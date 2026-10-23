@@ -1,7 +1,11 @@
-import React from 'react';
+import React, { act } from 'react';
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
-import { NoteMarkdown } from '@/components/incident/detail/NoteMarkdown';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import {
+  NoteMarkdown,
+  getSafeLinkUrl,
+  getSafeImageUrl,
+} from '@/components/incident/detail/NoteMarkdown';
 import NoteCard from '@/components/incident/NoteCard';
 import IncidentNotes from '@/components/incident/detail/IncidentNotes';
 
@@ -172,5 +176,107 @@ describe('IncidentNotes composer toolbar & live preview', () => {
     const writeBtn = screen.getByRole('button', { name: 'Switch to Write mode' });
     fireEvent.click(writeBtn);
     expect(screen.getByPlaceholderText(/Type a note/i)).toBeInTheDocument();
+  });
+
+  it('preserves newer typing appended while note submission was in progress', async () => {
+    let resolveAddNote: () => void = () => {};
+    const pendingSubmission = new Promise<void>(resolve => {
+      resolveAddNote = resolve;
+    });
+
+    const slowAddNote = vi.fn().mockImplementation(() => pendingSubmission);
+
+    render(
+      <IncidentNotes
+        incidentId="inc-100"
+        notes={dummyNotes}
+        canManage={true}
+        onAddNote={slowAddNote}
+      />
+    );
+
+    const textarea = screen.getByPlaceholderText(/Type a note/i) as HTMLTextAreaElement;
+    fireEvent.change(textarea, { target: { value: 'First sentence.' } });
+
+    const postBtn = screen.getByRole('button', { name: 'Post' });
+    fireEvent.click(postBtn);
+
+    // Responder types additional details while submission is still pending
+    fireEvent.change(textarea, {
+      target: { value: 'First sentence. Additional update typed while submitting.' },
+    });
+
+    // Submission succeeds
+    await act(async () => {
+      resolveAddNote();
+    });
+
+    // Only the submitted snapshot should be cleared, leaving the newly typed text
+    await waitFor(() => {
+      expect(textarea.value).toBe('Additional update typed while submitting.');
+    });
+  });
+});
+
+describe('Security: getSafeLinkUrl & getSafeImageUrl validation', () => {
+  describe('getSafeLinkUrl', () => {
+    it('allows valid http and https URLs', () => {
+      expect(getSafeLinkUrl('https://opsknight.io/docs')).toBe('https://opsknight.io/docs');
+      expect(getSafeLinkUrl('http://internal.company.net')).toBe('http://internal.company.net/');
+    });
+
+    it('allows valid root-relative paths starting with single slash', () => {
+      expect(getSafeLinkUrl('/incidents/inc-123')).toBe('/incidents/inc-123');
+      expect(getSafeLinkUrl('/services/auth')).toBe('/services/auth');
+    });
+
+    it('rejects protocol-relative URLs (// and /\\)', () => {
+      expect(getSafeLinkUrl('//evil.com/phishing')).toBeNull();
+      expect(getSafeLinkUrl('/\\evil.com/phishing')).toBeNull();
+      expect(getSafeLinkUrl('\\\\evil.com\\share')).toBeNull();
+    });
+
+    it('rejects dangerous schemes such as javascript, data, blob', () => {
+      expect(getSafeLinkUrl('javascript:alert(1)')).toBeNull();
+      expect(getSafeLinkUrl('data:text/html,<script>alert(1)</script>')).toBeNull();
+      expect(getSafeLinkUrl('blob:https://example.com/uuid')).toBeNull();
+    });
+  });
+
+  describe('getSafeImageUrl', () => {
+    it('allows valid raster images with extensions .png, .jpg, .jpeg, .webp, .gif', () => {
+      expect(getSafeImageUrl('/api/uploads/diagram.png')).toBe('/api/uploads/diagram.png');
+      expect(getSafeImageUrl('https://cdn.example.com/photo.jpeg')).toBe(
+        'https://cdn.example.com/photo.jpeg'
+      );
+      expect(getSafeImageUrl('https://cdn.example.com/asset.webp')).toBe(
+        'https://cdn.example.com/asset.webp'
+      );
+    });
+
+    it('allows safe base64 raster image data URIs', () => {
+      const validPngDataUri =
+        'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=';
+      expect(getSafeImageUrl(validPngDataUri)).toBe(validPngDataUri);
+    });
+
+    it('strictly rejects SVG data URIs to prevent XSS', () => {
+      expect(getSafeImageUrl('data:image/svg+xml;utf8,<svg onload=alert(1)>')).toBeNull();
+      expect(
+        getSafeImageUrl('data:image/svg+xml;base64,PHN2ZyBvbmxvYWQ9YWxlcnQoMSk+PC9zdmc+')
+      ).toBeNull();
+    });
+
+    it('rejects non-raster file extensions like .svg, .html, .js', () => {
+      expect(getSafeImageUrl('/images/logo.svg')).toBeNull();
+      expect(getSafeImageUrl('https://cdn.example.com/malicious.svg')).toBeNull();
+      expect(getSafeImageUrl('/scripts/exploit.js')).toBeNull();
+      expect(getSafeImageUrl('/pages/test.html')).toBeNull();
+    });
+
+    it('rejects protocol-relative image URLs', () => {
+      expect(getSafeImageUrl('//evil.com/image.png')).toBeNull();
+      expect(getSafeImageUrl('/\\evil.com/image.png')).toBeNull();
+    });
   });
 });

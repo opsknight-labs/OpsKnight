@@ -154,15 +154,19 @@ export default function IncidentNotes({
   };
 
   const handleSubmit = async (formData: FormData) => {
-    const text = noteContent.trim();
-    if (!text || isSubmitting) return;
+    const submittedText = noteContent.trim();
+    if (!submittedText || isSubmitting) return;
 
     try {
       setIsSubmitting(true);
       setSubmitError(null);
       await onAddNote(formData);
-      // Only clear text on confirmed success
-      setNoteContent('');
+      // Preserve newer typing: only clear the exact submitted text snapshot
+      setNoteContent(prev => {
+        if (prev.trim() === submittedText) return '';
+        if (prev.startsWith(submittedText)) return prev.slice(submittedText.length).trimStart();
+        return prev;
+      });
       setIsPreview(false);
     } catch (err) {
       console.error('Failed to post incident note', err);

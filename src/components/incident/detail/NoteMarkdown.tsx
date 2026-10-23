@@ -3,28 +3,104 @@
 import React, { useState, type ReactNode } from 'react';
 import { ExternalLink, Paperclip, Copy, Check, FileText, ZoomIn, X } from 'lucide-react';
 
-function getSafeUrl(urlStr: string): string | null {
+export const RASTER_IMAGE_EXTENSIONS = ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp', '.ico'];
+
+export const SAFE_DATA_IMAGE_REGEX =
+  /^data:image\/(png|jpeg|jpg|webp|gif);base64,[A-Za-z0-9+/=]+$/i;
+
+/**
+ * Validates links:
+ * - Rejects protocol-relative URLs (//, /\, \\, \/)
+ * - Enforces safe root-relative paths ^\/(?![/\\]) or relative ^\.\/(?![/\\])
+ * - Restricts absolute URLs strictly to http: and https: schemes with valid hostname
+ */
+export function getSafeLinkUrl(urlStr: string): string | null {
+  if (!urlStr) return null;
   const trimmed = urlStr.trim();
-  if (trimmed.startsWith('/') || trimmed.startsWith('data:image/') || trimmed.startsWith('./')) {
+  if (!trimmed) return null;
+
+  // Reject protocol-relative or backslash-based scheme bypasses
+  if (/^[/\\]{2}/.test(trimmed) || trimmed.startsWith('//') || trimmed.startsWith('/\\')) {
+    return null;
+  }
+
+  // Root-relative path: starts with single slash, not followed by / or \
+  if (/^\/(?![/\\])/.test(trimmed)) {
     return trimmed;
   }
+
+  // Relative path: starts with ./, not followed by / or \
+  if (/^\.\/(?![/\\])/.test(trimmed)) {
+    return trimmed;
+  }
+
+  // Absolute URL: strictly http: or https:
   try {
     const parsed = new URL(trimmed);
-    if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
+    if ((parsed.protocol === 'http:' || parsed.protocol === 'https:') && parsed.hostname) {
       return parsed.href;
     }
   } catch {
     return null;
   }
+
   return null;
 }
 
-const IMAGE_EXTENSIONS = ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp', '.ico'];
+/**
+ * Validates images:
+ * - Rejects protocol-relative URLs (//, /\, \\, \/)
+ * - Enforces raster base64 data URIs only (PNG, JPEG, WebP, GIF), strictly rejecting SVG and HTML
+ * - Allows root-relative or relative paths ending with safe raster extensions (.png, .jpg, .jpeg, .gif, .webp, .bmp, .ico)
+ * - Allows http: and https: URLs ending with safe raster extensions
+ */
+export function getSafeImageUrl(urlStr: string): string | null {
+  if (!urlStr) return null;
+  const trimmed = urlStr.trim();
+  if (!trimmed) return null;
 
-function isImageExtension(url: string): boolean {
-  if (url.startsWith('data:image/')) return true;
-  const clean = url.split('?')[0].toLowerCase();
-  return IMAGE_EXTENSIONS.some(ext => clean.endsWith(ext));
+  // Reject protocol-relative or backslash-based scheme bypasses
+  if (/^[/\\]{2}/.test(trimmed) || trimmed.startsWith('//') || trimmed.startsWith('/\\')) {
+    return null;
+  }
+
+  // Base64 Data URI: must strictly match safe raster format, rejecting SVG and HTML
+  if (trimmed.startsWith('data:')) {
+    if (SAFE_DATA_IMAGE_REGEX.test(trimmed)) {
+      return trimmed;
+    }
+    return null;
+  }
+
+  // Root-relative or relative paths
+  if (/^\/(?![/\\])/.test(trimmed) || /^\.\/(?![/\\])/.test(trimmed)) {
+    const cleanPath = trimmed.split(/[?#]/)[0].toLowerCase();
+    if (RASTER_IMAGE_EXTENSIONS.some(ext => cleanPath.endsWith(ext))) {
+      return trimmed;
+    }
+    return null;
+  }
+
+  // Absolute http/https URLs
+  try {
+    const parsed = new URL(trimmed);
+    if ((parsed.protocol === 'http:' || parsed.protocol === 'https:') && parsed.hostname) {
+      const cleanPath = parsed.pathname.toLowerCase();
+      if (RASTER_IMAGE_EXTENSIONS.some(ext => cleanPath.endsWith(ext))) {
+        return parsed.href;
+      }
+    }
+  } catch {
+    return null;
+  }
+
+  return null;
+}
+
+export function isImageExtension(url: string): boolean {
+  if (SAFE_DATA_IMAGE_REGEX.test(url)) return true;
+  const clean = url.split(/[?#]/)[0].toLowerCase();
+  return RASTER_IMAGE_EXTENSIONS.some(ext => clean.endsWith(ext));
 }
 
 function CodeBlock({ code, language }: { code: string; language?: string }) {
@@ -194,7 +270,7 @@ export function renderInlineMarkdown(line: string): ReactNode[] {
     if (match[1]) {
       const alt = match[2];
       const url = match[3];
-      const safe = getSafeUrl(url);
+      const safe = getSafeImageUrl(url);
       if (safe) {
         parts.push(<NoteImage key={`img-${index}-${safe}`} src={safe} alt={alt} />);
       } else {
@@ -205,20 +281,25 @@ export function renderInlineMarkdown(line: string): ReactNode[] {
     else if (match[4]) {
       const label = match[5];
       const url = match[6];
-      const safe = getSafeUrl(url);
+      const safe = getSafeLinkUrl(url);
       if (safe) {
         // If it's a file attachment or image URL
-        const isImage = isImageExtension(safe);
+        const safeImg = getSafeImageUrl(safe);
+        const isImage = safeImg !== null && isImageExtension(safeImg);
         const isAttachment =
-          label.startsWith('📎') || /\.(pdf|zip|tar|gz|csv|json|txt|log|docx?|xlsx?)$/i.test(safe);
+          label.startsWith('📎') ||
+          /\.(pdf|zip|tar|gz|csv|json|txt|log|docx?|xlsx?)$/i.test(safe.split(/[?#]/)[0]);
 
         if (
           isImage &&
           (label.toLowerCase() === 'image' ||
             label.toLowerCase().endsWith('.png') ||
-            label.toLowerCase().endsWith('.jpg'))
+            label.toLowerCase().endsWith('.jpg') ||
+            label.toLowerCase().endsWith('.jpeg') ||
+            label.toLowerCase().endsWith('.webp') ||
+            label.toLowerCase().endsWith('.gif'))
         ) {
-          parts.push(<NoteImage key={`link-img-${index}-${safe}`} src={safe} alt={label} />);
+          parts.push(<NoteImage key={`link-img-${index}-${safeImg}`} src={safeImg} alt={label} />);
         } else if (isAttachment) {
           parts.push(
             <a
@@ -290,10 +371,11 @@ export function renderInlineMarkdown(line: string): ReactNode[] {
     // 7. Raw URL autolink
     else if (match[19]) {
       const url = match[19];
-      const safe = getSafeUrl(url);
+      const safe = getSafeLinkUrl(url);
       if (safe) {
-        if (isImageExtension(safe)) {
-          parts.push(<NoteImage key={`autourl-img-${index}`} src={safe} alt={safe} />);
+        const safeImg = getSafeImageUrl(safe);
+        if (safeImg && isImageExtension(safeImg)) {
+          parts.push(<NoteImage key={`autourl-img-${index}`} src={safeImg} alt={safeImg} />);
         } else {
           parts.push(
             <a

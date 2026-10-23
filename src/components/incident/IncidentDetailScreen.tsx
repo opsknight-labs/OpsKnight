@@ -154,6 +154,9 @@ export default async function IncidentDetailScreen({
   const canManageIncident = permissions.isResponderOrAbove;
   const canAcknowledgeIncident = permissions.capabilities.includes('incident.acknowledge.scoped');
   const canAddIncidentNote = permissions.capabilities.includes('incident.note.scoped');
+  const canReadAutomation =
+    permissions.capabilities.includes(CAPABILITIES.AUTOMATION_READ) &&
+    !!storedIncident.automationDecision;
 
   const [users, teams, customFields, totalEventsCount, totalNotesCount, totalNotificationsCount] =
     await Promise.all([
@@ -294,11 +297,11 @@ export default async function IncidentDetailScreen({
     />
   );
 
-  const automationContent = (
+  const automationContent = canReadAutomation ? (
     <div id="automation-decision" className="scroll-mt-24 space-y-4">
       <IncidentAutomationCard incidentId={id} />
     </div>
-  );
+  ) : null;
 
   const contextContent = responseTimeline ? (
     <IncidentContextCard context={responseTimeline.context} />

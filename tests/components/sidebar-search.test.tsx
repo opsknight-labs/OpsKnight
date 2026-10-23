@@ -90,4 +90,57 @@ describe('SidebarSearch component', () => {
       expect(screen.getByText('View all incidents')).toBeDefined();
     });
   });
+
+  it('clears stale results immediately on query change and does not show old results while fetching', async () => {
+    const originalFetch = global.fetch;
+    const mockFetch = vi.fn();
+    global.fetch = mockFetch;
+
+    // First query response
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        results: [
+          {
+            type: 'service',
+            id: 'svc-old',
+            title: 'Legacy Auth Service',
+            href: '/services/svc-old',
+          },
+        ],
+      }),
+    } as unknown as Response);
+
+    render(<SidebarSearch />);
+    const input = screen.getByPlaceholderText('Search...');
+
+    // Type first query
+    fireEvent.change(input, { target: { value: 'auth' } });
+
+    await waitFor(() => {
+      expect(screen.getByText('Legacy Auth Service')).toBeDefined();
+    });
+
+    // Make second query hang / stay pending
+    let resolveSecondQuery: (val: unknown) => void = () => {};
+    const pendingPromise = new Promise(resolve => {
+      resolveSecondQuery = resolve;
+    });
+    mockFetch.mockReturnValueOnce(pendingPromise);
+
+    // Type new query
+    fireEvent.change(input, { target: { value: 'payment' } });
+
+    // Stale result must immediately disappear and searching loader should show
+    expect(screen.queryByText('Legacy Auth Service')).toBeNull();
+    expect(screen.getByText('Searching...')).toBeDefined();
+
+    // Resolve second query to clean up
+    resolveSecondQuery({
+      ok: true,
+      json: async () => ({ results: [] }),
+    });
+
+    global.fetch = originalFetch;
+  });
 });

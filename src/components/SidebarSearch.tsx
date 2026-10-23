@@ -314,6 +314,7 @@ export default function SidebarSearch() {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<SearchResult[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const activeQueryRef = useRef(query);
   const recentSearches = useSyncExternalStore(
     subscribeRecentSearches,
     getRecentSearchesSnapshot,
@@ -342,9 +343,13 @@ export default function SidebarSearch() {
   }, []);
 
   useEffect(() => {
-    if (abortControllerRef.current) abortControllerRef.current.abort();
+    activeQueryRef.current = query;
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
 
-    if (query.trim().length < 2) {
+    const trimmed = query.trim();
+    if (trimmed.length < 2) {
       return;
     }
 
@@ -352,20 +357,23 @@ export default function SidebarSearch() {
     abortControllerRef.current = abortController;
 
     const timeoutId = setTimeout(async () => {
-      setIsLoading(true);
       try {
-        const response = await fetch(`/api/search?q=${encodeURIComponent(query)}`, {
+        const response = await fetch(`/api/search?q=${encodeURIComponent(trimmed)}`, {
           signal: abortController.signal,
         });
         if (!response.ok) throw new Error('Search failed');
         const data = await response.json();
-        if (data.results) {
-          setResults(data.results);
+        // Only apply results if this request wasn't aborted and matches active query
+        if (!abortController.signal.aborted && activeQueryRef.current.trim() === trimmed) {
+          setResults(Array.isArray(data.results) ? data.results : []);
         }
-      } catch (_err) {
-        // ignore
+      } catch (err: unknown) {
+        if (err instanceof Error && err.name === 'AbortError') return;
+        if (!abortController.signal.aborted && activeQueryRef.current.trim() === trimmed) {
+          setResults([]);
+        }
       } finally {
-        if (!abortController.signal.aborted) {
+        if (!abortController.signal.aborted && activeQueryRef.current.trim() === trimmed) {
           setIsLoading(false);
         }
       }
@@ -410,6 +418,8 @@ export default function SidebarSearch() {
         inputRef.current?.blur();
       } else if (item?.query) {
         setQuery(item.query);
+        setResults([]);
+        setIsLoading(item.query.trim().length >= 2);
       }
     },
     [router, openCreateIncident, query, results.length, saveRecentSearch]
@@ -448,7 +458,8 @@ export default function SidebarSearch() {
     return count;
   }, [groupedResults]);
 
-  const hasAnyResults = matchingNavigation.length > 0 || totalRenderedResultsCount > 0;
+  const hasAnyResults =
+    matchingNavigation.length > 0 || (!isLoading && totalRenderedResultsCount > 0);
 
   return (
     <Command shouldFilter={false} className="overflow-visible bg-transparent border-0 shadow-none">
@@ -474,10 +485,10 @@ export default function SidebarSearch() {
                 value={query}
                 onValueChange={val => {
                   setQuery(val);
+                  setResults([]);
                   if (val.trim().length >= 2) {
                     setIsLoading(true);
                   } else {
-                    setResults([]);
                     setIsLoading(false);
                   }
                   if (!open) setOpen(true);
@@ -501,6 +512,7 @@ export default function SidebarSearch() {
                     e.stopPropagation();
                     setQuery('');
                     setResults([]);
+                    setIsLoading(false);
                     setOpen(false);
                     inputRef.current?.blur();
                   }}
@@ -537,7 +549,14 @@ export default function SidebarSearch() {
           }}
         >
           <CommandList className="max-h-[500px] py-1">
-            {query.length >= 2 && !hasAnyResults && !isLoading && (
+            {isLoading && (
+              <div className="flex items-center justify-center py-6 gap-2 text-muted-foreground text-sm">
+                <Loader2 className="h-4 w-4 animate-spin text-zinc-400" />
+                <span>Searching...</span>
+              </div>
+            )}
+
+            {!isLoading && query.trim().length >= 2 && !hasAnyResults && (
               <CommandEmpty>
                 <div className="flex flex-col items-center justify-center py-8 gap-2 text-muted-foreground">
                   <p className="text-sm">No results found for &quot;{query}&quot;</p>
@@ -615,66 +634,67 @@ export default function SidebarSearch() {
                   </CommandGroup>
                 )}
 
-                {TYPE_ORDER.map(type => {
-                  const items = groupedResults.get(type);
-                  if (!items?.length) return null;
-                  return (
-                    <CommandGroup key={type} heading={getTypeLabel(type)}>
-                      {items.map(result => (
-                        <CommandItem
-                          key={result.id}
-                          value={`${result.type}-${result.id}-${result.title}`}
-                          onSelect={() => handleSelect('', result)}
-                          className="aria-selected:bg-accent aria-selected:text-accent-foreground group cursor-pointer"
-                        >
-                          {result.type === 'user' ? (
-                            <div className="mr-3 shrink-0">
-                              <DirectUserAvatar
-                                avatarUrl={
-                                  result.avatarUrl || getDefaultAvatar(result.gender, result.id)
-                                }
-                                name={result.title}
-                                size="sm"
-                              />
+                {!isLoading &&
+                  TYPE_ORDER.map(type => {
+                    const items = groupedResults.get(type);
+                    if (!items?.length) return null;
+                    return (
+                      <CommandGroup key={type} heading={getTypeLabel(type)}>
+                        {items.map(result => (
+                          <CommandItem
+                            key={result.id}
+                            value={`${result.type}-${result.id}-${result.title}`}
+                            onSelect={() => handleSelect('', result)}
+                            className="aria-selected:bg-accent aria-selected:text-accent-foreground group cursor-pointer"
+                          >
+                            {result.type === 'user' ? (
+                              <div className="mr-3 shrink-0">
+                                <DirectUserAvatar
+                                  avatarUrl={
+                                    result.avatarUrl || getDefaultAvatar(result.gender, result.id)
+                                  }
+                                  name={result.title}
+                                  size="sm"
+                                />
+                              </div>
+                            ) : (
+                              <div className="mr-3 flex h-7 w-7 shrink-0 items-center justify-center rounded-sm bg-muted/50">
+                                {getTypeIcon(result.type)}
+                              </div>
+                            )}
+                            <div className="flex flex-1 flex-col gap-0.5 overflow-hidden">
+                              <div className="flex items-center gap-2">
+                                <span className="font-medium truncate text-sm">{result.title}</span>
+                                {result.priority && (
+                                  <Badge variant="neutral" size="xs" className="uppercase">
+                                    P{result.priority}
+                                  </Badge>
+                                )}
+                              </div>
+                              {result.subtitle && (
+                                <span className="text-[10px] text-muted-foreground truncate">
+                                  {result.subtitle}
+                                </span>
+                              )}
                             </div>
-                          ) : (
-                            <div className="mr-3 flex h-7 w-7 shrink-0 items-center justify-center rounded-sm bg-muted/50">
-                              {getTypeIcon(result.type)}
-                            </div>
-                          )}
-                          <div className="flex flex-1 flex-col gap-0.5 overflow-hidden">
-                            <div className="flex items-center gap-2">
-                              <span className="font-medium truncate text-sm">{result.title}</span>
-                              {result.priority && (
-                                <Badge variant="neutral" size="xs" className="uppercase">
-                                  P{result.priority}
+                            <div className="ml-auto">
+                              {typeof result.metadata?.status === 'string' && (
+                                <Badge
+                                  variant={
+                                    result.metadata.status === 'resolved' ? 'success' : 'danger'
+                                  }
+                                  size="xs"
+                                  className="capitalize"
+                                >
+                                  {result.metadata.status}
                                 </Badge>
                               )}
                             </div>
-                            {result.subtitle && (
-                              <span className="text-[10px] text-muted-foreground truncate">
-                                {result.subtitle}
-                              </span>
-                            )}
-                          </div>
-                          <div className="ml-auto">
-                            {typeof result.metadata?.status === 'string' && (
-                              <Badge
-                                variant={
-                                  result.metadata.status === 'resolved' ? 'success' : 'danger'
-                                }
-                                size="xs"
-                                className="capitalize"
-                              >
-                                {result.metadata.status}
-                              </Badge>
-                            )}
-                          </div>
-                        </CommandItem>
-                      ))}
-                    </CommandGroup>
-                  );
-                })}
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    );
+                  })}
               </>
             )}
           </CommandList>
