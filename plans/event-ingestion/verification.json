@@ -190,5 +190,31 @@
       "scope": "10-second synthetic compressible workload, Automation disabled; not sustained production certification"
     },
     "review": "Independent reviewers found mixed-mode evidence-alert masking; fixed with per-target matching and mixed-rollout promtool regression"
+  },
+  "operationalControlsAndRegistry": {
+    "certified": false,
+    "databaseAndContractPassed": 45,
+    "adminAndReceiptApiPassed": 11,
+    "focusedLifecycleOutboxPassed": 5,
+    "providerTypesPassed": 28,
+    "providerFormatCasesPassed": 31,
+    "providerEvidence": "local-provider-http-formats.json",
+    "lifecycleEvidence": "local-lifecycle-http.json",
+    "naturalLeaseEvidence": "local-database-outage-natural.json",
+    "liveControls": "revision-fenced backlog, retention, concurrency and polling; critical reserved budget shards",
+    "receiptIdentityRetentionDaysDefault": 90,
+    "externalEffectsDelivered": false,
+    "officialDockerfileBuild": "passed with opt-in low-memory compilation, one native thread, 4 GiB heap",
+    "imageId": "sha256:f48c1b817b690dde34704edaa51493da72984b1149cbae1864c01dd64c22897e",
+    "imageProducerRevisionLabel": "6bbed7e46",
+    "nativeContainerCapacity": "pending corrected-proxy run",
+    "typeCheck": "passed",
+    "modifiedSourceLint": "passed; CJS syntax checked separately",
+    "limitations": [
+      "Historical and focused test counts overlap and must not be added",
+      "HTTP diagnostics record running build identity and dirty source; no signed exact-commit attestation",
+      "Provider alternate formats, full signatures and dependent external delivery are not fully certified",
+      "Weighted service fairness, live quotas/bursts, Kafka, history partitioning/archive, HA and sustained/soak gates remain open"
+    ]
   }
 }

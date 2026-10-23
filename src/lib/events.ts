@@ -12,7 +12,7 @@ import { lockProcessingReceipt, completeProcessingReceipt } from './ingestion/po
 import { logger } from './logger';
 import { sanitizeIntegrationEnvelope } from './integrations/payload-security';
 import { EVENT_TRANSACTION_MAX_ATTEMPTS } from './config';
-import { normalizeDedupKeys } from './incidents/event-identity';
+import { normalizeDedupKeys, lockEventDedupKeys } from './incidents/event-identity';
 import { runReadCommittedTransaction } from './db-utils';
 import {
   enqueueEventSideEffects,
@@ -98,22 +98,6 @@ function boundedAlertPayload(eventData: EventPayload['payload']): Prisma.InputJs
     _truncated: true,
     _originalBytes: Buffer.byteLength(serialized, 'utf8'),
   };
-}
-
-async function lockEventDedupKeys(
-  tx: Prisma.TransactionClient,
-  serviceId: string,
-  candidateDedupKeys: string[]
-): Promise<void> {
-  // Serialize only requests that can address the same logical incident. Include
-  // legacy keys during rolling upgrades and use deterministic lock ordering.
-  const lockKeys = Array.from(
-    new Set(candidateDedupKeys.map(key => JSON.stringify([serviceId, key])))
-  ).sort();
-
-  for (const lockKey of lockKeys) {
-    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${lockKey}, 0))`;
-  }
 }
 
 async function reloadIncident(tx: Prisma.TransactionClient, incidentId: string) {

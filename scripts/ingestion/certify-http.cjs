@@ -74,7 +74,9 @@ async function main() {
     if (server && server.exitCode !== null)
       throw new Error('Candidate HTTP server exited before readiness');
     try {
-      const response = await fetch(`${baseUrl}/api/health?mode=readiness`);
+      const response = await fetch(`${baseUrl}/api/health?mode=readiness`, {
+        signal: AbortSignal.timeout(2000),
+      });
       readinessStatus = `${response.status}: ${(await response.text()).slice(0, 2000)}`;
       if (response.ok) {
         ready = true;
@@ -89,6 +91,14 @@ async function main() {
   const providerChecks =
     process.env.INGESTION_HTTP_PROVIDER_CHECKS === 'true'
       ? await require('./provider-http-checks.cjs')({
+          prisma,
+          baseUrl,
+          consumeIngestionBatch: external ? async () => 0 : consumeIngestionBatch,
+        })
+      : undefined;
+  const lifecycleChecks =
+    process.env.INGESTION_HTTP_LIFECYCLE_CHECKS === 'true'
+      ? await require('./lifecycle-http-checks.cjs')({
           prisma,
           baseUrl,
           consumeIngestionBatch: external ? async () => 0 : consumeIngestionBatch,
@@ -215,6 +225,7 @@ async function main() {
       ? 'Local Docker gateway and image ingestion consumers sharing an isolated PostgreSQL container network; not enterprise HA certification'
       : 'Local production HTTP gateway plus independent incident consumer and isolated PostgreSQL; not HA topology certification',
     providerChecks,
+    lifecycleChecks,
     databaseProfile,
     fixtureServiceId: service.id,
     atAdmissionEnd,

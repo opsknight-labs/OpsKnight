@@ -220,7 +220,7 @@ async function main() {
     `events { worker_connections 2048; }
 http { access_log off; upstream gateways { ${webNames.map(name => `server ${name}:3000;`).join(' ')} keepalive 64; }
 server { listen 8080; client_max_body_size 1m;
-location / { proxy_pass http://gateways; proxy_http_version 1.1; proxy_set_header Connection ""; proxy_next_upstream off; } } }
+location / { proxy_pass http://gateways; proxy_http_version 1.1; proxy_set_header Host $http_host; proxy_set_header Connection ""; proxy_next_upstream off; } } }
 `
   );
   const proxyName = `${prefix}-proxy`;
