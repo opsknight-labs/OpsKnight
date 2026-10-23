@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/no-require-imports -- Executable CommonJS harness loads the shared TypeScript fixture runtime. */
+/* eslint-disable security/detect-non-literal-fs-filename -- Paths are validated fixture evidence destinations or files inside this run's private temporary directory. */
 require('./isolated-runtime.cjs');
 const assert = require('node:assert/strict');
 const { spawn } = require('node:child_process');
@@ -30,6 +32,8 @@ let attached = false;
 let createdNetwork = false;
 let child;
 let chaosTimer;
+let notificationTimer;
+let notificationTask;
 let chaosTask;
 let resolveChaos;
 let loadActive = false;
@@ -195,7 +199,11 @@ async function waitHealthy(name) {
 }
 async function main() {
   const localUrl = new URL(process.env.DATABASE_URL);
-  assert.match(localUrl.pathname, /^\/ingestion_test_http(?:_[a-z0-9]+)*$/);
+  assert.ok(
+    localUrl.pathname === '/ingestion_test_http' ||
+      (localUrl.pathname.startsWith('/ingestion_test_http_') &&
+        /^[a-z0-9_]+$/.test(localUrl.pathname.slice('/ingestion_test_http_'.length)))
+  );
   assert.equal(localUrl.port, '55445');
   if (process.env.INGESTION_DB_PROFILE === 'true') {
     // Fail before starting replicas when a newly created fixture database has
@@ -294,6 +302,72 @@ async function main() {
   createdNetwork = true;
   await invoke(['network', 'connect', network, databaseContainer]);
   attached = true;
+  let exerciseNotification;
+  if (process.env.INGESTION_DOCKER_SMTP_CHECK === 'true') {
+    assert.ok(fullStack, 'SMTP delivery checks require every supporting worker role');
+    const smtpRef = process.env.INGESTION_SMTP_IMAGE || 'axllent/mailpit:latest';
+    try {
+      await invoke(['image', 'inspect', smtpRef]);
+    } catch {
+      await invoke(['pull', smtpRef]);
+    }
+    const smtpImage = JSON.parse(await invoke(['image', 'inspect', smtpRef]))[0];
+    const smtpName = `${prefix}-smtp`;
+    containers.push(smtpName);
+    await invoke([
+      'run',
+      '--detach',
+      '--name',
+      smtpName,
+      '--network',
+      network,
+      '--label',
+      `opsknight.ingestion-cert-run=${runId}`,
+      '--cpus',
+      '0.5',
+      '--memory',
+      '128m',
+      '--publish',
+      '127.0.0.1::8025',
+      '--env',
+      'MP_SMTP_AUTH_ACCEPT_ANY=true',
+      '--env',
+      'MP_SMTP_AUTH_ALLOW_INSECURE=true',
+      '--env',
+      'MP_SMTP_DISABLE_RDNS=true',
+      '--env',
+      'MP_MAX_MESSAGES=100',
+      smtpImage.Id,
+    ]);
+    const smtp = await inspect(smtpName);
+    const binding = smtp.NetworkSettings.Ports['8025/tcp'][0];
+    assert.equal(binding.HostIp, '127.0.0.1');
+    const captureUrl = `http://127.0.0.1:${binding.HostPort}`;
+    let ready = false;
+    for (let i = 0; i < 40; i++) {
+      try {
+        ready = (
+          await fetch(`${captureUrl}/api/v1/messages`, { signal: AbortSignal.timeout(1000) })
+        ).ok;
+      } catch {
+        /* capture server starting */
+      }
+      if (ready) break;
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+    assert.ok(ready, 'Owned SMTP capture did not become ready');
+    process.env.ENCRYPTION_KEY = encryptionKey;
+    exerciseNotification = await require('./notification-http-checks.cjs')({
+      prisma,
+      smtpHost: smtpName,
+      captureUrl,
+    });
+    evidence.smtpCapture = {
+      imageId: smtpImage.Id,
+      localOnly: true,
+      remoteDeliveryCertified: false,
+    };
+  }
   const start = async (name, role, migrationOwner) => {
     containers.push(name);
     await invoke([
@@ -462,6 +536,23 @@ location / { proxy_pass http://gateways; proxy_http_version 1.1; proxy_set_heade
     if (message?.type === 'ingestion-load-stopped') loadActive = false;
     if (message?.type !== 'ingestion-load-started') return;
     loadActive = true;
+    if (exerciseNotification && !notificationTask) {
+      notificationTask = new Promise(resolve => {
+        notificationTimer = setTimeout(async () => {
+          notificationTimer = undefined;
+          try {
+            evidence.smtpDelivery = await exerciseNotification({
+              baseUrl,
+              loadActive: () => loadActive,
+            });
+            resolve(evidence.smtpDelivery.capturedDuringLoad);
+          } catch (error) {
+            evidence.smtpDelivery = { passed: false, error: error.message };
+            resolve(false);
+          }
+        }, 2000);
+      });
+    }
     if (!chaosRequested || chaosTask) return;
     chaosTask = new Promise(resolve => {
       resolveChaos = resolve;
@@ -508,6 +599,12 @@ location / { proxy_pass http://gateways; proxy_http_version 1.1; proxy_set_heade
     chaosTimer = undefined;
     resolveChaos?.(false);
   }
+  if (exerciseNotification) {
+    assert.ok(
+      notificationTask && (await notificationTask),
+      'Actual SMTP paging delivery did not complete during active load'
+    );
+  }
   if (chaosRequested)
     assert.ok(
       chaosTask && (await chaosTask),
@@ -531,6 +628,7 @@ main()
   })
   .finally(async () => {
     if (chaosTimer) clearTimeout(chaosTimer);
+    if (notificationTimer) clearTimeout(notificationTimer);
     if (child?.pid && child.exitCode === null && child.signalCode === null) {
       await new Promise(resolve => {
         child.once('exit', resolve);
