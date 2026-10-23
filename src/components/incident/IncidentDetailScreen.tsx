@@ -448,13 +448,13 @@ export default async function IncidentDetailScreen({
           </div>
         </section>
       ) : (
-        <section className="relative overflow-hidden rounded-2xl border border-border bg-card text-card-foreground shadow-sm">
+        <section className="relative overflow-hidden rounded-2xl border border-border bg-card text-card-foreground shadow-2xs">
           <div className={`h-1 w-full bg-gradient-to-r ${statusGradient}`} />
-          <div className="p-4 sm:p-6">
-            <div className="mb-4 flex min-w-0 items-center justify-between gap-3">
+          <div className="p-3.5 sm:p-4.5">
+            <div className="mb-2.5 flex min-w-0 items-center justify-between gap-3">
               <Link
                 href={backHref}
-                className="inline-flex min-h-11 items-center gap-1.5 rounded-lg px-2 text-xs font-semibold text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                className="inline-flex h-7 items-center gap-1.5 rounded-lg px-2 text-xs font-semibold text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
               >
                 <ArrowLeft className="h-3.5 w-3.5" />
                 <span>{backLabel}</span>
@@ -462,45 +462,41 @@ export default async function IncidentDetailScreen({
               <div className="flex min-w-0 items-center gap-1.5">
                 <Badge
                   variant="outline"
-                  className="hidden font-mono text-xs text-muted-foreground sm:inline-flex"
+                  className="hidden font-mono text-[11px] text-muted-foreground sm:inline-flex border-border/80"
                 >
                   #{id.slice(0, 8)}
                 </Badge>
-                <CopyButton
-                  text={id}
-                  label="ID"
-                  className="min-h-11 h-11 px-2.5 text-xs sm:min-h-9 sm:h-9"
-                />
+                <CopyButton text={id} label="ID" className="h-7 px-2 text-xs font-medium" />
                 <CopyButton
                   text={`${appUrl}/incidents/${id}`}
                   icon="link"
                   label="Link"
-                  className="min-h-11 h-11 px-2.5 text-xs sm:min-h-9 sm:h-9"
+                  className="h-7 px-2 text-xs font-medium"
                 />
               </div>
             </div>
 
-            <div className="flex min-w-0 items-start gap-3 sm:gap-4">
+            <div className="flex min-w-0 items-start gap-3 sm:gap-3.5">
               <div
-                className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br text-white shadow-sm sm:h-11 sm:w-11 ${statusGradient}`}
+                className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br text-white shadow-sm sm:h-10 sm:w-10 ${statusGradient}`}
               >
                 {incident.status === 'RESOLVED' ? (
-                  <CheckCircle2 className="h-5 w-5" />
+                  <CheckCircle2 className="h-4.5 w-4.5" />
                 ) : incident.status === 'SNOOZED' ? (
-                  <Pause className="h-5 w-5" />
+                  <Pause className="h-4.5 w-4.5" />
                 ) : incident.status === 'SUPPRESSED' ? (
-                  <Volume2 className="h-5 w-5" />
+                  <Volume2 className="h-4.5 w-4.5" />
                 ) : (
-                  <AlertCircle className="h-5 w-5" />
+                  <AlertCircle className="h-4.5 w-4.5" />
                 )}
               </div>
-              <div className="min-w-0 flex-1 space-y-2">
+              <div className="min-w-0 flex-1 space-y-1.5">
                 <div className="flex min-w-0 flex-wrap items-center gap-2">
-                  <h1 className="min-w-0 break-words text-lg font-bold leading-snug tracking-tight text-foreground sm:text-2xl">
+                  <h1 className="min-w-0 break-words text-base font-bold leading-snug tracking-tight text-foreground sm:text-xl">
                     {incident.title}
                   </h1>
                   <Badge
-                    className={`shrink-0 border-0 bg-gradient-to-r text-xs font-bold text-white ${statusGradient}`}
+                    className={`shrink-0 border-0 bg-gradient-to-r text-[11px] font-bold text-white shadow-2xs ${statusGradient}`}
                   >
                     {incident.status}
                   </Badge>

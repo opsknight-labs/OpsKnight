@@ -52,10 +52,18 @@ export default function EscalationExecutionHealth({ health }: { health: Health |
     <section
       id="escalation-health"
       aria-label="Escalation execution health"
-      className="min-w-0 scroll-mt-24 overflow-hidden rounded-xl border border-border/80 bg-card text-sm text-card-foreground shadow-2xs"
+      className={cn(
+        'min-w-0 scroll-mt-24 overflow-hidden rounded-xl border bg-card text-xs text-card-foreground shadow-2xs transition-all',
+        health.needsAttention ? 'border-rose-500/40 dark:border-rose-500/30' : 'border-border/70'
+      )}
     >
       <details className="group" open={health.needsAttention}>
-        <summary className="flex min-h-10 cursor-pointer list-none items-center justify-between gap-2 px-3.5 py-2 text-xs font-semibold select-none transition-colors hover:bg-muted/30 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
+        <summary
+          className={cn(
+            'flex cursor-pointer list-none items-center justify-between gap-2 px-3 select-none transition-colors hover:bg-muted/30 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring [&::-webkit-details-marker]:hidden',
+            health.needsAttention ? 'min-h-9 py-2' : 'min-h-8 py-1.5'
+          )}
+        >
           <div className="flex min-w-0 items-center gap-2">
             <Siren
               className={cn(

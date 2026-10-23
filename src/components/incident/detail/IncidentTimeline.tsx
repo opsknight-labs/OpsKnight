@@ -589,6 +589,26 @@ export default function IncidentTimeline({
       : timelineEvents.filter(e => categorize(e.type, e.message) === activeFilter);
   }, [timelineEvents, activeFilter]);
 
+  const filterCounts = useMemo(() => {
+    const counts: Record<TimelineFilter, number> = {
+      ALL: timelineEvents.length,
+      LIFECYCLE: 0,
+      ESCALATION: 0,
+      ASSIGNMENT: 0,
+      NOTIFICATIONS: 0,
+      INTEGRATIONS: 0,
+      RUNBOOKS: 0,
+      NOTES: 0,
+    };
+    for (const e of timelineEvents) {
+      const cat = categorize(e.type, e.message);
+      if (cat !== 'ALL' && counts[cat] !== undefined) {
+        counts[cat]++;
+      }
+    }
+    return counts;
+  }, [timelineEvents]);
+
   const getEventConfig = (type: string, message: string) => {
     switch (type) {
       case 'CREATED':
@@ -667,22 +687,34 @@ export default function IncidentTimeline({
 
   const filterChips = (
     <div className="flex flex-wrap gap-1.5 mb-2" role="group" aria-label="Filter timeline events">
-      {FILTERS.map(filter => (
-        <button
-          key={filter.id}
-          type="button"
-          onClick={() => setActiveFilter(filter.id)}
-          aria-pressed={activeFilter === filter.id}
-          className={cn(
-            'rounded-full border px-2.5 py-1 text-xs font-medium transition-colors',
-            activeFilter === filter.id
-              ? 'bg-slate-900 text-white border-slate-900 dark:bg-slate-100 dark:text-slate-900 dark:border-slate-100'
-              : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700 dark:hover:bg-slate-700'
-          )}
-        >
-          {filter.label}
-        </button>
-      ))}
+      {FILTERS.map(filter => {
+        const count = filterCounts[filter.id] ?? 0;
+        return (
+          <button
+            key={filter.id}
+            type="button"
+            onClick={() => setActiveFilter(filter.id)}
+            aria-pressed={activeFilter === filter.id}
+            aria-label={filter.label}
+            className={cn(
+              'h-6.5 px-2.5 rounded-md text-xs font-medium transition-all select-none border focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring flex items-center gap-1.5',
+              activeFilter === filter.id
+                ? 'bg-foreground text-background border-foreground shadow-2xs font-semibold'
+                : 'bg-background text-muted-foreground border-border/80 hover:text-foreground hover:bg-muted/40'
+            )}
+          >
+            <span>{filter.label}</span>
+            <span
+              className={cn(
+                'text-[10.5px] tabular-nums font-mono',
+                activeFilter === filter.id ? 'opacity-90 font-semibold' : 'text-muted-foreground/70'
+              )}
+            >
+              {count}
+            </span>
+          </button>
+        );
+      })}
     </div>
   );
 
@@ -706,7 +738,7 @@ export default function IncidentTimeline({
       {filterChips}
       <div className="space-y-6 relative ml-2">
         {/* Continuous vertical line background */}
-        <div className="absolute left-[19px] top-2 bottom-4 w-px bg-slate-200 dark:bg-slate-700" />
+        <div className="absolute left-[19px] top-2 bottom-4 w-px bg-border/70" />
         {filteredEvents.map((event, index) => {
           const config = getEventConfig(event.type, event.message);
           const isLifecycleEvent =
@@ -722,7 +754,7 @@ export default function IncidentTimeline({
             >
               {/* Node Icon */}
               <div
-                className={`relative z-10 rounded-full border-4 border-white dark:border-slate-900 shrink-0 h-10 w-10 flex items-center justify-center shadow-sm ${config.avatarBg} ${config.avatarText}`}
+                className={`relative z-10 rounded-full border-4 border-background shrink-0 h-10 w-10 flex items-center justify-center shadow-xs ${config.avatarBg} ${config.avatarText}`}
               >
                 {config.icon}
               </div>
@@ -732,17 +764,21 @@ export default function IncidentTimeline({
                 <div className="flex items-center justify-between gap-2 mb-1">
                   <div className="flex items-center gap-2">
                     <span
-                      className={`text-sm font-semibold ${isLifecycleEvent ? 'text-slate-900 dark:text-slate-100' : 'text-slate-700 dark:text-slate-300'}`}
+                      className={`text-xs sm:text-sm font-semibold ${isLifecycleEvent ? 'text-foreground' : 'text-foreground/90'}`}
                     >
                       {config.label}
                     </span>
                     {isLifecycleEvent && (
-                      <Badge variant={config.variant} size="xs" className="uppercase h-5">
+                      <Badge
+                        variant={config.variant}
+                        size="xs"
+                        className="uppercase h-5 text-[10px]"
+                      >
                         {event.type}
                       </Badge>
                     )}
                   </div>
-                  <span className="text-xs text-slate-400 dark:text-slate-500 tabular-nums">
+                  <span className="text-[11px] text-muted-foreground font-mono tabular-nums">
                     {formatDateTime(event.createdAt, userTimeZone, { format: 'datetime' })}
                   </span>
                 </div>
