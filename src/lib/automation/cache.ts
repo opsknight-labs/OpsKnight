@@ -1,6 +1,11 @@
 import { createHash } from 'crypto';
-import { LIMITS, type CompiledSnapshot } from './contract';
-type CachedCompiledVersion = CompiledSnapshot & { versionNumber: number };
+import { LIMITS, type CompiledSnapshot, type CompiledField, builtinFields } from './contract';
+export type CachedCompiledVersion = CompiledSnapshot & {
+  compiled: CompiledSnapshot;
+  versionNumber: number;
+  fieldsByKey: Map<string, CompiledField | (typeof builtinFields)[number]>;
+};
+// Versions are immutable once published, so the number is cached alongside the snapshot.
 const versions = new Map<string, CachedCompiledVersion>();
 function canonical(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(canonical);
@@ -44,7 +49,15 @@ export function loadCompiledVersion(version: {
     !Array.isArray(compiled.rules)
   )
     throw new Error('VERSION_INVALID');
-  const entry = { ...compiled, versionNumber: version.versionNumber };
+  const fieldsByKey = new Map<string, CompiledField | (typeof builtinFields)[number]>(
+    [...builtinFields, ...compiled.fields].map(field => [field.key, field])
+  );
+  const entry: CachedCompiledVersion = {
+    ...compiled,
+    compiled,
+    versionNumber: version.versionNumber,
+    fieldsByKey,
+  };
   versions.set(version.id, entry);
   if (versions.size > LIMITS.cache) versions.delete(versions.keys().next().value!);
   return entry;

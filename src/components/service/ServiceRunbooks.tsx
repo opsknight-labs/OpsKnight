@@ -33,13 +33,6 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/shadcn/card';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/shadcn/select';
 import { EmptyHint } from '@/components/runbooks/ui/primitives';
 import type {
   BindingPresentation,
@@ -150,11 +143,24 @@ export default function ServiceRunbooks({
   const ids = useId();
   const router = useRouter();
   const [searchQuery, setSearchQuery] = useState(rulesSearch);
+  const [selectedState, setSelectedState] = useState(rulesState);
+  const [prevRulesSearch, setPrevRulesSearch] = useState(rulesSearch);
+  const [prevRulesState, setPrevRulesState] = useState(rulesState);
   const [modeFilter, setModeFilter] = useState<ModeFilter>('ALL');
   const [showScope, setShowScope] = useState(true);
 
+  if (rulesSearch !== prevRulesSearch) {
+    setPrevRulesSearch(rulesSearch);
+    setSearchQuery(rulesSearch);
+  }
+
+  if (rulesState !== prevRulesState) {
+    setPrevRulesState(rulesState);
+    setSelectedState(rulesState);
+  }
+
   const filteredBindings = useMemo(() => {
-    const q = searchQuery.trim() === rulesSearch.trim() ? '' : searchQuery.trim().toLowerCase();
+    const q = searchQuery.trim().toLowerCase();
     return bindings.filter(binding => {
       if (modeFilter !== 'ALL' && binding.mode !== modeFilter) return false;
       if (!q) return true;
@@ -166,7 +172,7 @@ export default function ServiceRunbooks({
         agent.includes(q)
       );
     });
-  }, [bindings, modeFilter, searchQuery, rulesSearch, availableAgents]);
+  }, [bindings, modeFilter, searchQuery, availableAgents]);
 
   const countMode = (mode: Exclude<ModeFilter, 'ALL'>) =>
     bindings.filter(b => b.enabled && b.mode === mode).length;
@@ -496,12 +502,26 @@ export default function ServiceRunbooks({
           </div>
 
           {/* Grid Layout Inputs Row matching LibraryFilterBar */}
-          <div className="grid grid-cols-1 sm:grid-cols-12 gap-2.5 items-end pt-2 border-t border-border/60">
+          <form
+            method="get"
+            onSubmit={e => {
+              e.preventDefault();
+              const formData = new FormData(e.currentTarget);
+              const state = (formData.get('rulesState') as string) || selectedState || rulesState;
+              const search = (formData.get('rulesSearch') as string) ?? searchQuery;
+              const params = new URLSearchParams();
+              params.set('tab', 'runbooks');
+              if (state) params.set('rulesState', state);
+              if (search) params.set('rulesSearch', search);
+              router.push(`/services/${serviceId}?${params.toString()}`);
+            }}
+            className="grid grid-cols-1 sm:grid-cols-12 gap-2.5 items-end pt-2 border-t border-border/60"
+          >
             {/* Search Input */}
             <div
               className={cn(
                 'space-y-1',
-                canManage ? 'sm:col-span-7 lg:col-span-8' : 'sm:col-span-8 lg:col-span-9'
+                canManage ? 'sm:col-span-5 lg:col-span-5' : 'sm:col-span-6 lg:col-span-6'
               )}
             >
               <Label
@@ -515,6 +535,7 @@ export default function ServiceRunbooks({
                 <Input
                   id={`${ids}-search`}
                   name="rulesSearch"
+                  aria-label="Search rules"
                   placeholder="Search rules by name, runbook, or target agent…"
                   value={searchQuery}
                   onChange={e => setSearchQuery(e.target.value)}
@@ -537,36 +558,47 @@ export default function ServiceRunbooks({
             <div
               className={cn(
                 'space-y-1',
-                canManage ? 'sm:col-span-3 lg:col-span-2' : 'sm:col-span-4 lg:col-span-3'
+                canManage ? 'sm:col-span-3 lg:col-span-3' : 'sm:col-span-3 lg:col-span-3'
               )}
             >
-              <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1">
+              <Label
+                htmlFor={`${ids}-state`}
+                className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1"
+              >
                 <Activity className="h-3 w-3" /> Lifecycle
               </Label>
-              <Select
-                value={rulesState}
-                onValueChange={val => {
-                  router.push(`/services/${serviceId}?tab=runbooks&rulesState=${val}`);
+              <select
+                id={`${ids}-state`}
+                name="rulesState"
+                aria-label="Rule history"
+                value={selectedState}
+                onChange={e => {
+                  const val = e.target.value === 'archived' ? 'archived' : 'active';
+                  setSelectedState(val);
+                  const params = new URLSearchParams();
+                  params.set('tab', 'runbooks');
+                  if (val) params.set('rulesState', val);
+                  if (searchQuery) params.set('rulesSearch', searchQuery);
+                  router.push(`/services/${serviceId}?${params.toString()}`);
                 }}
+                className="h-9 w-full rounded-xl border border-input/80 bg-background/80 px-2.5 text-xs font-medium shadow-2xs focus:ring-2 focus:ring-primary/40 focus:outline-none transition-colors"
               >
-                <SelectTrigger className="h-9 w-full rounded-xl border border-input/80 bg-background/80 text-xs font-medium shadow-2xs focus:ring-2 focus:ring-primary/40 transition-colors">
-                  <SelectValue placeholder="Attached rules" />
-                </SelectTrigger>
-                <SelectContent className="rounded-xl border border-border/80 bg-popover/95 backdrop-blur-md shadow-xl p-1">
-                  <SelectItem
-                    value="active"
-                    className="rounded-lg text-xs font-medium cursor-pointer"
-                  >
-                    Attached rules
-                  </SelectItem>
-                  <SelectItem
-                    value="archived"
-                    className="rounded-lg text-xs font-medium cursor-pointer"
-                  >
-                    Archived rules
-                  </SelectItem>
-                </SelectContent>
-              </Select>
+                <option value="active">Attached rules</option>
+                <option value="archived">Archived rules</option>
+              </select>
+            </div>
+
+            {/* Search Submit Button */}
+            <div className={cn('space-y-1', canManage ? 'sm:col-span-2 lg:col-span-2' : 'sm:col-span-3 lg:col-span-3')}>
+              <Button
+                type="submit"
+                variant="outline"
+                size="sm"
+                className="h-9 w-full font-medium text-xs rounded-xl shadow-2xs"
+                aria-label="Search rule history"
+              >
+                Search
+              </Button>
             </div>
 
             {/* Scope Parameters Toggle Button */}
@@ -599,7 +631,7 @@ export default function ServiceRunbooks({
                 </Button>
               </div>
             )}
-          </div>
+          </form>
 
           {/* Scope Inputs (only displayed when expanded) */}
           {showScope && canManage && (

@@ -5,6 +5,38 @@ export const MAX_AUTOMATION_TRACE_BYTES = 256 * 1024;
 
 /** Store long context scalars once; responder policy definitions remain directly readable. */
 export function encodeExplanation(input: unknown, maxBytes: number): Prisma.InputJsonObject {
+  // Fast path: if no string exceeds 256 bytes and total JSON fits in budget, avoid deep allocations
+  let hasLongString = false;
+  function scan(value: unknown): void {
+    if (hasLongString) return;
+    if (typeof value === 'string') {
+      if (value.length > 256) hasLongString = true;
+      return;
+    }
+    if (Array.isArray(value)) {
+      for (const item of value) {
+        scan(item);
+        if (hasLongString) return;
+      }
+      return;
+    }
+    if (value && typeof value === 'object') {
+      const obj = value as Record<string, unknown>;
+      for (const [key, prop] of Object.entries(obj)) {
+        if (key === 'responderPolicy') continue;
+        scan(prop);
+        if (hasLongString) return;
+      }
+    }
+  }
+  scan(input);
+  if (!hasLongString) {
+    const json = JSON.stringify(input);
+    if (Buffer.byteLength(json, 'utf8') <= maxBytes) {
+      return input as Prisma.InputJsonObject;
+    }
+  }
+
   const values: Array<string | null> = [];
   const index = new Map<string, number>();
   function encode(value: unknown): unknown {
@@ -17,14 +49,18 @@ export function encodeExplanation(input: unknown, maxBytes: number): Prisma.Inpu
       }
       return { automationValueRef: position };
     }
-    if (Array.isArray(value)) return value.map(encode);
-    if (value && typeof value === 'object')
+    if (Array.isArray(value)) {
+      return value.map(encode);
+    }
+    if (value && typeof value === 'object') {
+      const src = value as Record<string, unknown>;
       return Object.fromEntries(
-        Object.entries(value).map(([key, child]) => [
+        Object.entries(src).map(([key, prop]) => [
           key,
-          key === 'responderPolicy' ? child : encode(child),
+          key === 'responderPolicy' ? prop : encode(prop),
         ])
       );
+    }
     return value;
   }
   const encoded = encode(input) as Record<string, unknown>;

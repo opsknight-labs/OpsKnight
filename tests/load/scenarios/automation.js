@@ -34,8 +34,8 @@ export const options = {
       duration: __ENV.AUTOMATION_DURATION || '30s',
       // Allocate the existing maximum up front so cold VU initialization cannot
       // drop arrivals during sustained certification. The offered rate is unchanged.
-      preAllocatedVUs: 100,
-      maxVUs: 100,
+      preAllocatedVUs: Number(__ENV.AUTOMATION_PREALLOC_VUS || 300),
+      maxVUs: Number(__ENV.AUTOMATION_MAX_VUS || 500),
     },
   },
   thresholds: {

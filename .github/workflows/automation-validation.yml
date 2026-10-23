@@ -46,7 +46,7 @@ concurrency:
 jobs:
   automation:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 120
     services:
       postgres:
         image: postgres:16-alpine

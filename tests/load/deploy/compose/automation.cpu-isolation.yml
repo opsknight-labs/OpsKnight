@@ -3,14 +3,16 @@
 # the three Web CPUs while testing sustained ingestion. All capacity gates remain unchanged.
 services:
   db:
-    cpuset: '3-5'
+    cpuset: '3-6'
   web:
     cpuset: '0-2'
   general:
-    cpuset: '6-9'
+    cpuset: '7-9'
   critical:
     cpuset: '10-11'
   scheduler:
+    cpuset: '10-11'
+  runbook:
     cpuset: '10-11'
   proxy:
     cpuset: '0-2'

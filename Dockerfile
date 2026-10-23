@@ -1,4 +1,4 @@
-# syntax=docker/dockerfile:1
+# disabled: syntax=docker/dockerfile:1
 
 # Shared, digest-pinned OS packages prevent independently drifting package levels
 # and duplicate repository fetches in the dependency, builder and runtime stages.
