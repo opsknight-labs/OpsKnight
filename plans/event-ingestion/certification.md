@@ -87,3 +87,5 @@ The metrics follow-up passed 29 metrics/registry tests, 37 database/contract tes
 
 
 The first official Dockerfile build was deliberately capped at a 3 GiB Node heap and failed with V8 heap exhaustion during compilation. This is a failed build attempt, not image compatibility evidence. The Dockerfile's default 4 GiB build is the next check. The subsequent readiness follow-up passed 16 role/health tests and source type/lint checks; image execution and natural worker lease recovery remain unverified until the managed topology harness runs.
+
+The default 4 GiB Docker build also failed: its compiler was terminated by SIGKILL and BuildKit reported `cannot allocate memory` in the shared 8 GiB VM. Neither attempt produced a candidate image. The build follow-up enables Next.js's documented webpack memory optimizations and explicitly enables its compilation worker, which the custom PWA webpack wrapper otherwise disables. Type checking, explicit lint of the configuration, and nine runtime-role/worker-health tests pass. Production image execution is still pending; no runtime or capacity result is credited to this build change.

@@ -118,6 +118,10 @@ const nextConfig: NextConfig = {
   // generated Prisma client and native engine exist in the standalone artifact.
   outputFileTracingIncludes: { '/*': ['./node_modules/.prisma/client/**/*'] },
   experimental: {
+    // Keep production compilation bounded on shared build hosts. The PWA
+    // wrapper installs a custom webpack config, disabling the default worker.
+    webpackBuildWorker: true,
+    webpackMemoryOptimizations: true,
     optimizePackageImports: [
       '@prisma/client',
       'react-icons',
