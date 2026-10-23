@@ -224,6 +224,8 @@ async function main() {
     admissionThresholdsPassed: loadExit === 0,
     targetRps: Number(process.env.INGESTION_TARGET_RPS || 1000),
     workload: process.env.INGESTION_WORKLOAD || 'many-key',
+    payloadBytes: Number(process.env.INGESTION_PAYLOAD_BYTES || 10000),
+    payloadPattern: process.env.INGESTION_PAYLOAD_PATTERN || 'random',
     duration: process.env.INGESTION_DURATION || '60s',
     loadExit,
     acknowledged,
