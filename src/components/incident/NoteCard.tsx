@@ -1,12 +1,13 @@
 'use client';
 
-import { memo, useMemo, type ReactNode } from 'react';
+import { memo, useMemo } from 'react';
 import { useTimezone } from '@/contexts/TimezoneContext';
 import { formatDateTime } from '@/lib/timezone';
 import { DirectUserAvatar } from '@/components/UserAvatar';
 import { getDefaultAvatar } from '@/lib/avatar';
 import { Clock, CheckCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { NoteMarkdown } from './detail/NoteMarkdown';
 
 type NoteCardProps = {
   content: string;
@@ -29,44 +30,10 @@ function NoteCard({
 }: NoteCardProps) {
   const { userTimeZone } = useTimezone();
 
-  // Render links as React elements so React performs attribute escaping.
-  // Never pass note content through dangerouslySetInnerHTML.
-  const formattedContent = useMemo(() => {
-    const displayContent =
-      isResolution && content.startsWith('Resolution:')
-        ? content.replace(/^Resolution:\s*/i, '')
-        : content;
-    const nodes: ReactNode[] = [];
-    const linkPattern = /\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g;
-    let cursor = 0;
-    for (const match of displayContent.matchAll(linkPattern)) {
-      const index = match.index ?? 0;
-      nodes.push(displayContent.slice(cursor, index));
-      let safeUrl: string | null = null;
-      try {
-        safeUrl = new URL(match[2]).href;
-      } catch {
-        // Invalid markdown URLs stay plain text.
-      }
-      if (safeUrl) {
-        nodes.push(
-          <a
-            key={`${index}-${safeUrl}`}
-            href={safeUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-primary underline hover:text-primary/80 transition-colors"
-          >
-            {match[1]}
-          </a>
-        );
-      } else {
-        nodes.push(match[0]);
-      }
-      cursor = index + match[0].length;
-    }
-    nodes.push(displayContent.slice(cursor));
-    return nodes;
+  const displayContent = useMemo(() => {
+    return isResolution && content.startsWith('Resolution:')
+      ? content.replace(/^Resolution:\s*/i, '')
+      : content;
   }, [content, isResolution]);
 
   return (
@@ -111,13 +78,13 @@ function NoteCard({
 
         <div
           className={cn(
-            'p-3 rounded-xl border text-xs leading-relaxed whitespace-pre-wrap break-words transition-colors shadow-2xs',
+            'p-3 rounded-xl border text-xs leading-relaxed break-words transition-colors shadow-2xs',
             isResolution
               ? 'bg-amber-50/50 dark:bg-amber-950/20 border-amber-200/80 dark:border-amber-800/60 text-foreground'
               : 'bg-card border-border/70 text-foreground'
           )}
         >
-          {formattedContent}
+          <NoteMarkdown content={displayContent} />
         </div>
       </div>
     </div>
