@@ -143,11 +143,24 @@ export default function ServiceRunbooks({
   const ids = useId();
   const router = useRouter();
   const [searchQuery, setSearchQuery] = useState(rulesSearch);
+  const [selectedState, setSelectedState] = useState(rulesState);
+  const [prevRulesSearch, setPrevRulesSearch] = useState(rulesSearch);
+  const [prevRulesState, setPrevRulesState] = useState(rulesState);
   const [modeFilter, setModeFilter] = useState<ModeFilter>('ALL');
   const [showScope, setShowScope] = useState(true);
 
+  if (rulesSearch !== prevRulesSearch) {
+    setPrevRulesSearch(rulesSearch);
+    setSearchQuery(rulesSearch);
+  }
+
+  if (rulesState !== prevRulesState) {
+    setPrevRulesState(rulesState);
+    setSelectedState(rulesState);
+  }
+
   const filteredBindings = useMemo(() => {
-    const q = searchQuery.trim() === rulesSearch.trim() ? '' : searchQuery.trim().toLowerCase();
+    const q = searchQuery.trim().toLowerCase();
     return bindings.filter(binding => {
       if (modeFilter !== 'ALL' && binding.mode !== modeFilter) return false;
       if (!q) return true;
@@ -159,7 +172,7 @@ export default function ServiceRunbooks({
         agent.includes(q)
       );
     });
-  }, [bindings, modeFilter, searchQuery, rulesSearch, availableAgents]);
+  }, [bindings, modeFilter, searchQuery, availableAgents]);
 
   const countMode = (mode: Exclude<ModeFilter, 'ALL'>) =>
     bindings.filter(b => b.enabled && b.mode === mode).length;
@@ -493,10 +506,13 @@ export default function ServiceRunbooks({
             method="get"
             onSubmit={e => {
               e.preventDefault();
+              const formData = new FormData(e.currentTarget);
+              const state = (formData.get('rulesState') as string) || selectedState || rulesState;
+              const search = (formData.get('rulesSearch') as string) ?? searchQuery;
               const params = new URLSearchParams();
               params.set('tab', 'runbooks');
-              if (rulesState) params.set('rulesState', rulesState);
-              if (searchQuery) params.set('rulesSearch', searchQuery);
+              if (state) params.set('rulesState', state);
+              if (search) params.set('rulesSearch', search);
               router.push(`/services/${serviceId}?${params.toString()}`);
             }}
             className="grid grid-cols-1 sm:grid-cols-12 gap-2.5 items-end pt-2 border-t border-border/60"
@@ -555,9 +571,10 @@ export default function ServiceRunbooks({
                 id={`${ids}-state`}
                 name="rulesState"
                 aria-label="Rule history"
-                value={rulesState}
+                value={selectedState}
                 onChange={e => {
                   const val = e.target.value;
+                  setSelectedState(val);
                   const params = new URLSearchParams();
                   params.set('tab', 'runbooks');
                   if (val) params.set('rulesState', val);
