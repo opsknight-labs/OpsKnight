@@ -8,6 +8,12 @@ import { ingestionPolicySchema, type IngestionPolicy } from '@/lib/ingestion/pol
 
 const fields = [
   {
+    key: 'criticalReservePercent',
+    label: 'Backlog capacity reserved for critical source alerts (%)',
+    min: 0,
+    max: 50,
+  },
+  {
     key: 'receiptRetentionDays',
     label: 'Completed receipt and retry identity retention (days)',
     min: 31,
