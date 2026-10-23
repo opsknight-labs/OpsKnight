@@ -48,7 +48,7 @@
   },
   "benchmark": "local-microbenchmark.json",
   "unmet": [
-    "shared quota-row and locked budget-shard contention stress",
+    "shared quota-row optimization and representative contention/load certification",
     "optional broker transport for enterprise targets",
     "weighted service fairness and bounded inflight allocation",
     "history partitioning, archival and sustained cleanup capacity",
@@ -390,6 +390,23 @@
       "PagerDuty independent endpoint"
     ],
     "independentReviews": "PagerDuty gap fixed; repeat source reviews found no additional concrete defect",
+    "freshImage": "pending"
+  },
+  "budgetContentionFollowup": {
+    "recordedAt": "2026-10-23T21:03:58.482592+00:00",
+    "certified": false,
+    "confirmedReproduction": "All shard locks skipped despite committed headroom; old reservation returned undefined",
+    "fix": "Conditional bounded retries, 50ms total scheduled backoff; original atomic bounds retained",
+    "databaseContractPassed": 58,
+    "focusedUnitPassed": 24,
+    "typeCheck": "passed; completed exit0",
+    "modifiedSourceLint": "passed; completed exit0",
+    "quotaDiagnostic": "local-quota-contention.json",
+    "pilot": "local-quota-contention-short.json",
+    "scope": "Library-only diagnostic, dirty source, shared local VM; excludes HTTP/incidents/Automation/delivery",
+    "singleKeyDecisionsPerSecond": 2254.726971766665,
+    "hundredKeyDecisionsPerSecond": 3874.4925928177067,
+    "hotRowContentionEliminated": false,
     "freshImage": "pending"
   }
 }

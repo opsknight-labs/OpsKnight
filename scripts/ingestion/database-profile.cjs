@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/no-require-imports -- CommonJS diagnostic shared by executable fixture harnesses. */
+/* eslint-disable security/detect-object-injection -- Counter field names come from the fixed local PostgreSQL metrics schema, never request input. */
 const { createHash } = require('node:crypto');
 
 // Diagnostic snapshots only. Never reset cluster statistics or retain SQL text,
@@ -67,6 +69,8 @@ module.exports = async function startDatabaseProfile(prisma) {
     const after = await counters();
     const elapsedMs = performance.now() - started;
     const models = [
+      'IngestionQuota',
+      'SystemConfig',
       'IngestionReceipt',
       'IngestionBudget',
       'IngestionBatch',

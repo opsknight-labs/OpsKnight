@@ -95,6 +95,22 @@ export const OPERATIONAL_METRICS = [
     buckets: [100, 250, 500, 1000, 2000, 5000, 10000, 30000, 60000, 300000],
   },
   {
+    name: 'opsknight_ingestion_capacity_reservation_retries_total',
+    help: 'Additional reservation attempts after eligible budget shards were temporarily locked',
+    kind: 'counter',
+    labels: [],
+    scope: 'counter',
+    estimatedMaxSeries: 1,
+  },
+  {
+    name: 'opsknight_ingestion_capacity_rejections_total',
+    help: 'Reservation failures from exhausted committed capacity or persistent shard contention',
+    kind: 'counter',
+    labels: ['reason'],
+    scope: 'counter',
+    estimatedMaxSeries: 2,
+  },
+  {
     name: 'opsknight_ingestion_retention_rows_total',
     help: 'Rows minimized or removed by isolated ingestion maintenance',
     kind: 'counter',

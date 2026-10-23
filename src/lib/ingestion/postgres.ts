@@ -1,3 +1,4 @@
+import { reserveIngestionBudget } from './budget';
 import { randomUUID } from 'node:crypto';
 import { Prisma } from '@prisma/client';
 import prisma from '@/lib/prisma';
@@ -134,27 +135,14 @@ export async function acceptPostgresEvent(
     const critical =
       acceptedEnvelope.event.payload.severity === 'critical' ||
       acceptedEnvelope.automationSnapshot?.mode === 'LIVE';
-    // Reserve whole budget shards, rounding upward. Ordinary traffic cannot
-    // consume these rows; critical events can use every remaining shard.
-    const reservedShards = Math.ceil((64 * config.criticalReservePercent) / 100);
-    // Independent counters retain the global bound without forcing a hot
-    // incident key to use only 1/64 of the available backlog capacity.
-    const reserved = await tx.$queryRaw<Array<{ shard: number }>>`
-      WITH candidate AS (
-        SELECT "shard" FROM "IngestionBudget"
-        WHERE "pending" < ${Math.floor(config.maxPending / 64)}
-          AND "bytes" + ${payloadBytes} <= ${Math.floor(config.maxPendingBytes / 64)}
-          AND (${critical} OR "shard" >= ${reservedShards})
-        ORDER BY ("shard" - ${preferredBudgetShard} + 64) % 64
-        FOR UPDATE SKIP LOCKED LIMIT 1
-      )
-      UPDATE "IngestionBudget" budget SET "pending" = budget."pending" + 1,
-        "bytes" = budget."bytes" + ${payloadBytes}
-      FROM candidate WHERE budget."shard" = candidate."shard"
-      RETURNING budget."shard"
-    `;
-    if (!reserved[0]) throw new IngestionUnavailableError('Ingestion capacity exhausted');
-    const budgetShard = reserved[0].shard;
+    const budgetShard = await reserveIngestionBudget(tx, {
+      policy: config,
+      payloadBytes,
+      critical,
+      preferredShard: preferredBudgetShard,
+    });
+    if (budgetShard === undefined)
+      throw new IngestionUnavailableError('Ingestion capacity exhausted');
     const receipt = await tx.ingestionReceipt.create({
       data: {
         id: randomUUID(),

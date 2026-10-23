@@ -1,3 +1,4 @@
+import { reserveIngestionBudget } from '@/lib/ingestion/budget';
 import { getMaintenanceClient, disconnectMaintenanceClient } from '@/lib/maintenance/database';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { randomUUID, createHash } from 'node:crypto';
@@ -335,6 +336,65 @@ describe('PostgreSQL ingestion durability', () => {
     } finally {
       delete process.env.OPSKNIGHT_INGESTION_MODE;
     }
+  });
+
+  it('retries a confirmed skipped budget lock after headroom becomes available', async () => {
+    let unlock!: () => void;
+    let ready!: () => void;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let observedContention = false;
+    const held = new Promise<void>(resolve => {
+      unlock = resolve;
+    });
+    const locked = new Promise<void>(resolve => {
+      ready = resolve;
+    });
+    const holder = prisma.$transaction(
+      async tx => {
+        await tx.$queryRaw`SELECT "shard" FROM "IngestionBudget" ORDER BY "shard" FOR UPDATE`;
+        ready();
+        await held;
+      },
+      { timeout: 5000 }
+    );
+    const rollback = new Error('Rollback isolated reservation fixture');
+    try {
+      await locked;
+      const { policy } = await getIngestionPolicy();
+      const reservation = prisma.$transaction(async tx => {
+        const observed = new Proxy(tx, {
+          get(target, property, receiver) {
+            if (property !== '$queryRaw') return Reflect.get(target, property, receiver);
+            return async (...args: Parameters<Prisma.TransactionClient['$queryRaw']>) => {
+              const result = await tx.$queryRaw(...args);
+              if (Array.isArray(result) && result.length === 0 && !observedContention) {
+                observedContention = true;
+                // Release only after a real candidate query skipped every locked shard.
+                timer = setTimeout(unlock, 25);
+              }
+              return result;
+            };
+          },
+        });
+        const shard = await reserveIngestionBudget(observed, {
+          policy,
+          payloadBytes: 1000,
+          critical: true,
+          preferredShard: 0,
+        });
+        expect(observedContention).toBe(true);
+        expect(shard).toBeTypeOf('number');
+        throw rollback;
+      });
+      await expect(reservation).rejects.toBe(rollback);
+    } finally {
+      if (timer) clearTimeout(timer);
+      unlock();
+      await holder;
+    }
+    expect((await prisma.ingestionBudget.aggregate({ _sum: { pending: true } }))._sum.pending).toBe(
+      0
+    );
   });
 
   it('protects a warning promoted to P1 by pinned live Automation before evaluating its decision', async () => {
