@@ -113,6 +113,9 @@ const withPWA = withPWAInit({
 const nextConfig: NextConfig = {
   distDir: process.env.BUILD_DIR || '.next',
   output: 'standalone',
+  // Instrumentation and handlers share a native Prisma client. Bundling a
+  // second SQL-tag implementation breaks nested Prisma.sql fragment identity.
+  serverExternalPackages: ['@prisma/client', '.prisma/client'],
   outputFileTracingRoot: path.join(__dirname),
   // Instrumentation reads authentication policy before any request. Ensure the
   // generated Prisma client and native engine exist in the standalone artifact.
@@ -123,7 +126,6 @@ const nextConfig: NextConfig = {
     webpackBuildWorker: true,
     webpackMemoryOptimizations: true,
     optimizePackageImports: [
-      '@prisma/client',
       'react-icons',
       'lucide-react',
       'date-fns',
