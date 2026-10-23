@@ -88,7 +88,12 @@ export async function acceptPostgresEvent(
     );
     const payloadBytes =
       Buffer.byteLength(JSON.stringify(acceptedEnvelope)) + (context?.providerBytes ?? 0);
-    const critical = acceptedEnvelope.event.payload.severity === 'critical';
+    // LIVE Automation may promote even a warning to P1. Until its pinned
+    // decision runs, protect that entire class conservatively rather than
+    // evaluating rules twice or trusting caller-supplied priority metadata.
+    const critical =
+      acceptedEnvelope.event.payload.severity === 'critical' ||
+      acceptedEnvelope.automationSnapshot?.mode === 'LIVE';
     // Reserve whole budget shards, rounding upward. Ordinary traffic cannot
     // consume these rows; critical events can use every remaining shard.
     const reservedShards = Math.ceil((64 * config.criticalReservePercent) / 100);

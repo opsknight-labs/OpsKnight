@@ -98,6 +98,73 @@ afterAll(async () => {
 });
 
 describe('PostgreSQL ingestion durability', () => {
+  it('protects a warning promoted to P1 by pinned live Automation before evaluating its decision', async () => {
+    const settings = await getIngestionPolicy();
+    await applyIngestionCommand(
+      {
+        action: 'configure',
+        expectedRevision: 0,
+        policy: { ...settings.policy, maxPending: 64, criticalReservePercent: 25 },
+      },
+      actorId
+    );
+    for (let index = 0; index < 48; index++) {
+      const ordinary = envelope(`ordinary-priority-${index}`);
+      ordinary.event.payload.severity = 'warning';
+      await acceptPostgresEvent(ordinary);
+    }
+    const promoted = envelope('automation-priority');
+    promoted.event.payload.severity = 'warning';
+    await expect(acceptPostgresEvent(promoted)).rejects.toBeInstanceOf(IngestionUnavailableError);
+    const snapshot = {
+      ...emptySnapshot,
+      rules: [
+        {
+          id: 'promote',
+          name: 'P1',
+          enabled: true,
+          phase: 'ENRICH' as const,
+          conditions: [],
+          actions: [{ type: 'SET_PRIORITY' as const, value: 'P1' as const }],
+        },
+      ],
+    };
+    const { compiled, issues } = compileAutomation(snapshot);
+    expect(issues.filter(issue => issue.level === 'ERROR')).toHaveLength(0);
+    const version = await prisma.automationVersion.create({
+      data: {
+        serviceId,
+        versionNumber: 1,
+        snapshot,
+        compiledSnapshot: compiled,
+        checksum: checksum(compiled),
+        publishedBy: actorId,
+        lintReport: [],
+      },
+    });
+    await prisma.serviceAutomationConfig.create({
+      data: { serviceId, mode: 'LIVE', activeVersionId: version.id },
+    });
+    await prisma.systemSettings.update({
+      where: { id: 'default' },
+      data: { automationEnabled: true },
+    });
+    const accepted = await acceptPostgresEvent(promoted);
+    expect(
+      (await prisma.ingestionReceipt.findUniqueOrThrow({ where: { id: accepted.receiptId } }))
+        .critical
+    ).toBe(true);
+    const claims = await claimPostgresEvents(4);
+    const claim = claims.find(row => row.id === accepted.receiptId)!;
+    expect(claim).toBeDefined();
+    const decoded = decodeEnvelope(claim.envelope);
+    await processEvent(decoded.event, decoded.serviceId, decoded.integrationId, decoded, {
+      id: claim.id,
+      token: claim.leaseToken!,
+    });
+    expect((await prisma.incident.findFirstOrThrow({ where: { serviceId } })).priority).toBe('P1');
+  });
+
   it('naturally recovers a five-second abandoned lease and fences the previous worker', async () => {
     await acceptPostgresEvent(envelope('short-natural-lease'));
     await expect(claimPostgresEvents(1, 4999)).rejects.toThrow('Invalid ingestion lease duration');
@@ -1365,7 +1432,7 @@ describe('PostgreSQL ingestion durability', () => {
           name: 'Do not escalate',
           enabled: true,
           phase: 'ROUTE' as const,
-          conditions: [],
+          conditions: [{ fieldKey: 'source', operator: 'EQ' as const, value: 'database' }],
           actions: [{ type: 'NO_ESCALATION' as const }],
         },
       ],

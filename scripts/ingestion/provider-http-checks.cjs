@@ -4,6 +4,16 @@ const { encrypt } = require('../../src/lib/encryption');
 
 module.exports = async function providerHttpChecks({ prisma, baseUrl, consumeIngestionBatch }) {
   const run = randomUUID();
+  const credentialVariants = Object.fromEntries(
+    [
+      'secret_key',
+      'ssh_private_key',
+      'authorization_header',
+      'auth_header',
+      'AWS_SECRET_ACCESS_KEY',
+      '%41PI_KEY',
+    ].map(key => [key, 'fixture-credential-must-not-persist'])
+  );
   const fixtures = [
     ...require('./formatted-http-fixtures.cjs')(run),
     ...require('./additional-http-fixtures.cjs')(run),
@@ -19,7 +29,10 @@ module.exports = async function providerHttpChecks({ prisma, baseUrl, consumeIng
         receiver: 'certifier',
         groupLabels: {},
         commonLabels: {},
-        commonAnnotations: { api_key: 'fixture-credential-must-not-persist' },
+        commonAnnotations: {
+          api_key: 'fixture-credential-must-not-persist',
+          ...credentialVariants,
+        },
         externalURL: '',
         alerts: Array.from({ length: 40 }, (_, index) => ({
           status: 'firing',
@@ -67,7 +80,11 @@ module.exports = async function providerHttpChecks({ prisma, baseUrl, consumeIng
         severity: 'critical',
         status: 'triggered',
         source: 'http-certifier',
-        context: { headers: { 'x-api-key': 'fixture-credential-must-not-persist' } },
+        context: {
+          headers: { 'x-api-key': 'fixture-credential-must-not-persist', ...credentialVariants },
+          nested: [credentialVariants],
+          link: 'https://fixture.test/?%54oken=fixture-credential-must-not-persist',
+        },
       },
     },
   ];

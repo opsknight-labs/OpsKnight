@@ -71,6 +71,27 @@ function invoke(args) {
   });
 }
 const inspect = async name => JSON.parse(await invoke(['inspect', name]))[0];
+async function assertCredentialSentinelAbsentFromLogs(name) {
+  const sentinel = 'fixture-credential-must-not-persist';
+  await new Promise((resolve, reject) => {
+    const child = spawn(docker, ['logs', name], { stdio: ['ignore', 'pipe', 'pipe'] });
+    let found = false;
+    for (const stream of [child.stdout, child.stderr]) {
+      let suffix = '';
+      stream.on('data', chunk => {
+        const text = suffix + chunk.toString();
+        found ||= text.includes(sentinel);
+        suffix = text.slice(-(sentinel.length - 1));
+      });
+    }
+    child.once('error', reject);
+    child.once('close', code => {
+      if (code !== 0) reject(new Error('Candidate log privacy check failed to read logs'));
+      else if (found) reject(new Error('Credential privacy sentinel appeared in candidate logs'));
+      else resolve();
+    });
+  });
+}
 async function resources(name) {
   const container = await inspect(name);
   assert.equal(container.Config.Labels['opsknight.ingestion-cert-run'], runId);
@@ -437,6 +458,12 @@ location / { proxy_pass http://gateways; proxy_http_version 1.1; proxy_set_heade
     child.once('exit', resolve);
   });
   evidence.resourcesAfterLoad = await Promise.all([...webNames, ...workers].map(resources));
+  if (process.env.INGESTION_HTTP_PROVIDER_CHECKS === 'true') {
+    for (const name of [...webNames, ...workers]) {
+      await assertCredentialSentinelAbsentFromLogs(name);
+    }
+    evidence.credentialSentinelAbsentFromLogs = true;
+  }
   await collectProfiles();
   if (chaosTimer) {
     clearTimeout(chaosTimer);

@@ -9,7 +9,7 @@ import { ingestionPolicySchema, type IngestionPolicy } from '@/lib/ingestion/pol
 const fields = [
   {
     key: 'criticalReservePercent',
-    label: 'Backlog capacity reserved for critical source alerts (%)',
+    label: 'Backlog reserved for critical source alerts and live Automation (%)',
     min: 0,
     max: 50,
   },
