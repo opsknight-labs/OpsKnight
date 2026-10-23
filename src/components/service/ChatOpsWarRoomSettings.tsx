@@ -119,7 +119,7 @@ export default function ChatOpsWarRoomSettings({
   const PROVIDER_OPTIONS = [
     {
       value: 'INHERIT',
-      label: `Global (${globalDefaultSummary})`,
+      label: `Use global default (${globalDefaultSummary})`,
       description: 'Follow workspace default.',
     },
     {
@@ -140,7 +140,7 @@ export default function ChatOpsWarRoomSettings({
     {
       value: 'DISABLED',
       label: 'Disabled',
-      description: 'No war rooms for service.',
+      description: 'Do not create war rooms for this service.',
     },
   ];
 
