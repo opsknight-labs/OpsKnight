@@ -68,7 +68,9 @@ jobs:
       - run: npx vitest run --no-file-parallelism --maxWorkers=1 tests/integration/scim-lifecycle-database.test.ts tests/integration/scim-capacity-database.test.ts
         env: { SCIM_CERTIFICATION: '1', VITEST_USE_REAL_DB: '1', SCIM_LOAD_TEST: '1' }
       - run: npx ts-node --project tsconfig.script.json scripts/scim/seed-certification.ts
-      - run: npm run dev -- --port 3028 > /tmp/scim-server.log 2>&1 &
+      # Exercise the compiled SQL/runtime boundary, not only the development server.
+      - run: BUILD_DIR=.next-scim-production npx next build
+      - run: BUILD_DIR=.next-scim-production npx next start --port 3028 > /tmp/scim-server.log 2>&1 &
       - run: |
           node --input-type=module <<'JS'
           for (let attempt = 0; attempt < 120; attempt++) {
@@ -79,7 +81,7 @@ jobs:
           JS
       - run: npm run certify:scim:http
       - run: |
-          BUILD_DIR=.next-scim-replica NEXTAUTH_URL=http://localhost:3029 npm run dev -- --port 3029 > /tmp/scim-replica.log 2>&1 &
+          BUILD_DIR=.next-scim-production NEXTAUTH_URL=http://localhost:3029 npx next start --port 3029 > /tmp/scim-replica.log 2>&1 &
       - run: |
           node --input-type=module <<'JS'
           for (let attempt = 0; attempt < 120; attempt++) {

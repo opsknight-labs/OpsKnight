@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { Prisma } from '@prisma/client';
+import type { Prisma } from '@prisma/client';
 import { advanceUserSessionVersions } from '@/lib/users/admin-invariants';
 
 type ProspectiveGroup = Prisma.ScimGroupGetPayload<{ include: { memberships: true } }>;
@@ -36,33 +36,42 @@ export async function planTeamReconciliation(
     : [];
   const prospectiveBinding =
     prospective && stored.find(item => item.groupId === prospective.group.id);
-  const retirement = retiringBindingIds.length
-    ? Prisma.sql`AND b.id NOT IN (${Prisma.join([...retiringBindingIds])})`
-    : Prisma.empty;
-  const affectedMemberships = affectedUserIds
-    ? Prisma.sql`WHERE m."userId" IN (${Prisma.join([...affectedUserIds])})`
-    : Prisma.empty;
-  const affectedGrants = affectedUserIds
-    ? Prisma.sql`AND g."userId" IN (${Prisma.join([...affectedUserIds])})`
-    : Prisma.empty;
-  const desiredRows = await tx.$queryRaw<{ bindingId: string; userId: string }[]>`
+  // Only fixed SQL fragments are composed here. Every identifier/value from the
+  // request is bound separately; no user text is interpolated into SQL. Avoid
+  // nested Prisma.sql objects, whose class identity can differ in Next bundles.
+  const memberScope = affectedUserIds
+    ? 'WHERE m."userId" IN (SELECT jsonb_array_elements_text($4::jsonb))'
+    : '';
+  const grantScope = affectedUserIds
+    ? 'AND g."userId" IN (SELECT jsonb_array_elements_text($4::jsonb))'
+    : '';
+  const values: unknown[] = [
+    teamId,
+    JSON.stringify(retiringBindingIds),
+    prospective && !prospectiveBinding ? prospective.group.id : null,
+  ];
+  if (affectedUserIds) values.push(JSON.stringify(affectedUserIds));
+  const desiredRows = await tx.$queryRawUnsafe<{ bindingId: string; userId: string }[]>(
+    `
     WITH sources AS MATERIALIZED (
       SELECT b.id AS "bindingId", b."groupId" FROM "ScimGroupTeamBinding" b
-      WHERE b."teamId"=${teamId} ${retirement}
-      ${prospective && !prospectiveBinding ? Prisma.sql`UNION ALL SELECT 'pending-binding', ${prospective.group.id}` : Prisma.empty}
+      WHERE b."teamId"=$1 AND b.id NOT IN (SELECT jsonb_array_elements_text($2::jsonb))
+      UNION ALL SELECT 'pending-binding', $3::text WHERE $3::text IS NOT NULL
     ), current_grants AS MATERIALIZED (
       SELECT g."userId", g."bindingId" FROM "ScimTeamGrant" g
       JOIN "ScimGroupTeamBinding" b ON b.id=g."bindingId"
-      WHERE b."teamId"=${teamId} ${affectedGrants}
+      WHERE b."teamId"=$1 ${grantScope}
     ), preferred AS (
       SELECT m."userId", max(s."groupId") AS "groupId",
         max(s."bindingId") FILTER (WHERE s."bindingId"=g."bindingId") AS retained
       FROM sources s JOIN "ScimGroupMembership" m ON m."groupId"=s."groupId"
       LEFT JOIN current_grants g ON g."userId"=m."userId"
-      ${affectedMemberships}
+      ${memberScope}
       GROUP BY m."userId"
     ) SELECT p."userId", coalesce(p.retained, fallback."bindingId") AS "bindingId"
-      FROM preferred p JOIN sources fallback ON fallback."groupId"=p."groupId"`;
+      FROM preferred p JOIN sources fallback ON fallback."groupId"=p."groupId"`,
+    ...values
+  );
   const bindings = stored.map(binding => ({
     id: binding.id,
     groupId: binding.groupId,

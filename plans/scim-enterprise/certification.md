@@ -522,3 +522,36 @@ with diagnostics/directory writes/incident reads. All retained the original
 702 ms. Combined with the 45 passing lifecycle regressions and 175 unit/API/UI
 tests, these establish local correctness/capacity evidence, not production or
 fresh exact-head CI certification.
+
+The compiled-server browser gate subsequently found that nested Prisma SQL objects
+were bound as values in Next's runtime, producing PostgreSQL 42601 and a retryable
+503 during binding preview/group deletion. The `57c2a8b96` push CI independently
+passed capacity and then reproduced the same syntax error in session-replica
+group deletion. The follow-up composes only fixed SQL fragments and binds every
+request-derived value through positional parameters; no request text enters SQL.
+SCIM CI now builds once and runs HTTP, replica and browser gates against compiled
+servers, so this boundary is exercised automatically.
+
+Final local verification of that fix passed: 175 unit/API/UI tests, 45 PostgreSQL
+lifecycle tests and all seven capacity tests, TypeScript, zero-warning lint and
+the optimized build. Nine compiled-server browser journeys passed (three per
+Chromium/Firefox/WebKit, 1.9 minutes), with unchanged timeouts and native clicks.
+Six repeated prepared full-team reconciliations on an existing million-reference
+fixture also completed within the standard transaction timeout. Two compiled
+replicas passed duplicate provisioning, shared admission, credential revocation,
+deactivation, role downgrade and group-removal session/API checks. Sequential
+observation timings were 58/21/138 ms; these are not production network SLAs.
+
+The final complete capacity pass measured full bootstrap/repair at 458–4,707 ms;
+100-group repairs were 1,037–1,153 ms. Scoped mutations measured 51–95 ms without
+competing traffic and 521–623 ms including diagnostics/directory writes/incident
+reads. RSS deltas stayed below 8 MiB, retaining the 128 MiB ceiling. A preceding
+run timed out while rebuilding the million-row fixture under unrelated build
+contention; its failed test/cleanup result is retained in the investigation and
+was not converted to a pass by increasing limits. Local build and browser gates
+were completed before the successful complete capacity rerun.
+
+The branch integrates main `ccbcf282d`. Fresh exact-head CI is a separate required
+gate; the failed earlier head is not waived or presented as certified. Live
+providers, deployed ingress/PgBouncer and production rolling/HA/failover gates
+remain open.
