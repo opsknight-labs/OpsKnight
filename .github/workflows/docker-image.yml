@@ -3,6 +3,17 @@ name: Docker Image (build + push)
 on:
   pull_request:
     branches: [main]
+    paths:
+      - 'Dockerfile'
+      - 'docker-entrypoint.sh'
+      - 'agent/**'
+      - 'deploy/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'prisma/**'
+      - 'scripts/auto-recover-migrations.ts'
+      - 'scripts/create-bootstrap-code.mjs'
+      - '.github/workflows/docker-image.yml'
   push:
     branches: [main]
     tags:

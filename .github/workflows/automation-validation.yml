@@ -46,7 +46,7 @@ concurrency:
 jobs:
   automation:
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    timeout-minutes: 25
     services:
       postgres:
         image: postgres:16-alpine
@@ -71,6 +71,18 @@ jobs:
         with:
           node-version: 20
           generate-prisma: 'true'
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+      - name: Cache Next.js build
+        uses: actions/cache@v4
+        with:
+          path: ${{ github.workspace }}/.next/cache
+          key: nextjs-automation-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-${{ hashFiles('src/**/*.ts', 'src/**/*.tsx') }}
+          restore-keys: |
+            nextjs-automation-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-
       - name: Apply additive migrations
         run: npx prisma migrate deploy
       - name: Typecheck and automation unit contracts
@@ -86,11 +98,21 @@ jobs:
           npx tsc --project sdk/typescript/tsconfig.json
           npm run certify:api:clients:live
       - name: Install browser
-        run: npx playwright install --with-deps chromium firefox webkit
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            npx playwright install --with-deps chromium
+          else
+            npx playwright install --with-deps chromium firefox webkit
+          fi
       - name: Desktop and mobile authoring
         env:
           PLAYWRIGHT_PRODUCTION_SERVER: 'true'
-        run: npx playwright test --config playwright.automation.config.ts
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            npx playwright test --config playwright.automation.config.ts --project=desktop --project=mobile
+          else
+            npx playwright test --config playwright.automation.config.ts
+          fi
       - name: Preserve browser and load evidence
         if: always()
         uses: actions/upload-artifact@v4

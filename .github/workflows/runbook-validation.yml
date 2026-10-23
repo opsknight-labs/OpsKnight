@@ -61,7 +61,7 @@ jobs:
     if: needs.changes.outputs.runbooks == 'true'
     name: Runbook authoring and browser matrix
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 20
     services:
       postgres:
         image: postgres:15-alpine
@@ -88,14 +88,36 @@ jobs:
         with:
           node-version: 20
           generate-prisma: 'true'
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+      - name: Cache Next.js build
+        uses: actions/cache@v4
+        with:
+          path: ${{ github.workspace }}/.next/cache
+          key: nextjs-runbook-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-${{ hashFiles('src/**/*.ts', 'src/**/*.tsx') }}
+          restore-keys: |
+            nextjs-runbook-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-
       - name: Apply migrations to isolated UI database
         run: npx prisma migrate deploy
       - name: Install browser
-        run: npx playwright install --with-deps chromium firefox webkit
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            npx playwright install --with-deps chromium
+          else
+            npx playwright install --with-deps chromium firefox webkit
+          fi
       - name: Production build
         run: npm run build
       - name: Authoring, execution preview and responsive browser checks
-        run: npx playwright test --config playwright.runbooks.config.ts
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            npx playwright test --config playwright.runbooks.config.ts --project=chromium
+          else
+            npx playwright test --config playwright.runbooks.config.ts
+          fi
       - uses: actions/upload-artifact@v4
         if: always()
         with:
