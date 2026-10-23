@@ -48,7 +48,7 @@ module.exports = async function lifecycleHttpChecks({ prisma, baseUrl, consumeIn
     const versionSnapshot = number === 1 ? snapshot : emptySnapshot;
     const { compiled, issues } = compileAutomation(versionSnapshot);
     assert.ok(
-      !issues.some(item => item.severity === 'ERROR'),
+      !issues.some(item => item.level === 'ERROR'),
       'Lifecycle Automation fixture must pass compiler lint'
     );
     return prisma.automationVersion.create({

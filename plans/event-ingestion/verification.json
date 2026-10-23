@@ -270,5 +270,21 @@
       "Separately budgeted high-volume maintenance, partition/archive",
       "Kafka, full stack external deliveries, HA and sustained/soak"
     ]
+  },
+  "earlyPriorityAndQueryBudget": {
+    "certified": false,
+    "databaseAndContractPassed": 54,
+    "typeCheck": "passed",
+    "modifiedSourceLint": "passed",
+    "queryBudgetEvidence": "local-query-budget.json",
+    "priority": "Conservatively protect critical source severity or pinned LIVE Automation; warning-to-P1 reserved capacity regression passes",
+    "imageInProgress": "128eaaf5a predates early priority follow-up",
+    "remaining": [
+      "Weighted fairness including single-slot consumers",
+      "Liveness-based accelerated recovery",
+      "Image worker SIGKILL and strict performance reruns",
+      "Full deployment and downstream delivery",
+      "Main integration and release checks"
+    ]
   }
 }

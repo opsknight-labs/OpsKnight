@@ -1,0 +1,83 @@
+{
+  "measuredAt": "2026-10-23T14:41:20.381Z",
+  "certified": false,
+  "sourceRevision": "128eaaf5abbe692aaf9989a9891fbda5c6a11d38",
+  "scope": "Sequential isolated library diagnostic; excludes HTTP/auth/quota/network and external delivery. Includes transaction control and claim SQL. No statement-statistics reset.",
+  "phases": [
+    {
+      "kind": "new-incident",
+      "stage": "durable-admission",
+      "elapsedMs": 22.182457999999997,
+      "queryCalls": 11,
+      "databaseExecutionMs": 0.7437110000000058
+    },
+    {
+      "kind": "new-incident",
+      "stage": "claim-and-process",
+      "elapsedMs": 92.90200000000004,
+      "queryCalls": 31,
+      "databaseExecutionMs": 8.423329999999993
+    },
+    {
+      "kind": "deduplicated-trigger",
+      "stage": "durable-admission",
+      "elapsedMs": 8.950665999999956,
+      "queryCalls": 10,
+      "databaseExecutionMs": 0.23083799999999877
+    },
+    {
+      "kind": "deduplicated-trigger",
+      "stage": "claim-and-process",
+      "elapsedMs": 15.638417000000118,
+      "queryCalls": 17,
+      "databaseExecutionMs": 0.9636650000000018
+    },
+    {
+      "kind": "acknowledge",
+      "stage": "durable-admission",
+      "elapsedMs": 10.03170799999998,
+      "queryCalls": 10,
+      "databaseExecutionMs": 0.27741699999999647
+    },
+    {
+      "kind": "acknowledge",
+      "stage": "claim-and-process",
+      "elapsedMs": 32.51237500000002,
+      "queryCalls": 23,
+      "databaseExecutionMs": 2.630124999999998
+    },
+    {
+      "kind": "resolve",
+      "stage": "durable-admission",
+      "elapsedMs": 9.213750000000118,
+      "queryCalls": 10,
+      "databaseExecutionMs": 0.26312600000000086
+    },
+    {
+      "kind": "resolve",
+      "stage": "claim-and-process",
+      "elapsedMs": 31.74041599999987,
+      "queryCalls": 24,
+      "databaseExecutionMs": 1.8493359999999976
+    },
+    {
+      "kind": "automation-live-new-incident",
+      "stage": "durable-admission",
+      "elapsedMs": 8.373082999999951,
+      "queryCalls": 10,
+      "databaseExecutionMs": 0.2962519999999975
+    },
+    {
+      "kind": "automation-live-new-incident",
+      "stage": "claim-and-process",
+      "elapsedMs": 53.96074999999996,
+      "queryCalls": 37,
+      "databaseExecutionMs": 4.164752999999994
+    }
+  ],
+  "accepted": 5,
+  "completed": 5,
+  "alerts": 5,
+  "incidents": 2,
+  "automationDecisions": 1
+}
