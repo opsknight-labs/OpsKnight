@@ -11,6 +11,8 @@ import {
 } from '@/lib/metrics/operational/registry';
 import {
   digest,
+  receiptContentHash,
+  IngestionRateLimitError,
   encodeEnvelope,
   StoredEnvelope,
   partitionKey,
@@ -32,6 +34,50 @@ type AppendContext = {
   counts: { created: number; duplicate: number };
 };
 
+/** Read-only recovery after an authenticated request exhausted normal quota.
+ * No lock, budget allocation, configuration read, sequence or incident mutation.
+ */
+export async function replayPostgresEvents(
+  inputs: Array<{
+    input: IntegrationEventEnvelope;
+    deliveryKey: string | undefined;
+    context?: Pick<AppendContext, 'shared' | 'legacyContentHash'>;
+  }>,
+  denied: IngestionRateLimitError
+): Promise<Acceptance[]> {
+  if (!inputs.length || inputs.length > 10000 || inputs.some(item => !item.deliveryKey))
+    throw denied;
+  const expected = inputs.map(({ input, deliveryKey, context }) => ({
+    idempotencyKey: digest([input.serviceId, input.integrationId, deliveryKey]),
+    contentHash: receiptContentHash(encodeEnvelope(input, context?.shared)),
+    legacyContentHash: context?.legacyContentHash,
+  }));
+  const receipts = await prisma.ingestionReceipt.findMany({
+    where: { idempotencyKey: { in: expected.map(item => item.idempotencyKey) } },
+    select: { id: true, contentHash: true, idempotencyKey: true },
+  });
+  const byKey = new Map(receipts.map(receipt => [receipt.idempotencyKey, receipt]));
+  return expected.map(item => {
+    const existing = byKey.get(item.idempotencyKey);
+    if (!existing) throw denied;
+    if (
+      existing.contentHash !== item.contentHash &&
+      existing.contentHash !== item.legacyContentHash?.()
+    )
+      throw new IngestionConflictError('Delivery key reused with different content');
+    return { action: 'accepted', receiptId: existing.id };
+  });
+}
+
+export async function replayPostgresEvent(
+  input: IntegrationEventEnvelope,
+  deliveryKey: string | undefined,
+  denied: IngestionRateLimitError
+): Promise<Acceptance> {
+  const [result] = await replayPostgresEvents([{ input, deliveryKey }], denied);
+  return result;
+}
+
 /** Append and return only after PostgreSQL commits. Never fall back to volatile storage. */
 export async function acceptPostgresEvent(
   input: IntegrationEventEnvelope,
@@ -43,13 +89,7 @@ export async function acceptPostgresEvent(
   const partition = partitionKey(envelope);
   const identities = orderingKeys(envelope);
   if (!context) await prepareIngestionOrdering();
-  const {
-    receivedAt: _receivedAt,
-    automationSnapshot: _automationSnapshot,
-    batchPayloadId: _batchPayloadId,
-    ...content
-  } = envelope;
-  const contentHash = digest(content);
+  const contentHash = receiptContentHash(envelope);
   const preferredBudgetShard = Number.parseInt(partition.slice(0, 8), 16) % 64;
   const idempotencyKey = digest([
     input.serviceId,

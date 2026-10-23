@@ -7,21 +7,24 @@ import { runReadCommittedTransaction } from '@/lib/db-utils';
 import { addOperationalMetric } from '@/lib/metrics/operational/registry';
 import { eventDedupKey } from '@/lib/incidents/event-identity';
 import { sanitizeProviderData } from '@/lib/integrations/payload-security';
-import { acceptPostgresEvent, prepareIngestionOrdering } from './postgres';
+import { acceptPostgresEvent, replayPostgresEvents, prepareIngestionOrdering } from './postgres';
 import {
   decodeEnvelope,
   digest,
+  receiptContentHash,
   encodeEnvelope,
   orderingKeys,
   StoredEnvelope,
   IngestionPayloadError,
+  IngestionRateLimitError,
 } from './contract';
 
 /** Atomic child admission with one immutable copy of the webhook context. */
 export async function acceptPostgresBatch(
   input: Omit<IntegrationEventEnvelope, 'event'>,
   events: IntegrationEventEnvelope['event'][],
-  deliveryKeys: Array<string | undefined>
+  deliveryKeys: Array<string | undefined>,
+  replayOnly?: IngestionRateLimitError
 ) {
   if (!events.length) return [];
   if (events.length > 10000 || events.length !== deliveryKeys.length)
@@ -55,6 +58,25 @@ export async function acceptPostgresBatch(
       },
     };
   });
+  if (replayOnly) {
+    const batchPayloadId = randomUUID();
+    return replayPostgresEvents(
+      children.map((child, index) => ({
+        input: child.envelope,
+        deliveryKey: deliveryKeys.at(index),
+        context: {
+          shared: {
+            batchPayloadId,
+            providerPayloadDigest,
+            restoreBatchAlerts: child.restoreBatchAlerts,
+          },
+          legacyContentHash: () =>
+            receiptContentHash(encodeEnvelope({ ...input, event: events.at(index)! })),
+        },
+      })),
+      replayOnly
+    );
+  }
   // Validate before opening a transaction; a late invalid child must not leave a prefix accepted.
   const identities = [
     ...new Set(children.flatMap(child => orderingKeys(encodeEnvelope(child.envelope)))),

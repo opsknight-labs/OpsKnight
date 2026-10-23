@@ -1,14 +1,14 @@
-import { AsyncLocalStorage } from 'node:async_hooks';
+import { addOperationalMetric } from '@/lib/metrics/operational/registry';
+import { ingestionDeliveries as deliveries } from './delivery-context';
 import type { IntegrationEventEnvelope } from '@/lib/automation/runtime';
 import { acceptPostgresBatch } from './batches';
-import { acceptPostgresEvent } from './postgres';
+import { acceptPostgresEvent, replayPostgresEvent } from './postgres';
 import {
+  IngestionRateLimitError,
   IngestionConflictError,
   IngestionPayloadError,
   IngestionUnavailableError,
 } from './contract';
-
-const deliveries = new AsyncLocalStorage<{ key?: string; ordinal: number }>();
 
 export function ingestionDeliveryKey(headers: Headers, provider: string): string | undefined {
   const explicit = headers.get('idempotency-key');
@@ -28,18 +28,35 @@ export function ingestionDeliveryKey(headers: Headers, provider: string): string
 /** Provider delivery IDs identify a request; ordinal identifies each normalized event. */
 export function withIngestionDelivery<T>(
   key: string | undefined,
-  operation: () => Promise<T>
+  operation: () => Promise<T>,
+  replayOnly?: IngestionRateLimitError
 ): Promise<T> {
-  return deliveries.run({ key, ordinal: 0 }, operation);
+  return deliveries.run({ key, ordinal: 0, replayOnly, replayed: 0 }, async () => {
+    const result = await operation();
+    if (
+      replayOnly &&
+      !deliveries.getStore()?.replayed &&
+      (!(result instanceof Response) || result.ok)
+    )
+      throw replayOnly;
+    return result;
+  });
 }
 
 export async function acceptIntegrationEvent(envelope: IntegrationEventEnvelope) {
   const delivery = deliveries.getStore();
   const key = delivery?.key ? `${delivery.key}:${delivery.ordinal++}` : undefined;
   try {
+    if (delivery?.replayOnly) {
+      const result = await replayPostgresEvent(envelope, key, delivery.replayOnly);
+      delivery.replayed += 1;
+      addOperationalMetric('opsknight_ingestion_acceptance_total', 1, { outcome: 'duplicate' });
+      return result;
+    }
     return await acceptPostgresEvent(envelope, key);
   } catch (error) {
     if (
+      error instanceof IngestionRateLimitError ||
       error instanceof IngestionConflictError ||
       error instanceof IngestionPayloadError ||
       error instanceof IngestionUnavailableError
@@ -59,9 +76,17 @@ export async function acceptIntegrationBatch(
     delivery?.key ? `${delivery.key}:${delivery.ordinal++}` : undefined
   );
   try {
-    return await acceptPostgresBatch(input, events, keys);
+    const result = await acceptPostgresBatch(input, events, keys, delivery?.replayOnly);
+    if (delivery?.replayOnly) {
+      delivery.replayed += result.length;
+      addOperationalMetric('opsknight_ingestion_acceptance_total', result.length, {
+        outcome: 'duplicate',
+      });
+    }
+    return result;
   } catch (error) {
     if (
+      error instanceof IngestionRateLimitError ||
       error instanceof IngestionConflictError ||
       error instanceof IngestionPayloadError ||
       error instanceof IngestionUnavailableError

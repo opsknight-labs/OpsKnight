@@ -1,3 +1,5 @@
+import { reserveIngestionReplay } from '@/lib/ingestion/replay';
+import type { IngestionRateLimitError } from '@/lib/ingestion/contract';
 /**
  * Integration Handler Middleware
  *
@@ -129,27 +131,36 @@ export function createIntegrationHandler<T>(
 
       integrationType = integration.type;
 
+      let replayOnly: IngestionRateLimitError | undefined;
       if (RATE_LIMIT_ENABLED && !options.skipRateLimit) {
         const rateResult = await checkRateLimit(integrationId);
 
         if (!rateResult.allowed) {
-          const headers = createRateLimitHeaders(rateResult);
-          recordWebhookReceived(
-            integrationType,
-            integrationId,
-            false,
-            performance.now() - startTime,
-            'RATE_LIMITED'
+          replayOnly = await reserveIngestionReplay(
+            `integration:${integrationId}`,
+            ingestionDeliveryKey(req.headers, options.integrationType),
+            rateResult,
+            'integration'
           );
+          if (!replayOnly) {
+            const headers = createRateLimitHeaders(rateResult);
+            recordWebhookReceived(
+              integrationType,
+              integrationId,
+              false,
+              performance.now() - startTime,
+              'RATE_LIMITED'
+            );
 
-          // Preserve the integration-specific wire contract for rate limits.
-          return new Response(
-            JSON.stringify({ error: 'RATE_LIMITED', message: 'Rate limit exceeded' }),
-            {
-              status: 429,
-              headers: { 'Content-Type': 'application/json', ...headers },
-            }
-          );
+            // Preserve the integration-specific wire contract for rate limits.
+            return new Response(
+              JSON.stringify({ error: 'RATE_LIMITED', message: 'Rate limit exceeded' }),
+              {
+                status: 429,
+                headers: { 'Content-Type': 'application/json', ...headers },
+              }
+            );
+          }
         }
       }
 
@@ -211,7 +222,9 @@ export function createIntegrationHandler<T>(
             // Payload parsing below returns the canonical invalid-payload error.
           }
         }
-        const claim = await claimInboundDelivery(integration.id, provider, deliveryId);
+        const claim = replayOnly
+          ? null
+          : await claimInboundDelivery(integration.id, provider, deliveryId);
         if (claim?.disposition === 'COMPLETED') return jsonOk({ status: 'duplicate' }, 200);
         if (claim?.disposition === 'BUSY') {
           return new Response(JSON.stringify({ error: 'DELIVERY_IN_PROGRESS' }), {
@@ -258,7 +271,8 @@ export function createIntegrationHandler<T>(
       const result = await withIngestionDelivery(
         ingestionDeliveryKey(req.headers, options.integrationType) ??
           (deliveryId ? `${options.integrationType}:${deliveryId}` : undefined),
-        () => processor(ctx)
+        () => processor(ctx),
+        replayOnly
       );
       if (deliveryClaim) await completeInboundDelivery(deliveryClaim);
 
@@ -444,30 +458,40 @@ async function runIntegrationMiddleware(
     );
   }
 
+  let replayOnly: IngestionRateLimitError | undefined;
   if (RATE_LIMIT_ENABLED) {
     const rateResult = await checkRateLimit(integrationId);
     if (!rateResult.allowed) {
-      recordWebhookReceived(
-        integrationType,
-        integrationId,
-        false,
-        performance.now() - startTime,
-        'RATE_LIMITED'
+      replayOnly = await reserveIngestionReplay(
+        `integration:${integrationId}`,
+        ingestionDeliveryKey(req.headers, integrationType),
+        rateResult,
+        'integration'
       );
-      return new Response(
-        JSON.stringify({ error: 'RATE_LIMITED', message: 'Rate limit exceeded' }),
-        {
-          status: 429,
-          headers: { 'Content-Type': 'application/json', ...createRateLimitHeaders(rateResult) },
-        }
-      );
+      if (!replayOnly) {
+        recordWebhookReceived(
+          integrationType,
+          integrationId,
+          false,
+          performance.now() - startTime,
+          'RATE_LIMITED'
+        );
+        return new Response(
+          JSON.stringify({ error: 'RATE_LIMITED', message: 'Rate limit exceeded' }),
+          {
+            status: 429,
+            headers: { 'Content-Type': 'application/json', ...createRateLimitHeaders(rateResult) },
+          }
+        );
+      }
     }
   }
 
   try {
     const response = await withIngestionDelivery(
       ingestionDeliveryKey(req.headers, integrationType),
-      handler
+      handler,
+      replayOnly
     );
     const success = response.status >= 200 && response.status < 300;
     recordWebhookReceived(integrationType, integrationId, success, performance.now() - startTime);

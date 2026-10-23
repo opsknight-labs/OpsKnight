@@ -1,6 +1,7 @@
 import { getMaintenanceClient, disconnectMaintenanceClient } from '@/lib/maintenance/database';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { randomUUID, createHash } from 'node:crypto';
+import { NextRequest } from 'next/server';
 import { Prisma } from '@prisma/client';
 import { fork } from 'node:child_process';
 import { once } from 'node:events';
@@ -100,6 +101,242 @@ afterAll(async () => {
 });
 
 describe('PostgreSQL ingestion durability', () => {
+  it('returns committed receipts after lost responses under exhausted quota without admitting unknown retries', async () => {
+    process.env.OPSKNIGHT_INGESTION_MODE = 'postgres';
+    try {
+      const { POST } = await import('@/app/api/events/route');
+      const current = await getIngestionPolicy();
+      await applyIngestionCommand(
+        {
+          action: 'configure',
+          expectedRevision: 0,
+          policy: {
+            ...current.policy,
+            quotas: { ...current.policy.quotas, eventsPerMinute: 1, eventsBurst: 1 },
+          },
+        },
+        actorId
+      );
+      const integration = await prisma.integration.create({
+        data: { serviceId, name: 'Replay fixture', type: 'EVENTS_API_V2', key: randomUUID() },
+      });
+      const delivery = randomUUID();
+      const body = {
+        event_action: 'trigger',
+        dedup_key: 'lost-response',
+        payload: {
+          summary: 'Committed despite lost response',
+          source: 'quota-replay',
+          severity: 'warning',
+        },
+      };
+      const request = (id: string | null = delivery, content = body, key = integration.key) =>
+        POST(
+          new NextRequest('http://localhost/api/events', {
+            method: 'POST',
+            headers: {
+              Authorization: `Token token=${key}`,
+              'Content-Type': 'application/json',
+              ...(id ? { 'Idempotency-Key': id } : {}),
+            },
+            body: JSON.stringify(content),
+          })
+        );
+      const original = await request();
+      expect(original.status).toBe(202);
+      const receiptId = (await original.json()).data.result.receiptId;
+      const retryResponses = await Promise.all(Array.from({ length: 20 }, () => request()));
+      for (const response of retryResponses) {
+        expect(response.status).toBe(202);
+        expect((await response.json()).data.result.receiptId).toBe(receiptId);
+      }
+      expect((await request(randomUUID())).status).toBe(429);
+      expect((await request(null)).status).toBe(429);
+      expect((await request(delivery, body, 'invalid-key')).status).toBeGreaterThanOrEqual(400);
+      const prefix = `ingestion-replay:integration:${integration.id}:events:`;
+      const before = await prisma.rateLimit.aggregate({
+        where: { key: { startsWith: prefix } },
+        _sum: { count: true },
+      });
+      expect(
+        (
+          await request(delivery, {
+            ...body,
+            payload: { ...body.payload, summary: 'Changed content' },
+          })
+        ).status
+      ).toBe(409);
+      const after = await prisma.rateLimit.aggregate({
+        where: { key: { startsWith: prefix } },
+        _sum: { count: true },
+      });
+      expect(after._sum.count! - before._sum.count!).toBe(1);
+      await consumeIngestionBatch(4);
+      await prisma.ingestionReceipt.update({
+        where: { id: receiptId },
+        data: { completedAt: new Date(0) },
+      });
+      await pruneCompletedIngestionPayloads(getMaintenanceClient());
+      await applyIngestionCommand({ action: 'pause' }, actorId);
+      const replay = await request();
+      expect(replay.status).toBe(202);
+      expect((await replay.json()).data.result.receiptId).toBe(receiptId);
+      expect(await prisma.ingestionReceipt.count()).toBe(1);
+      expect(await prisma.alert.count({ where: { serviceId } })).toBe(1);
+      expect(await prisma.incident.count({ where: { serviceId } })).toBe(1);
+      expect(
+        (
+          await prisma.ingestionQuota.findUniqueOrThrow({
+            where: { key: `integration:${integration.id}:events` },
+          })
+        ).tokens
+      ).toBeLessThan(1);
+      const window = Math.floor(Date.now() / 60000);
+      await prisma.rateLimit.upsert({
+        where: { key: `${prefix}${window}` },
+        create: { key: `${prefix}${window}`, count: 600, expiresAt: new Date(Date.now() + 60000) },
+        update: { count: 600 },
+      });
+      expect((await request()).status).toBe(429);
+    } finally {
+      delete process.env.OPSKNIGHT_INGESTION_MODE;
+    }
+  });
+
+  it('replays an exhausted shared batch atomically and never appends a missing child', async () => {
+    process.env.OPSKNIGHT_INGESTION_MODE = 'postgres';
+    try {
+      const { POST } = await import('@/app/api/integrations/prometheus/route');
+      const current = await getIngestionPolicy();
+      await applyIngestionCommand(
+        {
+          action: 'configure',
+          expectedRevision: 0,
+          policy: {
+            ...current.policy,
+            quotas: { ...current.policy.quotas, integrationPerMinute: 1, integrationBurst: 1 },
+          },
+        },
+        actorId
+      );
+      const integration = await prisma.integration.create({
+        data: { serviceId, name: 'Replay batch', type: 'PROMETHEUS', key: randomUUID() },
+      });
+      const payload: PrometheusAlert = {
+        version: '4',
+        groupKey: 'batch-replay',
+        status: 'firing',
+        receiver: 'opsknight',
+        groupLabels: {},
+        commonLabels: {},
+        commonAnnotations: {},
+        externalURL: '',
+        alerts: [0, 1].map(index => ({
+          status: 'firing',
+          labels: { alertname: `replay-${index}` },
+          annotations: { summary: `Replay ${index}` },
+          generatorURL: '',
+          startsAt: '2026-10-23T00:00:00Z',
+          fingerprint: `replay-${index}`,
+        })),
+      };
+      const delivery = randomUUID();
+      const request = (data = payload) =>
+        POST(
+          new NextRequest(
+            `http://localhost/api/integrations/prometheus?integrationId=${integration.id}`,
+            {
+              method: 'POST',
+              headers: {
+                'x-integration-key': integration.key,
+                'Content-Type': 'application/json',
+                'Idempotency-Key': delivery,
+              },
+              body: JSON.stringify(data),
+            }
+          )
+        );
+      expect((await request()).status).toBe(202);
+      const before = await prisma.ingestionReceipt.findMany({
+        select: { id: true, idempotencyKey: true },
+      });
+      const batches = await prisma.ingestionBatch.count();
+      for (const response of await Promise.all(Array.from({ length: 8 }, () => request())))
+        expect(response.status).toBe(202);
+      expect(await prisma.ingestionBatch.count()).toBe(batches);
+      expect(await prisma.ingestionReceipt.count()).toBe(2);
+      await prisma.ingestionReceipt.delete({ where: { id: before[1].id } });
+      const missing = await request();
+      expect(missing.status).toBe(429);
+      expect(await prisma.ingestionReceipt.count()).toBe(1);
+      expect(await prisma.ingestionBatch.count()).toBe(batches);
+    } finally {
+      delete process.env.OPSKNIGHT_INGESTION_MODE;
+    }
+  });
+
+  it('supports exhausted-quota receipt recovery on the independent PagerDuty endpoint', async () => {
+    process.env.OPSKNIGHT_INGESTION_MODE = 'postgres';
+    try {
+      const { POST } = await import('@/app/api/integrations/pagerduty/route');
+      const current = await getIngestionPolicy();
+      await applyIngestionCommand(
+        {
+          action: 'configure',
+          expectedRevision: 0,
+          policy: {
+            ...current.policy,
+            quotas: { ...current.policy.quotas, integrationPerMinute: 1, integrationBurst: 1 },
+          },
+        },
+        actorId
+      );
+      const integration = await prisma.integration.create({
+        data: { serviceId, name: 'PagerDuty replay', type: 'PAGERDUTY', key: randomUUID() },
+      });
+      const delivery = randomUUID();
+      const body = {
+        event_action: 'trigger',
+        dedup_key: 'pagerduty-replay',
+        payload: {
+          summary: 'PagerDuty durable retry',
+          source: 'quota-replay',
+          severity: 'warning',
+        },
+      };
+      const request = (id = delivery) =>
+        POST(
+          new NextRequest(
+            `http://localhost/api/integrations/pagerduty?integrationId=${integration.id}`,
+            {
+              method: 'POST',
+              headers: {
+                'x-routing-key': integration.key,
+                'Content-Type': 'application/json',
+                'Idempotency-Key': id,
+              },
+              body: JSON.stringify(body),
+            }
+          )
+        );
+      const original = await request();
+      expect(original.status).toBe(202);
+      const receipt = (await original.json()).receiptId;
+      const replay = await request();
+      expect(replay.status).toBe(202);
+      expect((await replay.json()).receiptId).toBe(receipt);
+      const missing = await request(randomUUID());
+      expect(missing.status).toBe(429);
+      expect(await missing.json()).toMatchObject({
+        status: 'error',
+        message: 'Rate limit exceeded',
+      });
+      expect(await prisma.ingestionReceipt.count()).toBe(1);
+    } finally {
+      delete process.env.OPSKNIGHT_INGESTION_MODE;
+    }
+  });
+
   it('protects a warning promoted to P1 by pinned live Automation before evaluating its decision', async () => {
     const settings = await getIngestionPolicy();
     await applyIngestionCommand(

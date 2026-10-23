@@ -1,3 +1,5 @@
+import { reserveIngestionReplay } from '@/lib/ingestion/replay';
+import type { IngestionRateLimitError } from '@/lib/ingestion/contract';
 import { NextRequest } from 'next/server';
 import { withIngestionDelivery } from '@/lib/ingestion/admission';
 import { ingestionErrorResponse } from '@/lib/ingestion/http';
@@ -178,6 +180,11 @@ async function postEvent(req: NextRequest) {
       integrationId = 'api-key';
     }
 
+    const idempotencyKey =
+      ingestionConfig().mode === 'postgres' ? req.headers.get('Idempotency-Key') : null;
+    if (idempotencyKey && idempotencyKey.length > 256)
+      return jsonError('Invalid Idempotency-Key', 400);
+    let replayOnly: IngestionRateLimitError | undefined;
     if (process.env.INTEGRATION_RATE_LIMIT !== 'false') {
       const rateKey = apiKeyId
         ? `api:${apiKeyId}:events`
@@ -186,24 +193,28 @@ async function postEvent(req: NextRequest) {
           : 'anonymous:events';
       const rate = await checkRateLimit(rateKey, RATE_LIMIT_MAX, RATE_LIMIT_WINDOW_MS);
       if (!rate.allowed) {
-        const retryAfter = Math.ceil((rate.resetAt - Date.now()) / 1000);
-        return jsonError(
-          new AppError({
-            code: 'RATE_LIMIT_EXCEEDED',
-            userMessage: 'Rate limit exceeded.',
-            details: { retryAfter },
-          }),
-          undefined,
-          undefined,
-          { 'Retry-After': String(retryAfter) }
+        replayOnly = await reserveIngestionReplay(
+          rateKey,
+          idempotencyKey ?? undefined,
+          rate,
+          'events'
         );
+        if (!replayOnly) {
+          const retryAfter = Math.ceil((rate.resetAt - Date.now()) / 1000);
+          return jsonError(
+            new AppError({
+              code: 'RATE_LIMIT_EXCEEDED',
+              userMessage: 'Rate limit exceeded.',
+              details: { retryAfter },
+            }),
+            undefined,
+            undefined,
+            { 'Retry-After': String(retryAfter) }
+          );
+        }
       }
     }
 
-    const idempotencyKey =
-      ingestionConfig().mode === 'postgres' ? req.headers.get('Idempotency-Key') : null;
-    if (idempotencyKey && idempotencyKey.length > 256)
-      return jsonError('Invalid Idempotency-Key', 400);
     const result = await withIngestionDelivery(
       idempotencyKey ? `${apiKeyId ?? integrationId}:${idempotencyKey}` : undefined,
       () =>
@@ -214,7 +225,8 @@ async function postEvent(req: NextRequest) {
           integrationType,
           providerPayload: parsed.data,
           receivedAt: new Date(),
-        })
+        }),
+      replayOnly
     );
 
     logger.info('api.event.processed', { action: result.action, serviceId, integrationId });

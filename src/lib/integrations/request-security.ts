@@ -1,3 +1,4 @@
+import { ingestionDeliveries } from '@/lib/ingestion/delivery-context';
 import { createHash, randomUUID } from 'crypto';
 import { InboundDeliveryStatus } from '@prisma/client';
 import type { NextRequest } from 'next/server';
@@ -62,6 +63,8 @@ export async function claimInboundDelivery(
   provider: string,
   deliveryId?: string | null
 ): Promise<InboundDeliveryClaim | null> {
+  if (ingestionDeliveries.getStore()?.replayOnly) return null;
+
   const hash = deliveryHash(integrationId, deliveryId);
   // Payload hashes are intentionally not a substitute for provider delivery
   // IDs: identical state notifications may be legitimate future events.

@@ -48,7 +48,6 @@
   },
   "benchmark": "local-microbenchmark.json",
   "unmet": [
-    "bounded idempotent replay under exhausted new-event quotas",
     "shared quota-row and locked budget-shard contention stress",
     "optional broker transport for enterprise targets",
     "weighted service fairness and bounded inflight allocation",
@@ -367,5 +366,30 @@
     "focusedUnitPassed": 21,
     "typeCheck": "passed",
     "modifiedFileLint": "passed"
+  },
+  "quotaReplayFollowup": {
+    "recordedAt": "2026-10-23T20:56:52.231274+00:00",
+    "certified": false,
+    "databaseContractPassed": 57,
+    "focusedUnitPassed": 35,
+    "typeCheck": "passed; completed exit0",
+    "modifiedSourceLint": "passed; completed exit0",
+    "replayGuard": {
+      "attemptsPerFixedMinute": 600,
+      "clock": "PostgreSQL",
+      "scope": "authenticated principal",
+      "normalRequestCharging": "unchanged"
+    },
+    "covers": [
+      "Events API concurrent retained-receipt retries",
+      "conflict guard charges",
+      "unknown delivery rejection",
+      "exhausted recovery guard",
+      "pruned payload and admission pause",
+      "atomic shared-batch replay",
+      "PagerDuty independent endpoint"
+    ],
+    "independentReviews": "PagerDuty gap fixed; repeat source reviews found no additional concrete defect",
+    "freshImage": "pending"
   }
 }
