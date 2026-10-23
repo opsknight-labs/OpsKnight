@@ -1,15 +1,32 @@
-import { Prisma } from '@prisma/client';
+import { Prisma, type PrismaClient } from '@prisma/client';
 import { runReadCommittedTransaction } from '@/lib/db-utils';
 import { emitAuditEvent } from '@/lib/audit';
 import { getIngestionPolicy } from './policy';
 import { tryAcquireRetentionResourceLock } from '@/lib/retention/resource-lock';
 import { isIncidentHeld } from '@/lib/retention/lifecycle';
 
+// Maintenance uses an isolated one-connection pool and bounded transactions.
+// Existing callers retain the shared transaction helper for compatibility.
+function retentionTransaction<T>(
+  operation: (tx: Prisma.TransactionClient) => Promise<T>,
+  db?: PrismaClient
+): Promise<T> {
+  if (!db) return runReadCommittedTransaction(operation);
+  return db.$transaction(
+    async tx => {
+      await tx.$executeRaw`SET LOCAL statement_timeout = '1000ms'`;
+      await tx.$executeRaw`SET LOCAL lock_timeout = '100ms'`;
+      return operation(tx);
+    },
+    { isolationLevel: 'ReadCommitted', timeout: 2500, maxWait: 500 }
+  );
+}
+
 /** Expire only long-idle, fully replenished buckets. Deleting debt would grant
  * quota credit on the next request. Row locks serialize cleanup with admissions.
  */
-export async function pruneInactiveIngestionQuotas(): Promise<number> {
-  return runReadCommittedTransaction(async tx => {
+export async function pruneInactiveIngestionQuotas(db?: PrismaClient): Promise<number> {
+  return retentionTransaction(async tx => {
     const { policy } = await getIngestionPolicy(tx);
     return tx.$executeRaw`
       WITH inactive AS (
@@ -25,12 +42,12 @@ export async function pruneInactiveIngestionQuotas(): Promise<number> {
       ) DELETE FROM "IngestionQuota" bucket USING inactive
         WHERE bucket."key" = inactive."key"
     `;
-  });
+  }, db);
 }
 
 /** Expire completed raw payloads before the longer retry-identity retention window. */
-export async function pruneCompletedIngestionPayloads(): Promise<number> {
-  return runReadCommittedTransaction(async tx => {
+export async function pruneCompletedIngestionPayloads(db?: PrismaClient): Promise<number> {
+  return retentionTransaction(async tx => {
     const { policy } = await getIngestionPolicy(tx);
     const cutoff = new Date(Date.now() - policy.payloadRetentionHours * 3600000);
     const candidates = await tx.$queryRaw<Array<{ id: string; incidentId: string | null }>>`
@@ -66,12 +83,12 @@ export async function pruneCompletedIngestionPayloads(): Promise<number> {
         tx
       );
     return ids.length;
-  });
+  }, db);
 }
 
 /** Immutable batch context remains held while any child retains its payload. */
-export async function pruneSharedIngestionPayloads(): Promise<number> {
-  return runReadCommittedTransaction(async tx => {
+export async function pruneSharedIngestionPayloads(db?: PrismaClient): Promise<number> {
+  return retentionTransaction(async tx => {
     const candidates = await tx.$queryRaw<Array<{ id: string }>>`
       SELECT batch."id" FROM "IngestionBatch" batch
       WHERE batch."payload" <> 'null'::jsonb
@@ -132,12 +149,12 @@ export async function pruneSharedIngestionPayloads(): Promise<number> {
         tx
       );
     return pruned.length;
-  });
+  }, db);
 }
 
 /** Expire terminal retry identities after the documented window; never unfinished work. */
-export async function pruneExpiredIngestionReceipts(): Promise<number> {
-  return runReadCommittedTransaction(async tx => {
+export async function pruneExpiredIngestionReceipts(db?: PrismaClient): Promise<number> {
+  return retentionTransaction(async tx => {
     const { policy } = await getIngestionPolicy(tx);
     const candidates = await tx.$queryRaw<Array<{ id: string; incidentId: string | null }>>`
       SELECT receipt."id", receipt."result"->>'incidentId' AS "incidentId"
@@ -177,12 +194,12 @@ export async function pruneExpiredIngestionReceipts(): Promise<number> {
       );
     }
     return ids.length;
-  });
+  }, db);
 }
 
 /** Children own evidence holds; only empty, already-minimized batch records can expire. */
-export async function pruneExpiredIngestionBatches(): Promise<number> {
-  return runReadCommittedTransaction(async tx => {
+export async function pruneExpiredIngestionBatches(db?: PrismaClient): Promise<number> {
+  return retentionTransaction(async tx => {
     const { policy } = await getIngestionPolicy(tx);
     const ids = await tx.$queryRaw<Array<{ id: string }>>`
       SELECT batch."id" FROM "IngestionBatch" batch
@@ -205,5 +222,5 @@ export async function pruneExpiredIngestionBatches(): Promise<number> {
       );
     }
     return ids.length;
-  });
+  }, db);
 }

@@ -23,9 +23,9 @@ let workerFault;
 let finishDatabaseProfile;
 async function main() {
   const url = new URL(process.env.DATABASE_URL);
-  assert.equal(
+  assert.match(
     url.pathname,
-    '/ingestion_test_http',
+    /^\/ingestion_test_http(?:_[a-z0-9]+)*$/,
     'HTTP fixture requires its own dedicated database'
   );
   const service = await prisma.service.create({ data: { name: `HTTP load ${runId}` } });

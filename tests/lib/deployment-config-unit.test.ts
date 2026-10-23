@@ -13,6 +13,16 @@ const read = (file: string) => fs.readFileSync(path.join(root, file), 'utf8');
 const require = createRequire(import.meta.url);
 
 describe('deployment configuration invariants', () => {
+  it('enables maintenance on the scheduler in the PostgreSQL ingestion overlay', () => {
+    const overlay = YAML.parse(read('deploy/compose/docker-compose.ingestion.yml'));
+    expect(overlay.services['opsknight-scheduler'].environment.OPSKNIGHT_INGESTION_MODE).toBe(
+      'postgres'
+    );
+    expect(overlay.services['opsknight-scheduler'].environment).toEqual(
+      overlay.services['opsknight-web'].environment
+    );
+  });
+
   it('keeps packaged deployment versions aligned with the application version', () => {
     const pkg = JSON.parse(read('package.json')) as { version: string };
     const chart = read('deploy/kubernetes/helm/opsknight/Chart.yaml');

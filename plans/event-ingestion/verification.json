@@ -286,5 +286,50 @@
       "Full deployment and downstream delivery",
       "Main integration and release checks"
     ]
+  },
+  "updatedReviewFollowup": {
+    "recordedAt": "2026-10-23T15:22:47.896198+00:00",
+    "certified": false,
+    "mainReconciliation": {
+      "main": "fdabcf67b",
+      "source": "5a85387bb",
+      "databaseContractPassed": 54,
+      "ingestionRegressionPassed": 76,
+      "metricsPrivacyPassed": 39,
+      "scimUnitPassed": 172
+    },
+    "nativeImage100Rps": {
+      "evidence": "local-docker-http-native-prisma-100.json",
+      "topology": "local-docker-topology-native-prisma-100.json",
+      "passed": true,
+      "source": "8e19cd798",
+      "durationSeconds": 10,
+      "acceptedCompleted": 1001,
+      "httpP95Ms": 44.769,
+      "completionP95Ms": 165,
+      "enterpriseCertified": false
+    },
+    "fullStackCrash100Rps": {
+      "evidence": "local-docker-http-fullstack-crash-100.json",
+      "topology": "local-docker-topology-fullstack-crash-100.json",
+      "passed": false,
+      "acceptedCompleted": 2593,
+      "droppedArrivals": 407,
+      "httpP95Ms": 1665.54705,
+      "completionP95Ms": 6981,
+      "naturalRecoveryMs": 5371,
+      "leaseExpiryAdvanced": false,
+      "externalEffectsCertified": false
+    },
+    "isolatedMaintenance": {
+      "databaseContractPassed": 54,
+      "focusedUnitPassed": 78,
+      "focusedUnitSkipped": 4,
+      "typeCheck": "passed",
+      "modifiedSourceLint": "passed",
+      "independentBugbotSubstitute": "rollout findings fixed; no additional actionable findings",
+      "independentSecuritySubstitute": "cron-disabled regression fixed; no additional concrete findings",
+      "highVolumeRetentionCertified": false
+    }
   }
 }
