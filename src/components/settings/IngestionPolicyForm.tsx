@@ -7,6 +7,12 @@ import { Label } from '@/components/ui/shadcn/label';
 import { ingestionPolicySchema, type IngestionPolicy } from '@/lib/ingestion/policy-schema';
 
 const fields = [
+  {
+    key: 'receiptRetentionDays',
+    label: 'Completed receipt and retry identity retention (days)',
+    min: 31,
+    max: 3650,
+  },
   { key: 'maxPending', label: 'Maximum unfinished events', min: 64, max: 10000000 },
   {
     key: 'maxPendingBytes',
@@ -69,7 +75,9 @@ export default function IngestionPolicyForm({
         Limits apply to new admissions. Reducing capacity preserves accepted work while it drains.
         Workers adopt changes between processing cycles; running transactions finish normally.
         Increasing concurrency also increases database work. Shorter retention can remove completed
-        payloads on the next maintenance cycle; active retention holds remain protected.
+        payloads on the next maintenance cycle; active retention holds remain protected. Completed
+        receipt IDs and retry identities expire after their retention window. A later retry is
+        treated as a new event and passes through normal incident deduplication.
       </p>
       <div className="grid gap-4 md:grid-cols-2">
         {fields.map(field => (

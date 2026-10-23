@@ -5,7 +5,7 @@ import { getIngestionPolicy } from './policy';
 import { tryAcquireRetentionResourceLock } from '@/lib/retention/resource-lock';
 import { isIncidentHeld } from '@/lib/retention/lifecycle';
 
-/** Expire completed raw payloads, keeping the permanent idempotency tombstone. */
+/** Expire completed raw payloads before the longer retry-identity retention window. */
 export async function pruneCompletedIngestionPayloads(): Promise<number> {
   return runReadCommittedTransaction(async tx => {
     const { policy } = await getIngestionPolicy(tx);
@@ -109,5 +109,78 @@ export async function pruneSharedIngestionPayloads(): Promise<number> {
         tx
       );
     return pruned.length;
+  });
+}
+
+/** Expire terminal retry identities after the documented window; never unfinished work. */
+export async function pruneExpiredIngestionReceipts(): Promise<number> {
+  return runReadCommittedTransaction(async tx => {
+    const { policy } = await getIngestionPolicy(tx);
+    const candidates = await tx.$queryRaw<Array<{ id: string; incidentId: string | null }>>`
+      SELECT receipt."id", receipt."result"->>'incidentId' AS "incidentId"
+      FROM "IngestionReceipt" receipt
+      WHERE receipt."status" IN ('COMPLETED', 'ARCHIVED')
+        AND receipt."completedAt" < CURRENT_TIMESTAMP - ${policy.receiptRetentionDays} * INTERVAL '1 day'
+        AND receipt."envelope" = 'null'::jsonb
+        AND (receipt."batchId" IS NULL OR EXISTS (
+          SELECT 1 FROM "IngestionBatch" batch WHERE batch."id" = receipt."batchId"
+            AND batch."payload" = 'null'::jsonb))
+        AND NOT EXISTS (SELECT 1 FROM "DataRetentionHold" hold
+          WHERE hold."scopeType" = 'INCIDENT' AND hold."scopeId" = receipt."result"->>'incidentId'
+            AND hold."releasedAt" IS NULL AND (hold."expiresAt" IS NULL OR hold."expiresAt" > CURRENT_TIMESTAMP))
+      ORDER BY receipt."completedAt" FOR UPDATE OF receipt SKIP LOCKED LIMIT 100
+    `;
+    const ids: string[] = [];
+    for (const receipt of candidates) {
+      if (
+        receipt.incidentId &&
+        (!(await tryAcquireRetentionResourceLock(tx, 'INCIDENT', receipt.incidentId)) ||
+          (await isIncidentHeld(tx, receipt.incidentId)))
+      )
+        continue;
+      ids.push(receipt.id);
+    }
+    if (ids.length) {
+      await tx.ingestionReceipt.deleteMany({ where: { id: { in: ids } } });
+      await emitAuditEvent(
+        {
+          action: 'ingestion.receipt_retention',
+          source: 'BACKGROUND',
+          actor: { type: 'SYSTEM' },
+          target: { type: 'SYSTEM_CONFIG', id: 'ingestion_control' },
+          metadata: { count: ids.length, retentionDays: policy.receiptRetentionDays },
+        },
+        tx
+      );
+    }
+    return ids.length;
+  });
+}
+
+/** Children own evidence holds; only empty, already-minimized batch records can expire. */
+export async function pruneExpiredIngestionBatches(): Promise<number> {
+  return runReadCommittedTransaction(async tx => {
+    const { policy } = await getIngestionPolicy(tx);
+    const ids = await tx.$queryRaw<Array<{ id: string }>>`
+      SELECT batch."id" FROM "IngestionBatch" batch
+      WHERE batch."payload" = 'null'::jsonb
+        AND batch."createdAt" < CURRENT_TIMESTAMP - ${policy.receiptRetentionDays} * INTERVAL '1 day'
+        AND NOT EXISTS (SELECT 1 FROM "IngestionReceipt" receipt WHERE receipt."batchId" = batch."id")
+      ORDER BY batch."createdAt" FOR UPDATE OF batch SKIP LOCKED LIMIT 100
+    `;
+    if (ids.length) {
+      await tx.ingestionBatch.deleteMany({ where: { id: { in: ids.map(row => row.id) } } });
+      await emitAuditEvent(
+        {
+          action: 'ingestion.batch_retention',
+          source: 'BACKGROUND',
+          actor: { type: 'SYSTEM' },
+          target: { type: 'SYSTEM_CONFIG', id: 'ingestion_control' },
+          metadata: { count: ids.length },
+        },
+        tx
+      );
+    }
+    return ids.length;
   });
 }

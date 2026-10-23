@@ -36,7 +36,14 @@ describe('ingestion operator authorization', () => {
   it('validates online policy limits and rejects deployment settings in configure commands', async () => {
     const { concurrency, pollMs, maxPending, maxPendingBytes, payloadRetentionHours } =
       ingestionConfig();
-    const policy = { concurrency, pollMs, maxPending, maxPendingBytes, payloadRetentionHours };
+    const policy = {
+      concurrency,
+      pollMs,
+      maxPending,
+      maxPendingBytes,
+      payloadRetentionHours,
+      receiptRetentionDays: 90,
+    };
     for (const body of [
       { action: 'configure', expectedRevision: -1, policy },
       { action: 'configure', expectedRevision: 0, policy: { ...policy, concurrency: 33 } },

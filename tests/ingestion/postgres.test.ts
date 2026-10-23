@@ -27,6 +27,8 @@ import { checkIngestionQuota } from '@/lib/ingestion/quota';
 import {
   pruneCompletedIngestionPayloads,
   pruneSharedIngestionPayloads,
+  pruneExpiredIngestionReceipts,
+  pruneExpiredIngestionBatches,
 } from '@/lib/ingestion/retention';
 import { checksum } from '@/lib/automation/cache';
 import type { IntegrationEventEnvelope } from '@/lib/automation/runtime';
@@ -94,6 +96,109 @@ afterAll(async () => {
 });
 
 describe('PostgreSQL ingestion durability', () => {
+  it('cannot expire a minimized receipt while a concurrent hold is being created', async () => {
+    const accepted = await acceptPostgresEvent(envelope('terminal-hold-race'));
+    await consumeIngestionBatch(1);
+    const incident = await prisma.incident.findFirstOrThrow({ where: { serviceId } });
+    await prisma.ingestionReceipt.update({
+      where: { id: accepted.receiptId },
+      data: { completedAt: new Date(Date.now() - 91 * 86400000) },
+    });
+    await pruneCompletedIngestionPayloads();
+    let acquired!: () => void;
+    let release!: () => void;
+    const locked = new Promise<void>(resolve => {
+      acquired = resolve;
+    });
+    const released = new Promise<void>(resolve => {
+      release = resolve;
+    });
+    const holding = prisma.$transaction(async tx => {
+      await acquireRetentionResourceLock(tx, 'INCIDENT', incident.id);
+      acquired();
+      await released;
+      await tx.dataRetentionHold.create({
+        data: {
+          scopeType: 'INCIDENT',
+          scopeId: incident.id,
+          reason: 'Concurrent terminal evidence hold',
+          createdById: actorId,
+        },
+      });
+    });
+    await locked;
+    try {
+      expect(await pruneExpiredIngestionReceipts()).toBe(0);
+    } finally {
+      release();
+    }
+    await holding;
+    expect(await pruneExpiredIngestionReceipts()).toBe(0);
+    expect(
+      await prisma.ingestionReceipt.findUnique({ where: { id: accepted.receiptId } })
+    ).not.toBeNull();
+  });
+
+  it('expires only minimized terminal receipts and preserves held, recent and unfinished work', async () => {
+    const expired = await acceptPostgresEvent(envelope('expired-terminal'), 'expired-terminal');
+    const held = await acceptPostgresEvent(envelope('held-terminal'), 'held-terminal');
+    const recent = await acceptPostgresEvent(envelope('recent-terminal'), 'recent-terminal');
+    await consumeIngestionBatch(4);
+    const unfinished = await acceptPostgresEvent(
+      envelope('unfinished-terminal'),
+      'unfinished-terminal'
+    );
+    const old = new Date(Date.now() - 91 * 86400000);
+    await prisma.ingestionReceipt.updateMany({
+      where: { id: { in: [expired.receiptId, held.receiptId, unfinished.receiptId] } },
+      data: { acceptedAt: old, completedAt: old },
+    });
+    // Payloads must be minimized through the hold-aware lifecycle first.
+    expect(await pruneExpiredIngestionReceipts()).toBe(0);
+    expect(await pruneCompletedIngestionPayloads()).toBe(2);
+    const result = (
+      await prisma.ingestionReceipt.findUniqueOrThrow({ where: { id: held.receiptId } })
+    ).result as { incidentId: string };
+    const hold = await prisma.dataRetentionHold.create({
+      data: {
+        scopeType: 'INCIDENT',
+        scopeId: result.incidentId,
+        reason: 'Keep terminal ingestion evidence',
+        createdById: actorId,
+      },
+    });
+    expect(await pruneExpiredIngestionReceipts()).toBe(1);
+    expect(
+      await prisma.ingestionReceipt.findUnique({ where: { id: expired.receiptId } })
+    ).toBeNull();
+    for (const receiptId of [held.receiptId, recent.receiptId, unfinished.receiptId])
+      expect(await prisma.ingestionReceipt.findUnique({ where: { id: receiptId } })).not.toBeNull();
+    const retried = await acceptPostgresEvent(envelope('expired-terminal'), 'expired-terminal');
+    expect(retried.receiptId).not.toBe(expired.receiptId);
+    await prisma.dataRetentionHold.update({
+      where: { id: hold.id },
+      data: { releasedAt: new Date() },
+    });
+    expect(await pruneExpiredIngestionReceipts()).toBe(1);
+  });
+
+  it('expires shared batch metadata only after every minimized child has expired', async () => {
+    const { event, ...input } = envelope('expired-batch');
+    await acceptPostgresBatch(input, [event], ['expired-batch']);
+    await consumeIngestionBatch(1);
+    const old = new Date(Date.now() - 91 * 86400000);
+    await prisma.ingestionReceipt.updateMany({ data: { completedAt: old } });
+    await prisma.ingestionBatch.updateMany({ data: { createdAt: old } });
+    await pruneCompletedIngestionPayloads();
+    expect(await pruneExpiredIngestionReceipts()).toBe(0);
+    expect(await pruneExpiredIngestionBatches()).toBe(0);
+    expect(await pruneSharedIngestionPayloads()).toBe(1);
+    expect(await pruneExpiredIngestionBatches()).toBe(0);
+    expect(await pruneExpiredIngestionReceipts()).toBe(1);
+    expect(await pruneExpiredIngestionBatches()).toBe(1);
+    expect(await prisma.ingestionBatch.count()).toBe(0);
+  });
+
   it('applies live capacity settings, preserves accepted work and fences stale admin writes', async () => {
     const initial = await getIngestionPolicy();
     const policy = { ...initial.policy, maxPending: 64, payloadRetentionHours: 1 };
