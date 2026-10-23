@@ -10,6 +10,8 @@
  */
 
 import { NextRequest } from 'next/server';
+import { withIngestionDelivery, ingestionDeliveryKey } from '@/lib/ingestion/admission';
+import { ingestionErrorResponse } from '@/lib/ingestion/http';
 import prisma from '@/lib/prisma';
 import { jsonError, jsonOk } from '@/lib/api-response';
 import { AppError } from '@/lib/errors';
@@ -112,7 +114,14 @@ export function createIntegrationHandler<T>(
         );
       }
 
-      if (!(await isIntegrationAuthorized(req, integration.key, integration.previousKey, integration.previousKeyExpiresAt))) {
+      if (
+        !(await isIntegrationAuthorized(
+          req,
+          integration.key,
+          integration.previousKey,
+          integration.previousKeyExpiresAt
+        ))
+      ) {
         throw IntegrationErrors.invalidPayload('Invalid integration key');
       }
 
@@ -244,7 +253,11 @@ export function createIntegrationHandler<T>(
         startTime,
       };
 
-      const result = await processor(ctx);
+      const result = await withIngestionDelivery(
+        ingestionDeliveryKey(req.headers, options.integrationType) ??
+          (deliveryId ? `${options.integrationType}:${deliveryId}` : undefined),
+        () => processor(ctx)
+      );
       if (deliveryClaim) await completeInboundDelivery(deliveryClaim);
 
       recordWebhookReceived(integrationType, integrationId, true, performance.now() - startTime);
@@ -259,6 +272,8 @@ export function createIntegrationHandler<T>(
           })
         );
       }
+      const ingestionError = ingestionErrorResponse(error);
+      if (ingestionError) return ingestionError;
       if (error instanceof IntegrationBodyTooLargeError) {
         return jsonError(
           new AppError({
@@ -305,7 +320,7 @@ export function createIntegrationHandler<T>(
   return withRequestContext(handler, `api.integration.${options.integrationType}`);
 }
 
-export async function withIntegrationMiddleware(
+async function runIntegrationMiddleware(
   req: NextRequest,
   integrationType: string,
   handler: () => Promise<Response>
@@ -402,7 +417,14 @@ export async function withIntegrationMiddleware(
     );
   }
 
-  if (!(await isIntegrationAuthorized(req, integration.key, integration.previousKey, integration.previousKeyExpiresAt))) {
+  if (
+    !(await isIntegrationAuthorized(
+      req,
+      integration.key,
+      integration.previousKey,
+      integration.previousKeyExpiresAt
+    ))
+  ) {
     logger.warn('integration.invalid_key', { integrationId });
     recordWebhookReceived(
       integrationType,
@@ -441,7 +463,10 @@ export async function withIntegrationMiddleware(
   }
 
   try {
-    const response = await handler();
+    const response = await withIngestionDelivery(
+      ingestionDeliveryKey(req.headers, integrationType),
+      handler
+    );
     const success = response.status >= 200 && response.status < 300;
     recordWebhookReceived(integrationType, integrationId, success, performance.now() - startTime);
     return response;
@@ -467,6 +492,20 @@ export async function withIntegrationMiddleware(
       performance.now() - startTime,
       'ERROR'
     );
+    throw error;
+  }
+}
+
+export async function withIntegrationMiddleware(
+  req: NextRequest,
+  integrationType: string,
+  handler: () => Promise<Response>
+): Promise<Response> {
+  try {
+    return await runIntegrationMiddleware(req, integrationType, handler);
+  } catch (error) {
+    const response = ingestionErrorResponse(error);
+    if (response) return response;
     throw error;
   }
 }

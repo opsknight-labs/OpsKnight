@@ -26,6 +26,7 @@ export default defineConfig({
       '**/.claude/**',
       '**/.next/**',
       'tests/e2e/**',
+      'tests/ingestion/postgres.test.ts',
       'tests/docs/journeys/**',
       'tests/readme/**',
     ],

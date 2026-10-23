@@ -1,8 +1,10 @@
 import { NextRequest } from 'next/server';
+import { withIngestionDelivery } from '@/lib/ingestion/admission';
+import { ingestionErrorResponse } from '@/lib/ingestion/http';
 import prisma from '@/lib/prisma';
 import { processIntegrationEvent, EventPayload } from '@/lib/events';
 import { authenticateApiKey } from '@/lib/api-auth';
-import { checkRateLimit } from '@/lib/rate-limit';
+import { checkIngestionQuota as checkRateLimit } from '@/lib/ingestion/quota';
 import { jsonError, jsonOk } from '@/lib/api-response';
 import { EventSchema } from '@/lib/validation';
 import { logger, withRequestContext } from '@/lib/logger';
@@ -176,10 +178,10 @@ async function postEvent(req: NextRequest) {
     }
 
     if (process.env.INTEGRATION_RATE_LIMIT !== 'false') {
-      const rateKey = integrationId
-        ? `integration:${integrationId}:events`
-        : apiKeyId
-          ? `api:${apiKeyId}:events`
+      const rateKey = apiKeyId
+        ? `api:${apiKeyId}:events`
+        : integrationId
+          ? `integration:${integrationId}:events`
           : 'anonymous:events';
       const rate = await checkRateLimit(rateKey, RATE_LIMIT_MAX, RATE_LIMIT_WINDOW_MS);
       if (!rate.allowed) {
@@ -197,18 +199,27 @@ async function postEvent(req: NextRequest) {
       }
     }
 
-    const result = await processIntegrationEvent({
-      event: { ...parsed.data, event_action: eventAction, dedup_key: dedupKey } as EventPayload,
-      serviceId,
-      integrationId: integrationId || 'api-key',
-      integrationType,
-      providerPayload: parsed.data,
-      receivedAt: new Date(),
-    });
+    const idempotencyKey = req.headers.get('Idempotency-Key');
+    if (idempotencyKey && idempotencyKey.length > 256)
+      return jsonError('Invalid Idempotency-Key', 400);
+    const result = await withIngestionDelivery(
+      idempotencyKey ? `${apiKeyId ?? integrationId}:${idempotencyKey}` : undefined,
+      () =>
+        processIntegrationEvent({
+          event: { ...parsed.data, event_action: eventAction, dedup_key: dedupKey } as EventPayload,
+          serviceId,
+          integrationId: integrationId || 'api-key',
+          integrationType,
+          providerPayload: parsed.data,
+          receivedAt: new Date(),
+        })
+    );
 
     logger.info('api.event.processed', { action: result.action, serviceId, integrationId });
     return jsonOk({ status: 'success', result }, 202);
   } catch (error: unknown) {
+    const ingestionError = ingestionErrorResponse(error);
+    if (ingestionError) return ingestionError;
     logger.error('api.event.error', {
       error: error instanceof Error ? error.message : String(error),
     });

@@ -8,6 +8,7 @@ export const OPSKNIGHT_PROCESS_ROLES = [
   'bulk-worker',
   'status-projector',
   'runbook-worker',
+  'ingestion-worker',
 ] as const;
 
 export type OpsKnightProcessRole = (typeof OPSKNIGHT_PROCESS_ROLES)[number];
@@ -73,6 +74,7 @@ export function getRuntimeResponsibilities(
         startIsolatedRunbookWorker: true,
       };
     case 'web':
+    case 'ingestion-worker':
       return {
         startScheduler: false,
         startJobWorker: false,

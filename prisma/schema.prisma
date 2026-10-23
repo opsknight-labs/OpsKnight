@@ -791,6 +791,39 @@ model Integration {
   previousSignatureSecretExpiresAt DateTime?
 }
 
+// No cascading foreign keys: deleting a service must never discard accepted work.
+model IngestionReceipt {
+  id             String   @id
+  sequence       BigInt   @unique @default(autoincrement())
+  serviceId      String
+  integrationId  String
+  partitionKey   String
+  idempotencyKey String   @unique
+  contentHash    String
+  budgetShard    Int
+  payloadBytes   Int
+  envelope       Json
+  status         String   @default("PENDING")
+  attempts       Int      @default(0)
+  availableAt    DateTime @default(now())
+  leaseToken     String?
+  leaseExpiresAt DateTime?
+  result         Json?
+  failureCode    String?
+  acceptedAt     DateTime @default(now())
+  completedAt    DateTime?
+
+  @@index([partitionKey, sequence])
+  @@index([status, availableAt, sequence])
+  @@index([serviceId, acceptedAt])
+}
+
+model IngestionBudget {
+  shard   Int @id
+  pending Int @default(0)
+  bytes   BigInt @default(0)
+}
+
 model InboundDelivery {
   id             String                @id @default(cuid())
   integrationId  String

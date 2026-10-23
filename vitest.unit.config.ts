@@ -13,6 +13,7 @@ export default mergeConfig(baseConfig, defineConfig({
                     include: ['src/**/*.{test,spec}.ts', 'tests/**/*.{test,spec}.ts'],
                     exclude: [
                         'tests/integration/**',
+                        'tests/ingestion/postgres.test.ts',
                         'tests/e2e/**',
                         'tests/docs/journeys/**',
                         'tests/readme/**',
@@ -39,6 +40,7 @@ export default mergeConfig(baseConfig, defineConfig({
                     ],
                     exclude: [
                         'tests/integration/**',
+                        'tests/ingestion/postgres.test.ts',
                         'tests/e2e/**',
                         'tests/docs/journeys/**',
                         'tests/readme/**',

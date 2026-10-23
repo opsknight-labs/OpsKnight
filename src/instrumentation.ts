@@ -12,10 +12,13 @@ let authenticationHeartbeat: ReturnType<typeof setInterval> | null = null;
 let stopScheduler: (() => Promise<void>) | null = null;
 let stopJobWorkerService: (() => Promise<void>) | null = null;
 let stopIntegratedRunbookWorkerService: (() => Promise<void>) | null = null;
+let stopIngestionWorkerService: (() => Promise<void>) | null = null;
 let shutdownPromise: Promise<void> | null = null;
 
 async function stopRuntimeServices(): Promise<void> {
   const stops: Promise<void>[] = [];
+  if (stopIngestionWorkerService) stops.push(stopIngestionWorkerService());
+  stopIngestionWorkerService = null;
   if (authenticationHeartbeat) clearInterval(authenticationHeartbeat);
   authenticationHeartbeat = null;
 
@@ -71,6 +74,17 @@ export async function register() {
       await import('./lib/runtime-role');
     const role = getOpsKnightProcessRole();
     const responsibilities = getRuntimeResponsibilities(role);
+    const { ingestionConfig } = await import('./lib/ingestion/config');
+    const ingestion = ingestionConfig(); // Reject invalid rollout configuration at startup.
+    if (ingestion.mode === 'postgres') {
+      const { verifyPostgresIngestionDurability } = await import('./lib/ingestion/postgres');
+      await verifyPostgresIngestionDurability();
+    }
+    if (role === 'integrated' || role === 'ingestion-worker') {
+      const { startIngestionWorker, stopIngestionWorker } = await import('./lib/ingestion/worker');
+      startIngestionWorker();
+      stopIngestionWorkerService = stopIngestionWorker;
+    }
     if (role === 'web' || role === 'integrated') {
       const { observeAuthenticationReplica } = await import('./lib/auth-control/replicas');
       await observeAuthenticationReplica();
