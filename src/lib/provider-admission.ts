@@ -586,7 +586,7 @@ export async function acquireProviderConcurrency(
       SELECT ${id}, ${leaseOwner}, ${providerKey}, ${scope}, LEAST(${requested}, slots),
         ${new Date(now.getTime() + PROVIDER_LEASE_MS)}, ${now}, NOW()
       FROM available WHERE slots > 0
-      ON CONFLICT ("id") DO UPDATE SET
+      ON CONFLICT ("workerId", "providerKey", "channel") DO UPDATE SET
         "reservedSlots" = EXCLUDED."reservedSlots", "expiresAt" = EXCLUDED."expiresAt",
         "heartbeatAt" = EXCLUDED."heartbeatAt", "updatedAt" = NOW()
       RETURNING "reservedSlots"
@@ -677,7 +677,7 @@ export async function acquireProviderConcurrency(
           SELECT ${id}, ${leaseOwner}, ${providerKey}, ${scope}, LEAST(${expandRequested}, slots),
                  ${new Date(now.getTime() + PROVIDER_LEASE_MS)}, ${now}, ${now}
           FROM available
-          ON CONFLICT ("id") DO UPDATE SET
+          ON CONFLICT ("workerId", "providerKey", "channel") DO UPDATE SET
             "reservedSlots" = EXCLUDED."reservedSlots",
             "expiresAt" = EXCLUDED."expiresAt",
             "heartbeatAt" = EXCLUDED."heartbeatAt",

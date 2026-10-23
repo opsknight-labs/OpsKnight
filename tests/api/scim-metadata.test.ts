@@ -71,7 +71,7 @@ describe('SCIM Discovery Metadata Endpoints', () => {
 
     const body = await res.json();
     expect(body.schemas).toContain('urn:ietf:params:scim:api:messages:2.0:ListResponse');
-    expect(body.totalResults).toBe(2);
+    expect(body.totalResults).toBe(3);
     expect(body.Resources).toEqual(
       expect.arrayContaining([
         expect.objectContaining({

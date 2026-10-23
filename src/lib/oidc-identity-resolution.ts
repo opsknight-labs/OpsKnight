@@ -262,68 +262,106 @@ export async function resolveOidcIdentityForSignIn(
       // Email is discovery material only after stable identity lookup misses.
       // Re-read it in the transaction so linking decisions never rely on stale
       // state observed before the transaction began.
-      const emailUser = await tx.user.findUnique({
-        where: { email },
-        select: targetUserSelect,
-      });
+      // Opt-in Entra bridge: immutable directory object + tenant + exact OIDC
+      // registration. Email is never sufficient to authorize this bridge.
+      const directoryObject = typeof input.claims?.oid === 'string' ? input.claims.oid : '';
+      const tenant = typeof input.claims?.tid === 'string' ? input.claims.tid : '';
+      const trustedCandidates =
+        input.requireCurrentRegistration &&
+        input.clientId &&
+        /^[0-9a-f-]{36}$/i.test(directoryObject) &&
+        /^[0-9a-f-]{36}$/i.test(tenant)
+          ? await tx.scimIdentity.findMany({
+              where: {
+                externalId: directoryObject,
+                deletedAt: null,
+                connector: {
+                  enabled: true,
+                  provider: 'ENTRA',
+                  trustedLinkEnabled: true,
+                  tenantId: tenant,
+                  oidcIssuer: input.issuer,
+                  oidcClientId: input.clientId,
+                },
+              },
+              include: { user: { select: targetUserSelect } },
+              take: 2,
+            })
+          : [];
+      if (trustedCandidates.length > 1) throw new Error('OIDC_AMBIGUOUS_IDENTITY_CONFLICT');
+      const trustedIdentity = trustedCandidates[0] ?? null;
+      const emailUser =
+        trustedIdentity?.user ??
+        (await tx.user.findUnique({
+          where: { email },
+          select: targetUserSelect,
+        }));
 
       if (emailUser?.status === 'DISABLED') {
         throw new Error('OIDC_TARGET_NOT_OPERATIONAL');
       }
 
       if (emailUser) {
-        if (!hasOidcEmailLinkAssurance(input.providerType, input.emailVerifiedClaim)) {
+        if (
+          !trustedIdentity &&
+          !hasOidcEmailLinkAssurance(input.providerType, input.emailVerifiedClaim)
+        ) {
           throw new Error('OIDC_EMAIL_ASSURANCE_REQUIRED');
         }
 
-        const approval = await tx.oidcLinkingApproval.findUnique({
-          where: { userId: emailUser.id },
-          select: {
-            id: true,
-            generation: true,
-            revokedAt: true,
-            consumedAt: true,
-            expiresAt: true,
-            providerConfigId: true,
-            issuerFingerprint: true,
-            expectedEmail: true,
-            configVersion: true,
-          },
-        });
-        if (!approval) throw new Error('OIDC_LINK_NOT_APPROVED');
+        if (!trustedIdentity) {
+          const approval = await tx.oidcLinkingApproval.findUnique({
+            where: { userId: emailUser.id },
+            select: {
+              id: true,
+              generation: true,
+              revokedAt: true,
+              consumedAt: true,
+              expiresAt: true,
+              providerConfigId: true,
+              issuerFingerprint: true,
+              expectedEmail: true,
+              configVersion: true,
+            },
+          });
+          if (!approval) throw new Error('OIDC_LINK_NOT_APPROVED');
+          const fingerprint = input.clientId
+            ? oidcTrustFingerprint(input.issuer, input.clientId)
+            : null;
+          if (
+            (approval.providerConfigId &&
+              approval.providerConfigId !== (input.providerConfigId ?? 'default')) ||
+            (approval.issuerFingerprint && approval.issuerFingerprint !== fingerprint) ||
+            (approval.expectedEmail && approval.expectedEmail.toLowerCase() !== email) ||
+            (approval.configVersion != null && approval.configVersion !== input.configVersion)
+          ) {
+            throw new Error('OIDC_LINK_NOT_APPROVED');
+          }
+          if (!isOidcLinkingApprovalUsable(approval, now)) {
+            if (!approval.revokedAt && approval.expiresAt && approval.expiresAt <= now) {
+              throw new Error('OIDC_LINK_APPROVAL_EXPIRED');
+            }
+            throw new Error('OIDC_LINK_NOT_APPROVED');
+          }
+
+          // Consume exactly the generation that was evaluated. This closes the
+          // revoke/renew/callback race and guarantees one callback consumes one
+          // approval generation.
+          const consumed = await tx.oidcLinkingApproval.updateMany({
+            where: {
+              id: approval.id,
+              generation: approval.generation,
+              revokedAt: null,
+              consumedAt: null,
+              OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
+            },
+            data: { consumedAt: now },
+          });
+          if (consumed.count !== 1) throw new Error('OIDC_LINK_NOT_APPROVED');
+        }
         const fingerprint = input.clientId
           ? oidcTrustFingerprint(input.issuer, input.clientId)
           : null;
-        if (
-          (approval.providerConfigId &&
-            approval.providerConfigId !== (input.providerConfigId ?? 'default')) ||
-          (approval.issuerFingerprint && approval.issuerFingerprint !== fingerprint) ||
-          (approval.expectedEmail && approval.expectedEmail.toLowerCase() !== email) ||
-          (approval.configVersion != null && approval.configVersion !== input.configVersion)
-        ) {
-          throw new Error('OIDC_LINK_NOT_APPROVED');
-        }
-        if (!isOidcLinkingApprovalUsable(approval, now)) {
-          if (!approval.revokedAt && approval.expiresAt && approval.expiresAt <= now) {
-            throw new Error('OIDC_LINK_APPROVAL_EXPIRED');
-          }
-          throw new Error('OIDC_LINK_NOT_APPROVED');
-        }
-
-        // Consume exactly the generation that was evaluated. This closes the
-        // revoke/renew/callback race and guarantees one callback consumes one
-        // approval generation.
-        const consumed = await tx.oidcLinkingApproval.updateMany({
-          where: {
-            id: approval.id,
-            generation: approval.generation,
-            revokedAt: null,
-            consumedAt: null,
-            OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
-          },
-          data: { consumedAt: now },
-        });
-        if (consumed.count !== 1) throw new Error('OIDC_LINK_NOT_APPROVED');
 
         await tx.oidcIdentity.create({
           data: {
@@ -345,7 +383,7 @@ export async function resolveOidcIdentityForSignIn(
           user: emailUser,
           identityCreated: true,
           userCreated: false,
-          approvalConsumed: true,
+          approvalConsumed: !trustedIdentity,
         };
       }
 

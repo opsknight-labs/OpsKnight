@@ -125,7 +125,7 @@ it('isolates team and membership events with deterministic cursor pagination', a
     ).status
   ).toBe(400);
 });
-it('reads SCIM-managed team history without permitting manual membership writes', async () => {
+it('reads team history for legacy directory-associated operational teams', async () => {
   const { admin, team } = await fixture();
   await db.team.update({ where: { id: team.id }, data: { scimExternalId: 'managed-history' } });
   expect(

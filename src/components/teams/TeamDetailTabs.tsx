@@ -58,7 +58,7 @@ export default function TeamDetailTabs({
   ];
 
   return (
-    <DetailTabs tabs={tabItems} defaultTab={defaultTab}>
+    <DetailTabs tabs={tabItems} defaultTab={defaultTab} navigationMode="server">
       <DetailTabContent value="overview" className="mt-0 space-y-6">
         {overview}
       </DetailTabContent>

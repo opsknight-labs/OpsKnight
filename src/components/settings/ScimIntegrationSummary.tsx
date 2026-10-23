@@ -4,7 +4,7 @@ import { Badge } from '@/components/ui/shadcn/badge';
 
 /**
  * Read-only SCIM status for the SSO workspace. The dedicated SCIM tab is the single place
- * that edits SCIM configuration or reveals tokens, so this summary can never hold stale,
+ * that edits SCIM configuration or issues credentials, so this summary can never hold stale,
  * independently editable state. It shows only values OpsKnight actually persists.
  */
 export default function ScimIntegrationSummary({

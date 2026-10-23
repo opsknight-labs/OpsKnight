@@ -242,14 +242,11 @@ jobs:
           run-smoke: 'false'
           run-validation: 'false'
 
-      - name: Install Chromium
-        run: npx playwright install --with-deps chromium
-
       - name: Run authentication browser contracts (direct origin)
-        run: npx playwright test --project=chromium
+        run: bash scripts/ci/playwright-in-container.sh --project=chromium
 
       - name: Run trusted-proxy host routing browser contracts (reverse proxy)
-        run: TRUST_PROXY_HEADERS=true npx playwright test tests/e2e/host-bootstrap-routing.spec.ts --project=chromium
+        run: TRUST_PROXY_HEADERS=true bash scripts/ci/playwright-in-container.sh tests/e2e/host-bootstrap-routing.spec.ts --project=chromium
 
       - name: Upload Auth Playwright report
         if: failure()
@@ -265,7 +262,7 @@ jobs:
     name: Mobile & PWA browser E2E (L3)
     needs: [build]
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 40
     services:
       postgres:
         image: postgres:16
@@ -311,12 +308,9 @@ jobs:
           run-smoke: 'false'
           run-validation: 'false'
 
-      - name: Install mobile browser engines
-        run: npx playwright install --with-deps chromium webkit
-
       - name: Run Android and iPhone browser contracts + responsive matrix
         run: >-
-          npx playwright test
+          bash scripts/ci/playwright-in-container.sh
           tests/e2e/mobile-pwa.spec.ts
           tests/e2e/mobile-responsive-matrix.spec.ts
           --project=mobile-chromium
@@ -324,7 +318,7 @@ jobs:
 
       - name: Run production PWA service-worker contract
         run: >-
-          npx playwright test
+          bash scripts/ci/playwright-in-container.sh
           -c playwright.pwa.config.ts
           --project=pwa-production-chromium
           --project=pwa-production-webkit

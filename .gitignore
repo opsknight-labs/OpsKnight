@@ -120,3 +120,7 @@ __pycache__/
 /plans/runbook-engine/enterprise-physical-certification/screenshots/
 /plans/runbook-engine/enterprise-physical-certification/results/
 /.next-automation-build/
+
+# Isolated SCIM replica certification build
+/.next-scim-replica/
+/.next-scim-production/

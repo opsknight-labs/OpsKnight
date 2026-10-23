@@ -17,6 +17,9 @@ export async function GET(request: NextRequest) {
       endpoint: '/Users',
       description: 'OpsKnight User Account',
       schema: SCIM_USER_SCHEMA,
+      schemaExtensions: [
+        { schema: 'urn:ietf:params:scim:schemas:extension:enterprise:2.0:User', required: false },
+      ],
       meta: {
         resourceType: 'ResourceType',
         location: `${baseUrl}/api/scim/v2/ResourceTypes/User`,
@@ -27,7 +30,7 @@ export async function GET(request: NextRequest) {
       id: 'Group',
       name: 'Group',
       endpoint: '/Groups',
-      description: 'OpsKnight Team Group',
+      description: 'OpsKnight Directory Group',
       schema: SCIM_GROUP_SCHEMA,
       meta: {
         resourceType: 'ResourceType',

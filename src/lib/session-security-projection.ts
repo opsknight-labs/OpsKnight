@@ -46,8 +46,23 @@ function projectionTtlMs() {
  * replace the bounded process-local implementation later.
  */
 export async function getSessionSecurityProjection(
-  userId: string
+  userId: string,
+  fresh = false
 ): Promise<SessionSecurityProjection | null> {
+  if (fresh) {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, tokenVersion: true, status: true, role: true },
+    });
+    return user
+      ? {
+          userId: user.id,
+          tokenVersion: user.tokenVersion ?? 0,
+          status: user.status,
+          role: user.role,
+        }
+      : null;
+  }
   const cached = projectionCache.get(userId);
   if (cached && cached.expiresAt > Date.now()) return cached.value;
 
@@ -141,4 +156,3 @@ export function resetSessionSecurityProjectionCache() {
   inFlight.clear();
   userEpoch.clear();
 }
-

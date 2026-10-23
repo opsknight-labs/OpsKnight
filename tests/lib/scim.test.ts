@@ -1,5 +1,26 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+vi.mock('@/lib/prisma', () => ({
+  default: {
+    scimCredential: {
+      findFirst: vi.fn().mockResolvedValue(null),
+      findUnique: vi.fn().mockResolvedValue(null),
+      updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+    },
+    scimConnector: {
+      findUnique: vi
+        .fn()
+        .mockResolvedValue({ id: 'legacy', enabled: true, credentialAuthority: 'LEGACY' }),
+    },
+    systemConfig: { findUnique: vi.fn().mockResolvedValue(null) },
+  },
+}));
+vi.mock('@/lib/auth-control/actor', () => ({
+  getControlActor: vi.fn(),
+  lockControlActor: vi.fn(),
+}));
+import prisma from '@/lib/prisma';
 import {
+  getScimConfig,
   getScimSchemas,
   getServiceProviderConfig,
   isScimRequestAuthorized,
@@ -8,6 +29,10 @@ import {
   serializeScimGroup,
   serializeScimUser,
 } from '@/lib/scim';
+
+beforeEach(() => {
+  vi.mocked(prisma.systemConfig.findUnique).mockResolvedValue(null);
+});
 
 const originalToken = process.env.SCIM_BEARER_TOKEN;
 
@@ -24,10 +49,92 @@ describe('SCIM protocol helpers', () => {
     expect(await isScimRequestAuthorized('Bearer short')).toBe(false);
   });
 
+  it('bounds repeated unknown token misses before querying PostgreSQL again', async () => {
+    const { authenticate } = await import('@/lib/scim/security/credentials');
+    vi.mocked(prisma.scimConnector.findUnique).mockResolvedValueOnce(null);
+    const before = vi.mocked(prisma.scimCredential.findUnique).mock.calls.length;
+    const token = `Bearer repeated-unknown-token-${Date.now()}-certification`;
+    expect(await authenticate(token)).toBeNull();
+    expect(await authenticate(token)).toBeNull();
+    expect(vi.mocked(prisma.scimCredential.findUnique).mock.calls.length - before).toBe(1);
+  });
+  it('admits valid credentials after unrelated token keys saturate the bounded map', async () => {
+    const { authenticate, hashToken } = await import('@/lib/scim/security/credentials');
+    // Malformed headers fill admission history without any database traffic.
+    const before = vi.mocked(prisma.scimCredential.findUnique).mock.calls.length;
+    for (let index = 0; index < 4200; index++)
+      expect(await authenticate(`invalid-header-${index}`)).toBeNull();
+    expect(vi.mocked(prisma.scimCredential.findUnique).mock.calls.length).toBe(before);
+    const token = 'new-valid-credential-after-admission-saturation';
+    vi.mocked(prisma.scimCredential.findUnique).mockResolvedValueOnce({
+      id: 'saturation-key',
+      connectorId: 'source',
+      tokenHash: hashToken(token),
+      revokedAt: null,
+      expiresAt: new Date(Date.now() + 60000),
+      lastUsedAt: new Date(),
+      scopes: ['users:read'],
+      connector: { enabled: true, credentialAuthority: 'REGISTRY' },
+    } as never);
+    expect(await authenticate(`Bearer ${token}`)).toMatchObject({ credentialId: 'saturation-key' });
+    // A successful check is never cached: immediate revocation must still be authoritative.
+    vi.mocked(prisma.scimConnector.findUnique).mockResolvedValueOnce(null);
+    expect(await authenticate(`Bearer ${token}`)).toBeNull();
+  });
+  it('revalidates active credentials while coalescing last-used writes', async () => {
+    const { authenticate, hashToken } = await import('@/lib/scim/security/credentials');
+    const token = 'active-credential-last-used-certification-only';
+    vi.mocked(prisma.scimCredential.findUnique).mockResolvedValueOnce({
+      id: 'key',
+      connectorId: 'source',
+      tokenHash: hashToken(token),
+      revokedAt: null,
+      expiresAt: new Date(Date.now() + 60000),
+      lastUsedAt: new Date(),
+      scopes: ['users:read'],
+      connector: { enabled: true, credentialAuthority: 'REGISTRY' },
+    } as never);
+    const before = vi.mocked(prisma.scimCredential.updateMany).mock.calls.length;
+    expect(await authenticate(`Bearer ${token}`)).toMatchObject({ connectorId: 'source' });
+    expect(vi.mocked(prisma.scimCredential.updateMany).mock.calls.length).toBe(before);
+  });
   it('compares a configured bearer token exactly', async () => {
     process.env.SCIM_BEARER_TOKEN = 'a-secure-scim-token-with-at-least-32-characters';
     expect(await isScimRequestAuthorized(`Bearer ${process.env.SCIM_BEARER_TOKEN}`)).toBe(true);
     expect(await isScimRequestAuthorized('Bearer wrong-token')).toBe(false);
+  });
+
+  it('never rescues an invalid database credential with an environment token', async () => {
+    process.env.SCIM_BEARER_TOKEN = 'a-secure-scim-token-with-at-least-32-characters';
+    vi.mocked(prisma.systemConfig.findUnique).mockResolvedValue({
+      value: { enabled: true, secretTokenHash: '0'.repeat(64) },
+    } as never);
+    expect(await isScimRequestAuthorized(`Bearer ${process.env.SCIM_BEARER_TOKEN}`)).toBe(false);
+    vi.mocked(prisma.systemConfig.findUnique).mockRejectedValueOnce(
+      new Error('database unavailable')
+    );
+    expect(await isScimRequestAuthorized(`Bearer ${process.env.SCIM_BEARER_TOKEN}`)).toBe(false);
+  });
+
+  it('reports active legacy authentication independently of another connector registry key', async () => {
+    process.env.SCIM_BEARER_TOKEN = 'legacy-environment-token-00000000000000000001';
+    vi.mocked(prisma.scimCredential.findFirst).mockResolvedValueOnce({
+      id: 'other-key',
+      connectorId: 'other',
+      tokenHint: 'abcd',
+      createdAt: new Date(),
+    } as never);
+    expect(await getScimConfig()).toMatchObject({
+      enabled: true,
+      source: 'ENV',
+      legacyCredentialSource: 'ENV',
+      createdAt: null,
+      updatedAt: null,
+    });
+    vi.mocked(prisma.systemConfig.findUnique).mockResolvedValueOnce({
+      value: { enabled: false },
+    } as never);
+    expect(await getScimConfig()).toMatchObject({ enabled: false, legacyCredentialSource: null });
   });
 
   it('accepts only bounded externalId and userName equality filters', () => {
@@ -136,7 +243,7 @@ describe('SCIM protocol helpers', () => {
 
   it('generates RFC 7643 schema descriptors with attribute definitions', () => {
     const schemas = getScimSchemas('https://ops.example.com');
-    expect(schemas).toHaveLength(2);
+    expect(schemas).toHaveLength(3);
     const groupSchema = schemas.find(s => s.name === 'Group');
     expect(groupSchema).toBeDefined();
     expect(groupSchema?.attributes.some(a => a.name === 'displayName' && a.required)).toBe(true);

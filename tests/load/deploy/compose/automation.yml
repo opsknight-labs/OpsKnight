@@ -11,10 +11,23 @@ x-app-environment: &app-env
   ENCRYPTION_KEY: 4e7d2b9c1a8f6e3d5c0b9a8f7e6d5c4b3a29180f7e6d5c4b3a2918f7e6d5c4b3
   OPSKNIGHT_LOAD_TEST_ALLOW_HOSTS: host.docker.internal,127.0.0.1
   INTEGRATION_RATE_LIMIT: 'false'
+  AUTOMATION_EVALUATION_TIMEOUT_MS: '250'
 services:
   db:
     image: postgres:16-alpine
-    command: [postgres, '-c', 'max_connections=${AUTOMATION_POSTGRES_MAX_CONNECTIONS:-160}']
+    command:
+      [
+        postgres,
+        '-c', 'max_connections=${AUTOMATION_POSTGRES_MAX_CONNECTIONS:-300}',
+        '-c', 'shared_buffers=512MB',
+        '-c', 'work_mem=16MB',
+        '-c', 'maintenance_work_mem=128MB',
+        '-c', 'wal_buffers=64MB',
+        '-c', 'checkpoint_completion_target=0.9',
+        '-c', 'checkpoint_timeout=15min',
+        '-c', 'max_wal_size=4GB',
+        '-c', 'min_wal_size=512MB',
+      ]
     environment:
       POSTGRES_USER: automation
       # checkov:skip=CKV_SECRET_4: Ephemeral credential for a disposable load-certification database.
@@ -37,6 +50,7 @@ services:
     environment:
       {
         <<: *app-env,
+        DATABASE_URL: 'postgresql://automation:automation-cert-only@db:5432/automation_cert?connection_limit=64',
         OPSKNIGHT_SKIP_MIGRATIONS: 'true',
         OPSKNIGHT_PROCESS_ROLE: '${AUTOMATION_WEB_ROLE:-web}',
       }
@@ -49,7 +63,20 @@ services:
   general:
     image: ${AUTOMATION_IMAGE:-opsknight-automation:local}
     environment:
-      { <<: *app-env, OPSKNIGHT_SKIP_MIGRATIONS: 'true', OPSKNIGHT_PROCESS_ROLE: general-worker }
+      {
+        <<: *app-env,
+        DATABASE_URL: 'postgresql://automation:automation-cert-only@db:5432/automation_cert?connection_limit=32',
+        OPSKNIGHT_SKIP_MIGRATIONS: 'true',
+        OPSKNIGHT_PROCESS_ROLE: general-worker,
+        OPSKNIGHT_WORKER_CONCURRENCY: '30',
+        OPSKNIGHT_WORKER_BATCH_SIZE: '150',
+        OPSKNIGHT_WORKER_BUSY_POLL_MS: '20',
+      }
+    depends_on: { migration: { condition: service_completed_successfully } }
+  runbook:
+    image: ${AUTOMATION_IMAGE:-opsknight-automation:local}
+    environment:
+      { <<: *app-env, OPSKNIGHT_SKIP_MIGRATIONS: 'true', OPSKNIGHT_PROCESS_ROLE: runbook-worker }
     depends_on: { migration: { condition: service_completed_successfully } }
   scheduler:
     image: ${AUTOMATION_IMAGE:-opsknight-automation:local}

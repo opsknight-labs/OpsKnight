@@ -221,7 +221,7 @@ export default async function SystemSettingsPage() {
   const scimTab = (
     <SettingsSection
       title="SCIM 2.0 User Provisioning"
-      description="Automate identity lifecycle, role provisioning, and account deactivation directly from Okta, Entra ID, or any SCIM 2.0 compliant identity provider."
+      description="Automate identity lifecycle, profile provisioning, and account deactivation directly from Okta, Entra ID, or any SCIM 2.0 compliant identity provider."
       action={
         <div className="flex items-center gap-2">
           <div

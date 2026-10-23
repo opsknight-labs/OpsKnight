@@ -1,4 +1,5 @@
 import type { Prisma } from '@prisma/client';
+import type { z } from 'zod';
 import prisma from '@/lib/prisma';
 import { AppError } from '@/lib/errors';
 import { responderSnapshotSchema } from './automation-snapshot';
@@ -8,17 +9,61 @@ export const responderPolicyInclude = {
     orderBy: { stepOrder: 'asc' as const },
   },
 };
-type Policy = Prisma.EscalationPolicyGetPayload<{ include: typeof responderPolicyInclude }>;
+export type Policy = Prisma.EscalationPolicyGetPayload<{ include: typeof responderPolicyInclude }>;
+export type ResponderRouting = {
+  type: 'DEFAULT_POLICY' | 'SELECTED_POLICY' | 'NO_ESCALATION' | 'DEFAULT_FANOUT';
+  policy: Policy | null;
+  pinnedConditions?: Map<string, { field: string; operator: string; values: string[] }[]>;
+};
+
+export function buildResponderRoutingFromAutomation(
+  automation: {
+    mode: 'SHADOW' | 'LIVE';
+    policyId: string | null;
+    evaluationAt: Date;
+    responderPolicy?: z.infer<typeof responderSnapshotSchema> | null;
+    result: { outcome: { type: string } } | null;
+  }
+): ResponderRouting | null {
+  if (automation.mode === 'LIVE' && automation.result?.outcome.type === 'NO_ESCALATION') {
+    return { type: 'NO_ESCALATION', policy: null };
+  }
+  const snapshot = automation.responderPolicy;
+  if (snapshot) {
+    return {
+      type:
+        automation.mode === 'LIVE' && automation.result?.outcome.type === 'ESCALATION_POLICY'
+          ? 'SELECTED_POLICY'
+          : 'DEFAULT_POLICY',
+      policy: {
+        id: snapshot.id,
+        name: snapshot.name,
+        description: null,
+        archivedAt: null,
+        archivedBy: null,
+        revision: 0,
+        createdAt: automation.evaluationAt,
+        updatedAt: automation.evaluationAt,
+        steps: snapshot.steps.map(({ conditions: _conditions, ...step }) => ({
+          ...step,
+          targetUser: null,
+          targetTeam: null,
+          targetSchedule: null,
+        })),
+      },
+      pinnedConditions: new Map(snapshot.steps.map(step => [step.id, step.conditions])),
+    };
+  }
+  if (automation.mode !== 'LIVE') return null;
+  return { type: 'DEFAULT_FANOUT', policy: null };
+}
+
 export async function resolveIncidentResponderRouting(
   incidentId: string,
   serviceId: string,
   client: Prisma.TransactionClient = prisma,
   defaultPolicy?: Policy | null
-): Promise<{
-  type: 'DEFAULT_POLICY' | 'SELECTED_POLICY' | 'NO_ESCALATION' | 'DEFAULT_FANOUT';
-  policy: Policy | null;
-  pinnedConditions?: Map<string, { field: string; operator: string; values: string[] }[]>;
-}> {
+): Promise<ResponderRouting> {
   const decision = client.incidentAutomationDecision
     ? await client.incidentAutomationDecision.findUnique({ where: { incidentId } })
     : null;

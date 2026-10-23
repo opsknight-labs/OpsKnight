@@ -1,4 +1,4 @@
-import { resolveIncidentResponderRouting } from './routing';
+import { resolveIncidentResponderRouting, type ResponderRouting } from './routing';
 /**
  * Durable persistence for the escalation engine.
  *
@@ -418,9 +418,17 @@ export async function commitEscalationPlan(input: {
  */
 export async function initializeEscalationExecution(
   tx: Prisma.TransactionClient,
-  input: { incidentId: string; serviceId: string; now?: Date; notBefore?: Date }
+  input: {
+    incidentId: string;
+    serviceId: string;
+    now?: Date;
+    notBefore?: Date;
+    generation?: number;
+    routing?: ResponderRouting | null;
+  }
 ): Promise<{ initialized: boolean; dueAt: Date | null }> {
-  const routing = await resolveIncidentResponderRouting(input.incidentId, input.serviceId, tx);
+  const routing =
+    input.routing ?? (await resolveIncidentResponderRouting(input.incidentId, input.serviceId, tx));
   if (routing.type === 'NO_ESCALATION') return { initialized: false, dueAt: null };
   const firstStep = routing.policy?.steps[0];
   if (!firstStep) return { initialized: false, dueAt: null };
@@ -443,15 +451,19 @@ export async function initializeEscalationExecution(
   });
   if (initialized.count === 0) return { initialized: false, dueAt: null };
 
-  const incident = await tx.incident.findUnique({
-    where: { id: input.incidentId },
-    select: { escalationGeneration: true },
-  });
-  if (!incident) return { initialized: false, dueAt: null };
+  let generation = input.generation;
+  if (generation === undefined) {
+    const incident = await tx.incident.findUnique({
+      where: { id: input.incidentId },
+      select: { escalationGeneration: true },
+    });
+    if (!incident) return { initialized: false, dueAt: null };
+    generation = incident.escalationGeneration ?? 0;
+  }
 
   await createEscalationJob(tx, {
     incidentId: input.incidentId,
-    generation: incident.escalationGeneration ?? 0,
+    generation,
     stepIndex: 0,
     scheduledAt: dueAt,
   });
