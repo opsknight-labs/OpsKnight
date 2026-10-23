@@ -414,6 +414,49 @@ suite('SCIM PostgreSQL lifecycle certification', () => {
     );
   });
 
+  it('removes owned photos consistently through PATCH and replacement PUT', async () => {
+    const userName = `photo-remove-${Date.now()}@example.test`;
+    const externalId = `photo-remove-${Date.now()}`;
+    const photo = 'https://example.test/directory-photo.png';
+    const created = await (
+      await call('users', 'POST', {
+        userName,
+        externalId,
+        displayName: 'Photo User',
+        photos: [{ value: photo }],
+      })
+    ).json();
+    ids.push(created.id);
+    for (const method of ['PATCH', 'PUT']) {
+      expect(
+        (
+          await call(
+            'users',
+            'PATCH',
+            patch({ op: 'replace', path: 'photos', value: [{ value: photo }] }),
+            created.id
+          )
+        ).status
+      ).toBe(200);
+      const response = await call(
+        'users',
+        method,
+        method === 'PATCH'
+          ? patch({ op: 'remove', path: 'photos' })
+          : { userName, externalId, displayName: 'Photo User' },
+        created.id
+      );
+      expect(response.status).toBe(200);
+      expect((await response.json()).photos).toBeUndefined();
+      expect(
+        (await (await call('users', 'GET', undefined, created.id)).json()).photos
+      ).toBeUndefined();
+      const stored = await prisma.user.findUniqueOrThrow({ where: { id: created.id } });
+      expect(stored.avatarUrl).toMatch(/^\/api\/avatar/);
+      expect(stored.avatarUrl).not.toBe(photo);
+    }
+  });
+
   it('creates and serializes a directory identity without exposing local accounts', async () => {
     const response = await call('users', 'POST', {
       userName: `cert-${Date.now()}@example.test`,

@@ -465,3 +465,60 @@ after it rejected ordinary concurrent provisioning; the lifecycle suite now pass
 Live Entra/Okta, actual ingress enforcement, production pool/HA/failover and rolling
 deployment remain external release gates. The known explicit-photo-removal bug
 remains documented in the v2.1 SCIM guide and is not fixed by this pass.
+
+## Capacity and profile-correctness follow-up
+
+The preceding `de0eabb95` local results did not generalize to CI: both exact-head
+SCIM runs failed concurrent reconciliation, and one drift diagnostic timed out.
+Those failures supersede any inference that the previous local timings certified
+the deployment. No transaction, query, test-latency or memory ceiling is increased
+by this follow-up.
+
+EXPLAIN (ANALYZE, BUFFERS) against the populated disposable database identified
+external-merge sorting in the old preferred-binding query: the 100-group shape
+used approximately 100 MiB of sort space and 25,661 temporary written blocks.
+The replacement aggregates by user before selecting grant provenance, eliminating
+that spill. A same-fixture measurement reduced the SQL from 3,625 to 573 ms.
+A separate SERIALIZABLE 25-group comparison measured 1,604 vs 194 ms with no
+temporary blocks in the replacement. These are illustrative local plans, not
+production latency guarantees. The diagnostic query now materializes desired
+team/user unions and uses joins instead of per-member correlated probes.
+
+Ordinary group mutations pass their exact added/removed user IDs to the shared
+planner; user DELETE passes that user's ID. All contributing bindings still
+determine those users' grants, with manual/owner protection and session changes
+inside the same serializable transaction. No authorization revocation is deferred.
+Approval, repair, group deletion and detachment retain full-team reconciliation.
+Preview/approval still fingerprint contributing groups; execution avoids computing
+an unused revision. The capacity fixture now explicitly bounds full-team repair
+as well as scoped concurrent mutations, and repeats each 25/50/100-group scenario
+with competing diagnostics, directory writes and incident reads. The 10-second
+and 128 MiB ceilings remain intact.
+
+The scoped six-scenario run measured 174/64/123 ms without the competing workload,
+and 999/326/339 ms with it (25/50/100 bindings). Competing diagnostic calls stayed
+below 1,000 ms and incident reads below 91 ms. That run still failed the older
+10K-member setup during substantial unrelated host build contention; its overall
+result is not a pass. Earlier full-union attempts also exceeded the budget and
+prompted the scoped mutation change, rather than a relaxed assertion.
+
+The known P2 photo-removal issue is now fixed: owned PATCH removal and replacement
+PUT omission reset to a generated default, with matching mutation response,
+subsequent GET and stored profile. Untouched PATCH avatars and unowned-field
+protections remain. PostgreSQL lifecycle regressions include these cases.
+
+The two general-CI failure files passed all 27 tests on both this worktree and
+current main `ccbcf282d` in isolation against a separate disposable database.
+The failed CI log shows reset-hook timeouts followed by sealed SLA-policy seeding
+errors. This isolation does not prove the complete shard is healthy or establish
+a SCIM cause; fresh full-shard CI remains required and is not waived.
+
+The subsequent complete capacity rerun passed all seven tests, including the
+10K-member setup/revocation. Full-team bootstrap/repair across all six scenarios
+measured 454–4,617 ms (the maximum includes initial 10K grant creation). Scoped
+concurrent changes measured 62–138 ms without competing traffic and 483–729 ms
+with diagnostics/directory writes/incident reads. All retained the original
+10-second and 128 MiB limits. Standalone diagnostics returned 4,983 bytes in
+702 ms. Combined with the 45 passing lifecycle regressions and 175 unit/API/UI
+tests, these establish local correctness/capacity evidence, not production or
+fresh exact-head CI certification.

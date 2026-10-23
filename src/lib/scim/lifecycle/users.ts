@@ -268,8 +268,7 @@ export async function users(request: NextRequest, id?: string) {
       nextProfile.avatarUrl = isDefaultAvatar(existing.avatarUrl)
         ? getDefaultAvatar(nextProfile.name, identity.externalId)
         : existing.avatarUrl;
-    } else if (!document.photos && nextProfile.name === existing.name)
-      nextProfile.avatarUrl = existing.avatarUrl ?? nextProfile.avatarUrl;
+    }
     if (request.method !== 'DELETE')
       applyProfileAuthority(nextProfile, existing, connector.profileFields, touched);
     // A case-only representation change is not a new login identity.
@@ -324,7 +323,7 @@ export async function users(request: NextRequest, id?: string) {
           data: { updatedAt: new Date() },
         });
       for (const teamId of new Set(affected.map(binding => binding.teamId)))
-        await reconcileTeam(tx, teamId);
+        await reconcileTeam(tx, teamId, [], [id]);
     }
     const teamCount = !active ? await tx.teamMember.count({ where: { userId: id } }) : 0;
     const directEscalationRules = !active

@@ -300,14 +300,20 @@ suite('SCIM indexed capacity certification', () => {
     for (let group = 1; group <= 100; group++)
       await prisma.$executeRaw`INSERT INTO "ScimGroupMembership" ("groupId","userId")
         SELECT ${prefix + '-' + group}, 'scim-load-user-' || u FROM generate_series(1,10000) u`;
-    for (const size of [25, 50, 100]) {
+    for (const { size, competingLoad } of [25, 50, 100].flatMap(size => [
+      { size, competingLoad: false },
+      { size, competingLoad: true },
+    ])) {
       await prisma.$executeRaw`INSERT INTO "ScimGroupTeamBinding" (id,"groupId","teamId","approvedBy")
         SELECT ${prefix} || '-binding-' || i, ${prefix} || '-' || i, ${team.id}, 'capacity-certifier'
         FROM generate_series(1,${size}) i ON CONFLICT DO NOTHING`;
       await prisma.$executeRaw`INSERT INTO "ScimGroupMembership" ("groupId","userId")
         SELECT ${prefix} || '-' || g, 'scim-load-user-' || u
         FROM generate_series(1,100) g CROSS JOIN generate_series(1,2) u ON CONFLICT DO NOTHING`;
+      const repairStarted = performance.now();
       await runSerializableTransaction(tx => reconcileTeam(tx, team.id));
+      const fullRepairMs = performance.now() - repairStarted;
+      expect(fullRepairMs).toBeLessThan(10000);
       const versions = await prisma.user.findMany({
         where: { id: { in: ['scim-load-user-1', 'scim-load-user-2'] } },
         orderBy: { id: 'asc' },
@@ -319,10 +325,52 @@ suite('SCIM indexed capacity certification', () => {
       }, 10);
       let measuring = true;
       const databaseDurations: number[] = [];
+      const slowOperations: { operation: string; durationMs: number }[] = [];
       prisma.$on('query', query => {
-        if (measuring) databaseDurations.push(query.duration);
+        if (measuring) {
+          databaseDurations.push(query.duration);
+          if (query.duration >= 100)
+            slowOperations.push({
+              operation: query.query.slice(0, 160),
+              durationMs: query.duration,
+            });
+        }
       });
       const attempts = [{ count: 0 }, { count: 0 }];
+      let stopLoad = false;
+      const incidentLatencies: number[] = [];
+      const diagnosticLatencies: number[] = [];
+      const background = competingLoad
+        ? (async () => {
+            while (!stopLoad) {
+              await Promise.all([
+                (async () => {
+                  const start = performance.now();
+                  const result = await scimDriftAction({
+                    connectorId: 'scim-drift-capacity',
+                    page: 1,
+                  });
+                  expect(Array.isArray(result)).toBe(true);
+                  diagnosticLatencies.push(performance.now() - start);
+                })(),
+                (async () => {
+                  const start = performance.now();
+                  await prisma.incident.count();
+                  incidentLatencies.push(performance.now() - start);
+                })(),
+                prisma.scimGroup.update({
+                  where: { id: 'scim-load-group-10000' },
+                  data: { name: `Concurrent directory update ${Date.now()}` },
+                }),
+              ]);
+            }
+          })()
+        : Promise.resolve();
+      // Consume failures immediately, then rethrow after writers settle.
+      const loadResult = background.then(
+        () => null,
+        (error: unknown) => error
+      );
       const started = performance.now();
       try {
         await Promise.all(
@@ -330,15 +378,27 @@ suite('SCIM indexed capacity certification', () => {
             runSerializableTransaction(async tx => {
               counter.count++;
               await tx.$executeRaw`DELETE FROM "ScimGroupMembership" WHERE "groupId" LIKE ${prefix + '-%'} AND "userId"=${'scim-load-user-' + (index + 1)}`;
-              await reconcileTeam(tx, team.id);
+              await reconcileTeam(tx, team.id, [], ['scim-load-user-' + (index + 1)]);
             })
           )
         );
       } finally {
+        stopLoad = true;
         clearInterval(sampler);
         measuring = false;
+        const loadError = await loadResult;
+        if (loadError) throw loadError;
       }
       const elapsedMs = performance.now() - started;
+      process.stdout.write(
+        JSON.stringify({
+          multiGroupAttempt: size,
+          competingLoad,
+          elapsedMs,
+          attempts,
+          slowOperations,
+        }) + '\n'
+      );
       expect(await prisma.teamMember.count({ where: { teamId: team.id } })).toBe(9999);
       for (const previous of versions)
         expect(
@@ -355,10 +415,19 @@ suite('SCIM indexed capacity certification', () => {
         })
       ).toBe(1);
       expect(elapsedMs).toBeLessThan(10000);
+      if (competingLoad) {
+        expect(diagnosticLatencies.length).toBeGreaterThan(0);
+        expect(Math.max(...diagnosticLatencies)).toBeLessThan(10000);
+        expect(Math.max(...incidentLatencies)).toBeLessThan(2000);
+      }
       expect(peakRss - baselineRss).toBeLessThan(128 * 1024 * 1024);
       process.stdout.write(
         JSON.stringify({
           multiGroupBindings: size,
+          fullRepairMs,
+          competingLoad,
+          incidentLatencies,
+          diagnosticLatencies,
           references: size * 10000,
           concurrentRevocations: 2,
           elapsedMs,

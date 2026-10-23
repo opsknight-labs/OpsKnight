@@ -8,45 +8,61 @@ export async function planTeamReconciliation(
   tx: Prisma.TransactionClient,
   teamId: string,
   retiringBindingIds: readonly string[] = [],
-  prospective?: { group: ProspectiveGroup; adoptMemberIds: string[] }
+  prospective?: { group: ProspectiveGroup; adoptMemberIds: string[] },
+  includeRevision = true,
+  affectedUserIds?: readonly string[]
 ) {
   const stored = await tx.scimGroupTeamBinding.findMany({
     where: { teamId },
     orderBy: { id: 'asc' },
-    include: { group: true, grants: true },
+    include: {
+      group: true,
+      grants: affectedUserIds ? { where: { userId: { in: [...affectedUserIds] } } } : true,
+    },
   });
   const current = await tx.teamMember.findMany({
-    where: { teamId },
+    where: { teamId, ...(affectedUserIds ? { userId: { in: [...affectedUserIds] } } : {}) },
     orderBy: { id: 'asc' },
     include: { scimGrant: true },
   });
   // Collapse overlapping directory sources in PostgreSQL rather than returning
   // groups × members to Node. Revisions still fingerprint every contributing row.
-  const fingerprints = await tx.$queryRaw<{ id: string; digest: string }[]>`
+  const fingerprints = includeRevision
+    ? await tx.$queryRaw<{ id: string; digest: string }[]>`
     SELECT b.id, encode(sha256(convert_to(coalesce(string_agg(m."userId", ',' ORDER BY m."userId"), ''), 'UTF8')), 'hex') AS digest
     FROM "ScimGroupTeamBinding" b
     LEFT JOIN "ScimGroupMembership" m ON m."groupId"=b."groupId"
-    WHERE b."teamId"=${teamId} GROUP BY b.id ORDER BY b.id`;
+    WHERE b."teamId"=${teamId} GROUP BY b.id ORDER BY b.id`
+    : [];
   const prospectiveBinding =
     prospective && stored.find(item => item.groupId === prospective.group.id);
   const retirement = retiringBindingIds.length
     ? Prisma.sql`AND b.id NOT IN (${Prisma.join([...retiringBindingIds])})`
     : Prisma.empty;
-  const prospectiveRows =
-    prospective && !prospectiveBinding
-      ? Prisma.sql`UNION ALL SELECT 'pending-binding', m."groupId", m."userId"
-        FROM "ScimGroupMembership" m WHERE m."groupId"=${prospective.group.id}`
-      : Prisma.empty;
+  const affectedMemberships = affectedUserIds
+    ? Prisma.sql`WHERE m."userId" IN (${Prisma.join([...affectedUserIds])})`
+    : Prisma.empty;
+  const affectedGrants = affectedUserIds
+    ? Prisma.sql`AND g."userId" IN (${Prisma.join([...affectedUserIds])})`
+    : Prisma.empty;
   const desiredRows = await tx.$queryRaw<{ bindingId: string; userId: string }[]>`
-    WITH candidates AS (
-      SELECT b.id AS "bindingId", b."groupId", m."userId"
-      FROM "ScimGroupTeamBinding" b JOIN "ScimGroupMembership" m ON m."groupId"=b."groupId"
-      WHERE b."teamId"=${teamId} ${retirement} ${prospectiveRows}
-    ) SELECT DISTINCT ON (c."userId") c."bindingId", c."userId"
-      FROM candidates c
-      LEFT JOIN "TeamMember" tm ON tm."teamId"=${teamId} AND tm."userId"=c."userId"
-      LEFT JOIN "ScimTeamGrant" g ON g."teamMemberId"=tm.id
-      ORDER BY c."userId", (g."bindingId"=c."bindingId") DESC NULLS LAST, c."groupId" DESC`;
+    WITH sources AS MATERIALIZED (
+      SELECT b.id AS "bindingId", b."groupId" FROM "ScimGroupTeamBinding" b
+      WHERE b."teamId"=${teamId} ${retirement}
+      ${prospective && !prospectiveBinding ? Prisma.sql`UNION ALL SELECT 'pending-binding', ${prospective.group.id}` : Prisma.empty}
+    ), current_grants AS MATERIALIZED (
+      SELECT g."userId", g."bindingId" FROM "ScimTeamGrant" g
+      JOIN "ScimGroupTeamBinding" b ON b.id=g."bindingId"
+      WHERE b."teamId"=${teamId} ${affectedGrants}
+    ), preferred AS (
+      SELECT m."userId", max(s."groupId") AS "groupId",
+        max(s."bindingId") FILTER (WHERE s."bindingId"=g."bindingId") AS retained
+      FROM sources s JOIN "ScimGroupMembership" m ON m."groupId"=s."groupId"
+      LEFT JOIN current_grants g ON g."userId"=m."userId"
+      ${affectedMemberships}
+      GROUP BY m."userId"
+    ) SELECT p."userId", coalesce(p.retained, fallback."bindingId") AS "bindingId"
+      FROM preferred p JOIN sources fallback ON fallback."groupId"=p."groupId"`;
   const bindings = stored.map(binding => ({
     id: binding.id,
     groupId: binding.groupId,
@@ -56,21 +72,23 @@ export async function planTeamReconciliation(
       .map(grant => ({ ...grant }))
       .sort((a, b) => a.userId.localeCompare(b.userId)),
   }));
-  const snapshot = JSON.stringify({
-    bindings,
-    current: current.map(member => ({
-      id: member.id,
-      userId: member.userId,
-      role: member.role,
-      grant: member.scimGrant,
-    })),
-    retiring: [...retiringBindingIds].sort(),
-    prospective: prospective && {
-      groupId: prospective.group.id,
-      users: prospective.group.memberships.map(member => member.userId).sort(),
-      adopted: [...prospective.adoptMemberIds].sort(),
-    },
-  });
+  const snapshot = includeRevision
+    ? JSON.stringify({
+        bindings,
+        current: current.map(member => ({
+          id: member.id,
+          userId: member.userId,
+          role: member.role,
+          grant: member.scimGrant,
+        })),
+        retiring: [...retiringBindingIds].sort(),
+        prospective: prospective && {
+          groupId: prospective.group.id,
+          users: prospective.group.memberships.map(member => member.userId).sort(),
+          adopted: [...prospective.adoptMemberIds].sort(),
+        },
+      })
+    : '';
   if (prospective) {
     let binding = bindings.find(item => item.groupId === prospective.group.id);
     if (!binding) {
@@ -152,9 +170,25 @@ export async function planTeamReconciliation(
 export async function reconcileTeam(
   tx: Prisma.TransactionClient,
   teamId: string,
-  retiringBindingIds: readonly string[] = []
+  retiringBindingIds: readonly string[] = [],
+  affectedUserIds?: readonly string[]
 ) {
-  const plan = await planTeamReconciliation(tx, teamId, retiringBindingIds);
+  if (affectedUserIds?.length === 0)
+    return {
+      changedUserIds: [],
+      revokedMemberships: 0,
+      transferredGrants: 0,
+      addedMemberships: 0,
+      protectedOwners: 0,
+    };
+  const plan = await planTeamReconciliation(
+    tx,
+    teamId,
+    retiringBindingIds,
+    undefined,
+    false,
+    affectedUserIds
+  );
   const {
     changedUserIds,
     transfers,

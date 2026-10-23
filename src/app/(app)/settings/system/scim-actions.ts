@@ -552,28 +552,35 @@ export async function scimDriftAction(input: unknown) {
         JOIN "Team" team ON team.id = binding."teamId"
         WHERE directory."connectorId" = ${connectorId}
         ORDER BY binding.id LIMIT 25 OFFSET ${(page - 1) * 25}
+      ), selected_teams AS MATERIALIZED (
+        SELECT DISTINCT "teamId" FROM page
+      ), desired_users AS MATERIALIZED (
+        SELECT binding."teamId", desired."userId"
+        FROM selected_teams selected
+        JOIN "ScimGroupTeamBinding" binding ON binding."teamId"=selected."teamId"
+        JOIN "ScimGroupMembership" desired ON desired."groupId"=binding."groupId"
+        GROUP BY binding."teamId", desired."userId"
       ), team_stats AS (
-        SELECT selected."teamId",
+        SELECT member."teamId",
           count(*) FILTER (WHERE grant_row."teamMemberId" IS NULL)::integer AS manual,
-          count(*) FILTER (WHERE grant_row."teamMemberId" IS NOT NULL AND NOT EXISTS (
-            SELECT 1 FROM "ScimGroupTeamBinding" desired_binding
-            JOIN "ScimGroupMembership" desired ON desired."groupId" = desired_binding."groupId"
-            WHERE desired_binding."teamId" = selected."teamId" AND desired."userId" = member."userId"
-          ))::integer AS unexpected
-        FROM (SELECT DISTINCT "teamId" FROM page) selected
-        JOIN "TeamMember" member ON member."teamId" = selected."teamId"
-        LEFT JOIN "ScimTeamGrant" grant_row ON grant_row."teamMemberId" = member.id
-        GROUP BY selected."teamId"
+          count(*) FILTER (WHERE grant_row."teamMemberId" IS NOT NULL AND desired."userId" IS NULL)::integer AS unexpected
+        FROM selected_teams selected
+        JOIN "TeamMember" member ON member."teamId"=selected."teamId"
+        LEFT JOIN "ScimTeamGrant" grant_row ON grant_row."teamMemberId"=member.id
+        LEFT JOIN desired_users desired ON desired."teamId"=member."teamId" AND desired."userId"=member."userId"
+        GROUP BY member."teamId"
+      ), missing AS (
+        SELECT page.id, count(*) FILTER (WHERE actual.id IS NULL)::integer AS total
+        FROM page JOIN "ScimGroupMembership" desired ON desired."groupId"=page."groupId"
+        LEFT JOIN "TeamMember" actual ON actual."teamId"=page."teamId" AND actual."userId"=desired."userId"
+        GROUP BY page.id
       )
       SELECT page."groupId", page."teamId", page."group", page.team,
-        (SELECT count(*)::integer FROM "ScimGroupMembership" desired
-          WHERE desired."groupId" = page."groupId" AND NOT EXISTS (
-            SELECT 1 FROM "TeamMember" actual
-            WHERE actual."teamId" = page."teamId" AND actual."userId" = desired."userId"
-          )) AS "missingMembers",
+        coalesce(missing.total,0)::integer AS "missingMembers",
         coalesce(team_stats.unexpected, 0)::integer AS "unexpectedDirectoryGrants",
         coalesce(team_stats.manual, 0)::integer AS "independentManualMembers"
-      FROM page LEFT JOIN team_stats ON team_stats."teamId" = page."teamId"
+      FROM page LEFT JOIN team_stats ON team_stats."teamId"=page."teamId"
+      LEFT JOIN missing ON missing.id=page.id
       ORDER BY page.id`;
   } catch (error) {
     return await adminFailure(error);

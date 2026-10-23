@@ -339,14 +339,13 @@ mutation responses are serialized and checked against the byte budget before
 commit. A 413 rolls back directory changes and their audit events. Providers can
 request `excludedAttributes=members` for a bounded success representation.
 
-### Known profile-photo limitation
+### Profile-photo removal
 
-Removing `photos` through PATCH can return success while retaining the previous
-custom avatar when the user's name is unchanged. A PUT that omits `photos` can
-also retain that avatar. Do not rely on either operation to erase a profile image;
-verify the returned representation and subsequent GET. Explicit photo replacement
-is supported, but does not remove the attribute. This limitation remains unresolved.
-
+For connections owning `photos`, PATCH removal and a replacement PUT omitting
+`photos` reset the profile to its generated default avatar. The removed directory
+photo is absent from the mutation response and subsequent GET. Name-only PATCH
+preserves an untouched custom avatar. Connections without photo ownership preserve
+omitted photos and reject explicit attempts to change them.
 
 ### Complete administration and pinned binding repairs
 
@@ -388,10 +387,16 @@ headers do not establish an address. Enforce network-wide ingress limits as well
 local budgets multiply with application replicas and do not certify deployed WAF
 or PostgreSQL/PgBouncer capacity.
 
-Team reconciliation collapses overlapping group membership in PostgreSQL before
-returning desired users to the application. Revisions still fingerprint all
-contributing groups, and manual memberships and owner protections remain in
-force. Local tests cover 25, 50 and 100 overlapping groups of 10,000 members under
-concurrent revocation. Disjoint memberships can produce a larger distinct-user
+Team reconciliation aggregates overlapping group membership in PostgreSQL before
+joining grant provenance and returning desired users to the application. Approval
+previews fingerprint all contributing groups; ordinary execution avoids computing
+an unused approval revision, and manual memberships and owner protections remain in
+force. Group membership changes reconcile the users added or removed by that
+mutation; user DELETE reconciles that user. Their grants and session changes
+commit with the directory mutation. Approval, repair, detachment and group DELETE
+still reconcile the complete team. No revocation is deferred to a background job.
+Local tests cover 25, 50 and 100 overlapping groups of 10,000 members under
+concurrent revocation, including competing diagnostics and database traffic.
+Disjoint memberships can produce a larger distinct-user
 set; production memory, database I/O, pool waits and incident-processing latency
 still need a deployment-specific rehearsal.

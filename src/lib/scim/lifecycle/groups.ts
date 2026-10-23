@@ -221,8 +221,10 @@ export async function groups(request: NextRequest, id?: string) {
         data: additions.map(userId => ({ groupId: group.id, userId })),
         skipDuplicates: true,
       });
+    const nextIds = new Set(ids);
+    const affectedIds = [...additions, ...[...previousIds].filter(userId => !nextIds.has(userId))];
     for (const binding of existing?.bindings ?? []) {
-      const impact = await reconcileTeam(tx, binding.teamId);
+      const impact = await reconcileTeam(tx, binding.teamId, [], affectedIds);
       impact.changedUserIds.forEach(userId => changedUserIds.add(userId));
     }
     await event(tx, principal, existing ? 'group.updated' : 'group.created', group.id, {
