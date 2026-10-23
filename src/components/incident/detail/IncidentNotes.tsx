@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, type DragEvent, type ClipboardEvent } from 'react';
+import { useState, useRef } from 'react';
 import NoteCard from '../NoteCard';
 import { Button } from '@/components/ui/shadcn/button';
 import { Textarea } from '@/components/ui/shadcn/textarea';
@@ -14,11 +14,8 @@ import {
   Code,
   Link2,
   List,
-  Image as ImageIcon,
-  Paperclip,
   Eye,
   EyeOff,
-  UploadCloud,
   AlertCircle,
 } from 'lucide-react';
 import { loadOlderIncidentNotes } from './actions';
@@ -42,15 +39,9 @@ type IncidentNotesProps = {
   incidentId?: string;
   notes: Note[];
   canManage: boolean;
-  onAddNote: (formData: FormData) => void;
+  onAddNote: (formData: FormData) => Promise<void> | void;
   totalNotesCount?: number;
 };
-
-function formatFileSize(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
 
 export default function IncidentNotes({
   incidentId,
@@ -65,14 +56,10 @@ export default function IncidentNotes({
 
   const [noteContent, setNoteContent] = useState('');
   const [isPreview, setIsPreview] = useState(false);
-  const [isUploading, setIsUploading] = useState(false);
-  const [uploadStatus, setUploadStatus] = useState<string | null>(null);
-  const [uploadError, setUploadError] = useState<string | null>(null);
-  const [isDragging, setIsDragging] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const imageInputRef = useRef<HTMLInputElement>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   if (notes !== prevNotes) {
     setPrevNotes(notes);
@@ -104,33 +91,39 @@ export default function IncidentNotes({
     }
   };
 
-  const insertTextAtCursor = (prefix: string, suffix = '', defaultText = '') => {
-    setIsPreview(false);
+  const insertTextAtCursor = (prefix: string, suffix: string, defaultPlaceholder = '') => {
     const textarea = textareaRef.current;
     if (!textarea) {
-      setNoteContent(prev => `${prev}${prefix}${defaultText}${suffix}`);
+      setNoteContent(prev => prev + prefix + defaultPlaceholder + suffix);
       return;
     }
 
     const start = textarea.selectionStart;
     const end = textarea.selectionEnd;
-    const selected = textarea.value.slice(start, end) || defaultText;
-    const replacement = `${prefix}${selected}${suffix}`;
-    const newContent = textarea.value.slice(0, start) + replacement + textarea.value.slice(end);
+    const currentVal = textarea.value;
+    const selectedText = currentVal.substring(start, end);
 
-    setNoteContent(newContent);
+    const replacement = selectedText
+      ? `${prefix}${selectedText}${suffix}`
+      : `${prefix}${defaultPlaceholder}${suffix}`;
 
-    setTimeout(() => {
+    const nextVal = currentVal.substring(0, start) + replacement + currentVal.substring(end);
+    setNoteContent(nextVal);
+
+    requestAnimationFrame(() => {
       textarea.focus();
-      const newCursorPos = start + prefix.length + selected.length;
-      textarea.setSelectionRange(
-        selected === defaultText ? start + prefix.length : newCursorPos,
-        newCursorPos
-      );
-    }, 0);
+      if (selectedText) {
+        textarea.setSelectionRange(start, start + replacement.length);
+      } else {
+        const cursorTarget = start + prefix.length;
+        textarea.setSelectionRange(cursorTarget, cursorTarget + defaultPlaceholder.length);
+      }
+    });
   };
 
   const applyFormat = (type: 'bold' | 'italic' | 'code' | 'link' | 'list') => {
+    if (isPreview) setIsPreview(false);
+
     switch (type) {
       case 'bold':
         insertTextAtCursor('**', '**', 'bold text');
@@ -142,144 +135,52 @@ export default function IncidentNotes({
         insertTextAtCursor('`', '`', 'code');
         break;
       case 'link':
-        insertTextAtCursor('[', '](https://example.com)', 'Link title');
+        insertTextAtCursor('[', '](https://example.com)', 'link title');
         break;
-      case 'list':
-        insertTextAtCursor('\n- ', '', 'List item');
+      case 'list': {
+        const textarea = textareaRef.current;
+        if (!textarea) {
+          setNoteContent(prev => (prev ? `${prev}\n- List item` : '- List item'));
+          return;
+        }
+        const start = textarea.selectionStart;
+        const currentVal = textarea.value;
+        const before = currentVal.substring(0, start);
+        const needsNewline = before.length > 0 && !before.endsWith('\n');
+        insertTextAtCursor(needsNewline ? '\n- ' : '- ', '', 'List item');
         break;
+      }
     }
   };
 
-  const handleUploadFile = async (file: File, isImageHint = false) => {
-    if (!file) return;
-    setUploadError(null);
-    if (file.size > 15 * 1024 * 1024) {
-      setUploadError(`File "${file.name}" exceeds the 15MB limit.`);
-      return;
-    }
+  const handleSubmit = async (formData: FormData) => {
+    const text = noteContent.trim();
+    if (!text || isSubmitting) return;
 
-    setIsUploading(true);
-    setUploadStatus(`Uploading ${file.name}...`);
     try {
-      const fd = new FormData();
-      fd.append('file', file);
-      const res = await fetch('/api/uploads', {
-        method: 'POST',
-        body: fd,
-      });
-
-      if (!res.ok) {
-        const errorData = await res.json().catch(() => ({}));
-        throw new Error(errorData.error || 'Upload failed');
-      }
-
-      const data = await res.json();
-      const isImg = data.isImage || isImageHint;
-
-      const markdownSnippet = isImg
-        ? `\n![${data.filename}](${data.url})\n`
-        : `\n[📎 ${data.filename} (${formatFileSize(data.size)})](${data.url})\n`;
-
-      insertTextAtCursor('', '', markdownSnippet);
+      setIsSubmitting(true);
+      setSubmitError(null);
+      await onAddNote(formData);
+      // Only clear text on confirmed success
+      setNoteContent('');
+      setIsPreview(false);
     } catch (err) {
-      console.error('File upload failed', err);
-      setUploadError(err instanceof Error ? err.message : 'File upload failed');
+      console.error('Failed to post incident note', err);
+      setSubmitError(
+        err instanceof Error ? err.message : 'Failed to post note. Your draft has been preserved.'
+      );
     } finally {
-      setIsUploading(false);
-      setUploadStatus(null);
+      setIsSubmitting(false);
     }
-  };
-
-  const handleFileInputChange = async (
-    e: React.ChangeEvent<HTMLInputElement>,
-    isImageHint = false
-  ) => {
-    const files = e.target.files;
-    if (!files || files.length === 0) return;
-    const fileList = Array.from(files);
-    for (const file of fileList) {
-      await handleUploadFile(file, isImageHint);
-    }
-    e.target.value = '';
-  };
-
-  const handleDragOver = (e: DragEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (!isDragging) setIsDragging(true);
-  };
-
-  const handleDragLeave = (e: DragEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDragging(false);
-  };
-
-  const handleDrop = async (e: DragEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDragging(false);
-    if (!canManage) return;
-
-    const files = Array.from(e.dataTransfer.files);
-    for (const file of files) {
-      const isImage = file.type.startsWith('image/');
-      await handleUploadFile(file, isImage);
-    }
-  };
-
-  const handlePaste = async (e: ClipboardEvent<HTMLTextAreaElement>) => {
-    const items = Array.from(e.clipboardData.items);
-    const imageItem = items.find(item => item.type.startsWith('image/'));
-    if (imageItem) {
-      const file = imageItem.getAsFile();
-      if (file) {
-        e.preventDefault();
-        await handleUploadFile(file, true);
-      }
-    }
-  };
-
-  const handleSubmit = (formData: FormData) => {
-    onAddNote(formData);
-    setNoteContent('');
-    setIsPreview(false);
   };
 
   return (
     <div className="space-y-4">
-      {/* Hidden File Inputs */}
-      <input
-        type="file"
-        ref={imageInputRef}
-        accept="image/*"
-        aria-label="Upload picture attachment"
-        className="hidden"
-        onChange={e => handleFileInputChange(e, true)}
-      />
-      <input
-        type="file"
-        ref={fileInputRef}
-        aria-label="Upload file attachment"
-        className="hidden"
-        onChange={e => handleFileInputChange(e, false)}
-      />
-
       {/* Add Note Form */}
       {canManage ? (
-        <div
-          className="group relative"
-          onDragOver={handleDragOver}
-          onDragLeave={handleDragLeave}
-          onDrop={handleDrop}
-        >
+        <div className="group relative">
           <form action={handleSubmit} className="space-y-2">
-            <div
-              className={cn(
-                'relative rounded-xl border border-border/80 bg-card shadow-2xs transition-all focus-within:shadow-md focus-within:border-primary/50 overflow-hidden',
-                isDragging && 'border-primary ring-2 ring-primary/20 bg-primary/5'
-              )}
-            >
+            <div className="relative rounded-xl border border-border/80 bg-card shadow-2xs transition-all focus-within:shadow-md focus-within:border-primary/50 overflow-hidden">
               {/* Toolbar */}
               <div className="flex flex-wrap items-center justify-between gap-1 bg-muted/30 px-2 py-1.5 border-b border-border/60">
                 <div className="flex items-center gap-0.5">
@@ -287,7 +188,7 @@ export default function IncidentNotes({
                     type="button"
                     onClick={() => applyFormat('bold')}
                     title="Bold (**text**)"
-                    className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                    className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
                     aria-label="Format bold"
                   >
                     <Bold className="h-3.5 w-3.5" />
@@ -296,7 +197,7 @@ export default function IncidentNotes({
                     type="button"
                     onClick={() => applyFormat('italic')}
                     title="Italic (*text*)"
-                    className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                    className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
                     aria-label="Format italic"
                   >
                     <Italic className="h-3.5 w-3.5" />
@@ -305,7 +206,7 @@ export default function IncidentNotes({
                     type="button"
                     onClick={() => applyFormat('code')}
                     title="Inline code (`code`)"
-                    className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                    className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
                     aria-label="Format inline code"
                   >
                     <Code className="h-3.5 w-3.5" />
@@ -314,7 +215,7 @@ export default function IncidentNotes({
                     type="button"
                     onClick={() => applyFormat('link')}
                     title="Hyperlink ([text](url))"
-                    className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                    className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
                     aria-label="Insert hyperlink"
                   >
                     <Link2 className="h-3.5 w-3.5" />
@@ -323,36 +224,10 @@ export default function IncidentNotes({
                     type="button"
                     onClick={() => applyFormat('list')}
                     title="Bullet list (- item)"
-                    className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                    className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
                     aria-label="Insert bullet list"
                   >
                     <List className="h-3.5 w-3.5" />
-                  </button>
-
-                  <div className="h-4 w-px bg-border/80 mx-1" />
-
-                  {/* Picture Upload Button */}
-                  <button
-                    type="button"
-                    onClick={() => imageInputRef.current?.click()}
-                    title="Upload picture / image"
-                    className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-colors cursor-pointer"
-                    aria-label="Upload picture"
-                  >
-                    <ImageIcon className="h-3.5 w-3.5 text-primary" />
-                    <span className="text-[11px] hidden sm:inline">Picture</span>
-                  </button>
-
-                  {/* File Attachment Upload Button */}
-                  <button
-                    type="button"
-                    onClick={() => fileInputRef.current?.click()}
-                    title="Upload file attachment"
-                    className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-colors cursor-pointer"
-                    aria-label="Upload file attachment"
-                  >
-                    <Paperclip className="h-3.5 w-3.5 text-primary" />
-                    <span className="text-[11px] hidden sm:inline">File</span>
                   </button>
                 </div>
 
@@ -384,36 +259,20 @@ export default function IncidentNotes({
                 </div>
               </div>
 
-              {/* Upload Status Banner */}
-              {isUploading && (
-                <div className="flex items-center gap-2 px-3 py-1.5 bg-primary/10 border-b border-primary/20 text-xs text-primary animate-pulse">
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  <span>{uploadStatus || 'Uploading file...'}</span>
-                </div>
-              )}
-
-              {/* Upload Error Banner */}
-              {uploadError && (
+              {/* Submission Error Banner */}
+              {submitError && (
                 <div className="flex items-center justify-between px-3 py-1.5 bg-rose-500/10 border-b border-rose-500/20 text-xs text-rose-600 dark:text-rose-400">
                   <div className="flex items-center gap-1.5">
                     <AlertCircle className="h-3.5 w-3.5 shrink-0" />
-                    <span>{uploadError}</span>
+                    <span>{submitError}</span>
                   </div>
                   <button
                     type="button"
-                    onClick={() => setUploadError(null)}
-                    className="text-[10px] underline hover:no-underline font-medium"
+                    onClick={() => setSubmitError(null)}
+                    className="text-[10px] underline hover:no-underline font-medium cursor-pointer"
                   >
                     Dismiss
                   </button>
-                </div>
-              )}
-
-              {/* Dragging overlay notification */}
-              {isDragging && (
-                <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-card/95 backdrop-blur-xs border-2 border-dashed border-primary text-primary">
-                  <UploadCloud className="h-8 w-8 animate-bounce mb-1" />
-                  <span className="text-xs font-semibold">Drop image or file to upload</span>
                 </div>
               )}
 
@@ -427,7 +286,7 @@ export default function IncidentNotes({
                       Nothing to preview. Type a note or format text above.
                     </span>
                   )}
-                  {/* Keep hidden textarea with content so form submit still works if submitted from preview */}
+                  {/* Hidden textarea so standard FormData capture continues to function */}
                   <textarea
                     name="content"
                     value={noteContent}
@@ -442,8 +301,7 @@ export default function IncidentNotes({
                   name="content"
                   value={noteContent}
                   onChange={e => setNoteContent(e.target.value)}
-                  onPaste={handlePaste}
-                  placeholder="Type a note (Markdown supported: **bold**, *italic*, `code`, [link](url), pictures & files)..."
+                  placeholder="Type a note (Markdown supported: **bold**, *italic*, `code`, [link](url))..."
                   required
                   rows={3}
                   className="resize-none border-0 bg-transparent focus-visible:ring-0 p-3.5 text-xs sm:text-sm text-foreground placeholder:text-muted-foreground"
@@ -453,16 +311,25 @@ export default function IncidentNotes({
               {/* Footer Row */}
               <div className="flex items-center justify-between bg-muted/20 px-3 py-2 border-t border-border/60">
                 <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
-                  <span>Markdown &amp; drag-and-drop supported</span>
+                  <span>Markdown formatting supported</span>
                 </div>
                 <Button
                   type="submit"
                   size="sm"
-                  disabled={isUploading || !noteContent.trim()}
+                  disabled={isSubmitting || !noteContent.trim()}
                   className="h-7 rounded-lg px-3 gap-1.5 text-xs font-semibold shadow-2xs cursor-pointer"
                 >
-                  <Send className="h-3 w-3" />
-                  Post
+                  {isSubmitting ? (
+                    <>
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                      Posting...
+                    </>
+                  ) : (
+                    <>
+                      <Send className="h-3 w-3" />
+                      Post
+                    </>
+                  )}
                 </Button>
               </div>
             </div>
@@ -487,9 +354,11 @@ export default function IncidentNotes({
         {loadedNotes.length === 0 ? (
           <div className="text-center py-8 border border-dashed border-border/80 rounded-xl bg-muted/10">
             <MessageSquare className="h-6 w-6 mx-auto text-muted-foreground/60 mb-2" />
-            <h3 className="text-xs font-semibold text-foreground">No notes yet</h3>
+            <p className="text-xs font-medium text-foreground">No notes yet</p>
             <p className="text-[11px] text-muted-foreground mt-0.5">
-              Start the conversation by adding a note above.
+              {canManage
+                ? 'Add the first response note to keep responders aligned.'
+                : 'No response notes have been added to this incident yet.'}
             </p>
           </div>
         ) : (
@@ -507,25 +376,23 @@ export default function IncidentNotes({
           ))
         )}
 
+        {/* Load More Button */}
         {hasMoreNotes && (
-          <div className="mt-4 flex flex-col items-center justify-center p-3 border border-border/70 rounded-xl bg-muted/20 text-xs text-muted-foreground gap-2">
-            <span>
-              Showing {loadedNotes.length} of {totalNotesCount} notes
-            </span>
+          <div className="pt-2 text-center">
             <Button
               variant="outline"
               size="sm"
               onClick={handleLoadOlderNotes}
               disabled={isLoadingMore}
-              className="h-8 gap-1.5 cursor-pointer"
+              className="text-xs"
             >
               {isLoadingMore ? (
                 <>
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  <span>Loading older notes...</span>
+                  <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
+                  Loading older notes...
                 </>
               ) : (
-                <span>Load older notes</span>
+                `Load older notes (${loadedNotes.length} of ${totalNotesCount})`
               )}
             </Button>
           </div>

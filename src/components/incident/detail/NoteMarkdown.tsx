@@ -19,7 +19,7 @@ function getSafeUrl(urlStr: string): string | null {
   return null;
 }
 
-const IMAGE_EXTENSIONS = ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg', '.bmp', '.ico'];
+const IMAGE_EXTENSIONS = ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp', '.ico'];
 
 function isImageExtension(url: string): boolean {
   if (url.startsWith('data:image/')) return true;

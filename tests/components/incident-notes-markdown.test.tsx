@@ -105,7 +105,7 @@ describe('IncidentNotes composer toolbar & live preview', () => {
     },
   ];
 
-  it('renders formatting toolbar buttons for bold, italic, code, link, picture, and file', () => {
+  it('renders formatting toolbar buttons for bold, italic, code, link, list, and preview toggle', () => {
     render(
       <IncidentNotes incidentId="inc-100" notes={dummyNotes} canManage={true} onAddNote={vi.fn()} />
     );
@@ -115,9 +115,30 @@ describe('IncidentNotes composer toolbar & live preview', () => {
     expect(screen.getByRole('button', { name: 'Format inline code' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Insert hyperlink' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Insert bullet list' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Upload picture' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Upload file attachment' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Switch to Preview mode' })).toBeInTheDocument();
+  });
+
+  it('preserves draft note content when onAddNote fails', async () => {
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const failingAddNote = vi.fn().mockRejectedValue(new Error('Network error posting note'));
+    render(
+      <IncidentNotes
+        incidentId="inc-100"
+        notes={dummyNotes}
+        canManage={true}
+        onAddNote={failingAddNote}
+      />
+    );
+
+    const textarea = screen.getByPlaceholderText(/Type a note/i) as HTMLTextAreaElement;
+    fireEvent.change(textarea, { target: { value: 'Important draft text that must not be lost' } });
+
+    const postBtn = screen.getByRole('button', { name: 'Post' });
+    fireEvent.click(postBtn);
+
+    // The draft content should be preserved even if submit fails
+    expect(textarea.value).toBe('Important draft text that must not be lost');
+    consoleSpy.mockRestore();
   });
 
   it('applies bold formatting when bold button is clicked', () => {
