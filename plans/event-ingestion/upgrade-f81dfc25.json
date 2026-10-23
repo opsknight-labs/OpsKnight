@@ -1,0 +1,21 @@
+{
+  "measuredAt": "2026-10-23T05:30:59.126Z",
+  "baseline": "f81dfc25520a6c45007f87d90ac470547effbd6c",
+  "runtime": "v20.20.2",
+  "scope": "Populated database upgrade using the actual image migration entrypoint and old/new Prisma clients; not a Docker image or HA rollout certification",
+  "existingDataPreserved": true,
+  "repeatedStartup": true,
+  "splitReadinessPassed": true,
+  "defaultMode": "sync",
+  "legacyApiActions": [
+    "trigger",
+    "acknowledge",
+    "resolve"
+  ],
+  "legacyLargePayloadAccepted": true,
+  "legacyIdempotencyHeaderIgnored": true,
+  "oldClientReadsAndWritesAfterUpgrade": true,
+  "existingAutomationConfigPreserved": "absent in baseline",
+  "automaticQueueActivation": false,
+  "certifiedEnterprise": false
+}

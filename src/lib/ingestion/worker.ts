@@ -127,6 +127,7 @@ export function startIngestionWorker(): void {
 }
 
 export async function stopIngestionWorker(): Promise<void> {
+  if (!running) return;
   stopping = true;
   wake?.();
   await running;

@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server';
 import { withIngestionDelivery } from '@/lib/ingestion/admission';
 import { ingestionErrorResponse } from '@/lib/ingestion/http';
+import { ingestionConfig } from '@/lib/ingestion/config';
 import prisma from '@/lib/prisma';
 import { processIntegrationEvent, EventPayload } from '@/lib/events';
 import { authenticateApiKey } from '@/lib/api-auth';
@@ -199,7 +200,8 @@ async function postEvent(req: NextRequest) {
       }
     }
 
-    const idempotencyKey = req.headers.get('Idempotency-Key');
+    const idempotencyKey =
+      ingestionConfig().mode === 'postgres' ? req.headers.get('Idempotency-Key') : null;
     if (idempotencyKey && idempotencyKey.length > 256)
       return jsonError('Invalid Idempotency-Key', 400);
     const result = await withIngestionDelivery(

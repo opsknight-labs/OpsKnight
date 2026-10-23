@@ -80,7 +80,7 @@ export async function register() {
       const { verifyPostgresIngestionDurability } = await import('./lib/ingestion/postgres');
       await verifyPostgresIngestionDurability();
     }
-    if (role === 'integrated' || role === 'ingestion-worker') {
+    if (ingestion.mode === 'postgres' && (role === 'integrated' || role === 'ingestion-worker')) {
       const { startIngestionWorker, stopIngestionWorker } = await import('./lib/ingestion/worker');
       startIngestionWorker();
       stopIngestionWorkerService = stopIngestionWorker;
