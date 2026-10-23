@@ -6,13 +6,14 @@ const challengeFindUnique = vi.fn();
 const challengeUpdateMany = vi.fn();
 const linkUpsert = vi.fn();
 const userFindFirst = vi.fn();
+const userFindMany = vi.fn();
 const directoryFindMany = vi.fn();
 const getGraphTokenMock = vi.fn();
 
 const prismaMock = {
   chatIdentityLink: { findUnique: linkFindUnique, upsert: linkUpsert },
   chatIdentityChallenge: { create: challengeCreate },
-  user: { findFirst: userFindFirst },
+  user: { findFirst: userFindFirst, findMany: userFindMany },
   scimIdentity: { findMany: directoryFindMany },
   $transaction: vi.fn(async (callback: (tx: unknown) => Promise<unknown>) =>
     callback({
@@ -124,50 +125,39 @@ describe('Microsoft Teams explicit identity linking', () => {
     );
   });
 
-  it('auto-links an unlinked user matched by Microsoft Graph lookup', async () => {
+  it('requires explicit approval for email-only matches, including historical case duplicates', async () => {
     linkFindUnique.mockResolvedValue(null);
-    userFindFirst.mockResolvedValueOnce({
-      id: 'user-graph',
-      name: 'Graph Carol',
-      email: 'carol@example.com',
-    });
-    linkUpsert.mockResolvedValueOnce({ id: 'link-graph' });
-    getGraphTokenMock.mockResolvedValueOnce('mock-graph-token');
-
-    const originalFetch = global.fetch;
-    const fetchMock = vi.fn().mockResolvedValue({
-      ok: true,
-      json: async () => ({ mail: 'carol@example.com', displayName: 'Carol G' }),
-    });
-    global.fetch = fetchMock;
-
+    directoryFindMany.mockResolvedValue([]);
+    const historical = [
+      { id: 'historical-first', email: 'Case@example.test', name: 'First', status: 'ACTIVE' },
+      { id: 'historical-second', email: 'case@example.test', name: 'Second', status: 'ACTIVE' },
+    ];
+    userFindFirst.mockResolvedValue(historical[0]);
+    userFindMany.mockResolvedValue(historical);
+    getGraphTokenMock.mockResolvedValue('must-not-be-used');
+    const graph = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(
+        new Response(JSON.stringify({ id: 'unknown-object', mail: 'case@example.test' }), {
+          status: 200,
+        })
+      );
     try {
       const { resolveMicrosoftTeamsUser } = await import('@/lib/microsoft-teams/identity');
-      const result = await resolveMicrosoftTeamsUser({
-        tenantId: 'tenant-1',
-        providerUserId: 'teams-user-graph',
-        aadObjectId: 'aad-graph-1',
-        displayName: 'Carol G',
-      });
-
-      expect(result).toEqual({
-        linkId: 'link-graph',
-        userId: 'user-graph',
-        displayName: 'Graph Carol',
-      });
-      expect(fetchMock).toHaveBeenCalledWith(
-        expect.stringContaining('/users/aad-graph-1'),
-        expect.objectContaining({ headers: { Authorization: 'Bearer mock-graph-token' } })
-      );
-      expect(userFindFirst).toHaveBeenCalledWith({
-        where: {
-          email: { equals: 'carol@example.com', mode: 'insensitive' },
-          status: 'ACTIVE',
-        },
-        select: { id: true, name: true, email: true },
-      });
+      expect(
+        await resolveMicrosoftTeamsUser({
+          tenantId: 'tenant-1',
+          providerUserId: 'unlinked',
+          aadObjectId: 'unknown-object',
+        })
+      ).toBeNull();
+      expect(userFindFirst).not.toHaveBeenCalled();
+      expect(userFindMany).not.toHaveBeenCalled();
+      expect(getGraphTokenMock).not.toHaveBeenCalled();
+      expect(graph).not.toHaveBeenCalled();
+      expect(linkUpsert).not.toHaveBeenCalled();
     } finally {
-      global.fetch = originalFetch;
+      graph.mockRestore();
     }
   });
 

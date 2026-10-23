@@ -380,3 +380,36 @@ three times each (9 passed, 1.2 minutes), with native checkbox interactions,
 no forced clicks, no retries and unchanged timeouts. TypeScript and lint passed.
 The final 256-character multibyte group fixture confirms that oversized rejection
 also preserves a membership removed by the pending PATCH, not only its group name.
+
+
+## Administration and binding-approval hardening
+
+A shared read-only reconciliation planner now drives both execution and impact
+preview. Its revision includes all contributing directory bindings, user IDs,
+grant provenance and current team roles. Approval checks the revision and predicted
+addition/removal/transfer/session-invalidation counts before commit. Regression
+fixtures create a stale grant, prove the preview is read-only, change another
+connector's contributing group, reject stale approval, transfer ownership without
+revocation, and finally compare predicted removal/session changes to actual state.
+
+Connection and credential administration now use bounded 25-record pages with
+server-side search/status filters. All-credential ordering prioritizes active
+credentials before expired/revoked history. Tests create 101 connections and 26
+credentials with only the oldest still active, find/revoke that key, and navigate
+later connection/team/diagnostic pages while retaining the selected repair target.
+Credential pages select metadata only. Teams automatic linking no longer uses
+Graph email as proof: unmatched immutable identities require explicit account-link
+approval, including historical canonical-email duplicates.
+
+The final local pass completed 172 unit/API/auth/UI tests, 49 PostgreSQL tests,
+an optimized production build and nine compiled-server browser journeys (three
+per Chromium/Firefox/WebKit, 1.3 minutes). Browser assertions retain native clicks
+and unchanged timeouts with no retries. Pagination controls pass the existing
+mobile-width and accessibility checks. TypeScript and zero-warning lint passed.
+
+The Teams command suite also passed 21 tests. Local browser and database gates
+are run sequentially against their shared disposable database: overlapping their
+fixture writers produced serialization contention. Bounded retry exhaustion
+remains a retryable 503; the JIT race verifies Retry-After and then requires a 409
+once the winning transaction settles, with one canonical account throughout.
+Live-provider and production PgBouncer/CPU/I/O/resource budgets remain unverified.

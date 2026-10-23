@@ -8,6 +8,10 @@ import { getControlActor } from '@/lib/auth-control/actor';
 import { resolveOidcIdentityForSignIn } from '@/lib/oidc-identity-resolution';
 import {
   createScimCredentialAction,
+  scimOverviewAction,
+  scimConnectionPageAction,
+  scimCredentialPageAction,
+  scimTeamPageAction,
   bindExistingScimUserAction,
   scimDriftAction,
   detachScimBindingAction,
@@ -116,6 +120,168 @@ suite('SCIM PostgreSQL lifecycle certification', () => {
   afterAll(async () => {
     await prisma.$disconnect();
   });
+  it('pins every contributing binding and predicts removals, transfers and session invalidations', async () => {
+    vi.mocked(getControlActor).mockResolvedValue({ kind: 'admin', id: ids[0] } as Awaited<
+      ReturnType<typeof getControlActor>
+    >);
+    const created = await call('users', 'POST', {
+      userName: `impact-${Date.now()}@example.test`,
+      externalId: `impact-${Date.now()}`,
+    });
+    const user = await created.json();
+    const team = await prisma.team.create({
+      data: {
+        name: `Pinned impact ${Date.now()}`,
+        members: { create: { userId: ids[0], role: 'OWNER' } },
+      },
+    });
+    const groupA = await prisma.scimGroup.create({
+      data: {
+        connectorId: 'cert-a',
+        name: 'Selected source',
+        memberships: { create: { userId: user.id } },
+      },
+    });
+    const groupB = await prisma.scimGroup.create({
+      data: { connectorId: 'cert-b', name: 'Other contributing source' },
+    });
+    const first = await previewScimBindingAction({ groupId: groupA.id, teamId: team.id });
+    expect(first).toMatchObject({
+      additions: 1,
+      removals: 0,
+      sessionInvalidations: 1,
+      protectedOwners: 1,
+    });
+    if (!first || 'scimError' in first) throw new Error('Preview failed');
+    expect(
+      await approveScimBindingAction({
+        groupId: groupA.id,
+        teamId: team.id,
+        revision: first.revision,
+      })
+    ).toBeUndefined();
+    const bindingB = await prisma.scimGroupTeamBinding.create({
+      data: { groupId: groupB.id, teamId: team.id, approvedBy: ids[0] },
+    });
+    await prisma.scimGroupMembership.deleteMany({ where: { groupId: groupA.id } });
+    const stale = await previewScimBindingAction({ groupId: groupA.id, teamId: team.id });
+    expect(await prisma.teamMember.count({ where: { teamId: team.id, userId: user.id } })).toBe(1);
+    expect(stale).toMatchObject({
+      additions: 0,
+      removals: 1,
+      transfers: 0,
+      sessionInvalidations: 1,
+    });
+    if (!stale || 'scimError' in stale) throw new Error('Preview failed');
+    await prisma.scimGroupMembership.create({ data: { groupId: groupB.id, userId: user.id } });
+    expect(
+      await approveScimBindingAction({
+        groupId: groupA.id,
+        teamId: team.id,
+        revision: stale.revision,
+      })
+    ).toMatchObject({ scimError: expect.stringContaining('changed') });
+    const transfer = await previewScimBindingAction({ groupId: groupA.id, teamId: team.id });
+    expect(transfer).toMatchObject({ removals: 0, transfers: 1, sessionInvalidations: 0 });
+    if (!transfer || 'scimError' in transfer) throw new Error('Preview failed');
+    expect(
+      await approveScimBindingAction({
+        groupId: groupA.id,
+        teamId: team.id,
+        revision: transfer.revision,
+      })
+    ).toBeUndefined();
+    expect(
+      await prisma.scimTeamGrant.findFirst({ where: { bindingId: bindingB.id, userId: user.id } })
+    ).not.toBeNull();
+    await prisma.scimGroupMembership.deleteMany({ where: { groupId: groupB.id } });
+    const removal = await previewScimBindingAction({ groupId: groupA.id, teamId: team.id });
+    if (!removal || 'scimError' in removal) throw new Error('Preview failed');
+    const before = await prisma.user.findUniqueOrThrow({ where: { id: user.id } });
+    expect(
+      await approveScimBindingAction({
+        groupId: groupA.id,
+        teamId: team.id,
+        revision: removal.revision,
+      })
+    ).toBeUndefined();
+    expect(await prisma.teamMember.count({ where: { teamId: team.id, userId: user.id } })).toBe(0);
+    expect(
+      (await prisma.user.findUniqueOrThrow({ where: { id: user.id } })).tokenVersion -
+        before.tokenVersion
+    ).toBe(removal.sessionInvalidations);
+    expect(await prisma.teamMember.count({ where: { teamId: team.id, role: 'OWNER' } })).toBe(
+      removal.protectedOwners
+    );
+  });
+
+  it('pages beyond 100 connections, prioritizes an oldest active credential and pins selected teams', async () => {
+    const prefix = `admin-pages-${Date.now()}`;
+    await prisma.scimConnector.createMany({
+      data: Array.from({ length: 101 }, (_, index) => ({
+        id: `${prefix}-${index.toString().padStart(3, '0')}`,
+        name: `${prefix}-${index}`,
+        createdAt: new Date(1700000000000 + index),
+      })),
+    });
+    const page = await scimConnectionPageAction({ query: prefix, page: 5 });
+    expect(page).toMatchObject({ total: 101, rows: [{ id: `${prefix}-100` }] });
+    const selected = await scimOverviewAction({ selectedId: `${prefix}-100` });
+    expect(Array.isArray(selected) && selected.some(row => row.id === `${prefix}-100`)).toBe(true);
+    const connectorId = `${prefix}-100`;
+    await prisma.scimCredential.createMany({
+      data: Array.from({ length: 26 }, (_, index) => ({
+        id: `${prefix}-key-${index}`,
+        connectorId,
+        name: `Key ${index}`,
+        tokenHash: hashToken(`${prefix}-${index}`),
+        tokenHint: 'test',
+        scopes: ['users:read'],
+        createdBy: ids[0],
+        createdAt: new Date(1700000000000 + index),
+        expiresAt: new Date(index === 0 ? Date.now() + 86400000 : Date.now() - 86400000),
+        revokedAt: index > 12 ? new Date() : null,
+      })),
+    });
+    const active = await scimCredentialPageAction({ connectorId, page: 1, status: 'active' });
+    expect(active).toMatchObject({ total: 1, rows: [{ id: `${prefix}-key-0` }] });
+    const all = await scimCredentialPageAction({ connectorId, page: 1, status: 'all' });
+    if ('scimError' in all) throw new Error('Credential page failed');
+    expect(all.rows[0].id).toBe(`${prefix}-key-0`);
+    expect(all.rows).toHaveLength(25);
+    expect(all.rows.some(row => 'tokenHash' in row)).toBe(false);
+    expect(await scimCredentialPageAction({ connectorId, page: 2, status: 'all' })).toMatchObject({
+      total: 26,
+      rows: [expect.anything()],
+    });
+    expect(
+      await scimCredentialPageAction({ connectorId, page: 1, status: 'expired' })
+    ).toMatchObject({ total: 12 });
+    expect(
+      await scimCredentialPageAction({ connectorId, page: 1, status: 'revoked' })
+    ).toMatchObject({ total: 13 });
+    vi.mocked(getControlActor).mockResolvedValue({ kind: 'admin', id: ids[0] } as Awaited<
+      ReturnType<typeof getControlActor>
+    >);
+    expect(await revokeScimCredentialAction(`${prefix}-key-0`)).toBeUndefined();
+    expect(
+      await scimCredentialPageAction({ connectorId, page: 1, status: 'active' })
+    ).toMatchObject({ total: 0, rows: [] });
+    await prisma.team.createMany({
+      data: Array.from({ length: 26 }, (_, index) => ({
+        id: `${prefix}-team-${index}`,
+        name: `${prefix}-team-${index.toString().padStart(2, '0')}`,
+      })),
+    });
+    expect(
+      await scimTeamPageAction({ query: prefix, page: 1, selectedId: `${prefix}-team-25` })
+    ).toMatchObject({ total: 26, rows: expect.any(Array), selected: { id: `${prefix}-team-25` } });
+    expect(await scimTeamPageAction({ query: prefix, page: 2 })).toMatchObject({
+      total: 26,
+      rows: [{ id: `${prefix}-team-25` }],
+    });
+  });
+
   it('serializes SCIM creation against an uncommitted ordinary invitation with a case variant', async () => {
     const email = `race-${Date.now()}@example.test`;
     let ready!: () => void;
@@ -161,7 +327,15 @@ suite('SCIM PostgreSQL lifecycle certification', () => {
         call('users', 'POST', { userName: email, externalId: email }),
       ]);
       expect(jit.ok || scim.status === 201).toBe(true);
-      expect([201, 409]).toContain(scim.status);
+      if (scim.status === 503) {
+        // A slow contender can exhaust bounded serialization retries. Verify the
+        // protocol's retry contract once both original transactions have settled.
+        expect(scim.headers.get('Retry-After')).toBe('60');
+        expect(jit.ok).toBe(true);
+        expect((await call('users', 'POST', { userName: email, externalId: email })).status).toBe(
+          409
+        );
+      } else expect([201, 409]).toContain(scim.status);
       expect(
         await prisma.user.count({ where: { email: { equals: email, mode: 'insensitive' } } })
       ).toBe(1);

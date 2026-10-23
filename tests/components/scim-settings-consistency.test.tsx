@@ -11,7 +11,9 @@ const actions = vi.hoisted(() => ({
   approveScimBindingAction: vi.fn(),
   detachScimBindingAction: vi.fn(),
   restoreScimIdentityAction: vi.fn(),
-  scimTeamsAction: vi.fn(),
+  scimTeamPageAction: vi.fn(),
+  scimConnectionPageAction: vi.fn(),
+  scimCredentialPageAction: vi.fn(),
   bindExistingScimUserAction: vi.fn(),
   scimDriftAction: vi.fn(),
 }));
@@ -41,6 +43,8 @@ const preview = {
   revision: 'revision',
   additions: 0,
   removals: 0,
+  transfers: 0,
+  sessionInvalidations: 0,
   protectedOwners: 1,
   services: 0,
   escalations: 0,
@@ -77,7 +81,28 @@ beforeEach(() => {
     total: 1,
     rows: [{ id: 'group', label: 'Directory group', detail: 'GROUP', time: null }],
   });
-  actions.scimTeamsAction.mockResolvedValue([{ id: 'team', name: 'Operational team' }]);
+  actions.scimTeamPageAction.mockResolvedValue({
+    rows: [{ id: 'team', name: 'Operational team' }],
+    total: 1,
+    selected: null,
+  });
+  actions.scimConnectionPageAction.mockResolvedValue({ rows: [], total: 0 });
+  actions.scimCredentialPageAction.mockResolvedValue({
+    rows: [
+      {
+        id: 'key',
+        name: 'Key',
+        generation: 1,
+        tokenHint: 'hint',
+        scopes: [],
+        expiresAt: '2099-01-01',
+        revokedAt: null,
+        createdBy: 'admin',
+        lastUsedAt: null,
+      },
+    ],
+    total: 1,
+  });
   actions.previewScimBindingAction.mockResolvedValue(preview);
 });
 it('keeps legacy exposure visible across connections and labels disabled credentials as blocked', async () => {
@@ -86,7 +111,7 @@ it('keeps legacy exposure visible across connections and labels disabled credent
   fireEvent.change(screen.getByLabelText('SCIM connection'), { target: { value: 'other' } });
   expect(screen.getByText(/Legacy environment authentication is active/)).toBeVisible();
   fireEvent.click(screen.getByRole('button', { name: 'Security' }));
-  expect(screen.getByText('Blocked · connection disabled')).toBeVisible();
+  expect(await screen.findByText('Blocked · connection disabled')).toBeVisible();
   fireEvent.change(screen.getByLabelText('SCIM connection'), { target: { value: 'legacy' } });
   const create = screen.getByRole('button', { name: 'Create replacement credential' });
   expect(create).toBeDisabled();
@@ -152,4 +177,126 @@ it('does not keep connection editing blocked by a cancelled directory request', 
   fireEvent.click(screen.getByRole('button', { name: 'Connections' }));
   expect(screen.getByLabelText('Connection name')).toBeEnabled();
   expect(screen.queryByText('Loading provisioning data…')).not.toBeInTheDocument();
+});
+
+it('finds connection 101 and keeps its loaded selection when browsing another page', async () => {
+  actions.scimConnectionPageAction.mockImplementation(async ({ page }) => ({
+    total: 101,
+    rows: page === 5 ? [{ id: 'connection-101', name: 'Connection 101', provider: 'GENERIC' }] : [],
+  }));
+  actions.scimOverviewAction.mockImplementation(async ({ selectedId }) => [
+    { ...base, id: 'legacy', name: 'Legacy', legacyCredentialSource: 'ENV' },
+    ...(selectedId === 'connection-101'
+      ? [{ ...base, id: selectedId, name: 'Connection 101', legacyCredentialSource: null }]
+      : []),
+  ]);
+  render(<ScimSettingsSection initialConfig={config} tenantUrl="https://ops.test/api/scim/v2" />);
+  await screen.findByText('Connection page 1 · 101 records');
+  for (let index = 0; index < 4; index++)
+    fireEvent.click(screen.getByRole('button', { name: 'Next connections' }));
+  await screen.findByRole('option', { name: 'Connection 101 (GENERIC)' });
+  fireEvent.change(screen.getByLabelText('SCIM connection'), {
+    target: { value: 'connection-101' },
+  });
+  fireEvent.click(screen.getByRole('button', { name: 'Connections' }));
+  await waitFor(() =>
+    expect(screen.getByLabelText('Connection name')).toHaveValue('Connection 101')
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Previous connections' }));
+  await screen.findByText('Connection page 4 · 101 records');
+  expect(screen.getByLabelText('SCIM connection')).toHaveValue('connection-101');
+});
+
+it('pages to and revokes an older active credential', async () => {
+  const key = {
+    name: 'Older active key',
+    generation: 1,
+    tokenHint: 'old',
+    scopes: [],
+    expiresAt: '2099-01-01',
+    revokedAt: null,
+    createdBy: 'admin',
+    lastUsedAt: null,
+  };
+  actions.scimCredentialPageAction.mockImplementation(async ({ page, status }) => ({
+    total: 26,
+    rows: [
+      {
+        ...key,
+        id: page === 2 ? 'oldest' : 'newer',
+        name:
+          status === 'revoked'
+            ? 'Revoked history'
+            : page === 2
+              ? 'Oldest active credential'
+              : 'Newer credential',
+      },
+    ],
+  }));
+  actions.revokeScimCredentialAction.mockResolvedValue(undefined);
+  const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true);
+  try {
+    render(<ScimSettingsSection initialConfig={config} tenantUrl="https://ops.test/api/scim/v2" />);
+    fireEvent.click(screen.getByRole('button', { name: 'Security' }));
+    await screen.findByText(/Newer credential/);
+    fireEvent.click(screen.getByRole('button', { name: 'Next credentials' }));
+    await screen.findByText(/Oldest active credential/);
+    fireEvent.click(screen.getByRole('button', { name: 'Revoke credential' }));
+    await waitFor(() => expect(actions.revokeScimCredentialAction).toHaveBeenCalledWith('oldest'));
+    fireEvent.change(screen.getByLabelText('Credential status'), { target: { value: 'revoked' } });
+    await screen.findByText(/Revoked history/);
+    expect(actions.scimCredentialPageAction).toHaveBeenCalledWith({
+      connectorId: 'legacy',
+      page: 1,
+      status: 'revoked',
+    });
+  } finally {
+    confirm.mockRestore();
+  }
+});
+
+it('pages drift diagnostics and retains a repair team outside the first team page', async () => {
+  actions.scimDriftAction.mockImplementation(async ({ page }) =>
+    page === 1
+      ? Array.from({ length: 25 }, (_, index) => ({
+          groupId: `group-${index}`,
+          group: `Group ${index}`,
+          teamId: `team-${index}`,
+          team: `Team ${index}`,
+          missingMembers: 0,
+          unexpectedDirectoryGrants: 0,
+          independentManualMembers: 0,
+        }))
+      : [
+          {
+            groupId: 'later-group',
+            group: 'Later group',
+            teamId: 'later-team',
+            team: 'Later team',
+            missingMembers: 1,
+            unexpectedDirectoryGrants: 0,
+            independentManualMembers: 0,
+          },
+        ]
+  );
+  actions.scimTeamPageAction.mockImplementation(async ({ selectedId, page }) => ({
+    total: 26,
+    rows:
+      page === 2
+        ? [{ id: 'later-team', name: 'Later team' }]
+        : [{ id: 'first-team', name: 'First team' }],
+    selected: selectedId === 'later-team' ? { id: 'later-team', name: 'Later team' } : null,
+  }));
+  render(<ScimSettingsSection initialConfig={config} tenantUrl="https://ops.test/api/scim/v2" />);
+  fireEvent.click(screen.getByRole('button', { name: 'Diagnostics' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Compare local memberships' }));
+  await screen.findByText('Drift page 1');
+  fireEvent.click(screen.getByRole('button', { name: 'Next drift' }));
+  await screen.findByText('Drift page 2');
+  fireEvent.click(screen.getByRole('button', { name: 'Preview repair' }));
+  await screen.findByRole('option', { name: 'Later team' });
+  expect(screen.getByLabelText('Operational team')).toHaveValue('later-team');
+  fireEvent.click(screen.getByRole('button', { name: 'Next teams' }));
+  await screen.findByText('Team page 2 · 26 records');
+  expect(screen.getByLabelText('Operational team')).toHaveValue('later-team');
 });

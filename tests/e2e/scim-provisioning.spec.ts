@@ -83,7 +83,9 @@ test('SCIM administrator provisions, reviews bindings, rotates credentials and d
   await teamSelect.selectOption({ label: 'SCIM browser operational' });
   await section.getByRole('button', { name: 'Preview binding', exact: true }).click();
   await expect(
-    section.getByText(/1 members added; 0 existing memberships removed; 1 owners protected/)
+    section.getByText(
+      /1 members added; 0 existing memberships removed; 0 grants transferred; 1 owners protected; 1 users’ sessions invalidated/
+    )
   ).toBeVisible();
   await section.getByRole('button', { name: 'Approve this impact', exact: true }).click();
   await expect(section.getByRole('status').filter({ hasText: 'Binding approved' })).toBeVisible();

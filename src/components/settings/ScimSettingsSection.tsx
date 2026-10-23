@@ -14,7 +14,9 @@ import {
   approveScimBindingAction,
   detachScimBindingAction,
   restoreScimIdentityAction,
-  scimTeamsAction,
+  scimTeamPageAction,
+  scimConnectionPageAction,
+  scimCredentialPageAction,
   bindExistingScimUserAction,
   scimDriftAction,
 } from '@/app/(app)/settings/system/scim-actions';
@@ -58,6 +60,23 @@ export default function ScimSettingsSection({
   const [tab, setTab] = useState<(typeof tabs)[number]>('Overview');
   const [connectors, setConnectors] = useState<Connector[]>([]);
   const [selected, setSelected] = useState('legacy');
+  const [connectionPage, setConnectionPage] = useState(1);
+  const [connectionQuery, setConnectionQuery] = useState('');
+  const [connectionList, setConnectionList] = useState<
+    Data<ReturnType<typeof scimConnectionPageAction>>
+  >({ rows: [], total: 0 });
+  const [credentialPage, setCredentialPage] = useState(1);
+  const [credentialStatus, setCredentialStatus] = useState<
+    'active' | 'expired' | 'revoked' | 'all'
+  >('active');
+  const [credentialList, setCredentialList] = useState<
+    Data<ReturnType<typeof scimCredentialPageAction>>
+  >({ rows: [], total: 0 });
+  const [credentialLoading, setCredentialLoading] = useState(true);
+  const [driftPage, setDriftPage] = useState(1);
+  const [driftChecked, setDriftChecked] = useState(false);
+  const [teamPage, setTeamPage] = useState(1);
+  const [teamTotal, setTeamTotal] = useState(0);
   const [reload, setReload] = useState(0);
   const [busy, setBusy] = useState(false);
   const operationPending = useRef(false);
@@ -89,7 +108,7 @@ export default function ScimSettingsSection({
     : initialConfig.legacyCredentialSource;
   useEffect(() => {
     let current = true;
-    result(scimOverviewAction())
+    result(scimOverviewAction({ selectedId: selected }))
       .then(data => {
         if (current) {
           setConnectors(data);
@@ -108,7 +127,49 @@ export default function ScimSettingsSection({
     return () => {
       current = false;
     };
-  }, [reload]);
+  }, [reload, selected]);
+  useEffect(() => {
+    let current = true;
+    const timer = setTimeout(() => {
+      void result(scimConnectionPageAction({ page: connectionPage, query: connectionQuery }))
+        .then(data => {
+          if (current) setConnectionList(data);
+        })
+        .catch(() => {
+          if (current) setError('Cannot load connections.');
+        });
+    }, 250);
+    return () => {
+      current = false;
+      clearTimeout(timer);
+    };
+  }, [connectionPage, connectionQuery, reload]);
+  useEffect(() => {
+    if (tab !== 'Security') return;
+    let current = true;
+    void result(
+      scimCredentialPageAction({
+        connectorId: selected,
+        page: credentialPage,
+        status: credentialStatus,
+      })
+    )
+      .then(data => {
+        if (current) {
+          setCredentialList(data);
+          setObservedAt(Date.now());
+        }
+      })
+      .catch(() => {
+        if (current) setError('Cannot load credentials.');
+      })
+      .finally(() => {
+        if (current) setCredentialLoading(false);
+      });
+    return () => {
+      current = false;
+    };
+  }, [selected, credentialPage, credentialStatus, tab, reload]);
   useEffect(() => {
     if (tab !== 'Users & Groups' && tab !== 'Activity') return;
     let current = true;
@@ -142,9 +203,22 @@ export default function ScimSettingsSection({
     let current = true;
     const timer = setTimeout(
       () =>
-        result(scimTeamsAction(teamQuery))
+        result(
+          scimTeamPageAction({
+            query: teamQuery,
+            page: teamPage,
+            ...(teamId ? { selectedId: teamId } : {}),
+          })
+        )
           .then(data => {
-            if (current) setTeams(data);
+            if (current) {
+              setTeams(
+                data.selected && !data.rows.some(row => row.id === data.selected?.id)
+                  ? [data.selected, ...data.rows]
+                  : data.rows
+              );
+              setTeamTotal(data.total);
+            }
           })
           .catch(() => {
             if (current) setError('Cannot search operational teams.');
@@ -155,7 +229,7 @@ export default function ScimSettingsSection({
       current = false;
       clearTimeout(timer);
     };
-  }, [groupId, teamQuery]);
+  }, [groupId, teamQuery, teamPage, teamId]);
   useEffect(() => {
     if (!secret) return;
     const timer = setTimeout(() => setSecret(null), 300000);
@@ -173,6 +247,7 @@ export default function ScimSettingsSection({
       if (epoch !== connectionEpoch.current) return;
       setNotice(message);
       setOverviewLoading(true);
+      setCredentialLoading(true);
       setReload(v => v + 1);
     } catch (e) {
       if (epoch === connectionEpoch.current)
@@ -180,6 +255,15 @@ export default function ScimSettingsSection({
     } finally {
       operationPending.current = false;
       setBusy(false);
+    }
+  }
+  async function loadDrift(nextPage: number) {
+    const epoch = connectionEpoch.current;
+    const rows = await result(scimDriftAction({ connectorId: selected, page: nextPage }));
+    if (epoch === connectionEpoch.current) {
+      setDrift(rows);
+      setDriftPage(nextPage);
+      setDriftChecked(true);
     }
   }
   const date = (value: string | null) => (value ? new Date(value).toLocaleString() : 'Never');
@@ -204,6 +288,7 @@ export default function ScimSettingsSection({
               setTab(item);
               setPage(1);
               setQuery('');
+              setCredentialLoading(true);
             }}
           >
             {item}
@@ -233,6 +318,16 @@ export default function ScimSettingsSection({
           onChange={e => {
             connectionEpoch.current++;
             setSelected(e.target.value);
+            setOverviewLoading(true);
+            setCredentialPage(1);
+            setCredentialList({ rows: [], total: 0 });
+            setCredentialLoading(true);
+            setDrift([]);
+            setDriftPage(1);
+            setDriftChecked(false);
+            setTeamId('');
+            setTeams([]);
+            setTeamPage(1);
             setVerification(false);
             setLegacyCutoverAcknowledged(false);
             setAdoptMemberIds([]);
@@ -242,13 +337,46 @@ export default function ScimSettingsSection({
             setGroupId('');
           }}
         >
-          {connectors.map(c => (
+          {[
+            ...connectionList.rows,
+            ...connectors.filter(item => !connectionList.rows.some(row => row.id === item.id)),
+          ].map(c => (
             <option value={c.id} key={c.id}>
               {c.name} ({c.provider})
             </option>
           ))}
         </select>
       </label>
+      <label className="block text-sm">
+        Find a connection
+        <input
+          className={fieldClass}
+          value={connectionQuery}
+          onChange={e => {
+            setConnectionQuery(e.target.value);
+            setConnectionPage(1);
+          }}
+        />
+      </label>
+      <div className="flex flex-wrap items-center gap-3 text-sm">
+        <Button
+          variant="outline"
+          disabled={busy || connectionPage === 1}
+          onClick={() => setConnectionPage(value => value - 1)}
+        >
+          Previous connections
+        </Button>
+        <span>
+          Connection page {connectionPage} · {connectionList.total} records
+        </span>
+        <Button
+          variant="outline"
+          disabled={busy || connectionPage * 25 >= connectionList.total}
+          onClick={() => setConnectionPage(value => value + 1)}
+        >
+          Next connections
+        </Button>
+      </div>
       {(overviewLoading || (loading && (tab === 'Users & Groups' || tab === 'Activity'))) && (
         <p role="status" className="text-sm text-muted-foreground">
           Loading provisioning data…
@@ -568,7 +696,10 @@ export default function ScimSettingsSection({
                 <input
                   className={fieldClass}
                   value={teamQuery}
-                  onChange={e => setTeamQuery(e.target.value)}
+                  onChange={e => {
+                    setTeamQuery(e.target.value);
+                    setTeamPage(1);
+                  }}
                 />
               </label>
               <label className="block text-sm">
@@ -592,6 +723,25 @@ export default function ScimSettingsSection({
                   ))}
                 </select>
               </label>
+              <div className="flex flex-wrap items-center gap-3">
+                <Button
+                  variant="outline"
+                  disabled={busy || teamPage === 1}
+                  onClick={() => setTeamPage(value => value - 1)}
+                >
+                  Previous teams
+                </Button>
+                <span>
+                  Team page {teamPage} · {teamTotal} records
+                </span>
+                <Button
+                  variant="outline"
+                  disabled={busy || teamPage * 25 >= teamTotal}
+                  onClick={() => setTeamPage(value => value + 1)}
+                >
+                  Next teams
+                </Button>
+              </div>
               <Button
                 disabled={busy || !teamId}
                 variant="outline"
@@ -622,7 +772,8 @@ export default function ScimSettingsSection({
                   ) : (
                     <p>
                       {impact.additions} members added; {impact.removals} existing memberships
-                      removed; {impact.protectedOwners} owners protected.
+                      removed; {impact.transfers} grants transferred; {impact.protectedOwners}{' '}
+                      owners protected; {impact.sessionInvalidations} users’ sessions invalidated.
                     </p>
                   )}
                   {impact.legacyCandidates.length > 0 && (
@@ -824,8 +975,27 @@ export default function ScimSettingsSection({
               </Button>
             </div>
           )}
+          <label className="block text-sm">
+            Credential status
+            <select
+              aria-label="Credential status"
+              className={fieldClass}
+              value={credentialStatus}
+              onChange={e => {
+                setCredentialStatus(e.target.value as typeof credentialStatus);
+                setCredentialPage(1);
+                setCredentialLoading(true);
+              }}
+            >
+              <option value="active">Active</option>
+              <option value="expired">Expired</option>
+              <option value="revoked">Revoked</option>
+              <option value="all">All</option>
+            </select>
+          </label>
+          {credentialLoading && <p role="status">Loading credentials…</p>}
           <ul className="divide-y rounded-lg border">
-            {connector?.credentials.map(credential => (
+            {credentialList.rows.map(credential => (
               <li key={credential.id} className="p-3 space-y-1 text-sm">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <span className="font-medium">
@@ -869,9 +1039,34 @@ export default function ScimSettingsSection({
               </li>
             ))}
           </ul>
-          {connector?.credentials.length === 0 && (
+          <div className="flex flex-wrap items-center gap-3 text-sm">
+            <Button
+              variant="outline"
+              disabled={busy || credentialLoading || credentialPage === 1}
+              onClick={() => {
+                setCredentialPage(value => value - 1);
+                setCredentialLoading(true);
+              }}
+            >
+              Previous credentials
+            </Button>
+            <span>
+              Credential page {credentialPage} · {credentialList.total} records
+            </span>
+            <Button
+              variant="outline"
+              disabled={busy || credentialLoading || credentialPage * 25 >= credentialList.total}
+              onClick={() => {
+                setCredentialPage(value => value + 1);
+                setCredentialLoading(true);
+              }}
+            >
+              Next credentials
+            </Button>
+          </div>
+          {!credentialLoading && credentialList.rows.length === 0 && (
             <p className="text-sm text-muted-foreground">
-              No registry credentials. Create one to migrate legacy authentication.
+              No credentials match this status filter.
             </p>
           )}
         </div>
@@ -908,8 +1103,8 @@ export default function ScimSettingsSection({
             disabled={busy}
             onClick={() =>
               void run(
-                () => result(scimDriftAction({ connectorId: selected, page: 1 })).then(setDrift),
-                'Compared the first 25 local group bindings. Provider-side state requires provider diagnostics.'
+                () => loadDrift(1),
+                'Compared local group bindings. Provider-side state requires provider diagnostics.'
               )
             }
           >
@@ -927,6 +1122,10 @@ export default function ScimSettingsSection({
                   onClick={() => {
                     setGroupId(item.groupId);
                     setTeamId(item.teamId);
+                    setTeamQuery('');
+                    setTeamPage(1);
+                    setAdoptMemberIds([]);
+                    setImpactStale(false);
                     setImpact(null);
                     setTab('Users & Groups');
                     setKind('groups');
@@ -937,6 +1136,27 @@ export default function ScimSettingsSection({
               </li>
             ))}
           </ul>
+          {driftChecked && (
+            <div className="flex flex-wrap items-center gap-3">
+              <Button
+                variant="outline"
+                disabled={busy || driftPage === 1}
+                onClick={() =>
+                  void run(() => loadDrift(driftPage - 1), 'Previous drift page loaded.')
+                }
+              >
+                Previous drift
+              </Button>
+              <span>Drift page {driftPage}</span>
+              <Button
+                variant="outline"
+                disabled={busy || drift.length < 25}
+                onClick={() => void run(() => loadDrift(driftPage + 1), 'Next drift page loaded.')}
+              >
+                Next drift
+              </Button>
+            </div>
+          )}
           <form
             className="grid gap-3 sm:grid-cols-2"
             onSubmit={e => {

@@ -328,3 +328,28 @@ explicitly modified; generated default avatars can refresh their initials. Group
 mutation responses are serialized and checked against the byte budget before
 commit. A 413 rolls back directory changes and their audit events. Providers can
 request `excludedAttributes=members` for a bounded success representation.
+
+
+### Complete administration and pinned binding repairs
+
+The connection picker supports search and pages of 25, while keeping the selected
+connection available even when it lies outside the current page. Security lists
+credentials with server-side Active, Expired, Revoked and All filters and paging;
+All prioritizes unrevoked, unexpired credentials. Older active credentials remain
+individually revocable. Credential pages never include token hashes or raw secrets.
+Diagnostics can page through all local bindings. Team search is paginated and
+retains the selected repair target even outside the current search/page.
+
+Binding preview and execution share a read-only reconciliation planner. Preview
+shows additions, removals, grant transfers, protected owners and the number of
+users whose sessions will be invalidated. The approval revision pins every
+contributing group, binding and grant, not only the selected group. Changes require
+a fresh preview; approval also compares actual counts before committing. Existing
+grant ownership is retained while its directory source still desires the member.
+
+Microsoft Teams automatic linking requires an existing verified link or an
+unambiguous enabled Entra connector match on tenant and immutable directory object
+ID. Microsoft Graph email matching no longer authorizes automatic linking, even
+for a single email match. Email-only users must complete the signed-in account-link
+challenge. Historical case-variant email accounts are never chosen arbitrarily.
+Existing verified Teams links continue to work.

@@ -9,7 +9,8 @@ import { assertAdmin } from '@/lib/rbac';
 import { getControlActor, lockControlActor } from '@/lib/auth-control/actor';
 import { runSerializableTransaction } from '@/lib/db-utils';
 import { createCredential, revokeCredential, scopes } from '@/lib/scim/security/credentials';
-import { reconcileTeam } from '@/lib/scim/lifecycle/membership';
+import type { Prisma } from '@prisma/client';
+import { planTeamReconciliation, reconcileTeam } from '@/lib/scim/lifecycle/membership';
 
 const idSchema = z.string().min(1).max(128);
 const connectorSchema = z
@@ -58,10 +59,15 @@ const pageSchema = z
   })
   .strict();
 
-export async function scimOverviewAction() {
+export async function scimOverviewAction(input?: unknown) {
   try {
     await assertAdmin();
+    const { selectedId } = z
+      .object({ selectedId: idSchema.optional() })
+      .strict()
+      .parse(input ?? {});
     const connectors = await prisma.scimConnector.findMany({
+      ...(selectedId ? { where: { id: { in: [selectedId, 'legacy'] } } } : {}),
       orderBy: { createdAt: 'asc' },
       take: 100,
       include: {
@@ -258,7 +264,7 @@ const bindingSchema = z
   })
   .strict();
 async function preview(
-  tx: Pick<typeof prisma, 'scimGroup' | 'team' | 'teamMember' | 'service' | 'escalationRule'>,
+  tx: Prisma.TransactionClient,
   groupId: string,
   teamId: string,
   adoptMemberIds: string[] = []
@@ -267,7 +273,7 @@ async function preview(
     tx.scimGroup.findUniqueOrThrow({ where: { id: groupId }, include: { memberships: true } }),
     tx.team.findUniqueOrThrow({
       where: { id: teamId },
-      select: { name: true, scimExternalId: true },
+      select: { name: true, scimExternalId: true, teamLeadId: true },
     }),
     tx.teamMember.findMany({
       where: { teamId },
@@ -292,15 +298,17 @@ async function preview(
     throw new Error(
       'Membership or operational impact changed. Select only eligible legacy members.'
     );
-  const existing = new Set(members.map(m => m.userId));
+  const plan = await planTeamReconciliation(tx, teamId, [], { group, adoptMemberIds });
   const state = {
     group: group.name,
     team: team.name,
-    additions: group.memberships.filter(m => !existing.has(m.userId)).length,
-    protectedOwners: members.filter(m => m.role === 'OWNER').length,
+    additions: plan.additions.length,
+    protectedOwners: plan.protectedOwners,
     services,
     escalations,
-    removals: 0,
+    removals: plan.removedMembers.length,
+    transfers: plan.transferredGrants,
+    sessionInvalidations: plan.changedUserIds.length,
     adoptedMemberships: approved.size,
     legacyCandidates: candidates.map(member => ({ id: member.id, userId: member.userId })),
     retainedManualMemberships: members.filter(
@@ -313,6 +321,10 @@ async function preview(
     .update(
       JSON.stringify({
         state,
+        contributors: plan.revision,
+        teamLeadId: team.teamLeadId,
+        services,
+        escalations,
         adoptedMemberIds: [...approved].sort(),
         users: group.memberships.map(m => m.userId).sort(),
         members: members
@@ -327,7 +339,9 @@ export async function previewScimBindingAction(input: unknown) {
   try {
     await assertAdmin();
     const { groupId, teamId, adoptMemberIds } = bindingSchema.parse(input);
-    return await preview(prisma, groupId, teamId, adoptMemberIds);
+    return await prisma.$transaction(tx => preview(tx, groupId, teamId, adoptMemberIds), {
+      isolationLevel: 'RepeatableRead',
+    });
   } catch (error) {
     return await adminFailure(error);
   }
@@ -367,6 +381,15 @@ export async function approveScimBindingAction(input: unknown) {
         });
       }
       const reconciliation = await reconcileTeam(tx, teamId);
+      if (
+        reconciliation.revokedMemberships !== impact.removals ||
+        reconciliation.addedMemberships !== impact.additions ||
+        reconciliation.transferredGrants !== impact.transfers ||
+        reconciliation.changedUserIds.length !== impact.sessionInvalidations
+      )
+        throw new Error(
+          'Membership or operational impact changed. Preview again before approving.'
+        );
       await tx.scimEvent.create({
         data: {
           connectorId: group.connectorId,
@@ -552,6 +575,133 @@ export async function scimDriftAction(input: unknown) {
         coalesce(team_stats.manual, 0)::integer AS "independentManualMembers"
       FROM page LEFT JOIN team_stats ON team_stats."teamId" = page."teamId"
       ORDER BY page.id`;
+  } catch (error) {
+    return await adminFailure(error);
+  }
+}
+
+const adminPageSchema = z
+  .object({
+    query: z.string().trim().max(100).default(''),
+    page: z.number().int().min(1).max(1000000).default(1),
+  })
+  .strict();
+export async function scimConnectionPageAction(input: unknown) {
+  try {
+    await assertAdmin();
+    const { query, page } = adminPageSchema.parse(input);
+    const where = query ? { name: { contains: query, mode: 'insensitive' as const } } : {};
+    const [rows, total] = await prisma.$transaction(
+      [
+        prisma.scimConnector.findMany({
+          where,
+          select: { id: true, name: true, provider: true },
+          orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+          skip: (page - 1) * 25,
+          take: 25,
+        }),
+        prisma.scimConnector.count({ where }),
+      ],
+      { isolationLevel: 'RepeatableRead' }
+    );
+    return { rows, total };
+  } catch (error) {
+    return await adminFailure(error);
+  }
+}
+
+export async function scimCredentialPageAction(input: unknown) {
+  try {
+    await assertAdmin();
+    const { connectorId, page, status } = z
+      .object({
+        connectorId: idSchema,
+        page: z.number().int().min(1).max(1000000),
+        status: z.enum(['active', 'expired', 'revoked', 'all']),
+      })
+      .strict()
+      .parse(input);
+    const now = new Date();
+    const where = {
+      connectorId,
+      ...(status === 'revoked'
+        ? { revokedAt: { not: null } }
+        : status === 'active'
+          ? { revokedAt: null, expiresAt: { gt: now } }
+          : status === 'expired'
+            ? { revokedAt: null, expiresAt: { lte: now } }
+            : {}),
+    };
+    const [rows, total] = await prisma.$transaction(
+      [
+        prisma.scimCredential.findMany({
+          where,
+          skip: (page - 1) * 25,
+          take: 25,
+          select: {
+            id: true,
+            name: true,
+            scopes: true,
+            tokenHint: true,
+            generation: true,
+            createdBy: true,
+            createdAt: true,
+            expiresAt: true,
+            revokedAt: true,
+            lastUsedAt: true,
+          },
+          // Unrevoked active credentials precede expired credentials, then revoked history.
+          orderBy: [
+            { revokedAt: { sort: 'asc', nulls: 'first' } },
+            { expiresAt: 'desc' },
+            { createdAt: 'desc' },
+            { id: 'desc' },
+          ],
+        }),
+        prisma.scimCredential.count({ where }),
+      ],
+      { isolationLevel: 'RepeatableRead' }
+    );
+    return {
+      total,
+      rows: rows.map(row => ({
+        ...row,
+        createdAt: row.createdAt.toISOString(),
+        expiresAt: row.expiresAt.toISOString(),
+        revokedAt: row.revokedAt?.toISOString() ?? null,
+        lastUsedAt: row.lastUsedAt?.toISOString() ?? null,
+      })),
+    };
+  } catch (error) {
+    return await adminFailure(error);
+  }
+}
+
+export async function scimTeamPageAction(input: unknown) {
+  try {
+    await assertAdmin();
+    const { query, page, selectedId } = adminPageSchema
+      .extend({ selectedId: idSchema.optional() })
+      .parse(input);
+    const where = { name: { contains: query, mode: 'insensitive' as const } };
+    const [rows, total, selected] = await prisma.$transaction(
+      [
+        prisma.team.findMany({
+          where,
+          select: { id: true, name: true },
+          orderBy: [{ name: 'asc' }, { id: 'asc' }],
+          skip: (page - 1) * 25,
+          take: 25,
+        }),
+        prisma.team.count({ where }),
+        prisma.team.findUnique({
+          where: { id: selectedId ?? '' },
+          select: { id: true, name: true },
+        }),
+      ],
+      { isolationLevel: 'RepeatableRead' }
+    );
+    return { rows, total, selected };
   } catch (error) {
     return await adminFailure(error);
   }

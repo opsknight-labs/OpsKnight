@@ -59,45 +59,11 @@ export async function resolveMicrosoftTeamsUser(identity: TeamsUserIdentity) {
       take: 2,
     });
     if (directoryMatches.length > 1) throw new Error('Ambiguous Teams directory identity');
-    let matchedUser: { id: string; name: string; email: string } | null =
+    const matchedUser: { id: string; name: string; email: string } | null =
       directoryMatches[0]?.user ?? null;
 
-    if (!matchedUser) {
-      try {
-        const { getMicrosoftTeamsGraphAccessToken } = await import('./client');
-        const graphToken = await getMicrosoftTeamsGraphAccessToken(identity.tenantId);
-        if (graphToken) {
-          const graphRes = await fetch(
-            `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(identity.aadObjectId)}?$select=id,mail,userPrincipalName,displayName`,
-            {
-              headers: { Authorization: `Bearer ${graphToken}` },
-              cache: 'no-store',
-            }
-          );
-          if (graphRes.ok) {
-            const data = (await graphRes.json()) as {
-              mail?: string | null;
-              userPrincipalName?: string | null;
-            };
-            const graphEmail = (data.mail || data.userPrincipalName || '').trim().toLowerCase();
-            if (graphEmail) {
-              matchedUser = await prisma.user.findFirst({
-                where: {
-                  email: { equals: graphEmail, mode: 'insensitive' },
-                  status: 'ACTIVE',
-                },
-                select: { id: true, name: true, email: true },
-              });
-            }
-          }
-        }
-      } catch (graphError) {
-        logger.warn('[MicrosoftTeams] Auto-resolution Graph lookup failed', {
-          error: (graphError as Error).message,
-        });
-      }
-    }
-
+    // Email (including a Graph-assured address) is not immutable identity proof.
+    // Without a tenant/object match, require the signed-in account-link challenge.
     if (matchedUser) {
       try {
         const autoLink = await prisma.chatIdentityLink.upsert({
