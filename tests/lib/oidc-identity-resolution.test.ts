@@ -1,6 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+vi.mock('@/lib/oidc/registration', async importOriginal => ({
+  ...(await importOriginal<typeof import('@/lib/oidc/registration')>()),
+  assertCurrentOidcRegistration: vi.fn().mockResolvedValue(undefined),
+}));
+
 const tx = {
+  scimIdentity: { findMany: vi.fn().mockResolvedValue([]) },
   oidcIdentity: {
     findUnique: vi.fn(),
     findFirst: vi.fn(),
@@ -82,6 +88,7 @@ describe('resolveOidcIdentityForSignIn', () => {
     tx.oidcIdentity.update.mockResolvedValue({} as never);
     tx.oidcIdentity.deleteMany.mockResolvedValue({ count: 0 });
     tx.oidcIdentity.create.mockResolvedValue({ id: 'identity-1' });
+    tx.scimIdentity.findMany.mockResolvedValue([]);
     tx.user.findUnique.mockResolvedValue(null);
     tx.user.create.mockResolvedValue(linkedUser);
     tx.oidcLinkingApproval.findUnique.mockResolvedValue(null);
@@ -612,6 +619,77 @@ describe('resolveOidcIdentityForSignIn', () => {
     expect(prisma.oidcIdentity.update).toHaveBeenCalledWith({
       where: { id: 'legacy-ident-1' },
       data: { issuerFingerprint: currentFingerprint },
+    });
+  });
+});
+
+describe('SCIM trusted first-link bridge', () => {
+  const tenant = '11111111-1111-4111-8111-111111111111';
+  const objectId = '22222222-2222-4222-8222-222222222222';
+  const input = {
+    ...baseInput,
+    issuer: `https://login.microsoftonline.com/${tenant}/v2.0`,
+    providerType: 'microsoft',
+    clientId: 'registered-client',
+    requireCurrentRegistration: true,
+    claims: { tid: tenant, oid: objectId },
+  };
+  beforeEach(() => {
+    vi.clearAllMocks();
+    tx.oidcIdentity.findUnique.mockResolvedValue(null);
+    tx.oidcIdentity.findMany.mockResolvedValue([]);
+    tx.scimIdentity.findMany.mockResolvedValue([]);
+    tx.user.findUnique.mockResolvedValue(linkedUser);
+    tx.oidcLinkingApproval.findUnique.mockResolvedValue(null);
+    tx.oidcIdentity.create.mockResolvedValue({ id: 'linked' });
+  });
+  it('links only a proven tenant, object and exact registered OIDC client', async () => {
+    tx.scimIdentity.findMany.mockResolvedValue([{ user: linkedUser }]);
+    const result = await resolveOidcIdentityForSignIn(input);
+    expect(result).toMatchObject({
+      ok: true,
+      identityCreated: true,
+      userCreated: false,
+      approvalConsumed: false,
+    });
+    expect(tx.scimIdentity.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          externalId: objectId,
+          deletedAt: null,
+          connector: {
+            enabled: true,
+            provider: 'ENTRA',
+            trustedLinkEnabled: true,
+            tenantId: tenant,
+            oidcIssuer: input.issuer,
+            oidcClientId: input.clientId,
+          },
+        },
+      })
+    );
+    expect(tx.oidcLinkingApproval.updateMany).not.toHaveBeenCalled();
+  });
+  it('requires explicit approval when immutable source matching fails', async () => {
+    expect(await resolveOidcIdentityForSignIn(input)).toMatchObject({
+      ok: false,
+      reason: 'OIDC_LINK_NOT_APPROVED',
+    });
+    expect(tx.oidcIdentity.create).not.toHaveBeenCalled();
+  });
+  it('rejects duplicate source matches and disabled provisioning targets', async () => {
+    tx.scimIdentity.findMany.mockResolvedValue([
+      { user: linkedUser },
+      { user: { ...linkedUser, id: 'another' } },
+    ]);
+    expect(await resolveOidcIdentityForSignIn(input)).toMatchObject({
+      ok: false,
+      reason: 'OIDC_AMBIGUOUS_IDENTITY_CONFLICT',
+    });
+    tx.scimIdentity.findMany.mockResolvedValue([{ user: { ...linkedUser, status: 'DISABLED' } }]);
+    expect(await resolveOidcIdentityForSignIn(input)).toMatchObject({
+      ok: false,
+      reason: 'OIDC_TARGET_NOT_OPERATIONAL',
     });
   });
 });

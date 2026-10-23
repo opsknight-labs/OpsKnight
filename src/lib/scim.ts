@@ -1,8 +1,9 @@
 import 'server-only';
+import { equalityFilter } from '@/lib/scim/protocol/filters';
 
-import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
-import { decrypt, encrypt } from '@/lib/encryption';
-import { logAudit } from '@/lib/audit';
+import { authenticate, createCredential, scopes } from '@/lib/scim/security/credentials';
+import { getControlActor, lockControlActor } from '@/lib/auth-control/actor';
+import { runSerializableTransaction } from '@/lib/db-utils';
 
 export const SCIM_USER_SCHEMA = 'urn:ietf:params:scim:schemas:core:2.0:User';
 export const SCIM_GROUP_SCHEMA = 'urn:ietf:params:scim:schemas:core:2.0:Group';
@@ -14,10 +15,6 @@ export const SCIM_LIST_SCHEMA = 'urn:ietf:params:scim:api:messages:2.0:ListRespo
 export const SCIM_ERROR_SCHEMA = 'urn:ietf:params:scim:api:messages:2.0:Error';
 export const SCIM_CONFIG_KEY = 'scim_configuration';
 
-function digest(value: string): Buffer {
-  return createHash('sha256').update(value, 'utf8').digest();
-}
-
 export type ScimConfigRecord = {
   enabled: boolean;
   secretTokenHash?: string;
@@ -25,188 +22,106 @@ export type ScimConfigRecord = {
   tokenHint?: string;
   createdAt?: string;
   updatedAt?: string;
-  lastUsedAt?: string;
 };
-
 export async function isScimRequestAuthorized(authorization: string | null): Promise<boolean> {
-  if (!authorization?.startsWith('Bearer ')) return false;
-  const supplied = authorization.slice('Bearer '.length).trim();
-  if (supplied.length === 0) return false;
-
-  const suppliedDigest = digest(supplied);
-
-  // 1. Check UI/Database configuration first
   try {
-    const { default: prisma } = await import('@/lib/prisma');
-    const record = await prisma.systemConfig.findUnique({
-      where: { key: SCIM_CONFIG_KEY },
-    });
-    if (record?.value && typeof record.value === 'object') {
-      const config = record.value as ScimConfigRecord;
-      if (config.enabled === false) return false;
-      if (config.secretTokenHash) {
-        const storedDigest = Buffer.from(config.secretTokenHash, 'hex');
-        if (
-          storedDigest.length === suppliedDigest.length &&
-          timingSafeEqual(suppliedDigest, storedDigest)
-        ) {
-          return true;
-        }
-      }
-    }
+    return Boolean(await authenticate(authorization));
   } catch {
-    // If DB is temporarily unavailable (e.g. during isolated unit tests), fall back to env var
+    return false;
   }
-
-  // 2. Fallback to process.env.SCIM_BEARER_TOKEN (legacy / EC2 .env)
-  const configured = process.env.SCIM_BEARER_TOKEN?.trim() ?? '';
-  if (configured.length < 32) return false;
-  return timingSafeEqual(suppliedDigest, digest(configured));
 }
-
-export async function getScimConfig(): Promise<{
-  enabled: boolean;
-  hasSecretToken: boolean;
-  tokenHint: string | null;
-  source: 'DATABASE' | 'ENV' | 'NONE';
-  createdAt: string | null;
-  updatedAt: string | null;
-}> {
-  try {
-    const { default: prisma } = await import('@/lib/prisma');
-    const record = await prisma.systemConfig.findUnique({
-      where: { key: SCIM_CONFIG_KEY },
-    });
-    if (record?.value && typeof record.value === 'object') {
-      const config = record.value as ScimConfigRecord;
-      if (config.secretTokenHash) {
-        return {
-          enabled: config.enabled !== false,
-          hasSecretToken: true,
-          tokenHint: config.tokenHint ?? null,
-          source: 'DATABASE',
-          createdAt: config.createdAt ?? null,
-          updatedAt: config.updatedAt ?? null,
-        };
-      }
-    }
-  } catch {
-    // Fall back to env check
-  }
-
-  const envToken = process.env.SCIM_BEARER_TOKEN?.trim() ?? '';
-  if (envToken.length >= 32) {
-    return {
-      enabled: true,
-      hasSecretToken: true,
-      tokenHint: envToken.slice(-4),
-      source: 'ENV',
-      createdAt: null,
-      updatedAt: null,
-    };
-  }
-
+export async function getScimConfig() {
+  const { default: prisma } = await import('@/lib/prisma');
+  const connector = await prisma.scimConnector.findUnique({ where: { id: 'legacy' } });
+  const credential = await prisma.scimCredential.findFirst({
+    where: {
+      connector: { enabled: true, credentialAuthority: 'REGISTRY' },
+      revokedAt: null,
+      expiresAt: { gt: new Date() },
+    },
+    orderBy: { createdAt: 'desc' },
+  });
+  const record =
+    connector?.enabled && connector.credentialAuthority === 'LEGACY'
+      ? await prisma.systemConfig.findUnique({ where: { key: SCIM_CONFIG_KEY } })
+      : null;
+  const config = record?.value as ScimConfigRecord | null;
+  const env = !record && (process.env.SCIM_BEARER_TOKEN?.trim().length ?? 0) >= 32;
+  const legacyCredentialSource =
+    connector?.enabled && connector.credentialAuthority === 'LEGACY'
+      ? config?.enabled === true && config.secretTokenHash
+        ? ('DATABASE' as const)
+        : !record && env
+          ? ('ENV' as const)
+          : null
+      : null;
   return {
-    enabled: false,
-    hasSecretToken: false,
-    tokenHint: null,
-    source: 'NONE',
-    createdAt: null,
-    updatedAt: null,
+    enabled: Boolean(credential || legacyCredentialSource),
+    hasSecretToken: Boolean(credential || legacyCredentialSource),
+    tokenHint: legacyCredentialSource
+      ? (config?.tokenHint ?? null)
+      : (credential?.tokenHint ?? null),
+    source:
+      legacyCredentialSource ??
+      (credential || connector?.credentialAuthority === 'REGISTRY'
+        ? ('DATABASE' as const)
+        : ('NONE' as const)),
+    // Independent of other connectors and of the connection currently selected in the UI.
+    legacyCredentialSource,
+    createdAt: legacyCredentialSource
+      ? (config?.createdAt ?? null)
+      : (credential?.createdAt.toISOString() ?? null),
+    updatedAt: legacyCredentialSource
+      ? (config?.updatedAt ?? null)
+      : (credential?.createdAt.toISOString() ?? null),
   };
 }
 
-export async function generateAndSaveScimToken(actorId?: string): Promise<{
-  token: string;
-  tokenHint: string;
-}> {
-  const token = randomBytes(32).toString('hex');
-  const secretTokenHash = digest(token).toString('hex');
-  const encryptedSecretToken = await encrypt(token);
-  const tokenHint = token.slice(-4);
-  const now = new Date().toISOString();
-
-  const configValue: ScimConfigRecord = {
-    enabled: true,
-    secretTokenHash,
-    encryptedSecretToken,
-    tokenHint,
-    createdAt: now,
-    updatedAt: now,
-  };
-
-  const { default: prisma } = await import('@/lib/prisma');
-  await prisma.systemConfig.upsert({
-    where: { key: SCIM_CONFIG_KEY },
-    create: {
-      key: SCIM_CONFIG_KEY,
-      value: configValue,
-      updatedBy: actorId ?? null,
-    },
-    update: {
-      value: configValue,
-      updatedBy: actorId ?? null,
-    },
+export async function generateAndSaveScimToken(_actorId?: string) {
+  return createCredential({
+    connectorId: 'legacy',
+    name: 'SCIM provisioning',
+    scopes: [...scopes],
+    lifetimeDays: 90,
+    overlapMinutes: 60,
   });
-
-  await logAudit({
-    action: 'scim.token.generated',
-    entityType: 'SYSTEM_CONFIG',
-    entityId: SCIM_CONFIG_KEY,
-    actorId: actorId ?? null,
-    source: 'UI',
-    details: { tokenHint, source: 'UI' },
-  });
-
-  return { token, tokenHint };
 }
-
-export async function revokeScimToken(actorId?: string): Promise<void> {
-  const { default: prisma } = await import('@/lib/prisma');
-  const record = await prisma.systemConfig.findUnique({
-    where: { key: SCIM_CONFIG_KEY },
-  });
-  if (record) {
-    await prisma.systemConfig.update({
+export async function revokeScimToken(_actorId?: string) {
+  const actor = await getControlActor(true);
+  if (actor.kind !== 'admin') throw new Error('Administrator sign-in required.');
+  await runSerializableTransaction(async tx => {
+    await lockControlActor(tx, actor);
+    await tx.scimConnector.update({
+      where: { id: 'legacy' },
+      data: { enabled: false, credentialAuthority: 'REGISTRY' },
+    });
+    await tx.systemConfig.upsert({
       where: { key: SCIM_CONFIG_KEY },
+      create: {
+        key: SCIM_CONFIG_KEY,
+        value: { enabled: false, migratedToRegistry: true },
+        updatedBy: actor.id,
+      },
+      update: { value: { enabled: false, migratedToRegistry: true }, updatedBy: actor.id },
+    });
+    await tx.scimCredential.updateMany({
+      where: { connectorId: 'legacy', revokedAt: null },
+      data: { revokedAt: new Date() },
+    });
+    await tx.scimEvent.create({
       data: {
-        value: {
-          enabled: false,
-          updatedAt: new Date().toISOString(),
-        },
-        updatedBy: actorId ?? null,
+        connectorId: 'legacy',
+        action: 'connector.revoked',
+        requestId: crypto.randomUUID(),
+        details: { actorId: actor.id },
       },
     });
-  }
-
-  await logAudit({
-    action: 'scim.token.revoked',
-    entityType: 'SYSTEM_CONFIG',
-    entityId: SCIM_CONFIG_KEY,
-    actorId: actorId ?? null,
-    source: 'UI',
-    details: { source: 'UI' },
   });
 }
-
 export async function revealScimToken(): Promise<string | null> {
-  try {
-    const { default: prisma } = await import('@/lib/prisma');
-    const record = await prisma.systemConfig.findUnique({
-      where: { key: SCIM_CONFIG_KEY },
-    });
-    if (record?.value && typeof record.value === 'object') {
-      const config = record.value as ScimConfigRecord;
-      if (config.encryptedSecretToken) {
-        return await decrypt(config.encryptedSecretToken);
-      }
-    }
-  } catch {
-    // If not found in DB
-  }
-
-  const envToken = process.env.SCIM_BEARER_TOKEN?.trim() ?? '';
-  return envToken.length >= 32 ? envToken : null;
+  // New credentials are one-time secrets. Legacy secrets must be rotated to migrate.
+  await getControlActor(true);
+  return null;
 }
 
 export function scimError(status: number, detail: string, scimType?: string) {
@@ -234,26 +149,39 @@ export type ScimUserShape = {
   email: string;
   name: string;
   avatarUrl?: string | null;
+  department?: string | null;
+  scimGivenName?: string | null;
+  scimFamilyName?: string | null;
+  jobTitle?: string | null;
   status: string;
   createdAt: Date;
   updatedAt: Date;
 };
 
-export function serializeScimUser(user: ScimUserShape) {
+export function serializeScimUser(user: ScimUserShape, baseUrl = '') {
   return {
-    schemas: [SCIM_USER_SCHEMA],
+    schemas: [SCIM_USER_SCHEMA, 'urn:ietf:params:scim:schemas:extension:enterprise:2.0:User'],
+    title: user.jobTitle ?? undefined,
+    'urn:ietf:params:scim:schemas:extension:enterprise:2.0:User': {
+      department: user.department ?? undefined,
+    },
     id: user.id,
     externalId: user.scimExternalId ?? undefined,
     userName: user.email,
     displayName: user.name,
-    name: { formatted: user.name },
+    name: {
+      formatted: user.name,
+      givenName: user.scimGivenName ?? undefined,
+      familyName: user.scimFamilyName ?? undefined,
+    },
     emails: [{ value: user.email, primary: true, type: 'work' }],
-    ...(user.avatarUrl
+    ...(user.avatarUrl && /^https?:\/\//i.test(user.avatarUrl)
       ? { photos: [{ value: user.avatarUrl, primary: true, type: 'photo' }] }
       : {}),
-    active: user.status !== 'DISABLED',
+    active: user.status === 'ACTIVE',
     meta: {
       resourceType: 'User',
+      location: baseUrl ? `${baseUrl}/api/scim/v2/Users/${user.id}` : undefined,
       created: user.createdAt.toISOString(),
       lastModified: user.updatedAt.toISOString(),
     },
@@ -263,16 +191,11 @@ export function serializeScimUser(user: ScimUserShape) {
 export function parseScimFilter(
   filter: string | null
 ): { scimExternalId: string } | { email: string } | null {
-  if (!filter) return null;
-  const cleaned = filter
-    .trim()
-    .replace(/^\((.*)\)$/, '$1')
-    .trim();
-  const match = /^(externalId|userName)\s+eq\s+["']?([^"'\r\n]{1,320})["']?$/i.exec(cleaned);
-  if (!match) throw new Error('Unsupported SCIM filter. Use externalId eq or userName eq.');
-  return match[1].toLowerCase() === 'externalid'
-    ? { scimExternalId: match[2].trim() }
-    : { email: match[2].trim().toLowerCase() };
+  const parsed = equalityFilter(filter, ['externalid', 'username']);
+  if (!parsed) return null;
+  return parsed.attribute === 'externalid'
+    ? { scimExternalId: parsed.value }
+    : { email: parsed.value.toLowerCase() };
 }
 
 export type ScimGroupMember = {
@@ -315,23 +238,11 @@ export function serializeScimGroup(group: ScimGroupShape, baseUrl = '') {
 export function parseScimGroupFilter(
   filter: string | null
 ): { name?: string; scimExternalId?: string; id?: string } | null {
-  if (!filter) return null;
-  const cleaned = filter
-    .trim()
-    .replace(/^\((.*)\)$/, '$1')
-    .trim();
-  const match = /^(displayName|externalId|id)\s+eq\s+["']?([^"'\r\n]{1,320})["']?$/i.exec(cleaned);
-  if (!match) {
-    throw new Error('Unsupported SCIM group filter. Use displayName eq, externalId eq, or id eq.');
-  }
-  const field = match[1].toLowerCase();
-  if (field === 'displayname') {
-    return { name: match[2].trim() };
-  }
-  if (field === 'externalid') {
-    return { scimExternalId: match[2].trim() };
-  }
-  return { id: match[2].trim() };
+  const parsed = equalityFilter(filter, ['displayname', 'externalid', 'id']);
+  if (!parsed) return null;
+  if (parsed.attribute === 'displayname') return { name: parsed.value };
+  if (parsed.attribute === 'externalid') return { scimExternalId: parsed.value };
+  return { id: parsed.value };
 }
 
 export function getServiceProviderConfig(baseUrl = '') {
@@ -379,152 +290,99 @@ export function getServiceProviderConfig(baseUrl = '') {
 }
 
 export function getScimSchemas(baseUrl = '') {
-  return [
+  const string = (name: string, required = false) => ({
+    name,
+    type: 'string',
+    multiValued: false,
+    required,
+    mutability: 'readWrite',
+    returned: 'default',
+    caseExact: false,
+    uniqueness: 'none',
+  });
+  const complex = (
+    name: string,
+    multiValued: boolean,
+    subAttributes: Array<
+      ReturnType<typeof string> & { referenceTypes?: string[]; canonicalValues?: string[] }
+    >
+  ) => ({
+    name,
+    type: 'complex',
+    multiValued,
+    required: false,
+    mutability: 'readWrite',
+    returned: 'default',
+    subAttributes,
+  });
+  const descriptors = [
     {
-      schemas: [SCIM_SCHEMA_SCHEMA],
       id: SCIM_USER_SCHEMA,
       name: 'User',
-      description: 'OpsKnight User Account Schema',
+      description:
+        'OpsKnight directory-managed account. Configure an immutable externalId when creating users.',
       attributes: [
-        {
-          name: 'userName',
-          type: 'string',
-          multiValued: false,
-          description: 'Unique identifier for the User, typically user email address.',
-          required: true,
-          caseExact: false,
-          mutability: 'readWrite',
-          returned: 'default',
-          uniqueness: 'server',
-        },
-        {
-          name: 'displayName',
-          type: 'string',
-          multiValued: false,
-          description: 'The name of the User, suitable for display to end-users.',
-          required: false,
-          caseExact: false,
-          mutability: 'readWrite',
-          returned: 'default',
-          uniqueness: 'none',
-        },
-        {
-          name: 'emails',
-          type: 'complex',
-          multiValued: true,
-          description: 'Email addresses for the user.',
-          required: false,
-          subAttributes: [
-            { name: 'value', type: 'string', multiValued: false, required: false },
-            { name: 'type', type: 'string', multiValued: false, required: false },
-            { name: 'primary', type: 'boolean', multiValued: false, required: false },
-          ],
-        },
-        {
-          name: 'photos',
-          type: 'complex',
-          multiValued: true,
-          description: 'URLs of photos of the User.',
-          required: false,
-          subAttributes: [
-            { name: 'value', type: 'reference', multiValued: false, required: false },
-            { name: 'type', type: 'string', multiValued: false, required: false },
-            { name: 'primary', type: 'boolean', multiValued: false, required: false },
-          ],
-        },
+        { ...string('userName', true), uniqueness: 'server' },
+        { ...string('externalId'), mutability: 'immutable', caseExact: true },
+        string('displayName'),
+        complex('name', false, [string('formatted'), string('givenName'), string('familyName')]),
         {
           name: 'active',
           type: 'boolean',
           multiValued: false,
-          description: 'A Boolean value indicating the User administrative status.',
           required: false,
-          mutability: 'readWrite',
-        },
-        {
-          name: 'externalId',
-          type: 'string',
-          multiValued: false,
-          description:
-            'A unique identifier for the resource as defined by the provisioning client.',
-          required: false,
-          mutability: 'readWrite',
-        },
-      ],
-      meta: {
-        resourceType: 'Schema',
-        location: baseUrl
-          ? `${baseUrl}/api/scim/v2/Schemas/${encodeURIComponent(SCIM_USER_SCHEMA)}`
-          : undefined,
-      },
-    },
-    {
-      schemas: [SCIM_SCHEMA_SCHEMA],
-      id: SCIM_GROUP_SCHEMA,
-      name: 'Group',
-      description: 'OpsKnight Group Schema',
-      attributes: [
-        {
-          name: 'displayName',
-          type: 'string',
-          multiValued: false,
-          description: 'A human-readable name for the Group.',
-          required: true,
-          caseExact: false,
           mutability: 'readWrite',
           returned: 'default',
-          uniqueness: 'server',
         },
-        {
-          name: 'externalId',
-          type: 'string',
-          multiValued: false,
-          description:
-            'A unique identifier for the resource as defined by the provisioning client.',
-          required: false,
-          mutability: 'readWrite',
-        },
-        {
-          name: 'members',
-          type: 'complex',
-          multiValued: true,
-          description: 'A list of members of the Group.',
-          required: false,
-          mutability: 'readWrite',
-          subAttributes: [
-            {
-              name: 'value',
-              type: 'string',
-              multiValued: false,
-              description: 'Identifier of the member of this Group.',
-              required: true,
-              mutability: 'immutable',
-            },
-            {
-              name: '$ref',
-              type: 'reference',
-              referenceTypes: ['User'],
-              multiValued: false,
-              description: 'The URI that corresponds to the member resource of this Group.',
-              required: false,
-              mutability: 'immutable',
-            },
-            {
-              name: 'display',
-              type: 'string',
-              multiValued: false,
-              description: 'A human-readable name for the member.',
-              required: false,
-              mutability: 'readOnly',
-            },
-          ],
-        },
+        complex('emails', true, [
+          string('value', true),
+          string('type'),
+          { ...string('primary'), type: 'boolean' },
+        ]),
+        complex('photos', true, [
+          string('value', true),
+          string('type'),
+          { ...string('primary'), type: 'boolean' },
+        ]),
+        string('title'),
       ],
-      meta: {
-        resourceType: 'Schema',
-        location: baseUrl
-          ? `${baseUrl}/api/scim/v2/Schemas/${encodeURIComponent(SCIM_GROUP_SCHEMA)}`
-          : undefined,
-      },
+    },
+    {
+      id: SCIM_GROUP_SCHEMA,
+      name: 'Group',
+      description:
+        'Directory group. Operational team binding requires separate administrator approval.',
+      attributes: [
+        string('displayName', true),
+        { ...string('externalId'), mutability: 'immutable', caseExact: true },
+        complex('members', true, [
+          { ...string('value', true), mutability: 'immutable' },
+          { ...string('type'), canonicalValues: ['User'], mutability: 'immutable' },
+          {
+            ...string('$ref'),
+            type: 'reference',
+            mutability: 'readOnly',
+            referenceTypes: ['User'],
+          },
+          { ...string('display'), mutability: 'readOnly' },
+        ]),
+      ],
+    },
+    {
+      id: 'urn:ietf:params:scim:schemas:extension:enterprise:2.0:User',
+      name: 'EnterpriseUser',
+      description: 'Supported enterprise profile attributes',
+      attributes: [string('department')],
     },
   ];
+  return descriptors.map(schema => ({
+    schemas: [SCIM_SCHEMA_SCHEMA],
+    ...schema,
+    meta: {
+      resourceType: 'Schema',
+      location: baseUrl
+        ? `${baseUrl}/api/scim/v2/Schemas/${encodeURIComponent(schema.id)}`
+        : undefined,
+    },
+  }));
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { opaqueRssIncidentGuid } from '@/app/api/status/rss/route';
+import { opaqueRssIncidentGuid } from '@/lib/status-pages/rss';
 
 describe('status RSS opaque incident GUIDs', () => {
   it('keeps hidden-identifier items unique and stable without exposing raw IDs', () => {

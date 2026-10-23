@@ -1,230 +1,87 @@
-import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
-
-vi.mock('@/lib/prisma', () => ({
-  default: {
-    $transaction: vi.fn(),
-    user: {
-      findMany: vi.fn(),
-      count: vi.fn(),
-      findFirst: vi.fn(),
-    },
-  },
+vi.mock('@/lib/prisma', () => ({ default: { scimIdentity: { findFirst: vi.fn() } } }));
+vi.mock('@/lib/scim/security/credentials', () => ({
+  authorize: vi.fn(),
+  recheck: vi.fn(),
+  authenticate: vi.fn(),
+  scopes: [],
+  createCredential: vi.fn(),
 }));
-
-vi.mock('@/lib/audit', () => ({ logAudit: vi.fn().mockResolvedValue(undefined) }));
-vi.mock('@/lib/users/admin-invariants', () => ({
-  updateUserSecurityState: vi.fn(),
+vi.mock('@/lib/auth-control/actor', () => ({
+  getControlActor: vi.fn(),
+  lockControlActor: vi.fn(),
 }));
-
 import prisma from '@/lib/prisma';
-import { updateUserSecurityState } from '@/lib/users/admin-invariants';
-import { GET as listUsers } from '@/app/api/scim/v2/Users/route';
-import {
-  DELETE as deleteUser,
-  GET as getUser,
-  PATCH as patchUser,
-  PUT as replaceUser,
-} from '@/app/api/scim/v2/Users/[id]/route';
-
-const token = 'scim-test-token-that-is-longer-than-thirty-two-characters';
-const originalToken = process.env.SCIM_BEARER_TOKEN;
-const context = { params: Promise.resolve({ id: 'user-1' }) };
-
-function request(
-  url: string,
-  init: { method?: string; body?: BodyInit; headers?: HeadersInit } = {}
-) {
-  return new NextRequest(url, {
-    ...init,
-    headers: { authorization: `Bearer ${token}`, ...init.headers },
-  });
-}
-
-const scimUser = {
-  id: 'user-1',
-  scimExternalId: 'directory-1',
-  email: 'alice@example.com',
-  name: 'Alice',
-  role: 'USER',
-  status: 'ACTIVE',
-  createdAt: new Date('2026-01-01T00:00:00.000Z'),
-  updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+import { authorize } from '@/lib/scim/security/credentials';
+import { ScimFailure } from '@/lib/scim/protocol/validation';
+import { GET, POST, PATCH, PUT, DELETE } from '@/app/api/scim/v2/Users/route';
+import { GET as resource } from '@/app/api/scim/v2/Users/[id]/route';
+const principal = {
+  connectorId: 'source-a',
+  credentialId: 'key-a',
+  scopes: ['users:read', 'users:write'],
 };
-
-describe('SCIM Users HTTP lifecycle', () => {
+describe('SCIM Users HTTP boundary', () => {
+  it('rejects collection mutation methods without authorizing or writing', () => {
+    for (const handler of [PATCH, PUT, DELETE]) {
+      const response = handler();
+      expect(response.status).toBe(405);
+      expect(response.headers.get('allow')).toBe('GET, POST');
+    }
+  });
   beforeEach(() => {
     vi.clearAllMocks();
-    process.env.SCIM_BEARER_TOKEN = token;
+    vi.mocked(authorize).mockResolvedValue(principal);
   });
-
-  afterAll(() => {
-    if (originalToken === undefined) delete process.env.SCIM_BEARER_TOKEN;
-    else process.env.SCIM_BEARER_TOKEN = originalToken;
+  it('uses SCIM errors and challenge headers for invalid credentials', async () => {
+    vi.mocked(authorize).mockRejectedValue(new ScimFailure(401, 'Invalid credential.'));
+    const response = await GET(new NextRequest('https://ops.test/api/scim/v2/Users'));
+    expect(response.status).toBe(401);
+    expect(response.headers.get('www-authenticate')).toContain('Bearer');
+    expect(response.headers.get('content-type')).toContain('application/scim+json');
   });
-
-  it('never exposes a non-SCIM account through userName filtering', async () => {
-    vi.mocked(prisma.$transaction).mockResolvedValue([[], 0] as never);
-
-    const response = await listUsers(
-      request(
-        'https://ops.example.com/api/scim/v2/Users?filter=userName%20eq%20%22alice%40example.com%22'
-      )
+  it('returns a retryable, sanitized outage without environment fallback', async () => {
+    vi.mocked(authorize).mockRejectedValue(new Error('secret database connection string'));
+    const response = await GET(new NextRequest('https://ops.test/api/scim/v2/Users'));
+    expect(response.status).toBe(503);
+    expect(response.headers.get('retry-after')).toBe('60');
+    expect(await response.text()).not.toContain('secret database');
+  });
+  it('rejects malformed JSON, missing immutable mappings and privilege fields', async () => {
+    for (const body of [
+      '{',
+      JSON.stringify({ userName: 'a@example.test' }),
+      JSON.stringify({ userName: 'a@example.test', externalId: '1', roles: ['ADMIN'] }),
+    ]) {
+      expect(
+        (
+          await POST(
+            new NextRequest('https://ops.test/api/scim/v2/Users', { method: 'POST', body })
+          )
+        ).status
+      ).toBe(400);
+    }
+  });
+  it('scopes resource IDs to a live connector binding', async () => {
+    vi.mocked(prisma.scimIdentity.findFirst).mockResolvedValue(null);
+    const response = await resource(
+      new NextRequest('https://ops.test/api/scim/v2/Users/local-id'),
+      { params: Promise.resolve({ id: 'local-id' }) }
     );
-
-    expect(response.status).toBe(200);
-    expect(prisma.user.findMany).toHaveBeenCalledWith(
+    expect(response.status).toBe(404);
+    expect(prisma.scimIdentity.findFirst).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: {
-          AND: [{ scimExternalId: { not: null } }, { email: 'alice@example.com' }],
-        },
+        where: { connectorId: 'source-a', userId: 'local-id', deletedAt: null },
       })
     );
   });
-
-  it('replaces a SCIM resource and revokes its existing sessions', async () => {
-    vi.mocked(prisma.user.findFirst).mockResolvedValue(scimUser as never);
-    vi.mocked(updateUserSecurityState).mockResolvedValue({
-      ...scimUser,
-      email: 'renamed@example.com',
-      name: 'Renamed',
-    } as never);
-
-    const response = await replaceUser(
-      request('https://ops.example.com/api/scim/v2/Users/user-1', {
-        method: 'PUT',
-        body: JSON.stringify({
-          externalId: 'directory-1',
-          userName: 'renamed@example.com',
-          displayName: 'Renamed',
-          active: true,
-        }),
-      }),
-      context
+  it('requires users read and write scopes separately', async () => {
+    await POST(
+      new NextRequest('https://ops.test/api/scim/v2/Users', { method: 'POST', body: '{}' })
     );
-
-    expect(response.status).toBe(200);
-    expect(updateUserSecurityState).toHaveBeenCalledWith(
-      'user-1',
-      { status: 'ACTIVE' },
-      expect.objectContaining({
-        email: 'renamed@example.com',
-        roleSource: 'SCIM',
-        tokenVersion: { increment: 1 },
-      })
-    );
-  });
-
-  it('deprovisions DELETE requests and immediately revokes sessions', async () => {
-    vi.mocked(prisma.user.findFirst).mockResolvedValue({
-      id: 'user-1',
-      scimExternalId: 'directory-1',
-    } as never);
-    vi.mocked(updateUserSecurityState).mockResolvedValue({} as never);
-
-    const response = await deleteUser(
-      request('https://ops.example.com/api/scim/v2/Users/user-1', { method: 'DELETE' }),
-      context
-    );
-
-    expect(response.status).toBe(204);
-    expect(updateUserSecurityState).toHaveBeenCalledWith(
-      'user-1',
-      { status: 'DISABLED' },
-      {
-        scimExternalId: null,
-        roleSource: 'SCIM',
-        tokenVersion: { increment: 1 },
-      }
-    );
-
-    vi.mocked(prisma.user.findFirst).mockResolvedValue(null);
-    const getAfterDelete = await getUser(
-      request('https://ops.example.com/api/scim/v2/Users/user-1'),
-      context
-    );
-    expect(getAfterDelete.status).toBe(404);
-  });
-
-  it('handles PATCH with string booleans ("False"/"True") and "add" operations from Entra', async () => {
-    vi.mocked(prisma.user.findFirst).mockResolvedValue(scimUser as never);
-    vi.mocked(updateUserSecurityState).mockResolvedValue({
-      ...scimUser,
-      status: 'DISABLED',
-    } as never);
-
-    const response = await patchUser(
-      request('https://ops.example.com/api/scim/v2/Users/user-1', {
-        method: 'PATCH',
-        body: JSON.stringify({
-          Operations: [
-            { op: 'replace', path: 'active', value: 'False' },
-            { op: 'Add', path: 'name.givenName', value: 'Alice' },
-          ],
-        }),
-      }),
-      context
-    );
-
-    expect(response.status).toBe(200);
-    expect(updateUserSecurityState).toHaveBeenCalledWith(
-      'user-1',
-      { status: 'DISABLED' },
-      expect.objectContaining({
-        roleSource: 'SCIM',
-        tokenVersion: { increment: 1 },
-      })
-    );
-  });
-
-  it('handles PATCH with name.formatted and re-enabling user with string "True"', async () => {
-    vi.mocked(prisma.user.findFirst).mockResolvedValue({
-      ...scimUser,
-      status: 'DISABLED',
-    } as never);
-    vi.mocked(updateUserSecurityState).mockResolvedValue({
-      ...scimUser,
-      status: 'ACTIVE',
-      name: 'Alice Smith',
-    } as never);
-
-    const response = await patchUser(
-      request('https://ops.example.com/api/scim/v2/Users/user-1', {
-        method: 'PATCH',
-        body: JSON.stringify({
-          Operations: [
-            { op: 'Replace', path: 'active', value: 'True' },
-            { op: 'replace', path: 'name.formatted', value: 'Alice Smith' },
-          ],
-        }),
-      }),
-      context
-    );
-
-    expect(response.status).toBe(200);
-    expect(updateUserSecurityState).toHaveBeenCalledWith(
-      'user-1',
-      { status: 'ACTIVE' },
-      expect.objectContaining({
-        name: 'Alice Smith',
-        roleSource: 'SCIM',
-      })
-    );
-  });
-
-  it('rejects PATCH with invalid active string value', async () => {
-    vi.mocked(prisma.user.findFirst).mockResolvedValue(scimUser as never);
-
-    const response = await patchUser(
-      request('https://ops.example.com/api/scim/v2/Users/user-1', {
-        method: 'PATCH',
-        body: JSON.stringify({
-          Operations: [{ op: 'replace', path: 'active', value: 'not-a-bool' }],
-        }),
-      }),
-      context
-    );
-
-    expect(response.status).toBe(400);
+    expect(authorize).toHaveBeenCalledWith(expect.anything(), 'users:write');
+    await GET(new NextRequest('https://ops.test/api/scim/v2/Users?count=1.5'));
+    expect(authorize).toHaveBeenCalledWith(expect.anything(), 'users:read');
   });
 });

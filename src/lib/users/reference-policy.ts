@@ -46,6 +46,9 @@ export const USER_REFERENCE_POLICY = {
   chatIdentityLinks: { deactivate: 'DENY_AUTH', delete: 'CASCADE' },
   oidcConfigs: { deactivate: 'KEEP', delete: 'CASCADE' },
   oidcIdentities: { deactivate: 'DENY_AUTH', delete: 'CASCADE' },
+  // Deactivation keeps directory state for explicit reactivation; hard deletion cascades.
+  scimIdentities: { deactivate: 'DENY_AUTH', delete: 'CASCADE' },
+  scimMemberships: { deactivate: 'KEEP', delete: 'CASCADE' },
   oidcLinkingApproval: { deactivate: 'REVOKE', delete: 'CASCADE' },
   avatar: { deactivate: 'KEEP', delete: 'CASCADE' },
   dashboards: { deactivate: 'REPORT', delete: 'BLOCK' },

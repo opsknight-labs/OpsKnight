@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import prisma from '@/lib/prisma';
 import { getAuthOptions } from '@/lib/auth';
-import { tokensMatch } from '@/app/api/metrics/route';
+import { tokensMatch } from '@/lib/metrics/scrape';
 import { getJobWorkerStatus } from '@/lib/job-worker';
 import { getCronSchedulerStatus } from '@/lib/cron-scheduler';
 import { jsonApiOk } from '@/lib/api-response';

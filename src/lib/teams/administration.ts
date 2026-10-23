@@ -69,10 +69,8 @@ export async function requireTeamAccess(
       ...(write || administrativeRead ? { ownerIds: owner ? [owner.userId] : [] } : {}),
     }
   );
-  if (write && team.scimExternalId)
-    throw conflict(
-      'This team is managed by SCIM. Change its membership through the identity provider.'
-    );
+  // Directory ownership is represented by explicit group bindings and grants.
+  // Legacy external IDs do not remove local owner/administrator authority.
   return team;
 }
 async function retainActiveOwner(

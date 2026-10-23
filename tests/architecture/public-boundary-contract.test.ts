@@ -31,8 +31,14 @@ describe('public boundary contract', () => {
     const html = readFileSync('src/lib/status-pages/snapshot.ts', 'utf8');
     const statusApi = readFileSync('src/app/api/status/handler.ts', 'utf8');
     const historyApi = readFileSync('src/app/api/status/history/handler.ts', 'utf8');
-    const rss = readFileSync('src/app/api/status/rss/route.ts', 'utf8');
+    const rss = readFileSync('src/lib/status-pages/rss.ts', 'utf8');
 
+    expect(readFileSync('src/app/api/status/rss/route.ts', 'utf8')).toContain(
+      '@/lib/status-pages/rss'
+    );
+    expect(readFileSync('src/app/api/status/[slug]/rss/route.ts', 'utf8')).toContain(
+      '@/lib/status-pages/rss'
+    );
     expect(html).toContain('publicStatusVisibility');
     expect(historyApi).toContain('publicStatusVisibility');
     for (const source of [statusApi, rss]) {
@@ -50,7 +56,7 @@ describe('public boundary contract', () => {
       readFileSync('src/middleware.ts', 'utf8'),
       readFileSync('src/app/api/status/handler.ts', 'utf8'),
       readFileSync('src/app/api/status/history/handler.ts', 'utf8'),
-      readFileSync('src/app/api/status/rss/route.ts', 'utf8'),
+      readFileSync('src/lib/status-pages/rss.ts', 'utf8'),
     ];
     for (const source of sources) {
       expect(source).toContain('PUBLIC_STATUS_CACHE_CONTROL');

@@ -1,0 +1,123 @@
+name: SCIM identity lifecycle certification
+on:
+  push:
+    branches: ['feat/enterprise-scim-2.1']
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'src/lib/scim/**'
+      - 'src/lib/scim.ts'
+      - 'src/lib/auth.ts'
+      - 'src/lib/api-v2/endpoint.ts'
+      - 'src/lib/metrics/scrape.ts'
+      - 'src/lib/status-pages/rss.ts'
+      - 'src/lib/teams/administration.ts'
+      - 'src/lib/microsoft-teams/identity.ts'
+      - 'scripts/scim/**'
+      - 'tests/fixtures/scim/**'
+      - 'src/lib/oidc-identity-resolution.ts'
+      - 'src/app/api/scim/**'
+      - 'src/components/settings/ScimSettingsSection.tsx'
+      - 'src/app/(app)/settings/system/scim-actions.ts'
+      - 'prisma/**'
+      - 'tests/**/scim*'
+      - '.github/workflows/scim-certification.yml'
+jobs:
+  certify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: scim_certifier
+          POSTGRES_PASSWORD: isolated-ci-only
+          POSTGRES_DB: enterprise_scim_test
+        ports: ['5432:5432']
+        options: >-
+          --label opsknight.scim.certification=20261021
+          --health-cmd "pg_isready -U scim_certifier -d enterprise_scim_test"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgresql://scim_certifier:isolated-ci-only@localhost:5432/enterprise_scim_test
+      NEXTAUTH_URL: http://localhost:3028
+      NEXTAUTH_SECRET: isolated-scim-certification-only-ci-secret
+      OPSKNIGHT_PROCESS_ROLE: web
+      AUTH_LOCAL_LOGIN_ENABLED: 'true'
+      SCIM_E2E_BASE_URL: http://localhost:3028
+      SCIM_E2E_ADMIN_EMAIL: scim-admin@example.test
+      SCIM_E2E_ADMIN_PASSWORD: SCIM disposable CI certification passphrase!
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - uses: actions/setup-node@v4
+        with: { node-version: 20, cache: npm }
+      - name: Generate disposable production fixture keys
+        run: |
+          node --input-type=module <<'JS'
+          import { randomBytes } from 'node:crypto';
+          import { appendFileSync } from 'node:fs';
+          for (const name of ['API_KEY_SECRET', 'ENCRYPTION_KEY']) {
+            const value = randomBytes(32).toString('hex');
+            console.log(`::add-mask::${value}`);
+            appendFileSync(process.env.GITHUB_ENV, `${name}=${value}\n`);
+          }
+          JS
+      # Match the repository lockfile installation policy used by integration/security CI.
+      - run: npm ci --legacy-peer-deps
+      - run: npx prisma generate && npx prisma migrate deploy
+      - run: node scripts/scim/certify-migration-deploy.mjs
+      - run: npm run certify:scim:snapshot
+        env:
+          SCIM_CERT_DOCKER: docker
+          SCIM_CERT_DB_CONTAINER: ${{ job.services.postgres.id }}
+      - run: npm run certify:scim:baseline
+      - run: npx tsc --noEmit
+      - run: npx eslint src/lib/scim.ts src/lib/scim src/lib/auth.ts src/lib/oidc-identity-resolution.ts src/lib/teams/administration.ts src/lib/microsoft-teams/identity.ts src/app/api/scim/v2 'src/app/(app)/settings/system/scim-actions.ts' src/components/settings/ScimSettingsSection.tsx --max-warnings 0
+      - run: npx vitest run --no-file-parallelism --maxWorkers=1 tests/lib/scim-admission.test.ts tests/components/scim-settings-consistency.test.tsx tests/lib/scim.test.ts tests/lib/scim-protocol.test.ts tests/lib/oidc-identity-resolution.test.ts tests/lib/auth-control-actor.test.ts tests/lib/session-security-projection.test.ts tests/lib/auth-oidc-unit.test.ts tests/lib/auth-session-lifecycle.test.ts tests/lib/auth-oidc-provider-compat.test.ts tests/lib/authorization-cache-boundary.test.ts tests/lib/microsoft-teams-identity.test.ts tests/api/scim-users.test.ts tests/api/scim-groups.test.ts tests/api/scim-metadata.test.ts
+      - run: npx vitest run --no-file-parallelism --maxWorkers=1 tests/api/metrics.test.ts tests/api/status-rss-guid.test.ts tests/unit/api-v2-endpoint.test.ts tests/unit/api-v2-enterprise-platform.test.ts tests/unit/api-v2-observability.test.ts
+      - run: npx vitest run --no-file-parallelism --maxWorkers=1 tests/integration/scim-lifecycle-database.test.ts tests/integration/scim-capacity-database.test.ts
+        env: { SCIM_CERTIFICATION: '1', VITEST_USE_REAL_DB: '1', SCIM_LOAD_TEST: '1' }
+      - run: npx ts-node --project tsconfig.script.json scripts/scim/seed-certification.ts
+      # Exercise the compiled SQL/runtime boundary, not only the development server.
+      - run: BUILD_DIR=.next-scim-production npx next build
+      - name: Stage standalone production assets
+        run: |
+          mkdir -p .next-scim-production/standalone/public .next-scim-production/standalone/.next-scim-production/static
+          cp -R public/. .next-scim-production/standalone/public/
+          cp -R .next-scim-production/static/. .next-scim-production/standalone/.next-scim-production/static/
+      - name: Start standalone SCIM fixture
+        run: |
+          HOSTNAME=127.0.0.1 PORT=3028 node .next-scim-production/standalone/server.js > /tmp/scim-server.log 2>&1 &
+          echo "$!" > /tmp/scim-server.pid
+      - run: node scripts/scim/wait-for-server.mjs http://localhost:3028 /tmp/scim-server.log /tmp/scim-server.pid
+      - run: npm run certify:scim:http
+      - name: Start standalone SCIM replica
+        run: |
+          HOSTNAME=127.0.0.1 PORT=3029 NEXTAUTH_URL=http://localhost:3029 node .next-scim-production/standalone/server.js > /tmp/scim-replica.log 2>&1 &
+          echo "$!" > /tmp/scim-replica.pid
+      - run: node scripts/scim/wait-for-server.mjs http://localhost:3029 /tmp/scim-replica.log /tmp/scim-replica.pid
+      - run: npm run certify:scim:replicas && npm run certify:scim:sessions
+        env:
+          SCIM_CERT_REPLICA_URLS: http://localhost:3028,http://localhost:3029
+      # Keep browser binaries/system libraries aligned with the installed test package.
+      - name: Certify Chromium, Firefox and WebKit
+        timeout-minutes: 10
+        run: |
+          SCIM_PLAYWRIGHT_VERSION=$(node -p "require('@playwright/test/package.json').version")
+          docker run --rm --init --ipc=host --network host \
+            -e CI=true -e DATABASE_URL -e NEXTAUTH_SECRET -e API_KEY_SECRET \
+            -e SCIM_E2E_BASE_URL -e SCIM_E2E_ADMIN_EMAIL -e SCIM_E2E_ADMIN_PASSWORD \
+            -v "$PWD:/work" -w /work \
+            "mcr.microsoft.com/playwright:v${SCIM_PLAYWRIGHT_VERSION}-noble" \
+            npx playwright test --config playwright.scim.config.ts
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: scim-certification-evidence
+          path: |
+            test-results/
+            playwright-report/
+            /tmp/scim-server.log
+            /tmp/scim-replica.log
+          retention-days: 7
