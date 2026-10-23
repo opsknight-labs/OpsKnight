@@ -848,6 +848,72 @@ describe('deployment configuration invariants', () => {
     expect(webPatch).toContain("path: '/api/health?mode=readiness'");
   });
 
+  it('loads ingestion overlay capacity settings before applying deployment defaults', () => {
+    const directory = fs.mkdtempSync(path.join(root, 'node_modules/.tmp-ingestion-capacity-'));
+    const envFile = path.join(directory, '.env');
+    fs.writeFileSync(
+      envFile,
+      'INGESTION_WORKER_REPLICAS=1\nDATABASE_POOL_SIZE_INGESTION_WORKER=60\n'
+    );
+    try {
+      const result = spawnSync(
+        process.execPath,
+        [
+          'deploy/scripts/validate-runtime-capacity.cjs',
+          '--compose',
+          'deploy/compose/docker-compose.ingestion.yml',
+        ],
+        {
+          cwd: root,
+          env: {
+            ...process.env,
+            DOTENV_CONFIG_PATH: envFile,
+            INGESTION_WORKER_REPLICAS: undefined,
+            DATABASE_POOL_SIZE_INGESTION_WORKER: undefined,
+            OPSKNIGHT_RUNTIME_MODE: 'split',
+            DATABASE_MAX_CONNECTIONS: '80',
+          },
+          encoding: 'utf8',
+        }
+      );
+      expect(result.status).toBe(1);
+      expect(result.stdout).toContain('"pool":60');
+      expect(result.stderr).toContain('FATAL CAPACITY MISMATCH');
+    } finally {
+      fs.rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
+  it('budgets dedicated ingestion pools independently of PgBouncer and reserves failover headroom', () => {
+    const result = calculateRuntimeCapacity({
+      OPSKNIGHT_RUNTIME_MODE: 'split',
+      PGBOUNCER_ENABLED: 'true',
+      INGESTION_WORKER_REPLICAS: '4',
+      DATABASE_POOL_SIZE_INGESTION_WORKER: '5',
+      DATABASE_CONNECTION_RESERVE: '10',
+      DATABASE_MAX_CONNECTIONS: '60',
+    });
+    expect(result.breakdown.ingestionWorker.total).toBe(20);
+    expect(result.directWorkerConnections).toBe(43);
+    expect(result.totalDemand).toBe(68);
+    expect(result.safe).toBe(false);
+    expect(result.headroom).toBe(-8);
+    expect(
+      calculateRuntimeCapacity({
+        INGESTION_WORKER_REPLICAS: '2',
+        DATABASE_URL: 'postgresql://localhost/test?connection_limit=7',
+      }).breakdown.ingestionWorker.total
+    ).toBe(14);
+    expect(
+      calculateRuntimeCapacity({
+        OPSKNIGHT_RUNTIME_MODE: 'integrated',
+        INGESTION_WORKER_REPLICAS: '2',
+      }).totalDemand
+    ).toBe(31);
+    expect(() => calculateRuntimeCapacity({ INGESTION_WORKER_REPLICAS: '-1' })).toThrow();
+    expect(() => calculateRuntimeCapacity({ DATABASE_CONNECTION_RESERVE: 'oops' })).toThrow();
+  });
+
   it('validates runtime database connection capacity budgets across topologies', () => {
     // Default split capacity within budget
     const defaultSplit = calculateRuntimeCapacity({ OPSKNIGHT_RUNTIME_MODE: 'split' });

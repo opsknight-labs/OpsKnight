@@ -39,7 +39,7 @@ export function createIntegrationRoute<T>(
         providerPayload: payload,
         receivedAt: new Date(),
       });
-      return { action: result.action, incident: result.incident };
+      return result;
     }
   );
 }

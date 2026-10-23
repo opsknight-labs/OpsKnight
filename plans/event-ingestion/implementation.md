@@ -22,7 +22,7 @@ Raw alert timestamps and the five-minute resolve-before-trigger lookback use ori
 
 ## Admission and storage limits
 
-The default unfinished capacity is 100,000 receipts and 1 GiB of serialized envelope data. Sixty-four independently updated budget rows enforce conservative per-shard caps without one global write counter. A busy shard can reject before other shards fill. DEAD receipts keep their reservations. These are logical queue bounds, not a bound on PostgreSQL WAL, indexes, retained receipts, or existing Alert history.
+The default unfinished capacity is 100,000 receipts and 1 GiB of serialized envelope data. Sixty-four independently updated budget rows enforce conservative per-shard caps without one global write counter. Admission starts at the preferred shard and spills into other available budget shards; a concentrated partition can consume the full bounded backlog. Shard counters retain conservative global limits without one shared write counter. DEAD receipts keep their reservations. These are logical queue bounds, not a bound on PostgreSQL WAL, indexes, retained receipts, or existing Alert history.
 
 Asynchronous admission reserves small fixed-window quota blocks in PostgreSQL and spends them locally. Unused reservations are stranded until expiry when a replica exits or cache entries are evicted. This deliberately under-admits rather than overshooting the shared quota. Allocation uses the database clock; local validity uses a conservative monotonic deadline. This is not the proposed Redis/GCRA implementation and does not provide separate sustained/burst policies.
 
@@ -34,15 +34,15 @@ Envelopes are capped at 256 KiB without silent truncation. This is a new limit f
 
 `GET /api/admin/ingestion` returns persistent queue counts, oldest unfinished age, budget usage, recent worker evidence and up to 100 dead-letter summaries. `receiptId` selects an individual receipt. The System Health page reuses this API and the existing Card, Badge and Button components.
 
-`POST /api/admin/ingestion` supports strict `pause`, `resume`, and `replay` commands. Every mutation requires `admin.manage` and commits its audit entry in the same transaction. Pause stops new admission while workers drain. Replay only transitions DEAD receipts and preserves their stored envelope and sequence. No discard or arbitrary payload-edit operation is exposed.
+`POST /api/admin/ingestion` supports strict `pause`, `resume`, and `replay` commands. Every mutation requires `admin.manage` and commits its audit entry in the same transaction. Pause stops new admission while workers drain. Replay only transitions DEAD receipts and preserves their stored envelope and sequence. A strict `archive` command permits an administrator to explicitly discard a DEAD event after supplying a reason and confirming the lifecycle risk. It clears the payload, releases its reservation, unblocks successors, preserves the tombstone, checks incident retention holds, and audits the decision in the same transaction. No arbitrary payload editing is exposed.
 
-`GET /api/events/receipts/{id}` accepts a live API key and applies the same event capability and service/team scope policy as the Events API. It returns no raw envelope or lease credentials. Routing-key-only clients can use an authorized administrator or scoped API key for inspection.
+`GET /api/events/receipts/{id}` accepts a live API key and applies the same event capability and service/team scope policy as the Events API. It returns no raw envelope or lease credentials. Routing-key-only clients can supply `integrationId` and their integration credential. Inspection requires an enabled integration and an exact match on both receipt integration and current service ownership; rotated keys obey the existing expiry policy.
 
 Prometheus counters separate new accepted receipts from duplicate submissions and processing outcomes. Histograms separately record durable append latency and acceptance-to-processing completion latency. Instance counters reset on restart; the receipt ledger remains authoritative for reconciliation.
 
 ## Running the candidate
 
-Generate the Prisma client, apply migrations, then enable the mode consistently on producers and ingestion consumers. Integrated deployments run a consumer in the integrated process. Split deployments use `OPSKNIGHT_PROCESS_ROLE=ingestion-worker` with an independent `DATABASE_POOL_SIZE_INGESTION_WORKER` budget (default pool 10 unless explicitly configured; the Compose overlay sets 5 for concurrency 4).
+Generate the Prisma client, apply migrations, then enable the mode consistently on producers and ingestion consumers. Integrated deployments run a consumer in the integrated process. The connection preflight counts `INGESTION_WORKER_REPLICAS` (including Swarm aliases), their direct database pools even when web uses PgBouncer, and an optional `DATABASE_CONNECTION_RESERVE` for deployment/failover headroom. Pass the ingestion overlay to the CLI or explicitly set the replica count; the validator cannot discover an unconfigured remote topology. Split deployments use `OPSKNIGHT_PROCESS_ROLE=ingestion-worker` with an independent `DATABASE_POOL_SIZE_INGESTION_WORKER` budget (default pool 10 unless explicitly configured; the Compose overlay sets 5 for concurrency 4).
 
 Compose opt-in configuration:
 
@@ -84,3 +84,13 @@ A worker may be replaced without draining first: its uncommitted transaction rol
 - Phase 5: Swarm and Kubernetes sustained 1k/5k/10k HTTP RPS, a 25k burst and drain, provider failures, replica failover, rolling upgrades, restoration and the 24-hour soak require dedicated execution and reconciliation. None is claimed as certified.
 
 Do not interpret faster durable acceptance as sustainable incident-processing capacity. The measured local completion rate is far below the enterprise target.
+
+## Review remediation follow-up
+
+Ordering now uses the same canonical and legacy incident identities as processing. Cross-integration aliases are serialized, and repeated worker crashes cannot bypass the retry ceiling. Existing asynchronous consumers must be stopped/drained before this ordering-key upgrade; this is not a mixed-version async-worker protocol. The upgrade backfill skips terminal receipts, isolates malformed legacy envelopes as DEAD, and conservatively blocks later work for their service until explicit recovery.
+
+Completed payload retention respects active incident holds, including concurrent hold creation through the shared resource lock. Orphaned dead-letter disposal is explicit and audited. Permanent tombstone/history growth remains an unresolved release gate.
+
+A shared credential-only filtering boundary covers provider payloads, normalized summaries/sources/custom details, Automation input, receipts, alerts and incident descriptions. It recognizes supported credential header aliases and known token/URI patterns while preserving contact context used by Automation. Arbitrary secrets embedded under unrelated names cannot be inferred reliably; deployments still require encrypted storage/backups, restricted database roles, and enforced retention. Implicit dedup identity is captured before filtering to preserve existing incident keys.
+
+The health interface reports persisted accepted/completed throughput over a 60-second window, with a visible top-100 integration limit. The new k6 HTTP harness uses open-loop arrivals, treats 429/503 as failures, checks receipt acknowledgements and reconciles accepted receipts, alerts and incidents after draining. A failed latency or arrival target remains a failed run.

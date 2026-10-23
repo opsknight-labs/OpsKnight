@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { randomUUID } from 'node:crypto';
+import { randomUUID, createHash } from 'node:crypto';
 import { fork } from 'node:child_process';
 import { once } from 'node:events';
 import prisma from '@/lib/prisma';
@@ -11,6 +11,7 @@ import {
   completeProcessingReceipt,
   failPostgresEvent,
   lockProcessingReceipt,
+  backfillIngestionOrdering,
 } from '@/lib/ingestion/postgres';
 import {
   decodeEnvelope,
@@ -26,6 +27,7 @@ import { checkIngestionQuota } from '@/lib/ingestion/quota';
 import { pruneCompletedIngestionPayloads } from '@/lib/ingestion/retention';
 import { checksum } from '@/lib/automation/cache';
 import type { IntegrationEventEnvelope } from '@/lib/automation/runtime';
+import { acquireRetentionResourceLock } from '@/lib/retention/resource-lock';
 
 // Fail closed rather than skipping certification or truncating a shared database.
 const database = new URL(process.env.DATABASE_URL ?? 'http://missing');
@@ -83,6 +85,215 @@ afterAll(async () => {
 });
 
 describe('PostgreSQL ingestion durability', () => {
+  it('lets a concentrated partition use all bounded backlog shards', async () => {
+    process.env.OPSKNIGHT_INGESTION_MAX_PENDING = '64';
+    try {
+      for (let index = 0; index < 64; index++)
+        await acceptPostgresEvent(envelope('concentrated-storm'), `storm-${index}`);
+      const receipts = await prisma.ingestionReceipt.findMany();
+      expect(receipts).toHaveLength(64);
+      expect(new Set(receipts.map(receipt => receipt.budgetShard)).size).toBe(64);
+      await expect(
+        acceptPostgresEvent(envelope('concentrated-storm'), 'overflow')
+      ).rejects.toBeInstanceOf(IngestionUnavailableError);
+      expect(await consumeIngestionBatch()).toBe(1);
+      await acceptPostgresEvent(envelope('concentrated-storm'), 'released-slot');
+      const budgets = await prisma.ingestionBudget.findMany();
+      expect(budgets.reduce((total, budget) => total + budget.pending, 0)).toBe(64);
+    } finally {
+      delete process.env.OPSKNIGHT_INGESTION_MAX_PENDING;
+    }
+  });
+
+  it('cannot prune evidence while hold creation owns the shared retention lock', async () => {
+    const receipt = await acceptPostgresEvent(envelope('hold-race'), 'hold-race');
+    await consumeIngestionBatch();
+    const incident = await prisma.incident.findFirstOrThrow({ where: { serviceId } });
+    await prisma.ingestionReceipt.update({
+      where: { id: receipt.receiptId },
+      data: { completedAt: new Date(0) },
+    });
+    let locked!: () => void;
+    let release!: () => void;
+    const lockAcquired = new Promise<void>(resolve => {
+      locked = resolve;
+    });
+    const releaseLock = new Promise<void>(resolve => {
+      release = resolve;
+    });
+    const creation = prisma.$transaction(async tx => {
+      await acquireRetentionResourceLock(tx, 'INCIDENT', incident.id);
+      locked();
+      await releaseLock;
+      await tx.dataRetentionHold.create({
+        data: {
+          scopeType: 'INCIDENT',
+          scopeId: incident.id,
+          reason: 'Concurrent preservation hold',
+          createdById: actorId,
+        },
+      });
+    });
+    await lockAcquired;
+    try {
+      expect(await pruneCompletedIngestionPayloads()).toBe(0);
+    } finally {
+      release();
+      await creation;
+    }
+    expect(await pruneCompletedIngestionPayloads()).toBe(0);
+    expect(
+      (await prisma.ingestionReceipt.findUniqueOrThrow({ where: { id: receipt.receiptId } }))
+        .envelope
+    ).not.toBeNull();
+  });
+  it('upgrades malformed dead letters without blocking unrelated services or decoding archived payloads', async () => {
+    const old = await acceptPostgresEvent(envelope('old-invalid'), 'old-invalid');
+    const archived = await acceptPostgresEvent(envelope('old-archived'), 'old-archived');
+    await prisma.ingestionReceipt.updateMany({
+      where: { id: { in: [old.receiptId, archived.receiptId] } },
+      data: { orderingKeys: [], status: 'DEAD', envelope: { version: 2 } },
+    });
+    await applyIngestionCommand(
+      {
+        action: 'archive',
+        receiptId: archived.receiptId,
+        reason: 'Archive before ordering upgrade fixture',
+        confirmDiscardAcceptedEvent: true,
+      },
+      actorId
+    );
+    await expect(backfillIngestionOrdering()).resolves.toBeUndefined();
+    expect(
+      (await prisma.ingestionReceipt.findUniqueOrThrow({ where: { id: old.receiptId } }))
+        .orderingKeys
+    ).toEqual([`unidentified:${serviceId}`]);
+    await acceptPostgresEvent(envelope('blocked-same-service'), 'blocked');
+    const otherService = await prisma.service.create({
+      data: { name: `Unrelated ${randomUUID()}` },
+    });
+    const other = await acceptPostgresEvent(
+      { ...envelope('unrelated'), serviceId: otherService.id },
+      'unrelated'
+    );
+    const claims = await claimPostgresEvents(10);
+    expect(claims.map(row => row.id)).toEqual([other.receiptId]);
+  });
+  it('orders unkeyed and explicit fallback aliases as the same logical incident', async () => {
+    const trigger = envelope('');
+    const data = trigger.event.payload;
+    const alias = `unkeyed-${createHash('sha256')
+      .update(
+        JSON.stringify({
+          source: data.source,
+          summary: data.summary,
+          details: data.custom_details ?? null,
+        })
+      )
+      .digest('hex')}`;
+    const resolve = envelope(alias, 'resolve');
+    resolve.receivedAt = new Date(trigger.receivedAt.getTime() + 1000);
+    await acceptPostgresEvent(trigger, 'alias-trigger');
+    await acceptPostgresEvent(resolve, 'alias-resolve');
+    expect(await consumeIngestionBatch(2)).toBe(1);
+    expect(await consumeIngestionBatch(2)).toBe(1);
+    expect((await prisma.incident.findFirstOrThrow({ where: { serviceId } })).status).toBe(
+      'RESOLVED'
+    );
+  });
+
+  it('dead-letters after ten abandoned claims and retains FIFO blocking until disposition', async () => {
+    const first = await acceptPostgresEvent(envelope('crashing'), 'crashing');
+    await acceptPostgresEvent(envelope('crashing', 'resolve'), 'next');
+    for (let attempt = 1; attempt <= 10; attempt++) {
+      const claims = await claimPostgresEvents(4);
+      expect(claims).toHaveLength(1);
+      expect(claims[0].attempts).toBe(attempt);
+      await prisma.ingestionReceipt.update({
+        where: { id: first.receiptId },
+        data: { leaseExpiresAt: new Date(0) },
+      });
+    }
+    expect(await claimPostgresEvents(4)).toHaveLength(0);
+    expect(
+      await prisma.ingestionReceipt.findUniqueOrThrow({ where: { id: first.receiptId } })
+    ).toMatchObject({
+      status: 'DEAD',
+      attempts: 10,
+      leaseToken: null,
+      leaseExpiresAt: null,
+      failureCode: 'RETRIES_EXHAUSTED',
+    });
+    expect(await claimPostgresEvents(4)).toHaveLength(0);
+    await applyIngestionCommand(
+      {
+        action: 'archive',
+        receiptId: first.receiptId,
+        reason: 'Explicit test disposition of poison event',
+        confirmDiscardAcceptedEvent: true,
+      },
+      actorId
+    );
+    expect(
+      (await prisma.ingestionReceipt.findUniqueOrThrow({ where: { id: first.receiptId } })).envelope
+    ).toBeNull();
+    expect(await consumeIngestionBatch()).toBe(1);
+  });
+
+  it('preserves held incident evidence until its retention hold is released', async () => {
+    const receipt = await acceptPostgresEvent(envelope('held'), 'held');
+    await consumeIngestionBatch();
+    const incident = await prisma.incident.findFirstOrThrow({ where: { serviceId } });
+    await prisma.ingestionReceipt.update({
+      where: { id: receipt.receiptId },
+      data: { completedAt: new Date(0) },
+    });
+    const hold = await prisma.dataRetentionHold.create({
+      data: {
+        scopeType: 'INCIDENT',
+        scopeId: incident.id,
+        reason: 'Evidence preservation',
+        createdById: actorId,
+      },
+    });
+    expect(await pruneCompletedIngestionPayloads()).toBe(0);
+    expect(
+      (await prisma.ingestionReceipt.findUniqueOrThrow({ where: { id: receipt.receiptId } }))
+        .envelope
+    ).not.toBeNull();
+    await prisma.dataRetentionHold.update({
+      where: { id: hold.id },
+      data: { releasedAt: new Date() },
+    });
+    expect(await pruneCompletedIngestionPayloads()).toBe(1);
+  });
+
+  it('archives orphaned dead-letter data only through explicit audited disposition', async () => {
+    const receipt = await acceptPostgresEvent(envelope('orphan'), 'orphan');
+    await prisma.service.delete({ where: { id: serviceId } });
+    const [claim] = await claimPostgresEvents(1);
+    await failPostgresEvent({ id: claim.id, token: claim.leaseToken }, 10, false);
+    await expect(
+      applyIngestionCommand(
+        {
+          action: 'archive',
+          receiptId: receipt.receiptId,
+          reason: 'Orphaned deleted service payload minimization',
+          confirmDiscardAcceptedEvent: true,
+        },
+        actorId
+      )
+    ).resolves.toMatchObject({ action: 'archive' });
+    expect(
+      await prisma.ingestionReceipt.findUniqueOrThrow({ where: { id: receipt.receiptId } })
+    ).toMatchObject({ status: 'ARCHIVED', envelope: null });
+    expect((await prisma.ingestionBudget.aggregate({ _sum: { pending: true } }))._sum.pending).toBe(
+      0
+    );
+    expect(await prisma.auditLog.count({ where: { action: 'ingestion.archive' } })).toBeGreaterThan(
+      0
+    );
+  });
   it('keeps an image-only upgrade synchronous and accepts legacy payload sizes', async () => {
     const input = envelope('legacy');
     input.event.payload.custom_details = { blob: 'x'.repeat(300000) };
@@ -144,12 +355,18 @@ describe('PostgreSQL ingestion durability', () => {
       const results = await Promise.all(
         Array.from({ length: 40 }, () => checkIngestionQuota(key, 120, 60000))
       );
-      expect(results.filter(result => result.allowed)).toHaveLength(23);
+      const allowedByWindow = new Map<number, number>();
+      for (const result of results.filter(result => result.allowed))
+        allowedByWindow.set(result.resetAt, (allowedByWindow.get(result.resetAt) ?? 0) + 1);
+      expect(results.some(result => result.allowed)).toBe(true);
+      for (const count of allowedByWindow.values()) expect(count).toBeLessThanOrEqual(23);
       const counters = await prisma.rateLimit.findMany({
         where: { key: { startsWith: `ingestion-quota:${key}:` } },
       });
-      expect(counters).toHaveLength(1);
-      expect(counters[0].count).toBe(23);
+      // The concurrent run may straddle a real database minute boundary.
+      expect(counters.length).toBeGreaterThanOrEqual(1);
+      for (const counter of counters) expect(counter.count).toBeLessThanOrEqual(23);
+      if (counters.length === 1) expect(counters[0].count).toBe(23);
     } finally {
       delete process.env.OPSKNIGHT_INGESTION_MODE;
       delete process.env.OPSKNIGHT_INGESTION_EVENTS_PER_MINUTE;
@@ -431,22 +648,6 @@ describe('PostgreSQL ingestion durability', () => {
     expect(await prisma.incidentAutomationDecision.count({ where: { serviceId } })).toBe(1);
   });
 
-  it('enforces bounded capacity without deleting accepted events and releases reservations on completion', async () => {
-    process.env.OPSKNIGHT_INGESTION_MAX_PENDING = '64';
-    try {
-      await acceptPostgresEvent(envelope('bounded'), 'first');
-      await expect(acceptPostgresEvent(envelope('bounded'), 'second')).rejects.toBeInstanceOf(
-        IngestionUnavailableError
-      );
-      expect(await prisma.ingestionReceipt.count()).toBe(1);
-      await consumeIngestionBatch();
-      await expect(acceptPostgresEvent(envelope('bounded'), 'second')).resolves.toMatchObject({
-        action: 'accepted',
-      });
-    } finally {
-      delete process.env.OPSKNIGHT_INGESTION_MAX_PENDING;
-    }
-  });
 
   it('pauses new admission while allowing retries of durable receipts and processing to drain', async () => {
     const input = envelope();

@@ -95,7 +95,7 @@ export function startIngestionWorker(): void {
       if (Date.now() >= nextRetention) {
         try {
           const pruned = await pruneCompletedIngestionPayloads();
-          nextRetention = Date.now() + (pruned === 1000 ? 1000 : 60000);
+          nextRetention = Date.now() + (pruned === 100 ? 1000 : 60000);
         } catch {
           nextRetention = Date.now() + 60000;
           logger.warn('ingestion.retention_unavailable');

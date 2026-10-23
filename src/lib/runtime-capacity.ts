@@ -25,6 +25,9 @@ export interface CapacityEnv {
   STATUS_PROJECTOR_REPLICAS?: string;
   PROJECTOR_REPLICAS?: string;
   DATABASE_POOL_SIZE_STATUS_PROJECTOR?: string;
+  INGESTION_WORKER_REPLICAS?: string;
+  DATABASE_POOL_SIZE_INGESTION_WORKER?: string;
+  DATABASE_CONNECTION_RESERVE?: string;
   DATABASE_MAX_CONNECTIONS?: string;
   DATABASE_MAX_APPLICATION_CONNECTIONS?: string;
 }
@@ -35,10 +38,12 @@ export interface CapacityAnalysisResult {
   webConnections: number;
   directWorkerConnections: number;
   totalDemand: number;
+  connectionReserve: number;
   maxConnections: number;
   safe: boolean;
   headroom: number;
   breakdown: {
+    ingestionWorker: { replicas: number; pool: number; total: number };
     web: { replicas: number; pool: number; effective: number };
     pgbouncer: { replicas: number; defaultPool: number; reserve: number } | null;
     scheduler: { replicas: number; pool: number; total: number } | null;
@@ -61,8 +66,7 @@ export const parseStrictBoolean: (
   fallback?: boolean
 ) => boolean = validateScript.parseStrictBoolean;
 
-export const loadDotenvIfPresent: (filePath?: string) => void =
-  validateScript.loadDotenvIfPresent;
+export const loadDotenvIfPresent: (filePath?: string) => void = validateScript.loadDotenvIfPresent;
 
 export const calculateRuntimeCapacity = validateScript.calculateRuntimeCapacity as (
   env?: CapacityEnv | Record<string, string | undefined>
