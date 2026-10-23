@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { z } from 'zod';
 import {
   Card,
@@ -53,8 +53,8 @@ const snapshotSchema = z.object({
   ),
 });
 
-async function loadSnapshot() {
-  const response = await fetch('/api/admin/ingestion', { cache: 'no-store' });
+async function loadSnapshot(signal: AbortSignal) {
+  const response = await fetch('/api/admin/ingestion', { cache: 'no-store', signal });
   if (!response.ok) throw new Error('Ingestion status is unavailable.');
   const body = await response.json();
   return snapshotSchema.parse(body.data);
@@ -67,31 +67,78 @@ export default function IngestionHealthPanel() {
   const [busy, setBusy] = useState(false);
   const [archiveId, setArchiveId] = useState<string | null>(null);
   const [archiveReason, setArchiveReason] = useState('');
-  const refresh = useCallback(async () => {
-    try {
-      setSnapshot(await loadSnapshot());
-      setError(null);
-    } catch {
-      setError('Ingestion status is unavailable. Refresh to try again.');
-    }
-  }, []);
-  useEffect(() => {
-    let mounted = true;
-    void loadSnapshot()
+  const mounted = useRef(false);
+  const inFlight = useRef<Promise<void> | null>(null);
+  const controller = useRef<AbortController | null>(null);
+  const [editingPolicy, setEditingPolicy] = useState(false);
+  const refresh = useCallback((): Promise<void> => {
+    if (!mounted.current) return Promise.resolve();
+    if (inFlight.current) return inFlight.current;
+    const request = new AbortController();
+    controller.current = request;
+    const timeout = setTimeout(() => request.abort(), 10000);
+    const task = loadSnapshot(request.signal)
       .then(value => {
-        if (mounted) setSnapshot(value);
+        if (mounted.current && controller.current === request && !request.signal.aborted) {
+          setSnapshot(value);
+          setError(null);
+        }
       })
       .catch(() => {
-        if (mounted) setError('Ingestion status is unavailable. Refresh to try again.');
+        if (mounted.current && controller.current === request)
+          setError('Ingestion status is unavailable. Refresh to try again.');
+      })
+      .finally(() => {
+        clearTimeout(timeout);
+        if (controller.current === request) controller.current = null;
+        if (inFlight.current === task) inFlight.current = null;
       });
-    return () => {
-      mounted = false;
-    };
+    inFlight.current = task;
+    return task;
   }, []);
+  useEffect(() => {
+    mounted.current = true;
+    void refresh();
+    return () => {
+      mounted.current = false;
+      controller.current?.abort();
+      controller.current = null;
+      inFlight.current = null;
+    };
+  }, [refresh]);
+  useEffect(() => {
+    const poll = () => {
+      if (
+        document.visibilityState !== 'visible' ||
+        !navigator.onLine ||
+        busy ||
+        archiveId ||
+        editingPolicy
+      )
+        return;
+      void refresh();
+    };
+    const timer = setInterval(poll, 30000);
+    document.addEventListener('visibilitychange', poll);
+    window.addEventListener('online', poll);
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener('visibilitychange', poll);
+      window.removeEventListener('online', poll);
+    };
+  }, [refresh, busy, archiveId, editingPolicy]);
+
+  const refreshAfterMutation = useCallback(async () => {
+    // A save must not reuse a snapshot that started before the write committed.
+    await inFlight.current;
+    await refresh();
+  }, [refresh]);
 
   async function command(action: 'pause' | 'resume' | 'replay' | 'archive', receiptId?: string) {
     setBusy(true);
     try {
+      // Finish any old snapshot before mutating, then fetch the resulting state.
+      await inFlight.current;
       const response = await fetch('/api/admin/ingestion', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -121,8 +168,9 @@ export default function IngestionHealthPanel() {
       <CardHeader>
         <CardTitle>Ingestion health</CardTitle>
         <CardDescription>
-          Durably accepted alerts awaiting incident processing. Dead letters block later events with
-          the same key until replay succeeds or an administrator explicitly archives them.
+          Durably accepted alerts awaiting incident processing. Updates every 30 seconds while
+          visible, pausing during policy edits. Dead letters block later events with the same key
+          until replay succeeds or an administrator explicitly archives them.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -186,7 +234,7 @@ export default function IngestionHealthPanel() {
               Throughput is the last {snapshot.throughput.windowSeconds} seconds; only newly
               committed receipts count as accepted.{' '}
               {snapshot.throughput.limitedToTopIntegrations
-                ? 'Values show the top 100 integrations.'
+                ? 'Integration detail shows the top 100; totals include all integrations.'
                 : ''}
             </p>
             {snapshot.throughput.integrations.length > 0 && (
@@ -218,14 +266,14 @@ export default function IngestionHealthPanel() {
               Pausing admission lets accepted work drain. Replay retries the stored event and
               records an audit entry.
             </p>
-            <details>
+            <details onToggle={event => setEditingPolicy(event.currentTarget.open)}>
               <summary className="cursor-pointer text-sm">Ingestion capacity settings</summary>
               <div className="pt-4">
                 <IngestionPolicyForm
                   key={snapshot.control.revision}
                   policy={snapshot.control.policy}
                   revision={snapshot.control.revision}
-                  onSaved={refresh}
+                  onSaved={refreshAfterMutation}
                 />
               </div>
             </details>

@@ -65,10 +65,7 @@
     "No enterprise throughput or HA durability guarantee has been certified."
   ],
   "followUp": {
-    "imageUpgradeEvidence": [
-      "upgrade-f81dfc25.json",
-      "upgrade-58e9271c.json"
-    ],
+    "imageUpgradeEvidence": ["upgrade-f81dfc25.json", "upgrade-58e9271c.json"],
     "databaseOutageEvidence": "local-database-outage.json",
     "ingestionTestsPassed": 24,
     "focusedRegressionTestsPassed": 57,
@@ -390,7 +387,7 @@
       "PagerDuty independent endpoint"
     ],
     "independentReviews": "PagerDuty gap fixed; repeat source reviews found no additional concrete defect",
-    "freshImage": "pending"
+    "freshImage": "built 85725cc5e; native correctness exercised, HTTP latency gate failed"
   },
   "budgetContentionFollowup": {
     "recordedAt": "2026-10-23T21:03:58.482592+00:00",
@@ -407,6 +404,135 @@
     "singleKeyDecisionsPerSecond": 2254.726971766665,
     "hundredKeyDecisionsPerSecond": 3874.4925928177067,
     "hotRowContentionEliminated": false,
-    "freshImage": "pending"
+    "freshImage": "built 85725cc5e; native correctness exercised, HTTP latency gate failed"
+  },
+  "nativeQuotaReplayFollowup": {
+    "recordedAt": "2026-10-23T21:23:41.934896+00:00",
+    "certified": false,
+    "image": {
+      "revision": "85725cc5e",
+      "id": "sha256:03d08ba5062122e160a152a886fe615b9b77be674a70067d017c066503da0b1f",
+      "archiveSha256": "e6f3725a3a2bc668a53799a873508e80be6e2284034d318fa9ba56290a8cecd1"
+    },
+    "runs": [
+      {
+        "httpEvidence": "local-docker-http-quota-replay-crash-100.json",
+        "topologyEvidence": "local-docker-topology-quota-replay-crash-100.json",
+        "passed": false,
+        "accepted": 3001,
+        "completed": 3001,
+        "dropped": 0,
+        "httpP95Ms": 114.019,
+        "completionP95Ms": 276,
+        "cleanupFailures": []
+      },
+      {
+        "httpEvidence": "local-docker-http-pgbouncer-healthy-100.json",
+        "topologyEvidence": "local-docker-topology-pgbouncer-healthy-100.json",
+        "passed": false,
+        "accepted": 2682,
+        "completed": 2682,
+        "dropped": 319,
+        "httpP95Ms": 1661.00245,
+        "completionP95Ms": 784,
+        "cleanupFailures": []
+      },
+      {
+        "httpEvidence": "local-docker-http-pgbouncer-native-100.json",
+        "topologyEvidence": "local-docker-topology-pgbouncer-native-100.json",
+        "passed": false,
+        "accepted": 3001,
+        "completed": 3001,
+        "dropped": 0,
+        "httpP95Ms": 232.072,
+        "completionP95Ms": 289,
+        "cleanupFailures": []
+      }
+    ],
+    "limitations": [
+      "All three runs failed admission thresholds; no enterprise capacity claim",
+      "Compatibility PgBouncer run overlapped preparation of another database on the same instance; not a clean causal comparison",
+      "Native prepared mode and fresh database changed together; results do not isolate prepared-statement overhead",
+      "Image predates health-panel polling changes",
+      "Single local database, shared VM, no replicated PostgreSQL/PgBouncer HA"
+    ]
+  },
+  "healthPollingFollowup": {
+    "certified": false,
+    "componentTestsPassed": 5,
+    "typeCheck": "passed; completed exit0",
+    "modifiedSourceLint": "passed; explicit --no-ignore for CommonJS harnesses",
+    "scope": "source/component validation; polling source not in image85725cc5e"
+  },
+  "claimSequenceIndexFollowup": {
+    "recordedAt": "2026-10-23T21:32:30.433783+00:00",
+    "certified": false,
+    "migration": "20261024100000_ingestion_claim_sequence_index",
+    "claimSqlAndFences": "unchanged",
+    "controlledPlan": {
+      "backlog": 1000,
+      "claimed": 4,
+      "baselineMs": 366.822,
+      "sequenceIndexMs": 5.092,
+      "baselineCachedBlocks": 315787,
+      "sequenceIndexCachedBlocks": 3799,
+      "scope": "single transaction, synthetic unique-key heads, rollback-only; no concurrent workers"
+    },
+    "databaseContractPassed": 58,
+    "typeCheck": "passed; completed exit0",
+    "modifiedSourceLint": "passed; completed exit0",
+    "componentAndDeploymentUnitPassed": 46,
+    "runs": [
+      {
+        "httpEvidence": "local-docker-http-fullstack-ceiling-1000.json",
+        "topologyEvidence": "local-docker-topology-fullstack-ceiling-1000.json",
+        "targetRps": 1000,
+        "duration": "10s",
+        "passed": false,
+        "acknowledged": 1342,
+        "accepted": 1762,
+        "completed": 1762,
+        "ambiguous": 420,
+        "pending": 0,
+        "dropped": 8088,
+        "completionP95Ms": 5338.95,
+        "cleanupFailures": []
+      },
+      {
+        "httpEvidence": "local-docker-http-claim-index-ceiling-1000.json",
+        "topologyEvidence": "local-docker-topology-claim-index-ceiling-1000.json",
+        "targetRps": 1000,
+        "duration": "10s",
+        "passed": false,
+        "acknowledged": 1375,
+        "accepted": 1821,
+        "completed": 1821,
+        "ambiguous": 446,
+        "pending": 0,
+        "dropped": 8066,
+        "completionP95Ms": 3790,
+        "cleanupFailures": []
+      }
+    ],
+    "limitations": [
+      "Both 1000 RPS attempts failed; not sustained certification",
+      "420 and 446 persisted submissions exceeded observed acknowledgments; ambiguous timed-out submissions, not proof of lost receipts",
+      "Only the database migration changed for the second immutable85725cc5e image run; retained history and VM conditions differ",
+      "Critical-request latency still fails; admission/backpressure and hot quota rows require further work"
+    ],
+    "installedIndexPlans": [
+      {
+        "evidence": "local-claim-query-plan-installed-1000.json",
+        "backlog": 1000,
+        "claimed": 4,
+        "executionMs": 5.352
+      },
+      {
+        "evidence": "local-claim-query-plan-installed-10000.json",
+        "backlog": 10000,
+        "claimed": 4,
+        "executionMs": 38.889
+      }
+    ]
   }
 }

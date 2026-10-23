@@ -244,6 +244,25 @@ describe('deployment configuration invariants', () => {
     ).resolves.toContain('3 incident(s) await automation source classification');
   });
 
+  it('blocks a new runtime when the concurrent ingestion claim index is missing or invalid', async () => {
+    const readiness = require('../../scripts/wait-for-database-ready.cjs') as {
+      REQUIRED_INDEXES: string[];
+      readinessProblem: (
+        prisma: { $queryRawUnsafe: ReturnType<typeof vi.fn> },
+        expected: string[]
+      ) => Promise<string | null>;
+    };
+    for (const present of [false, true]) {
+      const indexes = readiness.REQUIRED_INDEXES.filter(
+        name => present || name !== 'IngestionReceipt_claim_sequence_idx'
+      ).map(name => ({ name, valid: name !== 'IngestionReceipt_claim_sequence_idx' }));
+      const query = vi.fn().mockResolvedValueOnce([]).mockResolvedValueOnce(indexes);
+      await expect(readiness.readinessProblem({ $queryRawUnsafe: query }, [])).resolves.toContain(
+        'IngestionReceipt_claim_sequence_idx'
+      );
+    }
+  });
+
   it('blocks migration-skipping replicas until diagnostic indexes and historical projections are complete', async () => {
     const readiness = require('../../scripts/wait-for-database-ready.cjs') as {
       REQUIRED_INDEXES: string[];

@@ -820,6 +820,7 @@ model IngestionReceipt {
   completedAt         DateTime?
 
   @@index([batchId])
+  // Partial active-sequence claim index is maintained by the SQL migration.
   @@index([partitionKey, sequence])
   @@index([status, availableAt, sequence])
   @@index([serviceId, acceptedAt])
