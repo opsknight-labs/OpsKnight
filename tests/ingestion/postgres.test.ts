@@ -31,7 +31,7 @@ import {
   pruneExpiredIngestionBatches,
 } from '@/lib/ingestion/retention';
 import { checksum } from '@/lib/automation/cache';
-import type { IntegrationEventEnvelope } from '@/lib/automation/runtime';
+import { prepareAutomation, type IntegrationEventEnvelope } from '@/lib/automation/runtime';
 import { collectIngestionQueueMetrics } from '@/lib/ingestion/metrics';
 import { acceptPostgresBatch, decodeReceiptEnvelope } from '@/lib/ingestion/batches';
 import { withIngestionDelivery } from '@/lib/ingestion/admission';
@@ -96,6 +96,57 @@ afterAll(async () => {
 });
 
 describe('PostgreSQL ingestion durability', () => {
+  it('keeps accepted disabled Automation independent of later settings changes', async () => {
+    await prisma.systemSettings.update({
+      where: { id: 'default' },
+      data: { automationEnabled: true },
+    });
+    await runReadCommittedTransaction(async tx => {
+      const guarded = new Proxy(tx, {
+        get(target, property, receiver) {
+          if (property === 'systemSettings')
+            throw new Error('Disabled acceptance must not read settings');
+          return Reflect.get(target, property, receiver);
+        },
+      });
+      for (const automationSnapshot of [
+        null,
+        { mode: 'DISABLED' as const, activeVersionId: null, candidateVersionId: null },
+      ]) {
+        expect(
+          await prepareAutomation(
+            guarded,
+            { ...envelope(), automationSnapshot },
+            { priority: null, urgency: 'HIGH' }
+          )
+        ).toBeNull();
+      }
+    });
+  });
+
+  it('rolls back completion and incident creation if the reserved budget is unavailable', async () => {
+    await acceptPostgresEvent(envelope());
+    const [claim] = await claimPostgresEvents(1);
+    const receipt = await prisma.ingestionReceipt.findUniqueOrThrow({ where: { id: claim.id } });
+    const lease = { id: claim.id, token: claim.leaseToken };
+    await expect(
+      runReadCommittedTransaction(async tx => {
+        await lockProcessingReceipt(tx, lease);
+        await tx.ingestionBudget.delete({ where: { shard: receipt.budgetShard } });
+        await tx.incident.create({ data: { title: 'must roll back', serviceId } });
+        await completeProcessingReceipt(tx, lease, { action: 'created' });
+      })
+    ).rejects.toBeInstanceOf(IngestionUnavailableError);
+    expect(await prisma.incident.count({ where: { serviceId } })).toBe(0);
+    expect(
+      (await prisma.ingestionReceipt.findUniqueOrThrow({ where: { id: claim.id } })).status
+    ).toBe('PROCESSING');
+    expect(
+      (await prisma.ingestionBudget.findUniqueOrThrow({ where: { shard: receipt.budgetShard } }))
+        .pending
+    ).toBe(1);
+  });
+
   it('never replaces an unexpired lease when severity-lane consumers race', async () => {
     for (let round = 0; round < 10; round++) {
       const input = envelope(`lease-race-${round}`);
@@ -972,6 +1023,18 @@ describe('PostgreSQL ingestion durability', () => {
         lockProcessingReceipt(tx, { id: first.id, token: first.leaseToken })
       )
     ).rejects.toBeInstanceOf(IngestionLeaseLostError);
+    await expect(
+      runReadCommittedTransaction(tx =>
+        completeProcessingReceipt(
+          tx,
+          { id: first.id, token: first.leaseToken },
+          { action: 'created' }
+        )
+      )
+    ).rejects.toBeInstanceOf(IngestionLeaseLostError);
+    expect((await prisma.ingestionBudget.aggregate({ _sum: { pending: true } }))._sum.pending).toBe(
+      1
+    );
     const decoded = decodeEnvelope(second.envelope);
     await processEvent(decoded.event, decoded.serviceId, decoded.integrationId, decoded, {
       id: second.id,

@@ -315,33 +315,30 @@ export async function completeProcessingReceipt(
   lease: ProcessingLease,
   result: { action: string; incident?: { id: string; createdAt?: Date } }
 ): Promise<void> {
-  const updated = await tx.ingestionReceipt.updateMany({
-    where: { id: lease.id, status: 'PROCESSING', leaseToken: lease.token },
-    data: {
-      status: 'COMPLETED',
-      completedAt: new Date(),
-      leaseToken: null,
-      leaseExpiresAt: null,
-      result: {
-        action: result.action,
-        incidentId: result.incident?.id ?? null,
-        operationalActivatedAt: result.incident?.createdAt?.toISOString() ?? null,
-      },
-      failureCode: null,
-    },
+  const persisted = JSON.stringify({
+    action: result.action,
+    incidentId: result.incident?.id ?? null,
+    operationalActivatedAt: result.incident?.createdAt?.toISOString() ?? null,
   });
-  if (updated.count !== 1) throw new IngestionLeaseLostError('Ingestion receipt completion fenced');
-  const receipt = await tx.ingestionReceipt.findUniqueOrThrow({
-    where: { id: lease.id },
-    select: { budgetShard: true, payloadBytes: true },
-  });
-  await tx.ingestionBudget.update({
-    where: { shard: receipt.budgetShard },
-    data: {
-      pending: { decrement: 1 },
-      bytes: { decrement: receipt.payloadBytes },
-    },
-  });
+  // One round trip retains the exact receipt fence and releases only the budget
+  // returned by that successful update. Both remain in the incident transaction.
+  const [counts] = await tx.$queryRaw<Array<{ completed: number; released: number }>>`
+    WITH completed AS (
+      UPDATE "IngestionReceipt" SET "status" = 'COMPLETED', "completedAt" = clock_timestamp(),
+        "leaseToken" = NULL, "leaseExpiresAt" = NULL, "failureCode" = NULL, "result" = ${persisted}::jsonb
+      WHERE "id" = ${lease.id} AND "status" = 'PROCESSING' AND "leaseToken" = ${lease.token}
+      RETURNING "budgetShard", "payloadBytes"
+    ), released AS (
+      UPDATE "IngestionBudget" budget SET "pending" = budget."pending" - 1,
+        "bytes" = budget."bytes" - completed."payloadBytes"
+      FROM completed WHERE budget."shard" = completed."budgetShard" RETURNING budget."shard"
+    ) SELECT (SELECT count(*)::int FROM completed) AS completed,
+      (SELECT count(*)::int FROM released) AS released
+  `;
+  if (counts?.completed !== 1)
+    throw new IngestionLeaseLostError('Ingestion receipt completion fenced');
+  if (counts.released !== 1)
+    throw new IngestionUnavailableError('Ingestion budget release unavailable');
 }
 
 export async function failPostgresEvent(

@@ -2,7 +2,14 @@ require('./isolated-runtime.cjs');
 const assert = require('node:assert/strict');
 const { spawn } = require('node:child_process');
 const { randomUUID, randomBytes } = require('node:crypto');
-const { mkdtempSync, writeFileSync, readFileSync, rmSync, existsSync } = require('node:fs');
+const {
+  mkdtempSync,
+  mkdirSync,
+  writeFileSync,
+  readFileSync,
+  rmSync,
+  existsSync,
+} = require('node:fs');
 const path = require('node:path');
 const os = require('node:os');
 const prisma = require('../../src/lib/prisma').default;
@@ -27,6 +34,8 @@ let chaosTask;
 let resolveChaos;
 let loadActive = false;
 let cancelled = false;
+const profiles = [];
+const cpuProfiling = process.env.INGESTION_CPU_PROFILE === 'true';
 for (const signal of ['SIGINT', 'SIGTERM'])
   process.once(signal, () => {
     cancelled = true;
@@ -62,7 +71,97 @@ function invoke(args) {
   });
 }
 const inspect = async name => JSON.parse(await invoke(['inspect', name]))[0];
+async function resources(name) {
+  const container = await inspect(name);
+  assert.equal(container.Config.Labels['opsknight.ingestion-cert-run'], runId);
+  const snapshot = {
+    name,
+    running: container.State.Running,
+    oomKilled: container.State.OOMKilled,
+    exitCode: container.State.ExitCode,
+    limits: {
+      cpuCores: container.HostConfig.NanoCpus / 1e9,
+      memoryBytes: container.HostConfig.Memory,
+    },
+  };
+  if (container.State.Running) {
+    try {
+      snapshot.cgroup = JSON.parse(
+        await invoke([
+          'exec',
+          name,
+          'node',
+          '-e',
+          "const fs=require('node:fs'); const read=p=>fs.readFileSync('/sys/fs/cgroup/'+p,'utf8').trim(); const counters=p=>Object.fromEntries(read(p).split('\\n').map(l=>{const[k,v]=l.split(/\\s+/);return[k,Number(v)]})); process.stdout.write(JSON.stringify({cpu:counters('cpu.stat'),memoryCurrentBytes:Number(read('memory.current')),memoryPeakBytes:Number(read('memory.peak')),memoryEvents:counters('memory.events')}));",
+        ])
+      );
+    } catch {
+      snapshot.resourceCountersUnavailable = true;
+    }
+  }
+  return snapshot;
+}
 const sleep = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds));
+async function waitFile(name, file) {
+  for (let attempt = 0; attempt < 40; attempt++) {
+    const exists = await invoke([
+      'exec',
+      name,
+      'node',
+      '-e',
+      'process.stdout.write(String(require("node:fs").existsSync(process.argv[1])))',
+      file,
+    ]);
+    if (exists === 'true') return;
+    await sleep(250);
+  }
+  throw new Error('Owned CPU profiler did not finish its operation');
+}
+async function startProfile(name) {
+  const output = `/tmp/ingestion-cpu-${runId}.cpuprofile`;
+  const stop = `/tmp/ingestion-cpu-${runId}.stop`;
+  const client = `/tmp/ingestion-cpu-${runId}.cjs`;
+  await invoke(['kill', '--signal', 'USR1', name]);
+  await invoke(['cp', path.join(__dirname, 'container-cpu-profile.cjs'), `${name}:${client}`]);
+  await invoke([
+    'exec',
+    '--detach',
+    name,
+    'node',
+    '--experimental-websocket',
+    client,
+    runId,
+    output,
+    stop,
+  ]);
+  await waitFile(name, `${output}.ready`);
+  profiles.push({ name, output, stop, collected: false });
+}
+async function collectProfiles() {
+  for (const profile of profiles.filter(item => !item.collected)) {
+    await invoke([
+      'exec',
+      profile.name,
+      'node',
+      '-e',
+      'require("node:fs").writeFileSync(process.argv[1],"stop")',
+      profile.stop,
+    ]);
+    await waitFile(profile.name, profile.output);
+    const destination =
+      process.env.INGESTION_CPU_PROFILE_DIRECTORY ||
+      path.join(os.tmpdir(), 'opsknight-ingestion-profiles', runId);
+    mkdirSync(destination, { recursive: true });
+    const output = path.join(destination, `${profile.name}.cpuprofile`);
+    await invoke(['cp', `${profile.name}:${profile.output}`, output]);
+    profile.collected = true;
+    (evidence.cpuProfiles ||= []).push({
+      container: profile.name,
+      file: output,
+      scope: 'Diagnostic sampling includes preflight/warmup/load; not capacity certification',
+    });
+  }
+}
 async function waitHealthy(name) {
   for (let attempt = 0; attempt < 120; attempt++) {
     if (cancelled) throw new Error('Certification cancelled');
@@ -91,6 +190,10 @@ async function main() {
   assert.ok(revision && revision !== 'unknown', 'Candidate must have a source revision label');
   const webReplicas = Number(process.env.INGESTION_WEB_REPLICAS || 2);
   const workerReplicas = Number(process.env.INGESTION_WORKER_REPLICAS || 4);
+  const webCpus = Number(process.env.INGESTION_WEB_CPUS || 1);
+  const workerCpus = Number(process.env.INGESTION_WORKER_CPUS || 1);
+  for (const cpus of [webCpus, workerCpus])
+    assert.ok(Number.isFinite(cpus) && cpus >= 0.25 && cpus <= 4);
   assert.ok(Number.isInteger(webReplicas) && webReplicas >= 1 && webReplicas <= 4);
   assert.ok(Number.isInteger(workerReplicas) && workerReplicas >= 1 && workerReplicas <= 8);
   const [limits] =
@@ -162,7 +265,7 @@ async function main() {
       '--label',
       `opsknight.ingestion-cert-run=${runId}`,
       '--cpus',
-      '1',
+      String(role === 'web' ? webCpus : workerCpus),
       '--memory',
       role === 'web' ? '1g' : '768m',
       '--health-interval',
@@ -263,6 +366,9 @@ location / { proxy_pass http://gateways; proxy_http_version 1.1; proxy_set_heade
     workerConcurrency: 4,
     webPool: 10,
     workerPool: 5,
+    webCpus,
+    workerCpus,
+    cpuProfiling,
     capacity,
   };
   const candidate = {
@@ -272,10 +378,15 @@ location / { proxy_pass http://gateways; proxy_http_version 1.1; proxy_set_heade
     sourceRevision: revision,
     webReplicas,
     workerReplicas,
+    webCpus,
+    workerCpus,
+    cpuProfiling,
     certificationRunId: runId,
     sourceProvenance:
       'Immutable image ID and producer-supplied OCI revision label; no signed build attestation',
   };
+  evidence.resourcesBeforePreflight = await Promise.all([...webNames, ...workers].map(resources));
+  if (cpuProfiling) for (const name of [webNames[0], workers[0]]) await startProfile(name);
   child = spawn(process.execPath, ['scripts/ingestion/certify-http.cjs'], {
     stdio: ['inherit', 'inherit', 'inherit', 'ipc'],
     detached: true,
@@ -325,6 +436,8 @@ location / { proxy_pass http://gateways; proxy_http_version 1.1; proxy_set_heade
     child.once('error', reject);
     child.once('exit', resolve);
   });
+  evidence.resourcesAfterLoad = await Promise.all([...webNames, ...workers].map(resources));
+  await collectProfiles();
   if (chaosTimer) {
     clearTimeout(chaosTimer);
     chaosTimer = undefined;
@@ -372,6 +485,10 @@ main()
         child.once('exit', () => clearTimeout(timer));
       });
     }
+    await collectProfiles().catch(error => {
+      evidence.profilerError = error.message;
+      process.exitCode = 1;
+    });
     for (const name of containers.reverse()) {
       try {
         const container = await inspect(name);

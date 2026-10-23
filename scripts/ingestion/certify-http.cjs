@@ -104,6 +104,16 @@ async function main() {
           consumeIngestionBatch: external ? async () => 0 : consumeIngestionBatch,
         })
       : undefined;
+  const warmupEvents = Number(process.env.INGESTION_WARMUP_EVENTS || 0);
+  assert.ok(Number.isInteger(warmupEvents) && warmupEvents >= 0 && warmupEvents <= 1000);
+  const warmup = warmupEvents
+    ? await require('./warmup-http.cjs')({
+        prisma,
+        baseUrl,
+        events: warmupEvents,
+        consumeIngestionBatch: external ? async () => 0 : consumeIngestionBatch,
+      })
+    : undefined;
   if (process.env.INGESTION_DB_PROFILE === 'true')
     finishDatabaseProfile = await require('./database-profile.cjs')(prisma);
   // Execute real ingestion processing independently of request completion.
@@ -226,6 +236,7 @@ async function main() {
       : 'Local production HTTP gateway plus independent incident consumer and isolated PostgreSQL; not HA topology certification',
     providerChecks,
     lifecycleChecks,
+    warmup,
     databaseProfile,
     fixtureServiceId: service.id,
     atAdmissionEnd,
