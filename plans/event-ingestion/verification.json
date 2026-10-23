@@ -148,5 +148,47 @@
       "Shared batch metadata history still unbounded",
       "Dedicated production/HA topologies not exercised"
     ]
+  },
+  "persistentMonitoringAndProfile": {
+    "recordedAt": "2026-10-23T09:51:13.252842+00:00",
+    "certified": false,
+    "checks": {
+      "databaseAndContract": {
+        "passed": 37,
+        "failed": 0,
+        "skipped": 0
+      },
+      "metricsAndRegistry": {
+        "passed": 29,
+        "failed": 0,
+        "skipped": 0
+      },
+      "ciClassification": {
+        "passed": 9,
+        "failed": 0
+      },
+      "promtool": "21 rules valid; ingestion and existing maintenance suites pass",
+      "typescript": "passed",
+      "modifiedSourceLint": "passed",
+      "productionBuild": "passed"
+    },
+    "http1000Rps": {
+      "evidence": "local-http-1000-rps.json",
+      "passed": false,
+      "acknowledged": 2401,
+      "completed": 2401,
+      "fullyDrainedRps": 38.72584447477068
+    },
+    "httpProfile100Rps": {
+      "evidence": "local-http-profile-100-rps.json",
+      "passed": true,
+      "acknowledged": 1001,
+      "completed": 1001,
+      "completionP95Ms": 474,
+      "postgresQueryCalls": 44354,
+      "postgresExecutionMs": 2681.152675,
+      "scope": "10-second synthetic compressible workload, Automation disabled; not sustained production certification"
+    },
+    "review": "Independent reviewers found mixed-mode evidence-alert masking; fixed with per-target matching and mixed-rollout promtool regression"
   }
 }

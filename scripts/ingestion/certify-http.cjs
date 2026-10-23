@@ -20,6 +20,7 @@ let readinessStatus;
 let draining = false;
 let worker;
 let workerFault;
+let finishDatabaseProfile;
 async function main() {
   const url = new URL(process.env.DATABASE_URL);
   assert.equal(
@@ -80,6 +81,8 @@ async function main() {
     process.env.INGESTION_HTTP_PROVIDER_CHECKS === 'true'
       ? await require('./provider-http-checks.cjs')({ prisma, baseUrl, consumeIngestionBatch })
       : undefined;
+  if (process.env.INGESTION_DB_PROFILE === 'true')
+    finishDatabaseProfile = await require('./database-profile.cjs')(prisma);
   // Execute real ingestion processing independently of request completion.
   worker = (async () => {
     while (!draining) {
@@ -90,7 +93,8 @@ async function main() {
     workerFault = error;
     draining = true;
   });
-  const candidate = { buildId: readFileSync('.next/BUILD_ID', 'utf8').trim(),
+  const candidate = {
+    buildId: readFileSync('.next/BUILD_ID', 'utf8').trim(),
     sourceRevision: spawnSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).stdout.trim(),
     sourceDirty: !!spawnSync('git', ['status', '--porcelain'], { encoding: 'utf8' }).stdout.trim(),
   };
@@ -119,6 +123,13 @@ async function main() {
     load.once('exit', resolve);
   });
   const ingressMs = performance.now() - started;
+  const [atAdmissionEnd] = await prisma.$queryRaw`
+    SELECT COUNT(*) FILTER (WHERE "status" = 'COMPLETED')::int AS completed,
+      COUNT(*) FILTER (WHERE "status" NOT IN ('COMPLETED', 'ARCHIVED'))::int AS pending,
+      COALESCE(EXTRACT(EPOCH FROM CURRENT_TIMESTAMP - MIN("acceptedAt")
+        FILTER (WHERE "status" NOT IN ('COMPLETED', 'ARCHIVED'))) * 1000, 0)::double precision AS "oldestPendingAgeMs"
+    FROM "IngestionReceipt" WHERE "serviceId" = ${service.id}
+  `;
   draining = true;
   await worker;
   if (workerFault) throw workerFault;
@@ -148,6 +159,17 @@ async function main() {
       select: { acceptedAt: true },
     }),
   ]);
+  const [endToEndLatency] = await prisma.$queryRaw`
+    SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY EXTRACT(EPOCH FROM ("completedAt" - COALESCE("receivedAt", "acceptedAt"))) * 1000)::double precision AS "p50Ms",
+      percentile_cont(0.95) WITHIN GROUP (ORDER BY EXTRACT(EPOCH FROM ("completedAt" - COALESCE("receivedAt", "acceptedAt"))) * 1000)::double precision AS "p95Ms",
+      percentile_cont(0.99) WITHIN GROUP (ORDER BY EXTRACT(EPOCH FROM ("completedAt" - COALESCE("receivedAt", "acceptedAt"))) * 1000)::double precision AS "p99Ms"
+    FROM "IngestionReceipt" WHERE "serviceId" = ${service.id} AND "status" = 'COMPLETED'
+  `;
+  const completionLatencyLimitMs = Number(process.env.INGESTION_COMPLETION_P95_MS || 2000);
+  const completionLatencyPassed =
+    accepted > 0 &&
+    endToEndLatency.p95Ms !== null &&
+    endToEndLatency.p95Ms <= completionLatencyLimitMs;
   const summary = JSON.parse(readFileSync(summaryPath, 'utf8'));
   const acknowledged = summary.metrics.ingestion_durable_accepted?.count || 0;
   const expectedIncidents =
@@ -158,6 +180,8 @@ async function main() {
     alerts === accepted &&
     incidents === expectedIncidents;
   const ambiguousSubmissions = accepted - acknowledged;
+  const databaseProfile = finishDatabaseProfile ? await finishDatabaseProfile() : undefined;
+  finishDatabaseProfile = undefined;
   const evidence = {
     measuredAt: new Date().toISOString(),
     candidate,
@@ -165,6 +189,13 @@ async function main() {
     scope:
       'Local production HTTP gateway plus independent incident consumer and isolated PostgreSQL; not HA topology certification',
     providerChecks,
+    databaseProfile,
+    fixtureServiceId: service.id,
+    atAdmissionEnd,
+    endToEndLatency,
+    completionLatencyLimitMs,
+    completionLatencyPassed,
+    admissionThresholdsPassed: loadExit === 0,
     targetRps: Number(process.env.INGESTION_TARGET_RPS || 1000),
     workload: process.env.INGESTION_WORKLOAD || 'many-key',
     duration: process.env.INGESTION_DURATION || '60s',
@@ -183,7 +214,7 @@ async function main() {
     completedPerSecondIncludingDrain: (completed * 1000) / completedMs,
     reconciled,
     metrics: summary.metrics,
-    passed: loadExit === 0 && reconciled && ambiguousSubmissions === 0,
+    passed: loadExit === 0 && reconciled && ambiguousSubmissions === 0 && completionLatencyPassed,
     certifiedEnterprise: false,
   };
   writeFileSync(
@@ -192,7 +223,8 @@ async function main() {
   );
   assert.ok(reconciled, 'Accepted ledger failed end-to-end drain reconciliation');
   assert.equal(ambiguousSubmissions, 0, 'HTTP acknowledgements and durable receipts differ');
-  assert.equal(loadExit, 0, 'Candidate failed the configured HTTP capacity thresholds');
+  assert.equal(loadExit, 0, 'Candidate failed the configured HTTP admission thresholds');
+  assert.ok(completionLatencyPassed, 'Candidate failed end-to-end processing latency threshold');
 }
 main()
   .catch(error => {
@@ -201,6 +233,7 @@ main()
   })
   .finally(async () => {
     draining = true;
+    if (finishDatabaseProfile) await finishDatabaseProfile().catch(() => {});
     await worker?.catch(() => {});
     for (const child of [load, server]) {
       if (child && child.exitCode === null && child.signalCode === null) {
