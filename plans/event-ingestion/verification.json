@@ -48,12 +48,16 @@
   },
   "benchmark": "local-microbenchmark.json",
   "unmet": [
-    "Kafka-compatible transport",
-    "weighted tenant fairness and critical ingestion reservations",
-    "history partitioning and archival",
-    "live HTTP/browser/outage and upgrade certification",
-    "Swarm and Kubernetes HA certification",
-    "sustained enterprise RPS and 25k burst certification",
+    "bounded idempotent replay under exhausted new-event quotas",
+    "shared quota-row and locked budget-shard contention stress",
+    "optional broker transport for enterprise targets",
+    "weighted service fairness and bounded inflight allocation",
+    "history partitioning, archival and sustained cleanup capacity",
+    "actual Agent execution and complete escalation lifecycle during ingestion storms",
+    "PgBouncer disruption, replicated PostgreSQL failover and restore",
+    "rolling-image rollout/rollback and final browser/CI certification",
+    "Swarm and Kubernetes ingestion HA certification",
+    "sustained 1000/5000/10000 RPS and 25000 RPS burst certification",
     "24-hour soak"
   ],
   "limitations": [
@@ -331,5 +335,37 @@
       "independentSecuritySubstitute": "cron-disabled regression fixed; no additional concrete findings",
       "highVolumeRetentionCertified": false
     }
+  },
+  "mainImagePagingFollowup": {
+    "recordedAt": "2026-10-23T20:45:40.059305+00:00",
+    "certified": false,
+    "imageSource": "dc9b54187",
+    "imageId": "sha256:cae7e777d70afa3452e511f771776a6ecf74f4a7c4ade9056989ae0a8d794d1b",
+    "fullStack100Rps": {
+      "passed": true,
+      "durationSeconds": 30,
+      "acceptedCompleted": 3001,
+      "httpP95Ms": 94.57,
+      "completionP95Ms": 541,
+      "droppedArrivals": 0,
+      "naturalRecoveryMs": 5097,
+      "smtpCaptureObservedMs": 1425,
+      "pinnedAutomationWarningToP1": true,
+      "evidence": "local-docker-http-main-smtp-crash-100.json",
+      "topology": "local-docker-topology-main-smtp-crash-100.json",
+      "remoteDeliveryCertified": false,
+      "agentExecutionDuringIngestionCertified": false
+    },
+    "ci": {
+      "runId": 39977846145,
+      "status": "failed browser matrix; other executed jobs passed",
+      "fix": "Manager catalog/target controls now available on empty services",
+      "localChromiumAffectedJourneysPassed": 2,
+      "localFirefoxWebkit": "failed at development login before rule journey; not passing evidence",
+      "finalProductionCi": "pending"
+    },
+    "focusedUnitPassed": 21,
+    "typeCheck": "passed",
+    "modifiedFileLint": "passed"
   }
 }
