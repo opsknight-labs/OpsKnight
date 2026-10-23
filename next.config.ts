@@ -211,7 +211,13 @@ const nextConfig: NextConfig = {
     // Dedicated typecheck step runs in CI/cert; skip inside container bundle to avoid OOM
     ignoreBuildErrors: Boolean(process.env.SKIP_BUILD_TYPECHECK === 'true'),
   },
-  webpack: (config, { isServer }) => {
+  webpack: (config, { isServer, dev }) => {
+    if (!dev && process.env.OPSKNIGHT_BUILD_LOW_MEMORY === 'true') {
+      // Cold container builds gain little from filesystem caching. Bound the
+      // compilation working set on small build hosts without skipping checks.
+      config.cache = false;
+      config.parallelism = 1;
+    }
     if (isServer) {
       // eslint-disable-next-line @typescript-eslint/no-require-imports
       const webpack = require('webpack');
