@@ -41,9 +41,9 @@ function parseMarkdown(text: string): ReactNode[] {
     return [
       <div
         key="json-block"
-        className="relative group/code my-2 rounded-lg border border-slate-800 bg-slate-950 p-4 font-mono text-xs overflow-x-auto shadow-inner"
+        className="relative group/code my-1.5 rounded-lg border border-slate-800 bg-slate-950 p-3 font-mono text-xs overflow-x-auto shadow-inner"
       >
-        <div className="flex items-center justify-between pb-2 mb-2 border-b border-slate-800/80 text-slate-400">
+        <div className="flex items-center justify-between pb-1.5 mb-1.5 border-b border-slate-800/80 text-slate-400">
           <span className="flex items-center gap-1.5 font-bold uppercase tracking-wider text-[10px] text-slate-400">
             <Code2 className="h-3.5 w-3.5 text-blue-400" />
             JSON Payload
@@ -51,10 +51,12 @@ function parseMarkdown(text: string): ReactNode[] {
           <CopyButton
             text={wholeJson}
             label="Copy JSON"
-            className="h-6 px-2 text-[11px] text-slate-400 hover:text-white"
+            className="h-5 px-1.5 text-[10px] text-slate-400 hover:text-white"
           />
         </div>
-        <pre className="text-emerald-400 leading-relaxed font-mono whitespace-pre">{wholeJson}</pre>
+        <pre className="text-emerald-400 leading-relaxed font-mono whitespace-pre max-h-48 overflow-y-auto pr-2">
+          {wholeJson}
+        </pre>
       </div>,
     ];
   }
@@ -313,19 +315,17 @@ export function IncidentDescriptionCard({
   return (
     <div
       className={cn(
-        'rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden dark:bg-slate-900 dark:border-slate-800 transition-all flex flex-col',
+        'rounded-xl border border-border/80 bg-card shadow-2xs overflow-hidden text-card-foreground transition-all flex flex-col',
         className
       )}
     >
       {/* Header bar */}
-      <div className="px-5 py-3 border-b border-slate-100 dark:border-slate-800/80 bg-slate-50/50 dark:bg-slate-800/30 flex items-center justify-between gap-4">
+      <div className="px-3.5 py-2 border-b border-border/80 bg-muted/20 flex items-center justify-between gap-3">
         <div className="flex items-center gap-2">
-          <FileText className="h-4 w-4 text-slate-500 shrink-0" />
-          <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100">
-            Description &amp; Context
-          </h3>
+          <FileText className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+          <h3 className="text-xs font-semibold text-foreground">Description &amp; Context</h3>
           {rawDescription && (
-            <span className="text-[10px] font-medium text-slate-400 dark:text-slate-500">
+            <span className="text-[10px] font-medium text-muted-foreground">
               ({rawDescription.split(/\s+/).filter(Boolean).length} words)
             </span>
           )}
@@ -336,7 +336,7 @@ export function IncidentDescriptionCard({
             <CopyButton
               text={rawDescription}
               label="Copy Description"
-              className="text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200 h-7 px-2 text-xs font-medium"
+              className="h-6 px-2 text-xs font-medium"
             />
           )}
           {canManage && !isEditing && (
@@ -348,7 +348,7 @@ export function IncidentDescriptionCard({
                 setEditedText(description || '');
                 setIsEditing(true);
               }}
-              className="h-7 px-2.5 gap-1.5 text-xs font-medium border-slate-200 bg-white hover:bg-slate-50 text-slate-700 shadow-2xs dark:bg-slate-800 dark:border-slate-700 dark:text-slate-300"
+              className="h-6 px-2 gap-1 text-[11px] font-medium"
             >
               <Edit2 className="h-3 w-3" />
               <span>Edit</span>
@@ -358,7 +358,7 @@ export function IncidentDescriptionCard({
       </div>
 
       {/* Body */}
-      <div className="p-5 md:p-6">
+      <div className="p-3 sm:p-4">
         {isEditing ? (
           <div className="space-y-3">
             <Textarea
@@ -408,7 +408,7 @@ export function IncidentDescriptionCard({
             <div
               className={cn(
                 'text-sm text-slate-800 dark:text-slate-200 transition-all',
-                isLong && !isExpanded && 'max-h-[300px] overflow-hidden'
+                isLong && !isExpanded && 'max-h-[200px] overflow-hidden'
               )}
             >
               {parsedContent}
@@ -416,7 +416,7 @@ export function IncidentDescriptionCard({
 
             {/* Gradient fade and expand button if content is long */}
             {isLong && !isExpanded && (
-              <div className="absolute bottom-0 inset-x-0 h-20 bg-gradient-to-t from-white via-white/80 to-transparent dark:from-slate-900 dark:via-slate-900/80 pointer-events-none flex items-end justify-center pb-1">
+              <div className="absolute bottom-0 inset-x-0 h-16 bg-gradient-to-t from-white via-white/80 to-transparent dark:from-slate-900 dark:via-slate-900/80 pointer-events-none flex items-end justify-center pb-1">
                 <Button
                   type="button"
                   variant="outline"

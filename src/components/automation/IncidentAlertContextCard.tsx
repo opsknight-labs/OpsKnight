@@ -120,10 +120,10 @@ export default function IncidentAlertContextCard({
     return (
       <div
         key={field.key}
-        className="min-w-0 rounded-lg border border-border/70 bg-card p-2 sm:p-2.5 transition-colors hover:border-border"
+        className="min-w-0 rounded-lg border border-border/70 bg-card p-2 transition-colors hover:border-border"
         data-testid={`alert-context-field-${field.key}`}
       >
-        <dt className="flex flex-wrap items-center justify-between gap-1.5">
+        <dt className="flex flex-wrap items-center justify-between gap-1">
           <span className="min-w-0 break-words text-xs font-semibold text-foreground">
             {field.label}
           </span>
@@ -180,20 +180,20 @@ export default function IncidentAlertContextCard({
   return (
     <section
       aria-labelledby="incident-alert-context-heading"
-      className="min-w-0 overflow-hidden rounded-xl border border-border bg-card text-sm text-card-foreground shadow-sm"
+      className="min-w-0 overflow-hidden rounded-xl border border-border/80 bg-card text-sm text-card-foreground shadow-2xs"
     >
-      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-3.5 py-2.5 sm:px-4">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/80 bg-muted/20 px-3 py-2 sm:px-3.5">
         <h2
           id="incident-alert-context-heading"
-          className="flex items-center gap-2 text-sm font-semibold tracking-tight"
+          className="flex items-center gap-2 text-xs font-semibold tracking-tight"
         >
-          <ListTree className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+          <ListTree className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
           Alert Context
         </h2>
         <Chip tone="neutral">Automation · v{versionNumber ?? '—'}</Chip>
       </div>
-      <div className="space-y-2.5 p-3 sm:p-3.5">
-        <p className="text-[11px] leading-relaxed text-muted-foreground">
+      <div className="space-y-2 p-2.5 sm:p-3">
+        <p className="text-[11px] leading-normal text-muted-foreground">
           What the alert sent when this incident was created, by field. Where automation changed a
           field, the received value is shown above the value after automation.
         </p>
@@ -205,7 +205,7 @@ export default function IncidentAlertContextCard({
         ) : (
           <>
             {omitted && (
-              <p className={cn('rounded-md border px-3 py-1.5 text-xs', toneChipClass('warning'))}>
+              <p className={cn('rounded-md border px-2.5 py-1 text-xs', toneChipClass('warning'))}>
                 Some diagnostic values were omitted from the stored explanation.
               </p>
             )}
@@ -215,11 +215,11 @@ export default function IncidentAlertContextCard({
                   {visible.map(renderField)}
                 </dl>
                 {!!remaining.length && (
-                  <details>
+                  <details className="mt-1">
                     <summary className={summaryClass}>
                       Show {remaining.length} more context fields
                     </summary>
-                    <dl className="mt-2 grid min-w-0 gap-2 sm:grid-cols-2 xl:grid-cols-3">
+                    <dl className="mt-1.5 grid min-w-0 gap-2 sm:grid-cols-2 xl:grid-cols-3">
                       {remaining.map(renderField)}
                     </dl>
                   </details>

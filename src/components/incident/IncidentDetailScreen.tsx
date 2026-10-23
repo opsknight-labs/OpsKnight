@@ -494,51 +494,7 @@ export default async function IncidentDetailScreen({
         </section>
       )}
 
-      {presentation === 'mobile' && (
-        <div id="automation-decision" className="scroll-mt-24">
-          <IncidentAutomationCard incidentId={id} />
-        </div>
-      )}
-      <EscalationExecutionHealth health={escalationHealth} />
-      {presentation === 'mobile' && hasContextCard && (
-        <details className="group overflow-hidden rounded-xl border border-border bg-card">
-          <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 px-3.5 py-2.5 text-xs font-semibold text-foreground select-none [&>*]:pointer-events-none [&::-webkit-details-marker]:hidden">
-            <span>Incident context</span>
-            <ChevronDown
-              className="h-4 w-4 text-muted-foreground transition-transform group-open:rotate-180"
-              aria-hidden="true"
-            />
-          </summary>
-          <div className="border-t border-border p-2">{contextContent}</div>
-        </details>
-      )}
-
-      {presentation === 'mobile' && (
-        <MobileOperationalContextCard
-          service={{
-            id: incident.service.id,
-            name: incident.service.name,
-            slaTier: incident.service.slaTier,
-          }}
-          team={incident.team ? { id: incident.team.id, name: incident.team.name } : null}
-          tags={incident.tags.map(tagLink => ({
-            id: tagLink.tag.id,
-            name: tagLink.tag.name,
-            color: tagLink.tag.color,
-          }))}
-          collaboration={collaboration}
-          jiraLinks={jiraLinks.map(l => ({
-            id: l.id,
-            issueKey: l.externalKey,
-            issueUrl: l.externalUrl,
-            status: l.externalStatus ?? undefined,
-          }))}
-          capabilities={{
-            jiraConfigured: jiraLinks.length > 0,
-          }}
-        />
-      )}
-
+      {/* Command Bar: Responders need immediate access to Acknowledge / Resolve */}
       <IncidentCommandBar
         incidentId={incident.id}
         currentStatus={incident.status}
@@ -578,10 +534,13 @@ export default async function IncidentDetailScreen({
         jiraCapability={incidentJiraCapability}
       />
 
+      {/* Escalation Execution Health: Compact status strip or alert banner */}
+      <EscalationExecutionHealth health={escalationHealth} />
+
       {presentation === 'mobile' ? (
         <details className="group overflow-hidden rounded-xl border border-border bg-card">
-          <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 px-3.5 py-2.5 text-xs font-semibold text-foreground select-none [&>*]:pointer-events-none [&::-webkit-details-marker]:hidden">
-            <span>Incident details & assignment</span>
+          <summary className="flex min-h-10 cursor-pointer list-none items-center justify-between gap-3 px-3.5 py-2 text-xs font-semibold text-foreground select-none [&>*]:pointer-events-none [&::-webkit-details-marker]:hidden">
+            <span>Incident details &amp; assignment</span>
             <ChevronDown
               className="h-4 w-4 text-muted-foreground transition-transform group-open:rotate-180"
               aria-hidden="true"
@@ -607,36 +566,62 @@ export default async function IncidentDetailScreen({
         />
       )}
 
-      {presentation !== 'mobile' && (
-        <div id="automation-decision" className="scroll-mt-24">
-          <IncidentAutomationCard incidentId={id} />
-        </div>
-      )}
-      {sourceRestricted ? (
-        <section className="rounded-xl border p-4">
-          <h2 className="font-semibold">Incident Description</h2>
-          <p className="text-sm text-muted-foreground">Alert details are restricted.</p>
-        </section>
-      ) : (
-        <IncidentDescriptionCard
-          incidentId={incident.id}
-          description={incident.description}
-          canManage={canManageIncident}
-          onUpdateDescription={handleUpdateDescription}
+      {presentation === 'mobile' && (
+        <MobileOperationalContextCard
+          service={{
+            id: incident.service.id,
+            name: incident.service.name,
+            slaTier: incident.service.slaTier,
+          }}
+          team={incident.team ? { id: incident.team.id, name: incident.team.name } : null}
+          tags={incident.tags.map(tagLink => ({
+            id: tagLink.tag.id,
+            name: tagLink.tag.name,
+            color: tagLink.tag.color,
+          }))}
+          collaboration={collaboration}
+          jiraLinks={jiraLinks.map(l => ({
+            id: l.id,
+            issueKey: l.externalKey,
+            issueUrl: l.externalUrl,
+            status: l.externalStatus ?? undefined,
+          }))}
+          capabilities={{
+            jiraConfigured: jiraLinks.length > 0,
+          }}
         />
       )}
 
-      {incident.status === 'RESOLVED' && (
-        <IncidentResolutionSummary
-          incident={incident}
-          resolutionNote={resolutionNote}
-          postmortemStatus={postmortem?.status ?? null}
-          canManage={canManageIncident}
-        />
-      )}
-
+      {/* Main Content Grid: 2 columns on desktop, responsive stack on mobile */}
       <div className="grid min-w-0 grid-cols-1 gap-4 lg:grid-cols-12 lg:gap-6">
-        <div className="min-w-0 space-y-4 lg:col-span-8 lg:space-y-6 2xl:col-span-9">
+        <div className="min-w-0 space-y-4 lg:col-span-8 lg:space-y-5 2xl:col-span-9">
+          {sourceRestricted ? (
+            <section className="rounded-xl border border-border/80 bg-card p-3.5 text-card-foreground">
+              <h2 className="text-xs font-semibold">Incident Description</h2>
+              <p className="mt-1 text-xs text-muted-foreground">Alert details are restricted.</p>
+            </section>
+          ) : (
+            <IncidentDescriptionCard
+              incidentId={incident.id}
+              description={incident.description}
+              canManage={canManageIncident}
+              onUpdateDescription={handleUpdateDescription}
+            />
+          )}
+
+          <div id="automation-decision" className="scroll-mt-24">
+            <IncidentAutomationCard incidentId={id} />
+          </div>
+
+          {incident.status === 'RESOLVED' && (
+            <IncidentResolutionSummary
+              incident={incident}
+              resolutionNote={resolutionNote}
+              postmortemStatus={postmortem?.status ?? null}
+              canManage={canManageIncident}
+            />
+          )}
+
           <IncidentDetailTabs
             defaultTab={initialTab || 'overview'}
             eventCount={totalEventsCount}
@@ -656,9 +641,21 @@ export default async function IncidentDetailScreen({
 
         {presentation === 'mobile' ? (
           <>
+            {hasContextCard && (
+              <details className="group overflow-hidden rounded-xl border border-border bg-card">
+                <summary className="flex min-h-10 cursor-pointer list-none items-center justify-between gap-3 px-3.5 py-2 text-xs font-semibold text-foreground select-none [&>*]:pointer-events-none [&::-webkit-details-marker]:hidden">
+                  <span>Incident context</span>
+                  <ChevronDown
+                    className="h-4 w-4 text-muted-foreground transition-transform group-open:rotate-180"
+                    aria-hidden="true"
+                  />
+                </summary>
+                <div className="border-t border-border p-2">{contextContent}</div>
+              </details>
+            )}
             <details className="group overflow-hidden rounded-xl border border-border bg-card lg:hidden">
-              <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 px-3.5 py-2.5 text-xs font-semibold text-foreground select-none [&>*]:pointer-events-none [&::-webkit-details-marker]:hidden">
-                <span>People, fields & links</span>
+              <summary className="flex min-h-10 cursor-pointer list-none items-center justify-between gap-3 px-3.5 py-2 text-xs font-semibold text-foreground select-none [&>*]:pointer-events-none [&::-webkit-details-marker]:hidden">
+                <span>People, fields &amp; links</span>
                 <ChevronDown
                   className="h-4 w-4 text-muted-foreground transition-transform group-open:rotate-180"
                   aria-hidden="true"
@@ -670,14 +667,15 @@ export default async function IncidentDetailScreen({
                 {quickLinksContent}
               </div>
             </details>
-            <aside className="hidden min-w-0 space-y-4 lg:block lg:col-span-4 lg:space-y-6 2xl:col-span-3">
+            <aside className="hidden min-w-0 space-y-4 lg:block lg:col-span-4 lg:space-y-5 2xl:col-span-3">
+              {contextContent}
               {watchersContent}
               {customFieldsContent}
               {quickLinksContent}
             </aside>
           </>
         ) : (
-          <aside className="min-w-0 space-y-4 lg:col-span-4 lg:space-y-6 2xl:col-span-3">
+          <aside className="min-w-0 space-y-4 lg:col-span-4 lg:space-y-5 2xl:col-span-3">
             {contextContent}
             {watchersContent}
             {customFieldsContent}
