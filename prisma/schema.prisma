@@ -793,30 +793,45 @@ model Integration {
 
 // No cascading foreign keys: deleting a service must never discard accepted work.
 model IngestionReceipt {
-  id             String   @id
-  sequence       BigInt   @unique @default(autoincrement())
-  serviceId      String
-  integrationId  String
-  partitionKey   String
-  orderingKeys   String[] @default([])
-  idempotencyKey String   @unique
-  contentHash    String
-  budgetShard    Int
-  payloadBytes   Int
-  envelope       Json
-  status         String   @default("PENDING")
-  attempts       Int      @default(0)
-  availableAt    DateTime @default(now())
-  leaseToken     String?
-  leaseExpiresAt DateTime?
-  result         Json?
-  failureCode    String?
-  acceptedAt     DateTime @default(now())
-  completedAt    DateTime?
+  id                  String          @id
+  sequence            BigInt          @unique @default(autoincrement())
+  serviceId           String
+  integrationId       String
+  partitionKey        String
+  orderingKeys        String[]        @default([])
+  idempotencyKey      String          @unique
+  contentHash         String
+  budgetShard         Int
+  payloadBytes        Int
+  envelope            Json
+  batchId             String?
+  batch               IngestionBatch? @relation(fields: [batchId], references: [id], onDelete: Restrict)
+  status              String          @default("PENDING")
+  attempts            Int             @default(0)
+  availableAt         DateTime        @default(now())
+  leaseToken          String?
+  leaseExpiresAt      DateTime?
+  result              Json?
+  failureCode         String?
+  acceptedAt          DateTime        @default(now())
+  receivedAt          DateTime?
+  processingStartedAt DateTime?
+  completedAt         DateTime?
 
+  @@index([batchId])
   @@index([partitionKey, sequence])
   @@index([status, availableAt, sequence])
   @@index([serviceId, acceptedAt])
+}
+
+// Shared immutable webhook context. No service cascade can delete accepted work.
+model IngestionBatch {
+  id            String             @id
+  serviceId     String
+  integrationId String
+  payload       Json
+  createdAt     DateTime           @default(now())
+  receipts      IngestionReceipt[]
 }
 
 model IngestionBudget {

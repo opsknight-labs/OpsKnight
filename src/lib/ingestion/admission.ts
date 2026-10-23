@@ -1,5 +1,6 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 import type { IntegrationEventEnvelope } from '@/lib/automation/runtime';
+import { acceptPostgresBatch } from './batches';
 import { acceptPostgresEvent } from './postgres';
 import {
   IngestionConflictError,
@@ -46,5 +47,26 @@ export async function acceptIntegrationEvent(envelope: IntegrationEventEnvelope)
       throw error;
     // An unavailable database must never turn into an optimistic acceptance.
     throw new IngestionUnavailableError('Durable ingestion unavailable');
+  }
+}
+
+export async function acceptIntegrationBatch(
+  input: Omit<IntegrationEventEnvelope, 'event'>,
+  events: IntegrationEventEnvelope['event'][]
+) {
+  const delivery = deliveries.getStore();
+  const keys = events.map(() =>
+    delivery?.key ? `${delivery.key}:${delivery.ordinal++}` : undefined
+  );
+  try {
+    return await acceptPostgresBatch(input, events, keys);
+  } catch (error) {
+    if (
+      error instanceof IngestionConflictError ||
+      error instanceof IngestionPayloadError ||
+      error instanceof IngestionUnavailableError
+    )
+      throw error;
+    throw new IngestionUnavailableError('Durable batch ingestion unavailable');
   }
 }

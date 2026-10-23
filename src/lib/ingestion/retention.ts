@@ -44,3 +44,69 @@ export async function pruneCompletedIngestionPayloads(): Promise<number> {
     return ids.length;
   });
 }
+
+/** Immutable batch context remains held while any child retains its payload. */
+export async function pruneSharedIngestionPayloads(): Promise<number> {
+  return runReadCommittedTransaction(async tx => {
+    const candidates = await tx.$queryRaw<Array<{ id: string }>>`
+      SELECT batch."id" FROM "IngestionBatch" batch
+      WHERE batch."payload" <> 'null'::jsonb
+        AND NOT EXISTS (SELECT 1 FROM "IngestionReceipt" receipt
+          WHERE receipt."batchId" = batch."id" AND receipt."envelope" <> 'null'::jsonb)
+        AND NOT EXISTS (SELECT 1 FROM "IngestionReceipt" receipt
+          JOIN "DataRetentionHold" hold ON hold."scopeId" = receipt."result"->>'incidentId'
+          WHERE receipt."batchId" = batch."id" AND hold."scopeType" = 'INCIDENT'
+            AND hold."releasedAt" IS NULL
+            AND (hold."expiresAt" IS NULL OR hold."expiresAt" > CURRENT_TIMESTAMP))
+      ORDER BY batch."createdAt" FOR UPDATE OF batch SKIP LOCKED LIMIT 100
+    `;
+    const pruned: string[] = [];
+    for (const batch of candidates) {
+      const receipts = await tx.ingestionReceipt.findMany({
+        where: { batchId: batch.id },
+        select: { result: true },
+      });
+      const incidentIds = [
+        ...new Set(
+          receipts.flatMap(receipt => {
+            const result = receipt.result;
+            return result &&
+              typeof result === 'object' &&
+              !Array.isArray(result) &&
+              typeof result.incidentId === 'string'
+              ? [result.incidentId]
+              : [];
+          })
+        ),
+      ].sort();
+      let held = false;
+      for (const incidentId of incidentIds) {
+        if (
+          !(await tryAcquireRetentionResourceLock(tx, 'INCIDENT', incidentId)) ||
+          (await isIncidentHeld(tx, incidentId))
+        ) {
+          held = true;
+          break;
+        }
+      }
+      if (!held) pruned.push(batch.id);
+    }
+    if (pruned.length)
+      await tx.$executeRaw`
+      UPDATE "IngestionBatch" SET "payload" = 'null'::jsonb
+      WHERE "id" IN (${Prisma.join(pruned)})
+    `;
+    if (pruned.length)
+      await emitAuditEvent(
+        {
+          action: 'ingestion.shared_payload_retention',
+          source: 'BACKGROUND',
+          actor: { type: 'SYSTEM' },
+          target: { type: 'SYSTEM_CONFIG', id: 'ingestion_control' },
+          metadata: { count: pruned.length },
+        },
+        tx
+      );
+    return pruned.length;
+  });
+}

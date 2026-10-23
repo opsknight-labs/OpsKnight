@@ -113,5 +113,40 @@
       "Kafka transport and HA",
       "sustained capacity and 24-hour soak"
     ]
+  },
+  "batchAndTimingFollowup": {
+    "recordedAt": "2026-10-23T09:36:05.612029+00:00",
+    "sourceBaseline": "233bf02d8",
+    "certified": false,
+    "buildId": "4YWinPVwQN-OtucrDvPZ3",
+    "sourceDirtyDuringHttpRun": true,
+    "checks": {
+      "isolatedPostgresAndContract": {
+        "passed": 37,
+        "failed": 0,
+        "skipped": 0
+      },
+      "focusedApiPrivacyCredential": {
+        "passed": 20,
+        "failed": 0,
+        "skipped": 0
+      },
+      "typescript": "passed",
+      "modifiedSourceLint": "passed",
+      "productionBuild": "passed"
+    },
+    "providerHttpEvidence": "local-provider-http.json",
+    "providerScope": [
+      "PROMETHEUS (329362-byte,40-child webhook)",
+      "GRAFANA (valid and invalid HMAC)",
+      "DATADOG (2-child batch)",
+      "WEBHOOK (credential filtering)"
+    ],
+    "limitations": [
+      "Four providers tested over HTTP; remaining providers unverified",
+      "Automation and notification delivery not enterprise representative",
+      "Shared batch metadata history still unbounded",
+      "Dedicated production/HA topologies not exercised"
+    ]
   }
 }

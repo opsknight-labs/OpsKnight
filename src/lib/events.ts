@@ -758,3 +758,17 @@ export async function processIntegrationEvent(envelope: IntegrationEventEnvelope
   }
   return processEvent(envelope.event, envelope.serviceId, envelope.integrationId, envelope);
 }
+
+/** Providers with multiple normalized children share the same admission policy. */
+export async function processIntegrationBatch(
+  input: Omit<IntegrationEventEnvelope, 'event'>,
+  events: EventPayload[]
+) {
+  if (ingestionConfig().mode === 'postgres') {
+    const { acceptIntegrationBatch } = await import('./ingestion/admission');
+    return acceptIntegrationBatch(input, events);
+  }
+  const results = [];
+  for (const event of events) results.push(await processIntegrationEvent({ ...input, event }));
+  return results;
+}

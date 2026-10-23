@@ -2,7 +2,8 @@ import { ZodError } from 'zod';
 import { randomUUID } from 'node:crypto';
 import { processEvent } from '@/lib/events';
 import { logger } from '@/lib/logger';
-import { decodeEnvelope, IngestionLeaseLostError, retryDelayMs } from './contract';
+import { decodeReceiptEnvelope } from './batches';
+import { IngestionPayloadError, IngestionLeaseLostError, retryDelayMs } from './contract';
 import { claimPostgresEvents, failPostgresEvent } from './postgres';
 import { ingestionConfig } from './config';
 import {
@@ -11,7 +12,7 @@ import {
 } from '@/lib/metrics/operational/registry';
 import { recordWorkerHeartbeat } from '@/lib/runbooks/worker-heartbeats';
 import { getOpsKnightProcessRole } from '@/lib/runtime-role';
-import { pruneCompletedIngestionPayloads } from './retention';
+import { pruneCompletedIngestionPayloads, pruneSharedIngestionPayloads } from './retention';
 
 let running: Promise<void> | null = null;
 let stopping = false;
@@ -41,7 +42,7 @@ export async function consumeIngestionBatch(
     claims.map(async claim => {
       const lease = { id: claim.id, token: claim.leaseToken };
       try {
-        const envelope = decodeEnvelope(claim.envelope);
+        const envelope = await decodeReceiptEnvelope(claim.envelope);
         await processEvent(
           envelope.event,
           envelope.serviceId,
@@ -56,9 +57,18 @@ export async function consumeIngestionBatch(
         );
       } catch (error) {
         if (error instanceof IngestionLeaseLostError) return;
-        await failPostgresEvent(lease, claim.attempts, error instanceof ZodError);
+        await failPostgresEvent(
+          lease,
+          claim.attempts,
+          error instanceof ZodError || error instanceof IngestionPayloadError
+        );
         addOperationalMetric('opsknight_ingestion_processing_total', 1, {
-          outcome: error instanceof ZodError || claim.attempts >= 10 ? 'dead' : 'retry',
+          outcome:
+            error instanceof ZodError ||
+            error instanceof IngestionPayloadError ||
+            claim.attempts >= 10
+              ? 'dead'
+              : 'retry',
         });
         logger.warn('ingestion.processing_failed', {
           receiptId: claim.id,
@@ -95,7 +105,8 @@ export function startIngestionWorker(): void {
       if (Date.now() >= nextRetention) {
         try {
           const pruned = await pruneCompletedIngestionPayloads();
-          nextRetention = Date.now() + (pruned === 100 ? 1000 : 60000);
+          const sharedPruned = await pruneSharedIngestionPayloads();
+          nextRetention = Date.now() + (pruned === 100 || sharedPruned === 100 ? 1000 : 60000);
         } catch {
           nextRetention = Date.now() + 60000;
           logger.warn('ingestion.retention_unavailable');

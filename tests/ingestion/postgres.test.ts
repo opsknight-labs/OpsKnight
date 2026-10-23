@@ -4,7 +4,7 @@ import { fork } from 'node:child_process';
 import { once } from 'node:events';
 import prisma from '@/lib/prisma';
 import { runReadCommittedTransaction } from '@/lib/db-utils';
-import { processEvent, processIntegrationEvent } from '@/lib/events';
+import { processEvent, processIntegrationEvent, processIntegrationBatch } from '@/lib/events';
 import {
   acceptPostgresEvent,
   claimPostgresEvents,
@@ -24,9 +24,15 @@ import { applyIngestionCommand } from '@/lib/ingestion/operations';
 import { compileAutomation } from '@/lib/automation/compiler';
 import { emptySnapshot } from '@/lib/automation/contract';
 import { checkIngestionQuota } from '@/lib/ingestion/quota';
-import { pruneCompletedIngestionPayloads } from '@/lib/ingestion/retention';
+import {
+  pruneCompletedIngestionPayloads,
+  pruneSharedIngestionPayloads,
+} from '@/lib/ingestion/retention';
 import { checksum } from '@/lib/automation/cache';
 import type { IntegrationEventEnvelope } from '@/lib/automation/runtime';
+import { acceptPostgresBatch, decodeReceiptEnvelope } from '@/lib/ingestion/batches';
+import { withIngestionDelivery } from '@/lib/ingestion/admission';
+import { transformPrometheusToEvent, type PrometheusAlert } from '@/lib/integrations/prometheus';
 import { acquireRetentionResourceLock } from '@/lib/retention/resource-lock';
 
 // Fail closed rather than skipping certification or truncating a shared database.
@@ -71,6 +77,7 @@ beforeAll(async () => {
 });
 beforeEach(async () => {
   await prisma.$executeRaw`TRUNCATE "IngestionReceipt"`;
+  await prisma.ingestionBatch.deleteMany();
   await prisma.ingestionBudget.updateMany({ data: { pending: 0, bytes: 0 } });
   await prisma.systemConfig.deleteMany({ where: { key: 'ingestion_control' } });
   await prisma.systemSettings.upsert({
@@ -85,6 +92,226 @@ afterAll(async () => {
 });
 
 describe('PostgreSQL ingestion durability', () => {
+  it('exposes delayed arrival and processing separately while SLA clocks start at operational activation', async () => {
+    const input = envelope('delayed-clock');
+    input.receivedAt = new Date(Date.now() - 2 * 3600000);
+    const accepted = await acceptPostgresEvent(input, 'delayed-clock');
+    await prisma.ingestionReceipt.update({
+      where: { id: accepted.receiptId },
+      data: { acceptedAt: input.receivedAt },
+    });
+    const started = Date.now();
+    await consumeIngestionBatch();
+    const incident = await prisma.incident.findFirstOrThrow({ where: { serviceId } });
+    const alert = await prisma.alert.findFirstOrThrow({ where: { serviceId } });
+    const receipt = await prisma.ingestionReceipt.findUniqueOrThrow({
+      where: { id: accepted.receiptId },
+    });
+    expect(receipt.receivedAt).toEqual(input.receivedAt);
+    expect(alert.createdAt).toEqual(input.receivedAt);
+    expect(receipt.processingStartedAt!.getTime()).toBeGreaterThanOrEqual(started - 1000);
+    expect(incident.createdAt.getTime()).toBeGreaterThanOrEqual(started);
+    expect(incident.slaTargetCapturedAt!.getTime()).toBeGreaterThanOrEqual(started);
+    expect(receipt.completedAt!.getTime()).toBeGreaterThanOrEqual(incident.createdAt.getTime());
+    expect(receipt.result).toMatchObject({
+      operationalActivatedAt: incident.createdAt.toISOString(),
+    });
+  });
+
+  it('stores large webhook context once and restores each child for Automation and processing', async () => {
+    const payload: PrometheusAlert = {
+      version: '4',
+      groupKey: 'batch',
+      status: 'firing',
+      receiver: 'opsknight',
+      groupLabels: {},
+      commonLabels: {},
+      commonAnnotations: {},
+      externalURL: '',
+      alerts: Array.from({ length: 40 }, (_, index) => ({
+        status: 'firing',
+        labels: { alertname: `batch-${index}` },
+        annotations: { summary: `Batch child ${index}`, context: 'x'.repeat(8000) },
+        generatorURL: '',
+        startsAt: '2026-10-23T00:00:00Z',
+        fingerprint: `batch-${index}`,
+      })),
+    };
+    const events = transformPrometheusToEvent(payload);
+    const input = {
+      serviceId,
+      integrationId: 'integration',
+      integrationType: 'PROMETHEUS',
+      providerPayload: payload,
+      receivedAt: new Date(),
+    };
+    process.env.OPSKNIGHT_INGESTION_MODE = 'postgres';
+    try {
+      const results = await withIngestionDelivery('large-batch', () =>
+        processIntegrationBatch(input, events)
+      );
+      expect(results).toHaveLength(40);
+      const receipts = await prisma.ingestionReceipt.findMany({ orderBy: { sequence: 'asc' } });
+      expect(new Set(receipts.map(receipt => receipt.batchId)).size).toBe(1);
+      const batch = await prisma.ingestionBatch.findUniqueOrThrow({
+        where: { id: receipts[0].batchId! },
+      });
+      const storedBytes =
+        Buffer.byteLength(JSON.stringify(batch.payload)) +
+        receipts.reduce(
+          (total, receipt) => total + Buffer.byteLength(JSON.stringify(receipt.envelope)),
+          0
+        );
+      expect(storedBytes).toBeLessThan(1024 * 1024);
+      const restored = await decodeReceiptEnvelope(receipts[0].envelope);
+      expect(restored.providerPayload).toEqual(payload);
+      expect(restored.event.payload.custom_details).toEqual(events[0].payload.custom_details);
+      const repeated = await withIngestionDelivery('large-batch', () =>
+        processIntegrationBatch(input, events)
+      );
+      expect(repeated).toEqual(results);
+      expect(await prisma.ingestionReceipt.count()).toBe(40);
+      expect(await prisma.ingestionBatch.count({ where: { serviceId } })).toBe(1);
+      while (await consumeIngestionBatch(8)) {
+        /* drain independently keyed children */
+      }
+      expect(await prisma.incident.count({ where: { serviceId } })).toBe(40);
+      await prisma.ingestionReceipt.updateMany({ data: { completedAt: new Date(0) } });
+      const incident = await prisma.incident.findFirstOrThrow({ where: { serviceId } });
+      const hold = await prisma.dataRetentionHold.create({
+        data: {
+          scopeType: 'INCIDENT',
+          scopeId: incident.id,
+          reason: 'Preserve shared provider evidence',
+          createdById: actorId,
+        },
+      });
+      expect(await pruneSharedIngestionPayloads()).toBe(0);
+      expect(await pruneCompletedIngestionPayloads()).toBe(39);
+      expect(await pruneSharedIngestionPayloads()).toBe(0);
+      await prisma.dataRetentionHold.update({
+        where: { id: hold.id },
+        data: { releasedAt: new Date() },
+      });
+      expect(await pruneCompletedIngestionPayloads()).toBe(1);
+      expect(await pruneSharedIngestionPayloads()).toBeGreaterThanOrEqual(1);
+      expect(
+        (await prisma.ingestionBatch.findUniqueOrThrow({ where: { id: batch.id } })).payload
+      ).toBeNull();
+    } finally {
+      delete process.env.OPSKNIGHT_INGESTION_MODE;
+    }
+  });
+
+  it('preserves shared evidence when a hold is created after child pruning, including concurrent creation', async () => {
+    const input = envelope('shared-hold-race');
+    const [accepted] = await acceptPostgresBatch(input, [input.event], ['shared-hold-race']);
+    await consumeIngestionBatch();
+    const receipt = await prisma.ingestionReceipt.findUniqueOrThrow({
+      where: { id: accepted.receiptId },
+    });
+    const incident = await prisma.incident.findFirstOrThrow({ where: { serviceId } });
+    await prisma.ingestionReceipt.update({
+      where: { id: receipt.id },
+      data: { completedAt: new Date(0) },
+    });
+    expect(await pruneCompletedIngestionPayloads()).toBe(1);
+    let locked!: () => void;
+    let release!: () => void;
+    const acquired = new Promise<void>(resolve => {
+      locked = resolve;
+    });
+    const released = new Promise<void>(resolve => {
+      release = resolve;
+    });
+    const creatingHold = prisma.$transaction(async tx => {
+      await acquireRetentionResourceLock(tx, 'INCIDENT', incident.id);
+      locked();
+      await released;
+      return tx.dataRetentionHold.create({
+        data: {
+          scopeType: 'INCIDENT',
+          scopeId: incident.id,
+          reason: 'Protect shared context after child retention',
+          createdById: actorId,
+        },
+      });
+    });
+    await acquired;
+    try {
+      expect(await pruneSharedIngestionPayloads()).toBe(0);
+    } finally {
+      release();
+    }
+    const hold = await creatingHold;
+    expect(await pruneSharedIngestionPayloads()).toBe(0);
+    expect(
+      (await prisma.ingestionBatch.findUniqueOrThrow({ where: { id: receipt.batchId! } })).payload
+    ).not.toBeNull();
+    await prisma.dataRetentionHold.update({
+      where: { id: hold.id },
+      data: { releasedAt: new Date() },
+    });
+    expect(await pruneSharedIngestionPayloads()).toBeGreaterThanOrEqual(1);
+  });
+
+  it('reuses per-event receipts accepted by the older unshared batch path', async () => {
+    const input = envelope('older-batch');
+    const old = await acceptPostgresEvent(input, 'old-request:0');
+    const results = await acceptPostgresBatch(
+      input,
+      [input.event, envelope('new-child').event],
+      ['old-request:0', 'old-request:1']
+    );
+    expect(results[0]).toEqual(old);
+    expect(await prisma.ingestionReceipt.count()).toBe(2);
+    expect(await consumeIngestionBatch(8)).toBe(2);
+    expect(await prisma.incident.count({ where: { serviceId } })).toBe(2);
+  });
+
+  it('quarantines corrupted shared context without materializing an incident', async () => {
+    const input = envelope('corrupted-batch');
+    const [accepted] = await acceptPostgresBatch(input, [input.event], ['corrupted:0']);
+    const receipt = await prisma.ingestionReceipt.findUniqueOrThrow({
+      where: { id: accepted.receiptId },
+    });
+    await prisma.ingestionBatch.update({
+      where: { id: receipt.batchId! },
+      data: { payload: { value: { modified: true } } },
+    });
+    expect(await consumeIngestionBatch()).toBe(1);
+    expect(
+      (await prisma.ingestionReceipt.findUniqueOrThrow({ where: { id: receipt.id } })).status
+    ).toBe('DEAD');
+    expect(await prisma.incident.count({ where: { serviceId } })).toBe(0);
+    expect(await prisma.alert.count({ where: { serviceId } })).toBe(0);
+  });
+
+  it('rolls back an entire multi-event admission if capacity runs out after its first child', async () => {
+    process.env.OPSKNIGHT_INGESTION_MAX_PENDING = '64';
+    try {
+      for (let index = 0; index < 63; index++)
+        await acceptPostgresEvent(envelope(`existing-${index}`), `existing-${index}`);
+      const input = envelope('batch-a');
+      const events = [input.event, envelope('batch-b').event];
+      await expect(
+        acceptPostgresBatch(input, events, ['batch:0', 'batch:1'])
+      ).rejects.toBeInstanceOf(IngestionUnavailableError);
+      expect(await prisma.ingestionReceipt.count()).toBe(63);
+      expect(await prisma.ingestionBatch.count({ where: { serviceId } })).toBe(0);
+      expect(
+        (await prisma.ingestionBudget.findMany()).reduce((sum, row) => sum + row.pending, 0)
+      ).toBe(63);
+      await consumeIngestionBatch(8);
+      const results = await acceptPostgresBatch(input, events, ['batch:0', 'batch:1']);
+      expect(results).toHaveLength(2);
+      const again = await acceptPostgresBatch(input, events, ['batch:0', 'batch:1']);
+      expect(again).toEqual(results);
+    } finally {
+      delete process.env.OPSKNIGHT_INGESTION_MAX_PENDING;
+    }
+  });
+
   it('lets a concentrated partition use all bounded backlog shards', async () => {
     process.env.OPSKNIGHT_INGESTION_MAX_PENDING = '64';
     try {
@@ -647,7 +874,6 @@ describe('PostgreSQL ingestion durability', () => {
     expect(await prisma.incident.count({ where: { serviceId } })).toBe(2);
     expect(await prisma.incidentAutomationDecision.count({ where: { serviceId } })).toBe(1);
   });
-
 
   it('pauses new admission while allowing retries of durable receipts and processing to drain', async () => {
     const input = envelope();
