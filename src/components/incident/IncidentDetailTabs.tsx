@@ -154,73 +154,78 @@ export default function IncidentDetailTabs({
   return (
     <Tabs value={tab} onValueChange={handleTabChange} className={cn('w-full', className)}>
       <div className="rounded-xl border border-border bg-card shadow-2xs overflow-hidden text-card-foreground transition-all">
-        {/* Modern, Fluid Segmented Tabs Header */}
-        <div className="border-b border-border/70 bg-muted/25 px-2.5 sm:px-3.5 py-2 flex items-center justify-between gap-3">
-          <div className="min-w-0 flex-1 overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden touch-pan-x">
-            <TabsList className="inline-flex h-8 items-center justify-start gap-1 p-0.5 bg-muted/60 dark:bg-muted/30 border border-border/50 rounded-lg w-max">
+        {/* Modern, Fluid Responsive Tabs Header */}
+        <div className="border-b border-border/70 bg-muted/20 p-1.5 sm:px-3 sm:py-2 flex items-center justify-between gap-3">
+          <div className="w-full sm:w-auto sm:min-w-0 sm:flex-1">
+            <TabsList className="grid w-full grid-cols-3 h-auto gap-1 p-1 bg-muted/50 sm:bg-muted/60 dark:bg-muted/30 border border-border/50 rounded-xl sm:inline-flex sm:h-8 sm:w-max sm:items-center sm:rounded-lg">
               <TabsTrigger
                 value="overview"
-                className="shrink-0 gap-1.5 px-3 py-1 text-xs font-medium rounded-md text-muted-foreground hover:text-foreground data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-xs transition-all select-none"
+                className="flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-1.5 py-1.5 px-1 sm:px-2 text-[10.5px] sm:text-xs font-medium rounded-lg sm:rounded-md text-muted-foreground hover:text-foreground data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-xs transition-all select-none"
               >
-                <Settings2 className="h-3.5 w-3.5" />
-                <span>Overview</span>
+                <Settings2 className="h-3.5 w-3.5 shrink-0" />
+                <span className="leading-tight">Overview</span>
               </TabsTrigger>
               {automationContent && (
                 <TabsTrigger
                   value="automation"
-                  className="shrink-0 gap-1.5 px-3 py-1 text-xs font-medium rounded-md text-muted-foreground hover:text-foreground data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-xs transition-all select-none"
+                  className="flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-1.5 py-1.5 px-1 sm:px-2 text-[10.5px] sm:text-xs font-medium rounded-lg sm:rounded-md text-muted-foreground hover:text-foreground data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-xs transition-all select-none"
                 >
-                  <Workflow className="h-3.5 w-3.5" />
-                  <span>Automation</span>
+                  <Workflow className="h-3.5 w-3.5 shrink-0" />
+                  <span className="leading-tight">Automation</span>
                 </TabsTrigger>
               )}
               {responseContent && (
                 <TabsTrigger
                   value="response"
-                  className="shrink-0 gap-1.5 px-3 py-1 text-xs font-medium rounded-md text-muted-foreground hover:text-foreground data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-xs transition-all select-none"
+                  className="flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-1.5 py-1.5 px-1 sm:px-2 text-[10.5px] sm:text-xs font-medium rounded-lg sm:rounded-md text-muted-foreground hover:text-foreground data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-xs transition-all select-none"
                 >
-                  <Route className="h-3.5 w-3.5" />
-                  <span>Response activity</span>
+                  <Route className="h-3.5 w-3.5 shrink-0" />
+                  <span className="leading-tight sm:hidden">Activity</span>
+                  <span className="hidden sm:inline truncate">Response activity</span>
                 </TabsTrigger>
               )}
               {runbooksContent && (
                 <TabsTrigger
                   value="runbooks"
-                  className="shrink-0 gap-1.5 px-3 py-1 text-xs font-medium rounded-md text-muted-foreground hover:text-foreground data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-xs transition-all select-none"
+                  className="flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-1.5 py-1.5 px-1 sm:px-2 text-[10.5px] sm:text-xs font-medium rounded-lg sm:rounded-md text-muted-foreground hover:text-foreground data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-xs transition-all select-none"
                 >
-                  <BookOpen className="h-3.5 w-3.5" />
-                  <span>Runbooks</span>
+                  <BookOpen className="h-3.5 w-3.5 shrink-0" />
+                  <span className="leading-tight">Runbooks</span>
                 </TabsTrigger>
               )}
               <TabsTrigger
                 value="timeline"
-                className="shrink-0 gap-1.5 px-3 py-1 text-xs font-medium rounded-md text-muted-foreground hover:text-foreground data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-xs transition-all select-none"
+                className="flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-1.5 py-1.5 px-1 sm:px-2 text-[10.5px] sm:text-xs font-medium rounded-lg sm:rounded-md text-muted-foreground hover:text-foreground data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-xs transition-all select-none"
               >
-                <History className="h-3.5 w-3.5" />
-                <span>Timeline</span>
-                {typeof eventCount === 'number' && (
-                  <span className="ml-1 inline-flex items-center rounded-full bg-muted-foreground/15 px-1.5 py-0.2 text-[10px] font-semibold text-muted-foreground">
-                    {eventCount}
-                  </span>
-                )}
+                <History className="h-3.5 w-3.5 shrink-0" />
+                <span className="inline-flex items-center gap-1 leading-tight">
+                  Timeline
+                  {typeof eventCount === 'number' && (
+                    <span className="rounded-full bg-muted-foreground/15 px-1.5 py-0.2 text-[9.5px] sm:text-[10px] font-semibold text-muted-foreground">
+                      {eventCount}
+                    </span>
+                  )}
+                </span>
               </TabsTrigger>
               <TabsTrigger
                 value="postmortem"
-                className="shrink-0 gap-1.5 px-3 py-1 text-xs font-medium rounded-md text-muted-foreground hover:text-foreground data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-xs transition-all select-none"
+                className="flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-1.5 py-1.5 px-1 sm:px-2 text-[10.5px] sm:text-xs font-medium rounded-lg sm:rounded-md text-muted-foreground hover:text-foreground data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-xs transition-all select-none"
               >
-                <FileText className="h-3.5 w-3.5" />
-                <span>Postmortem</span>
-                {postmortemStatus && (
-                  <span
-                    className={cn(
-                      'inline-block w-1.5 h-1.5 rounded-full ml-0.5',
-                      postmortemStatus === 'PUBLISHED'
-                        ? 'bg-emerald-500 ring-2 ring-emerald-500/20'
-                        : 'bg-amber-500 ring-2 ring-amber-500/20'
-                    )}
-                    title={`Status: ${postmortemStatus}`}
-                  />
-                )}
+                <FileText className="h-3.5 w-3.5 shrink-0" />
+                <span className="inline-flex items-center gap-1 leading-tight">
+                  Postmortem
+                  {postmortemStatus && (
+                    <span
+                      className={cn(
+                        'inline-block w-1.5 h-1.5 rounded-full',
+                        postmortemStatus === 'PUBLISHED'
+                          ? 'bg-emerald-500 ring-2 ring-emerald-500/20'
+                          : 'bg-amber-500 ring-2 ring-amber-500/20'
+                      )}
+                      title={`Status: ${postmortemStatus}`}
+                    />
+                  )}
+                </span>
               </TabsTrigger>
             </TabsList>
           </div>
