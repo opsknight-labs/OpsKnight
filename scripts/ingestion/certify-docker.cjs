@@ -244,7 +244,14 @@ async function main() {
     supportingRoles.map(item => [item.poolName, String(item.pool)])
   );
   const fullStack = process.env.INGESTION_DOCKER_FULL_STACK === 'true';
+  const usePgBouncer = process.env.INGESTION_DOCKER_PGBOUNCER === 'true';
+  const pgBouncerCompatibility = process.env.INGESTION_PGBOUNCER_COMPATIBILITY !== 'false';
+  const pgBouncerName = `${prefix}-pgbouncer`;
   const capacity = calculateRuntimeCapacity({
+    PGBOUNCER_ENABLED: String(usePgBouncer),
+    PGBOUNCER_REPLICAS: '1',
+    PGBOUNCER_DEFAULT_POOL_SIZE: '15',
+    PGBOUNCER_RESERVE_POOL_SIZE: '5',
     ...supportingPools,
     OPSKNIGHT_RUNTIME_MODE: 'split',
     WEB_REPLICAS: String(webReplicas),
@@ -270,6 +277,11 @@ async function main() {
   const containerUrl = new URL(localUrl.toString());
   containerUrl.hostname = databaseContainer;
   containerUrl.port = '5432';
+  const pooledUrl = new URL(containerUrl.toString());
+  pooledUrl.hostname = pgBouncerName;
+  pooledUrl.port = '6432';
+  if (pgBouncerCompatibility) pooledUrl.searchParams.set('pgbouncer', 'true');
+  else pooledUrl.searchParams.delete('pgbouncer');
   const shared = {
     ...supportingPools,
     NODE_ENV: 'production',
@@ -289,6 +301,7 @@ async function main() {
     TRUST_PROXY_HEADERS: 'false',
     ALLOW_INSECURE_SECRETS: 'true',
     DATABASE_URL: containerUrl.toString(),
+    ...(usePgBouncer ? { WEB_DATABASE_URL: pooledUrl.toString(), PGBOUNCER_ENABLED: 'true' } : {}),
   };
   const environmentFile = path.join(directory, 'candidate.env');
   writeFileSync(
@@ -302,6 +315,100 @@ async function main() {
   createdNetwork = true;
   await invoke(['network', 'connect', network, databaseContainer]);
   attached = true;
+  if (usePgBouncer) {
+    // Reuse the repository's pinned base and production configuration entrypoint.
+    const poolImageRef =
+      'ghcr.io/icoretech/pgbouncer-docker:1.26.0@sha256:f6537e614011f3d95349847fdd47f1b3a96be86eab99015b5b5918f732884a75';
+    try {
+      await invoke(['image', 'inspect', poolImageRef]);
+    } catch {
+      await invoke(['pull', poolImageRef]);
+    }
+    const poolImage = JSON.parse(await invoke(['image', 'inspect', poolImageRef]))[0];
+    const poolEnv = path.join(directory, 'pool.env');
+    const poolSettings = {
+      FORCE_DYNAMIC_CONFIG: 'true',
+      PGBOUNCER_DB_HOST: databaseContainer,
+      PGBOUNCER_DB_PORT: '5432',
+      PGBOUNCER_DB_NAME: localUrl.pathname.slice(1),
+      PGBOUNCER_DB_USER: decodeURIComponent(localUrl.username),
+      PGBOUNCER_DB_PASSWORD: decodeURIComponent(localUrl.password),
+      PGBOUNCER_SERVER_TLS_SSLMODE: 'disable',
+      PGBOUNCER_POOL_MODE: 'transaction',
+      PGBOUNCER_DEFAULT_POOL_SIZE: '15',
+      PGBOUNCER_RESERVE_POOL_SIZE: '5',
+      PGPASSWORD: decodeURIComponent(localUrl.password),
+      PGCONNECT_TIMEOUT: '2',
+    };
+    writeFileSync(
+      poolEnv,
+      Object.entries(poolSettings)
+        .map(([key, value]) => `${key}=${value}`)
+        .join('\n') + '\n',
+      { mode: 0o600 }
+    );
+    containers.push(pgBouncerName);
+    await invoke([
+      'run',
+      '--detach',
+      '--name',
+      pgBouncerName,
+      '--network',
+      network,
+      '--label',
+      `opsknight.ingestion-cert-run=${runId}`,
+      '--cpus',
+      '1',
+      '--memory',
+      '128m',
+      '--env-file',
+      poolEnv,
+      '--mount',
+      `type=bind,source=${path.resolve('deploy/images/pgbouncer/entrypoint.sh')},target=/docker-entrypoint.sh,readonly`,
+      '--entrypoint',
+      '/docker-entrypoint.sh',
+      poolImage.Id,
+    ]);
+    let poolReady = false;
+    for (let attempt = 0; attempt < 40; attempt++) {
+      try {
+        poolReady =
+          (await invoke([
+            'exec',
+            '--env-file',
+            poolEnv,
+            pgBouncerName,
+            '/usr/bin/psql',
+            '-h',
+            '127.0.0.1',
+            '-p',
+            '6432',
+            '-U',
+            decodeURIComponent(localUrl.username),
+            '-d',
+            localUrl.pathname.slice(1),
+            '-tAc',
+            'SELECT 1',
+          ])) === '1';
+      } catch {
+        /* fixture pool starting */
+      }
+      if (poolReady) break;
+      await sleep(500);
+    }
+    assert.ok(poolReady, 'Owned PgBouncer did not authenticate to the test database');
+    evidence.pgbouncer = {
+      imageId: poolImage.Id,
+      webOnly: true,
+      poolMode: 'transaction',
+      prismaCompatibilityMode: pgBouncerCompatibility,
+      maxPreparedStatements: 100,
+      defaultPool: 15,
+      reservePool: 5,
+      tls: 'disabled on owned local fixture network only',
+      resourcesBefore: await resources(pgBouncerName),
+    };
+  }
   let exerciseNotification;
   if (process.env.INGESTION_DOCKER_SMTP_CHECK === 'true') {
     assert.ok(fullStack, 'SMTP delivery checks require every supporting worker role');
@@ -434,6 +541,38 @@ async function main() {
     }
   }
   const processNames = [...webNames, ...workers, ...supportingProcesses];
+  if (usePgBouncer) {
+    const addresses = await Promise.all(
+      [pgBouncerName, ...webNames, ...workers].map(async name => {
+        const container = await inspect(name);
+        // eslint-disable-next-line security/detect-object-injection -- Network name is generated from this run's UUID, never request input.
+        return [name, container.NetworkSettings.Networks[network].IPAddress];
+      })
+    );
+    const connections = await prisma.$queryRaw`
+      SELECT host(client_addr) AS address, count(*)::int AS connections
+      FROM pg_stat_activity WHERE datname = current_database()
+      GROUP BY client_addr`;
+    const count = name =>
+      connections.find(item => item.address === addresses.find(([key]) => key === name)[1])
+        ?.connections || 0;
+    assert.ok(count(pgBouncerName) > 0, 'PgBouncer must own application server connections');
+    assert.equal(
+      webNames.reduce((total, name) => total + count(name), 0),
+      0,
+      'Web replicas must not bypass PgBouncer'
+    );
+    assert.ok(
+      workers.every(name => count(name) > 0),
+      'Ingestion workers must remain direct'
+    );
+    evidence.pgbouncer.routing = {
+      observedServerConnections: count(pgBouncerName),
+      directWebConnections: 0,
+      directWorkerConnections: workers.reduce((total, name) => total + count(name), 0),
+      verifiedThrough: 'PostgreSQL client addresses matched to owned container IPs',
+    };
+  }
   const proxyRef = process.env.INGESTION_PROXY_IMAGE || 'nginx:stable-alpine';
   try {
     await invoke(['image', 'inspect', proxyRef]);
@@ -486,6 +625,7 @@ location / { proxy_pass http://gateways; proxy_http_version 1.1; proxy_set_heade
   };
   evidence.topology = {
     fullStackProcesses: fullStack,
+    webUsesPgBouncer: usePgBouncer,
     supportingRoles: fullStack
       ? supportingRoles.map(({ role, pool }) => ({ role, replicas: 1, pool }))
       : [],
@@ -587,6 +727,7 @@ location / { proxy_pass http://gateways; proxy_http_version 1.1; proxy_set_heade
     child.once('exit', resolve);
   });
   evidence.resourcesAfterLoad = await Promise.all(processNames.map(resources));
+  if (usePgBouncer) evidence.pgbouncer.resourcesAfter = await resources(pgBouncerName);
   if (process.env.INGESTION_HTTP_PROVIDER_CHECKS === 'true') {
     for (const name of processNames) {
       await assertCredentialSentinelAbsentFromLogs(name);

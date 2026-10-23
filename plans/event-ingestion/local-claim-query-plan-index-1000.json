@@ -1,0 +1,287 @@
+{
+  "recordedAt": "2026-10-23T21:27:16.337Z",
+  "scope": "Production claim SQL with unique-key synthetic backlog, 10% critical; fixture rows and claims rolled back atomically. No concurrent workers or durability/capacity certification.",
+  "queryFingerprint": "81944ad18f90f4d11a79ab8a48c950840521ec54f6d7b347f7cbfd407193af35",
+  "retainedHistory": 4869,
+  "experimentalSequenceIndex": true,
+  "backlog": 1000,
+  "claimed": 4,
+  "executionMs": 5.092,
+  "planningMs": 2.285,
+  "plan": {
+    "node": "ModifyTable",
+    "relation": "IngestionReceipt",
+    "actualRows": 4,
+    "loops": 1,
+    "sharedHit": 3799,
+    "sharedRead": 0,
+    "children": [
+      {
+        "node": "Limit",
+        "actualRows": 1,
+        "loops": 1,
+        "sharedHit": 428,
+        "sharedRead": 0,
+        "children": [
+          {
+            "node": "LockRows",
+            "actualRows": 1,
+            "loops": 1,
+            "sharedHit": 428,
+            "sharedRead": 0,
+            "children": [
+              {
+                "node": "Nested Loop",
+                "actualRows": 1,
+                "loops": 1,
+                "sharedHit": 427,
+                "sharedRead": 0,
+                "children": [
+                  {
+                    "node": "Index Scan",
+                    "relation": "IngestionReceipt",
+                    "index": "IngestionReceipt_claim_sequence_idx",
+                    "actualRows": 1,
+                    "loops": 1,
+                    "rowsRemoved": 9,
+                    "sharedHit": 8,
+                    "sharedRead": 0
+                  },
+                  {
+                    "node": "Index Scan",
+                    "relation": "IngestionReceipt",
+                    "index": "IngestionReceipt_unfinished_partition_idx",
+                    "actualRows": 1000,
+                    "loops": 1,
+                    "rowsRemoved": 0,
+                    "sharedHit": 419,
+                    "sharedRead": 0
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "node": "Limit",
+        "actualRows": 1,
+        "loops": 1,
+        "sharedHit": 423,
+        "sharedRead": 0,
+        "children": [
+          {
+            "node": "LockRows",
+            "actualRows": 1,
+            "loops": 1,
+            "sharedHit": 423,
+            "sharedRead": 0,
+            "children": [
+              {
+                "node": "Nested Loop",
+                "actualRows": 1,
+                "loops": 1,
+                "sharedHit": 422,
+                "sharedRead": 0,
+                "children": [
+                  {
+                    "node": "Index Scan",
+                    "relation": "IngestionReceipt",
+                    "index": "IngestionReceipt_claim_sequence_idx",
+                    "actualRows": 1,
+                    "loops": 1,
+                    "rowsRemoved": 0,
+                    "sharedHit": 3,
+                    "sharedRead": 0
+                  },
+                  {
+                    "node": "Index Scan",
+                    "relation": "IngestionReceipt",
+                    "index": "IngestionReceipt_unfinished_partition_idx",
+                    "actualRows": 1000,
+                    "loops": 1,
+                    "rowsRemoved": 0,
+                    "sharedHit": 419,
+                    "sharedRead": 0
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "node": "Limit",
+        "actualRows": 2,
+        "loops": 1,
+        "sharedHit": 848,
+        "sharedRead": 0,
+        "children": [
+          {
+            "node": "Aggregate",
+            "actualRows": 1,
+            "loops": 1,
+            "sharedHit": 0,
+            "sharedRead": 0,
+            "children": [
+              {
+                "node": "CTE Scan",
+                "actualRows": 1,
+                "loops": 1,
+                "sharedHit": 0,
+                "sharedRead": 0
+              }
+            ]
+          },
+          {
+            "node": "Aggregate",
+            "actualRows": 1,
+            "loops": 1,
+            "sharedHit": 0,
+            "sharedRead": 0,
+            "children": [
+              {
+                "node": "CTE Scan",
+                "actualRows": 1,
+                "loops": 1,
+                "sharedHit": 0,
+                "sharedRead": 0
+              }
+            ]
+          },
+          {
+            "node": "LockRows",
+            "actualRows": 2,
+            "loops": 1,
+            "sharedHit": 848,
+            "sharedRead": 0,
+            "children": [
+              {
+                "node": "Nested Loop",
+                "actualRows": 2,
+                "loops": 1,
+                "sharedHit": 846,
+                "sharedRead": 0,
+                "children": [
+                  {
+                    "node": "Index Scan",
+                    "relation": "IngestionReceipt",
+                    "index": "IngestionReceipt_claim_sequence_idx",
+                    "actualRows": 2,
+                    "loops": 1,
+                    "rowsRemoved": 1,
+                    "sharedHit": 6,
+                    "sharedRead": 0,
+                    "children": [
+                      {
+                        "node": "Append",
+                        "actualRows": 2,
+                        "loops": 1,
+                        "sharedHit": 0,
+                        "sharedRead": 0,
+                        "children": [
+                          {
+                            "node": "CTE Scan",
+                            "actualRows": 1,
+                            "loops": 1,
+                            "sharedHit": 0,
+                            "sharedRead": 0
+                          },
+                          {
+                            "node": "CTE Scan",
+                            "actualRows": 1,
+                            "loops": 1,
+                            "sharedHit": 0,
+                            "sharedRead": 0
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "node": "Index Scan",
+                    "relation": "IngestionReceipt",
+                    "index": "IngestionReceipt_unfinished_partition_idx",
+                    "actualRows": 1000,
+                    "loops": 2,
+                    "rowsRemoved": 0,
+                    "sharedHit": 840,
+                    "sharedRead": 0
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "node": "Nested Loop",
+        "actualRows": 4,
+        "loops": 1,
+        "sharedHit": 3667,
+        "sharedRead": 0,
+        "children": [
+          {
+            "node": "Nested Loop",
+            "actualRows": 4,
+            "loops": 1,
+            "sharedHit": 1985,
+            "sharedRead": 0,
+            "children": [
+              {
+                "node": "Index Scan",
+                "relation": "IngestionReceipt",
+                "index": "IngestionReceipt_claim_sequence_idx",
+                "actualRows": 1000,
+                "loops": 1,
+                "rowsRemoved": 0,
+                "sharedHit": 286,
+                "sharedRead": 0
+              },
+              {
+                "node": "Append",
+                "actualRows": 4,
+                "loops": 1000,
+                "sharedHit": 1699,
+                "sharedRead": 0,
+                "children": [
+                  {
+                    "node": "CTE Scan",
+                    "actualRows": 1,
+                    "loops": 1000,
+                    "sharedHit": 428,
+                    "sharedRead": 0
+                  },
+                  {
+                    "node": "CTE Scan",
+                    "actualRows": 1,
+                    "loops": 1000,
+                    "sharedHit": 423,
+                    "sharedRead": 0
+                  },
+                  {
+                    "node": "CTE Scan",
+                    "actualRows": 2,
+                    "loops": 1000,
+                    "sharedHit": 848,
+                    "sharedRead": 0
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "node": "Index Scan",
+            "relation": "IngestionReceipt",
+            "index": "IngestionReceipt_unfinished_partition_idx",
+            "actualRows": 1000,
+            "loops": 4,
+            "rowsRemoved": 0,
+            "sharedHit": 1682,
+            "sharedRead": 0
+          }
+        ]
+      }
+    ]
+  }
+}

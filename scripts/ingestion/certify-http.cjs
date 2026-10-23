@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/no-require-imports -- Executable CommonJS harness loads the shared TypeScript fixture runtime. */
+/* eslint-disable security/detect-non-literal-fs-filename -- Evidence paths belong to this local fixture and its private temporary directory. */
 require('./isolated-runtime.cjs');
 const assert = require('node:assert/strict');
 const { spawn, spawnSync } = require('node:child_process');
@@ -25,7 +27,7 @@ async function main() {
   const url = new URL(process.env.DATABASE_URL);
   assert.match(
     url.pathname,
-    /^\/ingestion_test_http(?:_[a-z0-9]+)*$/,
+    /^\/ingestion_test_http[_a-z0-9]*$/,
     'HTTP fixture requires its own dedicated database'
   );
   const service = await prisma.service.create({ data: { name: `HTTP load ${runId}` } });
@@ -99,6 +101,14 @@ async function main() {
   const lifecycleChecks =
     process.env.INGESTION_HTTP_LIFECYCLE_CHECKS === 'true'
       ? await require('./lifecycle-http-checks.cjs')({
+          prisma,
+          baseUrl,
+          consumeIngestionBatch: external ? async () => 0 : consumeIngestionBatch,
+        })
+      : undefined;
+  const quotaReplayChecks =
+    process.env.INGESTION_HTTP_QUOTA_REPLAY_CHECKS === 'true'
+      ? await require('./quota-replay-http-checks.cjs')({
           prisma,
           baseUrl,
           consumeIngestionBatch: external ? async () => 0 : consumeIngestionBatch,
@@ -236,6 +246,7 @@ async function main() {
       : 'Local production HTTP gateway plus independent incident consumer and isolated PostgreSQL; not HA topology certification',
     providerChecks,
     lifecycleChecks,
+    quotaReplayChecks,
     warmup,
     databaseProfile,
     fixtureServiceId: service.id,
