@@ -152,13 +152,16 @@ module.exports = async function providerHttpChecks({ prisma, baseUrl, consumeIng
     const unauthorized = await post({
       [credentialHeader]: credential('invalid-fixture-credential'),
     });
-    assert.ok(unauthorized.status >= 400, `${fixture.type} invalid credentials accepted`);
+    assert.ok(
+      [400, 401, 403].includes(unauthorized.status),
+      `${fixture.type} invalid credential rejection failed with status ${unauthorized.status}`
+    );
     if (fixture.signed) {
       const invalidSignature = await post({ [signatureHeader]: 'invalid' });
       assert.equal(
         invalidSignature.status,
         401,
-        `${fixture.type} invalid signature/token accepted`
+        `${fixture.type} invalid signature/token rejection failed: ${await invalidSignature.text()}`
       );
     }
     assert.equal(await prisma.ingestionReceipt.count({ where: { serviceId: service.id } }), 0);
