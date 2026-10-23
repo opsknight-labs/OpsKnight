@@ -1,0 +1,74 @@
+rule_files:
+  - opsknight-alerts.yaml
+evaluation_interval: 1m
+tests:
+  - interval: 1m
+    input_series:
+      - series: 'opsknight_ingestion_unfinished{status="DEAD",instance="gateway-a"}'
+        values: '1x4'
+      - series: 'opsknight_ingestion_unfinished{status="DEAD",instance="gateway-b"}'
+        values: '1x4'
+    alert_rule_test:
+      - eval_time: 0m
+        alertname: OpsKnightIngestionDeadLetter
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+            exp_annotations:
+              summary: Accepted ingestion work requires operator recovery
+              description: A dead letter blocks later events for its incident identity. Diagnose and replay it, or explicitly archive it with a reason after reviewing lifecycle impact. Do not skip it automatically.
+  - interval: 1m
+    input_series:
+      - series: opsknight_ingestion_oldest_unfinished_age_seconds
+        values: '119 119 180 240 300'
+    alert_rule_test:
+      - eval_time: 1m
+        alertname: OpsKnightIngestionBacklogStale
+        exp_alerts: []
+      - eval_time: 3m
+        alertname: OpsKnightIngestionBacklogStale
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+            exp_annotations:
+              summary: Accepted events have waited more than two minutes
+              description: Check ingestion workers, database capacity and blocked identities. Incident SLA clocks start at activation; ingestion delay needs separate response.
+  - interval: 1m
+    input_series:
+      - series: opsknight_ingestion_enabled
+        values: '1x4'
+      - series: opsknight_ingestion_metrics_collection_success
+        values: '0x4'
+    alert_rule_test:
+      - eval_time: 1m
+        alertname: OpsKnightIngestionEvidenceUnavailable
+        exp_alerts: []
+      - eval_time: 2m
+        alertname: OpsKnightIngestionEvidenceUnavailable
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+            exp_annotations:
+              summary: Durable ingestion queue evidence is unavailable
+
+  - interval: 1m
+    input_series:
+      - series: 'opsknight_ingestion_enabled{job="opsknight",instance="gateway-a",cluster="production"}'
+        values: '1x4'
+      - series: 'opsknight_ingestion_metrics_collection_success{job="opsknight",instance="gateway-a",cluster="production"}'
+        values: '0x4'
+      - series: 'opsknight_ingestion_enabled{job="opsknight",instance="gateway-b",cluster="production"}'
+        values: '0x4'
+      - series: 'opsknight_ingestion_metrics_collection_success{job="opsknight",instance="gateway-b",cluster="production"}'
+        values: '1x4'
+    alert_rule_test:
+      - eval_time: 2m
+        alertname: OpsKnightIngestionEvidenceUnavailable
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              job: opsknight
+              instance: gateway-a
+              cluster: production
+            exp_annotations:
+              summary: Durable ingestion queue evidence is unavailable

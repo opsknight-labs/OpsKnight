@@ -163,7 +163,10 @@ module.exports = async function providerHttpChecks({ prisma, baseUrl, consumeIng
     assert.equal(await prisma.alert.count({ where: { serviceId: service.id } }), fixture.count);
     assert.equal(await prisma.incident.count({ where: { serviceId: service.id } }), fixture.count);
     const stored = JSON.stringify(
-      await prisma.ingestionReceipt.findMany({ where: { serviceId: service.id }, select: { envelope: true, result: true } })
+      await prisma.ingestionReceipt.findMany({
+        where: { serviceId: service.id },
+        select: { envelope: true, result: true },
+      })
     );
     assert.ok(!stored.includes('fixture-credential-must-not-persist'));
     evidence.push({

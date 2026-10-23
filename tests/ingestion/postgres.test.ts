@@ -30,6 +30,7 @@ import {
 } from '@/lib/ingestion/retention';
 import { checksum } from '@/lib/automation/cache';
 import type { IntegrationEventEnvelope } from '@/lib/automation/runtime';
+import { collectIngestionQueueMetrics } from '@/lib/ingestion/metrics';
 import { acceptPostgresBatch, decodeReceiptEnvelope } from '@/lib/ingestion/batches';
 import { withIngestionDelivery } from '@/lib/ingestion/admission';
 import { transformPrometheusToEvent, type PrometheusAlert } from '@/lib/integrations/prometheus';
@@ -451,6 +452,12 @@ describe('PostgreSQL ingestion durability', () => {
       leaseExpiresAt: null,
       failureCode: 'RETRIES_EXHAUSTED',
     });
+    expect(await collectIngestionQueueMetrics()).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ status: 'DEAD', count: 1 }),
+        expect.objectContaining({ status: 'PENDING', count: 1 }),
+      ])
+    );
     expect(await claimPostgresEvents(4)).toHaveLength(0);
     await applyIngestionCommand(
       {

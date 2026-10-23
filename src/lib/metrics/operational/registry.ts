@@ -29,6 +29,38 @@ const FORBIDDEN_LABELS = new Set([
 
 export const OPERATIONAL_METRICS = [
   {
+    name: 'opsknight_ingestion_enabled',
+    help: 'Durable PostgreSQL ingestion enabled on this gateway',
+    kind: 'gauge',
+    labels: [],
+    scope: 'instance',
+    estimatedMaxSeries: 1,
+  },
+  {
+    name: 'opsknight_ingestion_metrics_collection_success',
+    help: 'Persistent ingestion queue evidence is available',
+    kind: 'gauge',
+    labels: [],
+    scope: 'cluster_snapshot',
+    estimatedMaxSeries: 1,
+  },
+  {
+    name: 'opsknight_ingestion_unfinished',
+    help: 'Committed unfinished ingestion receipts by bounded status',
+    kind: 'gauge',
+    labels: ['status'],
+    scope: 'cluster_snapshot',
+    estimatedMaxSeries: 3,
+  },
+  {
+    name: 'opsknight_ingestion_oldest_unfinished_age_seconds',
+    help: 'Database-clock age of the oldest unfinished ingestion receipt',
+    kind: 'gauge',
+    labels: [],
+    scope: 'cluster_snapshot',
+    estimatedMaxSeries: 1,
+  },
+  {
     name: 'opsknight_ingestion_acceptance_total',
     help: 'Durably committed ingestion admissions, separated from duplicate delivery retries',
     kind: 'counter',
