@@ -35,6 +35,7 @@ import { acceptPostgresBatch, decodeReceiptEnvelope } from '@/lib/ingestion/batc
 import { withIngestionDelivery } from '@/lib/ingestion/admission';
 import { transformPrometheusToEvent, type PrometheusAlert } from '@/lib/integrations/prometheus';
 import { acquireRetentionResourceLock } from '@/lib/retention/resource-lock';
+import { getIngestionPolicy } from '@/lib/ingestion/policy';
 
 // Fail closed rather than skipping certification or truncating a shared database.
 const database = new URL(process.env.DATABASE_URL ?? 'http://missing');
@@ -93,6 +94,56 @@ afterAll(async () => {
 });
 
 describe('PostgreSQL ingestion durability', () => {
+  it('applies live capacity settings, preserves accepted work and fences stale admin writes', async () => {
+    const initial = await getIngestionPolicy();
+    const policy = { ...initial.policy, maxPending: 64, payloadRetentionHours: 1 };
+    const writes = await Promise.allSettled([
+      applyIngestionCommand({ action: 'configure', expectedRevision: 0, policy }, actorId),
+      applyIngestionCommand({ action: 'configure', expectedRevision: 0, policy }, actorId),
+    ]);
+    expect(writes.filter(result => result.status === 'fulfilled')).toHaveLength(1);
+    expect((await getIngestionPolicy()).revision).toBe(1);
+    for (let index = 0; index < 64; index++)
+      await acceptPostgresEvent(envelope(`online-${index}`), `online-${index}`);
+    await expect(acceptPostgresEvent(envelope('online-overflow'))).rejects.toBeInstanceOf(
+      IngestionUnavailableError
+    );
+    await applyIngestionCommand({ action: 'pause' }, actorId);
+    expect(await getIngestionPolicy()).toEqual({ paused: true, revision: 2, policy });
+    await applyIngestionCommand({ action: 'resume' }, actorId);
+    expect(await getIngestionPolicy()).toEqual({ paused: false, revision: 3, policy });
+    await expect(
+      applyIngestionCommand(
+        { action: 'configure', expectedRevision: 1, policy: initial.policy },
+        actorId
+      )
+    ).rejects.toThrow('settings changed');
+    expect(await prisma.ingestionReceipt.count()).toBe(64);
+    await consumeIngestionBatch(1);
+    await prisma.ingestionReceipt.updateMany({
+      where: { status: 'COMPLETED' },
+      data: { completedAt: new Date(Date.now() - 2 * 3600000) },
+    });
+    expect(await pruneCompletedIngestionPayloads()).toBe(1);
+    await applyIngestionCommand(
+      { action: 'configure', expectedRevision: 3, policy: { ...policy, maxPending: 128 } },
+      actorId
+    );
+    await acceptPostgresEvent(envelope('online-new-capacity'));
+    expect(await prisma.ingestionReceipt.count()).toBe(65);
+  });
+
+  it('fails closed on malformed persisted operational policy', async () => {
+    await prisma.systemConfig.create({
+      data: { key: 'ingestion_control', value: { paused: false, policy: { concurrency: 999 } } },
+    });
+    await expect(acceptPostgresEvent(envelope('bad-policy'))).rejects.toThrow();
+    expect(await prisma.ingestionReceipt.count()).toBe(0);
+    expect((await prisma.ingestionBudget.aggregate({ _sum: { pending: true } }))._sum.pending).toBe(
+      0
+    );
+  });
+
   it('exposes delayed arrival and processing separately while SLA clocks start at operational activation', async () => {
     const input = envelope('delayed-clock');
     input.receivedAt = new Date(Date.now() - 2 * 3600000);

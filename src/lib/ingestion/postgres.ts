@@ -4,7 +4,7 @@ import prisma from '@/lib/prisma';
 import { runReadCommittedTransaction } from '@/lib/db-utils';
 import type { IntegrationEventEnvelope } from '@/lib/automation/runtime';
 import { getIngestionAutomationConfig } from '@/lib/automation/settings';
-import { ingestionConfig } from './config';
+import { getIngestionPolicy } from './policy';
 import {
   addOperationalMetric,
   observeOperationalHistogram,
@@ -50,7 +50,6 @@ export async function acceptPostgresEvent(
     ...content
   } = envelope;
   const contentHash = digest(content);
-  const config = ingestionConfig();
   const preferredBudgetShard = Number.parseInt(partition.slice(0, 8), 16) % 64;
   const idempotencyKey = digest([
     input.serviceId,
@@ -74,13 +73,8 @@ export async function acceptPostgresEvent(
         throw new IngestionConflictError('Delivery key reused with different content');
       return { receiptId: existing.id, duplicate: true };
     }
-    const control = await tx.systemConfig.findUnique({ where: { key: 'ingestion_control' } });
-    if (
-      control?.value &&
-      typeof control.value === 'object' &&
-      !Array.isArray(control.value) &&
-      control.value.paused === true
-    ) {
+    const { paused, policy: config } = await getIngestionPolicy(tx);
+    if (paused) {
       throw new IngestionUnavailableError('Ingestion admission paused');
     }
     const acceptedEnvelope = encodeEnvelope(

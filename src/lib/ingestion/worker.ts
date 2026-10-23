@@ -7,6 +7,7 @@ import { decodeReceiptEnvelope } from './batches';
 import { IngestionPayloadError, IngestionLeaseLostError, retryDelayMs } from './contract';
 import { claimPostgresEvents, failPostgresEvent } from './postgres';
 import { ingestionConfig } from './config';
+import { getIngestionPolicy } from './policy';
 import {
   addOperationalMetric,
   observeOperationalHistogram,
@@ -99,10 +100,17 @@ export function startIngestionWorker(): void {
     let failures = 0;
     let lastHeartbeat = 0;
     let nextRetention = 0;
+    let nextPolicy = 0;
+    let policy = config;
     while (!stopping) {
       let count = 0;
       try {
-        count = await consumeIngestionBatch(config.concurrency);
+        if (Date.now() >= nextPolicy) {
+          const settings = await getIngestionPolicy();
+          policy = { ...config, ...settings.policy };
+          nextPolicy = Date.now() + 1000;
+        }
+        count = await consumeIngestionBatch(policy.concurrency);
         failures = 0;
         updateIngestionWorkerHealth({ lastSuccessAt: Date.now(), faulted: false });
       } catch {
@@ -134,7 +142,7 @@ export function startIngestionWorker(): void {
               wake = null;
               resolve();
             },
-            failures ? retryDelayMs(failures) : config.pollMs * (0.75 + Math.random() * 0.5)
+            failures ? retryDelayMs(failures) : policy.pollMs * (0.75 + Math.random() * 0.5)
           );
           wake = () => {
             clearTimeout(timer);
