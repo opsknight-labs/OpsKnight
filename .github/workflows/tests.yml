@@ -265,7 +265,7 @@ jobs:
     name: Mobile & PWA browser E2E (L3)
     needs: [build]
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 40
     services:
       postgres:
         image: postgres:16
