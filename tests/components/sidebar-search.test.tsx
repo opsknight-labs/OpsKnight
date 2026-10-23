@@ -79,4 +79,15 @@ describe('SidebarSearch component', () => {
 
     global.fetch = originalFetch;
   });
+
+  it('opens and displays quick actions on the first click or focus without requiring a second click', async () => {
+    render(<SidebarSearch />);
+    const input = screen.getByPlaceholderText('Search...');
+    fireEvent.focus(input);
+
+    await waitFor(() => {
+      expect(screen.getByText('Quick Actions')).toBeDefined();
+      expect(screen.getByText('View all incidents')).toBeDefined();
+    });
+  });
 });

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState, useMemo, useCallback } from 'react';
+import { useEffect, useRef, useState, useMemo, useCallback, useSyncExternalStore } from 'react';
 import { useRouter } from 'next/navigation';
 import { useCreateIncidentModal } from '@/contexts/IncidentCreationModalContext';
 import { Command as CommandPrimitive } from 'cmdk';
@@ -11,7 +11,7 @@ import {
   CommandGroup,
   CommandItem,
 } from '@/components/ui/shadcn/command';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/shadcn/popover';
+import { Popover, PopoverContent, PopoverAnchor } from '@/components/ui/shadcn/popover';
 import {
   Zap,
   Wrench,
@@ -63,14 +63,7 @@ type NavigationPage = {
 
 const RECENT_SEARCHES_KEY = 'OpsKnight-recent-searches-v2';
 const MAX_RECENT_SEARCHES = 5;
-const TYPE_ORDER = [
-  'incident',
-  'service',
-  'team',
-  'user',
-  'policy',
-  'postmortem',
-] as const;
+const TYPE_ORDER = ['incident', 'service', 'team', 'user', 'policy', 'postmortem'] as const;
 
 const NAVIGATION_PAGES: NavigationPage[] = [
   {
@@ -167,7 +160,15 @@ const NAVIGATION_PAGES: NavigationPage[] = [
     subtitle: 'Integrations, API keys & preferences',
     href: '/settings',
     icon: Wrench,
-    keywords: ['settings', 'setting', 'configuration', 'integrations', 'api keys', 'slack', 'profile'],
+    keywords: [
+      'settings',
+      'setting',
+      'configuration',
+      'integrations',
+      'api keys',
+      'slack',
+      'profile',
+    ],
   },
 ];
 
@@ -250,70 +251,108 @@ const SearchFooter = () => (
   </div>
 );
 
-export default function SidebarSearch() {
-  const [open, setOpen] = useState(false);
-  const [query, setQuery] = useState('');
-  const [results, setResults] = useState<SearchResult[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
-  const [recentSearches, setRecentSearches] = useState<RecentSearch[]>([]);
-  const [shortcutKey, setShortcutKey] = useState('Ctrl');
-  const inputRef = useRef<HTMLInputElement>(null);
+const emptySubscribe = () => () => {};
 
-  const abortControllerRef = useRef<AbortController | null>(null);
-  const router = useRouter();
-  const { openCreateIncident } = useCreateIncidentModal();
+let recentSearchesCache: RecentSearch[] | null = null;
+const recentSearchesListeners = new Set<() => void>();
 
-  useEffect(() => {
+function subscribeRecentSearches(callback: () => void) {
+  recentSearchesListeners.add(callback);
+  return () => {
+    recentSearchesListeners.delete(callback);
+  };
+}
+
+function getRecentSearchesSnapshot(): RecentSearch[] {
+  if (typeof window === 'undefined') return [];
+  if (recentSearchesCache === null) {
     try {
       const stored = localStorage.getItem(RECENT_SEARCHES_KEY);
       if (stored) {
         const parsed = JSON.parse(stored);
         if (Array.isArray(parsed) && parsed.length > 0 && typeof parsed[0] !== 'string') {
-          setRecentSearches(parsed);
+          recentSearchesCache = parsed;
+        } else {
+          recentSearchesCache = [];
         }
+      } else {
+        recentSearchesCache = [];
       }
-    } catch (_e) {}
-  }, []);
-
-  useEffect(() => {
-    if (typeof navigator !== 'undefined' && /Mac|iPod|iPhone|iPad/.test(navigator.platform)) {
-      setShortcutKey('⌘');
+    } catch {
+      recentSearchesCache = [];
     }
-  }, []);
+  }
+  return recentSearchesCache;
+}
+
+const SERVER_RECENT_SEARCHES: RecentSearch[] = [];
+function getRecentSearchesServerSnapshot(): RecentSearch[] {
+  return SERVER_RECENT_SEARCHES;
+}
+
+function saveRecentSearchToStorage(searchQuery: string, resultCount?: number) {
+  if (searchQuery.length < 2) return;
+  try {
+    const prev = getRecentSearchesSnapshot();
+    const newSearch: RecentSearch = {
+      query: searchQuery,
+      timestamp: Date.now(),
+      resultCount,
+    };
+    const updated = [
+      newSearch,
+      ...prev.filter(s => s.query.toLowerCase() !== searchQuery.toLowerCase()),
+    ].slice(0, MAX_RECENT_SEARCHES);
+    recentSearchesCache = updated;
+    localStorage.setItem(RECENT_SEARCHES_KEY, JSON.stringify(updated));
+    recentSearchesListeners.forEach(listener => listener());
+  } catch {}
+}
+
+export default function SidebarSearch() {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState('');
+  const [results, setResults] = useState<SearchResult[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const recentSearches = useSyncExternalStore(
+    subscribeRecentSearches,
+    getRecentSearchesSnapshot,
+    getRecentSearchesServerSnapshot
+  );
+
+  const shortcutKey = useSyncExternalStore(
+    emptySubscribe,
+    () =>
+      typeof navigator !== 'undefined' &&
+      /(Mac|iPhone|iPod|iPad)/i.test(navigator.platform || navigator.userAgent)
+        ? '⌘'
+        : 'Ctrl',
+    () => '⌘'
+  );
+
+  const inputRef = useRef<HTMLInputElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  const abortControllerRef = useRef<AbortController | null>(null);
+  const router = useRouter();
+  const { openCreateIncident } = useCreateIncidentModal();
 
   const saveRecentSearch = useCallback((searchQuery: string, resultCount?: number) => {
-    if (searchQuery.length < 2) return;
-    try {
-      const newSearch: RecentSearch = {
-        query: searchQuery,
-        timestamp: Date.now(),
-        resultCount,
-      };
-      setRecentSearches(prev => {
-        const updated = [
-          newSearch,
-          ...prev.filter(s => s.query.toLowerCase() !== searchQuery.toLowerCase()),
-        ].slice(0, MAX_RECENT_SEARCHES);
-        localStorage.setItem(RECENT_SEARCHES_KEY, JSON.stringify(updated));
-        return updated;
-      });
-    } catch (_e) {}
+    saveRecentSearchToStorage(searchQuery, resultCount);
   }, []);
 
   useEffect(() => {
     if (abortControllerRef.current) abortControllerRef.current.abort();
 
-    if (query.length < 2) {
-      setResults([]);
-      setIsLoading(false);
+    if (query.trim().length < 2) {
       return;
     }
 
-    setIsLoading(true);
+    const abortController = new AbortController();
+    abortControllerRef.current = abortController;
 
     const timeoutId = setTimeout(async () => {
-      const abortController = new AbortController();
-      abortControllerRef.current = abortController;
+      setIsLoading(true);
       try {
         const response = await fetch(`/api/search?q=${encodeURIComponent(query)}`, {
           signal: abortController.signal,
@@ -332,7 +371,10 @@ export default function SidebarSearch() {
       }
     }, 300);
 
-    return () => clearTimeout(timeoutId);
+    return () => {
+      clearTimeout(timeoutId);
+      abortController.abort();
+    };
   }, [query]);
 
   // Keyboard shortcut handler
@@ -411,13 +453,20 @@ export default function SidebarSearch() {
   return (
     <Command shouldFilter={false} className="overflow-visible bg-transparent border-0 shadow-none">
       <Popover open={open} onOpenChange={setOpen}>
-        <PopoverTrigger asChild>
-          <div className="relative w-full max-w-[420px]">
+        <PopoverAnchor asChild>
+          <div
+            ref={containerRef}
+            className="relative w-full max-w-[420px]"
+            onClick={() => {
+              if (!open) setOpen(true);
+              inputRef.current?.focus();
+            }}
+          >
             {/* 
               Redesign: Flex container mimicking the input style. 
               The actual input is transparent and sits next to the icon.
             */}
-            <div className="flex h-9 w-full items-center rounded-lg border border-zinc-800/90 bg-[#18181b]/90 px-3 focus-within:ring-1 focus-within:ring-zinc-600/70 focus-within:border-zinc-700 transition-all shadow-xs">
+            <div className="flex h-9 w-full items-center rounded-lg border border-zinc-800/90 bg-[#18181b]/90 px-3 focus-within:ring-1 focus-within:ring-zinc-600/70 focus-within:border-zinc-700 transition-all shadow-xs cursor-text">
               <SearchIcon className="mr-2 h-3.5 w-3.5 shrink-0 text-zinc-400" />
               <CommandPrimitive.Input
                 ref={inputRef}
@@ -425,13 +474,16 @@ export default function SidebarSearch() {
                 value={query}
                 onValueChange={val => {
                   setQuery(val);
-                  if (val.trim().length > 0 && !open) setOpen(true);
-                  if (val.trim().length === 0 && open) setOpen(false);
+                  if (val.trim().length >= 2) {
+                    setIsLoading(true);
+                  } else {
+                    setResults([]);
+                    setIsLoading(false);
+                  }
+                  if (!open) setOpen(true);
                 }}
                 onFocus={() => {
-                  if (query.length > 0 || recentSearches.length > 0 || QUICK_ACTIONS.length > 0) {
-                    setOpen(true);
-                  }
+                  setOpen(true);
                 }}
                 className="search-input topbar-search-input flex h-full w-full bg-transparent text-sm text-zinc-100 outline-none border-none placeholder:text-zinc-500 disabled:cursor-not-allowed disabled:opacity-50"
                 style={{
@@ -450,6 +502,7 @@ export default function SidebarSearch() {
                     setQuery('');
                     setResults([]);
                     setOpen(false);
+                    inputRef.current?.blur();
                   }}
                   className="mr-1 p-0.5 rounded-full hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200 transition-colors cursor-pointer"
                   aria-label="Clear search"
@@ -468,13 +521,17 @@ export default function SidebarSearch() {
               )}
             </div>
           </div>
-        </PopoverTrigger>
+        </PopoverAnchor>
         <PopoverContent
           className="p-0 w-[var(--radix-popover-trigger-width)] min-w-[340px] overflow-hidden bg-popover dark:bg-[#121216] border border-border dark:border-zinc-800 shadow-2xl rounded-xl"
           align="center"
           sideOffset={8}
           onOpenAutoFocus={(e: Event) => e.preventDefault()} // Don't steal focus from input
-          onInteractOutside={() => {
+          onInteractOutside={e => {
+            if (containerRef.current && containerRef.current.contains(e.target as Node)) {
+              e.preventDefault();
+              return;
+            }
             setOpen(false);
             inputRef.current?.blur();
           }}
