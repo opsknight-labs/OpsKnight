@@ -17,7 +17,7 @@ module.exports = async function providerHttpChecks({ prisma, baseUrl, consumeIng
         receiver: 'certifier',
         groupLabels: {},
         commonLabels: {},
-        commonAnnotations: {},
+        commonAnnotations: { api_key: 'fixture-credential-must-not-persist' },
         externalURL: '',
         alerts: Array.from({ length: 40 }, (_, index) => ({
           status: 'firing',
@@ -164,10 +164,24 @@ module.exports = async function providerHttpChecks({ prisma, baseUrl, consumeIng
     assert.equal(await prisma.alert.count({ where: { serviceId: service.id } }), fixture.count);
     assert.equal(await prisma.incident.count({ where: { serviceId: service.id } }), fixture.count);
     const stored = JSON.stringify(
-      await prisma.ingestionReceipt.findMany({
-        where: { serviceId: service.id },
-        select: { envelope: true, result: true },
-      })
+      await Promise.all([
+        prisma.ingestionReceipt.findMany({
+          where: { serviceId: service.id },
+          select: { envelope: true, result: true },
+        }),
+        prisma.ingestionBatch.findMany({
+          where: { serviceId: service.id },
+          select: { payload: true },
+        }),
+        prisma.alert.findMany({
+          where: { serviceId: service.id },
+          select: { payload: true },
+        }),
+        prisma.incident.findMany({
+          where: { serviceId: service.id },
+          select: { title: true, description: true },
+        }),
+      ])
     );
     assert.ok(!stored.includes('fixture-credential-must-not-persist'));
     evidence.push({
@@ -181,6 +195,7 @@ module.exports = async function providerHttpChecks({ prisma, baseUrl, consumeIng
       signatureChecked: !!fixture.signed,
       serviceIsolationChecked,
       oversizedRequestRejected: true,
+      persistedPayloadsChecked: true,
     });
   }
   return evidence;
