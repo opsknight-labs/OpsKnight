@@ -2,7 +2,12 @@ import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { APP_VERSION, DEPLOYMENT_ID } from '@/lib/version';
 import { getJobWorkerStatus } from '@/lib/job-worker';
-import { getOpsKnightProcessRole, getRuntimeResponsibilities } from '@/lib/runtime-role';
+import {
+  getOpsKnightProcessRole,
+  getRuntimeResponsibilities,
+  shouldRunIngestionConsumer,
+} from '@/lib/runtime-role';
+import { getIngestionWorkerHealth } from '@/lib/ingestion/worker-health';
 import { logger } from '@/lib/logger';
 
 import v8 from 'v8';
@@ -21,6 +26,7 @@ export async function GET(request: NextRequest) {
   const mode = request.nextUrl.searchParams.get('mode') || 'liveness';
   const responsibilities =
     mode === 'readiness' ? getRuntimeResponsibilities(getOpsKnightProcessRole()) : null;
+  const ingestionRequired = shouldRunIngestionConsumer(getOpsKnightProcessRole());
   const checks: Record<
     string,
     {
@@ -109,6 +115,23 @@ export async function GET(request: NextRequest) {
       }
     }
 
+    if (ingestionRequired) {
+      const ingestion = getIngestionWorkerHealth();
+      const healthy =
+        ingestion.running &&
+        !ingestion.faulted &&
+        ingestion.lastSuccessAt !== null &&
+        Date.now() - ingestion.lastSuccessAt <= 60000;
+      checks.ingestionWorker = {
+        status: !healthy ? 'unhealthy' : ingestion.retentionFaulted ? 'degraded' : 'healthy',
+        expected: true,
+        ...(!healthy
+          ? { error: 'Required ingestion consumer has no recent successful cycle' }
+          : ingestion.retentionFaulted
+            ? { error: 'Ingestion retention maintenance needs attention' }
+            : {}),
+      };
+    }
     if (responsibilities?.startJobWorker) {
       const worker = getJobWorkerStatus();
       const nowMs = Date.now();
@@ -183,6 +206,7 @@ export async function GET(request: NextRequest) {
     mode === 'readiness'
       ? checks.database?.status === 'unhealthy' ||
         (workerRequired && checks.worker?.status === 'unhealthy') ||
+        (ingestionRequired && checks.ingestionWorker?.status === 'unhealthy') ||
         (schedulerRequired && checks.scheduler?.status === 'unhealthy') ||
         (controlPlaneRequired && checks.notificationControlPlane?.status === 'unhealthy')
       : readinessChecks.some(check => check.status === 'unhealthy');

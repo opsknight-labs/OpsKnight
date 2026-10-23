@@ -114,3 +114,12 @@ Persistent queue metrics expose unfinished counts by PENDING/PROCESSING/DEAD sta
 
 
 `INGESTION_DB_PROFILE=true npm run certify:ingestion:http` optionally records read-only pg_stat_statements deltas and sampled wait states on the isolated test database. Provision the extension on that owned instance first. The helper never resets statistics and retains SQL fingerprints/allowlisted operation classes rather than SQL text, parameters or client identities. Server execution time excludes client, connection-pool and network time; cluster WAL deltas include other databases on that owned instance.
+
+
+## Local image topology diagnostics
+
+`npm run certify:ingestion:docker` targets only the owned `opsknight-ingestion-cert-db` PostgreSQL 16 fixture on localhost port 55445 and database `ingestion_test_http`. Set `INGESTION_IMAGE` to a built candidate with its OCI source revision label. The harness starts uniquely labelled gateways, ingestion workers and an immutable-ID proxy on a temporary container network, applies a conservative connection preflight, checks each consumer's local readiness, then runs the same HTTP reconciliation harness without a host-side consumer. Fixture secrets are temporary. Cleanup only removes resources whose run labels match; the existing database container remains running.
+
+`INGESTION_DOCKER_KILL_WORKER=true` requests a real SIGKILL coordinated with active load. The run must prove that work was admitted and the kill completed; failed or unexecuted chaos cannot pass. No lease timestamp is advanced. Use a load duration longer than five seconds and allow natural lease recovery during drain. All results remain local topology diagnostics, not Swarm/Kubernetes or replicated-database certification.
+
+Bootstrap and readiness share ingestion ownership policy. The dedicated role requires PostgreSQL mode. Consumers publish process-local successful-cycle evidence across instrumentation/route bundles; readiness fails for missing, faulted or stale consumption, and reports retention errors as degraded without stopping healthy consumption.

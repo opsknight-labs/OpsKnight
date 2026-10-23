@@ -37,33 +37,42 @@ async function main() {
       key: randomUUID(),
     },
   });
+  const external = process.env.INGESTION_EXTERNAL_BASE_URL;
   const port = Number(process.env.INGESTION_PORT || 3210);
-  const baseUrl = `http://127.0.0.1:${port}`;
-  server = spawn(process.execPath, ['.next/standalone/server.js'], {
-    stdio: ['ignore', 'pipe', 'pipe'],
-    env: {
-      ...process.env,
-      NODE_ENV: 'production',
-      PORT: String(port),
-      HOSTNAME: '127.0.0.1',
-      OPSKNIGHT_PROCESS_ROLE: 'web',
-      OPSKNIGHT_INGESTION_MODE: 'postgres',
-      OPSKNIGHT_INGESTION_EVENTS_PER_MINUTE: '10000000',
-      NEXTAUTH_URL: baseUrl,
-      NEXT_PUBLIC_APP_URL: baseUrl,
-      REDIRECT_TO_CANONICAL_HOST: 'false',
-      ALLOW_INSECURE_SECRETS: 'true',
-      TRUST_PROXY_HEADERS: 'false',
-    },
-  });
-  for (const stream of [server.stdout, server.stderr]) {
+  const baseUrl = external || `http://127.0.0.1:${port}`;
+  const candidateUrl = new URL(baseUrl);
+  assert.ok(
+    ['127.0.0.1', 'localhost'].includes(candidateUrl.hostname) && candidateUrl.protocol === 'http:',
+    'HTTP certification only targets a local isolated candidate'
+  );
+  if (external) assert.equal(process.env.INGESTION_EXTERNAL_CONSUMERS, 'true');
+  if (!external)
+    server = spawn(process.execPath, ['.next/standalone/server.js'], {
+      stdio: ['ignore', 'pipe', 'pipe'],
+      env: {
+        ...process.env,
+        NODE_ENV: 'production',
+        PORT: String(port),
+        HOSTNAME: '127.0.0.1',
+        OPSKNIGHT_PROCESS_ROLE: 'web',
+        OPSKNIGHT_INGESTION_MODE: 'postgres',
+        OPSKNIGHT_INGESTION_EVENTS_PER_MINUTE: '10000000',
+        NEXTAUTH_URL: baseUrl,
+        NEXT_PUBLIC_APP_URL: baseUrl,
+        REDIRECT_TO_CANONICAL_HOST: 'false',
+        ALLOW_INSECURE_SECRETS: 'true',
+        TRUST_PROXY_HEADERS: 'false',
+      },
+    });
+  for (const stream of [server?.stdout, server?.stderr].filter(Boolean)) {
     stream.on('data', chunk => {
       serverOutput = (serverOutput + chunk.toString()).slice(-16000);
     });
   }
   let ready = false;
   for (let attempt = 0; attempt < 120; attempt++) {
-    if (server.exitCode !== null) throw new Error('Candidate HTTP server exited before readiness');
+    if (server && server.exitCode !== null)
+      throw new Error('Candidate HTTP server exited before readiness');
     try {
       const response = await fetch(`${baseUrl}/api/health?mode=readiness`);
       readinessStatus = `${response.status}: ${(await response.text()).slice(0, 2000)}`;
@@ -79,25 +88,34 @@ async function main() {
   assert.ok(ready, `Candidate server readiness failed: ${readinessStatus}\n${serverOutput}`);
   const providerChecks =
     process.env.INGESTION_HTTP_PROVIDER_CHECKS === 'true'
-      ? await require('./provider-http-checks.cjs')({ prisma, baseUrl, consumeIngestionBatch })
+      ? await require('./provider-http-checks.cjs')({
+          prisma,
+          baseUrl,
+          consumeIngestionBatch: external ? async () => 0 : consumeIngestionBatch,
+        })
       : undefined;
   if (process.env.INGESTION_DB_PROFILE === 'true')
     finishDatabaseProfile = await require('./database-profile.cjs')(prisma);
   // Execute real ingestion processing independently of request completion.
-  worker = (async () => {
-    while (!draining) {
-      const count = await consumeIngestionBatch(4);
-      if (!count) await new Promise(resolve => setTimeout(resolve, 50));
-    }
-  })().catch(error => {
-    workerFault = error;
-    draining = true;
-  });
-  const candidate = {
-    buildId: readFileSync('.next/BUILD_ID', 'utf8').trim(),
-    sourceRevision: spawnSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).stdout.trim(),
-    sourceDirty: !!spawnSync('git', ['status', '--porcelain'], { encoding: 'utf8' }).stdout.trim(),
-  };
+  if (!external)
+    worker = (async () => {
+      while (!draining) {
+        const count = await consumeIngestionBatch(4);
+        if (!count) await new Promise(resolve => setTimeout(resolve, 50));
+      }
+    })().catch(error => {
+      workerFault = error;
+      draining = true;
+    });
+  const candidate = external
+    ? JSON.parse(process.env.INGESTION_CANDIDATE_METADATA || '{}')
+    : {
+        buildId: readFileSync('.next/BUILD_ID', 'utf8').trim(),
+        sourceRevision: spawnSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).stdout.trim(),
+        sourceDirty: !!spawnSync('git', ['status', '--porcelain'], {
+          encoding: 'utf8',
+        }).stdout.trim(),
+      };
   const started = performance.now();
   load = spawn(
     k6,
@@ -118,10 +136,15 @@ async function main() {
       },
     }
   );
+  load.once('spawn', () => {
+    if (process.connected)
+      process.send?.({ type: 'ingestion-load-started', fixtureServiceId: service.id }, () => {});
+  });
   const loadExit = await new Promise((resolve, reject) => {
     load.once('error', reject);
     load.once('exit', resolve);
   });
+  if (process.connected) process.send?.({ type: 'ingestion-load-stopped' }, () => {});
   const ingressMs = performance.now() - started;
   const [atAdmissionEnd] = await prisma.$queryRaw`
     SELECT COUNT(*) FILTER (WHERE "status" = 'COMPLETED')::int AS completed,
@@ -142,7 +165,8 @@ async function main() {
       },
     });
     if (!remaining) break;
-    if (!(await consumeIngestionBatch(8))) await new Promise(resolve => setTimeout(resolve, 100));
+    if (external || !(await consumeIngestionBatch(8)))
+      await new Promise(resolve => setTimeout(resolve, 100));
   }
   const completedMs = performance.now() - started;
   const [accepted, completed, alerts, incidents, pending, oldest] = await Promise.all([
@@ -160,7 +184,8 @@ async function main() {
     }),
   ]);
   const [endToEndLatency] = await prisma.$queryRaw`
-    SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY EXTRACT(EPOCH FROM ("completedAt" - COALESCE("receivedAt", "acceptedAt"))) * 1000)::double precision AS "p50Ms",
+    SELECT MAX(EXTRACT(EPOCH FROM ("completedAt" - COALESCE("receivedAt", "acceptedAt"))) * 1000)::double precision AS "maxMs",
+      percentile_cont(0.5) WITHIN GROUP (ORDER BY EXTRACT(EPOCH FROM ("completedAt" - COALESCE("receivedAt", "acceptedAt"))) * 1000)::double precision AS "p50Ms",
       percentile_cont(0.95) WITHIN GROUP (ORDER BY EXTRACT(EPOCH FROM ("completedAt" - COALESCE("receivedAt", "acceptedAt"))) * 1000)::double precision AS "p95Ms",
       percentile_cont(0.99) WITHIN GROUP (ORDER BY EXTRACT(EPOCH FROM ("completedAt" - COALESCE("receivedAt", "acceptedAt"))) * 1000)::double precision AS "p99Ms"
     FROM "IngestionReceipt" WHERE "serviceId" = ${service.id} AND "status" = 'COMPLETED'
@@ -186,8 +211,9 @@ async function main() {
     measuredAt: new Date().toISOString(),
     candidate,
     runtime: process.version,
-    scope:
-      'Local production HTTP gateway plus independent incident consumer and isolated PostgreSQL; not HA topology certification',
+    scope: external
+      ? 'Local Docker gateway and image ingestion consumers sharing an isolated PostgreSQL container network; not enterprise HA certification'
+      : 'Local production HTTP gateway plus independent incident consumer and isolated PostgreSQL; not HA topology certification',
     providerChecks,
     databaseProfile,
     fixtureServiceId: service.id,
