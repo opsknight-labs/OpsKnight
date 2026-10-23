@@ -40,6 +40,12 @@ async function main() {
   for (let i = 0; i < 20; i++) receipts.push(await accept(i));
   const [abandoned] = await claimPostgresEvents(1);
   assert.ok(abandoned);
+  assert.equal(
+    (await prisma.ingestionReceipt.findUniqueOrThrow({ where: { id: abandoned.id } })).serviceId,
+    service.id,
+    'Natural recovery must exercise the receipt claimed by this fixture'
+  );
+  const leaseClaimedAt = performance.now();
   execFileSync(docker, ['stop', '--time', '0', container], { stdio: 'inherit' });
   stopped = true;
   await assert.rejects(accept(20), error => error instanceof IngestionUnavailableError);
@@ -57,14 +63,16 @@ async function main() {
   }
   assert.ok(ready, 'Database did not recover');
   assert.equal(await prisma.ingestionReceipt.count({ where: { serviceId: service.id } }), 20);
-  await prisma.ingestionReceipt.update({
-    where: { id: abandoned.id },
-    data: { leaseExpiresAt: new Date(0) },
-  });
   receipts.push(await accept(20));
-  while (await consumeIngestionBatch(4)) {
-    /* drain accepted backlog */
+  const recoveryDeadline = Date.now() + 120000;
+  while (Date.now() < recoveryDeadline) {
+    await consumeIngestionBatch(4);
+    if (!(await prisma.ingestionReceipt.count({
+      where: { serviceId: service.id, status: { not: 'COMPLETED' } },
+    }))) break;
+    await new Promise(resolve => setTimeout(resolve, 250));
   }
+  const naturalRecoveryMs = performance.now() - leaseClaimedAt;
   for (let i = 0; i <= 20; i++) await accept(i);
   assert.equal(await consumeIngestionBatch(4), 0);
   const [completed, alerts, incidents, pending] = await Promise.all([
@@ -93,12 +101,13 @@ async function main() {
     pending,
     duplicateDeliveriesReconciled: true,
     abandonedLeaseRecovered: true,
-    leaseRecovery:
-      'Expiry advanced after restart to avoid waiting 60 seconds; fencing independently tested in database suite',
+    leaseExpiryAdvanced: false,
+    naturalRecoveryMs,
+    leaseRecovery: 'Real 60-second database-clock lease expiry; no receipt timestamps changed',
     certifiedEnterprise: false,
   };
   writeFileSync(
-    'plans/event-ingestion/local-database-outage.json',
+    'plans/event-ingestion/local-database-outage-natural.json',
     JSON.stringify(evidence, null, 2) + '\n'
   );
   console.log('Local database outage and restart reconciliation passed.');
