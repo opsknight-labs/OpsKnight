@@ -1,12 +1,28 @@
 import http from 'k6/http';
 import { Counter, Rate } from 'k6/metrics';
 import { check } from 'k6';
+import crypto from 'k6/crypto';
+import encoding from 'k6/encoding';
 
 const accepted = new Counter('ingestion_durable_accepted');
 const rejectedQuota = new Counter('ingestion_quota_rejected');
 const rejectedCapacity = new Counter('ingestion_capacity_rejected');
 const success = new Rate('ingestion_acceptance_success');
 const rate = Number(__ENV.INGESTION_TARGET_RPS || 1000);
+const payloadBytes = Number(__ENV.INGESTION_PAYLOAD_BYTES || 10000);
+const payloadPattern = __ENV.INGESTION_PAYLOAD_PATTERN || 'random';
+if (!Number.isInteger(payloadBytes) || payloadBytes < 0 || payloadBytes > 900000)
+  throw new Error('INGESTION_PAYLOAD_BYTES must be an integer between 0 and 900000');
+if (!['random', 'repeated'].includes(payloadPattern))
+  throw new Error('INGESTION_PAYLOAD_PATTERN must be random or repeated');
+// Construct once per VU, outside timed requests. Random content prevents TOAST
+// compression from turning a 10 KB storage workload into a tiny repeated string.
+const payloadBody =
+  payloadPattern === 'repeated'
+    ? 'x'.repeat(payloadBytes)
+    : payloadBytes === 0
+      ? ''
+      : encoding.b64encode(crypto.randomBytes(Math.ceil((payloadBytes * 3) / 4))).slice(0, payloadBytes);
 export const options = {
   scenarios: {
     ingress: {
@@ -37,7 +53,7 @@ export default function () {
         summary: 'Durable ingestion capacity fixture',
         source: 'k6-ingestion',
         severity: 'critical',
-        custom_details: { body: 'x'.repeat(Number(__ENV.INGESTION_PAYLOAD_BYTES || 10000)) },
+        custom_details: { body: payloadBody },
       },
     }),
     {

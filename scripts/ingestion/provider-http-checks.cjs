@@ -5,6 +5,7 @@ const { encrypt } = require('../../src/lib/encryption');
 module.exports = async function providerHttpChecks({ prisma, baseUrl, consumeIngestionBatch }) {
   const run = randomUUID();
   const fixtures = [
+    ...require('./monitoring-http-fixtures.cjs')(run),
     {
       type: 'PROMETHEUS',
       route: 'prometheus',

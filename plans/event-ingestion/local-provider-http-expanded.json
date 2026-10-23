@@ -1,0 +1,420 @@
+{
+  "measuredAt": "2026-10-23T10:59:36.780Z",
+  "candidate": {
+    "buildId": "miRPt0h3Xo-17leY8KKiu",
+    "sourceRevision": "52fddc95fc2f44890d040d1f2d9c29b2f713d2e2",
+    "sourceDirty": true
+  },
+  "runtime": "v20.20.2",
+  "scope": "Local production HTTP gateway plus independent incident consumer and isolated PostgreSQL; not HA topology certification",
+  "providerChecks": [
+    {
+      "provider": "UPTIMEROBOT",
+      "requestBytes": 103,
+      "accepted": 1,
+      "completed": 1,
+      "receiptsExposed": true,
+      "duplicateReconciled": true,
+      "invalidCredentialsRejected": true,
+      "signatureChecked": false,
+      "serviceIsolationChecked": false,
+      "oversizedRequestRejected": true
+    },
+    {
+      "provider": "PINGDOM",
+      "requestBytes": 92,
+      "accepted": 1,
+      "completed": 1,
+      "receiptsExposed": true,
+      "duplicateReconciled": true,
+      "invalidCredentialsRejected": true,
+      "signatureChecked": false,
+      "serviceIsolationChecked": true,
+      "oversizedRequestRejected": true
+    },
+    {
+      "provider": "BETTER_UPTIME",
+      "requestBytes": 122,
+      "accepted": 1,
+      "completed": 1,
+      "receiptsExposed": true,
+      "duplicateReconciled": true,
+      "invalidCredentialsRejected": true,
+      "signatureChecked": false,
+      "serviceIsolationChecked": true,
+      "oversizedRequestRejected": true
+    },
+    {
+      "provider": "UPTIME_KUMA",
+      "requestBytes": 168,
+      "accepted": 1,
+      "completed": 1,
+      "receiptsExposed": true,
+      "duplicateReconciled": true,
+      "invalidCredentialsRejected": true,
+      "signatureChecked": false,
+      "serviceIsolationChecked": true,
+      "oversizedRequestRejected": true
+    },
+    {
+      "provider": "SPLUNK_ONCALL",
+      "requestBytes": 123,
+      "accepted": 1,
+      "completed": 1,
+      "receiptsExposed": true,
+      "duplicateReconciled": true,
+      "invalidCredentialsRejected": true,
+      "signatureChecked": false,
+      "serviceIsolationChecked": true,
+      "oversizedRequestRejected": true
+    },
+    {
+      "provider": "SPLUNK_OBSERVABILITY",
+      "requestBytes": 127,
+      "accepted": 1,
+      "completed": 1,
+      "receiptsExposed": true,
+      "duplicateReconciled": true,
+      "invalidCredentialsRejected": true,
+      "signatureChecked": false,
+      "serviceIsolationChecked": true,
+      "oversizedRequestRejected": true
+    },
+    {
+      "provider": "DYNATRACE",
+      "requestBytes": 124,
+      "accepted": 1,
+      "completed": 1,
+      "receiptsExposed": true,
+      "duplicateReconciled": true,
+      "invalidCredentialsRejected": true,
+      "signatureChecked": false,
+      "serviceIsolationChecked": true,
+      "oversizedRequestRejected": true
+    },
+    {
+      "provider": "APPDYNAMICS",
+      "requestBytes": 125,
+      "accepted": 1,
+      "completed": 1,
+      "receiptsExposed": true,
+      "duplicateReconciled": true,
+      "invalidCredentialsRejected": true,
+      "signatureChecked": false,
+      "serviceIsolationChecked": true,
+      "oversizedRequestRejected": true
+    },
+    {
+      "provider": "ELASTIC",
+      "requestBytes": 167,
+      "accepted": 1,
+      "completed": 1,
+      "receiptsExposed": true,
+      "duplicateReconciled": true,
+      "invalidCredentialsRejected": true,
+      "signatureChecked": false,
+      "serviceIsolationChecked": true,
+      "oversizedRequestRejected": true
+    },
+    {
+      "provider": "HONEYCOMB",
+      "requestBytes": 128,
+      "accepted": 1,
+      "completed": 1,
+      "receiptsExposed": true,
+      "duplicateReconciled": true,
+      "invalidCredentialsRejected": true,
+      "signatureChecked": false,
+      "serviceIsolationChecked": true,
+      "oversizedRequestRejected": true
+    },
+    {
+      "provider": "GOOGLE_CLOUD_MONITORING",
+      "requestBytes": 130,
+      "accepted": 1,
+      "completed": 1,
+      "receiptsExposed": true,
+      "duplicateReconciled": true,
+      "invalidCredentialsRejected": true,
+      "signatureChecked": false,
+      "serviceIsolationChecked": true,
+      "oversizedRequestRejected": true
+    },
+    {
+      "provider": "NAGIOS",
+      "requestBytes": 166,
+      "accepted": 1,
+      "completed": 1,
+      "receiptsExposed": true,
+      "duplicateReconciled": true,
+      "invalidCredentialsRejected": true,
+      "signatureChecked": false,
+      "serviceIsolationChecked": true,
+      "oversizedRequestRejected": true
+    },
+    {
+      "provider": "ICINGA",
+      "requestBytes": 171,
+      "accepted": 1,
+      "completed": 1,
+      "receiptsExposed": true,
+      "duplicateReconciled": true,
+      "invalidCredentialsRejected": true,
+      "signatureChecked": false,
+      "serviceIsolationChecked": true,
+      "oversizedRequestRejected": true
+    },
+    {
+      "provider": "ZABBIX",
+      "requestBytes": 170,
+      "accepted": 1,
+      "completed": 1,
+      "receiptsExposed": true,
+      "duplicateReconciled": true,
+      "invalidCredentialsRejected": true,
+      "signatureChecked": false,
+      "serviceIsolationChecked": true,
+      "oversizedRequestRejected": true
+    },
+    {
+      "provider": "NEWRELIC",
+      "requestBytes": 119,
+      "accepted": 1,
+      "completed": 1,
+      "receiptsExposed": true,
+      "duplicateReconciled": true,
+      "invalidCredentialsRejected": true,
+      "signatureChecked": false,
+      "serviceIsolationChecked": true,
+      "oversizedRequestRejected": true
+    },
+    {
+      "provider": "AZURE",
+      "requestBytes": 187,
+      "accepted": 1,
+      "completed": 1,
+      "receiptsExposed": true,
+      "duplicateReconciled": true,
+      "invalidCredentialsRejected": true,
+      "signatureChecked": false,
+      "serviceIsolationChecked": true,
+      "oversizedRequestRejected": true
+    },
+    {
+      "provider": "PROMETHEUS",
+      "requestBytes": 329362,
+      "accepted": 40,
+      "completed": 40,
+      "receiptsExposed": true,
+      "duplicateReconciled": true,
+      "invalidCredentialsRejected": true,
+      "signatureChecked": false,
+      "serviceIsolationChecked": true,
+      "oversizedRequestRejected": true
+    },
+    {
+      "provider": "GRAFANA",
+      "requestBytes": 370,
+      "accepted": 2,
+      "completed": 2,
+      "receiptsExposed": true,
+      "duplicateReconciled": true,
+      "invalidCredentialsRejected": true,
+      "signatureChecked": true,
+      "serviceIsolationChecked": true,
+      "oversizedRequestRejected": true
+    },
+    {
+      "provider": "DATADOG",
+      "requestBytes": 333,
+      "accepted": 2,
+      "completed": 2,
+      "receiptsExposed": true,
+      "duplicateReconciled": true,
+      "invalidCredentialsRejected": true,
+      "signatureChecked": false,
+      "serviceIsolationChecked": true,
+      "oversizedRequestRejected": true
+    },
+    {
+      "provider": "WEBHOOK",
+      "requestBytes": 231,
+      "accepted": 1,
+      "completed": 1,
+      "receiptsExposed": true,
+      "duplicateReconciled": true,
+      "invalidCredentialsRejected": true,
+      "signatureChecked": false,
+      "serviceIsolationChecked": true,
+      "oversizedRequestRejected": true
+    }
+  ],
+  "fixtureServiceId": "cmvkuy1zu0000dekkygvqdn3f",
+  "atAdmissionEnd": {
+    "completed": 101,
+    "pending": 0,
+    "oldestPendingAgeMs": 0
+  },
+  "endToEndLatency": {
+    "maxMs": 335,
+    "p50Ms": 81,
+    "p95Ms": 218,
+    "p99Ms": 288
+  },
+  "completionLatencyLimitMs": 2000,
+  "completionLatencyPassed": true,
+  "admissionThresholdsPassed": true,
+  "targetRps": 20,
+  "workload": "many-key",
+  "payloadBytes": 10000,
+  "payloadPattern": "random",
+  "duration": "5s",
+  "loadExit": 0,
+  "acknowledged": 101,
+  "accepted": 101,
+  "completed": 101,
+  "alerts": 101,
+  "incidents": 101,
+  "pending": 0,
+  "ambiguousSubmissions": 0,
+  "oldestPendingAgeMs": 0,
+  "ingressMs": 5538.728500000001,
+  "completedMs": 5573.180625000001,
+  "acceptedPerSecond": 18.235232147594882,
+  "completedPerSecondIncludingDrain": 18.122506122794107,
+  "reconciled": true,
+  "metrics": {
+    "http_req_failed": {
+      "passes": 0,
+      "fails": 101,
+      "value": 0
+    },
+    "iteration_duration": {
+      "avg": 27.673905524752477,
+      "min": 13.258666,
+      "med": 20.732667,
+      "max": 99.098167,
+      "p(90)": 50.619375,
+      "p(95)": 68.480917
+    },
+    "http_req_blocked": {
+      "med": 0.004,
+      "max": 0.927,
+      "p(90)": 0.035,
+      "p(95)": 0.213,
+      "avg": 0.03274257425742576,
+      "min": 0.003
+    },
+    "vus_max": {
+      "value": 10,
+      "min": 10,
+      "max": 10
+    },
+    "http_reqs": {
+      "count": 101,
+      "rate": 20.124817706013875
+    },
+    "ingestion_acceptance_success": {
+      "passes": 101,
+      "fails": 0,
+      "thresholds": {
+        "rate>=0.999": false
+      },
+      "value": 1
+    },
+    "http_req_duration{expected_response:true}": {
+      "avg": 27.289504950495044,
+      "min": 12.974,
+      "med": 20.376,
+      "max": 98.638,
+      "p(90)": 50.286,
+      "p(95)": 67.823
+    },
+    "http_req_sending": {
+      "min": 0.029,
+      "med": 0.041,
+      "max": 0.264,
+      "p(90)": 0.069,
+      "p(95)": 0.093,
+      "avg": 0.04991089108910891
+    },
+    "data_sent": {
+      "count": 1057999,
+      "rate": 210812.24760539577
+    },
+    "http_req_waiting": {
+      "avg": 27.109059405940606,
+      "min": 12.841,
+      "med": 20.071,
+      "max": 98.356,
+      "p(90)": 50.006,
+      "p(95)": 67.437
+    },
+    "dropped_iterations": {
+      "count": 0,
+      "rate": 0,
+      "thresholds": {
+        "count==0": false
+      }
+    },
+    "vus": {
+      "value": 0,
+      "min": 0,
+      "max": 1
+    },
+    "http_req_duration": {
+      "med": 20.376,
+      "max": 98.638,
+      "p(90)": 50.286,
+      "p(95)": 67.823,
+      "avg": 27.289504950495044,
+      "min": 12.974,
+      "thresholds": {
+        "p(95)<100": false
+      }
+    },
+    "http_req_connecting": {
+      "max": 0.52,
+      "p(90)": 0,
+      "p(95)": 0.169,
+      "avg": 0.0201980198019802,
+      "min": 0,
+      "med": 0
+    },
+    "ingestion_durable_accepted": {
+      "count": 101,
+      "rate": 20.124817706013875
+    },
+    "data_received": {
+      "count": 133522,
+      "rate": 26605.00900735034
+    },
+    "http_req_receiving": {
+      "avg": 0.13053465346534654,
+      "min": 0.056,
+      "med": 0.119,
+      "max": 0.285,
+      "p(90)": 0.176,
+      "p(95)": 0.228
+    },
+    "checks": {
+      "passes": 101,
+      "fails": 0,
+      "value": 1
+    },
+    "http_req_tls_handshaking": {
+      "avg": 0,
+      "min": 0,
+      "med": 0,
+      "max": 0,
+      "p(90)": 0,
+      "p(95)": 0
+    },
+    "iterations": {
+      "count": 101,
+      "rate": 20.124817706013875
+    }
+  },
+  "passed": true,
+  "certifiedEnterprise": false
+}
