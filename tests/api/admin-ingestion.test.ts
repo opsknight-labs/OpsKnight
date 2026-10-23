@@ -68,10 +68,32 @@ describe('ingestion operator authorization', () => {
       { action: 'discard' },
       { action: 'replay', receiptId: 'invalid' },
       { action: 'pause', discard: true },
+      {
+        action: 'archive',
+        receiptId: '4c0dd9de-e55d-4753-b514-95fedbbfd64f',
+        reason: 'Minimize dead letter',
+      },
+      {
+        action: 'archive',
+        receiptId: '4c0dd9de-e55d-4753-b514-95fedbbfd64f',
+        reason: 'Minimize dead letter',
+        confirmDiscardAcceptedEvent: false,
+      },
     ]) {
       expect((await POST(request(body))).status).toBe(400);
     }
     expect(applyIngestionCommand).not.toHaveBeenCalled();
+  });
+  it('requires explicit discard acknowledgement and passes the archive reason to the audited operation', async () => {
+    const command = {
+      action: 'archive' as const,
+      receiptId: '4c0dd9de-e55d-4753-b514-95fedbbfd64f',
+      reason: 'Minimize orphaned provider data',
+      confirmDiscardAcceptedEvent: true as const,
+    };
+    vi.mocked(applyIngestionCommand).mockResolvedValue({ action: 'archive' });
+    expect((await POST(request(command))).status).toBe(200);
+    expect(applyIngestionCommand).toHaveBeenCalledWith(command, 'admin');
   });
   it('passes the authenticated actor into the transactional audit operation', async () => {
     vi.mocked(applyIngestionCommand).mockResolvedValue({ action: 'pause' });

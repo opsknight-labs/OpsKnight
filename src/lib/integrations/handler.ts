@@ -66,7 +66,9 @@ export interface HandlerOptions<T> {
 
 export function createIntegrationHandler<T>(
   options: HandlerOptions<T>,
-  processor: (ctx: IntegrationContext<T>) => Promise<{ action: string; incident?: unknown }>
+  processor: (
+    ctx: IntegrationContext<T>
+  ) => Promise<{ action: string; incident?: unknown; receiptId?: string; receipts?: string[] }>
 ) {
   const handler = async (req: NextRequest) => {
     const startTime = performance.now();

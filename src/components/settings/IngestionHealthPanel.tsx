@@ -11,6 +11,13 @@ import {
 } from '@/components/ui/shadcn/card';
 import { Button } from '@/components/ui/shadcn/button';
 import { Badge } from '@/components/ui/shadcn/badge';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogTitle,
+} from '@/components/ui/shadcn/dialog';
+import { Textarea } from '@/components/ui/shadcn/textarea';
 
 const snapshotSchema = z.object({
   mode: z.enum(['sync', 'postgres']),
@@ -20,6 +27,20 @@ const snapshotSchema = z.object({
   oldestPendingAgeSeconds: z.number(),
   control: z.object({ paused: z.boolean() }),
   workers: z.array(z.object({ running: z.boolean(), lastError: z.string().nullable() })),
+  throughput: z.object({
+    windowSeconds: z.number(),
+    acceptedPerSecond: z.number(),
+    completedPerSecond: z.number(),
+    limitedToTopIntegrations: z.boolean(),
+    integrations: z.array(
+      z.object({
+        serviceId: z.string(),
+        integrationId: z.string(),
+        accepted: z.number(),
+        completed: z.number(),
+      })
+    ),
+  }),
   receipts: z.array(
     z.object({
       id: z.string(),
@@ -42,6 +63,8 @@ export default function IngestionHealthPanel() {
   const [snapshot, setSnapshot] = useState<z.infer<typeof snapshotSchema> | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [archiveId, setArchiveId] = useState<string | null>(null);
+  const [archiveReason, setArchiveReason] = useState('');
   const refresh = useCallback(async () => {
     try {
       setSnapshot(await loadSnapshot());
@@ -64,16 +87,26 @@ export default function IngestionHealthPanel() {
     };
   }, []);
 
-  async function command(action: 'pause' | 'resume' | 'replay', receiptId?: string) {
+  async function command(action: 'pause' | 'resume' | 'replay' | 'archive', receiptId?: string) {
     setBusy(true);
     try {
       const response = await fetch('/api/admin/ingestion', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action, ...(receiptId ? { receiptId } : {}) }),
+        body: JSON.stringify({
+          action,
+          ...(receiptId ? { receiptId } : {}),
+          ...(action === 'archive'
+            ? { reason: archiveReason, confirmDiscardAcceptedEvent: true }
+            : {}),
+        }),
       });
       if (!response.ok) throw new Error('Ingestion command failed.');
       await refresh();
+      if (action === 'archive') {
+        setArchiveId(null);
+        setArchiveReason('');
+      }
     } catch {
       setError('The command could not be applied. Refresh and check the receipt status.');
     } finally {
@@ -87,7 +120,7 @@ export default function IngestionHealthPanel() {
         <CardTitle>Ingestion health</CardTitle>
         <CardDescription>
           Durably accepted alerts awaiting incident processing. Dead letters block later events with
-          the same key until replay succeeds.
+          the same key until replay succeeds or an administrator explicitly archives them.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -113,6 +146,18 @@ export default function IngestionHealthPanel() {
             </div>
             <dl className="grid grid-cols-2 gap-4 md:grid-cols-4">
               <div>
+                <dt className="text-sm text-muted-foreground">Accepted / second</dt>
+                <dd className="text-xl font-semibold">
+                  {snapshot.throughput.acceptedPerSecond.toFixed(1)}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-sm text-muted-foreground">Completed / second</dt>
+                <dd className="text-xl font-semibold">
+                  {snapshot.throughput.completedPerSecond.toFixed(1)}
+                </dd>
+              </div>
+              <div>
                 <dt className="text-sm text-muted-foreground">Pending</dt>
                 <dd className="text-xl font-semibold">{snapshot.pending.toLocaleString()}</dd>
               </div>
@@ -135,6 +180,31 @@ export default function IngestionHealthPanel() {
                 </dd>
               </div>
             </dl>
+            <p className="text-xs text-muted-foreground">
+              Throughput is the last {snapshot.throughput.windowSeconds} seconds; only newly
+              committed receipts count as accepted.{' '}
+              {snapshot.throughput.limitedToTopIntegrations
+                ? 'Values show the top 100 integrations.'
+                : ''}
+            </p>
+            {snapshot.throughput.integrations.length > 0 && (
+              <details>
+                <summary className="cursor-pointer text-sm">Throughput by integration</summary>
+                <ul className="space-y-2 pt-2 text-sm">
+                  {snapshot.throughput.integrations.map(row => (
+                    <li
+                      key={`${row.serviceId}:${row.integrationId}`}
+                      className="flex flex-wrap justify-between gap-2"
+                    >
+                      <span className="font-mono">{row.integrationId}</span>
+                      <span>
+                        {row.accepted} accepted · {row.completed} completed / minute
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </details>
+            )}
             <Button
               disabled={busy || snapshot.mode === 'sync'}
               variant="outline"
@@ -166,6 +236,16 @@ export default function IngestionHealthPanel() {
                     >
                       Replay
                     </Button>
+                    <Button
+                      disabled={busy}
+                      variant="outline"
+                      onClick={() => {
+                        setArchiveId(receipt.id);
+                        setArchiveReason('');
+                      }}
+                    >
+                      Archive
+                    </Button>
                   </li>
                 ))}
               </ul>
@@ -176,6 +256,39 @@ export default function IngestionHealthPanel() {
           Refresh ingestion status
         </Button>
       </CardContent>
+      <Dialog
+        open={archiveId !== null}
+        onOpenChange={open => {
+          if (!open && !busy) setArchiveId(null);
+        }}
+      >
+        <DialogContent>
+          <DialogTitle>Archive accepted dead-letter event</DialogTitle>
+          <DialogDescription>
+            This discards the stored event payload and unblocks later events with the same identity.
+            It cannot be replayed afterward. The receipt and audit record remain. Held evidence
+            cannot be archived.
+          </DialogDescription>
+          <label htmlFor="ingestion-archive-reason">
+            Reason for discarding this accepted event
+          </label>
+          <Textarea
+            id="ingestion-archive-reason"
+            value={archiveReason}
+            maxLength={1000}
+            onChange={event => setArchiveReason(event.target.value)}
+          />
+          <Button
+            variant="destructive"
+            disabled={busy || archiveReason.trim().length < 10}
+            onClick={() => {
+              if (archiveId) void command('archive', archiveId);
+            }}
+          >
+            Discard payload and archive event
+          </Button>
+        </DialogContent>
+      </Dialog>
     </Card>
   );
 }

@@ -3,12 +3,15 @@ import { NextRequest } from 'next/server';
 import { GET } from '@/app/api/events/receipts/[id]/route';
 import { authenticateApiKey } from '@/lib/api-auth';
 import { resolveApiKeyActor } from '@/lib/authorization-actors';
+import { isIntegrationAuthorized } from '@/lib/integrations/auth';
 import { authorize } from '@/lib/authorization-policy';
 
 const db = vi.hoisted(() => ({
   ingestionReceipt: { findUnique: vi.fn() },
   service: { findUnique: vi.fn() },
+  integration: { findUnique: vi.fn() },
 }));
+vi.mock('@/lib/integrations/auth', () => ({ isIntegrationAuthorized: vi.fn() }));
 vi.mock('@/lib/prisma', () => ({ default: db }));
 vi.mock('@/lib/api-auth', () => ({ authenticateApiKey: vi.fn() }));
 vi.mock('@/lib/authorization-actors', () => ({ resolveApiKeyActor: vi.fn() }));
@@ -35,6 +38,48 @@ beforeEach(() => {
 });
 
 describe('receipt service isolation', () => {
+  it('supports enabled integration credentials scoped to exactly their integration and service', async () => {
+    db.integration.findUnique.mockResolvedValue({
+      id: 'integration',
+      serviceId: 'service',
+      enabled: true,
+      key: 'encrypted',
+    });
+    vi.mocked(isIntegrationAuthorized).mockResolvedValue(true);
+    db.ingestionReceipt.findUnique.mockResolvedValue({
+      id,
+      integrationId: 'integration',
+      serviceId: 'service',
+      status: 'COMPLETED',
+    });
+    const req = new NextRequest(
+      `http://localhost/api/events/receipts/${id}?integrationId=integration`
+    );
+    expect((await GET(req, context())).status).toBe(200);
+    db.ingestionReceipt.findUnique.mockResolvedValue({
+      id,
+      integrationId: 'other',
+      serviceId: 'service',
+    });
+    expect((await GET(req, context())).status).toBe(404);
+    db.ingestionReceipt.findUnique.mockResolvedValue({
+      id,
+      integrationId: 'integration',
+      serviceId: 'other',
+    });
+    expect((await GET(req, context())).status).toBe(404);
+  });
+  it('rejects invalid and disabled integration credentials before accessing receipts', async () => {
+    const req = new NextRequest(
+      `http://localhost/api/events/receipts/${id}?integrationId=integration`
+    );
+    db.integration.findUnique.mockResolvedValue({ enabled: true, key: 'encrypted' });
+    vi.mocked(isIntegrationAuthorized).mockResolvedValue(false);
+    expect((await GET(req, context())).status).toBe(401);
+    db.integration.findUnique.mockResolvedValue({ enabled: false });
+    expect((await GET(req, context())).status).toBe(401);
+    expect(db.ingestionReceipt.findUnique).not.toHaveBeenCalled();
+  });
   it('requires a live API credential before reading receipts', async () => {
     expect((await GET(request(), context())).status).toBe(401);
     expect(db.ingestionReceipt.findUnique).not.toHaveBeenCalled();

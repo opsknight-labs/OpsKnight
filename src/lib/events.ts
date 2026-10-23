@@ -10,8 +10,9 @@ import type { ProcessingLease } from './ingestion/contract';
 import { ingestionConfig } from './ingestion/config';
 import { lockProcessingReceipt, completeProcessingReceipt } from './ingestion/postgres';
 import { logger } from './logger';
+import { sanitizeIntegrationEnvelope } from './integrations/payload-security';
 import { EVENT_TRANSACTION_MAX_ATTEMPTS } from './config';
-import { createHash } from 'crypto';
+import { normalizeDedupKeys } from './incidents/event-identity';
 import { runReadCommittedTransaction } from './db-utils';
 import {
   enqueueEventSideEffects,
@@ -44,7 +45,6 @@ export type EventPayload = {
   };
 };
 
-const MAX_DEDUP_KEY_LENGTH = 512;
 const MAX_STORED_ALERT_PAYLOAD_BYTES = 64 * 1024;
 
 const URGENCY_RANK: Record<IncidentUrgency, number> = {
@@ -79,38 +79,6 @@ function truncateString(str: string, maxLength: number): string {
   const chars = Array.from(str);
   if (chars.length <= maxLength) return str;
   return chars.slice(0, maxLength - 3).join('') + '...';
-}
-
-function truncateDedupKey(key: unknown): string {
-  const str = typeof key === 'string' ? key : String(key || '');
-  if (str.length <= MAX_DEDUP_KEY_LENGTH) return str;
-  const hash = createHash('sha256').update(str).digest('hex').slice(0, 32);
-  const prefixLength = MAX_DEDUP_KEY_LENGTH - 33; // 32 hex chars + 1 underscore
-  return `${str.slice(0, prefixLength)}_${hash}`;
-}
-
-function normalizeDedupKeys(
-  key: unknown,
-  integrationId: string,
-  eventData: EventPayload['payload']
-): { primary: string; legacy?: string } {
-  const supplied = typeof key === 'string' ? key.trim() : String(key ?? '').trim();
-  const stableRaw =
-    supplied ||
-    `unkeyed-${createHash('sha256')
-      .update(
-        JSON.stringify({
-          source: eventData.source,
-          summary: eventData.summary,
-          details: eventData.custom_details ?? null,
-        })
-      )
-      .digest('hex')}`;
-
-  return {
-    primary: truncateDedupKey(`${integrationId}:${stableRaw}`),
-    legacy: supplied ? truncateDedupKey(supplied) : undefined,
-  };
 }
 
 function boundedAlertPayload(eventData: EventPayload['payload']): Prisma.InputJsonValue {
@@ -163,16 +131,19 @@ export async function processEvent(
   envelopeInput?: IntegrationEventEnvelope,
   processingLease?: ProcessingLease
 ) {
-  const envelope: IntegrationEventEnvelope = envelopeInput ?? {
-    serviceId,
-    integrationId,
-    integrationType: 'EVENTS_API',
+  const dedupKeys = normalizeDedupKeys(payload.dedup_key, integrationId, payload.payload);
+  const envelope = sanitizeIntegrationEnvelope({
+    ...(envelopeInput ?? {
+      serviceId,
+      integrationId,
+      integrationType: 'EVENTS_API',
+      providerPayload: payload,
+      receivedAt: new Date(),
+    }),
     event: payload,
-    providerPayload: payload,
-    receivedAt: new Date(),
-  };
-  const { event_action, dedup_key: rawDedupKey, payload: eventData } = payload;
-  const dedupKeys = normalizeDedupKeys(rawDedupKey, integrationId, eventData);
+  });
+  payload = envelope.event;
+  const { event_action, payload: eventData } = payload;
   const dedup_key = dedupKeys.primary;
   const candidateDedupKeys = dedupKeys.legacy
     ? [dedupKeys.primary, dedupKeys.legacy]
@@ -780,6 +751,7 @@ export async function processEvent(
 export { escalationNotificationRoute } from './event-side-effects';
 
 export async function processIntegrationEvent(envelope: IntegrationEventEnvelope) {
+  envelope = sanitizeIntegrationEnvelope(envelope);
   if (ingestionConfig().mode === 'postgres') {
     const { acceptIntegrationEvent } = await import('./ingestion/admission');
     return acceptIntegrationEvent(envelope);

@@ -798,6 +798,7 @@ model IngestionReceipt {
   serviceId      String
   integrationId  String
   partitionKey   String
+  orderingKeys   String[] @default([])
   idempotencyKey String   @unique
   contentHash    String
   budgetShard    Int

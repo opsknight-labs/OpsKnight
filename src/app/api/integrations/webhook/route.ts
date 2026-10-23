@@ -22,8 +22,15 @@ export const POST = createIntegrationHandler<WebhookPayload>(
     const event = transformWebhookToEvent(payload, {});
 
     // Process the event
-    const result = await processIntegrationEvent({ event, serviceId: integration.serviceId, integrationId: integration.id, integrationType: 'WEBHOOK', providerPayload: payload, receivedAt: new Date() });
+    const result = await processIntegrationEvent({
+      event,
+      serviceId: integration.serviceId,
+      integrationId: integration.id,
+      integrationType: 'WEBHOOK',
+      providerPayload: payload,
+      receivedAt: new Date(),
+    });
 
-    return { action: result.action, incident: result.incident };
+    return result;
   }
 );

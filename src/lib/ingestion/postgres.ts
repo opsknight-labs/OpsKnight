@@ -12,7 +12,9 @@ import {
 import {
   digest,
   encodeEnvelope,
+  StoredEnvelope,
   partitionKey,
+  orderingKeys,
   retryDelayMs,
   IngestionConflictError,
   IngestionLeaseLostError,
@@ -29,10 +31,12 @@ export async function acceptPostgresEvent(
   const startedAt = performance.now();
   const envelope = encodeEnvelope(input);
   const partition = partitionKey(envelope);
+  const identities = orderingKeys(envelope);
+  await prepareIngestionOrdering();
   const { receivedAt: _receivedAt, automationSnapshot: _automationSnapshot, ...content } = envelope;
   const contentHash = digest(content);
   const config = ingestionConfig();
-  const budgetShard = Number.parseInt(partition.slice(0, 8), 16) % 64;
+  const preferredBudgetShard = Number.parseInt(partition.slice(0, 8), 16) % 64;
   const idempotencyKey = digest([
     input.serviceId,
     input.integrationId,
@@ -43,7 +47,9 @@ export async function acceptPostgresEvent(
     await tx.$executeRaw`SET LOCAL synchronous_commit = on`;
     // Allocate the sequence while holding this key's admission lock. Without
     // it a slower earlier append could commit after a later event was processed.
-    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`ingestion:${partition}`}, 0))`;
+    for (const identity of identities) {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`ingestion:${identity}`}, 0))`;
+    }
     const existing = await tx.ingestionReceipt.findUnique({ where: { idempotencyKey } });
     if (existing) {
       if (existing.contentHash !== contentHash)
@@ -64,20 +70,30 @@ export async function acceptPostgresEvent(
       automationSnapshot: await getIngestionAutomationConfig(tx, input.serviceId),
     });
     const payloadBytes = Buffer.byteLength(JSON.stringify(acceptedEnvelope));
-    // Conservative per-shard caps bound the total without a single hot global
-    // counter. Dead letters retain their reservation until successfully replayed.
-    const reserved = await tx.$executeRaw`
-      UPDATE "IngestionBudget" SET "pending" = "pending" + 1, "bytes" = "bytes" + ${payloadBytes}
-      WHERE "shard" = ${budgetShard} AND "pending" < ${Math.floor(config.maxPending / 64)}
-        AND "bytes" + ${payloadBytes} <= ${Math.floor(config.maxPendingBytes / 64)}
+    // Independent counters retain the global bound without forcing a hot
+    // incident key to use only 1/64 of the available backlog capacity.
+    const reserved = await tx.$queryRaw<Array<{ shard: number }>>`
+      WITH candidate AS (
+        SELECT "shard" FROM "IngestionBudget"
+        WHERE "pending" < ${Math.floor(config.maxPending / 64)}
+          AND "bytes" + ${payloadBytes} <= ${Math.floor(config.maxPendingBytes / 64)}
+        ORDER BY ("shard" - ${preferredBudgetShard} + 64) % 64
+        FOR UPDATE SKIP LOCKED LIMIT 1
+      )
+      UPDATE "IngestionBudget" budget SET "pending" = budget."pending" + 1,
+        "bytes" = budget."bytes" + ${payloadBytes}
+      FROM candidate WHERE budget."shard" = candidate."shard"
+      RETURNING budget."shard"
     `;
-    if (reserved !== 1) throw new IngestionUnavailableError('Ingestion capacity exhausted');
+    if (!reserved[0]) throw new IngestionUnavailableError('Ingestion capacity exhausted');
+    const budgetShard = reserved[0].shard;
     const receipt = await tx.ingestionReceipt.create({
       data: {
         id: randomUUID(),
         serviceId: input.serviceId,
         integrationId: input.integrationId,
         partitionKey: partition,
+        orderingKeys: identities,
         idempotencyKey,
         contentHash,
         budgetShard,
@@ -125,8 +141,9 @@ export async function claimPostgresEvents(limit: number, leaseMs = 60000) {
   if (!Number.isInteger(limit) || limit < 1 || limit > 64)
     throw new Error('Invalid ingestion claim limit');
   const token = randomUUID();
-  return prisma.$queryRaw<
-    Array<{ id: string; leaseToken: string; envelope: Prisma.JsonValue; attempts: number }>
+  await prepareIngestionOrdering();
+  const claims = await prisma.$queryRaw<
+    Array<{ id: string; leaseToken: string | null; envelope: Prisma.JsonValue; attempts: number }>
   >`
     WITH candidates AS (
       SELECT r."id" FROM "IngestionReceipt" r
@@ -134,17 +151,97 @@ export async function claimPostgresEvents(limit: number, leaseMs = 60000) {
         OR (r."status" = 'PROCESSING' AND r."leaseExpiresAt" <= CURRENT_TIMESTAMP))
       AND NOT EXISTS (
         SELECT 1 FROM "IngestionReceipt" previous
-        WHERE previous."partitionKey" = r."partitionKey"
-          AND previous."sequence" < r."sequence" AND previous."status" <> 'COMPLETED'
+        WHERE (previous."orderingKeys" && r."orderingKeys"
+          OR previous."orderingKeys" @> ARRAY['unidentified:' || r."serviceId"])
+          AND previous."sequence" < r."sequence" AND previous."status" NOT IN ('COMPLETED', 'ARCHIVED')
       )
       ORDER BY r."sequence" FOR UPDATE OF r SKIP LOCKED LIMIT ${limit}
     )
-    UPDATE "IngestionReceipt" r SET "status" = 'PROCESSING', "leaseToken" = ${token},
-      "leaseExpiresAt" = CURRENT_TIMESTAMP + ${leaseMs} * INTERVAL '1 millisecond',
-      "attempts" = r."attempts" + 1
+    UPDATE "IngestionReceipt" r SET
+      "status" = CASE WHEN r."attempts" >= 10 THEN 'DEAD' ELSE 'PROCESSING' END,
+      "leaseToken" = CASE WHEN r."attempts" >= 10 THEN NULL ELSE ${token} END,
+      "leaseExpiresAt" = CASE WHEN r."attempts" >= 10 THEN NULL ELSE CURRENT_TIMESTAMP + ${leaseMs} * INTERVAL '1 millisecond' END,
+      "failureCode" = CASE WHEN r."attempts" >= 10 THEN 'RETRIES_EXHAUSTED' ELSE r."failureCode" END,
+      "attempts" = CASE WHEN r."attempts" >= 10 THEN r."attempts" ELSE r."attempts" + 1 END
     FROM candidates WHERE r."id" = candidates."id"
     RETURNING r."id", r."leaseToken", r."envelope", r."attempts"
   `;
+  return claims.filter(
+    (claim): claim is typeof claim & { leaseToken: string } => claim.leaseToken !== null
+  );
+}
+
+let orderingReady: Promise<void> | null = null;
+/** Upgrade unfinished pre-release inbox rows before admitting or claiming new work. */
+export async function prepareIngestionOrdering(): Promise<void> {
+  if (!orderingReady)
+    orderingReady = backfillIngestionOrdering().catch(error => {
+      orderingReady = null;
+      throw error;
+    });
+  await orderingReady;
+}
+
+export async function backfillIngestionOrdering(): Promise<void> {
+  for (;;) {
+    const rows = await prisma.ingestionReceipt.findMany({
+      where: {
+        status: { in: ['PENDING', 'PROCESSING', 'DEAD'] },
+        orderingKeys: { isEmpty: true },
+      },
+      select: { id: true, envelope: true, serviceId: true, integrationId: true },
+      take: 100,
+    });
+    if (!rows.length) return;
+    for (const row of rows) {
+      const identity = StoredEnvelope.pick({ serviceId: true, integrationId: true, event: true })
+        .strip()
+        .safeParse({
+          ...(row.envelope && typeof row.envelope === 'object' && !Array.isArray(row.envelope)
+            ? row.envelope
+            : {}),
+          serviceId: row.serviceId,
+          integrationId: row.integrationId,
+        });
+      if (identity.success) {
+        const parsed = {
+          ...identity.data,
+          version: 1 as const,
+          integrationType: 'UPGRADE',
+          providerPayload: null,
+          receivedAt: new Date(0).toISOString(),
+        };
+        await prisma.ingestionReceipt.updateMany({
+          where: {
+            id: row.id,
+            status: { in: ['PENDING', 'PROCESSING', 'DEAD'] },
+            orderingKeys: { isEmpty: true },
+          },
+          data: {
+            partitionKey: partitionKey(parsed),
+            orderingKeys: orderingKeys(parsed),
+          },
+        });
+      } else {
+        // An unidentifiable poison row blocks only subsequent work for its
+        // service until explicit disposition; other services remain usable.
+        await prisma.ingestionReceipt.updateMany({
+          where: {
+            id: row.id,
+            status: { in: ['PENDING', 'PROCESSING', 'DEAD'] },
+            orderingKeys: { isEmpty: true },
+          },
+          data: {
+            orderingKeys: [`unidentified:${row.serviceId}`],
+            status: 'DEAD',
+            leaseToken: null,
+            leaseExpiresAt: null,
+            failureCode: 'INVALID_ENVELOPE',
+          },
+        });
+      }
+    }
+  }
 }
 
 /** Hold the receipt row until the incident and outbox transaction commits. */

@@ -26,6 +26,27 @@ describe('durable ingestion contract', () => {
   it('round trips the original acceptance time and provider fields', () => {
     expect(decodeEnvelope(encodeEnvelope(envelope))).toEqual(envelope);
   });
+  it('filters provider and normalized credentials while preserving Automation contact context', () => {
+    const encoded = encodeEnvelope({
+      ...envelope,
+      event: {
+        ...envelope.event,
+        payload: {
+          ...envelope.event.payload,
+          summary: 'Bearer secret-value',
+          source: 'postgresql://user:secret-password@host/db',
+          custom_details: { owner: 'oncall@example.test', api_key: 'secret-api' },
+        },
+      },
+      providerPayload: { raw: { routing_key: 'secret-routing' } },
+    });
+    expect(JSON.stringify(encoded)).not.toContain('secret-');
+    expect(encoded.event.payload.custom_details).toEqual({
+      owner: 'oncall@example.test',
+      api_key: '[REDACTED]',
+    });
+  });
+
   it('keeps one partition across transitions and separates services and integrations', () => {
     const encoded = encodeEnvelope(envelope);
     expect(partitionKey(encoded)).toBe(

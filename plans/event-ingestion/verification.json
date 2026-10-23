@@ -73,5 +73,45 @@
     "modifiedSourceLint": "passed",
     "productionBuild": "passed",
     "enterpriseCertified": false
+  },
+  "deepReviewFollowup": {
+    "recordedAt": "2026-10-23T09:17:30.527166+00:00",
+    "reviewedBaseline": "e6357c5b6",
+    "certified": false,
+    "checks": {
+      "isolatedPostgresAndContract": {
+        "passed": 31,
+        "failed": 0,
+        "skipped": 0
+      },
+      "focusedRegression": {
+        "passed": 74,
+        "failed": 0,
+        "skipped": 0
+      },
+      "typescript": "passed",
+      "modifiedSourceLint": "passed; CJS syntax checked separately"
+    },
+    "remediation": [
+      "canonical and legacy incident ordering",
+      "bounded abandoned-lease retries",
+      "hold-safe completed-payload retention",
+      "explicit audited dead-letter archive",
+      "integration-scoped receipt access and response propagation",
+      "shared credential filtering preserving Automation contact fields and implicit identity",
+      "direct ingestion connection accounting and deployment reserve",
+      "hot-key capacity spill across bounded budget shards",
+      "HTTP reconciliation harness with rejection-intolerant thresholds"
+    ],
+    "remaining": [
+      "shared immutable batch payloads and atomic child admission",
+      "storage lifecycle and bounded tombstones",
+      "critical reserve and fairness",
+      "operational event timing semantics",
+      "dynamic ingestion System settings",
+      "provider-wide HTTP and downstream lifecycle certification",
+      "Kafka transport and HA",
+      "sustained capacity and 24-hour soak"
+    ]
   }
 }

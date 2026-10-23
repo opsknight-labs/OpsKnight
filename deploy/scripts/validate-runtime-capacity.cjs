@@ -51,9 +51,7 @@ function parseStrictPositiveInt(key, val, fallback) {
   }
   const n = parseInt(trimmed, 10);
   if (!Number.isSafeInteger(n) || n <= 0) {
-    throw new Error(
-      `Invalid capacity configuration for ${key}: "${val}" must be greater than 0`
-    );
+    throw new Error(`Invalid capacity configuration for ${key}: "${val}" must be greater than 0`);
   }
   return n;
 }
@@ -103,7 +101,11 @@ function calculateRuntimeCapacity(customEnv) {
   if (!pgbouncer && env.COMPOSE_FILE && env.COMPOSE_FILE.includes('docker-compose.pgbouncer.yml')) {
     pgbouncer = true;
   }
-  if (!pgbouncer && env.SWARM_STACK_FILE && env.SWARM_STACK_FILE.includes('docker-stack.pgbouncer.yml')) {
+  if (
+    !pgbouncer &&
+    env.SWARM_STACK_FILE &&
+    env.SWARM_STACK_FILE.includes('docker-stack.pgbouncer.yml')
+  ) {
     pgbouncer = true;
   }
 
@@ -227,8 +229,38 @@ function calculateRuntimeCapacity(customEnv) {
     3
   );
 
-  const configuredMax =
-    env.DATABASE_MAX_CONNECTIONS || env.DATABASE_MAX_APPLICATION_CONNECTIONS;
+  // Dedicated consumers always use direct DATABASE_URL connections, including
+  // when web traffic is routed through PgBouncer. Integrated consumers share
+  // their process's existing Prisma pool and require no additional pool.
+  const ingestionReplicaValue =
+    env.SWARM_REPLICAS_INGESTION_WORKER ||
+    env.SWARM_INGESTION_WORKER_REPLICAS ||
+    env.INGESTION_WORKER_REPLICAS;
+  const ingestionReplicas =
+    ingestionReplicaValue === '0'
+      ? 0
+      : parseStrictPositiveInt('INGESTION_WORKER_REPLICAS', ingestionReplicaValue, 0);
+  let ingestionUrlPool;
+  try {
+    ingestionUrlPool = new URL(env.DATABASE_URL).searchParams.get('connection_limit');
+  } catch {
+    /* No datasource configured: use the Prisma default. */
+  }
+  const ingestionPool = parseStrictPositiveInt(
+    'DATABASE_POOL_SIZE_INGESTION_WORKER',
+    env.DATABASE_POOL_SIZE_INGESTION_WORKER || env.DATABASE_POOL_SIZE || ingestionUrlPool,
+    10
+  );
+  if (ingestionPool > 100)
+    throw new Error('DATABASE_POOL_SIZE_INGESTION_WORKER must not exceed 100');
+  const ingestionConnections = ingestionReplicas * ingestionPool;
+  const reserveValue = env.DATABASE_CONNECTION_RESERVE;
+  const connectionReserve =
+    reserveValue === '0'
+      ? 0
+      : parseStrictPositiveInt('DATABASE_CONNECTION_RESERVE', reserveValue, 0);
+
+  const configuredMax = env.DATABASE_MAX_CONNECTIONS || env.DATABASE_MAX_APPLICATION_CONNECTIONS;
   const maxConnections = parseStrictPositiveInt('DATABASE_MAX_CONNECTIONS', configuredMax, 80);
 
   let webConnections = 0;
@@ -242,15 +274,16 @@ function calculateRuntimeCapacity(customEnv) {
 
   const directWorkerConnections =
     mode === 'integrated'
-      ? integratedReplicas
-      : schedulerReplicas * (schedulerPool + 1) +
+      ? integratedReplicas + ingestionConnections
+      : ingestionConnections +
+        schedulerReplicas * (schedulerPool + 1) +
         generalReplicas * generalPool +
         criticalReplicas * criticalPool +
         bulkReplicas * bulkPool +
         runbookReplicas * runbookPool +
         projectorReplicas * projectorPool;
 
-  const totalDemand = webConnections + directWorkerConnections;
+  const totalDemand = webConnections + directWorkerConnections + connectionReserve;
   const safe = totalDemand <= maxConnections;
   const headroom = maxConnections - totalDemand;
 
@@ -260,10 +293,16 @@ function calculateRuntimeCapacity(customEnv) {
     webConnections,
     directWorkerConnections,
     totalDemand,
+    connectionReserve,
     maxConnections,
     safe,
     headroom,
     breakdown: {
+      ingestionWorker: {
+        replicas: ingestionReplicas,
+        pool: ingestionPool,
+        total: ingestionConnections,
+      },
       web: {
         replicas: mode === 'integrated' ? integratedReplicas : webReplicas,
         pool: webPool,
@@ -328,11 +367,16 @@ function calculateRuntimeCapacity(customEnv) {
 
 function main() {
   try {
+    loadDotenvIfPresent();
     for (let i = 2; i < process.argv.length; i++) {
       if ((process.argv[i] === '--compose' || process.argv[i] === '-f') && process.argv[i + 1]) {
         const composePath = process.argv[i + 1];
         if (fs.existsSync(composePath)) {
           const content = fs.readFileSync(composePath, 'utf8');
+          if (content.includes('opsknight-ingestion-worker:')) {
+            process.env.INGESTION_WORKER_REPLICAS ??= '1';
+            process.env.DATABASE_POOL_SIZE_INGESTION_WORKER ||= '5';
+          }
           if (content.includes('opsknight-pgbouncer:')) {
             process.env.PGBOUNCER_ENABLED = 'true';
           }
@@ -341,7 +385,9 @@ function main() {
     }
     const analysis = calculateRuntimeCapacity(process.env);
     console.log(`\n=== OpsKnight Database Connection Budget Preflight ===`);
-    console.log(`Topology Mode: ${analysis.mode} | PgBouncer: ${analysis.pgbouncer ? 'ENABLED' : 'DISABLED'}`);
+    console.log(
+      `Topology Mode: ${analysis.mode} | PgBouncer: ${analysis.pgbouncer ? 'ENABLED' : 'DISABLED'}`
+    );
     console.log(`Total Database Demand:      ${analysis.totalDemand} connections`);
     console.log(`Maximum Permitted Capacity: ${analysis.maxConnections} connections`);
     console.log(`Headroom / Safety Margin:   ${analysis.headroom} connections`);
@@ -359,6 +405,9 @@ function main() {
       console.log(`- Status Projector: ${JSON.stringify(analysis.breakdown.statusProjector)}`);
       console.log(`- Direct Worker Total: ${analysis.directWorkerConnections} connections`);
     }
+
+    console.log(`- Ingestion Worker: ${JSON.stringify(analysis.breakdown.ingestionWorker)}`);
+    console.log(`- Reserved connections: ${analysis.connectionReserve}`);
 
     if (!analysis.safe) {
       console.error(

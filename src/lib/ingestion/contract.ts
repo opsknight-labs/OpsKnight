@@ -1,5 +1,7 @@
 import { createHash } from 'node:crypto';
+import { normalizeDedupKeys } from '@/lib/incidents/event-identity';
 import { z } from 'zod';
+import { sanitizeIntegrationEnvelope } from '@/lib/integrations/payload-security';
 import type { IntegrationEventEnvelope } from '@/lib/automation/runtime';
 
 /** Versioned storage contract. Never persist credentials or request headers. */
@@ -67,7 +69,7 @@ export function digest(value: unknown): string {
 export function encodeEnvelope(input: IntegrationEventEnvelope): StoredEnvelope {
   // JSON round-trip rejects non-serializable payloads before durable acceptance.
   const serialized = JSON.stringify({
-    ...input,
+    ...sanitizeIntegrationEnvelope(input),
     version: 1,
     receivedAt: input.receivedAt.toISOString(),
   });
@@ -85,15 +87,24 @@ export function decodeEnvelope(input: unknown): IntegrationEventEnvelope {
   };
 }
 
+export function orderingKeys(envelope: StoredEnvelope): string[] {
+  const keys = normalizeDedupKeys(
+    envelope.event.dedup_key,
+    envelope.integrationId,
+    envelope.event.payload
+  );
+  return [...new Set([keys.primary, ...(keys.legacy ? [keys.legacy] : [])])]
+    .map(key => digest([envelope.serviceId, key]))
+    .sort();
+}
+
 export function partitionKey(envelope: StoredEnvelope): string {
-  const key =
-    envelope.event.dedup_key.trim() ||
-    digest({
-      source: envelope.event.payload.source,
-      summary: envelope.event.payload.summary,
-      details: envelope.event.payload.custom_details ?? null,
-    });
-  return digest([envelope.serviceId, envelope.integrationId, key]);
+  const keys = normalizeDedupKeys(
+    envelope.event.dedup_key,
+    envelope.integrationId,
+    envelope.event.payload
+  );
+  return digest([envelope.serviceId, keys.primary]);
 }
 
 export function retryDelayMs(attempt: number, random = Math.random()): number {

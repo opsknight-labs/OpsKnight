@@ -23,9 +23,24 @@ export const POST = createIntegrationHandler<DatadogEvent>(
 
     // Process all events
     const results = await Promise.all(
-      events.map(event => processIntegrationEvent({ event, serviceId: integration.serviceId, integrationId: integration.id, integrationType: 'DATADOG', providerPayload: payload, receivedAt: new Date() }))
+      events.map(event =>
+        processIntegrationEvent({
+          event,
+          serviceId: integration.serviceId,
+          integrationId: integration.id,
+          integrationType: 'DATADOG',
+          providerPayload: payload,
+          receivedAt: new Date(),
+        })
+      )
     );
 
-    return { action: results[0]?.action || 'acknowledge', incident: results[0]?.incident };
+    return {
+      ...results[0],
+      action: results[0]?.action || 'acknowledge',
+      ...(results.some(result => 'receiptId' in result)
+        ? { receipts: results.flatMap(result => ('receiptId' in result ? [result.receiptId] : [])) }
+        : {}),
+    };
   }
 );
