@@ -841,6 +841,19 @@ model IngestionBudget {
   bytes   BigInt @default(0)
 }
 
+// Shared token buckets use database time and survive web replica restarts.
+model IngestionQuota {
+  key            String   @id
+  tokens         Float
+  rate           Int
+  burst          Int
+  updatedAt      DateTime @db.Timestamptz(3)
+  lastAllowed    Boolean
+  policyRevision BigInt   @default(0)
+
+  @@index([updatedAt])
+}
+
 model InboundDelivery {
   id             String                @id @default(cuid())
   integrationId  String

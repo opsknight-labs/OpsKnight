@@ -1,5 +1,14 @@
 import { z } from 'zod';
 
+export const ingestionQuotaPolicySchema = z
+  .object({
+    eventsPerMinute: z.number().int().min(1).max(10000000),
+    eventsBurst: z.number().int().min(1).max(10000000),
+    integrationPerMinute: z.number().int().min(1).max(10000000),
+    integrationBurst: z.number().int().min(1).max(10000000),
+  })
+  .strict();
+
 /** Safe online controls. Transport and database pools remain deployment configuration. */
 export const ingestionPolicySchema = z
   .object({
@@ -14,6 +23,7 @@ export const ingestionPolicySchema = z
     payloadRetentionHours: z.number().int().min(1).max(720),
     receiptRetentionDays: z.number().int().min(31).max(3650).default(90),
     criticalReservePercent: z.number().int().min(0).max(50).default(10),
+    quotas: ingestionQuotaPolicySchema.optional(),
   })
   .strict();
 

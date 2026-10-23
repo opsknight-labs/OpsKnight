@@ -234,5 +234,21 @@
     "admissionTargetPassed": false,
     "cpuProfileScope": "Diagnostic includes setup/warmup/load; native query engine not fully visible; no causal attribution",
     "remaining": "New round-trip changes require rebuilt image and repeat; worker termination, HA and sustained/soak gates remain open"
+  },
+  "liveQuotas": {
+    "certified": false,
+    "databaseAndContractPassed": 49,
+    "focusedApiAndContractPassed": 18,
+    "freshMigrationDeployment": "passed on temporary PostgreSQL16.13 and owned Docker PostgreSQL16",
+    "typeCheck": "passed",
+    "modifiedSourceLint": "passed",
+    "review": "Independent bug/security substitutes found stale-rate refill and stale-reader overwrite; fixed and verified",
+    "behavior": "Shared token bucket with independent refill rates/bursts, live revisions, conservative refill and persistent debt",
+    "limitations": [
+      "No organization model or organization quotas",
+      "No service-weight/global-rate controls yet",
+      "No capacity certification; current-policy read and hot bucket upsert add database work",
+      "Mixed pre-release asynchronous admission images require controlled rollout; synchronous default is unchanged"
+    ]
   }
 }

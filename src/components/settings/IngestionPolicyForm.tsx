@@ -31,6 +31,13 @@ const fields = [
   { key: 'pollMs', label: 'Idle polling interval (milliseconds)', min: 50, max: 30000 },
 ] as const;
 
+const quotaFields = [
+  { key: 'eventsPerMinute', label: 'Events API requests per minute per authenticated key' },
+  { key: 'eventsBurst', label: 'Events API burst requests per authenticated key' },
+  { key: 'integrationPerMinute', label: 'Provider requests per minute per integration' },
+  { key: 'integrationBurst', label: 'Provider burst requests per integration' },
+] as const;
+
 /** Uses the same revision-checked command as operator API clients. */
 export default function IngestionPolicyForm({
   policy,
@@ -86,6 +93,30 @@ export default function IngestionPolicyForm({
         treated as a new event and passes through normal incident deduplication.
       </p>
       <div className="grid gap-4 md:grid-cols-2">
+        {draft.quotas &&
+          quotaFields.map(field => (
+            <div key={field.key} className="space-y-2">
+              <Label htmlFor={`ingestion-${field.key}`}>{field.label}</Label>
+              <Input
+                id={`ingestion-${field.key}`}
+                type="number"
+                required
+                step={1}
+                min={1}
+                max={10000000}
+                disabled={busy}
+                value={draft.quotas?.[field.key]}
+                onChange={event =>
+                  setDraft(previous => ({
+                    ...previous,
+                    quotas: previous.quotas
+                      ? { ...previous.quotas, [field.key]: Number(event.target.value) }
+                      : undefined,
+                  }))
+                }
+              />
+            </div>
+          ))}
         {fields.map(field => (
           <div key={field.key} className="space-y-2">
             <Label htmlFor={`ingestion-${field.key}`}>{field.label}</Label>
@@ -105,6 +136,11 @@ export default function IngestionPolicyForm({
           </div>
         ))}
       </div>
+      <p className="text-sm text-muted-foreground">
+        Quotas refill continuously at the configured rate up to the burst capacity. Saving a quota
+        preserves consumed credit across replicas. These limits apply to asynchronous ingestion;
+        synchronous mode keeps its existing rate limits.
+      </p>
       {error && (
         <p role="alert" className="text-sm text-destructive">
           {error}

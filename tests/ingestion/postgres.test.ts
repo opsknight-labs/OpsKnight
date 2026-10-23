@@ -857,31 +857,173 @@ describe('PostgreSQL ingestion durability', () => {
       await prisma.auditLog.count({ where: { action: 'ingestion.payload_retention' } })
     ).toBeGreaterThan(0);
   });
-  it('reserves shared quota blocks and never overshoots under concurrent requests', async () => {
+  it('shares burst credit under concurrent requests and refills without a window reset', async () => {
     process.env.OPSKNIGHT_INGESTION_MODE = 'postgres';
-    process.env.OPSKNIGHT_INGESTION_EVENTS_PER_MINUTE = '23';
     try {
+      const current = await getIngestionPolicy();
+      await applyIngestionCommand(
+        {
+          action: 'configure',
+          expectedRevision: current.revision,
+          policy: {
+            ...current.policy,
+            quotas: { ...current.policy.quotas, eventsPerMinute: 1, eventsBurst: 23 },
+          },
+        },
+        actorId
+      );
       const key = `quota-${randomUUID()}:events`;
       const results = await Promise.all(
         Array.from({ length: 40 }, () => checkIngestionQuota(key, 120, 60000))
       );
-      const allowedByWindow = new Map<number, number>();
-      for (const result of results.filter(result => result.allowed))
-        allowedByWindow.set(result.resetAt, (allowedByWindow.get(result.resetAt) ?? 0) + 1);
-      expect(results.some(result => result.allowed)).toBe(true);
-      for (const count of allowedByWindow.values()) expect(count).toBeLessThanOrEqual(23);
-      const counters = await prisma.rateLimit.findMany({
-        where: { key: { startsWith: `ingestion-quota:${key}:` } },
+      expect(results.filter(result => result.allowed)).toHaveLength(23);
+      const stored = await prisma.ingestionQuota.findUniqueOrThrow({ where: { key } });
+      expect(stored.tokens).toBeGreaterThanOrEqual(0);
+      expect(stored.tokens).toBeLessThan(1);
+      // Database-clock advance via fixture row only; production never modifies time.
+      await prisma.ingestionQuota.update({
+        where: { key },
+        data: { updatedAt: new Date(Date.now() - 61000) },
       });
-      // The concurrent run may straddle a real database minute boundary.
-      expect(counters.length).toBeGreaterThanOrEqual(1);
-      for (const counter of counters) expect(counter.count).toBeLessThanOrEqual(23);
-      if (counters.length === 1) expect(counters[0].count).toBe(23);
+      expect((await checkIngestionQuota(key, 120, 60000)).allowed).toBe(true);
+      expect((await checkIngestionQuota(key, 120, 60000)).allowed).toBe(false);
     } finally {
       delete process.env.OPSKNIGHT_INGESTION_MODE;
-      delete process.env.OPSKNIGHT_INGESTION_EVENTS_PER_MINUTE;
     }
   });
+
+  it('keeps exhausted quota debt across live policy changes and isolates integration keys', async () => {
+    process.env.OPSKNIGHT_INGESTION_MODE = 'postgres';
+    try {
+      const current = await getIngestionPolicy();
+      const quotas = {
+        eventsPerMinute: 1,
+        eventsBurst: 2,
+        integrationPerMinute: 1,
+        integrationBurst: 1,
+      };
+      await applyIngestionCommand(
+        {
+          action: 'configure',
+          expectedRevision: current.revision,
+          policy: { ...current.policy, quotas },
+        },
+        actorId
+      );
+      const key = `quota-live-${randomUUID()}:events`;
+      expect((await checkIngestionQuota(key, 120, 60000)).allowed).toBe(true);
+      expect((await checkIngestionQuota(key, 120, 60000)).allowed).toBe(true);
+      expect((await checkIngestionQuota(key, 120, 60000)).allowed).toBe(false);
+      await applyIngestionCommand(
+        {
+          action: 'configure',
+          expectedRevision: current.revision + 1,
+          policy: { ...current.policy, quotas: { ...quotas, eventsBurst: 10 } },
+        },
+        actorId
+      );
+      expect((await checkIngestionQuota(key, 120, 60000)).allowed).toBe(false);
+      const provider = `integration:${randomUUID()}`;
+      expect((await checkIngestionQuota(provider, 100, 60000)).allowed).toBe(true);
+      expect((await checkIngestionQuota(provider, 100, 60000)).allowed).toBe(false);
+      expect((await checkIngestionQuota(`integration:${randomUUID()}`, 100, 60000)).allowed).toBe(
+        true
+      );
+      const latest = await getIngestionPolicy();
+      const { quotas: omitted, ...olderFormPolicy } = latest.policy;
+      expect(omitted.eventsBurst).toBe(10);
+      await applyIngestionCommand(
+        { action: 'configure', expectedRevision: latest.revision, policy: olderFormPolicy },
+        actorId
+      );
+      expect((await getIngestionPolicy()).policy.quotas.eventsBurst).toBe(10);
+      expect((await checkIngestionQuota(key, 120, 60000)).allowed).toBe(false);
+    } finally {
+      delete process.env.OPSKNIGHT_INGESTION_MODE;
+    }
+  });
+  it('fences stale quota policy readers and never refills a reduced quota at the previous rate', async () => {
+    process.env.OPSKNIGHT_INGESTION_MODE = 'postgres';
+    let release = () => {};
+    let stale: Promise<unknown> | undefined;
+    try {
+      const initial = await getIngestionPolicy();
+      await applyIngestionCommand(
+        {
+          action: 'configure',
+          expectedRevision: initial.revision,
+          policy: {
+            ...initial.policy,
+            quotas: { ...initial.policy.quotas, eventsPerMinute: 10000000, eventsBurst: 100 },
+          },
+        },
+        actorId
+      );
+      const key = `quota-stale-${randomUUID()}:events`;
+      await checkIngestionQuota(key, 120, 60000);
+      await prisma.ingestionQuota.update({
+        where: { key },
+        data: { tokens: 0, updatedAt: new Date(Date.now() - 2000) },
+      });
+      let started = () => {};
+      const blocked = new Promise<void>(resolve => {
+        started = resolve;
+      });
+      const gate = new Promise<void>(resolve => {
+        release = resolve;
+      });
+      const delayed = new Proxy(prisma, {
+        get(target, property, receiver) {
+          if (property === '$queryRaw')
+            return new Proxy(target.$queryRaw, {
+              async apply(query, _receiver, args) {
+                started();
+                await gate;
+                return Reflect.apply(query, target, args);
+              },
+            });
+          return Reflect.get(target, property, receiver);
+        },
+      });
+      stale = checkIngestionQuota(key, 120, 60000, delayed);
+      await blocked;
+      const latest = await getIngestionPolicy();
+      await applyIngestionCommand(
+        {
+          action: 'configure',
+          expectedRevision: latest.revision,
+          policy: { ...latest.policy, quotas: { ...latest.policy.quotas, eventsPerMinute: 1 } },
+        },
+        actorId
+      );
+      expect((await checkIngestionQuota(key, 120, 60000)).allowed).toBe(false);
+      release();
+      expect(await stale).toMatchObject({ allowed: false });
+      expect(await prisma.ingestionQuota.findUniqueOrThrow({ where: { key } })).toMatchObject({
+        rate: 1,
+        policyRevision: BigInt(latest.revision + 1),
+      });
+      await prisma.ingestionQuota.update({
+        where: { key },
+        data: { updatedAt: new Date(Date.now() - 2000) },
+      });
+      expect((await checkIngestionQuota(key, 120, 60000)).allowed).toBe(false);
+      const future = new Date(Date.now() + 60000);
+      await prisma.ingestionQuota.update({
+        where: { key },
+        data: { tokens: 0, updatedAt: future },
+      });
+      expect((await checkIngestionQuota(key, 120, 60000)).allowed).toBe(false);
+      expect((await prisma.ingestionQuota.findUniqueOrThrow({ where: { key } })).updatedAt).toEqual(
+        future
+      );
+    } finally {
+      release();
+      await stale?.catch(() => undefined);
+      delete process.env.OPSKNIGHT_INGESTION_MODE;
+    }
+  });
+
   it('survives SIGKILL after staging the actual incident, receipt and outbox transaction', async () => {
     await acceptPostgresEvent(envelope(), 'kill');
     const jobsBefore = await prisma.backgroundJob.count();
