@@ -534,5 +534,23 @@
         "executionMs": 38.889
       }
     ]
+  },
+  "localRequestBackpressureFollowup": {
+    "recordedAt": "2026-10-23T21:47:56.676700+00:00",
+    "certified": false,
+    "perProcessDefault": 32,
+    "maximumConfigured": 1024,
+    "postgresOnly": true,
+    "overloadStatus": 503,
+    "retryAfterSeconds": 5,
+    "bodyReadDeadlineMs": 5000,
+    "durableOperationTimeout": false,
+    "focusedTestsPassed": 101,
+    "databaseContractPassed": 58,
+    "typeCheck": "passed; completed exit0",
+    "modifiedSourceLint": "passed; completed exit0",
+    "composeConfiguration": "passed with explicit candidate image",
+    "review": "P1 stalled unauthenticated body found and fixed; repeat independent review found no additional concrete defect",
+    "freshImageValidation": "pending"
   }
 }

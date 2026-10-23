@@ -1,4 +1,5 @@
 import { reserveIngestionReplay } from '@/lib/ingestion/replay';
+import { withIngestionRequestSlot } from '@/lib/ingestion/request-gate';
 import type { IngestionRateLimitError } from '@/lib/ingestion/contract';
 import { NextRequest } from 'next/server';
 import { withIngestionDelivery } from '@/lib/ingestion/admission';
@@ -241,4 +242,7 @@ async function postEvent(req: NextRequest) {
   }
 }
 
-export const POST = withRequestContext(postEvent, 'api.events');
+export const POST = withRequestContext(
+  (req: NextRequest) => withIngestionRequestSlot(() => postEvent(req)),
+  'api.events'
+);

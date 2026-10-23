@@ -5,6 +5,7 @@ export function ingestionConfig() {
     .object({
       mode: z.enum(['sync', 'postgres']).default('sync'),
       concurrency: z.coerce.number().int().min(1).max(32).default(4),
+      maxInFlightRequests: z.coerce.number().int().min(1).max(1024).default(32),
       pollMs: z.coerce.number().int().min(50).max(30000).default(250),
       maxPending: z.coerce.number().int().min(64).max(10000000).default(100000),
       eventsPerMinute: z.coerce.number().int().min(1).max(10000000).default(120),
@@ -20,6 +21,7 @@ export function ingestionConfig() {
     .parse({
       mode: process.env.OPSKNIGHT_INGESTION_MODE,
       concurrency: process.env.OPSKNIGHT_INGESTION_CONCURRENCY,
+      maxInFlightRequests: process.env.OPSKNIGHT_INGESTION_MAX_INFLIGHT_REQUESTS,
       pollMs: process.env.OPSKNIGHT_INGESTION_POLL_MS,
       maxPending: process.env.OPSKNIGHT_INGESTION_MAX_PENDING,
       eventsPerMinute: process.env.OPSKNIGHT_INGESTION_EVENTS_PER_MINUTE,
