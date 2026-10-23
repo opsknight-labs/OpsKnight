@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import type { EventPayload } from '@/lib/events';
+import type { Prisma } from '@prisma/client';
 
 function truncateDedupKey(key: unknown): string {
   const str = typeof key === 'string' ? key : String(key || '');
@@ -37,4 +38,17 @@ export function normalizeDedupKeys(
     primary: truncateDedupKey(`${integrationId}:${stableRaw}`),
     legacy: supplied ? truncateDedupKey(supplied) : undefined,
   };
+}
+
+/** Canonical and legacy identities share deterministic transaction-scoped locks. */
+export async function lockEventDedupKeys(
+  tx: Prisma.TransactionClient,
+  serviceId: string,
+  candidateDedupKeys: string[]
+): Promise<void> {
+  const lockKeys = Array.from(
+    new Set(candidateDedupKeys.map(key => JSON.stringify([serviceId, key])))
+  ).sort();
+  for (const lockKey of lockKeys)
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${lockKey}, 0))`;
 }
