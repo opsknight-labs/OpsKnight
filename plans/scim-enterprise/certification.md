@@ -413,3 +413,55 @@ fixture writers produced serialization contention. Bounded retry exhaustion
 remains a retryable 503; the JIT race verifies Retry-After and then requires a 409
 once the winning transaction settles, with one canonical account throughout.
 Live-provider and production PgBouncer/CPU/I/O/resource budgets remain unverified.
+
+## Production-readiness audit hardening (2026-10-23)
+
+The canonical-email migration now contains explicit BEGIN/COMMIT around its User
+lock, reservation backfill and enforcement trigger. Run
+`node scripts/scim/certify-migration-deploy.mjs` with the disposable localhost
+`enterprise_scim_test` database. This uses unmodified migration SQL through actual
+Prisma migrate deploy in a unique schema. A test-only PostgreSQL event trigger
+pauses trigger installation after backfill: concurrent insert/rename writers must
+wait; terminating the migration backend must roll back table and backfill; Prisma
+resolve --rolled-back followed by deploy must succeed with exact holder counts.
+The test passed locally, including historical casing duplicates and idempotent
+deploy. The legacy SQL/snapshot rehearsals strip only transaction boundary lines
+because they own outer transactions; they are not the deployment-path evidence.
+Do not silently edit an already-applied shared migration: reconcile its history.
+
+Pre-database authentication now bounds unknown verification concurrency to two,
+queue depth to 16, queue wait to 100 ms, attempts to 1,200/minute/process, and trusted
+client addresses to 120/minute. A separate two-slot recently-verified lane still
+checks PostgreSQL every request. Unit regressions cover distinct tokens, queue
+exhaustion/release, window reset and invalidation of a verified hint. Network maps
+are bounded and HMAC-pseudonymized. This does not replace deployed ingress limits.
+
+The reconciler now returns SQL-deduplicated desired users instead of materializing
+every overlapping group membership in Node. SHA-256 per-group fingerprints pin
+the contributing membership state. The local 25/50/100-group fixtures each use
+10,000 overlapping users and two concurrent revocations. They completed in
+3,921/3,948/8,185 ms under the unchanged 10-second transaction budget, including
+one retry for the contending writer. Sampled process RSS deltas were approximately
+79/93/13 MiB (128 MiB test ceiling); database query durations summed across both
+writers/retries were 5,365/5,529/12,134 ms. These are local measurements, not SLAs;
+sampling does not measure database RSS, PgBouncer waits or every transient peak.
+Manual membership, owner role and exact session-version changes were asserted.
+The 100-group fixture represents one million references but only 10,000 distinct
+directory users; disjoint high-cardinality unions remain a deployment budget gate.
+
+A distinct-token flood of 2,000 requests with 40 workers shed 1,982 before lookup;
+25 concurrent incident reads completed with a maximum 29.7 ms latency using a
+direct PostgreSQL pool of five. This is not deployed WAF/PgBouncer certification.
+Local regression results: 175 unit/API/auth/UI tests and 51 PostgreSQL tests passed.
+TypeScript, zero-warning lint, v2.1 frontmatter/relative links, the legacy SQL
+upgrade rehearsal and the 100K-user/10K-group backup/restore rehearsal passed.
+The optimized production build also passed; current-head browser CI remains a
+separate gate, rather than reusing the previous commit's browser results.
+The first fixture attempt timed out inserting one million rows in one statement;
+setup now inserts group-sized batches. Production transaction timeouts were not
+increased. Earlier immediate admission rejection was replaced by the bounded queue
+after it rejected ordinary concurrent provisioning; the lifecycle suite now passes.
+
+Live Entra/Okta, actual ingress enforcement, production pool/HA/failover and rolling
+deployment remain external release gates. The known explicit-photo-removal bug
+remains documented in the v2.1 SCIM guide and is not fixed by this pass.

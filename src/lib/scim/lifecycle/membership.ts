@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import type { Prisma } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 import { advanceUserSessionVersions } from '@/lib/users/admin-invariants';
 
 type ProspectiveGroup = Prisma.ScimGroupGetPayload<{ include: { memberships: true } }>;
@@ -13,18 +13,45 @@ export async function planTeamReconciliation(
   const stored = await tx.scimGroupTeamBinding.findMany({
     where: { teamId },
     orderBy: { id: 'asc' },
-    include: { group: { include: { memberships: true } }, grants: true },
+    include: { group: true, grants: true },
   });
   const current = await tx.teamMember.findMany({
     where: { teamId },
     orderBy: { id: 'asc' },
     include: { scimGrant: true },
   });
+  // Collapse overlapping directory sources in PostgreSQL rather than returning
+  // groups × members to Node. Revisions still fingerprint every contributing row.
+  const fingerprints = await tx.$queryRaw<{ id: string; digest: string }[]>`
+    SELECT b.id, encode(sha256(convert_to(coalesce(string_agg(m."userId", ',' ORDER BY m."userId"), ''), 'UTF8')), 'hex') AS digest
+    FROM "ScimGroupTeamBinding" b
+    LEFT JOIN "ScimGroupMembership" m ON m."groupId"=b."groupId"
+    WHERE b."teamId"=${teamId} GROUP BY b.id ORDER BY b.id`;
+  const prospectiveBinding =
+    prospective && stored.find(item => item.groupId === prospective.group.id);
+  const retirement = retiringBindingIds.length
+    ? Prisma.sql`AND b.id NOT IN (${Prisma.join([...retiringBindingIds])})`
+    : Prisma.empty;
+  const prospectiveRows =
+    prospective && !prospectiveBinding
+      ? Prisma.sql`UNION ALL SELECT 'pending-binding', m."groupId", m."userId"
+        FROM "ScimGroupMembership" m WHERE m."groupId"=${prospective.group.id}`
+      : Prisma.empty;
+  const desiredRows = await tx.$queryRaw<{ bindingId: string; userId: string }[]>`
+    WITH candidates AS (
+      SELECT b.id AS "bindingId", b."groupId", m."userId"
+      FROM "ScimGroupTeamBinding" b JOIN "ScimGroupMembership" m ON m."groupId"=b."groupId"
+      WHERE b."teamId"=${teamId} ${retirement} ${prospectiveRows}
+    ) SELECT DISTINCT ON (c."userId") c."bindingId", c."userId"
+      FROM candidates c
+      LEFT JOIN "TeamMember" tm ON tm."teamId"=${teamId} AND tm."userId"=c."userId"
+      LEFT JOIN "ScimTeamGrant" g ON g."teamMemberId"=tm.id
+      ORDER BY c."userId", (g."bindingId"=c."bindingId") DESC NULLS LAST, c."groupId" DESC`;
   const bindings = stored.map(binding => ({
     id: binding.id,
     groupId: binding.groupId,
     connectorId: binding.group.connectorId,
-    users: binding.group.memberships.map(member => member.userId).sort(),
+    digest: fingerprints.find(item => item.id === binding.id)?.digest,
     grants: binding.grants
       .map(grant => ({ ...grant }))
       .sort((a, b) => a.userId.localeCompare(b.userId)),
@@ -51,7 +78,7 @@ export async function planTeamReconciliation(
         id: 'pending-binding',
         groupId: prospective.group.id,
         connectorId: prospective.group.connectorId,
-        users: prospective.group.memberships.map(member => member.userId).sort(),
+        digest: undefined,
         grants: [],
       };
       bindings.push(binding);
@@ -67,17 +94,15 @@ export async function planTeamReconciliation(
   }
   const retiring = new Set(retiringBindingIds);
   const desired = new Map<string, string>();
-  // A stable group order makes prospective plans independent of a not-yet-created binding ID.
-  for (const binding of [...bindings].sort((a, b) => a.groupId.localeCompare(b.groupId)))
-    if (!retiring.has(binding.id))
-      for (const userId of binding.users) desired.set(userId, binding.id);
-  // Retain a grant's current source while that source still desires the member.
-  for (const binding of bindings)
-    if (!retiring.has(binding.id)) {
-      const users = new Set(binding.users);
-      for (const grant of binding.grants)
-        if (users.has(grant.userId)) desired.set(grant.userId, binding.id);
-    }
+  for (const row of desiredRows) desired.set(row.userId, row.bindingId);
+  // Explicit legacy adoption establishes provenance for a newly bound source.
+  if (prospective && !retiring.has(prospectiveBinding?.id ?? 'pending-binding')) {
+    const members = new Set(prospective.group.memberships.map(member => member.userId));
+    const adopted = new Set(prospective.adoptMemberIds);
+    for (const member of current)
+      if (adopted.has(member.id) && members.has(member.userId))
+        desired.set(member.userId, prospectiveBinding?.id ?? 'pending-binding');
+  }
   const byId = new Map(current.map(member => [member.id, member]));
   const existingUsers = new Set(current.map(member => member.userId));
   const obsoleteGrantMembers: string[] = [];

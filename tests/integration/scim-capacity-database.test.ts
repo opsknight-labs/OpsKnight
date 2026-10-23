@@ -5,7 +5,7 @@ import prisma from '@/lib/prisma';
 import { runSerializableTransaction } from '@/lib/db-utils';
 import { scimDriftAction } from '@/app/(app)/settings/system/scim-actions';
 import { reconcileTeam } from '@/lib/scim/lifecycle/membership';
-import { hashToken } from '@/lib/scim/security/credentials';
+import { authenticate, hashToken } from '@/lib/scim/security/credentials';
 import { users } from '@/lib/scim/lifecycle/users';
 import { groups } from '@/lib/scim/lifecycle/groups';
 import { handle } from '@/lib/scim/protocol/http';
@@ -280,4 +280,136 @@ suite('SCIM indexed capacity certification', () => {
       }) + '\n'
     );
   }, 120000);
+  it('reconciles 25/50/100 overlapping 10K-member sources with concurrent revocations', async () => {
+    const prefix = `scim-multigroup-${Date.now()}`;
+    await prisma.scimConnector.create({ data: { id: prefix, name: prefix } });
+    const team = await prisma.team.create({
+      data: {
+        name: prefix,
+        members: {
+          create: [
+            { userId: 'scim-load-user-10000', role: 'OWNER' },
+            { userId: 'scim-load-user-99999', role: 'MEMBER' },
+          ],
+        },
+      },
+    });
+    await prisma.$executeRaw`INSERT INTO "ScimGroup" (id,"connectorId",name,"updatedAt")
+      SELECT ${prefix} || '-' || i, ${prefix}, ${prefix} || '-' || i, CURRENT_TIMESTAMP
+      FROM generate_series(1,100) i`;
+    for (let group = 1; group <= 100; group++)
+      await prisma.$executeRaw`INSERT INTO "ScimGroupMembership" ("groupId","userId")
+        SELECT ${prefix + '-' + group}, 'scim-load-user-' || u FROM generate_series(1,10000) u`;
+    for (const size of [25, 50, 100]) {
+      await prisma.$executeRaw`INSERT INTO "ScimGroupTeamBinding" (id,"groupId","teamId","approvedBy")
+        SELECT ${prefix} || '-binding-' || i, ${prefix} || '-' || i, ${team.id}, 'capacity-certifier'
+        FROM generate_series(1,${size}) i ON CONFLICT DO NOTHING`;
+      await prisma.$executeRaw`INSERT INTO "ScimGroupMembership" ("groupId","userId")
+        SELECT ${prefix} || '-' || g, 'scim-load-user-' || u
+        FROM generate_series(1,100) g CROSS JOIN generate_series(1,2) u ON CONFLICT DO NOTHING`;
+      await runSerializableTransaction(tx => reconcileTeam(tx, team.id));
+      const versions = await prisma.user.findMany({
+        where: { id: { in: ['scim-load-user-1', 'scim-load-user-2'] } },
+        orderBy: { id: 'asc' },
+      });
+      let peakRss = process.memoryUsage().rss;
+      const baselineRss = peakRss;
+      const sampler = setInterval(() => {
+        peakRss = Math.max(peakRss, process.memoryUsage().rss);
+      }, 10);
+      let measuring = true;
+      const databaseDurations: number[] = [];
+      prisma.$on('query', query => {
+        if (measuring) databaseDurations.push(query.duration);
+      });
+      const attempts = [{ count: 0 }, { count: 0 }];
+      const started = performance.now();
+      try {
+        await Promise.all(
+          attempts.map((counter, index) =>
+            runSerializableTransaction(async tx => {
+              counter.count++;
+              await tx.$executeRaw`DELETE FROM "ScimGroupMembership" WHERE "groupId" LIKE ${prefix + '-%'} AND "userId"=${'scim-load-user-' + (index + 1)}`;
+              await reconcileTeam(tx, team.id);
+            })
+          )
+        );
+      } finally {
+        clearInterval(sampler);
+        measuring = false;
+      }
+      const elapsedMs = performance.now() - started;
+      expect(await prisma.teamMember.count({ where: { teamId: team.id } })).toBe(9999);
+      for (const previous of versions)
+        expect(
+          (await prisma.user.findUniqueOrThrow({ where: { id: previous.id } })).tokenVersion
+        ).toBe(previous.tokenVersion + 1);
+      expect(
+        await prisma.teamMember.count({
+          where: { teamId: team.id, userId: 'scim-load-user-10000', role: 'OWNER' },
+        })
+      ).toBe(1);
+      expect(
+        await prisma.teamMember.count({
+          where: { teamId: team.id, userId: 'scim-load-user-99999', scimGrant: null },
+        })
+      ).toBe(1);
+      expect(elapsedMs).toBeLessThan(10000);
+      expect(peakRss - baselineRss).toBeLessThan(128 * 1024 * 1024);
+      process.stdout.write(
+        JSON.stringify({
+          multiGroupBindings: size,
+          references: size * 10000,
+          concurrentRevocations: 2,
+          elapsedMs,
+          attempts,
+          peakRssBytes: peakRss,
+          rssDeltaBytes: peakRss - baselineRss,
+          databaseQueryMs: databaseDurations.reduce((a, b) => a + b, 0),
+          note: 'Local direct PostgreSQL; PgBouncer waits and server RSS not measured.',
+        }) + '\n'
+      );
+    }
+  }, 120000);
+  it('sheds distinct invalid bearer floods while ordinary database reads progress', async () => {
+    const started = performance.now();
+    const probeLatencies: number[] = [];
+    const flood = Array.from({ length: 2000 }, (_, i) => async () => {
+      try {
+        expect(
+          await authenticate(`Bearer distinct-flood-${Date.now()}-${i}-credential-invalid`)
+        ).toBeNull();
+        return 401;
+      } catch (error) {
+        if (error instanceof Error && 'status' in error && error.status === 429) return 429;
+        throw error;
+      }
+    });
+    let next = 0;
+    const outcomes: number[] = [];
+    await Promise.all([
+      ...Array.from({ length: 40 }, async () => {
+        while (next < flood.length) outcomes.push(await flood[next++]());
+      }),
+      (async () => {
+        for (let i = 0; i < 25; i++) {
+          const before = performance.now();
+          await prisma.incident.count();
+          probeLatencies.push(performance.now() - before);
+        }
+      })(),
+    ]);
+    expect(outcomes.filter(code => code === 429).length).toBeGreaterThan(0);
+    expect(probeLatencies.length).toBe(25);
+    expect(Math.max(...probeLatencies)).toBeLessThan(2000);
+    process.stdout.write(
+      JSON.stringify({
+        invalidDistinctTokens: outcomes.length,
+        shedBeforeLookup: outcomes.filter(code => code === 429).length,
+        incidentReadMaxMs: Math.max(...probeLatencies),
+        elapsedMs: performance.now() - started,
+        note: 'Direct PostgreSQL pool of five; not deployed WAF/PgBouncer certification.',
+      }) + '\n'
+    );
+  }, 30000);
 });

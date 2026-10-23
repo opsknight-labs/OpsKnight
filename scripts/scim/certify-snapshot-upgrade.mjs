@@ -80,7 +80,13 @@ INSERT INTO "SystemConfig" (key,value,"updatedAt") VALUES ('scim_configuration',
     '20261022150000_scim_case_insensitive_lookup',
     '20261023010000_user_canonical_email_reservation',
   ]
-    .map(name => readFileSync(`prisma/migrations/${name}/migration.sql`, 'utf8'))
+    // Snapshot invariants share an outer transaction; deploy certification uses
+    // the original migration, including its explicit transaction boundaries.
+    .map(name =>
+      readFileSync(`prisma/migrations/${name}/migration.sql`, 'utf8')
+        .replace(/^BEGIN;\s*$/gm, '')
+        .replace(/^COMMIT;\s*$/gm, '')
+    )
     .join('\n');
   sql(
     restoredDb,

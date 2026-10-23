@@ -5,6 +5,8 @@ import prisma from '@/lib/prisma';
 import { runSerializableTransaction } from '@/lib/db-utils';
 import { getControlActor, lockControlActor } from '@/lib/auth-control/actor';
 import { consumeAuthRateLimit } from '@/lib/auth-abuse';
+import { getClientIp } from '@/lib/client-ip';
+import { acquireScimAdmission } from './admission';
 import { recordAuthFailure } from '../observability/metrics';
 import { ScimFailure } from '../protocol/validation';
 
@@ -49,7 +51,10 @@ function denied(connectorId: string, reason: string): null {
   return null;
 }
 
-export async function authenticate(authorization: string | null): Promise<ScimPrincipal | null> {
+export async function authenticate(
+  authorization: string | null,
+  clientIp?: string
+): Promise<ScimPrincipal | null> {
   preauthenticate(authorization);
   const invalidKey = negativeKey(authorization);
   if ((invalidTokens.get(invalidKey) ?? 0) > Date.now())
@@ -57,6 +62,19 @@ export async function authenticate(authorization: string | null): Promise<ScimPr
   const match = /^Bearer ([^\s]{32,512})$/i.exec(authorization ?? '');
   if (!match) return denied('unknown', 'malformed');
   const token = match[1];
+  const admission = await acquireScimAdmission(hashToken(token), clientIp);
+  try {
+    const principal = await authenticateDatabase(token, invalidKey);
+    admission.remember(Boolean(principal));
+    return principal;
+  } finally {
+    admission.release();
+  }
+}
+async function authenticateDatabase(
+  token: string,
+  invalidKey: string
+): Promise<ScimPrincipal | null> {
   // PostgreSQL is authoritative: outages must never enable another authentication lane.
   const credential = await prisma.scimCredential.findUnique({
     where: { tokenHash: hashToken(token) },
@@ -109,7 +127,7 @@ export async function authenticate(authorization: string | null): Promise<ScimPr
   return { connectorId: 'legacy', credentialId: 'legacy', scopes: [...scopes] };
 }
 export async function authorize(request: Request, scope?: string) {
-  const principal = await authenticate(request.headers.get('authorization'));
+  const principal = await authenticate(request.headers.get('authorization'), getClientIp(request));
   if (!principal) throw new ScimFailure(401, 'Invalid, expired or revoked SCIM credential.');
   if (scope && !principal.scopes.includes(scope))
     throw new ScimFailure(403, `Credential requires ${scope} scope.`);

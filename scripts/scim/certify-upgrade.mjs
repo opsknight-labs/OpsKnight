@@ -29,7 +29,13 @@ try {
     '20261022150000_scim_case_insensitive_lookup',
     '20261023010000_user_canonical_email_reservation',
   ]
-    .map(name => readFileSync(`prisma/migrations/${name}/migration.sql`, 'utf8'))
+    // This legacy state-invariant rehearsal owns its outer rollback transaction.
+    // certify-migration-deploy.mjs separately exercises unmodified SQL via Prisma.
+    .map(name =>
+      readFileSync(`prisma/migrations/${name}/migration.sql`, 'utf8')
+        .replace(/^BEGIN;\s*$/gm, '')
+        .replace(/^COMMIT;\s*$/gm, '')
+    )
     .join('\n');
   const sql = `BEGIN; CREATE SCHEMA scim_upgrade_cert; SET LOCAL search_path TO scim_upgrade_cert;\n${ddl}\n
 INSERT INTO "User" (id,name,email,role,"roleSource",status,"scimExternalId","updatedAt") VALUES ('owner','Owner','owner@upgrade.example.test','ADMIN','MANUAL','ACTIVE',NULL,CURRENT_TIMESTAMP),('directory-user','Directory user','directory@upgrade.example.test','ADMIN','SCIM','ACTIVE','directory-object',CURRENT_TIMESTAMP);

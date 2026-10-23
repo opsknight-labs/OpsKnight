@@ -19,7 +19,7 @@ keywords:
   ]
 verification:
   level: source
-  verified_at: 2026-10-21
+  verified_at: 2026-10-23
   evidence:
     - src/lib/scim.ts
     - src/app/api/scim/v2/Users/route.ts
@@ -33,6 +33,10 @@ verification:
     - tests/api/scim-groups.test.ts
     - tests/api/scim-metadata.test.ts
     - src/components/settings/ScimSettingsSection.tsx
+    - src/app/(app)/settings/system/scim-actions.ts
+    - src/lib/scim/lifecycle/users.ts
+    - src/lib/scim/lifecycle/membership.ts
+    - src/lib/microsoft-teams/identity.ts
 ---
 
 # Configure SCIM provisioning
@@ -135,7 +139,9 @@ lifecycle. Use disposable accounts and groups:
 2. Update its profile; verify role authority and session version are unchanged.
 3. Create a group; add/remove users already provisioned through that connection.
 4. View the group under **Users & Groups**, select an operational team and preview
-   additions, protected owners, services and escalation rules. Approve the preview.
+   additions, removals, grant transfers, protected owners, affected users' session
+   invalidations, services and escalation rules. Approve the preview. If contributing
+   directory or team state changes, refresh the preview before approving.
 5. Replace membership; verify manual memberships and owner privileges survive.
 6. Disable the user; ordinary access is revoked. Review Activity for affected team
    memberships and future on-call shifts, and arrange operational coverage.
@@ -204,8 +210,9 @@ A failed audit insert rolls the mutation back. `X-Request-ID` correlates API
 responses with mutation activity. No raw bearer tokens or provider payloads are
 stored in activity records.
 
-Diagnostics compares the first 25 local group/team bindings against stored
-directory intent. Preview and approve a binding again to repair missing
+Diagnostics compares local group/team bindings against stored directory intent
+in pages of 25. Use the page controls to inspect bindings beyond the first page.
+Preview and approve a binding again to repair missing
 memberships. This comparison cannot infer the provider's current remote state;
 use provider logs for assignments or changes the provider has not delivered.
 Directory and activity lists use server pagination and bounded searches.
@@ -322,12 +329,23 @@ deleted. Case-only edits do not merge accounts. The seventh migration backfills
 reservation counts under a User-table write lock; rehearse its duration on a
 production-sized restored snapshot before scheduling the upgrade. Backups and
 restores must include the reservation table and its database trigger.
+The reservation migration explicitly wraps its lock, backfill and trigger
+installation in one transaction. If an earlier version was already applied in a
+shared environment, reconcile migration history before deploying the revised file.
 
 Name-only PATCH requests preserve local custom avatars when photos are not
 explicitly modified; generated default avatars can refresh their initials. Group
 mutation responses are serialized and checked against the byte budget before
 commit. A 413 rolls back directory changes and their audit events. Providers can
 request `excludedAttributes=members` for a bounded success representation.
+
+### Known profile-photo limitation
+
+Removing `photos` through PATCH can return success while retaining the previous
+custom avatar when the user's name is unchanged. A PUT that omits `photos` can
+also retain that avatar. Do not rely on either operation to erase a profile image;
+verify the returned representation and subsequent GET. Explicit photo replacement
+is supported, but does not remove the attribute. This limitation remains unresolved.
 
 
 ### Complete administration and pinned binding repairs
@@ -353,3 +371,27 @@ ID. Microsoft Graph email matching no longer authorizes automatic linking, even
 for a single email match. Email-only users must complete the signed-in account-link
 challenge. Historical case-variant email accounts are never chosen arbitrarily.
 Existing verified Teams links continue to work.
+
+### Admission and reconciliation deployment budgets
+
+Before database credential lookup, each application process admits at most two
+unknown-credential verifications concurrently, with a queue of 16 and a maximum
+100 ms wait. Unknown credentials have a shared 1,200-attempt/minute budget and,
+when a trusted client address is available, a 120-attempt/minute address budget.
+Recently verified credentials use a separate two-verification lane; this hint
+never replaces database authorization or revocation checks. New credentials can
+receive retryable 429 responses during sustained overload.
+
+Configure the existing trusted-proxy settings only behind an ingress that
+overwrites forwarding headers and blocks direct backend access. Untrusted client
+headers do not establish an address. Enforce network-wide ingress limits as well:
+local budgets multiply with application replicas and do not certify deployed WAF
+or PostgreSQL/PgBouncer capacity.
+
+Team reconciliation collapses overlapping group membership in PostgreSQL before
+returning desired users to the application. Revisions still fingerprint all
+contributing groups, and manual memberships and owner protections remain in
+force. Local tests cover 25, 50 and 100 overlapping groups of 10,000 members under
+concurrent revocation. Disjoint memberships can produce a larger distinct-user
+set; production memory, database I/O, pool waits and incident-processing latency
+still need a deployment-specific rehearsal.

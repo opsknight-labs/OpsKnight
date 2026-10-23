@@ -1,5 +1,7 @@
 -- Serialize every identity-creation path, including SQL/JIT/invitations, without
 -- rewriting or merging historical case variants. Installation blocks User writes.
+-- Prisma deploy does not supply a PostgreSQL transaction for migration files.
+BEGIN;
 LOCK TABLE "User" IN SHARE ROW EXCLUSIVE MODE;
 CREATE TABLE "UserEmailReservation" (
   "canonicalEmail" TEXT NOT NULL PRIMARY KEY,
@@ -34,3 +36,4 @@ $$;
 CREATE TRIGGER user_canonical_email_reservation
 AFTER INSERT OR UPDATE OF email OR DELETE ON "User"
 FOR EACH ROW EXECUTE FUNCTION maintain_user_email_reservation();
+COMMIT;
