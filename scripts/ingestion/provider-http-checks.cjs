@@ -5,6 +5,8 @@ const { encrypt } = require('../../src/lib/encryption');
 module.exports = async function providerHttpChecks({ prisma, baseUrl, consumeIngestionBatch }) {
   const run = randomUUID();
   const fixtures = [
+    ...require('./formatted-http-fixtures.cjs')(run),
+    ...require('./additional-http-fixtures.cjs')(run),
     ...require('./monitoring-http-fixtures.cjs')(run),
     {
       type: 'PROMETHEUS',
@@ -71,11 +73,11 @@ module.exports = async function providerHttpChecks({ prisma, baseUrl, consumeIng
   ];
   const evidence = [];
   let previous;
-  for (const fixture of fixtures) {
+  for (const [fixtureIndex, fixture] of fixtures.entries()) {
     const key = randomUUID();
     const signatureSecret = randomUUID();
     const service = await prisma.service.create({
-      data: { name: `Provider HTTP ${fixture.type} ${run}` },
+      data: { name: `Provider HTTP ${fixture.type} ${fixtureIndex} ${run}` },
     });
     const integration = await prisma.integration.create({
       data: {
@@ -87,25 +89,60 @@ module.exports = async function providerHttpChecks({ prisma, baseUrl, consumeIng
       },
     });
     const endpoint = `${baseUrl}/api/integrations/${fixture.route}?integrationId=${integration.id}`;
-    const body = JSON.stringify(fixture.payload);
+    const body =
+      fixture.encoding === 'form'
+        ? new URLSearchParams(fixture.payload).toString()
+        : fixture.encoding === 'pubsub'
+          ? JSON.stringify({
+              message: {
+                data: Buffer.from(JSON.stringify(fixture.payload)).toString('base64'),
+                messageId: run,
+              },
+              subscription: 'isolated-http-fixture',
+            })
+          : JSON.stringify(fixture.payload);
+    const credentialHeader = fixture.credentialHeader || 'X-Integration-Key';
+    const credential = value => (credentialHeader === 'Authorization' ? `Bearer ${value}` : value);
     const headers = {
-      'Content-Type': 'application/json',
-      'X-Integration-Key': key,
+      'Content-Type':
+        fixture.encoding === 'form' ? 'application/x-www-form-urlencoded' : 'application/json',
+      [credentialHeader]: credential(key),
       'Idempotency-Key': `${run}:${fixture.type}`,
     };
+    const signatureHeader =
+      {
+        GRAFANA: 'x-grafana-signature',
+        GITHUB: 'x-hub-signature-256',
+        GITLAB: 'x-gitlab-token',
+        SENTRY: 'sentry-hook-signature',
+        VERCEL: 'x-vercel-signature',
+      }[fixture.type] || 'x-signature';
     if (fixture.signed) {
-      headers['x-grafana-signature'] = createHmac('sha256', signatureSecret)
-        .update(body)
-        .digest('hex');
+      headers[signatureHeader] =
+        fixture.type === 'GITLAB'
+          ? signatureSecret
+          : (fixture.type === 'GITHUB' ? 'sha256=' : '') +
+            createHmac(fixture.type === 'VERCEL' ? 'sha1' : 'sha256', signatureSecret)
+              .update(body)
+              .digest('hex');
       headers['x-request-id'] = `${run}:${fixture.type}`;
+      headers['x-github-delivery'] = `${run}:${fixture.type}`;
+      headers['sentry-hook-id'] = `${run}:${fixture.type}`;
+      headers['sentry-hook-timestamp'] = String(Math.floor(Date.now() / 1000));
     }
     const post = overrides =>
       fetch(endpoint, { method: 'POST', headers: { ...headers, ...overrides }, body });
-    const unauthorized = await post({ 'X-Integration-Key': 'invalid-fixture-credential' });
+    const unauthorized = await post({
+      [credentialHeader]: credential('invalid-fixture-credential'),
+    });
     assert.ok(unauthorized.status >= 400, `${fixture.type} invalid credentials accepted`);
     if (fixture.signed) {
-      const invalidSignature = await post({ 'x-grafana-signature': 'invalid' });
-      assert.equal(invalidSignature.status, 401, 'Invalid Grafana signature accepted');
+      const invalidSignature = await post({ [signatureHeader]: 'invalid' });
+      assert.equal(
+        invalidSignature.status,
+        401,
+        `${fixture.type} invalid signature/token accepted`
+      );
     }
     assert.equal(await prisma.ingestionReceipt.count({ where: { serviceId: service.id } }), 0);
     const response = await post({});
@@ -126,6 +163,20 @@ module.exports = async function providerHttpChecks({ prisma, baseUrl, consumeIng
       await prisma.ingestionReceipt.count({ where: { serviceId: service.id } }),
       fixture.count
     );
+    if (fixture.type === 'PAGERDUTY') {
+      const alias = await fetch(
+        `${baseUrl}/api/integrations/pagerduty/v2/enqueue?integrationId=${integration.id}`,
+        { method: 'POST', headers, body }
+      );
+      assert.ok(
+        [200, 202].includes(alias.status),
+        'PagerDuty v2 alias rejected a compatible request'
+      );
+      assert.equal(
+        await prisma.ingestionReceipt.count({ where: { serviceId: service.id } }),
+        fixture.count
+      );
+    }
     const first = receipts[0];
     const statusUrl = `${baseUrl}/api/events/receipts/${first.id}?integrationId=${integration.id}`;
     const inspection = await fetch(statusUrl, { headers: { 'X-Integration-Key': key } });
@@ -163,6 +214,16 @@ module.exports = async function providerHttpChecks({ prisma, baseUrl, consumeIng
     assert.equal(completed, fixture.count);
     assert.equal(await prisma.alert.count({ where: { serviceId: service.id } }), fixture.count);
     assert.equal(await prisma.incident.count({ where: { serviceId: service.id } }), fixture.count);
+    if (fixture.expectedSummary) {
+      const incident = await prisma.incident.findFirstOrThrow({
+        where: { serviceId: service.id },
+        select: { title: true },
+      });
+      assert.ok(
+        incident.title.includes(fixture.expectedSummary),
+        `${fixture.type} ${fixture.format} lost its source summary`
+      );
+    }
     const stored = JSON.stringify(
       await Promise.all([
         prisma.ingestionReceipt.findMany({
@@ -193,6 +254,12 @@ module.exports = async function providerHttpChecks({ prisma, baseUrl, consumeIng
       duplicateReconciled: true,
       invalidCredentialsRejected: true,
       signatureChecked: !!fixture.signed,
+      signatureKind: fixture.signed
+        ? fixture.type === 'GITLAB'
+          ? 'shared-token'
+          : 'HMAC'
+        : undefined,
+      format: fixture.format || 'JSON',
       serviceIsolationChecked,
       oversizedRequestRejected: true,
       persistedPayloadsChecked: true,
