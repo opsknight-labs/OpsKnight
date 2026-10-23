@@ -14,7 +14,12 @@ import {
 } from '@/lib/metrics/operational/registry';
 import { recordWorkerHeartbeat } from '@/lib/runbooks/worker-heartbeats';
 import { getOpsKnightProcessRole } from '@/lib/runtime-role';
-import { pruneCompletedIngestionPayloads, pruneSharedIngestionPayloads } from './retention';
+import {
+  pruneCompletedIngestionPayloads,
+  pruneSharedIngestionPayloads,
+  pruneExpiredIngestionReceipts,
+  pruneExpiredIngestionBatches,
+} from './retention';
 
 let running: Promise<void> | null = null;
 let stopping = false;
@@ -123,8 +128,12 @@ export function startIngestionWorker(): void {
         try {
           const pruned = await pruneCompletedIngestionPayloads();
           const sharedPruned = await pruneSharedIngestionPayloads();
+          const receiptsPruned = await pruneExpiredIngestionReceipts();
+          const batchesPruned = await pruneExpiredIngestionBatches();
           updateIngestionWorkerHealth({ retentionFaulted: false });
-          nextRetention = Date.now() + (pruned === 100 || sharedPruned === 100 ? 1000 : 60000);
+          nextRetention =
+            Date.now() +
+            ([pruned, sharedPruned, receiptsPruned, batchesPruned].includes(100) ? 1000 : 60000);
         } catch {
           updateIngestionWorkerHealth({ retentionFaulted: true });
           nextRetention = Date.now() + 60000;

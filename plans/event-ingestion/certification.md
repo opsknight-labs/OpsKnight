@@ -4,6 +4,10 @@ Date: 2026-10-23. Candidate branch: `feat/enterprise-event-ingestion`.
 
 Enterprise status: **NOT CERTIFIED. No PR is authorized by this ledger.** The six-phase architecture plan is not complete; see `implementation.md` for the remaining transport, fairness, storage and deployment work.
 
+## Live policy and terminal lifecycle follow-up
+
+System settings now supports revision-fenced online backlog limits, payload/receipt retention, worker concurrency and polling. Concurrent admin updates, pause/resume preservation, stale revision rejection, effective admission limits and malformed policy fail-closed behavior passed real PostgreSQL checks. The terminal lifecycle default is a 90-day retry identity window, adjustable to 31–3,650 days. Only completed/archived receipts with minimized payloads and minimized shared context can expire. Cleanup rechecks incident holds under the existing hold resource lock; empty minimized batch rows expire only after all children. Tests cover unfinished/recent preservation, late holds, concurrent hold creation, shared-child deletion ordering and delivery reuse after expiry. Forty-two database/contract tests and seven focused API/worker-health tests pass; type and modified-source lint checks pass. Counts overlap historical suites. Independent review substitutes found no concrete regression; the security reviewer caught an outdated permanent-tombstone comment, corrected here. Partitioning, external archival and cleanup throughput under sustained enterprise workloads remain unimplemented/unverified.
+
 ## Executed local evidence
 
 - Node 20.20.2, matching the repository's supported major version.
