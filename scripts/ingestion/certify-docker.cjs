@@ -195,8 +195,13 @@ async function waitHealthy(name) {
 }
 async function main() {
   const localUrl = new URL(process.env.DATABASE_URL);
-  assert.equal(localUrl.pathname, '/ingestion_test_http');
+  assert.match(localUrl.pathname, /^\/ingestion_test_http(?:_[a-z0-9]+)*$/);
   assert.equal(localUrl.port, '55445');
+  if (process.env.INGESTION_DB_PROFILE === 'true') {
+    // Fail before starting replicas when a newly created fixture database has
+    // not enabled the explicitly requested diagnostic extension.
+    await prisma.$queryRaw`SELECT calls FROM pg_stat_statements LIMIT 0`;
+  }
   const pg = await inspect(databaseContainer);
   assert.ok(pg.Config.Image.startsWith('postgres:16'));
   assert.ok(
@@ -219,7 +224,20 @@ async function main() {
   assert.ok(Number.isInteger(workerReplicas) && workerReplicas >= 1 && workerReplicas <= 8);
   const [limits] =
     await prisma.$queryRaw`SELECT current_setting('max_connections')::int AS maximum`;
+  const supportingRoles = [
+    { role: 'scheduler', poolName: 'DATABASE_POOL_SIZE_SCHEDULER', pool: 2 },
+    { role: 'general-worker', poolName: 'DATABASE_POOL_SIZE_GENERAL_WORKER', pool: 5 },
+    { role: 'critical-worker', poolName: 'DATABASE_POOL_SIZE_CRITICAL_WORKER', pool: 5 },
+    { role: 'bulk-worker', poolName: 'DATABASE_POOL_SIZE_BULK_WORKER', pool: 3 },
+    { role: 'runbook-worker', poolName: 'DATABASE_POOL_SIZE_RUNBOOK_WORKER', pool: 5 },
+    { role: 'status-projector', poolName: 'DATABASE_POOL_SIZE_STATUS_PROJECTOR', pool: 2 },
+  ];
+  const supportingPools = Object.fromEntries(
+    supportingRoles.map(item => [item.poolName, String(item.pool)])
+  );
+  const fullStack = process.env.INGESTION_DOCKER_FULL_STACK === 'true';
   const capacity = calculateRuntimeCapacity({
+    ...supportingPools,
     OPSKNIGHT_RUNTIME_MODE: 'split',
     WEB_REPLICAS: String(webReplicas),
     DATABASE_POOL_SIZE_WEB: '10',
@@ -228,6 +246,7 @@ async function main() {
     DATABASE_CONNECTION_RESERVE: '15',
     DATABASE_MAX_CONNECTIONS: String(limits.maximum),
   });
+  const configuredControl = await require('../../src/lib/ingestion/policy').getIngestionPolicy();
   assert.ok(capacity.safe, 'Local candidate topology exceeds its PostgreSQL connection budget');
   assert.equal(
     await prisma.ingestionReceipt.count({
@@ -244,6 +263,7 @@ async function main() {
   containerUrl.hostname = databaseContainer;
   containerUrl.port = '5432';
   const shared = {
+    ...supportingPools,
     NODE_ENV: 'production',
     OPSKNIGHT_RUNTIME_MODE: 'split',
     OPSKNIGHT_INGESTION_MODE: 'postgres',
@@ -331,6 +351,15 @@ async function main() {
     );
     workers.push(name);
   }
+  const supportingProcesses = [];
+  if (fullStack) {
+    for (const item of supportingRoles) {
+      const name = `${prefix}-${item.role}`;
+      await start(name, item.role, false);
+      supportingProcesses.push(name);
+    }
+  }
+  const processNames = [...webNames, ...workers, ...supportingProcesses];
   const proxyRef = process.env.INGESTION_PROXY_IMAGE || 'nginx:stable-alpine';
   try {
     await invoke(['image', 'inspect', proxyRef]);
@@ -382,9 +411,16 @@ location / { proxy_pass http://gateways; proxy_http_version 1.1; proxy_set_heade
     proxyImageId: proxy.Id,
   };
   evidence.topology = {
+    fullStackProcesses: fullStack,
+    supportingRoles: fullStack
+      ? supportingRoles.map(({ role, pool }) => ({ role, replicas: 1, pool }))
+      : [],
+    externalEffectsCertified: false,
     webReplicas,
     workerReplicas,
-    workerConcurrency: 4,
+    workerConcurrency: configuredControl.policy.concurrency,
+    leaseMs: configuredControl.policy.leaseMs,
+    controlRevision: configuredControl.revision,
     webPool: 10,
     workerPool: 5,
     webCpus,
@@ -393,6 +429,7 @@ location / { proxy_pass http://gateways; proxy_http_version 1.1; proxy_set_heade
     capacity,
   };
   const candidate = {
+    fullStackProcesses: fullStack,
     kind: 'docker',
     nodeVersion: candidateNodeVersion,
     imageId: imageInfo.Id,
@@ -406,7 +443,7 @@ location / { proxy_pass http://gateways; proxy_http_version 1.1; proxy_set_heade
     sourceProvenance:
       'Immutable image ID and producer-supplied OCI revision label; no signed build attestation',
   };
-  evidence.resourcesBeforePreflight = await Promise.all([...webNames, ...workers].map(resources));
+  evidence.resourcesBeforePreflight = await Promise.all(processNames.map(resources));
   if (cpuProfiling) for (const name of [webNames[0], workers[0]]) await startProfile(name);
   child = spawn(process.execPath, ['scripts/ingestion/certify-http.cjs'], {
     stdio: ['inherit', 'inherit', 'inherit', 'ipc'],
@@ -437,15 +474,16 @@ location / { proxy_pass http://gateways; proxy_http_version 1.1; proxy_set_heade
           await prisma.ingestionReceipt.count({ where: { serviceId: message.fixtureServiceId } }),
           'No events were accepted before worker termination'
         );
-        assert.ok(loadActive, 'Load ended before worker termination');
-        await invoke(['kill', '--signal', 'KILL', workers[0]]);
-        evidence.chaos.push({
-          action: 'SIGKILL',
-          target: workers[0],
-          at: new Date().toISOString(),
-          loadActive: true,
-          leaseExpiryAdvanced: false,
+        const recovered = await require('./kill-leased-worker.cjs')({
+          prisma,
+          baseUrl,
+          workers,
+          inspect,
+          invoke,
+          network,
+          loadActive: () => loadActive,
         });
+        evidence.chaos.push(recovered);
         resolveChaos(true);
       } catch (error) {
         evidence.chaos.push({ action: 'SIGKILL failed', error: error.message });
@@ -457,9 +495,9 @@ location / { proxy_pass http://gateways; proxy_http_version 1.1; proxy_set_heade
     child.once('error', reject);
     child.once('exit', resolve);
   });
-  evidence.resourcesAfterLoad = await Promise.all([...webNames, ...workers].map(resources));
+  evidence.resourcesAfterLoad = await Promise.all(processNames.map(resources));
   if (process.env.INGESTION_HTTP_PROVIDER_CHECKS === 'true') {
-    for (const name of [...webNames, ...workers]) {
+    for (const name of processNames) {
       await assertCredentialSentinelAbsentFromLogs(name);
     }
     evidence.credentialSentinelAbsentFromLogs = true;

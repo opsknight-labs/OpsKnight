@@ -14,13 +14,6 @@ import {
 } from '@/lib/metrics/operational/registry';
 import { recordWorkerHeartbeat } from '@/lib/runbooks/worker-heartbeats';
 import { getOpsKnightProcessRole } from '@/lib/runtime-role';
-import {
-  pruneInactiveIngestionQuotas,
-  pruneCompletedIngestionPayloads,
-  pruneSharedIngestionPayloads,
-  pruneExpiredIngestionReceipts,
-  pruneExpiredIngestionBatches,
-} from './retention';
 
 let running: Promise<void> | null = null;
 let stopping = false;
@@ -106,7 +99,6 @@ export function startIngestionWorker(): void {
   running = (async () => {
     let failures = 0;
     let lastHeartbeat = 0;
-    let nextRetention = 0;
     let nextPolicy = 0;
     let policy = { ...config, leaseMs: 60000 };
     while (!stopping) {
@@ -126,25 +118,6 @@ export function startIngestionWorker(): void {
         logger.warn('ingestion.worker_unavailable');
       }
       if (stopping) break;
-      if (Date.now() >= nextRetention) {
-        try {
-          const pruned = await pruneCompletedIngestionPayloads();
-          const sharedPruned = await pruneSharedIngestionPayloads();
-          const receiptsPruned = await pruneExpiredIngestionReceipts();
-          const batchesPruned = await pruneExpiredIngestionBatches();
-          const quotasPruned = await pruneInactiveIngestionQuotas();
-          updateIngestionWorkerHealth({ retentionFaulted: false });
-          nextRetention =
-            Date.now() +
-            ([pruned, sharedPruned, receiptsPruned, batchesPruned, quotasPruned].includes(100)
-              ? 1000
-              : 60000);
-        } catch {
-          updateIngestionWorkerHealth({ retentionFaulted: true });
-          nextRetention = Date.now() + 60000;
-          logger.warn('ingestion.retention_unavailable');
-        }
-      }
       if (Date.now() - lastHeartbeat >= 10000) {
         await heartbeat(true, failures > 0).catch(() => undefined);
         lastHeartbeat = Date.now();

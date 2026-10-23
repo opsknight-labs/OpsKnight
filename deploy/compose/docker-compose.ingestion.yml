@@ -13,6 +13,9 @@ services:
   opsknight-web:
     environment: *ingestion-environment
 
+  opsknight-scheduler:
+    environment: *ingestion-environment
+
   opsknight-ingestion-worker:
     extends:
       file: docker-compose.split.yml

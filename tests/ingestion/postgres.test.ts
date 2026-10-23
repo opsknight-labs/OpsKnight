@@ -1,3 +1,4 @@
+import { getMaintenanceClient, disconnectMaintenanceClient } from '@/lib/maintenance/database';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { randomUUID, createHash } from 'node:crypto';
 import { Prisma } from '@prisma/client';
@@ -94,6 +95,7 @@ beforeEach(async () => {
   serviceId = (await prisma.service.create({ data: { name: `Ingestion ${randomUUID()}` } })).id;
 });
 afterAll(async () => {
+  await disconnectMaintenanceClient();
   await prisma.$disconnect();
 });
 
@@ -209,7 +211,7 @@ describe('PostgreSQL ingestion durability', () => {
         { ...data, key: `${prefix}-recent:events`, burst: 120, updatedAt: new Date() },
       ],
     });
-    await pruneInactiveIngestionQuotas();
+    await pruneInactiveIngestionQuotas(getMaintenanceClient());
     expect(
       await prisma.ingestionQuota.findUnique({ where: { key: `${prefix}-full:events` } })
     ).toBeNull();
@@ -407,7 +409,7 @@ describe('PostgreSQL ingestion durability', () => {
       where: { id: accepted.receiptId },
       data: { completedAt: new Date(Date.now() - 91 * 86400000) },
     });
-    await pruneCompletedIngestionPayloads();
+    await pruneCompletedIngestionPayloads(getMaintenanceClient());
     let acquired!: () => void;
     let release!: () => void;
     const locked = new Promise<void>(resolve => {
@@ -431,12 +433,12 @@ describe('PostgreSQL ingestion durability', () => {
     });
     await locked;
     try {
-      expect(await pruneExpiredIngestionReceipts()).toBe(0);
+      expect(await pruneExpiredIngestionReceipts(getMaintenanceClient())).toBe(0);
     } finally {
       release();
     }
     await holding;
-    expect(await pruneExpiredIngestionReceipts()).toBe(0);
+    expect(await pruneExpiredIngestionReceipts(getMaintenanceClient())).toBe(0);
     expect(
       await prisma.ingestionReceipt.findUnique({ where: { id: accepted.receiptId } })
     ).not.toBeNull();
@@ -457,8 +459,8 @@ describe('PostgreSQL ingestion durability', () => {
       data: { acceptedAt: old, completedAt: old },
     });
     // Payloads must be minimized through the hold-aware lifecycle first.
-    expect(await pruneExpiredIngestionReceipts()).toBe(0);
-    expect(await pruneCompletedIngestionPayloads()).toBe(2);
+    expect(await pruneExpiredIngestionReceipts(getMaintenanceClient())).toBe(0);
+    expect(await pruneCompletedIngestionPayloads(getMaintenanceClient())).toBe(2);
     const result = (
       await prisma.ingestionReceipt.findUniqueOrThrow({ where: { id: held.receiptId } })
     ).result as { incidentId: string };
@@ -470,7 +472,7 @@ describe('PostgreSQL ingestion durability', () => {
         createdById: actorId,
       },
     });
-    expect(await pruneExpiredIngestionReceipts()).toBe(1);
+    expect(await pruneExpiredIngestionReceipts(getMaintenanceClient())).toBe(1);
     expect(
       await prisma.ingestionReceipt.findUnique({ where: { id: expired.receiptId } })
     ).toBeNull();
@@ -482,7 +484,7 @@ describe('PostgreSQL ingestion durability', () => {
       where: { id: hold.id },
       data: { releasedAt: new Date() },
     });
-    expect(await pruneExpiredIngestionReceipts()).toBe(1);
+    expect(await pruneExpiredIngestionReceipts(getMaintenanceClient())).toBe(1);
   });
 
   it('expires shared batch metadata only after every minimized child has expired', async () => {
@@ -492,13 +494,13 @@ describe('PostgreSQL ingestion durability', () => {
     const old = new Date(Date.now() - 91 * 86400000);
     await prisma.ingestionReceipt.updateMany({ data: { completedAt: old } });
     await prisma.ingestionBatch.updateMany({ data: { createdAt: old } });
-    await pruneCompletedIngestionPayloads();
-    expect(await pruneExpiredIngestionReceipts()).toBe(0);
-    expect(await pruneExpiredIngestionBatches()).toBe(0);
-    expect(await pruneSharedIngestionPayloads()).toBe(1);
-    expect(await pruneExpiredIngestionBatches()).toBe(0);
-    expect(await pruneExpiredIngestionReceipts()).toBe(1);
-    expect(await pruneExpiredIngestionBatches()).toBe(1);
+    await pruneCompletedIngestionPayloads(getMaintenanceClient());
+    expect(await pruneExpiredIngestionReceipts(getMaintenanceClient())).toBe(0);
+    expect(await pruneExpiredIngestionBatches(getMaintenanceClient())).toBe(0);
+    expect(await pruneSharedIngestionPayloads(getMaintenanceClient())).toBe(1);
+    expect(await pruneExpiredIngestionBatches(getMaintenanceClient())).toBe(0);
+    expect(await pruneExpiredIngestionReceipts(getMaintenanceClient())).toBe(1);
+    expect(await pruneExpiredIngestionBatches(getMaintenanceClient())).toBe(1);
     expect(await prisma.ingestionBatch.count()).toBe(0);
   });
 
@@ -532,7 +534,7 @@ describe('PostgreSQL ingestion durability', () => {
       where: { status: 'COMPLETED' },
       data: { completedAt: new Date(Date.now() - 2 * 3600000) },
     });
-    expect(await pruneCompletedIngestionPayloads()).toBe(1);
+    expect(await pruneCompletedIngestionPayloads(getMaintenanceClient())).toBe(1);
     await applyIngestionCommand(
       { action: 'configure', expectedRevision: 3, policy: { ...policy, maxPending: 128 } },
       actorId
@@ -646,15 +648,15 @@ describe('PostgreSQL ingestion durability', () => {
           createdById: actorId,
         },
       });
-      expect(await pruneSharedIngestionPayloads()).toBe(0);
-      expect(await pruneCompletedIngestionPayloads()).toBe(39);
-      expect(await pruneSharedIngestionPayloads()).toBe(0);
+      expect(await pruneSharedIngestionPayloads(getMaintenanceClient())).toBe(0);
+      expect(await pruneCompletedIngestionPayloads(getMaintenanceClient())).toBe(39);
+      expect(await pruneSharedIngestionPayloads(getMaintenanceClient())).toBe(0);
       await prisma.dataRetentionHold.update({
         where: { id: hold.id },
         data: { releasedAt: new Date() },
       });
-      expect(await pruneCompletedIngestionPayloads()).toBe(1);
-      expect(await pruneSharedIngestionPayloads()).toBeGreaterThanOrEqual(1);
+      expect(await pruneCompletedIngestionPayloads(getMaintenanceClient())).toBe(1);
+      expect(await pruneSharedIngestionPayloads(getMaintenanceClient())).toBeGreaterThanOrEqual(1);
       expect(
         (await prisma.ingestionBatch.findUniqueOrThrow({ where: { id: batch.id } })).payload
       ).toBeNull();
@@ -675,7 +677,7 @@ describe('PostgreSQL ingestion durability', () => {
       where: { id: receipt.id },
       data: { completedAt: new Date(0) },
     });
-    expect(await pruneCompletedIngestionPayloads()).toBe(1);
+    expect(await pruneCompletedIngestionPayloads(getMaintenanceClient())).toBe(1);
     let locked!: () => void;
     let release!: () => void;
     const acquired = new Promise<void>(resolve => {
@@ -699,12 +701,12 @@ describe('PostgreSQL ingestion durability', () => {
     });
     await acquired;
     try {
-      expect(await pruneSharedIngestionPayloads()).toBe(0);
+      expect(await pruneSharedIngestionPayloads(getMaintenanceClient())).toBe(0);
     } finally {
       release();
     }
     const hold = await creatingHold;
-    expect(await pruneSharedIngestionPayloads()).toBe(0);
+    expect(await pruneSharedIngestionPayloads(getMaintenanceClient())).toBe(0);
     expect(
       (await prisma.ingestionBatch.findUniqueOrThrow({ where: { id: receipt.batchId! } })).payload
     ).not.toBeNull();
@@ -712,7 +714,7 @@ describe('PostgreSQL ingestion durability', () => {
       where: { id: hold.id },
       data: { releasedAt: new Date() },
     });
-    expect(await pruneSharedIngestionPayloads()).toBeGreaterThanOrEqual(1);
+    expect(await pruneSharedIngestionPayloads(getMaintenanceClient())).toBeGreaterThanOrEqual(1);
   });
 
   it('reuses per-event receipts accepted by the older unshared batch path', async () => {
@@ -823,12 +825,12 @@ describe('PostgreSQL ingestion durability', () => {
     });
     await lockAcquired;
     try {
-      expect(await pruneCompletedIngestionPayloads()).toBe(0);
+      expect(await pruneCompletedIngestionPayloads(getMaintenanceClient())).toBe(0);
     } finally {
       release();
       await creation;
     }
-    expect(await pruneCompletedIngestionPayloads()).toBe(0);
+    expect(await pruneCompletedIngestionPayloads(getMaintenanceClient())).toBe(0);
     expect(
       (await prisma.ingestionReceipt.findUniqueOrThrow({ where: { id: receipt.receiptId } }))
         .envelope
@@ -949,7 +951,7 @@ describe('PostgreSQL ingestion durability', () => {
         createdById: actorId,
       },
     });
-    expect(await pruneCompletedIngestionPayloads()).toBe(0);
+    expect(await pruneCompletedIngestionPayloads(getMaintenanceClient())).toBe(0);
     expect(
       (await prisma.ingestionReceipt.findUniqueOrThrow({ where: { id: receipt.receiptId } }))
         .envelope
@@ -958,7 +960,7 @@ describe('PostgreSQL ingestion durability', () => {
       where: { id: hold.id },
       data: { releasedAt: new Date() },
     });
-    expect(await pruneCompletedIngestionPayloads()).toBe(1);
+    expect(await pruneCompletedIngestionPayloads(getMaintenanceClient())).toBe(1);
   });
 
   it('archives orphaned dead-letter data only through explicit audited disposition', async () => {
@@ -1026,7 +1028,7 @@ describe('PostgreSQL ingestion durability', () => {
       where: { id: completed.receiptId },
       data: { completedAt: new Date(0) },
     });
-    expect(await pruneCompletedIngestionPayloads()).toBe(1);
+    expect(await pruneCompletedIngestionPayloads(getMaintenanceClient())).toBe(1);
     expect(
       (await prisma.ingestionReceipt.findUniqueOrThrow({ where: { id: completed.receiptId } }))
         .envelope
