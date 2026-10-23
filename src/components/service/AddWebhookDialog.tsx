@@ -16,6 +16,7 @@ import { Alert, AlertDescription } from '@/components/ui/shadcn/alert';
 import { Plus, Webhook, Loader2, AlertCircle } from 'lucide-react';
 import { createWebhookIntegration } from '@/app/(app)/services/[id]/webhooks/actions';
 import { notify } from '@/lib/toast';
+import { NativeSelect } from '@/components/automation/authoring/primitives';
 
 interface AddWebhookDialogProps {
   serviceId: string;
@@ -115,20 +116,19 @@ export default function AddWebhookDialog({ serviceId }: AddWebhookDialogProps) {
             <Label htmlFor="webhook-type" className="text-xs font-semibold">
               Webhook Platform Type <span className="text-destructive">*</span>
             </Label>
-            <select
+            <NativeSelect
               id="webhook-type"
               name="type"
               required
               disabled={isPending}
               defaultValue="GENERIC"
-              className="w-full h-9 rounded-md border border-input bg-background px-3 py-1 text-xs shadow-xs focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
             >
               {WEBHOOK_TYPES.map(t => (
                 <option key={t.value} value={t.value}>
                   {t.label}
                 </option>
               ))}
-            </select>
+            </NativeSelect>
             <p className="text-[10px] text-muted-foreground">
               Formats payload structure and headers according to the destination provider.
             </p>

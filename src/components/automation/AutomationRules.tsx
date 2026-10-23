@@ -4,6 +4,8 @@ import {
   memo,
   useId,
   useMemo,
+  useRef,
+  useEffect,
   useState,
   type Dispatch,
   type SetStateAction,
@@ -16,8 +18,10 @@ import {
   ArrowDown,
   ArrowUp,
   ChevronDown,
+  Copy,
   GripVertical,
   Plus,
+  RotateCcw,
   Search,
   Trash2,
 } from 'lucide-react';
@@ -28,6 +32,7 @@ import { Label } from '@/components/ui/shadcn/label';
 import { Switch } from '@/components/ui/shadcn/switch';
 import { cn } from '@/lib/utils';
 import { LIMITS, type Snapshot, type Rule, type Field } from '@/lib/automation/contract';
+import { newRule } from './workspace/constants';
 
 import { RuleConditionsEditor } from './RuleConditionsEditor';
 import { RuleActionsEditor } from './RuleActionsEditor';
@@ -36,6 +41,7 @@ import type { LintIssue } from '@/lib/automation/compiler';
 import { LimitCounter, NativeSelect } from './authoring/primitives';
 import { useShallowStableArray, useStableCallback } from './authoring/hooks';
 import { describeAction, describeCondition, ROUTE_ACTIONS } from './authoring/rule-language';
+import { notify } from '@/lib/toast';
 
 import type { Data } from './presentation-types';
 
@@ -91,6 +97,7 @@ type RuleRowProps = {
   position: number;
   expanded: boolean;
   canEdit: boolean;
+  query?: string;
   fields: Field[];
   fieldsByKey: Map<string, Field>;
   policies: Data['policies'];
@@ -98,6 +105,7 @@ type RuleRowProps = {
   issues: LintIssue[];
   onToggle: (id: string) => void;
   onUpdate: (id: string, update: Partial<Rule>) => void;
+  onDuplicate: (id: string) => void;
   onMove: (id: string, direction: number) => void;
   onRemove: (id: string) => void;
   onDragStart: (id: string) => void;
@@ -105,12 +113,39 @@ type RuleRowProps = {
   onDrop: (targetId: string) => void;
 };
 
+function HighlightText({ text, query }: { text: string; query?: string }) {
+  if (!query || !query.trim()) return <>{text}</>;
+  const trimmed = query.trim();
+  const escaped = trimmed.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  // eslint-disable-next-line security/detect-non-literal-regexp -- query is regex-escaped
+  const regex = new RegExp(`(${escaped})`, 'gi');
+  const parts = text.split(regex);
+  if (parts.length <= 1) return <>{text}</>;
+  return (
+    <>
+      {parts.map((part, index) =>
+        regex.test(part) ? (
+          <mark
+            key={index}
+            className="rounded-xs bg-amber-400/30 px-0.5 font-medium text-inherit dark:bg-amber-400/20"
+          >
+            {part}
+          </mark>
+        ) : (
+          part
+        )
+      )}
+    </>
+  );
+}
+
 const RuleRow = memo(
   function RuleRow({
     rule,
     position,
     expanded,
     canEdit,
+    query,
     fields,
     fieldsByKey,
     policies,
@@ -118,6 +153,7 @@ const RuleRow = memo(
     issues,
     onToggle,
     onUpdate,
+    onDuplicate,
     onMove,
     onRemove,
     onDragStart,
@@ -131,12 +167,15 @@ const RuleRow = memo(
       onMove(rule.id, direction);
       requestAnimationFrame(() => target.focus());
     };
+
     return (
       <li
         className={cn(
-          'rounded-lg border bg-card transition-colors',
-          expanded ? 'border-primary/40 shadow-sm' : 'border-border/70 hover:border-border',
-          !rule.enabled && 'bg-muted/30'
+          'overflow-hidden rounded-xl border bg-card transition-all duration-150',
+          expanded
+            ? 'border-primary/50 shadow-xs ring-1 ring-primary/20'
+            : 'border-border/70 hover:border-border hover:shadow-2xs',
+          !rule.enabled && 'bg-muted/20 opacity-80'
         )}
         onDragOver={canEdit ? event => event.preventDefault() : undefined}
         onDrop={event => {
@@ -149,18 +188,22 @@ const RuleRow = memo(
           aria-expanded={expanded}
           aria-controls={expanded ? `${id}-panel` : undefined}
           aria-label={`Configure ${rule.name}`}
-          className="flex min-h-12 w-full items-start gap-3 rounded-lg p-3 text-left hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="flex min-h-10 w-full items-center gap-2.5 px-3 py-2 text-left hover:bg-muted/30 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary"
           onClick={() => onToggle(rule.id)}
         >
-          <span className="mt-0.5 inline-flex h-6 min-w-6 items-center justify-center rounded-md bg-muted px-1.5 text-xs font-semibold tabular-nums text-foreground">
+          <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded border border-border/60 bg-muted/60 font-mono text-[10.5px] font-semibold text-muted-foreground">
             {position}
           </span>
+
           <span className="min-w-0 flex-1">
-            <span className="flex flex-wrap items-center gap-1.5">
-              <span className="min-w-0 break-words text-sm font-semibold">{rule.name}</span>
+            <span className="flex flex-wrap items-center gap-2">
+              <span className="text-xs sm:text-sm font-semibold tracking-tight text-foreground">
+                <HighlightText text={rule.name} query={query} />
+              </span>
+
               <span
                 className={cn(
-                  'rounded-md border px-1.5 py-px text-[11px] font-medium',
+                  'rounded-md border px-1.5 py-px text-[10px] font-medium tracking-wide',
                   rule.enabled
                     ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-800 dark:text-emerald-300'
                     : 'border-border bg-muted text-muted-foreground'
@@ -168,47 +211,57 @@ const RuleRow = memo(
               >
                 {rule.enabled ? 'Enabled' : 'Disabled'}
               </span>
+
               {errors > 0 && (
-                <span className="rounded-md border border-destructive/40 bg-destructive/10 px-1.5 py-px text-[11px] font-medium text-destructive">
+                <span className="rounded-md border border-destructive/40 bg-destructive/10 px-1.5 py-px text-[10px] font-medium text-destructive">
                   {errors} {errors === 1 ? 'error' : 'errors'}
                 </span>
               )}
               {warnings > 0 && (
-                <span className="rounded-md border border-amber-500/40 bg-amber-50 px-1.5 py-px text-[11px] font-medium text-amber-900 dark:bg-amber-950/30 dark:text-amber-200">
+                <span className="rounded-md border border-amber-500/40 bg-amber-50 px-1.5 py-px text-[10px] font-medium text-amber-900 dark:bg-amber-950/30 dark:text-amber-200">
                   Review warnings
                 </span>
               )}
             </span>
-            <span className="mt-1 line-clamp-2 block break-words text-xs text-muted-foreground">
-              {ruleSummary(rule, fieldsByKey, policies, destinations)}
+
+            <span className="mt-0.5 line-clamp-1 block text-xs text-muted-foreground">
+              <HighlightText
+                text={ruleSummary(rule, fieldsByKey, policies, destinations)}
+                query={query}
+              />
             </span>
           </span>
+
           <ChevronDown
             className={cn(
-              'mt-1 h-4 w-4 shrink-0 text-muted-foreground transition-transform',
+              'h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-150',
               expanded && 'rotate-180'
             )}
             aria-hidden="true"
           />
         </button>
+
         {expanded && (
-          <div id={`${id}-panel`} className="space-y-4 border-t border-border/70 p-3 sm:p-4">
+          <div
+            id={`${id}-panel`}
+            className="space-y-2.5 border-t border-border/60 bg-muted/5 p-2.5 sm:p-3"
+          >
             {issues.length > 0 && (
               <ul aria-label="Issues in this rule" className="space-y-1.5">
                 {issues.map((issue, index) => (
                   <li
                     key={index}
                     className={cn(
-                      'flex items-start gap-2 rounded-md border px-3 py-2 text-sm',
+                      'flex items-start gap-2 rounded-lg border px-2.5 py-1.5 text-xs',
                       issue.level === 'ERROR'
                         ? 'border-destructive/40 bg-destructive/5 text-destructive'
                         : 'border-amber-500/40 bg-amber-50 text-amber-900 dark:bg-amber-950/30 dark:text-amber-200'
                     )}
                   >
                     {issue.level === 'ERROR' ? (
-                      <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+                      <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
                     ) : (
-                      <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+                      <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
                     )}
                     <span>
                       <span className="sr-only">
@@ -220,91 +273,119 @@ const RuleRow = memo(
                 ))}
               </ul>
             )}
-            <div className="flex flex-wrap items-end gap-2">
-              <div className="min-w-0 flex-1 basis-56 space-y-1.5">
-                <Label htmlFor={`${id}-name`}>Rule name</Label>
+
+            {/* Compact Header Toolbar */}
+            <div className="flex flex-wrap items-center justify-between gap-2.5 rounded-lg border border-border/60 bg-muted/20 px-3 py-1.5">
+              <div className="flex items-center gap-2 flex-1 min-w-[220px]">
+                <Label
+                  htmlFor={`${id}-name`}
+                  className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider shrink-0"
+                >
+                  Rule name
+                </Label>
                 <Input
                   id={`${id}-name`}
                   disabled={!canEdit}
                   maxLength={100}
+                  className="h-7.5 text-xs font-medium bg-background/90"
                   value={rule.name}
                   onChange={e => onUpdate(rule.id, { name: e.target.value })}
                 />
               </div>
-              {canEdit && (
-                <div
-                  role="group"
-                  aria-label="Order and removal"
-                  className="flex items-center gap-1"
-                >
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    draggable
-                    className="cursor-grab text-muted-foreground active:cursor-grabbing"
-                    aria-label={`Reorder rule ${position}`}
-                    aria-keyshortcuts="ArrowUp ArrowDown"
-                    title="Drag to reorder, or focus and press ↑ / ↓"
-                    onDragStart={event => {
-                      event.dataTransfer.effectAllowed = 'move';
-                      event.dataTransfer.setData('text/plain', rule.id);
-                      onDragStart(rule.id);
-                    }}
-                    onDragEnd={onDragEnd}
-                    onKeyDown={event => {
-                      if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return;
-                      event.preventDefault();
-                      moveAndKeepFocus(event.currentTarget, event.key === 'ArrowUp' ? -1 : 1);
-                    }}
+
+              <div className="flex items-center gap-2 shrink-0">
+                <div className="flex items-center gap-1.5 pr-2 border-r border-border/60">
+                  <Switch
+                    id={`${id}-enabled`}
+                    disabled={!canEdit}
+                    checked={rule.enabled}
+                    onCheckedChange={checked => onUpdate(rule.id, { enabled: checked })}
+                  />
+                  <Label
+                    htmlFor={`${id}-enabled`}
+                    className="cursor-pointer text-[11px] font-medium text-muted-foreground select-none"
                   >
-                    <GripVertical aria-hidden="true" />
-                  </Button>
-                  <Button
-                    aria-label="Move rule up"
-                    variant="ghost"
-                    size="icon"
-                    onClick={event => moveAndKeepFocus(event.currentTarget, -1)}
-                  >
-                    <ArrowUp aria-hidden="true" />
-                  </Button>
-                  <Button
-                    aria-label="Move rule down"
-                    variant="ghost"
-                    size="icon"
-                    onClick={event => moveAndKeepFocus(event.currentTarget, 1)}
-                  >
-                    <ArrowDown aria-hidden="true" />
-                  </Button>
-                  <Button
-                    aria-label="Delete rule"
-                    variant="ghost"
-                    size="icon"
-                    className="text-muted-foreground hover:text-destructive"
-                    onClick={() => onRemove(rule.id)}
-                  >
-                    <Trash2 aria-hidden="true" />
-                  </Button>
+                    Enabled
+                  </Label>
                 </div>
-              )}
+
+                {canEdit && (
+                  <div
+                    role="group"
+                    aria-label="Order and removal"
+                    className="flex items-center gap-0.5"
+                  >
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      draggable
+                      className="h-7 w-7 cursor-grab text-muted-foreground hover:text-foreground active:cursor-grabbing"
+                      aria-label={`Reorder rule ${position}`}
+                      aria-keyshortcuts="ArrowUp ArrowDown"
+                      title="Drag to reorder, or focus and press ↑ / ↓"
+                      onDragStart={event => {
+                        event.dataTransfer.effectAllowed = 'move';
+                        event.dataTransfer.setData('text/plain', rule.id);
+                        onDragStart(rule.id);
+                      }}
+                      onDragEnd={onDragEnd}
+                      onKeyDown={event => {
+                        if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return;
+                        event.preventDefault();
+                        moveAndKeepFocus(event.currentTarget, event.key === 'ArrowUp' ? -1 : 1);
+                      }}
+                    >
+                      <GripVertical className="h-3.5 w-3.5" aria-hidden="true" />
+                    </Button>
+                    <Button
+                      aria-label="Move rule up"
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                      onClick={event => moveAndKeepFocus(event.currentTarget, -1)}
+                    >
+                      <ArrowUp className="h-3.5 w-3.5" aria-hidden="true" />
+                    </Button>
+                    <Button
+                      aria-label="Move rule down"
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                      onClick={event => moveAndKeepFocus(event.currentTarget, 1)}
+                    >
+                      <ArrowDown className="h-3.5 w-3.5" aria-hidden="true" />
+                    </Button>
+                    <Button
+                      aria-label={`Duplicate ${rule.name}`}
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                      title="Duplicate rule"
+                      onClick={() => onDuplicate(rule.id)}
+                    >
+                      <Copy className="h-3.5 w-3.5" aria-hidden="true" />
+                    </Button>
+                    <Button
+                      aria-label={`Delete ${rule.name}`}
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 text-destructive/80 hover:bg-destructive/10 hover:text-destructive"
+                      onClick={() => onRemove(rule.id)}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
+                    </Button>
+                  </div>
+                )}
+              </div>
             </div>
-            <div className="flex min-h-10 flex-wrap items-center gap-x-3 gap-y-1">
-              <Switch
-                id={`${id}-enabled`}
-                disabled={!canEdit}
-                checked={rule.enabled}
-                onCheckedChange={enabled => onUpdate(rule.id, { enabled })}
-              />
-              <Label htmlFor={`${id}-enabled`}>Enabled</Label>
-              <span className="text-xs text-muted-foreground">
-                {rule.enabled ? 'Evaluated for new alerts.' : 'Skipped during evaluation.'}
-              </span>
-            </div>
+
             <RuleConditionsEditor
               rule={rule}
               fields={fields}
               canEdit={canEdit}
               onChange={update => onUpdate(rule.id, update)}
             />
+
             <RuleActionsEditor
               rule={rule}
               fields={fields}
@@ -318,74 +399,148 @@ const RuleRow = memo(
       </li>
     );
   },
-  (previous, next) =>
-    (Object.keys(next) as Array<keyof RuleRowProps>).every(key =>
-      key === 'issues' ? sameIssues(previous.issues, next.issues) : previous[key] === next[key]
-    )
+  (prev, next) =>
+    prev.rule === next.rule &&
+    prev.position === next.position &&
+    prev.expanded === next.expanded &&
+    prev.canEdit === next.canEdit &&
+    prev.query === next.query &&
+    prev.fields === next.fields &&
+    prev.fieldsByKey === next.fieldsByKey &&
+    prev.policies === next.policies &&
+    prev.destinations === next.destinations &&
+    sameIssues(prev.issues, next.issues)
 );
 
 export function AutomationRules({
   data,
   draft,
-  fields,
+  issues = [],
   ruleSearch,
   setRuleSearch,
   ruleStateFilter,
   setRuleStateFilter,
   expandedRules,
   setExpandedRules,
-  draggedRule: draggedRuleRef,
-  edit,
   updateRule,
-  move,
   removeRule,
-  mobile,
+  move,
+  edit,
   createTemplate,
-  newRule,
-  issues,
+  draggedRuleRef,
+  draggedRule,
+  rootRef: _rootRef,
+  mobile,
+  newRule: propNewRule,
+  onOpenRule: propOnOpenRule,
+  onOpenContext,
 }: {
   data: Data;
   draft: Snapshot;
-  fields: Field[];
+  fields?: Field[];
+  issues?: LintIssue[];
   ruleSearch: string;
   setRuleSearch: (value: string) => void;
   ruleStateFilter: string;
   setRuleStateFilter: (value: string) => void;
   expandedRules: Set<string>;
   setExpandedRules: Dispatch<SetStateAction<Set<string>>>;
-  draggedRule: RefObject<string | null>;
-  edit: (snapshot: Snapshot) => void;
   updateRule: (id: string, update: Partial<Rule>) => void;
-  move: (index: number, direction: number) => void;
   removeRule: (rule: Rule) => void;
+  move: (fromIndex: number, direction: number) => void;
+  edit: (snapshot: Snapshot) => void;
+  createTemplate: (template: string) => void;
+  draggedRuleRef?: RefObject<string | null>;
+  draggedRule?: RefObject<string | null>;
+  rootRef?: RefObject<HTMLElement | null>;
   mobile: boolean;
-  createTemplate: (kind: string) => void;
-  newRule: (phase: Rule['phase']) => Rule;
-  issues: LintIssue[];
+  newRule?: (phase: Rule['phase']) => Rule;
+  onOpenRule?: (ruleId: string) => void;
+  onOpenContext?: () => void;
 }) {
   const headingId = useId();
   const [announcement, setAnnouncement] = useState('');
-  const stableFields = useShallowStableArray(fields);
+  const query = ruleSearch.trim().toLowerCase();
+  const activeDraggedRuleRef = draggedRuleRef ?? draggedRule;
+  const generateRule = propNewRule ?? newRule;
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      // Do not intercept if a modal, sheet, or dialog is currently open in the document
+      if (typeof document !== 'undefined') {
+        const hasOpenModal = document.querySelector(
+          '[role="dialog"][data-state="open"], [role="alertdialog"][data-state="open"], [aria-modal="true"], dialog[open]'
+        );
+        if (hasOpenModal) return;
+      }
+
+      const activeEl = document.activeElement as HTMLElement | null;
+      const isInputActive =
+        activeEl &&
+        (activeEl.tagName === 'INPUT' ||
+          activeEl.tagName === 'TEXTAREA' ||
+          activeEl.tagName === 'SELECT' ||
+          activeEl.isContentEditable ||
+          (typeof activeEl.closest === 'function' &&
+            activeEl.closest(
+              '[role="dialog"], [role="alertdialog"], [role="menu"], [data-radix-popper-content-wrapper]'
+            )));
+
+      if (isInputActive) return;
+
+      if (!searchInputRef.current) return;
+
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
+        event.preventDefault();
+        searchInputRef.current.focus();
+        searchInputRef.current.select();
+      } else if (event.key === '/' && !event.metaKey && !event.ctrlKey && !event.altKey) {
+        event.preventDefault();
+        searchInputRef.current.focus();
+        searchInputRef.current.select();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
+  const stableFields = useShallowStableArray(draft.fields);
   const fieldsByKey = useMemo(
-    () => new Map(stableFields.map(field => [field.key, field])),
-    [stableFields]
+    () => new Map(draft.fields.map(field => [field.key, field])),
+    [draft.fields]
   );
   const issuesByRule = useMemo(() => {
-    const grouped = new Map<string, LintIssue[]>();
+    const map = new Map<string, LintIssue[]>();
     for (const issue of issues) {
-      if (!issue.ruleId) continue;
-      const list = grouped.get(issue.ruleId);
-      if (list) list.push(issue);
-      else grouped.set(issue.ruleId, [issue]);
+      if (issue.ruleId) {
+        const list = map.get(issue.ruleId) ?? [];
+        list.push(issue);
+        map.set(issue.ruleId, list);
+      }
     }
-    return grouped;
+    return map;
   }, [issues]);
+
   const { phaseIndexes, phaseTotals } = useMemo(() => {
-    const counters = { ENRICH: 0, ROUTE: 0 };
-    const indexes = new Map(draft.rules.map(rule => [rule.id, counters[rule.phase]++]));
-    return { phaseIndexes: indexes, phaseTotals: counters };
+    const phaseIndexes = new Map<string, number>();
+    const phaseTotals: Record<Rule['phase'], number> = { ENRICH: 0, ROUTE: 0 };
+    for (const rule of draft.rules) {
+      phaseIndexes.set(rule.id, phaseTotals[rule.phase]);
+      phaseTotals[rule.phase] += 1;
+    }
+    return { phaseIndexes, phaseTotals };
   }, [draft.rules]);
-  const query = ruleSearch.toLowerCase();
+
+  const ruleCounts = useMemo(() => {
+    let enabled = 0;
+    let disabled = 0;
+    for (const rule of draft.rules) {
+      if (rule.enabled) enabled++;
+      else disabled++;
+    }
+    return { all: draft.rules.length, enabled, disabled };
+  }, [draft.rules]);
 
   const onToggle = useStableCallback((id: string) =>
     setExpandedRules(previous => {
@@ -395,6 +550,17 @@ export function AutomationRules({
       return next;
     })
   );
+  const handleOpenRule = useStableCallback((ruleId: string) => {
+    if (propOnOpenRule) {
+      propOnOpenRule(ruleId);
+    } else {
+      setExpandedRules(previous => (mobile ? new Set([ruleId]) : new Set([...previous, ruleId])));
+      const targetRule = draft.rules.find(r => r.id === ruleId);
+      if (targetRule) {
+        setAnnouncement(`Expanded rule ${targetRule.name}`);
+      }
+    }
+  });
   const onUpdate = useStableCallback((id: string, update: Partial<Rule>) => updateRule(id, update));
   const onMove = useStableCallback((id: string, direction: number) => {
     const index = draft.rules.findIndex(rule => rule.id === id);
@@ -413,14 +579,46 @@ export function AutomationRules({
     const rule = draft.rules.find(candidate => candidate.id === id);
     if (rule) removeRule(rule);
   });
+  const onDuplicate = useStableCallback((id: string) => {
+    if (draft.rules.length >= LIMITS.rules) {
+      notify.error('Rule limit reached', {
+        description: `Maximum limit of ${LIMITS.rules} rules reached.`,
+      });
+      return;
+    }
+    const index = draft.rules.findIndex(rule => rule.id === id);
+    if (index < 0) return;
+    const source = draft.rules[index];
+    const newId = `rule_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+    const clonedRule: Rule = {
+      ...source,
+      id: newId,
+      name: `${source.name} (Copy)`,
+      conditions: source.conditions.map(condition => ({ ...condition })),
+      actions: source.actions.map(action => ({ ...action })),
+    };
+    const rules = [...draft.rules];
+    rules.splice(index + 1, 0, clonedRule);
+    edit({ ...draft, rules });
+    setExpandedRules(previous =>
+      mobile ? new Set([clonedRule.id]) : new Set([...previous, clonedRule.id])
+    );
+    notify.success(`Duplicated "${source.name}"`, {
+      description: 'New copy created and expanded below.',
+    });
+  });
   const onDragStart = useStableCallback((id: string) => {
-    draggedRuleRef.current = id;
+    // eslint-disable-next-line react-hooks/immutability
+    if (activeDraggedRuleRef) activeDraggedRuleRef.current = id;
   });
   const onDragEnd = useStableCallback(() => {
-    draggedRuleRef.current = null;
+    // eslint-disable-next-line react-hooks/immutability
+    if (activeDraggedRuleRef) activeDraggedRuleRef.current = null;
   });
   const onDrop = useStableCallback((targetId: string) => {
-    const source = draft.rules.findIndex(candidate => candidate.id === draggedRuleRef.current);
+    const source = draft.rules.findIndex(
+      candidate => candidate.id === activeDraggedRuleRef?.current
+    );
     const index = draft.rules.findIndex(candidate => candidate.id === targetId);
     if (
       !data.canEdit ||
@@ -433,14 +631,16 @@ export function AutomationRules({
     const [moved] = rules.splice(source, 1);
     rules.splice(index, 0, moved);
     edit({ ...draft, rules });
-    draggedRuleRef.current = null;
-    setAnnouncement(
-      `${moved.name} moved to ${PHASES[moved.phase].noun} position ${(phaseIndexes.get(targetId) ?? 0) + 1}.`
-    );
+    // eslint-disable-next-line react-hooks/immutability
+    if (activeDraggedRuleRef) activeDraggedRuleRef.current = null;
+    const moveMsg = `${moved.name} moved to ${PHASES[moved.phase].noun} position ${(phaseIndexes.get(targetId) ?? 0) + 1}.`;
+    setAnnouncement(moveMsg);
+    notify.success(moveMsg, { id: 'automation:rule:reorder' });
   });
+
   const addRule = (phase: Rule['phase']) => {
     if (draft.rules.length >= LIMITS.rules) return;
-    const rule = newRule(phase);
+    const rule = generateRule(phase);
     setExpandedRules(previous => (mobile ? new Set([rule.id]) : new Set([...previous, rule.id])));
     edit({
       ...draft,
@@ -453,48 +653,117 @@ export function AutomationRules({
             ]
           : [...draft.rules, rule],
     });
+    notify.success(`${PHASES[phase].noun} rule created`, {
+      id: `automation:rule:${rule.id}:add`,
+      description: 'Configure conditions and actions below.',
+    });
   };
+
   const atRuleLimit = draft.rules.length >= LIMITS.rules;
 
   return (
-    <>
+    <div className="space-y-3.5">
       {mobile && expandedRules.size > 0 && (
         <Button
           variant="outline"
-          className="self-start"
+          size="sm"
+          className="self-start text-xs"
           onClick={() => setExpandedRules(new Set())}
         >
           ← Back to rules
         </Button>
       )}
-      <div className="flex flex-wrap items-center gap-2">
-        <div className="relative min-w-40 flex-1">
+
+      {/* High-density toolbar */}
+      <div className="flex flex-wrap items-center gap-2 rounded-xl border border-border/80 bg-card p-2 shadow-xs">
+        <div className="relative min-w-44 flex-1">
           <Search
-            className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+            className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground"
             aria-hidden="true"
           />
           <Input
+            ref={searchInputRef}
             aria-label="Search rules"
-            placeholder="Search rules…"
+            placeholder="Search rules… (⌘K)"
             value={ruleSearch}
             onChange={event => setRuleSearch(event.target.value)}
-            className="pl-9"
+            className="search-input h-8 !pl-8 !pr-9 text-xs bg-background"
           />
+          {!ruleSearch ? (
+            <kbd className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 rounded border border-border/80 bg-muted px-1.5 py-0.5 text-[10px] font-mono text-muted-foreground hidden sm:inline-block">
+              ⌘K
+            </kbd>
+          ) : (
+            <button
+              type="button"
+              aria-label="Clear search"
+              onClick={() => setRuleSearch('')}
+              className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-muted-foreground hover:text-foreground"
+            >
+              <RotateCcw className="h-3 w-3" />
+            </button>
+          )}
         </div>
+        {/* Segmented Filter Pills */}
+        <div
+          role="group"
+          aria-label="Filter rules by state"
+          className="hidden sm:inline-flex items-center rounded-lg border border-border/70 bg-muted/40 p-0.5 text-xs"
+        >
+          <button
+            type="button"
+            onClick={() => setRuleStateFilter('all')}
+            className={cn(
+              'rounded-md px-2 py-1 text-xs font-medium transition-all',
+              ruleStateFilter === 'all'
+                ? 'bg-background text-foreground shadow-2xs font-semibold'
+                : 'text-muted-foreground hover:text-foreground'
+            )}
+          >
+            All <span className="opacity-70 font-mono">({ruleCounts.all})</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setRuleStateFilter('enabled')}
+            className={cn(
+              'rounded-md px-2 py-1 text-xs font-medium transition-all',
+              ruleStateFilter === 'enabled'
+                ? 'bg-background text-emerald-700 dark:text-emerald-400 shadow-2xs font-semibold'
+                : 'text-muted-foreground hover:text-foreground'
+            )}
+          >
+            Enabled <span className="opacity-70 font-mono">({ruleCounts.enabled})</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setRuleStateFilter('disabled')}
+            className={cn(
+              'rounded-md px-2 py-1 text-xs font-medium transition-all',
+              ruleStateFilter === 'disabled'
+                ? 'bg-background text-foreground shadow-2xs font-semibold'
+                : 'text-muted-foreground hover:text-foreground'
+            )}
+          >
+            Disabled <span className="opacity-70 font-mono">({ruleCounts.disabled})</span>
+          </button>
+        </div>
+
         <NativeSelect
           aria-label="Filter rules"
-          className="w-auto"
+          wrapperClassName="w-auto shrink-0 sm:hidden"
+          className="h-8 min-w-[7.5rem] text-xs font-medium bg-background"
           value={ruleStateFilter}
           onChange={event => setRuleStateFilter(event.target.value)}
         >
-          <option value="all">All rules</option>
-          <option value="enabled">Enabled</option>
-          <option value="disabled">Disabled</option>
+          <option value="all">All ({ruleCounts.all})</option>
+          <option value="enabled">Enabled ({ruleCounts.enabled})</option>
+          <option value="disabled">Disabled ({ruleCounts.disabled})</option>
         </NativeSelect>
         {!mobile && (
           <Button
             variant="outline"
             size="sm"
+            className="h-8 text-xs font-medium"
             onClick={() => setExpandedRules(new Set(draft.rules.map(rule => rule.id)))}
           >
             Expand all
@@ -503,21 +772,25 @@ export function AutomationRules({
         <Button
           variant="outline"
           size="sm"
-          className="h-10 sm:h-9"
+          className="h-8 text-xs font-medium"
           onClick={() => setExpandedRules(new Set())}
         >
           Collapse all
         </Button>
         <LimitCounter count={draft.rules.length} limit={LIMITS.rules} noun="rules" />
       </div>
+
       <p aria-live="polite" className="sr-only">
         {announcement}
       </p>
+
       {draft.rules.length === 0 && data.canEdit && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">What would you like to automate?</CardTitle>
-            <p className="text-sm text-muted-foreground">
+        <Card className="border-border/80 shadow-xs">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm font-semibold">
+              What would you like to automate?
+            </CardTitle>
+            <p className="text-xs text-muted-foreground">
               Start from a template — each creates an editable rule and any context field it needs.
             </p>
           </CardHeader>
@@ -532,7 +805,8 @@ export function AutomationRules({
             ].map(([key, label]) => (
               <Button
                 variant="outline"
-                className="justify-start"
+                size="sm"
+                className="h-9 justify-start text-xs font-medium"
                 key={key}
                 onClick={() => createTemplate(key)}
               >
@@ -542,7 +816,14 @@ export function AutomationRules({
           </CardContent>
         </Card>
       )}
-      <ConfigurationHealth issues={issues} />
+
+      <ConfigurationHealth
+        issues={issues}
+        rules={draft.rules}
+        onOpenRule={handleOpenRule}
+        onOpenContext={onOpenContext}
+      />
+
       {(['ENRICH', 'ROUTE'] as const).map(phase => {
         const visible = draft.rules
           .filter(r => r.phase === phase)
@@ -556,13 +837,16 @@ export function AutomationRules({
           <section
             key={phase}
             aria-labelledby={`${headingId}-${phase}`}
-            className="min-w-0 space-y-3"
+            className="min-w-0 space-y-2.5 rounded-xl border border-border/80 bg-card/60 p-3 shadow-xs"
           >
-            <div className="space-y-1">
-              <h3 id={`${headingId}-${phase}`} className="font-semibold tracking-tight">
+            <div className="flex flex-col gap-0.5 sm:flex-row sm:items-baseline sm:justify-between border-b border-border/60 pb-2">
+              <h3
+                id={`${headingId}-${phase}`}
+                className="text-xs font-semibold uppercase tracking-wider text-foreground"
+              >
                 {PHASES[phase].title}
               </h3>
-              <p className="text-xs text-muted-foreground">{PHASES[phase].explanation}</p>
+              <p className="text-[11px] text-muted-foreground">{PHASES[phase].explanation}</p>
             </div>
             {visible.length > 0 ? (
               <ol className="space-y-2">
@@ -573,6 +857,7 @@ export function AutomationRules({
                     position={(phaseIndexes.get(rule.id) ?? 0) + 1}
                     expanded={expandedRules.has(rule.id)}
                     canEdit={data.canEdit}
+                    query={query}
                     fields={stableFields}
                     fieldsByKey={fieldsByKey}
                     policies={data.policies}
@@ -580,6 +865,7 @@ export function AutomationRules({
                     issues={issuesByRule.get(rule.id) ?? NO_ISSUES}
                     onToggle={onToggle}
                     onUpdate={onUpdate}
+                    onDuplicate={onDuplicate}
                     onMove={onMove}
                     onRemove={onRemove}
                     onDragStart={onDragStart}
@@ -589,30 +875,43 @@ export function AutomationRules({
                 ))}
               </ol>
             ) : (
-              <p className="rounded-lg border border-dashed border-border px-3 py-4 text-center text-sm text-muted-foreground">
-                {phaseTotals[phase] === 0
-                  ? `No ${PHASES[phase].noun} rules yet.`
-                  : `No ${PHASES[phase].noun} rules match the current search or filter.`}
-              </p>
+              <div className="flex flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-border/70 py-6 text-center text-xs text-muted-foreground">
+                <p>
+                  {phaseTotals[phase] === 0
+                    ? `No ${PHASES[phase].noun} rules yet.`
+                    : `No ${PHASES[phase].noun} rules match the current search or filter.`}
+                </p>
+                {phaseTotals[phase] > 0 && (query || ruleStateFilter !== 'all') && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-7 text-xs font-medium gap-1.5"
+                    onClick={() => {
+                      setRuleSearch('');
+                      setRuleStateFilter('all');
+                    }}
+                  >
+                    <RotateCcw className="h-3 w-3" />
+                    Reset filters
+                  </Button>
+                )}
+              </div>
             )}
             {data.canEdit && (
               <Button
                 variant="outline"
                 size="sm"
-                className="h-10 sm:h-9"
+                className="h-8.5 w-full justify-center gap-1.5 border-dashed text-xs font-medium hover:border-primary/50"
                 disabled={atRuleLimit}
                 onClick={() => addRule(phase)}
               >
-                <Plus aria-hidden="true" />
-                Add {phase === 'ENRICH' ? 'enrichment' : 'routing'} rule
+                <Plus className="h-3.5 w-3.5" aria-hidden="true" />
+                Add {PHASES[phase].noun} rule
               </Button>
             )}
           </section>
         );
       })}
-      <p className="rounded-lg border border-border/70 bg-muted/40 p-3 text-sm">
-        Fallback: service default escalation when no routing rule matches or evaluation fails.
-      </p>
-    </>
+    </div>
   );
 }

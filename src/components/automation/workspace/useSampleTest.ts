@@ -3,6 +3,7 @@ import { useCallback, useState } from 'react';
 import { automationAction } from '@/app/(app)/services/[id]/automation/actions';
 import type { Snapshot } from '@/lib/automation/contract';
 import type { testAutomation } from '@/lib/automation/testing';
+import { notify } from '@/lib/toast';
 import { defaultSample } from './constants';
 
 export type TestResult = Awaited<ReturnType<typeof testAutomation>>;
@@ -40,10 +41,20 @@ export function useSampleTest({
         integrationType,
         ...(integrationId ? { integrationId } : {}),
       });
-      if (!response.ok) onError(response.error);
-      else setResult(response.data as TestResult);
+      if (!response.ok) {
+        onError(response.error);
+        notify.error(response.error, { id: 'automation:test:error' });
+      } else {
+        setResult(response.data as TestResult);
+        notify.success('Simulation completed', {
+          id: 'automation:test:success',
+          description: 'Dry run evaluated against sample payload.',
+        });
+      }
     } catch {
-      onError('Enter valid event and provider JSON');
+      const err = 'Enter valid event and provider JSON';
+      onError(err);
+      notify.error(err, { id: 'automation:test:invalid-json' });
     } finally {
       setBusy(false);
     }

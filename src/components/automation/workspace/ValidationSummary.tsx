@@ -26,14 +26,14 @@ export const ValidationSummary = memo(function ValidationSummary({
   return (
     <section
       aria-labelledby={headingId}
-      className={cn('rounded-lg border p-3 sm:p-4', noticeClasses.error)}
+      className={cn('rounded-xl border p-3 sm:p-3.5 shadow-xs', noticeClasses.error)}
     >
-      <h3 id={headingId} className="flex items-center gap-2 text-sm font-semibold">
+      <h3 id={headingId} className="flex items-center gap-2 text-xs font-semibold">
         <XCircle className="h-4 w-4 shrink-0" aria-hidden="true" />
         {errors.length} blocking {errors.length === 1 ? 'issue prevents' : 'issues prevent'}{' '}
         publishing
       </h3>
-      <ul className="mt-2 space-y-2 text-sm">
+      <ul className="mt-2 space-y-1.5 text-xs">
         {errors.map((issue, index) => {
           const ruleName = issue.ruleId ? ruleNames.get(issue.ruleId) : undefined;
           const fieldIssue = !ruleName && issue.code.includes('FIELD');
@@ -42,22 +42,27 @@ export const ValidationSummary = memo(function ValidationSummary({
               key={`${issue.code}-${issue.ruleId ?? ''}-${index}`}
               className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1"
             >
-              <span className="min-w-0 break-words">{issue.message}</span>
+              <span className="min-w-0 break-words font-medium">{issue.message}</span>
               {ruleName !== undefined && issue.ruleId && (
                 <Button
                   variant="outline"
                   size="sm"
-                  className="h-10 sm:h-9"
+                  className="h-8 gap-1 text-xs font-medium"
                   onClick={() => onOpenRule(issue.ruleId!)}
                 >
                   Open rule {ruleName}
-                  <ArrowRight aria-hidden="true" />
+                  <ArrowRight className="h-3 w-3" aria-hidden="true" />
                 </Button>
               )}
               {fieldIssue && (
-                <Button variant="outline" size="sm" className="h-10 sm:h-9" onClick={onOpenContext}>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-8 gap-1 text-xs font-medium"
+                  onClick={onOpenContext}
+                >
                   Open context fields
-                  <ArrowRight aria-hidden="true" />
+                  <ArrowRight className="h-3 w-3" aria-hidden="true" />
                 </Button>
               )}
             </li>

@@ -28,6 +28,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import EscalationPolicyCombobox from '@/components/service/EscalationPolicyCombobox';
+import { NativeSelect } from '@/components/automation/authoring/primitives';
 
 interface TeamOption {
   id: string;
@@ -164,28 +165,26 @@ export default function ServiceGeneralSettings({
   };
 
   return (
-    <Card className="rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/60 backdrop-blur-xs shadow-xs">
-      <CardHeader className="pb-4 border-b border-border/60 bg-muted/20 dark:bg-muted/10">
+    <Card className="rounded-xl border border-border/80 bg-card/90 shadow-xs">
+      <CardHeader className="px-3.5 py-2.5 border-b border-border/60 bg-muted/20">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-          <div>
-            <CardTitle className="text-sm font-bold flex items-center gap-2.5">
-              <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-primary/10 text-primary shrink-0 border border-primary/20 shadow-2xs">
-                <Settings className="h-4 w-4" />
-              </div>
-              <div>
-                <span className="text-muted-foreground font-mono mr-1.5 text-xs">1.</span>
+          <div className="flex items-center gap-2.5">
+            <div className="flex h-6 w-6 items-center justify-center rounded-md bg-primary/10 text-primary shrink-0 border border-primary/20">
+              <Settings className="h-3.5 w-3.5" />
+            </div>
+            <div>
+              <CardTitle className="text-xs sm:text-sm font-bold flex items-center gap-1.5">
                 <span>General Configuration</span>
-              </div>
-            </CardTitle>
-            <CardDescription className="text-xs mt-1">
-              Manage service identity, SLA tier classification, escalation routing, and team
-              ownership.
-            </CardDescription>
+              </CardTitle>
+              <CardDescription className="text-[11px] leading-tight">
+                Service identity, SLA tier classification, escalation routing, and team ownership.
+              </CardDescription>
+            </div>
           </div>
           <Badge
             variant="outline"
             className={cn(
-              'text-[10px] font-semibold w-fit px-2.5 py-0.5 inline-flex items-center gap-1.5',
+              'text-[10px] font-semibold w-fit px-2 py-0.5 inline-flex items-center gap-1 shrink-0',
               activeTierDef
                 ? activeTierDef.badgeClass
                 : 'text-muted-foreground border-border bg-muted/40'
@@ -203,15 +202,15 @@ export default function ServiceGeneralSettings({
         </div>
       </CardHeader>
 
-      <CardContent className="p-5">
-        <form onSubmit={handleSubmit} className="space-y-6">
+      <CardContent className="p-3.5 sm:p-4">
+        <form onSubmit={handleSubmit} className="space-y-4">
           {/* Hidden input for SLA tier */}
           <input type="hidden" name="slaTier" value={selectedTier} />
 
           {/* Service Identity Section */}
-          <div className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-1.5">
+          <div className="space-y-3">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div className="space-y-1">
                 <Label
                   htmlFor="name"
                   className="text-xs font-semibold text-foreground flex items-center justify-between"
@@ -231,30 +230,30 @@ export default function ServiceGeneralSettings({
                   required
                   disabled={!canManageService || isPending}
                   placeholder="e.g. auth-service, payment-gateway"
-                  className="text-xs h-9 bg-background"
+                  className="text-xs h-8 bg-background"
                 />
               </div>
 
-              <div className="space-y-1.5">
+              <div className="space-y-1">
                 <Label
                   htmlFor="teamId"
                   className="text-xs font-semibold text-foreground flex items-center justify-between"
                 >
                   <span className="inline-flex items-center gap-1.5">
-                    <Users className="h-3.5 w-3.5 text-muted-foreground" />
+                    <Users className="h-3 w-3 text-muted-foreground" />
                     Owning Team
                   </span>
                   <span className="text-[10px] text-muted-foreground font-normal">
                     {teams.length} available
                   </span>
                 </Label>
-                <select
+                <NativeSelect
                   id="teamId"
                   name="teamId"
                   value={teamId}
                   onChange={e => setTeamId(e.target.value)}
                   disabled={!canManageService || isPending}
-                  className="w-full h-9 rounded-md border border-input bg-background px-3 py-1 text-xs shadow-xs focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                  className="text-xs h-8"
                 >
                   <option value="">No Owning Team (Unassigned)</option>
                   {teams.map(t => (
@@ -262,11 +261,11 @@ export default function ServiceGeneralSettings({
                       {t.name}
                     </option>
                   ))}
-                </select>
+                </NativeSelect>
               </div>
             </div>
 
-            <div className="space-y-1.5">
+            <div className="space-y-1">
               <Label
                 htmlFor="description"
                 className="text-xs font-semibold text-foreground flex items-center justify-between"
@@ -284,34 +283,36 @@ export default function ServiceGeneralSettings({
                 rows={2}
                 disabled={!canManageService || isPending}
                 placeholder="What critical components and flows does this service own?"
-                className="text-xs bg-background resize-y"
+                className="text-xs bg-background resize-y py-1.5 min-h-[46px]"
               />
             </div>
           </div>
 
           {/* Interactive SLA Tier Grid */}
-          <div className="space-y-2.5">
+          <div className="space-y-1.5 pt-1 border-t border-border/40">
             <div className="flex items-center justify-between">
-              <Label className="text-xs font-semibold text-foreground">
-                Service SLA Tier Classification
-              </Label>
+              <div>
+                <Label className="text-xs font-semibold text-foreground">
+                  Service SLA Tier Classification
+                </Label>
+                <p className="text-[10px] text-muted-foreground">
+                  Categorizes response expectations, baseline availability targets, and priority
+                  escalation urgency.
+                </p>
+              </div>
               {selectedTier && (
                 <button
                   type="button"
                   onClick={() => setSelectedTier('')}
                   disabled={!canManageService || isPending}
-                  className="text-[11px] text-muted-foreground hover:text-foreground transition-colors underline cursor-pointer"
+                  className="text-[10px] text-muted-foreground hover:text-foreground transition-colors underline cursor-pointer"
                 >
-                  Clear Tier Selection
+                  Clear Tier
                 </button>
               )}
             </div>
-            <p className="text-[11px] text-muted-foreground">
-              Categorizes response expectations, baseline availability targets, and priority
-              escalation urgency for this service.
-            </p>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2.5 pt-1">
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 pt-0.5">
               {SLA_TIERS.map(tier => {
                 const isSelected = selectedTier === tier.id;
                 const IconComponent = tier.icon;
@@ -322,33 +323,35 @@ export default function ServiceGeneralSettings({
                     disabled={!canManageService || isPending}
                     onClick={() => setSelectedTier(isSelected ? '' : tier.id)}
                     className={cn(
-                      'flex flex-col justify-between p-3 rounded-xl border text-left transition-all cursor-pointer relative',
+                      'flex flex-col justify-between p-2 rounded-lg border text-left transition-all cursor-pointer relative',
                       'disabled:cursor-not-allowed disabled:opacity-60',
                       isSelected
                         ? tier.colorClass
                         : 'border-border/80 bg-card hover:bg-muted/40 hover:border-border text-foreground shadow-2xs'
                     )}
                   >
-                    <div className="space-y-1">
+                    <div>
                       <div className="flex items-center justify-between gap-1">
-                        <span className="text-xs font-bold flex items-center gap-1.5">
-                          <IconComponent className="h-3.5 w-3.5 shrink-0" />
+                        <span className="text-[11px] font-bold flex items-center gap-1 truncate">
+                          <IconComponent className="h-3 w-3 shrink-0" />
                           {tier.name}
                         </span>
                         {isSelected && (
-                          <div className="h-4 w-4 rounded-full bg-primary text-primary-foreground flex items-center justify-center shrink-0">
-                            <Check className="h-2.5 w-2.5" />
+                          <div className="h-3.5 w-3.5 rounded-full bg-primary text-primary-foreground flex items-center justify-center shrink-0">
+                            <Check className="h-2 w-2" />
                           </div>
                         )}
                       </div>
-                      <p className="text-[10px] text-muted-foreground font-medium">
+                      <p className="text-[9px] text-muted-foreground font-medium truncate mt-0.5">
                         {tier.subtitle}
                       </p>
                     </div>
 
-                    <div className="mt-3 pt-2 border-t border-border/40 flex items-center justify-between text-[10px] font-mono">
-                      <span className="font-semibold">{tier.uptime}</span>
-                      <span className="text-muted-foreground text-[9px]">{tier.ackTarget}</span>
+                    <div className="mt-1.5 pt-1 border-t border-border/30 flex items-center justify-between text-[10px] font-mono">
+                      <span className="font-semibold text-[10px]">{tier.uptime}</span>
+                      <span className="text-muted-foreground text-[9px] truncate">
+                        {tier.ackTarget}
+                      </span>
                     </div>
                   </button>
                 );
@@ -357,14 +360,14 @@ export default function ServiceGeneralSettings({
           </div>
 
           {/* Operational Routing & Region */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2 border-t border-border/50">
-            <div className="space-y-1.5">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1 border-t border-border/40">
+            <div className="space-y-1">
               <Label
                 htmlFor="escalationPolicyId"
                 className="text-xs font-semibold text-foreground flex items-center justify-between"
               >
                 <span className="inline-flex items-center gap-1.5">
-                  <Shield className="h-3.5 w-3.5 text-muted-foreground" />
+                  <Shield className="h-3 w-3 text-muted-foreground" />
                   Default Escalation Policy
                 </span>
                 <span className="text-[10px] text-muted-foreground font-normal">
@@ -383,13 +386,13 @@ export default function ServiceGeneralSettings({
               </p>
             </div>
 
-            <div className="space-y-1.5">
+            <div className="space-y-1">
               <Label
                 htmlFor="region"
                 className="text-xs font-semibold text-foreground flex items-center justify-between"
               >
                 <span className="inline-flex items-center gap-1.5">
-                  <Globe className="h-3.5 w-3.5 text-muted-foreground" />
+                  <Globe className="h-3 w-3 text-muted-foreground" />
                   Primary Region / Deployment Zone
                 </span>
                 <span className="text-[10px] text-muted-foreground font-normal">
@@ -403,9 +406,9 @@ export default function ServiceGeneralSettings({
                 onChange={e => setRegion(e.target.value)}
                 disabled={!canManageService || isPending}
                 placeholder="e.g. us-east-1, eu-central-1, global"
-                className="text-xs h-9 bg-background font-mono"
+                className="text-xs h-8 bg-background font-mono"
               />
-              <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
+              <div className="flex items-center gap-1 flex-wrap pt-0.5">
                 <span className="text-[9px] text-muted-foreground">Quick set:</span>
                 {REGION_SUGGESTIONS.map(reg => (
                   <button
@@ -443,9 +446,9 @@ export default function ServiceGeneralSettings({
                 type="submit"
                 size="sm"
                 disabled={!isDirty || isPending}
-                className="text-xs font-semibold"
+                className="h-8 text-xs font-semibold px-3.5"
               >
-                {isPending && <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />}
+                {isPending && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
                 Save Changes
               </Button>
             </div>

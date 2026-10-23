@@ -1,10 +1,12 @@
 'use client';
 
 import { useId, useState } from 'react';
-import { ChevronDown, Play } from 'lucide-react';
+import { CheckCircle2, ChevronDown, Code2, Copy, FlaskConical, Play, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/shadcn/button';
 import { Label } from '@/components/ui/shadcn/label';
+import { Badge } from '@/components/ui/shadcn/badge';
 import { cn } from '@/lib/utils';
+import { notify } from '@/lib/toast';
 
 import { ManualSample } from './ManualSample';
 import { TraceDetail } from './TraceDetail';
@@ -12,6 +14,95 @@ import { Hint, NativeSelect, textareaClass } from './authoring/primitives';
 
 import type { testAutomation } from '@/lib/automation/testing';
 import type { Data } from './presentation-types';
+
+const SIMULATION_PRESETS = [
+  {
+    id: 'k8s-crashloop',
+    name: 'K8s CrashLoopBackOff',
+    description: 'Production pod crashloop in payment-service',
+    sample: {
+      event_action: 'trigger',
+      dedup_key: 'k8s-pod-crashloop-payment-0',
+      payload: {
+        summary: 'Pod payment-service-worker in CrashLoopBackOff',
+        severity: 'critical',
+        source: 'kubernetes',
+        custom_details: {
+          component: 'payment-service',
+          environment: 'production',
+          cluster: 'prod-us-east-1',
+          tier: 'backend',
+          team: 'payments',
+          restart_count: 14,
+          exit_code: 137,
+          reason: 'OOMKilled',
+        },
+      },
+    },
+    providerSample: {
+      event: 'pod_failed',
+      namespace: 'payments',
+      pod_name: 'payment-service-worker-7d9f8c6b-x9z2a',
+      cluster: 'prod-us-east-1',
+    },
+  },
+  {
+    id: 'datadog-latency',
+    name: 'Datadog Latency Spike (P1)',
+    description: 'p99 latency > 2.5s on checkout API endpoint',
+    sample: {
+      event_action: 'trigger',
+      dedup_key: 'datadog-checkout-p99-latency',
+      payload: {
+        summary: 'High latency detected: p99 > 2500ms on POST /api/v1/checkout',
+        severity: 'error',
+        source: 'datadog',
+        custom_details: {
+          component: 'checkout-api',
+          environment: 'production',
+          priority: 'P1',
+          tier: 'frontend',
+          team: 'checkout',
+          metric: 'trace.http.request.duration.p99',
+          value: 2840,
+          threshold: 2500,
+        },
+      },
+    },
+    providerSample: {
+      alert_type: 'error',
+      metric: 'trace.http.request.duration.p99',
+      tags: ['env:production', 'service:checkout-api', 'team:checkout'],
+    },
+  },
+  {
+    id: 'staging-worker',
+    name: 'Staging Memory Warning',
+    description: 'Staging async worker memory usage reached 85%',
+    sample: {
+      event_action: 'trigger',
+      dedup_key: 'staging-worker-memory-warning',
+      payload: {
+        summary: 'Staging async worker memory usage reached 85%',
+        severity: 'warning',
+        source: 'cloudwatch',
+        custom_details: {
+          component: 'async-worker',
+          environment: 'staging',
+          tier: 'worker',
+          team: 'platform',
+          memory_used_percent: 85.4,
+        },
+      },
+    },
+    providerSample: {
+      AlarmName: 'staging-worker-memory-high',
+      Namespace: 'AWS/ECS',
+      Trigger: { MetricName: 'MemoryUtilization', Threshold: 80 },
+    },
+  },
+] as const;
+
 function recentAlertLabel(alert: Data['alerts'][number]) {
   const payload = (
     alert.payload && typeof alert.payload === 'object' ? alert.payload : {}
@@ -23,6 +114,7 @@ function recentAlertLabel(alert: Data['alerts'][number]) {
     new Date(alert.createdAt).toLocaleString(),
   ].join(' · ');
 }
+
 export function AutomationTest({
   data,
   integrationId,
@@ -57,29 +149,92 @@ export function AutomationTest({
       ? data.policies.find(policy => policy.id === outcome.policyId)?.name
       : null;
   const errors = result?.issues.filter(issue => issue.level === 'ERROR').length ?? 0;
+
+  const formatJson = (text: string, setter: (val: string) => void, label: string) => {
+    try {
+      const parsed = JSON.parse(text);
+      setter(JSON.stringify(parsed, null, 2));
+      notify.success(`Formatted ${label} JSON`);
+    } catch {
+      notify.error(`Invalid ${label} JSON`, {
+        description: 'Please check JSON syntax before formatting.',
+      });
+    }
+  };
+
   return (
-    <div className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-      <section aria-labelledby={`${id}-input`} className="min-w-0 space-y-4">
-        <div>
-          <h3 id={`${id}-input`} className="font-semibold tracking-tight">
-            Sample event
-          </h3>
-          <p className="text-sm text-muted-foreground">
-            Sample tests use the production evaluator and create no incidents or notifications.
-          </p>
+    <div className="grid min-w-0 gap-3.5 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+      <section
+        aria-labelledby={`${id}-input`}
+        className="min-w-0 space-y-3.5 rounded-xl border border-border/80 bg-card p-3.5 sm:p-4 shadow-xs"
+      >
+        <div className="flex items-center justify-between border-b border-border/60 pb-2.5">
+          <div>
+            <h3
+              id={`${id}-input`}
+              className="flex items-center gap-2 text-sm font-semibold tracking-tight text-foreground"
+            >
+              <FlaskConical className="h-4 w-4 text-primary" aria-hidden="true" />
+              Sample event
+            </h3>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              Sample tests use the production evaluator and create no incidents or notifications.
+            </p>
+          </div>
+          <Badge
+            variant="outline"
+            className="font-mono text-[10px] uppercase tracking-wide text-muted-foreground"
+          >
+            Sandbox
+          </Badge>
         </div>
+
         {data.canReadSensitive === false && (
-          <p className="rounded-md border border-dashed border-border px-3 py-2 text-sm text-muted-foreground">
+          <p className="rounded-lg border border-dashed border-border/70 px-3 py-2 text-xs text-muted-foreground">
             Recent alert samples require sensitive incident access. You can test a sample you
-            provide.
+            provide below.
           </p>
         )}
-        <div className="grid gap-3 sm:grid-cols-2">
-          <div className="space-y-1.5">
-            <Label htmlFor={`${id}-alert`}>Use recent alert</Label>
+
+        {/* Quick Simulation Presets */}
+        <div className="space-y-1.5 rounded-lg border border-border/60 bg-muted/20 p-2.5">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold text-foreground">Simulation Presets</span>
+            <span className="text-[10px] text-muted-foreground">1-click test events</span>
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {SIMULATION_PRESETS.map(preset => (
+              <Button
+                key={preset.id}
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-7 text-[11px] font-medium gap-1.5 bg-background shadow-2xs hover:border-primary/50"
+                onClick={() => {
+                  setSelectedAlertId('');
+                  setSample(JSON.stringify(preset.sample, null, 2));
+                  setProviderSample(JSON.stringify(preset.providerSample, null, 2));
+                  notify.info(`Loaded preset: ${preset.name}`, {
+                    description: preset.description,
+                  });
+                }}
+              >
+                <Sparkles className="h-3 w-3 text-primary" aria-hidden="true" />
+                {preset.name}
+              </Button>
+            ))}
+          </div>
+        </div>
+
+        <div className="grid gap-2.5 sm:grid-cols-2">
+          <div className="space-y-1">
+            <Label htmlFor={`${id}-alert`} className="text-xs font-medium text-foreground">
+              Use recent alert
+            </Label>
             <NativeSelect
               id={`${id}-alert`}
               disabled={!data.alerts.length}
+              className="h-8.5 text-xs bg-background"
               value={selectedAlertId}
               onChange={e => {
                 const alert = data.alerts.find(a => a.id === e.target.value);
@@ -124,10 +279,14 @@ export function AutomationTest({
               ))}
             </NativeSelect>
           </div>
-          <div className="space-y-1.5">
-            <Label htmlFor={`${id}-integration`}>Integration</Label>
+
+          <div className="space-y-1">
+            <Label htmlFor={`${id}-integration`} className="text-xs font-medium text-foreground">
+              Integration
+            </Label>
             <NativeSelect
               id={`${id}-integration`}
+              className="h-8.5 text-xs bg-background"
               value={integrationId}
               onChange={e => {
                 setIntegrationId(e.target.value);
@@ -145,139 +304,292 @@ export function AutomationTest({
             </NativeSelect>
           </div>
         </div>
+
         {selectedAlert && (
-          <div className="flex flex-wrap items-center gap-2 rounded-md border border-border/70 bg-muted/40 px-3 py-2 text-xs">
-            <span className="font-medium text-foreground">
+          <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border/70 bg-muted/30 px-3 py-1.5 text-xs">
+            <span className="font-medium text-foreground/90">
               Replay mode: Normalized alert only (raw provider payload unavailable)
             </span>
           </div>
         )}
+
         <Hint>
           Recent alerts replay the normalized OpsKnight event only; full raw provider payloads are
           not retained for replay to prevent sensitive credential leakage. If rules require
           provider-specific mappings, paste a raw provider sample under Advanced sample JSON.
         </Hint>
+
         <ManualSample onBuild={setSample} />
-        <details className="group rounded-lg border border-border/70 bg-card">
-          <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-2 rounded-lg px-3 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
+
+        <details className="group rounded-lg border border-border/70 bg-background/50">
+          <summary className="flex min-h-10 cursor-pointer list-none items-center justify-between gap-2 rounded-lg px-3 text-xs font-medium text-foreground/90 hover:bg-muted/30 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary [&::-webkit-details-marker]:hidden">
             Advanced sample JSON
             <ChevronDown
-              className="h-4 w-4 text-muted-foreground transition-transform group-open:rotate-180"
+              className="h-3.5 w-3.5 text-muted-foreground transition-transform group-open:rotate-180"
               aria-hidden="true"
             />
           </summary>
           <div className="grid gap-3 border-t border-border/70 p-3 xl:grid-cols-2">
-            <div className="min-w-0 space-y-1.5">
-              <Label htmlFor={`${id}-event`}>Paste sample event · Normalized event</Label>
+            <div className="min-w-0 space-y-1">
+              <div className="flex items-center justify-between">
+                <Label
+                  htmlFor={`${id}-event`}
+                  className="text-[11px] font-medium text-muted-foreground"
+                >
+                  Normalized event JSON
+                </Label>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 px-1.5 text-[10px] text-muted-foreground hover:text-foreground"
+                  onClick={() => formatJson(sample, setSample, 'Normalized event')}
+                >
+                  <Code2 className="mr-1 h-3 w-3" />
+                  Format JSON
+                </Button>
+              </div>
               <textarea
                 id={`${id}-event`}
                 spellCheck={false}
-                className={cn(textareaClass, 'min-h-56')}
+                className={cn(textareaClass, 'min-h-48 font-mono text-xs')}
                 value={sample}
                 onChange={e => setSample(e.target.value)}
               />
             </div>
-            <div className="min-w-0 space-y-1.5">
-              <Label htmlFor={`${id}-provider`}>Provider input</Label>
+            <div className="min-w-0 space-y-1">
+              <div className="flex items-center justify-between">
+                <Label
+                  htmlFor={`${id}-provider`}
+                  className="text-[11px] font-medium text-muted-foreground"
+                >
+                  Provider input JSON
+                </Label>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 px-1.5 text-[10px] text-muted-foreground hover:text-foreground"
+                  onClick={() => formatJson(providerSample, setProviderSample, 'Provider')}
+                >
+                  <Code2 className="mr-1 h-3 w-3" />
+                  Format JSON
+                </Button>
+              </div>
               <textarea
                 id={`${id}-provider`}
                 spellCheck={false}
-                className={cn(textareaClass, 'min-h-56')}
+                className={cn(textareaClass, 'min-h-48 font-mono text-xs')}
                 value={providerSample}
                 onChange={e => setProviderSample(e.target.value)}
               />
             </div>
           </div>
         </details>
-        <Button disabled={busy} onClick={() => void runTest()}>
-          <Play aria-hidden="true" />
+
+        <Button
+          size="sm"
+          className="h-8.5 gap-1.5 text-xs font-medium shadow-xs"
+          disabled={busy}
+          onClick={() => void runTest()}
+        >
+          <Play className="h-3.5 w-3.5 fill-current" aria-hidden="true" />
           Test sample
         </Button>
       </section>
+
       <section
         aria-labelledby={`${id}-result`}
         aria-busy={busy}
-        className="min-w-0 space-y-3 rounded-lg border bg-card p-4"
+        className="min-w-0 space-y-3.5 rounded-xl border border-border/80 bg-card p-3.5 sm:p-4 shadow-xs"
       >
-        <h3 id={`${id}-result`} className="font-semibold tracking-tight">
-          Result
-        </h3>
+        <div className="flex items-center justify-between border-b border-border/60 pb-2.5">
+          <h3 id={`${id}-result`} className="text-sm font-semibold tracking-tight text-foreground">
+            Result
+          </h3>
+          {result && (
+            <Badge
+              variant="outline"
+              className="font-mono text-[10px] tabular-nums font-medium text-muted-foreground"
+            >
+              {result.durationMs.toFixed(2)} ms
+            </Badge>
+          )}
+        </div>
+
         {!result ? (
-          <p className="text-sm text-muted-foreground">
-            Run a sample to see the matched rule, final priority and route, and why each rule did or
-            did not match.
-          </p>
+          <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border/70 p-10 text-center text-xs text-muted-foreground bg-muted/5">
+            <div className="mb-2.5 flex h-9 w-9 items-center justify-center rounded-full bg-primary/10 text-primary">
+              <Sparkles className="h-4.5 w-4.5 text-primary" aria-hidden="true" />
+            </div>
+            <p className="font-semibold text-foreground text-xs">Ready for simulation</p>
+            <p className="mt-1 max-w-sm text-muted-foreground">
+              Run a sample event to trace rule matches, priority overrides, and responder route
+              decisions.
+            </p>
+          </div>
         ) : (
           <>
-            <p role="status" className="text-sm text-muted-foreground">
+            <p role="status" className="text-xs text-muted-foreground">
               {result.durationMs.toFixed(2)} ms ·{' '}
               {result.goldenResults.filter(f => f.expected === f.actual).length}/
               {result.goldenResults.length} semantic fixtures passed
             </p>
+
+            {result.result && (
+              <div className="overflow-hidden rounded-xl border border-primary/30 bg-gradient-to-b from-primary/10 via-card to-card p-3.5 shadow-xs space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/60 pb-2.5">
+                  <div className="flex items-center gap-2">
+                    <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary/20 text-primary">
+                      <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
+                    </div>
+                    <div>
+                      <h4 className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                        Simulation Decision
+                      </h4>
+                      <p className="text-sm font-bold text-foreground">
+                        {policyName ??
+                          (outcome?.type === 'NO_ESCALATION'
+                            ? 'No Escalation (Suppressed)'
+                            : 'Service Default Escalation')}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-6 gap-1 px-2 text-[10px] font-medium bg-background/80 shadow-2xs hover:bg-background"
+                      onClick={() => {
+                        const traceSummary = {
+                          decision:
+                            policyName ??
+                            (outcome?.type === 'NO_ESCALATION'
+                              ? 'No Escalation (Suppressed)'
+                              : 'Service Default Escalation'),
+                          matchedRule: result.result?.matchedRule?.name ?? 'Default Fallback',
+                          priority: result.classification?.priority ?? 'Unset',
+                          urgency: result.classification?.urgency ?? 'Unset',
+                          durationMs: result.durationMs,
+                          writes: result.result?.writes ?? [],
+                        };
+                        navigator.clipboard.writeText(JSON.stringify(traceSummary, null, 2));
+                        notify.success('Copied simulation trace to clipboard');
+                      }}
+                    >
+                      <Copy className="h-2.5 w-2.5" aria-hidden="true" />
+                      <span>Copy trace</span>
+                    </Button>
+                    <Badge
+                      variant="outline"
+                      className="border-primary/30 bg-primary/10 text-primary font-mono text-[10px]"
+                    >
+                      {result.durationMs.toFixed(2)} ms
+                    </Badge>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs">
+                  <div className="rounded-lg border border-border/60 bg-background/60 p-2">
+                    <span className="text-[10px] uppercase font-semibold text-muted-foreground block">
+                      Routing Match
+                    </span>
+                    <span className="font-medium text-foreground truncate block mt-0.5">
+                      {result.result.matchedRule?.name ?? 'Default Fallback'}
+                    </span>
+                  </div>
+                  <div className="rounded-lg border border-border/60 bg-background/60 p-2">
+                    <span className="text-[10px] uppercase font-semibold text-muted-foreground block">
+                      Priority / Urgency
+                    </span>
+                    <span className="font-medium text-foreground truncate block mt-0.5">
+                      {result.classification?.priority ?? 'Unset'} ·{' '}
+                      {result.classification?.urgency ?? 'Normal'}
+                    </span>
+                  </div>
+                  <div className="rounded-lg border border-border/60 bg-background/60 p-2 col-span-2 sm:col-span-1">
+                    <span className="text-[10px] uppercase font-semibold text-muted-foreground block">
+                      Context Writes
+                    </span>
+                    <span className="font-medium text-foreground truncate block mt-0.5">
+                      {result.result.writes.length}{' '}
+                      {result.result.writes.length === 1 ? 'write' : 'writes'} applied
+                    </span>
+                  </div>
+                </div>
+              </div>
+            )}
+
             <dl className="grid gap-2 sm:grid-cols-2">
-              <div className="rounded-md border border-border/70 px-3 py-2">
-                <dt className="text-xs text-muted-foreground">Base classification</dt>
-                <dd className="text-sm font-medium">
+              <div className="rounded-lg border border-border/70 bg-muted/20 px-3 py-2 text-xs">
+                <dt className="text-muted-foreground text-[11px]">Base classification</dt>
+                <dd className="mt-0.5 font-medium text-foreground">
                   {result.classification?.priority ?? 'Unset'} ·{' '}
                   {result.classification?.urgency ?? 'Unknown'}
                 </dd>
               </div>
-              <div className="rounded-md border border-border/70 px-3 py-2">
-                <dt className="text-xs text-muted-foreground">Draft checks</dt>
-                <dd className="text-sm font-medium">
+              <div className="rounded-lg border border-border/70 bg-muted/20 px-3 py-2 text-xs">
+                <dt className="text-muted-foreground text-[11px]">Draft checks</dt>
+                <dd className="mt-0.5 font-medium text-foreground">
                   {result.issues.length === 0
                     ? 'No issues'
                     : `${errors} ${errors === 1 ? 'error' : 'errors'} · ${result.issues.length - errors} ${result.issues.length - errors === 1 ? 'warning' : 'warnings'}`}
                 </dd>
               </div>
             </dl>
+
             {result.providerFieldsMissing && result.providerFieldsMissing.length > 0 && (
               <div
                 role="alert"
-                className="rounded-md border border-amber-500/40 bg-amber-50 p-3 text-sm text-amber-900 dark:bg-amber-950/30 dark:text-amber-200"
+                className="rounded-lg border border-amber-500/40 bg-amber-50/70 p-2.5 text-xs text-amber-900 dark:bg-amber-950/30 dark:text-amber-200"
               >
                 <p className="font-semibold">Provider-only mapping unavailable</p>
-                <p className="mt-0.5">
+                <p className="mt-0.5 text-[11px]">
                   {result.providerFieldsMissing.join(', ')} cannot be extracted because no raw
                   provider sample was supplied. Enter a provider sample in Advanced sample JSON to
                   test provider mappings.
                 </p>
               </div>
             )}
+
             {result.issues.length > 0 && (
-              <ul aria-label="Draft issues" className="space-y-1.5">
+              <ul aria-label="Draft issues" className="space-y-1.5 text-xs">
                 {result.issues.map((i, n) => (
                   <li
                     key={n}
                     className={cn(
-                      'rounded-md border px-3 py-2 text-sm',
+                      'rounded-lg border px-3 py-1.5 text-xs',
                       i.level === 'ERROR'
                         ? 'border-destructive/40 bg-destructive/5 text-destructive'
                         : 'border-amber-500/40 bg-amber-50 text-amber-900 dark:bg-amber-950/30 dark:text-amber-200'
                     )}
                   >
-                    {i.level}: {i.message}
+                    <span className="font-semibold">{i.level}:</span> {i.message}
                   </li>
                 ))}
               </ul>
             )}
+
             {result.result && (
-              <TraceDetail
-                detail={{
-                  result: result.result,
-                  policyName,
-                  destinationNames: data.destinations.map(destination => ({
-                    provider: destination.provider,
-                    destinationId: destination.id,
-                    label: destination.channelName,
-                  })),
-                  normalization: 'normalization' in result ? result.normalization : [],
-                  actual: {
-                    priority: result.classification?.priority,
-                    route: 'SERVICE_DEFAULT',
-                  },
-                }}
-              />
+              <div className="pt-1">
+                <TraceDetail
+                  detail={{
+                    result: result.result,
+                    policyName,
+                    destinationNames: data.destinations.map(destination => ({
+                      provider: destination.provider,
+                      destinationId: destination.id,
+                      label: destination.channelName,
+                    })),
+                    normalization: 'normalization' in result ? result.normalization : [],
+                    actual: {
+                      priority: result.classification?.priority,
+                      route: 'SERVICE_DEFAULT',
+                    },
+                  }}
+                />
+              </div>
             )}
           </>
         )}

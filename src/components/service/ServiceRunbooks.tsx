@@ -305,13 +305,13 @@ export default function ServiceRunbooks({
       )}
 
       {/* Top Header Section */}
-      <header className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-start gap-3 min-w-0">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary ring-1 ring-inset ring-primary/25 shadow-2xs">
-            <Workflow className="h-5 w-5" aria-hidden />
+      <header className="flex flex-col gap-2.5 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-start gap-2.5 min-w-0">
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary ring-1 ring-inset ring-primary/25 shadow-2xs">
+            <Workflow className="h-4 w-4" aria-hidden />
           </div>
           <div className="min-w-0">
-            <h2 className="text-base sm:text-lg font-bold tracking-tight text-foreground">
+            <h2 className="text-sm sm:text-base font-bold tracking-tight text-foreground">
               Service Automations
             </h2>
             <p className="mt-0.5 text-xs text-muted-foreground leading-relaxed max-w-2xl">
@@ -327,10 +327,10 @@ export default function ServiceRunbooks({
             asChild
             variant="outline"
             size="sm"
-            className="h-9 px-3.5 gap-2 rounded-xl border border-border/80 bg-background hover:bg-accent/60 text-foreground font-semibold text-xs shadow-2xs transition-all inline-flex items-center justify-center"
+            className="h-8 px-3 gap-1.5 rounded-lg border border-border/80 bg-background hover:bg-accent/60 text-foreground font-semibold text-xs shadow-2xs transition-all inline-flex items-center justify-center"
           >
             <Link href="/runbooks">
-              <BookOpen className="h-4 w-4 text-primary" aria-hidden />
+              <BookOpen className="h-3.5 w-3.5 text-primary" aria-hidden />
               <span>Catalog</span>
             </Link>
           </Button>
@@ -348,13 +348,13 @@ export default function ServiceRunbooks({
 
       {/* Modern Metric Telemetry Cards */}
       {bindings.length > 0 && !archived && (
-        <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-5">
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
           {stats.map(stat => {
             const Icon = stat.icon;
             return (
               <div
                 key={stat.label}
-                className="group relative overflow-hidden rounded-xl border border-border/80 bg-card/70 backdrop-blur-xs p-3 sm:p-3.5 shadow-2xs hover:shadow-xs hover:border-border transition-all duration-150"
+                className="group relative overflow-hidden rounded-xl border border-border/80 bg-card/70 backdrop-blur-xs p-2.5 sm:p-3 shadow-2xs hover:shadow-xs hover:border-border transition-all duration-150"
               >
                 <div className="flex items-center justify-between gap-1.5">
                   <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground truncate">
@@ -362,17 +362,17 @@ export default function ServiceRunbooks({
                   </span>
                   <span
                     className={cn(
-                      'flex h-6 w-6 items-center justify-center rounded-lg border shadow-2xs shrink-0',
+                      'flex h-5.5 w-5.5 items-center justify-center rounded-md border shadow-2xs shrink-0',
                       stat.color
                     )}
                   >
                     <Icon className="h-3 w-3" aria-hidden />
                   </span>
                 </div>
-                <div className="mt-1 text-lg sm:text-xl font-extrabold tracking-tight text-foreground tabular-nums">
+                <div className="mt-1 text-base sm:text-lg font-bold tracking-tight text-foreground tabular-nums">
                   {stat.value}
                 </div>
-                <div className="mt-0.5 text-[11px] text-muted-foreground/80 truncate">
+                <div className="mt-0.5 text-[10px] text-muted-foreground/80 truncate">
                   {stat.hint}
                 </div>
               </div>
@@ -382,315 +382,327 @@ export default function ServiceRunbooks({
       )}
 
       {/* Redesigned Clean & Robust Filter Card matching LibraryFilterBar */}
-      <Card className="border border-border/80 shadow-xs transition-colors">
-        <CardHeader className="pb-2.5 pt-3.5 px-4 sm:px-5">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div className="flex items-center gap-2">
-              <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary/10 text-primary shrink-0">
-                <Filter className="h-4 w-4" />
+      {(bindings.length > 0 || hasActiveFilters) && (
+        <Card className="border border-border/80 shadow-2xs transition-colors">
+          <CardHeader className="py-2.5 px-3.5 sm:px-4">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <div className="flex h-6 w-6 items-center justify-center rounded-md bg-primary/10 text-primary shrink-0">
+                  <Filter className="h-3.5 w-3.5" />
+                </div>
+                <div>
+                  <CardTitle className="text-xs sm:text-sm font-bold text-foreground">
+                    Filter Rules
+                  </CardTitle>
+                  <CardDescription className="text-[11px] text-muted-foreground mt-0.5">
+                    Filter by execution mode, lifecycle status, or keyword
+                  </CardDescription>
+                </div>
               </div>
-              <div>
-                <CardTitle className="text-sm sm:text-base font-bold text-foreground">
-                  Filter Rules
-                </CardTitle>
-                <CardDescription className="text-xs text-muted-foreground mt-0.5">
-                  Filter by execution mode, lifecycle status, or keyword
-                </CardDescription>
-              </div>
-            </div>
-            {hasActiveFilters && (
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground hover:bg-muted/60 cursor-pointer"
-                onClick={() => {
-                  setSearchQuery('');
-                  setModeFilter('ALL');
-                  router.push(`/services/${serviceId}?tab=runbooks`);
-                }}
-              >
-                <X className="mr-1 h-3 w-3" /> Clear filters
-              </Button>
-            )}
-          </div>
-        </CardHeader>
-
-        <CardContent className="space-y-3 pt-0 px-4 sm:px-5 pb-3.5 sm:pb-4">
-          {/* Quick Mode Filter Pills */}
-          <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
-            <Badge
-              variant={modeFilter === 'ALL' && !archived ? 'default' : 'outline'}
-              size="sm"
-              className={cn(
-                'cursor-pointer transition-colors shadow-2xs font-semibold py-1 px-2.5 text-xs',
-                modeFilter === 'ALL' && !archived
-                  ? 'bg-primary text-primary-foreground border-primary hover:bg-primary/90'
-                  : 'bg-card border-border/80 text-muted-foreground hover:text-foreground hover:bg-muted/50'
-              )}
-              onClick={() => {
-                setModeFilter('ALL');
-                if (archived) router.push(`/services/${serviceId}?tab=runbooks&rulesState=active`);
-              }}
-            >
-              All rules ({bindings.length})
-            </Badge>
-            <Badge
-              variant={modeFilter === 'AUTOMATIC' && !archived ? 'success' : 'outline'}
-              size="sm"
-              className={cn(
-                'cursor-pointer transition-colors shadow-2xs font-semibold py-1 px-2.5 text-xs',
-                modeFilter === 'AUTOMATIC' && !archived
-                  ? 'bg-emerald-600 text-white border-emerald-600 dark:bg-emerald-500 hover:bg-emerald-700'
-                  : 'bg-card border-border/80 text-muted-foreground hover:text-emerald-700 dark:hover:text-emerald-300 hover:bg-emerald-500/10'
-              )}
-              onClick={() => {
-                setModeFilter(modeFilter === 'AUTOMATIC' ? 'ALL' : 'AUTOMATIC');
-                if (archived) router.push(`/services/${serviceId}?tab=runbooks&rulesState=active`);
-              }}
-            >
-              <Zap className="mr-1 h-3 w-3" /> Automatic ({countMode('AUTOMATIC')})
-            </Badge>
-            <Badge
-              variant={modeFilter === 'SUGGESTED' && !archived ? 'warning' : 'outline'}
-              size="sm"
-              className={cn(
-                'cursor-pointer transition-colors shadow-2xs font-semibold py-1 px-2.5 text-xs',
-                modeFilter === 'SUGGESTED' && !archived
-                  ? 'bg-amber-600 text-white border-amber-600 dark:bg-amber-500 hover:bg-amber-700'
-                  : 'bg-card border-border/80 text-muted-foreground hover:text-amber-700 dark:hover:text-amber-300 hover:bg-amber-500/10'
-              )}
-              onClick={() => {
-                setModeFilter(modeFilter === 'SUGGESTED' ? 'ALL' : 'SUGGESTED');
-                if (archived) router.push(`/services/${serviceId}?tab=runbooks&rulesState=active`);
-              }}
-            >
-              <Sparkles className="mr-1 h-3 w-3" /> Suggested ({countMode('SUGGESTED')})
-            </Badge>
-            <Badge
-              variant={modeFilter === 'MANUAL' && !archived ? 'info' : 'outline'}
-              size="sm"
-              className={cn(
-                'cursor-pointer transition-colors shadow-2xs font-semibold py-1 px-2.5 text-xs',
-                modeFilter === 'MANUAL' && !archived
-                  ? 'bg-sky-600 text-white border-sky-600 dark:bg-sky-500 hover:bg-sky-700'
-                  : 'bg-card border-border/80 text-muted-foreground hover:text-sky-700 dark:hover:text-sky-300 hover:bg-sky-500/10'
-              )}
-              onClick={() => {
-                setModeFilter(modeFilter === 'MANUAL' ? 'ALL' : 'MANUAL');
-                if (archived) router.push(`/services/${serviceId}?tab=runbooks&rulesState=active`);
-              }}
-            >
-              <Hand className="mr-1 h-3 w-3" /> Manual ({countMode('MANUAL')})
-            </Badge>
-            <Badge
-              variant={archived ? 'secondary' : 'outline'}
-              size="sm"
-              className={cn(
-                'cursor-pointer transition-colors shadow-2xs font-semibold py-1 px-2.5 text-xs',
-                archived
-                  ? 'bg-slate-700 text-white border-slate-700 hover:bg-slate-800'
-                  : 'bg-card border-border/80 text-muted-foreground hover:text-foreground hover:bg-muted/50'
-              )}
-              onClick={() => {
-                router.push(
-                  `/services/${serviceId}?tab=runbooks&rulesState=${archived ? 'active' : 'archived'}`
-                );
-              }}
-            >
-              <Archive className="mr-1 h-3 w-3" /> Archived
-            </Badge>
-          </div>
-
-          {/* Grid Layout Inputs Row matching LibraryFilterBar */}
-          <form
-            method="get"
-            onSubmit={e => {
-              e.preventDefault();
-              const formData = new FormData(e.currentTarget);
-              const state = (formData.get('rulesState') as string) || selectedState || rulesState;
-              const search = (formData.get('rulesSearch') as string) ?? searchQuery;
-              const params = new URLSearchParams();
-              params.set('tab', 'runbooks');
-              if (state) params.set('rulesState', state);
-              if (search) params.set('rulesSearch', search);
-              router.push(`/services/${serviceId}?${params.toString()}`);
-            }}
-            className="grid grid-cols-1 sm:grid-cols-12 gap-2.5 items-end pt-2 border-t border-border/60"
-          >
-            {/* Search Input */}
-            <div
-              className={cn(
-                'space-y-1',
-                canManage ? 'sm:col-span-5 lg:col-span-5' : 'sm:col-span-6 lg:col-span-6'
-              )}
-            >
-              <Label
-                htmlFor={`${ids}-search`}
-                className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1"
-              >
-                <Search className="h-3 w-3" /> Search
-              </Label>
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
-                <Input
-                  id={`${ids}-search`}
-                  name="rulesSearch"
-                  aria-label="Search rules"
-                  placeholder="Search rules by name, runbook, or target agent…"
-                  value={searchQuery}
-                  onChange={e => setSearchQuery(e.target.value)}
-                  className="h-9 rounded-xl pl-9 pr-8 text-xs font-medium w-full bg-background/80 shadow-2xs"
-                />
-                {searchQuery && (
-                  <button
-                    type="button"
-                    aria-label="Clear search"
-                    onClick={() => setSearchQuery('')}
-                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground p-0.5 rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring cursor-pointer"
-                  >
-                    <X className="h-3.5 w-3.5" />
-                  </button>
-                )}
-              </div>
-            </div>
-
-            {/* Lifecycle Dropdown */}
-            <div
-              className={cn(
-                'space-y-1',
-                canManage ? 'sm:col-span-3 lg:col-span-3' : 'sm:col-span-3 lg:col-span-3'
-              )}
-            >
-              <Label
-                htmlFor={`${ids}-state`}
-                className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1"
-              >
-                <Activity className="h-3 w-3" /> Lifecycle
-              </Label>
-              <select
-                id={`${ids}-state`}
-                name="rulesState"
-                aria-label="Rule history"
-                value={selectedState}
-                onChange={e => {
-                  const val = e.target.value === 'archived' ? 'archived' : 'active';
-                  setSelectedState(val);
-                  const params = new URLSearchParams();
-                  params.set('tab', 'runbooks');
-                  if (val) params.set('rulesState', val);
-                  if (searchQuery) params.set('rulesSearch', searchQuery);
-                  router.push(`/services/${serviceId}?${params.toString()}`);
-                }}
-                className="h-9 w-full rounded-xl border border-input/80 bg-background/80 px-2.5 text-xs font-medium shadow-2xs focus:ring-2 focus:ring-primary/40 focus:outline-none transition-colors"
-              >
-                <option value="active">Attached rules</option>
-                <option value="archived">Archived rules</option>
-              </select>
-            </div>
-
-            {/* Search Submit Button */}
-            <div className={cn('space-y-1', canManage ? 'sm:col-span-2 lg:col-span-2' : 'sm:col-span-3 lg:col-span-3')}>
-              <Button
-                type="submit"
-                variant="outline"
-                size="sm"
-                className="h-9 w-full font-medium text-xs rounded-xl shadow-2xs"
-                aria-label="Search rule history"
-              >
-                Search
-              </Button>
-            </div>
-
-            {/* Scope Parameters Toggle Button */}
-            {canManage && (
-              <div className="space-y-1 sm:col-span-2 lg:col-span-2">
-                <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1">
-                  <SlidersHorizontal className="h-3 w-3" /> Scope
-                </Label>
+              {hasActiveFilters && (
                 <Button
-                  type="button"
-                  variant="outline"
+                  variant="ghost"
                   size="sm"
-                  onClick={() => setShowScope(!showScope)}
-                  className={cn(
-                    'h-9 w-full justify-between rounded-xl border-input/80 bg-background/80 text-xs font-medium shadow-2xs',
-                    (catalogQuery || targetQuery) && 'border-primary/50 text-primary bg-primary/5',
-                    showScope && 'border-primary text-primary'
-                  )}
+                  className="h-6 px-2 text-xs text-muted-foreground hover:text-foreground hover:bg-muted/60 cursor-pointer"
+                  onClick={() => {
+                    setSearchQuery('');
+                    setModeFilter('ALL');
+                    router.push(`/services/${serviceId}?tab=runbooks`);
+                  }}
                 >
-                  <span className="flex items-center gap-1.5 truncate">
-                    <SlidersHorizontal className="h-3.5 w-3.5 shrink-0" />
-                    <span>Filter</span>
-                  </span>
-                  <ChevronDown
-                    className={cn(
-                      'h-3.5 w-3.5 shrink-0 transition-transform duration-150',
-                      showScope && 'rotate-180'
-                    )}
-                  />
+                  <X className="mr-1 h-3 w-3" /> Clear filters
                 </Button>
-              </div>
-            )}
-          </form>
+              )}
+            </div>
+          </CardHeader>
 
-          {/* Scope Inputs (only displayed when expanded) */}
-          {showScope && canManage && (
+          <CardContent className="space-y-2.5 pt-0 px-3.5 sm:px-4 pb-3">
+            {/* Quick Mode Filter Pills */}
+            <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+              <Badge
+                variant={modeFilter === 'ALL' && !archived ? 'default' : 'outline'}
+                size="sm"
+                className={cn(
+                  'cursor-pointer transition-colors shadow-2xs font-semibold py-1 px-2.5 text-xs',
+                  modeFilter === 'ALL' && !archived
+                    ? 'bg-primary text-primary-foreground border-primary hover:bg-primary/90'
+                    : 'bg-card border-border/80 text-muted-foreground hover:text-foreground hover:bg-muted/50'
+                )}
+                onClick={() => {
+                  setModeFilter('ALL');
+                  if (archived)
+                    router.push(`/services/${serviceId}?tab=runbooks&rulesState=active`);
+                }}
+              >
+                All rules ({bindings.length})
+              </Badge>
+              <Badge
+                variant={modeFilter === 'AUTOMATIC' && !archived ? 'success' : 'outline'}
+                size="sm"
+                className={cn(
+                  'cursor-pointer transition-colors shadow-2xs font-semibold py-1 px-2.5 text-xs',
+                  modeFilter === 'AUTOMATIC' && !archived
+                    ? 'bg-emerald-600 text-white border-emerald-600 dark:bg-emerald-500 hover:bg-emerald-700'
+                    : 'bg-card border-border/80 text-muted-foreground hover:text-emerald-700 dark:hover:text-emerald-300 hover:bg-emerald-500/10'
+                )}
+                onClick={() => {
+                  setModeFilter(modeFilter === 'AUTOMATIC' ? 'ALL' : 'AUTOMATIC');
+                  if (archived)
+                    router.push(`/services/${serviceId}?tab=runbooks&rulesState=active`);
+                }}
+              >
+                <Zap className="mr-1 h-3 w-3" /> Automatic ({countMode('AUTOMATIC')})
+              </Badge>
+              <Badge
+                variant={modeFilter === 'SUGGESTED' && !archived ? 'warning' : 'outline'}
+                size="sm"
+                className={cn(
+                  'cursor-pointer transition-colors shadow-2xs font-semibold py-1 px-2.5 text-xs',
+                  modeFilter === 'SUGGESTED' && !archived
+                    ? 'bg-amber-600 text-white border-amber-600 dark:bg-amber-500 hover:bg-amber-700'
+                    : 'bg-card border-border/80 text-muted-foreground hover:text-amber-700 dark:hover:text-amber-300 hover:bg-amber-500/10'
+                )}
+                onClick={() => {
+                  setModeFilter(modeFilter === 'SUGGESTED' ? 'ALL' : 'SUGGESTED');
+                  if (archived)
+                    router.push(`/services/${serviceId}?tab=runbooks&rulesState=active`);
+                }}
+              >
+                <Sparkles className="mr-1 h-3 w-3" /> Suggested ({countMode('SUGGESTED')})
+              </Badge>
+              <Badge
+                variant={modeFilter === 'MANUAL' && !archived ? 'info' : 'outline'}
+                size="sm"
+                className={cn(
+                  'cursor-pointer transition-colors shadow-2xs font-semibold py-1 px-2.5 text-xs',
+                  modeFilter === 'MANUAL' && !archived
+                    ? 'bg-sky-600 text-white border-sky-600 dark:bg-sky-500 hover:bg-sky-700'
+                    : 'bg-card border-border/80 text-muted-foreground hover:text-sky-700 dark:hover:text-sky-300 hover:bg-sky-500/10'
+                )}
+                onClick={() => {
+                  setModeFilter(modeFilter === 'MANUAL' ? 'ALL' : 'MANUAL');
+                  if (archived)
+                    router.push(`/services/${serviceId}?tab=runbooks&rulesState=active`);
+                }}
+              >
+                <Hand className="mr-1 h-3 w-3" /> Manual ({countMode('MANUAL')})
+              </Badge>
+              <Badge
+                variant={archived ? 'secondary' : 'outline'}
+                size="sm"
+                className={cn(
+                  'cursor-pointer transition-colors shadow-2xs font-semibold py-1 px-2.5 text-xs',
+                  archived
+                    ? 'bg-slate-700 text-white border-slate-700 hover:bg-slate-800'
+                    : 'bg-card border-border/80 text-muted-foreground hover:text-foreground hover:bg-muted/50'
+                )}
+                onClick={() => {
+                  router.push(
+                    `/services/${serviceId}?tab=runbooks&rulesState=${archived ? 'active' : 'archived'}`
+                  );
+                }}
+              >
+                <Archive className="mr-1 h-3 w-3" /> Archived
+              </Badge>
+            </div>
+
+            {/* Grid Layout Inputs Row matching LibraryFilterBar */}
             <form
               method="get"
-              className="mt-2.5 grid grid-cols-1 sm:grid-cols-12 gap-2.5 rounded-xl border border-border/70 bg-muted/20 p-3"
+              onSubmit={e => {
+                e.preventDefault();
+                const formData = new FormData(e.currentTarget);
+                const state = (formData.get('rulesState') as string) || selectedState || rulesState;
+                const search = (formData.get('rulesSearch') as string) ?? searchQuery;
+                const params = new URLSearchParams();
+                params.set('tab', 'runbooks');
+                if (state) params.set('rulesState', state);
+                if (search) params.set('rulesSearch', search);
+                router.push(`/services/${serviceId}?${params.toString()}`);
+              }}
+              className="grid grid-cols-1 sm:grid-cols-12 gap-2.5 items-end pt-2 border-t border-border/60"
             >
-              <input type="hidden" name="tab" value="runbooks" />
-              <input type="hidden" name="rulesState" value={rulesState} />
-              <input type="hidden" name="rulesSearch" value={rulesSearch} />
-              <div className="sm:col-span-5 space-y-1">
+              {/* Search Input */}
+              <div
+                className={cn(
+                  'space-y-1',
+                  canManage ? 'sm:col-span-5 lg:col-span-5' : 'sm:col-span-6 lg:col-span-6'
+                )}
+              >
                 <Label
-                  htmlFor={`${ids}-catalog`}
-                  className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider flex items-center gap-1"
+                  htmlFor={`${ids}-search`}
+                  className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1"
                 >
-                  <BookOpen className="h-3 w-3" /> Catalog Scope
+                  <Search className="h-3 w-3" /> Search
                 </Label>
-                <Input
-                  id={`${ids}-catalog`}
-                  name="ruleCatalog"
-                  aria-label="Workflow search"
-                  defaultValue={catalogQuery}
-                  maxLength={100}
-                  placeholder="Filter workflow creation list…"
-                  className="h-8.5 text-xs rounded-lg bg-background/80"
-                />
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+                  <Input
+                    id={`${ids}-search`}
+                    name="rulesSearch"
+                    aria-label="Search rules"
+                    placeholder="Search rules by name, runbook, or target agent…"
+                    value={searchQuery}
+                    onChange={e => setSearchQuery(e.target.value)}
+                    className="h-9 rounded-xl pl-9 pr-8 text-xs font-medium w-full bg-background/80 shadow-2xs"
+                  />
+                  {searchQuery && (
+                    <button
+                      type="button"
+                      aria-label="Clear search"
+                      onClick={() => setSearchQuery('')}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground p-0.5 rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring cursor-pointer"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                </div>
               </div>
-              <div className="sm:col-span-5 space-y-1">
+
+              {/* Lifecycle Dropdown */}
+              <div
+                className={cn(
+                  'space-y-1',
+                  canManage ? 'sm:col-span-3 lg:col-span-3' : 'sm:col-span-3 lg:col-span-3'
+                )}
+              >
                 <Label
-                  htmlFor={`${ids}-targets`}
-                  className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider flex items-center gap-1"
+                  htmlFor={`${ids}-state`}
+                  className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1"
                 >
-                  <Workflow className="h-3 w-3" /> Target Scope
+                  <Activity className="h-3 w-3" /> Lifecycle
                 </Label>
-                <Input
-                  id={`${ids}-targets`}
-                  name="ruleTargets"
-                  aria-label="Agent / pool search"
-                  defaultValue={targetQuery}
-                  maxLength={100}
-                  placeholder="Filter target agents/pools…"
-                  className="h-8.5 text-xs rounded-lg bg-background/80"
-                />
+                <select
+                  id={`${ids}-state`}
+                  name="rulesState"
+                  aria-label="Rule history"
+                  value={selectedState}
+                  onChange={e => {
+                    const val = e.target.value === 'archived' ? 'archived' : 'active';
+                    setSelectedState(val);
+                    const params = new URLSearchParams();
+                    params.set('tab', 'runbooks');
+                    if (val) params.set('rulesState', val);
+                    if (searchQuery) params.set('rulesSearch', searchQuery);
+                    router.push(`/services/${serviceId}?${params.toString()}`);
+                  }}
+                  className="h-9 w-full rounded-xl border border-input/80 bg-background/80 px-2.5 text-xs font-medium shadow-2xs focus:ring-2 focus:ring-primary/40 focus:outline-none transition-colors"
+                >
+                  <option value="active">Attached rules</option>
+                  <option value="archived">Archived rules</option>
+                </select>
               </div>
-              <div className="sm:col-span-2 flex items-end">
+
+              {/* Search Submit Button */}
+              <div
+                className={cn(
+                  'space-y-1',
+                  canManage ? 'sm:col-span-2 lg:col-span-2' : 'sm:col-span-3 lg:col-span-3'
+                )}
+              >
                 <Button
                   type="submit"
-                  variant="secondary"
+                  variant="outline"
                   size="sm"
-                  aria-label="Search options"
-                  className="h-8.5 w-full text-xs font-semibold shadow-2xs"
+                  className="h-9 w-full font-medium text-xs rounded-xl shadow-2xs"
+                  aria-label="Search rule history"
                 >
-                  Search options
+                  Search
                 </Button>
               </div>
+
+              {/* Scope Parameters Toggle Button */}
+              {canManage && (
+                <div className="space-y-1 sm:col-span-2 lg:col-span-2">
+                  <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1">
+                    <SlidersHorizontal className="h-3 w-3" /> Scope
+                  </Label>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setShowScope(!showScope)}
+                    className={cn(
+                      'h-9 w-full justify-between rounded-xl border-input/80 bg-background/80 text-xs font-medium shadow-2xs',
+                      (catalogQuery || targetQuery) &&
+                        'border-primary/50 text-primary bg-primary/5',
+                      showScope && 'border-primary text-primary'
+                    )}
+                  >
+                    <span className="flex items-center gap-1.5 truncate">
+                      <SlidersHorizontal className="h-3.5 w-3.5 shrink-0" />
+                      <span>Filter</span>
+                    </span>
+                    <ChevronDown
+                      className={cn(
+                        'h-3.5 w-3.5 shrink-0 transition-transform duration-150',
+                        showScope && 'rotate-180'
+                      )}
+                    />
+                  </Button>
+                </div>
+              )}
             </form>
-          )}
-        </CardContent>
-      </Card>
+
+            {/* Scope Inputs (only displayed when expanded) */}
+            {showScope && canManage && (
+              <form
+                method="get"
+                className="mt-2.5 grid grid-cols-1 sm:grid-cols-12 gap-2.5 rounded-xl border border-border/70 bg-muted/20 p-3"
+              >
+                <input type="hidden" name="tab" value="runbooks" />
+                <input type="hidden" name="rulesState" value={rulesState} />
+                <input type="hidden" name="rulesSearch" value={rulesSearch} />
+                <div className="sm:col-span-5 space-y-1">
+                  <Label
+                    htmlFor={`${ids}-catalog`}
+                    className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider flex items-center gap-1"
+                  >
+                    <BookOpen className="h-3 w-3" /> Catalog Scope
+                  </Label>
+                  <Input
+                    id={`${ids}-catalog`}
+                    name="ruleCatalog"
+                    aria-label="Workflow search"
+                    defaultValue={catalogQuery}
+                    maxLength={100}
+                    placeholder="Filter workflow creation list…"
+                    className="h-8.5 text-xs rounded-lg bg-background/80"
+                  />
+                </div>
+                <div className="sm:col-span-5 space-y-1">
+                  <Label
+                    htmlFor={`${ids}-targets`}
+                    className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider flex items-center gap-1"
+                  >
+                    <Workflow className="h-3 w-3" /> Target Scope
+                  </Label>
+                  <Input
+                    id={`${ids}-targets`}
+                    name="ruleTargets"
+                    aria-label="Agent / pool search"
+                    defaultValue={targetQuery}
+                    maxLength={100}
+                    placeholder="Filter target agents/pools…"
+                    className="h-8.5 text-xs rounded-lg bg-background/80"
+                  />
+                </div>
+                <div className="sm:col-span-2 flex items-end">
+                  <Button
+                    type="submit"
+                    variant="secondary"
+                    size="sm"
+                    aria-label="Search options"
+                    className="h-8.5 w-full text-xs font-semibold shadow-2xs"
+                  >
+                    Search options
+                  </Button>
+                </div>
+              </form>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Compact Fleet Readiness Telemetry Bar */}
       {bindings.length > 0 && !archived && (

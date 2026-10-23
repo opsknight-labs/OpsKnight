@@ -3,7 +3,7 @@
 import React, { useEffect, useState, type ReactNode } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/shadcn/tabs';
 import { Badge } from '@/components/ui/shadcn/badge';
-import { Settings2, History, Zap, FileText, Workflow, Route } from 'lucide-react';
+import { Settings2, History, Zap, FileText, Workflow, Route, BookOpen } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 export type IncidentDetailTabsProps = {
@@ -12,6 +12,7 @@ export type IncidentDetailTabsProps = {
   noteCount?: number;
   activityContent: ReactNode;
   timelineContent: ReactNode;
+  automationContent?: ReactNode;
   responseContent?: ReactNode;
   runbooksContent?: ReactNode;
   postmortemContent?: ReactNode;
@@ -20,10 +21,23 @@ export type IncidentDetailTabsProps = {
 };
 
 /** Maps record anchors used by the Response activity view to the tab that renders them. */
-export function tabForAnchor(anchor: string, hasRunbooks: boolean): string | null {
+export function tabForAnchor(
+  anchor: string,
+  hasRunbooksOrOptions: boolean | { hasRunbooks?: boolean; hasAutomation?: boolean } = {}
+): string | null {
+  const opts =
+    typeof hasRunbooksOrOptions === 'boolean'
+      ? { hasRunbooks: hasRunbooksOrOptions, hasAutomation: true }
+      : {
+          hasRunbooks: hasRunbooksOrOptions.hasRunbooks ?? false,
+          hasAutomation: hasRunbooksOrOptions.hasAutomation ?? true,
+        };
   if (anchor.startsWith('timeline-')) return 'timeline';
-  if (anchor.startsWith('runbook-')) return hasRunbooks ? 'runbooks' : null;
+  if (anchor.startsWith('runbook-')) return opts.hasRunbooks ? 'runbooks' : null;
   if (anchor === 'response-activity') return 'response';
+  if (anchor === 'automation-decision' || anchor.startsWith('automation-')) {
+    return opts.hasAutomation ? 'automation' : null;
+  }
   return null;
 }
 
@@ -33,12 +47,15 @@ export function isIncidentTabAvailable(
     hasResponse?: boolean;
     hasRunbooks?: boolean;
     hasPostmortem?: boolean;
+    hasAutomation?: boolean;
   }
 ): boolean {
   switch (tabId) {
     case 'overview':
     case 'timeline':
       return true;
+    case 'automation':
+      return Boolean(options.hasAutomation);
     case 'response':
       return Boolean(options.hasResponse);
     case 'runbooks':
@@ -55,19 +72,22 @@ export default function IncidentDetailTabs({
   eventCount,
   activityContent,
   timelineContent,
+  automationContent,
   responseContent,
   runbooksContent,
   postmortemContent,
   postmortemStatus,
   className,
 }: IncidentDetailTabsProps) {
+  const hasAutomation = !!automationContent;
   const hasRunbooks = !!runbooksContent;
   const hasResponse = !!responseContent;
   const hasPostmortem = !!postmortemContent;
 
   const isAvailable = React.useCallback(
-    (t: string) => isIncidentTabAvailable(t, { hasResponse, hasRunbooks, hasPostmortem }),
-    [hasResponse, hasRunbooks, hasPostmortem]
+    (t: string) =>
+      isIncidentTabAvailable(t, { hasAutomation, hasResponse, hasRunbooks, hasPostmortem }),
+    [hasAutomation, hasResponse, hasRunbooks, hasPostmortem]
   );
 
   const [tab, setTab] = useState(() => {
@@ -100,7 +120,7 @@ export default function IncidentDetailTabs({
   useEffect(() => {
     const sync = () => {
       const anchor = decodeURIComponent(window.location.hash.slice(1));
-      const target = tabForAnchor(anchor, hasRunbooks);
+      const target = tabForAnchor(anchor, { hasRunbooks, hasAutomation });
       if (!target || !isAvailable(target)) return;
       setTab(target);
       // Wait for the newly selected tab panel to mount before scrolling.
@@ -113,7 +133,7 @@ export default function IncidentDetailTabs({
     sync();
     window.addEventListener('hashchange', sync);
     return () => window.removeEventListener('hashchange', sync);
-  }, [hasRunbooks, isAvailable]);
+  }, [hasRunbooks, hasAutomation, isAvailable]);
 
   const handleTabChange = (nextTab: string) => {
     if (!isAvailable(nextTab)) return;
@@ -134,68 +154,91 @@ export default function IncidentDetailTabs({
   return (
     <Tabs value={tab} onValueChange={handleTabChange} className={cn('w-full', className)}>
       <div className="rounded-xl border border-border bg-card shadow-2xs overflow-hidden text-card-foreground transition-all">
-        {/* Compact, Unified Header Bar */}
-        <div className="px-3 sm:px-4 py-2 border-b border-border/80 bg-muted/30 flex items-center justify-between gap-3">
-          <TabsList className="h-8 max-w-full justify-start overflow-x-auto p-0.5 bg-muted/80 border border-border/70 rounded-lg">
-            <TabsTrigger
-              value="overview"
-              className="shrink-0 gap-2 px-3 py-1 text-xs font-medium data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-2xs rounded-md transition-all"
-            >
-              <Settings2 className="h-4 w-4" />
-              <span>Overview</span>
-            </TabsTrigger>
-            {responseContent && (
+        {/* Modern, Fluid Responsive Tabs Header */}
+        <div className="border-b border-border/70 bg-muted/20 p-1.5 sm:px-3 sm:py-2 flex items-center justify-between gap-3">
+          <div className="overflow-x-auto scrollbar-none max-w-full min-w-0 flex-1">
+            <TabsList className="inline-flex h-9 sm:h-8 w-max min-w-full sm:w-auto items-center justify-start gap-1 p-1 bg-muted/50 sm:bg-muted/60 dark:bg-muted/30 border border-border/50 rounded-xl sm:rounded-lg overflow-x-auto">
               <TabsTrigger
-                value="response"
-                className="shrink-0 gap-2 px-3 py-1 text-xs font-medium data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-2xs rounded-md transition-all"
+                value="overview"
+                className="shrink-0 flex items-center justify-center gap-1.5 py-1.5 px-2.5 sm:px-2 text-xs font-medium rounded-lg sm:rounded-md text-muted-foreground hover:text-foreground data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-xs transition-all select-none truncate"
               >
-                <Route className="h-4 w-4" />
-                <span>Response activity</span>
+                <Settings2 className="h-3.5 w-3.5 shrink-0" />
+                <span className="truncate">Overview</span>
               </TabsTrigger>
-            )}
-            {runbooksContent && (
-              <TabsTrigger
-                value="runbooks"
-                className="shrink-0 gap-2 px-3 py-1 text-xs font-medium data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-2xs rounded-md transition-all"
-              >
-                <Workflow className="h-4 w-4" />
-                <span>Runbooks</span>
-              </TabsTrigger>
-            )}
-            <TabsTrigger
-              value="timeline"
-              className="shrink-0 gap-2 px-3 py-1 text-xs font-medium data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-2xs rounded-md transition-all"
-            >
-              <History className="h-4 w-4" />
-              <span>Timeline</span>
-            </TabsTrigger>
-            <TabsTrigger
-              value="postmortem"
-              className="shrink-0 gap-2 px-3 py-1 text-xs font-medium data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-2xs rounded-md transition-all"
-            >
-              <FileText className="h-4 w-4" />
-              <span>Postmortem</span>
-              {postmortemStatus && (
-                <span
-                  className={cn(
-                    'inline-block w-1.5 h-1.5 rounded-full ml-0.5',
-                    postmortemStatus === 'PUBLISHED'
-                      ? 'bg-emerald-500 ring-2 ring-emerald-500/20'
-                      : 'bg-amber-500 ring-2 ring-amber-500/20'
-                  )}
-                  title={`Status: ${postmortemStatus}`}
-                />
+              {automationContent && (
+                <TabsTrigger
+                  value="automation"
+                  className="shrink-0 flex items-center justify-center gap-1.5 py-1.5 px-2.5 sm:px-2 text-xs font-medium rounded-lg sm:rounded-md text-muted-foreground hover:text-foreground data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-xs transition-all select-none truncate"
+                >
+                  <Workflow className="h-3.5 w-3.5 shrink-0" />
+                  <span className="truncate">Automation</span>
+                </TabsTrigger>
               )}
-            </TabsTrigger>
-          </TabsList>
+              {responseContent && (
+                <TabsTrigger
+                  value="response"
+                  className="shrink-0 flex items-center justify-center gap-1.5 py-1.5 px-2.5 sm:px-2 text-xs font-medium rounded-lg sm:rounded-md text-muted-foreground hover:text-foreground data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-xs transition-all select-none truncate"
+                >
+                  <Route className="h-3.5 w-3.5 shrink-0" />
+                  <span className="leading-tight sm:hidden truncate">Activity</span>
+                  <span className="hidden sm:inline truncate">Response activity</span>
+                </TabsTrigger>
+              )}
+              {runbooksContent && (
+                <TabsTrigger
+                  value="runbooks"
+                  className="shrink-0 flex items-center justify-center gap-1.5 py-1.5 px-2.5 sm:px-2 text-xs font-medium rounded-lg sm:rounded-md text-muted-foreground hover:text-foreground data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-xs transition-all select-none truncate"
+                >
+                  <BookOpen className="h-3.5 w-3.5 shrink-0" />
+                  <span className="truncate">Runbooks</span>
+                </TabsTrigger>
+              )}
+              <TabsTrigger
+                value="timeline"
+                className="shrink-0 flex items-center justify-center gap-1.5 py-1.5 px-2.5 sm:px-2 text-xs font-medium rounded-lg sm:rounded-md text-muted-foreground hover:text-foreground data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-xs transition-all select-none truncate"
+              >
+                <History className="h-3.5 w-3.5 shrink-0" />
+                <span className="inline-flex items-center gap-1 leading-tight truncate">
+                  <span className="truncate">Timeline</span>
+                  {typeof eventCount === 'number' && (
+                    <span className="rounded-full bg-muted-foreground/15 px-1.5 py-0.2 text-[9.5px] sm:text-[10px] font-semibold text-muted-foreground shrink-0">
+                      {eventCount}
+                    </span>
+                  )}
+                </span>
+              </TabsTrigger>
+              <TabsTrigger
+                value="postmortem"
+                className="shrink-0 flex items-center justify-center gap-1.5 py-1.5 px-2.5 sm:px-2 text-xs font-medium rounded-lg sm:rounded-md text-muted-foreground hover:text-foreground data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-xs transition-all select-none truncate"
+              >
+                <FileText className="h-3.5 w-3.5 shrink-0" />
+                <span className="inline-flex items-center gap-1 leading-tight truncate">
+                  <span className="truncate">Postmortem</span>
+                  {postmortemStatus && (
+                    <span
+                      className={cn(
+                        'inline-block w-1.5 h-1.5 rounded-full shrink-0',
+                        postmortemStatus === 'PUBLISHED'
+                          ? 'bg-emerald-500 ring-2 ring-emerald-500/20'
+                          : 'bg-amber-500 ring-2 ring-amber-500/20'
+                      )}
+                      title={`Status: ${postmortemStatus}`}
+                    />
+                  )}
+                </span>
+              </TabsTrigger>
+            </TabsList>
+          </div>
 
-          <Badge
-            variant="outline"
-            className="gap-1.5 py-1 px-2 border-border bg-background shrink-0 text-xs font-medium"
-          >
-            <Zap className="h-3.5 w-3.5 text-amber-500" />
-            <span>{eventCount} Events</span>
-          </Badge>
+          {typeof eventCount === 'number' && (
+            <Badge
+              variant="outline"
+              className="hidden 2xl:inline-flex gap-1.5 py-1 px-2.5 border-border bg-background/80 shrink-0 text-xs font-medium"
+            >
+              <Zap className="h-3.5 w-3.5 text-amber-500" />
+              <span>{eventCount} Events</span>
+            </Badge>
+          )}
         </div>
 
         {/* Tab Content */}
@@ -203,6 +246,12 @@ export default function IncidentDetailTabs({
           <TabsContent value="overview" className="mt-0 space-y-6 focus-visible:outline-none">
             {activityContent}
           </TabsContent>
+
+          {automationContent && (
+            <TabsContent value="automation" className="mt-0 space-y-4 focus-visible:outline-none">
+              {automationContent}
+            </TabsContent>
+          )}
 
           {responseContent && (
             <TabsContent value="response" className="mt-0 focus-visible:outline-none">

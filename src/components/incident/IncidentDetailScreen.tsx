@@ -154,6 +154,9 @@ export default async function IncidentDetailScreen({
   const canManageIncident = permissions.isResponderOrAbove;
   const canAcknowledgeIncident = permissions.capabilities.includes('incident.acknowledge.scoped');
   const canAddIncidentNote = permissions.capabilities.includes('incident.note.scoped');
+  const canReadAutomation =
+    permissions.capabilities.includes(CAPABILITIES.AUTOMATION_READ) &&
+    !!storedIncident.automationDecision;
 
   const [users, teams, customFields, totalEventsCount, totalNotesCount, totalNotificationsCount] =
     await Promise.all([
@@ -293,6 +296,13 @@ export default async function IncidentDetailScreen({
       compact={presentation === 'mobile'}
     />
   );
+
+  const automationContent = canReadAutomation ? (
+    <div id="automation-decision" className="scroll-mt-24 space-y-4">
+      <IncidentAutomationCard incidentId={id} />
+    </div>
+  ) : null;
+
   const contextContent = responseTimeline ? (
     <IncidentContextCard context={responseTimeline.context} />
   ) : null;
@@ -430,13 +440,13 @@ export default async function IncidentDetailScreen({
           </div>
         </section>
       ) : (
-        <section className="relative overflow-hidden rounded-2xl border border-border bg-card text-card-foreground shadow-sm">
+        <section className="relative overflow-hidden rounded-2xl border border-border bg-card text-card-foreground shadow-2xs">
           <div className={`h-1 w-full bg-gradient-to-r ${statusGradient}`} />
-          <div className="p-4 sm:p-6">
-            <div className="mb-4 flex min-w-0 items-center justify-between gap-3">
+          <div className="p-3.5 sm:p-4.5">
+            <div className="mb-2.5 flex min-w-0 items-center justify-between gap-3">
               <Link
                 href={backHref}
-                className="inline-flex min-h-11 items-center gap-1.5 rounded-lg px-2 text-xs font-semibold text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                className="inline-flex h-7 items-center gap-1.5 rounded-lg px-2 text-xs font-semibold text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
               >
                 <ArrowLeft className="h-3.5 w-3.5" />
                 <span>{backLabel}</span>
@@ -444,45 +454,41 @@ export default async function IncidentDetailScreen({
               <div className="flex min-w-0 items-center gap-1.5">
                 <Badge
                   variant="outline"
-                  className="hidden font-mono text-xs text-muted-foreground sm:inline-flex"
+                  className="hidden font-mono text-[11px] text-muted-foreground sm:inline-flex border-border/80"
                 >
                   #{id.slice(0, 8)}
                 </Badge>
-                <CopyButton
-                  text={id}
-                  label="ID"
-                  className="min-h-11 h-11 px-2.5 text-xs sm:min-h-9 sm:h-9"
-                />
+                <CopyButton text={id} label="ID" className="h-7 px-2 text-xs font-medium" />
                 <CopyButton
                   text={`${appUrl}/incidents/${id}`}
                   icon="link"
                   label="Link"
-                  className="min-h-11 h-11 px-2.5 text-xs sm:min-h-9 sm:h-9"
+                  className="h-7 px-2 text-xs font-medium"
                 />
               </div>
             </div>
 
-            <div className="flex min-w-0 items-start gap-3 sm:gap-4">
+            <div className="flex min-w-0 items-start gap-3 sm:gap-3.5">
               <div
-                className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br text-white shadow-sm sm:h-11 sm:w-11 ${statusGradient}`}
+                className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br text-white shadow-sm sm:h-10 sm:w-10 ${statusGradient}`}
               >
                 {incident.status === 'RESOLVED' ? (
-                  <CheckCircle2 className="h-5 w-5" />
+                  <CheckCircle2 className="h-4.5 w-4.5" />
                 ) : incident.status === 'SNOOZED' ? (
-                  <Pause className="h-5 w-5" />
+                  <Pause className="h-4.5 w-4.5" />
                 ) : incident.status === 'SUPPRESSED' ? (
-                  <Volume2 className="h-5 w-5" />
+                  <Volume2 className="h-4.5 w-4.5" />
                 ) : (
-                  <AlertCircle className="h-5 w-5" />
+                  <AlertCircle className="h-4.5 w-4.5" />
                 )}
               </div>
-              <div className="min-w-0 flex-1 space-y-2">
+              <div className="min-w-0 flex-1 space-y-1.5">
                 <div className="flex min-w-0 flex-wrap items-center gap-2">
-                  <h1 className="min-w-0 break-words text-lg font-bold leading-snug tracking-tight text-foreground sm:text-2xl">
+                  <h1 className="min-w-0 break-words text-base font-bold leading-snug tracking-tight text-foreground sm:text-xl">
                     {incident.title}
                   </h1>
                   <Badge
-                    className={`shrink-0 border-0 bg-gradient-to-r text-xs font-bold text-white ${statusGradient}`}
+                    className={`shrink-0 border-0 bg-gradient-to-r text-[11px] font-bold text-white shadow-2xs ${statusGradient}`}
                   >
                     {incident.status}
                   </Badge>
@@ -494,53 +500,7 @@ export default async function IncidentDetailScreen({
         </section>
       )}
 
-      {presentation === 'mobile' && <IncidentAutomationCard incidentId={id} />}
-
-      {presentation === 'mobile' && (
-        <div id="automation-decision" className="scroll-mt-24">
-          <IncidentAutomationCard incidentId={id} />
-        </div>
-      )}
-      <EscalationExecutionHealth health={escalationHealth} />
-      {presentation === 'mobile' && hasContextCard && (
-        <details className="group overflow-hidden rounded-xl border border-border bg-card">
-          <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 px-3.5 py-2.5 text-xs font-semibold text-foreground select-none [&>*]:pointer-events-none [&::-webkit-details-marker]:hidden">
-            <span>Incident context</span>
-            <ChevronDown
-              className="h-4 w-4 text-muted-foreground transition-transform group-open:rotate-180"
-              aria-hidden="true"
-            />
-          </summary>
-          <div className="border-t border-border p-2">{contextContent}</div>
-        </details>
-      )}
-
-      {presentation === 'mobile' && (
-        <MobileOperationalContextCard
-          service={{
-            id: incident.service.id,
-            name: incident.service.name,
-            slaTier: incident.service.slaTier,
-          }}
-          team={incident.team ? { id: incident.team.id, name: incident.team.name } : null}
-          tags={incident.tags.map(tagLink => ({
-            id: tagLink.tag.id,
-            name: tagLink.tag.name,
-            color: tagLink.tag.color,
-          }))}
-          collaboration={collaboration}
-          jiraLinks={jiraLinks.map(l => ({
-            id: l.id,
-            issueKey: l.externalKey,
-            issueUrl: l.externalUrl,
-            status: l.externalStatus ?? undefined,
-          }))}
-          capabilities={{
-            jiraConfigured: jiraLinks.length > 0,
-          }}
-        />
-      )}
-
+      {/* Command Bar: Responders need immediate access to Acknowledge / Resolve */}
       <IncidentCommandBar
         incidentId={incident.id}
         currentStatus={incident.status}
@@ -580,10 +540,13 @@ export default async function IncidentDetailScreen({
         jiraCapability={incidentJiraCapability}
       />
 
+      {/* Escalation Execution Health: Compact status strip or alert banner */}
+      <EscalationExecutionHealth health={escalationHealth} />
+
       {presentation === 'mobile' ? (
         <details className="group overflow-hidden rounded-xl border border-border bg-card">
-          <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 px-3.5 py-2.5 text-xs font-semibold text-foreground select-none [&>*]:pointer-events-none [&::-webkit-details-marker]:hidden">
-            <span>Incident details & assignment</span>
+          <summary className="flex min-h-10 cursor-pointer list-none items-center justify-between gap-3 px-3.5 py-2 text-xs font-semibold text-foreground select-none [&>*]:pointer-events-none [&::-webkit-details-marker]:hidden">
+            <span>Incident details &amp; assignment</span>
             <ChevronDown
               className="h-4 w-4 text-muted-foreground transition-transform group-open:rotate-180"
               aria-hidden="true"
@@ -609,41 +572,64 @@ export default async function IncidentDetailScreen({
         />
       )}
 
-      {presentation !== 'mobile' && (
-        <div id="automation-decision" className="scroll-mt-24">
-          <IncidentAutomationCard incidentId={id} />
-        </div>
-      )}
-      {sourceRestricted ? (
-        <section className="rounded-xl border p-4">
-          <h2 className="font-semibold">Incident Description</h2>
-          <p className="text-sm text-muted-foreground">Alert details are restricted.</p>
-        </section>
-      ) : (
-        <IncidentDescriptionCard
-          incidentId={incident.id}
-          description={incident.description}
-          canManage={canManageIncident}
-          onUpdateDescription={handleUpdateDescription}
+      {presentation === 'mobile' && (
+        <MobileOperationalContextCard
+          service={{
+            id: incident.service.id,
+            name: incident.service.name,
+            slaTier: incident.service.slaTier,
+          }}
+          team={incident.team ? { id: incident.team.id, name: incident.team.name } : null}
+          tags={incident.tags.map(tagLink => ({
+            id: tagLink.tag.id,
+            name: tagLink.tag.name,
+            color: tagLink.tag.color,
+          }))}
+          collaboration={collaboration}
+          jiraLinks={jiraLinks.map(l => ({
+            id: l.id,
+            issueKey: l.externalKey,
+            issueUrl: l.externalUrl,
+            status: l.externalStatus ?? undefined,
+          }))}
+          capabilities={{
+            jiraConfigured: jiraLinks.length > 0,
+          }}
         />
       )}
 
-      {incident.status === 'RESOLVED' && (
-        <IncidentResolutionSummary
-          incident={incident}
-          resolutionNote={resolutionNote}
-          postmortemStatus={postmortem?.status ?? null}
-          canManage={canManageIncident}
-        />
-      )}
-
+      {/* Main Content Grid: 2 columns on desktop, responsive stack on mobile */}
       <div className="grid min-w-0 grid-cols-1 gap-4 lg:grid-cols-12 lg:gap-6">
-        <div className="min-w-0 space-y-4 lg:col-span-8 lg:space-y-6 2xl:col-span-9">
+        <div className="min-w-0 space-y-4 lg:col-span-8 lg:space-y-5 2xl:col-span-9">
+          {sourceRestricted ? (
+            <section className="rounded-xl border border-border/80 bg-card p-3.5 text-card-foreground">
+              <h2 className="text-xs font-semibold">Incident Description</h2>
+              <p className="mt-1 text-xs text-muted-foreground">Alert details are restricted.</p>
+            </section>
+          ) : (
+            <IncidentDescriptionCard
+              incidentId={incident.id}
+              description={incident.description}
+              canManage={canManageIncident}
+              onUpdateDescription={handleUpdateDescription}
+            />
+          )}
+
+          {incident.status === 'RESOLVED' && (
+            <IncidentResolutionSummary
+              incident={incident}
+              resolutionNote={resolutionNote}
+              postmortemStatus={postmortem?.status ?? null}
+              canManage={canManageIncident}
+            />
+          )}
+
           <IncidentDetailTabs
             defaultTab={initialTab || 'overview'}
             eventCount={totalEventsCount}
             noteCount={totalNotesCount}
             activityContent={activityContent}
+            automationContent={automationContent}
             responseContent={responseContent}
             runbooksContent={
               canReadRunbooks ? (
@@ -658,9 +644,21 @@ export default async function IncidentDetailScreen({
 
         {presentation === 'mobile' ? (
           <>
+            {hasContextCard && (
+              <details className="group overflow-hidden rounded-xl border border-border bg-card">
+                <summary className="flex min-h-10 cursor-pointer list-none items-center justify-between gap-3 px-3.5 py-2 text-xs font-semibold text-foreground select-none [&>*]:pointer-events-none [&::-webkit-details-marker]:hidden">
+                  <span>Incident context</span>
+                  <ChevronDown
+                    className="h-4 w-4 text-muted-foreground transition-transform group-open:rotate-180"
+                    aria-hidden="true"
+                  />
+                </summary>
+                <div className="border-t border-border p-2">{contextContent}</div>
+              </details>
+            )}
             <details className="group overflow-hidden rounded-xl border border-border bg-card lg:hidden">
-              <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 px-3.5 py-2.5 text-xs font-semibold text-foreground select-none [&>*]:pointer-events-none [&::-webkit-details-marker]:hidden">
-                <span>People, fields & links</span>
+              <summary className="flex min-h-10 cursor-pointer list-none items-center justify-between gap-3 px-3.5 py-2 text-xs font-semibold text-foreground select-none [&>*]:pointer-events-none [&::-webkit-details-marker]:hidden">
+                <span>People, fields &amp; links</span>
                 <ChevronDown
                   className="h-4 w-4 text-muted-foreground transition-transform group-open:rotate-180"
                   aria-hidden="true"
@@ -672,14 +670,15 @@ export default async function IncidentDetailScreen({
                 {quickLinksContent}
               </div>
             </details>
-            <aside className="hidden min-w-0 space-y-4 lg:block lg:col-span-4 lg:space-y-6 2xl:col-span-3">
+            <aside className="hidden min-w-0 space-y-4 lg:block lg:col-span-4 lg:space-y-5 2xl:col-span-3">
+              {contextContent}
               {watchersContent}
               {customFieldsContent}
               {quickLinksContent}
             </aside>
           </>
         ) : (
-          <aside className="min-w-0 space-y-4 lg:col-span-4 lg:space-y-6 2xl:col-span-3">
+          <aside className="min-w-0 space-y-4 lg:col-span-4 lg:space-y-5 2xl:col-span-3">
             {contextContent}
             {watchersContent}
             {customFieldsContent}

@@ -10,6 +10,7 @@ import { SettingsSection } from '@/components/settings/layout/SettingsSection';
 import RetentionPolicySettings from '@/components/settings/RetentionPolicySettings';
 import DetailHeroBanner from '@/components/ui/DetailHeroBanner';
 import SystemSettingsTabs from '@/components/settings/SystemSettingsTabs';
+import SystemOverviewTab from '@/components/settings/SystemOverviewTab';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/shadcn/alert';
 import { Badge } from '@/components/ui/shadcn/badge';
 
@@ -54,20 +55,50 @@ async function loadSystemSettings() {
   const permissions = await getUserPermissions();
   if (!permissions.isAdmin) return { kind: 'forbidden' as const, role: permissions.role };
   const prisma = (await import('@/lib/prisma')).default;
-  const [systemSettings, rawOidcConfig, scimConfig, effectivePolicy, automationSettings] =
-    await Promise.all([
-      prisma.systemSettings.findUnique({
-        where: { id: 'default' },
-        select: { appUrl: true, updatedAt: true },
-      }),
-      prisma.oidcConfig.findUnique({
-        where: { id: 'default' },
-        select: { enabled: true, providerType: true },
-      }),
-      getScimConfig(),
-      getAuthenticationPolicy(),
-      getAutomationSettings(),
-    ]);
+  // Dedicated PostgreSQL ping probe to accurately measure database round-trip latency
+  const pingStart = performance.now();
+  await prisma.$queryRawUnsafe('SELECT 1');
+  const dbPingMs = Math.max(1, Math.round(performance.now() - pingStart));
+
+  const [
+    systemSettings,
+    rawOidcConfig,
+    scimConfig,
+    effectivePolicy,
+    automationSettings,
+    incidentCount,
+    serviceCount,
+    userCount,
+    integrationCount,
+    automationCount,
+    runbookCount,
+  ] = await Promise.all([
+    prisma.systemSettings.findUnique({
+      where: { id: 'default' },
+      select: { appUrl: true, updatedAt: true },
+    }),
+    prisma.oidcConfig.findUnique({
+      where: { id: 'default' },
+      select: { enabled: true, providerType: true },
+    }),
+    getScimConfig(),
+    getAuthenticationPolicy(),
+    getAutomationSettings(),
+    prisma.incident.count(),
+    prisma.service.count(),
+    prisma.user.count(),
+    prisma.integration.count(),
+    prisma.serviceAutomationRule.count(),
+    prisma.runbook.count(),
+  ]);
+  const memory = process.memoryUsage();
+  const heapUsedMb = Math.round(memory.heapUsed / 1024 / 1024);
+  const heapTotalMb = Math.round(memory.heapTotal / 1024 / 1024);
+  const uptimeSeconds = Math.floor(process.uptime());
+  const nodeVersion = process.version;
+  const platform = process.platform;
+  const processId = process.pid;
+
   return {
     kind: 'ok' as const,
     systemSettings,
@@ -75,6 +106,22 @@ async function loadSystemSettings() {
     scimConfig,
     effectivePolicy,
     automationSettings,
+    metrics: {
+      incidentCount,
+      serviceCount,
+      userCount,
+      integrationCount,
+      automationCount,
+      runbookCount,
+      dbLatencyMs: dbPingMs,
+      dbPingMs,
+      uptimeSeconds,
+      heapUsedMb,
+      heapTotalMb,
+      nodeVersion,
+      platform,
+      processId,
+    },
   };
 }
 
@@ -429,6 +476,23 @@ export default async function SystemSettingsPage() {
     </Badge>
   );
 
+  const overviewTab = (
+    <SystemOverviewTab
+      metrics={loaded.metrics}
+      subsystems={{
+        appUrl,
+        appUrlConfigured,
+        ssoEnabled,
+        ssoProviderType: rawOidcConfig?.providerType ?? null,
+        scimEnabled: Boolean(scimConfig.enabled && scimConfig.hasSecretToken),
+        allEnvOk,
+        missingCount,
+        encryptionKeySet: env.encryptionKey,
+        authOrigin: { origin: authOrigin.origin, source: authOrigin.source },
+      }}
+    />
+  );
+
   return (
     <div className="space-y-6">
       <DetailHeroBanner
@@ -527,6 +591,7 @@ export default async function SystemSettingsPage() {
       )}
 
       <SystemSettingsTabs
+        overviewTab={overviewTab}
         automationTab={automationTab}
         appUrlTab={appUrlTab}
         ssoTab={ssoTab}

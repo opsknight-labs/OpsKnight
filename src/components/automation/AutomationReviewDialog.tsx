@@ -37,7 +37,8 @@ const copy = new Map([
     'activateCandidate',
     {
       title: 'Review candidate activation · Cutover to LIVE',
-      description: 'New incidents will use the promoted candidate. Existing incident decisions stay pinned.',
+      description:
+        'New incidents will use the promoted candidate. Existing incident decisions stay pinned.',
     },
   ],
   [
@@ -107,18 +108,31 @@ export function AutomationReviewDialog({
   destinations?: Array<{ id: string; channelName?: string | null; provider: string }>;
   version: number | null;
   enabled: boolean;
-  counts?: { evaluated: number; routes: number; priorities: number; skips: number; errors: number };
+  counts?: {
+    evaluated: number;
+    routes: number;
+    priorities: number;
+    skips: number;
+    errors: number;
+    fallbacks?: number;
+  };
   candidateFallbacks?: number;
   busy: boolean;
   error?: string;
   onCancel: () => void;
-  onConfirm: (acknowledgeNoShadow: boolean, acknowledgeShadowErrors: boolean, acknowledgeMaterialDifferences: boolean) => void;
+  onConfirm: (
+    acknowledgeNoShadow: boolean,
+    acknowledgeShadowErrors: boolean,
+    acknowledgeMaterialDifferences: boolean
+  ) => void;
 }) {
   const blockedId = useId();
   const [acknowledge, setAcknowledge] = useState(false);
   const [acknowledgeErrors, setAcknowledgeErrors] = useState(false);
   const [acknowledgeDifferences, setAcknowledgeDifferences] = useState(false);
   const liveReview = action === 'LIVE' || action === 'activateCandidate';
+  const fallbacksCount = candidateFallbacks || (counts?.fallbacks ?? 0);
+  const hasObservedFailures = !!counts?.errors || fallbacksCount > 0;
   // Only diff and compile while the dialog is open; the closed dialog re-renders on every edit.
   const changes = useMemo(
     () =>
@@ -140,11 +154,11 @@ export function AutomationReviewDialog({
         ? 'An administrator must turn on the global automation switch first.'
         : liveReview && noShadowEvidence && !acknowledge
           ? 'Acknowledge the missing Shadow evidence to continue.'
-          : liveReview && (!!counts?.errors || candidateFallbacks > 0) && !acknowledgeErrors
-            ? 'Accept the observed Shadow errors to continue.'
+          : liveReview && hasObservedFailures && !acknowledgeErrors
+            ? 'Accept the observed Shadow errors and fallbacks to continue.'
             : action === 'activateCandidate' && materialDifferences && !acknowledgeDifferences
               ? 'Approve the observed material differences to continue.'
-            : null;
+              : null;
   const TitleIcon = liveReview ? Zap : action === 'restore' ? History : Rocket;
   const { title, description } = copy.get(action ?? 'publish')!;
   return (
@@ -176,7 +190,8 @@ export function AutomationReviewDialog({
             <p role="alert" className={cn('flex gap-2 rounded-lg border p-3', noticeClasses.warn)}>
               <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
               <span>
-                Publishing stages a candidate version for parallel shadow evaluation. The active LIVE version stays in place.
+                Publishing stages a candidate version for parallel shadow evaluation. The active
+                LIVE version stays in place.
               </span>
             </p>
           )}
@@ -281,7 +296,8 @@ export function AutomationReviewDialog({
                 Shadow readiness · last 7 days
               </h3>
               <p>
-                {counts?.evaluated ?? 0} evaluations · {counts?.errors ?? 0} errors · {candidateFallbacks} fallbacks
+                {counts?.evaluated ?? 0} evaluations · {counts?.errors ?? 0} errors ·{' '}
+                {fallbacksCount} fallbacks
               </p>
               <p>
                 {counts?.routes ?? 0} routing differences · {counts?.priorities ?? 0} priority
@@ -316,7 +332,7 @@ export function AutomationReviewDialog({
                   </label>
                 </div>
               )}
-              {(!!counts?.errors || candidateFallbacks > 0) && (
+              {hasObservedFailures && (
                 <label
                   className={cn(
                     'flex min-h-10 cursor-pointer items-start gap-2 rounded-md border p-3',
@@ -333,9 +349,18 @@ export function AutomationReviewDialog({
                 </label>
               )}
               {action === 'activateCandidate' && materialDifferences && (
-                <label className={cn('flex min-h-10 cursor-pointer items-start gap-2 rounded-md border p-3', noticeClasses.warn)}>
-                  <input type="checkbox" className="mt-0.5 h-4 w-4 shrink-0 accent-primary"
-                    checked={acknowledgeDifferences} onChange={event => setAcknowledgeDifferences(event.target.checked)} />
+                <label
+                  className={cn(
+                    'flex min-h-10 cursor-pointer items-start gap-2 rounded-md border p-3',
+                    noticeClasses.warn
+                  )}
+                >
+                  <input
+                    type="checkbox"
+                    className="mt-0.5 h-4 w-4 shrink-0 accent-primary"
+                    checked={acknowledgeDifferences}
+                    onChange={event => setAcknowledgeDifferences(event.target.checked)}
+                  />
                   I approve the observed routing, priority and suppression differences.
                 </label>
               )}

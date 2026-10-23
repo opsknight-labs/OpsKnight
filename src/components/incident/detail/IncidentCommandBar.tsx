@@ -281,23 +281,6 @@ export default function IncidentCommandBar({
     onUnsuppress,
   ]);
 
-  const getStatusBorder = () => {
-    switch (currentStatus) {
-      case 'OPEN':
-        return 'border-l-4 border-l-rose-500';
-      case 'ACKNOWLEDGED':
-        return 'border-l-4 border-l-amber-500';
-      case 'RESOLVED':
-        return 'border-l-4 border-l-emerald-500';
-      case 'SNOOZED':
-        return 'border-l-4 border-l-indigo-500';
-      case 'SUPPRESSED':
-        return 'border-l-4 border-l-zinc-500';
-      default:
-        return 'border-l-4 border-l-slate-300';
-    }
-  };
-
   const statusAnnouncement = isResolved
     ? 'Incident resolved'
     : isSnoozed
@@ -315,7 +298,7 @@ export default function IncidentCommandBar({
           type="button"
           variant="outline"
           size="sm"
-          className="h-9 w-9 p-0 shrink-0 border-slate-200 bg-white hover:bg-slate-50 text-slate-600 shadow-xs"
+          className="h-8 w-8 p-0 shrink-0 border-border/80 bg-background hover:bg-muted/40 text-muted-foreground hover:text-foreground shadow-2xs transition-colors"
           aria-label="More incident actions"
         >
           <MoreHorizontal className="h-4 w-4" />
@@ -342,24 +325,21 @@ export default function IncidentCommandBar({
       </div>
 
       <div
-        className={cn(
-          'hidden sm:flex items-center justify-between gap-4 rounded-xl border border-slate-200 bg-white px-4 py-2.5 shadow-sm transition-all dark:bg-slate-900 dark:border-slate-800',
-          getStatusBorder()
-        )}
+        className="hidden sm:flex items-center justify-between gap-3 rounded-xl border border-border/80 bg-card px-3.5 py-2 shadow-2xs transition-all text-card-foreground"
         data-command-bar
       >
-        <div className="flex items-center gap-3 flex-wrap min-w-0">
+        <div className="flex items-center gap-2.5 flex-wrap min-w-0">
           {hasAnyIntegrations && (
             <>
-              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 select-none">
+              <span className="text-[9.5px] font-bold uppercase tracking-wider text-muted-foreground select-none">
                 Integrations:
               </span>
 
               {collaboration?.visible && <WarRoomLauncher collaboration={collaboration} />}
 
               {primaryJira ? (
-                <div className="inline-flex items-center gap-2 h-9 px-3 rounded-md bg-blue-50 text-blue-900 border border-blue-200 text-sm font-medium shadow-xs">
-                  <JiraLogo className="h-4 w-4 shrink-0" />
+                <div className="inline-flex items-center gap-1.5 h-8 px-2.5 rounded-lg bg-blue-500/10 text-blue-900 dark:text-blue-300 border border-blue-500/20 text-xs font-medium shadow-2xs">
+                  <JiraLogo className="h-3.5 w-3.5 shrink-0" />
                   <a
                     href={primaryJira.externalUrl}
                     target="_blank"
@@ -371,20 +351,20 @@ export default function IncidentCommandBar({
                     {primaryJira.externalStatus && (
                       <span
                         className={cn(
-                          'ml-1 px-1.5 py-0.5 rounded text-xs font-bold uppercase border',
+                          'ml-1 px-1.5 py-0.2 rounded text-[10px] font-bold uppercase border',
                           jiraStatusBadgeStyle(primaryJira.externalStatus)
                         )}
                       >
                         {primaryJira.externalStatus}
                       </span>
                     )}
-                    <ExternalLink className="h-3.5 w-3.5 text-blue-600 ml-0.5" />
+                    <ExternalLink className="h-3 w-3 text-blue-600 dark:text-blue-400 ml-0.5" />
                   </a>
                   {jiraLinks.length > 1 && (
                     <button
                       type="button"
                       onClick={() => setShowJiraDialog(true)}
-                      className="text-xs font-bold text-blue-700 bg-blue-100 hover:bg-blue-200 px-1.5 py-0.5 rounded transition-colors cursor-pointer"
+                      className="text-[10px] font-bold text-blue-700 dark:text-blue-300 bg-blue-500/15 hover:bg-blue-500/25 px-1 py-0.2 rounded transition-colors cursor-pointer"
                       title="View all linked Jira issues"
                     >
                       +{jiraLinks.length - 1}
@@ -395,13 +375,14 @@ export default function IncidentCommandBar({
                       type="button"
                       onClick={() => handleSyncJira(primaryJira.id)}
                       disabled={isJiraPending || syncingLinkId === primaryJira.id}
-                      className="text-xs font-semibold text-blue-700 hover:text-blue-950 transition-colors ml-1 pl-2 border-l border-blue-200 cursor-pointer inline-flex items-center gap-1 disabled:opacity-50"
+                      className="text-[11px] font-semibold text-blue-700 dark:text-blue-300 hover:text-blue-950 dark:hover:text-blue-100 transition-colors ml-1 pl-2 border-l border-blue-500/20 cursor-pointer inline-flex items-center gap-1 disabled:opacity-50"
                       title="Sync status with Jira"
                     >
                       <RefreshCw
                         className={cn(
                           'h-3 w-3',
-                          syncingLinkId === primaryJira.id && 'animate-spin text-blue-600'
+                          syncingLinkId === primaryJira.id &&
+                            'animate-spin text-blue-600 dark:text-blue-400'
                         )}
                       />
                       <span>Sync</span>
@@ -411,7 +392,7 @@ export default function IncidentCommandBar({
                     <button
                       type="button"
                       onClick={() => setShowJiraDialog(true)}
-                      className="text-xs font-semibold text-blue-700 hover:text-blue-950 transition-colors ml-1 pl-2 border-l border-blue-200 cursor-pointer"
+                      className="text-[11px] font-semibold text-blue-700 dark:text-blue-300 hover:text-blue-950 dark:hover:text-blue-100 transition-colors ml-1 pl-2 border-l border-blue-500/20 cursor-pointer"
                       title="Manage Jira issues"
                     >
                       Manage
@@ -424,14 +405,14 @@ export default function IncidentCommandBar({
                   variant="outline"
                   size="sm"
                   onClick={() => setShowJiraDialog(true)}
-                  className="h-9 gap-2 px-3 text-sm font-medium bg-white hover:bg-slate-50 border-slate-200 text-slate-800 shadow-xs hover:border-slate-300 transition-all"
+                  className="h-8 gap-1.5 px-2.5 text-xs font-semibold bg-background hover:bg-muted/40 border-border/80 text-foreground shadow-2xs hover:border-border transition-all"
                 >
-                  <JiraLogo className="h-4 w-4 shrink-0" />
+                  <JiraLogo className="h-3.5 w-3.5 shrink-0" />
                   <span>Link Jira Issue</span>
                 </Button>
               ) : null}
 
-              <div className="h-5 w-px bg-slate-200 dark:bg-slate-700 shrink-0 hidden md:block" />
+              <div className="h-4 w-px bg-border/80 shrink-0 hidden md:block" />
             </>
           )}
 
@@ -439,11 +420,11 @@ export default function IncidentCommandBar({
         </div>
 
         {canAct && (
-          <div className="flex items-center gap-2.5 shrink-0">
+          <div className="flex items-center gap-2 shrink-0">
             {isResolved ? (
               <Link href={postmortemHref}>
-                <Button size="sm" className="h-9 gap-2 px-4 shadow-xs text-sm font-semibold">
-                  <FileText className="h-4 w-4" />
+                <Button size="sm" className="h-8 gap-1.5 px-3.5 shadow-2xs text-xs font-semibold">
+                  <FileText className="h-3.5 w-3.5" />
                   <span>
                     {postmortemExists
                       ? 'View Postmortem'
@@ -460,9 +441,9 @@ export default function IncidentCommandBar({
                     <Button
                       type="submit"
                       size="sm"
-                      className="h-9 gap-2 px-4 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white font-semibold shadow-xs text-sm"
+                      className="h-8 gap-1.5 px-3.5 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold shadow-2xs text-xs transition-colors"
                     >
-                      <Check className="h-4 w-4" />
+                      <Check className="h-3.5 w-3.5" />
                       <span>Acknowledge</span>
                     </Button>
                   </form>
@@ -473,9 +454,9 @@ export default function IncidentCommandBar({
                       type="submit"
                       variant="outline"
                       size="sm"
-                      className="h-9 gap-2 px-4 font-medium shadow-xs border-slate-200 bg-white hover:bg-slate-50 text-slate-800 text-sm"
+                      className="h-8 gap-1.5 px-3.5 font-medium shadow-2xs border-border/80 bg-background hover:bg-muted/40 text-foreground text-xs"
                     >
-                      <Bell className="h-4 w-4" />
+                      <Bell className="h-3.5 w-3.5" />
                       <span>Unsnooze</span>
                     </Button>
                   </form>
@@ -485,10 +466,10 @@ export default function IncidentCommandBar({
                     type="button"
                     variant="outline"
                     size="sm"
-                    className="h-9 gap-2 px-4 border-emerald-300 text-emerald-700 hover:bg-emerald-50 font-semibold shadow-xs bg-white text-sm"
+                    className="h-8 gap-1.5 px-3.5 border-emerald-500/40 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-500/10 font-semibold shadow-2xs bg-background text-xs transition-colors"
                     onClick={() => setShowResolveModal(true)}
                   >
-                    <CheckCircle2 className="h-4 w-4" />
+                    <CheckCircle2 className="h-3.5 w-3.5" />
                     <span>Resolve Incident</span>
                   </Button>
                 )}
@@ -511,25 +492,25 @@ export default function IncidentCommandBar({
           ) : (
             <>
               {showAcknowledge && (
-                <form action={onAcknowledge} className="flex-1">
+                <form action={onAcknowledge} className="flex-1 min-w-0">
                   <Button
                     type="submit"
-                    className="w-full h-11 gap-2 bg-gradient-to-r from-green-600 to-emerald-600 text-white text-sm font-semibold"
+                    className="w-full h-11 gap-2 bg-gradient-to-r from-green-600 to-emerald-600 text-white text-sm font-semibold truncate"
                   >
-                    <Check className="h-4 w-4" />
-                    <span>Acknowledge</span>
+                    <Check className="h-4 w-4 shrink-0" />
+                    <span className="truncate">Acknowledge</span>
                   </Button>
                 </form>
               )}
               {!showAcknowledge && showResolve && (
                 <Button
                   type="button"
-                  className="flex-1 h-11 gap-2 border-emerald-300 text-emerald-700 text-sm font-semibold"
+                  className="flex-1 min-w-0 h-11 gap-2 border-emerald-300 text-emerald-700 text-sm font-semibold truncate"
                   variant="outline"
                   onClick={() => setShowResolveModal(true)}
                 >
-                  <CheckCircle2 className="h-4 w-4" />
-                  <span>Resolve incident</span>
+                  <CheckCircle2 className="h-4 w-4 shrink-0" />
+                  <span className="truncate">Resolve incident</span>
                 </Button>
               )}
               {collaboration?.visible && (

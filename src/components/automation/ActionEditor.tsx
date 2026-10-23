@@ -7,7 +7,7 @@ import { InlineError, Hint, NativeSelect } from './authoring/primitives';
 import { builtinFields, type Action, type Rule, type Field } from '@/lib/automation/contract';
 import type { getAutomationArea } from '@/app/(app)/services/[id]/automation/actions';
 type Data = Awaited<ReturnType<typeof getAutomationArea>>;
-const controlClass = 'w-full sm:w-auto sm:min-w-44 sm:flex-1';
+const controlClass = 'w-full sm:w-auto sm:min-w-40 sm:flex-1 h-7.5 text-xs px-2';
 
 function consequence(
   action: Action,
@@ -75,8 +75,8 @@ export function ActionEditor({
   const policyMissing =
     action.type === 'USE_ESCALATION_POLICY' && !policies.some(p => p.id === action.policyId);
   return (
-    <div className="space-y-1.5">
-      <div className="flex flex-wrap items-start gap-2">
+    <div className="space-y-1">
+      <div className="flex flex-wrap items-center gap-1.5">
         <NativeSelect
           aria-label={
             phase === 'ROUTE'
@@ -208,7 +208,7 @@ export function ActionEditor({
           </NativeSelect>
         )}
         {(action.type === 'ADD_TAG' || action.type === 'SET_CONTEXT') && (
-          <div className={controlClass}>
+          <div className="w-full sm:w-auto sm:min-w-40 sm:flex-1">
             <TypedValueInput
               label="Action value"
               type={
@@ -223,6 +223,7 @@ export function ActionEditor({
               }
               disabled={disabled}
               value={action.value}
+              compact
               onChange={value => {
                 if (!Array.isArray(value)) onChange({ ...action, value } as Action);
               }}
@@ -254,10 +255,10 @@ export function ActionEditor({
             size="icon"
             variant="ghost"
             aria-label="Remove action"
-            className="text-muted-foreground hover:text-destructive"
+            className="h-7 w-7 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
             onClick={onRemove}
           >
-            <Trash2 aria-hidden="true" />
+            <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
           </Button>
         )}
       </div>

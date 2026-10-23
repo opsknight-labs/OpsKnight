@@ -198,8 +198,10 @@ export default function ServiceNotificationSettings({
   // Fetch Slack channels when Slack is selected or integration exists
   useEffect(() => {
     if (slackIntegration) {
-      setLoadingChannels(true);
-      setChannelsError(null);
+      queueMicrotask(() => {
+        setLoadingChannels(true);
+        setChannelsError(null);
+      });
       fetch(`/api/slack/channels?serviceId=${encodeURIComponent(serviceId)}`)
         .then(async res => {
           const data = await res.json();
@@ -249,8 +251,10 @@ export default function ServiceNotificationSettings({
         }
       })
       .catch(() => undefined);
-    setTeamsLoading(true);
-    setTeamsError(null);
+    queueMicrotask(() => {
+      setTeamsLoading(true);
+      setTeamsError(null);
+    });
     fetch(`/api/microsoft-teams/discovery/teams?serviceId=${encodeURIComponent(serviceId)}`)
       .then(async r => {
         const data = await r.json();
@@ -267,11 +271,15 @@ export default function ServiceNotificationSettings({
 
   useEffect(() => {
     if (!selectedTeamId) {
-      setTeamsChannels([]);
+      queueMicrotask(() => {
+        setTeamsChannels([]);
+      });
       return;
     }
-    setTeamsChannelsLoading(true);
-    setTeamsChannelsError(null);
+    queueMicrotask(() => {
+      setTeamsChannelsLoading(true);
+      setTeamsChannelsError(null);
+    });
     fetch(
       `/api/microsoft-teams/discovery/channels?teamId=${encodeURIComponent(selectedTeamId)}&serviceId=${encodeURIComponent(serviceId)}`
     )
@@ -482,22 +490,23 @@ export default function ServiceNotificationSettings({
   );
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-3.5">
       {/* Top Banner Notice */}
-      <Alert className="border border-primary/20 bg-primary/5 text-foreground rounded-2xl shadow-xs">
+      <div className="flex items-center gap-2.5 px-3 py-2 rounded-xl border border-primary/20 bg-primary/5 text-xs text-muted-foreground shadow-2xs">
         <Info className="h-4 w-4 text-primary shrink-0" />
-        <AlertTitle className="text-xs font-bold text-foreground">
-          Service Notifications (Isolated)
-        </AlertTitle>
-        <AlertDescription className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
-          Service notifications are isolated from individual responder escalation preferences. They
-          broadcast incident state changes directly to configured team channels and automated
-          webhook endpoints.
-        </AlertDescription>
-      </Alert>
+        <div className="min-w-0">
+          <span className="font-semibold text-foreground mr-1.5">
+            Service Notifications (Isolated):
+          </span>
+          <span>
+            Broadcast incident state changes directly to configured team channels and automated
+            webhook endpoints without modifying responder escalation policies.
+          </span>
+        </div>
+      </div>
 
       {/* FORM: Notification Channels and Event Triggers */}
-      <form action={saveNotificationSettings} className="space-y-6">
+      <form action={saveNotificationSettings} className="space-y-3.5">
         {/* Submit an explicit snapshot so an empty selection cannot be confused with a missing field. */}
         <input
           type="hidden"
@@ -537,28 +546,35 @@ export default function ServiceNotificationSettings({
         />
 
         {/* CARD 1: Incident Event Triggers */}
-        <Card className="rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/60 backdrop-blur-xs shadow-xs">
-          <CardHeader className="pb-4 border-b border-border/60 bg-muted/20 dark:bg-muted/10">
-            <CardTitle className="text-sm font-bold flex items-center gap-2.5">
-              <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-primary/10 text-primary shrink-0 border border-primary/20 shadow-2xs">
-                <BellRing className="h-4 w-4" />
-              </div>
-              <div>
-                <span className="text-muted-foreground font-mono mr-1.5 text-xs">1.</span>
-                <span>Incident Event Triggers</span>
-              </div>
-            </CardTitle>
-            <CardDescription className="text-xs mt-1">
+        <Card className="rounded-xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/60 backdrop-blur-xs shadow-xs">
+          <CardHeader className="py-2.5 px-3.5 border-b border-border/60 bg-muted/20 dark:bg-muted/10">
+            <div className="flex items-center justify-between gap-2">
+              <CardTitle className="text-xs font-bold flex items-center gap-2">
+                <div className="flex h-6 w-6 items-center justify-center rounded-md bg-primary/10 text-primary shrink-0 border border-primary/20">
+                  <BellRing className="h-3.5 w-3.5" />
+                </div>
+                <span>1. Incident Event Triggers</span>
+              </CardTitle>
+              <span className="text-[10px] font-mono font-medium px-2 py-0.5 rounded-full bg-muted text-muted-foreground border border-border/60">
+                {
+                  [notifyOnTriggered, notifyOnAck, notifyOnResolved, notifyOnSlaBreach].filter(
+                    Boolean
+                  ).length
+                }
+                /4 active
+              </span>
+            </div>
+            <CardDescription className="text-[11px] text-muted-foreground mt-0.5">
               Choose which incident lifecycle state transitions broadcast updates to configured
               notification channels.
             </CardDescription>
           </CardHeader>
-          <CardContent className="p-5">
-            <div className="grid gap-3 sm:grid-cols-2">
+          <CardContent className="p-3 sm:p-3.5">
+            <div className="grid gap-2 grid-cols-1 sm:grid-cols-2">
               <label
                 htmlFor="notifyTriggered"
                 className={cn(
-                  'flex items-start gap-3 p-3.5 rounded-xl border text-left transition-all cursor-pointer',
+                  'min-w-0 flex items-center gap-2.5 p-2 px-2.5 rounded-lg border text-left transition-all cursor-pointer select-none',
                   notifyOnTriggered
                     ? 'border-primary/40 bg-primary/5 ring-1 ring-primary/20 shadow-2xs'
                     : 'border-border/80 bg-card hover:bg-muted/40 text-muted-foreground'
@@ -568,16 +584,18 @@ export default function ServiceNotificationSettings({
                   id="notifyTriggered"
                   checked={notifyOnTriggered}
                   onCheckedChange={c => setNotifyOnTriggered(!!c)}
-                  className="mt-0.5"
+                  className="h-4 w-4 shrink-0"
                 />
                 <div className="min-w-0 flex-1">
-                  <div className="flex items-center justify-between gap-1">
-                    <span className="text-xs font-bold text-foreground">Incident Triggered</span>
-                    <span className="text-[9px] font-mono font-semibold px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
+                  <div className="flex items-center justify-between gap-1 min-w-0">
+                    <span className="text-xs font-semibold text-foreground truncate">
+                      Incident Triggered
+                    </span>
+                    <span className="text-[9px] font-mono font-semibold px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 shrink-0">
                       TRIGGERED
                     </span>
                   </div>
-                  <p className="text-[11px] text-muted-foreground leading-relaxed mt-1">
+                  <p className="text-[10px] text-muted-foreground truncate mt-0.5">
                     Notify immediately when a new alert or incident is opened.
                   </p>
                 </div>
@@ -586,7 +604,7 @@ export default function ServiceNotificationSettings({
               <label
                 htmlFor="notifyAck"
                 className={cn(
-                  'flex items-start gap-3 p-3.5 rounded-xl border text-left transition-all cursor-pointer',
+                  'min-w-0 flex items-center gap-2.5 p-2 px-2.5 rounded-lg border text-left transition-all cursor-pointer select-none',
                   notifyOnAck
                     ? 'border-primary/40 bg-primary/5 ring-1 ring-primary/20 shadow-2xs'
                     : 'border-border/80 bg-card hover:bg-muted/40 text-muted-foreground'
@@ -596,16 +614,18 @@ export default function ServiceNotificationSettings({
                   id="notifyAck"
                   checked={notifyOnAck}
                   onCheckedChange={c => setNotifyOnAck(!!c)}
-                  className="mt-0.5"
+                  className="h-4 w-4 shrink-0"
                 />
                 <div className="min-w-0 flex-1">
-                  <div className="flex items-center justify-between gap-1">
-                    <span className="text-xs font-bold text-foreground">Incident Acknowledged</span>
-                    <span className="text-[9px] font-mono font-semibold px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20">
+                  <div className="flex items-center justify-between gap-1 min-w-0">
+                    <span className="text-xs font-semibold text-foreground truncate">
+                      Incident Acknowledged
+                    </span>
+                    <span className="text-[9px] font-mono font-semibold px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20 shrink-0">
                       ACKNOWLEDGED
                     </span>
                   </div>
-                  <p className="text-[11px] text-muted-foreground leading-relaxed mt-1">
+                  <p className="text-[10px] text-muted-foreground truncate mt-0.5">
                     Notify when a responder claims ownership and acknowledges the incident.
                   </p>
                 </div>
@@ -614,7 +634,7 @@ export default function ServiceNotificationSettings({
               <label
                 htmlFor="notifyResolved"
                 className={cn(
-                  'flex items-start gap-3 p-3.5 rounded-xl border text-left transition-all cursor-pointer',
+                  'min-w-0 flex items-center gap-2.5 p-2 px-2.5 rounded-lg border text-left transition-all cursor-pointer select-none',
                   notifyOnResolved
                     ? 'border-primary/40 bg-primary/5 ring-1 ring-primary/20 shadow-2xs'
                     : 'border-border/80 bg-card hover:bg-muted/40 text-muted-foreground'
@@ -624,16 +644,18 @@ export default function ServiceNotificationSettings({
                   id="notifyResolved"
                   checked={notifyOnResolved}
                   onCheckedChange={c => setNotifyOnResolved(!!c)}
-                  className="mt-0.5"
+                  className="h-4 w-4 shrink-0"
                 />
                 <div className="min-w-0 flex-1">
-                  <div className="flex items-center justify-between gap-1">
-                    <span className="text-xs font-bold text-foreground">Incident Resolved</span>
-                    <span className="text-[9px] font-mono font-semibold px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                  <div className="flex items-center justify-between gap-1 min-w-0">
+                    <span className="text-xs font-semibold text-foreground truncate">
+                      Incident Resolved
+                    </span>
+                    <span className="text-[9px] font-mono font-semibold px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 shrink-0">
                       RESOLVED
                     </span>
                   </div>
-                  <p className="text-[11px] text-muted-foreground leading-relaxed mt-1">
+                  <p className="text-[10px] text-muted-foreground truncate mt-0.5">
                     Notify when the incident is resolved and recovery has been verified.
                   </p>
                 </div>
@@ -642,7 +664,7 @@ export default function ServiceNotificationSettings({
               <label
                 htmlFor="notifySla"
                 className={cn(
-                  'flex items-start gap-3 p-3.5 rounded-xl border text-left transition-all cursor-pointer',
+                  'min-w-0 flex items-center gap-2.5 p-2 px-2.5 rounded-lg border text-left transition-all cursor-pointer select-none',
                   notifyOnSlaBreach
                     ? 'border-destructive/40 bg-destructive/5 ring-1 ring-destructive/20 shadow-2xs'
                     : 'border-border/80 bg-card hover:bg-muted/40 text-muted-foreground'
@@ -652,18 +674,19 @@ export default function ServiceNotificationSettings({
                   id="notifySla"
                   checked={notifyOnSlaBreach}
                   onCheckedChange={c => setNotifyOnSlaBreach(!!c)}
-                  className="mt-0.5"
+                  className="h-4 w-4 shrink-0"
                 />
                 <div className="min-w-0 flex-1">
-                  <div className="flex items-center justify-between gap-1">
-                    <span className="text-xs font-bold text-foreground">SLA Breach Warning</span>
-                    <span className="text-[9px] font-mono font-semibold px-1.5 py-0.5 rounded bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/20">
+                  <div className="flex items-center justify-between gap-1 min-w-0">
+                    <span className="text-xs font-semibold text-foreground truncate">
+                      SLA Breach Warning
+                    </span>
+                    <span className="text-[9px] font-mono font-semibold px-1.5 py-0.5 rounded bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/20 shrink-0">
                       SLA_BREACH
                     </span>
                   </div>
-                  <p className="text-[11px] text-muted-foreground leading-relaxed mt-1">
-                    Notify when acknowledgement or resolution targets breach configured SLA
-                    deadlines.
+                  <p className="text-[10px] text-muted-foreground truncate mt-0.5">
+                    Notify when targets breach configured SLA deadlines.
                   </p>
                 </div>
               </label>
@@ -686,45 +709,52 @@ export default function ServiceNotificationSettings({
         </Card>
 
         {/* CARD 2: Team Chat Channels */}
-        <Card className="rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/60 backdrop-blur-xs shadow-xs">
-          <CardHeader className="pb-4 border-b border-border/60 bg-muted/20 dark:bg-muted/10">
-            <CardTitle className="text-sm font-bold flex items-center gap-2.5">
-              <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-primary/10 text-primary shrink-0 border border-primary/20 shadow-2xs">
-                <MessageSquare className="h-4 w-4" />
-              </div>
-              <div>
-                <span className="text-muted-foreground font-mono mr-1.5 text-xs">2.</span>
-                <span>Team Chat Channels</span>
-              </div>
-            </CardTitle>
-            <CardDescription className="text-xs mt-1">
+        <Card className="rounded-xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/60 backdrop-blur-xs shadow-xs">
+          <CardHeader className="py-2.5 px-3.5 border-b border-border/60 bg-muted/20 dark:bg-muted/10">
+            <div className="flex items-center justify-between gap-2">
+              <CardTitle className="text-xs font-bold flex items-center gap-2">
+                <div className="flex h-6 w-6 items-center justify-center rounded-md bg-primary/10 text-primary shrink-0 border border-primary/20">
+                  <MessageSquare className="h-3.5 w-3.5" />
+                </div>
+                <div>
+                  <span className="text-muted-foreground font-mono mr-1 text-[11px]">2.</span>
+                  <span>Team Chat Channels</span>
+                </div>
+              </CardTitle>
+              <span className="text-[10px] font-mono font-medium px-2 py-0.5 rounded-full bg-muted text-muted-foreground border border-border/60">
+                {channels.length} channel type{channels.length === 1 ? '' : 's'} enabled
+              </span>
+            </div>
+            <CardDescription className="text-[11px] text-muted-foreground mt-0.5">
               Route automated incident announcements directly into team chat channels in Slack or
               Microsoft Teams.
             </CardDescription>
           </CardHeader>
-          <CardContent className="p-5 space-y-6">
+          <CardContent className="p-3 sm:p-3.5 space-y-3">
             {/* Active Chat Platforms Toggles */}
-            <div className="space-y-2">
-              <Label className="text-xs font-semibold text-foreground">Notification Channels</Label>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="space-y-1.5">
+              <Label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider block">
+                Notification Channels
+              </Label>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                 {[
                   {
                     id: 'SLACK',
                     name: 'Slack',
-                    icon: <SlackLogo className="h-4 w-4 shrink-0" />,
-                    desc: 'Post incident cards to Slack channels',
+                    icon: <SlackLogo className="h-3.5 w-3.5 shrink-0" />,
+                    desc: 'Post cards to Slack channels',
                   },
                   {
                     id: 'MICROSOFT_TEAMS',
                     name: 'Microsoft Teams',
-                    icon: <MicrosoftTeamsLogo className="h-4 w-4 shrink-0" />,
-                    desc: 'Send Adaptive Cards to Teams channels',
+                    icon: <MicrosoftTeamsLogo className="h-3.5 w-3.5 shrink-0" />,
+                    desc: 'Adaptive Cards to Teams channels',
                   },
                   {
                     id: 'WEBHOOK',
                     name: 'Outbound Webhooks',
-                    icon: <Webhook className="h-4 w-4 shrink-0" />,
-                    desc: 'Dispatch incident JSON to webhooks',
+                    icon: <Webhook className="h-3.5 w-3.5 shrink-0" />,
+                    desc: 'Incident JSON to webhooks',
                   },
                 ].map(item => {
                   const checked = channels.includes(item.id);
@@ -733,7 +763,7 @@ export default function ServiceNotificationSettings({
                       key={item.id}
                       htmlFor={`channel-${item.id}`}
                       className={cn(
-                        'flex items-start gap-3 p-3.5 rounded-xl border text-left transition-all cursor-pointer',
+                        'min-w-0 flex items-center gap-2 p-2 px-2.5 rounded-lg border text-left transition-all cursor-pointer select-none',
                         checked
                           ? 'border-primary/40 bg-primary/5 ring-1 ring-primary/20 shadow-2xs'
                           : 'border-border/80 bg-card hover:bg-muted/40 text-muted-foreground'
@@ -749,14 +779,14 @@ export default function ServiceNotificationSettings({
                             setChannels(channels.filter(ch => ch !== item.id));
                           }
                         }}
-                        className="mt-0.5"
+                        className="h-4 w-4 shrink-0"
                       />
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-1.5">
                           {item.icon}
-                          <span className="text-xs font-bold text-foreground">{item.name}</span>
+                          <span className="text-xs font-semibold text-foreground">{item.name}</span>
                         </div>
-                        <p className="text-[11px] text-muted-foreground leading-relaxed mt-1">
+                        <p className="text-[10px] text-muted-foreground truncate mt-0.5">
                           {item.desc}
                         </p>
                       </div>
@@ -768,10 +798,10 @@ export default function ServiceNotificationSettings({
 
             {/* Slack Config Section */}
             {channels.includes('SLACK') && (
-              <div className="rounded-xl border border-border/80 bg-muted/10 p-4 space-y-4">
-                <div className="flex items-center justify-between gap-2 pb-3 border-b border-border/60">
+              <div className="rounded-lg border border-border/80 bg-muted/10 p-2.5 sm:p-3 space-y-2.5">
+                <div className="flex items-center justify-between gap-2 pb-2 border-b border-border/60">
                   <div className="flex items-center gap-2">
-                    <SlackLogo className="h-4 w-4 shrink-0" />
+                    <SlackLogo className="h-3.5 w-3.5 shrink-0" />
                     <span className="text-xs font-bold text-foreground">Slack Destination</span>
                   </div>
                   {existingSlackDests.length > 0 ? (
@@ -792,7 +822,7 @@ export default function ServiceNotificationSettings({
                 {!slackIntegration ? (
                   <Alert
                     variant="destructive"
-                    className="bg-amber-50/50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800/40 text-amber-800 dark:text-amber-300"
+                    className="bg-amber-50/50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800/40 text-amber-800 dark:text-amber-300 py-2"
                   >
                     <AlertTriangle className="h-4 w-4 text-amber-600" />
                     <AlertTitle className="text-xs font-semibold">
@@ -810,8 +840,8 @@ export default function ServiceNotificationSettings({
                     </AlertDescription>
                   </Alert>
                 ) : (
-                  <div className="space-y-4">
-                    <div className="text-xs text-muted-foreground leading-relaxed">
+                  <div className="space-y-2.5">
+                    <div className="text-[11px] text-muted-foreground leading-normal">
                       Link up to 3 Slack channels to receive incident notification cards
                       simultaneously. Configure Slack workspace in{' '}
                       <Link
@@ -824,19 +854,19 @@ export default function ServiceNotificationSettings({
                     </div>
 
                     {existingSlackDests.length > 0 && (
-                      <div className="space-y-2">
-                        <Label className="text-xs font-semibold text-foreground">
+                      <div className="space-y-1.5">
+                        <Label className="text-[11px] font-semibold text-foreground">
                           Linked Channels ({existingSlackDests.length}/3)
                         </Label>
-                        <div className="space-y-2">
+                        <div className="space-y-1.5">
                           {existingSlackDests.map(dest => (
                             <div
                               key={dest.id}
-                              className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3 text-xs flex items-center justify-between gap-3"
+                              className="rounded-lg border border-emerald-500/30 bg-emerald-500/5 px-2.5 py-1.5 text-xs flex items-center justify-between gap-2"
                             >
-                              <div className="flex items-center gap-2 font-medium text-emerald-800 dark:text-emerald-300 min-w-0">
-                                <Check className="h-4 w-4 shrink-0" />
-                                <span className="truncate">
+                              <div className="flex items-center gap-1.5 font-medium text-emerald-800 dark:text-emerald-300 min-w-0">
+                                <Check className="h-3.5 w-3.5 shrink-0 text-emerald-600" />
+                                <span className="truncate text-xs">
                                   <strong>#{dest.channelName ?? dest.channelId}</strong>
                                 </span>
                                 {dest.isPrivate && (
@@ -850,7 +880,7 @@ export default function ServiceNotificationSettings({
                                   type="button"
                                   variant="outline"
                                   size="sm"
-                                  className="h-7 text-xs"
+                                  className="h-6 px-2 text-[11px]"
                                   disabled={slackLinking}
                                   onClick={() => void handleTestSlackDestination(dest)}
                                 >
@@ -860,7 +890,7 @@ export default function ServiceNotificationSettings({
                                   type="button"
                                   variant="outline"
                                   size="sm"
-                                  className="h-7 text-xs text-destructive hover:bg-destructive/10"
+                                  className="h-6 px-2 text-[11px] text-destructive hover:bg-destructive/10"
                                   disabled={slackLinking}
                                   onClick={() => void handleUnlinkSlackChannel(dest.id)}
                                 >
@@ -876,7 +906,7 @@ export default function ServiceNotificationSettings({
                     {slackLinkResult && (
                       <div
                         className={cn(
-                          'rounded-md px-3 py-2 text-xs border',
+                          'rounded-md px-2.5 py-1.5 text-xs border',
                           slackLinkResult.status === 'success'
                             ? 'bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300'
                             : 'bg-destructive/10 border-destructive/30 text-destructive'
@@ -887,33 +917,33 @@ export default function ServiceNotificationSettings({
                     )}
 
                     {existingSlackDests.length >= 3 ? (
-                      <div className="rounded-lg border border-border/80 bg-muted/20 p-3 text-xs text-muted-foreground flex items-center gap-2">
-                        <Check className="h-4 w-4 text-emerald-500 shrink-0" />
+                      <div className="rounded-lg border border-border/80 bg-muted/20 p-2 px-2.5 text-xs text-muted-foreground flex items-center gap-2">
+                        <Check className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
                         <span>
                           Maximum limit reached (3 channels linked). Unlink a channel to connect
                           another.
                         </span>
                       </div>
                     ) : (
-                      <div className="space-y-3 pt-2">
+                      <div className="space-y-1.5 pt-1">
                         <div className="flex items-center justify-between">
-                          <Label className="text-xs font-semibold text-foreground">
+                          <Label className="text-[11px] font-semibold text-foreground">
                             {existingSlackDests.length > 0
                               ? 'Link Another Channel'
                               : 'Select Channel for Notifications'}
                           </Label>
-                          <span className="text-[11px] text-muted-foreground">
+                          <span className="text-[10px] text-muted-foreground">
                             Bot has access to {memberCount} channel{memberCount === 1 ? '' : 's'}
                           </span>
                         </div>
 
                         {loadingChannels ? (
-                          <div className="flex items-center gap-2 text-xs text-muted-foreground p-2">
-                            <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
+                          <div className="flex items-center gap-2 text-xs text-muted-foreground p-1.5">
+                            <Loader2 className="h-3 w-3 animate-spin text-primary" />
                             Loading channels from Slack...
                           </div>
                         ) : channelsError ? (
-                          <div className="text-xs text-destructive flex items-center gap-2">
+                          <div className="text-xs text-destructive flex items-center gap-1.5">
                             <XCircle className="h-3.5 w-3.5" />
                             {channelsError}
                           </div>
@@ -929,7 +959,7 @@ export default function ServiceNotificationSettings({
                                 value={selectedSlackChannel}
                                 onValueChange={handleSlackChannelChange}
                               >
-                                <SelectTrigger className="w-full text-xs h-9">
+                                <SelectTrigger className="w-full text-xs h-8">
                                   <SelectValue placeholder="Choose a channel..." />
                                 </SelectTrigger>
                                 <SelectContent>
@@ -968,7 +998,7 @@ export default function ServiceNotificationSettings({
                               type="button"
                               variant="outline"
                               size="icon"
-                              className="h-9 w-9 shrink-0"
+                              className="h-8 w-8 shrink-0"
                               onClick={refreshChannels}
                               disabled={loadingChannels}
                               title="Refresh channel list"
@@ -983,7 +1013,7 @@ export default function ServiceNotificationSettings({
                         {joinState.status !== 'idle' && joinState.message && (
                           <Alert
                             className={cn(
-                              'border text-xs py-2.5',
+                              'border text-xs py-2',
                               joinState.status === 'success'
                                 ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-800 dark:text-emerald-300'
                                 : joinState.status === 'error'
@@ -1004,7 +1034,7 @@ export default function ServiceNotificationSettings({
                           </Alert>
                         )}
 
-                        <div className="flex flex-wrap gap-2 pt-1">
+                        <div className="flex flex-wrap gap-2 pt-0.5">
                           {selectedSlackChannel &&
                             (() => {
                               const channel = slackChannels.find(
@@ -1017,10 +1047,10 @@ export default function ServiceNotificationSettings({
                                     size="sm"
                                     onClick={() => void handleConnectBot()}
                                     disabled={joinState.status === 'joining'}
-                                    className="text-xs h-8 bg-blue-600 hover:bg-blue-700"
+                                    className="text-xs h-7 px-2.5 bg-blue-600 hover:bg-blue-700"
                                   >
                                     {joinState.status === 'joining' && (
-                                      <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                                      <Loader2 className="mr-1.5 h-3 w-3 animate-spin" />
                                     )}
                                     Connect Bot to #{channel.name}
                                   </Button>
@@ -1046,12 +1076,12 @@ export default function ServiceNotificationSettings({
                                     disabled={
                                       slackLinking || (!channel.isMember && !channel.isPrivate)
                                     }
-                                    className="text-xs h-8"
+                                    className="text-xs h-7 px-2.5"
                                   >
                                     {slackLinking ? (
-                                      <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                                      <Loader2 className="mr-1.5 h-3 w-3 animate-spin" />
                                     ) : (
-                                      <Check className="mr-1.5 h-3.5 w-3.5" />
+                                      <Check className="mr-1.5 h-3 w-3" />
                                     )}
                                     Link Channel
                                   </Button>
@@ -1063,23 +1093,23 @@ export default function ServiceNotificationSettings({
                       </div>
                     )}
 
-                    <div className="pt-3 border-t border-border/60">
-                      <Label
-                        htmlFor="slackWebhookUrl"
-                        className="text-xs font-semibold text-muted-foreground block mb-1"
-                      >
-                        Slack Webhook URL (Legacy Fallback)
-                      </Label>
+                    <div className="pt-2 border-t border-border/60">
+                      <div className="flex items-center justify-between mb-1">
+                        <Label
+                          htmlFor="slackWebhookUrl"
+                          className="text-[11px] font-semibold text-muted-foreground"
+                        >
+                          Slack Webhook URL (Legacy Fallback)
+                        </Label>
+                        <span className="text-[10px] text-muted-foreground">Optional</span>
+                      </div>
                       <input
                         id="slackWebhookUrl"
                         name="slackWebhookUrl"
                         defaultValue={slackWebhookUrl || ''}
                         placeholder="https://hooks.slack.com/services/..."
-                        className="w-full h-9 rounded-md border border-input bg-background px-3 py-1 text-xs font-mono shadow-xs focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-ring"
+                        className="w-full h-8 rounded-md border border-input bg-background px-2.5 py-1 text-xs font-mono shadow-2xs focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-ring"
                       />
-                      <p className="text-[10px] text-muted-foreground mt-1">
-                        Use this if you prefer static webhook URLs over OAuth app integration.
-                      </p>
                     </div>
                   </div>
                 )}
@@ -1088,10 +1118,10 @@ export default function ServiceNotificationSettings({
 
             {/* Microsoft Teams Section */}
             {channels.includes('MICROSOFT_TEAMS') && (
-              <div className="rounded-xl border border-border/80 bg-muted/10 p-4 space-y-4">
-                <div className="flex items-center justify-between gap-2 pb-3 border-b border-border/60">
+              <div className="rounded-lg border border-border/80 bg-muted/10 p-2.5 sm:p-3 space-y-2.5">
+                <div className="flex items-center justify-between gap-2 pb-2 border-b border-border/60">
                   <div className="flex items-center gap-2">
-                    <MicrosoftTeamsLogo className="h-4 w-4 shrink-0" />
+                    <MicrosoftTeamsLogo className="h-3.5 w-3.5 shrink-0" />
                     <span className="text-xs font-bold text-foreground">
                       Microsoft Teams Destination
                     </span>
@@ -1107,39 +1137,32 @@ export default function ServiceNotificationSettings({
                   )}
                 </div>
 
-                <div className="text-xs text-muted-foreground leading-relaxed">
+                <div className="text-[11px] text-muted-foreground leading-normal">
                   Teams is managed centrally for your tenant. Link up to 3 channels to receive
                   incident notification cards simultaneously. Incident War Rooms are hosted in the
-                  primary channel. Configure Azure credentials in{' '}
-                  <Link
-                    href="/settings/integrations/microsoft-teams"
-                    className="text-primary font-semibold hover:underline"
-                  >
-                    Settings → Integrations → Microsoft Teams
-                  </Link>
-                  .
+                  primary channel.
                 </div>
 
                 {existingTeamsDests.length > 0 && (
-                  <div className="space-y-2">
-                    <Label className="text-xs font-semibold text-foreground">
+                  <div className="space-y-1.5">
+                    <Label className="text-[11px] font-semibold text-foreground">
                       Linked Channels ({existingTeamsDests.length}/3)
                     </Label>
-                    <div className="space-y-2">
+                    <div className="space-y-1.5">
                       {existingTeamsDests.map(dest => (
                         <div
                           key={dest.id}
-                          className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3 text-xs flex items-center justify-between gap-3"
+                          className="rounded-lg border border-emerald-500/30 bg-emerald-500/5 px-2.5 py-1.5 text-xs flex items-center justify-between gap-2"
                         >
-                          <div className="flex items-center gap-2 font-medium text-emerald-800 dark:text-emerald-300 min-w-0">
-                            <Check className="h-4 w-4 shrink-0" />
-                            <span className="truncate">
+                          <div className="flex items-center gap-1.5 font-medium text-emerald-800 dark:text-emerald-300 min-w-0 flex-1">
+                            <Check className="h-3.5 w-3.5 shrink-0 text-emerald-600" />
+                            <span className="truncate text-xs block min-w-0">
                               <strong>{dest.teamName ?? dest.teamId}</strong> &rarr;{' '}
                               <strong>{dest.channelName ?? dest.channelId}</strong>
                             </span>
                             {dest.warRoomEnabled && (
-                              <span className="shrink-0 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-primary/15 text-primary border border-primary/25">
-                                War Room Primary
+                              <span className="shrink-0 text-[9px] font-semibold px-1.5 py-0.2 rounded bg-primary/15 text-primary border border-primary/25">
+                                War Room
                               </span>
                             )}
                           </div>
@@ -1148,7 +1171,7 @@ export default function ServiceNotificationSettings({
                               type="button"
                               variant="outline"
                               size="sm"
-                              className="h-7 text-xs"
+                              className="h-6 px-2 text-[11px]"
                               disabled={teamsLinking}
                               onClick={async () => {
                                 setTeamsLinking(true);
@@ -1181,7 +1204,7 @@ export default function ServiceNotificationSettings({
                               type="button"
                               variant="outline"
                               size="sm"
-                              className="h-7 text-xs text-destructive hover:bg-destructive/10"
+                              className="h-6 px-2 text-[11px] text-destructive hover:bg-destructive/10"
                               disabled={teamsLinking}
                               onClick={async () => {
                                 setTeamsLinking(true);
@@ -1223,102 +1246,108 @@ export default function ServiceNotificationSettings({
                 )}
 
                 {existingTeamsDests.length >= 3 ? (
-                  <div className="rounded-lg border border-border/80 bg-muted/20 p-3 text-xs text-muted-foreground flex items-center gap-2">
-                    <Check className="h-4 w-4 text-emerald-500 shrink-0" />
+                  <div className="rounded-lg border border-border/80 bg-muted/20 p-2 px-2.5 text-xs text-muted-foreground flex items-center gap-2">
+                    <Check className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
                     <span>
                       Maximum limit reached (3 channels linked). Unlink a channel to connect
                       another.
                     </span>
                   </div>
                 ) : (
-                  <div className="space-y-3 pt-2">
-                    <div className="text-xs font-semibold text-foreground">
+                  <div className="space-y-2 pt-1">
+                    <Label className="text-[11px] font-semibold text-foreground block">
                       {existingTeamsDests.length > 0
                         ? 'Link Another Channel'
                         : 'Link Teams Channel'}
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label className="text-xs font-semibold">Select Team</Label>
-                      {teamsLoading ? (
-                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                          <Loader2 className="h-3.5 w-3.5 animate-spin" /> Loading Teams…
-                        </div>
-                      ) : teamsError ? (
-                        <div className="text-xs text-destructive flex items-center gap-2">
-                          <XCircle className="h-3.5 w-3.5" /> {teamsError}
-                        </div>
-                      ) : teams.length === 0 ? (
-                        <p className="text-xs text-muted-foreground">
-                          No Teams found. Ensure the app is installed to a Team.
-                        </p>
-                      ) : (
-                        <Select
-                          value={selectedTeamId}
-                          onValueChange={v => {
-                            setSelectedTeamId(v);
-                            setSelectedTeamsChannelId('');
-                          }}
-                        >
-                          <SelectTrigger className="text-xs h-9">
-                            <SelectValue placeholder="Select a Team…" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {teams.map(t => (
-                              <SelectItem key={t.id} value={t.id}>
-                                {t.displayName}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      )}
-                    </div>
-
-                    {selectedTeamId && (
-                      <div className="space-y-1.5">
-                        <Label className="text-xs font-semibold">Select Channel</Label>
-                        {teamsChannelsLoading ? (
-                          <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                            <Loader2 className="h-3.5 w-3.5 animate-spin" /> Loading channels…
+                    </Label>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      <div>
+                        {teamsLoading ? (
+                          <div className="flex items-center gap-2 text-xs text-muted-foreground h-8">
+                            <Loader2 className="h-3 w-3 animate-spin" /> Loading Teams…
                           </div>
-                        ) : teamsChannelsError ? (
-                          <div className="text-xs text-destructive flex items-center gap-2">
-                            <XCircle className="h-3.5 w-3.5" /> {teamsChannelsError}
+                        ) : teamsError ? (
+                          <div className="text-xs text-destructive flex items-center gap-1.5 h-8">
+                            <XCircle className="h-3 w-3" /> {teamsError}
                           </div>
-                        ) : teamsChannels.length === 0 ? (
-                          <p className="text-xs text-muted-foreground">No channels in this Team.</p>
+                        ) : teams.length === 0 ? (
+                          <p className="text-[11px] text-muted-foreground h-8 flex items-center">
+                            No Teams found.
+                          </p>
                         ) : (
                           <Select
-                            value={selectedTeamsChannelId}
-                            onValueChange={setSelectedTeamsChannelId}
+                            value={selectedTeamId}
+                            onValueChange={v => {
+                              setSelectedTeamId(v);
+                              setSelectedTeamsChannelId('');
+                            }}
                           >
-                            <SelectTrigger className="text-xs h-9">
-                              <SelectValue placeholder="Select a channel…" />
+                            <SelectTrigger className="text-xs h-8">
+                              <SelectValue placeholder="Select a Team…" />
                             </SelectTrigger>
                             <SelectContent>
-                              {teamsChannels.map(c => {
-                                const isAlreadyLinked = existingTeamsDests.some(
-                                  d => d.teamId === selectedTeamId && d.channelId === c.id
-                                );
-                                return (
-                                  <SelectItem key={c.id} value={c.id} disabled={isAlreadyLinked}>
-                                    {c.displayName
-                                      ? `${c.displayName} — ${c.id.slice(0, 8)}…`
-                                      : c.id}
-                                    {isAlreadyLinked ? ' (Already linked)' : ''}
-                                  </SelectItem>
-                                );
-                              })}
+                              {teams.map(t => (
+                                <SelectItem key={t.id} value={t.id}>
+                                  {t.displayName}
+                                </SelectItem>
+                              ))}
                             </SelectContent>
                           </Select>
                         )}
                       </div>
-                    )}
 
-                    <div className="flex gap-2 pt-1">
+                      <div>
+                        {selectedTeamId ? (
+                          teamsChannelsLoading ? (
+                            <div className="flex items-center gap-2 text-xs text-muted-foreground h-8">
+                              <Loader2 className="h-3 w-3 animate-spin" /> Loading channels…
+                            </div>
+                          ) : teamsChannelsError ? (
+                            <div className="text-xs text-destructive flex items-center gap-1.5 h-8">
+                              <XCircle className="h-3 w-3" /> {teamsChannelsError}
+                            </div>
+                          ) : teamsChannels.length === 0 ? (
+                            <p className="text-[11px] text-muted-foreground h-8 flex items-center">
+                              No channels.
+                            </p>
+                          ) : (
+                            <Select
+                              value={selectedTeamsChannelId}
+                              onValueChange={setSelectedTeamsChannelId}
+                            >
+                              <SelectTrigger className="text-xs h-8">
+                                <SelectValue placeholder="Select a channel…" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {teamsChannels.map(c => {
+                                  const isAlreadyLinked = existingTeamsDests.some(
+                                    d => d.teamId === selectedTeamId && d.channelId === c.id
+                                  );
+                                  return (
+                                    <SelectItem key={c.id} value={c.id} disabled={isAlreadyLinked}>
+                                      {c.displayName
+                                        ? `${c.displayName} — ${c.id.slice(0, 8)}…`
+                                        : c.id}
+                                      {isAlreadyLinked ? ' (Already linked)' : ''}
+                                    </SelectItem>
+                                  );
+                                })}
+                              </SelectContent>
+                            </Select>
+                          )
+                        ) : (
+                          <div className="text-[11px] text-muted-foreground border border-dashed rounded-md h-8 px-2.5 flex items-center bg-muted/20">
+                            Select a team first
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="flex justify-end pt-1">
                       <Button
                         type="button"
                         size="sm"
-                        className="text-xs h-8"
+                        className="text-xs h-7 px-2.5"
                         disabled={
                           !selectedTeamId ||
                           !selectedTeamsChannelId ||
@@ -1388,7 +1417,7 @@ export default function ServiceNotificationSettings({
                           }
                         }}
                       >
-                        {teamsLinking && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
+                        {teamsLinking && <Loader2 className="mr-1.5 h-3 w-3 animate-spin" />}
                         Link Channel
                       </Button>
                     </div>
@@ -1398,7 +1427,7 @@ export default function ServiceNotificationSettings({
                 {teamsLinkResult && (
                   <Alert
                     className={cn(
-                      'text-xs py-2',
+                      'text-xs py-1.5 px-2.5',
                       teamsLinkResult.status === 'success'
                         ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-800 dark:text-emerald-300'
                         : 'border-destructive/30 bg-destructive/10 text-destructive'
@@ -1409,14 +1438,16 @@ export default function ServiceNotificationSettings({
                     ) : (
                       <XCircle className="h-3.5 w-3.5" />
                     )}
-                    <AlertDescription>{teamsLinkResult.message}</AlertDescription>
+                    <AlertDescription className="text-xs">
+                      {teamsLinkResult.message}
+                    </AlertDescription>
                   </Alert>
                 )}
               </div>
             )}
 
             <div className="pt-2 flex justify-end border-t border-border/60">
-              <Button type="submit" size="sm" className="text-xs">
+              <Button type="submit" size="sm" className="text-xs h-8">
                 Save Notification Channels & Triggers
               </Button>
             </div>
@@ -1428,20 +1459,20 @@ export default function ServiceNotificationSettings({
       {children}
 
       {/* CARD 4: Outbound Webhook Integrations */}
-      <Card className="rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/60 backdrop-blur-xs shadow-xs">
-        <CardHeader className="pb-4 border-b border-border/60 bg-muted/20 dark:bg-muted/10">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+      <Card className="rounded-xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/60 backdrop-blur-xs shadow-xs">
+        <CardHeader className="py-2.5 px-3.5 border-b border-border/60 bg-muted/20 dark:bg-muted/10">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
             <div>
-              <CardTitle className="text-sm font-bold flex items-center gap-2.5">
-                <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-primary/10 text-primary shrink-0 border border-primary/20 shadow-2xs">
-                  <Webhook className="h-4 w-4" />
+              <CardTitle className="text-xs font-bold flex items-center gap-2">
+                <div className="flex h-6 w-6 items-center justify-center rounded-md bg-primary/10 text-primary shrink-0 border border-primary/20">
+                  <Webhook className="h-3.5 w-3.5" />
                 </div>
                 <div>
-                  <span className="text-muted-foreground font-mono mr-1.5 text-xs">4.</span>
+                  <span className="text-muted-foreground font-mono mr-1 text-[11px]">4.</span>
                   <span>Outbound Webhook Integrations</span>
                 </div>
               </CardTitle>
-              <CardDescription className="text-xs mt-1">
+              <CardDescription className="text-[11px] text-muted-foreground mt-0.5">
                 Deliver real-time incident JSON payloads to custom HTTP endpoints, automation
                 workflows, or internal systems.
               </CardDescription>
@@ -1449,18 +1480,18 @@ export default function ServiceNotificationSettings({
             <AddWebhookDialog serviceId={serviceId} />
           </div>
         </CardHeader>
-        <CardContent className="p-5">
+        <CardContent className="p-3 sm:p-3.5">
           {webhookIntegrations.length === 0 ? (
-            <div className="text-xs text-muted-foreground italic text-center py-8 border border-dashed border-border/80 rounded-xl bg-muted/10">
+            <div className="text-xs text-muted-foreground italic text-center py-4 border border-dashed border-border/80 rounded-lg bg-muted/10">
               No webhook integrations configured for this service yet.
             </div>
           ) : (
-            <div className="space-y-2.5">
+            <div className="space-y-2">
               {webhookIntegrations.map(webhook => (
                 <div
                   key={webhook.id}
                   className={cn(
-                    'flex flex-col sm:flex-row sm:items-center justify-between p-3.5 rounded-xl border gap-3 transition-colors',
+                    'flex flex-col sm:flex-row sm:items-center justify-between p-2.5 px-3 rounded-lg border gap-2 transition-colors',
                     webhook.enabled
                       ? 'bg-card border-border/80 hover:bg-muted/20'
                       : 'bg-muted/20 border-border/50 opacity-75'
@@ -1469,15 +1500,15 @@ export default function ServiceNotificationSettings({
                   <div className="min-w-0">
                     <div className="font-semibold text-xs text-foreground flex items-center gap-2">
                       <span>{webhook.name}</span>
-                      <span className="text-[10px] font-mono font-medium text-muted-foreground px-1.5 py-0.5 bg-muted rounded border border-border/60">
+                      <span className="text-[9px] font-mono font-medium text-muted-foreground px-1.5 py-0.2 bg-muted rounded border border-border/60">
                         {webhook.type}
                       </span>
                     </div>
-                    <div className="text-[11px] text-muted-foreground font-mono mt-1 truncate max-w-xl">
+                    <div className="text-[11px] text-muted-foreground font-mono mt-0.5 truncate max-w-xl">
                       {webhook.url}
                     </div>
                   </div>
-                  <div className="flex items-center gap-3 shrink-0">
+                  <div className="flex items-center gap-2.5 shrink-0">
                     <span
                       className={cn(
                         'text-[10px] font-semibold px-2 py-0.5 rounded-full border',

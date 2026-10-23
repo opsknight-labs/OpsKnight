@@ -2,11 +2,21 @@
 
 import React, { type ReactNode } from 'react';
 import DetailTabs from '@/components/ui/DetailTabs';
-import { Globe, Shield, UserCheck, Database, Key, HeartPulse, ArrowRight } from 'lucide-react';
+import {
+  Activity,
+  Globe,
+  Shield,
+  UserCheck,
+  Database,
+  Key,
+  HeartPulse,
+  ArrowRight,
+} from 'lucide-react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/shadcn/button';
 
 interface Props {
+  overviewTab?: ReactNode;
   automationTab?: ReactNode;
   appUrlTab: ReactNode;
   ssoTab: ReactNode;
@@ -21,6 +31,7 @@ interface Props {
 }
 
 export default function SystemSettingsTabs({
+  overviewTab,
   automationTab,
   appUrlTab,
   ssoTab,
@@ -34,6 +45,21 @@ export default function SystemSettingsTabs({
   missingCount,
 }: Props) {
   const tabs = [
+    ...(overviewTab
+      ? [
+          {
+            id: 'overview',
+            label: 'Overview',
+            icon: <Activity className="h-3.5 w-3.5 text-emerald-500" />,
+            badge: (
+              <span className="rounded-full bg-emerald-500/15 px-1.5 py-0.5 text-[9px] font-semibold text-emerald-600 dark:text-emerald-400">
+                Live
+              </span>
+            ),
+            content: overviewTab,
+          },
+        ]
+      : []),
     ...(automationTab
       ? [
           {
@@ -107,9 +133,9 @@ export default function SystemSettingsTabs({
   return (
     <DetailTabs
       tabs={tabs}
-      defaultTab="app-url"
+      defaultTab={overviewTab ? 'overview' : 'app-url'}
       urlParamName="section"
-      layout="grid"
+      layout="auto"
       actions={
         <Link href="/settings/system/health">
           <Button size="sm" variant="outline" className="h-8 gap-1.5 text-xs">

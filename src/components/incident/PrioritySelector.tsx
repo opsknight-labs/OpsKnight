@@ -73,7 +73,7 @@ function getPriorityItem(priority: string | null | undefined) {
 }
 
 const SELECTOR_BASE_CLASS =
-  'inline-flex items-center gap-1.5 h-8 px-2.5 rounded-md text-xs font-semibold bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 text-slate-800 dark:text-zinc-200 shadow-2xs transition-all max-w-full select-none';
+  'inline-flex items-center gap-1.5 h-7 px-2 rounded-md text-xs font-semibold bg-background border border-border/80 text-foreground shadow-2xs transition-all max-w-full select-none';
 
 export default function PrioritySelector({
   incidentId,
@@ -100,8 +100,8 @@ export default function PrioritySelector({
     }
     return (
       <div className={cn(SELECTOR_BASE_CLASS, 'cursor-default')}>
-        <Activity className="h-3.5 w-3.5 text-slate-400 shrink-0" />
-        <span className="text-slate-500 dark:text-zinc-400 font-medium">Unassigned</span>
+        <Activity className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+        <span className="text-muted-foreground font-medium">Unassigned</span>
       </div>
     );
   }
@@ -121,7 +121,7 @@ export default function PrioritySelector({
         <div
           className={cn(
             SELECTOR_BASE_CLASS,
-            'hover:bg-slate-50 dark:hover:bg-zinc-800 hover:border-slate-300 dark:hover:border-zinc-700 cursor-pointer group'
+            'hover:bg-muted/40 hover:border-border cursor-pointer group'
           )}
         >
           {currentItem && priority ? (
@@ -133,11 +133,11 @@ export default function PrioritySelector({
             </>
           ) : (
             <>
-              <Activity className="h-3.5 w-3.5 text-slate-400 shrink-0" />
-              <span className="text-slate-500 dark:text-zinc-400 font-medium">Set Priority</span>
+              <Activity className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+              <span className="text-muted-foreground font-medium">Set Priority</span>
             </>
           )}
-          <ChevronDown className="h-3.5 w-3.5 text-slate-400 group-hover:text-slate-600 dark:text-zinc-500 transition-colors shrink-0 ml-auto" />
+          <ChevronDown className="h-3.5 w-3.5 text-muted-foreground group-hover:text-foreground transition-colors shrink-0 ml-auto" />
         </div>
       </SelectTrigger>
       <SelectContent align="start" className="min-w-[160px]">

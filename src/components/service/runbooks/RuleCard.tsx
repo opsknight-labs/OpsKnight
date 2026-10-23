@@ -97,9 +97,7 @@ export function ArchivedRuleCard({
             <h3 className="break-words text-sm sm:text-base font-bold text-foreground">
               {binding.name || binding.runbook.name}
             </h3>
-            <p className="mt-0.5 text-xs text-muted-foreground">
-              Rule detached · Archived history
-            </p>
+            <p className="mt-0.5 text-xs text-muted-foreground">Rule detached · Archived history</p>
           </div>
         </div>
         <RuleStatusPill kind="ARCHIVED" />
@@ -168,12 +166,12 @@ export function RuleCard({
   return (
     <article className="bg-card group relative overflow-hidden rounded-xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/50 backdrop-blur-xs shadow-xs hover:border-border hover:shadow-md transition-all duration-200">
       <span aria-hidden className={cn('absolute inset-y-0 left-0 w-1', accent)} />
-      <div className="space-y-3 p-3.5 sm:p-4 pl-4 sm:pl-4.5">
-        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2.5">
+      <div className="space-y-2.5 p-3 sm:p-3.5 pl-3.5 sm:pl-4">
+        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2">
           <div className="flex items-start gap-2.5 min-w-0 flex-1">
             <div
               className={cn(
-                'flex h-8.5 w-8.5 shrink-0 items-center justify-center rounded-lg shadow-2xs transition-transform group-hover:scale-105',
+                'flex h-7.5 w-7.5 shrink-0 items-center justify-center rounded-lg shadow-2xs transition-transform group-hover:scale-105',
                 binding.mode === 'AUTOMATIC'
                   ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20'
                   : binding.mode === 'SUGGESTED'
@@ -182,15 +180,15 @@ export function RuleCard({
               )}
             >
               {binding.mode === 'AUTOMATIC' ? (
-                <Zap className="h-4 w-4" />
+                <Zap className="h-3.5 w-3.5" />
               ) : binding.mode === 'SUGGESTED' ? (
-                <Sparkles className="h-4 w-4" />
+                <Sparkles className="h-3.5 w-3.5" />
               ) : (
-                <Hand className="h-4 w-4" />
+                <Hand className="h-3.5 w-3.5" />
               )}
             </div>
             <div className="min-w-0 flex-1">
-              <h3 className="text-sm sm:text-base font-bold leading-snug">
+              <h3 className="text-sm font-bold leading-snug">
                 <Link
                   href={rulePath}
                   className="break-words text-foreground hover:text-primary transition-colors focus-visible:underline"
@@ -207,7 +205,7 @@ export function RuleCard({
           </div>
           <div className="flex flex-wrap items-center gap-1.5 shrink-0 self-start sm:self-auto sm:justify-end">
             <RuleStatusPill kind={kind} />
-            <span className="inline-flex items-center gap-1 rounded-md border border-border/80 bg-muted/50 px-2 py-0.5 text-[11px] font-mono font-medium text-foreground shadow-2xs">
+            <span className="inline-flex items-center gap-1 rounded-md border border-border/80 bg-muted/50 px-2 py-0.5 text-[10px] font-mono font-medium text-foreground shadow-2xs">
               {binding.versionStrategy === 'PINNED'
                 ? `v${binding.runbookVersion?.version ?? '?'} pinned`
                 : 'Latest published'}
@@ -225,7 +223,7 @@ export function RuleCard({
         </div>
 
         <dl className="grid grid-cols-1 sm:grid-cols-3 divide-y sm:divide-y-0 sm:divide-x divide-border/70 rounded-lg border border-border/70 bg-muted/20">
-          <div className="min-w-0 px-3 py-1.5 sm:py-2">
+          <div className="min-w-0 px-2.5 py-1.5">
             <dt className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1">
               <Clock className="h-3 w-3 text-muted-foreground" /> Last Run
             </dt>
@@ -245,18 +243,18 @@ export function RuleCard({
               )}
             </dd>
           </div>
-          <div className="min-w-0 px-3 py-1.5 sm:py-2">
+          <div className="min-w-0 px-2.5 py-1.5">
             <dt className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1">
               <Activity className="h-3 w-3 text-muted-foreground" /> Executions
             </dt>
             <dd className="mt-0.5 flex items-baseline gap-1.5">
-              <span className="text-sm sm:text-base font-extrabold tracking-tight text-foreground tabular-nums">
+              <span className="text-sm font-extrabold tracking-tight text-foreground tabular-nums">
                 {executionCount}
               </span>
-              <span className="text-[11px] text-muted-foreground">runs</span>
+              <span className="text-[10px] text-muted-foreground">runs</span>
             </dd>
           </div>
-          <div className="min-w-0 px-3 py-1.5 sm:py-2">
+          <div className="min-w-0 px-2.5 py-1.5">
             <dt className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1">
               <ShieldCheck className="h-3 w-3 text-muted-foreground" /> Fleet Readiness
             </dt>
@@ -341,11 +339,15 @@ export function RuleCard({
         )}
       </div>
 
-      <div className="flex flex-wrap items-center gap-2 border-t border-border/70 bg-muted/20 px-3.5 sm:px-4 py-2 pl-4 sm:pl-4.5">
+      <div className="flex flex-wrap items-center gap-1.5 border-t border-border/70 bg-muted/20 px-3 sm:px-3.5 py-1.5 pl-3.5 sm:pl-4">
         {binding.enabled && (
-          <Button asChild size="sm" className="h-8 gap-1.5 shadow-2xs font-semibold text-xs">
+          <Button
+            asChild
+            size="sm"
+            className="h-7.5 px-2.5 gap-1.5 shadow-2xs font-semibold text-xs"
+          >
             <Link href={`${rulePath}#run-now`}>
-              <Play className="h-3.5 w-3.5" aria-hidden />
+              <Play className="h-3 w-3" aria-hidden />
               Run now
             </Link>
           </Button>
@@ -354,10 +356,10 @@ export function RuleCard({
           asChild
           variant="outline"
           size="sm"
-          className="h-8 gap-1.5 shadow-2xs font-semibold text-xs"
+          className="h-7.5 px-2.5 gap-1.5 shadow-2xs font-semibold text-xs"
         >
           <Link href={rulePath}>
-            <FileSearch className="h-3.5 w-3.5" aria-hidden />
+            <FileSearch className="h-3 w-3" aria-hidden />
             Rule evidence
           </Link>
         </Button>
@@ -365,10 +367,10 @@ export function RuleCard({
           asChild
           size="sm"
           variant="ghost"
-          className="h-8 gap-1.5 font-semibold text-xs text-muted-foreground hover:text-foreground"
+          className="h-7.5 px-2 gap-1.5 font-semibold text-xs text-muted-foreground hover:text-foreground"
         >
           <Link href={`/runbooks/${binding.runbookId}`}>
-            <BookOpen className="h-3.5 w-3.5" aria-hidden />
+            <BookOpen className="h-3 w-3" aria-hidden />
             <span>View Runbook</span>
           </Link>
         </Button>
@@ -387,7 +389,7 @@ export function RuleCard({
       </div>
 
       <details className="group/manage border-t border-border/60 [&_summary::-webkit-details-marker]:hidden">
-        <summary className="flex min-h-9 cursor-pointer list-none items-center justify-between gap-2 px-3.5 sm:px-4 py-2 pl-4 sm:pl-4.5 text-[11px] font-bold uppercase tracking-wider text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring">
+        <summary className="flex min-h-8 cursor-pointer list-none items-center justify-between gap-2 px-3 sm:px-3.5 py-1.5 pl-3.5 sm:pl-4 text-[10px] font-bold uppercase tracking-wider text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring">
           Manage rule
           <ChevronDown
             className="h-3.5 w-3.5 transition-transform group-open/manage:rotate-180"
@@ -482,7 +484,7 @@ function RuleConfigureSheet({
       title={`Configure ${binding.name || binding.runbook.name}`}
       description={`Runs ${binding.runbook.name}. Changes apply to future runs; existing executions are unaffected.`}
       trigger={
-        <Button variant="outline" size="sm" className="h-8 gap-1.5">
+        <Button variant="outline" size="sm" className="h-7.5 px-2.5 gap-1.5 text-xs font-semibold">
           <Settings2 className="h-3.5 w-3.5" aria-hidden />
           <span>Configure</span>
         </Button>

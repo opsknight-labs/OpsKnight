@@ -29,6 +29,7 @@ export function CanonicalValuesEditor({
   };
   return (
     <AuthoringFieldset
+      compact
       legend="Canonical choices"
       aside={<LimitCounter count={values.length} limit={MAX_CHOICES} noun="choices" />}
     >
@@ -41,19 +42,19 @@ export function CanonicalValuesEditor({
             return (
               <li
                 key={value}
-                className="inline-flex items-center gap-0.5 rounded-full border border-border bg-background py-0.5 pl-3 pr-0.5 text-sm"
+                className="inline-flex items-center gap-1.5 rounded-md border border-border/70 bg-background/80 py-0.5 pl-2 pr-1 text-xs font-mono shadow-2xs hover:border-border transition-colors"
               >
-                <span className="break-all">{value}</span>
+                <span className="break-all font-medium text-foreground">{value}</span>
                 <Button
                   aria-label={`Remove canonical value ${value}`}
                   variant="ghost"
                   size="icon"
-                  className="h-10 w-10 rounded-full text-muted-foreground hover:text-destructive sm:h-7 sm:w-7"
+                  className="h-4 w-4 rounded p-0 text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors"
                   disabled={used}
                   title={used ? 'Update rules and aliases using this value first' : undefined}
                   onClick={() => onChange(values.filter(v => v !== value))}
                 >
-                  <X aria-hidden="true" />
+                  <X className="h-3 w-3" aria-hidden="true" />
                 </Button>
               </li>
             );
@@ -61,23 +62,24 @@ export function CanonicalValuesEditor({
         </ul>
       )}
       {anyUsed && (
-        <Hint>
+        <Hint className="text-[11px] leading-tight">
           Choices used by rules or aliases can’t be removed until those references change.
         </Hint>
       )}
       <form
-        className="flex flex-wrap items-start gap-2"
+        className="flex items-center gap-1.5 pt-0.5"
         onSubmit={event => {
           event.preventDefault();
           add();
         }}
       >
-        <div className="min-w-0 flex-1 basis-40 space-y-1">
+        <div className="min-w-0 flex-1 max-w-xs space-y-1">
           <Input
             aria-label="New canonical choice"
-            placeholder="production"
+            placeholder="e.g. production"
             aria-invalid={duplicate || undefined}
             aria-describedby={duplicate ? `${id}-error` : undefined}
+            className="h-7.5 text-xs font-mono bg-background"
             value={next}
             onChange={event => setNext(event.target.value)}
           />
@@ -85,8 +87,14 @@ export function CanonicalValuesEditor({
             <InlineError id={`${id}-error`}>“{trimmed}” is already a choice.</InlineError>
           )}
         </div>
-        <Button type="submit" variant="outline" disabled={!canAdd}>
-          <Plus aria-hidden="true" />
+        <Button
+          type="submit"
+          variant="outline"
+          size="sm"
+          className="h-7.5 text-xs px-2.5 gap-1 shrink-0 bg-background hover:bg-muted font-medium"
+          disabled={!canAdd}
+        >
+          <Plus className="h-3 w-3" aria-hidden="true" />
           Add choice
         </Button>
       </form>

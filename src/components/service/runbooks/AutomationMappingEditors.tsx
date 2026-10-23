@@ -8,9 +8,7 @@ import { Label } from '@/components/ui/shadcn/label';
 import { contextTypeCompatibleWithInput, type ContextFieldOption } from './context-helpers';
 import type { ServiceRunbookAgent, ServiceRunbookAgentPool } from '../ServiceRunbooks';
 import type { RunbookInputType } from '@/lib/runbooks/types';
-
-const selectClass =
-  'h-9 w-full rounded-md border border-input bg-background px-2 text-xs shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
+import { NativeSelect } from '@/components/automation/authoring/primitives';
 
 export type MappingInputDefinition = {
   key: string;
@@ -64,9 +62,8 @@ export function ContextInputMappingEditor({
                     {input.type.toLowerCase()}
                   </span>
                 </Label>
-                <select
+                <NativeSelect
                   id={selectId}
-                  className={selectClass}
                   value={mapping[input.key] ?? ''}
                   onChange={event =>
                     setMapping(current => ({ ...current, [input.key]: event.target.value }))
@@ -78,7 +75,7 @@ export function ContextInputMappingEditor({
                       automation.{field.key} ({field.type.toLowerCase()})
                     </option>
                   ))}
-                </select>
+                </NativeSelect>
               </div>
             );
           })}
@@ -171,9 +168,8 @@ export function ContextTargetMappingEditor({
         <Label htmlFor={`${id}-key`} className="text-xs">
           Select target by
         </Label>
-        <select
+        <NativeSelect
           id={`${id}-key`}
-          className={selectClass}
           value={contextKey}
           onChange={event => {
             setContextKey(event.target.value);
@@ -187,7 +183,7 @@ export function ContextTargetMappingEditor({
               automation.{option.key} ({option.type.toLowerCase()})
             </option>
           ))}
-        </select>
+        </NativeSelect>
       </div>
       {!knownKey && (
         <p role="alert" className="text-[11px] text-destructive">
@@ -209,9 +205,8 @@ export function ContextTargetMappingEditor({
               <tr key={row.id}>
                 <td className="py-1 pr-2">
                   {choices ? (
-                    <select
+                    <NativeSelect
                       aria-label={`Mapping ${index + 1} value`}
-                      className={selectClass}
                       value={row.value}
                       onChange={event => update(row.id, { value: event.target.value })}
                     >
@@ -221,7 +216,7 @@ export function ContextTargetMappingEditor({
                           {choice}
                         </option>
                       ))}
-                    </select>
+                    </NativeSelect>
                   ) : (
                     <Input
                       aria-label={`Mapping ${index + 1} value`}
@@ -233,9 +228,8 @@ export function ContextTargetMappingEditor({
                   )}
                 </td>
                 <td className="py-1 pr-2">
-                  <select
+                  <NativeSelect
                     aria-label={`Mapping ${index + 1} target`}
-                    className={selectClass}
                     value={row.target}
                     onChange={event => update(row.id, { target: event.target.value })}
                   >
@@ -255,7 +249,7 @@ export function ContextTargetMappingEditor({
                         </option>
                       ))}
                     </optgroup>
-                  </select>
+                  </NativeSelect>
                 </td>
                 <td className="py-1 text-right">
                   <Button

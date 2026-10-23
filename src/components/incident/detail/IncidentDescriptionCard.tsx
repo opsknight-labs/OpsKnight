@@ -33,6 +33,62 @@ function tryParseJson(text: string): string | null {
   return null;
 }
 
+function renderJsonValue(val: string): ReactNode {
+  const trimmed = val.trim();
+  const hasComma = trimmed.endsWith(',');
+  const cleanVal = hasComma ? trimmed.slice(0, -1) : trimmed;
+
+  let node: ReactNode;
+  if (cleanVal.startsWith('"') && cleanVal.endsWith('"')) {
+    node = <span className="text-emerald-700 dark:text-emerald-400 font-normal">{cleanVal}</span>;
+  } else if (cleanVal.length > 0 && !Number.isNaN(Number(cleanVal))) {
+    node = <span className="text-amber-700 dark:text-amber-400 font-medium">{cleanVal}</span>;
+  } else if (cleanVal === 'true' || cleanVal === 'false') {
+    node = <span className="text-violet-700 dark:text-violet-400 font-semibold">{cleanVal}</span>;
+  } else if (cleanVal === 'null') {
+    node = <span className="text-rose-700 dark:text-rose-400 italic">null</span>;
+  } else {
+    node = <span className="text-foreground/80">{cleanVal}</span>;
+  }
+
+  return (
+    <>
+      {node}
+      {hasComma && <span className="text-muted-foreground">,</span>}
+    </>
+  );
+}
+
+function renderJsonLines(jsonStr: string): ReactNode[] {
+  const lines = jsonStr.split('\n');
+  return lines.map((line, idx) => {
+    const indentMatch = line.match(/^(\s*)/);
+    const indent = indentMatch ? indentMatch[1] : '';
+    const content = line.slice(indent.length);
+
+    const kvMatch = content.match(/^("([^"\\]|\\.)*")\s*:\s*(.*)$/);
+    if (kvMatch) {
+      const key = kvMatch[1];
+      const val = kvMatch[3];
+      return (
+        <div key={idx} className="leading-snug">
+          <span>{indent}</span>
+          <span className="text-sky-700 dark:text-sky-300 font-semibold">{key}</span>
+          <span className="text-muted-foreground">: </span>
+          {renderJsonValue(val)}
+        </div>
+      );
+    }
+
+    return (
+      <div key={idx} className="leading-snug">
+        <span>{indent}</span>
+        {renderJsonValue(content)}
+      </div>
+    );
+  });
+}
+
 // Universal parser for markdown, code fences, key-value alerts, and json payloads
 function parseMarkdown(text: string): ReactNode[] {
   // Check if entire text is a JSON payload
@@ -41,20 +97,22 @@ function parseMarkdown(text: string): ReactNode[] {
     return [
       <div
         key="json-block"
-        className="relative group/code my-2 rounded-lg border border-slate-800 bg-slate-950 p-4 font-mono text-xs overflow-x-auto shadow-inner"
+        className="relative group/code rounded-lg border border-border/70 bg-muted/30 dark:bg-muted/15 font-mono text-xs overflow-hidden shadow-2xs"
       >
-        <div className="flex items-center justify-between pb-2 mb-2 border-b border-slate-800/80 text-slate-400">
-          <span className="flex items-center gap-1.5 font-bold uppercase tracking-wider text-[10px] text-slate-400">
-            <Code2 className="h-3.5 w-3.5 text-blue-400" />
+        <div className="flex items-center justify-between px-3 py-1.5 border-b border-border/60 bg-muted/40 text-muted-foreground text-[10px] font-semibold uppercase tracking-wider">
+          <span className="flex items-center gap-1.5 text-foreground/80">
+            <Code2 className="h-3.5 w-3.5 text-primary" />
             JSON Payload
           </span>
           <CopyButton
             text={wholeJson}
             label="Copy JSON"
-            className="h-6 px-2 text-[11px] text-slate-400 hover:text-white"
+            className="h-5 px-1.5 text-[10px] text-muted-foreground hover:text-foreground"
           />
         </div>
-        <pre className="text-emerald-400 leading-relaxed font-mono whitespace-pre">{wholeJson}</pre>
+        <div className="p-2.5 sm:p-3 leading-relaxed font-mono whitespace-pre max-h-56 overflow-y-auto overflow-x-auto text-xs text-foreground">
+          {renderJsonLines(wholeJson)}
+        </div>
       </div>,
     ];
   }
@@ -72,7 +130,7 @@ function parseMarkdown(text: string): ReactNode[] {
       elements.push(
         <ul
           key={`list-${elements.length}`}
-          className="my-2 space-y-1 list-disc list-inside text-slate-700 dark:text-slate-300"
+          className="my-1.5 space-y-1 list-disc list-inside text-foreground/90 text-xs"
         >
           {listItems}
         </ul>
@@ -85,25 +143,28 @@ function parseMarkdown(text: string): ReactNode[] {
   const flushCodeBlock = (idx: number) => {
     if (inCodeBlock) {
       const codeContent = codeBlockLines.join('\n');
+      const isJsonCode = codeLanguage.toLowerCase() === 'json';
+      const parsedBlockJson = isJsonCode ? tryParseJson(codeContent) : null;
+
       elements.push(
         <div
           key={`codeblock-${idx}`}
-          className="relative group/code my-3 rounded-lg border border-slate-800 bg-slate-950 p-3.5 font-mono text-xs overflow-x-auto shadow-inner"
+          className="relative group/code my-2 rounded-lg border border-border/70 bg-muted/30 dark:bg-muted/15 font-mono text-xs overflow-hidden shadow-2xs"
         >
-          <div className="flex items-center justify-between pb-2 mb-2 border-b border-slate-800/80 text-slate-400 text-[10px] font-bold uppercase tracking-wider">
-            <span className="flex items-center gap-1.5 text-slate-400">
-              <Code2 className="h-3.5 w-3.5 text-blue-400" />
+          <div className="flex items-center justify-between px-3 py-1.5 border-b border-border/60 bg-muted/40 text-muted-foreground text-[10px] font-semibold uppercase tracking-wider">
+            <span className="flex items-center gap-1.5 text-foreground/80">
+              <Code2 className="h-3.5 w-3.5 text-primary" />
               {codeLanguage || 'Code Block'}
             </span>
             <CopyButton
               text={codeContent}
               label="Copy"
-              className="h-5 px-1.5 text-[10px] text-slate-400 hover:text-white"
+              className="h-5 px-1.5 text-[10px] text-muted-foreground hover:text-foreground"
             />
           </div>
-          <pre className="text-emerald-400 leading-relaxed font-mono whitespace-pre m-0">
-            {codeContent}
-          </pre>
+          <div className="p-2.5 sm:p-3 leading-relaxed font-mono whitespace-pre max-h-56 overflow-y-auto overflow-x-auto text-xs text-foreground">
+            {parsedBlockJson ? renderJsonLines(parsedBlockJson) : codeContent}
+          </div>
         </div>
       );
       codeBlockLines = [];
@@ -128,17 +189,14 @@ function parseMarkdown(text: string): ReactNode[] {
         parts.push(
           <code
             key={`${index}-code`}
-            className="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 font-mono text-xs font-semibold"
+            className="px-1.5 py-0.5 rounded bg-muted/70 dark:bg-muted/40 text-foreground font-mono text-[11px] font-medium border border-border/60"
           >
             {matchedStr.slice(1, -1)}
           </code>
         );
       } else if (matchedStr.startsWith('**') && matchedStr.endsWith('**')) {
         parts.push(
-          <strong
-            key={`${index}-strong`}
-            className="font-semibold text-slate-900 dark:text-slate-100"
-          >
+          <strong key={`${index}-strong`} className="font-semibold text-foreground">
             {matchedStr.slice(2, -2)}
           </strong>
         );
@@ -151,7 +209,7 @@ function parseMarkdown(text: string): ReactNode[] {
               href={linkMatch[2]}
               target="_blank"
               rel="noopener noreferrer"
-              className="text-primary hover:underline font-semibold"
+              className="text-primary hover:underline font-medium"
             >
               {linkMatch[1]}
             </a>
@@ -196,7 +254,7 @@ function parseMarkdown(text: string): ReactNode[] {
       elements.push(
         <h4
           key={`h4-${i}`}
-          className="mt-4 mb-2 text-sm font-bold uppercase tracking-wider text-slate-900 dark:text-slate-100 flex items-center gap-1.5"
+          className="mt-3 mb-1.5 text-xs font-bold uppercase tracking-wider text-foreground flex items-center gap-1.5"
         >
           <span className="w-1.5 h-1.5 rounded-full bg-primary inline-block" />
           {renderInline(trimmed.slice(4))}
@@ -207,7 +265,7 @@ function parseMarkdown(text: string): ReactNode[] {
       elements.push(
         <h3
           key={`h3-${i}`}
-          className="mt-5 mb-2 text-base font-bold text-slate-900 dark:text-slate-100 border-b pb-1 border-slate-100 dark:border-slate-800"
+          className="mt-3.5 mb-1.5 text-sm font-bold text-foreground border-b pb-1 border-border/60"
         >
           {renderInline(trimmed.slice(3))}
         </h3>
@@ -215,10 +273,7 @@ function parseMarkdown(text: string): ReactNode[] {
     } else if (trimmed.startsWith('# ')) {
       flushList();
       elements.push(
-        <h2
-          key={`h2-${i}`}
-          className="mt-6 mb-2 text-lg font-bold text-slate-900 dark:text-slate-100"
-        >
+        <h2 key={`h2-${i}`} className="mt-4 mb-2 text-base font-bold text-foreground">
           {renderInline(trimmed.slice(2))}
         </h2>
       );
@@ -243,24 +298,24 @@ function parseMarkdown(text: string): ReactNode[] {
       const key = trimmed.slice(0, colonIdx);
       const val = trimmed.slice(colonIdx + 1).trim();
       elements.push(
-        <div key={`kv-${i}`} className="my-1 flex items-baseline gap-2 font-mono text-xs">
-          <span className="text-slate-500 font-semibold uppercase tracking-wider shrink-0">
+        <div key={`kv-${i}`} className="my-0.5 flex items-baseline gap-2 font-mono text-xs">
+          <span className="text-muted-foreground font-semibold uppercase tracking-wider text-[11px] shrink-0">
             {key}:
           </span>
-          <span className="text-slate-800 dark:text-slate-200 font-medium break-all">{val}</span>
+          <span className="text-foreground font-medium break-all">{val}</span>
         </div>
       );
     }
     // Empty line / paragraph separator
     else if (trimmed === '') {
       flushList();
-      elements.push(<div key={`spacer-${i}`} className="h-2" />);
+      elements.push(<div key={`spacer-${i}`} className="h-1.5" />);
     }
     // Standard paragraph line
     else {
       flushList();
       elements.push(
-        <p key={`p-${i}`} className="my-1.5 leading-relaxed text-slate-700 dark:text-slate-300">
+        <p key={`p-${i}`} className="my-1 leading-relaxed text-foreground/90 text-xs">
           {renderInline(rawLine)}
         </p>
       );
@@ -288,7 +343,9 @@ export function IncidentDescriptionCard({
   const [isExpanded, setIsExpanded] = useState(false);
 
   const rawDescription = description?.trim() || '';
-  const isLong = rawDescription.split('\n').length > 12 || rawDescription.length > 800;
+  const wholeJson = useMemo(() => tryParseJson(rawDescription), [rawDescription]);
+  const isLong =
+    !wholeJson && (rawDescription.split('\n').length > 18 || rawDescription.length > 1200);
 
   const parsedContent = useMemo(() => {
     if (!rawDescription) return null;
@@ -313,19 +370,17 @@ export function IncidentDescriptionCard({
   return (
     <div
       className={cn(
-        'rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden dark:bg-slate-900 dark:border-slate-800 transition-all flex flex-col',
+        'rounded-xl border border-border/80 bg-card shadow-2xs overflow-hidden text-card-foreground transition-all flex flex-col',
         className
       )}
     >
       {/* Header bar */}
-      <div className="px-5 py-3 border-b border-slate-100 dark:border-slate-800/80 bg-slate-50/50 dark:bg-slate-800/30 flex items-center justify-between gap-4">
+      <div className="px-3.5 py-1.5 border-b border-border/70 bg-muted/20 flex items-center justify-between gap-3">
         <div className="flex items-center gap-2">
-          <FileText className="h-4 w-4 text-slate-500 shrink-0" />
-          <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100">
-            Description &amp; Context
-          </h3>
+          <FileText className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+          <h3 className="text-xs font-semibold text-foreground">Description &amp; Context</h3>
           {rawDescription && (
-            <span className="text-[10px] font-medium text-slate-400 dark:text-slate-500">
+            <span className="text-[10px] font-medium text-muted-foreground">
               ({rawDescription.split(/\s+/).filter(Boolean).length} words)
             </span>
           )}
@@ -336,7 +391,7 @@ export function IncidentDescriptionCard({
             <CopyButton
               text={rawDescription}
               label="Copy Description"
-              className="text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200 h-7 px-2 text-xs font-medium"
+              className="h-6 px-2 text-xs font-medium"
             />
           )}
           {canManage && !isEditing && (
@@ -348,7 +403,7 @@ export function IncidentDescriptionCard({
                 setEditedText(description || '');
                 setIsEditing(true);
               }}
-              className="h-7 px-2.5 gap-1.5 text-xs font-medium border-slate-200 bg-white hover:bg-slate-50 text-slate-700 shadow-2xs dark:bg-slate-800 dark:border-slate-700 dark:text-slate-300"
+              className="h-6 px-2 gap-1 text-[11px] font-medium"
             >
               <Edit2 className="h-3 w-3" />
               <span>Edit</span>
@@ -358,19 +413,19 @@ export function IncidentDescriptionCard({
       </div>
 
       {/* Body */}
-      <div className="p-5 md:p-6">
+      <div className="p-2.5 sm:p-3">
         {isEditing ? (
-          <div className="space-y-3">
+          <div className="space-y-2.5">
             <Textarea
               value={editedText}
               onChange={e => setEditedText(e.target.value)}
               placeholder="Add incident diagnostic notes, customer impact, or context... (Markdown, JSON, logs supported)"
               rows={8}
-              className="w-full text-sm font-mono leading-relaxed resize-y border-slate-300 focus-visible:ring-1 focus-visible:ring-primary"
+              className="w-full text-xs font-mono leading-relaxed resize-y border-border focus-visible:ring-1 focus-visible:ring-primary bg-background text-foreground"
               disabled={isPending}
             />
             <div className="flex items-center justify-between pt-1">
-              <span className="text-xs text-slate-400">
+              <span className="text-[11px] text-muted-foreground">
                 Tip: Markdown, JSON payloads, code blocks (<code>```</code>), and key: value pairs
                 are supported.
               </span>
@@ -381,7 +436,7 @@ export function IncidentDescriptionCard({
                   size="sm"
                   onClick={handleCancel}
                   disabled={isPending}
-                  className="h-8 gap-1 text-xs"
+                  className="h-7 gap-1 text-xs"
                 >
                   <X className="h-3.5 w-3.5" />
                   <span>Cancel</span>
@@ -391,7 +446,7 @@ export function IncidentDescriptionCard({
                   size="sm"
                   onClick={handleSave}
                   disabled={isPending}
-                  className="h-8 gap-1.5 text-xs font-semibold"
+                  className="h-7 gap-1.5 text-xs font-semibold"
                 >
                   {isPending ? (
                     <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -404,25 +459,25 @@ export function IncidentDescriptionCard({
             </div>
           </div>
         ) : rawDescription ? (
-          <div className="relative">
+          <div>
             <div
               className={cn(
-                'text-sm text-slate-800 dark:text-slate-200 transition-all',
-                isLong && !isExpanded && 'max-h-[300px] overflow-hidden'
+                'text-xs text-foreground transition-all',
+                isLong && !isExpanded && 'max-h-[220px] overflow-hidden'
               )}
             >
               {parsedContent}
             </div>
 
-            {/* Gradient fade and expand button if content is long */}
+            {/* Clean expand/collapse toggle without greyish gradient flare */}
             {isLong && !isExpanded && (
-              <div className="absolute bottom-0 inset-x-0 h-20 bg-gradient-to-t from-white via-white/80 to-transparent dark:from-slate-900 dark:via-slate-900/80 pointer-events-none flex items-end justify-center pb-1">
+              <div className="mt-2 pt-2 border-t border-border/60 flex justify-center">
                 <Button
                   type="button"
-                  variant="outline"
+                  variant="ghost"
                   size="sm"
                   onClick={() => setIsExpanded(true)}
-                  className="pointer-events-auto h-7 px-3 gap-1.5 text-xs font-semibold bg-white/95 dark:bg-slate-800/95 shadow-xs border-slate-200 dark:border-slate-700"
+                  className="h-6 px-2.5 gap-1 text-xs font-medium text-muted-foreground hover:text-foreground"
                 >
                   <span>Show full description</span>
                   <ChevronDown className="h-3.5 w-3.5" />
@@ -431,13 +486,13 @@ export function IncidentDescriptionCard({
             )}
 
             {isLong && isExpanded && (
-              <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 flex justify-center">
+              <div className="mt-2 pt-2 border-t border-border/60 flex justify-center">
                 <Button
                   type="button"
                   variant="ghost"
                   size="sm"
                   onClick={() => setIsExpanded(false)}
-                  className="h-7 px-3 gap-1.5 text-xs font-medium text-slate-500 hover:text-slate-800"
+                  className="h-6 px-2.5 gap-1 text-xs font-medium text-muted-foreground hover:text-foreground"
                 >
                   <span>Collapse description</span>
                   <ChevronUp className="h-3.5 w-3.5" />
@@ -446,7 +501,7 @@ export function IncidentDescriptionCard({
             )}
           </div>
         ) : (
-          <div className="text-center py-6 text-sm text-slate-400 dark:text-slate-500 italic">
+          <div className="text-center py-4 text-xs text-muted-foreground italic">
             No incident description provided.{' '}
             {canManage && (
               <button

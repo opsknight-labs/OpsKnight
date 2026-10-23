@@ -54,11 +54,11 @@ function Chip({ tone, children }: { tone: ResponseTone; children: ReactNode }) {
 
 function Fact({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <div className="min-w-0 rounded-lg border border-border/70 px-3 py-2">
-      <dt className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+    <div className="min-w-0 rounded-lg border border-border/70 bg-card p-2 sm:p-2.5">
+      <dt className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
         {label}
       </dt>
-      <dd className="mt-1 flex min-w-0 flex-wrap items-center gap-1.5 break-words text-sm font-medium">
+      <dd className="mt-0.5 flex min-w-0 flex-wrap items-center gap-1.5 break-words text-xs font-semibold">
         {children}
       </dd>
     </div>
@@ -153,7 +153,7 @@ export default async function IncidentAutomationCard({ incidentId }: { incidentI
     !!Object.keys(summary.inputContext ?? {}).length ||
     !!summary.writes?.length;
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       <IncidentAlertContextCard
         fields={fields}
         context={context}
@@ -164,50 +164,56 @@ export default async function IncidentAutomationCard({ incidentId }: { incidentI
       />
       <section
         aria-labelledby="incident-automation-decision-heading"
-        className="min-w-0 overflow-hidden rounded-xl border border-border bg-card text-sm text-card-foreground shadow-sm"
+        className="min-w-0 overflow-hidden rounded-xl border border-border/80 bg-card text-sm text-card-foreground shadow-2xs"
       >
-        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-4 py-3">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/80 bg-muted/20 px-3 py-2 sm:px-3.5">
           <h2
             id="incident-automation-decision-heading"
-            className="flex items-center gap-2 text-sm font-semibold tracking-tight"
+            className="flex items-center gap-2 text-xs font-semibold tracking-tight"
           >
-            <Workflow className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+            <Workflow className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
             Automation Decision
           </h2>
           <Chip tone={route.tone}>
-            <route.Icon className="h-3.5 w-3.5" aria-hidden="true" />
+            <route.Icon className="h-3 w-3" aria-hidden="true" />
             <span className="sr-only">Route outcome: </span>
             {route.label}
           </Chip>
         </div>
-        <div className="min-w-0 space-y-3 break-words p-4">
-          <p className="font-medium">
-            {matchedRuleName
-              ? `Matched rule: ${matchedRuleName}`
-              : decision.fallbackReason
-                ? 'Automation could not be applied; service-default routing was used.'
-                : decision.routeType === 'NO_ESCALATION'
-                  ? 'Personal paging was intentionally skipped by automation.'
-                  : decision.routeType === 'ESCALATION_POLICY'
-                    ? 'An escalation policy was selected by automation.'
-                    : 'No routing rule matched; service-default routing was used.'}
-          </p>
-          {sensitive && !!matchedRule?.conditions.length && (
-            <ul
-              aria-label="Matched rule conditions"
-              className="list-disc space-y-0.5 pl-5 text-xs text-muted-foreground"
-            >
-              {matchedRule.conditions.map((condition, index) => (
-                <li key={index}>
-                  {`${fieldLabels.get(condition.fieldKey) ?? condition.fieldKey} ${operators.get(condition.operator) ?? condition.operator}${
-                    condition.value === undefined
-                      ? ''
-                      : ` ${Array.isArray(condition.value) ? condition.value.join(', ') : String(condition.value)}`
-                  }`}
-                </li>
-              ))}
-            </ul>
-          )}
+        <div className="min-w-0 space-y-2 break-words p-2.5 sm:p-3">
+          <div className="rounded-lg border border-border/60 bg-muted/20 p-2 space-y-1">
+            <p className="text-xs font-semibold text-foreground">
+              {matchedRuleName
+                ? `Matched rule: ${matchedRuleName}`
+                : decision.fallbackReason
+                  ? 'Automation could not be applied; service-default routing was used.'
+                  : decision.routeType === 'NO_ESCALATION'
+                    ? 'Personal paging was intentionally skipped by automation.'
+                    : decision.routeType === 'ESCALATION_POLICY'
+                      ? 'An escalation policy was selected by automation.'
+                      : 'No routing rule matched; service-default routing was used.'}
+            </p>
+            {sensitive && !!matchedRule?.conditions.length && (
+              <ul
+                aria-label="Matched rule conditions"
+                className="flex flex-wrap gap-1.5 text-xs text-muted-foreground"
+              >
+                {matchedRule.conditions.map((condition, index) => (
+                  <li
+                    key={index}
+                    className="inline-flex items-center gap-1 rounded-md border border-border/80 bg-background/90 px-2 py-0.5 font-mono text-[11px]"
+                  >
+                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 shrink-0" />
+                    {`${fieldLabels.get(condition.fieldKey) ?? condition.fieldKey} ${operators.get(condition.operator) ?? condition.operator}${
+                      condition.value === undefined
+                        ? ''
+                        : ` ${Array.isArray(condition.value) ? condition.value.join(', ') : String(condition.value)}`
+                    }`}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
           <dl className="grid min-w-0 gap-2 sm:grid-cols-3">
             <Fact label="Responder route">
               {decision.routeType === 'NO_ESCALATION'
@@ -241,41 +247,43 @@ export default async function IncidentAutomationCard({ incidentId }: { incidentI
             </Fact>
           </dl>
           {decision.fallbackReason && (
-            <p className={cn('rounded-md border px-3 py-2 text-xs', toneChipClass('warning'))}>
+            <p className={cn('rounded-md border px-2.5 py-1 text-xs', toneChipClass('warning'))}>
               {`Fallback: ${decision.fallbackReason}`}
             </p>
           )}
           {sensitive && !!selectedChannels.length && (
-            <p className="text-xs">{`Selected channel actions: ${selectedChannels.join(', ')}.`}</p>
+            <p className="text-xs text-muted-foreground">{`Selected channel actions: ${selectedChannels.join(', ')}.`}</p>
           )}
           <section
             aria-label="Channel notification status"
-            className="space-y-2 rounded-lg border border-border/70 p-3"
+            className="space-y-1 rounded-lg border border-border/60 bg-muted/15 p-2 sm:p-2.5"
           >
-            <h3 className="text-xs font-semibold">Incident channel notifications</h3>
-            <p className="text-xs text-muted-foreground">
-              Current notification records are separate from the routing decision. Provider
-              acceptance does not confirm delivery.
-            </p>
+            <div className="flex flex-wrap items-center justify-between gap-1">
+              <h3 className="text-xs font-semibold">Incident channel notifications</h3>
+              <p className="text-[10.5px] text-muted-foreground">
+                Current notification records are separate from the routing decision. Provider
+                acceptance does not confirm delivery.
+              </p>
+            </div>
             {notifications.length ? (
-              <ul className="space-y-1">
+              <ul className="flex flex-wrap gap-1.5 pt-0.5">
                 {notifications.map(row => {
                   const status = NOTIFICATION_STATUS[row.status];
                   const StatusIcon = status?.Icon ?? HelpCircle;
                   return (
                     <li
                       key={`${row.channel}:${row.status}`}
-                      className="flex items-center gap-2 text-xs"
+                      className="inline-flex items-center gap-1 rounded-md border border-border/70 bg-card px-2 py-0.5 text-xs"
                     >
                       <span
                         className={cn(
-                          'inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full border',
+                          'inline-flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-full border',
                           toneChipClass(status?.tone ?? 'neutral')
                         )}
                       >
-                        <StatusIcon className="h-3 w-3" aria-hidden="true" />
+                        <StatusIcon className="h-2 w-2" aria-hidden="true" />
                       </span>
-                      <span>
+                      <span className="text-[11px]">
                         {`${row.channel === 'SLACK' ? 'Slack' : 'Teams'} · ${row._count._all} · ${status?.label ?? row.status}`}
                       </span>
                     </li>
@@ -283,32 +291,36 @@ export default async function IncidentAutomationCard({ incidentId }: { incidentI
                 })}
               </ul>
             ) : (
-              <p className="text-xs">No channel notification records are available.</p>
+              <p className="text-xs text-muted-foreground">
+                No channel notification records are available.
+              </p>
             )}
           </section>
           {!sensitive && (
-            <p className="flex items-center gap-2 rounded-md border border-dashed border-border px-3 py-2 text-xs text-muted-foreground">
+            <p className="flex items-center gap-2 rounded-md border border-dashed border-border px-3 py-1.5 text-xs text-muted-foreground">
               <Lock className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
               Evaluation context is restricted.
             </p>
           )}
           {sensitive && (
-            <details className="group rounded-lg border border-border/70">
-              <summary className="flex min-h-10 cursor-pointer list-none items-center justify-between gap-2 rounded-lg px-3 py-2 text-xs font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
+            <details className="group rounded-lg border border-border/70 bg-card">
+              <summary className="flex min-h-8 cursor-pointer list-none items-center justify-between gap-2 rounded-lg px-2.5 py-1 text-xs font-semibold focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
                 View evaluation
                 <ChevronDown
-                  className="h-4 w-4 text-muted-foreground transition-transform group-open:rotate-180"
+                  className="h-3.5 w-3.5 text-muted-foreground transition-transform group-open:rotate-180"
                   aria-hidden="true"
                 />
               </summary>
-              <div className="space-y-3 border-t border-border/70 px-3 py-3 text-xs">
+              <div className="space-y-2 border-t border-border/70 px-2.5 py-2 text-xs">
                 {!hasEvaluation && (
                   <p className="text-muted-foreground">No evaluation details were stored.</p>
                 )}
                 {!!summary.normalization?.length && (
                   <div>
-                    <h4 className="font-semibold">Normalization</h4>
-                    <ul className="mt-1 space-y-0.5 font-mono">
+                    <h4 className="font-semibold text-muted-foreground text-[11px] uppercase tracking-wider">
+                      Normalization
+                    </h4>
+                    <ul className="mt-1 space-y-0.5 font-mono text-[11px]">
                       {summary.normalization.map(n => (
                         <li key={n.fieldKey} className="break-all">
                           {`${n.fieldKey}: ${String(n.raw ?? 'Missing')} → ${
@@ -323,8 +335,10 @@ export default async function IncidentAutomationCard({ incidentId }: { incidentI
                 )}
                 {!!Object.keys(summary.inputContext ?? {}).length && (
                   <div>
-                    <h4 className="font-semibold">Evaluated input</h4>
-                    <ul className="mt-1 space-y-0.5 font-mono">
+                    <h4 className="font-semibold text-muted-foreground text-[11px] uppercase tracking-wider">
+                      Evaluated input
+                    </h4>
+                    <ul className="mt-1 space-y-0.5 font-mono text-[11px]">
                       {Object.entries(summary.inputContext ?? {}).map(([key, field]) => (
                         <li key={key} className="break-all">
                           {`${key}: ${field.state === 'MISSING' ? 'Missing' : String(field.value ?? field.raw)}${
@@ -337,8 +351,10 @@ export default async function IncidentAutomationCard({ incidentId }: { incidentI
                 )}
                 {!!summary.writes?.length && (
                   <div>
-                    <h4 className="font-semibold">Context writes</h4>
-                    <ul className="mt-1 space-y-0.5 font-mono">
+                    <h4 className="font-semibold text-muted-foreground text-[11px] uppercase tracking-wider">
+                      Context writes
+                    </h4>
+                    <ul className="mt-1 space-y-0.5 font-mono text-[11px]">
                       {summary.writes.map((write, i) => (
                         <li key={i} className="break-all">
                           {`${write.fieldKey} → ${String(write.value)}`}

@@ -13,7 +13,7 @@ import {
 } from '@/app/(app)/incidents/actions';
 
 const incidentIdSchema = z.string().trim().min(1).max(191);
-const noteSchema = z.string().trim().min(1).max(10_000);
+const noteSchema = z.string().trim().min(1).max(50_000);
 const watcherIdSchema = z.string().trim().min(1).max(191);
 const watcherRoleSchema = z.string().trim().min(1).max(64);
 const descriptionSchema = z.string().max(50_000);

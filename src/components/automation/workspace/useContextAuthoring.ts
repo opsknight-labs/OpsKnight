@@ -3,6 +3,7 @@ import { useCallback, useState } from 'react';
 import { automationAction } from '@/app/(app)/services/[id]/automation/actions';
 import { builtinFields, type Field, type Snapshot } from '@/lib/automation/contract';
 import type { Observation } from '@/lib/automation/discovery';
+import { notify } from '@/lib/toast';
 import type { Discovery } from '../presentation-types';
 import { deriveUniqueFieldKey } from '../authoring/context-fields';
 import { defaultProviderSample } from './constants';
@@ -13,11 +14,13 @@ export function useContextAuthoring({
   draft,
   edit,
   onError,
+  onNotify,
 }: {
   serviceId: string;
   draft: Snapshot;
   edit: (snapshot: Snapshot) => void;
   onError: (message: string) => void;
+  onNotify?: (message: string, tone?: 'success' | 'info' | 'error', description?: string) => void;
 }) {
   const [contextSearch, setContextSearch] = useState('');
   const [providerSample, setProviderSample] = useState(defaultProviderSample);
@@ -97,6 +100,8 @@ export function useContextAuthoring({
       });
       if (!response.ok) {
         onError(response.error);
+        notify.error(response.error, { id: 'automation:context:discover-error' });
+        onNotify?.(response.error, 'error');
         return;
       }
       const raw = response.data as Observation[];
@@ -107,16 +112,25 @@ export function useContextAuthoring({
           integrationType: integrationType === 'ALL' ? undefined : integrationType,
         }))
       );
+      const discMsg = `Discovered ${raw.length} fields from sample payload`;
+      notify.info(discMsg, { id: 'automation:context:discover' });
+      onNotify?.(discMsg, 'info');
     } catch {
-      onError('Enter a valid JSON provider sample');
+      const err = 'Enter a valid JSON provider sample';
+      onError(err);
+      notify.error(err, { id: 'automation:context:discover-json-error' });
+      onNotify?.(err, 'error');
     }
-  }, [serviceId, providerSample, integrationType, onError]);
+  }, [serviceId, providerSample, integrationType, onError, onNotify]);
 
   const addField = useCallback(() => {
     const existingKeys = new Set([...builtinFields, ...draft.fields].map(field => field.key));
     const key = deriveUniqueFieldKey(fieldLabel, existingKeys);
     if (!/^[a-z][a-z0-9_]{0,63}$/.test(key) || !observedPath) {
-      onError('Choose a unique field name and an observed source field');
+      const errMsg = 'Choose a unique field name and an observed source field';
+      onError(errMsg);
+      notify.error(errMsg, { id: 'automation:context:field-add-error' });
+      onNotify?.(errMsg, 'error');
       return;
     }
     const matchingDiscovery = discoveries.find(
@@ -169,6 +183,14 @@ export function useContextAuthoring({
         },
       ],
     });
+
+    const successMsg = `Context field "${fieldLabel.trim()}" added`;
+    const desc = `Field mapped to ${observedPath} is now available for rule conditions.`;
+    notify.success(successMsg, {
+      id: `automation:field:${key}:add`,
+      description: desc,
+    });
+    onNotify?.(successMsg, 'success', desc);
   }, [
     draft,
     edit,
@@ -178,6 +200,7 @@ export function useContextAuthoring({
     integrationType,
     observedPath,
     onError,
+    onNotify,
     selectedIntegrationType,
     selectedSource,
     values,

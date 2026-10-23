@@ -55,28 +55,26 @@ export default function ServiceVisibilitySettings({
   };
 
   return (
-    <Card className="rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/60 backdrop-blur-xs shadow-xs">
-      <CardHeader className="pb-4 border-b border-border/60 bg-muted/20 dark:bg-muted/10">
+    <Card className="rounded-xl border border-border/80 bg-card/90 shadow-xs">
+      <CardHeader className="px-3.5 py-2.5 border-b border-border/60 bg-muted/20">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-          <div>
-            <CardTitle className="text-sm font-bold flex items-center gap-2.5">
-              <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-primary/10 text-primary shrink-0 border border-primary/20 shadow-2xs">
-                <Shield className="h-4 w-4" />
-              </div>
-              <div>
-                <span className="text-muted-foreground font-mono mr-1.5 text-xs">2.</span>
+          <div className="flex items-center gap-2.5">
+            <div className="flex h-6 w-6 items-center justify-center rounded-md bg-primary/10 text-primary shrink-0 border border-primary/20">
+              <Shield className="h-3.5 w-3.5" />
+            </div>
+            <div>
+              <CardTitle className="text-xs sm:text-sm font-bold flex items-center gap-1.5">
                 <span>Default Incident Visibility</span>
-              </div>
-            </CardTitle>
-            <CardDescription className="text-xs mt-1">
-              Choose whether new incidents for this service default to public or private. Responders
-              can still override this per incident.
-            </CardDescription>
+              </CardTitle>
+              <CardDescription className="text-[11px] leading-tight">
+                Initial visibility state for newly ingested alerts and incidents on this service.
+              </CardDescription>
+            </div>
           </div>
           <Badge
             variant="outline"
             className={cn(
-              'text-[10px] font-semibold w-fit px-2.5 py-0.5',
+              'text-[10px] font-semibold w-fit px-2 py-0.5 shrink-0',
               savedVisibility === 'PUBLIC'
                 ? 'border-sky-500/40 text-sky-600 dark:text-sky-400 bg-sky-500/10'
                 : 'border-slate-500/40 text-slate-700 dark:text-slate-300 bg-slate-500/10'
@@ -86,15 +84,15 @@ export default function ServiceVisibilitySettings({
           </Badge>
         </div>
       </CardHeader>
-      <CardContent className="p-5 space-y-4">
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+      <CardContent className="p-3.5 sm:p-4 space-y-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
           {/* Public Option */}
           <button
             type="button"
             disabled={!canManage || isPending}
             onClick={() => setSelectedVisibility('PUBLIC')}
             className={cn(
-              'flex items-start gap-3 p-3.5 rounded-xl border text-left transition-all cursor-pointer disabled:cursor-not-allowed disabled:opacity-60',
+              'flex items-center gap-2.5 p-2.5 rounded-lg border text-left transition-all cursor-pointer disabled:cursor-not-allowed disabled:opacity-60',
               selectedVisibility === 'PUBLIC'
                 ? 'border-sky-500/50 bg-sky-500/10 ring-1 ring-sky-500/30 shadow-2xs'
                 : 'border-border/80 bg-card hover:bg-muted/50 hover:border-border text-muted-foreground'
@@ -102,13 +100,13 @@ export default function ServiceVisibilitySettings({
           >
             <div
               className={cn(
-                'flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border',
+                'flex h-7 w-7 shrink-0 items-center justify-center rounded-md border',
                 selectedVisibility === 'PUBLIC'
                   ? 'border-sky-500/40 bg-sky-500/20 text-sky-600 dark:text-sky-400'
                   : 'border-border/80 bg-muted/50 text-muted-foreground'
               )}
             >
-              <Globe className="h-4 w-4 shrink-0" />
+              <Globe className="h-3.5 w-3.5 shrink-0" />
             </div>
             <div className="min-w-0 flex-1">
               <div className="flex items-center justify-between gap-1">
@@ -116,7 +114,7 @@ export default function ServiceVisibilitySettings({
                 <Badge
                   variant="outline"
                   className={cn(
-                    'text-[9px] font-semibold',
+                    'text-[9px] font-semibold px-1.5 py-0',
                     selectedVisibility === 'PUBLIC'
                       ? 'border-sky-500/40 text-sky-600 dark:text-sky-400 bg-sky-500/10'
                       : 'opacity-60'
@@ -125,9 +123,8 @@ export default function ServiceVisibilitySettings({
                   PUBLIC
                 </Badge>
               </div>
-              <p className="text-[11px] text-muted-foreground leading-relaxed mt-1">
-                Incidents default to public. Visible on public status pages & client notification
-                broadcasts unless marked private.
+              <p className="text-[10px] text-muted-foreground leading-snug truncate mt-0.5">
+                Visible on status pages & client broadcasts by default.
               </p>
             </div>
           </button>
@@ -138,7 +135,7 @@ export default function ServiceVisibilitySettings({
             disabled={!canManage || isPending}
             onClick={() => setSelectedVisibility('PRIVATE')}
             className={cn(
-              'flex items-start gap-3 p-3.5 rounded-xl border text-left transition-all cursor-pointer disabled:cursor-not-allowed disabled:opacity-60',
+              'flex items-center gap-2.5 p-2.5 rounded-lg border text-left transition-all cursor-pointer disabled:cursor-not-allowed disabled:opacity-60',
               selectedVisibility === 'PRIVATE'
                 ? 'border-slate-500/50 bg-slate-500/10 ring-1 ring-slate-500/30 shadow-2xs'
                 : 'border-border/80 bg-card hover:bg-muted/50 hover:border-border text-muted-foreground'
@@ -146,13 +143,13 @@ export default function ServiceVisibilitySettings({
           >
             <div
               className={cn(
-                'flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border',
+                'flex h-7 w-7 shrink-0 items-center justify-center rounded-md border',
                 selectedVisibility === 'PRIVATE'
                   ? 'border-slate-500/40 bg-slate-500/20 text-slate-700 dark:text-slate-300'
                   : 'border-border/80 bg-muted/50 text-muted-foreground'
               )}
             >
-              <Lock className="h-4 w-4 shrink-0" />
+              <Lock className="h-3.5 w-3.5 shrink-0" />
             </div>
             <div className="min-w-0 flex-1">
               <div className="flex items-center justify-between gap-1">
@@ -160,7 +157,7 @@ export default function ServiceVisibilitySettings({
                 <Badge
                   variant="outline"
                   className={cn(
-                    'text-[9px] font-semibold',
+                    'text-[9px] font-semibold px-1.5 py-0',
                     selectedVisibility === 'PRIVATE'
                       ? 'border-slate-500/40 text-slate-700 dark:text-slate-300 bg-slate-500/10'
                       : 'opacity-60'
@@ -169,29 +166,28 @@ export default function ServiceVisibilitySettings({
                   PRIVATE
                 </Badge>
               </div>
-              <p className="text-[11px] text-muted-foreground leading-relaxed mt-1">
-                Incidents default to private. Kept internal and hidden from status pages until
-                explicitly promoted to public.
+              <p className="text-[10px] text-muted-foreground leading-snug truncate mt-0.5">
+                Internal only; hidden from public status pages until promoted.
               </p>
             </div>
           </button>
         </div>
 
         {canManage && (
-          <div className="pt-1 flex items-center justify-between">
+          <div className="pt-2 flex items-center justify-between border-t border-border/40">
             <p className="text-[11px] text-muted-foreground">
               {isDirty
-                ? 'Unsaved changes. Click save to apply to future incidents.'
-                : 'Applies to all new manual, alert, and integration incidents.'}
+                ? 'Unsaved changes. Click save to apply.'
+                : 'Applies to all newly ingested manual & alert incidents.'}
             </p>
             <Button
               type="button"
               size="sm"
               disabled={!isDirty || isPending}
               onClick={handleSave}
-              className="text-xs"
+              className="h-8 text-xs font-semibold px-3.5"
             >
-              {isPending && <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />}
+              {isPending && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
               {isPending ? 'Saving...' : 'Save Visibility'}
             </Button>
           </div>
