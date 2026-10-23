@@ -18,6 +18,8 @@ import {
   DialogTitle,
 } from '@/components/ui/shadcn/dialog';
 import { Textarea } from '@/components/ui/shadcn/textarea';
+import IngestionPolicyForm from './IngestionPolicyForm';
+import { ingestionPolicySchema } from '@/lib/ingestion/policy-schema';
 
 const snapshotSchema = z.object({
   mode: z.enum(['sync', 'postgres']),
@@ -25,7 +27,7 @@ const snapshotSchema = z.object({
   pending: z.number(),
   pendingBytes: z.string(),
   oldestPendingAgeSeconds: z.number(),
-  control: z.object({ paused: z.boolean() }),
+  control: z.object({ paused: z.boolean(), revision: z.number(), policy: ingestionPolicySchema }),
   workers: z.array(z.object({ running: z.boolean(), lastError: z.string().nullable() })),
   throughput: z.object({
     windowSeconds: z.number(),
@@ -216,6 +218,17 @@ export default function IngestionHealthPanel() {
               Pausing admission lets accepted work drain. Replay retries the stored event and
               records an audit entry.
             </p>
+            <details>
+              <summary className="cursor-pointer text-sm">Ingestion capacity settings</summary>
+              <div className="pt-4">
+                <IngestionPolicyForm
+                  key={snapshot.control.revision}
+                  policy={snapshot.control.policy}
+                  revision={snapshot.control.revision}
+                  onSaved={refresh}
+                />
+              </div>
+            </details>
             {snapshot.receipts.length > 0 && (
               <ul className="space-y-2" aria-label="Dead-letter receipts">
                 {snapshot.receipts.map(receipt => (

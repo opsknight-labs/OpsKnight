@@ -1,14 +1,15 @@
 import { Prisma } from '@prisma/client';
 import { runReadCommittedTransaction } from '@/lib/db-utils';
 import { emitAuditEvent } from '@/lib/audit';
-import { ingestionConfig } from './config';
+import { getIngestionPolicy } from './policy';
 import { tryAcquireRetentionResourceLock } from '@/lib/retention/resource-lock';
 import { isIncidentHeld } from '@/lib/retention/lifecycle';
 
 /** Expire completed raw payloads, keeping the permanent idempotency tombstone. */
 export async function pruneCompletedIngestionPayloads(): Promise<number> {
-  const cutoff = new Date(Date.now() - ingestionConfig().payloadRetentionHours * 3600000);
   return runReadCommittedTransaction(async tx => {
+    const { policy } = await getIngestionPolicy(tx);
+    const cutoff = new Date(Date.now() - policy.payloadRetentionHours * 3600000);
     const candidates = await tx.$queryRaw<Array<{ id: string; incidentId: string | null }>>`
       SELECT r."id", r."result"->>'incidentId' AS "incidentId"
       FROM "IngestionReceipt" r WHERE r."status" = 'COMPLETED'

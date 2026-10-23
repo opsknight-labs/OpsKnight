@@ -3,6 +3,7 @@ import { NextRequest } from 'next/server';
 import { GET, POST } from '@/app/api/admin/ingestion/route';
 import { getUserPermissions } from '@/lib/rbac';
 import { applyIngestionCommand, ingestionSnapshot } from '@/lib/ingestion/operations';
+import { ingestionConfig } from '@/lib/ingestion/config';
 
 vi.mock('@/lib/rbac', () => ({ getUserPermissions: vi.fn() }));
 vi.mock('@/lib/ingestion/operations', async importOriginal => ({
@@ -32,6 +33,22 @@ const request = (body: unknown) =>
   });
 
 describe('ingestion operator authorization', () => {
+  it('validates online policy limits and rejects deployment settings in configure commands', async () => {
+    const { concurrency, pollMs, maxPending, maxPendingBytes, payloadRetentionHours } =
+      ingestionConfig();
+    const policy = { concurrency, pollMs, maxPending, maxPendingBytes, payloadRetentionHours };
+    for (const body of [
+      { action: 'configure', expectedRevision: -1, policy },
+      { action: 'configure', expectedRevision: 0, policy: { ...policy, concurrency: 33 } },
+      { action: 'configure', expectedRevision: 0, policy: { ...policy, mode: 'postgres' } },
+    ])
+      expect((await POST(request(body))).status).toBe(400);
+    expect(applyIngestionCommand).not.toHaveBeenCalled();
+    vi.mocked(applyIngestionCommand).mockResolvedValue({ action: 'configure' });
+    const command = { action: 'configure', expectedRevision: 0, policy };
+    expect((await POST(request(command))).status).toBe(200);
+    expect(applyIngestionCommand).toHaveBeenCalledWith(command, 'admin');
+  });
   it('denies unauthenticated inspection and mutation before touching ingestion state', async () => {
     vi.mocked(getUserPermissions).mockResolvedValue({
       id: '',

@@ -6,10 +6,19 @@ import { ingestionConfig } from './config';
 import { Prisma } from '@prisma/client';
 import { acquireRetentionResourceLock } from '@/lib/retention/resource-lock';
 import { isIncidentHeld } from '@/lib/retention/lifecycle';
+import { getIngestionPolicy } from './policy';
+import { ingestionPolicySchema } from './policy-schema';
 
 export const IngestionCommand = z.discriminatedUnion('action', [
   z.object({ action: z.literal('pause') }).strict(),
   z.object({ action: z.literal('resume') }).strict(),
+  z
+    .object({
+      action: z.literal('configure'),
+      expectedRevision: z.number().int().nonnegative(),
+      policy: ingestionPolicySchema,
+    })
+    .strict(),
   z.object({ action: z.literal('replay'), receiptId: z.string().uuid() }).strict(),
   z
     .object({
@@ -64,14 +73,25 @@ export async function applyIngestionCommand(
       });
       if (updated.count !== 1) throw new Error('Only dead-letter receipts can be replayed');
     } else {
+      // Serialize read/modify/write, including first creation. Pause/resume must
+      // preserve online settings; stale forms must never overwrite another admin.
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended('ingestion:control', 0))`;
+      const current = await getIngestionPolicy(tx);
+      if (command.action === 'configure' && command.expectedRevision !== current.revision)
+        throw new Error('Ingestion settings changed; refresh before saving');
+      const value = {
+        paused: command.action === 'configure' ? current.paused : command.action === 'pause',
+        revision: current.revision + 1,
+        policy: command.action === 'configure' ? command.policy : current.policy,
+      };
       await tx.systemConfig.upsert({
         where: { key: 'ingestion_control' },
         create: {
           key: 'ingestion_control',
-          value: { paused: command.action === 'pause' },
+          value,
           updatedBy: actorId,
         },
-        update: { value: { paused: command.action === 'pause' }, updatedBy: actorId },
+        update: { value, updatedBy: actorId },
       });
     }
     await emitAuditEvent(
@@ -97,10 +117,7 @@ export async function ingestionSnapshot(receiptId?: string) {
       orderBy: { acceptedAt: 'asc' },
       select: { acceptedAt: true },
     }),
-    prisma.systemConfig.findUnique({
-      where: { key: 'ingestion_control' },
-      select: { value: true },
-    }),
+    getIngestionPolicy(),
     prisma.ingestionReceipt.findMany({
       where: receiptId ? { id: receiptId } : { status: 'DEAD' },
       take: 100,
@@ -143,7 +160,7 @@ export async function ingestionSnapshot(receiptId?: string) {
       : 0,
     pending: budget._sum.pending ?? 0,
     pendingBytes: String(budget._sum.bytes ?? 0),
-    control: control?.value ?? { paused: false },
+    control,
     workers,
     throughput: {
       windowSeconds: 60,

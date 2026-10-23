@@ -2,6 +2,8 @@
 
 Status: implementation in progress; enterprise certification has not passed. Do not open a PR until every required certification gate has evidence. The branch is `feat/enterprise-event-ingestion`, based on `origin/main` at `58e9271cc`.
 
+System administrators can now change unfinished-event/byte limits, completed-payload retention, per-worker concurrency and idle polling through the shared ingestion operations API and System health panel. Commands strictly validate bounds, serialize policy updates, require the displayed revision and commit the audit atomically. Pause/resume preserves policy. Admission reads shared policy within its transaction; workers adopt policy between cycles (idle polling/backoff can delay adoption), and maintenance reads current retention policy. Reducing capacity preserves accepted work and rejects new work until capacity is available. Already-running transactions can finish under their previously read policy. Concurrency changes do not resize database pools. Transport and quota bootstrap settings remain deployment configuration pending their separate distributed-policy implementation.
+
 ## Implemented boundary
 
 Provider parsers and authentication remain in their existing routes. `processIntegrationEvent` is the shared admission boundary. `OPSKNIGHT_INGESTION_MODE=sync` preserves the synchronous API by default. `postgres` acknowledges only a committed inbox append and returns a receipt ID. An accepted receipt is not proof of a successfully materialized incident.
