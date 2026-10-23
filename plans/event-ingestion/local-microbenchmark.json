@@ -1,0 +1,72 @@
+{
+  "measuredAt": "2026-10-23T05:23:43.654Z",
+  "runtime": "v20.20.2",
+  "scope": "Local PostgreSQL library microbenchmark; excludes HTTP authentication, quotas, deployment networking and external delivery",
+  "certified": false,
+  "automationEnabled": false,
+  "results": [
+    {
+      "mode": "sync",
+      "keys": "many-key",
+      "events": 200,
+      "concurrency": 4,
+      "acknowledgementRps": 112.98574332219485,
+      "drainedCompletionRps": 112.98567151473816,
+      "acceptanceMs": 1770.1348340000002,
+      "totalMs": 1770.135959,
+      "acknowledgementLatencyMs": {
+        "p50": 33.25112500000023,
+        "p95": 45.66279200000008,
+        "p99": 76.36420799999996
+      },
+      "alerts": 200,
+      "incidents": 200,
+      "completedReceipts": 0,
+      "pending": 0,
+      "globalPending": 0,
+      "reconciled": true
+    },
+    {
+      "mode": "postgres",
+      "keys": "many-key",
+      "events": 200,
+      "concurrency": 4,
+      "acknowledgementRps": 447.833423879654,
+      "drainedCompletionRps": 86.46231285765208,
+      "acceptanceMs": 446.5946249999997,
+      "totalMs": 2313.1465419999995,
+      "acknowledgementLatencyMs": {
+        "p50": 8.56145800000013,
+        "p95": 11.164667000000009,
+        "p99": 13.574792000000343
+      },
+      "alerts": 200,
+      "incidents": 200,
+      "completedReceipts": 200,
+      "pending": 0,
+      "globalPending": 0,
+      "reconciled": true
+    },
+    {
+      "mode": "postgres",
+      "keys": "same-key",
+      "events": 200,
+      "concurrency": 4,
+      "acknowledgementRps": 216.46398955722296,
+      "drainedCompletionRps": 44.18461965565027,
+      "acceptanceMs": 923.9412080000002,
+      "totalMs": 4526.461958,
+      "acknowledgementLatencyMs": {
+        "p50": 17.50799999999981,
+        "p95": 22.530791000000136,
+        "p99": 37.87883299999976
+      },
+      "alerts": 200,
+      "incidents": 1,
+      "completedReceipts": 200,
+      "pending": 0,
+      "globalPending": 0,
+      "reconciled": true
+    }
+  ]
+}

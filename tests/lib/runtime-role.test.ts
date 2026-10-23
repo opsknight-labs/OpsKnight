@@ -50,6 +50,15 @@ describe('runtime process roles', () => {
     expect(getOpsKnightProcessRole(' Worker ')).toBe('worker');
   });
 
+  it('keeps ingestion workers independent from downstream notification and runbook lanes', () => {
+    expect(getOpsKnightProcessRole('ingestion-worker')).toBe('ingestion-worker');
+    expect(getRuntimeResponsibilities('ingestion-worker')).toMatchObject({
+      startScheduler: false,
+      startJobWorker: false,
+      startIsolatedRunbookWorker: false,
+    });
+  });
+
   it('fails closed for an unknown role', () => {
     expect(() => getOpsKnightProcessRole('wrkerr')).toThrow(/Invalid OPSKNIGHT_PROCESS_ROLE/);
   });

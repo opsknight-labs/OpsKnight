@@ -1,3 +1,5 @@
+import { withIngestionDelivery, ingestionDeliveryKey } from '@/lib/ingestion/admission';
+import { ingestionErrorResponse } from '@/lib/ingestion/http';
 import { NextRequest } from 'next/server';
 import prisma from '@/lib/prisma';
 import { processIntegrationEvent } from '@/lib/events';
@@ -114,14 +116,15 @@ export async function POST(req: NextRequest) {
     }
 
     const event = transformPagerDutyToEvent(payload);
-    await processIntegrationEvent({ event, serviceId: integration.serviceId, integrationId: integration.id, integrationType: 'PAGERDUTY', providerPayload: payload, receivedAt: new Date() });
+    const result = await withIngestionDelivery(ingestionDeliveryKey(req.headers, 'PAGERDUTY'), () => processIntegrationEvent({ event, serviceId: integration.serviceId, integrationId: integration.id, integrationType: 'PAGERDUTY', providerPayload: payload, receivedAt: new Date() }));
 
     recordWebhookReceived('PAGERDUTY', integration.id, true, performance.now() - startTime);
 
     return new Response(
       JSON.stringify({
         status: 'success',
-        message: 'Event processed',
+        message: result.action === 'accepted' ? 'Event accepted' : 'Event processed',
+        ...('receiptId' in result ? { receiptId: result.receiptId } : {}),
         dedup_key: event.dedup_key,
       }),
       {
@@ -130,6 +133,8 @@ export async function POST(req: NextRequest) {
       }
     );
   } catch (error) {
+    const ingestionError = ingestionErrorResponse(error);
+    if (ingestionError) return ingestionError;
     if (error instanceof IntegrationBodyTooLargeError) {
       return new Response(JSON.stringify({ status: 'error', message: error.message }), {
         status: 413,

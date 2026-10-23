@@ -6,6 +6,9 @@ import {
   type IntegrationEventEnvelope,
 } from './automation/runtime';
 import { Prisma, IncidentUrgency } from '@prisma/client';
+import type { ProcessingLease } from './ingestion/contract';
+import { ingestionConfig } from './ingestion/config';
+import { lockProcessingReceipt, completeProcessingReceipt } from './ingestion/postgres';
 import { logger } from './logger';
 import { EVENT_TRANSACTION_MAX_ATTEMPTS } from './config';
 import { createHash } from 'crypto';
@@ -157,7 +160,8 @@ export async function processEvent(
   payload: EventPayload,
   serviceId: string,
   integrationId: string,
-  envelopeInput?: IntegrationEventEnvelope
+  envelopeInput?: IntegrationEventEnvelope,
+  processingLease?: ProcessingLease
 ) {
   const envelope: IntegrationEventEnvelope = envelopeInput ?? {
     serviceId,
@@ -188,7 +192,7 @@ export async function processEvent(
   const normalizedSource = truncateString(normalizeText(eventData.source.trim()), 500);
 
   const transactionStarted = performance.now();
-  const result = await runReadCommittedTransaction(async tx => {
+  const execute = async (tx: Prisma.TransactionClient) => {
     // 1. Validate serviceId exists (prevents orphaned incidents)
     const service = await tx.service.findUnique({
       where: { id: serviceId },
@@ -270,6 +274,7 @@ export async function processEvent(
         status: event_action === 'resolve' ? 'RESOLVED' : 'TRIGGERED',
         payload: boundedAlertPayload(eventData),
         serviceId,
+        createdAt: envelope.receivedAt,
       },
     });
 
@@ -350,7 +355,10 @@ export async function processEvent(
           serviceId,
           status: 'RESOLVED',
           incidentId: null,
-          createdAt: { gte: new Date(Date.now() - 5 * 60 * 1000) },
+          createdAt: {
+            gte: new Date(envelope.receivedAt.getTime() - 5 * 60 * 1000),
+            lte: envelope.receivedAt,
+          },
         },
         orderBy: { createdAt: 'desc' },
       });
@@ -731,6 +739,12 @@ export async function processEvent(
       source: normalizedSource,
     });
     return { action: 'ignored', reason: `Unknown event action: ${event_action}` };
+  };
+  const result = await runReadCommittedTransaction(async tx => {
+    if (processingLease) await lockProcessingReceipt(tx, processingLease);
+    const outcome = await execute(tx);
+    if (processingLease) await completeProcessingReceipt(tx, processingLease, outcome);
+    return outcome;
   }, EVENT_TRANSACTION_MAX_ATTEMPTS);
   observeOperationalHistogram(
     'opsknight_event_transaction_duration_ms',
@@ -764,5 +778,9 @@ export async function processEvent(
 export { escalationNotificationRoute } from './event-side-effects';
 
 export async function processIntegrationEvent(envelope: IntegrationEventEnvelope) {
+  if (ingestionConfig().mode === 'postgres') {
+    const { acceptIntegrationEvent } = await import('./ingestion/admission');
+    return acceptIntegrationEvent(envelope);
+  }
   return processEvent(envelope.event, envelope.serviceId, envelope.integrationId, envelope);
 }

@@ -1,3 +1,4 @@
+import { ingestionErrorResponse } from '@/lib/ingestion/http';
 import { NextRequest } from 'next/server';
 import { ZodError } from 'zod';
 import prisma from '@/lib/prisma';
@@ -114,6 +115,8 @@ export async function POST(req: NextRequest) {
       });
       return jsonOk({ status: 'success', results }, 202);
     } catch (error: unknown) {
+      const ingestionError = ingestionErrorResponse(error);
+      if (ingestionError) return ingestionError;
       if (error instanceof IntegrationBodyTooLargeError) {
         return jsonError(
           new AppError({ code: 'PAYLOAD_TOO_LARGE', userMessage: error.message, cause: error })

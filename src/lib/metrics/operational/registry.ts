@@ -29,6 +29,40 @@ const FORBIDDEN_LABELS = new Set([
 
 export const OPERATIONAL_METRICS = [
   {
+    name: 'opsknight_ingestion_acceptance_total',
+    help: 'Durably committed ingestion admissions, separated from duplicate delivery retries',
+    kind: 'counter',
+    labels: ['outcome'],
+    scope: 'counter',
+    estimatedMaxSeries: 2,
+  },
+  {
+    name: 'opsknight_ingestion_acceptance_duration_ms',
+    help: 'Durable append duration including admission checks',
+    kind: 'histogram',
+    labels: [],
+    scope: 'counter',
+    estimatedMaxSeries: 12,
+    buckets: [1, 5, 10, 25, 50, 100, 250, 500, 1000, 5000],
+  },
+  {
+    name: 'opsknight_ingestion_processing_total',
+    help: 'Ingestion worker attempts by completed, retry, or dead outcome',
+    kind: 'counter',
+    labels: ['outcome'],
+    scope: 'counter',
+    estimatedMaxSeries: 3,
+  },
+  {
+    name: 'opsknight_ingestion_completion_latency_ms',
+    help: 'Time from original acceptance to committed incident processing',
+    kind: 'histogram',
+    labels: [],
+    scope: 'counter',
+    estimatedMaxSeries: 12,
+    buckets: [100, 250, 500, 1000, 2000, 5000, 10000, 30000, 60000, 300000],
+  },
+  {
     name: 'opsknight_automation_decision_bytes',
     help: 'UTF-8 bytes in committed immutable Automation decision explanations',
     kind: 'histogram',

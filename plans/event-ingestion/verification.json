@@ -1,0 +1,64 @@
+{
+  "recordedAt": "2026-10-23T05:24:40.653938+00:00",
+  "branch": "feat/enterprise-event-ingestion",
+  "sourceBase": "58e9271cc",
+  "candidateFilesSha256": "5b4c46b7abac00fa7493fa58794492f7d137b9eab84f9350fefa01acf3c4ce82",
+  "certified": false,
+  "runtime": "Node 20.20.2",
+  "database": "isolated localhost PostgreSQL 16",
+  "checks": {
+    "ingestionDatabaseAndContract": {
+      "passed": 21,
+      "failed": 0,
+      "skipped": 0
+    },
+    "completeUnitSuite": {
+      "filesPassed": 933,
+      "passed": 9833,
+      "failed": 0,
+      "skipped": 4
+    },
+    "automationDatabaseSuites": {
+      "passed": 43,
+      "failed": 0,
+      "skipped": 1,
+      "skipReason": "AUTOMATION_INFRA_DB_RESTART was not enabled"
+    },
+    "focusedApiAndRuntime": {
+      "passed": 16,
+      "failed": 0
+    },
+    "modifiedSourceEslint": {
+      "errors": 0,
+      "warnings": 0
+    },
+    "productionBuild": {
+      "status": "passed",
+      "warnings": "Existing middleware/Edge and Tailwind warnings; see certification ledger"
+    },
+    "prismaSchema": "passed",
+    "freshMigrationDeployment": "passed",
+    "migrationScanner": {
+      "errors": 0,
+      "historicalWarnings": 48,
+      "newMigrationWarnings": 0
+    },
+    "composeConfiguration": "passed",
+    "typeCheck": "passed"
+  },
+  "benchmark": "local-microbenchmark.json",
+  "unmet": [
+    "Kafka-compatible transport",
+    "weighted tenant fairness and critical ingestion reservations",
+    "history partitioning and archival",
+    "live HTTP/browser/outage and upgrade certification",
+    "Swarm and Kubernetes HA certification",
+    "sustained enterprise RPS and 25k burst certification",
+    "24-hour soak"
+  ],
+  "limitations": [
+    "Counts from separate test suites overlap and must not be summed.",
+    "Local library microbenchmark excludes HTTP, authentication, quota admission and Automation-enabled throughput.",
+    "No enterprise throughput or HA durability guarantee has been certified."
+  ]
+}
