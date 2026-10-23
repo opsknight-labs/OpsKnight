@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { randomUUID, createHash } from 'node:crypto';
+import { Prisma } from '@prisma/client';
 import { fork } from 'node:child_process';
 import { once } from 'node:events';
 import prisma from '@/lib/prisma';
@@ -20,7 +21,7 @@ import {
   IngestionUnavailableError,
 } from '@/lib/ingestion/contract';
 import { consumeIngestionBatch, stopIngestionWorker } from '@/lib/ingestion/worker';
-import { applyIngestionCommand } from '@/lib/ingestion/operations';
+import { applyIngestionCommand, ingestionSnapshot } from '@/lib/ingestion/operations';
 import { compileAutomation } from '@/lib/automation/compiler';
 import { emptySnapshot } from '@/lib/automation/contract';
 import { checkIngestionQuota } from '@/lib/ingestion/quota';
@@ -29,6 +30,7 @@ import {
   pruneSharedIngestionPayloads,
   pruneExpiredIngestionReceipts,
   pruneExpiredIngestionBatches,
+  pruneInactiveIngestionQuotas,
 } from '@/lib/ingestion/retention';
 import { checksum } from '@/lib/automation/cache';
 import { prepareAutomation, type IntegrationEventEnvelope } from '@/lib/automation/runtime';
@@ -96,6 +98,120 @@ afterAll(async () => {
 });
 
 describe('PostgreSQL ingestion durability', () => {
+  it('naturally recovers a five-second abandoned lease and fences the previous worker', async () => {
+    await acceptPostgresEvent(envelope('short-natural-lease'));
+    await expect(claimPostgresEvents(1, 4999)).rejects.toThrow('Invalid ingestion lease duration');
+    const [first] = await claimPostgresEvents(1, 5000);
+    expect(await claimPostgresEvents(1, 5000)).toHaveLength(0);
+    await new Promise(resolve => setTimeout(resolve, 5100));
+    const [second] = await claimPostgresEvents(1, 5000);
+    expect(second.id).toBe(first.id);
+    expect(second.leaseToken).not.toBe(first.leaseToken);
+    await expect(
+      runReadCommittedTransaction(tx =>
+        completeProcessingReceipt(
+          tx,
+          { id: first.id, token: first.leaseToken },
+          { action: 'created' }
+        )
+      )
+    ).rejects.toBeInstanceOf(IngestionLeaseLostError);
+    const decoded = decodeEnvelope(second.envelope);
+    await processEvent(decoded.event, decoded.serviceId, decoded.integrationId, decoded, {
+      id: second.id,
+      token: second.leaseToken,
+    });
+    expect(await prisma.incident.count({ where: { serviceId } })).toBe(1);
+  });
+
+  it('expires inactive quota keys only after all credit has replenished', async () => {
+    const prefix = randomUUID();
+    const old = new Date(Date.now() - 8 * 86400000);
+    const data = {
+      tokens: 0,
+      rate: 1,
+      burst: 10000000,
+      updatedAt: old,
+      lastAllowed: false,
+      policyRevision: 0,
+    };
+    await prisma.ingestionQuota.createMany({
+      data: [
+        { ...data, key: `${prefix}-debt:events` },
+        { ...data, key: `${prefix}-full:events`, burst: 120 },
+        { ...data, key: `${prefix}-recent:events`, burst: 120, updatedAt: new Date() },
+      ],
+    });
+    await pruneInactiveIngestionQuotas();
+    expect(
+      await prisma.ingestionQuota.findUnique({ where: { key: `${prefix}-full:events` } })
+    ).toBeNull();
+    expect(await prisma.ingestionQuota.count({ where: { key: { startsWith: prefix } } })).toBe(2);
+  });
+
+  it('reports global throughput independently of its top 100 integration rows', async () => {
+    const accepted = await acceptPostgresEvent(envelope('metrics-many-integrations'));
+    const base = await prisma.ingestionReceipt.findUniqueOrThrow({
+      where: { id: accepted.receiptId },
+    });
+    await prisma.ingestionReceipt.createMany({
+      data: Array.from({ length: 104 }, (_, index) => {
+        const { sequence: _sequence, ...copy } = base;
+        void _sequence;
+        return {
+          ...copy,
+          envelope: base.envelope as Prisma.InputJsonValue,
+          result: base.result === null ? Prisma.DbNull : (base.result as Prisma.InputJsonValue),
+          id: randomUUID(),
+          integrationId: `metrics-${index}`,
+          idempotencyKey: randomUUID(),
+          status: 'COMPLETED',
+          completedAt: new Date(),
+        };
+      }),
+    });
+    const snapshot = await ingestionSnapshot();
+    expect(snapshot.throughput.integrations).toHaveLength(100);
+    expect(snapshot.throughput.limitedToTopIntegrations).toBe(true);
+    expect(snapshot.throughput.acceptedPerSecond).toBe(105 / 60);
+    expect(snapshot.throughput.completedPerSecond).toBe(104 / 60);
+  });
+
+  it('removes credential variants before receipts, shared context and incident processing persist them', async () => {
+    const input = envelope('credential-variants');
+    const secrets = {
+      secret_key: 'sensitive-field-one',
+      ssh_private_key: 'sensitive-field-two',
+      authorization_header: 'sensitive-field-three',
+      auth_header: 'sensitive-field-four',
+    };
+    input.providerPayload = { nested: [secrets], owner: 'oncall@example.test' };
+    input.event.payload.custom_details = {
+      ...secrets,
+      owner: 'oncall@example.test',
+      groupKey: 'business-group',
+    };
+    await acceptPostgresBatch(input, [input.event], ['credential-variants']);
+    const receipts = await prisma.ingestionReceipt.findMany({ where: { serviceId } });
+    const batches = await prisma.ingestionBatch.findMany({ where: { serviceId } });
+    expect(
+      JSON.stringify({ receipts, batches }, (_key, value) =>
+        typeof value === 'bigint' ? String(value) : value
+      )
+    ).not.toContain('sensitive-field-');
+    await consumeIngestionBatch();
+    const alerts = await prisma.alert.findMany({ where: { serviceId } });
+    const incidents = await prisma.incident.findMany({ where: { serviceId } });
+    expect(alerts).toHaveLength(1);
+    expect(incidents).toHaveLength(1);
+    const persisted = JSON.stringify({ alerts, incidents }, (_key, value) =>
+      typeof value === 'bigint' ? String(value) : value
+    );
+    expect(persisted).not.toContain('sensitive-field-');
+    expect(persisted).toContain('oncall@example.test');
+    expect(persisted).toContain('business-group');
+  });
+
   it('keeps accepted disabled Automation independent of later settings changes', async () => {
     await prisma.systemSettings.update({
       where: { id: 'default' },

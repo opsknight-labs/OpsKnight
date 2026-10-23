@@ -28,6 +28,7 @@ const fields = [
   },
   { key: 'payloadRetentionHours', label: 'Completed payload retention (hours)', min: 1, max: 720 },
   { key: 'concurrency', label: 'Events processed concurrently per worker', min: 1, max: 32 },
+  { key: 'leaseMs', label: 'Worker recovery lease (milliseconds)', min: 5000, max: 300000 },
   { key: 'pollMs', label: 'Idle polling interval (milliseconds)', min: 50, max: 30000 },
 ] as const;
 
@@ -88,9 +89,11 @@ export default function IngestionPolicyForm({
         Limits apply to new admissions. Reducing capacity preserves accepted work while it drains.
         Workers adopt changes between processing cycles; running transactions finish normally.
         Increasing concurrency also increases database work. Shorter retention can remove completed
-        payloads on the next maintenance cycle; active retention holds remain protected. Completed
-        receipt IDs and retry identities expire after their retention window. A later retry is
-        treated as a new event and passes through normal incident deduplication.
+        payloads on the next maintenance cycle. A shorter lease recovers abandoned work sooner but
+        can increase claim contention during long transactions. Existing leases keep their expiry;
+        active retention holds remain protected. Completed receipt IDs and retry identities expire
+        after their retention window. A later retry is treated as a new event and passes through
+        normal incident deduplication.
       </p>
       <div className="grid gap-4 md:grid-cols-2">
         {draft.quotas &&

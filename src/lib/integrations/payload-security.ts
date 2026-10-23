@@ -7,7 +7,80 @@ const CREDENTIAL_PATTERNS = [
   /\bok_[A-Za-z0-9_-]{20,}\b/g,
   /xox[baprs]-[0-9]{10,13}-[0-9]{10,13}[a-zA-Z0-9-]*/g,
   /AKIA[0-9A-Z]{16}/g,
+  /-----BEGIN [A-Z0-9 ]{0,64}PRIVATE KEY-----[\s\S]*?(?:-----END [A-Z0-9 ]{0,64}PRIVATE KEY-----|$)/g,
 ];
+
+const CREDENTIAL_NAMES = new Set([
+  'routingkey',
+  'xapikey',
+  'xintegrationkey',
+  'apikey',
+  'accesskey',
+  'secretaccesskey',
+  'privatekey',
+  'secretkey',
+  'password',
+  'passwd',
+  'pwd',
+  'authorization',
+  'authorizationheader',
+  'proxyauthorization',
+  'proxyauthorizationheader',
+  'auth',
+  'authheader',
+  'authentication',
+  'authenticationheader',
+  'cookie',
+  'setcookie',
+  'clientsecret',
+  'signingsecret',
+  'signaturesecret',
+  'webhooksecret',
+  'connectionstring',
+  'databaseurl',
+  'dsn',
+  'bearer',
+  'jwt',
+  'credential',
+  'credentials',
+]);
+
+/** Classify canonical authentication names and explicit credential compounds.
+ * Ordinary domain keys (groupKey, teamKey, dedup_key, fingerprint) remain intact.
+ */
+function canonicalCredentialField(key: string): string {
+  let canonical = key;
+  // URL query names may encode separators or letters. Decode a bounded number
+  // of times; malformed escapes remain classifiable without throwing.
+  for (let pass = 0; pass < 2 && canonical.includes('%'); pass++) {
+    try {
+      canonical = decodeURIComponent(canonical);
+    } catch {
+      break;
+    }
+  }
+  return canonical.toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
+export function isCredentialField(key: string): boolean {
+  const canonical = canonicalCredentialField(key);
+  return (
+    CREDENTIAL_NAMES.has(canonical) ||
+    [
+      'token',
+      'password',
+      'passwd',
+      'secret',
+      'secretkey',
+      'secretaccesskey',
+      'privatekey',
+      'authorizationheader',
+      'authheader',
+      'credential',
+      'credentials',
+    ].some(suffix => canonical.endsWith(suffix))
+  );
+}
 
 /** Credential filtering for retained business context. Unlike diagnostic
  * sanitization this preserves contact fields used by Automation routing. */
@@ -19,9 +92,11 @@ export function sanitizeCredentialString(value: string): string {
         uri
           .replace(/^([^:]+:\/\/)([^:\s/@]+):([^@\s/]+)@/, '$1$2:[REDACTED]@')
           .replace(/^([^:]+:\/\/):([^@\s/]+)@/, '$1:[REDACTED]@')
-          .replace(
-            /([?&](?:token|secret|key|sig|signature|api_key|password|pwd)=)[^&#\s]*/gi,
-            '$1[REDACTED]'
+          .replace(/([?&#])([^=&#\s]+)=([^&#\s]*)/g, (match, separator, name) =>
+            isCredentialField(name) ||
+            ['key', 'sig', 'signature'].includes(canonicalCredentialField(name))
+              ? `${separator}${name}=[REDACTED]`
+              : match
           )
       )
     : value;
@@ -33,9 +108,6 @@ export function sanitizeCredentialString(value: string): string {
 // Match credential field names without destroying domain keys such as groupKey,
 // dedup_key, monkey, or fingerprint. This boundary is shared by inbox storage,
 // Service Automation, alert storage, and incident descriptions.
-const CREDENTIAL_FIELD =
-  /^(?:routingkey|xapikey|xintegrationkey|apikey|accesskey|secretaccesskey|privatekey|password|passwd|authorization|proxyauthorization|cookie|setcookie|clientsecret|signingsecret|signaturesecret|webhooksecret|connectionstring|databaseurl|dsn|bearer|jwt|credentials?|.*token|.*password|.*secret)$/i;
-
 export function sanitizeProviderData(value: unknown, seen = new WeakSet<object>()): unknown {
   if (typeof value === 'string') return sanitizeCredentialString(value);
   if (value === null || typeof value !== 'object') return value;
@@ -46,9 +118,7 @@ export function sanitizeProviderData(value: unknown, seen = new WeakSet<object>(
     : Object.fromEntries(
         Object.entries(value).map(([key, item]) => [
           key,
-          CREDENTIAL_FIELD.test(key.replace(/[^a-z0-9]/gi, ''))
-            ? '[REDACTED]'
-            : sanitizeProviderData(item, seen),
+          isCredentialField(key) ? '[REDACTED]' : sanitizeProviderData(item, seen),
         ])
       );
   seen.delete(value);

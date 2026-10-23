@@ -15,6 +15,7 @@ import {
 import { recordWorkerHeartbeat } from '@/lib/runbooks/worker-heartbeats';
 import { getOpsKnightProcessRole } from '@/lib/runtime-role';
 import {
+  pruneInactiveIngestionQuotas,
   pruneCompletedIngestionPayloads,
   pruneSharedIngestionPayloads,
   pruneExpiredIngestionReceipts,
@@ -42,9 +43,10 @@ function heartbeat(running: boolean, faulted: boolean) {
 }
 
 export async function consumeIngestionBatch(
-  concurrency = ingestionConfig().concurrency
+  concurrency = ingestionConfig().concurrency,
+  leaseMs = 60000
 ): Promise<number> {
-  const claims = await claimPostgresEvents(concurrency);
+  const claims = await claimPostgresEvents(concurrency, leaseMs);
   const outcomes = await Promise.allSettled(
     claims.map(async claim => {
       const lease = { id: claim.id, token: claim.leaseToken };
@@ -106,7 +108,7 @@ export function startIngestionWorker(): void {
     let lastHeartbeat = 0;
     let nextRetention = 0;
     let nextPolicy = 0;
-    let policy = config;
+    let policy = { ...config, leaseMs: 60000 };
     while (!stopping) {
       let count = 0;
       try {
@@ -115,7 +117,7 @@ export function startIngestionWorker(): void {
           policy = { ...config, ...settings.policy };
           nextPolicy = Date.now() + 1000;
         }
-        count = await consumeIngestionBatch(policy.concurrency);
+        count = await consumeIngestionBatch(policy.concurrency, policy.leaseMs);
         failures = 0;
         updateIngestionWorkerHealth({ lastSuccessAt: Date.now(), faulted: false });
       } catch {
@@ -130,10 +132,13 @@ export function startIngestionWorker(): void {
           const sharedPruned = await pruneSharedIngestionPayloads();
           const receiptsPruned = await pruneExpiredIngestionReceipts();
           const batchesPruned = await pruneExpiredIngestionBatches();
+          const quotasPruned = await pruneInactiveIngestionQuotas();
           updateIngestionWorkerHealth({ retentionFaulted: false });
           nextRetention =
             Date.now() +
-            ([pruned, sharedPruned, receiptsPruned, batchesPruned].includes(100) ? 1000 : 60000);
+            ([pruned, sharedPruned, receiptsPruned, batchesPruned, quotasPruned].includes(100)
+              ? 1000
+              : 60000);
         } catch {
           updateIngestionWorkerHealth({ retentionFaulted: true });
           nextRetention = Date.now() + 60000;
