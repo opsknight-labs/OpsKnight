@@ -492,25 +492,25 @@ export default function IncidentCommandBar({
           ) : (
             <>
               {showAcknowledge && (
-                <form action={onAcknowledge} className="flex-1">
+                <form action={onAcknowledge} className="flex-1 min-w-0">
                   <Button
                     type="submit"
-                    className="w-full h-11 gap-2 bg-gradient-to-r from-green-600 to-emerald-600 text-white text-sm font-semibold"
+                    className="w-full h-11 gap-2 bg-gradient-to-r from-green-600 to-emerald-600 text-white text-sm font-semibold truncate"
                   >
-                    <Check className="h-4 w-4" />
-                    <span>Acknowledge</span>
+                    <Check className="h-4 w-4 shrink-0" />
+                    <span className="truncate">Acknowledge</span>
                   </Button>
                 </form>
               )}
               {!showAcknowledge && showResolve && (
                 <Button
                   type="button"
-                  className="flex-1 h-11 gap-2 border-emerald-300 text-emerald-700 text-sm font-semibold"
+                  className="flex-1 min-w-0 h-11 gap-2 border-emerald-300 text-emerald-700 text-sm font-semibold truncate"
                   variant="outline"
                   onClick={() => setShowResolveModal(true)}
                 >
-                  <CheckCircle2 className="h-4 w-4" />
-                  <span>Resolve incident</span>
+                  <CheckCircle2 className="h-4 w-4 shrink-0" />
+                  <span className="truncate">Resolve incident</span>
                 </Button>
               )}
               {collaboration?.visible && (
