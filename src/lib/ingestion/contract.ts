@@ -27,6 +27,9 @@ export const StoredEnvelope = z
       })
       .strict(),
     providerPayload: z.unknown(),
+    batchPayloadId: z.string().uuid().optional(),
+    providerPayloadDigest: z.string().length(64).optional(),
+    restoreBatchAlerts: z.boolean().optional(),
     automationSnapshot: z
       .object({
         mode: z.enum(['DISABLED', 'SHADOW', 'LIVE']),
@@ -66,20 +69,31 @@ export function digest(value: unknown): string {
     .digest('hex');
 }
 
-export function encodeEnvelope(input: IntegrationEventEnvelope): StoredEnvelope {
+export function encodeEnvelope(
+  input: IntegrationEventEnvelope,
+  shared?: { batchPayloadId: string; providerPayloadDigest: string; restoreBatchAlerts: boolean }
+): StoredEnvelope {
   // JSON round-trip rejects non-serializable payloads before durable acceptance.
   const serialized = JSON.stringify({
     ...sanitizeIntegrationEnvelope(input),
+    ...shared,
     version: 1,
     receivedAt: input.receivedAt.toISOString(),
   });
-  if (Buffer.byteLength(serialized) > 256 * 1024)
-    throw new IngestionPayloadError('Ingestion envelope exceeds 256 KiB');
+  if (Buffer.byteLength(serialized) > 2 * 1024 * 1024)
+    throw new IngestionPayloadError('Ingestion envelope exceeds 2 MiB');
   return StoredEnvelope.parse(JSON.parse(serialized));
 }
 
 export function decodeEnvelope(input: unknown): IntegrationEventEnvelope {
-  const { version: _version, receivedAt, ...envelope } = StoredEnvelope.parse(input);
+  const {
+    version: _version,
+    receivedAt,
+    batchPayloadId: _batchPayloadId,
+    providerPayloadDigest: _providerPayloadDigest,
+    restoreBatchAlerts: _restoreBatchAlerts,
+    ...envelope
+  } = StoredEnvelope.parse(input);
   return {
     ...envelope,
     providerPayload: envelope.providerPayload ?? null,

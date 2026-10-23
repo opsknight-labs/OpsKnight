@@ -1,6 +1,6 @@
 require('./isolated-runtime.cjs');
 const assert = require('node:assert/strict');
-const { spawn } = require('node:child_process');
+const { spawn, spawnSync } = require('node:child_process');
 const { randomUUID, randomBytes } = require('node:crypto');
 const { readFileSync, writeFileSync, mkdtempSync, rmSync } = require('node:fs');
 const os = require('node:os');
@@ -76,6 +76,10 @@ async function main() {
     await new Promise(resolve => setTimeout(resolve, 500));
   }
   assert.ok(ready, `Candidate server readiness failed: ${readinessStatus}\n${serverOutput}`);
+  const providerChecks =
+    process.env.INGESTION_HTTP_PROVIDER_CHECKS === 'true'
+      ? await require('./provider-http-checks.cjs')({ prisma, baseUrl, consumeIngestionBatch })
+      : undefined;
   // Execute real ingestion processing independently of request completion.
   worker = (async () => {
     while (!draining) {
@@ -86,6 +90,10 @@ async function main() {
     workerFault = error;
     draining = true;
   });
+  const candidate = { buildId: readFileSync('.next/BUILD_ID', 'utf8').trim(),
+    sourceRevision: spawnSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).stdout.trim(),
+    sourceDirty: !!spawnSync('git', ['status', '--porcelain'], { encoding: 'utf8' }).stdout.trim(),
+  };
   const started = performance.now();
   load = spawn(
     k6,
@@ -152,9 +160,11 @@ async function main() {
   const ambiguousSubmissions = accepted - acknowledged;
   const evidence = {
     measuredAt: new Date().toISOString(),
+    candidate,
     runtime: process.version,
     scope:
       'Local production HTTP gateway plus independent incident consumer and isolated PostgreSQL; not HA topology certification',
+    providerChecks,
     targetRps: Number(process.env.INGESTION_TARGET_RPS || 1000),
     workload: process.env.INGESTION_WORKLOAD || 'many-key',
     duration: process.env.INGESTION_DURATION || '60s',

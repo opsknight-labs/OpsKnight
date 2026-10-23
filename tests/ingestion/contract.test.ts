@@ -57,9 +57,9 @@ describe('durable ingestion contract', () => {
   });
   it('rejects unknown envelope versions and oversized payloads before acceptance', () => {
     expect(() => decodeEnvelope({ ...encodeEnvelope(envelope), version: 2 })).toThrow();
-    expect(() => encodeEnvelope({ ...envelope, providerPayload: 'x'.repeat(256 * 1024) })).toThrow(
-      /256 KiB/
-    );
+    expect(() =>
+      encodeEnvelope({ ...envelope, providerPayload: 'x'.repeat(2 * 1024 * 1024) })
+    ).toThrow(/2 MiB/);
   });
   it('canonicalizes nested object keys without changing array order', () => {
     expect(digest({ a: 1, b: { x: 1, y: 2 } })).toBe(digest({ b: { y: 2, x: 1 }, a: 1 }));

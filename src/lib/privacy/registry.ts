@@ -9,8 +9,8 @@ import type { PersonalDataDomain } from './types';
 export const personalDataRegistry = [
   {
     domain: 'event-ingestion',
-    models: ['IngestionReceipt'],
-    fields: ['envelope.event.payload', 'envelope.providerPayload', 'result'],
+    models: ['IngestionReceipt', 'IngestionBatch'],
+    fields: ['envelope.event.payload', 'envelope.providerPayload', 'payload.value', 'result'],
     purpose: ['Durable alert processing', 'Authorized replay and reconciliation'],
     classifications: ['INTERNAL', 'PERSONAL', 'SENSITIVE', 'SECRET'],
     locations: ['DATABASE'],

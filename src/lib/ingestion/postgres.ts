@@ -23,17 +23,32 @@ import {
   type ProcessingLease,
 } from './contract';
 
+type AppendContext = {
+  tx: Prisma.TransactionClient;
+  shared: { batchPayloadId: string; providerPayloadDigest: string; restoreBatchAlerts: boolean };
+  providerBytes: number;
+  automationSnapshot: IntegrationEventEnvelope['automationSnapshot'];
+  legacyContentHash: () => string;
+  counts: { created: number; duplicate: number };
+};
+
 /** Append and return only after PostgreSQL commits. Never fall back to volatile storage. */
 export async function acceptPostgresEvent(
   input: IntegrationEventEnvelope,
-  deliveryKey?: string
+  deliveryKey?: string,
+  context?: AppendContext
 ): Promise<Acceptance> {
   const startedAt = performance.now();
-  const envelope = encodeEnvelope(input);
+  const envelope = encodeEnvelope(input, context?.shared);
   const partition = partitionKey(envelope);
   const identities = orderingKeys(envelope);
-  await prepareIngestionOrdering();
-  const { receivedAt: _receivedAt, automationSnapshot: _automationSnapshot, ...content } = envelope;
+  if (!context) await prepareIngestionOrdering();
+  const {
+    receivedAt: _receivedAt,
+    automationSnapshot: _automationSnapshot,
+    batchPayloadId: _batchPayloadId,
+    ...content
+  } = envelope;
   const contentHash = digest(content);
   const config = ingestionConfig();
   const preferredBudgetShard = Number.parseInt(partition.slice(0, 8), 16) % 64;
@@ -42,7 +57,7 @@ export async function acceptPostgresEvent(
     input.integrationId,
     deliveryKey ?? randomUUID(),
   ]);
-  const accepted = await runReadCommittedTransaction(async tx => {
+  const append = async (tx: Prisma.TransactionClient) => {
     // Override an unsafe session default; acknowledgements require a WAL flush.
     await tx.$executeRaw`SET LOCAL synchronous_commit = on`;
     // Allocate the sequence while holding this key's admission lock. Without
@@ -52,7 +67,10 @@ export async function acceptPostgresEvent(
     }
     const existing = await tx.ingestionReceipt.findUnique({ where: { idempotencyKey } });
     if (existing) {
-      if (existing.contentHash !== contentHash)
+      if (
+        existing.contentHash !== contentHash &&
+        existing.contentHash !== context?.legacyContentHash()
+      )
         throw new IngestionConflictError('Delivery key reused with different content');
       return { receiptId: existing.id, duplicate: true };
     }
@@ -65,11 +83,17 @@ export async function acceptPostgresEvent(
     ) {
       throw new IngestionUnavailableError('Ingestion admission paused');
     }
-    const acceptedEnvelope = encodeEnvelope({
-      ...input,
-      automationSnapshot: await getIngestionAutomationConfig(tx, input.serviceId),
-    });
-    const payloadBytes = Buffer.byteLength(JSON.stringify(acceptedEnvelope));
+    const acceptedEnvelope = encodeEnvelope(
+      {
+        ...input,
+        automationSnapshot: context
+          ? context.automationSnapshot
+          : await getIngestionAutomationConfig(tx, input.serviceId),
+      },
+      context?.shared
+    );
+    const payloadBytes =
+      Buffer.byteLength(JSON.stringify(acceptedEnvelope)) + (context?.providerBytes ?? 0);
     // Independent counters retain the global bound without forcing a hot
     // incident key to use only 1/64 of the available backlog capacity.
     const reserved = await tx.$queryRaw<Array<{ shard: number }>>`
@@ -90,6 +114,7 @@ export async function acceptPostgresEvent(
     const receipt = await tx.ingestionReceipt.create({
       data: {
         id: randomUUID(),
+        receivedAt: input.receivedAt,
         serviceId: input.serviceId,
         integrationId: input.integrationId,
         partitionKey: partition,
@@ -102,10 +127,17 @@ export async function acceptPostgresEvent(
         // TIMESTAMP(3) rounding at the database's transaction boundary.
         availableAt: new Date(0),
         envelope: acceptedEnvelope as Prisma.InputJsonValue,
+        batchId: context?.shared.batchPayloadId,
       },
     });
     return { receiptId: receipt.id, duplicate: false };
-  });
+  };
+  const accepted = context ? await append(context.tx) : await runReadCommittedTransaction(append);
+  if (context) {
+    if (accepted.duplicate) context.counts.duplicate++;
+    else context.counts.created++;
+    return { action: 'accepted', receiptId: accepted.receiptId };
+  }
   addOperationalMetric('opsknight_ingestion_acceptance_total', 1, {
     outcome: accepted.duplicate ? 'duplicate' : 'new',
   });
@@ -159,6 +191,8 @@ export async function claimPostgresEvents(limit: number, leaseMs = 60000) {
     )
     UPDATE "IngestionReceipt" r SET
       "status" = CASE WHEN r."attempts" >= 10 THEN 'DEAD' ELSE 'PROCESSING' END,
+      "processingStartedAt" = CASE WHEN r."attempts" >= 10 THEN r."processingStartedAt"
+        ELSE COALESCE(r."processingStartedAt", CURRENT_TIMESTAMP) END,
       "leaseToken" = CASE WHEN r."attempts" >= 10 THEN NULL ELSE ${token} END,
       "leaseExpiresAt" = CASE WHEN r."attempts" >= 10 THEN NULL ELSE CURRENT_TIMESTAMP + ${leaseMs} * INTERVAL '1 millisecond' END,
       "failureCode" = CASE WHEN r."attempts" >= 10 THEN 'RETRIES_EXHAUSTED' ELSE r."failureCode" END,
@@ -260,7 +294,7 @@ export async function lockProcessingReceipt(
 export async function completeProcessingReceipt(
   tx: Prisma.TransactionClient,
   lease: ProcessingLease,
-  result: { action: string; incident?: { id: string } }
+  result: { action: string; incident?: { id: string; createdAt?: Date } }
 ): Promise<void> {
   const updated = await tx.ingestionReceipt.updateMany({
     where: { id: lease.id, status: 'PROCESSING', leaseToken: lease.token },
@@ -269,7 +303,11 @@ export async function completeProcessingReceipt(
       completedAt: new Date(),
       leaseToken: null,
       leaseExpiresAt: null,
-      result: { action: result.action, incidentId: result.incident?.id ?? null },
+      result: {
+        action: result.action,
+        incidentId: result.incident?.id ?? null,
+        operationalActivatedAt: result.incident?.createdAt?.toISOString() ?? null,
+      },
       failureCode: null,
     },
   });
