@@ -82,7 +82,13 @@ export async function applyIngestionCommand(
       const value = {
         paused: command.action === 'configure' ? current.paused : command.action === 'pause',
         revision: current.revision + 1,
-        policy: command.action === 'configure' ? command.policy : current.policy,
+        policy:
+          command.action === 'configure'
+            ? {
+                ...command.policy,
+                quotas: command.policy.quotas ?? current.policy.quotas,
+              }
+            : current.policy,
       };
       await tx.systemConfig.upsert({
         where: { key: 'ingestion_control' },

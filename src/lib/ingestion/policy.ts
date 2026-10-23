@@ -7,8 +7,15 @@ import { ingestionControlSchema, ingestionPolicySchema } from './policy-schema';
 export async function getIngestionPolicy(client: Prisma.TransactionClient = prisma) {
   const row = await client.systemConfig.findUnique({ where: { key: 'ingestion_control' } });
   const control = ingestionControlSchema.parse(row?.value ?? { paused: false });
-  const { concurrency, pollMs, maxPending, maxPendingBytes, payloadRetentionHours } =
-    ingestionConfig();
+  const {
+    concurrency,
+    pollMs,
+    maxPending,
+    maxPendingBytes,
+    payloadRetentionHours,
+    eventsPerMinute,
+    integrationPerMinute,
+  } = ingestionConfig();
   const defaults = ingestionPolicySchema.parse({
     concurrency,
     pollMs,
@@ -16,5 +23,17 @@ export async function getIngestionPolicy(client: Prisma.TransactionClient = pris
     maxPendingBytes,
     payloadRetentionHours,
   });
-  return { paused: control.paused, revision: control.revision, policy: control.policy ?? defaults };
+  return {
+    paused: control.paused,
+    revision: control.revision,
+    policy: {
+      ...(control.policy ?? defaults),
+      quotas: control.policy?.quotas ?? {
+        eventsPerMinute,
+        eventsBurst: eventsPerMinute,
+        integrationPerMinute,
+        integrationBurst: integrationPerMinute,
+      },
+    },
+  };
 }

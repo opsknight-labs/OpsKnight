@@ -49,6 +49,24 @@ describe('ingestion operator authorization', () => {
       { action: 'configure', expectedRevision: -1, policy },
       { action: 'configure', expectedRevision: 0, policy: { ...policy, concurrency: 33 } },
       { action: 'configure', expectedRevision: 0, policy: { ...policy, mode: 'postgres' } },
+      {
+        action: 'configure',
+        expectedRevision: 0,
+        policy: { ...policy, quotas: { eventsPerMinute: 1 } },
+      },
+      {
+        action: 'configure',
+        expectedRevision: 0,
+        policy: {
+          ...policy,
+          quotas: {
+            eventsPerMinute: 1,
+            eventsBurst: 0,
+            integrationPerMinute: 1,
+            integrationBurst: 1,
+          },
+        },
+      },
     ])
       expect((await POST(request(body))).status).toBe(400);
     expect(applyIngestionCommand).not.toHaveBeenCalled();
