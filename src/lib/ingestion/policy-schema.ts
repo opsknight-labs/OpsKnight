@@ -13,6 +13,7 @@ export const ingestionPolicySchema = z
       .max(Number.MAX_SAFE_INTEGER),
     payloadRetentionHours: z.number().int().min(1).max(720),
     receiptRetentionDays: z.number().int().min(31).max(3650).default(90),
+    criticalReservePercent: z.number().int().min(0).max(50).default(10),
   })
   .strict();
 

@@ -88,6 +88,10 @@ export async function acceptPostgresEvent(
     );
     const payloadBytes =
       Buffer.byteLength(JSON.stringify(acceptedEnvelope)) + (context?.providerBytes ?? 0);
+    const critical = acceptedEnvelope.event.payload.severity === 'critical';
+    // Reserve whole budget shards, rounding upward. Ordinary traffic cannot
+    // consume these rows; critical events can use every remaining shard.
+    const reservedShards = Math.ceil((64 * config.criticalReservePercent) / 100);
     // Independent counters retain the global bound without forcing a hot
     // incident key to use only 1/64 of the available backlog capacity.
     const reserved = await tx.$queryRaw<Array<{ shard: number }>>`
@@ -95,6 +99,7 @@ export async function acceptPostgresEvent(
         SELECT "shard" FROM "IngestionBudget"
         WHERE "pending" < ${Math.floor(config.maxPending / 64)}
           AND "bytes" + ${payloadBytes} <= ${Math.floor(config.maxPendingBytes / 64)}
+          AND (${critical} OR "shard" >= ${reservedShards})
         ORDER BY ("shard" - ${preferredBudgetShard} + 64) % 64
         FOR UPDATE SKIP LOCKED LIMIT 1
       )
@@ -117,6 +122,7 @@ export async function acceptPostgresEvent(
         contentHash,
         budgetShard,
         payloadBytes,
+        critical,
         // New work is immediately eligible, independently of clock skew and
         // TIMESTAMP(3) rounding at the database's transaction boundary.
         availableAt: new Date(0),
@@ -168,20 +174,39 @@ export async function claimPostgresEvents(limit: number, leaseMs = 60000) {
     throw new Error('Invalid ingestion claim limit');
   const token = randomUUID();
   await prepareIngestionOrdering();
+  const criticalSlots = limit > 1 ? Math.max(1, Math.floor(limit / 4)) : 0;
+  const standardSlots = limit > 1 ? Math.max(1, Math.floor(limit / 4)) : 0;
+  // Keep eligibility on each row-locking scan and the UPDATE itself. PostgreSQL
+  // must recheck the current row after a concurrent consumer changes its lease.
+  const eligible = Prisma.sql`
+    ((r."status" = 'PENDING' AND r."availableAt" <= CURRENT_TIMESTAMP)
+      OR (r."status" = 'PROCESSING' AND r."leaseExpiresAt" <= CURRENT_TIMESTAMP))
+    AND NOT EXISTS (
+      SELECT 1 FROM "IngestionReceipt" previous
+      WHERE (previous."orderingKeys" && r."orderingKeys"
+        OR previous."orderingKeys" @> ARRAY['unidentified:' || r."serviceId"])
+        AND previous."sequence" < r."sequence" AND previous."status" NOT IN ('COMPLETED', 'ARCHIVED')
+    )
+  `;
   const claims = await prisma.$queryRaw<
     Array<{ id: string; leaseToken: string | null; envelope: Prisma.JsonValue; attempts: number }>
   >`
-    WITH candidates AS (
+    WITH critical AS (
       SELECT r."id" FROM "IngestionReceipt" r
-      WHERE ((r."status" = 'PENDING' AND r."availableAt" <= CURRENT_TIMESTAMP)
-        OR (r."status" = 'PROCESSING' AND r."leaseExpiresAt" <= CURRENT_TIMESTAMP))
-      AND NOT EXISTS (
-        SELECT 1 FROM "IngestionReceipt" previous
-        WHERE (previous."orderingKeys" && r."orderingKeys"
-          OR previous."orderingKeys" @> ARRAY['unidentified:' || r."serviceId"])
-          AND previous."sequence" < r."sequence" AND previous."status" NOT IN ('COMPLETED', 'ARCHIVED')
-      )
-      ORDER BY r."sequence" FOR UPDATE OF r SKIP LOCKED LIMIT ${limit}
+      WHERE r."critical" = true AND ${eligible}
+      ORDER BY r."sequence" FOR UPDATE OF r SKIP LOCKED LIMIT ${criticalSlots}
+    ), standard AS (
+      SELECT r."id" FROM "IngestionReceipt" r
+      WHERE r."critical" = false AND ${eligible}
+      ORDER BY r."sequence" FOR UPDATE OF r SKIP LOCKED LIMIT ${standardSlots}
+    ), remainder AS (
+      SELECT r."id" FROM "IngestionReceipt" r
+      WHERE ${eligible}
+        AND r."id" NOT IN (SELECT "id" FROM critical UNION ALL SELECT "id" FROM standard)
+      ORDER BY r."sequence" FOR UPDATE OF r SKIP LOCKED
+      LIMIT (${limit} - (SELECT count(*) FROM critical) - (SELECT count(*) FROM standard))
+    ), candidates AS (
+      SELECT "id" FROM critical UNION ALL SELECT "id" FROM standard UNION ALL SELECT "id" FROM remainder
     )
     UPDATE "IngestionReceipt" r SET
       "status" = CASE WHEN r."attempts" >= 10 THEN 'DEAD' ELSE 'PROCESSING' END,
@@ -191,7 +216,7 @@ export async function claimPostgresEvents(limit: number, leaseMs = 60000) {
       "leaseExpiresAt" = CASE WHEN r."attempts" >= 10 THEN NULL ELSE CURRENT_TIMESTAMP + ${leaseMs} * INTERVAL '1 millisecond' END,
       "failureCode" = CASE WHEN r."attempts" >= 10 THEN 'RETRIES_EXHAUSTED' ELSE r."failureCode" END,
       "attempts" = CASE WHEN r."attempts" >= 10 THEN r."attempts" ELSE r."attempts" + 1 END
-    FROM candidates WHERE r."id" = candidates."id"
+    FROM candidates WHERE r."id" = candidates."id" AND ${eligible}
     RETURNING r."id", r."leaseToken", r."envelope", r."attempts"
   `;
   return claims.filter(

@@ -43,6 +43,7 @@ describe('ingestion operator authorization', () => {
       maxPendingBytes,
       payloadRetentionHours,
       receiptRetentionDays: 90,
+      criticalReservePercent: 10,
     };
     for (const body of [
       { action: 'configure', expectedRevision: -1, policy },

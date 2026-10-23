@@ -96,6 +96,75 @@ afterAll(async () => {
 });
 
 describe('PostgreSQL ingestion durability', () => {
+  it('never replaces an unexpired lease when severity-lane consumers race', async () => {
+    for (let round = 0; round < 10; round++) {
+      const input = envelope(`lease-race-${round}`);
+      if (round % 2) input.event.payload.severity = 'warning';
+      const accepted = await acceptPostgresEvent(input);
+      const results = await Promise.all(Array.from({ length: 16 }, () => claimPostgresEvents(4)));
+      const claimed = results.flat().filter(claim => claim.id === accepted.receiptId);
+      expect(claimed).toHaveLength(1);
+      const receipt = await prisma.ingestionReceipt.findUniqueOrThrow({
+        where: { id: accepted.receiptId },
+      });
+      expect(receipt.leaseToken).toBe(claimed[0].leaseToken);
+      expect(receipt.attempts).toBe(1);
+      expect(receipt.status).toBe('PROCESSING');
+    }
+  });
+
+  it('preserves critical backlog reservation while ordinary traffic fills its capacity', async () => {
+    const initial = await getIngestionPolicy();
+    await applyIngestionCommand(
+      {
+        action: 'configure',
+        expectedRevision: 0,
+        policy: { ...initial.policy, maxPending: 64, criticalReservePercent: 25 },
+      },
+      actorId
+    );
+    for (let index = 0; index < 48; index++) {
+      const input = envelope(`ordinary-${index}`);
+      input.event.payload.severity = 'warning';
+      await acceptPostgresEvent(input, `ordinary-${index}`);
+    }
+    const overflow = envelope('ordinary-overflow');
+    overflow.event.payload.severity = 'warning';
+    await expect(acceptPostgresEvent(overflow)).rejects.toBeInstanceOf(IngestionUnavailableError);
+    for (let index = 0; index < 16; index++)
+      await acceptPostgresEvent(envelope(`critical-${index}`), `critical-${index}`);
+    expect(await prisma.ingestionReceipt.count()).toBe(64);
+    await expect(acceptPostgresEvent(envelope('critical-overflow'))).rejects.toBeInstanceOf(
+      IngestionUnavailableError
+    );
+  });
+
+  it('reserves claim slots for both severity lanes without violating same-key order', async () => {
+    for (let index = 0; index < 8; index++) {
+      const input = envelope(`standard-${index}`);
+      input.event.payload.severity = 'warning';
+      await acceptPostgresEvent(input);
+    }
+    const critical = await acceptPostgresEvent(envelope('critical-late'));
+    const claims = await claimPostgresEvents(4);
+    expect(claims).toHaveLength(4);
+    expect(claims.map(claim => claim.id)).toContain(critical.receiptId);
+    expect(
+      (
+        await prisma.ingestionReceipt.findMany({
+          where: { id: { in: claims.map(claim => claim.id) }, critical: false },
+        })
+      ).length
+    ).toBeGreaterThanOrEqual(1);
+    const earlier = envelope('ordered-severity');
+    earlier.event.payload.severity = 'warning';
+    const first = await acceptPostgresEvent(earlier);
+    const second = await acceptPostgresEvent(envelope('ordered-severity'));
+    const next = await claimPostgresEvents(32);
+    expect(next.map(claim => claim.id)).toContain(first.receiptId);
+    expect(next.map(claim => claim.id)).not.toContain(second.receiptId);
+  });
+
   it('cannot expire a minimized receipt while a concurrent hold is being created', async () => {
     const accepted = await acceptPostgresEvent(envelope('terminal-hold-race'));
     await consumeIngestionBatch(1);
