@@ -4,7 +4,7 @@ import { fork } from 'node:child_process';
 import { once } from 'node:events';
 import prisma from '@/lib/prisma';
 import { runReadCommittedTransaction } from '@/lib/db-utils';
-import { processEvent } from '@/lib/events';
+import { processEvent, processIntegrationEvent } from '@/lib/events';
 import {
   acceptPostgresEvent,
   claimPostgresEvents,
@@ -18,7 +18,7 @@ import {
   IngestionLeaseLostError,
   IngestionUnavailableError,
 } from '@/lib/ingestion/contract';
-import { consumeIngestionBatch } from '@/lib/ingestion/worker';
+import { consumeIngestionBatch, stopIngestionWorker } from '@/lib/ingestion/worker';
 import { applyIngestionCommand } from '@/lib/ingestion/operations';
 import { compileAutomation } from '@/lib/automation/compiler';
 import { emptySnapshot } from '@/lib/automation/contract';
@@ -83,6 +83,36 @@ afterAll(async () => {
 });
 
 describe('PostgreSQL ingestion durability', () => {
+  it('keeps an image-only upgrade synchronous and accepts legacy payload sizes', async () => {
+    const input = envelope('legacy');
+    input.event.payload.custom_details = { blob: 'x'.repeat(300000) };
+    const result = await processIntegrationEvent(input);
+    expect(result.action).toBe('triggered');
+    expect(result.incident?.serviceId).toBe(serviceId);
+    expect('receiptId' in result).toBe(false);
+    expect(await prisma.ingestionReceipt.count()).toBe(0);
+  });
+
+  it('changes to durable acceptance only after explicit activation', async () => {
+    process.env.OPSKNIGHT_INGESTION_MODE = 'postgres';
+    try {
+      const result = await processIntegrationEvent(envelope('opt-in'));
+      expect(result.action).toBe('accepted');
+      expect(await prisma.incident.count({ where: { serviceId } })).toBe(0);
+      await consumeIngestionBatch();
+      expect(await prisma.incident.count({ where: { serviceId } })).toBe(1);
+    } finally {
+      delete process.env.OPSKNIGHT_INGESTION_MODE;
+    }
+  });
+
+  it('does not publish an ingestion-worker heartbeat when the worker was never started', async () => {
+    const before = await prisma.runtimeWorkerHeartbeat.count({ where: { lane: 'ingestion' } });
+    await stopIngestionWorker();
+    expect(await prisma.runtimeWorkerHeartbeat.count({ where: { lane: 'ingestion' } })).toBe(
+      before
+    );
+  });
   it('expires only completed raw payloads and preserves receipt idempotency and pending data', async () => {
     const input = envelope('retention');
     const completed = await acceptPostgresEvent(input, 'retained-id');

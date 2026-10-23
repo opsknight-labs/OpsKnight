@@ -52,3 +52,11 @@ VITEST_USE_REAL_DB=1 npx vitest run --no-file-parallelism --maxWorkers=1 \
 6. Publish topology-specific measured limits, workload definitions and rollback evidence. A failed target is a failed certification, not an adjusted success definition.
 
 The available Kubernetes context was `kind-opsknight-cluster`, but its API endpoint refused connection during inspection. Docker reported a 12-CPU, 8 GiB VM shared with existing services. No dedicated enterprise certification deployment or load generator was available in this session.
+
+## Image upgrade compatibility follow-up
+
+Populated upgrade checks passed from published v2.0.0 and the ingestion branch's original main base. Both checks run the actual image migration entrypoint twice, preserve existing data, exercise the legacy Events API and verify old Prisma client reads/writes after upgrade. See `image-upgrade-compatibility.md` and the two `upgrade-*.json` evidence files. These are startup-script and handler checks, not a running-container rolling-image certification.
+
+The follow-up ingestion suite passed 24 tests; focused runtime/API/side-effect regression tests passed 57 tests. TypeScript, modified-file lint and the production build passed. Default synchronous mode retains its previous payload limits, ignored idempotency-header behavior, timestamps and incident-bearing response. Ingestion consumers start only after explicit asynchronous activation.
+
+The dedicated local PostgreSQL forced-stop/restart drill also passed: 20 receipts accepted before termination survived; admission during unavailability rejected; one new receipt accepted after recovery; all 21 completed with 21 alerts, 21 incidents and zero pending work. Repeated delivery IDs did not duplicate processing. Lease expiry was explicitly advanced after restart; this validates recovery correctness, not natural lease-expiry latency or replicated failover. Evidence: `local-database-outage.json`. Only `opsknight-ingestion-cert-db` was stopped.

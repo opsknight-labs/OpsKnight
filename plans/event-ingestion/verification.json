@@ -60,5 +60,18 @@
     "Counts from separate test suites overlap and must not be summed.",
     "Local library microbenchmark excludes HTTP, authentication, quota admission and Automation-enabled throughput.",
     "No enterprise throughput or HA durability guarantee has been certified."
-  ]
+  ],
+  "followUp": {
+    "imageUpgradeEvidence": [
+      "upgrade-f81dfc25.json",
+      "upgrade-58e9271c.json"
+    ],
+    "databaseOutageEvidence": "local-database-outage.json",
+    "ingestionTestsPassed": 24,
+    "focusedRegressionTestsPassed": 57,
+    "typeCheck": "passed",
+    "modifiedSourceLint": "passed",
+    "productionBuild": "passed",
+    "enterpriseCertified": false
+  }
 }

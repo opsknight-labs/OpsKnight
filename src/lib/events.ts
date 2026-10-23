@@ -274,7 +274,7 @@ export async function processEvent(
         status: event_action === 'resolve' ? 'RESOLVED' : 'TRIGGERED',
         payload: boundedAlertPayload(eventData),
         serviceId,
-        createdAt: envelope.receivedAt,
+        createdAt: processingLease ? envelope.receivedAt : undefined,
       },
     });
 
@@ -355,10 +355,12 @@ export async function processEvent(
           serviceId,
           status: 'RESOLVED',
           incidentId: null,
-          createdAt: {
-            gte: new Date(envelope.receivedAt.getTime() - 5 * 60 * 1000),
-            lte: envelope.receivedAt,
-          },
+          createdAt: processingLease
+            ? {
+                gte: new Date(envelope.receivedAt.getTime() - 5 * 60 * 1000),
+                lte: envelope.receivedAt,
+              }
+            : { gte: new Date(Date.now() - 5 * 60 * 1000) },
         },
         orderBy: { createdAt: 'desc' },
       });
