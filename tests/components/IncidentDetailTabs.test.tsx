@@ -15,6 +15,8 @@ describe('IncidentDetailTabs access control and fallback', () => {
   it('determines tab availability based on content presence', () => {
     expect(isIncidentTabAvailable('overview', {})).toBe(true);
     expect(isIncidentTabAvailable('timeline', {})).toBe(true);
+    expect(isIncidentTabAvailable('automation', { hasAutomation: false })).toBe(false);
+    expect(isIncidentTabAvailable('automation', { hasAutomation: true })).toBe(true);
     expect(isIncidentTabAvailable('runbooks', { hasRunbooks: false })).toBe(false);
     expect(isIncidentTabAvailable('runbooks', { hasRunbooks: true })).toBe(true);
     expect(isIncidentTabAvailable('response', { hasResponse: false })).toBe(false);
@@ -24,6 +26,7 @@ describe('IncidentDetailTabs access control and fallback', () => {
   it('maps anchor to null when runbooks are not available', () => {
     expect(tabForAnchor('runbook-execution-1', false)).toBeNull();
     expect(tabForAnchor('runbook-execution-1', true)).toBe('runbooks');
+    expect(tabForAnchor('automation-decision')).toBe('automation');
   });
 
   it('falls back to overview when ?tab=runbooks is requested but user lacks runbook access', () => {

@@ -3,7 +3,7 @@
 import React, { useEffect, useState, type ReactNode } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/shadcn/tabs';
 import { Badge } from '@/components/ui/shadcn/badge';
-import { Settings2, History, Zap, FileText, Workflow, Route } from 'lucide-react';
+import { Settings2, History, Zap, FileText, Workflow, Route, BookOpen } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 export type IncidentDetailTabsProps = {
@@ -12,6 +12,7 @@ export type IncidentDetailTabsProps = {
   noteCount?: number;
   activityContent: ReactNode;
   timelineContent: ReactNode;
+  automationContent?: ReactNode;
   responseContent?: ReactNode;
   runbooksContent?: ReactNode;
   postmortemContent?: ReactNode;
@@ -20,10 +21,23 @@ export type IncidentDetailTabsProps = {
 };
 
 /** Maps record anchors used by the Response activity view to the tab that renders them. */
-export function tabForAnchor(anchor: string, hasRunbooks: boolean): string | null {
+export function tabForAnchor(
+  anchor: string,
+  hasRunbooksOrOptions: boolean | { hasRunbooks?: boolean; hasAutomation?: boolean } = {}
+): string | null {
+  const opts =
+    typeof hasRunbooksOrOptions === 'boolean'
+      ? { hasRunbooks: hasRunbooksOrOptions, hasAutomation: true }
+      : {
+          hasRunbooks: hasRunbooksOrOptions.hasRunbooks ?? false,
+          hasAutomation: hasRunbooksOrOptions.hasAutomation ?? true,
+        };
   if (anchor.startsWith('timeline-')) return 'timeline';
-  if (anchor.startsWith('runbook-')) return hasRunbooks ? 'runbooks' : null;
+  if (anchor.startsWith('runbook-')) return opts.hasRunbooks ? 'runbooks' : null;
   if (anchor === 'response-activity') return 'response';
+  if (anchor === 'automation-decision' || anchor.startsWith('automation-')) {
+    return opts.hasAutomation ? 'automation' : null;
+  }
   return null;
 }
 
@@ -33,12 +47,15 @@ export function isIncidentTabAvailable(
     hasResponse?: boolean;
     hasRunbooks?: boolean;
     hasPostmortem?: boolean;
+    hasAutomation?: boolean;
   }
 ): boolean {
   switch (tabId) {
     case 'overview':
     case 'timeline':
       return true;
+    case 'automation':
+      return Boolean(options.hasAutomation);
     case 'response':
       return Boolean(options.hasResponse);
     case 'runbooks':
@@ -55,19 +72,22 @@ export default function IncidentDetailTabs({
   eventCount,
   activityContent,
   timelineContent,
+  automationContent,
   responseContent,
   runbooksContent,
   postmortemContent,
   postmortemStatus,
   className,
 }: IncidentDetailTabsProps) {
+  const hasAutomation = !!automationContent;
   const hasRunbooks = !!runbooksContent;
   const hasResponse = !!responseContent;
   const hasPostmortem = !!postmortemContent;
 
   const isAvailable = React.useCallback(
-    (t: string) => isIncidentTabAvailable(t, { hasResponse, hasRunbooks, hasPostmortem }),
-    [hasResponse, hasRunbooks, hasPostmortem]
+    (t: string) =>
+      isIncidentTabAvailable(t, { hasAutomation, hasResponse, hasRunbooks, hasPostmortem }),
+    [hasAutomation, hasResponse, hasRunbooks, hasPostmortem]
   );
 
   const [tab, setTab] = useState(() => {
@@ -100,7 +120,7 @@ export default function IncidentDetailTabs({
   useEffect(() => {
     const sync = () => {
       const anchor = decodeURIComponent(window.location.hash.slice(1));
-      const target = tabForAnchor(anchor, hasRunbooks);
+      const target = tabForAnchor(anchor, { hasRunbooks, hasAutomation });
       if (!target || !isAvailable(target)) return;
       setTab(target);
       // Wait for the newly selected tab panel to mount before scrolling.
@@ -113,7 +133,7 @@ export default function IncidentDetailTabs({
     sync();
     window.addEventListener('hashchange', sync);
     return () => window.removeEventListener('hashchange', sync);
-  }, [hasRunbooks, isAvailable]);
+  }, [hasRunbooks, hasAutomation, isAvailable]);
 
   const handleTabChange = (nextTab: string) => {
     if (!isAvailable(nextTab)) return;
@@ -144,6 +164,15 @@ export default function IncidentDetailTabs({
               <Settings2 className="h-4 w-4" />
               <span>Overview</span>
             </TabsTrigger>
+            {automationContent && (
+              <TabsTrigger
+                value="automation"
+                className="shrink-0 gap-2 px-3 py-1 text-xs font-medium data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-2xs rounded-md transition-all"
+              >
+                <Workflow className="h-4 w-4" />
+                <span>Automation</span>
+              </TabsTrigger>
+            )}
             {responseContent && (
               <TabsTrigger
                 value="response"
@@ -158,7 +187,7 @@ export default function IncidentDetailTabs({
                 value="runbooks"
                 className="shrink-0 gap-2 px-3 py-1 text-xs font-medium data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-2xs rounded-md transition-all"
               >
-                <Workflow className="h-4 w-4" />
+                <BookOpen className="h-4 w-4" />
                 <span>Runbooks</span>
               </TabsTrigger>
             )}
@@ -203,6 +232,12 @@ export default function IncidentDetailTabs({
           <TabsContent value="overview" className="mt-0 space-y-6 focus-visible:outline-none">
             {activityContent}
           </TabsContent>
+
+          {automationContent && (
+            <TabsContent value="automation" className="mt-0 space-y-4 focus-visible:outline-none">
+              {automationContent}
+            </TabsContent>
+          )}
 
           {responseContent && (
             <TabsContent value="response" className="mt-0 focus-visible:outline-none">

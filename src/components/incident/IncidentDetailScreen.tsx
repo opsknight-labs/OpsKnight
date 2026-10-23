@@ -293,6 +293,13 @@ export default async function IncidentDetailScreen({
       compact={presentation === 'mobile'}
     />
   );
+
+  const automationContent = (
+    <div id="automation-decision" className="scroll-mt-24 space-y-4">
+      <IncidentAutomationCard incidentId={id} />
+    </div>
+  );
+
   const contextContent = responseTimeline ? (
     <IncidentContextCard context={responseTimeline.context} />
   ) : null;
@@ -609,10 +616,6 @@ export default async function IncidentDetailScreen({
             />
           )}
 
-          <div id="automation-decision" className="scroll-mt-24">
-            <IncidentAutomationCard incidentId={id} />
-          </div>
-
           {incident.status === 'RESOLVED' && (
             <IncidentResolutionSummary
               incident={incident}
@@ -627,6 +630,7 @@ export default async function IncidentDetailScreen({
             eventCount={totalEventsCount}
             noteCount={totalNotesCount}
             activityContent={activityContent}
+            automationContent={automationContent}
             responseContent={responseContent}
             runbooksContent={
               canReadRunbooks ? (
