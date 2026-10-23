@@ -573,7 +573,7 @@ export default function ServiceRunbooks({
                 aria-label="Rule history"
                 value={selectedState}
                 onChange={e => {
-                  const val = e.target.value;
+                  const val = e.target.value === 'archived' ? 'archived' : 'active';
                   setSelectedState(val);
                   const params = new URLSearchParams();
                   params.set('tab', 'runbooks');
