@@ -1,3 +1,4 @@
+import { assertNewIngestionWorkAllowed } from '@/lib/ingestion/delivery-context';
 import { ingestionErrorResponse } from '@/lib/ingestion/http';
 import { NextRequest } from 'next/server';
 import { ZodError } from 'zod';
@@ -138,6 +139,7 @@ export async function POST(req: NextRequest) {
 
       // Handle only cryptographically verified, topic-bound confirmations.
       if (verifiedSns?.Type === 'SubscriptionConfirmation' && verifiedSns.SubscribeURL) {
+        assertNewIngestionWorkAllowed();
         logger.info('api.integration.cloudwatch_subscription_confirmation', {
           integrationId,
           topicArn: verifiedSns.TopicArn,
@@ -239,7 +241,14 @@ export async function POST(req: NextRequest) {
       const event = transformCloudWatchToEvent(alarmMessage);
 
       // Process the event
-      const result = await processIntegrationEvent({ event, serviceId: integration.serviceId, integrationId: integration.id, integrationType: 'CLOUDWATCH', providerPayload: alarmMessage, receivedAt: new Date() });
+      const result = await processIntegrationEvent({
+        event,
+        serviceId: integration.serviceId,
+        integrationId: integration.id,
+        integrationType: 'CLOUDWATCH',
+        providerPayload: alarmMessage,
+        receivedAt: new Date(),
+      });
 
       logger.info('api.integration.cloudwatch_success', {
         integrationId,

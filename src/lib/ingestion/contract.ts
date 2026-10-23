@@ -46,6 +46,25 @@ export type StoredEnvelope = z.infer<typeof StoredEnvelope>;
 export type Acceptance = { action: 'accepted'; receiptId: string; incident?: never };
 export type ProcessingLease = { id: string; token: string };
 
+export class IngestionRateLimitError extends Error {
+  constructor(
+    readonly resetAt: number,
+    readonly wire: 'events' | 'integration' | 'pagerduty'
+  ) {
+    super('Ingestion request quota exhausted');
+  }
+}
+
+export function receiptContentHash(envelope: StoredEnvelope): string {
+  const {
+    receivedAt: _receivedAt,
+    automationSnapshot: _automationSnapshot,
+    batchPayloadId: _batchPayloadId,
+    ...content
+  } = envelope;
+  return digest(content);
+}
+
 export class IngestionUnavailableError extends Error {}
 export class IngestionConflictError extends Error {}
 export class IngestionLeaseLostError extends Error {}

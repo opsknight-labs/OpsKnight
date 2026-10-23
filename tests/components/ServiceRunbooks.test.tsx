@@ -229,7 +229,7 @@ it('keeps workflow and target searches available before a service has any rules'
       canManage={true}
     />
   );
-  expect(screen.getByRole('textbox', { name: 'Workflow search', exact: true })).toBeVisible();
-  expect(screen.getByRole('textbox', { name: 'Agent / pool search', exact: true })).toBeVisible();
-  expect(screen.getByRole('button', { name: 'Search options', exact: true })).toBeVisible();
+  expect(screen.getByRole('textbox', { name: 'Workflow search' })).toBeVisible();
+  expect(screen.getByRole('textbox', { name: 'Agent / pool search' })).toBeVisible();
+  expect(screen.getByRole('button', { name: 'Search options' })).toBeVisible();
 });
