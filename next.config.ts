@@ -207,7 +207,13 @@ const nextConfig: NextConfig = {
       },
     ];
   },
-  webpack: (config, { isServer }) => {
+  webpack: (config, { isServer, dev }) => {
+    if (!dev && process.env.OPSKNIGHT_BUILD_LOW_MEMORY === 'true') {
+      // Cold container builds gain little from filesystem caching. Bound the
+      // compilation working set on small build hosts without skipping checks.
+      config.cache = false;
+      config.parallelism = 1;
+    }
     if (isServer) {
       // eslint-disable-next-line @typescript-eslint/no-require-imports
       const webpack = require('webpack');

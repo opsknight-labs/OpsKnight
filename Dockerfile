@@ -83,6 +83,10 @@ ENV NEXT_PUBLIC_SOURCE_CODE_URL=$SOURCE_CODE_URL
 # Build Next.js application with production optimizations
 # Pages that need database access are marked as dynamic, so build works without DB
 ARG BUILD_NODE_MAX_OLD_SPACE_SIZE=4096
+ARG OPSKNIGHT_BUILD_LOW_MEMORY=false
+ARG BUILD_RAYON_THREADS=4
+ENV OPSKNIGHT_BUILD_LOW_MEMORY=$OPSKNIGHT_BUILD_LOW_MEMORY
+ENV RAYON_NUM_THREADS=$BUILD_RAYON_THREADS
 ENV NODE_OPTIONS="--max-old-space-size=${BUILD_NODE_MAX_OLD_SPACE_SIZE}"
 RUN npm run build
 # Compile helper scripts for production (where ts-node is not available)
