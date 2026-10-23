@@ -38,6 +38,7 @@ describe('ingestion operator authorization', () => {
       ingestionConfig();
     const policy = {
       concurrency,
+      leaseMs: 60000,
       pollMs,
       maxPending,
       maxPendingBytes,

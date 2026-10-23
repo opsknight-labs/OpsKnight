@@ -5,6 +5,29 @@ import { getIngestionPolicy } from './policy';
 import { tryAcquireRetentionResourceLock } from '@/lib/retention/resource-lock';
 import { isIncidentHeld } from '@/lib/retention/lifecycle';
 
+/** Expire only long-idle, fully replenished buckets. Deleting debt would grant
+ * quota credit on the next request. Row locks serialize cleanup with admissions.
+ */
+export async function pruneInactiveIngestionQuotas(): Promise<number> {
+  return runReadCommittedTransaction(async tx => {
+    const { policy } = await getIngestionPolicy(tx);
+    return tx.$executeRaw`
+      WITH inactive AS (
+        SELECT bucket."key" FROM "IngestionQuota" bucket
+        WHERE bucket."updatedAt" < CURRENT_TIMESTAMP - INTERVAL '7 days'
+          AND bucket."burst" >= CASE WHEN bucket."key" LIKE '%:events'
+            THEN ${policy.quotas.eventsBurst} ELSE ${policy.quotas.integrationBurst} END
+          AND bucket."tokens" + GREATEST(0, EXTRACT(EPOCH FROM
+            (CURRENT_TIMESTAMP - bucket."updatedAt"))) * LEAST(bucket."rate",
+              CASE WHEN bucket."key" LIKE '%:events' THEN ${policy.quotas.eventsPerMinute}
+                ELSE ${policy.quotas.integrationPerMinute} END) / 60.0 >= bucket."burst"
+        ORDER BY bucket."updatedAt" FOR UPDATE OF bucket SKIP LOCKED LIMIT 100
+      ) DELETE FROM "IngestionQuota" bucket USING inactive
+        WHERE bucket."key" = inactive."key"
+    `;
+  });
+}
+
 /** Expire completed raw payloads before the longer retry-identity retention window. */
 export async function pruneCompletedIngestionPayloads(): Promise<number> {
   return runReadCommittedTransaction(async tx => {

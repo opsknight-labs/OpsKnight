@@ -172,6 +172,8 @@ export async function verifyPostgresIngestionDurability(): Promise<void> {
 export async function claimPostgresEvents(limit: number, leaseMs = 60000) {
   if (!Number.isInteger(limit) || limit < 1 || limit > 64)
     throw new Error('Invalid ingestion claim limit');
+  if (!Number.isInteger(leaseMs) || leaseMs < 5000 || leaseMs > 300000)
+    throw new Error('Invalid ingestion lease duration');
   const token = randomUUID();
   await prepareIngestionOrdering();
   const criticalSlots = limit > 1 ? Math.max(1, Math.floor(limit / 4)) : 0;

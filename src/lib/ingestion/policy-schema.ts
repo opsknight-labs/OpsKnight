@@ -13,6 +13,7 @@ export const ingestionQuotaPolicySchema = z
 export const ingestionPolicySchema = z
   .object({
     concurrency: z.number().int().min(1).max(32),
+    leaseMs: z.number().int().min(5000).max(300000).default(60000),
     pollMs: z.number().int().min(50).max(30000),
     maxPending: z.number().int().min(64).max(10000000),
     maxPendingBytes: z

@@ -250,5 +250,25 @@
       "No capacity certification; current-policy read and hot bucket upsert add database work",
       "Mixed pre-release asynchronous admission images require controlled rollout; synchronous default is unchanged"
     ]
+  },
+  "updatedReviewRemediation": {
+    "certified": false,
+    "reviewBaseline": "f580a8c5c",
+    "databaseAndContractPassed": 53,
+    "focusedUnitPassed": 51,
+    "fixes": [
+      "Canonical credential classifier, encoded URL names, PEM private keys, nested structured secrets",
+      "Global monitoring totals independent of top100 integrations",
+      "Debt-preserving inactive quota cleanup",
+      "Bounded configurable processing leases5..300seconds default60"
+    ],
+    "productionDependencyAudit": "zero findings after PWA build tool reclassification; development tree remains affected",
+    "remaining": [
+      "Exact image clean build and performance rerun",
+      "Automation-derived early priority and single-slot fairness",
+      "Worker liveness accelerated recovery/full SIGKILL certification",
+      "Separately budgeted high-volume maintenance, partition/archive",
+      "Kafka, full stack external deliveries, HA and sustained/soak"
+    ]
   }
 }

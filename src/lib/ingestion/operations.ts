@@ -116,39 +116,40 @@ export async function applyIngestionCommand(
 
 /** Persistent gauges survive worker restart. Never return the raw provider payload. */
 export async function ingestionSnapshot(receiptId?: string) {
-  const [counts, oldest, control, receipts, budget, workers, throughput] = await Promise.all([
-    prisma.ingestionReceipt.groupBy({ by: ['status'], _count: true }),
-    prisma.ingestionReceipt.findFirst({
-      where: { status: { notIn: ['COMPLETED', 'ARCHIVED'] } },
-      orderBy: { acceptedAt: 'asc' },
-      select: { acceptedAt: true },
-    }),
-    getIngestionPolicy(),
-    prisma.ingestionReceipt.findMany({
-      where: receiptId ? { id: receiptId } : { status: 'DEAD' },
-      take: 100,
-      orderBy: { sequence: 'desc' },
-      select: {
-        id: true,
-        serviceId: true,
-        integrationId: true,
-        status: true,
-        attempts: true,
-        failureCode: true,
-        acceptedAt: true,
-        completedAt: true,
-        result: true,
-      },
-    }),
-    prisma.ingestionBudget.aggregate({ _sum: { pending: true, bytes: true } }),
-    prisma.runtimeWorkerHeartbeat.findMany({
-      where: { lane: 'ingestion', lastSeenAt: { gte: new Date(Date.now() - 90000) } },
-      take: 100,
-      select: { instanceId: true, running: true, lastSeenAt: true, lastError: true },
-    }),
-    prisma.$queryRaw<
-      Array<{ serviceId: string; integrationId: string; accepted: number; completed: number }>
-    >`
+  const [counts, oldest, control, receipts, budget, workers, throughput, totals] =
+    await Promise.all([
+      prisma.ingestionReceipt.groupBy({ by: ['status'], _count: true }),
+      prisma.ingestionReceipt.findFirst({
+        where: { status: { notIn: ['COMPLETED', 'ARCHIVED'] } },
+        orderBy: { acceptedAt: 'asc' },
+        select: { acceptedAt: true },
+      }),
+      getIngestionPolicy(),
+      prisma.ingestionReceipt.findMany({
+        where: receiptId ? { id: receiptId } : { status: 'DEAD' },
+        take: 100,
+        orderBy: { sequence: 'desc' },
+        select: {
+          id: true,
+          serviceId: true,
+          integrationId: true,
+          status: true,
+          attempts: true,
+          failureCode: true,
+          acceptedAt: true,
+          completedAt: true,
+          result: true,
+        },
+      }),
+      prisma.ingestionBudget.aggregate({ _sum: { pending: true, bytes: true } }),
+      prisma.runtimeWorkerHeartbeat.findMany({
+        where: { lane: 'ingestion', lastSeenAt: { gte: new Date(Date.now() - 90000) } },
+        take: 100,
+        select: { instanceId: true, running: true, lastSeenAt: true, lastError: true },
+      }),
+      prisma.$queryRaw<
+        Array<{ serviceId: string; integrationId: string; accepted: number; completed: number }>
+      >`
       SELECT "serviceId", "integrationId",
         count(*) FILTER (WHERE "acceptedAt" >= CURRENT_TIMESTAMP - INTERVAL '60 seconds')::int AS accepted,
         count(*) FILTER (WHERE "status" = 'COMPLETED' AND "completedAt" >= CURRENT_TIMESTAMP - INTERVAL '60 seconds')::int AS completed
@@ -157,7 +158,15 @@ export async function ingestionSnapshot(receiptId?: string) {
         OR ("status" = 'COMPLETED' AND "completedAt" >= CURRENT_TIMESTAMP - INTERVAL '60 seconds')
       GROUP BY "serviceId", "integrationId" ORDER BY accepted DESC, "serviceId", "integrationId" LIMIT 100
     `,
-  ]);
+      prisma.$queryRaw<Array<{ accepted: number; completed: number; groups: number }>>`
+      SELECT count(*) FILTER (WHERE "acceptedAt" >= CURRENT_TIMESTAMP - INTERVAL '60 seconds')::int AS accepted,
+        count(*) FILTER (WHERE "status" = 'COMPLETED' AND "completedAt" >= CURRENT_TIMESTAMP - INTERVAL '60 seconds')::int AS completed,
+        count(DISTINCT ("serviceId", "integrationId"))::int AS groups
+      FROM "IngestionReceipt"
+      WHERE "acceptedAt" >= CURRENT_TIMESTAMP - INTERVAL '60 seconds'
+        OR ("status" = 'COMPLETED' AND "completedAt" >= CURRENT_TIMESTAMP - INTERVAL '60 seconds')
+    `,
+    ]);
   return {
     mode: ingestionConfig().mode,
     counts: Object.fromEntries(counts.map(row => [row.status, row._count])),
@@ -171,9 +180,9 @@ export async function ingestionSnapshot(receiptId?: string) {
     throughput: {
       windowSeconds: 60,
       integrations: throughput,
-      acceptedPerSecond: throughput.reduce((sum, row) => sum + row.accepted, 0) / 60,
-      completedPerSecond: throughput.reduce((sum, row) => sum + row.completed, 0) / 60,
-      limitedToTopIntegrations: throughput.length === 100,
+      acceptedPerSecond: (totals[0]?.accepted ?? 0) / 60,
+      completedPerSecond: (totals[0]?.completed ?? 0) / 60,
+      limitedToTopIntegrations: (totals[0]?.groups ?? 0) > throughput.length,
     },
     receipts,
   };

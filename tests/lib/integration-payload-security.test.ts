@@ -3,9 +3,66 @@ import { describe, expect, it } from 'vitest';
 import {
   sanitizeProviderData,
   sanitizeIntegrationEnvelope,
+  isCredentialField,
 } from '@/lib/integrations/payload-security';
 
 describe('shared integration credential filtering', () => {
+  it.each([
+    'secret_key',
+    'ssh_private_key',
+    'authorization_header',
+    'auth_header',
+    'AWS_SECRET_ACCESS_KEY',
+    'clientSecret',
+    'refresh_token',
+    'databasePassword',
+    'x-api-key',
+    'credentials',
+    'proxyAuthorizationHeader',
+    '%54oken',
+    '%41PI_KEY',
+    '%41uthorization',
+  ])('classifies credential field %s', key => {
+    expect(isCredentialField(key)).toBe(true);
+    expect(sanitizeProviderData({ nested: [{ [key]: { arbitrary: 'sensitive-value' } }] })).toEqual(
+      { nested: [{ [key]: '[REDACTED]' }] }
+    );
+  });
+  it.each([
+    'groupKey',
+    'dedup_key',
+    'monkey',
+    'fingerprint',
+    'teamKey',
+    'secretary',
+    'authorizationStatus',
+    'authenticationMethod',
+    'tokenCount',
+    'public_key',
+    'owner',
+  ])('preserves ordinary business field %s', key => {
+    expect(isCredentialField(key)).toBe(false);
+    expect(sanitizeProviderData({ [key]: 'ordinary-context' })).toEqual({
+      [key]: 'ordinary-context',
+    });
+  });
+  it('redacts encoded URL credential fields and multiline private keys while preserving routing context', () => {
+    const result = sanitizeProviderData({
+      urls: [
+        'https://user:sensitive-password@host/path?secret_key=sensitive-one&teamKey=ops',
+        'https://host/path?ssh%5Fprivate%5Fkey=sensitive-two#auth_header=sensitive-three',
+        'https://host/path?%54oken=sensitive-four&%41PI_KEY=sensitive-five&%6bey=sensitive-six&%73ig=sensitive-seven',
+      ],
+      text: 'prefix -----BEGIN RSA PRIVATE KEY-----\nsensitive-pem\n-----END RSA PRIVATE KEY----- suffix',
+      owner: 'oncall@example.test',
+    });
+    expect(JSON.stringify(result)).not.toContain('sensitive-');
+    expect(JSON.stringify(result)).toContain('teamKey=ops');
+    expect(result).toMatchObject({
+      owner: 'oncall@example.test',
+      text: 'prefix [REDACTED] suffix',
+    });
+  });
   it('removes nested credentials while preserving domain identifiers and context', () => {
     const input = {
       routing_key: 'sensitive-routing',
