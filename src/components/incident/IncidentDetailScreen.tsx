@@ -45,7 +45,18 @@ import { Badge } from '@/components/ui/shadcn/badge';
 import CopyButton from '@/components/common/CopyButton';
 import { getAppUrl } from '@/lib/app-url';
 import { redactNotificationError } from '@/lib/notification-operations';
-import { AlertCircle, ArrowLeft, CheckCircle2, ChevronDown, Pause, Volume2 } from 'lucide-react';
+import {
+  AlertCircle,
+  ArrowLeft,
+  CheckCircle2,
+  ChevronDown,
+  Fingerprint,
+  Pause,
+  ShieldAlert,
+  ShieldCheck,
+  Volume2,
+} from 'lucide-react';
+import { incidentContextReasonLabel } from '@/lib/incidents/response-presentation';
 import { getJiraCapabilities } from '@/lib/jira-capabilities';
 import { serializeJiraIssueReference } from '@/lib/jira-references';
 import { getIncidentCollaborationView } from '@/lib/incident-collaboration/get-incident-collaboration';

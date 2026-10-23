@@ -154,77 +154,86 @@ export default function IncidentDetailTabs({
   return (
     <Tabs value={tab} onValueChange={handleTabChange} className={cn('w-full', className)}>
       <div className="rounded-xl border border-border bg-card shadow-2xs overflow-hidden text-card-foreground transition-all">
-        {/* Compact, Unified Header Bar */}
-        <div className="px-3 sm:px-4 py-2 border-b border-border/80 bg-muted/30 flex items-center justify-between gap-3">
-          <TabsList className="h-8 max-w-full justify-start overflow-x-auto p-0.5 bg-muted/80 border border-border/70 rounded-lg">
-            <TabsTrigger
-              value="overview"
-              className="shrink-0 gap-2 px-3 py-1 text-xs font-medium data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-2xs rounded-md transition-all"
-            >
-              <Settings2 className="h-4 w-4" />
-              <span>Overview</span>
-            </TabsTrigger>
-            {automationContent && (
+        {/* Modern, Fluid Segmented Tabs Header */}
+        <div className="border-b border-border/70 bg-muted/25 px-2.5 sm:px-3.5 py-2 flex items-center justify-between gap-3">
+          <div className="min-w-0 flex-1 overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden touch-pan-x">
+            <TabsList className="inline-flex h-8 items-center justify-start gap-1 p-0.5 bg-muted/60 dark:bg-muted/30 border border-border/50 rounded-lg w-max">
               <TabsTrigger
-                value="automation"
-                className="shrink-0 gap-2 px-3 py-1 text-xs font-medium data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-2xs rounded-md transition-all"
+                value="overview"
+                className="shrink-0 gap-1.5 px-3 py-1 text-xs font-medium rounded-md text-muted-foreground hover:text-foreground data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-xs transition-all select-none"
               >
-                <Workflow className="h-4 w-4" />
-                <span>Automation</span>
+                <Settings2 className="h-3.5 w-3.5" />
+                <span>Overview</span>
               </TabsTrigger>
-            )}
-            {responseContent && (
-              <TabsTrigger
-                value="response"
-                className="shrink-0 gap-2 px-3 py-1 text-xs font-medium data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-2xs rounded-md transition-all"
-              >
-                <Route className="h-4 w-4" />
-                <span>Response activity</span>
-              </TabsTrigger>
-            )}
-            {runbooksContent && (
-              <TabsTrigger
-                value="runbooks"
-                className="shrink-0 gap-2 px-3 py-1 text-xs font-medium data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-2xs rounded-md transition-all"
-              >
-                <BookOpen className="h-4 w-4" />
-                <span>Runbooks</span>
-              </TabsTrigger>
-            )}
-            <TabsTrigger
-              value="timeline"
-              className="shrink-0 gap-2 px-3 py-1 text-xs font-medium data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-2xs rounded-md transition-all"
-            >
-              <History className="h-4 w-4" />
-              <span>Timeline</span>
-            </TabsTrigger>
-            <TabsTrigger
-              value="postmortem"
-              className="shrink-0 gap-2 px-3 py-1 text-xs font-medium data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-2xs rounded-md transition-all"
-            >
-              <FileText className="h-4 w-4" />
-              <span>Postmortem</span>
-              {postmortemStatus && (
-                <span
-                  className={cn(
-                    'inline-block w-1.5 h-1.5 rounded-full ml-0.5',
-                    postmortemStatus === 'PUBLISHED'
-                      ? 'bg-emerald-500 ring-2 ring-emerald-500/20'
-                      : 'bg-amber-500 ring-2 ring-amber-500/20'
-                  )}
-                  title={`Status: ${postmortemStatus}`}
-                />
+              {automationContent && (
+                <TabsTrigger
+                  value="automation"
+                  className="shrink-0 gap-1.5 px-3 py-1 text-xs font-medium rounded-md text-muted-foreground hover:text-foreground data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-xs transition-all select-none"
+                >
+                  <Workflow className="h-3.5 w-3.5" />
+                  <span>Automation</span>
+                </TabsTrigger>
               )}
-            </TabsTrigger>
-          </TabsList>
+              {responseContent && (
+                <TabsTrigger
+                  value="response"
+                  className="shrink-0 gap-1.5 px-3 py-1 text-xs font-medium rounded-md text-muted-foreground hover:text-foreground data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-xs transition-all select-none"
+                >
+                  <Route className="h-3.5 w-3.5" />
+                  <span>Response activity</span>
+                </TabsTrigger>
+              )}
+              {runbooksContent && (
+                <TabsTrigger
+                  value="runbooks"
+                  className="shrink-0 gap-1.5 px-3 py-1 text-xs font-medium rounded-md text-muted-foreground hover:text-foreground data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-xs transition-all select-none"
+                >
+                  <BookOpen className="h-3.5 w-3.5" />
+                  <span>Runbooks</span>
+                </TabsTrigger>
+              )}
+              <TabsTrigger
+                value="timeline"
+                className="shrink-0 gap-1.5 px-3 py-1 text-xs font-medium rounded-md text-muted-foreground hover:text-foreground data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-xs transition-all select-none"
+              >
+                <History className="h-3.5 w-3.5" />
+                <span>Timeline</span>
+                {typeof eventCount === 'number' && (
+                  <span className="ml-1 inline-flex items-center rounded-full bg-muted-foreground/15 px-1.5 py-0.2 text-[10px] font-semibold text-muted-foreground">
+                    {eventCount}
+                  </span>
+                )}
+              </TabsTrigger>
+              <TabsTrigger
+                value="postmortem"
+                className="shrink-0 gap-1.5 px-3 py-1 text-xs font-medium rounded-md text-muted-foreground hover:text-foreground data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-xs transition-all select-none"
+              >
+                <FileText className="h-3.5 w-3.5" />
+                <span>Postmortem</span>
+                {postmortemStatus && (
+                  <span
+                    className={cn(
+                      'inline-block w-1.5 h-1.5 rounded-full ml-0.5',
+                      postmortemStatus === 'PUBLISHED'
+                        ? 'bg-emerald-500 ring-2 ring-emerald-500/20'
+                        : 'bg-amber-500 ring-2 ring-amber-500/20'
+                    )}
+                    title={`Status: ${postmortemStatus}`}
+                  />
+                )}
+              </TabsTrigger>
+            </TabsList>
+          </div>
 
-          <Badge
-            variant="outline"
-            className="gap-1.5 py-1 px-2 border-border bg-background shrink-0 text-xs font-medium"
-          >
-            <Zap className="h-3.5 w-3.5 text-amber-500" />
-            <span>{eventCount} Events</span>
-          </Badge>
+          {typeof eventCount === 'number' && (
+            <Badge
+              variant="outline"
+              className="hidden 2xl:inline-flex gap-1.5 py-1 px-2.5 border-border bg-background/80 shrink-0 text-xs font-medium"
+            >
+              <Zap className="h-3.5 w-3.5 text-amber-500" />
+              <span>{eventCount} Events</span>
+            </Badge>
+          )}
         </div>
 
         {/* Tab Content */}
