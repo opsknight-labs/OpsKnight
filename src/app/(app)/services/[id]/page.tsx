@@ -41,7 +41,6 @@ import DeleteConfirmDialog from '@/components/ui/DeleteConfirmDialog';
 import ServiceDetailTabs from '@/components/service/ServiceDetailTabs';
 import ServiceSettingsFlashToast from '@/components/service/ServiceSettingsFlashToast';
 import { InlineNotice } from '@/components/ui/InlineNotice';
-import { Alert, AlertTitle, AlertDescription } from '@/components/ui/shadcn/alert';
 
 // Icons
 import {
@@ -65,7 +64,6 @@ import {
   Terminal,
   Webhook,
   Bell,
-  Info,
   ChevronDown,
 } from 'lucide-react';
 

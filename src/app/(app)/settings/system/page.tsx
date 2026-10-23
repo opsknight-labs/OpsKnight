@@ -55,7 +55,11 @@ async function loadSystemSettings() {
   const permissions = await getUserPermissions();
   if (!permissions.isAdmin) return { kind: 'forbidden' as const, role: permissions.role };
   const prisma = (await import('@/lib/prisma')).default;
-  const t0 = performance.now();
+  // Dedicated PostgreSQL ping probe to accurately measure database round-trip latency
+  const pingStart = performance.now();
+  await prisma.$queryRawUnsafe('SELECT 1');
+  const dbPingMs = Math.max(1, Math.round(performance.now() - pingStart));
+
   const [
     systemSettings,
     rawOidcConfig,
@@ -87,13 +91,13 @@ async function loadSystemSettings() {
     prisma.serviceAutomationRule.count(),
     prisma.runbook.count(),
   ]);
-  const dbLatencyMs = Math.max(1, Math.round(performance.now() - t0));
   const memory = process.memoryUsage();
   const heapUsedMb = Math.round(memory.heapUsed / 1024 / 1024);
   const heapTotalMb = Math.round(memory.heapTotal / 1024 / 1024);
   const uptimeSeconds = Math.floor(process.uptime());
   const nodeVersion = process.version;
   const platform = process.platform;
+  const processId = process.pid;
 
   return {
     kind: 'ok' as const,
@@ -109,12 +113,14 @@ async function loadSystemSettings() {
       integrationCount,
       automationCount,
       runbookCount,
-      dbLatencyMs,
+      dbLatencyMs: dbPingMs,
+      dbPingMs,
       uptimeSeconds,
       heapUsedMb,
       heapTotalMb,
       nodeVersion,
       platform,
+      processId,
     },
   };
 }

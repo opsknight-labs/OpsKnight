@@ -129,6 +129,14 @@ export const AutomationOverview = memo(function AutomationOverview({
   const totalFailures = calculateDeduplicatedFailures(errors, fallbacks);
   const hasFailures = errors > 0 || fallbacks > 0;
 
+  // Enforce that stacked parity bar segments strictly partition the evaluated total
+  const identicalCount = Math.min(evaluated, Math.max(0, same));
+  const failureCount = Math.min(evaluated - identicalCount, Math.max(0, totalFailures));
+  const divergentCount = Math.max(0, evaluated - identicalCount - failureCount);
+  const identicalPct = evaluated > 0 ? (identicalCount / evaluated) * 100 : 0;
+  const failurePct = evaluated > 0 ? (failureCount / evaluated) * 100 : 0;
+  const divergentPct = evaluated > 0 ? (divergentCount / evaluated) * 100 : 0;
+
   return (
     <div className="space-y-3.5">
       {/* Pending candidate alert if evaluating in parallel */}
@@ -277,22 +285,24 @@ export const AutomationOverview = memo(function AutomationOverview({
             aria-valuemax={100}
             aria-label={`Routing parity: ${parityPct ?? '0'}%`}
           >
-            <div
-              className="bg-emerald-500 transition-all duration-300"
-              style={{ width: `${Math.min(100, Math.max(0, (same / evaluated) * 100))}%` }}
-              title={`Identical: ${same} (${parityPct}%)`}
-            />
-            <div
-              className="bg-indigo-500 transition-all duration-300"
-              style={{ width: `${Math.min(100, Math.max(0, (diffRoutes / evaluated) * 100))}%` }}
-              title={`Divergent routes: ${diffRoutes}`}
-            />
-            {totalFailures > 0 && (
+            {identicalPct > 0 && (
+              <div
+                className="bg-emerald-500 transition-all duration-300"
+                style={{ width: `${identicalPct}%` }}
+                title={`Identical: ${same} (${parityPct}%)`}
+              />
+            )}
+            {divergentPct > 0 && (
+              <div
+                className="bg-indigo-500 transition-all duration-300"
+                style={{ width: `${divergentPct}%` }}
+                title={`Divergent routes: ${diffRoutes}`}
+              />
+            )}
+            {failurePct > 0 && (
               <div
                 className="bg-amber-500 transition-all duration-300"
-                style={{
-                  width: `${Math.min(100, Math.max(0, (totalFailures / evaluated) * 100))}%`,
-                }}
+                style={{ width: `${failurePct}%` }}
                 title={`Errors/fallbacks: ${totalFailures}${
                   errors > 0 && fallbacks > 0 ? ` (${errors} err, ${fallbacks} fallback)` : ''
                 }`}

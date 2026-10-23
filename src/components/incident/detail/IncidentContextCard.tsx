@@ -60,13 +60,6 @@ function StateChip({ state }: { state: IncidentContextFieldView['state'] }) {
   );
 }
 
-function displayValue(field: IncidentContextFieldView): string {
-  if (field.redacted) return 'Restricted';
-  if (field.state === 'MISSING') return 'Not provided';
-  if (field.state === 'UNMAPPED') return 'Unrecognized value';
-  return field.value ?? '—';
-}
-
 function renderFieldValue(field: IncidentContextFieldView) {
   if (field.redacted) {
     return (

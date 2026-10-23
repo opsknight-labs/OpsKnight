@@ -467,17 +467,38 @@ export function AutomationRules({
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      const activeTag = document.activeElement?.tagName;
+      // Do not intercept if a modal, sheet, or dialog is currently open in the document
+      if (typeof document !== 'undefined') {
+        const hasOpenModal = document.querySelector(
+          '[role="dialog"][data-state="open"], [role="alertdialog"][data-state="open"], [aria-modal="true"], dialog[open]'
+        );
+        if (hasOpenModal) return;
+      }
+
+      const activeEl = document.activeElement as HTMLElement | null;
       const isInputActive =
-        activeTag === 'INPUT' || activeTag === 'TEXTAREA' || activeTag === 'SELECT';
+        activeEl &&
+        (activeEl.tagName === 'INPUT' ||
+          activeEl.tagName === 'TEXTAREA' ||
+          activeEl.tagName === 'SELECT' ||
+          activeEl.isContentEditable ||
+          (typeof activeEl.closest === 'function' &&
+            activeEl.closest(
+              '[role="dialog"], [role="alertdialog"], [role="menu"], [data-radix-popper-content-wrapper]'
+            )));
+
+      if (isInputActive) return;
+
+      if (!searchInputRef.current) return;
+
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
         event.preventDefault();
-        searchInputRef.current?.focus();
-        searchInputRef.current?.select();
-      } else if (event.key === '/' && !isInputActive) {
+        searchInputRef.current.focus();
+        searchInputRef.current.select();
+      } else if (event.key === '/' && !event.metaKey && !event.ctrlKey && !event.altKey) {
         event.preventDefault();
-        searchInputRef.current?.focus();
-        searchInputRef.current?.select();
+        searchInputRef.current.focus();
+        searchInputRef.current.select();
       }
     };
     window.addEventListener('keydown', handleKeyDown);

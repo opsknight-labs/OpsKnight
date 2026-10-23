@@ -280,4 +280,40 @@ describe('AutomationOverview Fallback / Error Display & Readiness Certification'
     expect(screen.getByText('2 errors require review')).toBeInTheDocument();
     expect(screen.getByText('4 / 5 checks ready')).toBeInTheDocument();
   });
+
+  it('strictly partitions the parity progressbar so sum of segment widths equals 100% without overflow', () => {
+    // Evaluated: 100. same: 70. routes: 25. fallbacks: 15 (25+15=40 > 30 remainder)
+    const counts: Counts = {
+      evaluated: 100,
+      same: 70,
+      routes: 25,
+      priorities: 5,
+      skips: 0,
+      errors: 10,
+      fallbacks: 15,
+    };
+
+    const { container } = render(
+      <AutomationOverview
+        data={baseData}
+        counts={counts}
+        traceFilter="ALL"
+        setTraceFilter={vi.fn()}
+        setArea={vi.fn()}
+      />
+    );
+
+    const progressbar = container.querySelector('[role="progressbar"]');
+    expect(progressbar).toBeInTheDocument();
+    const segments = Array.from(progressbar?.children ?? []) as HTMLElement[];
+    expect(segments.length).toBeGreaterThan(0);
+
+    const totalWidthPct = segments.reduce((sum, seg) => {
+      const match = seg.style.width.match(/([\d.]+)%/);
+      return sum + (match ? parseFloat(match[1]) : 0);
+    }, 0);
+
+    // Must strictly equal 100% without overflow
+    expect(totalWidthPct).toBeCloseTo(100, 1);
+  });
 });

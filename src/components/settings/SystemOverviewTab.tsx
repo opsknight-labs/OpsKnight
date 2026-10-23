@@ -12,13 +12,11 @@ import {
   CheckCircle2,
   AlertTriangle,
   ArrowRight,
-  Zap,
   Lock,
   Layers,
   HeartPulse,
   Workflow,
   BookOpen,
-  Terminal,
   Radio,
   Clock,
 } from 'lucide-react';
@@ -34,11 +32,13 @@ export interface SystemOverviewMetrics {
   automationCount: number;
   runbookCount: number;
   dbLatencyMs: number;
+  dbPingMs?: number;
   uptimeSeconds: number;
   heapUsedMb: number;
   heapTotalMb: number;
   nodeVersion: string;
   platform: string;
+  processId?: number;
 }
 
 export interface SystemOverviewSubsystems {
@@ -101,11 +101,11 @@ export default function SystemOverviewTab({ metrics, subsystems, onNavigateTab }
               </div>
               <div>
                 <p className="text-[11px] font-medium text-muted-foreground">
-                  PostgreSQL 16 Engine
+                  PostgreSQL Connection
                 </p>
                 <div className="flex items-center gap-1.5 mt-0.5">
                   <span className="flex h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                  <span className="text-xs font-semibold text-foreground">Operational</span>
+                  <span className="text-xs font-semibold text-foreground">Connected</span>
                 </div>
               </div>
             </div>
@@ -113,15 +113,15 @@ export default function SystemOverviewTab({ metrics, subsystems, onNavigateTab }
               variant="outline"
               className="text-[10px] font-mono border-emerald-500/30 text-emerald-600 dark:text-emerald-400"
             >
-              {metrics.dbLatencyMs} ms ping
+              {metrics.dbPingMs ?? metrics.dbLatencyMs} ms ping
             </Badge>
           </div>
           <p className="mt-2 text-[10px] text-muted-foreground leading-relaxed">
-            Persistent pool healthy. Schema migration status 100% synchronized.
+            Direct query round-trip (SELECT 1) to primary database pool.
           </p>
         </div>
 
-        {/* Node.js Heap Memory */}
+        {/* Process Heap Memory */}
         <div className="relative overflow-hidden rounded-xl border border-border/80 bg-card/60 p-3.5 backdrop-blur-xs shadow-2xs transition-all hover:border-blue-500/40 hover:shadow-xs">
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-2">
@@ -129,7 +129,7 @@ export default function SystemOverviewTab({ metrics, subsystems, onNavigateTab }
                 <Cpu className="h-4 w-4" />
               </div>
               <div>
-                <p className="text-[11px] font-medium text-muted-foreground">Runtime Memory</p>
+                <p className="text-[11px] font-medium text-muted-foreground">Web Process Memory</p>
                 <p className="text-xs font-semibold text-foreground mt-0.5">
                   {metrics.heapUsedMb} MB{' '}
                   <span className="text-[10px] font-normal text-muted-foreground">
@@ -154,9 +154,13 @@ export default function SystemOverviewTab({ metrics, subsystems, onNavigateTab }
               style={{ width: `${heapPct}%` }}
             />
           </div>
+          <p className="mt-2 text-[10px] text-muted-foreground leading-relaxed">
+            Local Node.js heap for serving instance
+            {metrics.processId ? ` (PID ${metrics.processId})` : ''}.
+          </p>
         </div>
 
-        {/* Platform Uptime & Engine */}
+        {/* Instance Runtime */}
         <div className="relative overflow-hidden rounded-xl border border-border/80 bg-card/60 p-3.5 backdrop-blur-xs shadow-2xs transition-all hover:border-purple-500/40 hover:shadow-xs">
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-2">
@@ -164,9 +168,7 @@ export default function SystemOverviewTab({ metrics, subsystems, onNavigateTab }
                 <Server className="h-4 w-4" />
               </div>
               <div>
-                <p className="text-[11px] font-medium text-muted-foreground">
-                  Node {metrics.nodeVersion}
-                </p>
+                <p className="text-[11px] font-medium text-muted-foreground">Instance Runtime</p>
                 <div className="flex items-center gap-1 mt-0.5">
                   <Clock className="h-3 w-3 text-purple-500" />
                   <span className="text-xs font-semibold text-foreground">
@@ -179,11 +181,11 @@ export default function SystemOverviewTab({ metrics, subsystems, onNavigateTab }
               variant="outline"
               className="text-[10px] font-mono border-purple-500/30 text-purple-600 dark:text-purple-400 capitalize"
             >
-              {metrics.platform}
+              Node {metrics.nodeVersion}
             </Badge>
           </div>
           <p className="mt-2 text-[10px] text-muted-foreground leading-relaxed">
-            Asynchronous event loop latency optimal. Zero unhandled promise rejections.
+            Elapsed runtime for this serving process on {metrics.platform}.
           </p>
         </div>
 
@@ -566,11 +568,8 @@ export default function SystemOverviewTab({ metrics, subsystems, onNavigateTab }
                 </div>
                 <h4 className="text-xs font-semibold text-foreground">System Health Center</h4>
               </div>
-              <Badge
-                variant="outline"
-                className="text-[10px] border-emerald-500/30 text-emerald-600 dark:text-emerald-400"
-              >
-                100% Probes Pass
+              <Badge variant="outline" className="text-[10px] border-primary/30 text-primary">
+                Deep Diagnostics
               </Badge>
             </div>
             <p className="text-xs text-muted-foreground leading-relaxed">
@@ -578,7 +577,7 @@ export default function SystemOverviewTab({ metrics, subsystems, onNavigateTab }
               replication.
             </p>
             <div className="rounded-lg bg-muted/50 px-2.5 py-1.5 border border-border/50 text-[11px] text-muted-foreground truncate">
-              Self-healing & audit logging active
+              Live status checks available via health center
             </div>
           </div>
           <div className="mt-4 pt-3 border-t border-border/60 flex items-center justify-between">

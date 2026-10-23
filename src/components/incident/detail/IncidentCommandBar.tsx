@@ -281,23 +281,6 @@ export default function IncidentCommandBar({
     onUnsuppress,
   ]);
 
-  const getStatusBorder = () => {
-    switch (currentStatus) {
-      case 'OPEN':
-        return 'border-l-4 border-l-rose-500';
-      case 'ACKNOWLEDGED':
-        return 'border-l-4 border-l-amber-500';
-      case 'RESOLVED':
-        return 'border-l-4 border-l-emerald-500';
-      case 'SNOOZED':
-        return 'border-l-4 border-l-indigo-500';
-      case 'SUPPRESSED':
-        return 'border-l-4 border-l-zinc-500';
-      default:
-        return 'border-l-4 border-l-slate-300';
-    }
-  };
-
   const statusAnnouncement = isResolved
     ? 'Incident resolved'
     : isSnoozed

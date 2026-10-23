@@ -120,19 +120,52 @@ export default function AutomationWorkspace({
     };
   }, []);
 
+  const [review, setReview] = useState<ReviewAction | null>(null);
+  const [reviewData, setReviewData] = useState<Data | null>(null);
+  const [restoreVersion, setRestoreVersion] = useState<RestorableVersion | null>(null);
+  const [confirmDisable, setConfirmDisable] = useState(false);
+  const [confirmDiscardCandidate, setConfirmDiscardCandidate] = useState(false);
+  const [deleteField, setDeleteField] = useState<Field | null>(null);
+  const [ruleSearch, setRuleSearch] = useState('');
+  const [ruleStateFilter, setRuleStateFilter] = useState('all');
+  const [expandedRules, setExpandedRules] = useState<Set<string>>(() => new Set());
+  const [traceFilter, setTraceFilter] = useState('ALL');
+  const [versionView, setVersionView] = useState<string | null>(null);
+
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      // Never intercept 1-5 when workspace dialogs/modals are active
+      if (
+        review !== null ||
+        restoreVersion !== null ||
+        confirmDisable ||
+        confirmDiscardCandidate ||
+        deleteField !== null
+      ) {
+        return;
+      }
       const target = e.target as HTMLElement | null;
+      if (typeof document !== 'undefined') {
+        const hasOpenModal = document.querySelector(
+          '[role="dialog"][data-state="open"], [role="alertdialog"][data-state="open"], [aria-modal="true"], dialog[open]'
+        );
+        if (hasOpenModal) return;
+      }
       if (
         target &&
         (target.tagName === 'INPUT' ||
           target.tagName === 'TEXTAREA' ||
           target.tagName === 'SELECT' ||
-          target.isContentEditable)
+          target.tagName === 'BUTTON' ||
+          target.isContentEditable ||
+          (typeof target.closest === 'function' &&
+            target.closest(
+              '[role="dialog"], [role="alertdialog"], [role="menu"], [data-radix-popper-content-wrapper]'
+            )))
       ) {
         return;
       }
-      if (e.metaKey || e.ctrlKey || e.altKey) return;
 
       const keyToArea: Record<string, Area> = {
         '1': 'overview',
@@ -149,19 +182,7 @@ export default function AutomationWorkspace({
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []);
-
-  const [review, setReview] = useState<ReviewAction | null>(null);
-  const [reviewData, setReviewData] = useState<Data | null>(null);
-  const [restoreVersion, setRestoreVersion] = useState<RestorableVersion | null>(null);
-  const [confirmDisable, setConfirmDisable] = useState(false);
-  const [confirmDiscardCandidate, setConfirmDiscardCandidate] = useState(false);
-  const [deleteField, setDeleteField] = useState<Field | null>(null);
-  const [ruleSearch, setRuleSearch] = useState('');
-  const [ruleStateFilter, setRuleStateFilter] = useState('all');
-  const [expandedRules, setExpandedRules] = useState<Set<string>>(() => new Set());
-  const [traceFilter, setTraceFilter] = useState('ALL');
-  const [versionView, setVersionView] = useState<string | null>(null);
+  }, [review, restoreVersion, confirmDisable, confirmDiscardCandidate, deleteField]);
   // eslint-disable-next-line security/detect-object-injection -- `area` is a closed union.
   const data = areaData[area] ?? null;
   // Keeps the header populated while a newly selected section loads.

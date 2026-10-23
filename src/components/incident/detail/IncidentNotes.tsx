@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import NoteCard from '../NoteCard';
 import { Button } from '@/components/ui/shadcn/button';
 import { Textarea } from '@/components/ui/shadcn/textarea';
@@ -36,11 +36,13 @@ export default function IncidentNotes({
   totalNotesCount,
 }: IncidentNotesProps) {
   const [loadedNotes, setLoadedNotes] = useState<Note[]>(notes);
+  const [prevNotes, setPrevNotes] = useState<Note[]>(notes);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
 
-  useEffect(() => {
+  if (notes !== prevNotes) {
+    setPrevNotes(notes);
     setLoadedNotes(notes);
-  }, [notes]);
+  }
 
   const hasMoreNotes = incidentId && totalNotesCount ? totalNotesCount > loadedNotes.length : false;
 

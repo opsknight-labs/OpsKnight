@@ -41,7 +41,7 @@ function renderJsonValue(val: string): ReactNode {
   let node: ReactNode;
   if (cleanVal.startsWith('"') && cleanVal.endsWith('"')) {
     node = <span className="text-emerald-700 dark:text-emerald-400 font-normal">{cleanVal}</span>;
-  } else if (/^-?\d+(\.\d+)?([eE][+-]?\d+)?$/.test(cleanVal)) {
+  } else if (cleanVal.length > 0 && !Number.isNaN(Number(cleanVal))) {
     node = <span className="text-amber-700 dark:text-amber-400 font-medium">{cleanVal}</span>;
   } else if (cleanVal === 'true' || cleanVal === 'false') {
     node = <span className="text-violet-700 dark:text-violet-400 font-semibold">{cleanVal}</span>;

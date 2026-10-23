@@ -15,7 +15,7 @@ import { Input } from '@/components/ui/shadcn/input';
 import { Label } from '@/components/ui/shadcn/label';
 import { Alert, AlertDescription } from '@/components/ui/shadcn/alert';
 import { Badge } from '@/components/ui/shadcn/badge';
-import { Loader2, Tickets, XCircle } from 'lucide-react';
+import { Loader2, XCircle } from 'lucide-react';
 import { notify } from '@/lib/toast';
 import { JiraLogo } from '@/components/common/BrandLogos';
 

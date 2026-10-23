@@ -383,3 +383,34 @@ it('rapid navigation and refreshes discard stale responses and prevent older res
   expect(screen.getByRole('heading', { name: 'Add context field' })).toBeInTheDocument();
   expect(screen.queryByText('Slow Rules Response')).not.toBeInTheDocument();
 });
+
+it('switches area via 1-5 keyboard shortcuts only when no dialog or interactive input is active', async () => {
+  render(<AutomationWorkspace serviceId="service" />);
+  await screen.findByRole('button', { name: 'Overview' });
+
+  // 1. Pressing '3' switches to rules
+  fireEvent.keyDown(window, { key: '3' });
+  expect(await screen.findByRole('button', { name: 'Rules' })).toBeInTheDocument();
+
+  // 2. When a dialog is active in the document, pressing '1' does NOT switch
+  const dialog = document.createElement('div');
+  dialog.setAttribute('role', 'dialog');
+  dialog.setAttribute('data-state', 'open');
+  document.body.appendChild(dialog);
+
+  fireEvent.keyDown(window, { key: '1' });
+  // Area should still be rules
+  expect(api.area).not.toHaveBeenCalledWith('service', 'overview');
+
+  document.body.removeChild(dialog);
+
+  // 3. When an input is focused, typing numbers does NOT trigger area switch
+  const input = document.createElement('input');
+  document.body.appendChild(input);
+  input.focus();
+
+  fireEvent.keyDown(input, { key: '1' });
+  expect(api.area).not.toHaveBeenCalledWith('service', 'overview');
+
+  document.body.removeChild(input);
+});

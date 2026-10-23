@@ -198,8 +198,10 @@ export default function ServiceNotificationSettings({
   // Fetch Slack channels when Slack is selected or integration exists
   useEffect(() => {
     if (slackIntegration) {
-      setLoadingChannels(true);
-      setChannelsError(null);
+      queueMicrotask(() => {
+        setLoadingChannels(true);
+        setChannelsError(null);
+      });
       fetch(`/api/slack/channels?serviceId=${encodeURIComponent(serviceId)}`)
         .then(async res => {
           const data = await res.json();
@@ -249,8 +251,10 @@ export default function ServiceNotificationSettings({
         }
       })
       .catch(() => undefined);
-    setTeamsLoading(true);
-    setTeamsError(null);
+    queueMicrotask(() => {
+      setTeamsLoading(true);
+      setTeamsError(null);
+    });
     fetch(`/api/microsoft-teams/discovery/teams?serviceId=${encodeURIComponent(serviceId)}`)
       .then(async r => {
         const data = await r.json();
@@ -267,11 +271,15 @@ export default function ServiceNotificationSettings({
 
   useEffect(() => {
     if (!selectedTeamId) {
-      setTeamsChannels([]);
+      queueMicrotask(() => {
+        setTeamsChannels([]);
+      });
       return;
     }
-    setTeamsChannelsLoading(true);
-    setTeamsChannelsError(null);
+    queueMicrotask(() => {
+      setTeamsChannelsLoading(true);
+      setTeamsChannelsError(null);
+    });
     fetch(
       `/api/microsoft-teams/discovery/channels?teamId=${encodeURIComponent(selectedTeamId)}&serviceId=${encodeURIComponent(serviceId)}`
     )

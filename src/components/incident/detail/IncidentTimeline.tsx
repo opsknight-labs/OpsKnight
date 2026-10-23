@@ -602,8 +602,8 @@ export default function IncidentTimeline({
     };
     for (const e of timelineEvents) {
       const cat = categorize(e.type, e.message);
-      if (cat !== 'ALL' && counts[cat] !== undefined) {
-        counts[cat]++;
+      if (cat in counts) {
+        counts[cat as keyof typeof counts]++;
       }
     }
     return counts;
