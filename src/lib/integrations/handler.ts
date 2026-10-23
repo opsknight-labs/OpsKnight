@@ -1,4 +1,5 @@
 import { reserveIngestionReplay } from '@/lib/ingestion/replay';
+import { withIngestionRequestSlot } from '@/lib/ingestion/request-gate';
 import type { IngestionRateLimitError } from '@/lib/ingestion/contract';
 /**
  * Integration Handler Middleware
@@ -333,7 +334,10 @@ export function createIntegrationHandler<T>(
     }
   };
 
-  return withRequestContext(handler, `api.integration.${options.integrationType}`);
+  return withRequestContext(
+    (req: NextRequest) => withIngestionRequestSlot(() => handler(req)),
+    `api.integration.${options.integrationType}`
+  );
 }
 
 async function runIntegrationMiddleware(
@@ -528,7 +532,9 @@ export async function withIntegrationMiddleware(
   handler: () => Promise<Response>
 ): Promise<Response> {
   try {
-    return await runIntegrationMiddleware(req, integrationType, handler);
+    return await withIngestionRequestSlot(() =>
+      runIntegrationMiddleware(req, integrationType, handler)
+    );
   } catch (error) {
     const response = ingestionErrorResponse(error);
     if (response) return response;

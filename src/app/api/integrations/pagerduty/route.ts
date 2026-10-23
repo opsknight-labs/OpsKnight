@@ -1,4 +1,5 @@
 import { reserveIngestionReplay } from '@/lib/ingestion/replay';
+import { withIngestionRequestSlot } from '@/lib/ingestion/request-gate';
 import { withIngestionDelivery, ingestionDeliveryKey } from '@/lib/ingestion/admission';
 import { ingestionErrorResponse } from '@/lib/ingestion/http';
 import { NextRequest } from 'next/server';
@@ -15,7 +16,7 @@ import {
 import { integrationKeyFingerprint } from '@/lib/integrations/credentials';
 import { decryptStoredSecret } from '@/lib/encryption';
 
-export async function POST(req: NextRequest) {
+async function postEvent(req: NextRequest) {
   const startTime = performance.now();
   let integrationId: string | null = null;
 
@@ -192,4 +193,8 @@ export async function POST(req: NextRequest) {
       { status: 500, headers: { 'Content-Type': 'application/json' } }
     );
   }
+}
+
+export async function POST(req: NextRequest) {
+  return withIngestionRequestSlot(() => postEvent(req));
 }

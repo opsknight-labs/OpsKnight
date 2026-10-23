@@ -63,6 +63,7 @@ Environment settings:
 
 - `OPSKNIGHT_INGESTION_MODE`: `sync` (default) or `postgres`.
 - `OPSKNIGHT_INGESTION_CONCURRENCY`: 1–32, default 4 per worker process.
+- `OPSKNIGHT_INGESTION_MAX_INFLIGHT_REQUESTS`: 1–1,024, default 32 active ingestion requests per web process. Excess requests receive 503 with Retry-After before authentication/body/database work. Shared across provider routes in a process, independent of distributed request quotas.
 - `OPSKNIGHT_INGESTION_POLL_MS`: 50–30,000, default 250, with jitter. Database failures use bounded exponential backoff.
 - `OPSKNIGHT_INGESTION_MAX_PENDING`: 64–10,000,000, default 100,000, divided conservatively across 64 shards.
 - `OPSKNIGHT_INGESTION_MAX_PENDING_BYTES`: default 1,073,741,824, divided across the same shards.
@@ -132,3 +133,11 @@ PostgreSQL ingestion retention belongs to the scheduler owner (or the integrated
 ### PgBouncer diagnostic variants
 
 `INGESTION_DOCKER_PGBOUNCER=true` adds an owned, network-local PgBouncer using the production entrypoint and pinned 1.26.0 image. Only web replicas use it; ingestion workers remain direct. The harness verifies PostgreSQL client addresses against owned container IPs, rather than relying only on URL configuration. Its 15 normal plus five reserve server connections match the two direct web pools in the default diagnostic topology. `INGESTION_PGBOUNCER_COMPATIBILITY=false` explicitly selects native prepared-statement tracking; compatibility mode remains the harness default and production deployment defaults are unchanged. Prepare fixture databases before load; creating or migrating another database on the same PostgreSQL instance contaminates WAL/latency comparisons. These diagnostics do not establish PgBouncer failover or enterprise capacity.
+
+### Local request backpressure
+
+PostgreSQL ingestion has a centralized process-local request gate across Events API, common provider handlers, middleware providers and the independent PagerDuty route. It bounds authentication, request-body and database work together; it never queues excess requests in JavaScript. Each accepted request holds its slot until the actual handler finishes, including any durable commit. There is no handler timeout that returns failure while an append continues in the background. The gate does not apply in default synchronous mode.
+
+Asynchronous request bodies have a five-second total read deadline and stop on disconnect. The deadline ends before parsing/admission and does not cancel a durable transaction. A nonsettling stream cancellation callback cannot prevent the slot being released. This addresses unauthenticated partial PagerDuty bodies consuming all shared slots. The gate is a local resource bound, not service fairness, a distributed quota, a throughput increase or a promise that a network-lost response cannot follow a committed receipt. Healthy replicas must still meet the existing acceptance/latency gates. Receipts and bounded authenticated replay remain necessary for ambiguous responses.
+
+`opsknight_ingestion_request_overload_total` counts requests refused at the local gate separately from persistent backlog-capacity and quota decisions. The Compose ingestion overlay exposes the concurrency setting; a changed value requires replica configuration/restart rather than a live shared-policy update. Tune it with pool sizes and measured latency, and retain upstream connection/body limits.
