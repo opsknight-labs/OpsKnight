@@ -97,6 +97,10 @@ export async function prepareAutomation(
   classification: { priority: string | null; urgency: string },
   defaultPolicy?: { id: string; name: string } | null
 ): Promise<RuntimeEvaluation | null> {
+  // Acceptance already fixed this event to disabled Automation. A later enable
+  // cannot activate it, so there is no emergency-switch read to perform.
+  if (envelope.automationSnapshot === null || envelope.automationSnapshot?.mode === 'DISABLED')
+    return null;
   // Keep the global emergency switch live even for accepted backlog. Rule
   // publication after acceptance must not silently change a queued decision.
   const config =
