@@ -103,17 +103,17 @@ export default function IncidentHeader({
   const getStatusBorder = () => {
     switch (incident.status) {
       case 'OPEN':
-        return 'border-l-4 border-l-rose-500 bg-gradient-to-r from-rose-50/20 via-white to-white';
+        return 'border-l-4 border-l-rose-500';
       case 'ACKNOWLEDGED':
-        return 'border-l-4 border-l-amber-500 bg-gradient-to-r from-amber-50/20 via-white to-white';
+        return 'border-l-4 border-l-amber-500';
       case 'RESOLVED':
-        return 'border-l-4 border-l-emerald-500 bg-gradient-to-r from-emerald-50/20 via-white to-white';
+        return 'border-l-4 border-l-emerald-500';
       case 'SNOOZED':
-        return 'border-l-4 border-l-indigo-500 bg-gradient-to-r from-indigo-50/20 via-white to-white';
+        return 'border-l-4 border-l-indigo-500';
       case 'SUPPRESSED':
-        return 'border-l-4 border-l-zinc-500 bg-gradient-to-r from-zinc-50/20 via-white to-white';
+        return 'border-l-4 border-l-zinc-500';
       default:
-        return 'border-l-4 border-l-slate-400 bg-white';
+        return 'border-l-4 border-l-muted-foreground';
     }
   };
 
@@ -125,7 +125,7 @@ export default function IncidentHeader({
         : 'bg-emerald-500';
 
   const SELECTOR_BASE_CLASS =
-    'inline-flex items-center gap-1.5 h-8 px-2.5 rounded-md text-xs font-semibold bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 text-slate-800 dark:text-zinc-200 shadow-2xs transition-all max-w-full select-none';
+    'inline-flex items-center gap-1.5 h-7 px-2 rounded-md text-xs font-semibold bg-background border border-border/80 text-foreground shadow-2xs transition-all max-w-full select-none hover:bg-muted/40 hover:border-border';
 
   const durationText = incident.resolvedAt
     ? `Resolved in ${formatDuration(incident.createdAt, incident.resolvedAt)}`
@@ -134,17 +134,17 @@ export default function IncidentHeader({
   return (
     <div
       className={cn(
-        'rounded-xl border border-slate-200 shadow-sm overflow-hidden transition-all',
+        'rounded-xl border border-border/80 bg-card shadow-2xs overflow-hidden transition-all text-card-foreground',
         getStatusBorder()
       )}
     >
       {/* Unified 7-cell grid — all metadata in equal rhythm */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-7 divide-x divide-y divide-slate-100">
+      <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-7 divide-x divide-y xl:divide-y-0 divide-border/60">
         {/* Priority */}
-        <div className="flex flex-col justify-center p-3.5 min-h-[74px]">
-          <div className="flex items-center gap-1.5 mb-1.5">
-            <Activity className="h-3 w-3 text-slate-400 shrink-0" />
-            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+        <div className="flex flex-col justify-center px-3 py-2 min-h-[52px]">
+          <div className="flex items-center gap-1 mb-1">
+            <Activity className="h-3 w-3 text-muted-foreground shrink-0" />
+            <span className="text-[9.5px] font-bold text-muted-foreground uppercase tracking-wider">
               Priority
             </span>
           </div>
@@ -156,10 +156,10 @@ export default function IncidentHeader({
         </div>
 
         {/* Urgency */}
-        <div className="flex flex-col justify-center p-3.5 min-h-[74px]">
-          <div className="flex items-center gap-1.5 mb-1.5">
-            <AlertTriangle className="h-3 w-3 text-slate-400 shrink-0" />
-            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+        <div className="flex flex-col justify-center px-3 py-2 min-h-[52px]">
+          <div className="flex items-center gap-1 mb-1">
+            <AlertTriangle className="h-3 w-3 text-muted-foreground shrink-0" />
+            <span className="text-[9.5px] font-bold text-muted-foreground uppercase tracking-wider">
               Urgency
             </span>
           </div>
@@ -170,15 +170,10 @@ export default function IncidentHeader({
               disabled={isPending}
             >
               <SelectTrigger className="h-auto w-fit border-0 bg-transparent p-0 shadow-none focus:ring-0 [&>svg]:hidden group">
-                <div
-                  className={cn(
-                    SELECTOR_BASE_CLASS,
-                    'hover:bg-slate-50 dark:hover:bg-zinc-800 hover:border-slate-300 dark:hover:border-zinc-700 cursor-pointer group'
-                  )}
-                >
+                <div className={cn(SELECTOR_BASE_CLASS, 'cursor-pointer group')}>
                   <span className={cn('h-2 w-2 rounded-full shrink-0', urgencyDot)} />
                   <span>{incident.urgency}</span>
-                  <ChevronDown className="h-3.5 w-3.5 text-slate-400 group-hover:text-slate-600 dark:text-zinc-500 transition-colors shrink-0 ml-auto" />
+                  <ChevronDown className="h-3.5 w-3.5 text-muted-foreground group-hover:text-foreground transition-colors shrink-0 ml-auto" />
                 </div>
               </SelectTrigger>
               <SelectContent align="start" className="min-w-[150px]">
@@ -211,14 +206,14 @@ export default function IncidentHeader({
         </div>
 
         {/* Visibility */}
-        <div className="flex flex-col justify-center p-3.5 min-h-[74px]">
-          <div className="flex items-center gap-1.5 mb-1.5">
+        <div className="flex flex-col justify-center px-3 py-2 min-h-[52px]">
+          <div className="flex items-center gap-1 mb-1">
             {isPrivate ? (
-              <EyeOff className="h-3 w-3 text-slate-400 shrink-0" />
+              <EyeOff className="h-3 w-3 text-muted-foreground shrink-0" />
             ) : (
-              <Eye className="h-3 w-3 text-slate-400 shrink-0" />
+              <Eye className="h-3 w-3 text-muted-foreground shrink-0" />
             )}
-            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+            <span className="text-[9.5px] font-bold text-muted-foreground uppercase tracking-wider">
               Visibility
             </span>
           </div>
@@ -229,31 +224,26 @@ export default function IncidentHeader({
               disabled={isPending}
             >
               <SelectTrigger className="h-auto w-fit border-0 bg-transparent p-0 shadow-none focus:ring-0 [&>svg]:hidden group">
-                <div
-                  className={cn(
-                    SELECTOR_BASE_CLASS,
-                    'hover:bg-slate-50 dark:hover:bg-zinc-800 hover:border-slate-300 dark:hover:border-zinc-700 cursor-pointer group'
-                  )}
-                >
+                <div className={cn(SELECTOR_BASE_CLASS, 'cursor-pointer group')}>
                   {isPrivate ? (
-                    <EyeOff className="h-3.5 w-3.5 text-slate-500 shrink-0" />
+                    <EyeOff className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
                   ) : (
-                    <Eye className="h-3.5 w-3.5 text-slate-500 shrink-0" />
+                    <Eye className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
                   )}
                   <span>{isPrivate ? 'Private' : 'Public'}</span>
-                  <ChevronDown className="h-3.5 w-3.5 text-slate-400 group-hover:text-slate-600 dark:text-zinc-500 transition-colors shrink-0 ml-auto" />
+                  <ChevronDown className="h-3.5 w-3.5 text-muted-foreground group-hover:text-foreground transition-colors shrink-0 ml-auto" />
                 </div>
               </SelectTrigger>
               <SelectContent align="start" className="min-w-[150px]">
                 <SelectItem value="PUBLIC" className="cursor-pointer">
-                  <div className="flex items-center gap-2 text-xs font-semibold text-slate-800 dark:text-zinc-200">
-                    <Eye className="h-3.5 w-3.5 text-slate-500 shrink-0" />
+                  <div className="flex items-center gap-2 text-xs font-semibold text-foreground">
+                    <Eye className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
                     <span>Public</span>
                   </div>
                 </SelectItem>
                 <SelectItem value="PRIVATE" className="cursor-pointer">
-                  <div className="flex items-center gap-2 text-xs font-semibold text-slate-800 dark:text-zinc-200">
-                    <EyeOff className="h-3.5 w-3.5 text-slate-500 shrink-0" />
+                  <div className="flex items-center gap-2 text-xs font-semibold text-foreground">
+                    <EyeOff className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
                     <span>Private</span>
                   </div>
                 </SelectItem>
@@ -262,9 +252,9 @@ export default function IncidentHeader({
           ) : (
             <div className={cn(SELECTOR_BASE_CLASS, 'cursor-default')}>
               {isPrivate ? (
-                <EyeOff className="h-3.5 w-3.5 text-slate-500 shrink-0" />
+                <EyeOff className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
               ) : (
-                <Eye className="h-3.5 w-3.5 text-slate-500 shrink-0" />
+                <Eye className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
               )}
               <span>{isPrivate ? 'Private' : 'Public'}</span>
             </div>
@@ -275,27 +265,27 @@ export default function IncidentHeader({
         <Link
           href={`${routePrefix}/services/${incident.serviceId}`}
           title={`Service: ${incident.service.name}`}
-          className="group flex flex-col justify-center p-3.5 min-h-[74px] hover:bg-slate-50/80 transition-colors"
+          className="group flex flex-col justify-center px-3 py-2 min-h-[52px] hover:bg-muted/40 transition-colors"
         >
-          <div className="flex items-center gap-1.5 mb-1.5">
-            <Server className="h-3 w-3 text-slate-400 shrink-0" />
-            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+          <div className="flex items-center gap-1 mb-1">
+            <Server className="h-3 w-3 text-muted-foreground shrink-0" />
+            <span className="text-[9.5px] font-bold text-muted-foreground uppercase tracking-wider">
               Service
             </span>
           </div>
-          <div className="flex items-center gap-1.5 max-w-full">
-            <span className="text-sm font-semibold text-slate-900 group-hover:text-primary transition-colors truncate">
+          <div className="flex items-center gap-1 max-w-full">
+            <span className="text-xs font-semibold text-foreground group-hover:text-primary transition-colors truncate">
               {incident.service.name}
             </span>
-            <ArrowUpRight className="h-3 w-3 text-slate-300 opacity-0 group-hover:opacity-100 group-hover:text-primary group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-all shrink-0" />
+            <ArrowUpRight className="h-3 w-3 text-muted-foreground/50 opacity-0 group-hover:opacity-100 group-hover:text-primary group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-all shrink-0" />
           </div>
         </Link>
 
         {/* Assignee */}
-        <div className="flex flex-col justify-center p-3.5 min-h-[74px]">
-          <div className="flex items-center gap-1.5 mb-1.5">
-            <Users className="h-3 w-3 text-slate-400 shrink-0" />
-            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+        <div className="flex flex-col justify-center px-3 py-2 min-h-[52px]">
+          <div className="flex items-center gap-1 mb-1">
+            <Users className="h-3 w-3 text-muted-foreground shrink-0" />
+            <span className="text-[9.5px] font-bold text-muted-foreground uppercase tracking-wider">
               Assignee
             </span>
           </div>
@@ -317,40 +307,40 @@ export default function IncidentHeader({
           <Link
             href={`${routePrefix}/policies/${incident.incidentPolicy.id}`}
             title={`Escalation Policy: ${incident.incidentPolicy.name}`}
-            className="group flex flex-col justify-center p-3.5 min-h-[74px] hover:bg-slate-50/80 transition-colors"
+            className="group flex flex-col justify-center px-3 py-2 min-h-[52px] hover:bg-muted/40 transition-colors"
           >
-            <div className="flex items-center gap-1.5 mb-1.5">
-              <Shield className="h-3 w-3 text-slate-400 shrink-0" />
-              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+            <div className="flex items-center gap-1 mb-1">
+              <Shield className="h-3 w-3 text-muted-foreground shrink-0" />
+              <span className="text-[9.5px] font-bold text-muted-foreground uppercase tracking-wider">
                 Incident policy
               </span>
             </div>
-            <div className="flex items-center gap-1.5 max-w-full">
-              <span className="text-sm font-semibold text-slate-900 group-hover:text-primary transition-colors truncate">
+            <div className="flex items-center gap-1 max-w-full">
+              <span className="text-xs font-semibold text-foreground group-hover:text-primary transition-colors truncate">
                 {incident.incidentPolicy.name}
               </span>
-              <ArrowUpRight className="h-3 w-3 text-slate-300 opacity-0 group-hover:opacity-100 group-hover:text-primary group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-all shrink-0" />
+              <ArrowUpRight className="h-3 w-3 text-muted-foreground/50 opacity-0 group-hover:opacity-100 group-hover:text-primary group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-all shrink-0" />
             </div>
           </Link>
         ) : (
-          <div className="flex flex-col justify-center p-3.5 min-h-[74px] opacity-60">
-            <div className="flex items-center gap-1.5 mb-1.5">
-              <Shield className="h-3 w-3 text-slate-400 shrink-0" />
-              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+          <div className="flex flex-col justify-center px-3 py-2 min-h-[52px] opacity-60">
+            <div className="flex items-center gap-1 mb-1">
+              <Shield className="h-3 w-3 text-muted-foreground shrink-0" />
+              <span className="text-[9.5px] font-bold text-muted-foreground uppercase tracking-wider">
                 Incident policy
               </span>
             </div>
-            <span className="text-sm text-slate-400 italic">
+            <span className="text-xs text-muted-foreground italic">
               {incident.noEscalation ? 'Personal paging skipped' : 'None'}
             </span>
           </div>
         )}
 
         {/* Escalation */}
-        <div className="flex flex-col justify-center p-3.5 min-h-[74px]">
-          <div className="flex items-center gap-1.5 mb-1.5">
-            <Clock className="h-3 w-3 text-slate-400 shrink-0" />
-            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+        <div className="flex flex-col justify-center px-3 py-2 min-h-[52px]">
+          <div className="flex items-center gap-1 mb-1">
+            <Clock className="h-3 w-3 text-muted-foreground shrink-0" />
+            <span className="text-[9.5px] font-bold text-muted-foreground uppercase tracking-wider">
               Escalation
             </span>
           </div>
@@ -359,10 +349,7 @@ export default function IncidentHeader({
             if (incident.status === 'RESOLVED') {
               return (
                 <div
-                  className={cn(
-                    SELECTOR_BASE_CLASS,
-                    'cursor-default text-slate-700 dark:text-zinc-300'
-                  )}
+                  className={cn(SELECTOR_BASE_CLASS, 'cursor-default text-foreground/80')}
                   title="Escalation ended upon resolution"
                 >
                   <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
@@ -416,7 +403,7 @@ export default function IncidentHeader({
                   currentStep={incident.currentEscalationStep}
                   nextEscalationAt={incident.nextEscalationAt}
                   size="sm"
-                  className="h-8"
+                  className="h-7 text-xs"
                 />
               );
             }
@@ -438,24 +425,24 @@ export default function IncidentHeader({
             }
 
             // Default fallback
-            return <span className="text-sm text-slate-400 italic">None</span>;
+            return <span className="text-xs text-muted-foreground italic">None</span>;
           })()}
         </div>
       </div>
 
-      {/* Balanced, enriched footer bar */}
-      <div className="border-t border-slate-100 bg-slate-50/70 px-4 py-2 flex flex-wrap items-center justify-between gap-y-1.5 text-xs text-slate-500">
+      {/* Balanced, enriched compact footer bar */}
+      <div className="border-t border-border/50 bg-muted/15 px-3 py-1.5 flex flex-wrap items-center justify-between gap-y-1 text-xs text-muted-foreground">
         {/* Left: Timestamps + duration */}
-        <div className="flex items-center gap-x-4 gap-y-1 flex-wrap font-medium">
-          <div className="flex items-center gap-1.5">
-            <Clock className="h-3 w-3 text-slate-400" />
+        <div className="flex items-center gap-x-3.5 gap-y-0.5 flex-wrap text-[11px] font-medium">
+          <div className="flex items-center gap-1">
+            <Clock className="h-3 w-3 text-muted-foreground" />
             <span>
               Created {formatDateTime(incident.createdAt, userTimeZone, { format: 'relative' })}
             </span>
           </div>
           {incident.acknowledgedAt && (
-            <div className="flex items-center gap-1.5 text-amber-700">
-              <CheckCircle2 className="h-3 w-3 text-amber-600" />
+            <div className="flex items-center gap-1 text-amber-700 dark:text-amber-400">
+              <CheckCircle2 className="h-3 w-3 text-amber-600 dark:text-amber-400" />
               <span>
                 Ack&apos;d{' '}
                 {formatDateTime(incident.acknowledgedAt, userTimeZone, { format: 'relative' })}
@@ -463,26 +450,28 @@ export default function IncidentHeader({
             </div>
           )}
           {incident.resolvedAt && (
-            <div className="flex items-center gap-1.5 text-emerald-700">
-              <CheckCircle2 className="h-3 w-3 text-emerald-600" />
+            <div className="flex items-center gap-1 text-emerald-700 dark:text-emerald-400">
+              <CheckCircle2 className="h-3 w-3 text-emerald-600 dark:text-emerald-400" />
               <span>
                 Resolved {formatDateTime(incident.resolvedAt, userTimeZone, { format: 'relative' })}
               </span>
             </div>
           )}
-          <div className="flex items-center gap-1.5 text-slate-600">
-            <Timer className="h-3 w-3 text-slate-400" />
+          <div className="flex items-center gap-1 text-foreground/80">
+            <Timer className="h-3 w-3 text-muted-foreground" />
             <span>{durationText}</span>
           </div>
         </div>
 
         {/* Right: Quick reference */}
-        <div className="flex items-center gap-2">
-          <span className="font-mono text-[11px] text-slate-400">#{incident.id.slice(0, 8)}</span>
+        <div className="flex items-center gap-1.5">
+          <span className="font-mono text-[11px] text-muted-foreground">
+            #{incident.id.slice(0, 8)}
+          </span>
           <CopyButton
             text={incident.id}
             label="Copy ID"
-            className="text-slate-400 hover:text-slate-700 hover:bg-slate-200/60 h-6 px-1.5 text-[11px]"
+            className="text-muted-foreground hover:text-foreground hover:bg-muted/60 h-5 px-1.5 text-[10px]"
           />
         </div>
       </div>

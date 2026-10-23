@@ -180,7 +180,7 @@ export default function AssigneeSection({
   // Header Variant - Button Trigger
   if (variant === 'header') {
     const SELECTOR_BASE_CLASS =
-      'inline-flex items-center gap-1.5 h-8 px-2.5 rounded-md text-xs font-semibold bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 text-slate-800 dark:text-zinc-200 shadow-2xs transition-all max-w-full select-none';
+      'inline-flex items-center gap-1.5 h-7 px-2 rounded-md text-xs font-semibold bg-background border border-border/80 text-foreground shadow-2xs transition-all max-w-full select-none';
 
     if (!canManage) {
       return (
@@ -198,14 +198,14 @@ export default function AssigneeSection({
                 gender={assignee.gender}
                 avatarUrl={assignee.avatarUrl}
                 size="xs"
-                className="border-slate-200 shrink-0 h-4 w-4 text-[9px]"
+                className="border-border/80 shrink-0 h-4 w-4 text-[9px]"
               />
               <span className="truncate max-w-[110px]">{assignee.name}</span>
             </>
           ) : (
             <>
-              <User className="h-3.5 w-3.5 text-slate-400 shrink-0" />
-              <span className="text-slate-500 dark:text-zinc-400 font-medium">Unassigned</span>
+              <User className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+              <span className="text-muted-foreground font-medium">Unassigned</span>
             </>
           )}
         </div>
@@ -219,7 +219,7 @@ export default function AssigneeSection({
             type="button"
             className={cn(
               SELECTOR_BASE_CLASS,
-              'hover:bg-slate-50 dark:hover:bg-zinc-800 hover:border-slate-300 dark:hover:border-zinc-700 cursor-pointer group'
+              'hover:bg-muted/40 hover:border-border cursor-pointer group'
             )}
             title="Change Assignee"
           >
@@ -236,17 +236,17 @@ export default function AssigneeSection({
                   gender={assignee.gender}
                   avatarUrl={assignee.avatarUrl}
                   size="xs"
-                  className="border-slate-200 shrink-0 h-4 w-4 text-[9px]"
+                  className="border-border/80 shrink-0 h-4 w-4 text-[9px]"
                 />
                 <span className="truncate max-w-[110px]">{assignee.name}</span>
               </>
             ) : (
               <>
-                <User className="h-3.5 w-3.5 text-slate-400 shrink-0" />
-                <span className="text-slate-500 dark:text-zinc-400 font-medium">Unassigned</span>
+                <User className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                <span className="text-muted-foreground font-medium">Unassigned</span>
               </>
             )}
-            <ChevronDown className="h-3.5 w-3.5 text-slate-400 group-hover:text-slate-600 dark:text-zinc-500 transition-colors shrink-0 ml-auto" />
+            <ChevronDown className="h-3.5 w-3.5 text-muted-foreground group-hover:text-foreground transition-colors shrink-0 ml-auto" />
           </button>
         </PopoverTrigger>
         <PopoverContent className="p-0 w-64" align="start">
