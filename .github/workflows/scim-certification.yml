@@ -52,6 +52,17 @@ jobs:
         with: { fetch-depth: 0 }
       - uses: actions/setup-node@v4
         with: { node-version: 20, cache: npm }
+      - name: Generate disposable production fixture keys
+        run: |
+          node --input-type=module <<'JS'
+          import { randomBytes } from 'node:crypto';
+          import { appendFileSync } from 'node:fs';
+          for (const name of ['API_KEY_SECRET', 'ENCRYPTION_KEY']) {
+            const value = randomBytes(32).toString('hex');
+            console.log(`::add-mask::${value}`);
+            appendFileSync(process.env.GITHUB_ENV, `${name}=${value}\n`);
+          }
+          JS
       # Match the repository lockfile installation policy used by integration/security CI.
       - run: npm ci --legacy-peer-deps
       - run: npx prisma generate && npx prisma migrate deploy
@@ -70,26 +81,22 @@ jobs:
       - run: npx ts-node --project tsconfig.script.json scripts/scim/seed-certification.ts
       # Exercise the compiled SQL/runtime boundary, not only the development server.
       - run: BUILD_DIR=.next-scim-production npx next build
-      - run: BUILD_DIR=.next-scim-production npx next start --port 3028 > /tmp/scim-server.log 2>&1 &
-      - run: |
-          node --input-type=module <<'JS'
-          for (let attempt = 0; attempt < 120; attempt++) {
-            try { if ((await fetch('http://localhost:3028/login')).ok) process.exit(0); } catch {}
-            await new Promise(resolve => setTimeout(resolve, 1000));
-          }
-          throw new Error('SCIM fixture did not start.');
-          JS
+      - name: Stage standalone production assets
+        run: |
+          mkdir -p .next-scim-production/standalone/public .next-scim-production/standalone/.next-scim-production/static
+          cp -R public/. .next-scim-production/standalone/public/
+          cp -R .next-scim-production/static/. .next-scim-production/standalone/.next-scim-production/static/
+      - name: Start standalone SCIM fixture
+        run: |
+          HOSTNAME=127.0.0.1 PORT=3028 node .next-scim-production/standalone/server.js > /tmp/scim-server.log 2>&1 &
+          echo "$!" > /tmp/scim-server.pid
+      - run: node scripts/scim/wait-for-server.mjs http://localhost:3028 /tmp/scim-server.log /tmp/scim-server.pid
       - run: npm run certify:scim:http
-      - run: |
-          BUILD_DIR=.next-scim-production NEXTAUTH_URL=http://localhost:3029 npx next start --port 3029 > /tmp/scim-replica.log 2>&1 &
-      - run: |
-          node --input-type=module <<'JS'
-          for (let attempt = 0; attempt < 120; attempt++) {
-            try { if ((await fetch('http://localhost:3029/login')).ok) process.exit(0); } catch {}
-            await new Promise(resolve => setTimeout(resolve, 1000));
-          }
-          throw new Error('SCIM replica did not start.');
-          JS
+      - name: Start standalone SCIM replica
+        run: |
+          HOSTNAME=127.0.0.1 PORT=3029 NEXTAUTH_URL=http://localhost:3029 node .next-scim-production/standalone/server.js > /tmp/scim-replica.log 2>&1 &
+          echo "$!" > /tmp/scim-replica.pid
+      - run: node scripts/scim/wait-for-server.mjs http://localhost:3029 /tmp/scim-replica.log /tmp/scim-replica.pid
       - run: npm run certify:scim:replicas && npm run certify:scim:sessions
         env:
           SCIM_CERT_REPLICA_URLS: http://localhost:3028,http://localhost:3029

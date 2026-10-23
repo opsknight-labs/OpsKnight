@@ -555,3 +555,28 @@ The branch integrates main `ccbcf282d`. Fresh exact-head CI is a separate requir
 gate; the failed earlier head is not waived or presented as certified. Live
 providers, deployed ingress/PgBouncer and production rolling/HA/failover gates
 remain open.
+
+## Standalone certification startup correction
+
+Both `459b21d1` SCIM CI runs passed their focused unit/database stages but failed
+to start the production HTTP fixture. Instrumentation correctly rejected absent
+API_KEY_SECRET and ENCRYPTION_KEY/ENCRYPTION_KEYS. The workflow now generates
+independent random 32-byte disposable API/encryption keys, masks them in Actions
+and shares them across its fixture processes. Production validation is unchanged.
+It stages public and static assets and launches the generated standalone server,
+matching the Docker production entry point instead of using next start.
+
+`scripts/scim/wait-for-server.mjs` bounds each readiness fetch, checks the process,
+detects fatal initialization messages and prints the last 80 server-log lines on
+failure. A local negative startup with missing keys reproduced production
+validation failure and confirmed immediate diagnostic output. Both standalone
+replicas passed readiness with generated keys. A local HTTP capacity attempt
+then returned 503 after an existing five-second read transaction expired under
+database load; this is a failed HTTP gate, not a successful certification or an
+excuse to disable validation/increase timeouts. Fresh exact-head CI must exercise
+HTTP capacity, both replica checks and all three browsers.
+
+TypeScript, script ESLint and workflow YAML parsing passed. The broader docs
+tooling suite found an existing stale generated configuration reference (49/50
+tests passed); no configuration-reference generation or unrelated application
+changes are included in this startup-only correction.
