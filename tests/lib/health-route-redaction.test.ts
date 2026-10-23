@@ -14,12 +14,49 @@ vi.mock('@/lib/prisma', () => ({
 }));
 
 import { GET } from '@/app/api/health/route';
+import { updateIngestionWorkerHealth } from '@/lib/ingestion/worker-health';
 
 describe('public readiness response', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     process.env.OPSKNIGHT_PROCESS_ROLE = 'web';
+    delete process.env.OPSKNIGHT_INGESTION_MODE;
+    updateIngestionWorkerHealth({
+      running: false,
+      faulted: false,
+      retentionFaulted: false,
+      lastSuccessAt: null,
+    });
     queryRaw.mockResolvedValue([{ '?column?': 1 }]);
+  });
+
+  it('requires a live ingestion consumer only on its configured role', async () => {
+    process.env.OPSKNIGHT_PROCESS_ROLE = 'ingestion-worker';
+    process.env.OPSKNIGHT_INGESTION_MODE = 'postgres';
+    const request = () => new NextRequest('http://localhost/api/health?mode=readiness');
+    expect((await GET(request())).status).toBe(503);
+    updateIngestionWorkerHealth({ running: true, faulted: false, lastSuccessAt: Date.now() });
+    expect((await GET(request())).status).toBe(200);
+    updateIngestionWorkerHealth({ faulted: true });
+    expect((await GET(request())).status).toBe(503);
+    updateIngestionWorkerHealth({ faulted: false, lastSuccessAt: Date.now() - 61000 });
+    expect((await GET(request())).status).toBe(503);
+    process.env.OPSKNIGHT_PROCESS_ROLE = 'web';
+    expect((await GET(request())).status).toBe(200);
+  });
+
+  it('reports failed ingestion maintenance as degraded while consumption remains live', async () => {
+    process.env.OPSKNIGHT_PROCESS_ROLE = 'ingestion-worker';
+    process.env.OPSKNIGHT_INGESTION_MODE = 'postgres';
+    updateIngestionWorkerHealth({
+      running: true,
+      faulted: false,
+      retentionFaulted: true,
+      lastSuccessAt: Date.now(),
+    });
+    const response = await GET(new NextRequest('http://localhost/api/health?mode=readiness'));
+    expect(response.status).toBe(200);
+    expect((await response.json()).checks.ingestionWorker.status).toBe('degraded');
   });
 
   it('does not expose the persisted scheduler error', async () => {

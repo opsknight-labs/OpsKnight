@@ -167,3 +167,11 @@ export function getSchedulerOwnership(profile: SchedulerProfile): SchedulerOwner
     statusProjection: ownsWorkerLanes,
   };
 }
+
+/** Bootstrap and readiness must agree on which processes own ingestion. */
+export function shouldRunIngestionConsumer(
+  role: OpsKnightProcessRole,
+  mode = process.env.OPSKNIGHT_INGESTION_MODE ?? 'sync'
+): boolean {
+  return mode === 'postgres' && (role === 'integrated' || role === 'ingestion-worker');
+}

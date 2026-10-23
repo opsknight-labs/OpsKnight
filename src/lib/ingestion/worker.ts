@@ -1,4 +1,5 @@
 import { ZodError } from 'zod';
+import { updateIngestionWorkerHealth } from './worker-health';
 import { randomUUID } from 'node:crypto';
 import { processEvent } from '@/lib/events';
 import { logger } from '@/lib/logger';
@@ -88,6 +89,12 @@ export function startIngestionWorker(): void {
   const config = ingestionConfig();
   if (config.mode !== 'postgres') return;
   stopping = false;
+  updateIngestionWorkerHealth({
+    running: true,
+    faulted: false,
+    retentionFaulted: false,
+    lastSuccessAt: null,
+  });
   running = (async () => {
     let failures = 0;
     let lastHeartbeat = 0;
@@ -97,8 +104,10 @@ export function startIngestionWorker(): void {
       try {
         count = await consumeIngestionBatch(config.concurrency);
         failures = 0;
+        updateIngestionWorkerHealth({ lastSuccessAt: Date.now(), faulted: false });
       } catch {
         failures += 1;
+        updateIngestionWorkerHealth({ faulted: true });
         logger.warn('ingestion.worker_unavailable');
       }
       if (stopping) break;
@@ -106,8 +115,10 @@ export function startIngestionWorker(): void {
         try {
           const pruned = await pruneCompletedIngestionPayloads();
           const sharedPruned = await pruneSharedIngestionPayloads();
+          updateIngestionWorkerHealth({ retentionFaulted: false });
           nextRetention = Date.now() + (pruned === 100 || sharedPruned === 100 ? 1000 : 60000);
         } catch {
+          updateIngestionWorkerHealth({ retentionFaulted: true });
           nextRetention = Date.now() + 60000;
           logger.warn('ingestion.retention_unavailable');
         }
@@ -134,12 +145,14 @@ export function startIngestionWorker(): void {
     }
   })().finally(() => {
     running = null;
+    updateIngestionWorkerHealth({ running: false });
   });
 }
 
 export async function stopIngestionWorker(): Promise<void> {
   if (!running) return;
   stopping = true;
+  updateIngestionWorkerHealth({ running: false });
   wake?.();
   await running;
   await heartbeat(false, false).catch(() => undefined);

@@ -1,12 +1,21 @@
 import { describe, expect, it } from 'vitest';
 import {
   getOpsKnightProcessRole,
+  shouldRunIngestionConsumer,
   getRuntimeResponsibilities,
   getSchedulerOwnership,
   getSchedulerProfile,
 } from '@/lib/runtime-role';
 
 describe('runtime process roles', () => {
+  it('centralizes opt-in ingestion ownership for bootstrap and readiness', () => {
+    expect(shouldRunIngestionConsumer('ingestion-worker', 'postgres')).toBe(true);
+    expect(shouldRunIngestionConsumer('integrated', 'postgres')).toBe(true);
+    expect(shouldRunIngestionConsumer('web', 'postgres')).toBe(false);
+    expect(shouldRunIngestionConsumer('integrated', 'sync')).toBe(false);
+    expect(shouldRunIngestionConsumer('ingestion-worker', 'sync')).toBe(false);
+  });
+
   it('preserves the integrated runtime by default and processes durable jobs in-process', () => {
     expect(getOpsKnightProcessRole(undefined)).toBe('integrated');
     expect(getRuntimeResponsibilities('integrated')).toEqual({

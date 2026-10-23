@@ -124,7 +124,8 @@
     "benchmark:ingestion": "node scripts/ingestion/benchmark.cjs",
     "certify:ingestion:upgrade": "node scripts/ingestion/certify-upgrade.cjs",
     "certify:ingestion:outage": "node scripts/ingestion/certify-outage.cjs",
-    "certify:ingestion:http": "node scripts/ingestion/certify-http.cjs"
+    "certify:ingestion:http": "node scripts/ingestion/certify-http.cjs",
+    "certify:ingestion:docker": "node scripts/ingestion/certify-docker.cjs"
   },
   "dependencies": {
     "@aws-sdk/client-ses": "^3.1149.0",

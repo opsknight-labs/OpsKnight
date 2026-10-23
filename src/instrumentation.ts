@@ -78,7 +78,7 @@ export async function register() {
     const { validateProductionEnv } = await import('./lib/env-validation');
     validateProductionEnv();
 
-    const { getOpsKnightProcessRole, getRuntimeResponsibilities } =
+    const { getOpsKnightProcessRole, getRuntimeResponsibilities, shouldRunIngestionConsumer } =
       await import('./lib/runtime-role');
     const role = getOpsKnightProcessRole();
     const responsibilities = getRuntimeResponsibilities(role);
@@ -88,7 +88,9 @@ export async function register() {
       const { verifyPostgresIngestionDurability } = await import('./lib/ingestion/postgres');
       await verifyPostgresIngestionDurability();
     }
-    if (ingestion.mode === 'postgres' && (role === 'integrated' || role === 'ingestion-worker')) {
+    if (role === 'ingestion-worker' && ingestion.mode !== 'postgres')
+      throw new Error('The ingestion-worker role requires OPSKNIGHT_INGESTION_MODE=postgres');
+    if (shouldRunIngestionConsumer(role, ingestion.mode)) {
       const { startIngestionWorker, stopIngestionWorker } = await import('./lib/ingestion/worker');
       startIngestionWorker();
       stopIngestionWorkerService = stopIngestionWorker;

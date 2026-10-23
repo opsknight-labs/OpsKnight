@@ -1,0 +1,397 @@
+require('./isolated-runtime.cjs');
+const assert = require('node:assert/strict');
+const { spawn } = require('node:child_process');
+const { randomUUID, randomBytes } = require('node:crypto');
+const { mkdtempSync, writeFileSync, readFileSync, rmSync, existsSync } = require('node:fs');
+const path = require('node:path');
+const os = require('node:os');
+const prisma = require('../../src/lib/prisma').default;
+const { calculateRuntimeCapacity } = require('../../deploy/scripts/validate-runtime-capacity.cjs');
+const docker =
+  process.env.INGESTION_DOCKER || '/Applications/Docker.app/Contents/Resources/bin/docker';
+const runId = randomUUID();
+const prefix = `ingestion-cert-${runId.slice(0, 8)}`;
+const network = `${prefix}-network`;
+const databaseContainer = 'opsknight-ingestion-cert-db';
+const containers = [];
+const directory = mkdtempSync(path.join(os.tmpdir(), 'ingestion-docker-'));
+const evidencePath =
+  process.env.INGESTION_DOCKER_EVIDENCE || 'plans/event-ingestion/local-docker-topology.json';
+const httpEvidencePath =
+  process.env.INGESTION_HTTP_EVIDENCE || 'plans/event-ingestion/local-docker-http.json';
+let attached = false;
+let createdNetwork = false;
+let child;
+let chaosTimer;
+let chaosTask;
+let resolveChaos;
+let loadActive = false;
+let cancelled = false;
+for (const signal of ['SIGINT', 'SIGTERM'])
+  process.once(signal, () => {
+    cancelled = true;
+    if (child?.pid && child.exitCode === null && child.signalCode === null) {
+      try {
+        process.kill(-child.pid, 'SIGTERM');
+      } catch {
+        /* child already stopped */
+      }
+    }
+  });
+const evidence = { runId, certifiedEnterprise: false, cleanupFailures: [], chaos: [] };
+function invoke(args) {
+  if (
+    cancelled &&
+    (args[0] === 'run' || (args[0] === 'network' && ['create', 'connect'].includes(args[1])))
+  )
+    return Promise.reject(new Error('Certification cancelled'));
+  return new Promise((resolve, reject) => {
+    const process = spawn(docker, args, { stdio: ['ignore', 'pipe', 'pipe'] });
+    let output = '';
+    let error = '';
+    process.stdout.on('data', data => {
+      output = (output + data.toString()).slice(-100000);
+    });
+    process.stderr.on('data', data => {
+      error = (error + data.toString()).slice(-4000);
+    });
+    process.once('error', reject);
+    process.once('exit', code =>
+      code === 0 ? resolve(output.trim()) : reject(new Error(`Docker ${args[0]} failed: ${error}`))
+    );
+  });
+}
+const inspect = async name => JSON.parse(await invoke(['inspect', name]))[0];
+const sleep = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds));
+async function waitHealthy(name) {
+  for (let attempt = 0; attempt < 120; attempt++) {
+    if (cancelled) throw new Error('Certification cancelled');
+    const container = await inspect(name);
+    if (!container.State.Running) throw new Error(`Candidate ${name} exited before readiness`);
+    if (container.State.Health?.Status === 'healthy') return;
+    await sleep(1000);
+  }
+  throw new Error(`Candidate ${name} did not become ready`);
+}
+async function main() {
+  const localUrl = new URL(process.env.DATABASE_URL);
+  assert.equal(localUrl.pathname, '/ingestion_test_http');
+  assert.equal(localUrl.port, '55445');
+  const pg = await inspect(databaseContainer);
+  assert.ok(pg.Config.Image.startsWith('postgres:16'));
+  assert.ok(
+    pg.NetworkSettings.Ports['5432/tcp'].some(
+      binding => binding.HostIp === '127.0.0.1' && binding.HostPort === '55445'
+    )
+  );
+  const image = process.env.INGESTION_IMAGE;
+  assert.ok(image, 'Set INGESTION_IMAGE to the exact candidate image');
+  const imageInfo = JSON.parse(await invoke(['image', 'inspect', image]))[0];
+  const revision = imageInfo.Config.Labels['org.opencontainers.image.revision'];
+  assert.ok(revision && revision !== 'unknown', 'Candidate must have a source revision label');
+  const webReplicas = Number(process.env.INGESTION_WEB_REPLICAS || 2);
+  const workerReplicas = Number(process.env.INGESTION_WORKER_REPLICAS || 4);
+  assert.ok(Number.isInteger(webReplicas) && webReplicas >= 1 && webReplicas <= 4);
+  assert.ok(Number.isInteger(workerReplicas) && workerReplicas >= 1 && workerReplicas <= 8);
+  const [limits] =
+    await prisma.$queryRaw`SELECT current_setting('max_connections')::int AS maximum`;
+  const capacity = calculateRuntimeCapacity({
+    OPSKNIGHT_RUNTIME_MODE: 'split',
+    WEB_REPLICAS: String(webReplicas),
+    DATABASE_POOL_SIZE_WEB: '10',
+    INGESTION_WORKER_REPLICAS: String(workerReplicas),
+    DATABASE_POOL_SIZE_INGESTION_WORKER: '5',
+    DATABASE_CONNECTION_RESERVE: '15',
+    DATABASE_MAX_CONNECTIONS: String(limits.maximum),
+  });
+  assert.ok(capacity.safe, 'Local candidate topology exceeds its PostgreSQL connection budget');
+  assert.equal(
+    await prisma.ingestionReceipt.count({
+      where: { status: { notIn: ['COMPLETED', 'ARCHIVED'] } },
+    }),
+    0,
+    'Resolve previous unfinished test work before a fresh topology capacity run'
+  );
+  const port = Number(process.env.INGESTION_PORT || 3210);
+  assert.ok(Number.isInteger(port) && port >= 3200 && port <= 65535);
+  const baseUrl = `http://127.0.0.1:${port}`;
+  const encryptionKey = randomBytes(32).toString('hex');
+  const containerUrl = new URL(localUrl.toString());
+  containerUrl.hostname = databaseContainer;
+  containerUrl.port = '5432';
+  const shared = {
+    NODE_ENV: 'production',
+    OPSKNIGHT_RUNTIME_MODE: 'split',
+    OPSKNIGHT_INGESTION_MODE: 'postgres',
+    OPSKNIGHT_INGESTION_CONCURRENCY: '4',
+    OPSKNIGHT_INGESTION_EVENTS_PER_MINUTE: '10000000',
+    OPSKNIGHT_INGESTION_INTEGRATION_PER_MINUTE: '10000000',
+    DATABASE_POOL_SIZE_WEB: '10',
+    DATABASE_POOL_SIZE_INGESTION_WORKER: '5',
+    NEXTAUTH_SECRET: randomBytes(32).toString('base64url'),
+    API_KEY_SECRET: randomBytes(32).toString('base64url'),
+    ENCRYPTION_KEY: encryptionKey,
+    NEXTAUTH_URL: baseUrl,
+    NEXT_PUBLIC_APP_URL: baseUrl,
+    REDIRECT_TO_CANONICAL_HOST: 'false',
+    TRUST_PROXY_HEADERS: 'false',
+    ALLOW_INSECURE_SECRETS: 'true',
+    DATABASE_URL: containerUrl.toString(),
+  };
+  const environmentFile = path.join(directory, 'candidate.env');
+  writeFileSync(
+    environmentFile,
+    Object.entries(shared)
+      .map(([key, value]) => `${key}=${value}`)
+      .join('\n') + '\n',
+    { mode: 0o600 }
+  );
+  await invoke(['network', 'create', '--label', `opsknight.ingestion-cert-run=${runId}`, network]);
+  createdNetwork = true;
+  await invoke(['network', 'connect', network, databaseContainer]);
+  attached = true;
+  const start = async (name, role, migrationOwner) => {
+    containers.push(name);
+    await invoke([
+      'run',
+      '--detach',
+      '--name',
+      name,
+      '--network',
+      network,
+      '--label',
+      `opsknight.ingestion-cert-run=${runId}`,
+      '--cpus',
+      '1',
+      '--memory',
+      role === 'web' ? '1g' : '768m',
+      '--health-interval',
+      '5s',
+      '--health-timeout',
+      '5s',
+      '--health-start-period',
+      '60s',
+      '--env-file',
+      environmentFile,
+      '--env',
+      `OPSKNIGHT_PROCESS_ROLE=${role}`,
+      '--env',
+      `OPSKNIGHT_SKIP_MIGRATIONS=${migrationOwner ? 'false' : 'true'}`,
+      imageInfo.Id,
+    ]);
+    await waitHealthy(name);
+  };
+  const webNames = [];
+  for (let index = 0; index < webReplicas; index++) {
+    const name = `${prefix}-web-${index}`;
+    await start(name, 'web', index === 0);
+    webNames.push(name);
+  }
+  const workers = [];
+  for (let index = 0; index < workerReplicas; index++) {
+    const name = `${prefix}-worker-${index}`;
+    await start(name, 'ingestion-worker', false);
+    const readiness = JSON.parse(
+      await invoke([
+        'exec',
+        name,
+        'node',
+        '-e',
+        "fetch('http://127.0.0.1:3000/api/health?mode=readiness').then(r=>r.json()).then(b=>process.stdout.write(JSON.stringify(b.checks.ingestionWorker)))",
+      ])
+    );
+    assert.equal(
+      readiness.status,
+      'healthy',
+      'Image lacks successful local ingestion consumer evidence'
+    );
+    workers.push(name);
+  }
+  const proxyRef = process.env.INGESTION_PROXY_IMAGE || 'nginx:stable-alpine';
+  try {
+    await invoke(['image', 'inspect', proxyRef]);
+  } catch {
+    await invoke(['pull', proxyRef]);
+  }
+  const proxy = JSON.parse(await invoke(['image', 'inspect', proxyRef]))[0];
+  const proxyConfig = path.join(directory, 'nginx.conf');
+  writeFileSync(
+    proxyConfig,
+    `events { worker_connections 2048; }
+http { access_log off; upstream gateways { ${webNames.map(name => `server ${name}:3000;`).join(' ')} keepalive 64; }
+server { listen 8080; client_max_body_size 1m;
+location / { proxy_pass http://gateways; proxy_http_version 1.1; proxy_set_header Connection ""; proxy_next_upstream off; } } }
+`
+  );
+  const proxyName = `${prefix}-proxy`;
+  containers.push(proxyName);
+  await invoke([
+    'run',
+    '--detach',
+    '--name',
+    proxyName,
+    '--network',
+    network,
+    '--label',
+    `opsknight.ingestion-cert-run=${runId}`,
+    '--cpus',
+    '1',
+    '--memory',
+    '128m',
+    '--publish',
+    `127.0.0.1:${port}:8080`,
+    '--mount',
+    `type=bind,source=${proxyConfig},target=/etc/nginx/nginx.conf,readonly`,
+    proxy.Id,
+  ]);
+  const candidateNodeVersion = await invoke([
+    'exec',
+    webNames[0],
+    'node',
+    '-e',
+    'process.stdout.write(process.version)',
+  ]);
+  evidence.image = {
+    nodeVersion: candidateNodeVersion,
+    id: imageInfo.Id,
+    revision,
+    proxyImageId: proxy.Id,
+  };
+  evidence.topology = {
+    webReplicas,
+    workerReplicas,
+    workerConcurrency: 4,
+    webPool: 10,
+    workerPool: 5,
+    capacity,
+  };
+  const candidate = {
+    kind: 'docker',
+    nodeVersion: candidateNodeVersion,
+    imageId: imageInfo.Id,
+    sourceRevision: revision,
+    webReplicas,
+    workerReplicas,
+    certificationRunId: runId,
+    sourceProvenance:
+      'Immutable image ID and producer-supplied OCI revision label; no signed build attestation',
+  };
+  child = spawn(process.execPath, ['scripts/ingestion/certify-http.cjs'], {
+    stdio: ['inherit', 'inherit', 'inherit', 'ipc'],
+    detached: true,
+    env: {
+      ...process.env,
+      ENCRYPTION_KEY: encryptionKey,
+      INGESTION_EXTERNAL_BASE_URL: baseUrl,
+      INGESTION_EXTERNAL_CONSUMERS: 'true',
+      INGESTION_HTTP_EVIDENCE: httpEvidencePath,
+      INGESTION_CANDIDATE_METADATA: JSON.stringify(candidate),
+    },
+  });
+  const chaosRequested = process.env.INGESTION_DOCKER_KILL_WORKER === 'true';
+  child.on('message', message => {
+    if (message?.type === 'ingestion-load-stopped') loadActive = false;
+    if (message?.type !== 'ingestion-load-started') return;
+    loadActive = true;
+    if (!chaosRequested || chaosTask) return;
+    chaosTask = new Promise(resolve => {
+      resolveChaos = resolve;
+    });
+    chaosTimer = setTimeout(async () => {
+      chaosTimer = undefined;
+      try {
+        assert.ok(loadActive, 'Load ended before the requested worker termination');
+        assert.ok(
+          await prisma.ingestionReceipt.count({ where: { serviceId: message.fixtureServiceId } }),
+          'No events were accepted before worker termination'
+        );
+        assert.ok(loadActive, 'Load ended before worker termination');
+        await invoke(['kill', '--signal', 'KILL', workers[0]]);
+        evidence.chaos.push({
+          action: 'SIGKILL',
+          target: workers[0],
+          at: new Date().toISOString(),
+          loadActive: true,
+          leaseExpiryAdvanced: false,
+        });
+        resolveChaos(true);
+      } catch (error) {
+        evidence.chaos.push({ action: 'SIGKILL failed', error: error.message });
+        resolveChaos(false);
+      }
+    }, 5000);
+  });
+  const code = await new Promise((resolve, reject) => {
+    child.once('error', reject);
+    child.once('exit', resolve);
+  });
+  if (chaosTimer) {
+    clearTimeout(chaosTimer);
+    chaosTimer = undefined;
+    resolveChaos?.(false);
+  }
+  if (chaosRequested)
+    assert.ok(
+      chaosTask && (await chaosTask),
+      'Requested worker termination did not complete during active load'
+    );
+  evidence.httpEvidence = httpEvidencePath;
+  evidence.httpExit = code;
+  if (existsSync(httpEvidencePath)) {
+    const httpEvidence = JSON.parse(readFileSync(httpEvidencePath, 'utf8'));
+    evidence.httpPassed =
+      httpEvidence.candidate?.certificationRunId === runId && httpEvidence.passed;
+  }
+  assert.equal(code, 0, 'Docker topology failed the configured end-to-end thresholds');
+  assert.equal(evidence.httpPassed, true, 'Fresh candidate-specific HTTP evidence is required');
+}
+main()
+  .catch(error => {
+    console.error(error);
+    evidence.error = error.message;
+    process.exitCode = 1;
+  })
+  .finally(async () => {
+    if (chaosTimer) clearTimeout(chaosTimer);
+    if (child?.pid && child.exitCode === null && child.signalCode === null) {
+      await new Promise(resolve => {
+        child.once('exit', resolve);
+        try {
+          process.kill(-child.pid, 'SIGTERM');
+        } catch {
+          resolve();
+        }
+        const timer = setTimeout(() => {
+          try {
+            process.kill(-child.pid, 'SIGKILL');
+          } catch {
+            /* already stopped */
+          }
+        }, 5000);
+        timer.unref();
+        child.once('exit', () => clearTimeout(timer));
+      });
+    }
+    for (const name of containers.reverse()) {
+      try {
+        const container = await inspect(name);
+        if (container.Config.Labels['opsknight.ingestion-cert-run'] === runId)
+          await invoke(['rm', '--force', name]);
+      } catch (error) {
+        evidence.cleanupFailures.push({ target: name, error: error.message });
+      }
+    }
+    if (attached)
+      await invoke(['network', 'disconnect', network, databaseContainer]).catch(error =>
+        evidence.cleanupFailures.push({ target: databaseContainer, error: error.message })
+      );
+    if (createdNetwork)
+      await invoke(['network', 'rm', network]).catch(error =>
+        evidence.cleanupFailures.push({ target: network, error: error.message })
+      );
+    await prisma.$disconnect();
+    rmSync(directory, { recursive: true, force: true });
+    evidence.measuredAt = new Date().toISOString();
+    writeFileSync(evidencePath, JSON.stringify(evidence, null, 2) + '\n');
+    if (evidence.cleanupFailures.length) process.exitCode = 1;
+  });
