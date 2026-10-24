@@ -204,6 +204,8 @@ async function main() {
         FILTER (WHERE "status" NOT IN ('COMPLETED', 'ARCHIVED'))) * 1000, 0)::double precision AS "oldestPendingAgeMs"
     FROM "IngestionReceipt" WHERE "serviceId" = ${service.id}
   `;
+  stage = 'admission-quiescence';
+  const admissionQuiescence = await require('./quiesce-admission.cjs')();
   draining = true;
   await worker;
   if (workerFault) throw workerFault;
@@ -289,6 +291,7 @@ async function main() {
     fixtureServiceId: service.id,
     atAdmissionEnd,
     backlogDuringLoad,
+    admissionQuiescence,
     endToEndLatency,
     completionLatencyLimitMs,
     completionLatencyPassed,
