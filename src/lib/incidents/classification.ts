@@ -1,3 +1,4 @@
+import { readPublishedClassificationPolicies } from '@/lib/incident-policies/published';
 import type { IncidentUrgency, Prisma } from '@prisma/client';
 import { normalizeIncidentPriority, type IncidentPriority } from './priority';
 import {
@@ -36,7 +37,7 @@ export type IncidentClassification = {
   rule: string | null;
 };
 
-type LoadedPolicy = Prisma.IncidentClassificationPolicyGetPayload<{ include: { rules: true } }>;
+type LoadedPolicy = Awaited<ReturnType<typeof readPublishedClassificationPolicies>>[number];
 type LoadedRule = LoadedPolicy['rules'][number];
 
 function sourceFor(scopeKey: string): ClassificationProvenance['source'] {
@@ -56,16 +57,7 @@ async function loadPolicies(
     `service:${serviceId}`,
     'workspace',
   ];
-  const latest = await Promise.all(
-    keys.map(scopeKey =>
-      tx.incidentClassificationPolicy.findFirst({
-        where: { scopeKey, sealedAt: { not: null } },
-        orderBy: { version: 'desc' },
-        include: { rules: true },
-      })
-    )
-  );
-  return latest.filter((policy): policy is LoadedPolicy => policy !== null);
+  return readPublishedClassificationPolicies(tx, keys);
 }
 
 function provenance(policy: LoadedPolicy, severity: AlertSeverity): ClassificationProvenance {

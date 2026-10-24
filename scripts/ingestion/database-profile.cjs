@@ -19,11 +19,19 @@ module.exports = async function startDatabaseProfile(prisma) {
         deadlocks::double precision AS deadlocks, temp_bytes::double precision AS "tempBytes",
         tup_inserted::double precision AS inserts, tup_updated::double precision AS updates,
         tup_deleted::double precision AS deletes,
-        (SELECT wal_bytes::double precision FROM pg_stat_wal) AS "clusterWalBytes"
-      FROM pg_stat_database WHERE datname = current_database()
+        wal.wal_bytes::double precision AS "clusterWalBytes",
+        wal.wal_buffers_full::double precision AS "clusterWalBuffersFull",
+        wal.wal_write::double precision AS "clusterWalWrites",
+        wal.wal_sync::double precision AS "clusterWalSyncs",
+        wal.wal_write_time::double precision AS "clusterWalWriteTimeMs",
+        wal.wal_sync_time::double precision AS "clusterWalSyncTimeMs"
+      FROM pg_stat_database CROSS JOIN pg_stat_wal wal WHERE datname = current_database()
     `;
     return value;
   };
+  const [diagnosticSettings] = await prisma.$queryRaw`
+    SELECT current_setting('track_wal_io_timing') = 'on' AS "walIoTimingEnabled"
+  `;
   const baseline = new Map((await statements()).map(row => [row.id, row]));
   const before = await counters();
   const started = performance.now();
@@ -76,6 +84,9 @@ module.exports = async function startDatabaseProfile(prisma) {
       'IngestionBatch',
       'ServiceAutomationConfig',
       'SystemSettings',
+      'IncidentClassificationPolicy',
+      'IncidentSlaPolicy',
+      'ResponseSupportHoursPolicy',
       'IncidentEvent',
       'Incident',
       'Alert',
@@ -111,6 +122,7 @@ module.exports = async function startDatabaseProfile(prisma) {
       Object.entries(after).map(([key, value]) => [key, Math.max(0, value - before[key])])
     );
     return {
+      diagnosticSettings,
       scope:
         'Owned local test database; PostgreSQL execution statistics exclude client/pool/network time. Cluster WAL includes all databases on this owned test instance.',
       elapsedMs,
