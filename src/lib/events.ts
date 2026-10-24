@@ -222,18 +222,24 @@ export async function processEvent(
       };
     }
 
-    // 4. Log the raw alert
-    const alert = await tx.alert.create({
-      data: {
-        dedupKey: dedup_key,
-        status: event_action === 'resolve' ? 'RESOLVED' : 'TRIGGERED',
-        payload: boundedAlertPayload(eventData),
-        serviceId,
-        createdAt: processingLease ? envelope.receivedAt : undefined,
-      },
-    });
+    // Persist the final link on insertion instead of rewriting every alert.
+    // New incidents are created first so the foreign key remains immediate;
+    // alert, incident, Automation and receipt still share this transaction.
+    const persistAlert = (incidentId?: string) =>
+      tx.alert.create({
+        data: {
+          dedupKey: dedup_key,
+          status: event_action === 'resolve' ? 'RESOLVED' : 'TRIGGERED',
+          payload: boundedAlertPayload(eventData),
+          serviceId,
+          incidentId,
+          createdAt: processingLease ? envelope.receivedAt : undefined,
+        },
+      });
+    if (existingIncident) await persistAlert(existingIncident.id);
 
     if (event_action === 'resolve' && !existingIncident) {
+      const alert = await persistAlert();
       logger.info('event.resolve_buffered_for_out_of_order', {
         dedupKey: dedup_key,
         serviceId,
@@ -251,11 +257,6 @@ export async function processEvent(
       if (existingIncident) {
         // Deduplication: append the alert and monotonically raise urgency when a
         // stronger signal arrives. Alert retries must never lower an incident.
-        await tx.alert.update({
-          where: { id: alert.id },
-          data: { incidentId: existingIncident.id },
-        });
-
         const incomingClassification = await resolveIncidentClassification(tx, {
           serviceId,
           integrationId,
@@ -391,6 +392,7 @@ export async function processEvent(
           },
         });
 
+        await persistAlert(resolvedIncident.id);
         await persistAutomation(
           tx,
           resolvedIncident.id,
@@ -405,7 +407,7 @@ export async function processEvent(
           source: 'MONITORING',
         });
         await tx.alert.updateMany({
-          where: { id: { in: [alert.id, recentResolveAlert.id] } },
+          where: { id: recentResolveAlert.id },
           data: { incidentId: resolvedIncident.id },
         });
 
@@ -533,7 +535,7 @@ export async function processEvent(
         }
       );
 
-      // Persist automation context/traces concurrently with alert attachment
+      // Persist automation context/traces and the already-linked alert.
       await Promise.all([
         persistAutomation(
           tx,
@@ -543,10 +545,7 @@ export async function processEvent(
           !isFlapping,
           service.escalationPolicyId
         ),
-        tx.alert.update({
-          where: { id: alert.id },
-          data: { incidentId: newIncident.id },
-        }),
+        persistAlert(newIncident.id),
       ]);
 
       // Log timeline event
@@ -605,8 +604,16 @@ export async function processEvent(
           'triggered',
           newIncident.id,
           engagement.earliestDeliveryAt,
-          { escalationGeneration: newIncident.escalationGeneration ?? 0, status: newIncident.status },
-          automation ? { mode: automation.mode, routeType: automation.result?.outcome.type ?? 'SERVICE_DEFAULT' } : null
+          {
+            escalationGeneration: newIncident.escalationGeneration ?? 0,
+            status: newIncident.status,
+          },
+          automation
+            ? {
+                mode: automation.mode,
+                routeType: automation.result?.outcome.type ?? 'SERVICE_DEFAULT',
+              }
+            : null
         );
       }
       // Same transaction as persistAutomation, so evaluation always sees the committed decision.
@@ -632,11 +639,6 @@ export async function processEvent(
     if (event_action === 'resolve') {
       // Alert linkage, lifecycle mutation, timeline event, and outbox enqueue stay
       // in this same ReadCommitted transaction under the dedup advisory lock.
-      await tx.alert.update({
-        where: { id: alert.id },
-        data: { incidentId: existingIncident!.id },
-      });
-
       const transition = await applyIncidentLifecycleCommand(tx, {
         incidentId: existingIncident!.id,
         command: 'RESOLVE',
@@ -662,11 +664,6 @@ export async function processEvent(
     if (event_action === 'acknowledge') {
       // Repeated acknowledge signals still attach their raw alert, but the
       // lifecycle engine makes the state transition/event/effects idempotent.
-      await tx.alert.update({
-        where: { id: alert.id },
-        data: { incidentId: existingIncident!.id },
-      });
-
       const transition = await applyIncidentLifecycleCommand(tx, {
         incidentId: existingIncident!.id,
         command: 'ACKNOWLEDGE',
@@ -690,6 +687,7 @@ export async function processEvent(
     }
 
     // Unknown event_action
+    if (!existingIncident) await persistAlert();
     logger.warn('event.unknown_action', {
       eventAction: event_action,
       dedupKey: dedup_key,
