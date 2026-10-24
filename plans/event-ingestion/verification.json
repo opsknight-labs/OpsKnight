@@ -771,5 +771,32 @@
   "localEnvironmentRestored": {
     "kindControlPlaneRunning": true,
     "ownedCertificationContainersRemaining": 0
+  },
+  "consumerFaultIsolationFollowup": {
+    "recordedAt": "2026-10-24",
+    "databaseContractTestsPassed": 67,
+    "focusedUnitTestsPassed": 36,
+    "sharedRegistryTests": "passed; operational registry and worker-health suites",
+    "typeCheck": "passed; completed exit0",
+    "modifiedSourceLint": "passed; zero warnings; completed exit0",
+    "changes": [
+      "Continuously refill bounded processing slots without waiting for an unrelated slow receipt",
+      "Alternate protected severity lanes for single-slot refills in multi-slot consumers while preserving per-key predecessors",
+      "Drain owned work on library shutdown and prevent lost shutdown wakeups during database heartbeat waits",
+      "Share operational gauges, counters and histograms across module instances within a process",
+      "Optional authenticated native worker metrics probe with private ephemeral credentials"
+    ],
+    "faultChecks": [
+      "An engine-key blocker no longer stalls an independent third event",
+      "Active work stays bounded; stop leaves queued work unclaimed and waits for all owned events",
+      "Terminating one processing PostgreSQL connection retries and completes its event once while independent work proceeds",
+      "Heartbeat lock regression reproduced a lost shutdown wakeup before the fix and passes afterward"
+    ],
+    "independentReviews": "Bugbot substitute found shutdown wakeup race; fixed and re-reviewed. Security substitute found no concrete new defect. Read-only substitutes, not branded bot certification.",
+    "limitations": [
+      "Library shutdown tests do not establish native Next.js SIGTERM drains background services; framework process-exit coordination remains unverified",
+      "Connection termination is not replicated PostgreSQL primary failover",
+      "Fresh native image and capacity evidence pending; no 1000 RPS or HA claim"
+    ]
   }
 }

@@ -86,6 +86,22 @@ export const OPERATIONAL_METRICS = [
     estimatedMaxSeries: 3,
   },
   {
+    name: 'opsknight_ingestion_active_events',
+    help: 'Events currently owned by the local continuous ingestion consumer',
+    kind: 'gauge',
+    labels: [],
+    scope: 'instance',
+    estimatedMaxSeries: 1,
+  },
+  {
+    name: 'opsknight_ingestion_processing_capacity',
+    help: 'Current local ingestion concurrency limit; zero while on standby or stopping',
+    kind: 'gauge',
+    labels: [],
+    scope: 'instance',
+    estimatedMaxSeries: 1,
+  },
+  {
     name: 'opsknight_ingestion_completion_latency_ms',
     help: 'Time from original acceptance to committed incident processing',
     kind: 'histogram',
@@ -1578,9 +1594,22 @@ export const OPERATIONAL_METRICS = [
 
 type RegisteredMetricName = (typeof OPERATIONAL_METRICS)[number]['name'];
 type RuntimeRow = { labels: Record<string, string>; value: number };
-const runtimeValues = new Map<RegisteredMetricName, Map<string, RuntimeRow>>();
 type HistogramRow = RuntimeRow & { count: number; buckets: number[] };
-const runtimeHistograms = new Map<RegisteredMetricName, Map<string, HistogramRow>>();
+type RuntimeMetricStore = {
+  values: Map<RegisteredMetricName, Map<string, RuntimeRow>>;
+  histograms: Map<RegisteredMetricName, Map<string, HistogramRow>>;
+};
+declare global {
+  var opsknightRuntimeOperationalMetrics: RuntimeMetricStore | undefined;
+}
+// Instrumentation, workers and HTTP scrapes can load separate emitted modules.
+// Keep one process-local store so telemetry does not depend on chunk placement.
+const runtimeStore: RuntimeMetricStore = (globalThis.opsknightRuntimeOperationalMetrics ??= {
+  values: new Map(),
+  histograms: new Map(),
+});
+const runtimeValues = runtimeStore.values;
+const runtimeHistograms = runtimeStore.histograms;
 
 function runtimeKey(labels: Record<string, string>) {
   return Object.entries(labels)

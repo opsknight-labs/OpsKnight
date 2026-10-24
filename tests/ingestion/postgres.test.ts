@@ -31,6 +31,7 @@ import {
 import { hasHealthyDedicatedIngestionWorker } from '@/lib/ingestion/fallback';
 import { getIngestionWorkerHealth } from '@/lib/ingestion/worker-health';
 import { acquireTextAdvisoryLocks } from '@/lib/db-locks';
+import { lockEventDedupKeys } from '@/lib/incidents/event-identity';
 import { applyIngestionCommand, ingestionSnapshot } from '@/lib/ingestion/operations';
 import { compileAutomation } from '@/lib/automation/compiler';
 import { emptySnapshot } from '@/lib/automation/contract';
@@ -50,6 +51,7 @@ import { withIngestionDelivery } from '@/lib/ingestion/admission';
 import { transformPrometheusToEvent, type PrometheusAlert } from '@/lib/integrations/prometheus';
 import { acquireRetentionResourceLock } from '@/lib/retention/resource-lock';
 import { getIngestionPolicy } from '@/lib/ingestion/policy';
+import { runtimeOperationalMetrics } from '@/lib/metrics/operational/registry';
 
 // Fail closed rather than skipping certification or truncating a shared database.
 const database = new URL(process.env.DATABASE_URL ?? 'http://missing');
@@ -78,6 +80,32 @@ function envelope(
       payload: { summary: 'Database unavailable', source: 'database', severity: 'critical' },
     },
   };
+}
+
+async function blockIncidentIdentity(key: string) {
+  let release!: () => void;
+  let acquired!: () => void;
+  const ready = new Promise<void>(resolve => {
+    acquired = resolve;
+  });
+  const hold = new Promise<void>(resolve => {
+    release = resolve;
+  });
+  const done = prisma.$transaction(
+    async tx => {
+      await lockEventDedupKeys(tx, serviceId, [`integration:${key}`, key]);
+      acquired();
+      await hold;
+    },
+    { timeout: 15000 }
+  );
+  await Promise.race([
+    ready,
+    done.then(() => {
+      throw new Error('Lock fixture ended early');
+    }),
+  ]);
+  return { release, done };
 }
 
 beforeAll(async () => {
@@ -109,6 +137,280 @@ afterAll(async () => {
 });
 
 describe('PostgreSQL ingestion durability', () => {
+  it('recovers a terminated processing connection without losing its event or duplicating side effects', async () => {
+    const previousRole = process.env.OPSKNIGHT_PROCESS_ROLE;
+    process.env.OPSKNIGHT_PROCESS_ROLE = 'integrated';
+    let block: Awaited<ReturnType<typeof blockIncidentIdentity>> | undefined;
+    try {
+      const current = await getIngestionPolicy();
+      await applyIngestionCommand(
+        {
+          action: 'configure',
+          expectedRevision: current.revision,
+          policy: { ...current.policy, concurrency: 2, pollMs: 50, leaseMs: 5000 },
+        },
+        actorId
+      );
+      const victim = await acceptPostgresEvent(envelope('connection-victim'));
+      block = await blockIncidentIdentity('connection-victim');
+      startIngestionWorker();
+      let pid: number | undefined;
+      await expect
+        .poll(
+          async () => {
+            const rows = await prisma.$queryRaw<Array<{ pid: number }>>`
+          SELECT pid FROM pg_stat_activity WHERE datname = current_database()
+            AND pid <> pg_backend_pid() AND wait_event_type = 'Lock' AND wait_event = 'advisory'
+            AND query LIKE '%pg_advisory_xact_lock%'`;
+            pid = rows.at(0)?.pid;
+            return pid;
+          },
+          { timeout: 5000 }
+        )
+        .toBeDefined();
+      const independent = await acceptPostgresEvent(envelope('connection-independent'));
+      await expect
+        .poll(
+          async () =>
+            (
+              await prisma.ingestionReceipt.findUniqueOrThrow({
+                where: { id: independent.receiptId },
+              })
+            ).status,
+          { timeout: 5000 }
+        )
+        .toBe('COMPLETED');
+      // Only the observed, waiting processing session in this guarded test DB
+      // is terminated. The lock holder and monitor remain connected.
+      const [result] = await prisma.$queryRaw<Array<{ terminated: boolean }>>`
+        SELECT pg_terminate_backend(${pid}::integer) AS terminated`;
+      expect(result.terminated).toBe(true);
+      block.release();
+      await block.done;
+      await expect
+        .poll(
+          async () =>
+            (await prisma.ingestionReceipt.findUniqueOrThrow({ where: { id: victim.receiptId } }))
+              .status,
+          { timeout: 10000 }
+        )
+        .toBe('COMPLETED');
+      expect(
+        (await prisma.ingestionReceipt.findUniqueOrThrow({ where: { id: victim.receiptId } }))
+          .attempts
+      ).toBeGreaterThanOrEqual(2);
+      expect(await prisma.alert.count({ where: { serviceId } })).toBe(2);
+      expect(await prisma.incident.count({ where: { serviceId } })).toBe(2);
+      expect(getIngestionWorkerHealth().faulted).toBe(false);
+    } finally {
+      block?.release();
+      await block?.done;
+      await stopIngestionWorker();
+      if (previousRole === undefined) delete process.env.OPSKNIGHT_PROCESS_ROLE;
+      else process.env.OPSKNIGHT_PROCESS_ROLE = previousRole;
+    }
+  });
+
+  it('does not miss shutdown requested while a heartbeat is waiting for the database', async () => {
+    const previousRole = process.env.OPSKNIGHT_PROCESS_ROLE;
+    process.env.OPSKNIGHT_PROCESS_ROLE = 'integrated';
+    const current = await getIngestionPolicy();
+    await applyIngestionCommand(
+      {
+        action: 'configure',
+        expectedRevision: current.revision,
+        policy: { ...current.policy, pollMs: 30000 },
+      },
+      actorId
+    );
+    let release!: () => void;
+    let acquired!: () => void;
+    const ready = new Promise<void>(resolve => {
+      acquired = resolve;
+    });
+    const hold = new Promise<void>(resolve => {
+      release = resolve;
+    });
+    const locker = prisma.$transaction(
+      async tx => {
+        await tx.$executeRaw`LOCK TABLE "RuntimeWorkerHeartbeat" IN SHARE MODE`;
+        acquired();
+        await hold;
+      },
+      { timeout: 15000 }
+    );
+    let deadline: ReturnType<typeof setTimeout> | undefined;
+    try {
+      await Promise.race([
+        ready,
+        locker.then(() => {
+          throw new Error('Lock fixture ended early');
+        }),
+      ]);
+      startIngestionWorker();
+      await expect
+        .poll(
+          async () => {
+            const [row] = await prisma.$queryRaw<Array<{ waiting: boolean }>>`
+          SELECT EXISTS (SELECT 1 FROM pg_stat_activity
+            WHERE datname = current_database() AND wait_event_type = 'Lock'
+              AND query LIKE '%INSERT INTO "RuntimeWorkerHeartbeat"%') AS waiting`;
+            return row.waiting;
+          },
+          { timeout: 5000 }
+        )
+        .toBe(true);
+      const stop = stopIngestionWorker();
+      release();
+      await locker;
+      const stopped = await Promise.race([
+        stop.then(() => true),
+        new Promise<boolean>(resolve => {
+          deadline = setTimeout(() => resolve(false), 1500);
+        }),
+      ]);
+      expect(stopped).toBe(true);
+      expect(getIngestionWorkerHealth().running).toBe(false);
+    } finally {
+      if (deadline) clearTimeout(deadline);
+      release();
+      await locker;
+      // Also wakes the old implementation after the regression deadline, so
+      // a failed assertion cannot leave a 30-second timer in subsequent tests.
+      await stopIngestionWorker();
+      if (previousRole === undefined) delete process.env.OPSKNIGHT_PROCESS_ROLE;
+      else process.env.OPSKNIGHT_PROCESS_ROLE = previousRole;
+    }
+  });
+
+  it('bounds active work and waits for every owned event on shutdown without claiming queued work', async () => {
+    const previousRole = process.env.OPSKNIGHT_PROCESS_ROLE;
+    process.env.OPSKNIGHT_PROCESS_ROLE = 'integrated';
+    const blocks: Array<Awaited<ReturnType<typeof blockIncidentIdentity>>> = [];
+    let stop: Promise<void> | undefined;
+    let stopped = false;
+    const status = async (id: string) =>
+      (await prisma.ingestionReceipt.findUniqueOrThrow({ where: { id } })).status;
+    try {
+      const current = await getIngestionPolicy();
+      await applyIngestionCommand(
+        {
+          action: 'configure',
+          expectedRevision: current.revision,
+          policy: { ...current.policy, concurrency: 2, pollMs: 50 },
+        },
+        actorId
+      );
+      blocks.push(await blockIncidentIdentity('shutdown-first'));
+      blocks.push(await blockIncidentIdentity('shutdown-second'));
+      const first = await acceptPostgresEvent(envelope('shutdown-first'));
+      const second = await acceptPostgresEvent(envelope('shutdown-second'));
+      const queued = await acceptPostgresEvent(envelope('shutdown-queued'));
+      startIngestionWorker();
+      await expect
+        .poll(async () => [await status(first.receiptId), await status(second.receiptId)], {
+          timeout: 5000,
+        })
+        .toEqual(['PROCESSING', 'PROCESSING']);
+      // More than one idle polling interval: a free-running third task would
+      // complete instead of remaining queued behind the configured two slots.
+      await new Promise(resolve => setTimeout(resolve, 200));
+      expect(await status(queued.receiptId)).toBe('PENDING');
+      expect(
+        runtimeOperationalMetrics().get('opsknight_ingestion_active_events')?.at(0)?.value
+      ).toBe(2);
+      stop = stopIngestionWorker().then(() => {
+        stopped = true;
+      });
+      expect(
+        runtimeOperationalMetrics().get('opsknight_ingestion_processing_capacity')?.at(0)?.value
+      ).toBe(0);
+      blocks[0].release();
+      await blocks[0].done;
+      await expect.poll(() => status(first.receiptId), { timeout: 5000 }).toBe('COMPLETED');
+      expect(stopped).toBe(false);
+      expect(await status(second.receiptId)).toBe('PROCESSING');
+      expect(await status(queued.receiptId)).toBe('PENDING');
+      blocks[1].release();
+      await blocks[1].done;
+      await stop;
+      expect(await status(second.receiptId)).toBe('COMPLETED');
+      expect(await status(queued.receiptId)).toBe('PENDING');
+      expect(getIngestionWorkerHealth().running).toBe(false);
+      expect(
+        runtimeOperationalMetrics().get('opsknight_ingestion_active_events')?.at(0)?.value
+      ).toBe(0);
+      await consumeIngestionBatch(1);
+      expect(await status(queued.receiptId)).toBe('COMPLETED');
+    } finally {
+      blocks.forEach(block => block.release());
+      await Promise.allSettled(blocks.map(block => block.done));
+      await (stop ?? stopIngestionWorker());
+      if (previousRole === undefined) delete process.env.OPSKNIGHT_PROCESS_ROLE;
+      else process.env.OPSKNIGHT_PROCESS_ROLE = previousRole;
+    }
+  });
+
+  it('protects both severity lanes during single-slot refills without bypassing same-key predecessors', async () => {
+    const ordinary = envelope('oldest-ordinary');
+    ordinary.event.payload.severity = 'warning';
+    const firstOrdinary = await acceptPostgresEvent(ordinary);
+    const critical = await acceptPostgresEvent(envelope('new-critical'));
+    expect((await claimPostgresEvents(1, 60000, 'critical'))[0].id).toBe(critical.receiptId);
+    expect((await claimPostgresEvents(1, 60000, 'standard'))[0].id).toBe(firstOrdinary.receiptId);
+    const successor = await acceptPostgresEvent(envelope('oldest-ordinary'));
+    // Its ordinary predecessor is still processing, so critical preference
+    // must not turn priority into permission to overtake it.
+    expect(await claimPostgresEvents(1, 60000, 'critical')).toHaveLength(0);
+    expect(
+      (await prisma.ingestionReceipt.findUniqueOrThrow({ where: { id: successor.receiptId } }))
+        .status
+    ).toBe('PENDING');
+    // A single-slot consumer with no preference retains the oldest-first contract.
+    const oldestInput = envelope('fifo-ordinary');
+    oldestInput.event.payload.severity = 'warning';
+    const oldest = await acceptPostgresEvent(oldestInput);
+    await acceptPostgresEvent(envelope('fifo-critical'));
+    expect((await claimPostgresEvents(1))[0].id).toBe(oldest.receiptId);
+  });
+
+  it('refills free worker slots while an independent event remains blocked', async () => {
+    const previousRole = process.env.OPSKNIGHT_PROCESS_ROLE;
+    process.env.OPSKNIGHT_PROCESS_ROLE = 'integrated';
+    const current = await getIngestionPolicy();
+    await applyIngestionCommand(
+      {
+        action: 'configure',
+        expectedRevision: current.revision,
+        policy: { ...current.policy, concurrency: 2 },
+      },
+      actorId
+    );
+    const blocked = await acceptPostgresEvent(envelope('blocked-slot'));
+    const fast = await acceptPostgresEvent(envelope('fast-slot'));
+    let block: Awaited<ReturnType<typeof blockIncidentIdentity>> | undefined;
+    const status = async (id: string) =>
+      (await prisma.ingestionReceipt.findUniqueOrThrow({ where: { id } })).status;
+    try {
+      block = await blockIncidentIdentity('blocked-slot');
+      startIngestionWorker();
+      await expect.poll(() => status(fast.receiptId), { timeout: 5000 }).toBe('COMPLETED');
+      expect(await status(blocked.receiptId)).toBe('PROCESSING');
+      const next = await acceptPostgresEvent(envelope('refilled-slot'));
+      await expect.poll(() => status(next.receiptId), { timeout: 3000 }).toBe('COMPLETED');
+      expect(await status(blocked.receiptId)).toBe('PROCESSING');
+      expect(await prisma.incident.count({ where: { serviceId } })).toBe(2);
+    } finally {
+      block?.release();
+      await block?.done;
+      await stopIngestionWorker();
+      if (previousRole === undefined) delete process.env.OPSKNIGHT_PROCESS_ROLE;
+      else process.env.OPSKNIGHT_PROCESS_ROLE = previousRole;
+    }
+    expect(await status(blocked.receiptId)).toBe('COMPLETED');
+    expect(await prisma.alert.count({ where: { serviceId } })).toBe(3);
+  });
+
   it('coalesces 64 concurrent hot-key decisions into two database writes without granting extra credit', async () => {
     const current = await getIngestionPolicy();
     await applyIngestionCommand(

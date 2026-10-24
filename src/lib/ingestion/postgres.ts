@@ -207,15 +207,21 @@ export async function verifyPostgresIngestionDurability(): Promise<void> {
 }
 
 /** One head per key, bounded claims, database clock, and crash-reclaimable leases. */
-export async function claimPostgresEvents(limit: number, leaseMs = 60000) {
+export async function claimPostgresEvents(
+  limit: number,
+  leaseMs = 60000,
+  preference: 'balanced' | 'critical' | 'standard' = 'balanced'
+) {
   if (!Number.isInteger(limit) || limit < 1 || limit > 64)
     throw new Error('Invalid ingestion claim limit');
   if (!Number.isInteger(leaseMs) || leaseMs < 5000 || leaseMs > 300000)
     throw new Error('Invalid ingestion lease duration');
   const token = randomUUID();
   await prepareIngestionOrdering();
-  const criticalSlots = limit > 1 ? Math.max(1, Math.floor(limit / 4)) : 0;
-  const standardSlots = limit > 1 ? Math.max(1, Math.floor(limit / 4)) : 0;
+  const criticalSlots =
+    limit > 1 ? Math.max(1, Math.floor(limit / 4)) : Number(preference === 'critical');
+  const standardSlots =
+    limit > 1 ? Math.max(1, Math.floor(limit / 4)) : Number(preference === 'standard');
   // Keep eligibility on each row-locking scan and the UPDATE itself. PostgreSQL
   // must recheck the current row after a concurrent consumer changes its lease.
   const eligible = Prisma.sql`
