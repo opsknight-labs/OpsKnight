@@ -1,3 +1,4 @@
+import 'server-only';
 import { Prisma } from '@prisma/client';
 
 type Classification = Pick<
