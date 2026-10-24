@@ -343,16 +343,21 @@ export async function claimPostgresEvents(
     limit > 1 ? Math.max(1, Math.floor(limit / 4)) : Number(preference === 'critical');
   const standardSlots =
     limit > 1 ? Math.max(1, Math.floor(limit / 4)) : Number(preference === 'standard');
-  // Keep eligibility on each row-locking scan and the UPDATE itself. PostgreSQL
-  // must recheck the current row after a concurrent consumer changes its lease.
+  // Each lane locks only eligible heads. A materialized overlap lookup keeps
+  // PostgreSQL on the ordering GIN index instead of scanning earlier history.
+  // Adding the unidentified marker is equivalent to the former overlap OR
+  // singleton-containment predicate. Locked candidates cannot change before
+  // UPDATE; keep its current lease/status fence without repeating predecessor
+  // scans against the entire UPDATE target relation.
   const eligible = Prisma.sql`
     ((r."status" = 'PENDING' AND r."availableAt" <= CURRENT_TIMESTAMP)
       OR (r."status" = 'PROCESSING' AND r."leaseExpiresAt" <= CURRENT_TIMESTAMP))
     AND NOT EXISTS (
-      SELECT 1 FROM "IngestionReceipt" previous
-      WHERE (previous."orderingKeys" && r."orderingKeys"
-        OR previous."orderingKeys" @> ARRAY['unidentified:' || r."serviceId"])
-        AND previous."sequence" < r."sequence" AND previous."status" NOT IN ('COMPLETED', 'ARCHIVED')
+      WITH matching AS MATERIALIZED (
+        SELECT previous."sequence" FROM "IngestionReceipt" previous
+        WHERE previous."orderingKeys" && array_append(r."orderingKeys", 'unidentified:' || r."serviceId")
+          AND previous."status" NOT IN ('COMPLETED', 'ARCHIVED')
+      ) SELECT 1 FROM matching WHERE matching."sequence" < r."sequence"
     )
   `;
   const claims = await prisma.$queryRaw<
@@ -372,8 +377,9 @@ export async function claimPostgresEvents(
         AND r."id" NOT IN (SELECT "id" FROM critical UNION ALL SELECT "id" FROM standard)
       ORDER BY r."sequence" FOR UPDATE OF r SKIP LOCKED
       LIMIT (${limit} - (SELECT count(*) FROM critical) - (SELECT count(*) FROM standard))
-    ), candidates AS (
+    ), candidates AS MATERIALIZED (
       SELECT "id" FROM critical UNION ALL SELECT "id" FROM standard UNION ALL SELECT "id" FROM remainder
+      LIMIT ${limit}
     )
     UPDATE "IngestionReceipt" r SET
       "status" = CASE WHEN r."attempts" >= 10 THEN 'DEAD' ELSE 'PROCESSING' END,
@@ -383,7 +389,9 @@ export async function claimPostgresEvents(
       "leaseExpiresAt" = CASE WHEN r."attempts" >= 10 THEN NULL ELSE CURRENT_TIMESTAMP + ${leaseMs} * INTERVAL '1 millisecond' END,
       "failureCode" = CASE WHEN r."attempts" >= 10 THEN 'RETRIES_EXHAUSTED' ELSE r."failureCode" END,
       "attempts" = CASE WHEN r."attempts" >= 10 THEN r."attempts" ELSE r."attempts" + 1 END
-    FROM candidates WHERE r."id" = candidates."id" AND ${eligible}
+    FROM candidates WHERE r."id" = candidates."id"
+      AND ((r."status" = 'PENDING' AND r."availableAt" <= CURRENT_TIMESTAMP)
+        OR (r."status" = 'PROCESSING' AND r."leaseExpiresAt" <= CURRENT_TIMESTAMP))
     RETURNING r."id", r."leaseToken", r."envelope", r."attempts"
   `;
   return claims.filter(

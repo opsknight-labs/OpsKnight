@@ -4,6 +4,12 @@ import { invalidateNotificationProviderCache } from '@/lib/notification-provider
 const prisma = new PrismaClient();
 
 async function seedRequiredReferenceData() {
+  // These are migration-owned reference rows, not disposable queue contents.
+  // Full test resets must restore them before default asynchronous admission.
+  await prisma.ingestionBudget.createMany({
+    data: Array.from({ length: 64 }, (_, shard) => ({ shard })),
+    skipDuplicates: true,
+  });
   await prisma.incidentSlaPolicy.upsert({
     where: { scopeKey_version: { scopeKey: 'workspace', version: 1 } },
     update: {},
@@ -216,7 +222,16 @@ export async function createTestNotificationProvider(
 
 export async function createTestEscalationPolicy(
   name: string,
-  steps: Array<any>,
+  steps: Array<
+    Omit<Prisma.EscalationRuleUncheckedCreateWithoutPolicyInput, 'notificationChannels'> &
+      Partial<
+        Pick<Prisma.EscalationRuleUncheckedCreateWithoutPolicyInput, 'notificationChannels'>
+      > &
+      Pick<
+        Prisma.EscalationRuleCreateWithoutPolicyInput,
+        'targetUser' | 'targetSchedule' | 'targetTeam'
+      >
+  >,
   overrides: Partial<Prisma.EscalationPolicyCreateInput> = {}
 ) {
   return await prisma.escalationPolicy.create({
@@ -233,19 +248,19 @@ export async function createTestEscalationPolicy(
             targetTeam,
             ...rest
           } = s;
-          const data: any = {
+          const data: Prisma.EscalationRuleCreateWithoutPolicyInput = {
             notificationChannels: [],
             ...rest,
           };
 
           // Prioritize scalar IDs if provided, otherwise fallback to relations
-          if (targetUserId) data.targetUserId = targetUserId;
+          if (targetUserId) data.targetUser = { connect: { id: targetUserId } };
           else if (targetUser) data.targetUser = targetUser;
 
-          if (targetScheduleId) data.targetScheduleId = targetScheduleId;
+          if (targetScheduleId) data.targetSchedule = { connect: { id: targetScheduleId } };
           else if (targetSchedule) data.targetSchedule = targetSchedule;
 
-          if (targetTeamId) data.targetTeamId = targetTeamId;
+          if (targetTeamId) data.targetTeam = { connect: { id: targetTeamId } };
           else if (targetTeam) data.targetTeam = targetTeam;
 
           return data;
@@ -303,7 +318,15 @@ export async function createTestStatusPageSubscription(
   });
 }
 
-export async function createTestOnCallSchedule(name: string, layers: any[] = []) {
+export async function createTestOnCallSchedule(
+  name: string,
+  layers: Array<{
+    name?: string;
+    start?: Date;
+    rotationLengthHours?: number;
+    userIds?: string[];
+  }> = []
+) {
   // Append random suffix to avoid unique constraint violations
   const uniqueName = `${name}-${Math.random().toString(36).slice(2, 9)}`;
   return await prisma.onCallSchedule.create({

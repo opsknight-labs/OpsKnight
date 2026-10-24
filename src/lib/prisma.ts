@@ -45,7 +45,8 @@ const prismaClientSingleton = () => {
   // Log configuration for debugging
   const datasourceUrl = configurePrismaDatasource(
     rawDatasourceUrl,
-    rolePoolSize() ?? process.env.DATABASE_POOL_SIZE
+    rolePoolSize() ?? process.env.DATABASE_POOL_SIZE,
+    role === 'web' && process.env.PGBOUNCER_ENABLED === 'true'
   );
 
   const client = new PrismaClient({
