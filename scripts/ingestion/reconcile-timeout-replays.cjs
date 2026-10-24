@@ -17,6 +17,10 @@ async function main() {
     ['/ingestion_test_http_frontier_500', ['identity-frontier-500', '500']],
     ['/ingestion_test_http_frontier_1000', ['identity-frontier-1000', '1000']],
     ['/ingestion_test_http_general_two50', ['general-two-50', 'general-two-50']],
+    [
+      '/ingestion_test_http_job_completion50',
+      ['job-completion-50-quiescent-ledger', 'job-completion-50'],
+    ],
   ]);
   const fixture = fixtures.get(url.pathname);
   assert.ok(fixture, 'Replay diagnostic requires a fixed owned timeout fixture');

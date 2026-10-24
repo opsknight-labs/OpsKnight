@@ -1,0 +1,9 @@
+{
+  "passed": true,
+  "elapsedMs": 1537.918,
+  "polls": 7,
+  "scope": "Owned fixture barrier verification after Docker cleanup. Transaction read open admission then slept 1.5 seconds. Final one-connection explicit-datasource quiescer awaited it despite inherited web role and unreachable shared WEB_DATABASE_URL. No events submitted.",
+  "oldTransactionReadOpen": true,
+  "pausedAfter": true,
+  "heldTransactionMs": 1500
+}

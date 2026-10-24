@@ -1882,7 +1882,7 @@
       "scope": "Sequential empty host-process component diagnostic, not image capacity"
     },
     "twoGeneralReplicaExperiment": {
-      "status": "pending",
+      "status": "failed; see twoGeneralReplicaMeasuredResult",
       "imageRevision": "2e22aaa61",
       "generalReplicas": 2,
       "poolPerGeneralReplica": 5,
@@ -1924,7 +1924,7 @@
       "before": 4.108538,
       "after": 1.747533
     },
-    "nativeImageBenchmark": "pending",
+    "nativeImageBenchmark": "FAILED 50 RPS / five minutes; final ledger supplement captures late commits",
     "staticReviews": "Two independent substitutes, no actionable findings; not branded certification",
     "redesignPlan": "high-throughput-redesign.md",
     "release": "NO-GO"
@@ -1954,5 +1954,52 @@
     "lintWarnings": 0,
     "separateNativeCapacityModes": "pending",
     "externalDeliveryCertified": false
+  },
+  "fencedCompletionNative50": {
+    "status": "failed",
+    "sourceRevision": "4d22259a7",
+    "imageId": "sha256:34c9b015b66ccf3190738575d3ac010812b5399d1e8eb4ca0b9f26bd2e89e1ce",
+    "offeredRps": 50,
+    "duration": "5m",
+    "dropped": 1782,
+    "httpP95Ms": 10002.0604,
+    "completionP95Ms": 4548.75,
+    "originalSnapshot": {
+      "persisted": 9414,
+      "acknowledged": 9202,
+      "completeLedger": false
+    },
+    "quiescentLedger": {
+      "persistedAndCompleted": 9450,
+      "ambiguous": 248,
+      "lateCommits": 36,
+      "replayRecovered": 9450,
+      "replayExtra": 0,
+      "pendingBudget": 0,
+      "bytes": 0
+    },
+    "sampler": {
+      "samples": 33,
+      "errors": 0,
+      "effectQueryCumulativeMs": 30206.47255,
+      "scope": "Diagnostic overhead; initial effects only"
+    },
+    "cleanupFailures": [],
+    "kindRestoredReady": true,
+    "certified": false
+  },
+  "redesignReconciliationBarrier": {
+    "nativeFullRepeat": "pending",
+    "realHeldTransaction": "passed, transaction read open admission then slept 1.5 seconds",
+    "datasourceMismatchFinding": "fixed, explicit URL/client plus current_database verification and host web-datasource pinning",
+    "substituteStaticReviews": "no remaining actionable findings; not branded certification",
+    "higherLoadGates": "blocked by failed lower gate",
+    "fourIndependentNativeModes": "incomplete",
+    "focusedTestsPassed": 12,
+    "typescript": "passed",
+    "lintErrors": 0,
+    "lintWarnings": 0,
+    "realHeldTransactionPolls": 7,
+    "connectionLimit": 1
   }
 }

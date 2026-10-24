@@ -1,0 +1,37 @@
+{
+  "measuredAt": "2026-10-24T22:11:11.240Z",
+  "source": "plans/event-ingestion/local-docker-http-job-completion-50.json",
+  "fixtureServiceId": "cmvmxzf5x0000wumkmmoe5kp1",
+  "accepted": 9450,
+  "completed": 9450,
+  "acknowledged": 9202,
+  "ambiguousSubmissions": 248,
+  "additionalCommitsAfterSnapshot": 36,
+  "admissionQuiescence": {
+    "passed": true,
+    "elapsedMs": 1635.9904580000002,
+    "polls": 7,
+    "scope": "Disposable HTTP fixture admission closed after offered load; pre-barrier database transactions settled before final reconciliation. Policy remains paused through topology cleanup. Not notification drain or HTTP timeout prevention."
+  },
+  "passed": false,
+  "certifiedEnterprise": false,
+  "scope": "Post-topology-cleanup ledger supplement. Preserves original failed load snapshot. Fixture admission closed and old transactions settled; real delayed-transaction barrier check passed. This is not a rerun or a passing capacity gate.",
+  "postCleanupEffectStatuses": [
+    {
+      "status": "PENDING",
+      "count": 30785
+    },
+    {
+      "status": "PROCESSING",
+      "count": 56
+    },
+    {
+      "status": "COMPLETED",
+      "count": 16409
+    }
+  ],
+  "postCleanupBudget": {
+    "pending": 0,
+    "bytes": "0"
+  }
+}
