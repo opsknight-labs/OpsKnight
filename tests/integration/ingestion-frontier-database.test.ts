@@ -233,6 +233,35 @@ it('advances and removes derived pointers when an unfinished owner is deleted', 
   expect(counts).toEqual({ heads: 0, links: 0 });
 });
 
+it('retains the shared successor when another identity is a singleton', async () => {
+  const first = await append(['unique:first', 'shared']);
+  const next = await append(['shared', 'unique:next']);
+  await finish(first.id);
+  expect(await assertFrontier()).toEqual([next.id]);
+  expect(
+    await prisma.ingestionOrderingHead.findUnique({ where: { identity: 'unique:first' } })
+  ).toBeNull();
+  await finish(next.id);
+  expect(await prisma.ingestionOrderingHead.count()).toBe(0);
+  expect(await prisma.ingestionOrderingLink.count()).toBe(0);
+});
+
+it('rolls back singleton frontier removal with receipt completion', async () => {
+  const first = await append(['singleton:a', 'singleton:b']);
+  await expect(
+    prisma.$transaction(async tx => {
+      await tx.ingestionReceipt.update({ where: { id: first.id }, data: { status: 'COMPLETED' } });
+      expect(await tx.ingestionOrderingHead.count()).toBe(0);
+      expect(await tx.ingestionOrderingLink.count()).toBe(0);
+      throw new Error('completion rollback fixture');
+    })
+  ).rejects.toThrow('completion rollback fixture');
+  expect(await assertFrontier()).toEqual([first.id]);
+  expect(await prisma.ingestionOrderingHead.count()).toBe(2);
+  await finish(first.id);
+  expect(await prisma.ingestionOrderingHead.count()).toBe(0);
+});
+
 it('keeps the eligible severity lane aligned with a receipt update', async () => {
   const receipt = await append(['severity']);
   await prisma.ingestionReceipt.update({ where: { id: receipt.id }, data: { critical: true } });

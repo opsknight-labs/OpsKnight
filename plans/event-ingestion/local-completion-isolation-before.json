@@ -1,0 +1,1584 @@
+{
+  "measuredAt": "2026-10-24T13:53:55.053Z",
+  "certified": false,
+  "settings": {
+    "fsync": "on",
+    "fullPageWrites": "on",
+    "synchronousCommit": "on"
+  },
+  "scope": "Completion-only pgbench over owned container socket, tiny synthetic receipts/two unique identities, no incident engine or admission. ABBA trigger isolation on disposable clone; disabling triggers is NOT a production optimization. Includes durable commits; EXPLAIN excludes commit. No application capacity claim.",
+  "phases": [
+    {
+      "commandLatencies": [
+        {
+          "meanMs": 0.003,
+          "failures": 0,
+          "operation": "\\set"
+        },
+        {
+          "meanMs": 0.001,
+          "failures": 0,
+          "operation": "\\set"
+        },
+        {
+          "meanMs": 1.257,
+          "failures": 0,
+          "operation": "BEGIN;"
+        },
+        {
+          "meanMs": 3.406,
+          "failures": 0,
+          "operation": "WITH"
+        },
+        {
+          "meanMs": 8.13,
+          "failures": 0,
+          "operation": "COMMIT;"
+        }
+      ],
+      "clients": 1,
+      "shape": "distributed",
+      "variant": "full-frontier",
+      "transactions": 32,
+      "tpsIncludingCommit": 78.119088,
+      "meanLatencyIncludingCommitMs": 12.801,
+      "explainExecutionMs": 13.427,
+      "triggerTimings": [
+        {
+          "Trigger Name": "IngestionReceipt_ordering_update",
+          "Relation": "IngestionReceipt",
+          "Time": 10.977,
+          "Calls": 1
+        }
+      ],
+      "functionTimes": [
+        {
+          "name": "opsknight_ingestion_ordering_detach",
+          "calls": 32,
+          "totalMs": 30.278000000002066,
+          "selfMs": 27.51299999999901
+        },
+        {
+          "name": "opsknight_ingestion_ordering_lock",
+          "calls": 64,
+          "totalMs": 6.675000000000637,
+          "selfMs": 6.675000000000637
+        },
+        {
+          "name": "opsknight_ingestion_ordering_write",
+          "calls": 32,
+          "totalMs": 40.56300000000192,
+          "selfMs": 6.375
+        }
+      ],
+      "state": {
+        "completed": 32,
+        "pending": 0,
+        "heads": 0
+      }
+    },
+    {
+      "commandLatencies": [
+        {
+          "meanMs": 0.003,
+          "failures": 0,
+          "operation": "\\set"
+        },
+        {
+          "meanMs": 0.001,
+          "failures": 0,
+          "operation": "\\set"
+        },
+        {
+          "meanMs": 1.472,
+          "failures": 0,
+          "operation": "BEGIN;"
+        },
+        {
+          "meanMs": 2.446,
+          "failures": 0,
+          "operation": "WITH"
+        },
+        {
+          "meanMs": 8.035,
+          "failures": 0,
+          "operation": "COMMIT;"
+        }
+      ],
+      "clients": 1,
+      "shape": "distributed",
+      "variant": "full-no-frontier",
+      "transactions": 32,
+      "tpsIncludingCommit": 83.601555,
+      "meanLatencyIncludingCommitMs": 11.962,
+      "explainExecutionMs": 0.898,
+      "triggerTimings": [],
+      "functionTimes": [
+        {
+          "name": "opsknight_ingestion_ordering_detach",
+          "calls": 0,
+          "totalMs": 0,
+          "selfMs": 0
+        },
+        {
+          "name": "opsknight_ingestion_ordering_lock",
+          "calls": 0,
+          "totalMs": 0,
+          "selfMs": 0
+        },
+        {
+          "name": "opsknight_ingestion_ordering_write",
+          "calls": 0,
+          "totalMs": 0,
+          "selfMs": 0
+        }
+      ],
+      "state": {
+        "completed": 32,
+        "pending": 0,
+        "heads": 64
+      }
+    },
+    {
+      "commandLatencies": [
+        {
+          "meanMs": 0.003,
+          "failures": 0,
+          "operation": "\\set"
+        },
+        {
+          "meanMs": 0.001,
+          "failures": 0,
+          "operation": "\\set"
+        },
+        {
+          "meanMs": 1.278,
+          "failures": 0,
+          "operation": "BEGIN;"
+        },
+        {
+          "meanMs": 1.995,
+          "failures": 0,
+          "operation": "WITH"
+        },
+        {
+          "meanMs": 5.029,
+          "failures": 0,
+          "operation": "COMMIT;"
+        }
+      ],
+      "clients": 1,
+      "shape": "distributed",
+      "variant": "full-no-frontier",
+      "transactions": 32,
+      "tpsIncludingCommit": 120.328798,
+      "meanLatencyIncludingCommitMs": 8.311,
+      "explainExecutionMs": 1.104,
+      "triggerTimings": [],
+      "functionTimes": [
+        {
+          "name": "opsknight_ingestion_ordering_detach",
+          "calls": 0,
+          "totalMs": 0,
+          "selfMs": 0
+        },
+        {
+          "name": "opsknight_ingestion_ordering_lock",
+          "calls": 0,
+          "totalMs": 0,
+          "selfMs": 0
+        },
+        {
+          "name": "opsknight_ingestion_ordering_write",
+          "calls": 0,
+          "totalMs": 0,
+          "selfMs": 0
+        }
+      ],
+      "state": {
+        "completed": 32,
+        "pending": 0,
+        "heads": 64
+      }
+    },
+    {
+      "commandLatencies": [
+        {
+          "meanMs": 0.003,
+          "failures": 0,
+          "operation": "\\set"
+        },
+        {
+          "meanMs": 0.001,
+          "failures": 0,
+          "operation": "\\set"
+        },
+        {
+          "meanMs": 1.114,
+          "failures": 0,
+          "operation": "BEGIN;"
+        },
+        {
+          "meanMs": 4.288,
+          "failures": 0,
+          "operation": "WITH"
+        },
+        {
+          "meanMs": 8.12,
+          "failures": 0,
+          "operation": "COMMIT;"
+        }
+      ],
+      "clients": 1,
+      "shape": "distributed",
+      "variant": "full-frontier",
+      "transactions": 32,
+      "tpsIncludingCommit": 73.919049,
+      "meanLatencyIncludingCommitMs": 13.528,
+      "explainExecutionMs": 9.497,
+      "triggerTimings": [
+        {
+          "Trigger Name": "IngestionReceipt_ordering_update",
+          "Relation": "IngestionReceipt",
+          "Time": 8.49,
+          "Calls": 1
+        }
+      ],
+      "functionTimes": [
+        {
+          "name": "opsknight_ingestion_ordering_detach",
+          "calls": 32,
+          "totalMs": 50.03600000000006,
+          "selfMs": 47.5580000000009
+        },
+        {
+          "name": "opsknight_ingestion_ordering_lock",
+          "calls": 64,
+          "totalMs": 6.170999999999367,
+          "selfMs": 6.170999999999367
+        },
+        {
+          "name": "opsknight_ingestion_ordering_write",
+          "calls": 32,
+          "totalMs": 61.39400000000023,
+          "selfMs": 7.664000000000669
+        }
+      ],
+      "state": {
+        "completed": 32,
+        "pending": 0,
+        "heads": 0
+      }
+    },
+    {
+      "commandLatencies": [
+        {
+          "meanMs": 0.004,
+          "failures": 0,
+          "operation": "\\set"
+        },
+        {
+          "meanMs": 0.001,
+          "failures": 0,
+          "operation": "\\set"
+        },
+        {
+          "meanMs": 1.232,
+          "failures": 0,
+          "operation": "BEGIN;"
+        },
+        {
+          "meanMs": 3.535,
+          "failures": 0,
+          "operation": "UPDATE"
+        },
+        {
+          "meanMs": 5.252,
+          "failures": 0,
+          "operation": "COMMIT;"
+        }
+      ],
+      "clients": 1,
+      "shape": "distributed",
+      "variant": "receipt-only",
+      "transactions": 32,
+      "tpsIncludingCommit": 99.68071,
+      "meanLatencyIncludingCommitMs": 10.032,
+      "explainExecutionMs": 8.28,
+      "triggerTimings": [
+        {
+          "Trigger Name": "IngestionReceipt_ordering_update",
+          "Relation": "IngestionReceipt",
+          "Time": 7.348,
+          "Calls": 1
+        }
+      ],
+      "functionTimes": [
+        {
+          "name": "opsknight_ingestion_ordering_detach",
+          "calls": 32,
+          "totalMs": 36.58299999999872,
+          "selfMs": 33.29899999999907
+        },
+        {
+          "name": "opsknight_ingestion_ordering_lock",
+          "calls": 64,
+          "totalMs": 10.680000000000291,
+          "selfMs": 10.680000000000291
+        },
+        {
+          "name": "opsknight_ingestion_ordering_write",
+          "calls": 32,
+          "totalMs": 50.953999999997905,
+          "selfMs": 6.972999999999956
+        }
+      ],
+      "state": {
+        "completed": 32,
+        "pending": 32,
+        "heads": 0
+      }
+    },
+    {
+      "commandLatencies": [
+        {
+          "meanMs": 0.009,
+          "failures": 0,
+          "operation": "\\set"
+        },
+        {
+          "meanMs": 0.001,
+          "failures": 0,
+          "operation": "\\set"
+        },
+        {
+          "meanMs": 2.016,
+          "failures": 0,
+          "operation": "BEGIN;"
+        },
+        {
+          "meanMs": 2.48,
+          "failures": 0,
+          "operation": "UPDATE"
+        },
+        {
+          "meanMs": 9.863,
+          "failures": 0,
+          "operation": "COMMIT;"
+        }
+      ],
+      "clients": 1,
+      "shape": "distributed",
+      "variant": "budget-only",
+      "transactions": 32,
+      "tpsIncludingCommit": 69.574897,
+      "meanLatencyIncludingCommitMs": 14.373,
+      "explainExecutionMs": 0.201,
+      "triggerTimings": [],
+      "functionTimes": [
+        {
+          "name": "opsknight_ingestion_ordering_detach",
+          "calls": 0,
+          "totalMs": 0,
+          "selfMs": 0
+        },
+        {
+          "name": "opsknight_ingestion_ordering_lock",
+          "calls": 0,
+          "totalMs": 0,
+          "selfMs": 0
+        },
+        {
+          "name": "opsknight_ingestion_ordering_write",
+          "calls": 0,
+          "totalMs": 0,
+          "selfMs": 0
+        }
+      ],
+      "state": {
+        "completed": 0,
+        "pending": 0,
+        "heads": 64
+      }
+    },
+    {
+      "commandLatencies": [
+        {
+          "meanMs": 0.001,
+          "failures": 0,
+          "operation": "\\set"
+        },
+        {
+          "meanMs": 0,
+          "failures": 0,
+          "operation": "\\set"
+        },
+        {
+          "meanMs": 0.159,
+          "failures": 0,
+          "operation": "BEGIN;"
+        },
+        {
+          "meanMs": 2.383,
+          "failures": 0,
+          "operation": "WITH"
+        },
+        {
+          "meanMs": 0.633,
+          "failures": 0,
+          "operation": "COMMIT;"
+        }
+      ],
+      "clients": 1,
+      "shape": "hot-budget",
+      "variant": "full-frontier",
+      "transactions": 32,
+      "tpsIncludingCommit": 314.502496,
+      "meanLatencyIncludingCommitMs": 3.18,
+      "explainExecutionMs": 10.824,
+      "triggerTimings": [
+        {
+          "Trigger Name": "IngestionReceipt_ordering_update",
+          "Relation": "IngestionReceipt",
+          "Time": 9.538,
+          "Calls": 1
+        }
+      ],
+      "functionTimes": [
+        {
+          "name": "opsknight_ingestion_ordering_detach",
+          "calls": 32,
+          "totalMs": 15.670999999998457,
+          "selfMs": 14.693999999999505
+        },
+        {
+          "name": "opsknight_ingestion_ordering_lock",
+          "calls": 64,
+          "totalMs": 5.007999999999811,
+          "selfMs": 5.007999999999811
+        },
+        {
+          "name": "opsknight_ingestion_ordering_write",
+          "calls": 32,
+          "totalMs": 24.048000000002503,
+          "selfMs": 4.343999999999141
+        }
+      ],
+      "state": {
+        "completed": 32,
+        "pending": 0,
+        "heads": 0
+      }
+    },
+    {
+      "commandLatencies": [
+        {
+          "meanMs": 0.003,
+          "failures": 0,
+          "operation": "\\set"
+        },
+        {
+          "meanMs": 0,
+          "failures": 0,
+          "operation": "\\set"
+        },
+        {
+          "meanMs": 1.682,
+          "failures": 0,
+          "operation": "BEGIN;"
+        },
+        {
+          "meanMs": 3.701,
+          "failures": 0,
+          "operation": "WITH"
+        },
+        {
+          "meanMs": 8.628,
+          "failures": 0,
+          "operation": "COMMIT;"
+        }
+      ],
+      "clients": 1,
+      "shape": "hot-budget",
+      "variant": "full-no-frontier",
+      "transactions": 32,
+      "tpsIncludingCommit": 71.34067,
+      "meanLatencyIncludingCommitMs": 14.017,
+      "explainExecutionMs": 0.957,
+      "triggerTimings": [],
+      "functionTimes": [
+        {
+          "name": "opsknight_ingestion_ordering_detach",
+          "calls": 0,
+          "totalMs": 0,
+          "selfMs": 0
+        },
+        {
+          "name": "opsknight_ingestion_ordering_lock",
+          "calls": 0,
+          "totalMs": 0,
+          "selfMs": 0
+        },
+        {
+          "name": "opsknight_ingestion_ordering_write",
+          "calls": 0,
+          "totalMs": 0,
+          "selfMs": 0
+        }
+      ],
+      "state": {
+        "completed": 32,
+        "pending": 0,
+        "heads": 64
+      }
+    },
+    {
+      "commandLatencies": [
+        {
+          "meanMs": 0.005,
+          "failures": 0,
+          "operation": "\\set"
+        },
+        {
+          "meanMs": 0.001,
+          "failures": 0,
+          "operation": "\\set"
+        },
+        {
+          "meanMs": 0.451,
+          "failures": 0,
+          "operation": "BEGIN;"
+        },
+        {
+          "meanMs": 1.418,
+          "failures": 0,
+          "operation": "WITH"
+        },
+        {
+          "meanMs": 3.415,
+          "failures": 0,
+          "operation": "COMMIT;"
+        }
+      ],
+      "clients": 1,
+      "shape": "hot-budget",
+      "variant": "full-no-frontier",
+      "transactions": 32,
+      "tpsIncludingCommit": 188.964475,
+      "meanLatencyIncludingCommitMs": 5.292,
+      "explainExecutionMs": 0.959,
+      "triggerTimings": [],
+      "functionTimes": [
+        {
+          "name": "opsknight_ingestion_ordering_detach",
+          "calls": 0,
+          "totalMs": 0,
+          "selfMs": 0
+        },
+        {
+          "name": "opsknight_ingestion_ordering_lock",
+          "calls": 0,
+          "totalMs": 0,
+          "selfMs": 0
+        },
+        {
+          "name": "opsknight_ingestion_ordering_write",
+          "calls": 0,
+          "totalMs": 0,
+          "selfMs": 0
+        }
+      ],
+      "state": {
+        "completed": 32,
+        "pending": 0,
+        "heads": 64
+      }
+    },
+    {
+      "commandLatencies": [
+        {
+          "meanMs": 0.008,
+          "failures": 0,
+          "operation": "\\set"
+        },
+        {
+          "meanMs": 0.001,
+          "failures": 0,
+          "operation": "\\set"
+        },
+        {
+          "meanMs": 2.211,
+          "failures": 0,
+          "operation": "BEGIN;"
+        },
+        {
+          "meanMs": 4.539,
+          "failures": 0,
+          "operation": "WITH"
+        },
+        {
+          "meanMs": 13.059,
+          "failures": 0,
+          "operation": "COMMIT;"
+        }
+      ],
+      "clients": 1,
+      "shape": "hot-budget",
+      "variant": "full-frontier",
+      "transactions": 32,
+      "tpsIncludingCommit": 50.44995,
+      "meanLatencyIncludingCommitMs": 19.822,
+      "explainExecutionMs": 12.916,
+      "triggerTimings": [
+        {
+          "Trigger Name": "IngestionReceipt_ordering_update",
+          "Relation": "IngestionReceipt",
+          "Time": 9.275,
+          "Calls": 1
+        }
+      ],
+      "functionTimes": [
+        {
+          "name": "opsknight_ingestion_ordering_detach",
+          "calls": 32,
+          "totalMs": 37.03200000000288,
+          "selfMs": 35.302999999999884
+        },
+        {
+          "name": "opsknight_ingestion_ordering_lock",
+          "calls": 64,
+          "totalMs": 5.279999999999745,
+          "selfMs": 5.279999999999745
+        },
+        {
+          "name": "opsknight_ingestion_ordering_write",
+          "calls": 32,
+          "totalMs": 45.2699999999968,
+          "selfMs": 4.684999999999491
+        }
+      ],
+      "state": {
+        "completed": 32,
+        "pending": 0,
+        "heads": 0
+      }
+    },
+    {
+      "commandLatencies": [
+        {
+          "meanMs": 0.003,
+          "failures": 0,
+          "operation": "\\set"
+        },
+        {
+          "meanMs": 0.001,
+          "failures": 0,
+          "operation": "\\set"
+        },
+        {
+          "meanMs": 0.94,
+          "failures": 0,
+          "operation": "BEGIN;"
+        },
+        {
+          "meanMs": 2.341,
+          "failures": 0,
+          "operation": "UPDATE"
+        },
+        {
+          "meanMs": 4.624,
+          "failures": 0,
+          "operation": "COMMIT;"
+        }
+      ],
+      "clients": 1,
+      "shape": "hot-budget",
+      "variant": "receipt-only",
+      "transactions": 32,
+      "tpsIncludingCommit": 126.383804,
+      "meanLatencyIncludingCommitMs": 7.912,
+      "explainExecutionMs": 14.931,
+      "triggerTimings": [
+        {
+          "Trigger Name": "IngestionReceipt_ordering_update",
+          "Relation": "IngestionReceipt",
+          "Time": 14.367,
+          "Calls": 1
+        }
+      ],
+      "functionTimes": [
+        {
+          "name": "opsknight_ingestion_ordering_detach",
+          "calls": 32,
+          "totalMs": 25.144000000000233,
+          "selfMs": 23.168000000001484
+        },
+        {
+          "name": "opsknight_ingestion_ordering_lock",
+          "calls": 64,
+          "totalMs": 5.889000000000124,
+          "selfMs": 5.889000000000124
+        },
+        {
+          "name": "opsknight_ingestion_ordering_write",
+          "calls": 32,
+          "totalMs": 33.60899999999674,
+          "selfMs": 4.551000000001295
+        }
+      ],
+      "state": {
+        "completed": 32,
+        "pending": 32,
+        "heads": 0
+      }
+    },
+    {
+      "commandLatencies": [
+        {
+          "meanMs": 0.003,
+          "failures": 0,
+          "operation": "\\set"
+        },
+        {
+          "meanMs": 0.001,
+          "failures": 0,
+          "operation": "\\set"
+        },
+        {
+          "meanMs": 1.335,
+          "failures": 0,
+          "operation": "BEGIN;"
+        },
+        {
+          "meanMs": 1.672,
+          "failures": 0,
+          "operation": "UPDATE"
+        },
+        {
+          "meanMs": 5.623,
+          "failures": 0,
+          "operation": "COMMIT;"
+        }
+      ],
+      "clients": 1,
+      "shape": "hot-budget",
+      "variant": "budget-only",
+      "transactions": 32,
+      "tpsIncludingCommit": 115.573951,
+      "meanLatencyIncludingCommitMs": 8.652,
+      "explainExecutionMs": 0.35,
+      "triggerTimings": [],
+      "functionTimes": [
+        {
+          "name": "opsknight_ingestion_ordering_detach",
+          "calls": 0,
+          "totalMs": 0,
+          "selfMs": 0
+        },
+        {
+          "name": "opsknight_ingestion_ordering_lock",
+          "calls": 0,
+          "totalMs": 0,
+          "selfMs": 0
+        },
+        {
+          "name": "opsknight_ingestion_ordering_write",
+          "calls": 0,
+          "totalMs": 0,
+          "selfMs": 0
+        }
+      ],
+      "state": {
+        "completed": 0,
+        "pending": 0,
+        "heads": 64
+      }
+    },
+    {
+      "commandLatencies": [
+        {
+          "meanMs": 0.004,
+          "failures": 0,
+          "operation": "\\set"
+        },
+        {
+          "meanMs": 0,
+          "failures": 0,
+          "operation": "\\set"
+        },
+        {
+          "meanMs": 3.65,
+          "failures": 0,
+          "operation": "BEGIN;"
+        },
+        {
+          "meanMs": 31.801,
+          "failures": 0,
+          "operation": "WITH"
+        },
+        {
+          "meanMs": 27.887,
+          "failures": 0,
+          "operation": "COMMIT;"
+        }
+      ],
+      "clients": 16,
+      "shape": "distributed",
+      "variant": "full-frontier",
+      "transactions": 512,
+      "tpsIncludingCommit": 237.399841,
+      "meanLatencyIncludingCommitMs": 67.397,
+      "explainExecutionMs": 9.26,
+      "triggerTimings": [
+        {
+          "Trigger Name": "IngestionReceipt_ordering_update",
+          "Relation": "IngestionReceipt",
+          "Time": 7.785,
+          "Calls": 1
+        }
+      ],
+      "functionTimes": [
+        {
+          "name": "opsknight_ingestion_ordering_detach",
+          "calls": 512,
+          "totalMs": 6298.153000000002,
+          "selfMs": 6024.892
+        },
+        {
+          "name": "opsknight_ingestion_ordering_lock",
+          "calls": 1024,
+          "totalMs": 645.9679999999998,
+          "selfMs": 645.9679999999998
+        },
+        {
+          "name": "opsknight_ingestion_ordering_write",
+          "calls": 512,
+          "totalMs": 7856.591,
+          "selfMs": 1185.6949999999997
+        }
+      ],
+      "state": {
+        "completed": 512,
+        "pending": 0,
+        "heads": 0
+      }
+    },
+    {
+      "commandLatencies": [
+        {
+          "meanMs": 0.011,
+          "failures": 0,
+          "operation": "\\set"
+        },
+        {
+          "meanMs": 0,
+          "failures": 0,
+          "operation": "\\set"
+        },
+        {
+          "meanMs": 2.025,
+          "failures": 0,
+          "operation": "BEGIN;"
+        },
+        {
+          "meanMs": 7.6,
+          "failures": 0,
+          "operation": "WITH"
+        },
+        {
+          "meanMs": 18.864,
+          "failures": 0,
+          "operation": "COMMIT;"
+        }
+      ],
+      "clients": 16,
+      "shape": "distributed",
+      "variant": "full-no-frontier",
+      "transactions": 512,
+      "tpsIncludingCommit": 508.036805,
+      "meanLatencyIncludingCommitMs": 31.494,
+      "explainExecutionMs": 1.082,
+      "triggerTimings": [],
+      "functionTimes": [
+        {
+          "name": "opsknight_ingestion_ordering_detach",
+          "calls": 0,
+          "totalMs": 0,
+          "selfMs": 0
+        },
+        {
+          "name": "opsknight_ingestion_ordering_lock",
+          "calls": 0,
+          "totalMs": 0,
+          "selfMs": 0
+        },
+        {
+          "name": "opsknight_ingestion_ordering_write",
+          "calls": 0,
+          "totalMs": 0,
+          "selfMs": 0
+        }
+      ],
+      "state": {
+        "completed": 512,
+        "pending": 0,
+        "heads": 1024
+      }
+    },
+    {
+      "commandLatencies": [
+        {
+          "meanMs": 0.002,
+          "failures": 0,
+          "operation": "\\set"
+        },
+        {
+          "meanMs": 0,
+          "failures": 0,
+          "operation": "\\set"
+        },
+        {
+          "meanMs": 2.17,
+          "failures": 0,
+          "operation": "BEGIN;"
+        },
+        {
+          "meanMs": 6.968,
+          "failures": 0,
+          "operation": "WITH"
+        },
+        {
+          "meanMs": 16.406,
+          "failures": 0,
+          "operation": "COMMIT;"
+        }
+      ],
+      "clients": 16,
+      "shape": "distributed",
+      "variant": "full-no-frontier",
+      "transactions": 512,
+      "tpsIncludingCommit": 568.727118,
+      "meanLatencyIncludingCommitMs": 28.133,
+      "explainExecutionMs": 1.012,
+      "triggerTimings": [],
+      "functionTimes": [
+        {
+          "name": "opsknight_ingestion_ordering_detach",
+          "calls": 0,
+          "totalMs": 0,
+          "selfMs": 0
+        },
+        {
+          "name": "opsknight_ingestion_ordering_lock",
+          "calls": 0,
+          "totalMs": 0,
+          "selfMs": 0
+        },
+        {
+          "name": "opsknight_ingestion_ordering_write",
+          "calls": 0,
+          "totalMs": 0,
+          "selfMs": 0
+        }
+      ],
+      "state": {
+        "completed": 512,
+        "pending": 0,
+        "heads": 1024
+      }
+    },
+    {
+      "commandLatencies": [
+        {
+          "meanMs": 0.002,
+          "failures": 0,
+          "operation": "\\set"
+        },
+        {
+          "meanMs": 0,
+          "failures": 0,
+          "operation": "\\set"
+        },
+        {
+          "meanMs": 2.985,
+          "failures": 0,
+          "operation": "BEGIN;"
+        },
+        {
+          "meanMs": 17.445,
+          "failures": 0,
+          "operation": "WITH"
+        },
+        {
+          "meanMs": 18.387,
+          "failures": 0,
+          "operation": "COMMIT;"
+        }
+      ],
+      "clients": 16,
+      "shape": "distributed",
+      "variant": "full-frontier",
+      "transactions": 512,
+      "tpsIncludingCommit": 383.48699,
+      "meanLatencyIncludingCommitMs": 41.722,
+      "explainExecutionMs": 10.483,
+      "triggerTimings": [
+        {
+          "Trigger Name": "IngestionReceipt_ordering_update",
+          "Relation": "IngestionReceipt",
+          "Time": 9.231,
+          "Calls": 1
+        }
+      ],
+      "functionTimes": [
+        {
+          "name": "opsknight_ingestion_ordering_detach",
+          "calls": 512,
+          "totalMs": 2187.7549999999974,
+          "selfMs": 2114.964
+        },
+        {
+          "name": "opsknight_ingestion_ordering_lock",
+          "calls": 1024,
+          "totalMs": 310.97100000000046,
+          "selfMs": 310.97100000000046
+        },
+        {
+          "name": "opsknight_ingestion_ordering_write",
+          "calls": 512,
+          "totalMs": 3192.475000000006,
+          "selfMs": 766.5079999999998
+        }
+      ],
+      "state": {
+        "completed": 512,
+        "pending": 0,
+        "heads": 0
+      }
+    },
+    {
+      "commandLatencies": [
+        {
+          "meanMs": 0.003,
+          "failures": 0,
+          "operation": "\\set"
+        },
+        {
+          "meanMs": 0.016,
+          "failures": 0,
+          "operation": "\\set"
+        },
+        {
+          "meanMs": 2.762,
+          "failures": 0,
+          "operation": "BEGIN;"
+        },
+        {
+          "meanMs": 13.11,
+          "failures": 0,
+          "operation": "UPDATE"
+        },
+        {
+          "meanMs": 24.664,
+          "failures": 0,
+          "operation": "COMMIT;"
+        }
+      ],
+      "clients": 16,
+      "shape": "distributed",
+      "variant": "receipt-only",
+      "transactions": 512,
+      "tpsIncludingCommit": 379.778008,
+      "meanLatencyIncludingCommitMs": 42.13,
+      "explainExecutionMs": 11.296,
+      "triggerTimings": [
+        {
+          "Trigger Name": "IngestionReceipt_ordering_update",
+          "Relation": "IngestionReceipt",
+          "Time": 10.363,
+          "Calls": 1
+        }
+      ],
+      "functionTimes": [
+        {
+          "name": "opsknight_ingestion_ordering_detach",
+          "calls": 512,
+          "totalMs": 3982.775999999998,
+          "selfMs": 3875.3459999999977
+        },
+        {
+          "name": "opsknight_ingestion_ordering_lock",
+          "calls": 1024,
+          "totalMs": 248.50900000000001,
+          "selfMs": 248.50900000000001
+        },
+        {
+          "name": "opsknight_ingestion_ordering_write",
+          "calls": 512,
+          "totalMs": 4337.148999999998,
+          "selfMs": 213.26100000000042
+        }
+      ],
+      "state": {
+        "completed": 512,
+        "pending": 512,
+        "heads": 0
+      }
+    },
+    {
+      "commandLatencies": [
+        {
+          "meanMs": 0.005,
+          "failures": 0,
+          "operation": "\\set"
+        },
+        {
+          "meanMs": 0,
+          "failures": 0,
+          "operation": "\\set"
+        },
+        {
+          "meanMs": 1.252,
+          "failures": 0,
+          "operation": "BEGIN;"
+        },
+        {
+          "meanMs": 4.227,
+          "failures": 0,
+          "operation": "UPDATE"
+        },
+        {
+          "meanMs": 16.02,
+          "failures": 0,
+          "operation": "COMMIT;"
+        }
+      ],
+      "clients": 16,
+      "shape": "distributed",
+      "variant": "budget-only",
+      "transactions": 512,
+      "tpsIncludingCommit": 712.367648,
+      "meanLatencyIncludingCommitMs": 22.46,
+      "explainExecutionMs": 0.261,
+      "triggerTimings": [],
+      "functionTimes": [
+        {
+          "name": "opsknight_ingestion_ordering_detach",
+          "calls": 0,
+          "totalMs": 0,
+          "selfMs": 0
+        },
+        {
+          "name": "opsknight_ingestion_ordering_lock",
+          "calls": 0,
+          "totalMs": 0,
+          "selfMs": 0
+        },
+        {
+          "name": "opsknight_ingestion_ordering_write",
+          "calls": 0,
+          "totalMs": 0,
+          "selfMs": 0
+        }
+      ],
+      "state": {
+        "completed": 0,
+        "pending": 0,
+        "heads": 1024
+      }
+    },
+    {
+      "commandLatencies": [
+        {
+          "meanMs": 0.005,
+          "failures": 0,
+          "operation": "\\set"
+        },
+        {
+          "meanMs": 0.001,
+          "failures": 0,
+          "operation": "\\set"
+        },
+        {
+          "meanMs": 2.194,
+          "failures": 0,
+          "operation": "BEGIN;"
+        },
+        {
+          "meanMs": 144.54,
+          "failures": 0,
+          "operation": "WITH"
+        },
+        {
+          "meanMs": 9.822,
+          "failures": 0,
+          "operation": "COMMIT;"
+        }
+      ],
+      "clients": 16,
+      "shape": "hot-budget",
+      "variant": "full-frontier",
+      "transactions": 512,
+      "tpsIncludingCommit": 92.58978,
+      "meanLatencyIncludingCommitMs": 172.805,
+      "explainExecutionMs": 10.965,
+      "triggerTimings": [
+        {
+          "Trigger Name": "IngestionReceipt_ordering_update",
+          "Relation": "IngestionReceipt",
+          "Time": 9.877,
+          "Calls": 1
+        }
+      ],
+      "functionTimes": [
+        {
+          "name": "opsknight_ingestion_ordering_detach",
+          "calls": 512,
+          "totalMs": 983.2050000000017,
+          "selfMs": 939.3290000000052
+        },
+        {
+          "name": "opsknight_ingestion_ordering_lock",
+          "calls": 1024,
+          "totalMs": 158.01500000000033,
+          "selfMs": 158.01500000000033
+        },
+        {
+          "name": "opsknight_ingestion_ordering_write",
+          "calls": 512,
+          "totalMs": 1477.548999999999,
+          "selfMs": 380.1350000000002
+        }
+      ],
+      "state": {
+        "completed": 512,
+        "pending": 0,
+        "heads": 0
+      }
+    },
+    {
+      "commandLatencies": [
+        {
+          "meanMs": 0.009,
+          "failures": 0,
+          "operation": "\\set"
+        },
+        {
+          "meanMs": 0.001,
+          "failures": 0,
+          "operation": "\\set"
+        },
+        {
+          "meanMs": 1.726,
+          "failures": 0,
+          "operation": "BEGIN;"
+        },
+        {
+          "meanMs": 187.1,
+          "failures": 0,
+          "operation": "WITH"
+        },
+        {
+          "meanMs": 13.898,
+          "failures": 0,
+          "operation": "COMMIT;"
+        }
+      ],
+      "clients": 16,
+      "shape": "hot-budget",
+      "variant": "full-no-frontier",
+      "transactions": 512,
+      "tpsIncludingCommit": 67.1887,
+      "meanLatencyIncludingCommitMs": 238.135,
+      "explainExecutionMs": 0.867,
+      "triggerTimings": [],
+      "functionTimes": [
+        {
+          "name": "opsknight_ingestion_ordering_detach",
+          "calls": 0,
+          "totalMs": 0,
+          "selfMs": 0
+        },
+        {
+          "name": "opsknight_ingestion_ordering_lock",
+          "calls": 0,
+          "totalMs": 0,
+          "selfMs": 0
+        },
+        {
+          "name": "opsknight_ingestion_ordering_write",
+          "calls": 0,
+          "totalMs": 0,
+          "selfMs": 0
+        }
+      ],
+      "state": {
+        "completed": 512,
+        "pending": 0,
+        "heads": 1024
+      }
+    },
+    {
+      "commandLatencies": [
+        {
+          "meanMs": 0.007,
+          "failures": 0,
+          "operation": "\\set"
+        },
+        {
+          "meanMs": 0.001,
+          "failures": 0,
+          "operation": "\\set"
+        },
+        {
+          "meanMs": 1.52,
+          "failures": 0,
+          "operation": "BEGIN;"
+        },
+        {
+          "meanMs": 130.57,
+          "failures": 0,
+          "operation": "WITH"
+        },
+        {
+          "meanMs": 9.059,
+          "failures": 0,
+          "operation": "COMMIT;"
+        }
+      ],
+      "clients": 16,
+      "shape": "hot-budget",
+      "variant": "full-no-frontier",
+      "transactions": 512,
+      "tpsIncludingCommit": 101.562898,
+      "meanLatencyIncludingCommitMs": 157.538,
+      "explainExecutionMs": 3.296,
+      "triggerTimings": [],
+      "functionTimes": [
+        {
+          "name": "opsknight_ingestion_ordering_detach",
+          "calls": 0,
+          "totalMs": 0,
+          "selfMs": 0
+        },
+        {
+          "name": "opsknight_ingestion_ordering_lock",
+          "calls": 0,
+          "totalMs": 0,
+          "selfMs": 0
+        },
+        {
+          "name": "opsknight_ingestion_ordering_write",
+          "calls": 0,
+          "totalMs": 0,
+          "selfMs": 0
+        }
+      ],
+      "state": {
+        "completed": 512,
+        "pending": 0,
+        "heads": 1024
+      }
+    },
+    {
+      "commandLatencies": [
+        {
+          "meanMs": 0.007,
+          "failures": 0,
+          "operation": "\\set"
+        },
+        {
+          "meanMs": 0.001,
+          "failures": 0,
+          "operation": "\\set"
+        },
+        {
+          "meanMs": 4.305,
+          "failures": 0,
+          "operation": "BEGIN;"
+        },
+        {
+          "meanMs": 165.443,
+          "failures": 0,
+          "operation": "WITH"
+        },
+        {
+          "meanMs": 10.964,
+          "failures": 0,
+          "operation": "COMMIT;"
+        }
+      ],
+      "clients": 16,
+      "shape": "hot-budget",
+      "variant": "full-frontier",
+      "transactions": 512,
+      "tpsIncludingCommit": 80.540654,
+      "meanLatencyIncludingCommitMs": 198.657,
+      "explainExecutionMs": 10.574,
+      "triggerTimings": [
+        {
+          "Trigger Name": "IngestionReceipt_ordering_update",
+          "Relation": "IngestionReceipt",
+          "Time": 8.908,
+          "Calls": 1
+        }
+      ],
+      "functionTimes": [
+        {
+          "name": "opsknight_ingestion_ordering_detach",
+          "calls": 512,
+          "totalMs": 1247.6080000000002,
+          "selfMs": 1218.7969999999987
+        },
+        {
+          "name": "opsknight_ingestion_ordering_lock",
+          "calls": 1024,
+          "totalMs": 219.41599999999926,
+          "selfMs": 219.41599999999926
+        },
+        {
+          "name": "opsknight_ingestion_ordering_write",
+          "calls": 512,
+          "totalMs": 1913.6920000000027,
+          "selfMs": 475.3809999999994
+        }
+      ],
+      "state": {
+        "completed": 512,
+        "pending": 0,
+        "heads": 0
+      }
+    },
+    {
+      "commandLatencies": [
+        {
+          "meanMs": 0.002,
+          "failures": 0,
+          "operation": "\\set"
+        },
+        {
+          "meanMs": 0,
+          "failures": 0,
+          "operation": "\\set"
+        },
+        {
+          "meanMs": 7.178,
+          "failures": 0,
+          "operation": "BEGIN;"
+        },
+        {
+          "meanMs": 45.302,
+          "failures": 0,
+          "operation": "UPDATE"
+        },
+        {
+          "meanMs": 26.955,
+          "failures": 0,
+          "operation": "COMMIT;"
+        }
+      ],
+      "clients": 16,
+      "shape": "hot-budget",
+      "variant": "receipt-only",
+      "transactions": 512,
+      "tpsIncludingCommit": 197.881432,
+      "meanLatencyIncludingCommitMs": 80.856,
+      "explainExecutionMs": 10.815,
+      "triggerTimings": [
+        {
+          "Trigger Name": "IngestionReceipt_ordering_update",
+          "Relation": "IngestionReceipt",
+          "Time": 10.192,
+          "Calls": 1
+        }
+      ],
+      "functionTimes": [
+        {
+          "name": "opsknight_ingestion_ordering_detach",
+          "calls": 512,
+          "totalMs": 8161.292000000001,
+          "selfMs": 8062.735999999997
+        },
+        {
+          "name": "opsknight_ingestion_ordering_lock",
+          "calls": 1024,
+          "totalMs": 2592.496000000001,
+          "selfMs": 2592.496000000001
+        },
+        {
+          "name": "opsknight_ingestion_ordering_write",
+          "calls": 512,
+          "totalMs": 12330.383000000002,
+          "selfMs": 1675.107
+        }
+      ],
+      "state": {
+        "completed": 512,
+        "pending": 512,
+        "heads": 0
+      }
+    },
+    {
+      "commandLatencies": [
+        {
+          "meanMs": 0.003,
+          "failures": 0,
+          "operation": "\\set"
+        },
+        {
+          "meanMs": 0,
+          "failures": 0,
+          "operation": "\\set"
+        },
+        {
+          "meanMs": 0.666,
+          "failures": 0,
+          "operation": "BEGIN;"
+        },
+        {
+          "meanMs": 57.011,
+          "failures": 0,
+          "operation": "UPDATE"
+        },
+        {
+          "meanMs": 3.847,
+          "failures": 0,
+          "operation": "COMMIT;"
+        }
+      ],
+      "clients": 16,
+      "shape": "hot-budget",
+      "variant": "budget-only",
+      "transactions": 512,
+      "tpsIncludingCommit": 254.326531,
+      "meanLatencyIncludingCommitMs": 62.911,
+      "explainExecutionMs": 0.26,
+      "triggerTimings": [],
+      "functionTimes": [
+        {
+          "name": "opsknight_ingestion_ordering_detach",
+          "calls": 0,
+          "totalMs": 0,
+          "selfMs": 0
+        },
+        {
+          "name": "opsknight_ingestion_ordering_lock",
+          "calls": 0,
+          "totalMs": 0,
+          "selfMs": 0
+        },
+        {
+          "name": "opsknight_ingestion_ordering_write",
+          "calls": 0,
+          "totalMs": 0,
+          "selfMs": 0
+        }
+      ],
+      "state": {
+        "completed": 0,
+        "pending": 0,
+        "heads": 1024
+      }
+    }
+  ]
+}

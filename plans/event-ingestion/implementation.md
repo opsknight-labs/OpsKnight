@@ -194,3 +194,12 @@ New incident creation now includes its linked Alert and initial timeline entry a
 ### Bounded local image builds
 
 The existing low-memory build profile now sets Next.js build CPUs to one, limiting page-generation workers as well as compilation. Type checking remains enabled. This affects the opt-in build profile only; it does not change deployed ingestion concurrency or introduce a customer configuration requirement.
+
+
+### Singleton completion fast path and controlled diagnosis
+
+An additive migration optimizes removal when every ordering identity has only the completing receipt. The existing identity locks fence admission/repair while checking that all head/tail IDs match. Two set-based deletes remove memberships and heads, without successor counter updates because no successors exist. Mixed/shared chains keep their original rewiring path. The replacement function retains installation-schema-bound lookup through an explicit atomic migration; no receipt, incident, outbox or budget safety rule is relaxed.
+
+completion-profile.cjs isolates full completion, receipt mutation, budget updates and explicit commit latency on the dedicated ingestion_test_completion_probe clone. It records function timing, waits and WAL, and restores its diagnostic trigger switch on exit. This harness's tiny receipt/single-operation rates are not incident throughput. Reconcile-timeout-replays checks original delivery identity hashes and production replay lookup on the two retained historical timeout fixtures without appending work. Native provider retry tests separately enforce authentication and quota/content-conflict behavior.
+
+The proposed 600 RPS sustained target remains unmet. Both the optimized and previous-function 50 RPS full-stack trials failed, so higher loads are gated. The existing runtime image plus explicit database-function variant is recorded; a release image including the new migration and downstream/HA certification remain outstanding.
