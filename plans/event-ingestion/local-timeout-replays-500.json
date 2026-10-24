@@ -1,0 +1,11 @@
+{
+  "measuredAt": "2026-10-24T14:07:14.527Z",
+  "passed": true,
+  "certified": false,
+  "source": "plans/event-ingestion/local-docker-http-identity-frontier-500.json",
+  "recordedAmbiguousResponses": 22,
+  "persistedReceiptsReplayed": 674,
+  "originalReceiptIdsRecovered": true,
+  "additionalReceipts": 0,
+  "scope": "Read-only production replay resolver against ALL persisted receipts from the historical timeout run, including its ambiguous subset. Original delivery identities reconstructed from owned k6 fixtures and checked against stored hashes. HTTP authentication is covered separately by native provider-replay checks. Does not identify individual timed-out requests or prove network-timeout prevention."
+}

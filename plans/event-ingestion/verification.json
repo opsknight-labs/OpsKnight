@@ -1546,5 +1546,171 @@
       "Partitioning, archival, downstream and HA fault certification",
       "Production dependency advisory remediation and fresh independent reviews"
     ]
+  },
+  "completionBottleneckFollowup": {
+    "recordedAt": "2026-10-24",
+    "certified": false,
+    "targetSustainedRps": 600,
+    "sourceBase": "8746117eb",
+    "scope": "Completion bottleneck investigation; no transport redesign or pool/concurrency increase",
+    "controlledIsolation": {
+      "before": {
+        "evidence": "local-completion-controlled-before.json",
+        "definitionSha256": "fc0c7aab872b4b9814cf4f69d1106520720a2b8184e7c63bb73970c99bc3a97f",
+        "cases": {
+          "distributed": {
+            "completionOnlyTps": [
+              1812.713423,
+              2156.3751
+            ],
+            "triggerTotalMsPerCompletion": [
+              1.5782441406249887,
+              1.733475585937498
+            ],
+            "completionCommandMeanMs": [
+              4.256,
+              3.89
+            ],
+            "commitCommandMeanMs": [
+              3.39,
+              2.783
+            ]
+          },
+          "hot-budget": {
+            "completionOnlyTps": [
+              671.720312,
+              589.707191
+            ],
+            "triggerTotalMsPerCompletion": [
+              1.2913798828124925,
+              2.3254628906250048
+            ],
+            "completionCommandMeanMs": [
+              21.468,
+              24
+            ],
+            "commitCommandMeanMs": [
+              1.235,
+              1.372
+            ]
+          }
+        }
+      },
+      "after": {
+        "evidence": "local-completion-controlled-after.json",
+        "definitionSha256": "597a515151dc28f72e90c887df70f937dff8489f1439d0d329d28c61efd847b1",
+        "cases": {
+          "distributed": {
+            "completionOnlyTps": [
+              2272.787805,
+              2447.65859
+            ],
+            "triggerTotalMsPerCompletion": [
+              0.6370976562500061,
+              0.6609521484375023
+            ],
+            "completionCommandMeanMs": [
+              2.492,
+              2.214
+            ],
+            "commitCommandMeanMs": [
+              3.847,
+              3.298
+            ]
+          },
+          "hot-budget": {
+            "completionOnlyTps": [
+              1002.307068,
+              909.375896
+            ],
+            "triggerTotalMsPerCompletion": [
+              0.48784960937500443,
+              0.5538076171874877
+            ],
+            "completionCommandMeanMs": [
+              14.02,
+              15.759
+            ],
+            "commitCommandMeanMs": [
+              0.788,
+              0.895
+            ]
+          }
+        }
+      }
+    },
+    "initialExploratoryEvidence": [
+      "local-completion-isolation-initial.json",
+      "local-completion-isolation-before.json"
+    ],
+    "limitations": [
+      "Tiny synthetic independent receipts over PostgreSQL container socket; no admission/incident/HTTP",
+      "Short trials on shared workstation; no-trigger controls vary and do not justify attributing the full throughput difference to the patch",
+      "SQL statement, nested function and COMMIT timings are different overlapping measurements; do not add function totals",
+      "EXPLAIN uses cold independent session; production-function stats come from measured warm sessions",
+      "Global WAL deltas include all databases on owned PostgreSQL instance",
+      "Wait sampling adds overhead; initial sampler could omit one final in-flight sample; current script includes it",
+      "Diagnostic trigger disabling is confined to dedicated clone and restored in finally; not a production setting"
+    ],
+    "change": "Additive migration removes all singleton head/link rows in bulk under existing sorted identity locks; multi-event chains retain existing dependency updates",
+    "checks": {
+      "focusedDatabaseTestsPassed": 17,
+      "frontierTestsWithinFocused": 12,
+      "coreIngestionDatabaseAndContractPassed": 71,
+      "tsc": "passed; final repeat exit 0",
+      "lint": "passed; explicit modified-source zero warnings",
+      "freshMigrations": 336,
+      "customSchemaAndTemporaryShadowing": "passed on final atomic migration",
+      "migrationScannerErrors": 0,
+      "migrationScannerWarnings": 53,
+      "newMigrationWarning": "Runtime deletes of derived frontier metadata; no receipt-history deployment deletion",
+      "finalFreshDatabaseFocusedPassed": 17,
+      "finalFreshDatabaseCorePassed": 71
+    },
+    "native50Rps": {
+      "optimized": {
+        "passed": false,
+        "offeredRps": 50,
+        "duration": "60s",
+        "persistedCompleted": 2935,
+        "acceptedPerSecond": 48.34331757269124,
+        "httpP95Ms": 991.1399499999992,
+        "completionP95Ms": 1279.4999999999993,
+        "ambiguousResponses": 0,
+        "finalBacklog": 0,
+        "cleanupFailures": [],
+        "httpEvidence": "local-docker-http-singleton-completion-50.json",
+        "topologyEvidence": "local-docker-topology-singleton-completion-50.json"
+      },
+      "previousFunctionControl": {
+        "passed": false,
+        "offeredRps": 50,
+        "duration": "60s",
+        "persistedCompleted": 2013,
+        "acceptedPerSecond": 32.844820986168486,
+        "httpP95Ms": 4083.8527499999977,
+        "completionP95Ms": 2373.399999999998,
+        "ambiguousResponses": 35,
+        "finalBacklog": 0,
+        "cleanupFailures": [],
+        "httpEvidence": "local-docker-http-completion-control-before-50.json",
+        "topologyEvidence": "local-docker-topology-completion-control-before-50.json"
+      }
+    },
+    "retryRecovery": {
+      "historical500RpsPersistedReceiptsReplayed": 674,
+      "historical500RpsAmbiguousResponses": 22,
+      "historical1000RpsPersistedReceiptsReplayed": 813,
+      "historical1000RpsAmbiguousResponses": 55,
+      "scope": "Read-only production replay resolver covers all persisted receipts including ambiguous subsets; native four-provider retries independently verify authentication/content conflict/quota behavior. Does not reproduce or prevent timeouts."
+    },
+    "remaining": [
+      "Passing and reproducible 50 RPS baseline before any increase",
+      "Admission/completion lock-holder and pool/transaction-duration profiling under full workload",
+      "Sequential 100/250/500/600 RPS only after lower gate passes",
+      "Native candidate image bundling new migration",
+      "SMTP/escalation/Service Automation/Runbook/worker-crash/PgBouncer validation after throughput recovers",
+      "Fresh independent bug/security reviews; dependency advisories remain unresolved"
+    ]
   }
 }
