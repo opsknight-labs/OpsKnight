@@ -1,0 +1,362 @@
+{
+  "certifiedEnterprise": false,
+  "scope": "Single Node library process and isolated local Docker PostgreSQL; excludes HTTP, incident processing, Automation and provider delivery",
+  "coalescing": false,
+  "scenarios": [
+    {
+      "keys": 1,
+      "concurrency": 32,
+      "decisions": 20000,
+      "allowed": 20000,
+      "elapsedMs": 8205.124334,
+      "decisionsPerSecond": 2437.501149997808,
+      "requestLatencyMs": {
+        "p50": 12.166833000000224,
+        "p95": 18.255290999999943,
+        "p99": 25.54333399999996,
+        "max": 171.879458
+      },
+      "databaseProfile": {
+        "scope": "Owned local test database; PostgreSQL execution statistics exclude client/pool/network time. Cluster WAL includes all databases on this owned test instance.",
+        "elapsedMs": 8216.005459,
+        "counters": {
+          "commits": 39151,
+          "rollbacks": 0,
+          "deadlocks": 0,
+          "tempBytes": 4150742,
+          "inserts": 2,
+          "updates": 19569,
+          "deletes": 0,
+          "clusterWalBytes": 4844041
+        },
+        "totalQueryCalls": 39980,
+        "totalDatabaseExecutionMs": 33127.77005100012,
+        "topQueriesByExecutionTime": [
+          {
+            "fingerprint": "0a8ae0887efbc19b70e6bc5b3d2d423eb4d6bde010693667eae4611051a1c2f8",
+            "operation": "INSERT",
+            "model": "IngestionQuota",
+            "calls": 20000,
+            "executionMs": 32809.51439900013,
+            "meanExecutionMs": 1.6404757199500066,
+            "rows": 20000,
+            "blocksHit": 445323,
+            "blocksRead": 75,
+            "blocksDirtied": 75,
+            "tempBlocksWritten": 0,
+            "walBytes": 4180480
+          },
+          {
+            "fingerprint": "9789d52f0d240347a1c53486c835e3626e112732b17d94edcfb71b8980d6c5c8",
+            "operation": "SELECT",
+            "model": "SystemConfig",
+            "calls": 19968,
+            "executionMs": 291.6551519999956,
+            "meanExecutionMs": 0.014606127403845934,
+            "rows": 19968,
+            "blocksHit": 39936,
+            "blocksRead": 0,
+            "blocksDirtied": 0,
+            "tempBlocksWritten": 0,
+            "walBytes": 0
+          },
+          {
+            "fingerprint": "cd83c5cc8f9919117637966e311ed35695c28271b91e10e6b739e2a88484090d",
+            "operation": "SELECT",
+            "model": "other",
+            "calls": 1,
+            "executionMs": 25.009291999999988,
+            "meanExecutionMs": 25.009291999999988,
+            "rows": 22,
+            "blocksHit": 1,
+            "blocksRead": 0,
+            "blocksDirtied": 0,
+            "tempBlocksWritten": 507,
+            "walBytes": 0
+          },
+          {
+            "fingerprint": "ed4b15c16c1a8b52ddce51899002c26d5458e47c8adce4da350441da294c0e91",
+            "operation": "SELECT",
+            "model": "other",
+            "calls": 8,
+            "executionMs": 1.489499,
+            "meanExecutionMs": 0.186187375,
+            "rows": 28,
+            "blocksHit": 23,
+            "blocksRead": 0,
+            "blocksDirtied": 0,
+            "tempBlocksWritten": 0,
+            "walBytes": 0
+          },
+          {
+            "fingerprint": "782b4b737752e920381e4861b025e335515873b71a8811b553f554f75ccb577d",
+            "operation": "SELECT",
+            "model": "other",
+            "calls": 2,
+            "executionMs": 0.08645799999999998,
+            "meanExecutionMs": 0.04322899999999999,
+            "rows": 2,
+            "blocksHit": 2,
+            "blocksRead": 0,
+            "blocksDirtied": 0,
+            "tempBlocksWritten": 0,
+            "walBytes": 0
+          },
+          {
+            "fingerprint": "7561ff81b94bd59e9506e87677177fe1341fc32535b4dbd233394b997725c2ed",
+            "operation": "SELECT",
+            "model": "SystemConfig",
+            "calls": 1,
+            "executionMs": 0.015251,
+            "meanExecutionMs": 0.015251,
+            "rows": 1,
+            "blocksHit": 1,
+            "blocksRead": 0,
+            "blocksDirtied": 0,
+            "tempBlocksWritten": 0,
+            "walBytes": 0
+          }
+        ],
+        "activitySamples": 8,
+        "activitySampleErrors": 0,
+        "waits": [
+          {
+            "state": "active",
+            "type": "Lock",
+            "event": "transactionid",
+            "summedConnections": 18,
+            "maxConnections": 5,
+            "averageConnectionsPerSample": 2.25
+          },
+          {
+            "state": "active",
+            "type": "Lock",
+            "event": "tuple",
+            "summedConnections": 1,
+            "maxConnections": 1,
+            "averageConnectionsPerSample": 0.125
+          },
+          {
+            "state": "active",
+            "type": "CPU",
+            "event": "running",
+            "summedConnections": 6,
+            "maxConnections": 2,
+            "averageConnectionsPerSample": 0.75
+          },
+          {
+            "state": "idle",
+            "type": "Client",
+            "event": "ClientRead",
+            "summedConnections": 20,
+            "maxConnections": 6,
+            "averageConnectionsPerSample": 2.5
+          },
+          {
+            "state": "active",
+            "type": "IO",
+            "event": "WALSync",
+            "summedConnections": 4,
+            "maxConnections": 1,
+            "averageConnectionsPerSample": 0.5
+          },
+          {
+            "state": "active",
+            "type": "LWLock",
+            "event": "BufferContent",
+            "summedConnections": 1,
+            "maxConnections": 1,
+            "averageConnectionsPerSample": 0.125
+          },
+          {
+            "state": "idle",
+            "type": "CPU",
+            "event": "running",
+            "summedConnections": 2,
+            "maxConnections": 2,
+            "averageConnectionsPerSample": 0.25
+          },
+          {
+            "state": "active",
+            "type": "Client",
+            "event": "ClientRead",
+            "summedConnections": 2,
+            "maxConnections": 1,
+            "averageConnectionsPerSample": 0.25
+          },
+          {
+            "state": "active",
+            "type": "LWLock",
+            "event": "LockManager",
+            "summedConnections": 2,
+            "maxConnections": 2,
+            "averageConnectionsPerSample": 0.25
+          }
+        ]
+      }
+    },
+    {
+      "keys": 100,
+      "concurrency": 32,
+      "decisions": 20000,
+      "allowed": 20000,
+      "elapsedMs": 5578.509666,
+      "decisionsPerSecond": 3585.1869401421595,
+      "requestLatencyMs": {
+        "p50": 8.660041999999521,
+        "p95": 11.499708999999712,
+        "p99": 15.438292000000729,
+        "max": 31.890583999998853
+      },
+      "databaseProfile": {
+        "scope": "Owned local test database; PostgreSQL execution statistics exclude client/pool/network time. Cluster WAL includes all databases on this owned test instance.",
+        "elapsedMs": 5585.632541999999,
+        "counters": {
+          "commits": 35607,
+          "rollbacks": 0,
+          "deadlocks": 0,
+          "tempBytes": 8302864,
+          "inserts": 100,
+          "updates": 17709,
+          "deletes": 0,
+          "clusterWalBytes": 6719769
+        },
+        "totalQueryCalls": 39977,
+        "totalDatabaseExecutionMs": 1856.056300999661,
+        "topQueriesByExecutionTime": [
+          {
+            "fingerprint": "0a8ae0887efbc19b70e6bc5b3d2d423eb4d6bde010693667eae4611051a1c2f8",
+            "operation": "INSERT",
+            "model": "IngestionQuota",
+            "calls": 20000,
+            "executionMs": 1463.6253189996933,
+            "meanExecutionMs": 0.07318126594998467,
+            "rows": 20000,
+            "blocksHit": 205066,
+            "blocksRead": 79,
+            "blocksDirtied": 100,
+            "tempBlocksWritten": 0,
+            "walBytes": 6910815
+          },
+          {
+            "fingerprint": "9789d52f0d240347a1c53486c835e3626e112732b17d94edcfb71b8980d6c5c8",
+            "operation": "SELECT",
+            "model": "SystemConfig",
+            "calls": 19968,
+            "executionMs": 380.7578579999679,
+            "meanExecutionMs": 0.019068402343748393,
+            "rows": 19968,
+            "blocksHit": 39936,
+            "blocksRead": 0,
+            "blocksDirtied": 0,
+            "tempBlocksWritten": 0,
+            "walBytes": 0
+          },
+          {
+            "fingerprint": "cd83c5cc8f9919117637966e311ed35695c28271b91e10e6b739e2a88484090d",
+            "operation": "SELECT",
+            "model": "other",
+            "calls": 1,
+            "executionMs": 10.75970799999999,
+            "meanExecutionMs": 10.75970799999999,
+            "rows": 23,
+            "blocksHit": 1,
+            "blocksRead": 0,
+            "blocksDirtied": 0,
+            "tempBlocksWritten": 507,
+            "walBytes": 0
+          },
+          {
+            "fingerprint": "ed4b15c16c1a8b52ddce51899002c26d5458e47c8adce4da350441da294c0e91",
+            "operation": "SELECT",
+            "model": "other",
+            "calls": 5,
+            "executionMs": 0.8276650000000001,
+            "meanExecutionMs": 0.165533,
+            "rows": 15,
+            "blocksHit": 8,
+            "blocksRead": 0,
+            "blocksDirtied": 0,
+            "tempBlocksWritten": 0,
+            "walBytes": 0
+          },
+          {
+            "fingerprint": "782b4b737752e920381e4861b025e335515873b71a8811b553f554f75ccb577d",
+            "operation": "SELECT",
+            "model": "other",
+            "calls": 2,
+            "executionMs": 0.07516699999999998,
+            "meanExecutionMs": 0.03758349999999999,
+            "rows": 2,
+            "blocksHit": 2,
+            "blocksRead": 0,
+            "blocksDirtied": 0,
+            "tempBlocksWritten": 0,
+            "walBytes": 0
+          },
+          {
+            "fingerprint": "7561ff81b94bd59e9506e87677177fe1341fc32535b4dbd233394b997725c2ed",
+            "operation": "SELECT",
+            "model": "SystemConfig",
+            "calls": 1,
+            "executionMs": 0.010584000000000003,
+            "meanExecutionMs": 0.010584000000000003,
+            "rows": 1,
+            "blocksHit": 1,
+            "blocksRead": 0,
+            "blocksDirtied": 0,
+            "tempBlocksWritten": 0,
+            "walBytes": 0
+          }
+        ],
+        "activitySamples": 5,
+        "activitySampleErrors": 0,
+        "waits": [
+          {
+            "state": "active",
+            "type": "IO",
+            "event": "WALSync",
+            "summedConnections": 3,
+            "maxConnections": 1,
+            "averageConnectionsPerSample": 0.6
+          },
+          {
+            "state": "idle",
+            "type": "Client",
+            "event": "ClientRead",
+            "summedConnections": 19,
+            "maxConnections": 6,
+            "averageConnectionsPerSample": 3.8
+          },
+          {
+            "state": "active",
+            "type": "LWLock",
+            "event": "WALWrite",
+            "summedConnections": 6,
+            "maxConnections": 2,
+            "averageConnectionsPerSample": 1.2
+          },
+          {
+            "state": "active",
+            "type": "CPU",
+            "event": "running",
+            "summedConnections": 6,
+            "maxConnections": 3,
+            "averageConnectionsPerSample": 1.2
+          },
+          {
+            "state": "active",
+            "type": "Client",
+            "event": "ClientRead",
+            "summedConnections": 1,
+            "maxConnections": 1,
+            "averageConnectionsPerSample": 0.2
+          }
+        ]
+      }
+    }
+  ],
+  "measuredAt": "2026-10-24T05:24:57.836Z",
+  "sourceRevision": "b9ab00858fb97ad8ec717679304630526beeebed",
+  "sourceDirty": true
+}

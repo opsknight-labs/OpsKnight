@@ -76,6 +76,10 @@ describe('durable ingestion contract', () => {
     delete process.env.OPSKNIGHT_INGESTION_MODE;
     try {
       expect(ingestionConfig().mode).toBe('postgres');
+      process.env.OPSKNIGHT_INGESTION_MODE = 'sync';
+      expect(ingestionConfig().mode).toBe('sync');
+      process.env.OPSKNIGHT_INGESTION_MODE = 'postgres';
+      expect(ingestionConfig().mode).toBe('postgres');
       expect(resolveIngestionMode('sync')).toBe('sync');
       expect(() => resolveIngestionMode('invalid')).toThrow('Invalid ingestion mode');
     } finally {
