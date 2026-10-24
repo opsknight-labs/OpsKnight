@@ -1,14 +1,13 @@
 /* eslint-disable @typescript-eslint/no-require-imports -- Executable isolated diagnostic loads TypeScript through the shared fixture runtime. */
 /* eslint-disable security/detect-non-literal-fs-filename -- Explicit local fixture evidence destination. */
 /* eslint-disable security/detect-object-injection -- Model keys come only from the fixed diagnostic model allowlist. */
-const root = process.cwd();
-require(root + '/scripts/ingestion/isolated-runtime.cjs');
+require('./isolated-runtime.cjs');
 const assert = require('node:assert/strict');
 const { randomUUID } = require('node:crypto');
 const fs = require('node:fs');
-const db = require(root + '/src/lib/prisma').default;
-const { processEvent } = require(root + '/src/lib/events');
-const { claimPendingJobs, processJob } = require(root + '/src/lib/jobs/queue');
+const db = require('../../src/lib/prisma').default;
+const { processEvent } = require('../../src/lib/events');
+const { claimPendingJobs, processJob } = require('../../src/lib/jobs/queue');
 let current;
 const models = [
   'BackgroundJob',
