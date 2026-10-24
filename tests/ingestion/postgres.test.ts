@@ -120,7 +120,7 @@ beforeAll(async () => {
   actorId = user.id;
 });
 beforeEach(async () => {
-  await prisma.$executeRaw`TRUNCATE "IngestionReceipt"`;
+  await prisma.$executeRaw`TRUNCATE "IngestionOrderingHead", "IngestionReceipt" CASCADE`;
   await prisma.ingestionBatch.deleteMany();
   await prisma.ingestionBudget.updateMany({ data: { pending: 0, bytes: 0 } });
   await prisma.systemConfig.deleteMany({ where: { key: 'ingestion_control' } });

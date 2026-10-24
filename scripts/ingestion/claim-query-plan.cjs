@@ -34,9 +34,11 @@ async function main() {
   assert.ok(
     ['/ingestion_test_http_poolscale', '/ingestion_test_claim_plan'].includes(url.pathname)
   );
-  assert.equal(process.env.OPSKNIGHT_INGESTION_MODE, 'postgres');
+  assert.equal(require('../../src/lib/ingestion/config').ingestionConfig().mode, 'postgres');
   const count = Number(process.env.INGESTION_PLAN_BACKLOG || 1000);
   assert.ok(Number.isInteger(count) && count >= 4 && count <= 100000);
+  const history = Number(process.env.INGESTION_PLAN_HISTORY || 0);
+  assert.ok(Number.isInteger(history) && history >= 0 && history <= 100000);
   const [clients] = await prisma.$queryRaw`
     SELECT count(*)::int AS others FROM pg_stat_activity
     WHERE datname = current_database() AND pid <> pg_backend_pid()
@@ -51,7 +53,7 @@ async function main() {
   );
   let captured;
   prisma.$on('query', event => {
-    if (event.query.includes('WITH critical AS')) captured = event;
+    if (event.query.includes('WITH critical_pool AS')) captured = event;
   });
   assert.equal((await claimPostgresEvents(4)).length, 0);
   assert.ok(captured, 'Production claim SQL was not captured');
@@ -80,6 +82,14 @@ async function main() {
           await tx.$executeRaw`ALTER INDEX "IngestionReceipt_unfinished_ordering_keys_idx" SET (fastupdate = off)`;
         // Available timestamps deliberately precede the transaction clock: the
         // millisecond column can otherwise round a default timestamp into its future.
+        if (history)
+          await tx.$executeRaw`
+          INSERT INTO "IngestionReceipt" (id, "serviceId", "integrationId", "partitionKey",
+            "idempotencyKey", "contentHash", "budgetShard", "payloadBytes", envelope, "orderingKeys", status)
+          SELECT ${prefix} || 'history-' || g, 'owned-plan-service', 'owned-plan-integration',
+            ${prefix} || 'history-' || g, ${prefix} || 'history-' || g, 'owned-plan-hash',
+            0, 1, '{}'::jsonb, ARRAY[${prefix} || 'history-' || g], 'COMPLETED'
+          FROM generate_series(1, ${history}::int) g`;
         await tx.$executeRaw`
         INSERT INTO "IngestionReceipt"
           (id, "serviceId", "integrationId", "partitionKey", "idempotencyKey", "contentHash",
@@ -89,7 +99,8 @@ async function main() {
           g % 10 = 0, CURRENT_TIMESTAMP - INTERVAL '1 second'
         FROM generate_series(1, ${count}::int) g`;
         const analyze = process.env.INGESTION_PLAN_ANALYZE === 'true';
-        if (analyze) await tx.$executeRaw`ANALYZE "IngestionReceipt"`;
+        if (analyze)
+          await tx.$executeRaw`ANALYZE "IngestionReceipt", "IngestionOrderingHead", "IngestionOrderingLink"`;
         // SQL is captured from the production function, never supplied externally.
         const rows = await tx.$queryRawUnsafe(
           'EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) ' + query,
@@ -107,6 +118,7 @@ async function main() {
             'Production claim SQL with unique-key synthetic backlog, 10% critical; fixture rows and claims rolled back atomically. No concurrent workers or durability/capacity certification.',
           queryFingerprint: createHash('sha256').update(query).digest('hex'),
           retainedHistory,
+          syntheticCompletedHistory: history,
           installedSequenceIndex: indexes[0] ?? null,
           experimentalSequenceIndex: sequenceIndex,
           backlog: count,

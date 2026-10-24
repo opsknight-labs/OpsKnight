@@ -121,6 +121,8 @@ const nextConfig: NextConfig = {
   // generated Prisma client and native engine exist in the standalone artifact.
   outputFileTracingIncludes: { '/*': ['./node_modules/.prisma/client/**/*'] },
   experimental: {
+    // The existing low-memory build profile also bounds page-data workers.
+    ...(process.env.OPSKNIGHT_BUILD_LOW_MEMORY === 'true' ? { cpus: 1 } : {}),
     // Keep production compilation bounded on shared build hosts. The PWA
     // wrapper installs a custom webpack config, disabling the default worker.
     webpackBuildWorker: true,

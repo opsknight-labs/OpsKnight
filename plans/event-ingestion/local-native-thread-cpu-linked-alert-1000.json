@@ -1,0 +1,78 @@
+{
+  "scope": "Diagnostic Linux per-thread CPU ticks from PID1 during a ten-second observed k6 window; no payloads, queries or credentials. Not throughput certification.",
+  "sourceRevision": "3099971e6",
+  "elapsedSeconds": 10.444882875000005,
+  "roles": [
+    {
+      "role": "ingestion-worker",
+      "threads": [
+        {
+          "threadName": "next-server (v",
+          "threads": 5,
+          "userTicksDelta": 250,
+          "systemTicksDelta": 16
+        },
+        {
+          "threadName": "node",
+          "threads": 6,
+          "userTicksDelta": 74,
+          "systemTicksDelta": 13
+        },
+        {
+          "threadName": "tokio-runtime-w",
+          "threads": 2,
+          "userTicksDelta": 230,
+          "systemTicksDelta": 124
+        },
+        {
+          "threadName": "opentelemetry-e",
+          "threads": 1,
+          "userTicksDelta": 0,
+          "systemTicksDelta": 0
+        },
+        {
+          "threadName": "futures-timer",
+          "threads": 1,
+          "userTicksDelta": 0,
+          "systemTicksDelta": 0
+        }
+      ]
+    },
+    {
+      "role": "web",
+      "threads": [
+        {
+          "threadName": "next-server (v",
+          "threads": 5,
+          "userTicksDelta": 580,
+          "systemTicksDelta": 22
+        },
+        {
+          "threadName": "node",
+          "threads": 6,
+          "userTicksDelta": 237,
+          "systemTicksDelta": 50
+        },
+        {
+          "threadName": "tokio-runtime-w",
+          "threads": 4,
+          "userTicksDelta": 81,
+          "systemTicksDelta": 44
+        },
+        {
+          "threadName": "opentelemetry-e",
+          "threads": 1,
+          "userTicksDelta": 0,
+          "systemTicksDelta": 0
+        },
+        {
+          "threadName": "futures-timer",
+          "threads": 1,
+          "userTicksDelta": 0,
+          "systemTicksDelta": 1
+        }
+      ]
+    }
+  ],
+  "resourceInterference": "Overlapped external opsknight-api-v2-cert build on shared 8GB Docker VM; not an isolated CPU/capacity comparison"
+}

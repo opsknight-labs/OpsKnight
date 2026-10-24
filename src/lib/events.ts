@@ -225,16 +225,17 @@ export async function processEvent(
     // Persist the final link on insertion instead of rewriting every alert.
     // New incidents are created first so the foreign key remains immediate;
     // alert, incident, Automation and receipt still share this transaction.
+    const alertData = () => ({
+      dedupKey: dedup_key,
+      status: event_action === 'resolve' ? 'RESOLVED' : 'TRIGGERED',
+      payload: boundedAlertPayload(eventData),
+      serviceId,
+      createdAt: processingLease ? envelope.receivedAt : undefined,
+    });
     const persistAlert = (incidentId?: string) =>
       tx.alert.create({
-        data: {
-          dedupKey: dedup_key,
-          status: event_action === 'resolve' ? 'RESOLVED' : 'TRIGGERED',
-          payload: boundedAlertPayload(eventData),
-          serviceId,
-          incidentId,
-          createdAt: processingLease ? envelope.receivedAt : undefined,
-        },
+        data: { ...alertData(), incidentId },
+        select: { id: true },
       });
     if (existingIncident) await persistAlert(existingIncident.id);
 
@@ -389,10 +390,15 @@ export async function processEvent(
             nextSlaTransitionAt: null,
             nextSlaTransitionKind: null,
             escalationStatus: 'COMPLETED',
+            alerts: { create: alertData() },
+            events: {
+              create: {
+                message: `Incident created in resolved state: resolve event was received prior to trigger event from ${normalizedSource}`,
+              },
+            },
           },
         });
 
-        await persistAlert(resolvedIncident.id);
         await persistAutomation(
           tx,
           resolvedIncident.id,
@@ -409,13 +415,6 @@ export async function processEvent(
         await tx.alert.updateMany({
           where: { id: recentResolveAlert.id },
           data: { incidentId: resolvedIncident.id },
-        });
-
-        await tx.incidentEvent.create({
-          data: {
-            incidentId: resolvedIncident.id,
-            message: `Incident created in resolved state: resolve event was received prior to trigger event from ${normalizedSource}`,
-          },
         });
 
         // This terminal creation bypasses applyIncidentLifecycleCommand, so it
@@ -507,6 +506,14 @@ export async function processEvent(
             return { nextSlaTransitionAt: next?.at, nextSlaTransitionKind: next?.kind };
           })(),
           createdAt: incidentCreatedAt,
+          alerts: { create: alertData() },
+          events: {
+            create: {
+              message: isFlapping
+                ? `Incident created in SUPPRESSED state: rapid alert oscillations detected from ${normalizedSource}. Notifications muted until signal stabilises.`
+                : `Incident triggered via API from ${normalizedSource}`,
+            },
+          },
           ...(isFlapping
             ? {
                 escalationStatus: 'COMPLETED',
@@ -535,28 +542,14 @@ export async function processEvent(
         }
       );
 
-      // Persist automation context/traces and the already-linked alert.
-      await Promise.all([
-        persistAutomation(
-          tx,
-          newIncident.id,
-          envelope,
-          automation,
-          !isFlapping,
-          service.escalationPolicyId
-        ),
-        persistAlert(newIncident.id),
-      ]);
-
-      // Log timeline event
-      await tx.incidentEvent.create({
-        data: {
-          incidentId: newIncident.id,
-          message: isFlapping
-            ? `Incident created in SUPPRESSED state: rapid alert oscillations detected from ${normalizedSource}. Notifications muted until signal stabilises.`
-            : `Incident triggered via API from ${normalizedSource}`,
-        },
-      });
+      await persistAutomation(
+        tx,
+        newIncident.id,
+        envelope,
+        automation,
+        !isFlapping,
+        service.escalationPolicyId
+      );
 
       if (!isFlapping) {
         // Escalation state and its first due job commit with the incident, so
