@@ -2077,6 +2077,86 @@ describe('PostgreSQL ingestion durability', () => {
     expect(await prisma.ingestionReceipt.count()).toBe(1);
   });
 
+  it('group commits independent requests and isolates conflicting delivery errors', async () => {
+    const existing = await acceptPostgresEvent(envelope('existing'), 'existing-delivery');
+    const input = envelope('group-original');
+    const requests = [
+      acceptPostgresEvent(input, 'group-delivery'),
+      acceptPostgresEvent(input, 'group-delivery'),
+      acceptPostgresEvent(envelope('conflicting-key'), 'group-delivery'),
+      ...Array.from({ length: 29 }, (_, index) =>
+        acceptPostgresEvent(envelope(`group-independent-${index}`), `group-independent-${index}`)
+      ),
+    ];
+    const outcomes = await Promise.allSettled(requests);
+    expect(outcomes.filter(row => row.status === 'fulfilled')).toHaveLength(31);
+    expect(outcomes[2].status).toBe('rejected');
+    if (outcomes[2].status === 'rejected')
+      expect(outcomes[2].reason).toBeInstanceOf(IngestionConflictError);
+    if (outcomes[0].status === 'fulfilled' && outcomes[1].status === 'fulfilled')
+      expect(outcomes[0].value.receiptId).toBe(outcomes[1].value.receiptId);
+    expect(await prisma.ingestionReceipt.count()).toBe(31);
+    expect((await prisma.ingestionBudget.aggregate({ _sum: { pending: true } }))._sum.pending).toBe(
+      31
+    );
+    expect(await acceptPostgresEvent(envelope('existing'), 'existing-delivery')).toEqual(existing);
+    expect(await consumeIngestionBatch(32)).toBe(31);
+    expect(await prisma.alert.count({ where: { serviceId } })).toBe(31);
+  });
+
+  it('returns no group acknowledgements and rolls back all reservations when receipt insertion fails', async () => {
+    await prisma.$executeRaw`ALTER TABLE "IngestionReceipt" ADD CONSTRAINT ingestion_group_test_failure
+      CHECK ("payloadBytes" < 0) NOT VALID`;
+    try {
+      const outcomes = await Promise.allSettled(
+        Array.from({ length: 8 }, (_, index) =>
+          acceptPostgresEvent(envelope(`failed-group-${index}`), `failed-group-${index}`)
+        )
+      );
+      expect(outcomes.every(outcome => outcome.status === 'rejected')).toBe(true);
+      expect(await prisma.ingestionReceipt.count()).toBe(0);
+      expect(
+        (await prisma.ingestionBudget.aggregate({ _sum: { pending: true } }))._sum.pending
+      ).toBe(0);
+      expect((await prisma.ingestionBudget.aggregate({ _sum: { bytes: true } }))._sum.bytes).toBe(
+        BigInt(0)
+      );
+    } finally {
+      await prisma.$executeRaw`ALTER TABLE "IngestionReceipt" DROP CONSTRAINT ingestion_group_test_failure`;
+    }
+    const accepted = await acceptPostgresEvent(envelope('recovered-group'), 'failed-group-0');
+    expect(accepted.receiptId).toBeTruthy();
+    expect(await prisma.ingestionReceipt.count()).toBe(1);
+  });
+
+  it('partially admits independent group callers within exact remaining capacity', async () => {
+    process.env.OPSKNIGHT_INGESTION_MAX_PENDING = '64';
+    process.env.OPSKNIGHT_INGESTION_CRITICAL_RESERVE_PERCENT = '0';
+    try {
+      await Promise.all(
+        Array.from({ length: 60 }, (_, index) =>
+          acceptPostgresEvent(envelope(`capacity-prefix-${index}`))
+        )
+      );
+      const outcomes = await Promise.allSettled(
+        Array.from({ length: 12 }, (_, index) =>
+          acceptPostgresEvent(envelope(`capacity-tail-${index}`))
+        )
+      );
+      expect(outcomes.filter(row => row.status === 'fulfilled')).toHaveLength(4);
+      for (const outcome of outcomes)
+        if (outcome.status === 'rejected')
+          expect(outcome.reason).toBeInstanceOf(IngestionUnavailableError);
+      expect(await prisma.ingestionReceipt.count()).toBe(64);
+      expect(
+        (await prisma.ingestionBudget.aggregate({ _sum: { pending: true } }))._sum.pending
+      ).toBe(64);
+    } finally {
+      delete process.env.OPSKNIGHT_INGESTION_MAX_PENDING;
+      delete process.env.OPSKNIGHT_INGESTION_CRITICAL_RESERVE_PERCENT;
+    }
+  });
+
   it('serializes concurrent duplicate submissions into one receipt and reservation', async () => {
     const input = envelope();
     const receipts = await Promise.all(
