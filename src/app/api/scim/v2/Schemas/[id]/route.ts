@@ -1,10 +1,11 @@
 import { NextRequest } from 'next/server';
 import { getScimSchemas, scimError } from '@/lib/scim';
+import { resolveScimPublicOrigin } from '@/lib/scim/protocol/origin';
 
-export async function GET(request: NextRequest, context: { params: Promise<{ id: string }> }) {
+export async function GET(_request: NextRequest, context: { params: Promise<{ id: string }> }) {
   const { id } = await context.params;
   const decodedId = decodeURIComponent(id);
-  const baseUrl = request.nextUrl.origin;
+  const baseUrl = await resolveScimPublicOrigin();
 
   const schemas = getScimSchemas(baseUrl);
   const matched = schemas.find(s => s.id === decodedId);

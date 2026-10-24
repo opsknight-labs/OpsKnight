@@ -1,8 +1,9 @@
 import { NextRequest } from 'next/server';
 import { getServiceProviderConfig } from '@/lib/scim';
+import { resolveScimPublicOrigin } from '@/lib/scim/protocol/origin';
 
-export async function GET(request: NextRequest) {
-  const baseUrl = request.nextUrl.origin;
+export async function GET(_request: NextRequest) {
+  const baseUrl = await resolveScimPublicOrigin();
   const config = getServiceProviderConfig(baseUrl);
 
   return Response.json(config, {

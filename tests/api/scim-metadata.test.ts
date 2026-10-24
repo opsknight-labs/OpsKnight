@@ -1,12 +1,22 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, beforeEach, afterEach } from 'vitest';
 import { NextRequest } from 'next/server';
 import { GET as getServiceProviderConfig } from '@/app/api/scim/v2/ServiceProviderConfig/route';
 import { GET as getResourceTypes } from '@/app/api/scim/v2/ResourceTypes/route';
 import { GET as getResourceTypeById } from '@/app/api/scim/v2/ResourceTypes/[id]/route';
 import { GET as getSchemas } from '@/app/api/scim/v2/Schemas/route';
 import { GET as getSchemaById } from '@/app/api/scim/v2/Schemas/[id]/route';
+import { GET as catchallGet, POST as catchallPost } from '@/app/api/scim/v2/[...catchall]/route';
 
 describe('SCIM Discovery Metadata Endpoints', () => {
+  const originalAppUrl = process.env.APP_URL;
+
+  beforeEach(() => {
+    process.env.APP_URL = 'https://ops.example.com';
+  });
+
+  afterEach(() => {
+    process.env.APP_URL = originalAppUrl;
+  });
   it('returns compliant ServiceProviderConfig metadata', async () => {
     const req = new NextRequest('https://ops.example.com/api/scim/v2/ServiceProviderConfig');
     const res = await getServiceProviderConfig(req);
@@ -104,5 +114,39 @@ describe('SCIM Discovery Metadata Endpoints', () => {
       params: Promise.resolve({ id: 'invalid' }),
     });
     expect(notFoundRes.status).toBe(404);
+  });
+
+  it('preserves canonical public origin and rejects untrusted forwarded headers', async () => {
+    const maliciousReq = new NextRequest('http://0.0.0.0:3000/api/scim/v2/ServiceProviderConfig', {
+      headers: {
+        'x-forwarded-host': 'attacker.example.com',
+        'x-forwarded-proto': 'http',
+        host: '0.0.0.0:3000',
+      },
+    });
+
+    const res = await getServiceProviderConfig(maliciousReq);
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.meta.location).toBe('https://ops.example.com/api/scim/v2/ServiceProviderConfig');
+    expect(body.meta.location).not.toContain('0.0.0.0:3000');
+    expect(body.meta.location).not.toContain('attacker.example.com');
+  });
+
+  it('returns RFC 7644 JSON error format for unknown SCIM subroutes via catch-all', async () => {
+    const getRes = await catchallGet();
+    expect(getRes.status).toBe(404);
+    expect(getRes.headers.get('content-type')).toBe('application/scim+json; charset=utf-8');
+    const getBody = await getRes.json();
+    expect(getBody.schemas).toContain('urn:ietf:params:scim:api:messages:2.0:Error');
+    expect(getBody.status).toBe('404');
+    expect(getBody.scimType).toBe('invalidPath');
+    expect(getBody.detail).toBe('The requested SCIM resource was not found.');
+
+    const postRes = await catchallPost();
+    expect(postRes.status).toBe(404);
+    expect(postRes.headers.get('content-type')).toBe('application/scim+json; charset=utf-8');
+    const postBody = await postRes.json();
+    expect(postBody.schemas).toContain('urn:ietf:params:scim:api:messages:2.0:Error');
   });
 });

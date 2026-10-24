@@ -5,9 +5,10 @@ import {
   SCIM_USER_SCHEMA,
   SCIM_GROUP_SCHEMA,
 } from '@/lib/scim';
+import { resolveScimPublicOrigin } from '@/lib/scim/protocol/origin';
 
-export async function GET(request: NextRequest) {
-  const baseUrl = request.nextUrl.origin;
+export async function GET(_request: NextRequest) {
+  const baseUrl = await resolveScimPublicOrigin();
 
   const resourceTypes = [
     {

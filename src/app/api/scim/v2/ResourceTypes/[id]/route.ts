@@ -5,10 +5,11 @@ import {
   SCIM_GROUP_SCHEMA,
   scimError,
 } from '@/lib/scim';
+import { resolveScimPublicOrigin } from '@/lib/scim/protocol/origin';
 
-export async function GET(request: NextRequest, context: { params: Promise<{ id: string }> }) {
+export async function GET(_request: NextRequest, context: { params: Promise<{ id: string }> }) {
   const { id } = await context.params;
-  const baseUrl = request.nextUrl.origin;
+  const baseUrl = await resolveScimPublicOrigin();
 
   const resourceTypes: Record<string, object> = {
     User: {
