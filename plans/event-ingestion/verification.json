@@ -776,8 +776,11 @@
     "freshNativeImage": "Pending; native b9 evidence predates schema-construction-only optimization"
   },
   "localEnvironmentRestored": {
-    "kindControlPlaneRunning": false,
-    "ownedCertificationContainersRemaining": "Measurement in progress; restore after run"
+    "kindControlPlaneRunning": true,
+    "freshKindCreation": "Created fresh kind-opsknight-cluster after explicit user authorization; original workloads not restored",
+    "ownedCertificationContainersRemaining": 0,
+    "postgresTimingRestored": "track_wal_io_timing=off verified",
+    "postgresTestContainers": "Recovered original volumes; both running"
   },
   "consumerFaultIsolationFollowup": {
     "recordedAt": "2026-10-24",
@@ -1418,7 +1421,7 @@
     "independentReviewFollowup": "Unavailable due workspace credit exhaustion"
   },
   "identityFrontierFollowup": {
-    "sourceRevision": "pending source commit after 3099971e6",
+    "sourceRevision": "43c33b3fc",
     "certified": false,
     "implementation": [
       "Transactional head/tail and indexed membership chains for unfinished ordering identities",
@@ -1455,7 +1458,84 @@
       "scope": "Rollback-only SQL fixture, excludes end-to-end application work",
       "rejectedBroadJoinExecutionMs": 28.775
     },
-    "nativeImageAndCapacity": "pending",
+    "nativeImageAndCapacity": {
+      "build": "passed",
+      "imageId": "sha256:4e030bf806982d5355843c80576709943cfa3bc124ac3e19be151f2e0c36c76f",
+      "archiveSha256": "101278cdb1c121449832c03e2051e2352ead64ce07217a86ee24e22bd12c4063",
+      "pageWorkers": 1,
+      "native250Rps": {
+        "passed": false,
+        "acceptedCompleted": 1852,
+        "acceptancePerSecond": 59.84043315921725,
+        "explicitRejections": 5380,
+        "droppedArrivals": 269,
+        "httpP95Ms": 1680.5176,
+        "completionP95Ms": 1586.35,
+        "ambiguousSubmissions": 0,
+        "finalBacklog": 0,
+        "modeOverrideAbsent": true,
+        "cleanupFailures": [],
+        "httpEvidence": "local-docker-http-identity-frontier-250.json",
+        "topologyEvidence": "local-docker-topology-identity-frontier-250.json",
+        "claimMeanMs": 0.6833398418502208,
+        "completionBudgetMeanMs": 13.57861509665228,
+        "scope": "30-second shared local VM diagnostic; not sustained capacity"
+      },
+      "nativeTwoCpuWeb250Rps": {
+        "passed": false,
+        "offeredRps": 250,
+        "acknowledged": 1799,
+        "acceptedCompleted": 1799,
+        "acceptancePerSecond": 58.319565405775535,
+        "httpP95Ms": 1797.3138,
+        "completionP95Ms": 2229.2999999999997,
+        "ambiguousSubmissions": 0,
+        "finalBacklog": 0,
+        "explicitRejections": 5165,
+        "droppedArrivals": 537,
+        "cleanupFailures": [],
+        "modeOverrideAbsent": true,
+        "httpEvidence": "local-docker-http-identity-frontier-cpu-250.json",
+        "topologyEvidence": "local-docker-topology-identity-frontier-cpu-250.json",
+        "scope": "30-second shared local VM diagnostic; no sustained capacity certification"
+      },
+      "native500Rps": {
+        "passed": false,
+        "offeredRps": 500,
+        "acknowledged": 652,
+        "acceptedCompleted": 674,
+        "acceptancePerSecond": 20.77434898663192,
+        "httpP95Ms": 9999.979599999999,
+        "completionP95Ms": 5779.05,
+        "ambiguousSubmissions": 22,
+        "finalBacklog": 0,
+        "explicitRejections": 2752,
+        "droppedArrivals": 11386,
+        "cleanupFailures": [],
+        "modeOverrideAbsent": true,
+        "httpEvidence": "local-docker-http-identity-frontier-500.json",
+        "topologyEvidence": "local-docker-topology-identity-frontier-500.json",
+        "scope": "30-second shared local VM diagnostic; no sustained capacity certification"
+      },
+      "native1000Rps": {
+        "passed": false,
+        "offeredRps": 1000,
+        "acknowledged": 758,
+        "acceptedCompleted": 813,
+        "acceptancePerSecond": 24.961173044237054,
+        "httpP95Ms": 7655.426899999992,
+        "completionP95Ms": 4070.7999999999993,
+        "ambiguousSubmissions": 55,
+        "finalBacklog": 0,
+        "explicitRejections": 4057,
+        "droppedArrivals": 24994,
+        "cleanupFailures": [],
+        "modeOverrideAbsent": true,
+        "httpEvidence": "local-docker-http-identity-frontier-1000.json",
+        "topologyEvidence": "local-docker-topology-identity-frontier-1000.json",
+        "scope": "30-second shared local VM diagnostic; no sustained capacity certification"
+      }
+    },
     "remaining": [
       "250/500/1000 RPS full-stack retests",
       "1000 accepted and completed per second for 60 minutes",
