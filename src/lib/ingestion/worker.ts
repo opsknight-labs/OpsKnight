@@ -14,6 +14,7 @@ import {
 } from '@/lib/metrics/operational/registry';
 import { recordWorkerHeartbeat } from '@/lib/runbooks/worker-heartbeats';
 import { getOpsKnightProcessRole } from '@/lib/runtime-role';
+import { hasHealthyDedicatedIngestionWorker } from './fallback';
 
 let running: Promise<void> | null = null;
 let stopping = false;
@@ -89,6 +90,7 @@ export function startIngestionWorker(): void {
   if (running) return;
   const config = ingestionConfig();
   if (config.mode !== 'postgres') return;
+  const webFallback = getOpsKnightProcessRole() === 'web';
   stopping = false;
   updateIngestionWorkerHealth({
     running: true,
@@ -100,6 +102,8 @@ export function startIngestionWorker(): void {
     let failures = 0;
     let lastHeartbeat = 0;
     let nextPolicy = 0;
+    let nextTopology = 0;
+    let dedicatedHealthy = false;
     let policy = { ...config, leaseMs: 60000 };
     while (!stopping) {
       let count = 0;
@@ -109,7 +113,14 @@ export function startIngestionWorker(): void {
           policy = { ...config, ...settings.policy };
           nextPolicy = Date.now() + 1000;
         }
-        count = await consumeIngestionBatch(policy.concurrency, policy.leaseMs);
+        if (webFallback && Date.now() >= nextTopology) {
+          dedicatedHealthy = await hasHealthyDedicatedIngestionWorker();
+          nextTopology = Date.now() + 5000;
+        }
+        count =
+          webFallback && dedicatedHealthy
+            ? 0
+            : await consumeIngestionBatch(webFallback ? 1 : policy.concurrency, policy.leaseMs);
         failures = 0;
         updateIngestionWorkerHealth({ lastSuccessAt: Date.now(), faulted: false });
       } catch {

@@ -1,9 +1,10 @@
 import { z } from 'zod';
+import { resolveIngestionMode } from './mode';
 
 export function ingestionConfig() {
   return z
     .object({
-      mode: z.enum(['sync', 'postgres']).default('sync'),
+      mode: z.enum(['sync', 'postgres']),
       concurrency: z.coerce.number().int().min(1).max(32).default(4),
       maxInFlightRequests: z.coerce.number().int().min(1).max(1024).default(32),
       pollMs: z.coerce.number().int().min(50).max(30000).default(250),
@@ -19,7 +20,7 @@ export function ingestionConfig() {
         .default(1024 * 1024 * 1024),
     })
     .parse({
-      mode: process.env.OPSKNIGHT_INGESTION_MODE,
+      mode: resolveIngestionMode(process.env.OPSKNIGHT_INGESTION_MODE),
       concurrency: process.env.OPSKNIGHT_INGESTION_CONCURRENCY,
       maxInFlightRequests: process.env.OPSKNIGHT_INGESTION_MAX_INFLIGHT_REQUESTS,
       pollMs: process.env.OPSKNIGHT_INGESTION_POLL_MS,

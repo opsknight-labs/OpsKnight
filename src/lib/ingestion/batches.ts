@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { acquireTextAdvisoryLocks } from '@/lib/db-locks';
 import { Prisma } from '@prisma/client';
 import prisma from '@/lib/prisma';
 import type { IntegrationEventEnvelope } from '@/lib/automation/runtime';
@@ -85,8 +86,10 @@ export async function acceptPostgresBatch(
   const committed = await runReadCommittedTransaction(async tx => {
     const counts = { created: 0, duplicate: 0 };
     await tx.$executeRaw`SET LOCAL synchronous_commit = on`;
-    for (const identity of identities)
-      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`ingestion:${identity}`}, 0))`;
+    await acquireTextAdvisoryLocks(
+      tx,
+      identities.map(identity => `ingestion:${identity}`)
+    );
     const batchId = randomUUID();
     await tx.ingestionBatch.create({
       data: {

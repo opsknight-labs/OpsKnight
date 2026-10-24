@@ -1,52 +1,25 @@
 # Image upgrade compatibility
 
-Replacing the image must preserve the existing synchronous ingestion behavior. Async ingestion is a separate, explicit rollout.
+The candidate defaults to durable PostgreSQL ingestion when `OPSKNIGHT_INGESTION_MODE` is absent. Customers do not need to add that variable, Kafka or Redis. Integrated installations consume in-process; existing split web installations automatically consume one receipt per web replica using the existing Prisma pool. Healthy dedicated ingestion workers suppress that fallback. A missing dedicated service cannot strand accepted work solely because the image was updated.
 
-## Default image replacement
+## Required cutover
 
-Leave `OPSKNIGHT_INGESTION_MODE` unset, or set it to `sync`. Existing deployments need no Kafka, Redis, ingestion workers or new ingestion settings.
+The first upgrade from synchronous producers requires draining their in-flight requests before new asynchronous producers receive ingestion traffic. Overlapping old synchronous and new asynchronous replicas can reorder trigger/resolve events. Ordinary mixed-version rolling upgrades are **not certified**. Use a coordinated traffic cutover; additive migrations alone cannot fence code running in old images. Future all-async worker replacements retain receipt lease fencing and replay recovery.
 
-The image's existing startup entrypoint runs additive database migrations before serving requests. The ingestion migrations create new tables and indexes; they do not rename, delete or rewrite existing incident, integration, alert, Automation or background-job tables. For split deployments, update the migration owner's image as well as application images. Replicas configured to skip migrations wait for the migration owner through the existing readiness gate.
+The image startup entrypoint applies additive migrations before serving traffic. Update the migration owner in split deployments; replicas that skip migration wait for its readiness gate. Existing administrator credentials, routing keys, services, incidents, SLA snapshots, Alerts, pending jobs and Automation configuration must remain intact.
 
-Default-mode compatibility:
+## Client contract and rollback
 
-- Events API trigger/acknowledge/resolve requests retain the synchronous `202` result containing the incident, after incident processing commits.
-- Routing keys, existing service settings, incident IDs, frozen SLA targets, alerts, pending jobs and Automation configuration remain intact.
-- The asynchronous 256 KiB envelope limit does not apply to synchronous requests. Existing request-size and stored-alert truncation rules remain in effect.
-- `Idempotency-Key` keeps its previous ignored behavior in synchronous mode, including values longer than the new asynchronous header limit.
-- Queue-specific event timestamps and recovery lookback behavior apply only to ingestion-worker processing. Synchronous processing preserves its existing timestamp semantics.
-- Default startup and shutdown do not start an ingestion consumer or publish a synthetic ingestion-worker heartbeat.
+Default `202` means a committed receipt, not a completed incident. The result contains `receiptId`; clients that require an immediate incident must use receipt status or explicitly retain `OPSKNIGHT_INGESTION_MODE=sync` during migration. Idempotency headers now take effect with asynchronous validation. Request quotas remain bounded policy, not an automatic 1,000 RPS entitlement.
 
-## Explicit async rollout
+For rollback, pause admission, finish in-flight admissions and reconcile/drain receipts while consumers remain asynchronous. Resolve DEAD heads before switching every producer to explicit `sync`. Keep the additive schema and receipt history. Reverting an image must not strand queued work.
 
-Apply migrations and finish upgrading producers before setting `OPSKNIGHT_INGESTION_MODE=postgres` consistently on the web tier and ingestion workers. Integrated installs can run their consumer in-process. Split installs need the dedicated ingestion-worker role.
+## Evidence
 
-In this mode, `202` means durably accepted, and the result contains a receipt ID instead of a materialized incident. Clients depending on an immediate incident result must stay in synchronous mode or be updated to use receipt status before the operator enables async mode. Enabling this mode is deliberately not a silent consequence of changing an image tag.
-
-Do not mix synchronous and asynchronous producers for the same routing identity while a backlog exists. For rollback, pause admission, finish in-flight admissions, drain/reconcile accepted work with consumers still enabled, then return producers to `sync`. Keep the additive tables and receipt history. Reverting an image alone must not strand a previously enabled async backlog.
-
-## Executed checks
-
-The populated upgrade harness ran against both the published `v2.0.0` baseline (`f81dfc25520a6c45007f87d90ac470547effbd6c`) and the original ingestion branch base (`58e9271cc7599447f86ecabae4592634d969cb30`).
-
-For each baseline it generated the old Prisma client, applied the baseline migrations to an empty isolated database, seeded existing records, and ran the actual candidate image migration/index/backfill entrypoint. It checked preservation of administrator credentials, routing keys, service settings, incident/SLA fields, alerts and pending background jobs. Existing Automation configuration was also checked where that feature existed in the baseline.
-
-After migration, it exercised the current Events API using an existing routing key, including a 300 KB custom payload and a long previously ignored idempotency header. It verified trigger, acknowledge and resolve results, zero implicit inbox receipts, old-client reads and writes, the split-runtime readiness gate and an idempotent second startup.
-
-Evidence is in `upgrade-f81dfc25.json` and `upgrade-58e9271c.json`. These checks use the actual startup script and application handlers, but do not certify replacement of a running Docker image, old/new notification worker interoperability, an HA rolling deployment, or enterprise capacity. Those remain separate certification gates.
-
-## Reproduce safely
-
-Create a new, empty localhost database whose name starts with `ingestion_test`. Set `DATABASE_URL` to that database and leave ingestion mode unset. The harness refuses populated databases and never resets data.
+Historical `upgrade-f81dfc25.json` and `upgrade-58e9271c.json` tested the earlier synchronous default. They do not certify the current default. The updated guarded harness writes `upgrade-auto-async-<baseline>.json` and checks the populated baseline, migration entrypoint, existing records, receipt-based lifecycle processing through the automatic web consumer, old Prisma client access and repeated startup. It requires a fresh isolated localhost database whose name starts with `ingestion_test` and no mode override:
 
 ```sh
 npm run certify:ingestion:upgrade
 ```
 
-The default baseline is the original ingestion branch base. To check the published release, use another fresh isolated database:
-
-```sh
-INGESTION_UPGRADE_BASELINE=f81dfc25520a6c45007f87d90ac470547effbd6c npm run certify:ingestion:upgrade
-```
-
-No PR should be opened until the complete architecture and its certification gates are finished.
+The optional published-release baseline is `f81dfc25520a6c45007f87d90ac470547effbd6c`. Source-level populated-database checks do not certify replacement of a running image, mixed-version HA rollout, notification-worker interoperability or enterprise capacity. A native fallback-only Docker run must omit the mode variable and dedicated workers explicitly. Enterprise certification remains false; no PR is authorized until its gates pass.

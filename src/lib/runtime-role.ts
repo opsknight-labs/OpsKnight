@@ -1,3 +1,5 @@
+import { resolveIngestionMode } from './ingestion/mode';
+
 export const OPSKNIGHT_PROCESS_ROLES = [
   'integrated',
   'web',
@@ -171,7 +173,9 @@ export function getSchedulerOwnership(profile: SchedulerProfile): SchedulerOwner
 /** Bootstrap and readiness must agree on which processes own ingestion. */
 export function shouldRunIngestionConsumer(
   role: OpsKnightProcessRole,
-  mode = process.env.OPSKNIGHT_INGESTION_MODE ?? 'sync'
+  mode = resolveIngestionMode(process.env.OPSKNIGHT_INGESTION_MODE)
 ): boolean {
-  return mode === 'postgres' && (role === 'integrated' || role === 'ingestion-worker');
+  return (
+    mode === 'postgres' && (role === 'integrated' || role === 'web' || role === 'ingestion-worker')
+  );
 }

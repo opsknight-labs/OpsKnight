@@ -8,6 +8,7 @@ const { pendingClassificationCount } = require('./backfill-automation-source-cla
 
 const REQUIRED_INDEXES = [
   'IngestionReceipt_claim_sequence_idx',
+  'RuntimeWorkerHeartbeat_ingestion_healthy_idx',
   'idx_notification_tenant_fair_delivery',
   'StatusPageSubscription_statusPageId_state_idx',
   // The SLA scheduler index is optional in LEGACY/SHADOW and is guarded when enabling INDEXED.

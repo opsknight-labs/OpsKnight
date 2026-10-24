@@ -6,7 +6,7 @@ System administrators can now change unfinished-event/byte limits, completed-pay
 
 ## Implemented boundary
 
-Provider parsers and authentication remain in their existing routes. `processIntegrationEvent` is the shared admission boundary. `OPSKNIGHT_INGESTION_MODE=sync` preserves the synchronous API by default. `postgres` acknowledges only a committed inbox append and returns a receipt ID. An accepted receipt is not proof of a successfully materialized incident.
+Provider parsers and authentication remain in their existing routes. `processIntegrationEvent` is the shared admission boundary. With `OPSKNIGHT_INGESTION_MODE` unset, durable PostgreSQL ingestion is the default. An explicit `sync` value retains the synchronous rollback path. The default acknowledges only a committed inbox append and returns a receipt ID. An accepted receipt is not proof of a successfully materialized incident.
 
 The ingestion module owns envelope validation, delivery identity, capacity reservations, shared token buckets, processing leases, retries, operator commands, status and retention. Workers call the existing incident engine. Incident mutation, Service Automation decisions, notification/runbook outbox records, receipt completion and capacity release commit in one transaction. The receipt row lock and lease token fence stale workers. There is no claim of exactly-once external notification delivery.
 
@@ -46,9 +46,9 @@ Prometheus counters separate new accepted receipts from duplicate submissions an
 
 ## Running the candidate
 
-Generate the Prisma client, apply migrations, then enable the mode consistently on producers and ingestion consumers. Integrated deployments run a consumer in the integrated process. The connection preflight counts `INGESTION_WORKER_REPLICAS` (including Swarm aliases), their direct database pools even when web uses PgBouncer, and an optional `DATABASE_CONNECTION_RESERVE` for deployment/failover headroom. Pass the ingestion overlay to the CLI or explicitly set the replica count; the validator cannot discover an unconfigured remote topology. Split deployments use `OPSKNIGHT_PROCESS_ROLE=ingestion-worker` with an independent `DATABASE_POOL_SIZE_INGESTION_WORKER` budget (default pool 10 unless explicitly configured; the Compose overlay sets 5 for concurrency 4).
+Generate the Prisma client and apply migrations before serving the updated image. No ingestion-mode variable is required. Integrated deployments run a consumer in the integrated process. Web replicas automatically run a single-slot fallback consumer using their existing Prisma pool; healthy dedicated ingestion workers put that fallback on standby. Topology checks run every five seconds and dedicated evidence expires after 30 seconds. Fallback adds no pool, but uses existing pool capacity and is not a high-throughput sizing recommendation. The connection preflight counts `INGESTION_WORKER_REPLICAS` (including Swarm aliases), their direct database pools even when web uses PgBouncer, and an optional `DATABASE_CONNECTION_RESERVE` for deployment/failover headroom. Pass the ingestion overlay to the CLI or explicitly set the replica count; the validator cannot discover an unconfigured remote topology. Split deployments use `OPSKNIGHT_PROCESS_ROLE=ingestion-worker` with an independent `DATABASE_POOL_SIZE_INGESTION_WORKER` budget (default pool 10 unless explicitly configured; the Compose overlay sets 5 for concurrency 4).
 
-Compose opt-in configuration:
+Optional dedicated-capacity Compose configuration:
 
 ```sh
 OPSKNIGHT_IMAGE=<image-built-from-this-branch> docker compose \
@@ -61,7 +61,7 @@ The overlay extends the existing worker service rather than duplicating its cred
 
 Environment settings:
 
-- `OPSKNIGHT_INGESTION_MODE`: `sync` (default) or `postgres`.
+- `OPSKNIGHT_INGESTION_MODE`: optional; unset defaults to `postgres`. Explicit `sync` is the compatibility/rollback override.
 - `OPSKNIGHT_INGESTION_CONCURRENCY`: 1–32, default 4 per worker process.
 - `OPSKNIGHT_INGESTION_MAX_INFLIGHT_REQUESTS`: 1–1,024, default 32 active ingestion requests per web process. Excess requests receive 503 with Retry-After before authentication/body/database work. Shared across provider routes in a process, independent of distributed request quotas.
 - `OPSKNIGHT_INGESTION_POLL_MS`: 50–30,000, default 250, with jitter. Database failures use bounded exponential backoff.
@@ -75,7 +75,7 @@ Quotas are not throughput guarantees. Configure them from measured deployment ca
 
 ## Rollout and rollback
 
-Do not mix synchronous and asynchronous producers for the same routing identity while an accepted backlog exists: a synchronous lifecycle transition can overtake queued work. For rollback, pause admission, wait for in-flight admissions to finish, keep ingestion workers in `postgres` mode, reconcile and drain all receipts, then switch producers to `sync`. Resolve DEAD receipts first. Stop consumers only after the backlog is empty. Keep both additive migrations and all receipts; do not drop inbox tables to roll back application behavior.
+The first upgrade from a synchronous image requires a coordinated producer cutover: stop routing new ingestion to old replicas, finish their in-flight requests, then route to the migrated new replicas. An ordinary overlapping old/new rolling update is not certified or safe for lifecycle ordering. Existing migrations are additive, but changing the default does not make mixed writers safe. Do not mix synchronous and asynchronous producers for the same routing identity while an accepted backlog exists: a synchronous lifecycle transition can overtake queued work. For rollback, pause admission, wait for in-flight admissions to finish, keep ingestion workers in `postgres` mode, reconcile and drain all receipts, then switch producers to `sync`. Resolve DEAD receipts first. Stop consumers only after the backlog is empty. Keep both additive migrations and all receipts; do not drop inbox tables to roll back application behavior.
 
 A worker may be replaced without draining first: its uncommitted transaction rolls back and a replacement can recover the lease. Default leases last 60 seconds; recovery is safe but not a two-second latency guarantee after a crash.
 
@@ -141,3 +141,5 @@ PostgreSQL ingestion has a centralized process-local request gate across Events 
 Asynchronous request bodies have a five-second total read deadline and stop on disconnect. The deadline ends before parsing/admission and does not cancel a durable transaction. A nonsettling stream cancellation callback cannot prevent the slot being released. This addresses unauthenticated partial PagerDuty bodies consuming all shared slots. The gate is a local resource bound, not service fairness, a distributed quota, a throughput increase or a promise that a network-lost response cannot follow a committed receipt. Healthy replicas must still meet the existing acceptance/latency gates. Receipts and bounded authenticated replay remain necessary for ambiguous responses.
 
 `opsknight_ingestion_request_overload_total` counts requests refused at the local gate separately from persistent backlog-capacity and quota decisions. The Compose ingestion overlay exposes the concurrency setting; a changed value requires replica configuration/restart rather than a live shared-policy update. Tune it with pool sizes and measured latency, and retain upstream connection/body limits.
+
+Next middleware clones/buffers bodies before route handlers in the installed framework. The five-second route-reader deadline and local gate do not cover that earlier phase. Native partial-body attempts did not reach the gate and failed their preflight; upstream connection/body limits and a network deadline require separate production-topology validation. The native gate fixture instead holds complete authenticated requests on an owned quota-row lock and checks prompt overload, release and exact receipt reconciliation.

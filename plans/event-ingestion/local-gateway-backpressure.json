@@ -1,0 +1,25 @@
+{
+  "certifiedEnterprise": false,
+  "runId": "fec25599-b04d-442c-8e53-18633f33e72f",
+  "passed": true,
+  "cleanupFailures": [],
+  "images": {
+    "upstream": "sha256:1bcbe966c4356bc1540bcd149cfbeddf83f9edbeb608af80430025a2a4e6aa31",
+    "proxy": "sha256:0985e772fb9f729e6fa0980da05fca5d9c468e870eed43071545afa9d2e27d94"
+  },
+  "checks": {
+    "syntax": true,
+    "globalPostConcurrency": true,
+    "crossProvider503": true,
+    "retryAfter": true,
+    "excessNotForwarded": true,
+    "operatorGetAvailable": true,
+    "recovery202": true,
+    "idleBodyServerStatus": 408,
+    "idleBodyClientOutcome": "connection-reset",
+    "idleBodyMs": 2007,
+    "queryCredentialAbsentFromLogs": true
+  },
+  "scope": "Actual owned Nginx and synthetic HTTP upstream only; no application receipts, distributed limits or enterprise capacity certification. Body timeout is idle time, not total upload duration.",
+  "recordedAt": "2026-10-23T22:13:13.420Z"
+}

@@ -1,0 +1,789 @@
+{
+  "measuredAt": "2026-10-23T22:10:13.693Z",
+  "candidate": {
+    "fullStackProcesses": true,
+    "kind": "docker",
+    "nodeVersion": "v20.20.2",
+    "imageId": "sha256:1bcbe966c4356bc1540bcd149cfbeddf83f9edbeb608af80430025a2a4e6aa31",
+    "sourceRevision": "8cfe6058f",
+    "webReplicas": 2,
+    "workerReplicas": 4,
+    "webCpus": 2,
+    "workerCpus": 2,
+    "cpuProfiling": false,
+    "certificationRunId": "77492f21-4dfe-4962-8ceb-056b6553c1ba",
+    "sourceProvenance": "Immutable image ID and producer-supplied OCI revision label; no signed build attestation"
+  },
+  "runtime": "v20.20.2",
+  "scope": "Local Docker gateway and image ingestion consumers sharing an isolated PostgreSQL container network; not enterprise HA certification",
+  "quotaReplayChecks": [
+    {
+      "provider": "EVENTS_API_V2",
+      "accepted": 1,
+      "completed": 1,
+      "concurrentRetries": 12,
+      "originalReceiptsRecovered": true,
+      "unknownIdentityRejected": true,
+      "changedContentRejected": true,
+      "invalidCredentialRejected": true
+    },
+    {
+      "provider": "WEBHOOK",
+      "accepted": 1,
+      "completed": 1,
+      "concurrentRetries": 12,
+      "originalReceiptsRecovered": true,
+      "unknownIdentityRejected": true,
+      "changedContentRejected": true,
+      "invalidCredentialRejected": true
+    },
+    {
+      "provider": "PAGERDUTY",
+      "accepted": 1,
+      "completed": 1,
+      "concurrentRetries": 12,
+      "originalReceiptsRecovered": true,
+      "unknownIdentityRejected": true,
+      "changedContentRejected": true,
+      "invalidCredentialRejected": true
+    },
+    {
+      "provider": "PROMETHEUS",
+      "accepted": 2,
+      "completed": 2,
+      "concurrentRetries": 12,
+      "originalReceiptsRecovered": true,
+      "unknownIdentityRejected": true,
+      "changedContentRejected": true,
+      "invalidCredentialRejected": true
+    }
+  ],
+  "warmup": {
+    "events": 50,
+    "completed": 50,
+    "durationMs": 1125.412792,
+    "scope": "Separate reconciled warmup fixture; excluded from measured load counts and database profile"
+  },
+  "databaseProfile": {
+    "scope": "Owned local test database; PostgreSQL execution statistics exclude client/pool/network time. Cluster WAL includes all databases on this owned test instance.",
+    "elapsedMs": 32768.080125,
+    "counters": {
+      "commits": 50009,
+      "rollbacks": 12,
+      "deadlocks": 0,
+      "tempBytes": 4246500,
+      "inserts": 104140,
+      "updates": 32880,
+      "deletes": 2,
+      "clusterWalBytes": 201408045
+    },
+    "totalQueryCalls": 178508,
+    "totalDatabaseExecutionMs": 39711.2167469999,
+    "topQueriesByExecutionTime": [
+      {
+        "fingerprint": "b79055717bc2eba257b07035ae276aaa344bc5d2a81cccf1de4ccab30a7ab659",
+        "operation": "WITH",
+        "model": "IngestionReceipt",
+        "calls": 933,
+        "executionMs": 12061.872001000007,
+        "meanExecutionMs": 12.928051448017156,
+        "rows": 3006,
+        "blocksHit": 7693014,
+        "blocksRead": 0,
+        "blocksDirtied": 138,
+        "tempBlocksWritten": 0,
+        "walBytes": 5795226
+      },
+      {
+        "fingerprint": "e830a69a81bbd4fef3bbfb35c0324b6216d50942d7eb8f6adb93e2f27634a27f",
+        "operation": "INSERT",
+        "model": "Incident",
+        "calls": 3005,
+        "executionMs": 3713.3662529999947,
+        "meanExecutionMs": 1.235729202329449,
+        "rows": 3005,
+        "blocksHit": 322245,
+        "blocksRead": 6,
+        "blocksDirtied": 5190,
+        "tempBlocksWritten": 0,
+        "walBytes": 42297558
+      },
+      {
+        "fingerprint": "8faa9eceb8c66993f1fce2b88d45d903e679e8bf94f1258690b448374eb35904",
+        "operation": "SELECT",
+        "model": "Incident",
+        "calls": 3005,
+        "executionMs": 2870.8879359999987,
+        "meanExecutionMs": 0.9553703613976702,
+        "rows": 0,
+        "blocksHit": 2865238,
+        "blocksRead": 0,
+        "blocksDirtied": 0,
+        "tempBlocksWritten": 0,
+        "walBytes": 27375
+      },
+      {
+        "fingerprint": "a6dc18db77e3d3b47fea6ee020608c87f2daf1e04587efc69af8a0a87c18449a",
+        "operation": "INSERT",
+        "model": "IngestionReceipt",
+        "calls": 3002,
+        "executionMs": 2795.072569999991,
+        "meanExecutionMs": 0.9310701432378385,
+        "rows": 3002,
+        "blocksHit": 205572,
+        "blocksRead": 1,
+        "blocksDirtied": 8675,
+        "tempBlocksWritten": 0,
+        "walBytes": 73266195
+      },
+      {
+        "fingerprint": "90a270cfb4505b7d16b6e8e71373374f6be239187a6e1dc7dd276bf4ffe4a09c",
+        "operation": "WITH",
+        "model": "IngestionReceipt",
+        "calls": 3002,
+        "executionMs": 1940.6564439999968,
+        "meanExecutionMs": 0.646454511658893,
+        "rows": 3002,
+        "blocksHit": 157785,
+        "blocksRead": 0,
+        "blocksDirtied": 132,
+        "tempBlocksWritten": 0,
+        "walBytes": 4314994
+      },
+      {
+        "fingerprint": "738f1b21b1d3a40699add2db6bb55c70701ee3fc78709ed303b0d703361ce049",
+        "operation": "INSERT",
+        "model": "Alert",
+        "calls": 3005,
+        "executionMs": 1856.743034000004,
+        "meanExecutionMs": 0.6178845371048266,
+        "rows": 3005,
+        "blocksHit": 141873,
+        "blocksRead": 2,
+        "blocksDirtied": 4760,
+        "tempBlocksWritten": 0,
+        "walBytes": 37223775
+      },
+      {
+        "fingerprint": "a340b7a8c62fcb81b3a07c3d283bb435dfbbb1e0701caacfc718d5e68ef2a5c7",
+        "operation": "SELECT",
+        "model": "Alert",
+        "calls": 3005,
+        "executionMs": 1660.9783389999993,
+        "meanExecutionMs": 0.5527382159733775,
+        "rows": 0,
+        "blocksHit": 3083977,
+        "blocksRead": 0,
+        "blocksDirtied": 0,
+        "tempBlocksWritten": 0,
+        "walBytes": 23025
+      },
+      {
+        "fingerprint": "806790f327fb19a7d7f8c5a894b618bba3e76d4862b91983ce3d10a653da71b8",
+        "operation": "INSERT",
+        "model": "IngestionQuota",
+        "calls": 3002,
+        "executionMs": 1546.409258000002,
+        "meanExecutionMs": 0.5151263351099273,
+        "rows": 3002,
+        "blocksHit": 48833,
+        "blocksRead": 0,
+        "blocksDirtied": 19,
+        "tempBlocksWritten": 0,
+        "walBytes": 894870
+      },
+      {
+        "fingerprint": "585d1bed9eb52ac53da1000786f143d1c74f045408f43a5d03f42f722f5b3bcc",
+        "operation": "SELECT",
+        "model": "IngestionReceipt",
+        "calls": 3006,
+        "executionMs": 1484.5049559999986,
+        "meanExecutionMs": 0.4938472907518292,
+        "rows": 3006,
+        "blocksHit": 28865,
+        "blocksRead": 0,
+        "blocksDirtied": 0,
+        "tempBlocksWritten": 0,
+        "walBytes": 208977
+      },
+      {
+        "fingerprint": "06eab5866d230502ff7b89b3bf86a24acea2b2c96080cffbc2bafaefe4032f35",
+        "operation": "UPDATE",
+        "model": "BackgroundJob",
+        "calls": 6578,
+        "executionMs": 1367.2313779999843,
+        "meanExecutionMs": 0.2078490997263582,
+        "rows": 6578,
+        "blocksHit": 125511,
+        "blocksRead": 5,
+        "blocksDirtied": 186,
+        "tempBlocksWritten": 0,
+        "walBytes": 5375485
+      },
+      {
+        "fingerprint": "fde31f929b09db877b539ca626d82be7a75d8df9ca05485f856197a0acf1c540",
+        "operation": "WITH",
+        "model": "BackgroundJob",
+        "calls": 38,
+        "executionMs": 1111.945662,
+        "meanExecutionMs": 29.261727947368424,
+        "rows": 3800,
+        "blocksHit": 834922,
+        "blocksRead": 7,
+        "blocksDirtied": 173,
+        "tempBlocksWritten": 0,
+        "walBytes": 4141434
+      },
+      {
+        "fingerprint": "265900b049ca4a85e769c90bff84e75ba8d32f9ad2cafa2559b4ac590a3d90d6",
+        "operation": "UPDATE",
+        "model": "Alert",
+        "calls": 3005,
+        "executionMs": 960.2073429999986,
+        "meanExecutionMs": 0.3195365534109812,
+        "rows": 3005,
+        "blocksHit": 109398,
+        "blocksRead": 0,
+        "blocksDirtied": 310,
+        "tempBlocksWritten": 0,
+        "walBytes": 4438830
+      },
+      {
+        "fingerprint": "b3dfa04d369f86c901a97f668e743cac20ef550e88fbe2571a8962bad43abce7",
+        "operation": "INSERT",
+        "model": "BackgroundJob",
+        "calls": 4426,
+        "executionMs": 620.0843670000014,
+        "meanExecutionMs": 0.14010039923181233,
+        "rows": 4426,
+        "blocksHit": 50056,
+        "blocksRead": 0,
+        "blocksDirtied": 102,
+        "tempBlocksWritten": 0,
+        "walBytes": 3025277
+      },
+      {
+        "fingerprint": "2a1cf26534e21fb515724ea544e228a9609c1964da96be8c9e9df3e3e66da6d8",
+        "operation": "INSERT",
+        "model": "IncidentEvent",
+        "calls": 3004,
+        "executionMs": 508.0793700000001,
+        "meanExecutionMs": 0.16913427762982694,
+        "rows": 3004,
+        "blocksHit": 55069,
+        "blocksRead": 0,
+        "blocksDirtied": 227,
+        "tempBlocksWritten": 0,
+        "walBytes": 2584616
+      },
+      {
+        "fingerprint": "f558769c67929afe870ae4f315d4536e609f81333abe4205b0bf254e6db339c0",
+        "operation": "WITH",
+        "model": "IngestionBudget",
+        "calls": 3002,
+        "executionMs": 499.49537499999855,
+        "meanExecutionMs": 0.16638753331112544,
+        "rows": 3002,
+        "blocksHit": 15218,
+        "blocksRead": 0,
+        "blocksDirtied": 0,
+        "tempBlocksWritten": 0,
+        "walBytes": 403917
+      },
+      {
+        "fingerprint": "4d69e9c62b53ee7b076314fa32fad9072eca332f2989acdca6aae72689815458",
+        "operation": "SELECT",
+        "model": "Alert",
+        "calls": 3005,
+        "executionMs": 497.083494,
+        "meanExecutionMs": 0.1654188,
+        "rows": 0,
+        "blocksHit": 854291,
+        "blocksRead": 0,
+        "blocksDirtied": 0,
+        "tempBlocksWritten": 0,
+        "walBytes": 8863
+      },
+      {
+        "fingerprint": "a22c42938c6453c6db8c34a0778502b1aa92db0f435cb97bc342d9d88686ba41",
+        "operation": "UPDATE",
+        "model": "Incident",
+        "calls": 718,
+        "executionMs": 256.94680700000015,
+        "meanExecutionMs": 0.3578646337047356,
+        "rows": 718,
+        "blocksHit": 14871,
+        "blocksRead": 3,
+        "blocksDirtied": 24,
+        "tempBlocksWritten": 0,
+        "walBytes": 549917
+      },
+      {
+        "fingerprint": "aea7c743b0465f2e21853d08bba720b441a7b50fee46014e4899536ee1bde2d1",
+        "operation": "SELECT",
+        "model": "Incident",
+        "calls": 1929,
+        "executionMs": 256.12576400000006,
+        "meanExecutionMs": 0.13277644582685333,
+        "rows": 1929,
+        "blocksHit": 12819,
+        "blocksRead": 101,
+        "blocksDirtied": 0,
+        "tempBlocksWritten": 0,
+        "walBytes": 3969
+      },
+      {
+        "fingerprint": "ce69de49307e7cbaa10577ed27b8fa024fab9d8c5747174dd1acb7ae40d37497",
+        "operation": "WITH",
+        "model": "BackgroundJob",
+        "calls": 280,
+        "executionMs": 228.23453600000002,
+        "meanExecutionMs": 0.8151233428571429,
+        "rows": 3008,
+        "blocksHit": 155766,
+        "blocksRead": 0,
+        "blocksDirtied": 38,
+        "tempBlocksWritten": 0,
+        "walBytes": 2396932
+      },
+      {
+        "fingerprint": "9789d52f0d240347a1c53486c835e3626e112732b17d94edcfb71b8980d6c5c8",
+        "operation": "SELECT",
+        "model": "SystemConfig",
+        "calls": 6099,
+        "executionMs": 213.5953429999995,
+        "meanExecutionMs": 0.035021371208394735,
+        "rows": 6099,
+        "blocksHit": 12198,
+        "blocksRead": 0,
+        "blocksDirtied": 0,
+        "tempBlocksWritten": 0,
+        "walBytes": 0
+      },
+      {
+        "fingerprint": "cc7c25fb247ccdb2f83d16503d37594a9bca067243cbca9e431bac6d07c71922",
+        "operation": "SELECT",
+        "model": "ServiceAutomationConfig",
+        "calls": 3002,
+        "executionMs": 150.88599000000048,
+        "meanExecutionMs": 0.05026182211858777,
+        "rows": 1,
+        "blocksHit": 9010,
+        "blocksRead": 0,
+        "blocksDirtied": 0,
+        "tempBlocksWritten": 0,
+        "walBytes": 0
+      },
+      {
+        "fingerprint": "a7d4f89e0e1cb08261528ccb83ac57480d3b2817f5ed1627dbcb99659dc0a6c7",
+        "operation": "SELECT",
+        "model": "Incident",
+        "calls": 127,
+        "executionMs": 148.20465899999996,
+        "meanExecutionMs": 1.1669658188976375,
+        "rows": 1905,
+        "blocksHit": 15134,
+        "blocksRead": 0,
+        "blocksDirtied": 0,
+        "tempBlocksWritten": 0,
+        "walBytes": 299
+      },
+      {
+        "fingerprint": "f8445f14ad5859ba10a1b0e3ae9cdd41f7f095b4d1c41b2f6264176462776641",
+        "operation": "INSERT",
+        "model": "other",
+        "calls": 1424,
+        "executionMs": 144.27813400000036,
+        "meanExecutionMs": 0.10131891432584295,
+        "rows": 1424,
+        "blocksHit": 14278,
+        "blocksRead": 0,
+        "blocksDirtied": 119,
+        "tempBlocksWritten": 0,
+        "walBytes": 1403528
+      },
+      {
+        "fingerprint": "e6f7def99f64e163e7fddd094e9c7050d99884d5184a0782977f2b930c1b53f9",
+        "operation": "SELECT",
+        "model": "Service",
+        "calls": 3006,
+        "executionMs": 129.26384799999957,
+        "meanExecutionMs": 0.04300194544244829,
+        "rows": 3006,
+        "blocksHit": 6056,
+        "blocksRead": 0,
+        "blocksDirtied": 0,
+        "tempBlocksWritten": 0,
+        "walBytes": 0
+      },
+      {
+        "fingerprint": "8328bdda18b189e1f9e4bc79a723d8fc5e03652aa48b7f7f0ab60538bea1a582",
+        "operation": "SELECT",
+        "model": "other",
+        "calls": 9015,
+        "executionMs": 123.10742100000054,
+        "meanExecutionMs": 0.013655842595673937,
+        "rows": 3005,
+        "blocksHit": 12020,
+        "blocksRead": 0,
+        "blocksDirtied": 0,
+        "tempBlocksWritten": 0,
+        "walBytes": 0
+      },
+      {
+        "fingerprint": "81869bbd3be0ac99088fc48c442a0fe51d4bf31f89f0efbcf41a2434efb88c1f",
+        "operation": "SELECT",
+        "model": "Incident",
+        "calls": 286,
+        "executionMs": 120.465654,
+        "meanExecutionMs": 0.4212085804195804,
+        "rows": 858,
+        "blocksHit": 14299,
+        "blocksRead": 63,
+        "blocksDirtied": 0,
+        "tempBlocksWritten": 0,
+        "walBytes": 993
+      },
+      {
+        "fingerprint": "5a66d52f8e6c43ae72c2068597aabbed25be3319ba015eab795bf47dd360511b",
+        "operation": "SELECT",
+        "model": "other",
+        "calls": 3005,
+        "executionMs": 118.52923499999987,
+        "meanExecutionMs": 0.03944400499168049,
+        "rows": 12020,
+        "blocksHit": 6109,
+        "blocksRead": 0,
+        "blocksDirtied": 0,
+        "tempBlocksWritten": 0,
+        "walBytes": 0
+      },
+      {
+        "fingerprint": "72825155498e71b1041c9fdbbb88e8725b35c5432125b6b1f9c69768c8837365",
+        "operation": "SELECT",
+        "model": "other",
+        "calls": 3048,
+        "executionMs": 112.16315400000013,
+        "meanExecutionMs": 0.03679893503937012,
+        "rows": 1,
+        "blocksHit": 3248,
+        "blocksRead": 0,
+        "blocksDirtied": 0,
+        "tempBlocksWritten": 0,
+        "walBytes": 0
+      },
+      {
+        "fingerprint": "3847b7d89b45adb9334417c574b6ff363735036d4fe560cdd3680f731cc64071",
+        "operation": "SELECT",
+        "model": "other",
+        "calls": 3000,
+        "executionMs": 99.20744599999993,
+        "meanExecutionMs": 0.033069148666666645,
+        "rows": 3000,
+        "blocksHit": 6000,
+        "blocksRead": 0,
+        "blocksDirtied": 0,
+        "tempBlocksWritten": 0,
+        "walBytes": 0
+      },
+      {
+        "fingerprint": "f1faad35c1aa2379070b0967eeba4730015fab88df24ec19c82fd0245c4a551a",
+        "operation": "SELECT",
+        "model": "other",
+        "calls": 3005,
+        "executionMs": 98.87350199999979,
+        "meanExecutionMs": 0.0329029956738768,
+        "rows": 6010,
+        "blocksHit": 3038,
+        "blocksRead": 0,
+        "blocksDirtied": 0,
+        "tempBlocksWritten": 0,
+        "walBytes": 0
+      }
+    ],
+    "activitySamples": 32,
+    "activitySampleErrors": 0,
+    "waits": [
+      {
+        "state": "idle",
+        "type": "Client",
+        "event": "ClientRead",
+        "summedConnections": 1409,
+        "maxConnections": 57,
+        "averageConnectionsPerSample": 44.03125
+      },
+      {
+        "state": "idle in transaction",
+        "type": "Client",
+        "event": "ClientRead",
+        "summedConnections": 368,
+        "maxConnections": 26,
+        "averageConnectionsPerSample": 11.5
+      },
+      {
+        "state": "idle in transaction",
+        "type": "CPU",
+        "event": "running",
+        "summedConnections": 22,
+        "maxConnections": 4,
+        "averageConnectionsPerSample": 0.6875
+      },
+      {
+        "state": "active",
+        "type": "Client",
+        "event": "ClientRead",
+        "summedConnections": 12,
+        "maxConnections": 2,
+        "averageConnectionsPerSample": 0.375
+      },
+      {
+        "state": "active",
+        "type": "IO",
+        "event": "WALSync",
+        "summedConnections": 15,
+        "maxConnections": 1,
+        "averageConnectionsPerSample": 0.46875
+      },
+      {
+        "state": "active",
+        "type": "LWLock",
+        "event": "WALWrite",
+        "summedConnections": 33,
+        "maxConnections": 10,
+        "averageConnectionsPerSample": 1.03125
+      },
+      {
+        "state": "active",
+        "type": "CPU",
+        "event": "running",
+        "summedConnections": 43,
+        "maxConnections": 5,
+        "averageConnectionsPerSample": 1.34375
+      },
+      {
+        "state": "idle",
+        "type": "IO",
+        "event": "WALSync",
+        "summedConnections": 1,
+        "maxConnections": 1,
+        "averageConnectionsPerSample": 0.03125
+      },
+      {
+        "state": "idle",
+        "type": "LWLock",
+        "event": "WALWrite",
+        "summedConnections": 2,
+        "maxConnections": 2,
+        "averageConnectionsPerSample": 0.0625
+      },
+      {
+        "state": "idle",
+        "type": "CPU",
+        "event": "running",
+        "summedConnections": 8,
+        "maxConnections": 3,
+        "averageConnectionsPerSample": 0.25
+      },
+      {
+        "state": "active",
+        "type": "Lock",
+        "event": "transactionid",
+        "summedConnections": 6,
+        "maxConnections": 3,
+        "averageConnectionsPerSample": 0.1875
+      },
+      {
+        "state": "idle in transaction",
+        "type": "IO",
+        "event": "WALSync",
+        "summedConnections": 1,
+        "maxConnections": 1,
+        "averageConnectionsPerSample": 0.03125
+      },
+      {
+        "state": "idle in transaction",
+        "type": "LWLock",
+        "event": "WALWrite",
+        "summedConnections": 1,
+        "maxConnections": 1,
+        "averageConnectionsPerSample": 0.03125
+      },
+      {
+        "state": "active",
+        "type": "IO",
+        "event": "DataFileExtend",
+        "summedConnections": 1,
+        "maxConnections": 1,
+        "averageConnectionsPerSample": 0.03125
+      }
+    ]
+  },
+  "fixtureServiceId": "cmvliw0dd000053v6a8gxyq32",
+  "atAdmissionEnd": {
+    "completed": 2816,
+    "pending": 184,
+    "oldestPendingAgeMs": 2291.137
+  },
+  "endToEndLatency": {
+    "maxMs": 5302,
+    "p50Ms": 236,
+    "p95Ms": 2403.1999999999994,
+    "p99Ms": 2606.0099999999998
+  },
+  "completionLatencyLimitMs": 2000,
+  "completionLatencyPassed": false,
+  "admissionThresholdsPassed": false,
+  "targetRps": 100,
+  "workload": "many-key",
+  "payloadBytes": 10000,
+  "payloadPattern": "random",
+  "duration": "30s",
+  "loadExit": 99,
+  "acknowledged": 3000,
+  "accepted": 3000,
+  "completed": 3000,
+  "alerts": 3000,
+  "incidents": 3000,
+  "pending": 0,
+  "ambiguousSubmissions": 0,
+  "oldestPendingAgeMs": 0,
+  "ingressMs": 30619.471208,
+  "completedMs": 32724.647167,
+  "acceptedPerSecond": 97.97687163245932,
+  "completedPerSecondIncludingDrain": 91.67402125652994,
+  "reconciled": true,
+  "metrics": {
+    "http_req_waiting": {
+      "max": 457.729,
+      "p(90)": 164.21250000000003,
+      "p(95)": 254.0494,
+      "avg": 70.31089433333327,
+      "min": 14.81,
+      "med": 41.159499999999994
+    },
+    "vus_max": {
+      "value": 100,
+      "min": 100,
+      "max": 100
+    },
+    "dropped_iterations": {
+      "count": 0,
+      "rate": 0,
+      "thresholds": {
+        "count==0": false
+      }
+    },
+    "ingestion_acceptance_success": {
+      "passes": 3000,
+      "fails": 0,
+      "thresholds": {
+        "rate>=0.999": false
+      },
+      "value": 1
+    },
+    "iterations": {
+      "count": 3000,
+      "rate": 99.9387908219146
+    },
+    "http_req_failed": {
+      "passes": 0,
+      "fails": 3000,
+      "value": 0
+    },
+    "http_req_tls_handshaking": {
+      "p(95)": 0,
+      "avg": 0,
+      "min": 0,
+      "med": 0,
+      "max": 0,
+      "p(90)": 0
+    },
+    "http_req_receiving": {
+      "avg": 0.06473833333333295,
+      "min": 0.018,
+      "med": 0.063,
+      "max": 1.976,
+      "p(90)": 0.08,
+      "p(95)": 0.094
+    },
+    "http_req_duration{expected_response:true}": {
+      "min": 14.947,
+      "med": 41.3915,
+      "max": 457.87,
+      "p(90)": 164.34890000000004,
+      "p(95)": 254.13975,
+      "avg": 70.44904899999979
+    },
+    "http_reqs": {
+      "count": 3000,
+      "rate": 99.9387908219146
+    },
+    "http_req_blocked": {
+      "max": 1.187,
+      "p(90)": 0.007,
+      "p(95)": 0.01,
+      "avg": 0.014391000000000476,
+      "min": 0.003,
+      "med": 0.006
+    },
+    "vus": {
+      "value": 4,
+      "min": 2,
+      "max": 30
+    },
+    "data_received": {
+      "count": 3963441,
+      "rate": 132033.833678
+    },
+    "data_sent": {
+      "count": 31434516,
+      "rate": 1047175.8397040425
+    },
+    "ingestion_durable_accepted": {
+      "count": 3000,
+      "rate": 99.9387908219146
+    },
+    "checks": {
+      "fails": 0,
+      "passes": 3000,
+      "value": 1
+    },
+    "http_req_sending": {
+      "avg": 0.07341633333333335,
+      "min": 0.034,
+      "med": 0.069,
+      "max": 2.928,
+      "p(90)": 0.096,
+      "p(95)": 0.111
+    },
+    "iteration_duration": {
+      "max": 458.231541,
+      "p(90)": 164.74492890000005,
+      "p(95)": 254.48762079999997,
+      "avg": 70.83981053866657,
+      "min": 15.377791,
+      "med": 41.7559165
+    },
+    "http_req_duration": {
+      "p(95)": 254.13975,
+      "avg": 70.44904899999979,
+      "min": 14.947,
+      "med": 41.3915,
+      "max": 457.87,
+      "p(90)": 164.34890000000004,
+      "thresholds": {
+        "p(95)<100": true
+      }
+    },
+    "http_req_connecting": {
+      "p(90)": 0,
+      "p(95)": 0,
+      "avg": 0.006614666666666667,
+      "min": 0,
+      "med": 0,
+      "max": 0.633
+    }
+  },
+  "passed": false,
+  "certifiedEnterprise": false
+}

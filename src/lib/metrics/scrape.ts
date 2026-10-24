@@ -1,3 +1,4 @@
+import { resolveIngestionMode } from '@/lib/ingestion/mode';
 import prisma from '@/lib/prisma';
 import { collectIngestionQueueMetrics } from '@/lib/ingestion/metrics';
 import { collectProviderFeedbackMetrics } from '@/lib/provider-feedback-metrics';
@@ -280,7 +281,7 @@ async function collectMetricsCached(): Promise<MetricsSnapshot> {
         FROM "BackgroundJob" WHERE type = 'SCHEDULED_TASK' AND status IN ('PENDING', 'PROCESSING')
       `
       ),
-      process.env.OPSKNIGHT_INGESTION_MODE === 'postgres'
+      resolveIngestionMode(process.env.OPSKNIGHT_INGESTION_MODE) === 'postgres'
         ? collectWithTimeout('ingestion', DB_COLLECTOR_TIMEOUT_MS, collectIngestionQueueMetrics)
         : Promise.resolve([]),
       collectWithTimeout('incident-collaboration-metrics', DB_COLLECTOR_TIMEOUT_MS, async () => {
@@ -428,7 +429,7 @@ async function getMetrics(req: Request) {
   const metrics = new OperationalMetricSnapshot();
   metrics.set(
     'opsknight_ingestion_enabled',
-    Number(process.env.OPSKNIGHT_INGESTION_MODE === 'postgres')
+    Number(resolveIngestionMode(process.env.OPSKNIGHT_INGESTION_MODE) === 'postgres')
   );
   metrics.set(
     'opsknight_ingestion_metrics_collection_success',
