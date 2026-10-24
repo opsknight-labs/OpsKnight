@@ -1,4 +1,4 @@
-import { reserveIngestionBudget } from '@/lib/ingestion/budget';
+import { reserveIngestionBudget, reserveIngestionBudgets } from '@/lib/ingestion/budget';
 import { getMaintenanceClient, disconnectMaintenanceClient } from '@/lib/maintenance/database';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { randomUUID, createHash } from 'node:crypto';
@@ -2075,6 +2075,27 @@ describe('PostgreSQL ingestion durability', () => {
       IngestionConflictError
     );
     expect(await prisma.ingestionReceipt.count()).toBe(1);
+  });
+
+  it('spreads a commit group across its reserved budget shards instead of concentrating completion locks', async () => {
+    const { policy } = await getIngestionPolicy();
+    const shards = await prisma.$transaction(tx =>
+      reserveIngestionBudgets(
+        tx,
+        policy,
+        Array.from({ length: 32 }, () => ({ payloadBytes: 100, critical: true, preferredShard: 0 }))
+      )
+    );
+    const counts = new Map<number, number>();
+    for (const shard of shards) {
+      expect(shard).toBeDefined();
+      counts.set(shard!, (counts.get(shard!) ?? 0) + 1);
+    }
+    expect(counts.size).toBe(8);
+    expect([...counts.values()]).toEqual(Array(8).fill(4));
+    const rows = await prisma.ingestionBudget.findMany({ where: { pending: { gt: 0 } } });
+    expect(rows).toHaveLength(8);
+    expect(rows.every(row => row.pending === 4 && row.bytes === BigInt(400))).toBe(true);
   });
 
   it('group commits independent requests and isolates conflicting delivery errors', async () => {

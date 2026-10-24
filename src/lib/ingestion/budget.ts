@@ -83,8 +83,9 @@ export async function reserveIngestionBudgets(
         )
         .sort(
           (a, b) =>
+            a.count - b.count ||
             ((a.shard - input.preferredShard + 64) % 64) -
-            ((b.shard - input.preferredShard + 64) % 64)
+              ((b.shard - input.preferredShard + 64) % 64)
         )[0];
       if (candidate) {
         candidate.count++;
@@ -104,7 +105,7 @@ export async function reserveIngestionBudgets(
     const rows = await tx.$queryRaw<Array<{ shard: number; pending: number; bytes: bigint }>>`
       SELECT "shard", "pending", "bytes" FROM "IngestionBudget"
       WHERE ${eligible} ORDER BY ("shard" - ${remaining[0].preferredShard} + 64) % 64
-      FOR UPDATE SKIP LOCKED LIMIT 8
+      FOR UPDATE SKIP LOCKED LIMIT ${Math.min(8, remaining.length)}
     `;
     for (const row of rows) held.set(row.shard, { ...row, count: 0, addedBytes: 0 });
     if (rows.length) continue;
