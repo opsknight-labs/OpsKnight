@@ -1,0 +1,318 @@
+{
+  "scope": "Diagnostic CPU sampling includes preflight/warmup and 10-second 1000-RPS offered load, uses database with prior retained history and profiling overhead. Not capacity certification.",
+  "sourceRevision": "716cebae7",
+  "profiles": [
+    {
+      "role": "web",
+      "sampledMs": 19297.01,
+      "topFrames": [
+        {
+          "function": "(idle)",
+          "url": "",
+          "line": -1,
+          "percent": 43.4389
+        },
+        {
+          "function": "(garbage collector)",
+          "url": "",
+          "line": -1,
+          "percent": 6.1315
+        },
+        {
+          "function": "custom_gc",
+          "url": "",
+          "line": -1,
+          "percent": 2.7558
+        },
+        {
+          "function": "(program)",
+          "url": "",
+          "line": -1,
+          "percent": 2.0612
+        },
+        {
+          "function": "_propagate",
+          "url": "node:async_hooks",
+          "line": 318,
+          "percent": 1.3913
+        },
+        {
+          "function": "runMicrotasks",
+          "url": "",
+          "line": -1,
+          "percent": 0.7842
+        },
+        {
+          "function": "parse",
+          "url": "",
+          "line": -1,
+          "percent": 0.6982
+        },
+        {
+          "function": "p",
+          "url": "file:///app/.next/server/chunks/26267.js",
+          "line": 12,
+          "percent": 0.6701
+        },
+        {
+          "function": "makeTransferable",
+          "url": "node:internal/worker/js_transferable",
+          "line": 41,
+          "percent": 0.6347
+        },
+        {
+          "function": "promiseInitHook",
+          "url": "node:internal/async_hooks",
+          "line": 319,
+          "percent": 0.5957
+        },
+        {
+          "function": "_parse",
+          "url": "file:///app/.next/server/chunks/86848.js",
+          "line": 0,
+          "percent": 0.5897
+        },
+        {
+          "function": "eos",
+          "url": "node:internal/streams/end-of-stream",
+          "line": 54,
+          "percent": 0.5381
+        },
+        {
+          "function": "URL",
+          "url": "node:internal/url",
+          "line": 792,
+          "percent": 0.4916
+        },
+        {
+          "function": "aa",
+          "url": "file:///app/node_modules/@prisma/client/runtime/library.js",
+          "line": 28,
+          "percent": 0.46
+        },
+        {
+          "function": "handleRoute",
+          "url": "file:///app/node_modules/next/dist/server/lib/router-utils/resolve-routes.js",
+          "line": 224,
+          "percent": 0.4357
+        },
+        {
+          "function": "o",
+          "url": "file:///app/.next/server/chunks/26267.js",
+          "line": 12,
+          "percent": 0.4156
+        },
+        {
+          "function": "flow",
+          "url": "node:internal/streams/readable",
+          "line": 1279,
+          "percent": 0.4141
+        },
+        {
+          "function": "promiseRejectHandler",
+          "url": "node:internal/process/promises",
+          "line": 180,
+          "percent": 0.399
+        },
+        {
+          "function": "",
+          "url": "file:///app/.next/server/src/middleware.js",
+          "line": 8,
+          "percent": 0.3868
+        },
+        {
+          "function": "request",
+          "url": "file:///app/node_modules/@prisma/client/runtime/library.js",
+          "line": 111,
+          "percent": 0.3566
+        },
+        {
+          "function": "",
+          "url": "file:///app/node_modules/next/dist/compiled/next-server/app-route.runtime.prod.js",
+          "line": 0,
+          "percent": 0.3548
+        },
+        {
+          "function": "get",
+          "url": "file:///app/node_modules/next/dist/compiled/next-server/app-route.runtime.prod.js",
+          "line": 0,
+          "percent": 0.3388
+        },
+        {
+          "function": "",
+          "url": "file:///app/.next/server/chunks/69921.js",
+          "line": 3,
+          "percent": 0.3323
+        },
+        {
+          "function": "l",
+          "url": "file:///app/.next/server/chunks/45592.js",
+          "line": 0,
+          "percent": 0.3148
+        },
+        {
+          "function": "v",
+          "url": "file:///app/.next/server/chunks/92970.js",
+          "line": 269,
+          "percent": 0.3148
+        }
+      ]
+    },
+    {
+      "role": "ingestion-worker",
+      "sampledMs": 18937.86,
+      "topFrames": [
+        {
+          "function": "(idle)",
+          "url": "",
+          "line": -1,
+          "percent": 75.636
+        },
+        {
+          "function": "custom_gc",
+          "url": "",
+          "line": -1,
+          "percent": 5.2513
+        },
+        {
+          "function": "(program)",
+          "url": "",
+          "line": -1,
+          "percent": 2.5253
+        },
+        {
+          "function": "(garbage collector)",
+          "url": "",
+          "line": -1,
+          "percent": 2.3862
+        },
+        {
+          "function": "",
+          "url": "file:///app/node_modules/@prisma/client/runtime/library.js",
+          "line": 30,
+          "percent": 1.3444
+        },
+        {
+          "function": "parseEngineResponse",
+          "url": "file:///app/node_modules/@prisma/client/runtime/library.js",
+          "line": 111,
+          "percent": 0.8683
+        },
+        {
+          "function": "request",
+          "url": "file:///app/node_modules/@prisma/client/runtime/library.js",
+          "line": 111,
+          "percent": 0.8575
+        },
+        {
+          "function": "get",
+          "url": "file:///app/node_modules/@prisma/client/runtime/library.js",
+          "line": 28,
+          "percent": 0.6861
+        },
+        {
+          "function": "_propagate",
+          "url": "node:async_hooks",
+          "line": 318,
+          "percent": 0.5737
+        },
+        {
+          "function": "request",
+          "url": "file:///app/node_modules/@prisma/client/runtime/library.js",
+          "line": 120,
+          "percent": 0.5415
+        },
+        {
+          "function": "nestArgument",
+          "url": "file:///app/node_modules/@prisma/client/runtime/library.js",
+          "line": 28,
+          "percent": 0.5203
+        },
+        {
+          "function": "singleLoader",
+          "url": "file:///app/node_modules/@prisma/client/runtime/library.js",
+          "line": 120,
+          "percent": 0.2612
+        },
+        {
+          "function": "ah",
+          "url": "file:///app/.next/server/chunks/94278.js",
+          "line": 188,
+          "percent": 0.2558
+        },
+        {
+          "function": "_request",
+          "url": "file:///app/node_modules/@prisma/client/runtime/library.js",
+          "line": 129,
+          "percent": 0.2536
+        },
+        {
+          "function": "q",
+          "url": "file:///app/.next/server/chunks/94278.js",
+          "line": 188,
+          "percent": 0.2432
+        },
+        {
+          "function": "$queryRawInternal",
+          "url": "file:///app/node_modules/@prisma/client/runtime/library.js",
+          "line": 129,
+          "percent": 0.2115
+        },
+        {
+          "function": "Date1",
+          "url": "file:///app/node_modules/next/dist/server/node-environment-extensions/date.js",
+          "line": 29,
+          "percent": 0.2031
+        },
+        {
+          "function": "dispatchBatches",
+          "url": "file:///app/node_modules/@prisma/client/runtime/library.js",
+          "line": 120,
+          "percent": 0.1958
+        },
+        {
+          "function": "l",
+          "url": "file:///app/node_modules/@prisma/client/runtime/library.js",
+          "line": 129,
+          "percent": 0.1859
+        },
+        {
+          "function": "aa",
+          "url": "file:///app/node_modules/@prisma/client/runtime/library.js",
+          "line": 28,
+          "percent": 0.1754
+        },
+        {
+          "function": "Ld",
+          "url": "file:///app/node_modules/@prisma/client/runtime/library.js",
+          "line": 30,
+          "percent": 0.1704
+        },
+        {
+          "function": "isEmpty",
+          "url": "node:internal/fixed_queue",
+          "line": 67,
+          "percent": 0.1673
+        },
+        {
+          "function": "lookupPublicResource",
+          "url": "node:internal/async_hooks",
+          "line": 176,
+          "percent": 0.1669
+        },
+        {
+          "function": "Te",
+          "url": "file:///app/node_modules/@prisma/client/runtime/library.js",
+          "line": 28,
+          "percent": 0.1573
+        },
+        {
+          "function": "",
+          "url": "file:///app/node_modules/@prisma/client/runtime/library.js",
+          "line": 111,
+          "percent": 0.1527
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,378 @@
+{
+  "recordedAt": "2026-10-24T07:12:54.099Z",
+  "scope": "Production claim SQL with unique-key synthetic backlog, 10% critical; fixture rows and claims rolled back atomically. No concurrent workers or durability/capacity certification.",
+  "queryFingerprint": "daa19f5af0a6b45095307221b1e2bb46784e0cc130cf4f530eed4458be5e5d87",
+  "retainedHistory": 6740,
+  "installedSequenceIndex": {
+    "valid": true,
+    "ready": true
+  },
+  "experimentalSequenceIndex": false,
+  "backlog": 10000,
+  "analyzedSyntheticBacklog": true,
+  "claimed": 4,
+  "executionMs": 17.81,
+  "planningMs": 1.524,
+  "plan": {
+    "node": "ModifyTable",
+    "relation": "IngestionReceipt",
+    "actualRows": 4,
+    "estimatedRows": 2,
+    "totalCost": 94861.84,
+    "loops": 1,
+    "sharedHit": 52121,
+    "sharedRead": 792,
+    "children": [
+      {
+        "node": "Limit",
+        "actualRows": 1,
+        "estimatedRows": 1,
+        "totalCost": 379.95,
+        "loops": 1,
+        "sharedHit": 12437,
+        "sharedRead": 757,
+        "children": [
+          {
+            "node": "LockRows",
+            "actualRows": 1,
+            "estimatedRows": 1155,
+            "totalCost": 438509.19,
+            "loops": 1,
+            "sharedHit": 12437,
+            "sharedRead": 757,
+            "children": [
+              {
+                "node": "Index Scan",
+                "relation": "IngestionReceipt",
+                "index": "IngestionReceipt_critical_head_idx",
+                "actualRows": 1,
+                "estimatedRows": 1155,
+                "totalCost": 438497.64,
+                "loops": 1,
+                "rowsRemoved": 0,
+                "indexCondition": "(critical = true)",
+                "filter": "((((status = 'PENDING'::text) AND (\"availableAt\" <= CURRENT_TIMESTAMP)) OR ((status = 'PROCESSING'::text) AND (\"leaseExpiresAt\" <= CURRENT_TIMESTAMP))) AND (NOT (SubPlan 1)) AND (NOT (SubPlan 2)))",
+                "sharedHit": 12436,
+                "sharedRead": 757,
+                "children": [
+                  {
+                    "node": "Index Scan",
+                    "relation": "IngestionReceipt",
+                    "index": "IngestionReceipt_sequence_key",
+                    "actualRows": 0,
+                    "estimatedRows": 33,
+                    "totalCost": 1038.02,
+                    "loops": 1,
+                    "rowsRemoved": 6749,
+                    "indexCondition": "(sequence < r_1.sequence)",
+                    "filter": "((\"orderingKeys\" && r_1.\"orderingKeys\") AND (status <> ALL ('{COMPLETED,ARCHIVED}'::text[])))",
+                    "sharedHit": 5841,
+                    "sharedRead": 754
+                  },
+                  {
+                    "node": "Index Scan",
+                    "relation": "IngestionReceipt",
+                    "index": "IngestionReceipt_sequence_key",
+                    "actualRows": 0,
+                    "estimatedRows": 17,
+                    "totalCost": 1051.97,
+                    "loops": 1,
+                    "rowsRemoved": 6749,
+                    "indexCondition": "(sequence < r_1.sequence)",
+                    "filter": "((status <> ALL ('{COMPLETED,ARCHIVED}'::text[])) AND (\"orderingKeys\" @> ARRAY[('unidentified:'::text || r_1.\"serviceId\")]))",
+                    "sharedHit": 6595,
+                    "sharedRead": 0
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "node": "Limit",
+        "actualRows": 1,
+        "estimatedRows": 1,
+        "totalCost": 379.29,
+        "loops": 1,
+        "sharedHit": 13183,
+        "sharedRead": 1,
+        "children": [
+          {
+            "node": "LockRows",
+            "actualRows": 1,
+            "estimatedRows": 1345,
+            "totalCost": 509761.21,
+            "loops": 1,
+            "sharedHit": 13183,
+            "sharedRead": 1,
+            "children": [
+              {
+                "node": "Index Scan",
+                "relation": "IngestionReceipt",
+                "index": "IngestionReceipt_critical_head_idx",
+                "actualRows": 1,
+                "estimatedRows": 1345,
+                "totalCost": 509747.76,
+                "loops": 1,
+                "rowsRemoved": 0,
+                "indexCondition": "(critical = false)",
+                "filter": "((((status = 'PENDING'::text) AND (\"availableAt\" <= CURRENT_TIMESTAMP)) OR ((status = 'PROCESSING'::text) AND (\"leaseExpiresAt\" <= CURRENT_TIMESTAMP))) AND (NOT (SubPlan 4)) AND (NOT (SubPlan 5)))",
+                "sharedHit": 13182,
+                "sharedRead": 1,
+                "children": [
+                  {
+                    "node": "Index Scan",
+                    "relation": "IngestionReceipt",
+                    "index": "IngestionReceipt_sequence_key",
+                    "actualRows": 0,
+                    "estimatedRows": 33,
+                    "totalCost": 1038.02,
+                    "loops": 1,
+                    "rowsRemoved": 6740,
+                    "indexCondition": "(sequence < r_2.sequence)",
+                    "filter": "((\"orderingKeys\" && r_2.\"orderingKeys\") AND (status <> ALL ('{COMPLETED,ARCHIVED}'::text[])))",
+                    "sharedHit": 6590,
+                    "sharedRead": 0
+                  },
+                  {
+                    "node": "Index Scan",
+                    "relation": "IngestionReceipt",
+                    "index": "IngestionReceipt_sequence_key",
+                    "actualRows": 0,
+                    "estimatedRows": 17,
+                    "totalCost": 1051.97,
+                    "loops": 1,
+                    "rowsRemoved": 6740,
+                    "indexCondition": "(sequence < r_2.sequence)",
+                    "filter": "((status <> ALL ('{COMPLETED,ARCHIVED}'::text[])) AND (\"orderingKeys\" @> ARRAY[('unidentified:'::text || r_2.\"serviceId\")]))",
+                    "sharedHit": 6590,
+                    "sharedRead": 0
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "node": "Limit",
+        "actualRows": 2,
+        "estimatedRows": 125,
+        "totalCost": 94068.56,
+        "loops": 1,
+        "sharedHit": 26380,
+        "sharedRead": 0,
+        "children": [
+          {
+            "node": "Aggregate",
+            "actualRows": 1,
+            "estimatedRows": 1,
+            "totalCost": 0.03,
+            "loops": 1,
+            "sharedHit": 0,
+            "sharedRead": 0,
+            "children": [
+              {
+                "node": "CTE Scan",
+                "actualRows": 1,
+                "estimatedRows": 1,
+                "totalCost": 0.02,
+                "loops": 1,
+                "sharedHit": 0,
+                "sharedRead": 0
+              }
+            ]
+          },
+          {
+            "node": "Aggregate",
+            "actualRows": 1,
+            "estimatedRows": 1,
+            "totalCost": 0.03,
+            "loops": 1,
+            "sharedHit": 0,
+            "sharedRead": 0,
+            "children": [
+              {
+                "node": "CTE Scan",
+                "actualRows": 1,
+                "estimatedRows": 1,
+                "totalCost": 0.02,
+                "loops": 1,
+                "sharedHit": 0,
+                "sharedRead": 0
+              }
+            ]
+          },
+          {
+            "node": "LockRows",
+            "actualRows": 2,
+            "estimatedRows": 1250,
+            "totalCost": 940681.94,
+            "loops": 1,
+            "sharedHit": 26380,
+            "sharedRead": 0,
+            "children": [
+              {
+                "node": "Index Scan",
+                "relation": "IngestionReceipt",
+                "index": "IngestionReceipt_claim_sequence_idx",
+                "actualRows": 2,
+                "estimatedRows": 1250,
+                "totalCost": 940669.44,
+                "loops": 1,
+                "rowsRemoved": 1,
+                "filter": "((NOT (hashed SubPlan 9)) AND (((status = 'PENDING'::text) AND (\"availableAt\" <= CURRENT_TIMESTAMP)) OR ((status = 'PROCESSING'::text) AND (\"leaseExpiresAt\" <= CURRENT_TIMESTAMP))) AND (NOT (SubPlan 7)) AND (NOT (SubPlan 8)))",
+                "sharedHit": 26378,
+                "sharedRead": 0,
+                "children": [
+                  {
+                    "node": "Append",
+                    "actualRows": 2,
+                    "estimatedRows": 2,
+                    "totalCost": 0.05,
+                    "loops": 1,
+                    "sharedHit": 0,
+                    "sharedRead": 0,
+                    "children": [
+                      {
+                        "node": "CTE Scan",
+                        "actualRows": 1,
+                        "estimatedRows": 1,
+                        "totalCost": 0.02,
+                        "loops": 1,
+                        "sharedHit": 0,
+                        "sharedRead": 0
+                      },
+                      {
+                        "node": "CTE Scan",
+                        "actualRows": 1,
+                        "estimatedRows": 1,
+                        "totalCost": 0.02,
+                        "loops": 1,
+                        "sharedHit": 0,
+                        "sharedRead": 0
+                      }
+                    ]
+                  },
+                  {
+                    "node": "Index Scan",
+                    "relation": "IngestionReceipt",
+                    "index": "IngestionReceipt_sequence_key",
+                    "actualRows": 0,
+                    "estimatedRows": 33,
+                    "totalCost": 1038.02,
+                    "loops": 2,
+                    "rowsRemoved": 6742,
+                    "indexCondition": "(sequence < r_3.sequence)",
+                    "filter": "((\"orderingKeys\" && r_3.\"orderingKeys\") AND (status <> ALL ('{COMPLETED,ARCHIVED}'::text[])))",
+                    "sharedHit": 13186,
+                    "sharedRead": 0
+                  },
+                  {
+                    "node": "Index Scan",
+                    "relation": "IngestionReceipt",
+                    "index": "IngestionReceipt_sequence_key",
+                    "actualRows": 0,
+                    "estimatedRows": 17,
+                    "totalCost": 1051.97,
+                    "loops": 2,
+                    "rowsRemoved": 6742,
+                    "indexCondition": "(sequence < r_3.sequence)",
+                    "filter": "((status <> ALL ('{COMPLETED,ARCHIVED}'::text[])) AND (\"orderingKeys\" @> ARRAY[('unidentified:'::text || r_3.\"serviceId\")]))",
+                    "sharedHit": 13186,
+                    "sharedRead": 0
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "node": "Limit",
+        "actualRows": 4,
+        "estimatedRows": 4,
+        "totalCost": 0.1,
+        "loops": 1,
+        "sharedHit": 52000,
+        "sharedRead": 758,
+        "children": [
+          {
+            "node": "Append",
+            "actualRows": 4,
+            "estimatedRows": 127,
+            "totalCost": 3.18,
+            "loops": 1,
+            "sharedHit": 52000,
+            "sharedRead": 758,
+            "children": [
+              {
+                "node": "CTE Scan",
+                "actualRows": 1,
+                "estimatedRows": 1,
+                "totalCost": 0.02,
+                "loops": 1,
+                "sharedHit": 12437,
+                "sharedRead": 757
+              },
+              {
+                "node": "CTE Scan",
+                "actualRows": 1,
+                "estimatedRows": 1,
+                "totalCost": 0.02,
+                "loops": 1,
+                "sharedHit": 13183,
+                "sharedRead": 1
+              },
+              {
+                "node": "CTE Scan",
+                "actualRows": 2,
+                "estimatedRows": 125,
+                "totalCost": 2.5,
+                "loops": 1,
+                "sharedHit": 26380,
+                "sharedRead": 0
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "node": "Nested Loop",
+        "actualRows": 4,
+        "estimatedRows": 2,
+        "totalCost": 33.94,
+        "loops": 1,
+        "joinType": "Inner",
+        "sharedHit": 52011,
+        "sharedRead": 763,
+        "children": [
+          {
+            "node": "CTE Scan",
+            "actualRows": 4,
+            "estimatedRows": 4,
+            "totalCost": 0.08,
+            "loops": 1,
+            "sharedHit": 52000,
+            "sharedRead": 758
+          },
+          {
+            "node": "Index Scan",
+            "relation": "IngestionReceipt",
+            "index": "IngestionReceipt_pkey",
+            "actualRows": 1,
+            "estimatedRows": 1,
+            "totalCost": 8.45,
+            "loops": 4,
+            "rowsRemoved": 0,
+            "indexCondition": "(id = candidates.id)",
+            "filter": "(((status = 'PENDING'::text) AND (\"availableAt\" <= CURRENT_TIMESTAMP)) OR ((status = 'PROCESSING'::text) AND (\"leaseExpiresAt\" <= CURRENT_TIMESTAMP)))",
+            "sharedHit": 11,
+            "sharedRead": 5
+          }
+        ]
+      }
+    ]
+  }
+}

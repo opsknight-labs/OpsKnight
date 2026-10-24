@@ -1,0 +1,522 @@
+{
+  "recordedAt": "2026-10-24T12:49:29.058Z",
+  "scope": "Production claim SQL with unique-key synthetic backlog, 10% critical; fixture rows and claims rolled back atomically. No concurrent workers or durability/capacity certification.",
+  "queryFingerprint": "3cb52c71cbdae3304c17701ec3ff27f39b8228e1c67aa1339fc275c63e943cc5",
+  "retainedHistory": 0,
+  "syntheticCompletedHistory": 100000,
+  "installedSequenceIndex": {
+    "valid": true,
+    "ready": true
+  },
+  "experimentalSequenceIndex": false,
+  "backlog": 10000,
+  "analyzedSyntheticBacklog": true,
+  "experimentalDirectGin": false,
+  "jit": "off",
+  "claimed": 4,
+  "executionMs": 1.603,
+  "planningMs": 1.808,
+  "plan": {
+    "node": "ModifyTable",
+    "relation": "IngestionReceipt",
+    "actualRows": 4,
+    "estimatedRows": 1,
+    "totalCost": 170.18,
+    "loops": 1,
+    "sharedHit": 235,
+    "sharedRead": 0,
+    "children": [
+      {
+        "node": "Limit",
+        "actualRows": 4,
+        "estimatedRows": 4,
+        "totalCost": 74.33,
+        "loops": 1,
+        "sharedHit": 37,
+        "sharedRead": 0,
+        "children": [
+          {
+            "node": "Nested Loop",
+            "actualRows": 4,
+            "estimatedRows": 1000,
+            "totalCost": 18304.81,
+            "loops": 1,
+            "joinType": "Inner",
+            "sharedHit": 37,
+            "sharedRead": 0,
+            "children": [
+              {
+                "node": "Index Scan",
+                "relation": "IngestionOrderingHead",
+                "index": "IngestionOrderingHead_eligible_idx",
+                "actualRows": 4,
+                "estimatedRows": 1000,
+                "totalCost": 1379.81,
+                "loops": 1,
+                "indexCondition": "(\"headCritical\" = true)",
+                "sharedHit": 5,
+                "sharedRead": 0
+              },
+              {
+                "node": "Subquery Scan",
+                "actualRows": 1,
+                "estimatedRows": 1,
+                "totalCost": 16.92,
+                "loops": 4,
+                "sharedHit": 32,
+                "sharedRead": 0,
+                "children": [
+                  {
+                    "node": "Limit",
+                    "actualRows": 1,
+                    "estimatedRows": 1,
+                    "totalCost": 16.91,
+                    "loops": 4,
+                    "sharedHit": 32,
+                    "sharedRead": 0,
+                    "children": [
+                      {
+                        "node": "LockRows",
+                        "actualRows": 1,
+                        "estimatedRows": 1,
+                        "totalCost": 16.91,
+                        "loops": 4,
+                        "sharedHit": 32,
+                        "sharedRead": 0,
+                        "children": [
+                          {
+                            "node": "Nested Loop",
+                            "actualRows": 1,
+                            "estimatedRows": 1,
+                            "totalCost": 16.89,
+                            "loops": 4,
+                            "joinType": "Anti",
+                            "sharedHit": 28,
+                            "sharedRead": 0,
+                            "children": [
+                              {
+                                "node": "Index Scan",
+                                "relation": "IngestionReceipt",
+                                "index": "IngestionReceipt_pkey",
+                                "actualRows": 1,
+                                "estimatedRows": 1,
+                                "totalCost": 8.45,
+                                "loops": 4,
+                                "rowsRemoved": 0,
+                                "indexCondition": "(id = h.\"headId\")",
+                                "filter": "(critical AND (\"orderingWaitCount\" = 0) AND (((status = 'PENDING'::text) AND (\"availableAt\" <= CURRENT_TIMESTAMP)) OR ((status = 'PROCESSING'::text) AND (\"leaseExpiresAt\" <= CURRENT_TIMESTAMP))))",
+                                "sharedHit": 16,
+                                "sharedRead": 0
+                              },
+                              {
+                                "node": "Index Scan",
+                                "relation": "IngestionOrderingHead",
+                                "index": "IngestionOrderingHead_pkey",
+                                "actualRows": 0,
+                                "estimatedRows": 1,
+                                "totalCost": 8.43,
+                                "loops": 4,
+                                "rowsRemoved": 0,
+                                "indexCondition": "(identity = ('unidentified:'::text || r_1.\"serviceId\"))",
+                                "filter": "(\"headSequence\" < r_1.sequence)",
+                                "sharedHit": 12,
+                                "sharedRead": 0
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "node": "Limit",
+        "actualRows": 4,
+        "estimatedRows": 4,
+        "totalCost": 69.71,
+        "loops": 1,
+        "sharedHit": 35,
+        "sharedRead": 0,
+        "children": [
+          {
+            "node": "Nested Loop",
+            "actualRows": 4,
+            "estimatedRows": 9000,
+            "totalCost": 154335.22,
+            "loops": 1,
+            "joinType": "Inner",
+            "sharedHit": 35,
+            "sharedRead": 0,
+            "children": [
+              {
+                "node": "Index Scan",
+                "relation": "IngestionOrderingHead",
+                "index": "IngestionOrderingHead_eligible_idx",
+                "actualRows": 4,
+                "estimatedRows": 9000,
+                "totalCost": 2010.22,
+                "loops": 1,
+                "indexCondition": "(\"headCritical\" = false)",
+                "sharedHit": 3,
+                "sharedRead": 0
+              },
+              {
+                "node": "Subquery Scan",
+                "actualRows": 1,
+                "estimatedRows": 1,
+                "totalCost": 16.92,
+                "loops": 4,
+                "sharedHit": 32,
+                "sharedRead": 0,
+                "children": [
+                  {
+                    "node": "Limit",
+                    "actualRows": 1,
+                    "estimatedRows": 1,
+                    "totalCost": 16.91,
+                    "loops": 4,
+                    "sharedHit": 32,
+                    "sharedRead": 0,
+                    "children": [
+                      {
+                        "node": "LockRows",
+                        "actualRows": 1,
+                        "estimatedRows": 1,
+                        "totalCost": 16.91,
+                        "loops": 4,
+                        "sharedHit": 32,
+                        "sharedRead": 0,
+                        "children": [
+                          {
+                            "node": "Nested Loop",
+                            "actualRows": 1,
+                            "estimatedRows": 1,
+                            "totalCost": 16.89,
+                            "loops": 4,
+                            "joinType": "Anti",
+                            "sharedHit": 28,
+                            "sharedRead": 0,
+                            "children": [
+                              {
+                                "node": "Index Scan",
+                                "relation": "IngestionReceipt",
+                                "index": "IngestionReceipt_pkey",
+                                "actualRows": 1,
+                                "estimatedRows": 1,
+                                "totalCost": 8.45,
+                                "loops": 4,
+                                "rowsRemoved": 0,
+                                "indexCondition": "(id = h_1.\"headId\")",
+                                "filter": "((NOT critical) AND (\"orderingWaitCount\" = 0) AND (((status = 'PENDING'::text) AND (\"availableAt\" <= CURRENT_TIMESTAMP)) OR ((status = 'PROCESSING'::text) AND (\"leaseExpiresAt\" <= CURRENT_TIMESTAMP))))",
+                                "sharedHit": 16,
+                                "sharedRead": 0
+                              },
+                              {
+                                "node": "Index Scan",
+                                "relation": "IngestionOrderingHead",
+                                "index": "IngestionOrderingHead_pkey",
+                                "actualRows": 0,
+                                "estimatedRows": 1,
+                                "totalCost": 8.43,
+                                "loops": 4,
+                                "rowsRemoved": 0,
+                                "indexCondition": "(identity = ('unidentified:'::text || r_2.\"serviceId\"))",
+                                "filter": "(\"headSequence\" < r_2.sequence)",
+                                "sharedHit": 12,
+                                "sharedRead": 0
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "node": "Limit",
+        "actualRows": 1,
+        "estimatedRows": 1,
+        "totalCost": 0.1,
+        "loops": 1,
+        "sharedHit": 37,
+        "sharedRead": 0,
+        "children": [
+          {
+            "node": "Sort",
+            "actualRows": 1,
+            "estimatedRows": 4,
+            "totalCost": 0.11,
+            "loops": 1,
+            "sharedHit": 37,
+            "sharedRead": 0,
+            "children": [
+              {
+                "node": "CTE Scan",
+                "actualRows": 4,
+                "estimatedRows": 4,
+                "totalCost": 0.08,
+                "loops": 1,
+                "sharedHit": 37,
+                "sharedRead": 0
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "node": "Limit",
+        "actualRows": 1,
+        "estimatedRows": 1,
+        "totalCost": 0.1,
+        "loops": 1,
+        "sharedHit": 35,
+        "sharedRead": 0,
+        "children": [
+          {
+            "node": "Sort",
+            "actualRows": 1,
+            "estimatedRows": 4,
+            "totalCost": 0.11,
+            "loops": 1,
+            "sharedHit": 35,
+            "sharedRead": 0,
+            "children": [
+              {
+                "node": "CTE Scan",
+                "actualRows": 4,
+                "estimatedRows": 4,
+                "totalCost": 0.08,
+                "loops": 1,
+                "sharedHit": 35,
+                "sharedRead": 0
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "node": "Limit",
+        "actualRows": 4,
+        "estimatedRows": 3,
+        "totalCost": 0.48,
+        "loops": 1,
+        "sharedHit": 72,
+        "sharedRead": 0,
+        "children": [
+          {
+            "node": "Append",
+            "actualRows": 4,
+            "estimatedRows": 3,
+            "totalCost": 0.48,
+            "loops": 1,
+            "sharedHit": 72,
+            "sharedRead": 0,
+            "children": [
+              {
+                "node": "CTE Scan",
+                "actualRows": 1,
+                "estimatedRows": 1,
+                "totalCost": 0.02,
+                "loops": 1,
+                "sharedHit": 37,
+                "sharedRead": 0
+              },
+              {
+                "node": "CTE Scan",
+                "actualRows": 1,
+                "estimatedRows": 1,
+                "totalCost": 0.02,
+                "loops": 1,
+                "sharedHit": 35,
+                "sharedRead": 0
+              },
+              {
+                "node": "Subquery Scan",
+                "actualRows": 2,
+                "estimatedRows": 1,
+                "totalCost": 0.43,
+                "loops": 1,
+                "sharedHit": 0,
+                "sharedRead": 0,
+                "children": [
+                  {
+                    "node": "Limit",
+                    "actualRows": 2,
+                    "estimatedRows": 1,
+                    "totalCost": 0.42,
+                    "loops": 1,
+                    "sharedHit": 0,
+                    "sharedRead": 0,
+                    "children": [
+                      {
+                        "node": "Aggregate",
+                        "actualRows": 1,
+                        "estimatedRows": 1,
+                        "totalCost": 0.03,
+                        "loops": 1,
+                        "sharedHit": 0,
+                        "sharedRead": 0,
+                        "children": [
+                          {
+                            "node": "CTE Scan",
+                            "actualRows": 1,
+                            "estimatedRows": 1,
+                            "totalCost": 0.02,
+                            "loops": 1,
+                            "sharedHit": 0,
+                            "sharedRead": 0
+                          }
+                        ]
+                      },
+                      {
+                        "node": "Aggregate",
+                        "actualRows": 1,
+                        "estimatedRows": 1,
+                        "totalCost": 0.03,
+                        "loops": 1,
+                        "sharedHit": 0,
+                        "sharedRead": 0,
+                        "children": [
+                          {
+                            "node": "CTE Scan",
+                            "actualRows": 1,
+                            "estimatedRows": 1,
+                            "totalCost": 0.02,
+                            "loops": 1,
+                            "sharedHit": 0,
+                            "sharedRead": 0
+                          }
+                        ]
+                      },
+                      {
+                        "node": "Sort",
+                        "actualRows": 2,
+                        "estimatedRows": 4,
+                        "totalCost": 0.36,
+                        "loops": 1,
+                        "sharedHit": 0,
+                        "sharedRead": 0,
+                        "children": [
+                          {
+                            "node": "Append",
+                            "actualRows": 6,
+                            "estimatedRows": 4,
+                            "totalCost": 0.31,
+                            "loops": 1,
+                            "sharedHit": 0,
+                            "sharedRead": 0,
+                            "children": [
+                              {
+                                "node": "CTE Scan",
+                                "actualRows": 3,
+                                "estimatedRows": 2,
+                                "totalCost": 0.14,
+                                "loops": 1,
+                                "rowsRemoved": 1,
+                                "filter": "(NOT (hashed SubPlan 5))",
+                                "sharedHit": 0,
+                                "sharedRead": 0,
+                                "children": [
+                                  {
+                                    "node": "Append",
+                                    "actualRows": 2,
+                                    "estimatedRows": 2,
+                                    "totalCost": 0.05,
+                                    "loops": 2,
+                                    "sharedHit": 0,
+                                    "sharedRead": 0,
+                                    "children": [
+                                      {
+                                        "node": "CTE Scan",
+                                        "actualRows": 1,
+                                        "estimatedRows": 1,
+                                        "totalCost": 0.02,
+                                        "loops": 2,
+                                        "sharedHit": 0,
+                                        "sharedRead": 0
+                                      },
+                                      {
+                                        "node": "CTE Scan",
+                                        "actualRows": 1,
+                                        "estimatedRows": 1,
+                                        "totalCost": 0.02,
+                                        "loops": 2,
+                                        "sharedHit": 0,
+                                        "sharedRead": 0
+                                      }
+                                    ]
+                                  }
+                                ]
+                              },
+                              {
+                                "node": "CTE Scan",
+                                "actualRows": 3,
+                                "estimatedRows": 2,
+                                "totalCost": 0.14,
+                                "loops": 1,
+                                "rowsRemoved": 1,
+                                "filter": "(NOT (hashed SubPlan 5))",
+                                "sharedHit": 0,
+                                "sharedRead": 0,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "node": "Nested Loop",
+        "actualRows": 4,
+        "estimatedRows": 1,
+        "totalCost": 25.46,
+        "loops": 1,
+        "joinType": "Inner",
+        "sharedHit": 88,
+        "sharedRead": 0,
+        "children": [
+          {
+            "node": "CTE Scan",
+            "actualRows": 4,
+            "estimatedRows": 3,
+            "totalCost": 0.06,
+            "loops": 1,
+            "sharedHit": 72,
+            "sharedRead": 0
+          },
+          {
+            "node": "Index Scan",
+            "relation": "IngestionReceipt",
+            "index": "IngestionReceipt_pkey",
+            "actualRows": 1,
+            "estimatedRows": 1,
+            "totalCost": 8.45,
+            "loops": 4,
+            "rowsRemoved": 0,
+            "indexCondition": "(id = candidates.id)",
+            "filter": "((\"orderingWaitCount\" = 0) AND (((status = 'PENDING'::text) AND (\"availableAt\" <= CURRENT_TIMESTAMP)) OR ((status = 'PROCESSING'::text) AND (\"leaseExpiresAt\" <= CURRENT_TIMESTAMP))))",
+            "sharedHit": 16,
+            "sharedRead": 0
+          }
+        ]
+      }
+    ]
+  }
+}

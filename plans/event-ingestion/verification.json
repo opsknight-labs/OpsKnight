@@ -54,7 +54,7 @@
     "history partitioning, archival and sustained cleanup capacity",
     "actual Agent execution and complete escalation lifecycle during ingestion storms",
     "PgBouncer disruption, replicated PostgreSQL failover and restore",
-    "rolling-image rollout/rollback and final browser/CI certification",
+    "maintenance-window image replacement/rollback and final browser/CI certification",
     "Swarm and Kubernetes ingestion HA certification",
     "sustained 1000/5000/10000 RPS and 25000 RPS burst certification",
     "24-hour soak"
@@ -776,8 +776,8 @@
     "freshNativeImage": "Pending; native b9 evidence predates schema-construction-only optimization"
   },
   "localEnvironmentRestored": {
-    "kindControlPlaneRunning": true,
-    "ownedCertificationContainersRemaining": 0
+    "kindControlPlaneRunning": false,
+    "ownedCertificationContainersRemaining": "Measurement in progress; restore after run"
   },
   "consumerFaultIsolationFollowup": {
     "recordedAt": "2026-10-24",
@@ -961,5 +961,510 @@
       "topologyEvidence": "local-docker-topology-auto-refill-ceiling-1000.json",
       "capacityCertified": false
     }
+  },
+  "boundedGroupCommitFollowup": {
+    "recordedAt": "2026-10-24",
+    "sourceRevision": "13152fa2c83fed0136b921fb79beb1a802a77aaa",
+    "databaseContractTestsPassed": 70,
+    "focusedQueueQuotaGateHealthTestsPassed": 14,
+    "additionalRealDatabaseAutomationDedupOutboxTestsPassed": 20,
+    "typeCheck": "passed; completed exit0",
+    "modifiedSourceLint": "passed; explicit no-ignore; zero warnings; completed exit0",
+    "independentReviews": "No concrete issue from read-only Bugbot and Security Review substitutes; not branded bot certification",
+    "architecture": {
+      "commitWindowMs": 2,
+      "maximumEventsPerGroup": 32,
+      "maximumPayloadBytesPerGroup": 4194304,
+      "maximumConcurrentCommitGroupsPerProcess": 2,
+      "maximumOutstandingCallersPerProcess": 256,
+      "maximumRetainedEnvelopeBytesPerProcess": 33554432,
+      "mutablePolicyCached": false,
+      "acknowledgementBeforeCommit": false,
+      "databasePoolLimitsIncreased": false,
+      "providerBatchAtomicityRetained": true
+    },
+    "regressions": [
+      "Independent conflicting delivery does not fail valid siblings",
+      "Partial independent admissions honor exact remaining capacity",
+      "Injected receipt insert failure rolls back all reservations and grants no acknowledgement",
+      "Pending count includes in-flight callers; retained bytes release after failures",
+      "Shared provider batches preserve their all-or-nothing transaction"
+    ],
+    "nativeImageAndCapacity": "Pending; no 1000 RPS claim",
+    "native1000Rps30s": {
+      "passed": false,
+      "image": {
+        "nodeVersion": "v20.20.2",
+        "id": "sha256:0858e4daee76c822e80212da3fffdd562262709de3f17156306c1cb9055ba709",
+        "revision": "13152fa2c",
+        "proxyImageId": "sha256:0985e772fb9f729e6fa0980da05fca5d9c468e870eed43071545afa9d2e27d94"
+      },
+      "archiveSha256": "0e67a5adb9aa92b242e89b9b983f5720a08236be57b109d8182e7153d7265f2f",
+      "accepted": 6526,
+      "completed": 6526,
+      "pending": 0,
+      "ambiguousSubmissions": 0,
+      "explicitCapacityRejections": 23407,
+      "droppedArrivals": 67,
+      "observedAcceptedPerSecond": 212.8557701361536,
+      "httpP95Ms": 325.7098,
+      "completionP95Ms": 57288.75,
+      "atAdmissionEnd": {
+        "completed": 890,
+        "pending": 5636,
+        "oldestPendingAgeMs": 24878.663
+      },
+      "workerMetricsPassed": true,
+      "cleanupFailures": [],
+      "httpEvidence": "local-docker-http-group-commit-1000.json",
+      "topologyEvidence": "local-docker-topology-group-commit-1000.json",
+      "capacityCertified": false
+    }
+  },
+  "indexedClaimFollowup": {
+    "sourceRevision": "741e24a6f",
+    "databaseContractTestsPassed": 70,
+    "additionalRealDatabaseAutomationDedupOutboxTestsPassed": 20,
+    "focusedDatasourceQueueHealthTestsPassed": 12,
+    "typeCheck": "passed; completed exit0",
+    "modifiedSourceLint": "passed; completed exit0; zero warnings",
+    "independentReview": "Bugbot substitute found pooled jit startup regression; fixed direct-only defaults and shared pooler handling, re-review found no remaining concrete finding. Security substitute found no concrete issue. Native pooled check pending.",
+    "finalSynthetic10000Backlog": {
+      "executionMs": 0.716,
+      "evidence": "local-claim-group-production-10000.json",
+      "scope": "Four claims; unique synthetic keys and 10% critical; analyzed synthetic statistics; receipt inserts and claims rolled back. Excludes concurrent workers, HTTP, Automation and delivery."
+    },
+    "diagnosticScope": "Intermediate files preserve rejected query shapes and isolated factors. Different analysis/index/JIT settings are recorded; do not interpret all cross-file timings as an isolated controlled query-only speedup.",
+    "changes": [
+      "Materialized indexed predecessor overlap includes unidentified service marker",
+      "Materialized bounded candidate IDs and final lease/status recheck",
+      "Existing ordering GIN uses direct updates and maintenance-window pending-list flush",
+      "Default direct Prisma connections disable JIT; supported PgBouncer modes retain compatible startup parameters; explicit options preserved",
+      "Shared integration-test reset restores migration-owned 64 budget rows"
+    ],
+    "nativeImageAndCapacity": "Native direct workers and pooled web startup/routing/metrics passed; both 1000 RPS runs failed. No capacity certification.",
+    "nativeRuns": [
+      {
+        "image": {
+          "nodeVersion": "v20.20.2",
+          "id": "sha256:5c974c1be343f2778c86fbee5387cd2ab267046a2cd32ad8b8ba3b1bad64d6b3",
+          "revision": "741e24a6f",
+          "proxyImageId": "sha256:0985e772fb9f729e6fa0980da05fca5d9c468e870eed43071545afa9d2e27d94"
+        },
+        "workers": 4,
+        "passed": false,
+        "accepted": 5053,
+        "completed": 5053,
+        "pending": 0,
+        "ambiguousSubmissions": 0,
+        "explicitCapacityRejections": 24876,
+        "droppedArrivals": 72,
+        "httpP95Ms": 405.2967999999999,
+        "completionP95Ms": 8812,
+        "observedAcceptedPerSecond": 163.96563439550596,
+        "atAdmissionEnd": {
+          "completed": 3760,
+          "pending": 1293,
+          "oldestPendingAgeMs": 7378.631
+        },
+        "poolerRouting": {
+          "observedServerConnections": 6,
+          "directWebConnections": 0,
+          "directWorkerConnections": 20,
+          "verifiedThrough": "PostgreSQL client addresses matched to owned container IPs"
+        },
+        "connectionBudget": {
+          "mode": "split",
+          "pgbouncer": true,
+          "webConnections": 20,
+          "directWorkerConnections": 43,
+          "totalDemand": 78,
+          "connectionReserve": 15,
+          "maxConnections": 100,
+          "safe": true,
+          "headroom": 22,
+          "breakdown": {
+            "ingestionWorker": {
+              "replicas": 4,
+              "pool": 5,
+              "total": 20
+            },
+            "web": {
+              "replicas": 2,
+              "pool": 10,
+              "effective": 20
+            },
+            "pgbouncer": {
+              "replicas": 1,
+              "defaultPool": 15,
+              "reserve": 5
+            },
+            "scheduler": {
+              "replicas": 1,
+              "pool": 2,
+              "total": 3,
+              "artifactMaintenanceConnections": 1
+            },
+            "generalWorker": {
+              "replicas": 1,
+              "pool": 5,
+              "total": 5
+            },
+            "criticalWorker": {
+              "replicas": 1,
+              "pool": 5,
+              "total": 5
+            },
+            "bulkWorker": {
+              "replicas": 1,
+              "pool": 3,
+              "total": 3
+            },
+            "runbookWorker": {
+              "replicas": 1,
+              "pool": 5,
+              "total": 5
+            },
+            "statusProjector": {
+              "replicas": 1,
+              "pool": 2,
+              "total": 2
+            }
+          }
+        },
+        "workerMetricsPassed": true,
+        "cleanupFailures": [],
+        "httpEvidence": "local-docker-http-indexed-claim-pool-1000.json",
+        "topologyEvidence": "local-docker-topology-indexed-claim-pool-1000.json"
+      },
+      {
+        "image": {
+          "nodeVersion": "v20.20.2",
+          "id": "sha256:5c974c1be343f2778c86fbee5387cd2ab267046a2cd32ad8b8ba3b1bad64d6b3",
+          "revision": "741e24a6f",
+          "proxyImageId": "sha256:0985e772fb9f729e6fa0980da05fca5d9c468e870eed43071545afa9d2e27d94"
+        },
+        "workers": 8,
+        "passed": false,
+        "accepted": 1157,
+        "completed": 1157,
+        "pending": 0,
+        "ambiguousSubmissions": 0,
+        "explicitCapacityRejections": 25833,
+        "droppedArrivals": 3011,
+        "httpP95Ms": 482.92214999999993,
+        "completionP95Ms": 3090.9999999999977,
+        "observedAcceptedPerSecond": 36.936533451951675,
+        "atAdmissionEnd": {
+          "completed": 1124,
+          "pending": 33,
+          "oldestPendingAgeMs": 709.729
+        },
+        "poolerRouting": {
+          "observedServerConnections": 7,
+          "directWebConnections": 0,
+          "directWorkerConnections": 40,
+          "verifiedThrough": "PostgreSQL client addresses matched to owned container IPs"
+        },
+        "connectionBudget": {
+          "mode": "split",
+          "pgbouncer": true,
+          "webConnections": 20,
+          "directWorkerConnections": 63,
+          "totalDemand": 98,
+          "connectionReserve": 15,
+          "maxConnections": 100,
+          "safe": true,
+          "headroom": 2,
+          "breakdown": {
+            "ingestionWorker": {
+              "replicas": 8,
+              "pool": 5,
+              "total": 40
+            },
+            "web": {
+              "replicas": 2,
+              "pool": 10,
+              "effective": 20
+            },
+            "pgbouncer": {
+              "replicas": 1,
+              "defaultPool": 15,
+              "reserve": 5
+            },
+            "scheduler": {
+              "replicas": 1,
+              "pool": 2,
+              "total": 3,
+              "artifactMaintenanceConnections": 1
+            },
+            "generalWorker": {
+              "replicas": 1,
+              "pool": 5,
+              "total": 5
+            },
+            "criticalWorker": {
+              "replicas": 1,
+              "pool": 5,
+              "total": 5
+            },
+            "bulkWorker": {
+              "replicas": 1,
+              "pool": 3,
+              "total": 3
+            },
+            "runbookWorker": {
+              "replicas": 1,
+              "pool": 5,
+              "total": 5
+            },
+            "statusProjector": {
+              "replicas": 1,
+              "pool": 2,
+              "total": 2
+            }
+          }
+        },
+        "workerMetricsPassed": true,
+        "cleanupFailures": [],
+        "httpEvidence": "local-docker-http-indexed-claim-scale-1000.json",
+        "topologyEvidence": "local-docker-topology-indexed-claim-scale-1000.json"
+      }
+    ]
+  },
+  "budgetReservationSpreadFollowup": {
+    "sourceRevision": "7cc6bf600",
+    "databaseContractTestsPassed": 71,
+    "typeCheck": "passed; completed exit0",
+    "modifiedSourceLint": "passed; zero warnings; completed exit0",
+    "regression": "32 same-preference requests previously allocated one shard; regression failed before and passed after balanced allocation across eight shards, four each.",
+    "changes": [
+      "Locks at most min(8, remaining requests) new shards per scan",
+      "Balances assigned count within each commit group before preferred-shard distance"
+    ],
+    "independentReview": "Read-only Bugbot substitute found no new actionable issue",
+    "nativeImageAndCapacity": {
+      "passed": false,
+      "acceptedCompleted": 1503,
+      "explicitCapacityRejections": 27135,
+      "droppedArrivals": 1363,
+      "observedAcceptancePerSecond": 47.9654,
+      "ambiguousSubmissions": 0,
+      "finalBacklog": 0,
+      "httpEvidence": "local-docker-http-spread-budget-1000.json",
+      "topologyEvidence": "local-docker-topology-spread-budget-1000.json"
+    }
+  },
+  "publishedPolicyReaderFollowup": {
+    "sourceRevision": "716cebae7",
+    "imageId": "sha256:515256b1195c297a495070b28457845b860ff26a1b8f348f65fa285e49e816d2",
+    "archiveSha256": "b8d623ebce80e8c6f2bacc6c521f9f3f28d15bffda865f16cb2bd8612c7e29e4",
+    "productionImageBuild": "passed",
+    "completeUnitSuite": {
+      "filesPassed": 947,
+      "passed": 9972,
+      "skipped": 4,
+      "failed": 0
+    },
+    "databaseContractTestsPassed": 71,
+    "additionalPolicyApiDatabaseTestsPassed": 13,
+    "typeCheck": "passed",
+    "modifiedSourceLint": "passed; zero warnings",
+    "independentReview": "Read-only bug/security substitutes found no concrete issue; not branded bot certification",
+    "changes": [
+      "Shared fixed parameterized SQL readers select latest sealed classification, SLA and support policies plus children in one statement per family",
+      "Scope precedence and support exception date hydration preserved; no mutable publication cache",
+      "Database diagnostic includes WAL write/sync timing when enabled"
+    ],
+    "nativeCapacity": {
+      "passed": false,
+      "acceptedCompleted": 2044,
+      "observedAcceptancePerSecond": 66.0950712199655,
+      "explicitCapacityRejections": 27503,
+      "droppedArrivals": 453,
+      "ambiguousSubmissions": 0,
+      "finalBacklog": 0,
+      "endToEndP95Ms": 5074.85,
+      "httpP95Ms": 721.3325999999997,
+      "httpEvidence": "local-docker-http-policy-snapshot-1000.json",
+      "topologyEvidence": "local-docker-topology-policy-snapshot-1000.json",
+      "walSyncs": 5096,
+      "clusterWalSyncTimeMs": 21703.939,
+      "cleanupFailures": []
+    }
+  },
+  "linkedAlertInsertFollowup": {
+    "sourceRevision": "92e890ff7",
+    "databaseContractTestsPassed": 71,
+    "lifecycleAutomationDatabaseTestsPassed": 17,
+    "finalAlertRegressionTestsPassed": 2,
+    "focusedUnitTestsPassed": 107,
+    "typeCheck": "passed",
+    "modifiedSourceLint": "passed; zero warnings",
+    "regressions": [
+      "Four normal lifecycle inputs previously issued four Alert updates; now four inserts and zero updates with every Alert linked",
+      "Injected Alert CHECK failure rolls back the new Incident and Alert"
+    ],
+    "change": "Create Alerts with their final Incident link within the existing fenced transaction; buffered out-of-order resolves keep their existing attachment update",
+    "nativeImage": {
+      "revision": "3099971e6",
+      "imageId": "sha256:97b5ae4aa6c9aecbd5677049c5712fe7652e4984e530b2f0cf7341021d7741f1",
+      "archiveSha256": "e88728115a63926d64af043e5ae27ae4255eb9dccf6ea058375febe95b4d13f2",
+      "build": "passed",
+      "startupAttempt": "First attempt failed before load after PostgreSQL OOM during packaging; DB and SCIM DB restarted; failed artifact retained"
+    },
+    "review": "Independent substitute follow-up unavailable: workspace credit exhaustion; no new review pass claimed",
+    "native100Rps": {
+      "passed": false,
+      "acceptedCompleted": 2581,
+      "observedAcceptancePerSecond": 84.39931569208801,
+      "explicitRejections": 397,
+      "droppedArrivals": 23,
+      "httpP95Ms": 993.5788499999993,
+      "completionP95Ms": 1216,
+      "finalBacklog": 0,
+      "ambiguousSubmissions": 0,
+      "chaos": [
+        {
+          "action": "SIGKILL failed",
+          "error": "Crash fixture was not durably accepted\n\n503 !== 202\n"
+        }
+      ],
+      "smtpDelivery": {
+        "receiptId": "a7f01438-2e5b-4df8-9b1e-36aa53b3f3d7",
+        "incidentId": "cmvmbozln01gou0dby2nyt2il",
+        "notificationId": "notification_5ab5db0cd6eb992916adb2acbecb590",
+        "smtpCaptured": true,
+        "durableDeliveryRecorded": true,
+        "captureObservedMs": 1577,
+        "startedDuringLoad": true,
+        "capturedDuringLoad": true,
+        "provider": "smtp",
+        "pinnedAutomationVerified": true,
+        "sourceSeverity": "warning",
+        "finalPriority": "P1",
+        "scope": "Real application workers and SMTP transport to owned local capture only; no Internet delivery or remote mailbox certification"
+      },
+      "cleanupFailures": [],
+      "httpEvidence": "local-docker-http-linked-alert-smtp-crash-100.json",
+      "topologyEvidence": "local-docker-topology-linked-alert-smtp-crash-100.json"
+    },
+    "native1000Rps": {
+      "passed": false,
+      "acceptedCompleted": 1966,
+      "observedAcceptancePerSecond": 61.49562585773457,
+      "explicitRejections": 27695,
+      "droppedArrivals": 340,
+      "httpP95Ms": 676.802,
+      "completionP95Ms": 3963.5,
+      "finalBacklog": 0,
+      "ambiguousSubmissions": 0,
+      "chaos": [],
+      "smtpDelivery": null,
+      "cleanupFailures": [],
+      "httpEvidence": "local-docker-http-linked-alert-1000.json",
+      "topologyEvidence": "local-docker-topology-linked-alert-1000.json",
+      "resourceInterference": {
+        "externalBuild": "opsknight-api-v2-cert",
+        "externalBuildStarted": "2026-10-24 17:08:38 Asia/Kolkata",
+        "overlapConfirmed": true,
+        "conclusion": "Measured failure on a contended VM; not an isolated capacity comparison or causal source-regression proof"
+      }
+    }
+  },
+  "browserPolicyBoundaryFollowup": {
+    "sourceRevision": "5196ae7af",
+    "trigger": "CI40076098320 crashed Incidents navigation in all three browsers: eager Prisma.sql construction reached client through SLA metrics helper",
+    "fix": [
+      "Move pure captured-contract validation to browser-safe module while preserving server contract reexports",
+      "Point shared SLA metrics at pure validator",
+      "Mark published policy reader server-only to make future client imports build errors"
+    ],
+    "regression": "New unit test with unavailable Prisma runtime fails before and passes after fix",
+    "focusedUnitTestsPassed": 57,
+    "additionalPolicyAndAlertDatabaseTestsPassed": 4,
+    "typeCheck": "passed",
+    "modifiedSourceLint": "passed; zero warnings",
+    "nativeBuildBrowserAndCapacity": "3099971e6 native build and three browser tests passed; both capacity gates failed",
+    "followup": {
+      "sourceRevision": "3099971e6",
+      "buildGuardFinding": "5196ae7af build rejected another browser path through incident-sla/state.ts and useIncidentSlaState",
+      "fix": "Point pure SLA state projector at captured-contract validator and test browser import with Prisma runtime unavailable",
+      "focusedClockMetricsTestsPassed": 95,
+      "typeCheck": "passed after narrowing test state",
+      "modifiedSourceLint": "passed; zero warnings",
+      "nativeBuild": "passed; see linkedAlertInsertFollowup"
+    },
+    "nativeBrowser": {
+      "sourceRevision": "3099971e6",
+      "imageId": "sha256:97b5ae4aa6c9aecbd5677049c5712fe7652e4984e530b2f0cf7341021d7741f1",
+      "test": "Global history, Incidents navigation, authentication redirects",
+      "passed": 3,
+      "browsers": [
+        "Chromium",
+        "Firefox",
+        "WebKit"
+      ],
+      "durationSeconds": 56.2,
+      "ownedBrowserContainerCleanedUp": true
+    }
+  },
+  "productionDependencyAudit": {
+    "evidence": "local-production-dependency-audit.json",
+    "critical": 0,
+    "high": 1,
+    "moderate": 2,
+    "resolved": false,
+    "independentReviewFollowup": "Unavailable due workspace credit exhaustion"
+  },
+  "identityFrontierFollowup": {
+    "sourceRevision": "pending source commit after 3099971e6",
+    "certified": false,
+    "implementation": [
+      "Transactional head/tail and indexed membership chains for unfinished ordering identities",
+      "All-identity predecessor counter with eligible-primary-head index and lateral receipt probes",
+      "Row triggers for older-client inserts, completion/archive, key repair and replay",
+      "Maintenance-window unfinished backfill with installation-schema-bound function lookup",
+      "New-incident nested Alert/timeline writes within existing atomic engine transaction",
+      "Existing low-memory build profile limits Next.js page workers to one"
+    ],
+    "checks": {
+      "unitFilesPassed": 948,
+      "unitTestsPassed": 9974,
+      "unitTestsSkipped": 4,
+      "initialConcurrentIntegration": "27 passed, one database-reset setup hook timeout",
+      "serialIntegrationPassed": 29,
+      "serialIntegrationFiles": 7,
+      "frontierDatabaseTests": 10,
+      "typeCheck": "passed",
+      "modifiedSourceLint": "passed; zero warnings",
+      "freshMigrationCount": 335,
+      "migrationScannerErrors": 0,
+      "migrationScannerWarnings": 52,
+      "newMigrationWarnings": 1,
+      "newMigrationWarningReason": "Runtime DELETE of derived metadata; no receipt-history deployment deletion",
+      "customSchemaBackfillAndTemporaryShadowing": "passed",
+      "coreIngestionDatabaseAndContract": 71
+    },
+    "queryDiagnostic": {
+      "evidence": "local-claim-frontier-history-100000.json",
+      "unfinished": 10000,
+      "completedHistory": 100000,
+      "claimed": 4,
+      "executionMs": 1.603,
+      "scope": "Rollback-only SQL fixture, excludes end-to-end application work",
+      "rejectedBroadJoinExecutionMs": 28.775
+    },
+    "nativeImageAndCapacity": "pending",
+    "remaining": [
+      "250/500/1000 RPS full-stack retests",
+      "1000 accepted and completed per second for 60 minutes",
+      "Maintenance-window image replacement and rollback",
+      "Adaptive consumer capacity and dedicated gateway if profiling supports them",
+      "Optional replicated transport if PostgreSQL admission remains limiting",
+      "Service fairness and poison-load bounds",
+      "Partitioning, archival, downstream and HA fault certification",
+      "Production dependency advisory remediation and fresh independent reviews"
+    ]
   }
 }

@@ -1,0 +1,410 @@
+{
+  "recordedAt": "2026-10-24T07:14:54.413Z",
+  "scope": "Production claim SQL with unique-key synthetic backlog, 10% critical; fixture rows and claims rolled back atomically. No concurrent workers or durability/capacity certification.",
+  "queryFingerprint": "0cd9ab7d76843a45b1f46991be64f592fb7b9eb7dd8f5d73d391711ad433e6b8",
+  "retainedHistory": 6740,
+  "installedSequenceIndex": {
+    "valid": true,
+    "ready": true
+  },
+  "experimentalSequenceIndex": false,
+  "backlog": 10000,
+  "analyzedSyntheticBacklog": true,
+  "experimentalDirectGin": false,
+  "jit": "off",
+  "claimed": 4,
+  "executionMs": 6.767,
+  "planningMs": 1.153,
+  "plan": {
+    "node": "ModifyTable",
+    "relation": "IngestionReceipt",
+    "actualRows": 4,
+    "estimatedRows": 2,
+    "totalCost": 646065.61,
+    "loops": 1,
+    "sharedHit": 1140,
+    "sharedRead": 933,
+    "children": [
+      {
+        "node": "Limit",
+        "actualRows": 1,
+        "estimatedRows": 1,
+        "totalCost": 1289.76,
+        "loops": 1,
+        "sharedHit": 158,
+        "sharedRead": 490,
+        "children": [
+          {
+            "node": "LockRows",
+            "actualRows": 1,
+            "estimatedRows": 2310,
+            "totalCost": 2978689,
+            "loops": 1,
+            "sharedHit": 158,
+            "sharedRead": 490,
+            "children": [
+              {
+                "node": "Index Scan",
+                "relation": "IngestionReceipt",
+                "index": "IngestionReceipt_critical_head_idx",
+                "actualRows": 1,
+                "estimatedRows": 2310,
+                "totalCost": 2978665.9,
+                "loops": 1,
+                "rowsRemoved": 0,
+                "indexCondition": "(critical = true)",
+                "filter": "((((status = 'PENDING'::text) AND (\"availableAt\" <= CURRENT_TIMESTAMP)) OR ((status = 'PROCESSING'::text) AND (\"leaseExpiresAt\" <= CURRENT_TIMESTAMP))) AND (NOT (SubPlan 2)))",
+                "sharedHit": 157,
+                "sharedRead": 490,
+                "children": [
+                  {
+                    "node": "CTE Scan",
+                    "actualRows": 0,
+                    "estimatedRows": 33,
+                    "totalCost": 645.44,
+                    "loops": 1,
+                    "rowsRemoved": 1,
+                    "filter": "(sequence < r_1.sequence)",
+                    "sharedHit": 76,
+                    "sharedRead": 5,
+                    "children": [
+                      {
+                        "node": "Bitmap Heap Scan",
+                        "relation": "IngestionReceipt",
+                        "actualRows": 1,
+                        "estimatedRows": 100,
+                        "totalCost": 643.19,
+                        "loops": 1,
+                        "rowsRemoved": 0,
+                        "filter": "(status <> ALL ('{COMPLETED,ARCHIVED}'::text[]))",
+                        "sharedHit": 76,
+                        "sharedRead": 5,
+                        "children": [
+                          {
+                            "node": "Bitmap Index Scan",
+                            "index": "IngestionReceipt_unfinished_ordering_keys_idx",
+                            "actualRows": 1,
+                            "estimatedRows": 100,
+                            "totalCost": 327.64,
+                            "loops": 1,
+                            "indexCondition": "(\"orderingKeys\" && array_append(r_1.\"orderingKeys\", ('unidentified:'::text || r_1.\"serviceId\")))",
+                            "sharedHit": 75,
+                            "sharedRead": 5
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "node": "Limit",
+        "actualRows": 1,
+        "estimatedRows": 1,
+        "totalCost": 1288.9,
+        "loops": 1,
+        "sharedHit": 669,
+        "sharedRead": 407,
+        "children": [
+          {
+            "node": "LockRows",
+            "actualRows": 1,
+            "estimatedRows": 2690,
+            "totalCost": 3466381.48,
+            "loops": 1,
+            "sharedHit": 669,
+            "sharedRead": 407,
+            "children": [
+              {
+                "node": "Index Scan",
+                "relation": "IngestionReceipt",
+                "index": "IngestionReceipt_critical_head_idx",
+                "actualRows": 1,
+                "estimatedRows": 2690,
+                "totalCost": 3466354.58,
+                "loops": 1,
+                "rowsRemoved": 0,
+                "indexCondition": "(critical = false)",
+                "filter": "((((status = 'PENDING'::text) AND (\"availableAt\" <= CURRENT_TIMESTAMP)) OR ((status = 'PROCESSING'::text) AND (\"leaseExpiresAt\" <= CURRENT_TIMESTAMP))) AND (NOT (SubPlan 5)))",
+                "sharedHit": 668,
+                "sharedRead": 407,
+                "children": [
+                  {
+                    "node": "CTE Scan",
+                    "actualRows": 0,
+                    "estimatedRows": 33,
+                    "totalCost": 645.44,
+                    "loops": 1,
+                    "rowsRemoved": 1,
+                    "filter": "(sequence < r_2.sequence)",
+                    "sharedHit": 81,
+                    "sharedRead": 0,
+                    "children": [
+                      {
+                        "node": "Bitmap Heap Scan",
+                        "relation": "IngestionReceipt",
+                        "actualRows": 1,
+                        "estimatedRows": 100,
+                        "totalCost": 643.19,
+                        "loops": 1,
+                        "rowsRemoved": 0,
+                        "filter": "(status <> ALL ('{COMPLETED,ARCHIVED}'::text[]))",
+                        "sharedHit": 81,
+                        "sharedRead": 0,
+                        "children": [
+                          {
+                            "node": "Bitmap Index Scan",
+                            "index": "IngestionReceipt_unfinished_ordering_keys_idx",
+                            "actualRows": 1,
+                            "estimatedRows": 100,
+                            "totalCost": 327.64,
+                            "loops": 1,
+                            "indexCondition": "(\"orderingKeys\" && array_append(r_2.\"orderingKeys\", ('unidentified:'::text || r_2.\"serviceId\")))",
+                            "sharedHit": 80,
+                            "sharedRead": 0
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "node": "Limit",
+        "actualRows": 2,
+        "estimatedRows": 250,
+        "totalCost": 643452.9,
+        "loops": 1,
+        "sharedHit": 170,
+        "sharedRead": 26,
+        "children": [
+          {
+            "node": "Aggregate",
+            "actualRows": 1,
+            "estimatedRows": 1,
+            "totalCost": 0.03,
+            "loops": 1,
+            "sharedHit": 0,
+            "sharedRead": 0,
+            "children": [
+              {
+                "node": "CTE Scan",
+                "actualRows": 1,
+                "estimatedRows": 1,
+                "totalCost": 0.02,
+                "loops": 1,
+                "sharedHit": 0,
+                "sharedRead": 0
+              }
+            ]
+          },
+          {
+            "node": "Aggregate",
+            "actualRows": 1,
+            "estimatedRows": 1,
+            "totalCost": 0.03,
+            "loops": 1,
+            "sharedHit": 0,
+            "sharedRead": 0,
+            "children": [
+              {
+                "node": "CTE Scan",
+                "actualRows": 1,
+                "estimatedRows": 1,
+                "totalCost": 0.02,
+                "loops": 1,
+                "sharedHit": 0,
+                "sharedRead": 0
+              }
+            ]
+          },
+          {
+            "node": "LockRows",
+            "actualRows": 2,
+            "estimatedRows": 2500,
+            "totalCost": 6434525.3,
+            "loops": 1,
+            "sharedHit": 170,
+            "sharedRead": 26,
+            "children": [
+              {
+                "node": "Index Scan",
+                "relation": "IngestionReceipt",
+                "index": "IngestionReceipt_claim_sequence_idx",
+                "actualRows": 2,
+                "estimatedRows": 2500,
+                "totalCost": 6434500.3,
+                "loops": 1,
+                "rowsRemoved": 1,
+                "filter": "((NOT (hashed SubPlan 9)) AND (((status = 'PENDING'::text) AND (\"availableAt\" <= CURRENT_TIMESTAMP)) OR ((status = 'PROCESSING'::text) AND (\"leaseExpiresAt\" <= CURRENT_TIMESTAMP))) AND (NOT (SubPlan 8)))",
+                "sharedHit": 168,
+                "sharedRead": 26,
+                "children": [
+                  {
+                    "node": "Append",
+                    "actualRows": 2,
+                    "estimatedRows": 2,
+                    "totalCost": 0.05,
+                    "loops": 1,
+                    "sharedHit": 0,
+                    "sharedRead": 0,
+                    "children": [
+                      {
+                        "node": "CTE Scan",
+                        "actualRows": 1,
+                        "estimatedRows": 1,
+                        "totalCost": 0.02,
+                        "loops": 1,
+                        "sharedHit": 0,
+                        "sharedRead": 0
+                      },
+                      {
+                        "node": "CTE Scan",
+                        "actualRows": 1,
+                        "estimatedRows": 1,
+                        "totalCost": 0.02,
+                        "loops": 1,
+                        "sharedHit": 0,
+                        "sharedRead": 0
+                      }
+                    ]
+                  },
+                  {
+                    "node": "CTE Scan",
+                    "actualRows": 0,
+                    "estimatedRows": 33,
+                    "totalCost": 645.44,
+                    "loops": 2,
+                    "rowsRemoved": 1,
+                    "filter": "(sequence < r_3.sequence)",
+                    "sharedHit": 162,
+                    "sharedRead": 0,
+                    "children": [
+                      {
+                        "node": "Bitmap Heap Scan",
+                        "relation": "IngestionReceipt",
+                        "actualRows": 1,
+                        "estimatedRows": 100,
+                        "totalCost": 643.19,
+                        "loops": 2,
+                        "rowsRemoved": 0,
+                        "filter": "(status <> ALL ('{COMPLETED,ARCHIVED}'::text[]))",
+                        "sharedHit": 162,
+                        "sharedRead": 0,
+                        "children": [
+                          {
+                            "node": "Bitmap Index Scan",
+                            "index": "IngestionReceipt_unfinished_ordering_keys_idx",
+                            "actualRows": 1,
+                            "estimatedRows": 100,
+                            "totalCost": 327.64,
+                            "loops": 2,
+                            "indexCondition": "(\"orderingKeys\" && array_append(r_3.\"orderingKeys\", ('unidentified:'::text || r_3.\"serviceId\")))",
+                            "sharedHit": 160,
+                            "sharedRead": 0
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "node": "Limit",
+        "actualRows": 4,
+        "estimatedRows": 4,
+        "totalCost": 0.1,
+        "loops": 1,
+        "sharedHit": 997,
+        "sharedRead": 923,
+        "children": [
+          {
+            "node": "Append",
+            "actualRows": 4,
+            "estimatedRows": 252,
+            "totalCost": 6.3,
+            "loops": 1,
+            "sharedHit": 997,
+            "sharedRead": 923,
+            "children": [
+              {
+                "node": "CTE Scan",
+                "actualRows": 1,
+                "estimatedRows": 1,
+                "totalCost": 0.02,
+                "loops": 1,
+                "sharedHit": 158,
+                "sharedRead": 490
+              },
+              {
+                "node": "CTE Scan",
+                "actualRows": 1,
+                "estimatedRows": 1,
+                "totalCost": 0.02,
+                "loops": 1,
+                "sharedHit": 669,
+                "sharedRead": 407
+              },
+              {
+                "node": "CTE Scan",
+                "actualRows": 2,
+                "estimatedRows": 250,
+                "totalCost": 5,
+                "loops": 1,
+                "sharedHit": 170,
+                "sharedRead": 26
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "node": "Nested Loop",
+        "actualRows": 4,
+        "estimatedRows": 2,
+        "totalCost": 33.94,
+        "loops": 1,
+        "joinType": "Inner",
+        "sharedHit": 1012,
+        "sharedRead": 924,
+        "children": [
+          {
+            "node": "CTE Scan",
+            "actualRows": 4,
+            "estimatedRows": 4,
+            "totalCost": 0.08,
+            "loops": 1,
+            "sharedHit": 997,
+            "sharedRead": 923
+          },
+          {
+            "node": "Index Scan",
+            "relation": "IngestionReceipt",
+            "index": "IngestionReceipt_pkey",
+            "actualRows": 1,
+            "estimatedRows": 1,
+            "totalCost": 8.45,
+            "loops": 4,
+            "rowsRemoved": 0,
+            "indexCondition": "(id = candidates.id)",
+            "filter": "(((status = 'PENDING'::text) AND (\"availableAt\" <= CURRENT_TIMESTAMP)) OR ((status = 'PROCESSING'::text) AND (\"leaseExpiresAt\" <= CURRENT_TIMESTAMP)))",
+            "sharedHit": 15,
+            "sharedRead": 1
+          }
+        ]
+      }
+    ]
+  }
+}

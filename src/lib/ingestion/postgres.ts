@@ -343,39 +343,52 @@ export async function claimPostgresEvents(
     limit > 1 ? Math.max(1, Math.floor(limit / 4)) : Number(preference === 'critical');
   const standardSlots =
     limit > 1 ? Math.max(1, Math.floor(limit / 4)) : Number(preference === 'standard');
-  // Each lane locks only eligible heads. A materialized overlap lookup keeps
-  // PostgreSQL on the ordering GIN index instead of scanning earlier history.
-  // Adding the unidentified marker is equivalent to the former overlap OR
-  // singleton-containment predicate. Locked candidates cannot change before
-  // UPDATE; keep its current lease/status fence without repeating predecessor
-  // scans against the entire UPDATE target relation.
+  // Transactional immediate-predecessor counters form an explicit frontier.
+  // Probe only its compact legacy service barrier, never receipt history.
+  // Each severity pool locks at most limit heads; bounded merging preserves
+  // reserved lanes and FIFO without sorting the entire eligible queue.
   const eligible = Prisma.sql`
     ((r."status" = 'PENDING' AND r."availableAt" <= CURRENT_TIMESTAMP)
       OR (r."status" = 'PROCESSING' AND r."leaseExpiresAt" <= CURRENT_TIMESTAMP))
+    AND r."orderingWaitCount" = 0
     AND NOT EXISTS (
-      WITH matching AS MATERIALIZED (
-        SELECT previous."sequence" FROM "IngestionReceipt" previous
-        WHERE previous."orderingKeys" && array_append(r."orderingKeys", 'unidentified:' || r."serviceId")
-          AND previous."status" NOT IN ('COMPLETED', 'ARCHIVED')
-      ) SELECT 1 FROM matching WHERE matching."sequence" < r."sequence"
+      SELECT 1 FROM "IngestionOrderingHead" barrier
+      WHERE barrier."identity" = 'unidentified:' || r."serviceId"
+        AND barrier."headSequence" < r."sequence"
     )
   `;
   const claims = await prisma.$queryRaw<
     Array<{ id: string; leaseToken: string | null; envelope: Prisma.JsonValue; attempts: number }>
   >`
-    WITH critical AS (
-      SELECT r."id" FROM "IngestionReceipt" r
-      WHERE r."critical" = true AND ${eligible}
-      ORDER BY r."sequence" FOR UPDATE OF r SKIP LOCKED LIMIT ${criticalSlots}
+    WITH critical_pool AS MATERIALIZED (
+      SELECT candidate."id", h."headSequence" AS "sequence" FROM "IngestionOrderingHead" h
+      CROSS JOIN LATERAL (
+        SELECT r."id" FROM "IngestionReceipt" r
+        WHERE r."id" = h."headId" AND r."critical" = true AND ${eligible}
+        FOR UPDATE OF r SKIP LOCKED LIMIT 1
+      ) candidate
+      WHERE h."headPrimary" AND h."headReady" AND h."headActive"
+        AND h."headCritical" = true
+      ORDER BY h."headSequence" LIMIT ${limit}
+    ), standard_pool AS MATERIALIZED (
+      SELECT candidate."id", h."headSequence" AS "sequence" FROM "IngestionOrderingHead" h
+      CROSS JOIN LATERAL (
+        SELECT r."id" FROM "IngestionReceipt" r
+        WHERE r."id" = h."headId" AND r."critical" = false AND ${eligible}
+        FOR UPDATE OF r SKIP LOCKED LIMIT 1
+      ) candidate
+      WHERE h."headPrimary" AND h."headReady" AND h."headActive"
+        AND h."headCritical" = false
+      ORDER BY h."headSequence" LIMIT ${limit}
+    ), critical AS (
+      SELECT "id" FROM critical_pool ORDER BY "sequence" LIMIT ${criticalSlots}
     ), standard AS (
-      SELECT r."id" FROM "IngestionReceipt" r
-      WHERE r."critical" = false AND ${eligible}
-      ORDER BY r."sequence" FOR UPDATE OF r SKIP LOCKED LIMIT ${standardSlots}
+      SELECT "id" FROM standard_pool ORDER BY "sequence" LIMIT ${standardSlots}
     ), remainder AS (
-      SELECT r."id" FROM "IngestionReceipt" r
-      WHERE ${eligible}
-        AND r."id" NOT IN (SELECT "id" FROM critical UNION ALL SELECT "id" FROM standard)
-      ORDER BY r."sequence" FOR UPDATE OF r SKIP LOCKED
+      SELECT "id" FROM (
+        SELECT * FROM critical_pool UNION ALL SELECT * FROM standard_pool
+      ) pool WHERE "id" NOT IN (SELECT "id" FROM critical UNION ALL SELECT "id" FROM standard)
+      ORDER BY "sequence"
       LIMIT (${limit} - (SELECT count(*) FROM critical) - (SELECT count(*) FROM standard))
     ), candidates AS MATERIALIZED (
       SELECT "id" FROM critical UNION ALL SELECT "id" FROM standard UNION ALL SELECT "id" FROM remainder
@@ -390,6 +403,7 @@ export async function claimPostgresEvents(
       "failureCode" = CASE WHEN r."attempts" >= 10 THEN 'RETRIES_EXHAUSTED' ELSE r."failureCode" END,
       "attempts" = CASE WHEN r."attempts" >= 10 THEN r."attempts" ELSE r."attempts" + 1 END
     FROM candidates WHERE r."id" = candidates."id"
+      AND r."orderingWaitCount" = 0
       AND ((r."status" = 'PENDING' AND r."availableAt" <= CURRENT_TIMESTAMP)
         OR (r."status" = 'PROCESSING' AND r."leaseExpiresAt" <= CURRENT_TIMESTAMP))
     RETURNING r."id", r."leaseToken", r."envelope", r."attempts"

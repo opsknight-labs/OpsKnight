@@ -152,3 +152,45 @@ Consumers refill each free processing slot as events finish; a slow key cannot h
 `opsknight_ingestion_active_events` reports locally owned continuous work; `opsknight_ingestion_processing_capacity` reports the current local limit and is zero while stopping or while a web fallback stands by for healthy dedicated workers. Active work can temporarily exceed a newly lowered limit until existing transactions drain. Registry storage is shared across module instances within one process, without sharing counters across replicas. Scrape every worker separately.
 
 Library stop prevents further claims, wakes polling and waits for all owned processing. PostgreSQL connection loss retries through the existing lease/recovery path. Native Next.js process signal coordination still requires validation; library drain tests alone do not certify a Docker SIGTERM drain or database primary failover.
+
+
+### Bounded durable append groups
+
+Independent scalar requests share a PostgreSQL group commit. A process-wide queue coalesces for two milliseconds with at most 32 envelopes/four MiB per group, two active commit transactions, 256 outstanding callers and 32 MiB of retained serialized envelope content (excluding object overhead). Bounds include database-inflight groups. Excess requests fail with explicit unavailable/backpressure rather than accumulating an unbounded queue. No success is returned until the transaction commits with synchronous_commit on. A process crash before commit grants no acceptance; an interrupted response after commit remains recoverable by the original delivery ID.
+
+Each group acquires the sorted union of canonical/legacy admission identities and service/integration-scoped delivery identities before sequence allocation. One database read detects persisted duplicates and conflicts; same-group duplicates reuse one new receipt. Content conflicts, pause and capacity decisions are per independent request, while a database transaction failure rolls back the entire group. Shared provider webhook batches retain their existing all-or-nothing transaction. Shared policy and immutable Automation version pointers are read per group without caching mutable policy.
+
+Grouped budget allocation locks at most min(eight, remaining callers) eligible shards per scan with SKIP LOCKED, accounts exact event/byte increments under those locks, and applies one update for all assigned shards. Allocation balances each group across those shards before considering preferred distance so completion releases do not converge on one budget row. The existing ordinary/critical reserve and global bounds remain; no credit is cached across transactions. Receipts are inserted together in original group order. Completion still commits receipt fencing, incident mutation, Automation/outbox and capacity release atomically through the existing engine. Database pools are unchanged.
+
+
+### Indexed claims and OLTP connection defaults
+
+The earlier GIN predecessor implementation probed the active ordering index through a materialized matching-key lookup; it is superseded by the transactional identity frontier below. Candidate keys include the service-specific unidentified marker, retaining poison-row isolation without an OR that encourages broad scans. Claim lanes row-lock eligible heads; the final bounded update rechecks status and lease eligibility while those locks remain held. The existing GIN index writes keys directly (fastupdate off) so worker probes do not scan a growing pending list on each request. The migration flushes older pending entries in the supported maintenance window.
+
+Default direct Prisma connection options disable PostgreSQL JIT for short OLTP statements, alongside the existing 30-second statement timeout. Explicit URL options remain authoritative. Supported transaction-pooler connections retain the existing compatible startup options: both pgbouncer=true URLs and web processes with PGBOUNCER_ENABLED=true avoid sending the unsupported jit startup parameter. Pooled server tuning remains the database/pooler operator's responsibility. No connection limit was raised.
+
+
+### Shared published-policy statement snapshots
+
+Classification, SLA and support-hours resolvers use one shared module with fixed parameterized SQL fragments. Each family selects the latest sealed version for at most three ordered scopes and aggregates only that version's rules/windows/exceptions within the same statement snapshot. Existing resolver precedence, inheritance and emergency controls remain authoritative. Support exception DATE values are explicitly hydrated to UTC Dates before calendar logic. Publication decisions are read from PostgreSQL each time; no mutable policy cache or additional pool is introduced.
+
+
+### Transactional identity frontier
+
+The claim path now reads an explicit eligible-head index rather than searching receipt history. Each unfinished identity has a compact head/tail row and an ordered membership chain. A receipt's nonnegative dependency counter records its unfinished immediate predecessors; canonical and legacy identities contribute separately. A receipt becomes eligible only when all dependencies clear. Exactly one primary identity drives each ready receipt. Critical/standard pools use lateral primary-key receipt probes, SKIP LOCKED and a bounded merge retaining the existing reserved lanes. No database connection limit was increased.
+
+Row triggers maintain this metadata in the receipt transaction, including older-image inserts, completion/archive, replay and ordering-key repair. AFTER INSERT preserves ON CONFLICT skip semantics. Receipt ownership has a cascading foreign key; ancestor pointers deliberately do not, because checking a predecessor foreign key can block admission behind an older worker's FOR UPDATE lock. The regression test holds that actual lock while admitting a successor. Completion and archive use the existing sorted ingestion advisory-lock namespace. Old repaired sequences splice into indexed chains; removing interior nodes retains dependencies. Dead letters remain blockers until explicit disposition. Empty heads are deleted transactionally.
+
+The additive migration backfills all unfinished receipts before the new reader starts, within the supported maintenance window. Function search paths bind to the installation schema, with pg_catalog first and pg_temp last; a custom-schema backfill and temporary-shadowing diagnostic passed. This is a row-trigger implementation, not a statement-level bulk frontier. Admission's existing durable append groups remain bounded and acknowledge only after commit.
+
+An unidentified legacy receipt remains a service barrier through a compact head lookup. Large queues blocked behind such a barrier, delayed retries and leased heads can still require multiple candidate probes; universal constant-cost scheduling is not claimed. Service fairness, poison-load capacity and long-term partitioning remain open.
+
+The final lateral query claimed four events in 1.603 ms with 10,000 unfinished and 100,000 completed fixture receipts. An intermediate broad join took 28.775 ms on that fixture and was rejected. These rollback-only SQL diagnostics exclude admission, HTTP, Automation, incident processing and downstream effects. They establish no end-to-end capacity.
+
+### Common incident write grouping
+
+New incident creation now includes its linked Alert and initial timeline entry as nested writes through the existing transaction. Existing-incident lifecycle, buffered resolve attachment, Automation, escalation and durable downstream intents retain their shared atomic transaction. This reduces application-to-Prisma operations, not necessarily SQL statement count. Actual notification delivery and Runbook execution remain in downstream workers. A rejected Alert insertion must roll back the Incident as well.
+
+### Bounded local image builds
+
+The existing low-memory build profile now sets Next.js build CPUs to one, limiting page-generation workers as well as compilation. Type checking remains enabled. This affects the opt-in build profile only; it does not change deployed ingestion concurrency or introduce a customer configuration requirement.
