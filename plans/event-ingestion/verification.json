@@ -1665,7 +1665,8 @@
       "migrationScannerWarnings": 53,
       "newMigrationWarning": "Runtime deletes of derived frontier metadata; no receipt-history deployment deletion",
       "finalFreshDatabaseFocusedPassed": 17,
-      "finalFreshDatabaseCorePassed": 71
+      "finalFreshDatabaseCorePassed": 71,
+      "finalBlockerContractUnitTestsPassed": 7
     },
     "native50Rps": {
       "optimized": {
@@ -1711,6 +1712,55 @@
       "Native candidate image bundling new migration",
       "SMTP/escalation/Service Automation/Runbook/worker-crash/PgBouncer validation after throughput recovers",
       "Fresh independent bug/security reviews; dependency advisories remain unresolved"
-    ]
+    ],
+    "sourceRevision": "61b69f8e2",
+    "blockerDiagnostic": {
+      "sourceChange": "scripts/ingestion/database-profile.cjs",
+      "observerSampleErrors": 0,
+      "passedCapacity": false,
+      "persistedCompleted": 2946,
+      "acceptedPerSecond": 48.617723158477716,
+      "httpP95Ms": 778.7076999999997,
+      "completionP95Ms": 753.7499999999999,
+      "ambiguousResponses": 0,
+      "finalBacklog": 0,
+      "completionStatementMeanMs": 3.25151002613714,
+      "blockers": [
+        {
+          "waitingOperation": "receipt-completion",
+          "waitType": "Lock",
+          "waitEvent": "transactionid",
+          "holderOperation": "budget",
+          "holderState": "idle in transaction",
+          "maxHolderTransactionAgeMs": 101.186,
+          "summedPairs": 1,
+          "maxPairs": 1
+        },
+        {
+          "waitingOperation": "quota",
+          "waitType": "Lock",
+          "waitEvent": "transactionid",
+          "holderOperation": "quota",
+          "holderState": "active",
+          "maxHolderTransactionAgeMs": 262.815,
+          "summedPairs": 10,
+          "maxPairs": 6
+        },
+        {
+          "waitingOperation": "receipt-completion",
+          "waitType": "Lock",
+          "waitEvent": "transactionid",
+          "holderOperation": "receipt-append",
+          "holderState": "idle in transaction",
+          "maxHolderTransactionAgeMs": 1208.17,
+          "summedPairs": 1,
+          "maxPairs": 1
+        }
+      ],
+      "scope": "Sparse one-second categories describe last/current blocker statement, not original lock acquisition. Confirms observed admission/quota blockers; does not establish one exclusive dominant cause. Additional observer overhead; no higher-load capacity comparison.",
+      "httpEvidence": "local-docker-http-completion-lock-profile-50.json",
+      "topologyEvidence": "local-docker-topology-completion-lock-profile-50.json",
+      "cleanupFailures": []
+    }
   }
 }

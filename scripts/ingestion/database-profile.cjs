@@ -39,15 +39,49 @@ module.exports = async function startDatabaseProfile(prisma) {
   let samples = 0;
   let errors = 0;
   const waits = new Map();
+  const blockers = new Map();
   const timer = setInterval(() => {
     if (inFlight) return;
-    inFlight = prisma.$queryRaw`
+    inFlight = Promise.all([
+      prisma.$queryRaw`
       SELECT state, COALESCE(wait_event_type, 'CPU') AS type,
         COALESCE(wait_event, 'running') AS event, COUNT(*)::int AS count
       FROM pg_stat_activity WHERE datid = (SELECT oid FROM pg_database WHERE datname = current_database())
         AND pid <> pg_backend_pid() GROUP BY state, wait_event_type, wait_event
-    `
-      .then(rows => {
+    `,
+      prisma.$queryRaw`
+      /* ingestion_blocker_sample: return fixed categories, never SQL or parameters */
+      WITH activity AS MATERIALIZED (
+        SELECT pid, state, xact_start, wait_event_type, wait_event, query,
+          pg_blocking_pids(pid) AS blockers
+        FROM pg_stat_activity
+        WHERE datid = (SELECT oid FROM pg_database WHERE datname = current_database())
+          AND pid <> pg_backend_pid()
+      ), classified AS (
+        SELECT *, CASE
+          WHEN query LIKE '%WITH completed AS%' THEN 'receipt-completion'
+          WHEN query LIKE '%INSERT INTO%' AND query LIKE '%"IngestionReceipt"%' THEN 'receipt-append'
+          WHEN query LIKE '%"IngestionBudget"%' THEN 'budget'
+          WHEN query LIKE '%"IngestionQuota"%' THEN 'quota'
+          WHEN query LIKE '%"IngestionOrdering%' THEN 'ordering'
+          WHEN query LIKE '%"Incident"%' THEN 'incident'
+          WHEN query LIKE '%"Alert"%' THEN 'alert'
+          WHEN query LIKE '%COMMIT%' THEN 'commit'
+          ELSE 'other' END AS operation
+        FROM activity
+      )
+      SELECT waiting.operation AS "waitingOperation", waiting.wait_event_type AS "waitType",
+        waiting.wait_event AS "waitEvent", holder.operation AS "holderOperation",
+        holder.state AS "holderState", COUNT(*)::int AS pairs,
+        MAX(EXTRACT(EPOCH FROM clock_timestamp() - holder.xact_start) * 1000)::double precision
+          AS "maxHolderTransactionAgeMs"
+      FROM classified waiting CROSS JOIN LATERAL unnest(waiting.blockers) AS blocking(pid)
+      JOIN classified holder ON holder.pid = blocking.pid
+      GROUP BY waiting.operation, waiting.wait_event_type, waiting.wait_event,
+        holder.operation, holder.state
+    `,
+    ])
+      .then(([rows, locks]) => {
         samples++;
         for (const row of rows) {
           const key = `${row.state}/${row.type}/${row.event}`;
@@ -61,6 +95,23 @@ module.exports = async function startDatabaseProfile(prisma) {
           value.summedConnections += row.count;
           value.maxConnections = Math.max(value.maxConnections, row.count);
           waits.set(key, value);
+        }
+        for (const row of locks) {
+          const key = `${row.waitingOperation}/${row.waitType}/${row.waitEvent}/${row.holderOperation}/${row.holderState}`;
+          const value = blockers.get(key) || {
+            ...row,
+            summedPairs: 0,
+            maxPairs: 0,
+            maxHolderTransactionAgeMs: 0,
+          };
+          value.summedPairs += row.pairs;
+          value.maxPairs = Math.max(value.maxPairs, row.pairs);
+          value.maxHolderTransactionAgeMs = Math.max(
+            value.maxHolderTransactionAgeMs,
+            row.maxHolderTransactionAgeMs || 0
+          );
+          delete value.pairs;
+          blockers.set(key, value);
         }
       })
       .catch(() => {
@@ -136,6 +187,9 @@ module.exports = async function startDatabaseProfile(prisma) {
         ...row,
         averageConnectionsPerSample: samples ? row.summedConnections / samples : 0,
       })),
+      blockerSamples: [...blockers.values()],
+      blockerScope:
+        'Sampled blocker statement categories and transaction age; a transaction can retain locks acquired by an earlier statement. Fixed SQL-side labels only, no query text, parameters, backend IDs or credentials retained.',
     };
   };
 };
