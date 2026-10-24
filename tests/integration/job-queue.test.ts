@@ -1,10 +1,12 @@
 import { describe, it, expect, beforeEach, afterAll } from 'vitest';
 import type { Prisma } from '@prisma/client';
+import prisma from '@/lib/prisma';
 import {
   scheduleJob,
   claimPendingJobs,
   claimPendingOperationalJobs,
   markJobFailed,
+  markJobCompleted,
   processJob,
 } from '@/lib/jobs/queue';
 import { testPrisma, resetDatabase } from '../helpers/test-db';
@@ -29,6 +31,124 @@ describeIfRealDB('Job Queue Resilience Tests', { timeout: 30000 }, () => {
   });
 
   describe('Atomic Job Claiming (FOR UPDATE SKIP LOCKED)', () => {
+    it('does not complete cancelled or changed-generation war-room claims after provider settlement', async () => {
+      const delivery = await testPrisma.warRoomProviderEventDelivery.create({
+        data: {
+          provider: 'SLACK',
+          idempotencyKey: 'already-settled-fixture',
+          incidentId: 'owned-fixture',
+          kind: 'TRIGGER',
+          status: 'COMPLETED',
+          eventPayload: { kind: 'TRIGGER', incidentId: 'owned-fixture' },
+        },
+      });
+      for (const currentStatus of ['PROCESSING', 'CANCELLED', 'PROCESSING_V2'] as const) {
+        const snapshot = await testPrisma.backgroundJob.create({
+          data: {
+            type: 'WAR_ROOM_PROVIDER_EVENT',
+            status: 'PROCESSING',
+            attempts: 1,
+            claimToken: '00000000-0000-4000-8000-000000000001',
+            scheduledAt: new Date(0),
+            payload: { deliveryId: delivery.id },
+          },
+        });
+        // The worker retains its PROCESSING claim snapshot while another owner
+        // can cancel or change the persisted generation. No provider I/O: its
+        // durable delivery has already settled.
+        if (currentStatus !== 'PROCESSING')
+          await testPrisma.backgroundJob.update({
+            where: { id: snapshot.id },
+            data: { status: currentStatus },
+          });
+        expect(await processJob(snapshot)).toBe(currentStatus === 'PROCESSING');
+        expect(
+          (await testPrisma.backgroundJob.findUniqueOrThrow({ where: { id: snapshot.id } })).status
+        ).toBe(currentStatus === 'PROCESSING' ? 'COMPLETED' : currentStatus);
+      }
+    });
+
+    it('completes a fenced job in one database command without weakening its claim', async () => {
+      const id = await scheduleJob('SCHEDULED_TASK', new Date(0), { task: 'ORDINARY' });
+      const [job] = await claimPendingJobs(1, 'SCHEDULED_TASK');
+      expect(job.id).toBe(id);
+      const commands: string[] = [];
+      let capture = true;
+      prisma.$on('query', event => {
+        if (capture) commands.push(event.query.trim().split(/\s+/)[0].toUpperCase());
+      });
+      try {
+        await markJobCompleted(id, job.attempts, job.claimToken);
+      } finally {
+        capture = false;
+      }
+      expect(commands).toEqual(['UPDATE']);
+      const completed = await testPrisma.backgroundJob.findUniqueOrThrow({ where: { id } });
+      expect(completed.status).toBe('COMPLETED');
+      expect(completed.completedAt).toBeInstanceOf(Date);
+      expect(completed.claimToken).toBe(job.claimToken);
+      await markJobCompleted(id, job.attempts + 1, job.claimToken);
+      expect(
+        (await testPrisma.backgroundJob.findUniqueOrThrow({ where: { id } })).completedAt
+      ).toEqual(completed.completedAt);
+    });
+
+    it('fences completion by token and attempt for both queue generations and legacy null tokens', async () => {
+      const token = '00000000-0000-4000-8000-000000000001';
+      const replaced = '00000000-0000-4000-8000-000000000002';
+      await testPrisma.backgroundJob.createMany({
+        data: (
+          [
+            { id: 'ordinary', type: 'SCHEDULED_TASK', status: 'PROCESSING', claimToken: token },
+            {
+              id: 'bulk',
+              type: 'STATUS_PAGE_ANNOUNCEMENT_FANOUT_V2',
+              status: 'PROCESSING_V2',
+              claimToken: token,
+            },
+            { id: 'legacy', type: 'SCHEDULED_TASK', status: 'PROCESSING', claimToken: null },
+            {
+              id: 'legacy-unspecified',
+              type: 'SCHEDULED_TASK',
+              status: 'PROCESSING',
+              claimToken: token,
+            },
+            { id: 'pending', type: 'SCHEDULED_TASK', status: 'PENDING', claimToken: token },
+          ] as const
+        ).map(row => ({
+          ...row,
+          scheduledAt: new Date(0),
+          attempts: 2,
+          payload: {},
+        })),
+      });
+      for (const id of ['ordinary', 'bulk']) {
+        await markJobCompleted(id, 1, token);
+        await markJobCompleted(id, 2, replaced);
+        await markJobCompleted(id, 2, null);
+        expect(
+          (await testPrisma.backgroundJob.findUniqueOrThrow({ where: { id } })).completedAt
+        ).toBeNull();
+        await markJobCompleted(id, 2, token);
+        expect((await testPrisma.backgroundJob.findUniqueOrThrow({ where: { id } })).status).toBe(
+          'COMPLETED'
+        );
+      }
+      await markJobCompleted('legacy', 2, null);
+      expect(
+        (await testPrisma.backgroundJob.findUniqueOrThrow({ where: { id: 'legacy' } })).status
+      ).toBe('COMPLETED');
+      await markJobCompleted('legacy-unspecified', 2);
+      expect(
+        (await testPrisma.backgroundJob.findUniqueOrThrow({ where: { id: 'legacy-unspecified' } }))
+          .status
+      ).toBe('COMPLETED');
+      await markJobCompleted('pending', 2, token);
+      expect(
+        (await testPrisma.backgroundJob.findUniqueOrThrow({ where: { id: 'pending' } })).status
+      ).toBe('PENDING');
+    });
+
     it('retains both queue generations and lease rules while excluding terminal history', async () => {
       const due = new Date(Date.now() - 60_000);
       const stale = new Date(Date.now() - 20 * 60_000);
