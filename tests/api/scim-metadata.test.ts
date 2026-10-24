@@ -9,24 +9,30 @@ import { GET as catchallGet, POST as catchallPost } from '@/app/api/scim/v2/[...
 import {
   clearScimOriginCache,
   parseStrictOrigin,
-  isNonPublicOrigin,
+  isNonPublicDestination,
+  validateProductionOrigin,
   resolveScimPublicOrigin,
 } from '@/lib/scim/protocol/origin';
 import prisma from '@/lib/prisma';
 
 describe('SCIM Discovery Metadata Endpoints', () => {
   const originalAppUrl = process.env.NEXT_PUBLIC_APP_URL;
-  const originalNodeEnv = process.env.NODE_ENV;
+  const originalAuthUrl = process.env.NEXTAUTH_URL;
+  const originalAllowPrivate = process.env.SCIM_ALLOW_PRIVATE_NETWORK;
 
   beforeEach(() => {
     clearScimOriginCache();
     process.env.NEXT_PUBLIC_APP_URL = 'https://ops.example.com';
+    delete process.env.NEXTAUTH_URL;
+    delete process.env.SCIM_ALLOW_PRIVATE_NETWORK;
   });
 
   afterEach(() => {
     clearScimOriginCache();
     process.env.NEXT_PUBLIC_APP_URL = originalAppUrl;
-    process.env.NODE_ENV = originalNodeEnv;
+    process.env.NEXTAUTH_URL = originalAuthUrl;
+    process.env.SCIM_ALLOW_PRIVATE_NETWORK = originalAllowPrivate;
+    vi.unstubAllEnvs();
     vi.restoreAllMocks();
   });
   it('returns compliant ServiceProviderConfig metadata', async () => {
@@ -173,13 +179,72 @@ describe('SCIM Discovery Metadata Endpoints', () => {
     expect(parseStrictOrigin('')).toBeNull();
   });
 
-  it('detects non-public loopback and bind origins', () => {
-    expect(isNonPublicOrigin('http://localhost:3000')).toBe(true);
-    expect(isNonPublicOrigin('https://127.0.0.1')).toBe(true);
-    expect(isNonPublicOrigin('https://0.0.0.0:3000')).toBe(true);
-    expect(isNonPublicOrigin('http://[::1]:8080')).toBe(true);
-    expect(isNonPublicOrigin('http://app.localhost')).toBe(true);
-    expect(isNonPublicOrigin('https://opssentinal.com')).toBe(false);
+  it('detects non-public loopback, private IP, and bind destinations', () => {
+    expect(isNonPublicDestination('http://localhost:3000')).toBe(true);
+    expect(isNonPublicDestination('https://127.0.0.1')).toBe(true);
+    expect(isNonPublicDestination('https://0.0.0.0:3000')).toBe(true);
+    expect(isNonPublicDestination('https://10.0.0.1')).toBe(true);
+    expect(isNonPublicDestination('https://172.16.0.1')).toBe(true);
+    expect(isNonPublicDestination('https://192.168.1.1')).toBe(true);
+    expect(isNonPublicDestination('https://169.254.169.254')).toBe(true); // Cloud metadata
+    expect(isNonPublicDestination('http://[::1]:8080')).toBe(true);
+    expect(isNonPublicDestination('https://[fe80::1]')).toBe(true);
+    expect(isNonPublicDestination('https://[fc00::1]')).toBe(true);
+    expect(isNonPublicDestination('http://app.localhost')).toBe(true);
+    expect(isNonPublicDestination('https://corp.internal')).toBe(true);
+    expect(isNonPublicDestination('https://service.local')).toBe(true);
+    expect(isNonPublicDestination('https://opssentinal.com')).toBe(false);
+  });
+
+  it('enforces HTTPS and rejects non-public destinations in production validation', () => {
+    // HTTPS required
+    expect(() => validateProductionOrigin('http://public.example.com')).toThrow(
+      'SCIM service configuration'
+    );
+    expect(() => validateProductionOrigin('https://public.example.com')).not.toThrow();
+
+    // Private addresses rejected in production
+    expect(() => validateProductionOrigin('https://127.0.0.1')).toThrow(
+      'SCIM service configuration'
+    );
+    expect(() => validateProductionOrigin('https://10.0.0.1')).toThrow(
+      'SCIM service configuration'
+    );
+    expect(() => validateProductionOrigin('https://169.254.169.254')).toThrow(
+      'SCIM service configuration'
+    );
+
+    // Private deployment override supported via SCIM_ALLOW_PRIVATE_NETWORK=true
+    process.env.SCIM_ALLOW_PRIVATE_NETWORK = 'true';
+    expect(() => validateProductionOrigin('http://internal.corp:8080')).not.toThrow();
+    expect(() => validateProductionOrigin('https://10.0.0.5')).not.toThrow();
+  });
+
+  it('prevents concurrent cold-cache requests from producing duplicate PostgreSQL lookups', async () => {
+    const findUniqueSpy = prisma?.systemSettings
+      ? vi.spyOn(prisma.systemSettings, 'findUnique').mockImplementation(() => {
+          return new Promise(r => {
+            setTimeout(() => {
+              r({ id: 'default', appUrl: 'https://db.example.com' } as unknown as Awaited<
+                ReturnType<typeof prisma.systemSettings.findUnique>
+              >);
+            }, 20);
+          }) as unknown as ReturnType<typeof prisma.systemSettings.findUnique>;
+        })
+      : null;
+
+    findUniqueSpy?.mockClear();
+
+    // Launch 10 simultaneous requests on cold cache
+    const results = await Promise.all(Array.from({ length: 10 }, () => resolveScimPublicOrigin()));
+
+    expect(results).toHaveLength(10);
+    results.forEach(res => expect(res).toBe('https://db.example.com'));
+
+    if (findUniqueSpy) {
+      // Exactly 1 DB lookup executed; the other 9 shared the in-flight promise
+      expect(findUniqueSpy).toHaveBeenCalledTimes(1);
+    }
   });
 
   it('gracefully falls back to environment when database is degraded and caches result', async () => {
@@ -198,8 +263,8 @@ describe('SCIM Discovery Metadata Endpoints', () => {
     expect(cached).toBe('https://fallback.example.com');
   });
 
-  it('rejects unconfigured or non-public origins in production mode', async () => {
-    process.env.NODE_ENV = 'production';
+  it('returns consistent SCIM JSON error envelope when origin is unconfigured in production', async () => {
+    vi.stubEnv('NODE_ENV', 'production');
     delete process.env.NEXT_PUBLIC_APP_URL;
     delete process.env.NEXTAUTH_URL;
 
@@ -207,6 +272,21 @@ describe('SCIM Discovery Metadata Endpoints', () => {
       vi.spyOn(prisma.systemSettings, 'findUnique').mockResolvedValueOnce(null);
     }
 
-    await expect(resolveScimPublicOrigin()).rejects.toThrow('SCIM public origin is not configured');
+    const req = new NextRequest('https://ops.example.com/api/scim/v2/ServiceProviderConfig');
+    const res = await getServiceProviderConfig(req);
+
+    expect(res.status).toBe(500);
+    expect(res.headers.get('content-type')).toBe('application/scim+json; charset=utf-8');
+    expect(res.headers.get('x-request-id')).toBeDefined();
+
+    const body = await res.json();
+    expect(body.schemas).toContain('urn:ietf:params:scim:api:messages:2.0:Error');
+    expect(body.status).toBe('500');
+    expect(body.detail).toBe(
+      'An internal error occurred resolving the SCIM service configuration.'
+    );
+    // Ensure no internal env variable names or DB connection details leak
+    expect(body.detail).not.toContain('NEXT_PUBLIC_APP_URL');
+    expect(body.detail).not.toContain('PostgreSQL');
   });
 });

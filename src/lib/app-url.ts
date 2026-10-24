@@ -39,20 +39,18 @@ function normalizeAppUrl(value?: string | null): string | null {
  */
 export async function getAppUrl(): Promise<string> {
   try {
-    if (prisma?.systemSettings?.findUnique) {
-      const settings = await prisma.systemSettings.findUnique({
-        where: { id: 'default' },
-        select: { appUrl: true },
-      });
+    const settings = await prisma.systemSettings.findUnique({
+      where: { id: 'default' },
+      select: { appUrl: true },
+    });
 
-      const normalizedFromDb = normalizeAppUrl(settings?.appUrl);
-      if (normalizedFromDb) {
-        return normalizedFromDb;
-      }
+    const normalizedFromDb = normalizeAppUrl(settings?.appUrl);
+    if (normalizedFromDb) {
+      return normalizedFromDb;
+    }
 
-      if (settings?.appUrl) {
-        logger.warn('Invalid app URL found in database configuration', { appUrl: settings.appUrl });
-      }
+    if (settings?.appUrl) {
+      logger.warn('Invalid app URL found in database configuration', { appUrl: settings.appUrl });
     }
   } catch (error) {
     logger.warn('Failed to fetch app URL from database', {
