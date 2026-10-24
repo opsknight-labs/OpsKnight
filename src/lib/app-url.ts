@@ -60,8 +60,7 @@ export async function getAppUrl(): Promise<string> {
     });
   }
 
-  const normalizedFromEnv =
-    normalizeAppUrl(process.env.APP_URL) ?? normalizeAppUrl(process.env.NEXT_PUBLIC_APP_URL);
+  const normalizedFromEnv = normalizeAppUrl(process.env.NEXT_PUBLIC_APP_URL);
   if (normalizedFromEnv) {
     return normalizedFromEnv;
   }
@@ -87,8 +86,7 @@ export async function getAppUrl(): Promise<string> {
  * Priority: NEXT_PUBLIC_APP_URL → NEXTAUTH_URL → localhost.
  */
 export function getAppUrlSync(): string {
-  const normalizedFromEnv =
-    normalizeAppUrl(process.env.APP_URL) ?? normalizeAppUrl(process.env.NEXT_PUBLIC_APP_URL);
+  const normalizedFromEnv = normalizeAppUrl(process.env.NEXT_PUBLIC_APP_URL);
   if (normalizedFromEnv) {
     return normalizedFromEnv;
   }

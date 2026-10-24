@@ -1,7 +1,7 @@
 import { scimError } from '@/lib/scim';
 
 function notFound() {
-  return scimError(404, 'The requested SCIM resource was not found.', 'invalidPath');
+  return scimError(404, 'The requested SCIM resource was not found.');
 }
 
 export async function GET() {

@@ -1,4 +1,4 @@
-import { describe, expect, it, beforeEach, afterEach } from 'vitest';
+import { describe, expect, it, beforeEach, afterEach, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 import { GET as getServiceProviderConfig } from '@/app/api/scim/v2/ServiceProviderConfig/route';
 import { GET as getResourceTypes } from '@/app/api/scim/v2/ResourceTypes/route';
@@ -6,16 +6,28 @@ import { GET as getResourceTypeById } from '@/app/api/scim/v2/ResourceTypes/[id]
 import { GET as getSchemas } from '@/app/api/scim/v2/Schemas/route';
 import { GET as getSchemaById } from '@/app/api/scim/v2/Schemas/[id]/route';
 import { GET as catchallGet, POST as catchallPost } from '@/app/api/scim/v2/[...catchall]/route';
+import {
+  clearScimOriginCache,
+  parseStrictOrigin,
+  isNonPublicOrigin,
+  resolveScimPublicOrigin,
+} from '@/lib/scim/protocol/origin';
+import prisma from '@/lib/prisma';
 
 describe('SCIM Discovery Metadata Endpoints', () => {
-  const originalAppUrl = process.env.APP_URL;
+  const originalAppUrl = process.env.NEXT_PUBLIC_APP_URL;
+  const originalNodeEnv = process.env.NODE_ENV;
 
   beforeEach(() => {
-    process.env.APP_URL = 'https://ops.example.com';
+    clearScimOriginCache();
+    process.env.NEXT_PUBLIC_APP_URL = 'https://ops.example.com';
   });
 
   afterEach(() => {
-    process.env.APP_URL = originalAppUrl;
+    clearScimOriginCache();
+    process.env.NEXT_PUBLIC_APP_URL = originalAppUrl;
+    process.env.NODE_ENV = originalNodeEnv;
+    vi.restoreAllMocks();
   });
   it('returns compliant ServiceProviderConfig metadata', async () => {
     const req = new NextRequest('https://ops.example.com/api/scim/v2/ServiceProviderConfig');
@@ -133,14 +145,14 @@ describe('SCIM Discovery Metadata Endpoints', () => {
     expect(body.meta.location).not.toContain('attacker.example.com');
   });
 
-  it('returns RFC 7644 JSON error format for unknown SCIM subroutes via catch-all', async () => {
+  it('returns RFC 7644 JSON error format for unknown SCIM subroutes via catch-all without invalidPath', async () => {
     const getRes = await catchallGet();
     expect(getRes.status).toBe(404);
     expect(getRes.headers.get('content-type')).toBe('application/scim+json; charset=utf-8');
     const getBody = await getRes.json();
     expect(getBody.schemas).toContain('urn:ietf:params:scim:api:messages:2.0:Error');
     expect(getBody.status).toBe('404');
-    expect(getBody.scimType).toBe('invalidPath');
+    expect(getBody.scimType).toBeUndefined(); // RFC 7644 §3.12: scimType is omitted for 404
     expect(getBody.detail).toBe('The requested SCIM resource was not found.');
 
     const postRes = await catchallPost();
@@ -148,5 +160,53 @@ describe('SCIM Discovery Metadata Endpoints', () => {
     expect(postRes.headers.get('content-type')).toBe('application/scim+json; charset=utf-8');
     const postBody = await postRes.json();
     expect(postBody.schemas).toContain('urn:ietf:params:scim:api:messages:2.0:Error');
+    expect(postBody.scimType).toBeUndefined();
+  });
+
+  it('strictly parses URLs and strips paths, query strings, and fragments', () => {
+    expect(parseStrictOrigin('https://example.com/some/path?query=1#frag')).toBe(
+      'https://example.com'
+    );
+    expect(parseStrictOrigin('https://example.com:8443/api/v2')).toBe('https://example.com:8443');
+    expect(parseStrictOrigin('http://user:pass@example.com/')).toBeNull(); // Disallow credentials
+    expect(parseStrictOrigin('ftp://example.com')).toBeNull(); // Disallow non-HTTP
+    expect(parseStrictOrigin('')).toBeNull();
+  });
+
+  it('detects non-public loopback and bind origins', () => {
+    expect(isNonPublicOrigin('http://localhost:3000')).toBe(true);
+    expect(isNonPublicOrigin('https://127.0.0.1')).toBe(true);
+    expect(isNonPublicOrigin('https://0.0.0.0:3000')).toBe(true);
+    expect(isNonPublicOrigin('http://[::1]:8080')).toBe(true);
+    expect(isNonPublicOrigin('http://app.localhost')).toBe(true);
+    expect(isNonPublicOrigin('https://opssentinal.com')).toBe(false);
+  });
+
+  it('gracefully falls back to environment when database is degraded and caches result', async () => {
+    process.env.NEXT_PUBLIC_APP_URL = 'https://fallback.example.com/app';
+    if (prisma?.systemSettings) {
+      vi.spyOn(prisma.systemSettings, 'findUnique').mockRejectedValueOnce(
+        new Error('PostgreSQL connection timeout')
+      );
+    }
+
+    const origin = await resolveScimPublicOrigin();
+    expect(origin).toBe('https://fallback.example.com');
+
+    // Subsequent call should use bounded cache
+    const cached = await resolveScimPublicOrigin();
+    expect(cached).toBe('https://fallback.example.com');
+  });
+
+  it('rejects unconfigured or non-public origins in production mode', async () => {
+    process.env.NODE_ENV = 'production';
+    delete process.env.NEXT_PUBLIC_APP_URL;
+    delete process.env.NEXTAUTH_URL;
+
+    if (prisma?.systemSettings) {
+      vi.spyOn(prisma.systemSettings, 'findUnique').mockResolvedValueOnce(null);
+    }
+
+    await expect(resolveScimPublicOrigin()).rejects.toThrow('SCIM public origin is not configured');
   });
 });
