@@ -88,7 +88,16 @@ export function DashboardAnalyticsProvider({
   }, [stableQuery]);
 
   useEffect(() => {
-    void load();
+    // Historical analytics never compete with the live, above-the-fold projection: the single
+    // request starts once the browser is idle (bounded so it still loads promptly).
+    let idleHandle: number | null = null;
+    let idleTimer: number | null = null;
+    const start = () => void load();
+    if (typeof window.requestIdleCallback === 'function') {
+      idleHandle = window.requestIdleCallback(start, { timeout: 2_500 });
+    } else {
+      idleTimer = window.setTimeout(start, 500);
+    }
     let reconciliationTimer: number | null = null;
     const scheduleReconciliation = () => {
       const delay = 5 * 60_000 + Math.floor(Math.random() * 2 * 60_000);
@@ -109,6 +118,8 @@ export function DashboardAnalyticsProvider({
     document.addEventListener('visibilitychange', resume);
     window.addEventListener('online', resume);
     return () => {
+      if (idleHandle !== null) window.cancelIdleCallback?.(idleHandle);
+      if (idleTimer !== null) window.clearTimeout(idleTimer);
       requestRef.current?.abort();
       if (retryTimerRef.current !== null) window.clearTimeout(retryTimerRef.current);
       if (reconciliationTimer !== null) window.clearTimeout(reconciliationTimer);

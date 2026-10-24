@@ -1,126 +1,253 @@
 /**
- * Client/server contract for the dashboard Live Incidents feed.
+ * Client/server contract for the dashboard live projection.
  *
- * The feed is a *current-state* projection: it always means "active now"
- * (OPEN + ACKNOWLEDGED) and is intentionally independent from the dashboard's
- * historical reporting range so a page-load timestamp can never hide new incidents.
+ * The live feed is a *current-state* projection: "active" always means OPEN + ACKNOWLEDGED and
+ * is independent from the dashboard's historical reporting range, so a page-load timestamp can
+ * never hide new incidents.
  */
 
-export const LIVE_INCIDENT_FILTERS = ['active', 'critical', 'mine', 'my_teams'] as const;
-export type LiveIncidentFilter = (typeof LIVE_INCIDENT_FILTERS)[number];
+export const LIVE_INCIDENT_VIEWS = [
+  'active',
+  'critical',
+  'mine',
+  'my_teams',
+  'unassigned',
+  'breaching',
+] as const;
+export type LiveIncidentView = (typeof LIVE_INCIDENT_VIEWS)[number];
+
+export const LIVE_VIEW_LABELS: Record<LiveIncidentView, string> = {
+  active: 'All Active',
+  critical: 'Critical',
+  mine: 'Mine',
+  my_teams: 'My Teams',
+  unassigned: 'Unassigned',
+  breaching: 'SLA Risk',
+};
+
+export const LIVE_STATUS_OPTIONS = ['all', 'OPEN', 'ACKNOWLEDGED'] as const;
+export const LIVE_URGENCY_OPTIONS = ['all', 'HIGH', 'MEDIUM', 'LOW'] as const;
+export const LIVE_ASSIGNMENT_OPTIONS = ['all', 'unassigned', 'assigned'] as const;
+export type LiveStatusFilter = (typeof LIVE_STATUS_OPTIONS)[number];
+export type LiveUrgencyFilter = (typeof LIVE_URGENCY_OPTIONS)[number];
+export type LiveAssignmentFilter = (typeof LIVE_ASSIGNMENT_OPTIONS)[number];
 
 export const LIVE_ACTIVE_STATUSES = ['OPEN', 'ACKNOWLEDGED'] as const;
 export const LIVE_INCIDENT_DEFAULT_LIMIT = 50;
 export const LIVE_INCIDENT_MAX_LIMIT = 100;
 export const LIVE_INCIDENT_VISIBLE_ROWS = 10;
+export const LIVE_SEARCH_MAX_LENGTH = 120;
 
-export const LIVE_INCIDENT_FILTER_LABELS: Record<LiveIncidentFilter, string> = {
-  active: 'All Active',
-  critical: 'Critical',
-  mine: 'Mine',
-  my_teams: 'My Teams',
-};
-
-export type LiveIncident = {
-  id: string;
-  title: string;
-  status: 'OPEN' | 'ACKNOWLEDGED';
-  urgency: 'HIGH' | 'MEDIUM' | 'LOW';
-  priority: string | null;
-  createdAt: string;
-  updatedAt: string;
-  service: { id: string; name: string };
-  team: { id: string; name: string } | null;
-  assignee: { id: string; name: string } | null;
-};
-
-export const LIVE_STATUS_FILTERS = ['all', 'OPEN', 'ACKNOWLEDGED'] as const;
-export const LIVE_URGENCY_FILTERS = ['all', 'HIGH', 'MEDIUM', 'LOW'] as const;
-export const LIVE_ASSIGNMENT_FILTERS = ['all', 'unassigned', 'assigned'] as const;
-export type LiveStatusFilter = (typeof LIVE_STATUS_FILTERS)[number];
-export type LiveUrgencyFilter = (typeof LIVE_URGENCY_FILTERS)[number];
-export type LiveAssignmentFilter = (typeof LIVE_ASSIGNMENT_FILTERS)[number];
-
-/** Full live-feed query: a quick view plus optional narrowing facets. */
 export type LiveIncidentQuery = {
-  filter: LiveIncidentFilter;
+  view: LiveIncidentView;
   serviceId: string | null;
+  teamId: string | null;
   status: LiveStatusFilter;
   urgency: LiveUrgencyFilter;
   assignment: LiveAssignmentFilter;
+  search: string;
 };
 
-export const DEFAULT_LIVE_INCIDENT_QUERY: LiveIncidentQuery = {
-  filter: 'active',
+export const DEFAULT_LIVE_QUERY: LiveIncidentQuery = {
+  view: 'active',
   serviceId: null,
+  teamId: null,
   status: 'all',
   urgency: 'all',
   assignment: 'all',
+  search: '',
 };
 
-const SERVICE_ID_PATTERN = /^[A-Za-z0-9_-]{1,100}$/;
+/** URL parameter names; prefixed so they never collide with the history filters. */
+export const LIVE_URL_PARAMS = {
+  view: 'lview',
+  serviceId: 'lservice',
+  teamId: 'lteam',
+  status: 'lstatus',
+  urgency: 'lurgency',
+  assignment: 'lassign',
+  search: 'lq',
+} as const;
 
-export function isValidServiceId(value: unknown): value is string {
-  return typeof value === 'string' && SERVICE_ID_PATTERN.test(value);
+/** API parameter names for /api/dashboard/live. */
+export const LIVE_API_PARAMS = {
+  view: 'view',
+  serviceId: 'service',
+  teamId: 'team',
+  status: 'status',
+  urgency: 'urgency',
+  assignment: 'assignment',
+  search: 'q',
+} as const;
+
+const ID_PATTERN = /^[A-Za-z0-9_-]{1,100}$/;
+export function isValidId(value: unknown): value is string {
+  return typeof value === 'string' && ID_PATTERN.test(value);
+}
+
+function pick<T extends string>(options: readonly T[], input: unknown, fallback: T): T {
+  return typeof input === 'string' && (options as readonly string[]).includes(input)
+    ? (input as T)
+    : fallback;
+}
+
+export function normalizeSearch(value: unknown): string {
+  return typeof value === 'string' ? value.trim().slice(0, LIVE_SEARCH_MAX_LENGTH) : '';
+}
+
+/** Lenient parse for persisted preferences / URLs; invalid fields fall back to defaults. */
+export function coerceLiveQuery(raw: Partial<Record<keyof LiveIncidentQuery, unknown>>) {
+  return {
+    view: pick(LIVE_INCIDENT_VIEWS, raw.view, 'active'),
+    serviceId: isValidId(raw.serviceId) ? raw.serviceId : null,
+    teamId: isValidId(raw.teamId) ? raw.teamId : null,
+    status: pick(LIVE_STATUS_OPTIONS, raw.status, 'all'),
+    urgency: pick(LIVE_URGENCY_OPTIONS, raw.urgency, 'all'),
+    assignment: pick(LIVE_ASSIGNMENT_OPTIONS, raw.assignment, 'all'),
+    search: normalizeSearch(raw.search),
+  } satisfies LiveIncidentQuery;
+}
+
+export function liveQueryFromParams(
+  params: URLSearchParams | { get(name: string): string | null },
+  names: Record<keyof LiveIncidentQuery, string> = LIVE_URL_PARAMS
+): LiveIncidentQuery {
+  return coerceLiveQuery({
+    view: params.get(names.view),
+    serviceId: params.get(names.serviceId),
+    teamId: params.get(names.teamId),
+    status: params.get(names.status),
+    urgency: params.get(names.urgency),
+    assignment: params.get(names.assignment),
+    search: params.get(names.search),
+  });
+}
+
+/** Canonical, stable encoding. Default values are omitted. */
+export function liveQueryToParams(
+  query: LiveIncidentQuery,
+  names: Record<keyof LiveIncidentQuery, string> = LIVE_API_PARAMS
+): URLSearchParams {
+  const params = new URLSearchParams();
+  if (query.view !== 'active') params.set(names.view, query.view);
+  if (query.serviceId) params.set(names.serviceId, query.serviceId);
+  if (query.teamId) params.set(names.teamId, query.teamId);
+  if (query.status !== 'all') params.set(names.status, query.status);
+  if (query.urgency !== 'all') params.set(names.urgency, query.urgency);
+  if (query.assignment !== 'all') params.set(names.assignment, query.assignment);
+  if (query.search) params.set(names.search, query.search);
+  return params;
+}
+
+export function liveQueryKey(query: LiveIncidentQuery): string {
+  return liveQueryToParams(query).toString();
 }
 
 export function countActiveFacets(query: LiveIncidentQuery): number {
   return (
     (query.serviceId ? 1 : 0) +
+    (query.teamId ? 1 : 0) +
     (query.status !== 'all' ? 1 : 0) +
     (query.urgency !== 'all' ? 1 : 0) +
-    (query.assignment !== 'all' ? 1 : 0)
+    (query.assignment !== 'all' ? 1 : 0) +
+    (query.search ? 1 : 0)
   );
 }
 
-/** Stable, canonical query string (also used as the server cache key). */
-export function liveIncidentQueryString(query: LiveIncidentQuery): string {
-  const params = new URLSearchParams();
-  params.set('filter', query.filter);
-  if (query.serviceId) params.set('service', query.serviceId);
-  if (query.status !== 'all') params.set('status', query.status);
-  if (query.urgency !== 'all') params.set('urgency', query.urgency);
-  if (query.assignment !== 'all') params.set('assignment', query.assignment);
-  return params.toString();
-}
+export type LiveSlaFields = {
+  acknowledgedAt: string | null;
+  slaFirstAcknowledgedAt: string | null;
+  slaAckTargetMs: number | null;
+  slaResolveTargetMs: number | null;
+  slaTargetSource: string | null;
+  slaTargetCapturedAt: string | null;
+  slaPausedMs: number;
+  slaPauseStartedAt: string | null;
+  slaAckElapsedMs: number | null;
+  slaResolveElapsedMs: number | null;
+};
 
-/** Lenient parse for persisted client preferences; invalid fields fall back to defaults. */
-export function coerceLiveIncidentQuery(value: unknown): LiveIncidentQuery {
-  const raw = (value && typeof value === 'object' ? value : {}) as Record<string, unknown>;
-  const pick = <T extends string>(options: readonly T[], input: unknown, fallback: T): T =>
-    typeof input === 'string' && (options as readonly string[]).includes(input)
-      ? (input as T)
-      : fallback;
-  return {
-    filter: pick(LIVE_INCIDENT_FILTERS, raw.filter, 'active'),
-    serviceId: isValidServiceId(raw.serviceId) ? raw.serviceId : null,
-    status: pick(LIVE_STATUS_FILTERS, raw.status, 'all'),
-    urgency: pick(LIVE_URGENCY_FILTERS, raw.urgency, 'all'),
-    assignment: pick(LIVE_ASSIGNMENT_FILTERS, raw.assignment, 'all'),
-  };
-}
+export type LiveSlaSignal = {
+  /** NONE when no actionable SLA signal (met, paused, not applicable or invalid). */
+  warning: 'NONE' | 'APPROACHING' | 'BREACHED';
+  phase: 'ack' | 'resolve' | null;
+  /** Deadline of the phase that drives the signal (ISO), null when unavailable. */
+  deadline: string | null;
+};
 
-export function sameLiveIncidentQuery(a: LiveIncidentQuery, b: LiveIncidentQuery): boolean {
-  return liveIncidentQueryString(a) === liveIncidentQueryString(b);
-}
+export type LiveIncident = LiveSlaFields & {
+  id: string;
+  title: string;
+  status: 'OPEN' | 'ACKNOWLEDGED';
+  urgency: 'HIGH' | 'MEDIUM' | 'LOW';
+  priority: string | null;
+  escalationStatus: string | null;
+  createdAt: string;
+  updatedAt: string;
+  service: { id: string; name: string; teamId: string | null };
+  team: { id: string; name: string } | null;
+  assignee: { id: string; name: string } | null;
+  sla: LiveSlaSignal;
+};
 
-export type LiveIncidentFeed = {
+export type LiveFacetOption = { id: string; name: string; count: number; critical: number };
+
+export type LiveFacets = {
+  views: Record<LiveIncidentView, number>;
+  services: LiveFacetOption[];
+  teams: LiveFacetOption[];
+  status: Record<'OPEN' | 'ACKNOWLEDGED', number>;
+  urgency: Record<'HIGH' | 'MEDIUM' | 'LOW', number>;
+  assignment: Record<'assigned' | 'unassigned', number>;
+};
+
+export type LiveSummary = {
+  active: number;
+  triggered: number;
+  acknowledged: number;
+  critical: number;
+  unassigned: number;
+  slaBreached: number;
+  slaAtRisk: number;
+  mine: number;
+};
+
+export type LiveActivityItem = {
+  id: string;
+  incidentId: string;
+  incidentTitle: string;
+  message: string;
+  type: string | null;
+  createdAt: string;
+};
+
+export type LiveOnCallShift = {
+  id: string;
+  scheduleName: string;
+  user: { id: string | null; name: string; avatarUrl: string | null; gender: string | null };
+};
+
+export type LiveSnapshot = {
   query: LiveIncidentQuery;
-  filter: LiveIncidentFilter;
+  /** Rows matching the query, newest first, bounded by the request limit. */
   incidents: LiveIncident[];
+  /** Total rows matching the query. */
   total: number;
+  facets: LiveFacets;
+  summary: LiveSummary;
+  rail: {
+    myQueue: LiveIncident[];
+    slaRisk: LiveIncident[];
+    servicesAtRisk: LiveFacetOption[];
+    activity: LiveActivityItem[];
+    onCall: LiveOnCallShift[];
+  };
+  /** True when the scoped active set exceeded the in-memory projection cap. */
+  truncated: boolean;
   asOf: string;
   generation: string | null;
 };
 
-export function parseLiveIncidentFilter(value: unknown): LiveIncidentFilter | null {
-  if (value === undefined || value === null || value === '') return 'active';
-  return typeof value === 'string' && (LIVE_INCIDENT_FILTERS as readonly string[]).includes(value)
-    ? (value as LiveIncidentFilter)
-    : null;
-}
-
-/** Mirrors the dashboard "ACTIVE" pseudo-status: never a literal database status. */
 export function isActiveStatus(status: unknown): status is 'OPEN' | 'ACKNOWLEDGED' {
   return status === 'OPEN' || status === 'ACKNOWLEDGED';
 }
@@ -130,23 +257,22 @@ export function isCriticalIncident(incident: Pick<LiveIncident, 'urgency' | 'pri
 }
 
 /** Newest first; ties broken by id so ordering is stable across refetches. */
-export function sortLiveIncidents(items: LiveIncident[]): LiveIncident[] {
-  return [...items].sort((a, b) => {
-    const delta = Date.parse(b.createdAt) - Date.parse(a.createdAt);
-    return delta !== 0 ? delta : b.id.localeCompare(a.id);
-  });
+export function compareNewestFirst(
+  a: Pick<LiveIncident, 'createdAt' | 'id'>,
+  b: Pick<LiveIncident, 'createdAt' | 'id'>
+): number {
+  const delta = Date.parse(b.createdAt) - Date.parse(a.createdAt);
+  return delta !== 0 ? delta : b.id < a.id ? -1 : b.id > a.id ? 1 : 0;
 }
 
-export type LiveFeedDiff = {
-  added: string[];
-  updated: string[];
-  removed: string[];
-};
+export function sortLiveIncidents<T extends Pick<LiveIncident, 'createdAt' | 'id'>>(
+  items: T[]
+): T[] {
+  return [...items].sort(compareNewestFirst);
+}
 
-/**
- * Compares the displayed snapshot to a canonical snapshot. Used to highlight
- * genuinely new rows and to count pending changes while live updates are paused.
- */
+export type LiveFeedDiff = { added: string[]; updated: string[]; removed: string[] };
+
 export function diffLiveIncidents(previous: LiveIncident[], next: LiveIncident[]): LiveFeedDiff {
   const before = new Map(previous.map(item => [item.id, item]));
   const after = new Set(next.map(item => item.id));
@@ -181,6 +307,21 @@ export function formatIncidentAge(createdAt: string, now: number): string {
   const hours = Math.floor(minutes / 60);
   if (hours < 24) return `${hours}h`;
   return `${Math.floor(hours / 24)}d`;
+}
+
+export function formatCountdown(deadline: string, now: number): string {
+  const deltaSeconds = Math.round((Date.parse(deadline) - now) / 1000);
+  const overdue = deltaSeconds < 0;
+  const seconds = Math.abs(deltaSeconds);
+  const label =
+    seconds < 60
+      ? `${seconds}s`
+      : seconds < 3600
+        ? `${Math.floor(seconds / 60)}m`
+        : seconds < 86_400
+          ? `${Math.floor(seconds / 3600)}h${String(Math.floor((seconds % 3600) / 60)).padStart(2, '0')}m`
+          : `${Math.floor(seconds / 86_400)}d`;
+  return overdue ? `${label} over` : `${label} left`;
 }
 
 export type LiveConnectionHealth = 'connecting' | 'live' | 'stale' | 'offline' | 'revoked';

@@ -89,6 +89,13 @@ export async function GET(req: NextRequest) {
             return;
           }
           isPolling = true;
+          // Lightweight, level-triggered invalidation signal for projections that reconcile
+          // through their own authorized read path (e.g. the dashboard live feed).
+          if (generation !== null && /^\d+$/.test(generation)) {
+            send(
+              JSON.stringify({ type: 'changed', generation, timestamp: new Date().toISOString() })
+            );
+          }
           try {
             const incidentResult = await getCachedRecentIncidents(
               user.id,

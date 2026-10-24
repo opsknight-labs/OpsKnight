@@ -152,6 +152,35 @@ export async function getRealtimeChangeGeneration(): Promise<string | null> {
   return state.initialRead;
 }
 
+/**
+ * Returns a generation that is at least `minimum`. Clients pass the generation they learned
+ * from SSE; when this replica's poller lags behind (or has no subscribers), the durable clock
+ * is read directly so a generation-keyed cache can never serve a pre-change projection.
+ */
+export async function getRealtimeChangeGenerationAtLeast(
+  minimum: string | null
+): Promise<string | null> {
+  const current = await getRealtimeChangeGeneration();
+  const needsFreshRead =
+    state.listeners.size === 0 ||
+    (minimum !== null && (current === null || BigInt(current) < BigInt(minimum)));
+  if (!needsFreshRead) return current;
+  try {
+    const clock = await readClock();
+    if (state.lastObservedGeneration === null || clock.generation > state.lastObservedGeneration) {
+      state.lastObservedGeneration = clock.generation;
+      state.lastChangedAt = clock.changedAt.getTime();
+    }
+    return clock.generation.toString();
+  } catch (error) {
+    addOperationalMetric('opsknight_realtime_clock_errors_total', 1);
+    logger.warn('realtime.change_clock_fresh_read_failed', {
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return current;
+  }
+}
+
 /** One database poller per process fans durable changes out to every local SSE subscriber. */
 export function subscribeToRealtimeChanges(
   stream: RealtimeStreamKind,

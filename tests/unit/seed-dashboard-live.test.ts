@@ -10,23 +10,23 @@ const LOCAL = 'postgresql://u:p@127.0.0.1:55433/opsknight_dashboard?schema=publi
 describe('dashboard live fixture seed', () => {
   it('only targets the explicitly allowed loopback database outside production', () => {
     expect(() =>
-      assertLocalDashboardTarget({ DATABASE_URL: LOCAL } as NodeJS.ProcessEnv)
+      assertLocalDashboardTarget({ DATABASE_URL: LOCAL } as unknown as NodeJS.ProcessEnv)
     ).not.toThrow();
     expect(() =>
       assertLocalDashboardTarget({
         DATABASE_URL: 'postgresql://u:p@db.internal:5432/opsknight_dashboard',
-      } as NodeJS.ProcessEnv)
+      } as unknown as NodeJS.ProcessEnv)
     ).toThrow(/non-loopback/);
     expect(() =>
       assertLocalDashboardTarget({
         DATABASE_URL: 'postgresql://u:p@127.0.0.1:5432/opsknight',
-      } as NodeJS.ProcessEnv)
+      } as unknown as NodeJS.ProcessEnv)
     ).toThrow(/Refusing to seed database/);
     expect(() =>
       assertLocalDashboardTarget({
         DATABASE_URL: LOCAL,
         NODE_ENV: 'production',
-      } as NodeJS.ProcessEnv)
+      } as unknown as NodeJS.ProcessEnv)
     ).toThrow(/production/);
   });
 

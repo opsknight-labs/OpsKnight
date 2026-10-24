@@ -34,6 +34,7 @@ export type RealtimeEvent =
       timestamp: string;
     }
   | { type: 'heartbeat'; timestamp: string }
+  | { type: 'changed'; generation: string; timestamp: string }
   | { type: 'authorization_revoked' }
   | { type: 'error'; message: string; timestamp: string };
 
@@ -63,6 +64,10 @@ function useRealtimeConnection() {
   const [connectionEpoch, setConnectionEpoch] = useState(0);
   const [lastMessageAt, setLastMessageAt] = useState<number | null>(null);
   const [isRevoked, setIsRevoked] = useState(false);
+  // Durable change generation and a counter that bumps on every `changed` signal. Kept apart
+  // from `revision` so route-refresh consumers are not triggered by every change.
+  const [changeGeneration, setChangeGeneration] = useState<string | null>(null);
+  const [changeCount, setChangeCount] = useState(0);
   const eventSourceRef = useRef<EventSource | null>(null);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const reconnectAttempts = useRef(0);
@@ -157,6 +162,10 @@ function useRealtimeConnection() {
                 break;
               case 'heartbeat':
                 break;
+              case 'changed':
+                setChangeGeneration(data.generation);
+                setChangeCount(value => value + 1);
+                break;
               case 'error':
                 setError(data.message);
                 break;
@@ -225,6 +234,8 @@ function useRealtimeConnection() {
     connectionEpoch,
     lastMessageAt,
     isRevoked,
+    changeGeneration,
+    changeCount,
   };
 }
 

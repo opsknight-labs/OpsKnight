@@ -209,7 +209,7 @@ function projectForUser(
   freshness: 'fresh' | 'stale'
 ): ResponderDashboardSnapshot {
   const currentOnCallShift = userId
-    ? snapshot.currentShifts.find(shift => shift.userId === userId && shift.end) ?? null
+    ? (snapshot.currentShifts.find(shift => shift.userId === userId && shift.end) ?? null)
     : null;
 
   return {

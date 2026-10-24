@@ -421,6 +421,15 @@ export const OPERATIONAL_METRICS = [
     buckets: [0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2, 5],
   },
   {
+    name: 'opsknight_dashboard_live_set_duration_seconds',
+    help: 'Time spent loading one authorized active-incident set for the live dashboard',
+    kind: 'histogram',
+    labels: [],
+    scope: 'counter',
+    estimatedMaxSeries: 16,
+    buckets: [0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2],
+  },
+  {
     name: 'opsknight_dashboard_analytics_duration_seconds',
     help: 'Time spent calculating an isolated dashboard analytics projection',
     kind: 'histogram',
