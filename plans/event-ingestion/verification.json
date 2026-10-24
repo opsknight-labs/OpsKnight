@@ -754,7 +754,14 @@
     "testsPassed": 3,
     "seconds": 28.8,
     "scope": "One focused native browser regression; not entire CI matrix",
-    "completeCiCertified": false
+    "completeCiCertified": false,
+    "previousRevisionCi": {
+      "runId": 40067864121,
+      "sourceRevision": "e472ec5f1669e508540c21b8aa9872965c300e3d",
+      "status": "completed",
+      "conclusion": "success",
+      "scope": "All executed jobs green; deployment-manifests and swarm-manifests skipped by change detection; predates consumer fault-isolation changes"
+    }
   },
   "configSchemaReuseFollowup": {
     "evidence": "local-config-schema-allocation.json",
@@ -776,9 +783,13 @@
     "recordedAt": "2026-10-24",
     "databaseContractTestsPassed": 67,
     "focusedUnitTestsPassed": 36,
-    "sharedRegistryTests": "passed; operational registry and worker-health suites",
+    "sharedRegistryTests": {
+      "passed": 8,
+      "files": 2,
+      "overlapsFocusedUnitSuite": true
+    },
     "typeCheck": "passed; completed exit0",
-    "modifiedSourceLint": "passed; zero warnings; completed exit0",
+    "modifiedSourceLint": "passed; explicit --no-ignore included CommonJS harness; zero warnings; completed exit0",
     "changes": [
       "Continuously refill bounded processing slots without waiting for an unrelated slow receipt",
       "Alternate protected severity lanes for single-slot refills in multi-slot consumers while preserving per-key predecessors",
@@ -797,6 +808,158 @@
       "Library shutdown tests do not establish native Next.js SIGTERM drains background services; framework process-exit coordination remains unverified",
       "Connection termination is not replicated PostgreSQL primary failover",
       "Fresh native image and capacity evidence pending; no 1000 RPS or HA claim"
-    ]
+    ],
+    "freshNativeImage": "passed native 100 RPS SMTP/crash and authenticated worker scrape; higher capacity and HA remain unverified"
+  },
+  "nativeFaultIsolationFollowup": {
+    "sourceRevision": "ccb3905d940e03671358d16b9769d1c1c139bc09",
+    "image": {
+      "nodeVersion": "v20.20.2",
+      "id": "sha256:0f7bb7bd1b1cca2337957502683ff8195cd8f015191a12543061acebd74f739b",
+      "revision": "ccb3905d9",
+      "proxyImageId": "sha256:0985e772fb9f729e6fa0980da05fca5d9c468e870eed43071545afa9d2e27d94"
+    },
+    "archiveSha256": "de16f38983f3e135bd7e75e77d0f27ea13b9c55d20a529313deb2b0f2d080994",
+    "automaticModeVerified": true,
+    "fullStack100Rps30s": {
+      "passed": true,
+      "acknowledged": 3000,
+      "accepted": 3000,
+      "completed": 3000,
+      "pending": 0,
+      "ambiguousSubmissions": 0,
+      "droppedArrivals": 0,
+      "httpP95Ms": 37.07055,
+      "completionP95Ms": 127,
+      "providerFormatsPassed": 31,
+      "lifecyclePassed": true,
+      "quotaReplayProvidersPassed": 4,
+      "requestGate": {
+        "passed": true,
+        "heldRequests": 64,
+        "overloadObserved": true,
+        "acceptedAndCompleted": 65,
+        "ambiguousSubmissions": 0,
+        "recoveryAccepted": true,
+        "elapsedMs": 1015,
+        "scope": "Real complete HTTP requests held on an owned quota-row lock, then released and reconciled. Next middleware buffers partial bodies before route handlers; this does not certify a network body deadline."
+      },
+      "smtpDelivery": {
+        "receiptId": "e389d2a3-dfc0-4938-8a54-249601f40a2e",
+        "incidentId": "cmvm0l48m012714ag0ump2j3r",
+        "notificationId": "notification_7146de4b83a2095af5f62fcc0febf7a",
+        "smtpCaptured": true,
+        "durableDeliveryRecorded": true,
+        "captureObservedMs": 1153,
+        "startedDuringLoad": true,
+        "capturedDuringLoad": true,
+        "provider": "smtp",
+        "pinnedAutomationVerified": true,
+        "sourceSeverity": "warning",
+        "finalPriority": "P1",
+        "scope": "Real application workers and SMTP transport to owned local capture only; no Internet delivery or remote mailbox certification"
+      },
+      "workerCrash": [
+        {
+          "action": "SIGKILL",
+          "target": "ingestion-cert-b24ff958-worker-1",
+          "at": "2026-10-24T06:25:06.770Z",
+          "receiptId": "3b040510-d100-467c-a294-e15852a16e1e",
+          "priorLeaseExpiresAt": "2026-10-24T06:25:11.735Z",
+          "processingTransactionProven": true,
+          "loadActive": true,
+          "leaseExpiryAdvanced": false,
+          "recoveredAt": "2026-10-24T06:25:11.823Z",
+          "recoveryMs": 5053,
+          "attempts": 2,
+          "completed": 1,
+          "alerts": 1,
+          "incidents": 1
+        }
+      ],
+      "workerMetrics": {
+        "scope": "Authenticated real worker scrapes after load; no credentials or raw metric text retained",
+        "snapshots": [
+          {
+            "name": "ingestion-cert-b24ff958-worker-0",
+            "status": 200,
+            "active": 0,
+            "capacity": 4,
+            "completed": 1083
+          },
+          {
+            "name": "ingestion-cert-b24ff958-worker-2",
+            "status": 200,
+            "active": 0,
+            "capacity": 4,
+            "completed": 951
+          },
+          {
+            "name": "ingestion-cert-b24ff958-worker-3",
+            "status": 200,
+            "active": 0,
+            "capacity": 4,
+            "completed": 976
+          }
+        ],
+        "passed": true
+      },
+      "cleanupFailures": [],
+      "httpEvidence": "local-docker-http-auto-refill-smtp-crash-100.json",
+      "topologyEvidence": "local-docker-topology-auto-refill-smtp-crash-100.json"
+    },
+    "scope": "Single shared local Docker VM with unreplicated PostgreSQL. Short run; not sustained 1000 RPS, HA or 24-hour soak. Cross-run shared storage and history differ; improvement cannot be attributed solely to consumer changes.",
+    "healthy1000Rps30s": {
+      "passed": false,
+      "acknowledged": 4670,
+      "accepted": 4670,
+      "completed": 4670,
+      "pending": 0,
+      "ambiguousSubmissions": 0,
+      "explicitRejectedRequests": 25167,
+      "droppedArrivals": 164,
+      "observedAcceptedPerSecond": 151.58354390327628,
+      "httpP95Ms": 444.0267999999998,
+      "completionP95Ms": 4712.55,
+      "databaseDeadlocks": 0,
+      "workerMetrics": {
+        "scope": "Authenticated real worker scrapes after load; no credentials or raw metric text retained",
+        "snapshots": [
+          {
+            "name": "ingestion-cert-f81af10f-worker-0",
+            "status": 200,
+            "active": 0,
+            "capacity": 4,
+            "completed": 1204
+          },
+          {
+            "name": "ingestion-cert-f81af10f-worker-1",
+            "status": 200,
+            "active": 0,
+            "capacity": 4,
+            "completed": 1163
+          },
+          {
+            "name": "ingestion-cert-f81af10f-worker-2",
+            "status": 200,
+            "active": 0,
+            "capacity": 4,
+            "completed": 1199
+          },
+          {
+            "name": "ingestion-cert-f81af10f-worker-3",
+            "status": 200,
+            "active": 0,
+            "capacity": 4,
+            "completed": 1204
+          }
+        ],
+        "passed": true
+      },
+      "cleanupFailures": [],
+      "httpEvidence": "local-docker-http-auto-refill-ceiling-1000.json",
+      "topologyEvidence": "local-docker-topology-auto-refill-ceiling-1000.json",
+      "capacityCertified": false
+    }
   }
 }
