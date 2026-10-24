@@ -1,6 +1,6 @@
 import { reserveIngestionBudget } from '@/lib/ingestion/budget';
 import { getMaintenanceClient, disconnectMaintenanceClient } from '@/lib/maintenance/database';
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { randomUUID, createHash } from 'node:crypto';
 import { NextRequest } from 'next/server';
 import { Prisma } from '@prisma/client';
@@ -109,6 +109,40 @@ afterAll(async () => {
 });
 
 describe('PostgreSQL ingestion durability', () => {
+  it('coalesces 64 concurrent hot-key decisions into two database writes without granting extra credit', async () => {
+    const current = await getIngestionPolicy();
+    await applyIngestionCommand(
+      {
+        action: 'configure',
+        expectedRevision: current.revision,
+        policy: {
+          ...current.policy,
+          quotas: { ...current.policy.quotas, eventsPerMinute: 1, eventsBurst: 23 },
+        },
+      },
+      actorId
+    );
+    const query = vi.spyOn(prisma, '$queryRaw');
+    try {
+      const key = `quota-coalesce:${randomUUID()}:events`;
+      const results = await Promise.all(
+        Array.from({ length: 64 }, () => checkIngestionQuota(key, 120, 60000))
+      );
+      expect(results.filter(result => result.allowed)).toHaveLength(23);
+      const writes = query.mock.calls.filter(
+        ([sql]) =>
+          Array.isArray(sql) && sql.join('').includes('INSERT INTO "IngestionQuota" AS bucket')
+      );
+      expect(writes).toHaveLength(2);
+      expect(results.every(result => result.remaining >= 0)).toBe(true);
+      expect(
+        (await prisma.ingestionQuota.findUniqueOrThrow({ where: { key } })).tokens
+      ).toBeLessThan(1);
+    } finally {
+      query.mockRestore();
+    }
+  });
+
   it('holds every batched identity against legacy writers until transaction completion', async () => {
     const identities = ['é', 'z', '😀', 'a', 'z'].map(key => `${randomUUID()}:${key}`);
     let release!: () => void;

@@ -624,5 +624,25 @@
       "evidence": "upgrade-auto-async-58e9271c.json",
       "scope": "Actual migration entrypoint and source handlers; existing records preserved, three receipts processed via automatic web consumer, repeated startup; no native image or mixed-version certification"
     }
+  },
+  "quotaCoalescingFollowup": {
+    "recordedAt": "2026-10-24T05:23:00.912531+00:00",
+    "certified": false,
+    "maximumCallersPerStatement": 32,
+    "coalescingWindowMs": 2,
+    "maximumOutstandingPerProcess": 1024,
+    "quotaCreditCached": false,
+    "databaseContractTestsPassed": 62,
+    "hotKeyRegression": {
+      "requests": 64,
+      "quotaWrites": 2,
+      "burst": 23,
+      "allowed": 23
+    },
+    "typeCheck": "passed; completed exit0",
+    "modifiedSourceLint": "passed; completed exit0",
+    "independentReview": "No concrete finding from bug/security substitutes",
+    "freshImageValidation": "pending",
+    "throughput1000RpsCertified": false
   }
 }
