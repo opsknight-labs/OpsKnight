@@ -1843,7 +1843,31 @@
       "errors": 0,
       "warnings": 0
     },
-    "freshImageAndCapacity": "pending",
-    "release": "NO-GO"
+    "freshImageAndCapacity": {
+      "revision": "2e22aaa61",
+      "imageId": "sha256:547acca58f62db765a0a24e4e6afebfc8ecc331807546ccb03b69bba7a34f467",
+      "archiveSha256": "e069138a12ec05544d118684009cd0ae26fe7febbfc9ce1745bddd9ec3102d75",
+      "offeredRps": 50,
+      "duration": "5m",
+      "passed": false,
+      "failure": "One dropped generator arrival; downstream execution also remains behind",
+      "accepted": 15000,
+      "completed": 15000,
+      "httpP95Ms": 37.2318,
+      "completionP95Ms": 90,
+      "dueSideEffectJobs": 32961,
+      "processingSideEffectJobs": 75,
+      "dropped": 1,
+      "ambiguous": 0,
+      "receiptBacklog": 0,
+      "httpEvidence": "local-docker-http-live-claim-50.json",
+      "topologyEvidence": "local-docker-topology-live-claim-50.json"
+    },
+    "release": "NO-GO",
+    "automationDatabase": {
+      "passed": 41,
+      "skipped": 1,
+      "skipReason": "Infrastructure database restart case not enabled"
+    }
   }
 }
