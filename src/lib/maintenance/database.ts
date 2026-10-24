@@ -9,7 +9,8 @@ export function getMaintenanceClient() {
   return (maintenanceClient ??= new PrismaClient({
     datasourceUrl: configurePrismaDatasource(
       selectPrismaDatasourceUrl(getOpsKnightProcessRole()),
-      '1'
+      '1',
+      getOpsKnightProcessRole() === 'web' && process.env.PGBOUNCER_ENABLED === 'true'
     ),
   }));
 }

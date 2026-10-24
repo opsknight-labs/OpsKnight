@@ -13,8 +13,15 @@ function summarize(node) {
     relation: node['Relation Name'],
     index: node['Index Name'],
     actualRows: node['Actual Rows'],
+    estimatedRows: node['Plan Rows'],
+    totalCost: node['Total Cost'],
     loops: node['Actual Loops'],
     rowsRemoved: node['Rows Removed by Filter'],
+    indexCondition: node['Index Cond'],
+    filter: node.Filter,
+    joinType: node['Join Type'],
+    joinFilter: node['Join Filter'],
+    rowsRemovedByJoin: node['Rows Removed by Join Filter'],
     sharedHit: node['Shared Hit Blocks'],
     sharedRead: node['Shared Read Blocks'],
     children: node.Plans?.map(summarize),
@@ -68,6 +75,9 @@ async function main() {
         if (sequenceIndex)
           await tx.$executeRaw`CREATE INDEX "IngestionReceipt_claim_sequence_idx"
             ON "IngestionReceipt" ("sequence") WHERE "status" IN ('PENDING', 'PROCESSING')`;
+        const directGin = process.env.INGESTION_PLAN_GIN_DIRECT === 'true';
+        if (directGin)
+          await tx.$executeRaw`ALTER INDEX "IngestionReceipt_unfinished_ordering_keys_idx" SET (fastupdate = off)`;
         // Available timestamps deliberately precede the transaction clock: the
         // millisecond column can otherwise round a default timestamp into its future.
         await tx.$executeRaw`
@@ -78,6 +88,8 @@ async function main() {
           ${prefix} || g, 'owned-plan-hash', 0, 1, '{}'::jsonb, ARRAY[${prefix} || g],
           g % 10 = 0, CURRENT_TIMESTAMP - INTERVAL '1 second'
         FROM generate_series(1, ${count}::int) g`;
+        const analyze = process.env.INGESTION_PLAN_ANALYZE === 'true';
+        if (analyze) await tx.$executeRaw`ANALYZE "IngestionReceipt"`;
         // SQL is captured from the production function, never supplied externally.
         const rows = await tx.$queryRawUnsafe(
           'EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) ' + query,
@@ -98,6 +110,10 @@ async function main() {
           installedSequenceIndex: indexes[0] ?? null,
           experimentalSequenceIndex: sequenceIndex,
           backlog: count,
+          analyzedSyntheticBacklog: analyze,
+          experimentalDirectGin: directGin,
+          jit: (await tx.$queryRaw`SELECT current_setting('jit') AS value`)[0].value,
+          jitEvidence: plan.JIT,
           claimed: 4,
           executionMs: plan['Execution Time'],
           planningMs: plan['Planning Time'],
