@@ -1869,5 +1869,33 @@
       "skipped": 1,
       "skipReason": "Infrastructure database restart case not enabled"
     }
+  },
+  "downstreamExecutionInvestigation": {
+    "certified": false,
+    "componentProfile": {
+      "jobs": 210,
+      "failed": 0,
+      "warmupIterationsExcluded": 5,
+      "queriesPerIncident": 105,
+      "hostCpuMsPerIncident": 40.651,
+      "evidence": "local-side-effect-handler-profile.json",
+      "scope": "Sequential empty host-process component diagnostic, not image capacity"
+    },
+    "twoGeneralReplicaExperiment": {
+      "status": "pending",
+      "imageRevision": "2e22aaa61",
+      "generalReplicas": 2,
+      "poolPerGeneralReplica": 5,
+      "connectionDemandIncludingReserve": 83,
+      "maxConnections": 100,
+      "reserve": 15
+    },
+    "focusedDeploymentWorkerTestsPassed": 61,
+    "typescript": "passed",
+    "lint": {
+      "errors": 0,
+      "warnings": 0
+    },
+    "k6Inspect": "passed"
   }
 }
