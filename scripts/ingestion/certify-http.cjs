@@ -251,6 +251,21 @@ async function main() {
     alerts === accepted &&
     incidents === expectedIncidents;
   const ambiguousSubmissions = accepted - acknowledged;
+  // Receipt completion is atomic with durable outbox persistence, not with
+  // delivery. Report unfinished fixture effects separately from receipt drain.
+  const sideEffectJobs = await prisma.$queryRaw`
+    SELECT job.status::text AS status, COUNT(*)::int AS count,
+      COUNT(*) FILTER (WHERE job.status = 'PENDING'::"JobStatus"
+        AND job."scheduledAt" <= CURRENT_TIMESTAMP)::int AS due,
+      COALESCE(MAX(EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - job."scheduledAt")) * 1000)
+        FILTER (WHERE job.status = 'PENDING'::"JobStatus"
+          AND job."scheduledAt" <= CURRENT_TIMESTAMP), 0)::double precision AS "oldestDueAgeMs"
+    FROM "BackgroundJob" job
+    JOIN "Incident" incident ON incident.id = job.payload->>'incidentId'
+    WHERE job.type = 'SCHEDULED_TASK'::"JobType" AND job.payload->>'task' = 'EVENT_SIDE_EFFECT'
+      AND incident."serviceId" = ${service.id}
+    GROUP BY job.status ORDER BY job.status
+  `;
   const databaseProfile = finishDatabaseProfile ? await finishDatabaseProfile() : undefined;
   finishDatabaseProfile = undefined;
   const evidence = {
@@ -285,6 +300,11 @@ async function main() {
     incidents,
     pending,
     ambiguousSubmissions,
+    sideEffectJobs: {
+      scope:
+        'Measured fixture incident outbox jobs after receipt drain; excludes preflight, other job families and external-provider completion. Not a downstream drain certification.',
+      statuses: sideEffectJobs,
+    },
     oldestPendingAgeMs: oldest ? Date.now() - oldest.acceptedAt.getTime() : 0,
     ingressMs,
     completedMs,

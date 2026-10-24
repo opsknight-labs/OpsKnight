@@ -402,10 +402,13 @@ export async function claimPendingJobs(
     ? Prisma.sql`AND NOT (candidate."type"='SCHEDULED_TASK'::"JobType"
         AND candidate.payload->>'task' IS NOT DISTINCT FROM 'AUTOMATION_OBSERVE')`
     : Prisma.empty;
+  // Expose the live-state bound so PostgreSQL can prove the partial ordered
+  // index applies across the type-specific OR branches below.
   return prisma.$queryRaw<QueuedJob[]>(Prisma.sql`
     WITH cte AS (
       SELECT candidate."id" FROM "BackgroundJob" AS candidate
-      WHERE (
+      WHERE candidate."status" IN ('PENDING'::"JobStatus", 'PROCESSING'::"JobStatus",
+        'PENDING_V2'::"JobStatus", 'PROCESSING_V2'::"JobStatus") AND (
           (
             candidate."type"='STATUS_PAGE_ANNOUNCEMENT_FANOUT_V2'::"JobType"
             AND (

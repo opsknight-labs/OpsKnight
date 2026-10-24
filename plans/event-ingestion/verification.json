@@ -1789,8 +1789,61 @@
       "provider batch prefix retries retain identities",
       "unknown commit reply recovers original batch receipts"
     ],
-    "imageGate": "pending fresh immutable image and 50 RPS / 5 minute gate",
+    "imageGate": {
+      "revision": "f781eeea5",
+      "imageId": "sha256:531cfe51e9cb49659a6779418695b86675cda9a6f8eaad29ae6157993b1c395f",
+      "archiveSha256": "b29f3b34677b0e4aba218df979acac1a9b12f0a64fd16388a4ed0a666985cb1d",
+      "offeredRps": 50,
+      "duration": "5m",
+      "passed": true,
+      "accepted": 15000,
+      "completed": 15000,
+      "httpP95Ms": 52.76,
+      "completionP95Ms": 105,
+      "dropped": 0,
+      "ambiguous": 0,
+      "finalBacklog": 0,
+      "scope": "Diagnostic independent-key critical triggers, random 10KB; not final mixed workload or HA certification",
+      "httpEvidence": "local-docker-http-admission-retry-50.json",
+      "topologyEvidence": "local-docker-topology-admission-retry-50.json"
+    },
     "release": "NO-GO",
     "clock": "Earlier sleep/clock-lag run invalid; authorized sync verified already recovered clock; final caffeinated repeats passed"
+  },
+  "liveJobClaimHardening": {
+    "certified": false,
+    "sourceBase": "f781eeea5",
+    "prior100RpsGate": {
+      "passed": false,
+      "accepted": 29960,
+      "completed": 29960,
+      "httpP95Ms": 137.9694,
+      "completionP95Ms": 179,
+      "rejected": 37,
+      "dropped": 4,
+      "ambiguous": 0,
+      "receiptBacklog": 0
+    },
+    "downstreamDueAfterReceiptDrain": {
+      "50Rps": 34547,
+      "100Rps": 106705
+    },
+    "diagnosticOldIndexMs": [
+      63.857,
+      27.537
+    ],
+    "diagnosticLiveIndexMs": [
+      3.509,
+      3.208
+    ],
+    "databaseTestsPassed": 24,
+    "focusedUnitPassed": 44,
+    "typescript": "passed",
+    "modifiedSourceLint": {
+      "errors": 0,
+      "warnings": 0
+    },
+    "freshImageAndCapacity": "pending",
+    "release": "NO-GO"
   }
 }

@@ -1,0 +1,45 @@
+{
+  "sourceRevision": "f781eeea5",
+  "imageId": "sha256:531cfe51e9cb49659a6779418695b86675cda9a6f8eaad29ae6157993b1c395f",
+  "enterpriseCertified": false,
+  "scope": "Read-only measured-service incident outbox jobs after receipt drain and owned container cleanup. Some PROCESSING jobs can be awaiting reclaim after shutdown. Excludes other job families and preflight; proves receipt drain is not downstream drain.",
+  "runs": [
+    {
+      "rate": 50,
+      "scope": "Read-only measured-fixture event-side-effect jobs retained after receipt drain and owned container cleanup; not external provider completion.",
+      "statuses": [
+        {
+          "status": "PENDING",
+          "count": 34547,
+          "due": 34547
+        },
+        {
+          "status": "PROCESSING",
+          "count": 70,
+          "due": 0
+        },
+        {
+          "status": "COMPLETED",
+          "count": 40383,
+          "due": 0
+        }
+      ]
+    },
+    {
+      "rate": 100,
+      "scope": "Read-only measured-fixture event-side-effect jobs retained after receipt drain and owned container cleanup; not external provider completion.",
+      "statuses": [
+        {
+          "status": "PENDING",
+          "count": 106705,
+          "due": 106705
+        },
+        {
+          "status": "COMPLETED",
+          "count": 43095,
+          "due": 0
+        }
+      ]
+    }
+  ]
+}
