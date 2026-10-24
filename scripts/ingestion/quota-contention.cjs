@@ -12,6 +12,7 @@ const evidence = {
   certifiedEnterprise: false,
   scope:
     'Single Node library process and isolated local Docker PostgreSQL; excludes HTTP, incident processing, Automation and provider delivery',
+  coalescing: process.env.INGESTION_QUOTA_COALESCE !== 'false',
   scenarios: [],
 };
 async function main() {
@@ -39,6 +40,15 @@ async function main() {
     create: { key: 'ingestion_control', value },
     update: { value },
   });
+  // A transaction-shaped direct adapter bypasses coalescing for a controlled
+  // scalar comparison using the same SQL and policy; no production flag changes.
+  const quotaClient = evidence.coalescing
+    ? prisma
+    : {
+        systemConfig: prisma.systemConfig,
+        $queryRaw: prisma.$queryRaw.bind(prisma),
+      };
+  const decide = key => checkIngestionQuota(key, 120, 60000, quotaClient);
   const decisions = Number(process.env.INGESTION_QUOTA_DECISIONS || 20000);
   const concurrency = Number(process.env.INGESTION_QUOTA_CONCURRENCY || 32);
   assert.ok(Number.isInteger(decisions) && decisions >= 100 && decisions <= 100000);
@@ -48,7 +58,7 @@ async function main() {
       { length: keys },
       (_, index) => `quota-contention:${run}:${keys}:${index}:events`
     );
-    for (const key of quotaKeys) assert.ok((await checkIngestionQuota(key, 120, 60000)).allowed);
+    for (const key of quotaKeys) assert.ok((await decide(key)).allowed);
     const finish = await require('./database-profile.cjs')(prisma);
     const latencies = [];
     let next = 0;
@@ -59,7 +69,7 @@ async function main() {
         while (next < decisions) {
           const index = next++;
           const at = performance.now();
-          const result = await checkIngestionQuota(quotaKeys.at(index % keys), 120, 60000);
+          const result = await decide(quotaKeys.at(index % keys));
           latencies.push(performance.now() - at);
           if (result.allowed) allowed++;
         }

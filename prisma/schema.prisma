@@ -850,6 +850,7 @@ model IngestionQuota {
   burst          Int
   updatedAt      DateTime @db.Timestamptz(3)
   lastAllowed    Boolean
+  lastGranted    Int      @default(0)
   policyRevision BigInt   @default(0)
 
   @@index([updatedAt])

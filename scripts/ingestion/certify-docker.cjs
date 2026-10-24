@@ -550,6 +550,16 @@ async function main() {
     }
   }
   const processNames = [...webNames, ...workers, ...supportingProcesses];
+  if (automaticMode) {
+    for (const name of processNames) {
+      const container = await inspect(name);
+      assert.ok(
+        container.Config.Env.every(value => !value.startsWith('OPSKNIGHT_INGESTION_MODE=')),
+        'Automatic-mode certification requires the mode variable absent from the actual image process'
+      );
+    }
+    evidence.modeOverrideAbsentFromContainers = true;
+  }
   if (usePgBouncer) {
     const addresses = await Promise.all(
       [pgBouncerName, ...webNames, ...workers].map(async name => {
