@@ -210,3 +210,8 @@ The shared database profiler also samples categorized blocking transactions and 
 ### Admission rollback before contention backoff
 
 Capacity helpers distinguish true exhaustion from skipped locks with remaining committed headroom. Transient contention throws an internally marked unavailable error, retaining the public 503 contract while the shared bounded transaction helper rolls back before waiting. Grouped partial reservations and batch children restart atomically. Fallback child identities are stable across retries, including unknown commit outcomes. Shared phase histograms expose admission and driver intervals without adding SQL, timers inside reservations or high-cardinality labels. Optional native snapshots export only allowlisted numeric metrics. This is phase-one source hardening; CPU preparation and identity locking still need measured analysis, and no new capacity is certified.
+
+
+### Live background-job claim index
+
+The shared job claimant now exposes its existing four live statuses as a redundant explicit bound, allowing PostgreSQL to prove applicability of an additive partial index on scheduledAt/createdAt/id with attempts below maxAttempts. Completed history no longer has to precede due work in this ordered scan. Type-specific generation, lease, lane, predecessor and SKIP LOCKED rules remain. This improves the measured SQL access path; it does not establish that the general worker can execute all resulting jobs quickly enough. Native evidence now records measured-service event-side-effect backlog separately from receipt completion.

@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, afterAll } from 'vitest';
+import type { Prisma } from '@prisma/client';
 import {
   scheduleJob,
   claimPendingJobs,
@@ -28,6 +29,52 @@ describeIfRealDB('Job Queue Resilience Tests', { timeout: 30000 }, () => {
   });
 
   describe('Atomic Job Claiming (FOR UPDATE SKIP LOCKED)', () => {
+    it('retains both queue generations and lease rules while excluding terminal history', async () => {
+      const due = new Date(Date.now() - 60_000);
+      const stale = new Date(Date.now() - 20 * 60_000);
+      const fresh = new Date();
+      const fixtures: Prisma.BackgroundJobCreateManyInput[] = (
+        [
+          { id: 'ordinary-pending', type: 'SCHEDULED_TASK', status: 'PENDING' },
+          { id: 'ordinary-stale', type: 'SCHEDULED_TASK', status: 'PROCESSING', startedAt: stale },
+          { id: 'ordinary-fresh', type: 'SCHEDULED_TASK', status: 'PROCESSING', startedAt: fresh },
+          { id: 'bulk-pending', type: 'STATUS_PAGE_ANNOUNCEMENT_FANOUT_V2', status: 'PENDING_V2' },
+          {
+            id: 'bulk-stale',
+            type: 'STATUS_PAGE_ANNOUNCEMENT_FANOUT_V2',
+            status: 'PROCESSING_V2',
+            startedAt: stale,
+          },
+          {
+            id: 'bulk-fresh',
+            type: 'STATUS_PAGE_ANNOUNCEMENT_FANOUT_V2',
+            status: 'PROCESSING_V2',
+            startedAt: fresh,
+          },
+          { id: 'wrong-generation', type: 'STATUS_PAGE_ANNOUNCEMENT_FANOUT_V2', status: 'PENDING' },
+          { id: 'completed', type: 'SCHEDULED_TASK', status: 'COMPLETED' },
+          { id: 'failed', type: 'SCHEDULED_TASK', status: 'FAILED' },
+          { id: 'cancelled', type: 'SCHEDULED_TASK', status: 'CANCELLED' },
+          { id: 'exhausted', type: 'SCHEDULED_TASK', status: 'PENDING', attempts: 3 },
+          {
+            id: 'future',
+            type: 'SCHEDULED_TASK',
+            status: 'PENDING',
+            scheduledAt: new Date(Date.now() + 60_000),
+          },
+        ] as const
+      ).map(row => ({ scheduledAt: due, payload: { task: 'ORDINARY' }, ...row }));
+      await testPrisma.backgroundJob.createMany({ data: fixtures });
+      const batches = await Promise.all([claimPendingJobs(20), claimPendingJobs(20)]);
+      expect(
+        batches
+          .flat()
+          .map(job => job.id)
+          .sort()
+      ).toEqual(['bulk-pending', 'bulk-stale', 'ordinary-pending', 'ordinary-stale']);
+      expect(await testPrisma.backgroundJob.count()).toBe(fixtures.length);
+    });
+
     it('should prevent multiple workers from claiming the same job', async () => {
       // 1. Create due jobs, independent of host/database clock skew.
       for (let i = 0; i < 5; i++) {
