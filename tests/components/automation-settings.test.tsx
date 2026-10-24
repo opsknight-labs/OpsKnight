@@ -145,7 +145,7 @@ describe('AutomationSettings', () => {
     const fieldError = screen.getByText('Enter a whole number of days from 1 to 3650.');
     expect(retention().getAttribute('aria-invalid')).toBe('true');
     expect(retention().getAttribute('aria-describedby')).toContain(fieldError.id);
-    expect(document.activeElement).toBe(retention());
+    await waitFor(() => expect(document.activeElement).toBe(retention()));
     expect(screen.queryByRole('button', { name: 'Reload settings' })).toBeNull();
     fireEvent.change(retention(), { target: { value: '45' } });
     expect(screen.queryByText('Enter a whole number of days from 1 to 3650.')).toBeNull();

@@ -4,7 +4,11 @@ import { acquireTextAdvisoryLocks } from '@/lib/db-locks';
 import { randomUUID } from 'node:crypto';
 import { Prisma } from '@prisma/client';
 import prisma from '@/lib/prisma';
-import { runReadCommittedTransaction } from '@/lib/db-utils';
+import {
+  measureAdmissionStage,
+  measureAdmissionPreparation,
+  runIngestionAdmissionTransaction,
+} from './admission-timing';
 import type { IntegrationEventEnvelope } from '@/lib/automation/runtime';
 import { getIngestionAutomationConfigs } from '@/lib/automation/settings';
 import { getIngestionPolicy } from './policy';
@@ -102,18 +106,25 @@ async function appendPostgresGroup(
   tx: Prisma.TransactionClient,
   entries: PreparedAppend[]
 ): Promise<AppendResult[]> {
-  await tx.$executeRaw`SET LOCAL synchronous_commit = on`;
-  await acquireTextAdvisoryLocks(
-    tx,
-    entries.flatMap(entry => [
-      ...entry.identities.map(identity => `ingestion:${identity}`),
-      `ingestion-delivery:${entry.idempotencyKey}`,
-    ])
+  await measureAdmissionStage(
+    'durability',
+    () => tx.$executeRaw`SET LOCAL synchronous_commit = on`
   );
-  const existing = await tx.ingestionReceipt.findMany({
-    where: { idempotencyKey: { in: entries.map(entry => entry.idempotencyKey) } },
-    select: { id: true, idempotencyKey: true, contentHash: true },
-  });
+  await measureAdmissionStage('advisory', () =>
+    acquireTextAdvisoryLocks(
+      tx,
+      entries.flatMap(entry => [
+        ...entry.identities.map(identity => `ingestion:${identity}`),
+        `ingestion-delivery:${entry.idempotencyKey}`,
+      ])
+    )
+  );
+  const existing = await measureAdmissionStage('idempotency', () =>
+    tx.ingestionReceipt.findMany({
+      where: { idempotencyKey: { in: entries.map(entry => entry.idempotencyKey) } },
+      select: { id: true, idempotencyKey: true, contentHash: true },
+    })
+  );
   const byKey = new Map(existing.map(row => [row.idempotencyKey, row]));
   const results = new Map<PreparedAppend, AppendResult>();
   const fresh: PreparedAppend[] = [];
@@ -139,30 +150,36 @@ async function appendPostgresGroup(
     }
   }
   if (fresh.length) {
-    const { paused, policy } = await getIngestionPolicy(tx);
+    const { paused, policy } = await measureAdmissionStage('policy', () => getIngestionPolicy(tx));
     if (paused) {
       for (const entry of fresh)
         results.set(entry, { error: new IngestionUnavailableError('Ingestion admission paused') });
     } else {
-      const automation = await getIngestionAutomationConfigs(tx, [
-        ...new Set(fresh.map(entry => entry.envelope.serviceId)),
-      ]);
-      const prepared = fresh.map(entry => {
-        const envelope = encodeEnvelope({
-          ...decodeEnvelope(entry.envelope),
-          automationSnapshot: automation.get(entry.envelope.serviceId) ?? null,
-        });
-        return {
-          entry,
-          envelope,
-          payloadBytes: Buffer.byteLength(JSON.stringify(envelope)),
-          critical:
-            envelope.event.payload.severity === 'critical' ||
-            envelope.automationSnapshot?.mode === 'LIVE',
-          preferredShard: Number.parseInt(entry.partition.slice(0, 8), 16) % 64,
-        };
-      });
-      const reservations = await reserveIngestionBudgets(tx, policy, prepared);
+      const automation = await measureAdmissionStage('automation', () =>
+        getIngestionAutomationConfigs(tx, [
+          ...new Set(fresh.map(entry => entry.envelope.serviceId)),
+        ])
+      );
+      const prepared = measureAdmissionPreparation(() =>
+        fresh.map(entry => {
+          const envelope = encodeEnvelope({
+            ...decodeEnvelope(entry.envelope),
+            automationSnapshot: automation.get(entry.envelope.serviceId) ?? null,
+          });
+          return {
+            entry,
+            envelope,
+            payloadBytes: Buffer.byteLength(JSON.stringify(envelope)),
+            critical:
+              envelope.event.payload.severity === 'critical' ||
+              envelope.automationSnapshot?.mode === 'LIVE',
+            preferredShard: Number.parseInt(entry.partition.slice(0, 8), 16) % 64,
+          };
+        })
+      );
+      const reservations = await measureAdmissionStage('reservation', () =>
+        reserveIngestionBudgets(tx, policy, prepared)
+      );
       const rows: Prisma.IngestionReceiptCreateManyInput[] = [];
       for (const [index, item] of prepared.entries()) {
         const budgetShard = reservations.at(index);
@@ -190,7 +207,8 @@ async function appendPostgresGroup(
         });
         results.set(item.entry, { receiptId: id, duplicate: false });
       }
-      if (rows.length) await tx.ingestionReceipt.createMany({ data: rows });
+      if (rows.length)
+        await measureAdmissionStage('insert', () => tx.ingestionReceipt.createMany({ data: rows }));
     }
   }
   for (const { entry, original } of duplicates) {
@@ -218,7 +236,8 @@ export async function acceptPostgresEvent(
     };
     await prepareIngestionOrdering();
     const batcher = (globalThis.opsknightIngestionAppendBatcher ??= new DurableAppendBatcher(
-      entries => runReadCommittedTransaction(tx => appendPostgresGroup(tx, entries))
+      entries =>
+        runIngestionAdmissionTransaction(tx => appendPostgresGroup(tx, entries), entries.length)
     ));
     const accepted = await batcher.enqueue(prepared, Buffer.byteLength(JSON.stringify(envelope)));
     if ('error' in accepted) throw accepted.error;
@@ -243,7 +262,9 @@ export async function acceptPostgresEvent(
     deliveryKey ?? randomUUID(),
   ]);
   const append = async (tx: Prisma.TransactionClient) => {
-    const existing = await tx.ingestionReceipt.findUnique({ where: { idempotencyKey } });
+    const existing = await measureAdmissionStage('idempotency', () =>
+      tx.ingestionReceipt.findUnique({ where: { idempotencyKey } })
+    );
     if (existing) {
       if (
         existing.contentHash !== contentHash &&
@@ -252,7 +273,9 @@ export async function acceptPostgresEvent(
         throw new IngestionConflictError('Delivery key reused with different content');
       return { receiptId: existing.id, duplicate: true };
     }
-    const { paused, policy: config } = await getIngestionPolicy(tx);
+    const { paused, policy: config } = await measureAdmissionStage('policy', () =>
+      getIngestionPolicy(tx)
+    );
     if (paused) {
       throw new IngestionUnavailableError('Ingestion admission paused');
     }
@@ -271,34 +294,38 @@ export async function acceptPostgresEvent(
     const critical =
       acceptedEnvelope.event.payload.severity === 'critical' ||
       acceptedEnvelope.automationSnapshot?.mode === 'LIVE';
-    const budgetShard = await reserveIngestionBudget(tx, {
-      policy: config,
-      payloadBytes,
-      critical,
-      preferredShard: preferredBudgetShard,
-    });
-    if (budgetShard === undefined)
-      throw new IngestionUnavailableError('Ingestion capacity exhausted');
-    const receipt = await tx.ingestionReceipt.create({
-      data: {
-        id: randomUUID(),
-        receivedAt: input.receivedAt,
-        serviceId: input.serviceId,
-        integrationId: input.integrationId,
-        partitionKey: partition,
-        orderingKeys: identities,
-        idempotencyKey,
-        contentHash,
-        budgetShard,
+    const budgetShard = await measureAdmissionStage('reservation', () =>
+      reserveIngestionBudget(tx, {
+        policy: config,
         payloadBytes,
         critical,
-        // New work is immediately eligible, independently of clock skew and
-        // TIMESTAMP(3) rounding at the database's transaction boundary.
-        availableAt: new Date(0),
-        envelope: acceptedEnvelope as Prisma.InputJsonValue,
-        batchId: context.shared.batchPayloadId,
-      },
-    });
+        preferredShard: preferredBudgetShard,
+      })
+    );
+    if (budgetShard === undefined)
+      throw new IngestionUnavailableError('Ingestion capacity exhausted');
+    const receipt = await measureAdmissionStage('insert', () =>
+      tx.ingestionReceipt.create({
+        data: {
+          id: randomUUID(),
+          receivedAt: input.receivedAt,
+          serviceId: input.serviceId,
+          integrationId: input.integrationId,
+          partitionKey: partition,
+          orderingKeys: identities,
+          idempotencyKey,
+          contentHash,
+          budgetShard,
+          payloadBytes,
+          critical,
+          // New work is immediately eligible, independently of clock skew and
+          // TIMESTAMP(3) rounding at the database's transaction boundary.
+          availableAt: new Date(0),
+          envelope: acceptedEnvelope as Prisma.InputJsonValue,
+          batchId: context.shared.batchPayloadId,
+        },
+      })
+    );
     return { receiptId: receipt.id, duplicate: false };
   };
   const accepted = await append(context.tx);

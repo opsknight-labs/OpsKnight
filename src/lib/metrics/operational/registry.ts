@@ -78,6 +78,15 @@ export const OPERATIONAL_METRICS = [
     buckets: [1, 5, 10, 25, 50, 100, 250, 500, 1000, 5000],
   },
   {
+    name: 'opsknight_ingestion_admission_stage_duration_ms',
+    help: 'Admission stage duration; acquire includes pool/BEGIN and finalize includes driver handoff plus commit or rollback',
+    kind: 'histogram',
+    labels: ['stage', 'outcome'],
+    scope: 'counter',
+    estimatedMaxSeries: 312,
+    buckets: [1, 5, 10, 25, 50, 100, 250, 500, 1000, 5000],
+  },
+  {
     name: 'opsknight_ingestion_processing_total',
     help: 'Ingestion worker attempts by completed, retry, or dead outcome',
     kind: 'counter',
@@ -121,6 +130,14 @@ export const OPERATIONAL_METRICS = [
   {
     name: 'opsknight_ingestion_capacity_reservation_retries_total',
     help: 'Additional reservation attempts after eligible budget shards were temporarily locked',
+    kind: 'counter',
+    labels: [],
+    scope: 'counter',
+    estimatedMaxSeries: 1,
+  },
+  {
+    name: 'opsknight_ingestion_capacity_contention_total',
+    help: 'Reservation attempts rolled back after skipping locked shards despite committed headroom; retries may succeed',
     kind: 'counter',
     labels: [],
     scope: 'counter',

@@ -1,6 +1,8 @@
 import { addOperationalMetric } from '@/lib/metrics/operational/registry';
 import { Prisma } from '@prisma/client';
 import type { IngestionPolicy } from './policy-schema';
+import { markTransactionRetry } from '@/lib/transaction-retry';
+import { IngestionUnavailableError } from './contract';
 
 /** Independent counters retain the global bound and protected critical reserve. */
 export async function reserveIngestionBudget(
@@ -19,15 +21,9 @@ export async function reserveIngestionBudget(
     AND "bytes" + ${payloadBytes} <= ${Math.floor(policy.maxPendingBytes / 64)}
     AND (${critical} OR "shard" >= ${reservedShards})
   `;
-  // SKIP LOCKED is a concurrency hint, not evidence of exhausted capacity.
-  // Retry only while a non-locking snapshot still shows eligible headroom.
-  // No sleep is added to successful admission; total scheduled backoff is 50ms.
-  for (const delay of [0, 5, 15, 30]) {
-    if (delay) {
-      await new Promise(resolve => setTimeout(resolve, delay));
-      addOperationalMetric('opsknight_ingestion_capacity_reservation_retries_total', 1);
-    }
-    const reserved = await tx.$queryRaw<Array<{ shard: number }>>`
+  // SKIP LOCKED can indicate contention rather than exhaustion. Never wait
+  // here: the caller may hold ordering, capacity or earlier batch-child locks.
+  const reserved = await tx.$queryRaw<Array<{ shard: number }>>`
     WITH candidate AS (
       SELECT "shard" FROM "IngestionBudget" WHERE ${eligible}
       ORDER BY ("shard" - ${preferredShard} + 64) % 64
@@ -37,18 +33,16 @@ export async function reserveIngestionBudget(
       FROM candidate WHERE budget."shard" = candidate."shard"
       RETURNING budget."shard"
   `;
-    if (reserved[0]) return reserved[0].shard;
-    if (delay === 30) break;
-    const [capacity] = await tx.$queryRaw<Array<{ available: boolean }>>`
+  if (reserved[0]) return reserved[0].shard;
+  const [capacity] = await tx.$queryRaw<Array<{ available: boolean }>>`
       SELECT EXISTS (SELECT 1 FROM "IngestionBudget" WHERE ${eligible}) AS available
     `;
-    if (!capacity?.available) {
-      addOperationalMetric('opsknight_ingestion_capacity_rejections_total', 1, { reason: 'full' });
-      return undefined;
-    }
+  if (!capacity?.available) {
+    addOperationalMetric('opsknight_ingestion_capacity_rejections_total', 1, { reason: 'full' });
+    return undefined;
   }
-  addOperationalMetric('opsknight_ingestion_capacity_rejections_total', 1, { reason: 'contended' });
-  return undefined;
+  addOperationalMetric('opsknight_ingestion_capacity_contention_total', 1);
+  throw markTransactionRetry(new IngestionUnavailableError('Ingestion capacity contended'));
 }
 
 /** Reserve a bounded commit group without one query per receipt. Row locks are
@@ -70,7 +64,6 @@ export async function reserveIngestionBudgets(
     { shard: number; pending: number; bytes: bigint; count: number; addedBytes: number }
   >();
   const results: Array<number | undefined> = inputs.map(() => undefined);
-  let retries = 0;
   for (;;) {
     for (const [index, input] of inputs.entries()) {
       if (results.at(index) !== undefined) continue;
@@ -113,14 +106,16 @@ export async function reserveIngestionBudgets(
       SELECT EXISTS (SELECT 1 FROM "IngestionBudget" WHERE ${eligible}) AS available
     `;
     const reason = capacity?.available ? 'contended' : 'full';
-    if (!capacity?.available || retries === 3) {
+    if (!capacity?.available) {
       addOperationalMetric('opsknight_ingestion_capacity_rejections_total', remaining.length, {
         reason,
       });
       break;
     }
-    await new Promise(resolve => setTimeout(resolve, [5, 15, 30][retries++]));
-    addOperationalMetric('opsknight_ingestion_capacity_reservation_retries_total', 1);
+    // Roll back even a partially allocated group before retrying. Nothing
+    // escapes until the whole transaction commits, and delivery IDs are stable.
+    addOperationalMetric('opsknight_ingestion_capacity_contention_total', remaining.length);
+    throw markTransactionRetry(new IngestionUnavailableError('Ingestion capacity contended'));
   }
   const changes = [...held.values()].filter(row => row.count);
   if (changes.length) {

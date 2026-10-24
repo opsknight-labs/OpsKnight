@@ -805,11 +805,14 @@ describe('PostgreSQL ingestion durability', () => {
     }
   });
 
-  it('retries a confirmed skipped budget lock after headroom becomes available', async () => {
+  it('releases admission locks before retrying a skipped budget reservation', async () => {
     let unlock!: () => void;
     let ready!: () => void;
     let timer: ReturnType<typeof setTimeout> | undefined;
     let observedContention = false;
+    let releasedAdmissionLock = false;
+    let probe: Promise<void> | undefined;
+    const probeKey = `admission-retry-${randomUUID()}`;
     const held = new Promise<void>(resolve => {
       unlock = resolve;
     });
@@ -828,7 +831,8 @@ describe('PostgreSQL ingestion durability', () => {
     try {
       await locked;
       const { policy } = await getIngestionPolicy();
-      const reservation = prisma.$transaction(async tx => {
+      const reservation = runReadCommittedTransaction(async tx => {
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${probeKey}, 0))`;
         const observed = new Proxy(tx, {
           get(target, property, receiver) {
             if (property !== '$queryRaw') return Reflect.get(target, property, receiver);
@@ -837,7 +841,15 @@ describe('PostgreSQL ingestion durability', () => {
               if (Array.isArray(result) && result.length === 0 && !observedContention) {
                 observedContention = true;
                 // Release only after a real candidate query skipped every locked shard.
-                timer = setTimeout(unlock, 25);
+                timer = setTimeout(() => {
+                  probe = prisma.$queryRaw<Array<{ available: boolean }>>`
+                    SELECT pg_try_advisory_xact_lock(hashtextextended(${probeKey}, 0)) AS available
+                  `
+                    .then(rows => {
+                      releasedAdmissionLock = rows[0].available;
+                    })
+                    .finally(unlock);
+                }, 5);
               }
               return result;
             };
@@ -854,6 +866,8 @@ describe('PostgreSQL ingestion durability', () => {
         throw rollback;
       });
       await expect(reservation).rejects.toBe(rollback);
+      await probe;
+      expect(releasedAdmissionLock).toBe(true);
     } finally {
       if (timer) clearTimeout(timer);
       unlock();
@@ -2096,6 +2110,191 @@ describe('PostgreSQL ingestion durability', () => {
     const rows = await prisma.ingestionBudget.findMany({ where: { pending: { gt: 0 } } });
     expect(rows).toHaveLength(8);
     expect(rows.every(row => row.pending === 4 && row.bytes === BigInt(400))).toBe(true);
+  });
+
+  it('rolls back a partially locked group before retrying without leaking reservations', async () => {
+    let ready!: () => void;
+    let unlock!: () => void;
+    const locked = new Promise<void>(resolve => {
+      ready = resolve;
+    });
+    const release = new Promise<void>(resolve => {
+      unlock = resolve;
+    });
+    const holder = prisma.$transaction(
+      async tx => {
+        await tx.$queryRaw`SELECT "shard" FROM "IngestionBudget" WHERE "shard" <> 0 ORDER BY "shard" FOR UPDATE`;
+        ready();
+        await release;
+      },
+      { timeout: 5000 }
+    );
+    let probe: Promise<void> | undefined;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let skipped = false;
+    let freedPrefix = false;
+    let attempts = 0;
+    try {
+      await locked;
+      const { policy } = await getIngestionPolicy();
+      const assignments = await runReadCommittedTransaction(async tx => {
+        attempts++;
+        const observed = new Proxy(tx, {
+          get(target, property, receiver) {
+            if (property !== '$queryRaw') return Reflect.get(target, property, receiver);
+            return async (...args: Parameters<Prisma.TransactionClient['$queryRaw']>) => {
+              const result = await tx.$queryRaw(...args);
+              if (Array.isArray(result) && result.length === 0 && !skipped) {
+                skipped = true;
+                timer = setTimeout(() => {
+                  probe = prisma.$queryRaw<Array<{ shard: number }>>`
+                    SELECT "shard" FROM "IngestionBudget" WHERE "shard"=0 FOR UPDATE SKIP LOCKED
+                  `
+                    .then(rows => {
+                      freedPrefix = rows.length === 1;
+                    })
+                    .finally(unlock);
+                }, 5);
+              }
+              return result;
+            };
+          },
+        });
+        return reserveIngestionBudgets(
+          observed,
+          { ...policy, maxPending: 64 },
+          Array.from({ length: 4 }, () => ({
+            payloadBytes: 100,
+            critical: true,
+            preferredShard: 0,
+          }))
+        );
+      });
+      await probe;
+      expect(freedPrefix).toBe(true);
+      expect(attempts).toBeGreaterThan(1);
+      expect(assignments.every(shard => shard !== undefined)).toBe(true);
+      const totals = await prisma.ingestionBudget.aggregate({
+        _sum: { pending: true, bytes: true },
+      });
+      expect(totals._sum).toEqual({ pending: 4, bytes: BigInt(400) });
+    } finally {
+      if (timer) clearTimeout(timer);
+      unlock();
+      await holder;
+      await probe;
+    }
+  });
+
+  it('retries an entire provider batch with stable child identities and no accepted prefix', async () => {
+    const settings = await getIngestionPolicy();
+    await applyIngestionCommand(
+      {
+        action: 'configure',
+        expectedRevision: settings.revision,
+        policy: { ...settings.policy, maxPending: 64, criticalReservePercent: 0 },
+      },
+      actorId
+    );
+    let ready!: () => void;
+    let unlock!: () => void;
+    const locked = new Promise<void>(resolve => {
+      ready = resolve;
+    });
+    const release = new Promise<void>(resolve => {
+      unlock = resolve;
+    });
+    const holder = prisma.$transaction(
+      async tx => {
+        await tx.$queryRaw`SELECT "shard" FROM "IngestionBudget" WHERE "shard" <> 0 ORDER BY "shard" FOR UPDATE`;
+        ready();
+        await release;
+      },
+      { timeout: 5000 }
+    );
+    const insertedKeys: string[] = [];
+    let active = true;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    prisma.$on('query', event => {
+      if (!active) return;
+      if (/INSERT INTO ("public"\.)?"IngestionReceipt"/.test(event.query)) {
+        const columns = event.query
+          .slice(event.query.indexOf('(') + 1, event.query.indexOf(')'))
+          .split(',')
+          .map(column => column.trim().replaceAll('"', ''));
+        const values: unknown[] = JSON.parse(event.params);
+        const key = values.at(columns.indexOf('idempotencyKey'));
+        if (typeof key === 'string') insertedKeys.push(key);
+      }
+      if (!timer && event.query.includes('EXISTS') && event.query.includes('"IngestionBudget"'))
+        timer = setTimeout(unlock, 5);
+    });
+    try {
+      await locked;
+      const input = envelope('batch-retry-first');
+      const receipts = await acceptPostgresBatch(
+        input,
+        [input.event, envelope('batch-retry-second').event],
+        [undefined, undefined]
+      );
+      expect(timer).toBeDefined();
+      expect(insertedKeys.length).toBeGreaterThan(2);
+      const persisted = await prisma.ingestionReceipt.findMany({
+        select: { id: true, idempotencyKey: true },
+      });
+      expect(persisted).toHaveLength(2);
+      expect(persisted.map(row => row.idempotencyKey)).toContain(insertedKeys[0]);
+      expect(new Set(persisted.map(row => row.id))).toEqual(
+        new Set(receipts.map(row => row.receiptId))
+      );
+      expect(await prisma.ingestionBatch.count()).toBe(1);
+      expect(
+        (await prisma.ingestionBudget.aggregate({ _sum: { pending: true } }))._sum.pending
+      ).toBe(2);
+    } finally {
+      active = false;
+      if (timer) clearTimeout(timer);
+      unlock();
+      await holder;
+    }
+  });
+
+  it('recovers a provider batch when its commit succeeds but the commit reply is lost', async () => {
+    const transaction = prisma.$transaction.bind(prisma);
+    let committedIds: string[] = [];
+    const intercept = vi.spyOn(prisma, '$transaction').mockImplementationOnce((async (
+      callback: (tx: Prisma.TransactionClient) => Promise<unknown>,
+      options?: {
+        isolationLevel?: Prisma.TransactionIsolationLevel;
+        timeout?: number;
+        maxWait?: number;
+      }
+    ) => {
+      await transaction(callback, options);
+      committedIds = (await prisma.ingestionReceipt.findMany({ select: { id: true } })).map(
+        row => row.id
+      );
+      throw new Prisma.PrismaClientKnownRequestError('Owned commit-response-loss fixture', {
+        code: 'P2028',
+        clientVersion: '5.22.0',
+      });
+    }) as never);
+    try {
+      const input = envelope('committed-batch-first');
+      const recovered = await acceptPostgresBatch(
+        input,
+        [input.event, envelope('committed-batch-second').event],
+        [undefined, undefined]
+      );
+      expect(new Set(recovered.map(row => row.receiptId))).toEqual(new Set(committedIds));
+      expect(await prisma.ingestionReceipt.count()).toBe(2);
+      expect(await prisma.ingestionBatch.count()).toBe(1);
+      expect(
+        (await prisma.ingestionBudget.aggregate({ _sum: { pending: true } }))._sum.pending
+      ).toBe(2);
+    } finally {
+      intercept.mockRestore();
+    }
   });
 
   it('group commits independent requests and isolates conflicting delivery errors', async () => {

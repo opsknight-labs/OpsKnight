@@ -1762,5 +1762,35 @@
       "topologyEvidence": "local-docker-topology-completion-lock-profile-50.json",
       "cleanupFailures": []
     }
+  },
+  "admissionRetryHardening": {
+    "recordedAt": "2026-10-24T20:13:58.235072+00:00",
+    "certified": false,
+    "sourceBase": "7d242636b",
+    "unit": {
+      "filesPassed": 949,
+      "passed": 9976,
+      "skipped": 7
+    },
+    "ingestionDatabaseAndContract": {
+      "passed": 74
+    },
+    "lifecycleFrontierAutomation": {
+      "passed": 31
+    },
+    "typescript": "passed",
+    "modifiedSourceEslint": {
+      "errors": 0,
+      "warnings": 0
+    },
+    "regressions": [
+      "rollback releases advisory lock before contention backoff",
+      "partial grouped reservation rollback before retry",
+      "provider batch prefix retries retain identities",
+      "unknown commit reply recovers original batch receipts"
+    ],
+    "imageGate": "pending fresh immutable image and 50 RPS / 5 minute gate",
+    "release": "NO-GO",
+    "clock": "Earlier sleep/clock-lag run invalid; authorized sync verified already recovered clock; final caffeinated repeats passed"
   }
 }
