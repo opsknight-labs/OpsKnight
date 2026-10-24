@@ -1,0 +1,83 @@
+import type { Prisma } from '@prisma/client';
+import { runReadCommittedTransaction, TRANSACTION_MAX_ATTEMPTS_HIGH_LOAD } from '@/lib/db-utils';
+import { isExplicitTransactionRetry } from '@/lib/transaction-retry';
+import {
+  addOperationalMetric,
+  observeOperationalHistogram,
+} from '@/lib/metrics/operational/registry';
+
+type AdmissionStage =
+  | 'durability'
+  | 'advisory'
+  | 'idempotency'
+  | 'policy'
+  | 'automation'
+  | 'preparation'
+  | 'reservation'
+  | 'insert';
+
+export async function measureAdmissionStage<T>(
+  stage: AdmissionStage,
+  operation: () => Promise<T>
+): Promise<T> {
+  const startedAt = performance.now();
+  let outcome = 'failure';
+  try {
+    const result = await operation();
+    outcome = 'success';
+    return result;
+  } finally {
+    observeOperationalHistogram(
+      'opsknight_ingestion_admission_stage_duration_ms',
+      performance.now() - startedAt,
+      { stage, outcome }
+    );
+  }
+}
+
+export function measureAdmissionPreparation<T>(operation: () => T): T {
+  const startedAt = performance.now();
+  let outcome = 'failure';
+  try {
+    const result = operation();
+    outcome = 'success';
+    return result;
+  } finally {
+    observeOperationalHistogram(
+      'opsknight_ingestion_admission_stage_duration_ms',
+      performance.now() - startedAt,
+      { stage: 'preparation', outcome }
+    );
+  }
+}
+
+/** Finalize includes driver handoff and commit/rollback, not pure WAL time.
+ * Acquire includes pool checkout and BEGIN. Explicit contention rolls back
+ * before backoff; other failures can include unknown commit outcomes.
+ */
+export async function runIngestionAdmissionTransaction<T>(
+  operation: (tx: Prisma.TransactionClient) => Promise<T>,
+  admissionCount = 1
+): Promise<T> {
+  try {
+    return await runReadCommittedTransaction(
+      operation,
+      TRANSACTION_MAX_ATTEMPTS_HIGH_LOAD,
+      timing => {
+        observeOperationalHistogram(
+          'opsknight_ingestion_admission_stage_duration_ms',
+          timing.durationMs,
+          { stage: `transaction-${timing.phase}`, outcome: timing.outcome }
+        );
+        if (timing.phase === 'backoff' && timing.retryReason === 'explicit')
+          addOperationalMetric('opsknight_ingestion_capacity_reservation_retries_total', 1);
+      }
+    );
+  } catch (error) {
+    if (isExplicitTransactionRetry(error))
+      addOperationalMetric('opsknight_ingestion_capacity_rejections_total', admissionCount, {
+        reason: 'contended',
+      });
+    throw error;
+  }
+}

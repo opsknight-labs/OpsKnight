@@ -226,6 +226,7 @@ async function main() {
   const workerReplicas = Number(process.env.INGESTION_WORKER_REPLICAS ?? 4);
   const automaticMode = process.env.INGESTION_DOCKER_DEFAULT_MODE === 'true';
   const workerMetricsChecks = process.env.INGESTION_DOCKER_WORKER_METRICS_CHECKS === 'true';
+  const admissionMetricsChecks = process.env.INGESTION_DOCKER_ADMISSION_METRICS_CHECKS === 'true';
   const webCpus = Number(process.env.INGESTION_WEB_CPUS || 1);
   const workerCpus = Number(process.env.INGESTION_WORKER_CPUS || 1);
   for (const cpus of [webCpus, workerCpus])
@@ -304,7 +305,7 @@ async function main() {
     DATABASE_POOL_SIZE_INGESTION_WORKER: '5',
     NEXTAUTH_SECRET: randomBytes(32).toString('base64url'),
     API_KEY_SECRET: randomBytes(32).toString('base64url'),
-    ...(workerMetricsChecks
+    ...(workerMetricsChecks || admissionMetricsChecks
       ? { PROMETHEUS_SCRAPE_TOKEN: randomBytes(32).toString('base64url') }
       : {}),
     ENCRYPTION_KEY: encryptionKey,
@@ -792,6 +793,30 @@ location / { proxy_pass http://gateways; proxy_http_version 1.1; proxy_set_heade
     evidence.httpPassed =
       httpEvidence.candidate?.certificationRunId === runId && httpEvidence.passed;
     evidence.httpFailureStage = httpEvidence.failureStage;
+  }
+  if (admissionMetricsChecks) {
+    const snapshots = [];
+    for (const name of webNames) {
+      try {
+        snapshots.push({
+          name,
+          ...JSON.parse(
+            await invoke(['exec', name, 'node', 'scripts/ingestion/admission-stage-snapshot.cjs'])
+          ),
+        });
+      } catch {
+        snapshots.push({ name, error: 'Admission stage scrape failed' });
+      }
+    }
+    evidence.admissionStageMetrics = {
+      snapshots,
+      scope:
+        'Authenticated web scrapes after load. Process-lifetime histograms include preflight and warm-up, not just measured load. Acquire includes pool and BEGIN; finalize includes driver handoff and commit/rollback. Fixed labels and numeric buckets only.',
+      passed:
+        snapshots.length === webNames.length &&
+        snapshots.every(row => row.status === 200 && row.stages?.length > 0),
+    };
+    assert.ok(evidence.admissionStageMetrics.passed, 'Admission stage telemetry incomplete');
   }
   if (workerMetricsChecks) {
     const snapshots = [];

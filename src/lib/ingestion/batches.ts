@@ -4,7 +4,7 @@ import { Prisma } from '@prisma/client';
 import prisma from '@/lib/prisma';
 import type { IntegrationEventEnvelope } from '@/lib/automation/runtime';
 import { getIngestionAutomationConfig } from '@/lib/automation/settings';
-import { runReadCommittedTransaction } from '@/lib/db-utils';
+import { measureAdmissionStage, runIngestionAdmissionTransaction } from './admission-timing';
 import { addOperationalMetric } from '@/lib/metrics/operational/registry';
 import { eventDedupKey } from '@/lib/incidents/event-identity';
 import { sanitizeProviderData } from '@/lib/integrations/payload-security';
@@ -32,7 +32,8 @@ export async function acceptPostgresBatch(
     throw new IngestionPayloadError('Invalid ingestion batch');
   const providerPayload = sanitizeProviderData(input.providerPayload) ?? null;
   const serialized = JSON.stringify(providerPayload);
-  if (Buffer.byteLength(serialized) > 2 * 1024 * 1024)
+  const providerBytes = Buffer.byteLength(serialized);
+  if (providerBytes > 2 * 1024 * 1024)
     throw new IngestionPayloadError('Shared provider payload exceeds 2 MiB');
   const providerPayloadDigest = digest(providerPayload);
   const children = events.map(event => {
@@ -83,12 +84,18 @@ export async function acceptPostgresBatch(
     ...new Set(children.flatMap(child => orderingKeys(encodeEnvelope(child.envelope)))),
   ].sort();
   await prepareIngestionOrdering();
-  const committed = await runReadCommittedTransaction(async tx => {
+  const stableDeliveryKeys = deliveryKeys.map(key => key ?? randomUUID());
+  const committed = await runIngestionAdmissionTransaction(async tx => {
     const counts = { created: 0, duplicate: 0 };
-    await tx.$executeRaw`SET LOCAL synchronous_commit = on`;
-    await acquireTextAdvisoryLocks(
-      tx,
-      identities.map(identity => `ingestion:${identity}`)
+    await measureAdmissionStage(
+      'durability',
+      () => tx.$executeRaw`SET LOCAL synchronous_commit = on`
+    );
+    await measureAdmissionStage('advisory', () =>
+      acquireTextAdvisoryLocks(
+        tx,
+        identities.map(identity => `ingestion:${identity}`)
+      )
     );
     const batchId = randomUUID();
     await tx.ingestionBatch.create({
@@ -99,11 +106,13 @@ export async function acceptPostgresBatch(
         payload: { value: providerPayload } as Prisma.InputJsonValue,
       },
     });
-    const automationSnapshot = await getIngestionAutomationConfig(tx, input.serviceId);
+    const automationSnapshot = await measureAdmissionStage('automation', () =>
+      getIngestionAutomationConfig(tx, input.serviceId)
+    );
     const results = [];
     for (const [index, child] of children.entries()) {
       results.push(
-        await acceptPostgresEvent(child.envelope, deliveryKeys.at(index), {
+        await acceptPostgresEvent(child.envelope, stableDeliveryKeys.at(index), {
           tx,
           shared: {
             batchPayloadId: batchId,
@@ -112,7 +121,7 @@ export async function acceptPostgresBatch(
           },
           // Conservatively charge shared bytes to each unfinished reference. This
           // bounds unfinished referenced context even after sibling completion.
-          providerBytes: Buffer.byteLength(serialized),
+          providerBytes,
           automationSnapshot,
           counts,
           // Older releases stored full per-child context. Only calculate this
@@ -132,7 +141,7 @@ export async function acceptPostgresBatch(
     if (!(await tx.ingestionReceipt.count({ where: { batchId } })))
       await tx.ingestionBatch.delete({ where: { id: batchId } });
     return { results, counts };
-  });
+  }, events.length);
   for (const [outcome, count] of [
     ['new', committed.counts.created],
     ['duplicate', committed.counts.duplicate],

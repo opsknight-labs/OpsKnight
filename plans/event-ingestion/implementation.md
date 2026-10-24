@@ -205,3 +205,8 @@ completion-profile.cjs isolates full completion, receipt mutation, budget update
 The proposed 600 RPS sustained target remains unmet. Both the optimized and previous-function 50 RPS full-stack trials failed, so higher loads are gated. The existing runtime image plus explicit database-function variant is recorded; a release image including the new migration and downstream/HA certification remain outstanding.
 
 The shared database profiler also samples categorized blocking transactions and their maximum age. Labels are computed inside PostgreSQL; no SQL text, parameters or backend identities leave the query. A blocker’s last statement is context, not proof of its original lock acquisition. Sparse samples and profiling overhead are recorded as limitations.
+
+
+### Admission rollback before contention backoff
+
+Capacity helpers distinguish true exhaustion from skipped locks with remaining committed headroom. Transient contention throws an internally marked unavailable error, retaining the public 503 contract while the shared bounded transaction helper rolls back before waiting. Grouped partial reservations and batch children restart atomically. Fallback child identities are stable across retries, including unknown commit outcomes. Shared phase histograms expose admission and driver intervals without adding SQL, timers inside reservations or high-cardinality labels. Optional native snapshots export only allowlisted numeric metrics. This is phase-one source hardening; CPU preparation and identity locking still need measured analysis, and no new capacity is certified.
