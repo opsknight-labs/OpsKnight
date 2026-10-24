@@ -1,3 +1,4 @@
+import { readPublishedSupportPolicies } from '@/lib/incident-policies/published';
 import type { Prisma } from '@prisma/client';
 
 export type SupportHoursState = 'INSIDE' | 'OUTSIDE' | 'UNCONFIGURED';
@@ -10,9 +11,7 @@ export type SupportHoursDecision = {
   nextSupportAt: Date | null;
 };
 
-type Policy = Prisma.ResponseSupportHoursPolicyGetPayload<{
-  include: { windows: true; exceptions: true };
-}>;
+type Policy = Awaited<ReturnType<typeof readPublishedSupportPolicies>>[number];
 const compiledPolicies = new WeakMap<
   object,
   { exceptions: Map<string, Policy['exceptions'][number]>; windows: Map<number, Policy['windows']> }
@@ -140,15 +139,9 @@ export async function resolveSupportHours(
   input: { serviceId: string; at: Date }
 ): Promise<SupportHoursDecision> {
   const keys = [`service:${input.serviceId}`, 'workspace'];
-  const [service, workspace] = await Promise.all(
-    keys.map(scopeKey =>
-      tx.responseSupportHoursPolicy.findFirst({
-        where: { scopeKey, sealedAt: { not: null } },
-        orderBy: { version: 'desc' },
-        include: { windows: true, exceptions: true },
-      })
-    )
-  );
+  const policies = await readPublishedSupportPolicies(tx, keys);
+  const service = policies.find(policy => policy.scopeKey === keys[0]);
+  const workspace = policies.find(policy => policy.scopeKey === 'workspace');
   const serviceMode = service?.mode ?? (service?.inheritWorkspace ? 'INHERIT' : 'SCHEDULED');
   const policy = service && serviceMode !== 'INHERIT' ? service : workspace;
   if (!policy)

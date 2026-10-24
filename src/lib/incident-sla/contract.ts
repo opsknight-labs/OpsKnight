@@ -1,3 +1,4 @@
+import { readPublishedSlaPolicies } from '@/lib/incident-policies/published';
 import type { Prisma } from '@prisma/client';
 
 export type CapturedIncidentSlaContract = {
@@ -51,15 +52,7 @@ export async function resolveNewIncidentSlaContract(
   tx: Prisma.TransactionClient,
   input: { serviceId: string; priority?: string | null; now: Date }
 ): Promise<NewIncidentSlaContract> {
-  const policies = await tx.incidentSlaPolicy.findMany({
-    where: {
-      scopeKey: { in: [`service:${input.serviceId}`, 'workspace'] },
-      sealedAt: { not: null },
-    },
-    orderBy: { version: 'desc' },
-    distinct: ['scopeKey'],
-    include: { rules: true },
-  });
+  const policies = await readPublishedSlaPolicies(tx, [`service:${input.serviceId}`, 'workspace']);
   const service = policies.find(policy => policy.scopeKey === `service:${input.serviceId}`);
   const workspace = policies.find(policy => policy.scopeKey === 'workspace');
   const match = input.priority

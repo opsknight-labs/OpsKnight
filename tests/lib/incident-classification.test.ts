@@ -4,7 +4,8 @@ import { resolveIncidentClassification } from '@/lib/incidents/classification';
 
 const tx = (policy: unknown | null) =>
   ({
-    incidentClassificationPolicy: { findFirst: vi.fn().mockResolvedValue(policy) },
+    incidentClassificationPolicy: {},
+    $queryRaw: vi.fn().mockResolvedValue(policy ? [{ snapshot: policy }] : []),
   }) as unknown as Prisma.TransactionClient;
 
 describe('incident classification', () => {

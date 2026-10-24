@@ -180,7 +180,9 @@ describe('automation semantics', () => {
     let persistedJobData: { payload: unknown } | null = null;
     const mockTx = {
       $queryRaw: vi.fn(async () => [{ id: 'default' }]),
-      systemSettings: { findUnique: vi.fn(async () => ({ automationStoreObservationPreviews: false })) },
+      systemSettings: {
+        findUnique: vi.fn(async () => ({ automationStoreObservationPreviews: false })),
+      },
       backgroundJob: {
         create: vi.fn(async ({ data }: { data: { payload: unknown } }) => {
           persistedJobData = data;
@@ -272,13 +274,15 @@ describe('automation semantics', () => {
       expect(parseResult.data.serviceId).toBe('srv-omega');
       expect(parseResult.data.integrationId).toBe('int-gh-42');
       expect(parseResult.data.observations).toHaveLength(2);
-      expect(parseResult.data.observations[0]).toEqual(expect.objectContaining({
-        key: 'repository_name',
-        path: 'repository.name',
-        value: '',
-        type: 'STRING',
-        unmapped: false,
-      }));
+      expect(parseResult.data.observations[0]).toEqual(
+        expect.objectContaining({
+          key: 'repository_name',
+          path: 'repository.name',
+          value: '',
+          type: 'STRING',
+          unmapped: false,
+        })
+      );
       expect(parseResult.data.observations[0].valueHash).toMatch(/^[a-f0-9]{64}$/);
     }
   });
@@ -315,8 +319,17 @@ describe('automation semantics', () => {
     };
 
     const mockTx = {
-      $queryRaw: vi.fn(async () => [{ mode: 'LIVE', activeVersionId: versionId }]),
-      systemSettings: { findUnique: vi.fn(async () => ({ automationStoreObservationPreviews: false })) },
+      $queryRaw: vi.fn(async () => [
+        {
+          serviceId: 'srv-omega',
+          mode: 'LIVE',
+          activeVersionId: versionId,
+          candidateVersionId: null,
+        },
+      ]),
+      systemSettings: {
+        findUnique: vi.fn(async () => ({ automationStoreObservationPreviews: false })),
+      },
       automationVersion: {
         findUnique: vi.fn(async () => stored),
       },

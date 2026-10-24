@@ -91,7 +91,14 @@ function fixture(options: { mode?: 'LIVE' | 'SHADOW'; corrupt?: boolean } = {}) 
   const decisionCreate = vi.fn(async (_args: { data: Record<string, unknown> }) => ({}));
   const versionFind = vi.fn(async () => stored);
   const tx = {
-    $queryRaw: vi.fn(async () => [{ mode: options.mode ?? 'LIVE', activeVersionId: versionId }]),
+    $queryRaw: vi.fn(async () => [
+      {
+        serviceId: 'service-1',
+        mode: options.mode ?? 'LIVE',
+        activeVersionId: versionId,
+        candidateVersionId: null,
+      },
+    ]),
     service: {
       findUnique: vi.fn(async () => ({
         policy: { id: 'policy-1', name: 'Default policy' },
@@ -99,13 +106,15 @@ function fixture(options: { mode?: 'LIVE' | 'SHADOW'; corrupt?: boolean } = {}) 
       })),
     },
     automationVersion: { findUnique: versionFind },
-    systemSettings: { findUnique: vi.fn(async () => ({
-      automationEnabled: true,
-      automationTraceRetentionDays: 90,
-      automationSettingsRevision: 0,
-      automationStoreObservationPreviews: false,
-      automationReadinessPolicy: null,
-    })) },
+    systemSettings: {
+      findUnique: vi.fn(async () => ({
+        automationEnabled: true,
+        automationTraceRetentionDays: 90,
+        automationSettingsRevision: 0,
+        automationStoreObservationPreviews: false,
+        automationReadinessPolicy: null,
+      })),
+    },
     escalationPolicy: { findUnique: vi.fn() },
     incidentAutomationDecision: { create: decisionCreate },
     automationTrace: { create: vi.fn(async () => ({})) },
