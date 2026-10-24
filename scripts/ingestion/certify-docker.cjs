@@ -225,6 +225,7 @@ async function main() {
   const webReplicas = Number(process.env.INGESTION_WEB_REPLICAS || 2);
   const workerReplicas = Number(process.env.INGESTION_WORKER_REPLICAS ?? 4);
   const automaticMode = process.env.INGESTION_DOCKER_DEFAULT_MODE === 'true';
+  const workerMetricsChecks = process.env.INGESTION_DOCKER_WORKER_METRICS_CHECKS === 'true';
   const webCpus = Number(process.env.INGESTION_WEB_CPUS || 1);
   const workerCpus = Number(process.env.INGESTION_WORKER_CPUS || 1);
   for (const cpus of [webCpus, workerCpus])
@@ -303,6 +304,9 @@ async function main() {
     DATABASE_POOL_SIZE_INGESTION_WORKER: '5',
     NEXTAUTH_SECRET: randomBytes(32).toString('base64url'),
     API_KEY_SECRET: randomBytes(32).toString('base64url'),
+    ...(workerMetricsChecks
+      ? { PROMETHEUS_SCRAPE_TOKEN: randomBytes(32).toString('base64url') }
+      : {}),
     ENCRYPTION_KEY: encryptionKey,
     NEXTAUTH_URL: baseUrl,
     NEXT_PUBLIC_APP_URL: baseUrl,
@@ -789,7 +793,58 @@ location / { proxy_pass http://gateways; proxy_http_version 1.1; proxy_set_heade
       httpEvidence.candidate?.certificationRunId === runId && httpEvidence.passed;
     evidence.httpFailureStage = httpEvidence.failureStage;
   }
+  if (workerMetricsChecks) {
+    const snapshots = [];
+    for (const name of workers) {
+      if (!(await inspect(name)).State.Running) continue;
+      try {
+        const snapshot = JSON.parse(
+          await invoke([
+            'exec',
+            name,
+            'node',
+            '-e',
+            `fetch('http://127.0.0.1:3000/api/metrics', {
+            headers: { Authorization: 'Bearer ' + process.env.PROMETHEUS_SCRAPE_TOKEN },
+            signal: AbortSignal.timeout(10000)
+          }).then(async response => {
+            const lines = (await response.text()).split('\\n');
+            const value = name => Number(lines.find(line => line.startsWith(name + ' '))?.split(' ')[1]);
+            process.stdout.write(JSON.stringify({
+              status: response.status,
+              active: value('opsknight_ingestion_active_events'),
+              capacity: value('opsknight_ingestion_processing_capacity'),
+              completed: value('opsknight_ingestion_processing_total{outcome="completed"}')
+            }));
+          }).catch(() => { process.exitCode = 1; })`,
+          ])
+        );
+        snapshots.push({ name, ...snapshot });
+      } catch {
+        snapshots.push({ name, error: 'Worker scrape probe failed' });
+      }
+    }
+    evidence.workerMetrics = {
+      scope:
+        'Authenticated real worker scrapes after load; no credentials or raw metric text retained',
+      snapshots,
+      passed:
+        snapshots.length > 0 &&
+        snapshots.every(
+          row =>
+            row.status === 200 &&
+            row.active === 0 &&
+            row.capacity === configuredControl.policy.concurrency &&
+            row.completed > 0
+        ),
+    };
+  }
   assert.equal(code, 0, 'Docker topology failed the configured end-to-end thresholds');
+  if (workerMetricsChecks)
+    assert.ok(
+      evidence.workerMetrics.passed,
+      'Worker telemetry was not visible to the HTTP scrape module'
+    );
   if (exerciseNotification) {
     assert.ok(
       notificationPassed,
