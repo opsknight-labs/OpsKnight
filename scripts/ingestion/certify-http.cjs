@@ -23,6 +23,7 @@ let draining = false;
 let worker;
 let workerFault;
 let finishDatabaseProfile;
+let finishBacklogSampler;
 let evidenceWritten = false;
 let stage = 'startup';
 async function main() {
@@ -161,6 +162,8 @@ async function main() {
           encoding: 'utf8',
         }).stdout.trim(),
       };
+  if (process.env.INGESTION_BACKLOG_SAMPLES === 'true')
+    finishBacklogSampler = await require('./backlog-sampler.cjs')(prisma, service.id);
   const started = performance.now();
   stage = 'measured-load';
   load = spawn(
@@ -192,6 +195,8 @@ async function main() {
   });
   if (process.connected) process.send?.({ type: 'ingestion-load-stopped' }, () => {});
   const ingressMs = performance.now() - started;
+  const backlogDuringLoad = finishBacklogSampler ? await finishBacklogSampler() : undefined;
+  finishBacklogSampler = undefined;
   const [atAdmissionEnd] = await prisma.$queryRaw`
     SELECT COUNT(*) FILTER (WHERE "status" = 'COMPLETED')::int AS completed,
       COUNT(*) FILTER (WHERE "status" NOT IN ('COMPLETED', 'ARCHIVED'))::int AS pending,
@@ -283,6 +288,7 @@ async function main() {
     databaseProfile,
     fixtureServiceId: service.id,
     atAdmissionEnd,
+    backlogDuringLoad,
     endToEndLatency,
     completionLatencyLimitMs,
     completionLatencyPassed,
@@ -312,7 +318,12 @@ async function main() {
     completedPerSecondIncludingDrain: (completed * 1000) / completedMs,
     reconciled,
     metrics: summary.metrics,
-    passed: loadExit === 0 && reconciled && ambiguousSubmissions === 0 && completionLatencyPassed,
+    passed:
+      loadExit === 0 &&
+      reconciled &&
+      ambiguousSubmissions === 0 &&
+      completionLatencyPassed &&
+      (!backlogDuringLoad || backlogDuringLoad.passed),
     certifiedEnterprise: false,
   };
   writeFileSync(
@@ -320,6 +331,8 @@ async function main() {
     JSON.stringify(evidence, null, 2) + '\n'
   );
   evidenceWritten = true;
+  if (backlogDuringLoad)
+    assert.ok(backlogDuringLoad.passed, 'Backlog sampling failed or truncated');
   assert.ok(reconciled, 'Accepted ledger failed end-to-end drain reconciliation');
   assert.equal(ambiguousSubmissions, 0, 'HTTP acknowledgements and durable receipts differ');
   assert.equal(loadExit, 0, 'Candidate failed the configured HTTP admission thresholds');
@@ -350,6 +363,7 @@ main()
   })
   .finally(async () => {
     draining = true;
+    if (finishBacklogSampler) await finishBacklogSampler().catch(() => {});
     if (finishDatabaseProfile) await finishDatabaseProfile().catch(() => {});
     await worker?.catch(() => {});
     for (const child of [load, server]) {
