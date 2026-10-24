@@ -11,6 +11,7 @@ type MetricCardProps = {
   rangeLabel?: string;
   isDark?: boolean;
   variant?: 'default' | 'hero';
+  density?: 'default' | 'compact';
   tone?: 'default' | 'rose' | 'amber' | 'emerald';
   description?: string;
   href?: string;
@@ -101,6 +102,7 @@ const MetricCard = memo(
     rangeLabel,
     isDark = false,
     variant = 'default',
+    density = 'default',
     tone = 'default',
     description,
     href,
@@ -181,7 +183,11 @@ const MetricCard = memo(
           isDark && !isHero
             ? 'bg-white/[0.03] border border-white/[0.06] shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] hover:bg-white/[0.08] hover:border-white/20'
             : '',
-          isHero ? 'flex min-h-32 flex-col justify-center p-3 md:p-4' : 'p-6 sm:p-4'
+          isHero
+            ? density === 'compact'
+              ? 'flex min-h-[5.25rem] flex-col justify-center p-2.5'
+              : 'flex min-h-32 flex-col justify-center p-3 md:p-4'
+            : 'p-6 sm:p-4'
         )}
         role="figure"
         aria-label={`${label}: ${formattedDisplay}${description ? `. ${description}` : ''}${rangeLabel ? ` ${rangeLabel}` : ''}`}
@@ -194,7 +200,9 @@ const MetricCard = memo(
 
         <div
           className={cn(
-            'text-3xl sm:text-2xl font-bold mb-1.5 leading-tight tabular-nums relative z-10',
+            density === 'compact'
+              ? 'text-2xl font-bold mb-1 leading-tight tabular-nums relative z-10'
+              : 'text-3xl sm:text-2xl font-bold mb-1.5 leading-tight tabular-nums relative z-10',
             isDark ? 'text-white' : isHero ? heroValueClass : 'text-foreground'
           )}
           aria-live="polite"

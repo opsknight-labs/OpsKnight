@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import Link from 'next/link';
 import DashboardRefresh from '../DashboardRefresh';
 import DashboardExport from '../DashboardExport';
 import MetricCard from './MetricCard';
@@ -35,6 +36,7 @@ type DashboardCommandCenterProps = {
   currentSuppressedCount: number;
   metricsResolvedCount: number;
   unassignedCount: number;
+  currentCriticalCount?: number;
   rangeLabel: string;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   incidents: any[];
@@ -50,6 +52,9 @@ type DashboardCommandCenterProps = {
   mutedHref?: string;
   resolvedHref?: string;
   unassignedHref?: string;
+  triggeredHref?: string;
+  acknowledgedHref?: string;
+  criticalHref?: string;
 };
 
 export default function DashboardCommandCenter({
@@ -65,6 +70,7 @@ export default function DashboardCommandCenter({
   currentSuppressedCount,
   metricsResolvedCount,
   unassignedCount,
+  currentCriticalCount = 0,
   rangeLabel,
   incidents,
   filters,
@@ -79,6 +85,9 @@ export default function DashboardCommandCenter({
   mutedHref,
   resolvedHref,
   unassignedHref,
+  triggeredHref,
+  acknowledgedHref,
+  criticalHref,
 }: DashboardCommandCenterProps) {
   const { metrics: liveMetrics, recentIncidents } = useRealtime();
   const [filteredLiveMetrics, setFilteredLiveMetrics] = React.useState<typeof liveMetrics>(null);
@@ -120,6 +129,7 @@ export default function DashboardCommandCenter({
   currentSuppressedCount = applicableLiveMetrics?.suppressed ?? currentSuppressedCount;
   currentMutedCount = currentSnoozedCount + currentSuppressedCount;
   unassignedCount = applicableLiveMetrics?.unassigned ?? unassignedCount;
+  currentCriticalCount = applicableLiveMetrics?.highUrgency ?? currentCriticalCount;
   if (visibilityScope !== 'NONE' && (applicableLiveMetrics?.highUrgency ?? 0) > 0) {
     systemStatus = {
       label: 'CRITICAL',
@@ -159,12 +169,15 @@ export default function DashboardCommandCenter({
     : null;
 
   return (
-    <div className="relative overflow-hidden rounded-xl border border-zinc-800/80 bg-gradient-to-b from-[#121216] to-[#09090b] text-slate-100 p-4 md:p-6 mb-6 shadow-xl ring-1 ring-white/5">
+    <div
+      data-testid="command-center"
+      className="relative overflow-hidden rounded-xl border border-zinc-800/80 bg-gradient-to-b from-[#121216] to-[#09090b] text-slate-100 p-3 md:p-4 shadow-xl ring-1 ring-white/5"
+    >
       {/* Header */}
-      <div className="relative z-10 flex flex-col md:flex-row md:items-start md:justify-between gap-4 md:gap-6 mb-6">
-        <div className="space-y-3">
+      <div className="relative z-10 flex flex-col md:flex-row md:items-start md:justify-between gap-3 md:gap-6 mb-3">
+        <div className="space-y-2">
           <div className="flex items-center gap-3">
-            <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight text-white">
+            <h1 className="text-xl md:text-2xl font-extrabold tracking-tight text-white">
               Command Center
             </h1>
             <LiveClock timeZone={userTimeZone} />
@@ -192,9 +205,17 @@ export default function DashboardCommandCenter({
             >
               {systemStatus.label}
             </Badge>
-            {allActiveIncidentsCount > 0 && (
-              <span className="text-xs text-slate-300">({allActiveIncidentsCount} active)</span>
-            )}
+            {allActiveIncidentsCount > 0 &&
+              (activeHref ? (
+                <Link
+                  href={activeHref}
+                  className="text-xs text-slate-300 underline-offset-2 hover:text-white hover:underline"
+                >
+                  ({allActiveIncidentsCount} active)
+                </Link>
+              ) : (
+                <span className="text-xs text-slate-300">({allActiveIncidentsCount} active)</span>
+              ))}
             <Badge
               variant="outline"
               size="xs"
@@ -247,65 +268,113 @@ export default function DashboardCommandCenter({
         </div>
       </div>
 
-      <div className="relative z-10 grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3 md:gap-4">
-        <MetricCard
-          label="TOTAL"
-          value={totalInRange}
-          rangeLabel={metricScopeLabel('selected_period', rangeLabel)}
-          variant="hero"
-          href={totalHref}
-          tooltip={metricDefinitionTooltip(INCIDENT_METRIC_DEFINITIONS.totalIncidents, rangeLabel)}
-          dataState={metricDataState}
-          asOf={metricsAsOf}
-        />
-        <MetricCard
-          label="ACTIVE"
-          value={currentActiveCount}
-          rangeLabel={metricScopeLabel('current')}
-          description={`${currentTriggeredCount.toLocaleString()} Triggered · ${currentAcknowledgedCount.toLocaleString()} Acknowledged`}
-          href={activeHref}
-          variant="hero"
-          tone={currentActiveCount > 0 ? 'rose' : 'default'}
-          tooltip={metricDefinitionTooltip(INCIDENT_METRIC_DEFINITIONS.activeIncidents)}
-          dataState={metricDataState}
-          asOf={metricsAsOf}
-        />
-        <MetricCard
-          label="MUTED"
-          value={currentMutedCount}
-          rangeLabel={metricScopeLabel('current')}
-          description={`${currentSnoozedCount.toLocaleString()} Snoozed · ${currentSuppressedCount.toLocaleString()} Suppressed`}
-          href={mutedHref}
-          variant="hero"
-          tooltip={metricDefinitionTooltip(INCIDENT_METRIC_DEFINITIONS.mutedIncidents)}
-          dataState={metricDataState}
-          asOf={metricsAsOf}
-        />
-        <MetricCard
-          label="RESOLVED"
-          value={metricsResolvedCount}
-          rangeLabel={metricScopeLabel('selected_period', rangeLabel)}
-          variant="hero"
-          tone={metricsResolvedCount > 0 ? 'emerald' : 'default'}
-          href={resolvedHref}
-          tooltip={metricDefinitionTooltip(
-            INCIDENT_METRIC_DEFINITIONS.resolvedIncidents,
-            rangeLabel
-          )}
-          dataState={metricDataState}
-          asOf={metricsAsOf}
-        />
-        <MetricCard
-          label="UNASSIGNED"
-          value={unassignedCount}
-          rangeLabel={metricScopeLabel('current')}
-          variant="hero"
-          tone={unassignedCount > 0 ? 'amber' : 'default'}
-          href={unassignedHref}
-          tooltip={metricDefinitionTooltip(INCIDENT_METRIC_DEFINITIONS.unassignedActive)}
-          dataState={metricDataState}
-          asOf={metricsAsOf}
-        />
+      <div
+        className="relative z-10 grid grid-cols-6 sm:grid-cols-4 xl:grid-cols-7 gap-2 md:gap-3"
+        data-testid="command-center-counters"
+      >
+        <div className="col-span-3 sm:col-span-1">
+          <MetricCard
+            label="TRIGGERED"
+            value={currentTriggeredCount}
+            rangeLabel={metricScopeLabel('current')}
+            href={triggeredHref}
+            variant="hero"
+            density="compact"
+            tone={currentTriggeredCount > 0 ? 'rose' : 'default'}
+            tooltip={metricDefinitionTooltip(INCIDENT_METRIC_DEFINITIONS.activeIncidents)}
+            dataState={metricDataState}
+            asOf={metricsAsOf}
+          />
+        </div>
+        <div className="col-span-3 sm:col-span-1">
+          <MetricCard
+            label="CRITICAL"
+            value={currentCriticalCount}
+            rangeLabel={metricScopeLabel('current')}
+            href={criticalHref}
+            variant="hero"
+            density="compact"
+            tone={currentCriticalCount > 0 ? 'rose' : 'default'}
+            tooltip="Active (triggered or acknowledged) high-urgency incidents."
+            dataState={metricDataState}
+            asOf={metricsAsOf}
+          />
+        </div>
+        <div className="col-span-3 sm:col-span-1">
+          <MetricCard
+            label="ACKNOWLEDGED"
+            value={currentAcknowledgedCount}
+            rangeLabel={metricScopeLabel('current')}
+            href={acknowledgedHref}
+            variant="hero"
+            density="compact"
+            tone={currentAcknowledgedCount > 0 ? 'amber' : 'default'}
+            tooltip={metricDefinitionTooltip(INCIDENT_METRIC_DEFINITIONS.activeIncidents)}
+            dataState={metricDataState}
+            asOf={metricsAsOf}
+          />
+        </div>
+        <div className="col-span-3 sm:col-span-1">
+          <MetricCard
+            label="UNASSIGNED"
+            value={unassignedCount}
+            rangeLabel={metricScopeLabel('current')}
+            variant="hero"
+            density="compact"
+            tone={unassignedCount > 0 ? 'amber' : 'default'}
+            href={unassignedHref}
+            tooltip={metricDefinitionTooltip(INCIDENT_METRIC_DEFINITIONS.unassignedActive)}
+            dataState={metricDataState}
+            asOf={metricsAsOf}
+          />
+        </div>
+        <div className="col-span-2 sm:col-span-1">
+          <MetricCard
+            label="MUTED"
+            value={currentMutedCount}
+            rangeLabel={metricScopeLabel('current')}
+            description={`${currentSnoozedCount.toLocaleString()} Snoozed · ${currentSuppressedCount.toLocaleString()} Suppressed`}
+            href={mutedHref}
+            variant="hero"
+            density="compact"
+            tooltip={metricDefinitionTooltip(INCIDENT_METRIC_DEFINITIONS.mutedIncidents)}
+            dataState={metricDataState}
+            asOf={metricsAsOf}
+          />
+        </div>
+        <div className="col-span-2 sm:col-span-1">
+          <MetricCard
+            label="TOTAL"
+            value={totalInRange}
+            rangeLabel={metricScopeLabel('selected_period', rangeLabel)}
+            variant="hero"
+            density="compact"
+            href={totalHref}
+            tooltip={metricDefinitionTooltip(
+              INCIDENT_METRIC_DEFINITIONS.totalIncidents,
+              rangeLabel
+            )}
+            dataState={metricDataState}
+            asOf={metricsAsOf}
+          />
+        </div>
+        <div className="col-span-2 sm:col-span-1">
+          <MetricCard
+            label="RESOLVED"
+            value={metricsResolvedCount}
+            rangeLabel={metricScopeLabel('selected_period', rangeLabel)}
+            variant="hero"
+            density="compact"
+            tone={metricsResolvedCount > 0 ? 'emerald' : 'default'}
+            href={resolvedHref}
+            tooltip={metricDefinitionTooltip(
+              INCIDENT_METRIC_DEFINITIONS.resolvedIncidents,
+              rangeLabel
+            )}
+            dataState={metricDataState}
+            asOf={metricsAsOf}
+          />
+        </div>
       </div>
     </div>
   );

@@ -250,7 +250,7 @@ function sortIncidents(items: IncidentListItem[], sort: string = 'newest'): Inci
   });
 }
 
-function matchesRealtimeFilter(
+export function matchesRealtimeFilter(
   raw: Record<string, unknown>,
   filter: NonNullable<IncidentsListTableProps['realtimeFilter']>
 ): boolean {
@@ -274,11 +274,7 @@ function matchesRealtimeFilter(
     !['OPEN', 'ACKNOWLEDGED'].includes(status)
   )
     return false;
-  if (
-    filterName === 'critical_focus' &&
-    raw.urgency !== 'HIGH' &&
-    raw.priority !== 'P1'
-  )
+  if (filterName === 'critical_focus' && raw.urgency !== 'HIGH' && raw.priority !== 'P1')
     return false;
   if (filterName === 'muted' && !['SNOOZED', 'SUPPRESSED'].includes(status)) return false;
   const namedStatus =
@@ -294,7 +290,10 @@ function matchesRealtimeFilter(
               ? 'SUPPRESSED'
               : null;
   if (namedStatus && status !== namedStatus) return false;
-  if (filter.status && status !== filter.status) return false;
+  // ACTIVE is a dashboard pseudo-status (OPEN + ACKNOWLEDGED), never a stored value.
+  if (filter.status === 'ACTIVE') {
+    if (!['OPEN', 'ACKNOWLEDGED'].includes(status)) return false;
+  } else if (filter.status && status !== filter.status) return false;
   if (filter.serviceId && serviceId !== filter.serviceId) return false;
   if (
     filter.assignee !== undefined &&

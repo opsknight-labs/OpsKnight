@@ -59,6 +59,10 @@ function useRealtimeConnection() {
   const [error, setError] = useState<string | null>(null);
   const [reconnectTrigger, setReconnectTrigger] = useState(0);
   const [revision, setRevision] = useState(0);
+  // Bumps on every successful (re)connect so consumers can re-fetch canonical state.
+  const [connectionEpoch, setConnectionEpoch] = useState(0);
+  const [lastMessageAt, setLastMessageAt] = useState<number | null>(null);
+  const [isRevoked, setIsRevoked] = useState(false);
   const eventSourceRef = useRef<EventSource | null>(null);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const reconnectAttempts = useRef(0);
@@ -127,6 +131,8 @@ function useRealtimeConnection() {
           setError(null);
           reconnectAttempts.current = 0;
           lastEventAt.current = Date.now();
+          setLastMessageAt(lastEventAt.current);
+          setConnectionEpoch(value => value + 1);
         };
 
         eventSource.onmessage = event => {
@@ -135,6 +141,7 @@ function useRealtimeConnection() {
           try {
             const data: RealtimeEvent = JSON.parse(event.data);
             lastEventAt.current = Date.now();
+            setLastMessageAt(lastEventAt.current);
 
             switch (data.type) {
               case 'connected':
@@ -155,6 +162,7 @@ function useRealtimeConnection() {
                 break;
               case 'authorization_revoked':
                 authorizationRevoked.current = true;
+                setIsRevoked(true);
                 eventSource.close();
                 eventSourceRef.current = null;
                 setIsConnected(false);
@@ -178,6 +186,7 @@ function useRealtimeConnection() {
             if (!mounted || authorizationRevoked.current) return;
             if (isTerminalSessionError(result)) {
               authorizationRevoked.current = true;
+              setIsRevoked(true);
               setError('Real-time authorization was revoked. Sign in again to reconnect.');
               notifySessionExpired();
               return;
@@ -213,6 +222,9 @@ function useRealtimeConnection() {
     recentIncidents,
     error,
     revision,
+    connectionEpoch,
+    lastMessageAt,
+    isRevoked,
   };
 }
 
