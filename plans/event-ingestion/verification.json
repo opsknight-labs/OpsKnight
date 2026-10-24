@@ -1944,5 +1944,15 @@
     "replayRecovered": 10310,
     "replayExtraReceipts": 0,
     "kindRestored": true
+  },
+  "inLoadBacklogSampling": {
+    "optIn": "INGESTION_BACKLOG_SAMPLES=true",
+    "unitPassed": 3,
+    "realPostgresSqlCheck": "passed, owned temporary service removed",
+    "typescript": "passed",
+    "lintErrors": 0,
+    "lintWarnings": 0,
+    "separateNativeCapacityModes": "pending",
+    "externalDeliveryCertified": false
   }
 }
