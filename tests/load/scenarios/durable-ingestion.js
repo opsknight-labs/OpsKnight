@@ -7,6 +7,15 @@ import encoding from 'k6/encoding';
 const accepted = new Counter('ingestion_durable_accepted');
 const rejectedQuota = new Counter('ingestion_quota_rejected');
 const rejectedCapacity = new Counter('ingestion_capacity_rejected');
+// Fixed counters retain rejection status in the summary without response bodies,
+// identities, unbounded labels or extra requests during the measured interval.
+const rejectedStatuses = new Map(
+  [0, 202, 400, 401, 403, 409, 413, 429, 500, 502, 503, 504].map(status => [
+    status,
+    new Counter(`ingestion_rejected_http_${status}`),
+  ])
+);
+const rejectedOther = new Counter('ingestion_rejected_http_other');
 const success = new Rate('ingestion_acceptance_success');
 const rate = Number(__ENV.INGESTION_TARGET_RPS || 1000);
 const payloadBytes = Number(__ENV.INGESTION_PAYLOAD_BYTES || 10000);
@@ -22,7 +31,9 @@ const payloadBody =
     ? 'x'.repeat(payloadBytes)
     : payloadBytes === 0
       ? ''
-      : encoding.b64encode(crypto.randomBytes(Math.ceil((payloadBytes * 3) / 4))).slice(0, payloadBytes);
+      : encoding
+          .b64encode(crypto.randomBytes(Math.ceil((payloadBytes * 3) / 4)))
+          .slice(0, payloadBytes);
 export const options = {
   scenarios: {
     ingress: {
@@ -79,5 +90,6 @@ export default function () {
   if (valid) accepted.add(1);
   if (response.status === 429) rejectedQuota.add(1);
   if (response.status === 503) rejectedCapacity.add(1);
+  if (!valid) (rejectedStatuses.get(response.status) || rejectedOther).add(1);
   check(response, { 'durably accepted with receipt': () => valid });
 }

@@ -233,6 +233,12 @@ async function main() {
     assert.ok(Number.isFinite(cpus) && cpus >= 0.25 && cpus <= 4);
   assert.ok(Number.isInteger(webReplicas) && webReplicas >= 1 && webReplicas <= 4);
   assert.ok(Number.isInteger(workerReplicas) && workerReplicas >= 0 && workerReplicas <= 8);
+  const generalWorkerReplicas = Number(process.env.INGESTION_GENERAL_WORKER_REPLICAS ?? 1);
+  assert.ok(
+    Number.isInteger(generalWorkerReplicas) &&
+      generalWorkerReplicas >= 1 &&
+      generalWorkerReplicas <= 4
+  );
   const [limits] =
     await prisma.$queryRaw`SELECT current_setting('max_connections')::int AS maximum`;
   const supportingRoles = [
@@ -242,7 +248,10 @@ async function main() {
     { role: 'bulk-worker', poolName: 'DATABASE_POOL_SIZE_BULK_WORKER', pool: 3 },
     { role: 'runbook-worker', poolName: 'DATABASE_POOL_SIZE_RUNBOOK_WORKER', pool: 5 },
     { role: 'status-projector', poolName: 'DATABASE_POOL_SIZE_STATUS_PROJECTOR', pool: 2 },
-  ];
+  ].map(item => ({
+    ...item,
+    replicas: item.role === 'general-worker' ? generalWorkerReplicas : 1,
+  }));
   const supportingPools = Object.fromEntries(
     supportingRoles.map(item => [item.poolName, String(item.pool)])
   );
@@ -260,6 +269,7 @@ async function main() {
     WEB_REPLICAS: String(webReplicas),
     DATABASE_POOL_SIZE_WEB: '10',
     INGESTION_WORKER_REPLICAS: String(workerReplicas),
+    GENERAL_WORKER_REPLICAS: String(generalWorkerReplicas),
     DATABASE_POOL_SIZE_INGESTION_WORKER: '5',
     DATABASE_CONNECTION_RESERVE: '15',
     DATABASE_MAX_CONNECTIONS: String(limits.maximum),
@@ -549,9 +559,11 @@ async function main() {
   const supportingProcesses = [];
   if (fullStack) {
     for (const item of supportingRoles) {
-      const name = `${prefix}-${item.role}`;
-      await start(name, item.role, false);
-      supportingProcesses.push(name);
+      for (let index = 0; index < item.replicas; index++) {
+        const name = `${prefix}-${item.role}${index ? `-${index}` : ''}`;
+        await start(name, item.role, false);
+        supportingProcesses.push(name);
+      }
     }
   }
   const processNames = [...webNames, ...workers, ...supportingProcesses];
@@ -667,7 +679,7 @@ location / { proxy_pass http://gateways; proxy_http_version 1.1; proxy_set_heade
     webFallbackOnly: workerReplicas === 0,
     webUsesPgBouncer: usePgBouncer,
     supportingRoles: fullStack
-      ? supportingRoles.map(({ role, pool }) => ({ role, replicas: 1, pool }))
+      ? supportingRoles.map(({ role, replicas, pool }) => ({ role, replicas, pool }))
       : [],
     externalEffectsCertified: false,
     webReplicas,
