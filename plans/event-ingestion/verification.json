@@ -617,7 +617,27 @@
     "typeCheck": "passed; completed exit0",
     "mixedVersionRollingUpgradeCertified": false,
     "firstCutoverRequiresOldProducersDrained": true,
-    "nativeImageValidation": "pending fresh image",
+    "nativeImageValidation": {
+      "passed": true,
+      "targetRps": 10,
+      "duration": "15s",
+      "acknowledged": 151,
+      "accepted": 151,
+      "completed": 151,
+      "ambiguous": 0,
+      "pending": 0,
+      "httpP95Ms": 22.614,
+      "completionP95Ms": 116.5,
+      "modeVariableAbsentVerified": true,
+      "dedicatedWorkers": 0,
+      "webReplicas": 2,
+      "providerFormatCases": 31,
+      "lifecycleChecks": 11,
+      "quotaReplayProviders": 4,
+      "httpEvidence": "local-docker-http-auto-fallback-10.json",
+      "topologyEvidence": "local-docker-topology-auto-fallback-10.json",
+      "certifies1000Rps": false
+    },
     "throughput1000RpsCertified": false,
     "populatedUpgrade": {
       "passed": true,
@@ -642,7 +662,114 @@
     "typeCheck": "passed; completed exit0",
     "modifiedSourceLint": "passed; completed exit0",
     "independentReview": "No concrete finding from bug/security substitutes",
-    "freshImageValidation": "pending",
-    "throughput1000RpsCertified": false
+    "freshImageValidation": {
+      "revision": "b9ab00858",
+      "imageId": "sha256:e9de0d749485b4da0bbe493c8da4aa2a1a76777ebefd6880e6bd234acbe113e7",
+      "archiveSha256": "bc3e457fa1e6f6ecb25e2ccc791300f56e55d7ea076cf975208da9010d3a2159",
+      "fullStack100RpsPassed": false,
+      "acknowledged": 2022,
+      "accepted": 2022,
+      "completed": 2022,
+      "ambiguous": 0,
+      "pending": 0,
+      "dropped": 18,
+      "explicitCapacityRejected": 960,
+      "httpP95Ms": 1319.0695,
+      "completionP95Ms": 3487.95,
+      "smtpCaptureMs": 1190,
+      "workerCrashRecoveryMs": 5050,
+      "modeVariableAbsentVerified": true,
+      "cleanupFailures": [],
+      "httpEvidence": "local-docker-http-auto-coalesced-smtp-crash-100.json",
+      "topologyEvidence": "local-docker-topology-auto-coalesced-smtp-crash-100.json"
+    },
+    "throughput1000RpsCertified": false,
+    "controlledComparison": {
+      "scalarEvidence": "local-quota-scalar-comparison.json",
+      "coalescedEvidence": "local-quota-coalesced-comparison.json",
+      "requestsPerScenario": 20000,
+      "concurrency": 32,
+      "oneKey": {
+        "scalarDecisionsPerSecond": 2437.5,
+        "coalescedDecisionsPerSecond": 9083.3,
+        "scalarP95Ms": 18.26,
+        "coalescedP95Ms": 4.74,
+        "sampledScalarQueries": 39980,
+        "sampledCoalescedQueries": 1255
+      },
+      "hundredKeys": {
+        "scalarDecisionsPerSecond": 3585.2,
+        "coalescedDecisionsPerSecond": 3534.0
+      },
+      "scope": "Single source process, same SQL with and without batching, isolated DB; excludes HTTP/incident/Automation/delivery, single sequential comparison not enterprise certification"
+    },
+    "ceilingDiagnostic": {
+      "passed": false,
+      "targetRps": 1000,
+      "duration": "10s",
+      "acknowledged": 1055,
+      "accepted": 1055,
+      "completed": 1055,
+      "ambiguous": 0,
+      "pending": 0,
+      "explicitCapacityRejected": 8826,
+      "dropped": 119,
+      "httpP95Ms": 624.977,
+      "completionP95Ms": 1463.3,
+      "acceptedPerSecond": 93.2161,
+      "cpuProfiles": [
+        {
+          "role": "web",
+          "sampledSeconds": 16.236,
+          "idlePercent": 32.52,
+          "v8GcPercent": 7.66,
+          "customGcFramesPercent": 6.24,
+          "scope": "One replica per role; includes preflight/warmup/load; not a causal capacity attribution"
+        },
+        {
+          "role": "ingestion-worker",
+          "sampledSeconds": 16.249,
+          "idlePercent": 73.0,
+          "v8GcPercent": 3.62,
+          "customGcFramesPercent": 6.81,
+          "scope": "One replica per role; includes preflight/warmup/load; not a causal capacity attribution"
+        }
+      ],
+      "httpEvidence": "local-docker-http-auto-coalesced-ceiling-1000.json",
+      "topologyEvidence": "local-docker-topology-auto-coalesced-ceiling-1000.json",
+      "cleanupFailures": []
+    }
+  },
+  "browserRegressionFollowup": {
+    "recordedAt": "2026-10-24",
+    "sourceTest": "tests/e2e/runbooks-ui.spec.ts",
+    "previousCiRun": 40029355913,
+    "previousFailure": "Native HTML option clicked; archived labels drifted",
+    "nativeImage": "sha256:2f648951d471af8a2db224d27184e05712c76cf6dc1be1c315c5b8b26d3f243d",
+    "projectsPassed": [
+      "chromium",
+      "firefox",
+      "webkit"
+    ],
+    "testsPassed": 3,
+    "seconds": 28.8,
+    "scope": "One focused native browser regression; not entire CI matrix",
+    "completeCiCertified": false
+  },
+  "configSchemaReuseFollowup": {
+    "evidence": "local-config-schema-allocation.json",
+    "scope": "Source-only parsing diagnostic; not HTTP capacity certification",
+    "baseline10000CallsMs": 514.36675,
+    "sharedSchema10000CallsMs": 39.268667,
+    "mutableValuesCached": false,
+    "databaseContractTestsPassed": 62,
+    "typeCheck": "passed; completed exit0",
+    "modifiedSourceLint": "passed; completed exit0",
+    "independentReviews": "No concrete finding from bug/security substitutes",
+    "freshNativeImage": "Pending; native b9 evidence predates schema-construction-only optimization"
+  },
+  "localEnvironmentRestored": {
+    "kindControlPlaneRunning": true,
+    "ownedCertificationContainersRemaining": 0
   }
 }

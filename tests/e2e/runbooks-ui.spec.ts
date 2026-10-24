@@ -1522,24 +1522,24 @@ test('detached-rule suggestions stay visible with disabled execution and can be 
   const history = await page.context().newPage();
   await history.goto(`/services/${service.id}?tab=runbooks`);
   await expect(
-    history.getByRole('link', { name: 'View Archived Evidence', exact: true })
+    history.getByRole('link', { name: 'View archived rule evidence', exact: true })
   ).not.toBeVisible();
-  await history.getByRole('combobox').filter({ hasText: 'Attached rules' }).click();
-  await history.getByRole('option', { name: 'Archived rules', exact: true }).click();
+  await history
+    .getByRole('combobox', { name: 'Rule history', exact: true })
+    .filter({ visible: true })
+    .selectOption('archived');
   await expect(history).toHaveURL(/rulesState=archived/);
   await history
     .getByPlaceholder('Search rules by name, runbook, or target agent…')
     .filter({ visible: true })
     .fill('Detached response');
   await expect(
-    history
-      .getByText('Rule detached · Archived execution history retained', { exact: true })
-      .filter({ visible: true })
+    history.getByText('Rule detached · Archived history', { exact: true }).filter({ visible: true })
   ).toBeVisible();
   await expect(
     history.getByRole('button', { name: 'Duplicate paused rule', exact: true })
   ).not.toBeVisible();
-  await history.getByRole('link', { name: 'View Archived Evidence', exact: true }).click();
+  await history.getByRole('link', { name: 'View archived rule evidence', exact: true }).click();
   await expect(history.getByRole('list', { name: 'Rule lifecycle' })).toBeVisible();
   await expect(
     history.getByText('Detached; activation unavailable', { exact: true }).filter({ visible: true })
