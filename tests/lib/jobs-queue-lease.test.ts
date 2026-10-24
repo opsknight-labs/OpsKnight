@@ -4,6 +4,7 @@ const mocks = vi.hoisted(() => ({
   processEventSideEffect: vi.fn(),
   updateMany: vi.fn(),
   queryRaw: vi.fn(),
+  executeRaw: vi.fn().mockResolvedValue(1),
   update: vi.fn(),
   findUnique: vi.fn(),
   externalFindUnique: vi.fn(),
@@ -14,6 +15,7 @@ vi.mock('@/lib/prisma', () => ({
   __esModule: true,
   default: {
     $queryRaw: mocks.queryRaw,
+    $executeRaw: mocks.executeRaw,
     backgroundJob: {
       updateMany: mocks.updateMany,
       update: mocks.update,
@@ -73,7 +75,12 @@ describe('background job processing lease', () => {
 
     await vi.advanceTimersByTimeAsync(60_000);
     expect(mocks.updateMany).toHaveBeenCalledWith({
-      where: { id: 'job-1', status: 'PROCESSING', attempts: 1, claimToken: '00000000-0000-4000-8000-000000000001' },
+      where: {
+        id: 'job-1',
+        status: 'PROCESSING',
+        attempts: 1,
+        claimToken: '00000000-0000-4000-8000-000000000001',
+      },
       data: { startedAt: expect.any(Date) },
     });
 

@@ -892,7 +892,10 @@ describe('Admin API RBAC — static guard check', () => {
 
 // ── Worker execution — processJob reason routing ─────────────────────────
 describe('worker — processJob reason routing (enqueue → processJob → engine/adapter)', () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(prisma.$executeRaw).mockResolvedValueOnce(1);
+  });
 
   it('external_cleanup_retry routes to reconcileTerminalWarRoomDriftForRoom', async () => {
     const { processJob } = await import('@/lib/jobs/queue');

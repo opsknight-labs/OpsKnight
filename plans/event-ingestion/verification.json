@@ -1897,5 +1897,52 @@
       "warnings": 0
     },
     "k6Inspect": "passed"
+  },
+  "fencedJobCompletion": {
+    "certified": false,
+    "unit": {
+      "files": 949,
+      "passed": 9976,
+      "skipped": 7
+    },
+    "database": {
+      "files": 5,
+      "passed": 68,
+      "skipped": 1
+    },
+    "focusedPassed": 103,
+    "typescript": "passed",
+    "lint": {
+      "errors": 0,
+      "warnings": 0
+    },
+    "driverCommands": {
+      "before": 3,
+      "after": 1
+    },
+    "componentMeanMs": {
+      "before": 4.108538,
+      "after": 1.747533
+    },
+    "nativeImageBenchmark": "pending",
+    "staticReviews": "Two independent substitutes, no actionable findings; not branded certification",
+    "redesignPlan": "high-throughput-redesign.md",
+    "release": "NO-GO"
+  },
+  "twoGeneralReplicaMeasuredResult": {
+    "status": "failed",
+    "offeredRps": 50,
+    "durationSeconds": 300,
+    "persistedAndCompleted": 10310,
+    "acknowledged": 10216,
+    "ambiguous": 94,
+    "dropped": 695,
+    "httpP95Ms": 6071.5625,
+    "completionP95Ms": 4403.65,
+    "sideEffectsDue": 28847,
+    "sideEffectsProcessing": 122,
+    "replayRecovered": 10310,
+    "replayExtraReceipts": 0,
+    "kindRestored": true
   }
 }

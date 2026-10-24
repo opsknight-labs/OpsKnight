@@ -495,6 +495,28 @@ export async function markJobProcessing(jobId: string, claimToken?: string): Pro
   });
 }
 
+/** One autocommitted statement retains all claim predicates without the
+ * extra driver BEGIN/COMMIT round trips of an ORM updateMany operation.
+ */
+async function completeClaimedJob(
+  jobId: string,
+  claimAttempt: number | undefined,
+  claimToken: string | null | undefined,
+  allowV2: boolean
+): Promise<number> {
+  const now = new Date();
+  return prisma.$executeRaw`
+    UPDATE "BackgroundJob" SET "status"='COMPLETED'::"JobStatus",
+      "completedAt"=${now}, "updatedAt"=${now}
+    WHERE "id"=${jobId}
+      AND ("status"='PROCESSING'::"JobStatus"
+        OR (${allowV2} AND "status"='PROCESSING_V2'::"JobStatus"))
+      AND (${claimAttempt === undefined} OR "attempts"=${claimAttempt ?? 0})
+      AND (${claimToken === undefined}
+        OR "claimToken" IS NOT DISTINCT FROM ${claimToken ?? null}::uuid)
+  `;
+}
+
 export async function markJobCompleted(
   jobId: string,
   claimAttempt?: number,
@@ -505,15 +527,7 @@ export async function markJobCompleted(
     await prisma.backgroundJob.update({ where: { id: jobId }, data });
     return;
   }
-  await prisma.backgroundJob.updateMany({
-    where: {
-      id: jobId,
-      attempts: claimAttempt,
-      status: { in: ['PROCESSING', 'PROCESSING_V2'] },
-      ...(claimToken === undefined ? {} : { claimToken }),
-    },
-    data,
-  });
+  await completeClaimedJob(jobId, claimAttempt, claimToken, true);
 }
 
 async function markWarRoomJobCompleted(
@@ -521,16 +535,7 @@ async function markWarRoomJobCompleted(
   claimAttempt?: number,
   claimToken?: string | null
 ): Promise<boolean> {
-  const result = await prisma.backgroundJob.updateMany({
-    where: {
-      id: jobId,
-      status: 'PROCESSING',
-      ...(claimAttempt === undefined ? {} : { attempts: claimAttempt }),
-      ...(claimToken === undefined ? {} : { claimToken }),
-    },
-    data: { status: 'COMPLETED', completedAt: new Date() },
-  });
-  return result.count === 1;
+  return (await completeClaimedJob(jobId, claimAttempt, claimToken, false)) === 1;
 }
 
 async function markWarRoomJobFailed(job: QueuedJob, error: string): Promise<void> {
@@ -862,13 +867,21 @@ export async function processJob(jobInput: QueuedJob | string | null): Promise<b
     switch (job.type) {
       case 'AUDIT_EXPORT': {
         const { processAuditExportJob } = await import('../api-v2/audit-exports');
-        await processAuditExportJob(requiredPayloadString(job.payload, 'exportId'), job.id, job.claimToken);
+        await processAuditExportJob(
+          requiredPayloadString(job.payload, 'exportId'),
+          job.id,
+          job.claimToken
+        );
         await markJobCompleted(job.id, claimAttempt, job.claimToken);
         return true;
       }
       case 'REPORT_EXPORT': {
         const { processReportExportJob } = await import('../api-v2/report-exports');
-        await processReportExportJob(requiredPayloadString(job.payload, 'exportId'), job.id, job.claimToken);
+        await processReportExportJob(
+          requiredPayloadString(job.payload, 'exportId'),
+          job.id,
+          job.claimToken
+        );
         await markJobCompleted(job.id, claimAttempt, job.claimToken);
         return true;
       }

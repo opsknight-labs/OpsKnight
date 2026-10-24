@@ -215,3 +215,10 @@ Capacity helpers distinguish true exhaustion from skipped locks with remaining c
 ### Live background-job claim index
 
 The shared job claimant now exposes its existing four live statuses as a redundant explicit bound, allowing PostgreSQL to prove applicability of an additive partial index on scheduledAt/createdAt/id with attempts below maxAttempts. Completed history no longer has to precede due work in this ordered scan. Type-specific generation, lease, lane, predecessor and SKIP LOCKED rules remain. This improves the measured SQL access path; it does not establish that the general worker can execute all resulting jobs quickly enough. Native evidence now records measured-service event-side-effect backlog separately from receipt completion.
+
+
+### Single-statement fenced background completion
+
+A shared conditional UPDATE replaces transaction-wrapped single-row updateMany on claimed ordinary/V2 jobs and war-room completion. Attempt, token (including explicit null), generation/status and timestamps are retained. Legacy completion without an attempt remains unchanged. Real-database regressions cover SQL command count, stale/replaced claims and cancellation after the worker snapshot. The alternating component diagnostic saves two driver commands per completion, without changing acknowledged durability. Native image throughput is pending.
+
+The high-throughput redesign is tracked in high-throughput-redesign.md. Admission-only, incident-only, effects-only and full-stack capacities must remain separate; the current empty-provider handler profile is diagnostic only. The two-general-worker trial failed, and critical initial responder planning currently depends on the general queue. No new lane migration or configuration-aware omission is implemented yet.
