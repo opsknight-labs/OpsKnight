@@ -15,9 +15,9 @@ const require = createRequire(import.meta.url);
 describe('deployment configuration invariants', () => {
   it('enables maintenance on the scheduler in the PostgreSQL ingestion overlay', () => {
     const overlay = YAML.parse(read('deploy/compose/docker-compose.ingestion.yml'));
-    expect(overlay.services['opsknight-scheduler'].environment.OPSKNIGHT_INGESTION_MODE).toBe(
-      'postgres'
-    );
+    expect(
+      overlay.services['opsknight-scheduler'].environment.OPSKNIGHT_INGESTION_MODE
+    ).toBeUndefined();
     expect(overlay.services['opsknight-scheduler'].environment).toEqual(
       overlay.services['opsknight-web'].environment
     );

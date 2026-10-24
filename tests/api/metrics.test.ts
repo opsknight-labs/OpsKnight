@@ -52,8 +52,8 @@ describe('API Route - Prometheus Metrics (/api/metrics)', () => {
     process.env = originalEnv;
   });
 
-  it('exports persistent dead-letter and backlog evidence independently of worker counters', async () => {
-    process.env.OPSKNIGHT_INGESTION_MODE = 'postgres';
+  it('exports persistent dead-letter and backlog evidence with automatic async mode', async () => {
+    delete process.env.OPSKNIGHT_INGESTION_MODE;
     process.env.PROMETHEUS_SCRAPE_TOKEN = 'fixture-scrape';
     vi.mocked(collectIngestionQueueMetrics).mockResolvedValue([
       { status: 'DEAD', count: 2, oldestAgeSeconds: 180 },
@@ -66,6 +66,8 @@ describe('API Route - Prometheus Metrics (/api/metrics)', () => {
     );
     const body = await response.text();
     expect(response.status).toBe(200);
+    expect(body).toContain('opsknight_ingestion_enabled 1');
+    expect(collectIngestionQueueMetrics).toHaveBeenCalledOnce();
     expect(body).toContain('opsknight_ingestion_unfinished{status="DEAD"} 2');
     expect(body).toContain('opsknight_ingestion_unfinished{status="PENDING"} 3');
     expect(body).toContain('opsknight_ingestion_oldest_unfinished_age_seconds 180');

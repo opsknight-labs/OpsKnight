@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/no-require-imports -- Executable CommonJS fixture loads the shared TypeScript runtime. */
+/* eslint-disable security/detect-non-literal-fs-filename, security/detect-non-literal-require -- Generated baseline client and schema live in the owned private temporary directory; paths are validated below. */
 // Populated upgrade fixture. Never resets or reuses an existing database.
 require('./isolated-runtime.cjs');
 const assert = require('node:assert/strict');
@@ -169,10 +171,14 @@ async function main() {
     OPSKNIGHT_DATABASE_READY_POLL_MS: '100',
   });
   const { ingestionConfig } = require('../../src/lib/ingestion/config');
-  assert.equal(ingestionConfig().mode, 'sync');
+  assert.equal(ingestionConfig().mode, 'postgres');
+  process.env.OPSKNIGHT_PROCESS_ROLE = 'web';
+  const { startIngestionWorker, stopIngestionWorker } = require('../../src/lib/ingestion/worker');
+  startIngestionWorker();
   assert.equal(await current.ingestionReceipt.count(), 0);
   assert.equal(await current.ingestionBudget.count(), 64);
   const { POST } = require('../../src/app/api/events/route');
+  const receiptIds = [];
   async function send(action, large = false) {
     const response = await POST(
       new NextRequest('http://localhost/api/events', {
@@ -180,7 +186,7 @@ async function main() {
         headers: {
           Authorization: `Token token=${integration.key}`,
           'Content-Type': 'application/json',
-          'Idempotency-Key': 'legacy-header-'.repeat(30),
+          'Idempotency-Key': `upgrade-${action}-${suffix}`,
         },
         body: JSON.stringify({
           event_action: action,
@@ -197,9 +203,20 @@ async function main() {
     assert.equal(response.status, 202);
     const body = await response.json();
     assert.equal(body.data.status, 'success');
-    assert.equal(body.data.result.incident.id, incident.id);
-    assert.equal('receiptId' in body.data.result, false);
-    return body.data.result.action;
+    assert.equal(body.data.result.action, 'accepted');
+    const receiptId = body.data.result.receiptId;
+    assert.equal(typeof receiptId, 'string');
+    receiptIds.push(receiptId);
+    const deadline = Date.now() + 15000;
+    let receipt;
+    do {
+      receipt = await current.ingestionReceipt.findUniqueOrThrow({ where: { id: receiptId } });
+      if (receipt.status === 'COMPLETED') break;
+      await new Promise(resolve => setTimeout(resolve, 50));
+    } while (Date.now() < deadline);
+    assert.equal(receipt.status, 'COMPLETED');
+    assert.equal(receipt.result.incidentId, incident.id);
+    return receipt.result.action;
   }
   assert.equal(await send('trigger', true), 'deduplicated');
   assert.equal(await send('acknowledge'), 'acknowledged');
@@ -207,9 +224,11 @@ async function main() {
   assert.equal((await old.incident.findUnique({ where: { id: incident.id } })).status, 'RESOLVED');
   assert.equal(
     await current.ingestionReceipt.count(),
-    0,
-    'Plain image replacement must not enqueue work'
+    3,
+    'Plain image replacement must durably enqueue and process lifecycle work'
   );
+  await stopIngestionWorker();
+  assert.equal(receiptIds.length, 3);
   const oldWriter = await old.incident.create({
     data: { serviceId: service.id, title: 'Old client after upgrade' },
   });
@@ -242,17 +261,19 @@ async function main() {
     existingDataPreserved: true,
     repeatedStartup: true,
     splitReadinessPassed: true,
-    defaultMode: 'sync',
+    defaultMode: 'postgres',
     legacyApiActions: ['trigger', 'acknowledge', 'resolve'],
     legacyLargePayloadAccepted: true,
-    legacyIdempotencyHeaderIgnored: true,
+    deliveryIdempotencyEnabled: true,
+    automaticWebFallbackProcessedReceipts: true,
+    rollingMixedVersionUpgradeCertified: false,
     oldClientReadsAndWritesAfterUpgrade: true,
     existingAutomationConfigPreserved: automation ? true : 'absent in baseline',
-    automaticQueueActivation: false,
+    automaticQueueActivation: true,
     certifiedEnterprise: false,
   };
   fs.writeFileSync(
-    path.join(root, `plans/event-ingestion/upgrade-${baseline.slice(0, 8)}.json`),
+    path.join(root, `plans/event-ingestion/upgrade-auto-async-${baseline.slice(0, 8)}.json`),
     JSON.stringify(evidence, null, 2) + '\n'
   );
   console.log('Populated image-startup upgrade compatibility passed.');
@@ -263,6 +284,7 @@ main()
     process.exitCode = 1;
   })
   .finally(async () => {
+    await require('../../src/lib/ingestion/worker').stopIngestionWorker();
     await old?.$disconnect();
     await current.$disconnect();
     const shared = require('../../src/lib/prisma').default;

@@ -20,7 +20,7 @@ describe('public readiness response', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     process.env.OPSKNIGHT_PROCESS_ROLE = 'web';
-    delete process.env.OPSKNIGHT_INGESTION_MODE;
+    process.env.OPSKNIGHT_INGESTION_MODE = 'sync';
     updateIngestionWorkerHealth({
       running: false,
       faulted: false,
@@ -42,6 +42,8 @@ describe('public readiness response', () => {
     updateIngestionWorkerHealth({ faulted: false, lastSuccessAt: Date.now() - 61000 });
     expect((await GET(request())).status).toBe(503);
     process.env.OPSKNIGHT_PROCESS_ROLE = 'web';
+    expect((await GET(request())).status).toBe(503);
+    updateIngestionWorkerHealth({ lastSuccessAt: Date.now() });
     expect((await GET(request())).status).toBe(200);
   });
 

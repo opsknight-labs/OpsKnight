@@ -1,0 +1,12 @@
+{
+  "certifiedEnterprise": false,
+  "runId": "a3318aeb-b57c-4b53-9f2e-6f5ead3d0b13",
+  "passed": false,
+  "cleanupFailures": [],
+  "images": {
+    "upstream": "sha256:1bcbe966c4356bc1540bcd149cfbeddf83f9edbeb608af80430025a2a4e6aa31",
+    "proxy": "sha256:0985e772fb9f729e6fa0980da05fca5d9c468e870eed43071545afa9d2e27d94"
+  },
+  "error": "socket hang up",
+  "recordedAt": "2026-10-23T22:11:37.727Z"
+}

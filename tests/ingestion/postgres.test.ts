@@ -23,7 +23,14 @@ import {
   IngestionLeaseLostError,
   IngestionUnavailableError,
 } from '@/lib/ingestion/contract';
-import { consumeIngestionBatch, stopIngestionWorker } from '@/lib/ingestion/worker';
+import {
+  consumeIngestionBatch,
+  startIngestionWorker,
+  stopIngestionWorker,
+} from '@/lib/ingestion/worker';
+import { hasHealthyDedicatedIngestionWorker } from '@/lib/ingestion/fallback';
+import { getIngestionWorkerHealth } from '@/lib/ingestion/worker-health';
+import { acquireTextAdvisoryLocks } from '@/lib/db-locks';
 import { applyIngestionCommand, ingestionSnapshot } from '@/lib/ingestion/operations';
 import { compileAutomation } from '@/lib/automation/compiler';
 import { emptySnapshot } from '@/lib/automation/contract';
@@ -102,6 +109,130 @@ afterAll(async () => {
 });
 
 describe('PostgreSQL ingestion durability', () => {
+  it('holds every batched identity against legacy writers until transaction completion', async () => {
+    const identities = ['é', 'z', '😀', 'a', 'z'].map(key => `${randomUUID()}:${key}`);
+    let release!: () => void;
+    let acquired!: () => void;
+    const ready = new Promise<void>(resolve => {
+      acquired = resolve;
+    });
+    const hold = new Promise<void>(resolve => {
+      release = resolve;
+    });
+    const transaction = prisma.$transaction(async tx => {
+      await acquireTextAdvisoryLocks(tx, identities);
+      acquired();
+      await hold;
+    });
+    try {
+      await Promise.race([
+        ready,
+        transaction.then(() => {
+          throw new Error('Lock fixture ended early');
+        }),
+      ]);
+      for (const identity of identities) {
+        const [row] = await prisma.$queryRaw<Array<{ acquired: boolean }>>`
+          SELECT pg_try_advisory_xact_lock(hashtextextended(${identity}, 0)) AS acquired`;
+        expect(row.acquired).toBe(false);
+      }
+    } finally {
+      release();
+      await transaction;
+    }
+    for (const identity of identities) {
+      const [row] = await prisma.$queryRaw<Array<{ acquired: boolean }>>`
+        SELECT pg_try_advisory_xact_lock(hashtextextended(${identity}, 0)) AS acquired`;
+      expect(row.acquired).toBe(true);
+    }
+  });
+
+  it('automatically drains accepted events on an upgraded web replica without a mode flag', async () => {
+    const previousMode = process.env.OPSKNIGHT_INGESTION_MODE;
+    const previousRole = process.env.OPSKNIGHT_PROCESS_ROLE;
+    delete process.env.OPSKNIGHT_INGESTION_MODE;
+    process.env.OPSKNIGHT_PROCESS_ROLE = 'web';
+    try {
+      const receipts = await Promise.all([
+        acceptPostgresEvent(envelope('upgrade-first')),
+        acceptPostgresEvent(envelope('upgrade-second')),
+      ]);
+      startIngestionWorker();
+      await expect
+        .poll(
+          async () =>
+            prisma.ingestionReceipt.count({
+              where: {
+                id: { in: receipts.map(receipt => receipt.receiptId) },
+                status: 'COMPLETED',
+              },
+            }),
+          { timeout: 10000 }
+        )
+        .toBe(2);
+      expect(await prisma.alert.count({ where: { serviceId } })).toBe(2);
+      expect(await prisma.incident.count({ where: { serviceId } })).toBe(2);
+    } finally {
+      await stopIngestionWorker();
+      if (previousMode === undefined) delete process.env.OPSKNIGHT_INGESTION_MODE;
+      else process.env.OPSKNIGHT_INGESTION_MODE = previousMode;
+      if (previousRole === undefined) delete process.env.OPSKNIGHT_PROCESS_ROLE;
+      else process.env.OPSKNIGHT_PROCESS_ROLE = previousRole;
+    }
+  });
+
+  it('keeps web consumption on standby for a healthy dedicated worker and resumes after stale evidence', async () => {
+    const previousMode = process.env.OPSKNIGHT_INGESTION_MODE;
+    const previousRole = process.env.OPSKNIGHT_PROCESS_ROLE;
+    delete process.env.OPSKNIGHT_INGESTION_MODE;
+    process.env.OPSKNIGHT_PROCESS_ROLE = 'web';
+    const instanceId = `fallback-test:${randomUUID()}`;
+    try {
+      await prisma.runtimeWorkerHeartbeat.create({
+        data: {
+          instanceId,
+          lane: 'ingestion',
+          role: 'ingestion-worker',
+          running: true,
+          lastSuccessAt: new Date(),
+        },
+      });
+      expect(await hasHealthyDedicatedIngestionWorker()).toBe(true);
+      const receipt = await acceptPostgresEvent(envelope('dedicated-handoff'));
+      startIngestionWorker();
+      await expect
+        .poll(() => getIngestionWorkerHealth().lastSuccessAt, { timeout: 5000 })
+        .not.toBeNull();
+      expect(
+        (await prisma.ingestionReceipt.findUniqueOrThrow({ where: { id: receipt.receiptId } }))
+          .status
+      ).toBe('PENDING');
+      await stopIngestionWorker();
+      await prisma.$executeRaw`UPDATE "RuntimeWorkerHeartbeat" SET "lastSeenAt" = clock_timestamp() - INTERVAL '31 seconds' WHERE "instanceId" = ${instanceId}`;
+      expect(await hasHealthyDedicatedIngestionWorker()).toBe(false);
+      startIngestionWorker();
+      await expect
+        .poll(
+          async () =>
+            (
+              await prisma.ingestionReceipt.findUniqueOrThrow({
+                where: { id: receipt.receiptId },
+              })
+            ).status,
+          { timeout: 10000 }
+        )
+        .toBe('COMPLETED');
+      expect(await prisma.alert.count({ where: { serviceId } })).toBe(1);
+    } finally {
+      await stopIngestionWorker();
+      await prisma.runtimeWorkerHeartbeat.deleteMany({ where: { instanceId } });
+      if (previousMode === undefined) delete process.env.OPSKNIGHT_INGESTION_MODE;
+      else process.env.OPSKNIGHT_INGESTION_MODE = previousMode;
+      if (previousRole === undefined) delete process.env.OPSKNIGHT_PROCESS_ROLE;
+      else process.env.OPSKNIGHT_PROCESS_ROLE = previousRole;
+    }
+  });
+
   it('returns committed receipts after lost responses under exhausted quota without admitting unknown retries', async () => {
     process.env.OPSKNIGHT_INGESTION_MODE = 'postgres';
     try {
@@ -1286,17 +1417,22 @@ describe('PostgreSQL ingestion durability', () => {
       0
     );
   });
-  it('keeps an image-only upgrade synchronous and accepts legacy payload sizes', async () => {
-    const input = envelope('legacy');
-    input.event.payload.custom_details = { blob: 'x'.repeat(300000) };
-    const result = await processIntegrationEvent(input);
-    expect(result.action).toBe('triggered');
-    expect(result.incident?.serviceId).toBe(serviceId);
-    expect('receiptId' in result).toBe(false);
-    expect(await prisma.ingestionReceipt.count()).toBe(0);
+  it('preserves explicit synchronous rollback and legacy payload sizes', async () => {
+    process.env.OPSKNIGHT_INGESTION_MODE = 'sync';
+    try {
+      const input = envelope('legacy');
+      input.event.payload.custom_details = { blob: 'x'.repeat(300000) };
+      const result = await processIntegrationEvent(input);
+      expect(result.action).toBe('triggered');
+      expect(result.incident?.serviceId).toBe(serviceId);
+      expect('receiptId' in result).toBe(false);
+      expect(await prisma.ingestionReceipt.count()).toBe(0);
+    } finally {
+      delete process.env.OPSKNIGHT_INGESTION_MODE;
+    }
   });
 
-  it('changes to durable acceptance only after explicit activation', async () => {
+  it('also supports explicit durable mode', async () => {
     process.env.OPSKNIGHT_INGESTION_MODE = 'postgres';
     try {
       const result = await processIntegrationEvent(envelope('opt-in'));

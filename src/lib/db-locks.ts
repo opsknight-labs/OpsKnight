@@ -1,6 +1,23 @@
 import { Prisma } from '@prisma/client';
 import { logger } from './logger';
 
+/** Acquire canonical text identities in the same JS order as legacy writers,
+ * with one database round trip. Materialization preserves that acquisition
+ * order before PostgreSQL evaluates the volatile advisory-lock function.
+ */
+export async function acquireTextAdvisoryLocks(
+  tx: Prisma.TransactionClient,
+  identities: string[]
+): Promise<void> {
+  const ordered = [...new Set(identities)].sort();
+  if (!ordered.length) return;
+  await tx.$executeRaw`
+    WITH ordered AS MATERIALIZED (
+      SELECT identity FROM unnest(${ordered}::text[]) WITH ORDINALITY AS locks(identity, position)
+      ORDER BY position
+    ) SELECT pg_advisory_xact_lock(hashtextextended(identity, 0)) FROM ordered`;
+}
+
 /**
  * Postgres advisory-lock helpers.
  *

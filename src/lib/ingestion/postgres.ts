@@ -1,4 +1,5 @@
 import { reserveIngestionBudget } from './budget';
+import { acquireTextAdvisoryLocks } from '@/lib/db-locks';
 import { randomUUID } from 'node:crypto';
 import { Prisma } from '@prisma/client';
 import prisma from '@/lib/prisma';
@@ -99,12 +100,16 @@ export async function acceptPostgresEvent(
   ]);
   const append = async (tx: Prisma.TransactionClient) => {
     // Override an unsafe session default; acknowledgements require a WAL flush.
-    await tx.$executeRaw`SET LOCAL synchronous_commit = on`;
+    if (!context) await tx.$executeRaw`SET LOCAL synchronous_commit = on`;
     // Allocate the sequence while holding this key's admission lock. Without
     // it a slower earlier append could commit after a later event was processed.
-    for (const identity of identities) {
-      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`ingestion:${identity}`}, 0))`;
-    }
+    // Shared batches acquire the union of every child's identities first.
+    // Reacquiring those locks per child only adds database round trips.
+    if (!context)
+      await acquireTextAdvisoryLocks(
+        tx,
+        identities.map(identity => `ingestion:${identity}`)
+      );
     const existing = await tx.ingestionReceipt.findUnique({ where: { idempotencyKey } });
     if (existing) {
       if (

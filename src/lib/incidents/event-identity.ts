@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import type { EventPayload } from '@/lib/events';
 import type { Prisma } from '@prisma/client';
+import { acquireTextAdvisoryLocks } from '@/lib/db-locks';
 
 function truncateDedupKey(key: unknown): string {
   const str = typeof key === 'string' ? key : String(key || '');
@@ -49,6 +50,5 @@ export async function lockEventDedupKeys(
   const lockKeys = Array.from(
     new Set(candidateDedupKeys.map(key => JSON.stringify([serviceId, key])))
   ).sort();
-  for (const lockKey of lockKeys)
-    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${lockKey}, 0))`;
+  await acquireTextAdvisoryLocks(tx, lockKeys);
 }

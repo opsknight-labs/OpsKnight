@@ -65,7 +65,10 @@
     "No enterprise throughput or HA durability guarantee has been certified."
   ],
   "followUp": {
-    "imageUpgradeEvidence": ["upgrade-f81dfc25.json", "upgrade-58e9271c.json"],
+    "imageUpgradeEvidence": [
+      "upgrade-f81dfc25.json",
+      "upgrade-58e9271c.json"
+    ],
     "databaseOutageEvidence": "local-database-outage.json",
     "ingestionTestsPassed": 24,
     "focusedRegressionTestsPassed": 57,
@@ -551,6 +554,75 @@
     "modifiedSourceLint": "passed; completed exit0",
     "composeConfiguration": "passed with explicit candidate image",
     "review": "P1 stalled unauthenticated body found and fixed; repeat independent review found no additional concrete defect",
-    "freshImageValidation": "pending"
+    "freshImageValidation": "Native controlled request-gate recovery passed; 100 RPS crash run failed acceptance/latency gates"
+  },
+  "nativeRequestBackpressureFollowup": {
+    "recordedAt": "2026-10-23T22:07:20.845377+00:00",
+    "certified": false,
+    "image": {
+      "revision": "8cfe6058f",
+      "id": "sha256:1bcbe966c4356bc1540bcd149cfbeddf83f9edbeb608af80430025a2a4e6aa31",
+      "archiveSha256": "def890482f930b1f20ad8a60e5f09ba5f5e672750a4c6c79fea6b7e25039442e"
+    },
+    "requestGateChecks": {
+      "passed": true,
+      "heldRequests": 64,
+      "overloadObserved": true,
+      "acceptedAndCompleted": 65,
+      "ambiguousSubmissions": 0,
+      "recoveryAccepted": true,
+      "elapsedMs": 1247,
+      "scope": "Real complete HTTP requests held on an owned quota-row lock, then released and reconciled. Next middleware buffers partial bodies before route handlers; this does not certify a network body deadline."
+    },
+    "crashRun": {
+      "httpEvidence": "local-docker-http-request-gate-lock-crash-100.json",
+      "topologyEvidence": "local-docker-topology-request-gate-lock-crash-100.json",
+      "passed": false,
+      "acknowledged": 2992,
+      "accepted": 2992,
+      "completed": 2992,
+      "ambiguous": 0,
+      "httpP95Ms": 562.624,
+      "completionP95Ms": 959,
+      "explicit503": 9,
+      "dropped": 0,
+      "workerRecoveryMs": 4995,
+      "cleanupFailures": []
+    },
+    "networkBodyDeadlineCertified": false,
+    "failedPartialBodyPreflights": [
+      "local-docker-topology-request-gate-crash-100.json",
+      "local-docker-http-request-gate-healthy-100.json",
+      "local-docker-topology-request-gate-healthy-100.json"
+    ],
+    "partialBodyLimitation": "Next middleware buffers bodies before route handlers; route-level five-second read deadlines do not certify pre-handler network protection",
+    "checks": {
+      "typeCheck": "passed; completed exit0",
+      "modifiedHarnessLint": "passed; completed exit0",
+      "focusedUnitPassed": 47
+    },
+    "new1000RpsDiagnostic": "failed; see local-docker-http-request-gate-ceiling-1000.json and local-docker-http-edge-backpressure-1000.json"
+  },
+  "automaticAsyncDefaultFollowup": {
+    "recordedAt": "2026-10-24T05:14:24.706458+00:00",
+    "certified": false,
+    "defaultMode": "postgres",
+    "requiresModeVariable": false,
+    "webFallbackConcurrency": 1,
+    "additionalWebDatabasePools": 0,
+    "dedicatedHeartbeatFreshnessSeconds": 30,
+    "topologyCheckSeconds": 5,
+    "databaseContractTestsPassed": 61,
+    "focusedUnitTestsPassed": 90,
+    "typeCheck": "passed; completed exit0",
+    "mixedVersionRollingUpgradeCertified": false,
+    "firstCutoverRequiresOldProducersDrained": true,
+    "nativeImageValidation": "pending fresh image",
+    "throughput1000RpsCertified": false,
+    "populatedUpgrade": {
+      "passed": true,
+      "evidence": "upgrade-auto-async-58e9271c.json",
+      "scope": "Actual migration entrypoint and source handlers; existing records preserved, three receipts processed via automatic web consumer, repeated startup; no native image or mixed-version certification"
+    }
   }
 }

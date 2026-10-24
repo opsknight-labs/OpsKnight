@@ -8,10 +8,10 @@ import {
 } from '@/lib/runtime-role';
 
 describe('runtime process roles', () => {
-  it('centralizes opt-in ingestion ownership for bootstrap and readiness', () => {
+  it('centralizes automatic ingestion ownership and the web upgrade fallback', () => {
     expect(shouldRunIngestionConsumer('ingestion-worker', 'postgres')).toBe(true);
     expect(shouldRunIngestionConsumer('integrated', 'postgres')).toBe(true);
-    expect(shouldRunIngestionConsumer('web', 'postgres')).toBe(false);
+    expect(shouldRunIngestionConsumer('web', 'postgres')).toBe(true);
     expect(shouldRunIngestionConsumer('integrated', 'sync')).toBe(false);
     expect(shouldRunIngestionConsumer('ingestion-worker', 'sync')).toBe(false);
   });

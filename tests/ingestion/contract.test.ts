@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { resolveIngestionMode } from '@/lib/ingestion/mode';
 import {
   decodeEnvelope,
   digest,
@@ -70,7 +71,16 @@ describe('durable ingestion contract', () => {
     expect(retryDelayMs(1, 1)).toBe(1000);
     expect(retryDelayMs(100, 1)).toBe(300000);
   });
-  it('defaults to compatibility mode until certification permits rollout', () => {
-    expect(ingestionConfig().mode).toBe('sync');
+  it('defaults to durable ingestion without a customer variable and retains explicit rollback', () => {
+    const previous = process.env.OPSKNIGHT_INGESTION_MODE;
+    delete process.env.OPSKNIGHT_INGESTION_MODE;
+    try {
+      expect(ingestionConfig().mode).toBe('postgres');
+      expect(resolveIngestionMode('sync')).toBe('sync');
+      expect(() => resolveIngestionMode('invalid')).toThrow('Invalid ingestion mode');
+    } finally {
+      if (previous === undefined) delete process.env.OPSKNIGHT_INGESTION_MODE;
+      else process.env.OPSKNIGHT_INGESTION_MODE = previous;
+    }
   });
 });

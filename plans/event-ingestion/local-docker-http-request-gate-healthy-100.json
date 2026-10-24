@@ -1,0 +1,22 @@
+{
+  "measuredAt": "2026-10-23T21:59:59.402Z",
+  "candidate": {
+    "fullStackProcesses": true,
+    "kind": "docker",
+    "nodeVersion": "v20.20.2",
+    "imageId": "sha256:1bcbe966c4356bc1540bcd149cfbeddf83f9edbeb608af80430025a2a4e6aa31",
+    "sourceRevision": "8cfe6058f",
+    "webReplicas": 2,
+    "workerReplicas": 4,
+    "webCpus": 2,
+    "workerCpus": 2,
+    "cpuProfiling": false,
+    "certificationRunId": "97d50a99-5dfc-4819-a9bb-8e15d9060b06",
+    "sourceProvenance": "Immutable image ID and producer-supplied OCI revision label; no signed build attestation"
+  },
+  "passed": false,
+  "certifiedEnterprise": false,
+  "failureStage": "request-gate-checks",
+  "errorType": "AssertionError",
+  "scope": "Failed before full load evidence was produced; local stderr has diagnostics"
+}

@@ -223,13 +223,14 @@ async function main() {
   const revision = imageInfo.Config.Labels['org.opencontainers.image.revision'];
   assert.ok(revision && revision !== 'unknown', 'Candidate must have a source revision label');
   const webReplicas = Number(process.env.INGESTION_WEB_REPLICAS || 2);
-  const workerReplicas = Number(process.env.INGESTION_WORKER_REPLICAS || 4);
+  const workerReplicas = Number(process.env.INGESTION_WORKER_REPLICAS ?? 4);
+  const automaticMode = process.env.INGESTION_DOCKER_DEFAULT_MODE === 'true';
   const webCpus = Number(process.env.INGESTION_WEB_CPUS || 1);
   const workerCpus = Number(process.env.INGESTION_WORKER_CPUS || 1);
   for (const cpus of [webCpus, workerCpus])
     assert.ok(Number.isFinite(cpus) && cpus >= 0.25 && cpus <= 4);
   assert.ok(Number.isInteger(webReplicas) && webReplicas >= 1 && webReplicas <= 4);
-  assert.ok(Number.isInteger(workerReplicas) && workerReplicas >= 1 && workerReplicas <= 8);
+  assert.ok(Number.isInteger(workerReplicas) && workerReplicas >= 0 && workerReplicas <= 8);
   const [limits] =
     await prisma.$queryRaw`SELECT current_setting('max_connections')::int AS maximum`;
   const supportingRoles = [
@@ -261,6 +262,14 @@ async function main() {
     DATABASE_CONNECTION_RESERVE: '15',
     DATABASE_MAX_CONNECTIONS: String(limits.maximum),
   });
+  if (workerReplicas === 0) {
+    assert.ok(automaticMode, 'Fallback-only certification must omit the mode override');
+    assert.notEqual(
+      process.env.INGESTION_DOCKER_KILL_WORKER,
+      'true',
+      'Worker-kill certification needs a dedicated worker'
+    );
+  }
   const configuredControl = await require('../../src/lib/ingestion/policy').getIngestionPolicy();
   assert.ok(capacity.safe, 'Local candidate topology exceeds its PostgreSQL connection budget');
   assert.equal(
@@ -286,7 +295,7 @@ async function main() {
     ...supportingPools,
     NODE_ENV: 'production',
     OPSKNIGHT_RUNTIME_MODE: 'split',
-    OPSKNIGHT_INGESTION_MODE: 'postgres',
+    ...(automaticMode ? {} : { OPSKNIGHT_INGESTION_MODE: 'postgres' }),
     OPSKNIGHT_INGESTION_CONCURRENCY: '4',
     OPSKNIGHT_INGESTION_EVENTS_PER_MINUTE: '10000000',
     OPSKNIGHT_INGESTION_INTEGRATION_PER_MINUTE: '10000000',
@@ -581,9 +590,16 @@ async function main() {
   }
   const proxy = JSON.parse(await invoke(['image', 'inspect', proxyRef]))[0];
   const proxyConfig = path.join(directory, 'nginx.conf');
+  const edgeBackpressure = process.env.INGESTION_DOCKER_EDGE_BACKPRESSURE === 'true';
+  const edgeMaxInFlight = webReplicas * 32;
   writeFileSync(
     proxyConfig,
-    `events { worker_connections 2048; }
+    edgeBackpressure
+      ? require('../../deploy/scripts/ingestion-gateway.cjs').renderIngestionGateway({
+          upstreams: webNames.map(name => `${name}:3000`),
+          maxInFlight: edgeMaxInFlight,
+        })
+      : `events { worker_connections 2048; }
 http { access_log off; upstream gateways { ${webNames.map(name => `server ${name}:3000;`).join(' ')} keepalive 64; }
 server { listen 8080; client_max_body_size 1m;
 location / { proxy_pass http://gateways; proxy_http_version 1.1; proxy_set_header Host $http_host; proxy_set_header Connection ""; proxy_next_upstream off; } } }
@@ -625,6 +641,15 @@ location / { proxy_pass http://gateways; proxy_http_version 1.1; proxy_set_heade
   };
   evidence.topology = {
     fullStackProcesses: fullStack,
+    edgeBackpressure: edgeBackpressure
+      ? {
+          maxInFlight: edgeMaxInFlight,
+          bodyIdleSeconds: 5,
+          scope: 'Per gateway; not distributed quotas or a total body-transfer deadline',
+        }
+      : false,
+    automaticMode,
+    webFallbackOnly: workerReplicas === 0,
     webUsesPgBouncer: usePgBouncer,
     supportingRoles: fullStack
       ? supportingRoles.map(({ role, pool }) => ({ role, replicas: 1, pool }))
@@ -658,7 +683,8 @@ location / { proxy_pass http://gateways; proxy_http_version 1.1; proxy_set_heade
       'Immutable image ID and producer-supplied OCI revision label; no signed build attestation',
   };
   evidence.resourcesBeforePreflight = await Promise.all(processNames.map(resources));
-  if (cpuProfiling) for (const name of [webNames[0], workers[0]]) await startProfile(name);
+  if (cpuProfiling)
+    for (const name of [webNames[0], workers[0]].filter(Boolean)) await startProfile(name);
   child = spawn(process.execPath, ['scripts/ingestion/certify-http.cjs'], {
     stdio: ['inherit', 'inherit', 'inherit', 'ipc'],
     detached: true,
@@ -740,25 +766,28 @@ location / { proxy_pass http://gateways; proxy_http_version 1.1; proxy_set_heade
     chaosTimer = undefined;
     resolveChaos?.(false);
   }
-  if (exerciseNotification) {
-    assert.ok(
-      notificationTask && (await notificationTask),
-      'Actual SMTP paging delivery did not complete during active load'
-    );
-  }
-  if (chaosRequested)
-    assert.ok(
-      chaosTask && (await chaosTask),
-      'Requested worker termination did not complete during active load'
-    );
+  const notificationPassed = exerciseNotification
+    ? Boolean(notificationTask && (await notificationTask))
+    : undefined;
+  const chaosPassed = chaosRequested ? Boolean(chaosTask && (await chaosTask)) : undefined;
+  evidence.downstreamChecks = { notificationPassed, chaosPassed };
   evidence.httpEvidence = httpEvidencePath;
   evidence.httpExit = code;
   if (existsSync(httpEvidencePath)) {
     const httpEvidence = JSON.parse(readFileSync(httpEvidencePath, 'utf8'));
     evidence.httpPassed =
       httpEvidence.candidate?.certificationRunId === runId && httpEvidence.passed;
+    evidence.httpFailureStage = httpEvidence.failureStage;
   }
   assert.equal(code, 0, 'Docker topology failed the configured end-to-end thresholds');
+  if (exerciseNotification) {
+    assert.ok(
+      notificationPassed,
+      'Actual SMTP paging delivery did not complete during active load'
+    );
+  }
+  if (chaosRequested)
+    assert.ok(chaosPassed, 'Requested worker termination did not complete during active load');
   assert.equal(evidence.httpPassed, true, 'Fresh candidate-specific HTTP evidence is required');
 }
 main()

@@ -23,6 +23,8 @@ let draining = false;
 let worker;
 let workerFault;
 let finishDatabaseProfile;
+let evidenceWritten = false;
+let stage = 'startup';
 async function main() {
   const url = new URL(process.env.DATABASE_URL);
   assert.match(
@@ -90,6 +92,7 @@ async function main() {
     await new Promise(resolve => setTimeout(resolve, 500));
   }
   assert.ok(ready, `Candidate server readiness failed: ${readinessStatus}\n${serverOutput}`);
+  stage = 'provider-checks';
   const providerChecks =
     process.env.INGESTION_HTTP_PROVIDER_CHECKS === 'true'
       ? await require('./provider-http-checks.cjs')({
@@ -98,6 +101,7 @@ async function main() {
           consumeIngestionBatch: external ? async () => 0 : consumeIngestionBatch,
         })
       : undefined;
+  stage = 'lifecycle-checks';
   const lifecycleChecks =
     process.env.INGESTION_HTTP_LIFECYCLE_CHECKS === 'true'
       ? await require('./lifecycle-http-checks.cjs')({
@@ -106,6 +110,7 @@ async function main() {
           consumeIngestionBatch: external ? async () => 0 : consumeIngestionBatch,
         })
       : undefined;
+  stage = 'quota-replay-checks';
   const quotaReplayChecks =
     process.env.INGESTION_HTTP_QUOTA_REPLAY_CHECKS === 'true'
       ? await require('./quota-replay-http-checks.cjs')({
@@ -114,6 +119,16 @@ async function main() {
           consumeIngestionBatch: external ? async () => 0 : consumeIngestionBatch,
         })
       : undefined;
+  stage = 'request-gate-checks';
+  const requestGateChecks =
+    process.env.INGESTION_HTTP_REQUEST_GATE_CHECKS === 'true'
+      ? await require('./request-gate-http-checks.cjs')({
+          prisma,
+          baseUrl,
+          consumeIngestionBatch: external ? async () => 0 : consumeIngestionBatch,
+        })
+      : undefined;
+  stage = 'warmup';
   const warmupEvents = Number(process.env.INGESTION_WARMUP_EVENTS || 0);
   assert.ok(Number.isInteger(warmupEvents) && warmupEvents >= 0 && warmupEvents <= 1000);
   const warmup = warmupEvents
@@ -147,6 +162,7 @@ async function main() {
         }).stdout.trim(),
       };
   const started = performance.now();
+  stage = 'measured-load';
   load = spawn(
     k6,
     [
@@ -247,6 +263,7 @@ async function main() {
     providerChecks,
     lifecycleChecks,
     quotaReplayChecks,
+    requestGateChecks,
     warmup,
     databaseProfile,
     fixtureServiceId: service.id,
@@ -282,6 +299,7 @@ async function main() {
     process.env.INGESTION_HTTP_EVIDENCE || 'plans/event-ingestion/local-http-load.json',
     JSON.stringify(evidence, null, 2) + '\n'
   );
+  evidenceWritten = true;
   assert.ok(reconciled, 'Accepted ledger failed end-to-end drain reconciliation');
   assert.equal(ambiguousSubmissions, 0, 'HTTP acknowledgements and durable receipts differ');
   assert.equal(loadExit, 0, 'Candidate failed the configured HTTP admission thresholds');
@@ -290,6 +308,24 @@ async function main() {
 main()
   .catch(error => {
     console.error(error);
+    if (!evidenceWritten) {
+      writeFileSync(
+        process.env.INGESTION_HTTP_EVIDENCE || 'plans/event-ingestion/local-http-load.json',
+        JSON.stringify(
+          {
+            measuredAt: new Date().toISOString(),
+            candidate: JSON.parse(process.env.INGESTION_CANDIDATE_METADATA || '{}'),
+            passed: false,
+            certifiedEnterprise: false,
+            failureStage: stage,
+            errorType: error.name,
+            scope: 'Failed before full load evidence was produced; local stderr has diagnostics',
+          },
+          null,
+          2
+        ) + '\n'
+      );
+    }
     process.exitCode = 1;
   })
   .finally(async () => {
