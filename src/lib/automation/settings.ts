@@ -6,23 +6,32 @@ import type { AutomationMode, Prisma } from '@prisma/client';
 import prisma from '@/lib/prisma';
 
 /** One shared MVCC read per incident; no cache can delay the emergency switch. */
-export async function getIngestionAutomationConfig(
+export async function getIngestionAutomationConfigs(
   client: Prisma.TransactionClient,
-  serviceId: string
+  serviceIds: string[]
 ) {
   const rows = await client.$queryRaw<
     Array<{
+      serviceId: string;
       mode: AutomationMode;
       activeVersionId: string | null;
       candidateVersionId: string | null;
     }>
   >`
-    SELECT config."mode"::text AS mode, config."activeVersionId", config."candidateVersionId"
+    SELECT config."serviceId", config."mode"::text AS mode,
+      config."activeVersionId", config."candidateVersionId"
     FROM "SystemSettings" AS settings
-    JOIN "ServiceAutomationConfig" AS config ON config."serviceId" = ${serviceId}
+    JOIN "ServiceAutomationConfig" AS config ON config."serviceId" = ANY(${serviceIds})
     WHERE settings.id = 'default' AND settings."automationEnabled" = true
   `;
-  return rows[0] ?? null;
+  return new Map(rows.map(({ serviceId, ...config }) => [serviceId, config]));
+}
+
+export async function getIngestionAutomationConfig(
+  client: Prisma.TransactionClient,
+  serviceId: string
+) {
+  return (await getIngestionAutomationConfigs(client, [serviceId])).get(serviceId) ?? null;
 }
 
 /** Read shared settings directly so an admin disable is visible to every replica. */

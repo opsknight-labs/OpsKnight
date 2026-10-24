@@ -1,11 +1,12 @@
-import { reserveIngestionBudget } from './budget';
+import { reserveIngestionBudget, reserveIngestionBudgets } from './budget';
+import { DurableAppendBatcher } from './append-batcher';
 import { acquireTextAdvisoryLocks } from '@/lib/db-locks';
 import { randomUUID } from 'node:crypto';
 import { Prisma } from '@prisma/client';
 import prisma from '@/lib/prisma';
 import { runReadCommittedTransaction } from '@/lib/db-utils';
 import type { IntegrationEventEnvelope } from '@/lib/automation/runtime';
-import { getIngestionAutomationConfig } from '@/lib/automation/settings';
+import { getIngestionAutomationConfigs } from '@/lib/automation/settings';
 import { getIngestionPolicy } from './policy';
 import {
   addOperationalMetric,
@@ -17,6 +18,7 @@ import {
   IngestionRateLimitError,
   encodeEnvelope,
   StoredEnvelope,
+  decodeEnvelope,
   partitionKey,
   orderingKeys,
   retryDelayMs,
@@ -80,6 +82,124 @@ export async function replayPostgresEvent(
   return result;
 }
 
+type PreparedAppend = {
+  envelope: StoredEnvelope;
+  partition: string;
+  identities: string[];
+  contentHash: string;
+  idempotencyKey: string;
+};
+type AppendResult = { receiptId: string; duplicate: boolean } | { error: Error };
+declare global {
+  var opsknightIngestionAppendBatcher:
+    DurableAppendBatcher<PreparedAppend, AppendResult> | undefined;
+}
+
+/** Independent requests share a commit, never their delivery identity or errors.
+ * Results escape only after the caller's transaction has durably committed.
+ */
+async function appendPostgresGroup(
+  tx: Prisma.TransactionClient,
+  entries: PreparedAppend[]
+): Promise<AppendResult[]> {
+  await tx.$executeRaw`SET LOCAL synchronous_commit = on`;
+  await acquireTextAdvisoryLocks(
+    tx,
+    entries.flatMap(entry => [
+      ...entry.identities.map(identity => `ingestion:${identity}`),
+      `ingestion-delivery:${entry.idempotencyKey}`,
+    ])
+  );
+  const existing = await tx.ingestionReceipt.findMany({
+    where: { idempotencyKey: { in: entries.map(entry => entry.idempotencyKey) } },
+    select: { id: true, idempotencyKey: true, contentHash: true },
+  });
+  const byKey = new Map(existing.map(row => [row.idempotencyKey, row]));
+  const results = new Map<PreparedAppend, AppendResult>();
+  const fresh: PreparedAppend[] = [];
+  const duplicates: Array<{ entry: PreparedAppend; original: PreparedAppend }> = [];
+  const originals = new Map<string, PreparedAppend>();
+  for (const entry of entries) {
+    const receipt = byKey.get(entry.idempotencyKey);
+    const original = originals.get(entry.idempotencyKey);
+    if (
+      (receipt && receipt.contentHash !== entry.contentHash) ||
+      (original && original.contentHash !== entry.contentHash)
+    ) {
+      results.set(entry, {
+        error: new IngestionConflictError('Delivery key reused with different content'),
+      });
+    } else if (receipt) {
+      results.set(entry, { receiptId: receipt.id, duplicate: true });
+    } else if (original) {
+      duplicates.push({ entry, original });
+    } else {
+      originals.set(entry.idempotencyKey, entry);
+      fresh.push(entry);
+    }
+  }
+  if (fresh.length) {
+    const { paused, policy } = await getIngestionPolicy(tx);
+    if (paused) {
+      for (const entry of fresh)
+        results.set(entry, { error: new IngestionUnavailableError('Ingestion admission paused') });
+    } else {
+      const automation = await getIngestionAutomationConfigs(tx, [
+        ...new Set(fresh.map(entry => entry.envelope.serviceId)),
+      ]);
+      const prepared = fresh.map(entry => {
+        const envelope = encodeEnvelope({
+          ...decodeEnvelope(entry.envelope),
+          automationSnapshot: automation.get(entry.envelope.serviceId) ?? null,
+        });
+        return {
+          entry,
+          envelope,
+          payloadBytes: Buffer.byteLength(JSON.stringify(envelope)),
+          critical:
+            envelope.event.payload.severity === 'critical' ||
+            envelope.automationSnapshot?.mode === 'LIVE',
+          preferredShard: Number.parseInt(entry.partition.slice(0, 8), 16) % 64,
+        };
+      });
+      const reservations = await reserveIngestionBudgets(tx, policy, prepared);
+      const rows: Prisma.IngestionReceiptCreateManyInput[] = [];
+      for (const [index, item] of prepared.entries()) {
+        const budgetShard = reservations.at(index);
+        if (budgetShard === undefined) {
+          results.set(item.entry, {
+            error: new IngestionUnavailableError('Ingestion capacity exhausted'),
+          });
+          continue;
+        }
+        const id = randomUUID();
+        rows.push({
+          id,
+          receivedAt: new Date(item.entry.envelope.receivedAt),
+          serviceId: item.entry.envelope.serviceId,
+          integrationId: item.entry.envelope.integrationId,
+          partitionKey: item.entry.partition,
+          orderingKeys: item.entry.identities,
+          idempotencyKey: item.entry.idempotencyKey,
+          contentHash: item.entry.contentHash,
+          budgetShard,
+          payloadBytes: item.payloadBytes,
+          critical: item.critical,
+          availableAt: new Date(0),
+          envelope: item.envelope as Prisma.InputJsonValue,
+        });
+        results.set(item.entry, { receiptId: id, duplicate: false });
+      }
+      if (rows.length) await tx.ingestionReceipt.createMany({ data: rows });
+    }
+  }
+  for (const { entry, original } of duplicates) {
+    const accepted = results.get(original)!;
+    results.set(entry, 'error' in accepted ? accepted : { ...accepted, duplicate: true });
+  }
+  return entries.map(entry => results.get(entry)!);
+}
+
 /** Append and return only after PostgreSQL commits. Never fall back to volatile storage. */
 export async function acceptPostgresEvent(
   input: IntegrationEventEnvelope,
@@ -87,10 +207,34 @@ export async function acceptPostgresEvent(
   context?: AppendContext
 ): Promise<Acceptance> {
   const startedAt = performance.now();
-  const envelope = encodeEnvelope(input, context?.shared);
-  const partition = partitionKey(envelope);
+  if (!context) {
+    const envelope = encodeEnvelope(input);
+    const prepared = {
+      envelope,
+      partition: partitionKey(envelope),
+      identities: orderingKeys(envelope),
+      contentHash: receiptContentHash(envelope),
+      idempotencyKey: digest([input.serviceId, input.integrationId, deliveryKey ?? randomUUID()]),
+    };
+    await prepareIngestionOrdering();
+    const batcher = (globalThis.opsknightIngestionAppendBatcher ??= new DurableAppendBatcher(
+      entries => runReadCommittedTransaction(tx => appendPostgresGroup(tx, entries))
+    ));
+    const accepted = await batcher.enqueue(prepared, Buffer.byteLength(JSON.stringify(envelope)));
+    if ('error' in accepted) throw accepted.error;
+    addOperationalMetric('opsknight_ingestion_acceptance_total', 1, {
+      outcome: accepted.duplicate ? 'duplicate' : 'new',
+    });
+    observeOperationalHistogram(
+      'opsknight_ingestion_acceptance_duration_ms',
+      performance.now() - startedAt
+    );
+    return { action: 'accepted', receiptId: accepted.receiptId };
+  }
+  const envelope = encodeEnvelope(input, context.shared);
   const identities = orderingKeys(envelope);
-  if (!context) await prepareIngestionOrdering();
+  const partition = partitionKey(envelope);
+
   const contentHash = receiptContentHash(envelope);
   const preferredBudgetShard = Number.parseInt(partition.slice(0, 8), 16) % 64;
   const idempotencyKey = digest([
@@ -99,22 +243,11 @@ export async function acceptPostgresEvent(
     deliveryKey ?? randomUUID(),
   ]);
   const append = async (tx: Prisma.TransactionClient) => {
-    // Override an unsafe session default; acknowledgements require a WAL flush.
-    if (!context) await tx.$executeRaw`SET LOCAL synchronous_commit = on`;
-    // Allocate the sequence while holding this key's admission lock. Without
-    // it a slower earlier append could commit after a later event was processed.
-    // Shared batches acquire the union of every child's identities first.
-    // Reacquiring those locks per child only adds database round trips.
-    if (!context)
-      await acquireTextAdvisoryLocks(
-        tx,
-        identities.map(identity => `ingestion:${identity}`)
-      );
     const existing = await tx.ingestionReceipt.findUnique({ where: { idempotencyKey } });
     if (existing) {
       if (
         existing.contentHash !== contentHash &&
-        existing.contentHash !== context?.legacyContentHash()
+        existing.contentHash !== context.legacyContentHash()
       )
         throw new IngestionConflictError('Delivery key reused with different content');
       return { receiptId: existing.id, duplicate: true };
@@ -126,14 +259,12 @@ export async function acceptPostgresEvent(
     const acceptedEnvelope = encodeEnvelope(
       {
         ...input,
-        automationSnapshot: context
-          ? context.automationSnapshot
-          : await getIngestionAutomationConfig(tx, input.serviceId),
+        automationSnapshot: context.automationSnapshot,
       },
-      context?.shared
+      context.shared
     );
     const payloadBytes =
-      Buffer.byteLength(JSON.stringify(acceptedEnvelope)) + (context?.providerBytes ?? 0);
+      Buffer.byteLength(JSON.stringify(acceptedEnvelope)) + context.providerBytes;
     // LIVE Automation may promote even a warning to P1. Until its pinned
     // decision runs, protect that entire class conservatively rather than
     // evaluating rules twice or trusting caller-supplied priority metadata.
@@ -165,24 +296,14 @@ export async function acceptPostgresEvent(
         // TIMESTAMP(3) rounding at the database's transaction boundary.
         availableAt: new Date(0),
         envelope: acceptedEnvelope as Prisma.InputJsonValue,
-        batchId: context?.shared.batchPayloadId,
+        batchId: context.shared.batchPayloadId,
       },
     });
     return { receiptId: receipt.id, duplicate: false };
   };
-  const accepted = context ? await append(context.tx) : await runReadCommittedTransaction(append);
-  if (context) {
-    if (accepted.duplicate) context.counts.duplicate++;
-    else context.counts.created++;
-    return { action: 'accepted', receiptId: accepted.receiptId };
-  }
-  addOperationalMetric('opsknight_ingestion_acceptance_total', 1, {
-    outcome: accepted.duplicate ? 'duplicate' : 'new',
-  });
-  observeOperationalHistogram(
-    'opsknight_ingestion_acceptance_duration_ms',
-    performance.now() - startedAt
-  );
+  const accepted = await append(context.tx);
+  if (accepted.duplicate) context.counts.duplicate++;
+  else context.counts.created++;
   return { action: 'accepted', receiptId: accepted.receiptId };
 }
 
