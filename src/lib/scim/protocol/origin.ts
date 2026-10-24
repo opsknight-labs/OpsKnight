@@ -41,7 +41,11 @@ export function isNonPublicDestination(origin: string): boolean {
   try {
     const url = new URL(origin);
     const rawHost = url.hostname.toLowerCase();
-    const cleanHost = rawHost.replace(/^\[|\]$/g, '');
+    const cleanHost = rawHost.replace(/^\[|\]$/g, '').replace(/\.+$/, '');
+
+    if (!cleanHost) {
+      return true;
+    }
 
     // Common local/private hostnames
     if (

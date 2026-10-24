@@ -194,6 +194,14 @@ describe('SCIM Discovery Metadata Endpoints', () => {
     expect(isNonPublicDestination('https://corp.internal')).toBe(true);
     expect(isNonPublicDestination('https://service.local')).toBe(true);
     expect(isNonPublicDestination('https://opssentinal.com')).toBe(false);
+
+    // Trailing DNS dot normalization
+    expect(isNonPublicDestination('http://localhost.:3000')).toBe(true);
+    expect(isNonPublicDestination('https://service.local.')).toBe(true);
+    expect(isNonPublicDestination('https://corp.internal.')).toBe(true);
+    expect(isNonPublicDestination('https://app.localhost.')).toBe(true);
+    expect(isNonPublicDestination('https://127.0.0.1.')).toBe(true);
+    expect(isNonPublicDestination('https://opssentinal.com.')).toBe(false);
   });
 
   it('enforces HTTPS and rejects non-public destinations in production validation', () => {
@@ -211,6 +219,12 @@ describe('SCIM Discovery Metadata Endpoints', () => {
       'SCIM service configuration'
     );
     expect(() => validateProductionOrigin('https://169.254.169.254')).toThrow(
+      'SCIM service configuration'
+    );
+    expect(() => validateProductionOrigin('https://localhost.')).toThrow(
+      'SCIM service configuration'
+    );
+    expect(() => validateProductionOrigin('https://service.local.')).toThrow(
       'SCIM service configuration'
     );
 
