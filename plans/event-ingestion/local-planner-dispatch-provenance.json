@@ -1,0 +1,166 @@
+{
+  "baselineRevision": "a8f01661c2ba8beabddac88dd06628845661135f",
+  "archiveSha256": "11e037898d8a851295b48c0f804e07af5d0c5dafea96bd9dd23e0e52d6d27844",
+  "candidateFiles": {
+    "src/lib/incident-effect-planner.ts": "3f20735cc89a118d9b8f95b5ad0946ba184802cc245fe6d2bb7f78f0c3f26f7a",
+    "src/lib/event-side-effects.ts": "f4c1b46795bf20c9da86406d6b6c9520611c30c117d7dbc47d6fc5e272ea0c17",
+    "src/lib/war-room/engine.ts": "03c8690ca1f1a128941c76d9a522f5345fdadfc43c5532ce09bcf8d45704606d",
+    "src/lib/war-room/provider.ts": "71a14610406c5129fd1d560606d525f45c55a4f3187f08c2207c86238b27e660",
+    "src/lib/war-room/providers/slack/adapter.ts": "7810a2167a37199aa5dfbfeee38ee990ac55bf062e83ab167cc6e83bc2a04f8b",
+    "src/lib/war-room/providers/microsoft-teams/adapter.ts": "c3a2169bf71da1951168f44f6c0b1d80a8725d8a116f3be62c37f6e9954b897d",
+    "scripts/ingestion/profile-general-dispatch.cjs": "1295bb3589163bf3c2108ba6941e17ffdd79dd990d0a93ca29ca227ec078fd5b"
+  },
+  "runs": [
+    {
+      "label": "a1",
+      "database": "ingestion_test_http_planner_a1_20261025",
+      "preflight": {
+        "database": "ingestion_test_http_planner_a1_20261025",
+        "migrations": 338,
+        "synchronousCommit": "on",
+        "walIoTiming": "off",
+        "clockMidpointOffsetMs": 8.5,
+        "clockRoundTripMs": 3,
+        "policy": {
+          "paused": false,
+          "revision": 1,
+          "policy": {
+            "concurrency": 4,
+            "leaseMs": 5000,
+            "pollMs": 100,
+            "maxPending": 1000000,
+            "maxPendingBytes": 10737418240,
+            "payloadRetentionHours": 24,
+            "receiptRetentionDays": 90,
+            "criticalReservePercent": 10,
+            "quotas": {
+              "eventsPerMinute": 10000000,
+              "eventsBurst": 10000000,
+              "integrationPerMinute": 10000000,
+              "integrationBurst": 10000000
+            }
+          }
+        }
+      }
+    },
+    {
+      "label": "b1",
+      "database": "ingestion_test_http_planner_b1_20261025",
+      "preflight": {
+        "database": "ingestion_test_http_planner_b1_20261025",
+        "migrations": 338,
+        "synchronousCommit": "on",
+        "walIoTiming": "off",
+        "clockMidpointOffsetMs": 8.5,
+        "clockRoundTripMs": 3,
+        "policy": {
+          "paused": false,
+          "revision": 1,
+          "policy": {
+            "concurrency": 4,
+            "leaseMs": 5000,
+            "pollMs": 100,
+            "maxPending": 1000000,
+            "maxPendingBytes": 10737418240,
+            "payloadRetentionHours": 24,
+            "receiptRetentionDays": 90,
+            "criticalReservePercent": 10,
+            "quotas": {
+              "eventsPerMinute": 10000000,
+              "eventsBurst": 10000000,
+              "integrationPerMinute": 10000000,
+              "integrationBurst": 10000000
+            }
+          }
+        }
+      }
+    },
+    {
+      "label": "b2",
+      "database": "ingestion_test_http_planner_b2_20261025",
+      "preflight": {
+        "database": "ingestion_test_http_planner_b2_20261025",
+        "migrations": 338,
+        "synchronousCommit": "on",
+        "walIoTiming": "off",
+        "clockMidpointOffsetMs": 8,
+        "clockRoundTripMs": 2,
+        "policy": {
+          "paused": false,
+          "revision": 1,
+          "policy": {
+            "concurrency": 4,
+            "leaseMs": 5000,
+            "pollMs": 100,
+            "maxPending": 1000000,
+            "maxPendingBytes": 10737418240,
+            "payloadRetentionHours": 24,
+            "receiptRetentionDays": 90,
+            "criticalReservePercent": 10,
+            "quotas": {
+              "eventsPerMinute": 10000000,
+              "eventsBurst": 10000000,
+              "integrationPerMinute": 10000000,
+              "integrationBurst": 10000000
+            }
+          }
+        }
+      }
+    },
+    {
+      "label": "a2",
+      "database": "ingestion_test_http_planner_a2_20261025",
+      "preflight": {
+        "database": "ingestion_test_http_planner_a2_20261025",
+        "migrations": 338,
+        "synchronousCommit": "on",
+        "walIoTiming": "off",
+        "clockMidpointOffsetMs": 8,
+        "clockRoundTripMs": 2,
+        "policy": {
+          "paused": false,
+          "revision": 1,
+          "policy": {
+            "concurrency": 4,
+            "leaseMs": 5000,
+            "pollMs": 100,
+            "maxPending": 1000000,
+            "maxPendingBytes": 10737418240,
+            "payloadRetentionHours": 24,
+            "receiptRetentionDays": 90,
+            "criticalReservePercent": 10,
+            "quotas": {
+              "eventsPerMinute": 10000000,
+              "eventsBurst": 10000000,
+              "integrationPerMinute": 10000000,
+              "integrationBurst": 10000000
+            }
+          }
+        }
+      }
+    }
+  ],
+  "scope": "Sequential controlled A-B-B-A host-process diagnostic on shared workstation. Fresh migrated database per run, Node20, pool5, same 300 default incidents and 1500 initial effect jobs plus300 intentionally held Runbook jobs. Baseline generates600 no-op provider child jobs; candidate correctly generates0 with ChatOps disabled. No configured providers/users/Automation, no native image, no CPU quota, no sustainable end-to-end or compact-budget certification. Unrelated projects remained running. Source overlay hashes are producer-recorded, not signed attestation.",
+  "comparison": {
+    "queriesPerUnit": {
+      "baselineMean": 62.76833333333333,
+      "candidateMean": 30.305,
+      "changePercent": -51.71928520219856
+    },
+    "cpuMs": {
+      "baselineMean": 8603.258000000002,
+      "candidateMean": 5561.4,
+      "changePercent": -35.357047295338596
+    },
+    "elapsedMs": {
+      "baselineMean": 4386.7753755,
+      "candidateMean": 3217.6767704999997,
+      "changePercent": -26.650523560640437
+    },
+    "unitsPerSecond": {
+      "baselineMean": 68.38926797647996,
+      "candidateMean": 93.31141052951693,
+      "changePercent": 36.44159864616194
+    }
+  }
+}

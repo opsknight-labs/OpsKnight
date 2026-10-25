@@ -1,3 +1,4 @@
+import { processEventSideEffect } from '@/lib/event-side-effects';
 import { reserveIngestionBudget, reserveIngestionBudgets } from '@/lib/ingestion/budget';
 import { getMaintenanceClient, disconnectMaintenanceClient } from '@/lib/maintenance/database';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -60,6 +61,8 @@ import {
   processPendingJobsByType,
 } from '@/lib/jobs/queue';
 import {
+  ensureWarRoomDelivery,
+  warRoomIdempotencyKey,
   claimWarRoomDelivery,
   claimWarRoomDeliveryById,
   completeWarRoomDelivery,
@@ -149,6 +152,43 @@ afterAll(async () => {
 });
 
 describe('PostgreSQL ingestion durability', () => {
+  it('plans collaboration at execution and recovers a committed child intent after disable', async () => {
+    const previous = await prisma.chatOpsConfig.findUnique({ where: { id: 'default' } });
+    const incident = await prisma.incident.create({ data: {
+      title: 'Planner configuration boundary', serviceId, status: 'OPEN',
+    } });
+    const payload = {
+      task: 'EVENT_SIDE_EFFECT' as const, effect: 'TRIGGER_WAR_ROOM' as const,
+      lane: 'WAR_ROOM' as const, incidentId: incident.id,
+      sourceEventId: randomUUID(), eventOrderAt: new Date().toISOString(),
+    };
+    try {
+      await prisma.chatOpsConfig.upsert({ where: { id: 'default' },
+        create: { enabled: false }, update: { enabled: false } });
+      await processEventSideEffect(payload);
+      expect(await prisma.warRoomProviderEventDelivery.count({ where: { incidentId: incident.id } })).toBe(0);
+      // This durable parent was enqueued before enablement but not yet executed.
+      const queued = { ...payload, sourceEventId: randomUUID() };
+      await prisma.chatOpsConfig.update({ where: { id: 'default' }, data: { enabled: true } });
+      await processEventSideEffect(queued);
+      expect(await prisma.warRoomProviderEventDelivery.count({ where: { incidentId: incident.id } })).toBe(2);
+      await prisma.chatOpsConfig.update({ where: { id: 'default' }, data: { enabled: false } });
+      const recovery = { ...payload, sourceEventId: randomUUID() };
+      const event = { kind: 'TRIGGER' as const, incidentId: incident.id, incidentEventId: recovery.sourceEventId };
+      const delivery = await ensureWarRoomDelivery({ provider: 'SLACK', incidentId: incident.id,
+        kind: 'TRIGGER', idempotencyKey: warRoomIdempotencyKey(event), eventPayload: event });
+      expect(await prisma.backgroundJob.count({ where: { type: 'WAR_ROOM_PROVIDER_EVENT',
+        payload: { path: ['deliveryId'], equals: delivery.id } } })).toBe(0);
+      await processEventSideEffect(recovery);
+      expect(await prisma.backgroundJob.count({ where: { type: 'WAR_ROOM_PROVIDER_EVENT',
+        payload: { path: ['deliveryId'], equals: delivery.id } } })).toBe(1);
+      expect(await prisma.warRoomProviderEventDelivery.count({ where: { incidentId: incident.id } })).toBe(3);
+    } finally {
+      if (previous) await prisma.chatOpsConfig.update({ where: { id: 'default' }, data: { enabled: previous.enabled } });
+      else await prisma.chatOpsConfig.deleteMany({ where: { id: 'default' } });
+    }
+  });
+
   it('processes fallback responder planning while an older general backlog remains untouched', async () => {
     await prisma.backgroundJob.deleteMany();
     const noiseIds = Array.from({ length: 1000 }, () => randomUUID());

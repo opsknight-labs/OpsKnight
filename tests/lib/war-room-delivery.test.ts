@@ -1,6 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const prismaMock: Record<string, unknown> = {};
+const planningAdapters = vi.hoisted(() => [
+  { provider: 'SLACK', usesChatOpsPolicy: false },
+  { provider: 'MICROSOFT_TEAMS', usesChatOpsPolicy: false },
+]);
 
 vi.mock('@/lib/prisma', () => ({
   default: new Proxy(
@@ -17,7 +21,7 @@ vi.mock('@/lib/prisma', () => ({
 vi.mock('@/lib/jobs/queue', () => ({ scheduleJob: vi.fn().mockResolvedValue('job-1') }));
 
 vi.mock('@/lib/war-room/registry', () => ({
-  listWarRoomProviders: () => [{ provider: 'SLACK' }, { provider: 'MICROSOFT_TEAMS' }],
+  listWarRoomProviders: () => planningAdapters,
   getWarRoomProvider: vi.fn((p: string) => ({
     provider: p,
     handleIncidentEvent: vi.fn().mockResolvedValue({ ok: true, value: undefined }),
@@ -51,6 +55,7 @@ describe('WarRoomProviderEventDelivery durability', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     resetPrismaMock();
+    for (const adapter of planningAdapters) adapter.usesChatOpsPolicy = false;
   });
 
   it('ensureWarRoomDelivery is idempotent across COMPLETED (unique survives)', async () => {
@@ -362,5 +367,52 @@ describe('WAR_ROOM_CLOSE terminal projection fencing', () => {
       name: 'WarRoomRetryableError',
       retryBudgetNeutral: true,
     });
+  });
+});
+
+
+describe('configuration-aware collaboration job planning', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    resetPrismaMock();
+    for (const adapter of planningAdapters) adapter.usesChatOpsPolicy = true;
+  });
+  async function setup(existing: Array<{ provider: string }> = []) {
+    const prisma = (await import('@/lib/prisma')).default;
+    const deliveries = {
+      findMany: vi.fn().mockResolvedValue(existing),
+      create: vi.fn().mockResolvedValue({ id: 'delivery-planned' }),
+    };
+    Reflect.set(prismaMock, 'warRoomProviderEventDelivery', deliveries);
+    const { handleIncidentWarRoomEvent } = await import('@/lib/war-room/engine');
+    const { scheduleJob } = await import('@/lib/jobs/queue');
+    return { prisma, deliveries, handleIncidentWarRoomEvent, scheduleJob };
+  }
+  it('creates no provider jobs or delivery rows for disabled built-in trigger work', async () => {
+    const x = await setup();
+    await x.handleIncidentWarRoomEvent({ kind: 'TRIGGER', incidentId: 'inc-1', incidentEventId: 'event-1' },
+      { collaboration: 'DISABLED', chatOpsRevision: 4 });
+    expect(x.deliveries.create).not.toHaveBeenCalled();
+    expect(x.scheduleJob).not.toHaveBeenCalled();
+  });
+  it('recovers previously committed delivery intent even after configuration is disabled', async () => {
+    const x = await setup([{ provider: 'SLACK' }]);
+    await x.handleIncidentWarRoomEvent({ kind: 'TRIGGER', incidentId: 'inc-1', incidentEventId: 'event-1' },
+      { collaboration: 'DISABLED', chatOpsRevision: 4 });
+    expect(x.deliveries.create).toHaveBeenCalledTimes(1);
+    expect(x.deliveries.create).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ provider: 'SLACK' }) }));
+    expect(x.scheduleJob).toHaveBeenCalledTimes(1);
+  });
+  it('retains unknown/custom adapter behavior and existing lifecycle work', async () => {
+    const x = await setup();
+    planningAdapters[0].usesChatOpsPolicy = false;
+    await x.handleIncidentWarRoomEvent({ kind: 'TRIGGER', incidentId: 'inc-1' },
+      { collaboration: 'DISABLED', chatOpsRevision: null });
+    expect(x.scheduleJob).toHaveBeenCalledTimes(1);
+    vi.clearAllMocks();
+    await x.handleIncidentWarRoomEvent({ kind: 'ARCHIVE', incidentId: 'inc-1' },
+      { collaboration: 'DISABLED', chatOpsRevision: null });
+    expect(x.scheduleJob).toHaveBeenCalledTimes(2);
+    expect(x.deliveries.findMany).not.toHaveBeenCalled();
   });
 });

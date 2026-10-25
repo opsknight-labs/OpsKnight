@@ -401,6 +401,7 @@ async function handleIncidentEvent(
  */
 export const slackWarRoomAdapter: WarRoomProviderAdapter = {
   provider: 'SLACK',
+  usesChatOpsPolicy: true,
   capabilities: {
     createRoom: true,
     privateRooms: false,

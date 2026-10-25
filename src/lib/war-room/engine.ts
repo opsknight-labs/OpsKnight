@@ -1,3 +1,4 @@
+import type { IncidentEffectPlan } from '@/lib/incident-effect-planner';
 import prisma from '@/lib/prisma';
 import { getWarRoomProvider, listWarRoomProviders } from './registry';
 import type { WarRoomIncidentEvent } from './provider';
@@ -1088,14 +1089,44 @@ export async function repairOrphanedClosingWarRooms(
   return { checked, repaired };
 }
 
-export async function handleIncidentWarRoomEvent(event: WarRoomIncidentEvent): Promise<void> {
+export async function handleIncidentWarRoomEvent(
+  event: WarRoomIncidentEvent,
+  plan?: IncidentEffectPlan
+): Promise<void> {
   const idempotencyKey = event.idempotencyKey ?? warRoomIdempotencyKey(event as never);
   const tagged: WarRoomIncidentEvent = { ...event, idempotencyKey } as WarRoomIncidentEvent;
   const { ensureWarRoomDelivery } = await import('./delivery');
   const { scheduleJob } = await import('@/lib/jobs/queue');
   const incidentId = event.incidentId;
   const kind = event.kind;
-  for (const adapter of listWarRoomProviders()) {
+  const adapters = listWarRoomProviders();
+  const canSkip =
+    event.kind === 'TRIGGER' &&
+    plan?.collaboration === 'DISABLED' &&
+    adapters.some(adapter => adapter.usesChatOpsPolicy === true);
+  // A previous parent attempt may have committed a delivery but crashed before
+  // scheduling it. Preserve that durable recovery path across config changes.
+  const existingProviders = canSkip
+    ? new Set<string>(
+        (
+          await prisma.warRoomProviderEventDelivery.findMany({
+            where: {
+              incidentId,
+              idempotencyKey,
+              provider: {
+                in: adapters
+                  .filter(adapter => adapter.usesChatOpsPolicy === true)
+                  .map(adapter => adapter.provider),
+              },
+            },
+            select: { provider: true },
+          })
+        ).map(row => row.provider)
+      )
+    : null;
+  for (const adapter of adapters) {
+    if (canSkip && adapter.usesChatOpsPolicy === true && !existingProviders?.has(adapter.provider))
+      continue;
     const ensure = await ensureWarRoomDelivery({
       provider: adapter.provider,
       idempotencyKey,
