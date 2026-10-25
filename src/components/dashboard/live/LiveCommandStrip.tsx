@@ -36,6 +36,7 @@ function Metric({
   testId,
   title,
   variant = 'primary',
+  groupDivider = false,
 }: {
   label: string;
   value: number | null;
@@ -46,17 +47,18 @@ function Metric({
   testId: string;
   title: string;
   variant?: 'primary' | 'secondary';
+  groupDivider?: boolean;
 }) {
   const valueClass =
     value === null || value === 0
-      ? 'text-zinc-500'
+      ? 'text-muted-foreground/60'
       : emphasis === 'critical'
-        ? 'text-rose-400 font-bold'
+        ? 'text-rose-600 dark:text-rose-400 font-bold'
         : emphasis === 'warning'
-          ? 'text-amber-300 font-bold'
+          ? 'text-amber-600 dark:text-amber-400 font-bold'
           : variant === 'secondary'
-            ? 'text-zinc-300 font-semibold'
-            : 'text-zinc-100 font-bold';
+            ? 'text-muted-foreground font-semibold'
+            : 'text-foreground font-bold';
   return (
     <button
       type="button"
@@ -66,17 +68,18 @@ function Metric({
       title={title}
       data-icon-button
       className={cn(
-        'group relative min-w-0 bg-[#0c0c0f] px-3.5 py-2.5 text-left sm:px-4 sm:py-3 outline-none transition-colors',
-        'hover:bg-[#121216] focus-visible:bg-[#121216] focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-zinc-500',
-        active && 'bg-[#141418]',
-        variant === 'secondary' && 'bg-[#0a0a0d]'
+        'group relative min-w-0 bg-card dark:bg-[#0c0c11] px-3.5 py-2 text-left sm:px-4 sm:py-2 outline-none transition-colors',
+        'hover:bg-muted/40 dark:hover:bg-[#141419] focus-visible:bg-muted/40 dark:focus-visible:bg-[#141419] focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary/50',
+        active && 'bg-muted/60 dark:bg-[#181820]',
+        variant === 'secondary' && 'bg-card/70 dark:bg-[#09090d]',
+        groupDivider && 'xl:relative xl:before:absolute xl:before:left-0 xl:before:inset-y-2 xl:before:w-px xl:before:bg-border/80 dark:xl:before:bg-zinc-700/80'
       )}
     >
-      <div className="flex items-center justify-between gap-2">
+      <div className="flex items-center justify-between gap-1.5">
         <span
           className={cn(
-            'block truncate text-[11px] sm:text-[12px] font-medium group-hover:text-zinc-300',
-            variant === 'secondary' ? 'text-zinc-500' : 'text-zinc-400'
+            'block truncate text-[11px] sm:text-[11.5px] font-medium transition-colors group-hover:text-foreground',
+            variant === 'secondary' ? 'text-muted-foreground/80' : 'text-muted-foreground'
           )}
         >
           {label}
@@ -85,20 +88,20 @@ function Metric({
           <span className="h-1.5 w-1.5 rounded-full bg-rose-500 motion-safe:animate-pulse" aria-hidden />
         )}
         {emphasis === 'warning' && value !== null && value > 0 && (
-          <span className="h-1.5 w-1.5 rounded-full bg-amber-400" aria-hidden />
+          <span className="h-1.5 w-1.5 rounded-full bg-amber-500 dark:bg-amber-400" aria-hidden />
         )}
       </div>
       <span
         className={cn(
-          'mt-1.5 block font-display text-[22px] sm:text-[24px] leading-tight tabular-nums tracking-[-0.02em]',
+          'mt-1 block font-display text-[20px] sm:text-[22px] leading-tight tabular-nums tracking-[-0.02em]',
           valueClass
         )}
       >
         {value !== null && value < 10 && value > 0 ? `0${value}` : (value ?? '—')}
       </span>
-      <span className="mt-1 block truncate text-[11px] text-zinc-500">{context}</span>
+      <span className="mt-0.5 block truncate text-[10.5px] text-muted-foreground">{context}</span>
       {active && (
-        <span aria-hidden className="absolute inset-x-4 bottom-0 h-0.5 rounded-full bg-zinc-200" />
+        <span aria-hidden className="absolute inset-x-3 bottom-0 h-0.5 rounded-full bg-primary" />
       )}
     </button>
   );
@@ -236,17 +239,17 @@ export default function LiveCommandStrip({
     <section
       data-testid="command-center"
       aria-label="Command center"
-      className="overflow-hidden rounded-xl border border-zinc-800 bg-[#0c0c0f] text-zinc-100 shadow-xs"
+      className="overflow-hidden rounded-xl border border-border bg-card dark:bg-[#0c0c11] text-foreground shadow-xs"
     >
-      <div className="flex flex-col gap-2.5 px-4 pb-3 pt-3 lg:flex-row lg:items-start lg:justify-between sm:px-5 sm:pb-3 sm:pt-3.5">
+      <div className="flex flex-col gap-2.5 px-4 pb-2.5 pt-2.5 lg:flex-row lg:items-start lg:justify-between sm:px-5 sm:pb-3 sm:pt-3">
         <div className="min-w-0">
           <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-            <h1 className="dash-hero-title">Command Center</h1>
+            <h1 className="dash-hero-title text-foreground">Command Center</h1>
             <div
-              className="hidden sm:inline-flex items-center gap-1.5 rounded-md border border-zinc-800 bg-zinc-900/60 px-2 py-0.5 text-[11px] font-mono text-zinc-400"
+              className="hidden sm:inline-flex items-center gap-1.5 rounded-md border border-border bg-muted/40 px-2 py-0.5 text-[11px] font-mono text-muted-foreground"
               title={`Real-time incident arrival rate: ${trend?.createdLastHour ?? 0} created last hour`}
             >
-              <span className="text-[10px] uppercase tracking-wider font-semibold text-zinc-500">Pulse</span>
+              <span className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground/80">Pulse</span>
               {velocitySamples && velocitySamples.length > 0 && (
                 <div className="flex items-end gap-0.5 h-3" aria-hidden>
                   {velocitySamples.map((bar, idx) => (
@@ -258,15 +261,15 @@ export default function LiveCommandStrip({
                         bar.isCritical
                           ? 'bg-rose-500 motion-safe:animate-pulse'
                           : bar.count > 0
-                            ? 'bg-zinc-400'
-                            : 'bg-zinc-800'
+                            ? 'bg-muted-foreground/70 dark:bg-zinc-400'
+                            : 'bg-muted dark:bg-zinc-800'
                       )}
                       title={`${bar.count} in hour -${6 - idx}`}
                     />
                   ))}
                 </div>
               )}
-              <span className="tabular-nums font-semibold text-zinc-300">
+              <span className="tabular-nums font-semibold text-foreground">
                 {trend?.createdLastHour ?? 0}/h
               </span>
             </div>
@@ -274,10 +277,10 @@ export default function LiveCommandStrip({
           <p
             data-testid="command-insight"
             aria-live="polite"
-            className="mt-2 text-[13px] leading-6 text-zinc-400"
+            className="mt-1.5 text-[13px] leading-snug text-muted-foreground"
           >
             {narrative.length === 0 ? (
-              <span className="text-zinc-300">
+              <span className="text-foreground">
                 No active incidents{query.scope !== 'all' ? ' in this scope' : ''}. Everything is
                 quiet.
               </span>
@@ -285,7 +288,7 @@ export default function LiveCommandStrip({
               narrative.map((fragment, index) => (
                 <span key={fragment.text}>
                   {index > 0 && (
-                    <span aria-hidden className="mx-2 text-zinc-700">
+                    <span aria-hidden className="mx-2 text-muted-foreground/40">
                       /
                     </span>
                   )}
@@ -297,10 +300,10 @@ export default function LiveCommandStrip({
                       className={cn(
                         'rounded-sm p-0 font-medium decoration-1 underline-offset-4 outline-none hover:underline focus-visible:underline',
                         fragment.tone === 'rose'
-                          ? 'text-rose-300'
+                          ? 'text-rose-600 dark:text-rose-300 font-semibold'
                           : fragment.tone === 'amber'
-                            ? 'text-amber-200'
-                            : 'text-zinc-200'
+                            ? 'text-amber-600 dark:text-amber-200 font-semibold'
+                            : 'text-foreground font-medium'
                       )}
                     >
                       {fragment.text}
@@ -313,7 +316,7 @@ export default function LiveCommandStrip({
             )}
           </p>
         </div>
-        <div className="flex shrink-0 flex-wrap items-center gap-2 sm:gap-3">
+        <div className="flex shrink-0 flex-wrap items-center gap-2 sm:gap-2.5">
           <span className="hidden sm:inline">
             <LiveClock timeZone={timeZone} variant="plain" />
           </span>
@@ -321,7 +324,7 @@ export default function LiveCommandStrip({
             role="radiogroup"
             aria-label="Incident scope"
             data-testid="scope-switch"
-            className="inline-flex h-8 items-center rounded-md border border-zinc-800 p-0.5 text-[12px] font-medium"
+            className="inline-flex h-8 items-center rounded-md border border-border bg-muted/20 p-0.5 text-[12px] font-medium"
           >
             {LIVE_SCOPES.map(scope => (
               <button
@@ -333,15 +336,15 @@ export default function LiveCommandStrip({
                 data-icon-button
                 onClick={() => setQuery({ scope })}
                 className={cn(
-                  'h-full whitespace-nowrap rounded px-2.5 outline-none transition-colors focus-visible:ring-2 focus-visible:ring-zinc-500',
+                  'h-full whitespace-nowrap rounded px-2.5 outline-none transition-colors focus-visible:ring-2 focus-visible:ring-primary/50',
                   query.scope === scope
-                    ? 'bg-zinc-800 text-zinc-50'
-                    : 'text-zinc-400 hover:text-zinc-100'
+                    ? 'bg-card text-foreground shadow-2xs dark:bg-zinc-800 dark:text-zinc-50'
+                    : 'text-muted-foreground hover:text-foreground'
                 )}
               >
                 {SCOPE_LABEL.get(scope)}
                 {scope === 'mine' && summary ? (
-                  <span className="ml-1 tabular-nums text-zinc-500">{summary.mine}</span>
+                  <span className="ml-1 tabular-nums opacity-75">{summary.mine}</span>
                 ) : null}
               </button>
             ))}
@@ -351,7 +354,7 @@ export default function LiveCommandStrip({
               role="radiogroup"
               aria-label="Reporting period"
               data-testid="command-period"
-              className="inline-flex h-8 items-center rounded-md border border-zinc-800 p-0.5 text-[12px] font-medium"
+              className="inline-flex h-8 items-center rounded-md border border-border bg-muted/20 p-0.5 text-[12px] font-medium"
             >
               {HISTORY_RANGES.map(range => (
                 <button
@@ -363,10 +366,10 @@ export default function LiveCommandStrip({
                   onClick={() => history.setQuery({ range })}
                   title={`Analytics reporting period: ${range} days`}
                   className={cn(
-                    'h-full whitespace-nowrap rounded px-2.5 outline-none transition-colors focus-visible:ring-2 focus-visible:ring-zinc-500',
+                    'h-full whitespace-nowrap rounded px-2.5 outline-none transition-colors focus-visible:ring-2 focus-visible:ring-primary/50',
                     history.query.range === range
-                      ? 'bg-zinc-800 text-zinc-50 font-semibold'
-                      : 'text-zinc-400 hover:text-zinc-100'
+                      ? 'bg-card text-foreground font-semibold shadow-2xs dark:bg-zinc-800 dark:text-zinc-50'
+                      : 'text-muted-foreground hover:text-foreground'
                   )}
                 >
                   {range}d
@@ -383,7 +386,7 @@ export default function LiveCommandStrip({
               }
             }}
             title="Full-screen operations command console for office TVs and NOC screens"
-            className="inline-flex h-8 items-center gap-1.5 rounded-md border border-zinc-800 px-2.5 text-[12px] font-medium text-zinc-300 outline-none transition-colors hover:bg-zinc-900 hover:text-zinc-50 focus-visible:ring-2 focus-visible:ring-zinc-500"
+            className="inline-flex h-8 items-center gap-1.5 rounded-md border border-border px-2.5 text-[12px] font-medium text-foreground outline-none transition-colors hover:bg-muted/60 focus-visible:ring-2 focus-visible:ring-primary/50"
           >
             <Monitor className="h-3.5 w-3.5 shrink-0" aria-hidden />
             <span className="hidden sm:inline">Operations Console</span>
@@ -393,7 +396,7 @@ export default function LiveCommandStrip({
       </div>
 
       <div
-        className="grid grid-cols-2 gap-px border-t border-zinc-800 bg-zinc-800 md:grid-cols-3 xl:grid-cols-6"
+        className="grid grid-cols-2 gap-px border-t border-border bg-border/70 dark:border-zinc-800 dark:bg-zinc-800/80 md:grid-cols-3 xl:grid-cols-6"
         data-testid="command-center-counters"
       >
         <Metric
@@ -423,7 +426,7 @@ export default function LiveCommandStrip({
           value={summary?.slaAtRisk ?? null}
           context={
             summary?.slaDueSoon || summary?.slaRecentlyBreached ? (
-              <span className="text-amber-200/90">
+              <span className="text-amber-600 dark:text-amber-200/90 font-medium">
                 {[
                   summary.slaRecentlyBreached
                     ? `${summary.slaRecentlyBreached} breached <1h`
@@ -450,7 +453,7 @@ export default function LiveCommandStrip({
           value={summary?.unassigned ?? null}
           context={
             summary?.unassignedCritical ? (
-              <span className="text-rose-300/90">
+              <span className="text-rose-600 dark:text-rose-300/90 font-medium">
                 {summary.unassignedCritical} of them critical
               </span>
             ) : summary ? (
@@ -471,6 +474,7 @@ export default function LiveCommandStrip({
           context={lastHour(trend?.acknowledgedLastHour, 'acked')}
           emphasis="none"
           variant="secondary"
+          groupDivider={true}
           active={isFocused({ status: 'ACKNOWLEDGED' })}
           onClick={() => focus({ status: 'ACKNOWLEDGED' })}
         />

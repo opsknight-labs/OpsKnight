@@ -278,7 +278,7 @@ textarea:focus-visible {
     font-weight: 700 !important;
     letter-spacing: -0.03em !important;
     line-height: 1 !important;
-    color: #fff;
+    color: var(--foreground, #0f172a);
 }
 
 .dash-wallboard-title:not(#dash-specificity) {
