@@ -239,7 +239,8 @@ export default function LiveCommandStrip({
     <section
       data-testid="command-center"
       aria-label="Command center"
-      className="overflow-hidden rounded-xl border border-border bg-card dark:bg-[#0c0c11] text-foreground shadow-xs"
+      // The `dark` class scopes dark tokens and `dark:` variants to this card in every theme.
+      className="dark overflow-hidden rounded-xl border border-zinc-800 bg-[#0c0c11] text-zinc-100 shadow-xs"
     >
       <div className="flex flex-col gap-2.5 px-4 pb-2.5 pt-2.5 lg:flex-row lg:items-start lg:justify-between sm:px-5 sm:pb-3 sm:pt-3">
         <div className="min-w-0">
