@@ -64,7 +64,7 @@ function parseArgs(argv: string[]): Options {
 }
 
 const USERS = {
-  admin: { email: 'admin@example.com', password: 'Password123!' },
+  admin: { email: 'dashboard-admin@example.local', password: 'Password123!' },
   alpha: { email: 'dashboard-alpha@example.local', password: 'Password123!' },
 };
 

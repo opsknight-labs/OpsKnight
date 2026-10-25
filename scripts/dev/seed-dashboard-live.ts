@@ -21,6 +21,7 @@ import bcrypt from 'bcryptjs';
 
 export const DASHBOARD_FIXTURE_PREFIX = 'dashboard-live:';
 export const DASHBOARD_FIXTURE_USERS = {
+  admin: 'dashboard-admin@example.local',
   alpha: 'dashboard-alpha@example.local',
   alphaPeer: 'dashboard-alpha-peer@example.local',
   bravo: 'dashboard-bravo@example.local',
@@ -129,11 +130,11 @@ async function main(): Promise<void> {
     const password = process.env.DASHBOARD_FIXTURE_PASSWORD ?? 'Password123!';
     const passwordHash = await bcrypt.hash(password, 10);
 
-    const upsertUser = (email: string, name: string) =>
+    const upsertUser = (email: string, name: string, role: 'USER' | 'ADMIN' = 'USER') =>
       prisma.user.upsert({
         where: { email },
-        update: { passwordHash, status: 'ACTIVE', role: 'USER' },
-        create: { email, name, passwordHash, status: 'ACTIVE', role: 'USER', timeZone: 'UTC' },
+        update: { passwordHash, status: 'ACTIVE', role },
+        create: { email, name, passwordHash, status: 'ACTIVE', role, timeZone: 'UTC' },
       });
     const upsertTeam = (name: string) =>
       prisma.team.upsert({
@@ -142,6 +143,7 @@ async function main(): Promise<void> {
         create: { name, description: 'Local dashboard fixture team' },
       });
 
+    await upsertUser(DASHBOARD_FIXTURE_USERS.admin, 'Avery Admin', 'ADMIN');
     const alpha = await upsertUser(DASHBOARD_FIXTURE_USERS.alpha, 'Dana Alpha');
     const alphaPeer = await upsertUser(DASHBOARD_FIXTURE_USERS.alphaPeer, 'Parker Alpha');
     const bravo = await upsertUser(DASHBOARD_FIXTURE_USERS.bravo, 'Blair Bravo');

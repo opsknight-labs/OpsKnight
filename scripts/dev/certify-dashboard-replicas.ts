@@ -34,7 +34,7 @@ function parseArgs(argv: string[]): Args {
   return { a, b, pidA: pid ? Number(pid) : null };
 }
 
-const ADMIN = { email: 'admin@example.com', password: 'Password123!' };
+const ADMIN = { email: 'dashboard-admin@example.local', password: 'Password123!' };
 const results: Array<{ name: string; ok: boolean; detail?: string }> = [];
 function check(name: string, ok: boolean, detail?: string) {
   results.push({ name, ok, detail });

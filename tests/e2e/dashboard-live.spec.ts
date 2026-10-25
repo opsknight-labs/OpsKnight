@@ -17,7 +17,7 @@ import { PrismaClient } from '@prisma/client';
  * pipeline (DB trigger -> change clock -> SSE -> panel reconcile) is exercised end to end.
  */
 
-const ADMIN = { email: 'admin@example.com', password: 'Password123!' };
+const ADMIN = { email: 'dashboard-admin@example.local', password: 'Password123!' };
 const ALPHA = { email: 'dashboard-alpha@example.local', password: 'Password123!' };
 const EMPTY = { email: 'dashboard-empty@example.local', password: 'Password123!' };
 const LATENCY_BUDGET_MS = Number(process.env.LIVE_LATENCY_BUDGET_MS || 2_000);
