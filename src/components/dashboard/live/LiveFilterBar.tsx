@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+import Link from 'next/link';
 import {
   Briefcase,
   Check,
@@ -171,7 +172,7 @@ function Segmented<T extends string>({
       <div
         role="radiogroup"
         aria-label={label}
-        className="grid grid-cols-3 gap-1"
+        className="grid grid-cols-[repeat(auto-fit,minmax(5.75rem,1fr))] gap-1"
         data-testid={testId}
       >
         {options.map(option => (
@@ -183,7 +184,7 @@ function Segmented<T extends string>({
             data-value={option.value}
             onClick={() => onChange(option.value)}
             className={cn(
-              'rounded-md border px-2 py-1 text-[11px] font-medium outline-none focus-visible:ring-2 focus-visible:ring-primary/50',
+              'whitespace-nowrap rounded-md border px-2 py-1 text-[11px] font-medium outline-none focus-visible:ring-2 focus-visible:ring-primary/50',
               value === option.value
                 ? 'border-primary/50 bg-primary/10 text-primary'
                 : 'border-border bg-card text-foreground hover:bg-muted'
@@ -200,57 +201,50 @@ function Segmented<T extends string>({
   );
 }
 
-export function LiveViewTabs() {
+/** View picker for the Filters popover; every view stays one keyboard path away. */
+function LiveViewPicker() {
   const { query, setQuery, snapshot } = useLiveDashboard();
   const counts = new Map(Object.entries(snapshot?.facets.views ?? {}));
   return (
-    <div
-      role="tablist"
-      aria-label="Live incident views"
-      className="flex min-w-0 max-w-full gap-0.5 overflow-x-auto rounded-lg border border-border bg-muted/40 p-0.5 [scrollbar-width:none]"
-    >
-      {LIVE_INCIDENT_VIEWS.map(view => {
-        const active = query.view === view;
-        const count = counts.get(view);
-        return (
-          <button
-            key={view}
-            type="button"
-            role="tab"
-            aria-selected={active}
-            data-testid={`live-view-${view}`}
-            onClick={() => setQuery({ view })}
-            className={cn(
-              'inline-flex h-7 shrink-0 items-center gap-1.5 rounded-md px-2.5 text-[11px] font-semibold transition-colors outline-none',
-              'focus-visible:ring-2 focus-visible:ring-primary/50',
-              active
-                ? 'bg-card text-foreground shadow-xs'
-                : 'text-muted-foreground hover:text-foreground'
-            )}
-          >
-            {liveViewLabel(view)}
-            {count !== undefined && (
-              <span
-                className={cn(
-                  'rounded px-1 text-[10px] tabular-nums',
-                  view === 'breaching' && count > 0
-                    ? 'bg-amber-500/15 text-amber-800 dark:text-amber-300'
-                    : view === 'critical' && count > 0
-                      ? 'bg-rose-500/10 text-rose-700 dark:text-rose-300'
-                      : 'bg-muted text-muted-foreground'
-                )}
-              >
-                {count}
-              </span>
-            )}
-          </button>
-        );
-      })}
-    </div>
+    <fieldset>
+      <legend className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+        Show
+      </legend>
+      <div
+        role="radiogroup"
+        aria-label="Live incident view"
+        className="grid grid-cols-[repeat(auto-fit,minmax(5.75rem,1fr))] gap-1"
+      >
+        {LIVE_INCIDENT_VIEWS.map(view => {
+          const active = query.view === view;
+          const count = counts.get(view);
+          return (
+            <button
+              key={view}
+              type="button"
+              role="radio"
+              aria-checked={active}
+              data-testid={`live-view-${view}`}
+              onClick={() => setQuery({ view })}
+              className={cn(
+                'flex items-center justify-between gap-1 rounded-md border px-2 py-1 text-left text-[11px] font-medium outline-none focus-visible:ring-2 focus-visible:ring-primary/50',
+                active
+                  ? 'border-primary/50 bg-primary/10 text-primary'
+                  : 'border-border bg-card text-foreground hover:bg-muted'
+              )}
+            >
+              <span className="truncate">{liveViewLabel(view)}</span>
+              {count !== undefined && (
+                <span className="tabular-nums text-muted-foreground">{count}</span>
+              )}
+            </button>
+          );
+        })}
+      </div>
+    </fieldset>
   );
 }
 
-/** Search, service and the remaining facets in one compact control group. */
 export function LiveToolbar({
   services,
   teams,
@@ -352,7 +346,12 @@ export function LiveToolbar({
             )}
           </Button>
         </PopoverTrigger>
-        <PopoverContent align="end" className="w-[22rem] max-w-[calc(100vw-2rem)] space-y-3 p-3">
+        <PopoverContent
+          align="end"
+          collisionPadding={12}
+          className="max-h-[min(36rem,var(--radix-popover-content-available-height))] w-[22rem] max-w-[calc(100vw-2rem)] space-y-3 overflow-y-auto overscroll-contain p-3"
+        >
+          <LiveViewPicker />
           <div>
             <p className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
               Team
@@ -431,12 +430,12 @@ export function LiveToolbar({
           />
           <p className="border-t border-border pt-2 text-[11px] text-muted-foreground">
             Snoozed and suppressed incidents are not active.{' '}
-            <a
+            <Link
               href="/incidents?filter=muted"
               className="font-semibold text-primary hover:underline"
             >
               View muted incidents
-            </a>
+            </Link>
           </p>
         </PopoverContent>
       </Popover>

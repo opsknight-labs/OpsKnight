@@ -33,7 +33,13 @@ const LIVE_SET_TTL_MS = 15_000;
 const ACTIVITY_TTL_MS = 15_000;
 const ONCALL_TTL_MS = 60_000;
 const ACTIVITY_LIMIT = 12;
-const TREND_TTL_MS = 60_000;
+/**
+ * Trends refresh on a fixed cadence rather than per realtime generation, so a burst of
+ * incident changes costs at most one 24h aggregate read per scope per window.
+ */
+const TREND_TTL_MS = 15_000;
+/** Fixed rolling window for hero trends; never driven by the history range picker. */
+const TREND_WINDOW_MS = 24 * 60 * 60_000;
 /** Bound on incidents touched in 24h that feed trends; larger windows truncate gracefully. */
 const TREND_CAP = 5_000;
 
@@ -221,13 +227,12 @@ async function loadOnCall(): Promise<LiveOnCallShift[]> {
   return result.data;
 }
 
-async function loadTrendRows(scope: LiveScope, generation: string | null): Promise<LiveTrendRow[]> {
-  // Minute bucket keeps "last 24h" honest even when nothing changes.
-  const minute = Math.floor(Date.now() / TREND_TTL_MS);
+async function loadTrendRows(scope: LiveScope): Promise<LiveTrendRow[]> {
+  const bucket = Math.floor(Date.now() / TREND_TTL_MS);
   const result = await getCachedOrFetch(
-    `live-trend:${scope.key}:g:${generation ?? 'none'}:m:${minute}`,
+    `live-trend:${scope.key}:t:${bucket}`,
     async () => {
-      const since = new Date(Date.now() - 24 * 60 * 60_000);
+      const since = new Date(Date.now() - TREND_WINDOW_MS);
       const rows = await prisma.incident.findMany({
         where: {
           AND: [
@@ -316,7 +321,7 @@ export async function getLiveDashboardSnapshot(
     loadActiveSet(scope, generation),
     loadActivity(scope, generation).catch(() => [] as LiveActivityItem[]),
     loadOnCall().catch(() => [] as LiveOnCallShift[]),
-    loadTrendRows(scope, generation).catch(() => [] as LiveTrendRow[]),
+    loadTrendRows(scope).catch(() => [] as LiveTrendRow[]),
     loadSchedules().catch(() => [] as Array<{ id: string; name: string }>),
   ]);
   const ctx = { actorId: actor.id, teamIds: [...actor.teamIds], now: Date.now() };

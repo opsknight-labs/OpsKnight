@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
   computeSlaSignal,
+  deriveAttention,
   deriveLiveProjection,
+  deriveTrend,
   type LiveSetRow,
+  type LiveTrendRow,
 } from '@/lib/dashboard/live-incidents-engine';
 import { DEFAULT_LIVE_QUERY, type LiveIncidentQuery } from '@/lib/dashboard/live-incidents-shared';
 
@@ -12,6 +15,9 @@ const ctx = { actorId: 'me', teamIds: ['team-a'], now: NOW };
 function row(id: string, overrides: Partial<LiveSetRow> = {}): LiveSetRow {
   return {
     id,
+    escalationLevel: null,
+    alertCount: 0,
+    responderCount: 0,
     title: `Incident ${id}`,
     status: 'OPEN',
     urgency: 'LOW',
@@ -127,8 +133,11 @@ describe('live projection engine', () => {
       acknowledged: 1,
       critical: 1,
       unassigned: 2,
+      unassignedCritical: 0,
       slaBreached: 1,
       slaAtRisk: 1,
+      slaDueSoon: 0,
+      slaRecentlyBreached: 1,
       mine: 1,
     });
   });
@@ -154,5 +163,114 @@ describe('live projection engine', () => {
       phase: null,
       deadline: null,
     });
+  });
+
+  it('applies scope before views and keeps "mine" counted across the full set', () => {
+    const teams = derive({ scope: 'teams' });
+    expect(teams.incidents.map(item => item.id)).toEqual([
+      'critical-mine',
+      'breached',
+      'payment-search',
+    ]);
+    expect(teams.summary.active).toBe(3);
+    const mine = derive({ scope: 'mine' });
+    expect(mine.incidents.map(item => item.id)).toEqual(['critical-mine']);
+    expect(mine.summary).toMatchObject({ active: 1, mine: 1 });
+    // A peer's incident outside my teams is never in the teams scope.
+    expect(teams.incidents.some(item => item.id === 'acked-other-team')).toBe(false);
+  });
+
+  it('sorts by attention: critical first, then SLA risk, then unowned, then newest', () => {
+    const ids = derive({ sort: 'attention' }).incidents.map(item => item.id);
+    expect(ids).toEqual(['critical-mine', 'breached', 'payment-search', 'acked-other-team']);
+  });
+
+  it('returns pinned incidents in pin order, independent of view and filters', () => {
+    const result = deriveLiveProjection(
+      set,
+      { ...DEFAULT_LIVE_QUERY, view: 'critical', search: 'nothing' },
+      ctx,
+      50,
+      { pinIds: ['payment-search', 'missing', 'acked-other-team'] }
+    );
+    expect(result.incidents).toHaveLength(0);
+    expect(result.pinned.map(item => item.id)).toEqual(['payment-search', 'acked-other-team']);
+  });
+
+  it('separates "due within 10 minutes" from "breached in the last hour"', () => {
+    const dueSoon = row('due-soon', withSla('2026-10-24T11:55:00.000Z', 10 * 60_000));
+    const overdueLong = row('overdue-long', withSla('2026-10-24T09:00:00.000Z', 15 * 60_000));
+    const { summary } = deriveLiveProjection(
+      [...set, dueSoon, overdueLong],
+      DEFAULT_LIVE_QUERY,
+      ctx,
+      50
+    );
+    expect(summary.slaDueSoon).toBe(1);
+    expect(summary.slaRecentlyBreached).toBe(1);
+    expect(summary.slaBreached).toBe(2);
+    expect(summary.slaAtRisk).toBe(2);
+  });
+
+  it('derives a bounded needs-attention list with actionable labels', () => {
+    const { incidents } = deriveLiveProjection(
+      [
+        ...set,
+        row('unowned-p1', { urgency: 'HIGH', priority: 'P1' }),
+        row('escalated', {
+          escalationLevel: 3,
+          assignee: { id: 'peer', name: 'Peer' },
+        }),
+      ],
+      DEFAULT_LIVE_QUERY,
+      ctx,
+      50
+    );
+    const items = deriveAttention(incidents, NOW);
+    expect(items.map(item => [item.incident.id, item.reason])).toEqual([
+      ['breached', 'sla'],
+      ['unowned-p1', 'unowned'],
+      ['escalated', 'escalated'],
+    ]);
+    expect(items[0]?.label).toBe('Ack 45m late');
+    expect(items[1]?.label).toBe('No owner · P1');
+    expect(items[2]?.label).toBe('Escalated L3');
+  });
+
+  it('builds 24 hourly trend buckets, last-hour deltas and MTTA/MTTR within scope', () => {
+    const trendRow = (overrides: Partial<LiveTrendRow>): LiveTrendRow => ({
+      createdAt: '2026-10-24T11:30:00.000Z',
+      acknowledgedAt: null,
+      resolvedAt: null,
+      critical: false,
+      assigneeId: null,
+      teamId: 'team-a',
+      serviceTeamId: 'team-a',
+      ...overrides,
+    });
+    const rows = [
+      trendRow({ critical: true, acknowledgedAt: '2026-10-24T11:40:00.000Z' }),
+      trendRow({
+        createdAt: '2026-10-24T08:00:00.000Z',
+        acknowledgedAt: '2026-10-24T08:20:00.000Z',
+        resolvedAt: '2026-10-24T09:00:00.000Z',
+      }),
+      trendRow({ teamId: 'team-b', serviceTeamId: 'team-b' }),
+      trendRow({ createdAt: '2026-10-22T08:00:00.000Z' }),
+    ];
+    const all = deriveTrend(rows, 'all', ctx);
+    expect(all.created).toHaveLength(24);
+    expect(all.created.reduce((sum, value) => sum + value, 0)).toBe(3);
+    expect(all.created.at(-1)).toBe(2);
+    expect(all.createdLastHour).toBe(2);
+    expect(all.createdCriticalLastHour).toBe(1);
+    expect(all.acknowledgedLastHour).toBe(1);
+    expect(all.resolved24h).toBe(1);
+    expect(all.mtta24h).toBe(15);
+    expect(all.mttr24h).toBe(60);
+
+    const teams = deriveTrend(rows, 'teams', ctx);
+    expect(teams.createdLastHour).toBe(1);
+    expect(deriveTrend(rows, 'mine', ctx).createdLastHour).toBe(0);
   });
 });

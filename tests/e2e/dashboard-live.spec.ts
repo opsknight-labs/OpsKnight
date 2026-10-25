@@ -214,8 +214,18 @@ test.describe.serial('dashboard live incidents', () => {
   test('renders a compact, authorized, newest-first feed near the top', async () => {
     const { page } = alpha;
     const panel = await openDashboard(page);
-    await expect(page.getByTestId('live-incident-row')).toHaveCount(10);
     await expect(page.getByTestId('live-incidents-total')).toHaveText('30 active');
+    const fills = (page.viewportSize()?.width ?? 0) >= 1280;
+    if (fills) {
+      // Wide screens: the panel fills the viewport and scrolls internally over the whole set.
+      await expect(page.getByTestId('live-incident-row')).toHaveCount(30);
+      const scroller = (await page.getByTestId('live-incidents-scroll').boundingBox())!;
+      expect(scroller.y + scroller.height).toBeLessThanOrEqual(page.viewportSize()!.height);
+      await expect(page.getByTestId('live-view-all')).toBeInViewport();
+    } else {
+      // Narrow screens: the first 10, with an explicit "show more".
+      await expect(page.getByTestId('live-incident-row')).toHaveCount(10);
+    }
     await expectNewestFirst(page);
     await expect(panel).not.toContainText('Bravo restricted');
 
@@ -289,7 +299,8 @@ test.describe.serial('dashboard live incidents', () => {
 
     // Reassign through the real server action behind the admin's "Assign to me" button.
     await openDashboard(admin.page);
-    await row(admin.page, id).getByTestId('live-assign-me').click();
+    // Unassigned rows offer the inline "+ Assign" (assign to me) affordance.
+    await row(admin.page, id).locator('[data-testid="live-assign-ghost"]:visible').click();
     await expect(row(page, id)).toContainText('System Admin');
     expect((await rowIds(page)).indexOf(id)).toBe(indexBefore);
 
@@ -318,10 +329,12 @@ test.describe.serial('dashboard live incidents', () => {
       select: { id: true, name: true },
     });
 
-    const critical = page.getByTestId('live-view-critical');
+    // Critical: the hero counter is a keyboard-operable toggle that focuses the feed.
+    const critical = page.getByTestId('counter-critical');
     await critical.focus();
     await page.keyboard.press('Enter');
-    await expect(critical).toHaveAttribute('aria-selected', 'true');
+    await expect(critical).toHaveAttribute('aria-pressed', 'true');
+    await expect(page).toHaveURL(/lview=critical/);
     await settled(page);
     await expect(page.getByTestId('live-view-all')).toHaveAttribute(
       'href',
@@ -337,30 +350,43 @@ test.describe.serial('dashboard live incidents', () => {
     for (const item of criticalRows) {
       expect(item.urgency === 'HIGH' || item.priority === 'P1').toBe(true);
     }
+    await page.keyboard.press('Enter');
+    await expect(critical).toHaveAttribute('aria-pressed', 'false');
 
-    const mine = page.getByTestId('live-view-mine');
+    // Scope: Mine / My teams / All, operable by keyboard.
+    const mine = page.getByTestId('scope-mine');
     await mine.focus();
     await page.keyboard.press('Space');
-    await expect(mine).toHaveAttribute('aria-selected', 'true');
+    await expect(mine).toHaveAttribute('aria-checked', 'true');
+    await expect(page).toHaveURL(/lscope=mine/);
     await settled(page);
     await expect(page.getByTestId('live-incident-row').first()).toBeVisible();
     for (const text of await page.getByTestId('live-incident-row').allInnerTexts()) {
       expect(text).toContain(alphaUser.name);
     }
 
-    await page.getByTestId('live-view-my_teams').click();
-    await expect(page.getByTestId('live-incidents-total')).toHaveText(/\d+ matching/);
-    await expect(page.getByTestId('live-incidents-panel')).not.toContainText('Bravo restricted');
-
-    await page.getByTestId('live-view-unassigned').click();
+    await page.getByTestId('scope-teams').click();
     await settled(page);
     await expect(page.getByTestId('live-incident-row').first()).toBeVisible();
-    for (const text of await page.getByTestId('live-incident-row').allInnerTexts()) {
-      expect(text).toContain('Unassigned');
-    }
+    await expect(page.getByTestId('live-incidents-panel')).not.toContainText('Bravo restricted');
 
-    await page.getByTestId('live-view-active').click();
-    await expect(page.getByTestId('live-view-active')).toHaveAttribute('aria-selected', 'true');
+    await page.getByTestId('scope-all').click();
+    await expect(page.getByTestId('scope-all')).toHaveAttribute('aria-checked', 'true');
+    await expect(page).not.toHaveURL(/lscope=/);
+
+    // Every view is also reachable from the Filters popover.
+    await page.getByTestId('live-more-filters').click();
+    await page.getByTestId('live-view-unassigned').click();
+    await expect(page.getByTestId('live-view-unassigned')).toHaveAttribute('aria-checked', 'true');
+    await page.keyboard.press('Escape');
+    await settled(page);
+    await expect(page.getByTestId('live-filter-chips')).toContainText('Unassigned');
+    await expect(page.getByTestId('live-incident-row').first()).toBeVisible();
+    for (const text of await page.getByTestId('live-incident-row').allInnerTexts()) {
+      expect(text).toMatch(/Assign|Unassigned/);
+    }
+    await page.getByRole('button', { name: 'Remove filter Unassigned' }).click();
+    await expect(page.getByTestId('live-filter-chips')).toHaveCount(0);
 
     // Rows are real links reachable by keyboard; j/k move focus between them.
     const firstLink = page.locator('[data-testid="live-incident-row"] a').first();
@@ -425,9 +451,13 @@ test.describe.serial('dashboard live incidents', () => {
     const { page } = alpha;
     await openDashboard(page);
     await page.getByTestId('counter-unassigned').click();
-    await expect(page.getByTestId('live-view-unassigned')).toHaveAttribute('aria-selected', 'true');
+    await expect(page.getByTestId('counter-unassigned')).toHaveAttribute('aria-pressed', 'true');
+    await expect(page).toHaveURL(/lview=unassigned/);
     await page.getByTestId('counter-unassigned').click();
-    await expect(page.getByTestId('live-view-active')).toHaveAttribute('aria-selected', 'true');
+    await expect(page.getByTestId('counter-unassigned')).toHaveAttribute('aria-pressed', 'false');
+    await page.getByTestId('counter-sla').click();
+    await expect(page).toHaveURL(/lview=breaching/);
+    await page.getByTestId('counter-sla').click();
     await page.getByTestId('counter-triggered').click();
     await expect(page).toHaveURL(/lstatus=OPEN/);
     await page.getByTestId('counter-triggered').click();
@@ -439,6 +469,7 @@ test.describe.serial('dashboard live incidents', () => {
     await openDashboard(alpha.page);
     await expect(alpha.page.getByTestId('live-ack')).toHaveCount(0);
     await expect(alpha.page.getByTestId('live-assign-me')).toHaveCount(0);
+    await expect(alpha.page.getByTestId('live-assign-ghost')).toHaveCount(0);
 
     const { page } = admin;
     const id = await createIncident(admin.page.request, {
@@ -449,7 +480,7 @@ test.describe.serial('dashboard live incidents', () => {
     await expect(row(page, id)).toBeVisible();
     await row(page, id).getByTestId('live-ack').click();
     await expect(row(page, id)).toHaveAttribute('data-status', 'ACKNOWLEDGED');
-    await row(page, id).getByTestId('live-assign-me').click();
+    await row(page, id).locator('[data-testid="live-assign-ghost"]:visible').click();
     await expect(row(page, id)).toContainText('System Admin');
     await expect
       .poll(async () =>
@@ -554,11 +585,17 @@ test.describe.serial('dashboard live incidents', () => {
     seed('stress', 150);
     await openDashboard(page);
     await expect(page.getByTestId('live-incidents-total')).toHaveText('150 active');
-    await expect(page.getByTestId('live-incident-row')).toHaveCount(10);
-    await page.getByTestId('live-show-more').click();
-    await expect(page.getByTestId('live-incident-row')).toHaveCount(50);
-    await page.getByTestId('live-show-more').click();
-    await expect(page.getByTestId('live-incident-row')).toHaveCount(10);
+    if ((page.viewportSize()?.width ?? 0) >= 1280) {
+      // Wide screens render the bounded window (50) inside the scrollable panel.
+      await expect(page.getByTestId('live-incident-row')).toHaveCount(50);
+      await expect(page.getByTestId('live-show-more')).toHaveCount(0);
+    } else {
+      await expect(page.getByTestId('live-incident-row')).toHaveCount(10);
+      await page.getByTestId('live-show-more').click();
+      await expect(page.getByTestId('live-incident-row')).toHaveCount(50);
+      await page.getByTestId('live-show-more').click();
+      await expect(page.getByTestId('live-incident-row')).toHaveCount(10);
+    }
 
     const ids: string[] = [];
     for (const wave of [0, 1]) {
@@ -636,6 +673,100 @@ test.describe.serial('dashboard live incidents', () => {
     const cls = await page.evaluate(() => (window as unknown as { __cls: number }).__cls);
     test.info().annotations.push({ type: 'live-update-cls', description: cls.toFixed(4) });
     expect(cls).toBeLessThan(0.1);
+  });
+
+  test('pins keep chosen incidents on top across filters and reloads', async () => {
+    const { page } = alpha;
+    await openDashboard(page);
+    const target = page.getByTestId('live-incident-row').nth(1);
+    const id = (await target.getAttribute('data-incident-id'))!;
+    await target.hover();
+    await target.getByTestId('live-pin').click();
+    await expect(row(page, id).getByTestId('live-pin')).toHaveAttribute('aria-pressed', 'true');
+    const strip = page.getByTestId('live-pinned');
+    await expect(strip).toBeVisible();
+    await expect(strip.locator(`a[href="/incidents/${id}"]`)).toBeVisible();
+
+    // A filter that excludes the incident still keeps it in the pinned strip.
+    await page.getByTestId('live-search').fill('zz-no-incident-matches-this');
+    await settled(page);
+    await expect(strip.locator(`a[href="/incidents/${id}"]`)).toBeVisible();
+    await page.getByTestId('live-search').fill('');
+
+    // Pins are a per-user preference that survives a reload.
+    await openDashboard(page);
+    await expect(
+      page.getByTestId('live-pinned').locator(`a[href="/incidents/${id}"]`)
+    ).toBeVisible();
+    await page
+      .getByTestId('live-pinned')
+      .getByRole('button', { name: /^Unpin / })
+      .first()
+      .click();
+    await expect(page.getByTestId('live-pinned')).toHaveCount(0);
+  });
+
+  test('needs-attention sort ranks critical work first', async () => {
+    const { page } = alpha;
+    await openDashboard(page);
+    await page.getByTestId('live-sort').click();
+    await page.getByTestId('live-sort-attention').click();
+    await expect(page).toHaveURL(/lsort=attention/);
+    await settled(page);
+    const ids = ((await rowIds(page)) as string[]).slice(0, 5);
+    expect(ids.length).toBeGreaterThan(0);
+    const rows = await prisma.incident.findMany({
+      where: { id: { in: ids } },
+      select: { id: true, urgency: true, priority: true },
+    });
+    const isCritical = (item?: { urgency: string; priority: string | null }) =>
+      item?.urgency === 'HIGH' || item?.priority === 'P1';
+    const flags = ids.map(id => isCritical(rows.find(item => item.id === id)));
+    // Once a non-critical row appears, no critical row follows it.
+    expect(
+      flags.slice(flags.indexOf(false) === -1 ? flags.length : flags.indexOf(false))
+    ).not.toContain(true);
+    await expect(page.getByRole('menu')).toHaveCount(0);
+    await expect(page.getByTestId('live-sort')).toHaveText(/Needs attention/);
+    // Keyboard path: the sort menu opens and selects without a pointer.
+    await page.getByTestId('live-sort').focus();
+    await page.keyboard.press('Enter');
+    await page.getByTestId('live-sort-newest').click();
+    await expect(page).not.toHaveURL(/lsort=/);
+    await expect
+      .poll(async () => {
+        const times = await page
+          .locator('[data-testid="live-incident-row"] time')
+          .evaluateAll(nodes => nodes.map(node => Date.parse(node.getAttribute('datetime') || '')));
+        return times.every((time, index) => index === 0 || times[index - 1]! >= time);
+      })
+      .toBe(true);
+  });
+
+  test('the whole live panel fits common desktop screens without page scrolling', async ({}, testInfo) => {
+    test.skip(testInfo.project.name.startsWith('mobile'), 'Phones stack the panel by design');
+    const { page } = alpha;
+    const original = page.viewportSize();
+    try {
+      for (const viewport of [
+        { width: 1366, height: 768 },
+        { width: 1440, height: 900 },
+        { width: 1920, height: 1080 },
+      ]) {
+        await page.setViewportSize(viewport);
+        await openDashboard(page);
+        await expect
+          .poll(async () => {
+            const box = await page.getByTestId('live-incidents-panel').boundingBox();
+            return box ? Math.round(box.y + box.height) : Number.POSITIVE_INFINITY;
+          })
+          .toBeLessThanOrEqual(viewport.height);
+        const footer = await page.getByTestId('live-view-all').boundingBox();
+        expect(footer!.y + footer!.height).toBeLessThanOrEqual(viewport.height);
+      }
+    } finally {
+      if (original) await page.setViewportSize(original);
+    }
   });
 
   test('light and dark themes keep readable contrast', async () => {

@@ -194,6 +194,7 @@ export const LiveIncidentRow = memo(function LiveIncidentRow({
       onClick={() => onAssignSelf(incident)}
       disabled={busy !== null}
       title="Assign to me (m)"
+      aria-label={`Assign ${incident.title} to me`}
       className="inline-flex w-fit items-center gap-1 rounded-md border border-dashed border-slate-300 px-2 py-0.5 text-[11px] font-medium text-muted-foreground hover:border-primary/60 hover:text-primary disabled:opacity-50 outline-none focus-visible:ring-2 focus-visible:ring-primary/50 dark:border-slate-700"
     >
       {busy === 'assign' ? (

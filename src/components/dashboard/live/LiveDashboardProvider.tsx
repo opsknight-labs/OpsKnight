@@ -412,7 +412,6 @@ export function LiveDashboardProvider({
       if (persistQuery && !hasLiveUrlParams(params)) {
         const stored = window.localStorage.getItem(LIVE_QUERY_STORAGE_PREFIX + currentUserId);
         // Synchronizes with an external store (localStorage) that does not exist during SSR.
-        // eslint-disable-next-line react-hooks/set-state-in-effect
         if (stored) commitQuery(coerceLiveQuery(JSON.parse(stored)), false);
       }
     } catch {

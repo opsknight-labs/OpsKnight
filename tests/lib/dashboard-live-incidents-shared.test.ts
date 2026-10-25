@@ -22,6 +22,9 @@ import {
 function liveIncident(id: string, overrides: Partial<LiveIncident> = {}): LiveIncident {
   return {
     id,
+    escalationLevel: null,
+    alertCount: 0,
+    responderCount: 0,
     title: `Incident ${id}`,
     status: 'OPEN',
     urgency: 'HIGH',
@@ -52,6 +55,8 @@ describe('live incident query contract', () => {
     expect(coerceLiveQuery({})).toEqual(DEFAULT_LIVE_QUERY);
     expect(
       coerceLiveQuery({
+        scope: 'everyone',
+        sort: 'random',
         view: 'ACTIVE',
         serviceId: 'svc;drop',
         teamId: 'team-1',
@@ -61,6 +66,8 @@ describe('live incident query contract', () => {
         search: `  ${'x'.repeat(500)}  `,
       })
     ).toEqual({
+      scope: 'all',
+      sort: 'newest',
       view: 'active',
       serviceId: null,
       teamId: 'team-1',
@@ -90,6 +97,16 @@ describe('live incident query contract', () => {
     expect(liveQueryToParams(DEFAULT_LIVE_QUERY).toString()).toBe('');
     expect(liveQueryKey(query)).toBe(api.toString());
     expect(countActiveFacets(query)).toBe(4);
+  });
+
+  it('round-trips scope and sort without counting them as filters', () => {
+    const query = coerceLiveQuery({ scope: 'teams', sort: 'attention' });
+    const url = liveQueryToParams(query, LIVE_URL_PARAMS);
+    expect(url.get('lscope')).toBe('teams');
+    expect(url.get('lsort')).toBe('attention');
+    expect(liveQueryFromParams(url)).toEqual(query);
+    expect(liveQueryToParams(query, LIVE_API_PARAMS).toString()).toBe('scope=teams&sort=attention');
+    expect(countActiveFacets(query)).toBe(0);
   });
 
   it('treats ACTIVE as OPEN plus ACKNOWLEDGED only', () => {

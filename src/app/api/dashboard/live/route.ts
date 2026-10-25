@@ -41,9 +41,9 @@ const querySchema = z
     // Personally pinned incidents, comma separated; still resolved inside the authorized set.
     ids: z
       .string()
-      .regex(/^[A-Za-z0-9_-]{1,100}(,[A-Za-z0-9_-]{1,100})*$/)
+      .max(LIVE_MAX_PINS * 101)
       .transform(value => value.split(','))
-      .refine(value => value.length <= LIVE_MAX_PINS)
+      .pipe(z.array(id).min(1).max(LIVE_MAX_PINS))
       .optional(),
   })
   .strict();

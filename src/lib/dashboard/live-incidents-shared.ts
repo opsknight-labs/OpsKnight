@@ -254,8 +254,10 @@ export type LiveFacets = {
 };
 
 export type LiveSummary = {
-  /** Incidents that have breached or are due within 10 minutes. */
+  /** Incidents whose next SLA deadline is still ahead but within 10 minutes. */
   slaDueSoon: number;
+  /** Incidents that breached their SLA within the last hour (still recoverable signal). */
+  slaRecentlyBreached: number;
   /** Unassigned incidents that are critical. */
   unassignedCritical: number;
   active: number;

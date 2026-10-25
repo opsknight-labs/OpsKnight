@@ -20,7 +20,7 @@ function scrollParent(node: HTMLElement): HTMLElement | null {
  */
 export function useViewportFill<T extends HTMLElement>({
   minWidth = 1280,
-  minHeight = 520,
+  minHeight = 360,
   bottomGap = 16,
 }: { minWidth?: number; minHeight?: number; bottomGap?: number } = {}) {
   const ref = useRef<T | null>(null);

@@ -10,7 +10,6 @@ import {
   Keyboard,
   Monitor,
   MoreHorizontal,
-  Pause,
   Play,
   RefreshCw,
   X,
@@ -42,11 +41,10 @@ import {
   type LiveIncidentQuery,
   type LiveSort,
 } from '@/lib/dashboard/live-incidents-shared';
-import { useLiveDashboard } from './LiveDashboardProvider';
+import { useLiveDashboard, type LiveDensity } from './LiveDashboardProvider';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { LIVE_ROW_GRID, LIVE_ROW_GRID_TV, LiveIncidentRow } from './LiveIncidentRow';
 import { LiveActiveFilters, LiveToolbar, type LiveDirectoryOption } from './LiveFilterBar';
-import type { LiveDensity } from './LiveDashboardProvider';
 
 function healthCopy(health: LiveConnectionHealth): { label: string; dot: string; text: string } {
   switch (health) {

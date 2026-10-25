@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const prismaMock = vi.hoisted(() => ({
   incident: { findMany: vi.fn() },
   incidentEvent: { findMany: vi.fn() },
+  onCallSchedule: { findMany: vi.fn() },
 }));
 vi.mock('@/lib/prisma', () => ({ default: prismaMock }));
 vi.mock('@/lib/oncall-shifts', () => ({
@@ -54,21 +55,45 @@ const dbRow = {
   service: { id: 'svc', name: 'API', teamId: 'team-a', team: { id: 'team-a', name: 'Alpha' } },
   team: null,
   assignee: { id: 'u2', name: '', email: 'b@example.com' },
+  currentEscalationStep: null,
+  _count: { alerts: 2, watchers: 1 },
 };
+
+const trendRow = {
+  createdAt: new Date(Date.now() - 30 * 60_000),
+  acknowledgedAt: null,
+  resolvedAt: null,
+  urgency: 'HIGH',
+  priority: 'P1',
+  assigneeId: null,
+  teamId: null,
+  service: { teamId: 'team-a' },
+};
+
+/** The active-set read selects `id`; the 24h trend read does not. */
+const isActiveSetRead = (args: { select?: { id?: boolean } }) => args.select?.id === true;
+const activeSetCalls = () =>
+  prismaMock.incident.findMany.mock.calls.filter(([args]) => isActiveSetRead(args));
 
 describe('getLiveDashboardSnapshot', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     clearCache();
-    prismaMock.incident.findMany.mockResolvedValue([dbRow]);
+    prismaMock.incident.findMany.mockImplementation(async args =>
+      isActiveSetRead(args) ? [dbRow] : [trendRow]
+    );
     prismaMock.incidentEvent.findMany.mockResolvedValue([]);
+    prismaMock.onCallSchedule.findMany.mockResolvedValue([
+      { id: 's1', name: 'Primary' },
+      { id: 's2', name: 'Secondary' },
+    ]);
   });
 
   it('reads one bounded, newest-first active set inside the authorization scope', async () => {
     await getLiveDashboardSnapshot(scoped('user-a', ['team-a']), DEFAULT_LIVE_QUERY, {
       generation: '1',
     });
-    const args = prismaMock.incident.findMany.mock.calls[0][0];
+    const args = activeSetCalls()[0][0];
     expect(args.orderBy).toEqual([{ createdAt: 'desc' }, { id: 'desc' }]);
     expect(args.take).toBe(2001);
     expect(args.where.AND).toContainEqual({ status: { in: ['OPEN', 'ACKNOWLEDGED'] } });
@@ -97,9 +122,13 @@ describe('getLiveDashboardSnapshot', () => {
         }
       ),
     ]);
-    expect(prismaMock.incident.findMany).toHaveBeenCalledTimes(1);
+    expect(activeSetCalls()).toHaveLength(1);
     await getLiveDashboardSnapshot(admin('a1'), DEFAULT_LIVE_QUERY, { generation: '6' });
-    expect(prismaMock.incident.findMany).toHaveBeenCalledTimes(2);
+    expect(activeSetCalls()).toHaveLength(2);
+    // Trends refresh on a fixed cadence, not on every realtime generation.
+    expect(
+      prismaMock.incident.findMany.mock.calls.filter(([args]) => !isActiveSetRead(args))
+    ).toHaveLength(1);
   });
 
   it('never shares a scoped set between different users or team sets', () => {
@@ -127,19 +156,35 @@ describe('getLiveDashboardSnapshot', () => {
       assignee: { id: 'u2', name: 'b@example.com' },
     });
     expect(snapshot.summary.active).toBe(1);
+    expect(snapshot.incidents[0]).toMatchObject({
+      escalationLevel: null,
+      alertCount: 2,
+      responderCount: 1,
+    });
     expect(snapshot.rail.onCall).toEqual([
-      {
+      expect.objectContaining({
         id: 'shift-1',
+        scheduleId: 's1',
         scheduleName: 'Primary',
         user: { id: 'u1', name: 'Ava', avatarUrl: null, gender: null },
-      },
+      }),
     ]);
+    expect(snapshot.coverage).toMatchObject({
+      me: { onCall: true, schedules: ['Primary'] },
+      gaps: [{ id: 's2', name: 'Secondary' }],
+      scheduleCount: 2,
+    });
+    expect(snapshot.trend.createdLastHour).toBe(1);
+    expect(snapshot.trend.createdCriticalLastHour).toBe(1);
+    expect(snapshot.trend.created).toHaveLength(24);
     expect(snapshot.truncated).toBe(false);
   });
 
   it('clamps the requested row limit', async () => {
-    prismaMock.incident.findMany.mockResolvedValue(
-      Array.from({ length: 150 }, (_, index) => ({ ...dbRow, id: `inc-${index}` }))
+    prismaMock.incident.findMany.mockImplementation(async args =>
+      isActiveSetRead(args)
+        ? Array.from({ length: 150 }, (_, index) => ({ ...dbRow, id: `inc-${index}` }))
+        : []
     );
     const snapshot = await getLiveDashboardSnapshot(admin('a1'), DEFAULT_LIVE_QUERY, {
       limit: 10_000,
@@ -147,5 +192,16 @@ describe('getLiveDashboardSnapshot', () => {
     });
     expect(snapshot.incidents).toHaveLength(100);
     expect(snapshot.total).toBe(150);
+  });
+
+  it('returns pinned incidents from the same authorized set without another query', async () => {
+    const snapshot = await getLiveDashboardSnapshot(
+      admin('a1'),
+      { ...DEFAULT_LIVE_QUERY, view: 'mine' },
+      { generation: '12', pinIds: ['inc-1', 'not-visible'] }
+    );
+    expect(snapshot.incidents).toHaveLength(0);
+    expect(snapshot.pinned.map(item => item.id)).toEqual(['inc-1']);
+    expect(activeSetCalls()).toHaveLength(1);
   });
 });

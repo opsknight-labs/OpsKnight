@@ -14,7 +14,7 @@ export default function DashboardCockpit({ feed, rail }: { feed: ReactNode; rail
     <div
       ref={ref}
       data-testid="dashboard-cockpit"
-      className="grid grid-cols-1 gap-4 xl:h-[calc(100dvh-17rem)] xl:min-h-[32.5rem] xl:grid-cols-[minmax(0,1fr)_21rem] 2xl:grid-cols-[minmax(0,1fr)_23rem]"
+      className="grid grid-cols-1 gap-4 xl:h-[calc(100dvh-17rem)] xl:min-h-[22.5rem] xl:grid-cols-[minmax(0,1fr)_21rem] 2xl:grid-cols-[minmax(0,1fr)_23rem]"
       style={height ? { height } : undefined}
     >
       <div className="min-h-0 min-w-0">{feed}</div>

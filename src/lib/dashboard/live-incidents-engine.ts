@@ -100,7 +100,13 @@ export function isSlaAtRisk(incident: Pick<LiveIncident, 'sla'>, now: number): b
 function isSlaDueSoon(incident: Pick<LiveIncident, 'sla'>, now: number): boolean {
   if (!incident.sla.deadline) return false;
   const delta = Date.parse(incident.sla.deadline) - now;
-  return delta <= SLA_DUE_SOON_MS && delta > -SLA_RECENT_BREACH_MS;
+  return delta >= 0 && delta <= SLA_DUE_SOON_MS;
+}
+
+function isSlaRecentlyBreached(incident: Pick<LiveIncident, 'sla'>, now: number): boolean {
+  if (!incident.sla.deadline) return false;
+  const delta = Date.parse(incident.sla.deadline) - now;
+  return delta < 0 && delta > -SLA_RECENT_BREACH_MS;
 }
 
 function inTeams(
@@ -407,6 +413,7 @@ export function deriveLiveProjection(
     slaBreached: 0,
     slaAtRisk: 0,
     slaDueSoon: 0,
+    slaRecentlyBreached: 0,
     mine: 0,
   };
   for (const row of rows) {
@@ -421,6 +428,7 @@ export function deriveLiveProjection(
     if (row.sla.warning === 'BREACHED') summary.slaBreached += 1;
     if (isSlaAtRisk(row, ctx.now)) summary.slaAtRisk += 1;
     if (isSlaDueSoon(row, ctx.now)) summary.slaDueSoon += 1;
+    if (isSlaRecentlyBreached(row, ctx.now)) summary.slaRecentlyBreached += 1;
   }
   // "Mine" is always counted across the full visible set, independent of scope.
   summary.mine = all.filter(row => row.assignee?.id === ctx.actorId).length;
@@ -435,8 +443,9 @@ export function deriveLiveProjection(
     .sort((a, b) => deadlineOf(a) - deadlineOf(b) || compareNewestFirst(a, b))
     .slice(0, RAIL_LIMIT);
   const servicesAtRisk = groupOptions(rows, row => row.service).slice(0, SERVICES_AT_RISK_LIMIT);
-  const pinIds = new Set((options.pinIds ?? []).slice(0, LIVE_MAX_PINS));
-  const pinned = pinIds.size ? all.filter(row => pinIds.has(row.id)) : [];
+  // Pins keep the order the user pinned them in so the strip never reshuffles.
+  const byId = new Map(all.map(row => [row.id, row]));
+  const pinned = (options.pinIds ?? []).slice(0, LIVE_MAX_PINS).flatMap(id => byId.get(id) ?? []);
 
   return {
     incidents: matching.slice(0, limit),

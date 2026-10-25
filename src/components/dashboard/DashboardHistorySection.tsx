@@ -199,10 +199,10 @@ function FlowChart({
   const y = (value: number) => height - 8 - (value / max) * (height - 24);
   const line = (key: 'count' | 'resolveCount') =>
     series
-      .map(
-        (point, index) =>
-          `${index === 0 ? 'M' : 'L'}${x(index).toFixed(1)},${y(point[key]).toFixed(1)}`
-      )
+      .map((point, index) => {
+        const value = key === 'count' ? point.count : point.resolveCount;
+        return `${index === 0 ? 'M' : 'L'}${x(index).toFixed(1)},${y(value).toFixed(1)}`;
+      })
       .join(' ');
   const area = (key: 'count' | 'resolveCount') => `${line(key)} L${width},${height} L0,${height} Z`;
   const totalCreated = series.reduce((sum, point) => sum + point.count, 0);

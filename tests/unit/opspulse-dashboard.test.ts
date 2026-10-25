@@ -17,17 +17,21 @@ describe('Ops Pulse dashboard contract', () => {
     expect(engineSource).toContain('row.assignee?.id === ctx.actorId');
   });
 
-  it('renders queue, SLA risk and services in the Ops Pulse panel', () => {
+  it('renders you, needs-attention, hotspots and coverage in the Ops Pulse panel', () => {
     expect(pageSource).toContain('<OpsPulsePanel />');
-    expect(railSource).toContain('title="My Queue"');
+    expect(railSource).toContain('data-testid="pulse-you"');
+    expect(railSource).toContain('data-testid="pulse-attention"');
+    expect(railSource).toContain('data-testid="services-at-risk"');
+    expect(railSource).toContain('data-testid="pulse-coverage"');
+    // Wallboard still renders the standalone SLA card.
     expect(railSource).toContain('title="SLA at Risk"');
-    expect(railSource).toContain('title="Services at Risk"');
     expect(engineSource).toContain('isCriticalIncident(row) ? 0 : 1');
   });
 
   it('shows explicit empty states rather than blank widgets', () => {
     expect(railSource).toContain('Your queue is clear');
     expect(railSource).toContain('Everything is within SLA');
+    expect(railSource).toContain('Nothing near breach or without an owner');
     expect(railSource).toContain('No service has active incidents');
   });
 

@@ -7,7 +7,6 @@ import {
   Calendar,
   CheckCircle2,
   Clock3,
-  Server,
   UserRound,
   Users,
 } from 'lucide-react';
@@ -153,9 +152,7 @@ export function SlaRiskCard({ grow = false }: { grow?: boolean } = {}) {
       count={summary?.slaAtRisk}
       subtitle={
         summary
-          ? summary.slaDueSoon > 0
-            ? `${summary.slaDueSoon} due within 10 min · ${summary.slaBreached} breached`
-            : `${summary.slaBreached} breached overall`
+          ? `${summary.slaDueSoon} due <10m · ${summary.slaRecentlyBreached} breached <1h`
           : 'Acknowledge and resolve targets'
       }
       tone="amber"
@@ -406,7 +403,7 @@ export function OpsPulsePanel() {
           {attention.length === 0 ? (
             <EmptyLine
               icon={<CheckCircle2 className="h-4 w-4 text-emerald-500" aria-hidden />}
-              text="Nothing is about to breach or unowned"
+              text="Nothing near breach or without an owner"
             />
           ) : (
             <ul className="space-y-0.5">

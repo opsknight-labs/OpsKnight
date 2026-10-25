@@ -107,7 +107,11 @@ async function calculate(
   }
 }
 
-function startCalculation(key: string, actor: AuthorizationActor, windowDays: 7 | 30 | 90) {
+function startCalculation(
+  key: string,
+  actor: AuthorizationActor,
+  windowDays: 7 | 30 | 90
+) {
   const existing = inFlight.get(key);
   if (existing) return existing;
   if (activeCalculations >= MAX_CONCURRENT_CALCULATIONS) return null;

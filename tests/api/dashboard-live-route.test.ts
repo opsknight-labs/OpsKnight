@@ -31,7 +31,7 @@ describe('GET /api/dashboard/live', () => {
   it('serves the authorization-scoped snapshot with no-store caching', async () => {
     const response = await GET(
       url(
-        '?view=mine&service=svc-1&team=t-1&status=OPEN&urgency=HIGH&assignment=unassigned&q=api&limit=20&after=6'
+        '?scope=teams&sort=attention&view=mine&service=svc-1&team=t-1&status=OPEN&urgency=HIGH&assignment=unassigned&q=api&limit=20&after=6&ids=inc-2,inc-1'
       )
     );
     expect(response.status).toBe(200);
@@ -40,6 +40,8 @@ describe('GET /api/dashboard/live', () => {
     expect(mocks.snapshot).toHaveBeenCalledWith(
       expect.objectContaining({ id: 'user-1' }),
       {
+        scope: 'teams',
+        sort: 'attention',
         view: 'mine',
         serviceId: 'svc-1',
         teamId: 't-1',
@@ -48,14 +50,20 @@ describe('GET /api/dashboard/live', () => {
         assignment: 'unassigned',
         search: 'api',
       },
-      { limit: 20, generation: '7' }
+      { limit: 20, generation: '7', pinIds: ['inc-2', 'inc-1'] }
     );
   });
 
   it('defaults to the all-active view', async () => {
     await GET(url());
     expect(mocks.generation).toHaveBeenCalledWith(null);
-    expect(mocks.snapshot.mock.calls[0][1]).toMatchObject({ view: 'active', status: 'all' });
+    expect(mocks.snapshot.mock.calls[0][1]).toMatchObject({
+      scope: 'all',
+      sort: 'newest',
+      view: 'active',
+      status: 'all',
+    });
+    expect(mocks.snapshot.mock.calls[0][2]).toMatchObject({ pinIds: undefined });
   });
 
   it('rejects unauthenticated, unknown, duplicate and malformed parameters', async () => {
@@ -69,6 +77,11 @@ describe('GET /api/dashboard/live', () => {
       '?userId=admin',
       '?service=a%3Bb',
       '?after=abc',
+      '?scope=everyone',
+      '?sort=random',
+      '?ids=a,b,c,d,e,f',
+      '?ids=a;b',
+      '?ids=',
       `?q=${'x'.repeat(200)}`,
     ]) {
       await expect(GET(url(query))).resolves.toMatchObject({ status: 400 });

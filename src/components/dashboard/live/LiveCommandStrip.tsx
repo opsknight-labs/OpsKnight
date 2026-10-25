@@ -115,9 +115,16 @@ export function buildNarrative(snapshot: LiveSnapshot | null): Fragment[] {
       patch: { view: 'critical' },
     });
   }
+  if (summary.slaRecentlyBreached > 0) {
+    fragments.push({
+      text: `${summary.slaRecentlyBreached} breached SLA this hour`,
+      tone: 'rose',
+      patch: { view: 'breaching' },
+    });
+  }
   if (summary.slaDueSoon > 0) {
     fragments.push({
-      text: `${summary.slaDueSoon} near SLA deadline`,
+      text: `${summary.slaDueSoon} due within 10 min`,
       tone: 'amber',
       patch: { view: 'breaching' },
     });
@@ -158,7 +165,11 @@ export function buildInsight(summary: LiveSummary | null): { text: string; tone:
   return { text: 'All clear — no active incidents', tone: 'emerald' };
 }
 
-const SCOPE_LABEL: Record<LiveScope, string> = { all: 'All', teams: 'My teams', mine: 'Mine' };
+const SCOPE_LABEL = new Map<LiveScope, string>([
+  ['all', 'All'],
+  ['teams', 'My teams'],
+  ['mine', 'Mine'],
+]);
 
 export default function LiveCommandStrip({
   scopeMode,
@@ -178,7 +189,7 @@ export default function LiveCommandStrip({
       ? { label: 'No operational scope', dot: 'bg-zinc-500', text: 'text-zinc-400' }
       : !summary
         ? { label: 'Connecting', dot: 'bg-zinc-500', text: 'text-zinc-400' }
-        : summary.critical > 0 || summary.slaDueSoon > 0
+        : summary.critical > 0 || summary.slaDueSoon > 0 || summary.slaRecentlyBreached > 0
           ? { label: 'Critical', dot: 'bg-rose-500', text: 'text-rose-300' }
           : summary.active > 0
             ? { label: 'Degraded', dot: 'bg-amber-400', text: 'text-amber-200' }
@@ -278,7 +289,7 @@ export default function LiveCommandStrip({
                     : 'text-zinc-400 hover:text-zinc-100'
                 )}
               >
-                {SCOPE_LABEL[scope]}
+                {SCOPE_LABEL.get(scope)}
                 {scope === 'mine' && summary ? (
                   <span className="ml-1 tabular-nums text-zinc-500">{summary.mine}</span>
                 ) : null}
@@ -358,8 +369,17 @@ export default function LiveCommandStrip({
           title="Due within 30 minutes or breached in the last hour"
           value={summary?.slaAtRisk ?? null}
           context={
-            summary?.slaDueSoon ? (
-              <span className="text-amber-200/90">{summary.slaDueSoon} due within 10 min</span>
+            summary?.slaDueSoon || summary?.slaRecentlyBreached ? (
+              <span className="text-amber-200/90">
+                {[
+                  summary.slaRecentlyBreached
+                    ? `${summary.slaRecentlyBreached} breached <1h`
+                    : null,
+                  summary.slaDueSoon ? `${summary.slaDueSoon} due <10m` : null,
+                ]
+                  .filter(Boolean)
+                  .join(' · ')}
+              </span>
             ) : summary ? (
               `${summary.slaBreached} breached overall`
             ) : (

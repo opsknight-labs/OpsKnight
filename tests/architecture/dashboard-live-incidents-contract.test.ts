@@ -14,14 +14,12 @@ describe('dashboard live command contract', () => {
   const wallboardPage = readFileSync('src/app/(kiosk)/wallboard/page.tsx', 'utf8');
   const kioskLayout = readFileSync('src/app/(kiosk)/layout.tsx', 'utf8');
 
-  it('orders the page: command center, live feed beside Ops Pulse, responders, then trends', () => {
+  it('orders the page: command center, live feed beside Ops Pulse, then trends', () => {
     const order = [
       '<LiveCommandStrip',
       '<DashboardCockpit',
       '<LiveIncidentsPanel',
       '<OpsPulsePanel',
-      '<OnCallCard',
-      '<ActivityCard',
       '<DashboardHistorySection',
     ].map(marker => page.indexOf(marker));
     expect(order.every(index => index > -1)).toBe(true);
@@ -47,7 +45,15 @@ describe('dashboard live command contract', () => {
   it('keeps live data independent from historical reporting dates', () => {
     const shared = readFileSync('src/lib/dashboard/live-incidents-shared.ts', 'utf8');
     const live = readFileSync('src/lib/dashboard/live-incidents.ts', 'utf8');
-    expect(live).not.toMatch(/createdAt:\s*\{\s*(gte|lte)/);
+    const activeSet = live.slice(
+      live.indexOf('async function loadActiveSet('),
+      live.indexOf('async function loadActivity(')
+    );
+    expect(activeSet.length).toBeGreaterThan(100);
+    expect(activeSet).not.toMatch(/createdAt:\s*\{\s*(gte|lte)/);
+    // Hero trends use a fixed rolling window, never the history range picker.
+    expect(live).toContain('const TREND_WINDOW_MS = 24 * 60 * 60_000;');
+    expect(live).not.toMatch(/parseHistoryRange|HISTORY_RANGES/);
     expect(shared).not.toContain('createdBefore');
     expect(page).not.toContain('createdBefore');
   });
