@@ -18,8 +18,7 @@ import { getMicrosoftTeamsCapabilities } from '@/lib/microsoft-teams/capabilitie
 import { findTeamMember } from '@/lib/microsoft-teams/graph/members';
 
 type RequestResult =
-  | { accepted: true; warRoomId: string; state: string }
-  | { accepted: false; code: string };
+  { accepted: true; warRoomId: string; state: string } | { accepted: false; code: string };
 type WarRoomRequestIntent = {
   manual: boolean;
   allowNewGeneration: boolean;
@@ -35,9 +34,21 @@ export async function requestMicrosoftTeamsWarRoom(
   return runSerializableTransaction(async tx => {
     const incident = await tx.incident.findUnique({
       where: { id: incidentId },
-      include: {
+      select: {
+        status: true,
+        urgency: true,
+        priority: true,
+        visibility: true,
+        serviceId: true,
+        assigneeId: true,
         service: {
-          select: { microsoftTeamsWarRoomAutoCreate: true, team: { select: { teamLeadId: true } } },
+          select: {
+            id: true,
+            autoCreateWarRoom: true,
+            microsoftTeamsWarRoomAutoCreate: true,
+            warRoomVideoBridge: true,
+            team: { select: { teamLeadId: true } },
+          },
         },
       },
     });
@@ -61,13 +72,14 @@ export async function requestMicrosoftTeamsWarRoom(
       }),
     ]);
 
-    const { getGlobalWarRoomPolicy, getServiceWarRoomPolicy, resolveIncidentCollaborationPolicy } =
+    const { getIncidentCollaborationPolicies, resolveIncidentCollaborationPolicy } =
       await import('@/lib/incident-collaboration/policy');
 
-    const [globalPolicy, servicePolicy] = await Promise.all([
-      getGlobalWarRoomPolicy(tx),
-      incident.serviceId ? getServiceWarRoomPolicy(incident.serviceId, tx) : null,
-    ]);
+    const { globalPolicy, servicePolicy } = await getIncidentCollaborationPolicies(
+      incident.service,
+      tx,
+      chatOpsConfig
+    );
 
     const canonicalPolicy = resolveIncidentCollaborationPolicy({
       incident: {
@@ -335,8 +347,7 @@ export async function reconcileMicrosoftTeamsWarRoomHealth(
     // single channel directly instead of paginating the entire channel list.
     // Fall back to the marker scan only when the direct probe is inconclusive.
     let result:
-      | Awaited<ReturnType<typeof getChannelById>>
-      | Awaited<ReturnType<typeof findWarRoomChannel>>;
+      Awaited<ReturnType<typeof getChannelById>> | Awaited<ReturnType<typeof findWarRoomChannel>>;
     if (room.providerChannelId) {
       const direct = await getChannelById({
         tenantId: room.providerTenantId!,

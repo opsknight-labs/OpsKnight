@@ -2,9 +2,32 @@
 
 Started: 2026-10-24. Updated: 2026-10-25. Candidate branch: `feat/enterprise-event-ingestion`.
 
-Enterprise status: **NOT CERTIFIED. No PR is authorized by this ledger.** The current acceptance plan is [high-throughput-redesign.md](high-throughput-redesign.md): 600 RPS sustained, bounded 1,000 RPS bursts, and independently verified downstream delivery. Earlier entries and targets below are historical evidence; they do not supersede that plan or certify a later revision.
+Enterprise status: **NOT CERTIFIED. No PR is authorized by this ledger.** The current priority is [efficiency-first-recommendation.md](efficiency-first-recommendation.md): affordable end-to-end processing before higher offered load. The earlier [high-throughput-redesign.md](high-throughput-redesign.md) remains design context; its 600/1,000 RPS targets are unverified stress ambitions, not the compact deployment release gate. Historical entries below do not certify later revisions.
 
-Current implementation status: four native stage diagnostics exist; admission/incident work reduction, shared effect planning, continuous cross-batch refill, million-history verification, and supported resource profiles remain incomplete. Within-batch refill and fenced war-room writes are committed. Critical responder isolation is undergoing source/native verification. The latest full-stack 50 RPS gate failed and retained a growing downstream backlog. No higher full-stack capacity is established.
+Current implementation status: four native stage diagnostics exist; admission/incident work reduction, configuration-aware effect planning, continuous cross-batch refill, million-history verification, and supported resource profiles remain incomplete. Within-batch refill, fenced war-room writes, and critical responder isolation are committed. The latest full-stack 50 RPS run passed admission/incident thresholds but accumulated 21,100 pending downstream jobs. No higher full-stack capacity is established.
+
+Current independent gates, all pending under disclosed aggregate resource budgets:
+
+- Compact OSS: 4 vCPU / 8 GB total, including PostgreSQL, web and workers; 300 **new incidents/minute** (5/sec) for 60 minutes, all intended lifecycle work complete and stable downstream backlog.
+- Stretch on the same budget: 600 new incidents/minute (10/sec) for 30 minutes.
+- 50 incoming events/sec: full end-to-end verification, not receipt completion alone.
+- High volume: sequential 100 → 300 incoming events/sec with the incident creation/deduplication mix disclosed independently from the all-new-incident stress workload.
+- Critical paging: p95 <1 second to durable notification handoff; controlled provider capture measured separately.
+- Reliability: no lost acknowledged events or duplicate effects attributable to retries; Automation, escalation, Runbooks, lifecycle ordering, configuration changes while queued, crashes and mixed-version upgrade checks retained.
+
+No current run establishes the aggregate compact resource budget. Do not infer compact-tier certification from the isolated ~33 incident units/sec effects result. Storage growth and bounded retention remain gates: 5 new incidents/sec sustained is 432,000 incidents/day before alerts, history and side effects.
+
+### Efficiency implementation: execution-time context
+
+The first work reduction candidate consolidates collaboration policy reads around the service and ChatOps snapshots already loaded by the worker transaction. Existing canonical and legacy decoders remain shared. It does not cache negative configuration or remove durable effect intent: an integration enabled while an event waits must still be considered at execution. New policy-read failures propagate to retry rather than being interpreted as disabled. The meeting-planning parent now rethrows after logging; previously it swallowed failures and completed the durable job. A recovery regression checks failure propagation and preservation of the source event identity. Meeting, Slack and Teams planning use narrow incident/service selections; the redundant Slack incident read within the same SERIALIZABLE transaction is removed. Provider I/O and lifecycle/generation fences remain in their existing paths.
+
+Configuration-aware outbox omission remains **unimplemented**. Execution-time configuration semantics must be preserved through a durable planning/recovery boundary before omission is safe. A creation-time negative snapshot alone is insufficient. No throughput improvement is credited to these source changes until a controlled native comparison and full downstream gate pass.
+
+
+The controlled host-process A–B–B–A comparison is retained in `local-efficiency-context-{a1,b1,b2,a2}.json`, with exact source hashes and preflight in `local-efficiency-context-provenance.json`. Every run completes the same 1,500 parent and 600 provider-child jobs for 300 default incidents; 300 Runbook jobs are intentionally held outside this diagnostic. Mean statements/incident decreased from 72.795 to 63.845 (~12.3%); process CPU for 300 incidents decreased from 10,206.8 ms to 9,117.6 ms (~10.7%). Elapsed time was 5,332.6 / 4,850.0 ms for baseline and 4,775.7 / 4,697.5 ms for candidate. Shared-host variance and two repetitions limit timing conclusions. The measured candidate is the exact four-file policy/select overlay in the provenance, before the subsequent error-path rethrow; it is not exact-final-revision certification. This is unchanged work with cheaper reads, not no-op elimination, a native image result, or sustainable end-to-end capacity. The ~33/sec native effects baseline and failed 50 RPS downstream gate remain the latest native capacity evidence.
+
+
+Validation for the context/recovery change: full unit suite 954 files / 10,019 tests passed, seven existing tests skipped; final affected-suite rerun 118 tests passed; real PostgreSQL durability suite 74 tests passed (22.56 seconds). Counts overlap and must not be added together. TypeScript passed and modified-source ESLint passed with zero warnings. Independent Bugbot and security review substitutes found no actionable introduced finding; the later parent rethrow received an additional bug-review recheck. These are source/fixture checks, not release certification. The full suite's unrelated generated SSO evidence was restored. Existing kind and other projects were left running; no new image, higher-RPS load, or compact-budget soak was run.
 
 ## Complete provider registry preflight
 

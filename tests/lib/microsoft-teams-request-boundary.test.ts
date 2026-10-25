@@ -25,15 +25,17 @@ vi.mock('@/lib/incident-collaboration/policy', async importOriginal => {
   const actual = await importOriginal<typeof import('@/lib/incident-collaboration/policy')>();
   return {
     ...actual,
-    getGlobalWarRoomPolicy: vi.fn().mockResolvedValue({
-      enabled: true,
-      defaultProviders: ['MICROSOFT_TEAMS'],
-      defaultMeetingProvider: 'MICROSOFT_TEAMS',
-      autoCreateOnUrgency: ['HIGH'],
-      autoCreateOnPriority: ['P1', 'P2'],
-      archiveOnResolve: true,
+    getIncidentCollaborationPolicies: vi.fn().mockResolvedValue({
+      globalPolicy: {
+        enabled: true,
+        defaultProviders: ['MICROSOFT_TEAMS'],
+        defaultMeetingProvider: 'MICROSOFT_TEAMS',
+        autoCreateOnUrgency: ['HIGH'],
+        autoCreateOnPriority: ['P1', 'P2'],
+        archiveOnResolve: true,
+      },
+      servicePolicy: null,
     }),
-    getServiceWarRoomPolicy: vi.fn().mockResolvedValue(null),
   };
 });
 
