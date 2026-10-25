@@ -407,7 +407,7 @@ async function main() {
     DATABASE_POOL_SIZE_INGESTION_WORKER: '5',
     NEXTAUTH_SECRET: randomBytes(32).toString('base64url'),
     API_KEY_SECRET: randomBytes(32).toString('base64url'),
-    ...(workerMetricsChecks || admissionMetricsChecks
+    ...(workerMetricsChecks || admissionMetricsChecks || capacityStage === 'incident-only'
       ? { PROMETHEUS_SCRAPE_TOKEN: randomBytes(32).toString('base64url') }
       : {}),
     ENCRYPTION_KEY: encryptionKey,
