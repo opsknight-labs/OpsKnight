@@ -363,13 +363,16 @@ export default function IncidentsListTable({
 
   // Local displayed list for instant optimistic real-time updates
   const [displayedIncidents, setDisplayedIncidents] = useState<IncidentListItem[]>(incidents);
-  const displayedIncidentIdsRef = useRef<Set<string>>(new Set(incidents.map(i => i.id)));
-  displayedIncidentIdsRef.current = new Set(displayedIncidents.map(incident => incident.id));
-
-  // Sync displayed incidents whenever props.incidents updates from the server
-  useEffect(() => {
+  const [prevIncidents, setPrevIncidents] = useState<IncidentListItem[]>(incidents);
+  if (prevIncidents !== incidents) {
+    setPrevIncidents(incidents);
     setDisplayedIncidents(incidents);
-  }, [incidents]);
+  }
+
+  const displayedIncidentIdsRef = useRef<Set<string>>(new Set(incidents.map(i => i.id)));
+  useEffect(() => {
+    displayedIncidentIdsRef.current = new Set(displayedIncidents.map(incident => incident.id));
+  }, [displayedIncidents]);
 
   const handleStatusChange = useCallback(
     async (incidentId: string, status: IncidentStatus) => {
@@ -408,7 +411,12 @@ export default function IncidentsListTable({
   const rowRefs = useRef<Map<number, HTMLDivElement>>(new Map());
   const lastGTimeRef = useRef<number>(0);
 
-  const mountedAtRef = useRef<number>(Date.now());
+  const mountedAtRef = useRef<number>(0);
+  useEffect(() => {
+    if (!mountedAtRef.current) {
+      mountedAtRef.current = Date.now();
+    }
+  }, []);
   const isPageOne = !pagination || pagination.currentPage === 1;
   const maxItems = pagination?.itemsPerPage ?? Math.max(incidents.length, 15);
   const activeSort = realtimeFilter.sort || 'newest';

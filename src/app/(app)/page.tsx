@@ -88,7 +88,10 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
               <LiveIncidentsPanel
                 services={services}
                 teams={teams}
-                canAcknowledge={hasCapability(actor.role, CAPABILITIES.INCIDENT_ACKNOWLEDGE_SCOPED)}
+                canAcknowledge={
+                  hasCapability(actor.role, CAPABILITIES.OPERATIONS_MANAGE) ||
+                  hasCapability(actor.role, CAPABILITIES.INCIDENT_ACKNOWLEDGE_SCOPED)
+                }
                 canAssignSelf={hasCapability(actor.role, CAPABILITIES.OPERATIONS_MANAGE)}
                 canExport={hasCapability(actor.role, CAPABILITIES.REPORT_EXPORT)}
                 currentUserName={user.name || user.email}

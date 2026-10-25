@@ -21,7 +21,6 @@ type ControlPlaneState = {
 };
 
 declare global {
-  // eslint-disable-next-line no-var
   var realtimeChangeControlPlaneGlobal: ControlPlaneState | undefined;
 }
 

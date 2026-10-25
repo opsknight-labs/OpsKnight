@@ -29,6 +29,7 @@ export function DashboardAnalyticsProvider({
   const requestRef = useRef<AbortController | null>(null);
   const retryTimerRef = useRef<number | null>(null);
   const lastSuccessAtRef = useRef(0);
+  const loadRef = useRef<(() => Promise<void>) | null>(null);
   const stableQuery = useMemo(() => {
     const params = new URLSearchParams();
     for (const [key, value] of Object.entries(query).sort(([a], [b]) => a.localeCompare(b))) {
@@ -81,11 +82,14 @@ export function DashboardAnalyticsProvider({
         const jitteredDelay = retryAfterMs + Math.floor(Math.random() * 1_000);
         retryTimerRef.current = window.setTimeout(() => {
           retryTimerRef.current = null;
-          if (document.visibilityState === 'visible') void load();
+          if (document.visibilityState === 'visible') void loadRef.current?.();
         }, jitteredDelay);
       }
     }
   }, [stableQuery]);
+  useEffect(() => {
+    loadRef.current = load;
+  }, [load]);
 
   useEffect(() => {
     // Historical analytics never compete with the live, above-the-fold projection: the single

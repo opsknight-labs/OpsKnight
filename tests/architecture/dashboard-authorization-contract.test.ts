@@ -17,6 +17,9 @@ describe('dashboard authorization contract', () => {
     // Every live read (incidents and activity) is derived from incidentReadWhere.
     expect(live).toContain('incidentReadWhere(actor)');
     expect(live).toContain('{ incident: scope.where }');
+    // Live on-call and schedule coverage reads are scoped to scheduleReadWhere.
+    expect(live).toContain('scheduleReadWhere(actor)');
+    expect(live).toContain('{ where: scheduleWhere }');
     expect(liveRoute).toContain('getCurrentAuthorizationActor()');
     expect(liveRoute).toContain('.strict()');
     expect(analyticsRoute).toContain('getCurrentAuthorizationActor()');

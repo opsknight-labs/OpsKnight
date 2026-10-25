@@ -2,9 +2,9 @@ import 'server-only';
 
 import type { Prisma } from '@prisma/client';
 import prisma from '@/lib/prisma';
-import { CAPABILITIES, hasCapability } from '@/lib/authorization';
+import { AuthorizationError, CAPABILITIES, hasCapability } from '@/lib/authorization';
 import type { AuthorizationActor } from '@/lib/authorization-policy';
-import { incidentReadWhere } from '@/lib/authorization-filters';
+import { incidentReadWhere, scheduleReadWhere } from '@/lib/authorization-filters';
 import { visibleIncidentSource } from '@/lib/automation/presentation/source-visibility';
 import { getCachedOrFetch } from '@/lib/realtime-cache';
 import { getActiveOnCallShifts } from '@/lib/oncall-shifts';
@@ -204,13 +204,27 @@ async function loadActivity(
   return result.data;
 }
 
-async function loadOnCall(): Promise<LiveOnCallShift[]> {
-  // On-call coverage is time-based and identical for every viewer: one shared minute bucket.
+async function loadOnCall(actor: AuthorizationActor): Promise<LiveOnCallShift[]> {
+  let scheduleWhere: Prisma.OnCallScheduleWhereInput;
+  try {
+    scheduleWhere = scheduleReadWhere(actor);
+  } catch (err) {
+    if (err instanceof AuthorizationError) {
+      return [];
+    }
+    throw err;
+  }
+
+  const isGlobal = Object.keys(scheduleWhere).length === 0;
   const bucket = Math.floor(Date.now() / ONCALL_TTL_MS);
+  const cacheKey = isGlobal
+    ? `live-oncall:global:${bucket}`
+    : `live-oncall:${actor.id}:${bucket}`;
+
   const result = await getCachedOrFetch(
-    `live-oncall:${bucket}`,
+    cacheKey,
     async () =>
-      (await getActiveOnCallShifts(new Date())).map(shift => ({
+      (await getActiveOnCallShifts(new Date(), { where: scheduleWhere })).map(shift => ({
         id: shift.id,
         scheduleId: shift.scheduleId,
         end: shift.end.toISOString(),
@@ -274,12 +288,28 @@ async function loadTrendRows(scope: LiveScope): Promise<LiveTrendRow[]> {
   return result.data;
 }
 
-async function loadSchedules(): Promise<Array<{ id: string; name: string }>> {
+async function loadSchedules(actor: AuthorizationActor): Promise<Array<{ id: string; name: string }>> {
+  let scheduleWhere: Prisma.OnCallScheduleWhereInput;
+  try {
+    scheduleWhere = scheduleReadWhere(actor);
+  } catch (err) {
+    if (err instanceof AuthorizationError) {
+      return [];
+    }
+    throw err;
+  }
+
+  const isGlobal = Object.keys(scheduleWhere).length === 0;
   const bucket = Math.floor(Date.now() / ONCALL_TTL_MS);
+  const cacheKey = isGlobal
+    ? `live-schedules:global:${bucket}`
+    : `live-schedules:${actor.id}:${bucket}`;
+
   const result = await getCachedOrFetch(
-    `live-schedules:${bucket}`,
+    cacheKey,
     () =>
       prisma.onCallSchedule.findMany({
+        where: scheduleWhere,
         select: { id: true, name: true },
         orderBy: { name: 'asc' },
       }),
@@ -320,9 +350,9 @@ export async function getLiveDashboardSnapshot(
   const [{ set, truncated }, activity, onCall, trendRows, schedules] = await Promise.all([
     loadActiveSet(scope, generation),
     loadActivity(scope, generation).catch(() => [] as LiveActivityItem[]),
-    loadOnCall().catch(() => [] as LiveOnCallShift[]),
+    loadOnCall(actor).catch(() => [] as LiveOnCallShift[]),
     loadTrendRows(scope).catch(() => [] as LiveTrendRow[]),
-    loadSchedules().catch(() => [] as Array<{ id: string; name: string }>),
+    loadSchedules(actor).catch(() => [] as Array<{ id: string; name: string }>),
   ]);
   const ctx = { actorId: actor.id, teamIds: [...actor.teamIds], now: Date.now() };
   const derived = deriveLiveProjection(set, query, ctx, limit, { pinIds: options.pinIds });

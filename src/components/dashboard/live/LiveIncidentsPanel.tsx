@@ -80,7 +80,15 @@ const SHORTCUTS: Array<[string, string]> = [
 ];
 
 export function viewAllHref(query: LiveIncidentQuery, currentUserId: string): string {
+  const scopeParams =
+    query.scope === 'mine'
+      ? { assignee: currentUserId }
+      : query.scope === 'teams'
+        ? { teamId: query.teamId ?? 'mine' }
+        : {};
+
   const base = {
+    ...scopeParams,
     ...(query.serviceId ? { serviceId: query.serviceId } : {}),
     ...(query.teamId ? { teamId: query.teamId } : {}),
     ...(query.urgency !== 'all' ? { urgency: query.urgency } : {}),

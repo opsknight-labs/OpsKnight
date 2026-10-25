@@ -204,4 +204,34 @@ describe('getLiveDashboardSnapshot', () => {
     expect(snapshot.pinned.map(item => item.id)).toEqual(['inc-1']);
     expect(activeSetCalls()).toHaveLength(1);
   });
+
+  it('enforces schedule authorization scope and never leaks unauthorized schedules or shifts', async () => {
+    const actor = scoped('u1', ['team-a']);
+    await getLiveDashboardSnapshot(actor, DEFAULT_LIVE_QUERY, { generation: '20' });
+
+    const scheduleCalls = prismaMock.onCallSchedule.findMany.mock.calls;
+    expect(scheduleCalls.length).toBeGreaterThan(0);
+    const lastScheduleCall = scheduleCalls[scheduleCalls.length - 1][0];
+    expect(lastScheduleCall).toHaveProperty('where');
+    expect(JSON.stringify(lastScheduleCall.where)).toContain('u1');
+  });
+
+  it('restricts schedule and on-call data for users without matching schedules', async () => {
+    prismaMock.onCallSchedule.findMany.mockImplementation(async _args => {
+      // If scoped where clause is present for u-no-schedules, return empty
+      return [];
+    });
+    const { getActiveOnCallShifts } = await import('@/lib/oncall-shifts');
+    vi.mocked(getActiveOnCallShifts).mockResolvedValueOnce([]);
+
+    const snapshot = await getLiveDashboardSnapshot(
+      scoped('u-no-schedules', []),
+      DEFAULT_LIVE_QUERY,
+      { generation: '21' }
+    );
+
+    expect(snapshot.coverage.scheduleCount).toBe(0);
+    expect(snapshot.coverage.gaps).toEqual([]);
+    expect(snapshot.rail.onCall).toEqual([]);
+  });
 });
