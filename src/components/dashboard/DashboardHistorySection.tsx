@@ -316,10 +316,10 @@ function ActivityTimeline() {
         !active?.types ||
         (item.type !== null && (active.types as readonly string[]).includes(item.type))
     )
-    .slice(0, 8);
+    .slice(0, 10);
   return (
-    <div className={cn(card, 'p-4')} data-testid="rail-activity">
-      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+    <div className={cn(card, 'flex flex-col h-[340px] p-4')} data-testid="rail-activity">
+      <div className="mb-3 flex shrink-0 flex-wrap items-center justify-between gap-2">
         <h3 className="dash-heading-sm">Recent activity</h3>
         <div role="radiogroup" aria-label="Activity type" className="flex flex-wrap gap-1">
           {ACTIVITY_FILTERS.map(option => (
@@ -342,9 +342,11 @@ function ActivityTimeline() {
         </div>
       </div>
       {visible.length === 0 ? (
-        <p className="py-6 text-center text-xs text-muted-foreground">No matching activity</p>
+        <div className="flex flex-1 items-center justify-center text-center text-xs text-muted-foreground">
+          No matching activity
+        </div>
       ) : (
-        <ol className="space-y-2.5">
+        <ol className="flex-1 space-y-2.5 overflow-y-auto overscroll-contain pr-1.5">
           {visible.map(item => {
             const { icon: Icon, tone } = activityIcon(item.type);
             return (
@@ -358,7 +360,7 @@ function ActivityTimeline() {
                 >
                   <Icon className="h-3.5 w-3.5" />
                 </span>
-                <div className="min-w-0">
+                <div className="min-w-0 flex-1">
                   <p className="line-clamp-2 text-[12px] text-foreground">{item.message}</p>
                   <p className="truncate text-[11px] text-muted-foreground">
                     <Link
@@ -454,11 +456,20 @@ function InsightsContent() {
           />
         </div>
       </div>
-      <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-2">
+      <div className="grid grid-cols-1 items-stretch gap-4 lg:grid-cols-2">
         <ActivityTimeline />
-        <div className={cn(card, 'p-4')} data-testid="insight-team-load">
-          <h3 className="dash-heading-sm mb-2">Team load</h3>
-          <CompactTeamLoad assigneeLoad={data.assigneeLoad} />
+        <div className={cn(card, 'flex flex-col h-[340px] p-4')} data-testid="insight-team-load">
+          <div className="mb-3 flex shrink-0 items-center justify-between">
+            <h3 className="dash-heading-sm">Team load</h3>
+            {data.assigneeLoad && data.assigneeLoad.length > 0 && (
+              <span className="font-mono text-[11px] text-muted-foreground tabular-nums">
+                {data.assigneeLoad.filter(a => a.count > 0).length} active responder{data.assigneeLoad.filter(a => a.count > 0).length === 1 ? '' : 's'}
+              </span>
+            )}
+          </div>
+          <div className="flex-1 overflow-y-auto overscroll-contain pr-1">
+            <CompactTeamLoad assigneeLoad={data.assigneeLoad} />
+          </div>
         </div>
       </div>
       <DashboardAnalyticsHeatmap />
