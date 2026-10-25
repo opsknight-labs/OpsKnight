@@ -9,7 +9,10 @@ export interface IncidentEffectPlan {
   readonly chatOpsRevision: number | null;
 }
 
-export async function planIncidentEffects(): Promise<IncidentEffectPlan> {
+export async function planIncidentEffects(parentAttempt?: number): Promise<IncidentEffectPlan> {
+  // Reclaimed/retried/legacy parents can overlap an older writer whose delivery
+  // is not committed yet. Keep the original unique-key handoff on those paths.
+  if (parentAttempt !== 1) return Object.freeze({ collaboration: 'EXECUTE', chatOpsRevision: null });
   // A missing row is the documented disabled default. Errors must propagate:
   // unavailable configuration is not evidence that work is unnecessary.
   const config = await prisma.chatOpsConfig.findUnique({
