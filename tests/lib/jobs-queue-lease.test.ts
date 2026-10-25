@@ -38,6 +38,7 @@ vi.mock('@/lib/logger', () => ({
 }));
 
 import {
+  claimPendingJobs,
   processJob,
   processPendingGeneralJobs,
   processPendingJobs,
@@ -195,6 +196,23 @@ describe('queued batch lease heartbeat', () => {
 
 describe('claimed job slot refilling', () => {
   afterEach(() => vi.useRealTimers());
+
+  it('rejects conflicting lane selection and invalid critical job types before claims', async () => {
+    vi.clearAllMocks();
+    await expect(
+      claimPendingJobs(5, undefined, [], {
+        criticalEffectsOnly: true,
+        excludeCriticalEffects: true,
+      })
+    ).rejects.toThrow('selected and excluded');
+    await expect(claimPendingJobs(5, 'RUNBOOK', [], { criticalEffectsOnly: true })).rejects.toThrow(
+      'scheduled-task queue'
+    );
+    await expect(
+      processPendingJobsByType('RUNBOOK', 5, 2, { criticalEffectsOnly: true })
+    ).rejects.toThrow('scheduled-task queue');
+    expect(mocks.queryRaw).not.toHaveBeenCalled();
+  });
 
   it('continues independent jobs while one slot is slow and another handler rejects', async () => {
     vi.useFakeTimers();

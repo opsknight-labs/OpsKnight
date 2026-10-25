@@ -52,7 +52,13 @@ import { transformPrometheusToEvent, type PrometheusAlert } from '@/lib/integrat
 import { acquireRetentionResourceLock } from '@/lib/retention/resource-lock';
 import { getIngestionPolicy } from '@/lib/ingestion/policy';
 import { runtimeOperationalMetrics } from '@/lib/metrics/operational/registry';
-import { processPendingJobsByType } from '@/lib/jobs/queue';
+import {
+  claimPendingJobs,
+  claimPendingOperationalJobs,
+  GENERAL_WORKER_EXCLUDED_JOB_TYPES,
+  markJobCompleted,
+  processPendingJobsByType,
+} from '@/lib/jobs/queue';
 import {
   claimWarRoomDelivery,
   claimWarRoomDeliveryById,
@@ -143,6 +149,139 @@ afterAll(async () => {
 });
 
 describe('PostgreSQL ingestion durability', () => {
+  it('processes fallback responder planning while an older general backlog remains untouched', async () => {
+    await prisma.backgroundJob.deleteMany();
+    const noiseIds = Array.from({ length: 1000 }, () => randomUUID());
+    try {
+      await prisma.backgroundJob.createMany({
+        data: noiseIds.map(id => ({
+          id,
+          type: 'SCHEDULED_TASK' as const,
+          scheduledAt: new Date('2000-01-01T00:00:00Z'),
+          payload: { task: 'OWNED_GENERAL_BACKLOG' },
+        })),
+      });
+      await processEvent(envelope(randomUUID()).event, serviceId, 'integration');
+      const incident = await prisma.incident.findFirstOrThrow({ where: { serviceId } });
+      const result = await processPendingJobsByType('SCHEDULED_TASK', 10, 2, {
+        criticalEffectsOnly: true,
+      });
+      expect(result).toEqual({ total: 1, processed: 1, failed: 0 });
+      expect(
+        await prisma.backgroundJob.count({ where: { id: { in: noiseIds }, status: 'PENDING' } })
+      ).toBe(1000);
+      expect(
+        await prisma.backgroundJob.count({
+          where: {
+            type: 'SCHEDULED_TASK' as const,
+            status: 'COMPLETED',
+            AND: [
+              { payload: { path: ['incidentId'], equals: incident.id } },
+              { payload: { path: ['lane'], equals: 'PERSONAL_NOTIFICATION' } },
+            ],
+          },
+        })
+      ).toBe(1);
+    } finally {
+      await prisma.backgroundJob.deleteMany();
+    }
+  });
+
+  it('excludes personal effects from general claims while retaining legacy missing-lane jobs', async () => {
+    await prisma.backgroundJob.deleteMany();
+    const ids = Array.from({ length: 4 }, () => randomUUID());
+    const base = {
+      task: 'EVENT_SIDE_EFFECT',
+      incidentId: serviceId,
+      eventOrderAt: new Date().toISOString(),
+      sourceEventId: randomUUID(),
+      effect: 'TRIGGER_WEBHOOK',
+    };
+    try {
+      await prisma.backgroundJob.createMany({
+        data: [
+          {
+            id: ids[0],
+            type: 'SCHEDULED_TASK' as const,
+            payload: { ...base, lane: 'PERSONAL_NOTIFICATION' },
+          },
+          { id: ids[1], type: 'SCHEDULED_TASK' as const, payload: {} },
+          { id: ids[2], type: 'SCHEDULED_TASK' as const, payload: { ...base, lane: 'WEBHOOK' } },
+          { id: ids[3], type: 'NOTIFICATION' as const, payload: {} },
+        ].map(row => ({ ...row, scheduledAt: new Date('2000-01-01T00:00:00Z') })),
+      });
+      const general = await claimPendingOperationalJobs(4, GENERAL_WORKER_EXCLUDED_JOB_TYPES, {
+        excludeCriticalEffects: true,
+      });
+      expect(general.map(job => job.id).sort()).toEqual(ids.slice(1).sort());
+      expect(await prisma.backgroundJob.findUnique({ where: { id: ids[0] } })).toMatchObject({
+        status: 'PENDING',
+        attempts: 0,
+      });
+      const critical = await claimPendingJobs(4, 'SCHEDULED_TASK', [], {
+        criticalEffectsOnly: true,
+      });
+      expect(critical.map(job => job.id)).toEqual([ids[0]]);
+    } finally {
+      await prisma.backgroundJob.deleteMany();
+    }
+  });
+
+  it('retains personal lifecycle predecessors and stale-token fencing across critical recovery', async () => {
+    await prisma.backgroundJob.deleteMany();
+    const ids = Array.from({ length: 3 }, () => randomUUID());
+    try {
+      await prisma.backgroundJob.createMany({
+        data: ids.map((id, index) => ({
+          id,
+          type: 'SCHEDULED_TASK' as const,
+          scheduledAt: new Date(Date.UTC(2002 - index, 0, 1)),
+          payload: {
+            task: 'EVENT_SIDE_EFFECT',
+            lane: 'PERSONAL_NOTIFICATION',
+            effect:
+              index === 0 ? 'TRIGGER_ESCALATION_NOTIFICATIONS' : 'LIFECYCLE_USER_NOTIFICATION',
+            incidentId: serviceId,
+            sourceEventId: randomUUID(),
+            eventOrderAt: new Date(Date.UTC(2000, 0, 1, 0, 0, index)).toISOString(),
+          },
+        })),
+      });
+      const claim = () => claimPendingJobs(10, 'SCHEDULED_TASK', [], { criticalEffectsOnly: true });
+      const first = await claim();
+      expect(first.map(job => job.id)).toEqual([ids[0]]);
+      await prisma.$executeRaw`UPDATE "BackgroundJob"
+        SET "startedAt" = clock_timestamp() - INTERVAL '21 seconds' WHERE id = ${ids[0]}`;
+      const recovered = await claim();
+      expect(recovered.map(job => job.id)).toEqual([ids[0]]);
+      expect(recovered[0].claimToken).not.toBe(first[0].claimToken);
+      await markJobCompleted(first[0].id, first[0].attempts, first[0].claimToken);
+      expect(await claim()).toEqual([]);
+      expect(await prisma.backgroundJob.findUnique({ where: { id: ids[0] } })).toMatchObject({
+        status: 'PROCESSING',
+        claimToken: recovered[0].claimToken,
+        attempts: 2,
+      });
+      await markJobCompleted(recovered[0].id, recovered[0].attempts, recovered[0].claimToken);
+      const acknowledgment = await claim();
+      expect(acknowledgment.map(job => job.id)).toEqual([ids[1]]);
+      expect(await claim()).toEqual([]);
+      await markJobCompleted(
+        acknowledgment[0].id,
+        acknowledgment[0].attempts,
+        acknowledgment[0].claimToken
+      );
+      const resolution = await claim();
+      expect(resolution.map(job => job.id)).toEqual([ids[2]]);
+      await markJobCompleted(resolution[0].id, resolution[0].attempts, resolution[0].claimToken);
+      expect(
+        await prisma.backgroundJob.count({ where: { id: { in: ids }, status: 'COMPLETED' } })
+      ).toBe(3);
+    } finally {
+      await prisma.backgroundJob.deleteMany();
+    }
+  });
+
   async function createDeliveryFixture(
     stageName = 'ingestion-lease-fixture',
     status: 'PENDING' | 'FAILED' = 'PENDING'

@@ -301,6 +301,15 @@ export interface ClaimJobsOptions {
   readonly runMaintenance?: boolean;
   readonly automationObservationsOnly?: boolean;
   readonly excludeAutomationObservations?: boolean;
+  readonly criticalEffectsOnly?: boolean;
+  readonly excludeCriticalEffects?: boolean;
+}
+
+function validateClaimLane(type: JobType | undefined, options?: ClaimJobsOptions): void {
+  if (options?.criticalEffectsOnly && options.excludeCriticalEffects)
+    throw new Error('Critical effects cannot be selected and excluded together');
+  if (options?.criticalEffectsOnly && type && type !== 'SCHEDULED_TASK')
+    throw new Error('Critical incident effects must use the scheduled-task queue');
 }
 
 export async function runQueueMaintenance(prismaClient = prisma): Promise<QueueMaintenanceResult> {
@@ -382,6 +391,7 @@ export async function claimPendingJobs(
   excludeTypes: readonly JobType[] = [],
   options?: ClaimJobsOptions
 ): Promise<QueuedJob[]> {
+  validateClaimLane(type, options);
   if (options?.runMaintenance) {
     await runQueueMaintenance(prisma).catch(err =>
       logger.warn('[Queue] Explicit maintenance run during job claim failed', { error: err })
@@ -402,6 +412,14 @@ export async function claimPendingJobs(
     ? Prisma.sql`AND NOT (candidate."type"='SCHEDULED_TASK'::"JobType"
         AND candidate.payload->>'task' IS NOT DISTINCT FROM 'AUTOMATION_OBSERVE')`
     : Prisma.empty;
+  const criticalEffect = Prisma.sql`candidate."type"='SCHEDULED_TASK'::"JobType"
+    AND candidate.payload->>'task'='EVENT_SIDE_EFFECT'
+    AND candidate.payload->>'lane'='PERSONAL_NOTIFICATION'`;
+  const criticalEffectFilter = options?.criticalEffectsOnly
+    ? Prisma.sql`AND (${criticalEffect})`
+    : options?.excludeCriticalEffects
+      ? Prisma.sql`AND NOT COALESCE((${criticalEffect}), false)`
+      : Prisma.empty;
   // Expose the live-state bound so PostgreSQL can prove the partial ordered
   // index applies across the type-specific OR branches below.
   return prisma.$queryRaw<QueuedJob[]>(Prisma.sql`
@@ -431,7 +449,7 @@ export async function claimPendingJobs(
             )
           )
         )
-        AND candidate."scheduledAt"<=NOW() AND candidate."attempts"<candidate."maxAttempts" ${typeFilter} ${excludedTypeFilter} ${observationFilter} ${excludedObservationFilter}
+        AND candidate."scheduledAt"<=NOW() AND candidate."attempts"<candidate."maxAttempts" ${typeFilter} ${excludedTypeFilter} ${observationFilter} ${excludedObservationFilter} ${criticalEffectFilter}
         AND (
           candidate."type"<>'SCHEDULED_TASK'::"JobType"
           OR candidate."payload"->>'task' IS DISTINCT FROM 'EVENT_SIDE_EFFECT'
@@ -1643,16 +1661,23 @@ async function processClaimedJobs(pendingJobs: QueuedJob[], concurrency: number)
 
 /** Reserve a bounded observation slice without increasing the worker batch or
  * concurrency. Ordinary work retains at least three quarters of every batch. */
-export async function claimPendingOperationalJobs(limit: number, excludeTypes: readonly JobType[]) {
+export async function claimPendingOperationalJobs(
+  limit: number,
+  excludeTypes: readonly JobType[],
+  options: Pick<ClaimJobsOptions, 'excludeCriticalEffects'> = {}
+) {
   const reserved = Math.min(16, Math.floor(limit / 4));
   if (!reserved || excludeTypes.includes('SCHEDULED_TASK'))
     return claimPendingJobs(limit, undefined, excludeTypes, {
+      ...options,
       excludeAutomationObservations: true,
     });
   const observations = await claimPendingJobs(reserved, 'SCHEDULED_TASK', [], {
+    ...options,
     automationObservationsOnly: true,
   });
   const ordinary = await claimPendingJobs(limit - observations.length, undefined, excludeTypes, {
+    ...options,
     excludeAutomationObservations: true,
   });
   return [...observations, ...ordinary];
@@ -1686,20 +1711,24 @@ export async function processPendingGeneralJobs(
   concurrency: number = 10
 ): Promise<{ processed: number; failed: number; total: number }> {
   validateProcessingConcurrency(concurrency);
-  const pendingJobs = await claimPendingOperationalJobs(limit, GENERAL_WORKER_EXCLUDED_JOB_TYPES);
+  const pendingJobs = await claimPendingOperationalJobs(limit, GENERAL_WORKER_EXCLUDED_JOB_TYPES, {
+    excludeCriticalEffects: true,
+  });
   return processClaimedJobs(pendingJobs, concurrency);
 }
 
 export async function processPendingJobsByType(
   type: JobType,
   limit: number = 50,
-  concurrency: number = 10
+  concurrency: number = 10,
+  options?: Pick<ClaimJobsOptions, 'criticalEffectsOnly'>
 ): Promise<{ processed: number; failed: number; total: number }> {
   validateProcessingConcurrency(concurrency);
+  validateClaimLane(type, options);
   if (isBulkNotificationJob(type) && (await bulkDeliveryPaused())) {
     return { processed: 0, failed: 0, total: 0 };
   }
-  const pendingJobs = await claimPendingJobs(limit, type);
+  const pendingJobs = await claimPendingJobs(limit, type, [], options);
   return processClaimedJobs(pendingJobs, concurrency);
 }
 

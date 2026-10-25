@@ -118,45 +118,14 @@ module.exports = async function prepareNotificationCheck({ prisma, smtpHost, cap
     assert.equal(response.status, 202, 'Paging fixture admission failed');
     const receiptId = (await response.json()).data?.result?.receiptId;
     assert.equal(typeof receiptId, 'string');
-    const deadline = Date.now() + 90000;
-    let captured;
-    let receipt;
-    let notification;
-    while (Date.now() < deadline) {
-      receipt = await prisma.ingestionReceipt.findUniqueOrThrow({ where: { id: receiptId } });
-      assert.notEqual(receipt.status, 'DEAD', 'Paging fixture dead-lettered');
-      const messagesResponse = await fetch(`${captureUrl}/api/v1/messages`, {
-        signal: AbortSignal.timeout(3000),
-      });
-      assert.ok(messagesResponse.ok, 'Owned SMTP capture API unavailable');
-      const { messages } = await messagesResponse.json();
-      captured = messages?.find(
-        message =>
-          message.To?.some(to => to.Address === recipient) && message.Subject?.includes(run)
-      );
-      if (receipt.status === 'COMPLETED') {
-        notification = await prisma.notification.findFirst({
-          where: {
-            incidentId: receipt.result.incidentId,
-            userId: actor.id,
-            channel: 'EMAIL',
-            status: { in: ['SENT', 'DELIVERED'] },
-          },
-        });
-      }
-      if (captured && notification) break;
-      await new Promise(resolve => setTimeout(resolve, 100));
-    }
-    assert.ok(captured, 'Critical page did not reach the owned SMTP capture server');
-    assert.ok(notification, 'Captured critical page lacks a successful durable delivery record');
-    assert.equal(notification.deliveryProvider, 'smtp');
-    assert.ok(notification.providerMessageId);
-    const normalizeMessageId = value => String(value).replace(/^<|>$/g, '');
-    assert.equal(
-      normalizeMessageId(captured.MessageID),
-      normalizeMessageId(notification.providerMessageId),
-      'Captured SMTP message does not match the persisted provider delivery ID'
-    );
+    const { receipt, notification } = await require('./smtp-capture.cjs').observeSmtpDelivery({
+      prisma,
+      receiptId,
+      recipient,
+      userId: actor.id,
+      subjectToken: run,
+      captureUrl,
+    });
     const incident = await prisma.incident.findUniqueOrThrow({
       where: { id: receipt.result.incidentId },
     });

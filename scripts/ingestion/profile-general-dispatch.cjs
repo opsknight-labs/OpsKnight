@@ -5,7 +5,10 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const db = require('../../src/lib/prisma').default;
 const { prepareStageFixture } = require('./capacity-stages.cjs');
-const { processPendingGeneralJobs } = require('../../src/lib/jobs/queue');
+const {
+  processPendingJobs,
+  GENERAL_WORKER_EXCLUDED_JOB_TYPES,
+} = require('../../src/lib/jobs/queue');
 let finishProfile;
 (async () => {
   assert.equal(process.env.OPSKNIGHT_PROCESS_ROLE, 'general-worker');
@@ -19,7 +22,10 @@ let finishProfile;
     processed = 0,
     failed = 0;
   while (performance.now() - started < 120000) {
-    const result = await processPendingGeneralJobs(100, 15);
+    // Benchmark the same operational effects independently of split-lane
+    // ownership. The production unified processor retains all predecessor and
+    // lease checks; the dedicated general worker now excludes personal effects.
+    const result = await processPendingJobs(100, 15, [...GENERAL_WORKER_EXCLUDED_JOB_TYPES]);
     cycles++;
     processed += result.processed;
     failed += result.failed;
@@ -44,6 +50,7 @@ let finishProfile;
     variant: process.env.INGESTION_DISPATCH_VARIANT || 'current-source',
     sourceRevision: process.env.INGESTION_DISPATCH_SOURCE_REVISION || 'working-tree-unverified',
     runtime: process.version,
+    dispatcher: 'unified-operational-v2',
     certifiedEnterprise: false,
     measuredAt: new Date().toISOString(),
     passed,
@@ -58,7 +65,7 @@ let finishProfile;
     queriesPerUnit: databaseProfile.totalQueryCalls / 300,
     databaseProfile,
     scope:
-      'Controlled host-process general-queue diagnostic, 300 default 10KB critical-trigger incidents, no providers/users/Automation; 1,500 parents plus 600 generated child jobs must finish, 300 runbook jobs intentionally held. Source variant is producer-identified; comparisons require controlled source and resources. No native-image, provider, full-stack or sustained capacity certification.',
+      'Controlled host-process unified operational-queue diagnostic, 300 default 10KB critical-trigger incidents, no providers/users/Automation; 1,500 parents plus 600 generated child jobs must finish, 300 runbook jobs intentionally held. This is an execution-cost probe, not a split-general-worker routing test. Source variant is producer-identified; comparisons require controlled source and resources. No native-image, provider, full-stack or sustained capacity certification.',
   };
   const evidencePath =
     process.env.INGESTION_DISPATCH_EVIDENCE ||

@@ -1,8 +1,10 @@
 # Ingestion certification ledger
 
-Date: 2026-10-24. Candidate branch: `feat/enterprise-event-ingestion`.
+Started: 2026-10-24. Updated: 2026-10-25. Candidate branch: `feat/enterprise-event-ingestion`.
 
-Enterprise status: **NOT CERTIFIED. No PR is authorized by this ledger.** The six-phase architecture plan is not complete; see `implementation.md` for the remaining transport, fairness, storage and deployment work.
+Enterprise status: **NOT CERTIFIED. No PR is authorized by this ledger.** The current acceptance plan is [high-throughput-redesign.md](high-throughput-redesign.md): 600 RPS sustained, bounded 1,000 RPS bursts, and independently verified downstream delivery. Earlier entries and targets below are historical evidence; they do not supersede that plan or certify a later revision.
+
+Current implementation status: four native stage diagnostics exist; admission/incident work reduction, shared effect planning, continuous cross-batch refill, million-history verification, and supported resource profiles remain incomplete. Within-batch refill and fenced war-room writes are committed. Critical responder isolation is undergoing source/native verification. The latest full-stack 50 RPS gate failed and retained a growing downstream backlog. No higher full-stack capacity is established.
 
 ## Complete provider registry preflight
 
@@ -542,3 +544,22 @@ Raw A/B/C/D/E evidence and exact source patches/probe snapshots are retained in 
 Kind was restarted after the profiling cycle and is confirmed Ready from both host and container. Its first post-start RBAC check failed transiently and cleared without configuration changes. Native verification of fenced delivery, protection of fallback paging under general saturation, representative Automation/provider/runbook scenarios, historical-storage tests and the broader redesign remain open. Release remains NO-GO; no PR or merge.
 
 Final delivery verification: all 71 PostgreSQL tests passed, including explicit legacy null-expiry completion and failed-terminal non-reclaim checks. The three focused unit suites passed 42 tests. These counts overlap earlier checks. Final source type/lint gates are recorded with the commit; the diagnostic reductions above remain host measurements. Kind was running during the final correctness repeat, so its 82.47-second duration is not compared with earlier test durations or treated as capacity evidence.
+
+### Critical responder lane isolation: source verification in progress
+
+The split critical worker now owns every `EVENT_SIDE_EFFECT / PERSONAL_NOTIFICATION` job, including fallback responder planning and later lifecycle notifications. The split general worker excludes that lane. The original job type, claim tokens, lease recovery, attempts, and per-incident/lane predecessor checks are retained, including TRIGGER → ACK → RESOLVE ordering. Missing task/lane fields remain eligible for legacy general handling. The integrated operational processor continues accepting all those jobs, preserving existing single-process deployments; its shared loop does not provide the same isolation as dedicated critical/general processes.
+
+Migration `20261025020000_background_job_responder_lanes` adds live ordered responder/general indexes without rewriting existing rows. Runtime readiness requires valid indexes. The bounded opposite-lane probe below checks index selection; extra index write costs and sustained behavior remain unverified. No new production environment variable or job enum is required.
+
+A real PostgreSQL repeat passed all 74 ingestion tests, including a 1,000-job older general backlog, legacy payload handling, lifecycle ordering, lease expiry/reclaim and stale-token completion. Five focused unit suites passed 92 tests, including bounded SMTP capture reconciliation and worker health. Type checking and explicit non-ignored modified-file lint passed before the final fixture corrections; final gates and the full unit run remain in progress. Counts overlap previous runs and are not additive.
+
+The optional native certification fixture `INGESTION_DOCKER_RESPONDER_CHECKS=true` requires full-stack SMTP checks and at least 60 seconds of load. It publishes 10,000 valid held general jobs and 10,000 bulk jobs, verifies policy and fallback SMTP delivery with matching durable provider IDs, then verifies a captured LIVE/NO_ESCALATION decision survives a queued configuration change to OFF. It must observe mail within five seconds while pressure remains; this functional profile is separate from sustained capacity gates. Default certification behavior is unchanged. SMTP capture polling is centralized in one helper. Static bug review corrected an erroneous expectation of a personal job for NO_ESCALATION; correct suppression omits that job. Static security substitute review found no introduced actionable issue. Neither is branded bot or release certification.
+
+The first fixture SQL preflight rejected an unconditional suppression rule, as intended by the Automation compiler. After correcting it to match the fixture source, the preflight persisted 10,000 provider deliveries and all 20,000 jobs, with every pressure job held. This proves fixture creation only, not delivery or saturation. Bounded evidence is in `local-responder-preflight.json`. Native tests of the new routing and fenced war-room SQL have not yet run. No RPS increase or certified capacity is claimed; release remains NO-GO with no PR or merge.
+
+
+Final source gates for responder isolation: the full unit run passed 953 files / 10,010 tests, with seven skipped. All 74 real PostgreSQL tests passed. The fixture-rule correction and static review resolution are included in the source; these results do not certify native SMTP delivery.
+
+A rollback-only A–B–B–A probe captured actual production critical and ordinary/general claim SQL against 30,000 synthetic active rows. With the new indexes transactionally removed, critical claims took 42.08 / 45.42 ms; with them present, 1.80 / 2.46 ms, selecting the responder index and examining 50 candidates instead of evaluating about 10,000 predecessors. General claims took 22.71 / 13.36 ms without and 16.12 / 10.76 ms with the new indexes. The general index removed 10,000 personal rows from consideration but still scanned/filtered 10,000 older bulk rows; overlapping timing ranges do not establish a general-lane throughput gain. All claims rolled back and zero jobs remained PROCESSING. Repeated rollback storage churn and warm caches limit comparison. This is neither a million-history test nor application capacity certification. Exact bounded plans, probe source, source hashes and limitations are retained in `local-responder-claim-plans.json`.
+
+Final type checking and explicit non-ignored lint of every modified TypeScript/CommonJS source/test passed with zero errors and warnings. Both substitute static reviews completed; the sole bug finding was fixed and rechecked. No branded bot, provider-delivery or capacity certification is implied.
