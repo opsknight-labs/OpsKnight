@@ -1607,6 +1607,40 @@ function heartbeatClaimedBatch(jobs: QueuedJob[]) {
   return () => clearInterval(timer);
 }
 
+function validateProcessingConcurrency(concurrency: number): void {
+  if (!Number.isSafeInteger(concurrency) || concurrency < 1)
+    throw new Error('Job processing concurrency must be a positive safe integer');
+}
+
+/** Refill a free slot from the already fenced claim batch immediately. Claim
+ * boundaries, predecessor checks and waiting-job heartbeats remain unchanged.
+ * A rejected handler counts as failed without abandoning other claimed jobs.
+ */
+async function processClaimedJobs(pendingJobs: QueuedJob[], concurrency: number) {
+  let cursor = 0;
+  let processed = 0;
+  let failed = 0;
+  const stopHeartbeat = heartbeatClaimedBatch(pendingJobs);
+  try {
+    await Promise.all(
+      Array.from({ length: Math.min(concurrency, pendingJobs.length) }, async () => {
+        while (cursor < pendingJobs.length) {
+          const job = pendingJobs[cursor++];
+          try {
+            if (await processJob(job)) processed++;
+            else failed++;
+          } catch {
+            failed++;
+          }
+        }
+      })
+    );
+  } finally {
+    stopHeartbeat();
+  }
+  return { processed, failed, total: pendingJobs.length };
+}
+
 /** Reserve a bounded observation slice without increasing the worker batch or
  * concurrency. Ordinary work retains at least three quarters of every batch. */
 export async function claimPendingOperationalJobs(limit: number, excludeTypes: readonly JobType[]) {
@@ -1629,6 +1663,7 @@ export async function processPendingJobs(
   concurrency: number = 10,
   additionalExcludedTypes: JobType[] = []
 ): Promise<{ processed: number; failed: number; total: number }> {
+  validateProcessingConcurrency(concurrency);
   const excludeTypes: JobType[] = (await bulkDeliveryPaused())
     ? [
         'STATUS_PAGE_NOTIFICATION',
@@ -1638,23 +1673,7 @@ export async function processPendingJobs(
     : [];
   excludeTypes.push(...additionalExcludedTypes);
   const pendingJobs = await claimPendingOperationalJobs(limit, excludeTypes);
-  let processed = 0;
-  let failed = 0;
-  const stopHeartbeat = heartbeatClaimedBatch(pendingJobs);
-  try {
-    for (let i = 0; i < pendingJobs.length; i += concurrency) {
-      const results = await Promise.allSettled(
-        pendingJobs.slice(i, i + concurrency).map(job => processJob(job))
-      );
-      for (const result of results) {
-        if (result.status === 'fulfilled' && result.value) processed++;
-        else failed++;
-      }
-    }
-  } finally {
-    stopHeartbeat();
-  }
-  return { processed, failed, total: pendingJobs.length };
+  return processClaimedJobs(pendingJobs, concurrency);
 }
 
 /**
@@ -1666,24 +1685,9 @@ export async function processPendingGeneralJobs(
   limit: number = 50,
   concurrency: number = 10
 ): Promise<{ processed: number; failed: number; total: number }> {
+  validateProcessingConcurrency(concurrency);
   const pendingJobs = await claimPendingOperationalJobs(limit, GENERAL_WORKER_EXCLUDED_JOB_TYPES);
-  let processed = 0;
-  let failed = 0;
-  const stopHeartbeat = heartbeatClaimedBatch(pendingJobs);
-  try {
-    for (let i = 0; i < pendingJobs.length; i += concurrency) {
-      const results = await Promise.allSettled(
-        pendingJobs.slice(i, i + concurrency).map(job => processJob(job))
-      );
-      for (const result of results) {
-        if (result.status === 'fulfilled' && result.value) processed++;
-        else failed++;
-      }
-    }
-  } finally {
-    stopHeartbeat();
-  }
-  return { processed, failed, total: pendingJobs.length };
+  return processClaimedJobs(pendingJobs, concurrency);
 }
 
 export async function processPendingJobsByType(
@@ -1691,27 +1695,12 @@ export async function processPendingJobsByType(
   limit: number = 50,
   concurrency: number = 10
 ): Promise<{ processed: number; failed: number; total: number }> {
+  validateProcessingConcurrency(concurrency);
   if (isBulkNotificationJob(type) && (await bulkDeliveryPaused())) {
     return { processed: 0, failed: 0, total: 0 };
   }
   const pendingJobs = await claimPendingJobs(limit, type);
-  let processed = 0;
-  let failed = 0;
-  const stopHeartbeat = heartbeatClaimedBatch(pendingJobs);
-  try {
-    for (let i = 0; i < pendingJobs.length; i += concurrency) {
-      const results = await Promise.allSettled(
-        pendingJobs.slice(i, i + concurrency).map(job => processJob(job))
-      );
-      for (const result of results) {
-        if (result.status === 'fulfilled' && result.value) processed++;
-        else failed++;
-      }
-    }
-  } finally {
-    stopHeartbeat();
-  }
-  return { processed, failed, total: pendingJobs.length };
+  return processClaimedJobs(pendingJobs, concurrency);
 }
 
 export async function cleanupOldJobs(olderThanDays: number = 7): Promise<number> {
