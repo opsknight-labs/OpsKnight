@@ -1,0 +1,8 @@
+{
+  "runId": "e5c39d3d-cc9d-4795-9a48-8b5686fc2b4b",
+  "certifiedEnterprise": false,
+  "cleanupFailures": [],
+  "chaos": [],
+  "error": "Worker-stage profiles use cgroup CPU and direct database connections",
+  "measuredAt": "2026-10-25T07:56:49.374Z"
+}
