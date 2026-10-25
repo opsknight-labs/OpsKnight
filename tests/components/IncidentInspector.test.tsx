@@ -37,7 +37,7 @@ const mockIncident: LiveIncident = {
 };
 
 describe('IncidentInspector', () => {
-  it('renders incident core details, service context, and automation readiness', () => {
+  it('renders incident core details, service context, and honest unconfigured states without fabricated claims', () => {
     render(
       <IncidentInspector
         incident={mockIncident}
@@ -57,9 +57,44 @@ describe('IncidentInspector', () => {
     expect(screen.getByText('Payment API')).toBeDefined();
     expect(screen.getByText('Checkout Team')).toBeDefined();
     expect(screen.getByText('Unassigned')).toBeDefined();
-    expect(screen.getByText('4 alerts')).toBeDefined();
-    expect(screen.getByText('Level 1')).toBeDefined();
-    expect(screen.getByText(/Automated check passed/)).toBeDefined();
+    expect(screen.getByText(/4 signals/)).toBeDefined();
+    expect(screen.getByText('Step 1')).toBeDefined();
+    expect(screen.getByText('No runbook executions')).toBeDefined();
+    expect(screen.getAllByText('Not configured').length).toBeGreaterThan(0);
+  });
+
+  it('renders verified automation, runbook execution outcome, and deduplication telemetry when configured', () => {
+    const verifiedIncident: LiveIncident = {
+      ...mockIncident,
+      dedupKey: 'srv-1:payment-timeout',
+      routeRuleName: 'Payment Gateway Auto-Route',
+      escalationPolicyName: 'Tier 1 SRE Escalation',
+      latestRunbook: {
+        name: 'Restart Gateway Pods',
+        status: 'COMPLETED',
+        completedAt: new Date().toISOString(),
+        failureCode: null,
+      },
+    };
+
+    render(
+      <IncidentInspector
+        incident={verifiedIncident}
+        now={Date.now()}
+        currentUserId="usr-1"
+        canAcknowledge={true}
+        canAssignSelf={true}
+        busy={null}
+        onAcknowledge={vi.fn()}
+        onAssignSelf={vi.fn()}
+        onClose={vi.fn()}
+      />
+    );
+
+    expect(screen.getByText('Payment Gateway Auto-Route')).toBeDefined();
+    expect(screen.getByText('Step 1 · Tier 1 SRE Escalation')).toBeDefined();
+    expect(screen.getByText(/Restart Gateway Pods: Completed/)).toBeDefined();
+    expect(screen.getByText('srv-1:payment-timeout')).toBeDefined();
   });
 
   it('triggers onAcknowledge when acknowledge button is clicked', () => {

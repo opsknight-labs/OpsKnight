@@ -1,5 +1,6 @@
 'use client';
 
+import { useMemo } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Monitor } from 'lucide-react';
@@ -33,6 +34,7 @@ function Metric({
   onClick,
   testId,
   title,
+  variant = 'primary',
 }: {
   label: string;
   value: number | null;
@@ -42,6 +44,7 @@ function Metric({
   onClick: () => void;
   testId: string;
   title: string;
+  variant?: 'primary' | 'secondary';
 }) {
   const valueClass =
     value === null || value === 0
@@ -50,7 +53,9 @@ function Metric({
         ? 'text-rose-400 font-bold'
         : emphasis === 'warning'
           ? 'text-amber-300 font-bold'
-          : 'text-zinc-50 font-bold';
+          : variant === 'secondary'
+            ? 'text-zinc-300 font-semibold'
+            : 'text-zinc-100 font-bold';
   return (
     <button
       type="button"
@@ -60,13 +65,19 @@ function Metric({
       title={title}
       data-icon-button
       className={cn(
-        'group relative min-w-0 bg-[#0c0c0f] px-4 py-3.5 text-left sm:px-5 sm:py-4 outline-none transition-colors',
+        'group relative min-w-0 bg-[#0c0c0f] px-3.5 py-2.5 text-left sm:px-4 sm:py-3 outline-none transition-colors',
         'hover:bg-[#121216] focus-visible:bg-[#121216] focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-zinc-500',
-        active && 'bg-[#141418]'
+        active && 'bg-[#141418]',
+        variant === 'secondary' && 'bg-[#0a0a0d]'
       )}
     >
       <div className="flex items-center justify-between gap-2">
-        <span className="block truncate text-[12px] font-medium text-zinc-400 group-hover:text-zinc-300">
+        <span
+          className={cn(
+            'block truncate text-[11px] sm:text-[12px] font-medium group-hover:text-zinc-300',
+            variant === 'secondary' ? 'text-zinc-500' : 'text-zinc-400'
+          )}
+        >
           {label}
         </span>
         {emphasis === 'critical' && value !== null && value > 0 && (
@@ -78,15 +89,15 @@ function Metric({
       </div>
       <span
         className={cn(
-          'mt-2 block font-display text-[30px] sm:text-[32px] leading-none tabular-nums tracking-[-0.03em]',
+          'mt-1.5 block font-display text-[22px] sm:text-[24px] leading-tight tabular-nums tracking-[-0.02em]',
           valueClass
         )}
       >
         {value !== null && value < 10 && value > 0 ? `0${value}` : (value ?? '—')}
       </span>
-      <span className="mt-2 block truncate text-[12px] text-zinc-500">{context}</span>
+      <span className="mt-1 block truncate text-[11px] text-zinc-500">{context}</span>
       {active && (
-        <span aria-hidden className="absolute inset-x-5 bottom-0 h-0.5 rounded-full bg-zinc-200" />
+        <span aria-hidden className="absolute inset-x-4 bottom-0 h-0.5 rounded-full bg-zinc-200" />
       )}
     </button>
   );
@@ -214,13 +225,30 @@ export default function LiveCommandStrip({
   const lastHour = (count: number | undefined, verb: string) =>
     trend ? (count ? `+${count} ${verb} · last hour` : `None ${verb} · last hour`) : '\u00a0';
 
+  const trendCreated = trend?.created;
+  const trendCreatedCritical = trend?.createdCritical;
+  const velocitySamples = useMemo(() => {
+    if (!trendCreated || trendCreated.length === 0) return null;
+    const slices = trendCreated.slice(-6);
+    const criticalSlices = trendCreatedCritical ? trendCreatedCritical.slice(-6) : [];
+    const max = Math.max(...slices, 1);
+    return slices.map((count, i) => {
+      const isCritical = (criticalSlices.at(i) ?? 0) > 0;
+      return {
+        count,
+        isCritical,
+        heightPct: Math.max(15, Math.round((count / max) * 100)),
+      };
+    });
+  }, [trendCreated, trendCreatedCritical]);
+
   return (
     <section
       data-testid="command-center"
       aria-label="Command center"
-      className="overflow-hidden rounded-xl border border-zinc-800 bg-[#0c0c0f] text-zinc-100"
+      className="overflow-hidden rounded-xl border border-zinc-800 bg-[#0c0c0f] text-zinc-100 shadow-xs"
     >
-      <div className="flex flex-col gap-3 px-5 pb-4 pt-4 lg:flex-row lg:items-start lg:justify-between">
+      <div className="flex flex-col gap-2.5 px-4 pb-3 pt-3 lg:flex-row lg:items-start lg:justify-between sm:px-5 sm:pb-3 sm:pt-3.5">
         <div className="min-w-0">
           <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
             <h1 className="dash-hero-title">Command Center</h1>
@@ -233,21 +261,28 @@ export default function LiveCommandStrip({
             </span>
             <div
               className="hidden sm:inline-flex items-center gap-1.5 rounded-md border border-zinc-800 bg-zinc-900/60 px-2 py-0.5 text-[11px] font-mono text-zinc-400"
-              title="Real-time incident velocity (signals created last hour)"
+              title={`Real-time incident arrival rate: ${trend?.createdLastHour ?? 0} created last hour`}
             >
               <span className="text-[10px] uppercase tracking-wider font-semibold text-zinc-500">Pulse</span>
-              <div className="flex items-end gap-0.5 h-3" aria-hidden>
-                <span className="w-1 rounded-xs bg-zinc-700 h-1.5" />
-                <span className="w-1 rounded-xs bg-zinc-700 h-2" />
-                <span className="w-1 rounded-xs bg-amber-500/70 h-2.5" />
-                <span
-                  className={cn(
-                    'w-1 rounded-xs',
-                    (summary?.critical ?? 0) > 0 ? 'bg-rose-500 h-3 motion-safe:animate-pulse' : 'bg-zinc-600 h-2'
-                  )}
-                />
-                <span className="w-1 rounded-xs bg-emerald-500/70 h-2" />
-              </div>
+              {velocitySamples && velocitySamples.length > 0 && (
+                <div className="flex items-end gap-0.5 h-3" aria-hidden>
+                  {velocitySamples.map((bar, idx) => (
+                    <span
+                      key={idx}
+                      style={{ height: `${bar.heightPct}%` }}
+                      className={cn(
+                        'w-1 rounded-xs transition-all',
+                        bar.isCritical
+                          ? 'bg-rose-500 motion-safe:animate-pulse'
+                          : bar.count > 0
+                            ? 'bg-zinc-400'
+                            : 'bg-zinc-800'
+                      )}
+                      title={`${bar.count} in hour -${6 - idx}`}
+                    />
+                  ))}
+                </div>
+              )}
               <span className="tabular-nums font-semibold text-zinc-300">
                 {trend?.createdLastHour ?? 0}/h
               </span>
@@ -447,6 +482,7 @@ export default function LiveCommandStrip({
           value={summary?.acknowledged ?? null}
           context={lastHour(trend?.acknowledgedLastHour, 'acked')}
           emphasis="none"
+          variant="secondary"
           active={isFocused({ status: 'ACKNOWLEDGED' })}
           onClick={() => focus({ status: 'ACKNOWLEDGED' })}
         />
@@ -461,6 +497,7 @@ export default function LiveCommandStrip({
               : '\u00a0'
           }
           emphasis="none"
+          variant="secondary"
           active={false}
           onClick={() => router.push('/incidents?filter=resolved')}
         />

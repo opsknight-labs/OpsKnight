@@ -16,6 +16,7 @@ export default function DashboardCockpit({ feed, rail }: { feed: ReactNode; rail
     snapshot,
     incidents,
     selectedIncidentId,
+    selectedIncident: providerSelectedIncident,
     selectIncident,
     now,
     currentUserId,
@@ -27,11 +28,13 @@ export default function DashboardCockpit({ feed, rail }: { feed: ReactNode; rail
     assignIncidentToMe,
   } = useLiveDashboard();
 
-  const selectedIncident = selectedIncidentId
-    ? (incidents.find(i => i.id === selectedIncidentId) ??
-      snapshot?.incidents.find(i => i.id === selectedIncidentId) ??
-      null)
-    : null;
+  const selectedIncident =
+    providerSelectedIncident ??
+    (selectedIncidentId
+      ? (incidents.find(i => i.id === selectedIncidentId) ??
+        snapshot?.incidents.find(i => i.id === selectedIncidentId) ??
+        null)
+      : null);
 
   return (
     <div

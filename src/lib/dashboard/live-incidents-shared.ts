@@ -240,6 +240,19 @@ export type LiveIncident = LiveSlaFields & {
   team: { id: string; name: string } | null;
   assignee: { id: string; name: string } | null;
   sla: LiveSlaSignal;
+  /** Dedup key if assigned by inbound alert grouping, otherwise null. */
+  dedupKey?: string | null;
+  /** Service escalation policy name if configured. */
+  escalationPolicyName?: string | null;
+  /** Service automation routing rule matched at incident creation if any. */
+  routeRuleName?: string | null;
+  /** Most recent automated runbook execution status for this incident. */
+  latestRunbook?: {
+    name: string;
+    status: string;
+    completedAt: string | null;
+    failureCode: string | null;
+  } | null;
 };
 
 export type LiveFacetOption = { id: string; name: string; count: number; critical: number };

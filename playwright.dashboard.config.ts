@@ -10,7 +10,10 @@ import { defineConfig, devices } from '@playwright/test';
  *
  * Projects run serially because every project mutates the same fixture dataset.
  */
-const baseURL = process.env.DASHBOARD_BASE_URL || 'http://localhost:3000';
+const port = process.env.PORT || (process.env.CI ? '3100' : '3000');
+const defaultBaseURL = process.env.NEXTAUTH_URL || `http://127.0.0.1:${port}`;
+const baseURL = process.env.DASHBOARD_BASE_URL || defaultBaseURL;
+const useProductionServer = process.env.PLAYWRIGHT_PRODUCTION_SERVER === 'true';
 
 export default defineConfig({
   testDir: './tests/e2e',
@@ -43,9 +46,15 @@ export default defineConfig({
   webServer: process.env.DASHBOARD_BASE_URL
     ? undefined
     : {
-        command: 'npm run dev',
+        command: useProductionServer
+          ? `npm run start:dev -- --hostname 0.0.0.0 --port ${port}`
+          : `npm run dev -- --hostname 0.0.0.0 --port ${port}`,
         url: `${baseURL}/login`,
-        reuseExistingServer: true,
+        reuseExistingServer: !process.env.CI,
         timeout: 180_000,
+        env: {
+          PORT: port,
+          HOSTNAME: '0.0.0.0',
+        },
       },
 });

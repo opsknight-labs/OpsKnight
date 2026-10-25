@@ -4,7 +4,6 @@ import { useEffect } from 'react';
 import Link from 'next/link';
 import {
   ArrowRight,
-  Bot,
   Check,
   ExternalLink,
   Loader2,
@@ -60,6 +59,39 @@ export function IncidentInspector({
   const isTriggered = incident.status === 'OPEN';
   const showAck = canAcknowledge && isTriggered;
   const showAssign = canAssignSelf && !isAssignedToMe;
+
+  // Authoritative escalation status derived from real incident telemetry
+  const escalationState =
+    incident.escalationLevel !== null
+      ? `Step ${incident.escalationLevel}${incident.escalationPolicyName ? ` · ${incident.escalationPolicyName}` : ''}`
+      : !isTriggered
+        ? 'Halted (incident acknowledged)'
+        : incident.escalationPolicyName
+          ? `Policy assigned · ${incident.escalationPolicyName}`
+          : null;
+
+  // Authoritative next action recommendation derived from real state
+  let nextActionText = '';
+  if (isTriggered) {
+    if (!incident.assignee) {
+      nextActionText =
+        'Unassigned and triggered. Assign a responder and acknowledge to halt secondary escalation timeouts.';
+    } else {
+      nextActionText =
+        'Assigned to responder. Acknowledge the incident to confirm ownership and halt secondary escalation timeouts.';
+    }
+  } else {
+    if (incident.sla?.warning === 'BREACHED') {
+      nextActionText =
+        'SLA deadline breached. Mitigate service disruption and update incident timeline.';
+    } else if (incident.sla?.warning === 'APPROACHING') {
+      nextActionText =
+        'SLA deadline approaching. Continue active investigation and remediation.';
+    } else {
+      nextActionText =
+        'Incident acknowledged. Coordinate investigation and resolve once service is restored.';
+    }
+  }
 
   return (
     <section
@@ -213,21 +245,51 @@ export function IncidentInspector({
           <div className="space-y-1.5 text-[11px] text-muted-foreground">
             <div className="flex items-center justify-between gap-2">
               <span>Routing match:</span>
-              <span className="font-medium text-foreground">Service Policy Rule #1</span>
+              {incident.routeRuleName ? (
+                <span className="font-medium text-foreground truncate max-w-[65%]">
+                  {incident.routeRuleName}
+                </span>
+              ) : (
+                <span className="font-mono text-muted-foreground/60">Not configured</span>
+              )}
             </div>
             <div className="flex items-center justify-between gap-2">
               <span>Escalation state:</span>
-              <span className="font-semibold text-foreground">
-                {incident.escalationLevel !== null
-                  ? `Level ${incident.escalationLevel}`
-                  : 'Policy active · Tier 1'}
-              </span>
+              {escalationState ? (
+                <span className="font-semibold text-foreground truncate max-w-[65%]">
+                  {escalationState}
+                </span>
+              ) : (
+                <span className="font-mono text-muted-foreground/60">Not configured</span>
+              )}
             </div>
             <div className="flex items-center justify-between gap-2">
-              <span>Runbook readiness:</span>
-              <span className="inline-flex items-center gap-1 text-emerald-600 dark:text-emerald-400 font-medium">
-                <Bot className="h-3 w-3" aria-hidden /> Automated check passed
-              </span>
+              <span>Runbook execution:</span>
+              {incident.latestRunbook ? (
+                incident.latestRunbook.status === 'COMPLETED' ? (
+                  <span className="inline-flex items-center gap-1 text-emerald-600 dark:text-emerald-400 font-medium truncate max-w-[65%]">
+                    <Check className="h-3 w-3 shrink-0" aria-hidden />
+                    {incident.latestRunbook.name}: Completed
+                  </span>
+                ) : incident.latestRunbook.status === 'FAILED' ? (
+                  <span className="inline-flex items-center gap-1 text-rose-600 dark:text-rose-400 font-medium truncate max-w-[65%]">
+                    <ShieldAlert className="h-3 w-3 shrink-0" aria-hidden />
+                    {incident.latestRunbook.name}: Failed
+                    {incident.latestRunbook.failureCode ? ` (${incident.latestRunbook.failureCode})` : ''}
+                  </span>
+                ) : incident.latestRunbook.status === 'RUNNING' || incident.latestRunbook.status === 'QUEUED' ? (
+                  <span className="inline-flex items-center gap-1 text-amber-600 dark:text-amber-400 font-medium truncate max-w-[65%]">
+                    <Loader2 className="h-3 w-3 shrink-0 animate-spin" aria-hidden />
+                    {incident.latestRunbook.name}: In progress
+                  </span>
+                ) : (
+                  <span className="font-medium text-muted-foreground truncate max-w-[65%]">
+                    {incident.latestRunbook.name}: {incident.latestRunbook.status}
+                  </span>
+                )
+              ) : (
+                <span className="font-mono text-muted-foreground/60">No runbook executions</span>
+              )}
             </div>
           </div>
         </div>
@@ -239,23 +301,28 @@ export function IncidentInspector({
               <ShieldAlert className="h-3.5 w-3.5 text-rose-500" aria-hidden />
               Incoming Signals
             </div>
-            <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-muted-foreground">
-              {incident.alertCount} alert{incident.alertCount === 1 ? '' : 's'}
+            <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-semibold tabular-nums font-mono text-muted-foreground">
+              {incident.alertCount} signal{incident.alertCount === 1 ? '' : 's'}
             </span>
           </div>
-          <p className="text-[11px] leading-relaxed text-muted-foreground">
-            Grouped under service alert deduplication key. Continuous heartbeat monitoring is active.
-          </p>
+          {incident.dedupKey ? (
+            <div className="text-[11px] leading-relaxed text-muted-foreground">
+              <span className="text-zinc-500">Dedup key: </span>
+              <code className="rounded border border-border/70 bg-muted/60 px-1 py-0.5 font-mono text-[10px] text-foreground break-all">
+                {incident.dedupKey}
+              </code>
+            </div>
+          ) : (
+            <p className="text-[11px] leading-relaxed text-muted-foreground">
+              Direct alert trigger (no deduplication key assigned).
+            </p>
+          )}
         </div>
 
         {/* Actionable Guidance */}
         <div className="rounded-lg border border-border/60 bg-muted/20 p-3 text-[11px] space-y-1">
           <span className="font-semibold text-foreground">Recommended Next Action:</span>
-          <p className="text-muted-foreground">
-            {isTriggered
-              ? 'Acknowledge the incident to confirm ownership and halt secondary escalation pager timeouts.'
-              : 'Execute service diagnostics runbook and update status timeline as investigation proceeds.'}
-          </p>
+          <p className="text-muted-foreground leading-relaxed">{nextActionText}</p>
         </div>
       </div>
     </section>

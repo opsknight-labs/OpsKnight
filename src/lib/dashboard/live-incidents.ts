@@ -10,6 +10,7 @@ import { getCachedOrFetch } from '@/lib/realtime-cache';
 import { getActiveOnCallShifts } from '@/lib/oncall-shifts';
 import { observeOperationalHistogram } from '@/lib/metrics/operational/registry';
 import {
+  computeSlaSignal,
   deriveLiveProjection,
   deriveTrend,
   type LiveSetRow,
@@ -21,6 +22,7 @@ import {
   LIVE_INCIDENT_MAX_LIMIT,
   type LiveActivityItem,
   type LiveCoverage,
+  type LiveIncident,
   type LiveIncidentQuery,
   type LiveOnCallShift,
   type LiveSnapshot,
@@ -47,13 +49,20 @@ const liveSetSelect = {
   id: true,
   title: true,
   automationSourceRestricted: true,
-  automationDecision: { select: { incidentId: true } },
+  automationDecision: {
+    select: {
+      incidentId: true,
+      matchedRouteRuleName: true,
+      escalationPolicyNameSnapshot: true,
+    },
+  },
   automationTraces: { select: { incidentId: true }, take: 1 },
   status: true,
   urgency: true,
   priority: true,
   escalationStatus: true,
   currentEscalationStep: true,
+  dedupKey: true,
   createdAt: true,
   updatedAt: true,
   acknowledgedAt: true,
@@ -66,8 +75,25 @@ const liveSetSelect = {
   slaPauseStartedAt: true,
   slaAckElapsedMs: true,
   slaResolveElapsedMs: true,
+  runbookExecutions: {
+    select: {
+      id: true,
+      status: true,
+      runbook: { select: { name: true } },
+      completedAt: true,
+      failureCode: true,
+    },
+    take: 1,
+    orderBy: { createdAt: 'desc' },
+  },
   service: {
-    select: { id: true, name: true, teamId: true, team: { select: { id: true, name: true } } },
+    select: {
+      id: true,
+      name: true,
+      teamId: true,
+      team: { select: { id: true, name: true } },
+      policy: { select: { id: true, name: true } },
+    },
   },
   team: { select: { id: true, name: true } },
   assignee: { select: { id: true, name: true, email: true } },
@@ -146,6 +172,20 @@ async function loadActiveSet(scope: LiveScope, generation: string | null) {
           team: owner ? { id: owner.id, name: owner.name } : null,
           assignee: visible.assignee
             ? { id: visible.assignee.id, name: visible.assignee.name || visible.assignee.email }
+            : null,
+          dedupKey: row.dedupKey ?? null,
+          routeRuleName: row.automationDecision?.matchedRouteRuleName ?? null,
+          escalationPolicyName:
+            row.automationDecision?.escalationPolicyNameSnapshot ??
+            row.service.policy?.name ??
+            null,
+          latestRunbook: row.runbookExecutions?.[0]
+            ? {
+                name: row.runbookExecutions[0].runbook.name,
+                status: row.runbookExecutions[0].status,
+                completedAt: iso(row.runbookExecutions[0].completedAt),
+                failureCode: row.runbookExecutions[0].failureCode ?? null,
+              }
             : null,
         };
       });
@@ -377,4 +417,76 @@ export async function getLiveDashboardSnapshot(
     asOf: new Date().toISOString(),
     generation,
   };
+}
+
+/**
+ * Fetch authoritative live detail for a specific incident within the viewer's
+ * authorization scope, ensuring selection stability even when an incident
+ * is filtered out of the current page projection.
+ */
+export async function getLiveIncidentDetail(
+  actor: AuthorizationActor,
+  incidentId: string
+): Promise<LiveIncident | null> {
+  const scope = resolveLiveScope(actor);
+  const row = await prisma.incident.findFirst({
+    where: { AND: [{ id: incidentId }, scope.where] },
+    select: liveSetSelect,
+  });
+  if (!row) return null;
+
+  const visible = visibleIncidentSource(row, scope.sensitive);
+  const owner = visible.team ?? visible.service.team;
+  const setRow: LiveSetRow = {
+    id: visible.id,
+    title: visible.title,
+    status: visible.status as LiveSetRow['status'],
+    urgency: visible.urgency,
+    priority: visible.priority,
+    escalationStatus: visible.escalationStatus,
+    escalationLevel:
+      visible.escalationStatus === 'ESCALATING' && visible.currentEscalationStep !== null
+        ? visible.currentEscalationStep + 1
+        : null,
+    alertCount: row._count.alerts,
+    responderCount: row._count.watchers,
+    createdAt: visible.createdAt.toISOString(),
+    updatedAt: visible.updatedAt.toISOString(),
+    acknowledgedAt: iso(visible.acknowledgedAt),
+    slaFirstAcknowledgedAt: iso(visible.slaFirstAcknowledgedAt),
+    slaAckTargetMs: visible.slaAckTargetMs,
+    slaResolveTargetMs: visible.slaResolveTargetMs,
+    slaTargetSource: visible.slaTargetSource,
+    slaTargetCapturedAt: iso(visible.slaTargetCapturedAt),
+    slaPausedMs: Number(visible.slaPausedMs ?? 0),
+    slaPauseStartedAt: iso(visible.slaPauseStartedAt),
+    slaAckElapsedMs: num(visible.slaAckElapsedMs),
+    slaResolveElapsedMs: num(visible.slaResolveElapsedMs),
+    service: {
+      id: visible.service.id,
+      name: visible.service.name,
+      teamId: visible.service.teamId,
+    },
+    team: owner ? { id: owner.id, name: owner.name } : null,
+    assignee: visible.assignee
+      ? { id: visible.assignee.id, name: visible.assignee.name || visible.assignee.email }
+      : null,
+    dedupKey: row.dedupKey ?? null,
+    routeRuleName: row.automationDecision?.matchedRouteRuleName ?? null,
+    escalationPolicyName:
+      row.automationDecision?.escalationPolicyNameSnapshot ??
+      row.service.policy?.name ??
+      null,
+    latestRunbook: row.runbookExecutions?.[0]
+      ? {
+          name: row.runbookExecutions[0].runbook.name,
+          status: row.runbookExecutions[0].status,
+          completedAt: iso(row.runbookExecutions[0].completedAt),
+          failureCode: row.runbookExecutions[0].failureCode ?? null,
+        }
+      : null,
+  };
+
+  const sla = computeSlaSignal(setRow, Date.now());
+  return { ...setRow, sla };
 }

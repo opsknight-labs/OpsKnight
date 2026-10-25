@@ -81,6 +81,7 @@ export type LiveDashboardContextValue = {
   density: LiveDensity;
   setDensity: (density: LiveDensity) => void;
   selectedIncidentId: string | null;
+  selectedIncident: LiveIncident | null;
   selectIncident: (id: string | null) => void;
 };
 
@@ -512,8 +513,19 @@ export function LiveDashboardProvider({
     }
   }, [applyDisplayed, scheduleReconcile]);
 
+  const [selectedIncidentId, setSelectedIncidentId] = useState<string | null>(null);
+  const [cachedIncident, setCachedIncident] = useState<LiveIncident | null>(null);
+
   const applyOptimistic = useCallback((id: string, patch: OptimisticPatch) => {
     setOptimistic(current => new Map(current).set(id, { ...current.get(id), ...patch }));
+    setCachedIncident(prev => {
+      if (!prev || prev.id !== id) return prev;
+      return {
+        ...prev,
+        ...(patch.status ? { status: patch.status } : {}),
+        ...(patch.assignee ? { assignee: patch.assignee } : {}),
+      };
+    });
     return () =>
       setOptimistic(current => {
         const next = new Map(current);
@@ -580,10 +592,61 @@ export function LiveDashboardProvider({
   });
   const health: LiveConnectionHealth = baseHealth === 'live' && syncError ? 'stale' : baseHealth;
 
-  const [selectedIncidentId, setSelectedIncidentId] = useState<string | null>(null);
-  const selectIncident = useCallback((id: string | null) => {
-    setSelectedIncidentId(id);
-  }, []);
+  const selectedIncidentInFeed = useMemo(() => {
+    if (!selectedIncidentId) return null;
+    return (
+      incidents.find(i => i.id === selectedIncidentId) ??
+      snapshot?.incidents.find(i => i.id === selectedIncidentId) ??
+      snapshot?.pinned.find(i => i.id === selectedIncidentId) ??
+      snapshot?.attention.find(a => a.incident.id === selectedIncidentId)?.incident ??
+      null
+    );
+  }, [selectedIncidentId, incidents, snapshot]);
+
+  const selectedIncident = useMemo(() => {
+    if (!selectedIncidentId) return null;
+    if (selectedIncidentInFeed) return selectedIncidentInFeed;
+    if (cachedIncident && cachedIncident.id === selectedIncidentId) return cachedIncident;
+    return null;
+  }, [selectedIncidentId, selectedIncidentInFeed, cachedIncident]);
+
+  // If selectedIncidentId is set but not found in current feed/snapshot (e.g. filtered out), fetch it
+  useEffect(() => {
+    if (!selectedIncidentId || selectedIncidentInFeed) return;
+    if (cachedIncident && cachedIncident.id === selectedIncidentId) return;
+
+    let cancelled = false;
+    fetch(`/api/dashboard/live/incidents/${encodeURIComponent(selectedIncidentId)}`)
+      .then(res => (res.ok ? res.json() : null))
+      .then(data => {
+        if (!cancelled && data?.data?.incident) {
+          setCachedIncident(data.data.incident);
+        }
+      })
+      .catch(() => {});
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedIncidentId, selectedIncidentInFeed, cachedIncident]);
+
+  const selectIncident = useCallback(
+    (id: string | null) => {
+      setSelectedIncidentId(id);
+      if (!id) {
+        setCachedIncident(null);
+      } else {
+        const match =
+          incidents.find(i => i.id === id) ??
+          snapshot?.incidents.find(i => i.id === id) ??
+          snapshot?.pinned.find(i => i.id === id) ??
+          snapshot?.attention.find(a => a.incident.id === id)?.incident ??
+          null;
+        if (match) setCachedIncident(match);
+      }
+    },
+    [incidents, snapshot]
+  );
 
   const [busyMap, setBusyMap] = useState<Record<string, 'ack' | 'assign'>>({});
   const { showToast } = useToast();
@@ -671,6 +734,7 @@ export function LiveDashboardProvider({
       density,
       setDensity,
       selectedIncidentId,
+      selectedIncident,
       selectIncident,
     }),
     [
@@ -705,6 +769,7 @@ export function LiveDashboardProvider({
       density,
       setDensity,
       selectedIncidentId,
+      selectedIncident,
       selectIncident,
     ]
   );

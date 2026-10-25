@@ -873,4 +873,30 @@ test.describe.serial('dashboard live incidents', () => {
     await expect(page).toHaveURL(/\/m(\/|$|\?)|\/login/);
     await context.close();
   });
+
+  test('opens incident inspector alongside the live feed with verified operational telemetry and closes via Escape', async ({
+    browser,
+  }, testInfo) => {
+    test.skip(testInfo.project.name.startsWith('mobile'), 'Desktop browser test');
+    const { page, context } = await signIn(browser, ALPHA, testInfo);
+    try {
+      await openDashboard(page, '/?lview=active');
+      await expect(page.getByTestId('live-incidents-panel')).toBeVisible();
+
+      const firstInspectButton = page.getByTestId('live-inspect').first();
+      await expect(firstInspectButton).toBeVisible();
+      await firstInspectButton.click();
+
+      const inspector = page.getByTestId('incident-inspector');
+      await expect(inspector).toBeVisible();
+      await expect(inspector.getByText('Incoming Signals')).toBeVisible();
+      await expect(inspector.getByText('Automation & Escalation')).toBeVisible();
+
+      // Dismiss via Escape key
+      await page.keyboard.press('Escape');
+      await expect(inspector).toHaveCount(0);
+    } finally {
+      await context.close();
+    }
+  });
 });
