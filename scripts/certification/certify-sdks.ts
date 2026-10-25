@@ -1,8 +1,8 @@
-import fs from 'node:fs';
-import path from 'node:path';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
-import { Client as TsClient, ApiError as TsApiError } from '../../sdk/typescript/dist/client.js';
+import { Client as TsClient, ApiError as TsApiError } from '../../sdk/typescript/client';
 
 async function main() {
   console.log('=== Starting Phase 7: Live SDK Certification ===\n');

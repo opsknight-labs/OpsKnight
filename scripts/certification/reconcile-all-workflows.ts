@@ -4,8 +4,17 @@ import fs from 'node:fs';
 import path from 'node:path';
 import crypto, { randomBytes } from 'node:crypto';
 import { PrismaClient } from '@prisma/client';
+import { API_CAPABILITY_CATALOG } from '../../src/lib/api-v2/capability-catalog';
 
-const DATABASE_URL = process.env.DATABASE_URL || 'postgresql://opsknight:bf5efc57520313b61b4950d1ebf4f355@127.0.0.1:55490/opsknight?sslmode=disable';
+function requireEnv(name: string): string {
+  const value = process.env[name];
+  if (!value || value.trim().length === 0) {
+    throw new Error(`[FATAL] Missing mandatory environment variable: ${name}. Configure it in .env or shell environment.`);
+  }
+  return value.trim();
+}
+
+const DATABASE_URL = requireEnv('DATABASE_URL');
 const prisma = new PrismaClient({
   datasources: { db: { url: DATABASE_URL } }
 });
@@ -192,7 +201,6 @@ async function main() {
 
     let classification: WorkflowReconciliationEntry['classification'] = 'CERTIFIED_ATOMIC_MATRIX';
     let summary = '';
-    let verdict: 'PASS' | 'FAIL' = 'PASS';
 
     // Map to 8 primary E2E workflows
     if (cid === 'incident-lifecycle') {
@@ -251,10 +259,36 @@ async function main() {
       summary = `Certified with 100% live HTTP 2xx, 5 auth failure vectors, and OpenAPI schema compliance in 314-operation matrix.`;
     }
 
-    // Collect linked operations from matrix
-    const ops = opMatrix.operations
-      .filter((o: any) => o.path.includes(cid.replace('-', '/')) || o.operationId.toLowerCase().includes(cid.replace('-', '')))
-      .map((o: any) => o.operationId);
+    // Collect linked operations from canonical capability catalog or matrix
+    const cap = API_CAPABILITY_CATALOG.find(c => c.id === cid);
+    const ops = cap?.operationIds && cap.operationIds.length > 0
+      ? [...cap.operationIds]
+      : opMatrix.operations
+          .filter((o: any) => o.path.includes(cid.replace('-', '/')) || o.operationId.toLowerCase().includes(cid.replace('-', '')))
+          .map((o: any) => o.operationId);
+
+    // Evidence-based strict verdict evaluation (no default PASS)
+    let verdict: 'PASS' | 'FAIL' = 'FAIL';
+
+    if (cid === 'slo-management') {
+      verdict = sloPass ? 'PASS' : 'FAIL';
+    } else if (cid === 'audit-export') {
+      verdict = auditPass ? 'PASS' : 'FAIL';
+    } else if (cid === 'incident-metadata' || cid === 'incident-diagnostics') {
+      verdict = incMetaPass ? 'PASS' : 'FAIL';
+    } else if (cid === 'runbook-service-rules') {
+      verdict = rulePass ? 'PASS' : 'FAIL';
+    } else if (cid === 'identity-lifecycle') {
+      verdict = identityPass ? 'PASS' : 'FAIL';
+    } else if (classification === 'SPECIALIZED_PROTOCOL') {
+      verdict = 'PASS';
+    } else {
+      const allOpsPass = ops.length > 0 && ops.every((opId: string) => {
+        const found = opMatrix.operations.find((o: any) => o.operationId === opId);
+        return found && found.overallVerdict === 'PASS';
+      });
+      verdict = allOpsPass ? 'PASS' : 'FAIL';
+    }
 
     results.push({
       capabilityId: cid,
@@ -266,6 +300,12 @@ async function main() {
       evidenceSummary: summary,
       verdict
     });
+  }
+
+  const failedWorkflows = results.filter(r => r.verdict === 'FAIL');
+  if (failedWorkflows.length > 0) {
+    console.error(`[FATAL] ${failedWorkflows.length} workflows failed evidence-based reconciliation:`, failedWorkflows.map(f => f.capabilityId));
+    process.exit(1);
   }
 
   // -------------------------------------------------------------------------

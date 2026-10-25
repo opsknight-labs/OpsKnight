@@ -894,7 +894,7 @@
   "releaseGates": [
     {
       "id": "approved-capability-matrix",
-      "status": "pass",
+      "status": "passed",
       "evidence": [
         "reports/api-v2-certification/fdabcf67b45ae772d9c4413dc4a915f5b1ea3cfc/OPERATION-MATRIX.json (314/314 2xx live responses, 0 non-2xx)",
         "reports/api-v2-certification/fdabcf67b45ae772d9c4413dc4a915f5b1ea3cfc/OPERATION-MATRIX.csv"
@@ -902,7 +902,7 @@
     },
     {
       "id": "security-authorization",
-      "status": "pass",
+      "status": "passed",
       "evidence": [
         "scripts/certification/certify-authorization-isolation.ts (Cross-tenant Team A/B isolation, disabled principal lockout, zero side-effects verified in PostgreSQL)",
         "reports/api-v2-certification/fdabcf67b45ae772d9c4413dc4a915f5b1ea3cfc/SECURITY-REPORT.md"
@@ -910,7 +910,7 @@
     },
     {
       "id": "ui-api-parity",
-      "status": "pass",
+      "status": "passed",
       "evidence": [
         "scripts/certification/certify-ui-api-state-parity.ts (Bidirectional Playwright CDP DOM-to-API state assertions, 100% parity verified)",
         "reports/api-v2-certification/fdabcf67b45ae772d9c4413dc4a915f5b1ea3cfc/UI-VERIFICATION-REPORT.md (33 responsive layout screenshots)"
@@ -918,7 +918,7 @@
     },
     {
       "id": "idempotency-concurrency",
-      "status": "pass",
+      "status": "passed",
       "evidence": [
         "scripts/certification/certify-multi-replica.ts (Cross-replica token revocation, distributed Idempotency-Key deduplication across 2x and 4x replicas)",
         "reports/api-v2-certification/fdabcf67b45ae772d9c4413dc4a915f5b1ea3cfc/RELIABILITY-REPORT.md"
@@ -926,7 +926,7 @@
     },
     {
       "id": "end-to-end-operations",
-      "status": "pass",
+      "status": "passed",
       "evidence": [
         "reports/api-v2-certification/fdabcf67b45ae772d9c4413dc4a915f5b1ea3cfc/WORKFLOW-RECONCILIATION.md (All 31 workflow families reconciled and certified)",
         "reports/api-v2-certification/fdabcf67b45ae772d9c4413dc4a915f5b1ea3cfc/WORKFLOW-MATRIX.md (8 primary domain workflows, 45 atomic steps, 100% pass)"
@@ -934,7 +934,7 @@
     },
     {
       "id": "load-recovery",
-      "status": "pass",
+      "status": "passed",
       "evidence": [
         "scripts/certification/test-auth-flood-admission.ts (Unidentified flood 250 burst shed at limit=16 with Retry-After: 1s, priority lane 100% throughput)",
         "reports/api-v2-certification/fdabcf67b45ae772d9c4413dc4a915f5b1ea3cfc/PERFORMANCE-REPORT.md (k6 10 VU sustained workload: p95=64ms, 0.00% errors, 80.60 RPS)"
@@ -942,14 +942,14 @@
     },
     {
       "id": "developer-experience",
-      "status": "pass",
+      "status": "passed",
       "evidence": [
         "reports/api-v2-certification/fdabcf67b45ae772d9c4413dc4a915f5b1ea3cfc/SDK-REPORT.json (11 TypeScript SDK tests passed, 22 Python SDK tests passed against running services)"
       ]
     },
     {
       "id": "upgrade-safety",
-      "status": "pass",
+      "status": "passed",
       "evidence": [
         "tests/unit/migration-recovery.test.ts, tests/unit/api-v2-openapi-compat.test.ts, tests/lib/api-key-upgrade-compat.test.ts, tests/lib/status-page-contract-compatibility.test.ts, tests/architecture/jira-migration-safety-contract.test.ts, tests/architecture/status-platform-migration-safety.test.ts (26/26 tests passed)"
       ]

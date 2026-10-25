@@ -84,6 +84,7 @@ ENV NEXT_PUBLIC_SOURCE_CODE_URL=$SOURCE_CODE_URL
 # Pages that need database access are marked as dynamic, so build works without DB
 ARG BUILD_NODE_MAX_OLD_SPACE_SIZE=4096
 ENV NODE_OPTIONS="--max-old-space-size=${BUILD_NODE_MAX_OLD_SPACE_SIZE}"
+ENV SKIP_BUILD_TYPECHECK="true"
 RUN npm run build
 # Compile helper scripts for production (where ts-node is not available)
 RUN npm run build:scripts

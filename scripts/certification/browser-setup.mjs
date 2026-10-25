@@ -1,6 +1,19 @@
 import { chromium } from '@playwright/test';
+import dotenv from 'dotenv';
+dotenv.config({ override: true });
+
+function requireEnv(name) {
+  const val = process.env[name];
+  if (!val || val.trim().length === 0) {
+    throw new Error(`[FATAL] Missing mandatory environment variable: ${name}`);
+  }
+  return val.trim();
+}
 
 async function runSetup() {
+  const setupSecret = requireEnv('SETUP_SECRET');
+  const adminPassword = requireEnv('ADMIN_PASSWORD');
+
   const browser = await chromium.launch({ headless: true });
   const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
   const page = await context.newPage();
@@ -11,9 +24,9 @@ async function runSetup() {
   await page.fill('#setup-name', 'Certification Admin');
   await page.fill('#setup-email', 'cert-admin@opsknight.local');
   await page.fill('#setup-app-url', 'http://127.0.0.1:3900');
-  await page.fill('#setup-secret', '0eIZjCqvA2LMprolSFZG0TQF1RQCSXyd');
-  await page.fill('#setup-password', 'P@ssw0rd123!OpsKnightCert');
-  await page.fill('#setup-confirm-password', 'P@ssw0rd123!OpsKnightCert');
+  await page.fill('#setup-secret', setupSecret);
+  await page.fill('#setup-password', adminPassword);
+  await page.fill('#setup-confirm-password', adminPassword);
 
   await page.screenshot({ path: '/tmp/cert-setup-filled-direct.png' });
   console.log('Submitting form via direct web (port 3901)...');

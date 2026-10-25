@@ -3,6 +3,9 @@ import * as React from 'react';
 import { afterEach, afterAll, vi } from 'vitest';
 import { cleanup } from '@testing-library/react';
 
+// Ensure consistent baseline key derivation secrets in unit test runners
+delete process.env.API_KEY_SECRET;
+
 if (typeof HTMLElement !== 'undefined' && !HTMLElement.prototype.scrollIntoView) {
   HTMLElement.prototype.scrollIntoView = vi.fn();
 }

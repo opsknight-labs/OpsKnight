@@ -1,5 +1,5 @@
 {
-  "certifiedAt": "2026-10-24T15:04:58.149Z",
+  "certifiedAt": "2026-10-25T07:11:09.838Z",
   "apiBase": "http://127.0.0.1:3900/api/v2",
   "typescriptSdk": {
     "status": "PASS",
@@ -7,7 +7,7 @@
       {
         "test": "tsClient.call(\"listUsers\")",
         "status": "PASS",
-        "latencyMs": 75
+        "latencyMs": 47
       },
       {
         "test": "tsClient.call(\"getUser\")",
@@ -17,47 +17,47 @@
       {
         "test": "tsClient.call(\"listServices\")",
         "status": "PASS",
-        "latencyMs": 27
+        "latencyMs": 16
       },
       {
         "test": "tsClient.call(\"getService\")",
         "status": "PASS",
-        "latencyMs": 16
+        "latencyMs": 23
       },
       {
         "test": "tsClient.call(\"getIncident\")",
         "status": "PASS",
-        "latencyMs": 16
+        "latencyMs": 18
       },
       {
         "test": "tsClient.paginate(\"listIncidents\")",
         "status": "PASS",
-        "latencyMs": 46
+        "latencyMs": 39
       },
       {
         "test": "tsClient.call(\"createRunbook\")",
         "status": "PASS",
-        "latencyMs": 34
+        "latencyMs": 39
       },
       {
         "test": "tsClient.call(\"validateRunbookDraft\")",
         "status": "PASS",
-        "latencyMs": 15
+        "latencyMs": 19
       },
       {
         "test": "tsClient.call(\"publishRunbookDraft\")",
         "status": "PASS",
-        "latencyMs": 25
+        "latencyMs": 26
       },
       {
         "test": "tsClient error handling on 404",
         "status": "PASS",
-        "latencyMs": 11
+        "latencyMs": 14
       },
       {
         "test": "tsClient error handling on 403 scope denial",
         "status": "PASS",
-        "latencyMs": 9
+        "latencyMs": 13
       }
     ]
   },

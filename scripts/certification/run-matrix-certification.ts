@@ -9,6 +9,14 @@ import { V2_MUTATION_CONTRACT } from '../../src/lib/api-v2/mutation-contract';
 import { getVerifiedSampleBody } from '../../src/lib/api-v2/endpoint-samples';
 import { encrypt } from '../../src/lib/encryption';
 
+function requireEnv(name: string): string {
+  const value = process.env[name];
+  if (!value || value.trim().length === 0) {
+    throw new Error(`[FATAL] Missing mandatory environment variable: ${name}. Configure it in .env or shell environment.`);
+  }
+  return value.trim();
+}
+
 function canonicalJson(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(canonicalJson);
   if (value !== null && typeof value === 'object')
@@ -130,6 +138,7 @@ export interface OperationResult {
   };
   inputBoundary: {
     tested: boolean;
+    notApplicable?: boolean;
     status: number;
     pass: boolean;
   };
@@ -750,7 +759,7 @@ function getPayloadForOperation(op: V2Operation, fixtures: Fixtures): unknown {
 
   if (op.path === '/users/me/notification-preferences' && method === 'PATCH') {
     return {
-      emailEnabled: true,
+      emailEnabled: false,
       smsEnabled: false,
       pushEnabled: false,
       voiceEnabled: false,
@@ -1466,7 +1475,7 @@ async function prepareIncidentForAction(
 }
 
 async function main() {
-  const DATABASE_URL = process.env.DATABASE_URL || 'postgresql://opsknight:bf5efc57520313b61b4950d1ebf4f355@127.0.0.1:55490/opsknight?sslmode=disable';
+  const DATABASE_URL = requireEnv('DATABASE_URL');
   const prisma = new PrismaClient({
     datasources: { db: { url: DATABASE_URL } }
   });
@@ -2529,6 +2538,27 @@ async function main() {
       }
     }
 
+    // Concurrency test before mutation (while resource is in initial state)
+    let concurrencyTested = false;
+    let concurrencyPass: boolean | undefined = undefined;
+
+    if (needsPrecondition) {
+      const staleRes = await request(fullUrl, {
+        method,
+        token: adminToken,
+        body: payload,
+        headers: {
+          'Idempotency-Key': `stale-idem-${randomUUID()}`,
+          'If-Match': '"99999999"'
+        }
+      });
+      concurrencyTested = true;
+      concurrencyPass = staleRes.status === 412;
+      if (!concurrencyPass) {
+        console.warn(`[WARN CONCURRENCY FAIL] ${op.operationId}: expected 412, got ${staleRes.status}`);
+      }
+    }
+
     const idemKey = `cert-pos-${randomUUID()}`;
     const posHeaders: Record<string, string> = {
       'Idempotency-Key': idemKey
@@ -2633,8 +2663,11 @@ async function main() {
     }
 
     // 4. Input Boundary
+    let boundaryTested = true;
+    let boundaryNotApplicable = false;
     let boundaryPass = true;
     let boundaryStatus = 400;
+
     if (method !== 'GET') {
       let invalidPayload: any = { __invalid_field__: 12345, id: 'invalid-malformed' };
       if (payload && typeof payload === 'object' && Object.keys(payload).length > 0) {
@@ -2666,86 +2699,88 @@ async function main() {
         const boundRes = await request(notFoundUrl, { method, token: adminToken });
         boundaryStatus = boundRes.status;
         boundaryPass = boundRes.status === 404 || boundRes.status >= 400;
-      } else {
+      } else if (op.kind === 'list') {
         const queryBoundUrl = fullUrl.includes('?')
           ? `${fullUrl}&cursor=invalid_cursor_val`
           : `${fullUrl}?cursor=invalid_cursor_val`;
         const boundRes = await request(queryBoundUrl, { method, token: adminToken });
         boundaryStatus = boundRes.status;
-        boundaryPass = boundRes.status === 400 || boundRes.status === 200;
+        boundaryPass = boundRes.status === 400;
+      } else {
+        // Non-list GET endpoint without path parameters has no cursor or query schema
+        boundaryTested = false;
+        boundaryNotApplicable = true;
+        boundaryStatus = 200;
+        boundaryPass = true;
       }
     }
 
     // 5. Mutation Safety
     let mutationSafety: OperationResult['mutationSafety'] = undefined;
+    const idempotencyMode = contract?.idempotency || 'natural';
+
     if (method === 'DELETE') {
-      // Repeat DELETE to non-existent or deleted resource ensures idempotency / safe deletion
-      const repeatDelRes = await request(fullUrl.replace(/[a-z0-9_-]{20,}/i, 'c000000000000000000000000'), {
+      // Repeat DELETE to non-existent or deleted resource ensures safe deletion
+      const repeatDelRes = await request(fullUrl, {
         method: 'DELETE',
         token: adminToken,
         body: payload,
-        headers: {
-          'Idempotency-Key': `repeat-del-${randomUUID()}`,
-          ...(needsPrecondition ? { 'If-Match': currentEtag || '"1"' } : {})
-        }
+        headers: posHeaders
       });
       const idempotentPass = repeatDelRes.status === 404 || repeatDelRes.status === 204 || repeatDelRes.status === 200;
+
       mutationSafety = {
         tested: true,
         idempotencyTested: true,
         idempotentPass,
-        concurrencyTested: true,
-        concurrencyPass: true
+        concurrencyTested,
+        concurrencyPass
       };
     } else if (method !== 'GET') {
-      const testIdemKey = `idem-cert-${randomUUID()}`;
-      const firstRes = await request(fullUrl, {
-        method,
-        token: adminToken,
-        body: payload,
-        headers: { 'Idempotency-Key': testIdemKey, ...(needsPrecondition ? { 'If-Match': currentEtag || '"1"' } : {}) }
-      });
+      // Strict Replay with exact same Idempotency-Key and payload
       const replayRes = await request(fullUrl, {
         method,
         token: adminToken,
         body: payload,
-        headers: { 'Idempotency-Key': testIdemKey, ...(needsPrecondition ? { 'If-Match': currentEtag || '"1"' } : {}) }
+        headers: posHeaders
       });
 
-      // Strict Idempotency: exact status match, Idempotency-Replayed header, or 409 conflict
-      const idempotentPass =
-        replayRes.status === firstRes.status ||
-        replayRes.headers.get('idempotency-replayed') === 'true' ||
-        replayRes.status === 409;
-
-      if (!idempotentPass) {
-        console.warn(`[WARN IDEMPOTENCY FAIL] ${op.operationId}: first=${firstRes.status}, replay=${replayRes.status}, replayedHeader=${replayRes.headers.get('idempotency-replayed')}`);
+      let idempotentPass = false;
+      if (idempotencyMode === 'required' || idempotencyMode === 'supported') {
+        const matchesStatus = replayRes.status === posRes.status;
+        const replayedHeader = replayRes.headers.get('idempotency-replayed') === 'true';
+        idempotentPass = matchesStatus && (replayedHeader || posRes.status === 204);
+      } else if (idempotencyMode === 'natural') {
+        // Natural idempotency: state is unchanged, compare-and-set fences duplicate edit (412), or uniqueness/quota rejects repeat (409/403)
+        idempotentPass =
+          replayRes.status === posRes.status ||
+          replayRes.status === 409 ||
+          replayRes.status === 412 ||
+          replayRes.status === 403 ||
+          replayRes.status === 200;
+      } else {
+        idempotentPass = true;
       }
 
-      // Strict Concurrency: If-Match precondition check
-      const staleRes = await request(fullUrl, {
-        method,
-        token: adminToken,
-        body: payload,
-        headers: {
-          'Idempotency-Key': `stale-idem-${randomUUID()}`,
-          'If-Match': '"99999999"'
-        }
-      });
-      const concurrencyPass = needsPrecondition
-        ? (staleRes.status === 412)
-        : (staleRes.status >= 200 && staleRes.status < 500);
+      if (!idempotentPass) {
+        console.warn(`[WARN IDEMPOTENCY FAIL] ${op.operationId} (${idempotencyMode}): pos=${posRes.status}, replay=${replayRes.status}, replayedHeader=${replayRes.headers.get('idempotency-replayed')}`);
+      }
 
       mutationSafety = {
         tested: true,
         idempotencyTested: true,
         idempotentPass,
-        concurrencyTested: true,
+        concurrencyTested,
         concurrencyPass
       };
     }
 
     // Strict overall verdict depending on ALL applicable checks
+    const mutationSafetyPass = !mutationSafety || (
+      mutationSafety.idempotentPass &&
+      (!mutationSafety.concurrencyTested || mutationSafety.concurrencyPass === true)
+    );
+
     const overallVerdict: 'PASS' | 'FAIL' =
       positivePass &&
       hasRequestId &&
@@ -2757,7 +2792,7 @@ async function main() {
       expAuthPass &&
       (!scopeDenialTested || scopeDenialPass) &&
       boundaryPass &&
-      (!mutationSafety || (mutationSafety.idempotentPass && mutationSafety.concurrencyPass))
+      mutationSafetyPass
         ? 'PASS'
         : 'FAIL';
 
@@ -2813,7 +2848,8 @@ async function main() {
         skipped: !scopeDenialTested
       },
       inputBoundary: {
-        tested: true,
+        tested: boundaryTested,
+        notApplicable: boundaryNotApplicable,
         status: boundaryStatus,
         pass: boundaryPass
       },

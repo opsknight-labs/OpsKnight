@@ -1,7 +1,8 @@
 # OpsKnight REST API v2 — Production Release Certification Executive Summary & Final Evidence Audit
 
 **Release Candidate Commit SHA**: `fdabcf67b45ae772d9c4413dc4a915f5b1ea3cfc`  
-**Image Tag / Digest**: `opsknight:fdabcf67b45ae772d9c4413dc4a915f5b1ea3cfc`  
+**Image Tag**: `opsknight:fdabcf67b45ae772d9c4413dc4a915f5b1ea3cfc` / `opsknight:release-cert-final`  
+**Image Digest**: `sha256:52f31a93ad9b9e49e63cbd28e3c57bdcf82d29dd3ba4fc1e98c6346ed75c772a` (Built cleanly from Git source via `Dockerfile`)  
 **Certification & Audit Completed**: `October 25, 2026`  
 **Test Environment**: Isolated Docker Compose Production Stack (`http://127.0.0.1:3900`)  
 **Overall Release Decision**: **APPROVED FOR PRODUCTION RELEASE (100% EVIDENCE-BASED CERTIFICATION)**

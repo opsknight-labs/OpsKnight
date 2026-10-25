@@ -9,6 +9,17 @@ interface ViewportConfig {
   isMobile?: boolean;
 }
 
+import dotenv from 'dotenv';
+dotenv.config({ override: true });
+
+function requireEnv(name: string): string {
+  const value = process.env[name];
+  if (!value || value.trim().length === 0) {
+    throw new Error(`[FATAL] Missing mandatory environment variable: ${name}. Configure it in .env or shell environment.`);
+  }
+  return value.trim();
+}
+
 const VIEWPORTS: ViewportConfig[] = [
   { name: 'desktop', width: 1280, height: 800, isMobile: false },
   { name: 'tablet', width: 768, height: 1024, isMobile: true },
@@ -29,7 +40,7 @@ async function main() {
 
   const origin = 'http://127.0.0.1:3900';
   const adminEmail = 'cert-admin@opsknight.local';
-  const adminPassword = 'CertificationAdmin123!';
+  const adminPassword = requireEnv('ADMIN_PASSWORD');
 
   const browser = await chromium.launch({
     headless: true,

@@ -1,9 +1,18 @@
-import 'dotenv/config';
+import dotenv from 'dotenv';
+dotenv.config({ override: true });
 import { PrismaClient } from '@prisma/client';
 import fs from 'node:fs';
 import path from 'node:path';
 
-const DATABASE_URL = process.env.DATABASE_URL || 'postgresql://opsknight:bf5efc57520313b61b4950d1ebf4f355@127.0.0.1:55490/opsknight?sslmode=disable';
+function requireEnv(name: string): string {
+  const value = process.env[name];
+  if (!value || value.trim().length === 0) {
+    throw new Error(`[FATAL] Missing mandatory environment variable: ${name}. Configure it in .env or shell environment.`);
+  }
+  return value.trim();
+}
+
+const DATABASE_URL = requireEnv('DATABASE_URL');
 const prisma = new PrismaClient({
   datasources: { db: { url: DATABASE_URL } }
 });

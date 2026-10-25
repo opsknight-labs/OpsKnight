@@ -6,8 +6,16 @@ import { PrismaClient } from '@prisma/client';
 import { createHmac, randomBytes } from 'node:crypto';
 import { API_SCOPES } from '../../src/lib/authorization';
 
-const DATABASE_URL = process.env.DATABASE_URL || 'postgresql://opsknight:bf5efc57520313b61b4950d1ebf4f355@127.0.0.1:55490/opsknight?sslmode=disable';
-const API_KEY_SECRET = process.env.API_KEY_SECRET || 'd63f3fab7ed1d4bd07d921fac8ec8104b29f34e2587d62ccca2f6093a4f8934f';
+function requireEnv(name: string): string {
+  const value = process.env[name];
+  if (!value || value.trim().length === 0) {
+    throw new Error(`[FATAL] Missing mandatory environment variable: ${name}. Configure it in .env or shell environment.`);
+  }
+  return value.trim();
+}
+
+const DATABASE_URL = requireEnv('DATABASE_URL');
+const API_KEY_SECRET = requireEnv('API_KEY_SECRET');
 
 const prisma = new PrismaClient({
   datasources: { db: { url: DATABASE_URL } }
@@ -242,6 +250,21 @@ async function main() {
   // Verify all 4 containers healthy
   const psOutput = execSync('docker ps --filter "name=opsknight-cert-v2-web" --format "{{.Names}}: {{.Status}}"').toString();
   console.log('Active web containers:\n' + psOutput.trim());
+
+  console.log('Verifying traffic distribution across all 4 distinct backends...');
+  const servedBy4 = new Map<string, number>();
+  for (let i = 0; i < 40; i++) {
+    const res = await fetch(`${proxyBase}/teams`, {
+      headers: { 'Authorization': `Bearer ${fixtures.tokens.admin}` }
+    });
+    const backend = res.headers.get('x-served-by') || 'unknown';
+    servedBy4.set(backend, (servedBy4.get(backend) || 0) + 1);
+  }
+  console.log('Four-Replica Traffic Distribution (X-Served-By):', Object.fromEntries(servedBy4.entries()));
+  if (servedBy4.size < 4) {
+    throw new Error(`Traffic reached only ${servedBy4.size} backend(s) in 4-replica topology. Expected all 4 distinct replicas.`);
+  }
+  console.log('Four-Replica Distribution Verified: Traffic successfully reached all 4 distinct replicas.');
 
   // Launch sustained 40-request burst across all 4 replicas while killing container #4
   console.log('Dispatching 40 in-flight requests while terminating replica web-4...');

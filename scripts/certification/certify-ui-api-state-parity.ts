@@ -4,7 +4,15 @@ import fs from 'node:fs';
 import { chromium } from '@playwright/test';
 import { PrismaClient } from '@prisma/client';
 
-const DATABASE_URL = process.env.DATABASE_URL || 'postgresql://opsknight:bf5efc57520313b61b4950d1ebf4f355@127.0.0.1:55490/opsknight?sslmode=disable';
+function requireEnv(name: string): string {
+  const value = process.env[name];
+  if (!value || value.trim().length === 0) {
+    throw new Error(`[FATAL] Missing mandatory environment variable: ${name}. Configure it in .env or shell environment.`);
+  }
+  return value.trim();
+}
+
+const DATABASE_URL = requireEnv('DATABASE_URL');
 const prisma = new PrismaClient({
   datasources: { db: { url: DATABASE_URL } }
 });
@@ -20,7 +28,7 @@ async function main() {
   const adminToken = fixtures.tokens.admin;
 
   const adminEmail = 'cert-admin@opsknight.local';
-  const adminPassword = 'CertificationAdmin123!';
+  const adminPassword = requireEnv('ADMIN_PASSWORD');
 
   const browser = await chromium.launch({
     headless: true,
@@ -211,8 +219,14 @@ async function main() {
   });
   console.log(`Timeline events found in PostgreSQL: ${dbEvents.length}`);
 
-  if (events.length === 0 || dbEvents.length === 0) {
-    throw new Error('Zero timeline events found in API or database!');
+  if (events.length === 0 || dbEvents.length === 0 || events.length !== dbEvents.length) {
+    throw new Error(`Timeline count mismatch! API returned ${events.length} events, PostgreSQL has ${dbEvents.length}`);
+  }
+  const dbEventIds = new Set(dbEvents.map(e => e.id));
+  for (const ev of events) {
+    if (!dbEventIds.has(ev.id)) {
+      throw new Error(`Timeline event ${ev.id} returned by API does not exist in PostgreSQL!`);
+    }
   }
   console.log('Workflow 4 Parity: PASSED (Verified end-to-end database persistence).\n');
 
