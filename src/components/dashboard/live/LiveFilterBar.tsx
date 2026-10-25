@@ -81,7 +81,7 @@ function FacetCombobox({
           className={cn(
             controlClass,
             'justify-between gap-1.5 font-normal',
-            value && 'border-primary/50 bg-primary/5 text-primary',
+            value && 'border-primary/50 bg-primary/5 font-medium text-primary',
             className
           )}
         >
@@ -94,10 +94,13 @@ function FacetCombobox({
           <ChevronsUpDown className="h-3.5 w-3.5 shrink-0 opacity-50" aria-hidden />
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-[18rem] rounded-lg p-0 shadow-lg" align="start">
+      <PopoverContent
+        className="w-[21rem] overflow-hidden rounded-xl border border-border/80 p-0 shadow-xl dark:border-zinc-800 dark:shadow-2xl dark:shadow-black/60"
+        align="start"
+      >
         <Command>
-          <CommandInput placeholder={`Search ${label.toLowerCase()}s…`} className="h-8 text-xs" />
-          <CommandList className="max-h-[280px]">
+          <CommandInput placeholder={`Search ${label.toLowerCase()}s…`} />
+          <CommandList className="max-h-[280px] p-1">
             <CommandEmpty className="py-4 text-center text-xs text-muted-foreground">
               No {label.toLowerCase()}s found.
             </CommandEmpty>
@@ -108,10 +111,12 @@ function FacetCombobox({
                   onChange(null);
                   setOpen(false);
                 }}
-                className="cursor-pointer text-xs"
+                className="cursor-pointer text-xs font-medium text-muted-foreground hover:text-foreground"
               >
                 <span className="flex-1">All {label.toLowerCase()}s</span>
-                {!value && <Check className="h-3.5 w-3.5 text-primary" aria-hidden />}
+                <span className="flex h-3.5 w-3.5 items-center justify-center">
+                  {!value && <Check className="h-3.5 w-3.5 text-primary" aria-hidden />}
+                </span>
               </CommandItem>
               {options.map(option => (
                 <CommandItem
@@ -122,25 +127,31 @@ function FacetCombobox({
                     onChange(option.id);
                     setOpen(false);
                   }}
-                  className="cursor-pointer text-xs"
+                  className="group cursor-pointer px-2.5 py-1.5 text-xs"
                 >
-                  <span className="flex-1 truncate">{option.name}</span>
-                  {option.critical > 0 && (
-                    <span className="ml-2 rounded bg-rose-500/10 px-1 text-[10px] font-bold text-rose-600 dark:text-rose-400">
-                      {option.critical} crit
-                    </span>
-                  )}
-                  <span
-                    className={cn(
-                      'ml-2 min-w-6 rounded px-1 text-center text-[10px] font-semibold tabular-nums',
-                      option.count > 0 ? 'bg-muted text-foreground' : 'text-muted-foreground/60'
+                  <span className="flex-1 truncate font-medium text-foreground">{option.name}</span>
+                  <div className="flex shrink-0 items-center gap-1.5 pl-2">
+                    {option.critical > 0 && (
+                      <span className="rounded border border-rose-500/25 bg-rose-500/10 px-1.5 py-0.2 font-mono text-[9px] font-semibold text-rose-600 dark:text-rose-400">
+                        {option.critical} crit
+                      </span>
                     )}
-                  >
-                    {option.count}
-                  </span>
-                  {option.id === value && (
-                    <Check className="ml-1 h-3.5 w-3.5 text-primary" aria-hidden />
-                  )}
+                    <span
+                      className={cn(
+                        'min-w-5 rounded px-1 text-center font-mono text-[10px] tabular-nums',
+                        option.count > 0
+                          ? 'bg-muted font-medium text-foreground'
+                          : 'text-muted-foreground/60'
+                      )}
+                    >
+                      {option.count}
+                    </span>
+                    <span className="flex h-3.5 w-3.5 items-center justify-center">
+                      {option.id === value && (
+                        <Check className="h-3.5 w-3.5 text-primary" aria-hidden />
+                      )}
+                    </span>
+                  </div>
                 </CommandItem>
               ))}
             </CommandGroup>
@@ -157,45 +168,60 @@ function Segmented<T extends string>({
   options,
   onChange,
   testId,
+  cols,
 }: {
   label: string;
   value: T;
   options: Array<{ value: T; label: string; count?: number }>;
   onChange: (value: T) => void;
   testId: string;
+  cols?: string;
 }) {
   return (
     <fieldset>
-      <legend className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+      <legend className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
         {label}
       </legend>
       <div
         role="radiogroup"
         aria-label={label}
-        className="grid grid-cols-[repeat(auto-fit,minmax(5.75rem,1fr))] gap-1"
+        className={cn(
+          'grid gap-1 rounded-lg border border-border/60 bg-muted/30 p-1 dark:bg-zinc-900/40',
+          cols ?? 'grid-cols-3'
+        )}
         data-testid={testId}
       >
-        {options.map(option => (
-          <button
-            key={option.value}
-            type="button"
-            role="radio"
-            aria-checked={value === option.value}
-            data-value={option.value}
-            onClick={() => onChange(option.value)}
-            className={cn(
-              'whitespace-nowrap rounded-md border px-2 py-1 text-[11px] font-medium outline-none focus-visible:ring-2 focus-visible:ring-primary/50',
-              value === option.value
-                ? 'border-primary/50 bg-primary/10 text-primary'
-                : 'border-border bg-card text-foreground hover:bg-muted'
-            )}
-          >
-            {option.label}
-            {option.count !== undefined && (
-              <span className="ml-1 tabular-nums text-muted-foreground">{option.count}</span>
-            )}
-          </button>
-        ))}
+        {options.map(option => {
+          const selected = value === option.value;
+          return (
+            <button
+              key={option.value}
+              type="button"
+              role="radio"
+              aria-checked={selected}
+              data-value={option.value}
+              onClick={() => onChange(option.value)}
+              className={cn(
+                'flex items-center justify-center gap-1 rounded-md px-2 py-1 text-xs font-medium transition-all outline-none focus-visible:ring-2 focus-visible:ring-primary/50',
+                selected
+                  ? 'border border-border/80 bg-background font-semibold text-foreground shadow-2xs'
+                  : 'border border-transparent text-muted-foreground hover:bg-background/40 hover:text-foreground'
+              )}
+            >
+              <span>{option.label}</span>
+              {option.count !== undefined && (
+                <span
+                  className={cn(
+                    'font-mono text-[10px] tabular-nums',
+                    selected ? 'font-semibold text-primary' : 'text-muted-foreground/80'
+                  )}
+                >
+                  {option.count}
+                </span>
+              )}
+            </button>
+          );
+        })}
       </div>
     </fieldset>
   );
@@ -207,13 +233,13 @@ function LiveViewPicker() {
   const counts = new Map(Object.entries(snapshot?.facets.views ?? {}));
   return (
     <fieldset>
-      <legend className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-        Show
+      <legend className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+        View
       </legend>
       <div
         role="radiogroup"
         aria-label="Live incident view"
-        className="grid grid-cols-[repeat(auto-fit,minmax(5.75rem,1fr))] gap-1"
+        className="grid grid-cols-2 gap-1.5"
       >
         {LIVE_INCIDENT_VIEWS.map(view => {
           const active = query.view === view;
@@ -227,15 +253,22 @@ function LiveViewPicker() {
               data-testid={`live-view-${view}`}
               onClick={() => setQuery({ view })}
               className={cn(
-                'flex items-center justify-between gap-1 rounded-md border px-2 py-1 text-left text-[11px] font-medium outline-none focus-visible:ring-2 focus-visible:ring-primary/50',
+                'flex items-center justify-between gap-1.5 rounded-lg border px-2.5 py-1.5 text-left text-xs font-medium transition-all outline-none focus-visible:ring-2 focus-visible:ring-primary/50',
                 active
-                  ? 'border-primary/50 bg-primary/10 text-primary'
-                  : 'border-border bg-card text-foreground hover:bg-muted'
+                  ? 'border-primary/60 bg-primary/10 font-semibold text-primary shadow-2xs'
+                  : 'border-border/70 bg-card text-foreground hover:border-border hover:bg-muted/60'
               )}
             >
               <span className="truncate">{liveViewLabel(view)}</span>
               {count !== undefined && (
-                <span className="tabular-nums text-muted-foreground">{count}</span>
+                <span
+                  className={cn(
+                    'rounded px-1 font-mono text-[10px] tabular-nums',
+                    active ? 'bg-primary/20 font-bold text-primary' : 'bg-muted/60 text-muted-foreground'
+                  )}
+                >
+                  {count}
+                </span>
               )}
             </button>
           );
@@ -349,11 +382,38 @@ export function LiveToolbar({
         <PopoverContent
           align="end"
           collisionPadding={12}
-          className="max-h-[min(36rem,var(--radix-popover-content-available-height))] w-[22rem] max-w-[calc(100vw-2rem)] space-y-3 overflow-y-auto overscroll-contain p-3"
+          className="max-h-[min(38rem,var(--radix-popover-content-available-height))] w-[23rem] max-w-[calc(100vw-2rem)] space-y-3.5 overflow-y-auto overscroll-contain p-3.5 rounded-xl border border-border/80 shadow-xl dark:border-zinc-800 dark:shadow-2xl dark:shadow-black/60"
         >
+          <div className="flex items-center justify-between border-b border-border/60 pb-2.5">
+            <div className="flex items-center gap-1.5">
+              <SlidersHorizontal className="h-3.5 w-3.5 text-muted-foreground" aria-hidden />
+              <span className="text-xs font-semibold tracking-tight text-foreground">Filter Incidents</span>
+              {moreCount > 0 && (
+                <span className="rounded-full bg-primary/15 px-1.5 py-0.2 font-mono text-[10px] font-bold text-primary">
+                  {moreCount} active
+                </span>
+              )}
+            </div>
+            {moreCount > 0 && (
+              <button
+                type="button"
+                onClick={() =>
+                  setQuery({
+                    teamId: null,
+                    status: 'all',
+                    urgency: 'all',
+                    assignment: 'all',
+                  })
+                }
+                className="text-[11px] font-medium text-muted-foreground hover:text-foreground transition-colors outline-none focus-visible:underline"
+              >
+                Reset all
+              </button>
+            )}
+          </div>
           <LiveViewPicker />
           <div>
-            <p className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+            <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
               Team
             </p>
             <FacetCombobox
@@ -377,46 +437,19 @@ export function LiveToolbar({
               { value: 'ACKNOWLEDGED', label: 'Acked', count: facets?.status.ACKNOWLEDGED },
             ]}
           />
-          <fieldset>
-            <legend className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-              Urgency
-            </legend>
-            <div
-              role="radiogroup"
-              aria-label="Urgency"
-              className="grid grid-cols-4 gap-1"
-              data-testid="live-filter-urgency"
-            >
-              {(
-                [
-                  ['all', 'Any', undefined],
-                  ['HIGH', 'High', facets?.urgency.HIGH],
-                  ['MEDIUM', 'Med', facets?.urgency.MEDIUM],
-                  ['LOW', 'Low', facets?.urgency.LOW],
-                ] as const
-              ).map(([value, label, count]) => (
-                <button
-                  key={value}
-                  type="button"
-                  role="radio"
-                  aria-checked={query.urgency === value}
-                  data-value={value}
-                  onClick={() => setQuery({ urgency: value })}
-                  className={cn(
-                    'rounded-md border px-1.5 py-1 text-[11px] font-medium outline-none focus-visible:ring-2 focus-visible:ring-primary/50',
-                    query.urgency === value
-                      ? 'border-primary/50 bg-primary/10 text-primary'
-                      : 'border-border bg-card text-foreground hover:bg-muted'
-                  )}
-                >
-                  {label}
-                  {count !== undefined && (
-                    <span className="ml-1 tabular-nums text-muted-foreground">{count}</span>
-                  )}
-                </button>
-              ))}
-            </div>
-          </fieldset>
+          <Segmented
+            label="Urgency"
+            testId="live-filter-urgency"
+            value={query.urgency}
+            onChange={urgency => setQuery({ urgency })}
+            cols="grid-cols-4"
+            options={[
+              { value: 'all', label: 'Any' },
+              { value: 'HIGH', label: 'High', count: facets?.urgency.HIGH },
+              { value: 'MEDIUM', label: 'Med', count: facets?.urgency.MEDIUM },
+              { value: 'LOW', label: 'Low', count: facets?.urgency.LOW },
+            ]}
+          />
           <Segmented
             label="Assignment"
             testId="live-filter-assignment"
@@ -428,11 +461,11 @@ export function LiveToolbar({
               { value: 'assigned', label: 'Assigned', count: facets?.assignment.assigned },
             ]}
           />
-          <p className="border-t border-border pt-2 text-[11px] text-muted-foreground">
+          <p className="border-t border-border/60 pt-2.5 text-[11px] text-muted-foreground">
             Snoozed and suppressed incidents are not active.{' '}
             <Link
               href="/incidents?filter=muted"
-              className="font-semibold text-primary hover:underline"
+              className="font-medium text-primary hover:underline"
             >
               View muted incidents
             </Link>
