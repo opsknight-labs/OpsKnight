@@ -1,27 +1,27 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 
-const read = (path: string) => readFileSync(path, 'utf8');
-
 describe('dashboard live command contract', () => {
-  const page = read('src/app/(app)/page.tsx');
-  const provider = read('src/components/dashboard/live/LiveDashboardProvider.tsx');
+  const page = readFileSync('src/app/(app)/page.tsx', 'utf8');
+  const provider = readFileSync('src/components/dashboard/live/LiveDashboardProvider.tsx', 'utf8');
   const liveFiles = [
     provider,
-    read('src/components/dashboard/live/LiveIncidentsPanel.tsx'),
-    read('src/components/dashboard/live/LiveCommandStrip.tsx'),
-    read('src/components/dashboard/live/ResponderRail.tsx'),
-    read('src/components/dashboard/live/LiveWallboard.tsx'),
+    readFileSync('src/components/dashboard/live/LiveIncidentsPanel.tsx', 'utf8'),
+    readFileSync('src/components/dashboard/live/LiveCommandStrip.tsx', 'utf8'),
+    readFileSync('src/components/dashboard/live/ResponderRail.tsx', 'utf8'),
+    readFileSync('src/components/dashboard/live/LiveWallboard.tsx', 'utf8'),
   ];
-  const wallboardPage = read('src/app/(kiosk)/wallboard/page.tsx');
-  const kioskLayout = read('src/app/(kiosk)/layout.tsx');
+  const wallboardPage = readFileSync('src/app/(kiosk)/wallboard/page.tsx', 'utf8');
+  const kioskLayout = readFileSync('src/app/(kiosk)/layout.tsx', 'utf8');
 
-  it('orders the page: command strip, live feed, services/activity, rail, then trends', () => {
+  it('orders the page: command center, live feed beside Ops Pulse, responders, then trends', () => {
     const order = [
       '<LiveCommandStrip',
+      '<DashboardCockpit',
       '<LiveIncidentsPanel',
-      '<ServicesAtRiskCard',
-      '<MyQueueCard',
+      '<OpsPulsePanel',
+      '<OnCallCard',
+      '<ActivityCard',
       '<DashboardHistorySection',
     ].map(marker => page.indexOf(marker));
     expect(order.every(index => index > -1)).toBe(true);
@@ -45,8 +45,8 @@ describe('dashboard live command contract', () => {
   });
 
   it('keeps live data independent from historical reporting dates', () => {
-    const shared = read('src/lib/dashboard/live-incidents-shared.ts');
-    const live = read('src/lib/dashboard/live-incidents.ts');
+    const shared = readFileSync('src/lib/dashboard/live-incidents-shared.ts', 'utf8');
+    const live = readFileSync('src/lib/dashboard/live-incidents.ts', 'utf8');
     expect(live).not.toMatch(/createdAt:\s*\{\s*(gte|lte)/);
     expect(shared).not.toContain('createdBefore');
     expect(page).not.toContain('createdBefore');

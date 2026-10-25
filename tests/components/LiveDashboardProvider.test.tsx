@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { act, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DEFAULT_LIVE_QUERY, type LiveSnapshot } from '@/lib/dashboard/live-incidents-shared';
@@ -14,6 +15,7 @@ const realtime = vi.hoisted(() => ({
   },
 }));
 vi.mock('@/hooks/useRealtime', () => ({ useRealtime: () => realtime.value }));
+vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn() }) }));
 
 import {
   LIVE_QUERY_STORAGE_PREFIX,
@@ -74,9 +76,13 @@ function snapshot(ids: string[], query = DEFAULT_LIVE_QUERY): LiveSnapshot {
   };
 }
 
-let api: ReturnType<typeof useLiveDashboard>;
+const holder: { current: ReturnType<typeof useLiveDashboard> | null } = { current: null };
 function Probe() {
-  api = useLiveDashboard();
+  const value = useLiveDashboard();
+  useEffect(() => {
+    holder.current = value;
+  });
+  const api = value;
   return (
     <div>
       <span data-testid="ids">{api.incidents.map(item => item.id).join(',')}</span>
@@ -136,13 +142,13 @@ describe('LiveDashboardProvider', () => {
 
   it('buffers updates while paused and applies them on resume', async () => {
     mount();
-    act(() => api.togglePaused());
+    act(() => holder.current!.togglePaused());
     fetchMock.mockImplementation(() => respond(snapshot(['c', 'a'])));
-    act(() => api.refresh());
+    act(() => holder.current!.refresh());
     await flush();
     expect(screen.getByTestId('ids').textContent).toBe('a');
     expect(screen.getByTestId('pending').textContent).toBe('1');
-    act(() => api.togglePaused());
+    act(() => holder.current!.togglePaused());
     expect(screen.getByTestId('ids').textContent).toBe('c,a');
     expect(screen.getByTestId('pending').textContent).toBe('0');
   });
@@ -163,8 +169,8 @@ describe('LiveDashboardProvider', () => {
       .mockImplementationOnce(() =>
         respond(snapshot(['crit'], { ...DEFAULT_LIVE_QUERY, view: 'critical' }))
       );
-    act(() => api.setQuery({ view: 'mine' }));
-    act(() => api.setQuery({ view: 'critical' }));
+    act(() => holder.current!.setQuery({ view: 'mine' }));
+    act(() => holder.current!.setQuery({ view: 'critical' }));
     await flush();
     resolveStale(new Response(JSON.stringify({ data: snapshot(['stale']) })));
     await flush();
@@ -203,6 +209,6 @@ describe('LiveDashboardProvider', () => {
     mount();
     await flush();
     expect(String(fetchMock.mock.calls[0][0])).toContain('view=unassigned');
-    expect(api.query.view).toBe('unassigned');
+    expect(holder.current!.query.view).toBe('unassigned');
   });
 });

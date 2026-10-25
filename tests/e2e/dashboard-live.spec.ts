@@ -381,7 +381,7 @@ test.describe.serial('dashboard live incidents', () => {
     await page.getByTestId('live-filter-service').click();
     await page.getByRole('option', { name: /Dashboard Alpha Worker/ }).click();
     await expect(page.getByTestId('live-filter-chips')).toContainText('Dashboard Alpha Worker');
-    await expect(page).toHaveURL(new RegExp(`lservice=${workerId}`));
+    await expect.poll(() => new URL(page.url()).searchParams.get('lservice')).toBe(workerId);
     await settled(page);
     for (const text of await page.getByTestId('live-incident-row').allInnerTexts()) {
       expect(text).toContain('Dashboard Alpha Worker');

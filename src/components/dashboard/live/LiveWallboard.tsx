@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import {
@@ -105,12 +105,37 @@ function burnInOffset(step: number): [number, number] {
   }
 }
 
-function nearestScaleIndex(value: number): number {
-  let best = 2;
-  SCALE_STEPS.forEach((step, index) => {
-    if (Math.abs(step - value) < Math.abs(SCALE_STEPS[best] - value)) best = index;
-  });
-  return best;
+/** Snaps any requested scale to the closest supported step. */
+function normalizeScale(value: number): number {
+  return SCALE_STEPS.reduce(
+    (best, step) => (Math.abs(step - value) < Math.abs(best - value) ? step : best),
+    1 as number
+  );
+}
+
+function stepScale(current: number, delta: number): number {
+  const index = SCALE_STEPS.findIndex(step => step === current);
+  const next = Math.min(SCALE_STEPS.length - 1, Math.max(0, index + delta));
+  return SCALE_STEPS.slice(next, next + 1)[0] ?? 1;
+}
+
+const scaleListeners = new Set<() => void>();
+function subscribeScale(onChange: () => void) {
+  scaleListeners.add(onChange);
+  window.addEventListener('storage', onChange);
+  return () => {
+    scaleListeners.delete(onChange);
+    window.removeEventListener('storage', onChange);
+  };
+}
+function readStoredScale(): number | null {
+  try {
+    const value = Number(window.localStorage.getItem(SCALE_STORAGE_KEY));
+    return value > 0 ? value : null;
+  } catch {
+    // Storage may be disabled on locked-down TV browsers.
+    return null;
+  }
 }
 
 const controlClass =
@@ -127,9 +152,9 @@ export default function LiveWallboard({ timeZone }: { timeZone: string }) {
   );
   const [fullscreen, setFullscreen] = useState(false);
   const [fullscreenHint, setFullscreenHint] = useState(false);
-  const [scaleIndex, setScaleIndex] = useState(() =>
-    nearestScaleIndex(Number(searchParams.get('scale')) || 1)
-  );
+  // A `?scale=` URL pins the size for that screen; otherwise the per-screen stored choice wins.
+  const urlScale = Number(searchParams.get('scale')) || null;
+  const storedScale = useSyncExternalStore(subscribeScale, readStoredScale, () => null);
   const [shift, setShift] = useState(0);
   const wakeLockActive = useScreenWakeLock();
   const idle = useIdle(IDLE_HIDE_MS);
@@ -142,30 +167,22 @@ export default function LiveWallboard({ timeZone }: { timeZone: string }) {
   const insight = buildInsight(summary);
   const hasCritical = (summary?.critical ?? 0) > 0;
   const degraded = health !== 'live';
-  const scale = SCALE_STEPS[scaleIndex] ?? 1;
+  const [scaleOverride, setScaleOverride] = useState<number | null>(null);
+  const scale = normalizeScale(scaleOverride ?? urlScale ?? storedScale ?? 1);
 
-  // Restore the per-screen text size unless the URL pins one.
-  useEffect(() => {
-    if (searchParams.get('scale')) return;
-    try {
-      const stored = Number(window.localStorage.getItem(SCALE_STORAGE_KEY));
-      if (stored) setScaleIndex(nearestScaleIndex(stored));
-    } catch {
-      // Storage may be disabled on locked-down TV browsers.
-    }
-  }, [searchParams]);
-
-  const changeScale = useCallback((delta: number) => {
-    setScaleIndex(current => {
-      const next = Math.min(SCALE_STEPS.length - 1, Math.max(0, current + delta));
+  const changeScale = useCallback(
+    (delta: number) => {
+      const next = stepScale(scale, delta);
+      setScaleOverride(next);
       try {
-        window.localStorage.setItem(SCALE_STORAGE_KEY, String(SCALE_STEPS[next]));
+        window.localStorage.setItem(SCALE_STORAGE_KEY, String(next));
       } catch {
         // Best-effort preference.
       }
-      return next;
-    });
-  }, []);
+      scaleListeners.forEach(notify => notify());
+    },
+    [scale]
+  );
 
   // The board is dark regardless of the app theme; also paint the page behind any TV overscan.
   useEffect(() => {

@@ -8,8 +8,10 @@ import {
   useMemo,
   useRef,
   useState,
+  useSyncExternalStore,
   type ReactNode,
 } from 'react';
+import { useRouter } from 'next/navigation';
 import { useRealtime } from '@/hooks/useRealtime';
 import {
   DEFAULT_LIVE_QUERY,
@@ -86,6 +88,32 @@ function writeQueryToUrl(query: LiveIncidentQuery) {
   window.history.replaceState(window.history.state, '', url.toString());
 }
 
+function subscribeOnline(onChange: () => void) {
+  window.addEventListener('online', onChange);
+  window.addEventListener('offline', onChange);
+  return () => {
+    window.removeEventListener('online', onChange);
+    window.removeEventListener('offline', onChange);
+  };
+}
+
+const alertListeners = new Set<() => void>();
+function subscribeAlerts(onChange: () => void) {
+  alertListeners.add(onChange);
+  window.addEventListener('storage', onChange);
+  return () => {
+    alertListeners.delete(onChange);
+    window.removeEventListener('storage', onChange);
+  };
+}
+function readAlertsPreference(): boolean {
+  try {
+    return window.localStorage.getItem(ALERTS_STORAGE_KEY) === 'on';
+  } catch {
+    return false;
+  }
+}
+
 function playAlertTone() {
   try {
     const AudioCtor =
@@ -141,14 +169,23 @@ export function LiveDashboardProvider({
   );
   const [syncError, setSyncError] = useState(false);
   const [loading, setLoading] = useState(initialSnapshot === null);
-  const [highlightUntil, setHighlightUntil] = useState<Record<string, number>>({});
-  const [optimistic, setOptimistic] = useState<Record<string, OptimisticPatch>>({});
+  const [highlightUntil, setHighlightUntil] = useState<ReadonlyMap<string, number>>(new Map());
+  const [optimistic, setOptimistic] = useState<ReadonlyMap<string, OptimisticPatch>>(new Map());
   // Server and client must render identical relative times: start from the snapshot clock and
   // switch to the live clock after mount.
   const [now, setNow] = useState(() => (initialSnapshot ? Date.parse(initialSnapshot.asOf) : 0));
-  const [online, setOnline] = useState(true);
-  const [everConnected, setEverConnected] = useState(false);
-  const [criticalAlerts, setCriticalAlertsState] = useState(false);
+  const online = useSyncExternalStore(
+    subscribeOnline,
+    () => navigator.onLine,
+    () => true
+  );
+  const criticalAlerts = useSyncExternalStore(subscribeAlerts, readAlertsPreference, () => false);
+  const everConnected = connectionEpoch > 0;
+  const router = useRouter();
+  const routerRef = useRef(router);
+  useEffect(() => {
+    routerRef.current = router;
+  }, [router]);
 
   const queryRef = useRef(query);
   const snapshotRef = useRef(snapshot);
@@ -183,7 +220,7 @@ export function LiveDashboardProvider({
       );
       notification.onclick = () => {
         window.focus();
-        window.location.assign(`/incidents/${first.id}`);
+        routerRef.current.push(`/incidents/${first.id}`);
       };
     }
   }, []);
@@ -196,8 +233,8 @@ export function LiveDashboardProvider({
         if (added.length > 0) {
           const until = Date.now() + HIGHLIGHT_MS;
           setHighlightUntil(current => {
-            const updated = { ...current };
-            for (const id of added) updated[id] = until;
+            const updated = new Map(current);
+            for (const id of added) updated.set(id, until);
             return updated;
           });
           const addedSet = new Set(added);
@@ -208,7 +245,7 @@ export function LiveDashboardProvider({
       }
       displayedRef.current = next;
       setDisplayed(next);
-      setOptimistic({});
+      setOptimistic(new Map());
     },
     [notifyNewCritical]
   );
@@ -312,9 +349,10 @@ export function LiveDashboardProvider({
       const params = new URLSearchParams(window.location.search);
       if (persistQuery && !hasLiveUrlParams(params)) {
         const stored = window.localStorage.getItem(LIVE_QUERY_STORAGE_PREFIX + currentUserId);
+        // Synchronizes with an external store (localStorage) that does not exist during SSR.
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         if (stored) commitQuery(coerceLiveQuery(JSON.parse(stored)), false);
       }
-      setCriticalAlertsState(window.localStorage.getItem(ALERTS_STORAGE_KEY) === 'on');
     } catch {
       // Ignore malformed or unavailable storage.
     }
@@ -336,7 +374,6 @@ export function LiveDashboardProvider({
   // Every (re)connect may have missed changes: re-fetch canonical state.
   useEffect(() => {
     if (connectionEpoch === 0) return;
-    setEverConnected(true);
     scheduleReconcile();
   }, [connectionEpoch, scheduleReconcile]);
 
@@ -350,33 +387,27 @@ export function LiveDashboardProvider({
         scheduleReconcile();
       }
     };
-    const onNetwork = () => setOnline(navigator.onLine);
-    onNetwork();
-    setNow(Date.now());
+    // Switch from the server snapshot clock to the live clock right after hydration.
+    const hydrated = setTimeout(() => setNow(Date.now()), 0);
     document.addEventListener('visibilitychange', onVisible);
-    window.addEventListener('online', onNetwork);
-    window.addEventListener('offline', onNetwork);
     const tick = setInterval(() => {
       if (document.visibilityState === 'visible') setNow(Date.now());
     }, CLOCK_TICK_MS);
     return () => {
       clearInterval(safety);
       clearInterval(tick);
+      clearTimeout(hydrated);
       document.removeEventListener('visibilitychange', onVisible);
-      window.removeEventListener('online', onNetwork);
-      window.removeEventListener('offline', onNetwork);
     };
   }, [scheduleReconcile]);
 
   useEffect(() => {
-    const expiries = Object.values(highlightUntil);
+    const expiries = [...highlightUntil.values()];
     if (expiries.length === 0) return;
     const timer = setTimeout(
       () => {
         const cutoff = Date.now();
-        setHighlightUntil(current =>
-          Object.fromEntries(Object.entries(current).filter(([, until]) => until > cutoff))
-        );
+        setHighlightUntil(current => new Map([...current].filter(([, until]) => until > cutoff)));
       },
       Math.max(0, Math.min(...expiries) - Date.now())
     );
@@ -405,22 +436,22 @@ export function LiveDashboardProvider({
   }, [applyDisplayed, scheduleReconcile]);
 
   const applyOptimistic = useCallback((id: string, patch: OptimisticPatch) => {
-    setOptimistic(current => ({ ...current, [id]: { ...current[id], ...patch } }));
+    setOptimistic(current => new Map(current).set(id, { ...current.get(id), ...patch }));
     return () =>
       setOptimistic(current => {
-        const next = { ...current };
-        delete next[id];
+        const next = new Map(current);
+        next.delete(id);
         return next;
       });
   }, []);
 
   const setCriticalAlerts = useCallback((enabled: boolean) => {
-    setCriticalAlertsState(enabled);
     try {
       window.localStorage.setItem(ALERTS_STORAGE_KEY, enabled ? 'on' : 'off');
     } catch {
       // Preference is best-effort.
     }
+    alertListeners.forEach(notify => notify());
     if (enabled && 'Notification' in window && Notification.permission === 'default') {
       void Notification.requestPermission();
     }
@@ -430,8 +461,11 @@ export function LiveDashboardProvider({
 
   const incidents = useMemo(() => {
     const rows = displayed?.incidents ?? [];
-    if (Object.keys(optimistic).length === 0) return rows;
-    return rows.map(row => (optimistic[row.id] ? { ...row, ...optimistic[row.id] } : row));
+    if (optimistic.size === 0) return rows;
+    return rows.map(row => {
+      const patch = optimistic.get(row.id);
+      return patch ? { ...row, ...patch } : row;
+    });
   }, [displayed, optimistic]);
 
   const pendingCount = useMemo(() => {
@@ -440,7 +474,7 @@ export function LiveDashboardProvider({
     return countLiveFeedChanges(diffLiveIncidents(displayed.incidents, snapshot.incidents));
   }, [displayed, paused, snapshot]);
 
-  const highlighted = useMemo(() => new Set(Object.keys(highlightUntil)), [highlightUntil]);
+  const highlighted = useMemo(() => new Set(highlightUntil.keys()), [highlightUntil]);
 
   const baseHealth = resolveConnectionHealth({
     isConnected,

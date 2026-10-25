@@ -10,14 +10,9 @@ import { liveQueryFromParams, parseHistoryRange } from '@/lib/dashboard/live-inc
 import { logger } from '@/lib/logger';
 import { LiveDashboardProvider } from '@/components/dashboard/live/LiveDashboardProvider';
 import LiveCommandStrip from '@/components/dashboard/live/LiveCommandStrip';
+import DashboardCockpit from '@/components/dashboard/live/DashboardCockpit';
 import LiveIncidentsPanel from '@/components/dashboard/live/LiveIncidentsPanel';
-import {
-  ActivityCard,
-  MyQueueCard,
-  OnCallCard,
-  ServicesAtRiskCard,
-  SlaRiskCard,
-} from '@/components/dashboard/live/ResponderRail';
+import { ActivityCard, OnCallCard, OpsPulsePanel } from '@/components/dashboard/live/ResponderRail';
 import DashboardHistorySection, {
   DashboardHistoryProvider,
 } from '@/components/dashboard/DashboardHistorySection';
@@ -89,7 +84,7 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
   return (
     <DashboardHistoryProvider initialQuery={historyQuery}>
       <LiveDashboardProvider initialSnapshot={snapshot} currentUserId={user.id}>
-        <div className="w-full min-h-screen space-y-4 px-3 py-4 sm:space-y-5 sm:px-4 sm:py-5 md:px-6 lg:px-8">
+        <div className="w-full space-y-4 px-3 py-3 sm:px-4 md:px-6 lg:px-6">
           <LiveCommandStrip
             scopeMode={scopeMode}
             timeZone={timeZone}
@@ -99,8 +94,8 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
             }}
           />
 
-          <div className="grid grid-cols-1 items-start gap-4 sm:gap-5 xl:grid-cols-[minmax(0,1fr)_20rem] 2xl:grid-cols-[minmax(0,1fr)_24rem]">
-            <div className="min-w-0 space-y-4 sm:space-y-5">
+          <DashboardCockpit
+            feed={
               <LiveIncidentsPanel
                 services={services}
                 teams={teams}
@@ -109,21 +104,17 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
                 canExport={hasCapability(actor.role, CAPABILITIES.REPORT_EXPORT)}
                 currentUserName={user.name || user.email}
               />
-              <div className="grid grid-cols-1 items-start gap-4 sm:gap-5 lg:grid-cols-2">
-                <ServicesAtRiskCard />
-                <ActivityCard />
-              </div>
-            </div>
-            <aside
-              aria-label="Responder overview"
-              data-testid="responder-rail"
-              className="grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-5 xl:sticky xl:top-4 xl:grid-cols-1"
-            >
-              <MyQueueCard />
-              <SlaRiskCard />
-              <OnCallCard />
-            </aside>
-          </div>
+            }
+            rail={<OpsPulsePanel />}
+          />
+
+          <section
+            aria-label="Responders"
+            className="grid grid-cols-1 items-start gap-4 lg:grid-cols-2"
+          >
+            <OnCallCard />
+            <ActivityCard />
+          </section>
 
           <DashboardHistorySection />
         </div>

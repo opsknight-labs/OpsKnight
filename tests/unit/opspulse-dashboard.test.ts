@@ -17,10 +17,11 @@ describe('Ops Pulse dashboard contract', () => {
     expect(engineSource).toContain('row.assignee?.id === ctx.actorId');
   });
 
-  it('renders queue, SLA risk and services in the responder rail', () => {
-    expect(pageSource).toContain('<MyQueueCard />');
-    expect(pageSource).toContain('<SlaRiskCard />');
-    expect(pageSource).toContain('<ServicesAtRiskCard />');
+  it('renders queue, SLA risk and services in the Ops Pulse panel', () => {
+    expect(pageSource).toContain('<OpsPulsePanel />');
+    expect(railSource).toContain('title="My Queue"');
+    expect(railSource).toContain('title="SLA at Risk"');
+    expect(railSource).toContain('title="Services at Risk"');
     expect(engineSource).toContain('isCriticalIncident(row) ? 0 : 1');
   });
 

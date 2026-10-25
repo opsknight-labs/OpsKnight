@@ -4,7 +4,6 @@ import { memo } from 'react';
 import Link from 'next/link';
 import { Check, Clock3, Loader2, UserPlus, UserRound } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import StatusBadge from '@/components/incident/StatusBadge';
 import PriorityBadge from '@/components/incident/PriorityBadge';
 import { Badge } from '@/components/ui/shadcn/badge';
 import {
@@ -100,26 +99,63 @@ export const LiveIncidentRow = memo(function LiveIncidentRow({
   const showAck = canAcknowledge && incident.status === 'OPEN';
   const showAssign = canAssignSelf && !isMine;
   const status = (
-    <StatusBadge
-      status={incident.status}
-      label={incident.status === 'OPEN' ? 'Triggered' : 'Acknowledged'}
-      size={tv ? 'sm' : 'xs'}
-      showDot
-      className={tv ? '!h-auto !px-2.5 !py-1 !text-[0.75em]' : undefined}
-    />
-  );
-  const assignee = (
     <span
       className={cn(
-        'flex min-w-0 items-center gap-1',
-        incident.assignee ? 'text-foreground' : 'text-amber-700 dark:text-amber-400'
+        'inline-flex items-center gap-1.5 whitespace-nowrap font-medium',
+        tv ? 'text-[0.9em]' : 'text-xs',
+        incident.status === 'OPEN'
+          ? 'text-rose-700 dark:text-rose-400'
+          : 'text-amber-700 dark:text-amber-400'
       )}
     >
-      <UserRound
-        className={cn('shrink-0 text-muted-foreground', tv ? 'h-[1em] w-[1em]' : 'h-3 w-3')}
+      <span
         aria-hidden
+        className={cn(
+          'h-1.5 w-1.5 shrink-0 rounded-full',
+          incident.status === 'OPEN' ? 'bg-rose-500' : 'bg-amber-500'
+        )}
       />
-      <span className="truncate">{incident.assignee?.name ?? 'Unassigned'}</span>
+      {incident.status === 'OPEN' ? 'Triggered' : 'Acknowledged'}
+    </span>
+  );
+  const assigneeName = incident.assignee?.name ?? null;
+  const initials = assigneeName
+    ? assigneeName
+        .split(/\s+/)
+        .filter(Boolean)
+        .slice(0, 2)
+        .map(part => part.charAt(0).toUpperCase())
+        .join('')
+    : null;
+  const assignee = (
+    <span className="flex min-w-0 items-center gap-1.5">
+      {initials ? (
+        <span
+          aria-hidden
+          className={cn(
+            'flex shrink-0 items-center justify-center rounded-full bg-primary/10 font-semibold text-primary',
+            tv ? 'h-[1.5em] w-[1.5em] text-[0.65em]' : 'h-5 w-5 text-[9px]'
+          )}
+        >
+          {initials}
+        </span>
+      ) : (
+        <UserRound
+          className={cn(
+            'shrink-0 text-amber-600 dark:text-amber-400',
+            tv ? 'h-[1em] w-[1em]' : 'h-3.5 w-3.5'
+          )}
+          aria-hidden
+        />
+      )}
+      <span
+        className={cn(
+          'truncate',
+          assigneeName ? 'text-foreground' : 'font-medium text-amber-700 dark:text-amber-400'
+        )}
+      >
+        {assigneeName ?? 'Unassigned'}
+      </span>
     </span>
   );
 
@@ -132,6 +168,7 @@ export const LiveIncidentRow = memo(function LiveIncidentRow({
       data-focused={focused ? 'true' : 'false'}
       className={cn(
         'group relative transition-colors duration-700',
+        'hover:bg-muted/40 focus-within:bg-muted/40',
         highlighted ? 'bg-primary/[0.08]' : 'bg-transparent',
         focused && 'bg-muted/60'
       )}
@@ -140,7 +177,7 @@ export const LiveIncidentRow = memo(function LiveIncidentRow({
       <div
         className={cn(
           'grid items-center gap-x-2.5 pl-4 pr-3',
-          tv ? 'gap-y-1 py-[0.9vh] md:gap-x-4' : 'gap-y-1 py-2.5 md:py-2',
+          tv ? 'gap-y-1 py-[0.9vh] md:gap-x-4' : 'gap-y-1 py-2.5 md:py-[7px]',
           'grid-cols-[auto_minmax(0,1fr)_auto]',
           tv ? LIVE_ROW_GRID_TV : LIVE_ROW_GRID
         )}
@@ -170,7 +207,7 @@ export const LiveIncidentRow = memo(function LiveIncidentRow({
               'block rounded-sm font-semibold text-foreground outline-none',
               tv ? 'truncate' : 'line-clamp-2 break-words md:line-clamp-none md:truncate',
               'hover:text-primary focus-visible:ring-2 focus-visible:ring-primary/50',
-              tv ? 'text-[1.15em]' : 'text-sm'
+              tv ? 'text-[1.15em]' : 'text-[13px] leading-5'
             )}
           >
             {incident.title}
@@ -211,7 +248,7 @@ export const LiveIncidentRow = memo(function LiveIncidentRow({
         </span>
 
         {!tv && (
-          <span className="flex items-center justify-end gap-1 self-start md:self-center">
+          <span className="flex items-center justify-end gap-1 self-start transition-opacity md:self-center md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100">
             {showAck && (
               <button
                 type="button"

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import {
+  ArrowRight,
   CheckCircle2,
   Download,
   Keyboard,
@@ -36,6 +37,7 @@ import {
   type LiveIncidentQuery,
 } from '@/lib/dashboard/live-incidents-shared';
 import { useLiveDashboard } from './LiveDashboardProvider';
+import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { LIVE_ROW_GRID, LIVE_ROW_GRID_TV, LiveIncidentRow } from './LiveIncidentRow';
 import { LiveToolbar, LiveViewTabs, type LiveDirectoryOption } from './LiveFilterBar';
 
@@ -164,14 +166,17 @@ export default function LiveIncidentsPanel({
     setCriticalAlerts,
   } = live;
   const wallboard = variant === 'wallboard';
-  const [expanded, setExpanded] = useState(wallboard);
+  // Desktop cockpit: the panel is viewport-sized and scrolls internally, so render every loaded
+  // row. Phones keep a short list with "Show more" to avoid a very long page.
+  const fill = useMediaQuery('(min-width: 1280px)') || wallboard;
+  const [expanded, setExpanded] = useState(false);
   const [focusedIndex, setFocusedIndex] = useState<number | null>(null);
   const [busy, setBusy] = useState<Record<string, 'ack' | 'assign'>>({});
   const listRef = useRef<HTMLUListElement | null>(null);
 
   const visible = useMemo(
-    () => (expanded ? incidents : incidents.slice(0, LIVE_INCIDENT_VISIBLE_ROWS)),
-    [expanded, incidents]
+    () => (fill || expanded ? incidents : incidents.slice(0, LIVE_INCIDENT_VISIBLE_ROWS)),
+    [expanded, fill, incidents]
   );
   const hiddenLoaded = incidents.length - visible.length;
   const facetCount = countActiveFacets(query);
@@ -341,6 +346,34 @@ export default function LiveIncidentsPanel({
     URL.revokeObjectURL(url);
   };
 
+  const statusLine = (
+    <p
+      className="flex min-w-0 items-center gap-x-2 truncate text-[11px] text-muted-foreground"
+      aria-live="polite"
+      data-testid="live-incidents-status"
+    >
+      <span className={cn('inline-flex items-center gap-1.5 font-semibold', health_.text)}>
+        <span
+          aria-hidden
+          className={cn(
+            'h-1.5 w-1.5 rounded-full',
+            health_.dot,
+            health === 'live' && !paused && 'motion-safe:animate-pulse'
+          )}
+        />
+        {paused ? 'Paused' : health_.label}
+      </span>
+      <span data-testid="live-incidents-synced">{formatSyncAge(syncedAt, now)}</span>
+      {syncError && (
+        <span className="text-amber-700 dark:text-amber-400">Sync failed — retrying</span>
+      )}
+      {health === 'offline' && <span>Showing last known state</span>}
+      {snapshot?.truncated && (
+        <span>Showing newest {snapshot.summary.active.toLocaleString()}</span>
+      )}
+    </p>
+  );
+
   return (
     <section
       aria-labelledby="live-incidents-heading"
@@ -348,51 +381,45 @@ export default function LiveIncidentsPanel({
       data-connection={health}
       data-paused={paused ? 'true' : 'false'}
       data-loading={loading ? 'true' : 'false'}
-      className={cn(
-        'rounded-2xl border border-border bg-card shadow-xs overflow-hidden flex flex-col',
-        wallboard && 'h-full'
-      )}
+      className="flex h-full min-h-0 flex-col overflow-hidden rounded-xl border border-border bg-card shadow-[0_1px_2px_rgba(16,24,40,0.05)]"
     >
-      <header className="space-y-2.5 border-b border-border p-3 sm:px-4">
-        {!wallboard && (
-          <div className="flex items-center justify-between gap-2">
-            <div className="flex min-w-0 items-center gap-2.5">
-              <h2 id="live-incidents-heading" className="text-sm font-bold text-foreground">
+      <header className="shrink-0 space-y-2.5 border-b border-border px-3 pb-2.5 pt-3 sm:px-4">
+        {wallboard ? (
+          <h2 id="live-incidents-heading" className="sr-only">
+            Live Incidents
+          </h2>
+        ) : (
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+            <div className="flex min-w-0 items-center gap-2">
+              <span
+                aria-hidden
+                className={cn(
+                  'h-2 w-2 shrink-0 rounded-full',
+                  health === 'live' && !paused
+                    ? 'bg-rose-500 motion-safe:animate-pulse'
+                    : 'bg-slate-400'
+                )}
+              />
+              <h2
+                id="live-incidents-heading"
+                className="whitespace-nowrap text-[15px] font-semibold tracking-tight text-foreground"
+              >
                 Live Incidents
               </h2>
-              <Badge variant="outline" size="xs" data-testid="live-incidents-total">
+              <Badge
+                variant="outline"
+                size="xs"
+                data-testid="live-incidents-total"
+                className="tabular-nums"
+              >
                 {total.toLocaleString()}{' '}
                 {query.view === 'active' && facetCount === 0 ? 'active' : 'matching'}
               </Badge>
-              <p
-                className="hidden min-w-0 items-center gap-x-2 truncate text-[11px] text-muted-foreground sm:flex"
-                aria-live="polite"
-                data-testid="live-incidents-status"
-              >
-                <span
-                  className={cn('inline-flex items-center gap-1.5 font-semibold', health_.text)}
-                >
-                  <span
-                    aria-hidden
-                    className={cn(
-                      'h-1.5 w-1.5 rounded-full',
-                      health_.dot,
-                      health === 'live' && !paused && 'motion-safe:animate-pulse'
-                    )}
-                  />
-                  {paused ? 'Paused' : health_.label}
-                </span>
-                <span data-testid="live-incidents-synced">{formatSyncAge(syncedAt, now)}</span>
-                {syncError && (
-                  <span className="text-amber-700 dark:text-amber-400">Sync failed — retrying</span>
-                )}
-                {health === 'offline' && <span>Showing last known state</span>}
-                {snapshot?.truncated && (
-                  <span>Showing newest {snapshot.summary.active.toLocaleString()}</span>
-                )}
-              </p>
             </div>
-            <div className="flex shrink-0 items-center gap-1.5">
+            <div className="order-3 w-full min-w-0 2xl:order-none 2xl:w-auto 2xl:flex-1">
+              <LiveViewTabs />
+            </div>
+            <div className="ml-auto flex shrink-0 items-center gap-1.5">
               <button
                 type="button"
                 onClick={togglePaused}
@@ -482,20 +509,15 @@ export default function LiveIncidentsPanel({
             </div>
           </div>
         )}
-        {wallboard && (
-          <h2 id="live-incidents-heading" className="sr-only">
-            Live Incidents
-          </h2>
-        )}
-        <LiveViewTabs />
+        {wallboard && <LiveViewTabs />}
         {!wallboard && <LiveToolbar services={services} teams={teams} />}
       </header>
 
       <div
         aria-hidden
         className={cn(
-          'hidden md:grid gap-x-2.5 border-b border-border bg-muted/30 pl-4 pr-3 py-1.5 font-semibold uppercase tracking-wider text-muted-foreground',
-          wallboard ? 'md:gap-x-4 text-[0.7em]' : 'text-[10px]',
+          'hidden shrink-0 border-b border-border bg-muted/40 py-1.5 pl-4 pr-3 font-semibold uppercase tracking-wider text-muted-foreground md:grid',
+          wallboard ? 'gap-x-4 text-[0.7em]' : 'gap-x-2.5 text-[10px]',
           wallboard ? LIVE_ROW_GRID_TV : LIVE_ROW_GRID
         )}
       >
@@ -509,11 +531,11 @@ export default function LiveIncidentsPanel({
 
       <div
         className={cn(
-          'relative flex-1',
-          isQueryLoading && 'opacity-60',
-          wallboard && 'overflow-y-auto'
+          'relative min-h-0 flex-1 overflow-y-auto overscroll-contain transition-opacity',
+          isQueryLoading && 'opacity-60'
         )}
         aria-busy={isQueryLoading}
+        data-testid="live-incidents-scroll"
       >
         {snapshot === null && loading ? (
           <div className="flex items-center justify-center gap-2 py-10 text-xs text-muted-foreground">
@@ -525,14 +547,19 @@ export default function LiveIncidentsPanel({
             Live incidents are unavailable. Retrying automatically.
           </div>
         ) : incidents.length === 0 ? (
-          <div className="py-10 text-center" data-testid="live-incidents-empty">
-            <CheckCircle2 className="mx-auto mb-2 h-6 w-6 text-emerald-500" aria-hidden />
+          <div
+            className="flex h-full min-h-[12rem] flex-col items-center justify-center py-10 text-center"
+            data-testid="live-incidents-empty"
+          >
+            <span className="mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-emerald-500/10">
+              <CheckCircle2 className="h-5 w-5 text-emerald-500" aria-hidden />
+            </span>
             <p className="text-sm font-semibold text-foreground">
               {query.view === 'active' && facetCount === 0
                 ? 'No active incidents'
                 : 'Nothing matches'}
             </p>
-            <p className="text-xs text-muted-foreground">
+            <p className="mt-0.5 max-w-xs text-xs text-muted-foreground">
               {query.view === 'active' && facetCount === 0
                 ? 'All clear. New incidents will appear here automatically.'
                 : `No active incidents match “${liveViewLabel(query.view)}”${facetCount ? ' with these filters' : ''}.`}
@@ -541,7 +568,7 @@ export default function LiveIncidentsPanel({
         ) : (
           <ul
             ref={listRef}
-            className="divide-y divide-border"
+            className="divide-y divide-border/70"
             aria-label={`${liveViewLabel(query.view)} incidents, newest first`}
             data-testid="live-incidents-list"
           >
@@ -568,12 +595,15 @@ export default function LiveIncidentsPanel({
       </div>
 
       {!wallboard && (
-        <footer className="flex flex-wrap items-center justify-between gap-2 border-t border-border px-3 py-2 sm:px-4">
-          <span className="text-[11px] text-muted-foreground">
-            Showing {visible.length} of {total.toLocaleString()}
-          </span>
+        <footer className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-t border-border bg-muted/20 px-3 py-2 sm:px-4">
+          <div className="flex min-w-0 items-center gap-3">
+            <span className="whitespace-nowrap text-[11px] text-muted-foreground">
+              Showing {visible.length} of {total.toLocaleString()}
+            </span>
+            <span className="hidden sm:block">{statusLine}</span>
+          </div>
           <div className="flex items-center gap-2">
-            {(hiddenLoaded > 0 || expanded) && (
+            {!fill && (hiddenLoaded > 0 || expanded) && (
               <button
                 type="button"
                 onClick={() => setExpanded(value => !value)}
@@ -586,9 +616,10 @@ export default function LiveIncidentsPanel({
             <Link
               href={viewAllHref(query, currentUserId)}
               data-testid="live-view-all"
-              className="rounded-lg border border-border/60 bg-muted/50 px-2.5 py-1 text-[11px] font-semibold text-foreground hover:bg-muted hover:text-primary outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+              className="inline-flex items-center gap-1 rounded-lg border border-border bg-card px-2.5 py-1 text-[11px] font-semibold text-foreground hover:bg-muted hover:text-primary outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
             >
-              View All Incidents &rarr;
+              View all incidents
+              <ArrowRight className="h-3 w-3 shrink-0" aria-hidden />
             </Link>
           </div>
         </footer>
