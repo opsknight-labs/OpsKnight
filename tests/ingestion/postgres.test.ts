@@ -53,6 +53,11 @@ import { acquireRetentionResourceLock } from '@/lib/retention/resource-lock';
 import { getIngestionPolicy } from '@/lib/ingestion/policy';
 import { runtimeOperationalMetrics } from '@/lib/metrics/operational/registry';
 import { processPendingJobsByType } from '@/lib/jobs/queue';
+import {
+  claimWarRoomDelivery,
+  claimWarRoomDeliveryById,
+  completeWarRoomDelivery,
+} from '@/lib/war-room/delivery';
 
 // Fail closed rather than skipping certification or truncating a shared database.
 const database = new URL(process.env.DATABASE_URL ?? 'http://missing');
@@ -138,6 +143,151 @@ afterAll(async () => {
 });
 
 describe('PostgreSQL ingestion durability', () => {
+  async function createDeliveryFixture(
+    stageName = 'ingestion-lease-fixture',
+    status: 'PENDING' | 'FAILED' = 'PENDING'
+  ) {
+    const delivery = await prisma.warRoomProviderEventDelivery.create({
+      data: {
+        provider: 'SLACK',
+        idempotencyKey: randomUUID(),
+        incidentId: serviceId,
+        kind: 'TRIGGER',
+        eventPayload: {},
+        status,
+      },
+    });
+    const stage = await prisma.warRoomProviderEventStage.create({
+      data: { deliveryId: delivery.id, stage: stageName },
+    });
+    return { delivery, stage };
+  }
+
+  it('retains legacy null-expiry completion and never reclaims a failed delivery', async () => {
+    const legacy = await createDeliveryFixture();
+    const failed = await createDeliveryFixture('failed-delivery-fixture', 'FAILED');
+    try {
+      await prisma.warRoomProviderEventDelivery.update({
+        where: { id: legacy.delivery.id },
+        data: { status: 'PROCESSING', leaseToken: 'legacy-owner-token', leaseExpiresAt: null },
+      });
+      await completeWarRoomDelivery(legacy.delivery.id, 'legacy-owner-token');
+      expect(
+        await prisma.warRoomProviderEventDelivery.findUnique({ where: { id: legacy.delivery.id } })
+      ).toMatchObject({ status: 'COMPLETED', leaseToken: null });
+      expect(
+        await prisma.warRoomProviderEventStage.findUnique({ where: { id: legacy.stage.id } })
+      ).toMatchObject({ status: 'SKIPPED' });
+      expect(await claimWarRoomDeliveryById(failed.delivery.id)).toBeNull();
+      expect(
+        await prisma.warRoomProviderEventDelivery.findUnique({ where: { id: failed.delivery.id } })
+      ).toMatchObject({ status: 'FAILED', attempts: 0, leaseToken: null });
+    } finally {
+      await prisma.warRoomProviderEventDelivery.deleteMany({
+        where: { id: { in: [legacy.delivery.id, failed.delivery.id] } },
+      });
+    }
+  });
+
+  it('fences competing war-room claims, expired completion and stale completion after reclaim', async () => {
+    const { delivery, stage } = await createDeliveryFixture();
+    try {
+      await prisma.warRoomProviderEventStage.createMany({
+        data: [
+          { deliveryId: delivery.id, stage: 'already-done', status: 'COMPLETED' },
+          { deliveryId: delivery.id, stage: 'already-attempting', status: 'ATTEMPTING' },
+        ],
+      });
+      const results = await Promise.allSettled([
+        claimWarRoomDeliveryById(delivery.id),
+        claimWarRoomDeliveryById(delivery.id),
+      ]);
+      const claims = results.flatMap(row =>
+        row.status === 'fulfilled' && row.value ? [row.value] : []
+      );
+      expect(claims).toHaveLength(1);
+      expect(results.filter(row => row.status === 'rejected')).toEqual([
+        expect.objectContaining({
+          reason: expect.objectContaining({
+            name: 'WarRoomRetryableError',
+            retryBudgetNeutral: true,
+          }),
+        }),
+      ]);
+      expect(
+        await prisma.warRoomProviderEventDelivery.findUnique({ where: { id: delivery.id } })
+      ).toMatchObject({ status: 'PROCESSING', attempts: 1, leaseToken: claims[0].token });
+      await prisma.$executeRaw`UPDATE "WarRoomProviderEventDelivery"
+        SET "leaseExpiresAt" = clock_timestamp() - INTERVAL '1 second' WHERE id = ${delivery.id}`;
+      await completeWarRoomDelivery(delivery.id, claims[0].token);
+      expect(
+        await prisma.warRoomProviderEventStage.findUnique({ where: { id: stage.id } })
+      ).toMatchObject({ status: 'PENDING' });
+      expect(
+        await prisma.warRoomProviderEventDelivery.findUnique({ where: { id: delivery.id } })
+      ).toMatchObject({ status: 'PROCESSING', leaseToken: claims[0].token });
+      const reclaimed = await claimWarRoomDelivery({
+        provider: delivery.provider,
+        idempotencyKey: delivery.idempotencyKey,
+      });
+      expect(reclaimed).not.toBeNull();
+      expect(reclaimed!.token).not.toBe(claims[0].token);
+      await completeWarRoomDelivery(delivery.id, claims[0].token);
+      expect(
+        await prisma.warRoomProviderEventDelivery.findUnique({ where: { id: delivery.id } })
+      ).toMatchObject({ status: 'PROCESSING', attempts: 2, leaseToken: reclaimed!.token });
+      expect(
+        await prisma.warRoomProviderEventStage.findUnique({ where: { id: stage.id } })
+      ).toMatchObject({ status: 'PENDING' });
+      await completeWarRoomDelivery(delivery.id, reclaimed!.token);
+      expect(
+        await prisma.warRoomProviderEventDelivery.findUnique({ where: { id: delivery.id } })
+      ).toMatchObject({ status: 'COMPLETED', attempts: 2, leaseToken: null });
+      expect(
+        await prisma.warRoomProviderEventStage.findUnique({ where: { id: stage.id } })
+      ).toMatchObject({ status: 'SKIPPED' });
+      expect(
+        await prisma.warRoomProviderEventStage.findMany({
+          where: { deliveryId: delivery.id, stage: { in: ['already-done', 'already-attempting'] } },
+          select: { stage: true, status: true },
+          orderBy: { stage: 'asc' },
+        })
+      ).toEqual([
+        { stage: 'already-attempting', status: 'ATTEMPTING' },
+        { stage: 'already-done', status: 'COMPLETED' },
+      ]);
+      expect(await claimWarRoomDeliveryById(delivery.id)).toBeNull();
+      expect(await claimWarRoomDeliveryById(randomUUID())).toBeNull();
+    } finally {
+      await prisma.warRoomProviderEventDelivery.delete({ where: { id: delivery.id } });
+    }
+  });
+
+  it('rolls back war-room completion when atomic pending-stage settlement fails', async () => {
+    const { delivery, stage } = await createDeliveryFixture('ingestion-atomic-settlement');
+    let constraintInstalled = false;
+    try {
+      const claim = await claimWarRoomDeliveryById(delivery.id);
+      expect(claim).not.toBeNull();
+      await prisma.$executeRawUnsafe(`ALTER TABLE "WarRoomProviderEventStage"
+        ADD CONSTRAINT ingestion_test_atomic_stage_settlement
+        CHECK (stage <> 'ingestion-atomic-settlement' OR status <> 'SKIPPED') NOT VALID`);
+      constraintInstalled = true;
+      await expect(completeWarRoomDelivery(delivery.id, claim!.token)).rejects.toThrow();
+      expect(
+        await prisma.warRoomProviderEventDelivery.findUnique({ where: { id: delivery.id } })
+      ).toMatchObject({ status: 'PROCESSING', leaseToken: claim!.token });
+      expect(
+        await prisma.warRoomProviderEventStage.findUnique({ where: { id: stage.id } })
+      ).toMatchObject({ status: 'PENDING', lastError: null });
+    } finally {
+      if (constraintInstalled)
+        await prisma.$executeRawUnsafe(`ALTER TABLE "WarRoomProviderEventStage"
+          DROP CONSTRAINT ingestion_test_atomic_stage_settlement`);
+      await prisma.warRoomProviderEventDelivery.delete({ where: { id: delivery.id } });
+    }
+  });
+
   it('refills an independent job slot while another claimed job waits on PostgreSQL', async () => {
     const jobs = await Promise.all(
       [true, false, false].map((slotHold, index) =>
