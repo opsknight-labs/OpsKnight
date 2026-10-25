@@ -14,7 +14,7 @@ import {
 
 /** Shared column templates so the desktop header and rows always align. */
 export const LIVE_ROW_GRID =
-  'md:grid-cols-[2.75rem_minmax(0,1fr)_6.75rem_7.5rem_minmax(0,8rem)_7.75rem]';
+  'md:grid-cols-[2.75rem_minmax(0,1fr)_6.5rem_7rem_minmax(0,8.5rem)_8.25rem]';
 export const LIVE_ROW_GRID_TV = 'md:grid-cols-[3.5em_minmax(0,1fr)_7.5em_9.5em_minmax(0,10em)]';
 
 const HOUR = 3_600_000;
@@ -120,7 +120,7 @@ type RowProps = {
 };
 
 const iconButton =
-  'inline-flex h-7 min-w-7 px-1.5 shrink-0 items-center justify-center gap-1 rounded-md border border-border/80 bg-card text-foreground disabled:opacity-50 outline-none focus-visible:ring-2 focus-visible:ring-primary/50 text-xs shadow-2xs transition-colors';
+  'inline-flex h-7 w-7 p-0 shrink-0 items-center justify-center rounded-md border border-border/80 bg-card text-foreground disabled:opacity-50 outline-none focus-visible:ring-2 focus-visible:ring-primary/50 text-xs shadow-2xs transition-colors';
 
 function initialsOf(name: string): string {
   return name
@@ -341,7 +341,7 @@ export const LiveIncidentRow = memo(function LiveIncidentRow({
         </span>
 
         {!tv && (
-          <span className="flex items-center justify-end gap-1.5 self-start md:self-center">
+          <span className="flex items-center justify-end gap-1 self-start md:self-center">
             {showAck && (
               <button
                 type="button"
@@ -360,9 +360,6 @@ export const LiveIncidentRow = memo(function LiveIncidentRow({
                 ) : (
                   <Check className="h-3.5 w-3.5 shrink-0" aria-hidden />
                 )}
-                <kbd className="hidden group-hover:inline-block font-mono text-[9px] text-muted-foreground/70" aria-hidden>
-                  A
-                </kbd>
               </button>
             )}
             {showAssign && (
@@ -383,9 +380,6 @@ export const LiveIncidentRow = memo(function LiveIncidentRow({
                 ) : (
                   <UserPlus className="h-3.5 w-3.5 shrink-0" aria-hidden />
                 )}
-                <kbd className="hidden group-hover:inline-block font-mono text-[9px] text-muted-foreground/70" aria-hidden>
-                  M
-                </kbd>
               </button>
             )}
             <button
@@ -403,9 +397,6 @@ export const LiveIncidentRow = memo(function LiveIncidentRow({
               )}
             >
               <PanelRight className="h-3.5 w-3.5 shrink-0" aria-hidden />
-              <kbd className="hidden group-hover:inline-block font-mono text-[9px] text-muted-foreground/70" aria-hidden>
-                O
-              </kbd>
             </button>
             <button
               type="button"
