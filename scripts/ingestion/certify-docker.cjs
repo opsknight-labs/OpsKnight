@@ -80,6 +80,48 @@ function invoke(args) {
   });
 }
 const inspect = async name => JSON.parse(await invoke(['inspect', name]))[0];
+async function collectStageMetrics(names, domain) {
+  const snapshots = [];
+  for (const name of names) {
+    try {
+      snapshots.push({
+        name,
+        ...JSON.parse(
+          await invoke([
+            'exec',
+            name,
+            'node',
+            'scripts/ingestion/admission-stage-snapshot.cjs',
+            domain,
+          ])
+        ),
+      });
+    } catch {
+      snapshots.push({ name, error: 'Transaction stage scrape failed' });
+    }
+  }
+  return {
+    snapshots,
+    scope:
+      'Authenticated process-lifetime histograms after load. Acquire includes pool checkout and BEGIN; finalize includes driver handoff and commit/rollback, not pure WAL time. Idle processes may have empty event histograms. Fixed labels and numeric buckets only.',
+    passed:
+      snapshots.length === names.length &&
+      snapshots.every(
+        row =>
+          row.status === 200 &&
+          Array.isArray(row.stages) &&
+          (domain === 'event' || row.stages.length > 0)
+      ) &&
+      snapshots.some(row =>
+        row.stages?.some(
+          stage =>
+            stage.stage === 'transaction-finalize' &&
+            stage.outcome === 'success' &&
+            stage.count > 0
+        )
+      ),
+  };
+}
 async function assertCredentialSentinelAbsentFromLogs(name) {
   const sentinel = 'fixture-credential-must-not-persist';
   await new Promise((resolve, reject) => {
@@ -686,6 +728,10 @@ async function main() {
       evidence.resourcesBeforePreflight,
       evidence.resourcesAfterLoad
     );
+    if (capacityStage === 'incident-only') {
+      evidence.eventStageMetrics = await collectStageMetrics(workers, 'event');
+      assert.ok(evidence.eventStageMetrics.passed, 'Incident transaction telemetry incomplete');
+    }
     assert.ok(
       evidence.stageEvidence.passed,
       'Native stage failed reconciliation or drain deadline'
@@ -903,27 +949,7 @@ location / { proxy_pass http://gateways; proxy_http_version 1.1; proxy_set_heade
     evidence.httpFailureStage = httpEvidence.failureStage;
   }
   if (admissionMetricsChecks) {
-    const snapshots = [];
-    for (const name of webNames) {
-      try {
-        snapshots.push({
-          name,
-          ...JSON.parse(
-            await invoke(['exec', name, 'node', 'scripts/ingestion/admission-stage-snapshot.cjs'])
-          ),
-        });
-      } catch {
-        snapshots.push({ name, error: 'Admission stage scrape failed' });
-      }
-    }
-    evidence.admissionStageMetrics = {
-      snapshots,
-      scope:
-        'Authenticated web scrapes after load. Process-lifetime histograms include preflight and warm-up, not just measured load. Acquire includes pool and BEGIN; finalize includes driver handoff and commit/rollback. Fixed labels and numeric buckets only.',
-      passed:
-        snapshots.length === webNames.length &&
-        snapshots.every(row => row.status === 200 && row.stages?.length > 0),
-    };
+    evidence.admissionStageMetrics = await collectStageMetrics(webNames, 'admission');
     assert.ok(evidence.admissionStageMetrics.passed, 'Admission stage telemetry incomplete');
   }
   if (workerMetricsChecks) {
