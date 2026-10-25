@@ -2751,15 +2751,21 @@ async function main() {
         const replayedHeader = replayRes.headers.get('idempotency-replayed') === 'true';
         idempotentPass = matchesStatus && (replayedHeader || posRes.status === 204);
       } else if (idempotencyMode === 'natural') {
-        // Natural idempotency: state is unchanged, compare-and-set fences duplicate edit (412), or uniqueness/quota rejects repeat (409/403)
-        idempotentPass =
-          replayRes.status === posRes.status ||
-          replayRes.status === 409 ||
-          replayRes.status === 412 ||
-          replayRes.status === 403 ||
-          replayRes.status === 200;
-      } else {
-        idempotentPass = true;
+        // Natural idempotency: replaying an idempotent write must produce:
+        // - Matching status (200/204) for state updates
+        // - Precondition failure (412) if monotonic revision advanced
+        // - Unique constraint conflict (409) or quota rejection (403) preventing duplicate creation
+        const matchesStatus = replayRes.status === posRes.status;
+        const isPreconditionFailed = replayRes.status === 412;
+        const isUniquenessConstraint = (posRes.status === 201 || posRes.status === 200) && (replayRes.status === 409 || replayRes.status === 403);
+        idempotentPass = matchesStatus || isPreconditionFailed || isUniquenessConstraint;
+      } else if (idempotencyMode === 'never') {
+        // Non-idempotent operations ('never') must NOT replay cached responses or set idempotency-replayed
+        const replayedHeader = replayRes.headers.get('idempotency-replayed');
+        const notDeduplicated = replayedHeader !== 'true';
+        // Replay must be handled deterministically by the endpoint without unhandled 500s
+        const handledDeterministically = replayRes.status < 500;
+        idempotentPass = notDeduplicated && handledDeterministically;
       }
 
       if (!idempotentPass) {

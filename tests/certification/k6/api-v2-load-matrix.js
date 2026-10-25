@@ -74,8 +74,8 @@ export function sustainedWorkload() {
   sleep(0.3);
 }
 
-// Fixed single token to test admission refusal (rate limiting)
-const overflowToken = 'ok_admin_pool_1_5bH7PXytY7Z9B4n5ZCKlPXZ3HngeK26H';
+// Dynamic token from secure test environment or key pool
+const overflowToken = __ENV.OVERFLOW_TOKEN || __ENV.API_KEY || (keyPool && keyPool.length > 0 ? keyPool[0] : '');
 
 export function admissionControlTest() {
   const headers = {
