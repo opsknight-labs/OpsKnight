@@ -107,9 +107,21 @@ export function IncidentInspector({
               <PriorityBadge priority={incident.priority} size="sm" showLabel={false} />
             ) : (
               <Badge variant="neutral" size="xs" className="font-mono">
-                {incident.urgency}
+                P—
               </Badge>
             )}
+            <span
+              className={cn(
+                'rounded border px-1.5 py-0.5 font-mono text-[10px] font-semibold uppercase',
+                incident.urgency === 'HIGH'
+                  ? 'border-rose-500/25 bg-rose-500/10 text-rose-700 dark:text-rose-400'
+                  : incident.urgency === 'MEDIUM'
+                    ? 'border-amber-500/25 bg-amber-500/10 text-amber-700 dark:text-amber-400'
+                    : 'border-blue-500/25 bg-blue-500/10 text-blue-700 dark:text-blue-400'
+              )}
+            >
+              {incident.urgency} urgency
+            </span>
             <span
               className={cn(
                 'inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-semibold tabular-nums',
@@ -220,6 +232,21 @@ export function IncidentInspector({
             <span className="text-muted-foreground">Team</span>
             <span className="font-medium text-foreground truncate">
               {incident.team?.name ?? '—'}
+            </span>
+          </div>
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-muted-foreground">Urgency</span>
+            <span
+              className={cn(
+                'rounded border px-1.5 py-0.2 font-mono text-[10px] font-semibold uppercase',
+                incident.urgency === 'HIGH'
+                  ? 'border-rose-500/25 bg-rose-500/10 text-rose-700 dark:text-rose-400'
+                  : incident.urgency === 'MEDIUM'
+                    ? 'border-amber-500/25 bg-amber-500/10 text-amber-700 dark:text-amber-400'
+                    : 'border-blue-500/25 bg-blue-500/10 text-blue-700 dark:text-blue-400'
+              )}
+            >
+              {incident.urgency}
             </span>
           </div>
           <div className="flex items-center justify-between gap-2">

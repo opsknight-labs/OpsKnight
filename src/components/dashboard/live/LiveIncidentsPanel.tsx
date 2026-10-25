@@ -640,7 +640,7 @@ export default function LiveIncidentsPanel({
           wallboard ? LIVE_ROW_GRID_TV : LIVE_ROW_GRID
         )}
       >
-        <span>Prio</span>
+        <span>Prio / Urg</span>
         <span>Incident</span>
         <span>Status</span>
         <span>SLA</span>
