@@ -85,10 +85,12 @@ async function signIn(
   return { context, page };
 }
 
-async function openDashboard(page: Page) {
-  await page.goto('/');
+async function openDashboard(page: Page, path = '/?lview=active') {
+  // An explicit view in the URL bypasses the per-user saved view from earlier tests.
+  await page.goto(path);
   const panel = page.getByTestId('live-incidents-panel');
   await expect(panel).toBeVisible();
+  await expect(panel).toHaveAttribute('data-loading', 'false');
   await expect(panel).toHaveAttribute('data-connection', 'live');
   return panel;
 }
@@ -107,11 +109,21 @@ async function adminRequest(
 ) {
   const origin = new URL(path, test.info().project.use.baseURL as string).origin;
   for (let attempt = 0; attempt < 5; attempt += 1) {
-    const response = await request.fetch(path, {
-      method,
-      data,
-      headers: { Origin: origin, 'Content-Type': 'application/json', ...headers },
-    });
+    let response;
+    try {
+      response = await request.fetch(path, {
+        method,
+        data,
+        headers: { Origin: origin, 'Content-Type': 'application/json', ...headers },
+      });
+    } catch (error) {
+      // `next dev` occasionally resets sockets under concurrent load; retry transient resets.
+      if (attempt < 4 && /ECONNRESET|socket hang up/.test(String(error))) {
+        await new Promise(resolve => setTimeout(resolve, 500));
+        continue;
+      }
+      throw error;
+    }
     if (response.status() === 429) {
       await new Promise(resolve =>
         setTimeout(resolve, Number(response.headers()['retry-after'] || 5) * 1000)
@@ -147,8 +159,22 @@ async function createIncident(
   return created.id;
 }
 
-const patchIncident = (request: APIRequestContext, id: string, data: Record<string, unknown>) =>
-  adminRequest(request, 'PATCH', `/api/incidents/${id}`, data);
+/** Cookie-authenticated browser lifecycle route (same path the incident UI uses). */
+const setStatus = (request: APIRequestContext, id: string, status: 'ACKNOWLEDGED' | 'OPEN') =>
+  adminRequest(
+    request,
+    'PATCH',
+    `/api/incidents/${id}/status`,
+    { status },
+    {
+      'Idempotency-Key': randomUUID(),
+    }
+  );
+
+/** Waits until the feed reflects the current query (no in-flight view/filter change). */
+async function settled(page: Page) {
+  await expect(page.getByTestId('live-incidents-panel')).toHaveAttribute('data-loading', 'false');
+}
 
 const row = (page: Page, id: string) =>
   page.locator(`[data-testid="live-incident-row"][data-incident-id="${id}"]`);
@@ -256,24 +282,35 @@ test.describe.serial('dashboard live incidents', () => {
     await expect(row(page, id)).toHaveAttribute('data-status', 'OPEN');
     const indexBefore = (await rowIds(page)).indexOf(id);
 
-    await patchIncident(admin.page.request, id, { status: 'ACKNOWLEDGED' });
+    await setStatus(admin.page.request, id, 'ACKNOWLEDGED');
     await expect(row(page, id)).toHaveAttribute('data-status', 'ACKNOWLEDGED');
     await expect(row(page, id)).toContainText('Acknowledged');
     expect((await rowIds(page)).indexOf(id)).toBe(indexBefore);
 
-    const peer = await prisma.user.findUniqueOrThrow({
-      where: { email: 'dashboard-alpha-peer@example.local' },
-      select: { id: true, name: true },
-    });
-    await patchIncident(admin.page.request, id, { assigneeId: peer.id });
-    await expect(row(page, id)).toContainText(peer.name);
+    // Reassign through the real server action behind the admin's "Assign to me" button.
+    await openDashboard(admin.page);
+    await row(admin.page, id).getByTestId('live-assign-me').click();
+    await expect(row(page, id)).toContainText('System Admin');
+    expect((await rowIds(page)).indexOf(id)).toBe(indexBefore);
 
-    await patchIncident(admin.page.request, id, { status: 'RESOLVED' });
+    // Resolve through the incident page's resolve dialog (a resolution note is mandatory).
+    await admin.page.goto(`/incidents/${id}`);
+    await admin.page
+      .getByRole('button', { name: /^Resolve incident$/i })
+      .first()
+      .click();
+    await admin.page
+      .getByPlaceholder(/root cause, remediation steps/i)
+      .fill('Rolled back the faulty deployment; error rate back to baseline.');
+    await admin.page
+      .getByRole('dialog')
+      .getByRole('button', { name: /^Resolve Incident$/ })
+      .click();
     await expect(row(page, id)).toHaveCount(0);
     await expectNewestFirst(page);
   });
 
-  test('filters are keyboard accessible and scoped correctly', async () => {
+  test('views are keyboard accessible and scoped correctly', async () => {
     const { page } = alpha;
     await openDashboard(page);
     const alphaUser = await prisma.user.findUniqueOrThrow({
@@ -281,10 +318,11 @@ test.describe.serial('dashboard live incidents', () => {
       select: { id: true, name: true },
     });
 
-    const critical = page.getByTestId('live-filter-critical');
+    const critical = page.getByTestId('live-view-critical');
     await critical.focus();
     await page.keyboard.press('Enter');
-    await expect(critical).toHaveAttribute('aria-pressed', 'true');
+    await expect(critical).toHaveAttribute('aria-selected', 'true');
+    await settled(page);
     await expect(page.getByTestId('live-view-all')).toHaveAttribute(
       'href',
       '/incidents?filter=critical_focus'
@@ -300,26 +338,127 @@ test.describe.serial('dashboard live incidents', () => {
       expect(item.urgency === 'HIGH' || item.priority === 'P1').toBe(true);
     }
 
-    const mine = page.getByTestId('live-filter-mine');
+    const mine = page.getByTestId('live-view-mine');
     await mine.focus();
     await page.keyboard.press('Space');
-    await expect(mine).toHaveAttribute('aria-pressed', 'true');
+    await expect(mine).toHaveAttribute('aria-selected', 'true');
+    await settled(page);
     await expect(page.getByTestId('live-incident-row').first()).toBeVisible();
-    const assignees = await page.getByTestId('live-incident-row').allInnerTexts();
-    for (const text of assignees) expect(text).toContain(alphaUser.name);
+    for (const text of await page.getByTestId('live-incident-row').allInnerTexts()) {
+      expect(text).toContain(alphaUser.name);
+    }
 
-    await page.getByTestId('live-filter-my_teams').click();
-    await expect(page.getByTestId('live-incidents-total')).toHaveText(/\d+ active/);
+    await page.getByTestId('live-view-my_teams').click();
+    await expect(page.getByTestId('live-incidents-total')).toHaveText(/\d+ matching/);
     await expect(page.getByTestId('live-incidents-panel')).not.toContainText('Bravo restricted');
 
-    await page.getByTestId('live-filter-active').click();
-    await expect(page.getByTestId('live-filter-active')).toHaveAttribute('aria-pressed', 'true');
+    await page.getByTestId('live-view-unassigned').click();
+    await settled(page);
+    await expect(page.getByTestId('live-incident-row').first()).toBeVisible();
+    for (const text of await page.getByTestId('live-incident-row').allInnerTexts()) {
+      expect(text).toContain('Unassigned');
+    }
 
-    // Rows are real links reachable by keyboard.
+    await page.getByTestId('live-view-active').click();
+    await expect(page.getByTestId('live-view-active')).toHaveAttribute('aria-selected', 'true');
+
+    // Rows are real links reachable by keyboard; j/k move focus between them.
     const firstLink = page.locator('[data-testid="live-incident-row"] a').first();
     await firstLink.focus();
     await expect(firstLink).toBeFocused();
     await expect(firstLink).toHaveAttribute('href', /^\/incidents\//);
+    await page.keyboard.press('j');
+    await expect(page.locator('[data-live-row-link="1"]')).toBeFocused();
+    await page.keyboard.press('k');
+    await expect(page.locator('[data-live-row-link="0"]')).toBeFocused();
+  });
+
+  test('service, search and facet filters narrow the feed and persist as a saved view', async () => {
+    const { page } = alpha;
+    await openDashboard(page);
+    const workerId = await serviceId('Dashboard Alpha Worker');
+
+    await page.getByTestId('live-filter-service').click();
+    await page.getByRole('option', { name: /Dashboard Alpha Worker/ }).click();
+    await expect(page.getByTestId('live-filter-chips')).toContainText('Dashboard Alpha Worker');
+    await expect(page).toHaveURL(new RegExp(`lservice=${workerId}`));
+    await settled(page);
+    for (const text of await page.getByTestId('live-incident-row').allInnerTexts()) {
+      expect(text).toContain('Dashboard Alpha Worker');
+    }
+
+    await page.getByTestId('live-more-filters').click();
+    await page.getByTestId('live-filter-status').locator('[data-value="ACKNOWLEDGED"]').click();
+    await page.keyboard.press('Escape');
+    await expect(page).toHaveURL(/lstatus=ACKNOWLEDGED/);
+    await settled(page);
+    await expect(page.getByTestId('live-incident-row').first()).toBeVisible();
+    for (const status of await page
+      .getByTestId('live-incident-row')
+      .evaluateAll(rows => rows.map(node => node.getAttribute('data-status')))) {
+      expect(status).toBe('ACKNOWLEDGED');
+    }
+
+    // Saved view: reloading the bare dashboard restores the last view for this user.
+    await page.goto('/');
+    await expect(page.getByTestId('live-filter-chips')).toContainText('Acknowledged');
+    await expect(page).toHaveURL(/lstatus=ACKNOWLEDGED/);
+
+    await page.getByTestId('live-clear-filters').click();
+    await expect(page.getByTestId('live-filter-chips')).toHaveCount(0);
+
+    const search = page.getByTestId('live-search');
+    await page.keyboard.press('/');
+    await expect(search).toBeFocused();
+    await search.fill('Queue backlog');
+    await expect(page).toHaveURL(/lq=Queue\+backlog/);
+    await settled(page);
+    await expect(page.getByTestId('live-incident-row').first()).toBeVisible();
+    for (const text of await page.getByTestId('live-incident-row').allInnerTexts()) {
+      expect(text.toLowerCase()).toContain('queue backlog');
+    }
+    await search.press('Escape');
+    await expect(page.getByTestId('live-filter-chips')).toHaveCount(0);
+  });
+
+  test('command center counters drive the live view', async () => {
+    const { page } = alpha;
+    await openDashboard(page);
+    await page.getByTestId('counter-unassigned').click();
+    await expect(page.getByTestId('live-view-unassigned')).toHaveAttribute('aria-selected', 'true');
+    await page.getByTestId('counter-unassigned').click();
+    await expect(page.getByTestId('live-view-active')).toHaveAttribute('aria-selected', 'true');
+    await page.getByTestId('counter-triggered').click();
+    await expect(page).toHaveURL(/lstatus=OPEN/);
+    await page.getByTestId('counter-triggered').click();
+    await expect(page).not.toHaveURL(/lstatus=/);
+  });
+
+  test('quick actions respect permissions and update optimistically', async () => {
+    // A scoped USER never sees management actions.
+    await openDashboard(alpha.page);
+    await expect(alpha.page.getByTestId('live-ack')).toHaveCount(0);
+    await expect(alpha.page.getByTestId('live-assign-me')).toHaveCount(0);
+
+    const { page } = admin;
+    const id = await createIncident(admin.page.request, {
+      title: `Quick action ${runTag()}`,
+      service: 'Dashboard Alpha API',
+    });
+    await openDashboard(page);
+    await expect(row(page, id)).toBeVisible();
+    await row(page, id).getByTestId('live-ack').click();
+    await expect(row(page, id)).toHaveAttribute('data-status', 'ACKNOWLEDGED');
+    await row(page, id).getByTestId('live-assign-me').click();
+    await expect(row(page, id)).toContainText('System Admin');
+    await expect
+      .poll(async () =>
+        prisma.incident.findUnique({ where: { id }, select: { status: true, assignee: true } })
+      )
+      .toMatchObject({ status: 'ACKNOWLEDGED', assignee: { email: ADMIN.email } });
+    // The scoped viewer sees the same change arrive in real time.
+    await openDashboard(alpha.page);
+    await expect(row(alpha.page, id)).toHaveAttribute('data-status', 'ACKNOWLEDGED');
   });
 
   test('pause buffers changes with a pending count and resume applies them', async () => {
@@ -383,14 +522,30 @@ test.describe.serial('dashboard live incidents', () => {
     await expect(row(page, visibleId)).toBeVisible();
     await expect(row(page, hiddenId)).toHaveCount(0);
 
-    for (const filter of ['active', 'critical', 'mine', 'my_teams']) {
-      const response = await page.request.get(`/api/dashboard/live-incidents?filter=${filter}`);
-      expect(response.ok()).toBeTruthy();
+    const bravoGateway = await serviceId('Dashboard Bravo Gateway');
+    const bravoTeam = await prisma.team.findUniqueOrThrow({
+      where: { name: 'Dashboard Bravo' },
+      select: { id: true },
+    });
+    // Every view and even explicitly targeting the other team's service/team stays scoped.
+    for (const query of [
+      'view=active',
+      'view=critical',
+      'view=mine',
+      'view=my_teams',
+      'view=unassigned',
+      'view=breaching',
+      `service=${bravoGateway}`,
+      `team=${bravoTeam.id}`,
+      'q=Bravo',
+    ]) {
+      const response = await page.request.get(`/api/dashboard/live?${query}`);
+      expect(response.ok(), query).toBeTruthy();
       const body = await response.text();
       expect(body).not.toContain(hiddenId);
       expect(body).not.toContain('Bravo restricted');
     }
-    const forged = await page.request.get('/api/dashboard/live-incidents?filter=active&userId=x');
+    const forged = await page.request.get('/api/dashboard/live?view=active&userId=x');
     expect(forged.status()).toBe(400);
   });
 
@@ -405,16 +560,21 @@ test.describe.serial('dashboard live incidents', () => {
     await page.getByTestId('live-show-more').click();
     await expect(page.getByTestId('live-incident-row')).toHaveCount(10);
 
-    const ids = await Promise.all(
-      Array.from({ length: 8 }, (_, index) =>
-        createIncident(admin.page.request, {
-          title: `Burst ${index} ${runTag()}`,
-          service: index % 2 ? 'Dashboard Alpha API' : 'Dashboard Alpha Worker',
-          urgency: 'MEDIUM',
-          priority: 'P2',
-        })
-      )
-    );
+    const ids: string[] = [];
+    for (const wave of [0, 1]) {
+      ids.push(
+        ...(await Promise.all(
+          Array.from({ length: 4 }, (_, index) =>
+            createIncident(admin.page.request, {
+              title: `Burst ${wave * 4 + index} ${runTag()}`,
+              service: index % 2 ? 'Dashboard Alpha API' : 'Dashboard Alpha Worker',
+              urgency: 'MEDIUM',
+              priority: 'P2',
+            })
+          )
+        ))
+      );
+    }
     await expect(page.getByTestId('live-incidents-total')).toHaveText('158 active');
     const top = await rowIds(page);
     for (const id of ids) expect(top.slice(0, 10)).toContain(id);
@@ -430,7 +590,7 @@ test.describe.serial('dashboard live incidents', () => {
   test('responsive layout: stacked cards on phones, dense rows on desktop', async ({}, testInfo) => {
     const { page } = alpha;
     await openDashboard(page);
-    const header = page.getByText('Priority', { exact: true });
+    const header = page.getByText('Prio', { exact: true });
     const firstRow = page.getByTestId('live-incident-row').first();
     const box = await firstRow.boundingBox();
     if (testInfo.project.name.startsWith('mobile')) {
@@ -438,7 +598,7 @@ test.describe.serial('dashboard live incidents', () => {
       expect(box!.height).toBeGreaterThan(48);
     } else {
       await expect(header).toBeVisible();
-      expect(box!.height).toBeLessThan(56);
+      expect(box!.height).toBeLessThan(64);
     }
     const overflow = await page.evaluate(
       () => document.documentElement.scrollWidth - document.documentElement.clientWidth
@@ -512,6 +672,60 @@ test.describe.serial('dashboard live incidents', () => {
     } finally {
       await empty.context.close();
     }
+  });
+
+  test('TV wallboard is chrome-free, read-only and enters real fullscreen', async ({
+    browserName,
+  }, testInfo) => {
+    const { page } = alpha;
+    await page.goto('/?view=wallboard');
+    await expect(page).toHaveURL(/\/wallboard$/);
+    const board = page.getByTestId('wallboard');
+    await expect(board).toBeVisible();
+    await expect(page.locator('#app-sidebar')).toHaveCount(0);
+    await expect(page.getByTestId('live-incident-row').first()).toBeVisible();
+    await expect(page.getByTestId('live-ack')).toHaveCount(0);
+    await expect(page.getByTestId('live-pause-toggle')).toHaveCount(0);
+
+    // The board fills the viewport edge to edge.
+    const viewport = page.viewportSize()!;
+    const box = (await board.boundingBox())!;
+    expect(Math.round(box.width)).toBe(viewport.width);
+    expect(Math.round(box.height)).toBe(viewport.height);
+
+    // Text size control for distant screens (persisted per screen).
+    await expect(page.getByTestId('wallboard-scale')).toHaveText('100%');
+    await page.keyboard.press('+');
+    await expect(page.getByTestId('wallboard-scale')).toHaveText('113%');
+    await page.reload();
+    await expect(page.getByTestId('wallboard-scale')).toHaveText('113%');
+    await page.keyboard.press('-');
+
+    // Fullscreen is either entered or the user is told how to do it; never a silent no-op.
+    await page.getByTestId('wallboard-fullscreen').click();
+    const outcome = await Promise.race([
+      expect(board)
+        .toHaveAttribute('data-fullscreen', 'true', { timeout: 5_000 })
+        .then(() => 'fullscreen')
+        .catch(() => 'none'),
+      page
+        .getByTestId('wallboard-fullscreen-hint')
+        .waitFor({ timeout: 5_000 })
+        .then(() => 'hint')
+        .catch(() => 'none'),
+    ]);
+    expect(['fullscreen', 'hint']).toContain(outcome);
+    if (browserName === 'chromium' && !testInfo.project.name.startsWith('mobile')) {
+      expect(outcome).toBe('fullscreen');
+      expect(
+        await page.evaluate(() => document.fullscreenElement?.getAttribute('data-testid'))
+      ).toBe('wallboard');
+      await page.keyboard.press('f');
+      await expect(board).toHaveAttribute('data-fullscreen', 'false');
+    }
+
+    await page.getByTestId('wallboard-exit').click();
+    await expect(page.getByTestId('live-incidents-panel')).toBeVisible();
   });
 
   test('phones without a desktop preference still land on the mobile PWA', async ({

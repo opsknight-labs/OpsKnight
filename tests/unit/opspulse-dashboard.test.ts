@@ -6,37 +6,28 @@ import type { SLAMetrics } from '@/lib/sla';
 
 describe('Ops Pulse dashboard contract', () => {
   const pageSource = readFileSync('src/app/(app)/page.tsx', 'utf8');
-  const operationalSource = readFileSync(
-    'src/lib/dashboard/dashboard-operational-snapshot.ts',
-    'utf8'
-  );
+  const liveSource = readFileSync('src/lib/dashboard/live-incidents.ts', 'utf8');
+  const engineSource = readFileSync('src/lib/dashboard/live-incidents-engine.ts', 'utf8');
+  const railSource = readFileSync('src/components/dashboard/live/ResponderRail.tsx', 'utf8');
 
-  it('queries critical focus incidents directly with authorization and active status', () => {
-    expect(pageSource).toContain('criticalFocusIncidents');
-    expect(operationalSource).toContain("status: { in: ['OPEN', 'ACKNOWLEDGED'] }");
-    expect(operationalSource).toContain("OR: [{ urgency: 'HIGH' }, { priority: 'P1' }]");
-    expect(operationalSource).toContain('incidentReadWhere(actor)');
+  it('derives critical focus and the user queue from the authorized active set', () => {
+    expect(liveSource).toContain('incidentReadWhere(actor)');
+    expect(liveSource).toContain('LIVE_ACTIVE_STATUSES');
+    expect(engineSource).toContain("case 'critical':\n      return isCriticalIncident(row);");
+    expect(engineSource).toContain('row.assignee?.id === ctx.actorId');
   });
 
-  it('queries user queue incidents and count directly with authorization and active status', () => {
-    expect(pageSource).toContain('myQueueIncidents');
-    expect(pageSource).toContain('myQueueCount');
-    expect(operationalSource).toContain('assigneeId: actor.id');
+  it('renders queue, SLA risk and services in the responder rail', () => {
+    expect(pageSource).toContain('<MyQueueCard />');
+    expect(pageSource).toContain('<SlaRiskCard />');
+    expect(pageSource).toContain('<ServicesAtRiskCard />');
+    expect(engineSource).toContain('isCriticalIncident(row) ? 0 : 1');
   });
 
-  it('uses direct query results for criticalFocus and myQueueItems', () => {
-    expect(pageSource).toContain('criticalFocusIncidents.slice(0, 3)');
-    expect(pageSource).toContain('myQueueIncidents.slice(0, 3)');
-    expect(pageSource).toContain('currentCriticalActive');
-    expect(pageSource).toContain('Math.max(');
-  });
-
-  it('handles empty state properly when critical incidents exist vs all systems stable', () => {
-    expect(pageSource).toContain('active critical incident');
-    expect(pageSource).toContain('All systems stable');
-    expect(pageSource).not.toContain(
-      '<ShieldAlert className="w-6 h-6 mx-auto text-rose-400 mb-2" />'
-    );
+  it('shows explicit empty states rather than blank widgets', () => {
+    expect(railSource).toContain('Your queue is clear');
+    expect(railSource).toContain('Everything is within SLA');
+    expect(railSource).toContain('No service has active incidents');
   });
 
   it('preserves activeIncidentSummaries in hybrid SLA metrics merging', () => {

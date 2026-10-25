@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import {
   CheckCircle2,
   Download,
@@ -66,7 +65,7 @@ function healthCopy(health: LiveConnectionHealth): { label: string; dot: string;
 
 const SHORTCUTS: Array<[string, string]> = [
   ['j / k', 'Next / previous incident'],
-  ['Enter', 'Open focused incident'],
+  ['Enter', 'Open the focused incident'],
   ['a', 'Acknowledge focused incident'],
   ['m', 'Assign focused incident to me'],
   ['/', 'Search live incidents'],
@@ -142,7 +141,6 @@ export default function LiveIncidentsPanel({
   currentUserName: string;
   variant?: 'default' | 'wallboard';
 }) {
-  const router = useRouter();
   const { showToast } = useToast();
   const live = useLiveDashboard();
   const {
@@ -291,12 +289,6 @@ export default function LiveIncidentsPanel({
           event.preventDefault();
           togglePaused();
           return;
-        case 'Enter':
-          if (focused && !(event.target instanceof HTMLAnchorElement)) {
-            event.preventDefault();
-            router.push(`/incidents/${focused.id}`);
-          }
-          return;
       }
     };
     window.addEventListener('keydown', onKeyDown);
@@ -309,7 +301,6 @@ export default function LiveIncidentsPanel({
     currentUserId,
     focusRow,
     focusedIndex,
-    router,
     togglePaused,
     visible,
     wallboard,
@@ -356,6 +347,7 @@ export default function LiveIncidentsPanel({
       data-testid="live-incidents-panel"
       data-connection={health}
       data-paused={paused ? 'true' : 'false'}
+      data-loading={loading ? 'true' : 'false'}
       className={cn(
         'rounded-2xl border border-border bg-card shadow-xs overflow-hidden flex flex-col',
         wallboard && 'h-full'
