@@ -98,6 +98,7 @@ export function DashboardAnalyticsProvider({
 
   useEffect(() => {
     if (!activated) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Synchronize analytics on activation
     void load();
     let reconciliationTimer: number | null = null;
     const scheduleReconciliation = () => {
