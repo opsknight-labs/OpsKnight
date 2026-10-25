@@ -16,6 +16,8 @@ let finishProfile;
   const fixture = await prepareStageFixture(db, 'effects-only', 300);
   const effectPlan = await require('../../src/lib/incident-effect-planner').planIncidentEffects(1);
   const expectedProviderJobs = effectPlan.collaboration === 'DISABLED' ? 0 : 600;
+  const expectedScheduledJobs =
+    fixture.expectedOutbox - 300 + (effectPlan.collaboration === 'DISABLED' ? 0 : 300);
   finishProfile = await require('./database-profile.cjs')(db);
   const started = performance.now(),
     cpu = process.cpuUsage();
@@ -44,10 +46,11 @@ let finishProfile;
   const passed =
     elapsedMs <= 120000 &&
     failed === 0 &&
-    count('SCHEDULED_TASK', 'COMPLETED') === 1500 &&
+    count('SCHEDULED_TASK', 'COMPLETED') === expectedScheduledJobs &&
     count('WAR_ROOM_PROVIDER_EVENT', 'COMPLETED') === expectedProviderJobs &&
     count('RUNBOOK', 'PENDING') === 300 &&
-    jobs.reduce((n, r) => n + r._count._all, 0) === 1800 + expectedProviderJobs;
+    jobs.reduce((n, r) => n + r._count._all, 0) ===
+      expectedScheduledJobs + 300 + expectedProviderJobs;
   const evidence = {
     variant: process.env.INGESTION_DISPATCH_VARIANT || 'current-source',
     sourceRevision: process.env.INGESTION_DISPATCH_SOURCE_REVISION || 'working-tree-unverified',
@@ -59,6 +62,7 @@ let finishProfile;
     fixture,
     effectPlan,
     expectedProviderJobs,
+    expectedScheduledJobs,
     elapsedMs,
     cpuMs: (usage.user + usage.system) / 1000,
     cycles,
@@ -69,7 +73,7 @@ let finishProfile;
     queriesPerUnit: databaseProfile.totalQueryCalls / 300,
     databaseProfile,
     scope:
-      'Controlled host-process unified operational-queue diagnostic, 300 default 10KB critical-trigger incidents, no providers/users/Automation; 1,500 parents plus the disclosed planned provider child jobs must finish, 300 runbook jobs intentionally held. This is an execution-cost probe, not a split-general-worker routing test. Source variant is producer-identified; comparisons require controlled source and resources. No native-image, provider, full-stack or sustained capacity certification.',
+      'Controlled host-process unified operational-queue diagnostic, 300 default 10KB critical-trigger incidents, no providers/users/Automation; The disclosed compact parents, planned effect children and provider children must finish, 300 runbook jobs intentionally held. This is an execution-cost probe, not a split-general-worker routing test. Source variant is producer-identified; comparisons require controlled source and resources. No native-image, provider, full-stack or sustained capacity certification.',
   };
   const evidencePath =
     process.env.INGESTION_DISPATCH_EVIDENCE ||

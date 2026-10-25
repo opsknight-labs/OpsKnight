@@ -1,3 +1,4 @@
+import { dispatchIncidentEffects } from '@/lib/incident-effect-dispatch';
 import { readPublishedIncidentPolicies, readPublishedClassificationPolicies, readPublishedSlaPolicies } from '@/lib/incident-policies/published';
 import { resolveIncidentClassification } from '@/lib/incidents/classification';
 import { resolveNewIncidentSlaContract } from '@/lib/incident-sla/contract';
@@ -63,6 +64,7 @@ import {
   claimPendingOperationalJobs,
   GENERAL_WORKER_EXCLUDED_JOB_TYPES,
   markJobCompleted,
+  processJob,
   processPendingJobsByType,
 } from '@/lib/jobs/queue';
 import {
@@ -157,6 +159,145 @@ afterAll(async () => {
 });
 
 describe('PostgreSQL ingestion durability', () => {
+  it('compacts ordinary defaults while independently retaining critical and Runbook work', async () => {
+    const result = await processEvent(envelope('compact-default').event, serviceId, 'integration');
+    expect(result.action).toBe('triggered');
+    if (!('incident' in result) || !result.incident) throw new Error('Expected a new incident');
+    const jobs = await prisma.backgroundJob.findMany({ where: { payload: { path: ['incidentId'], equals: result.incident!.id } } });
+    expect(jobs.filter(job => job.type === 'SCHEDULED_TASK')).toHaveLength(2);
+    expect(jobs.filter(job => job.type === 'RUNBOOK')).toHaveLength(1);
+    const payloads = jobs.map(job => job.payload as Prisma.JsonObject);
+    expect(payloads.some(payload => payload.effect === 'TRIGGER_ESCALATION_NOTIFICATIONS')).toBe(true);
+    const parent = jobs.find(job => (job.payload as Prisma.JsonObject).effect === 'DISPATCH_ORDINARY')!;
+    const token = randomUUID();
+    await prisma.backgroundJob.update({ where: { id: parent.id }, data: { status: 'PROCESSING_V2', attempts: 1, claimToken: token } });
+    const config = await prisma.chatOpsConfig.findUnique({ where: { id: 'default' } });
+    try {
+      if (config) await prisma.chatOpsConfig.update({ where: { id: 'default' }, data: { enabled: false } });
+      expect(await dispatchIncidentEffects(parent.id, 1, token)).toBe(true);
+      expect(await dispatchIncidentEffects(parent.id, 1, token)).toBe(false);
+      const final = await prisma.backgroundJob.findMany({ where: { payload: { path: ['incidentId'], equals: result.incident!.id } } });
+      expect(final).toHaveLength(3);
+      expect(final.find(job => job.id === parent.id)?.status).toBe('COMPLETED');
+    } finally {
+      if (config) await prisma.chatOpsConfig.update({ where: { id: 'default' }, data: { enabled: config.enabled } });
+    }
+  });
+
+  it('fences stale dispatch claims and atomically rolls back child intents on completion failure', async () => {
+    const incident = await prisma.incident.create({ data: { title: 'Dispatch rollback', serviceId } });
+    const at = new Date();
+    const token = randomUUID();
+    const parent = await prisma.backgroundJob.create({ data: {
+      type: 'SCHEDULED_TASK', status: 'PROCESSING_V2', attempts: 2, claimToken: token, scheduledAt: at,
+      payload: { task: 'EVENT_SIDE_EFFECT', effect: 'DISPATCH_ORDINARY', lane: 'ORDINARY_DISPATCH',
+        incidentId: incident.id, sourceEventId: randomUUID(), eventOrderAt: at.toISOString(),
+        dispatch: { version: 1, effects: ['LIFECYCLE_WEBHOOK'] },
+      },
+    } });
+    expect(await dispatchIncidentEffects(parent.id, 1, randomUUID())).toBe(false);
+    await prisma.$executeRawUnsafe(`CREATE FUNCTION ingestion_test_dispatch_completion() RETURNS trigger LANGUAGE plpgsql AS $$
+      BEGIN IF NEW.status='COMPLETED' AND NEW.payload->>'effect'='DISPATCH_ORDINARY' THEN
+        RAISE EXCEPTION 'owned dispatch completion fixture'; END IF; RETURN NEW; END $$`);
+    await prisma.$executeRawUnsafe(`CREATE TRIGGER ingestion_test_dispatch_completion BEFORE UPDATE ON "BackgroundJob"
+      FOR EACH ROW EXECUTE FUNCTION ingestion_test_dispatch_completion()`);
+    try {
+      await expect(dispatchIncidentEffects(parent.id, 2, token)).rejects.toThrow();
+      expect(await prisma.backgroundJob.count({ where: { payload: { path: ['incidentId'], equals: incident.id } } })).toBe(1);
+      expect((await prisma.backgroundJob.findUniqueOrThrow({ where: { id: parent.id } })).status).toBe('PROCESSING_V2');
+    } finally {
+      await prisma.$executeRawUnsafe('DROP TRIGGER ingestion_test_dispatch_completion ON "BackgroundJob"');
+      await prisma.$executeRawUnsafe('DROP FUNCTION ingestion_test_dispatch_completion()');
+    }
+    expect(await dispatchIncidentEffects(parent.id, 2, token)).toBe(true);
+    const children = await prisma.backgroundJob.findMany({ where: { id: { startsWith: `${parent.id}:` } } });
+    expect(children).toHaveLength(1);
+    expect(children[0].createdAt).toEqual(parent.createdAt);
+    expect(children[0].payload).toMatchObject({ effect: 'LIFECYCLE_WEBHOOK', sourceEventId: (parent.payload as Prisma.JsonObject).sourceEventId, dispatchOrderId: parent.id });
+  });
+
+  it('keeps compact generation out of old claims and orders same-instant children before later legacy work', async () => {
+    await prisma.backgroundJob.deleteMany();
+    const incident = await prisma.incident.create({ data: { title: 'Dispatch ordering', serviceId } });
+    const at = new Date('2026-01-01T00:00:00.000Z');
+    const context = { task: 'EVENT_SIDE_EFFECT', incidentId: incident.id, sourceEventId: randomUUID(), eventOrderAt: at.toISOString() };
+    const prefix = randomUUID();
+    const parentId = `${prefix}:a`, legacyId = `${prefix}:b`, criticalId = `${prefix}:c`;
+    await prisma.backgroundJob.createMany({ data: [
+      { id: parentId, type: 'SCHEDULED_TASK', status: 'PENDING_V2', scheduledAt: at, createdAt: at, payload: {
+        ...context, effect: 'DISPATCH_ORDINARY', lane: 'ORDINARY_DISPATCH', dispatch: { version: 1, effects: ['LIFECYCLE_WEBHOOK'] },
+      } },
+      { id: legacyId, type: 'SCHEDULED_TASK', status: 'PENDING', scheduledAt: at, createdAt: at, payload: {
+        ...context, effect: 'RESOLVE_WEBHOOK', lane: 'WEBHOOK',
+      } },
+      { id: criticalId, type: 'SCHEDULED_TASK', status: 'PENDING', scheduledAt: at, createdAt: at, payload: {
+        ...context, effect: 'TRIGGER_ESCALATION_NOTIFICATIONS', lane: 'PERSONAL_NOTIFICATION',
+      } },
+    ] });
+    // Old ordinary candidate eligibility excludes V2 state regardless of task.
+    const oldEligible = await prisma.backgroundJob.findMany({ where: { id: parentId, status: { in: ['PENDING', 'PROCESSING'] } } });
+    expect(oldEligible).toHaveLength(0);
+    try {
+      const initial = await claimPendingJobs(10, 'SCHEDULED_TASK');
+      expect(initial.map(job => job.id).sort()).toEqual([parentId, criticalId].sort());
+      const parent = initial.find(job => job.id === parentId)!;
+      expect(parent.status).toBe('PROCESSING_V2');
+      expect(await dispatchIncidentEffects(parent.id, parent.attempts, parent.claimToken)).toBe(true);
+      const next = await claimPendingJobs(10, 'SCHEDULED_TASK');
+      expect(next).toHaveLength(1);
+      expect(next[0].id.startsWith(`${parentId}:`)).toBe(true);
+      await prisma.backgroundJob.update({ where: { id: next[0].id }, data: { status: 'COMPLETED' } });
+      expect((await claimPendingJobs(10, 'SCHEDULED_TASK')).map(job => job.id)).toEqual([legacyId]);
+    } finally {
+      await prisma.backgroundJob.deleteMany({ where: { payload: { path: ['incidentId'], equals: incident.id } } });
+    }
+  });
+
+  it('observes service configuration enabled while dispatch waits and retains the committed child after disablement', async () => {
+    const incident = await prisma.incident.create({ data: { title: 'Dispatch configuration', serviceId } });
+    const at = new Date();
+    const parent = await prisma.backgroundJob.create({ data: {
+      type: 'SCHEDULED_TASK', status: 'PENDING_V2', scheduledAt: at,
+      payload: { task: 'EVENT_SIDE_EFFECT', effect: 'DISPATCH_ORDINARY', lane: 'ORDINARY_DISPATCH',
+        incidentId: incident.id, sourceEventId: randomUUID(), eventOrderAt: at.toISOString(),
+        dispatch: { version: 1, effects: ['TRIGGER_SERVICE_NOTIFICATION'] },
+      },
+    } });
+    const previous = await prisma.service.findUniqueOrThrow({ where: { id: serviceId }, select: { serviceNotificationChannels: true } });
+    try {
+      await prisma.service.update({ where: { id: serviceId }, data: { serviceNotificationChannels: ['WEBHOOK'] } });
+      const token = randomUUID();
+      await prisma.backgroundJob.update({ where: { id: parent.id }, data: { status: 'PROCESSING_V2', attempts: 1, claimToken: token } });
+      expect(await dispatchIncidentEffects(parent.id, 1, token)).toBe(true);
+      await prisma.service.update({ where: { id: serviceId }, data: { serviceNotificationChannels: [] } });
+      expect(await dispatchIncidentEffects(parent.id, 1, token)).toBe(false);
+      const children = await prisma.backgroundJob.findMany({ where: { id: { startsWith: `${parent.id}:` } } });
+      expect(children).toHaveLength(1);
+      expect(children[0].payload).toMatchObject({ effect: 'TRIGGER_SERVICE_NOTIFICATION', lane: 'SERVICE_NOTIFICATION', sourceEventId: (parent.payload as Prisma.JsonObject).sourceEventId });
+    } finally {
+      await prisma.service.update({ where: { id: serviceId }, data: { serviceNotificationChannels: previous.serviceNotificationChannels } });
+    }
+  });
+
+  it('settles dispatch planning failures into the protected retry generation', async () => {
+    const incident = await prisma.incident.create({ data: { title: 'Dispatch retry', serviceId } });
+    const at = new Date();
+    const parent = await prisma.backgroundJob.create({ data: {
+      type: 'SCHEDULED_TASK', status: 'PROCESSING_V2', attempts: 1, maxAttempts: 5, claimToken: randomUUID(), scheduledAt: at,
+      payload: { task: 'EVENT_SIDE_EFFECT', effect: 'DISPATCH_ORDINARY', lane: 'ORDINARY_DISPATCH',
+        incidentId: incident.id, sourceEventId: randomUUID(), eventOrderAt: at.toISOString(),
+        dispatch: { version: 999, effects: ['TRIGGER_WEBHOOK'] },
+      },
+    } });
+    expect(await processJob(parent)).toBe(false);
+    const retry = await prisma.backgroundJob.findUniqueOrThrow({ where: { id: parent.id } });
+    expect(retry.status).toBe('PENDING_V2');
+    expect(retry.claimToken).toBeNull();
+    expect(retry.scheduledAt.getTime()).toBeGreaterThan(at.getTime());
+    expect(await prisma.backgroundJob.count({ where: { id: { startsWith: `${parent.id}:` } } })).toBe(0);
+    await prisma.backgroundJob.delete({ where: { id: parent.id } });
+  });
+
   it('shares one authoritative published policy snapshot without re-reading during resolution', async () => {
     await prisma.$transaction(async tx => {
       const keys = ['integration:integration', `service:${serviceId}`, 'workspace'];

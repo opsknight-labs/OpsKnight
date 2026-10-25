@@ -107,6 +107,14 @@ function pendingStatusForJobType(type: string): JobStatus {
   return isAnnouncementFanoutV2(type) ? STATUS_PAGE_ANNOUNCEMENT_FANOUT_V2_PENDING : 'PENDING';
 }
 
+function isCompactDispatchJob(job: { type: string; payload: unknown }): boolean {
+  return (
+    job.type === 'SCHEDULED_TASK' &&
+    payloadValue(job.payload, 'task') === 'EVENT_SIDE_EFFECT' &&
+    payloadValue(job.payload, 'effect') === 'DISPATCH_ORDINARY'
+  );
+}
+
 function processingStatusForJobType(type: string): JobStatus {
   return isAnnouncementFanoutV2(type)
     ? STATUS_PAGE_ANNOUNCEMENT_FANOUT_V2_PROCESSING
@@ -161,6 +169,8 @@ function payloadValue(payload: unknown, key: string): unknown {
       return values.statusPageId;
     case 'stepIndex':
       return values.stepIndex;
+    case 'effect':
+      return values.effect;
     case 'task':
       return values.task;
     case 'warRoomId':
@@ -382,6 +392,14 @@ export async function runQueueMaintenance(prismaClient = prisma): Promise<QueueM
     )
     .catch(err => logger.warn('[Queue] Failed to sweep zombie V2 fan-out jobs', { error: err }));
 
+  await prismaClient.$executeRaw`
+    UPDATE "BackgroundJob" SET status='FAILED'::"JobStatus", "failedAt"=NOW(),
+      error='Incident dispatch claim exhausted after worker loss'
+    WHERE type='SCHEDULED_TASK'::"JobType" AND payload->>'task'='EVENT_SIDE_EFFECT'
+      AND payload->>'effect'='DISPATCH_ORDINARY' AND status='PROCESSING_V2'::"JobStatus"
+      AND attempts >= "maxAttempts" AND ("startedAt" IS NULL OR "startedAt"<NOW()-INTERVAL '20 seconds')
+  `;
+
   return { executedAt: new Date() };
 }
 
@@ -428,18 +446,22 @@ export async function claimPendingJobs(
       WHERE candidate."status" IN ('PENDING'::"JobStatus", 'PROCESSING'::"JobStatus",
         'PENDING_V2'::"JobStatus", 'PROCESSING_V2'::"JobStatus") AND (
           (
-            candidate."type"='STATUS_PAGE_ANNOUNCEMENT_FANOUT_V2'::"JobType"
+            (candidate."type"='STATUS_PAGE_ANNOUNCEMENT_FANOUT_V2'::"JobType"
+              OR (candidate."type"='SCHEDULED_TASK'::"JobType" AND candidate.payload->>'task'='EVENT_SIDE_EFFECT'
+                AND candidate.payload->>'effect'='DISPATCH_ORDINARY'))
             AND (
               candidate."status"='PENDING_V2'::"JobStatus"
               OR (
                 candidate."status"='PROCESSING_V2'::"JobStatus"
-                AND (candidate."startedAt" IS NULL OR candidate."startedAt"<NOW()-INTERVAL '10 minutes')
+                AND (candidate."startedAt" IS NULL OR candidate."startedAt"<NOW()-(${operationalLease(true)}))
               )
             )
           )
           OR
           (
             candidate."type"<>'STATUS_PAGE_ANNOUNCEMENT_FANOUT_V2'::"JobType"
+            AND NOT COALESCE((candidate."type"='SCHEDULED_TASK'::"JobType" AND candidate.payload->>'task'='EVENT_SIDE_EFFECT'
+              AND candidate.payload->>'effect'='DISPATCH_ORDINARY'), false)
             AND (
               candidate."status"='PENDING'::"JobStatus"
               OR (
@@ -455,10 +477,12 @@ export async function claimPendingJobs(
           OR candidate."payload"->>'task' IS DISTINCT FROM 'EVENT_SIDE_EFFECT'
           OR NOT EXISTS (
             SELECT 1 FROM "BackgroundJob" AS older
-            WHERE older."type"='SCHEDULED_TASK'::"JobType" AND older."status" IN ('PENDING','PROCESSING')
+            WHERE older."type"='SCHEDULED_TASK'::"JobType" AND older."status" IN ('PENDING','PROCESSING','PENDING_V2','PROCESSING_V2')
               AND older."payload"->>'task'='EVENT_SIDE_EFFECT'
               AND older."payload"->>'incidentId'=candidate."payload"->>'incidentId'
-              AND older."payload"->>'lane'=candidate."payload"->>'lane'
+              AND (older."payload"->>'lane'=candidate."payload"->>'lane'
+                OR (candidate."payload"->>'lane'<>'PERSONAL_NOTIFICATION'
+                  AND older."payload"->>'lane'='ORDINARY_DISPATCH'))
               AND older."id"<>candidate."id"
               AND (
                 (older."payload"->>'eventOrderAt')::timestamptz < (candidate."payload"->>'eventOrderAt')::timestamptz
@@ -466,7 +490,11 @@ export async function claimPendingJobs(
                   (older."payload"->>'eventOrderAt')::timestamptz = (candidate."payload"->>'eventOrderAt')::timestamptz
                   AND (
                     older."createdAt" < candidate."createdAt"
-                    OR (older."createdAt" = candidate."createdAt" AND older."id" < candidate."id")
+                    OR (older."createdAt" = candidate."createdAt" AND (
+                      COALESCE(older.payload->>'dispatchOrderId', older.id) < COALESCE(candidate.payload->>'dispatchOrderId', candidate.id)
+                      OR (COALESCE(older.payload->>'dispatchOrderId', older.id) = COALESCE(candidate.payload->>'dispatchOrderId', candidate.id)
+                        AND older.id < candidate.id)
+                    ))
                   )
                 )
               )
@@ -477,7 +505,9 @@ export async function claimPendingJobs(
     )
     UPDATE "BackgroundJob"
     SET "status"=CASE
-          WHEN "type"='STATUS_PAGE_ANNOUNCEMENT_FANOUT_V2'::"JobType" THEN 'PROCESSING_V2'::"JobStatus"
+          WHEN "type"='STATUS_PAGE_ANNOUNCEMENT_FANOUT_V2'::"JobType"
+            OR ("type"='SCHEDULED_TASK'::"JobType" AND payload->>'task'='EVENT_SIDE_EFFECT'
+              AND payload->>'effect'='DISPATCH_ORDINARY') THEN 'PROCESSING_V2'::"JobStatus"
           ELSE 'PROCESSING'::"JobStatus"
         END,
         "startedAt"=NOW(),
@@ -491,11 +521,12 @@ export async function claimPendingJobs(
 export async function markJobProcessing(jobId: string, claimToken?: string): Promise<void> {
   const existing = await prisma.backgroundJob.findUnique({
     where: { id: jobId },
-    select: { type: true },
+    select: { type: true, payload: true },
   });
   if (!existing) return;
   const type = existing.type as JobType;
   const isBulk = isBulkNotificationJob(type);
+  const compactDispatch = isCompactDispatchJob(existing);
   await prisma.backgroundJob.update({
     where: { id: jobId },
     data: isBulk
@@ -505,7 +536,7 @@ export async function markJobProcessing(jobId: string, claimToken?: string): Pro
           claimToken: claimToken ?? null,
         }
       : {
-          status: 'PROCESSING',
+          status: compactDispatch ? 'PROCESSING_V2' : 'PROCESSING',
           startedAt: new Date(),
           attempts: { increment: 1 },
           claimToken: claimToken ?? null,
@@ -824,7 +855,11 @@ export async function markJobFailed(
     data: {
       startedAt: null,
       claimToken: null,
-      status: shouldRetry ? ('PENDING' as const) : ('FAILED' as const),
+      status: shouldRetry
+        ? isCompactDispatchJob(job)
+          ? ('PENDING_V2' as const)
+          : ('PENDING' as const)
+        : ('FAILED' as const),
       failedAt: shouldRetry ? null : now,
       error: shouldRetry ? null : error,
       scheduledAt: shouldRetry
@@ -842,7 +877,10 @@ export async function markJobFailed(
   else
     await prisma.backgroundJob.updateMany({
       ...update,
-      where: { ...update.where, status: 'PROCESSING' },
+      where: {
+        ...update.where,
+        status: isCompactDispatchJob(job) ? 'PROCESSING_V2' : 'PROCESSING',
+      },
     });
 }
 
@@ -856,7 +894,9 @@ export async function processJob(jobInput: QueuedJob | string | null): Promise<b
   let leaseHeartbeat: NodeJS.Timeout | null = null;
   let claimAttempt = job.claimToken === undefined ? undefined : job.attempts;
   try {
-    const expectedProcessingStatus = processingStatusForJobType(job.type);
+    const expectedProcessingStatus = isCompactDispatchJob(job)
+      ? 'PROCESSING_V2'
+      : processingStatusForJobType(job.type);
     if (job.status !== expectedProcessingStatus) {
       job.claimToken = randomUUID();
       await markJobProcessing(job.id, job.claimToken);
@@ -1450,8 +1490,15 @@ export async function processJob(jobInput: QueuedJob | string | null): Promise<b
           });
           return false;
         }
+        if (payloadValue(job.payload, 'effect') === 'DISPATCH_ORDINARY') {
+          const { dispatchIncidentEffects } = await import('../incident-effect-dispatch');
+          return await dispatchIncidentEffects(job.id, claimAttempt, job.claimToken);
+        }
         const { processEventSideEffect } = await import('../event-side-effects');
-        await processEventSideEffect(job.payload as unknown as EventSideEffectPayload, claimAttempt);
+        await processEventSideEffect(
+          job.payload as unknown as EventSideEffectPayload,
+          claimAttempt
+        );
         await markJobCompleted(job.id, claimAttempt, job.claimToken);
         return true;
       }
@@ -1610,7 +1657,9 @@ function heartbeatClaimedBatch(jobs: QueuedJob[]) {
           OR: jobs.map(job => ({
             id: job.id,
             attempts: job.attempts,
-            status: processingStatusForJobType(job.type as JobType),
+            status: isCompactDispatchJob(job)
+              ? 'PROCESSING_V2'
+              : processingStatusForJobType(job.type as JobType),
             ...(job.claimToken === undefined ? {} : { claimToken: job.claimToken }),
           })),
         },

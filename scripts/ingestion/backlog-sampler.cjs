@@ -30,15 +30,15 @@ module.exports = async function startBacklogSampler(prisma, serviceId, intervalM
           `,
           prisma.$queryRaw`
             SELECT CASE WHEN job.payload->>'lane' IN
-                ('PERSONAL_NOTIFICATION','SERVICE_NOTIFICATION','WEBHOOK','WAR_ROOM','STATUS_PAGE','SLACK','INTEGRATION')
+                ('PERSONAL_NOTIFICATION','SERVICE_NOTIFICATION','WEBHOOK','WAR_ROOM','STATUS_PAGE','SLACK','INTEGRATION','ORDINARY_DISPATCH')
                 THEN job.payload->>'lane' ELSE 'OTHER' END AS lane,
               COUNT(*)::int AS total,
               COUNT(*) FILTER (WHERE job.status = 'COMPLETED')::int AS completed,
-              COUNT(*) FILTER (WHERE job.status = 'PENDING' AND job."scheduledAt" <= clock_timestamp())::int AS due,
-              COUNT(*) FILTER (WHERE job.status = 'PROCESSING')::int AS processing,
+              COUNT(*) FILTER (WHERE job.status IN ('PENDING', 'PENDING_V2') AND job."scheduledAt" <= clock_timestamp())::int AS due,
+              COUNT(*) FILTER (WHERE job.status IN ('PROCESSING', 'PROCESSING_V2'))::int AS processing,
               COUNT(*) FILTER (WHERE job.status = 'FAILED')::int AS failed,
               COALESCE(MAX(EXTRACT(EPOCH FROM (clock_timestamp() - job."scheduledAt")) * 1000)
-                FILTER (WHERE job.status = 'PENDING' AND job."scheduledAt" <= clock_timestamp()), 0)::double precision AS "oldestDueAgeMs"
+                FILTER (WHERE job.status IN ('PENDING', 'PENDING_V2') AND job."scheduledAt" <= clock_timestamp()), 0)::double precision AS "oldestDueAgeMs"
             FROM "BackgroundJob" job JOIN "Incident" incident ON incident.id = job.payload->>'incidentId'
             WHERE incident."serviceId" = ${serviceId}
               AND job.type = 'SCHEDULED_TASK' AND job.payload->>'task' = 'EVENT_SIDE_EFFECT'

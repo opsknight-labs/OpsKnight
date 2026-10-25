@@ -101,7 +101,11 @@ async function prepareStageFixture(prisma, stage, count) {
   else
     await prisma.$executeRaw`UPDATE "BackgroundJob" SET "scheduledAt" = clock_timestamp() + INTERVAL '1 day'`;
   const expectedOutbox =
-    count * (require('../../src/lib/event-outbox').getEventSideEffects('triggered').length + 1);
+    count *
+    (require('../../src/lib/event-outbox').getDurableEventSideEffects(
+      require('../../src/lib/event-outbox').getEventSideEffects('triggered')
+    ).length +
+      1);
   if (stage === 'effects-only') assert.equal(await prisma.backgroundJob.count(), expectedOutbox);
   return {
     expectedOutbox,
@@ -179,7 +183,7 @@ function stageUnclaimed(fixture, value) {
     );
   return (
     value.jobs.reduce((sum, row) => sum + row.count, 0) === fixture.initialJobs &&
-    value.jobs.every(row => row.status === 'PENDING' && row.maxAttemptsUsed === 0)
+    value.jobs.every(row => ['PENDING', 'PENDING_V2'].includes(row.status) && row.maxAttemptsUsed === 0)
   );
 }
 
@@ -198,7 +202,7 @@ async function measureStage(prisma, fixture, timeoutMs = 120000) {
     if (fixture.stage === 'incident-only')
       await prisma.$executeRaw`UPDATE "IngestionReceipt" SET "availableAt" = clock_timestamp() WHERE "serviceId" = ${fixture.serviceId}`;
     else
-      await prisma.$executeRaw`UPDATE "BackgroundJob" SET "scheduledAt" = clock_timestamp() WHERE status = 'PENDING'`;
+      await prisma.$executeRaw`UPDATE "BackgroundJob" SET "scheduledAt" = clock_timestamp() WHERE status IN ('PENDING', 'PENDING_V2')`;
     while (performance.now() - started < timeoutMs) {
       final = await snapshot(prisma, fixture);
       samples.push({ elapsedMs: performance.now() - started, ...final });

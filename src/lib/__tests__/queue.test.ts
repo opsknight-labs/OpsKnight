@@ -298,7 +298,7 @@ describe('queue.processJob SCHEDULED_TASK event side effects', () => {
       maxAttempts: 5,
     });
     expect(result).toBe(true);
-    expect(processEventSideEffectMock).toHaveBeenCalledWith(payload);
+    expect(processEventSideEffectMock).toHaveBeenCalledWith(payload, undefined);
     expect(prismaMock.backgroundJob.update).toHaveBeenCalledWith(
       expect.objectContaining({
         where: { id: 'job-side-effect' },
