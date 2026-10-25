@@ -1,0 +1,42 @@
+{
+  "sourceRevision": "f159a76d3b82203f9ec397e59049bd09c4b8b7e5",
+  "runs": [
+    {
+      "label": "a1",
+      "variant": "baseline",
+      "database": "ingestion_test_query_events_a1_20261025",
+      "cpuMs": 928.793,
+      "elapsedMs": 2066.2282910000004,
+      "queriesPerEvent": 0.637
+    },
+    {
+      "label": "b1",
+      "variant": "candidate",
+      "database": "ingestion_test_query_events_b1_20261025",
+      "cpuMs": 871.236,
+      "elapsedMs": 2059.6230000000005,
+      "queriesPerEvent": 0.638
+    },
+    {
+      "label": "b2",
+      "variant": "candidate",
+      "database": "ingestion_test_query_events_b2_20261025",
+      "cpuMs": 869.04,
+      "elapsedMs": 1915.483417,
+      "queriesPerEvent": 0.635
+    },
+    {
+      "label": "a2",
+      "variant": "baseline",
+      "database": "ingestion_test_query_events_a2_20261025",
+      "cpuMs": 924.243,
+      "elapsedMs": 2035.5491670000001,
+      "queriesPerEvent": 0.637
+    }
+  ],
+  "prismaSourceSha256": {
+    "baseline": "2739c00adede0109e1c3dad770c6e854496d99a2eee1da7b2697b04c745b547c",
+    "candidate": "bfdb96f708c9a0408c0aafe3d28418cf2fdf015597ca737415bee962d9ca5827"
+  },
+  "scope": "Private host admission-only A-B-B-A, same1000 random10KB envelopes/concurrency16/pool5. Candidate replaces every-query engine event emission with parameter-free slow client-operation middleware. Different duration scope; transaction-level engine events not replaced. Prototype only, no production edit or native certification."
+}

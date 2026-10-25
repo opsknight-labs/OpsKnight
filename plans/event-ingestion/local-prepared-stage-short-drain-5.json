@@ -1,0 +1,76 @@
+{
+  "sourceRevision": "f159a76d3b82203f9ec397e59049bd09c4b8b7e5",
+  "imageId": "sha256:84724613803dfe02366474810f89b91fc00f2a50c31b6f1d3d41103f9abe6524",
+  "runId": "2d831de2-f65a-449b-b858-94e46bbebf10",
+  "target": 5,
+  "duration": "1m",
+  "generalWorkerReplicas": 1,
+  "httpPassed": true,
+  "localSmtpPassed": true,
+  "shortPreflightPassed": false,
+  "queueBounded": false,
+  "lastQueueSamples": [
+    {
+      "elapsedMs": 40037.427833,
+      "due": 20,
+      "oldestDueMs": 736.688,
+      "failed": 0
+    },
+    {
+      "elapsedMs": 50032.772083,
+      "due": 21,
+      "oldestDueMs": 901.55,
+      "failed": 0
+    },
+    {
+      "elapsedMs": 60043.537917,
+      "due": 0,
+      "oldestDueMs": 0,
+      "failed": 0
+    },
+    {
+      "elapsedMs": 60625.96325,
+      "due": 10,
+      "oldestDueMs": 582.704,
+      "failed": 0
+    }
+  ],
+  "finalDrain": {
+    "observedAt": "2026-10-25T16:21:34.094345+00:00",
+    "dueUnfinished": 0,
+    "jobs": [
+      {
+        "type": "ESCALATION",
+        "status": "COMPLETED",
+        "count": 1
+      },
+      {
+        "type": "SCHEDULED_TASK",
+        "status": "COMPLETED",
+        "count": 1510
+      },
+      {
+        "type": "COMPLIANCE_EVALUATION_SWEEP",
+        "status": "PENDING",
+        "count": 1
+      },
+      {
+        "type": "COMPLIANCE_EVALUATION_SWEEP",
+        "status": "COMPLETED",
+        "count": 1
+      },
+      {
+        "type": "COMPLIANCE_DRIFT_PROJECT",
+        "status": "COMPLETED",
+        "count": 6
+      },
+      {
+        "type": "RUNBOOK",
+        "status": "COMPLETED",
+        "count": 302
+      }
+    ],
+    "deliveries": null
+  },
+  "scope": "Short fresh-incident default/unconfigured-provider smoke with one separate pinned-Automation SMTP fixture. All active job families inspected after owned topology cleanup. Not sustained, compact-budget, configured fanout, actual Runbook execution, HA, remote delivery or release certification. General workers1; web1/ingestion1/six support roles1CPU each, DB uncapped/shared Docker VM."
+}
