@@ -52,6 +52,7 @@ import { transformPrometheusToEvent, type PrometheusAlert } from '@/lib/integrat
 import { acquireRetentionResourceLock } from '@/lib/retention/resource-lock';
 import { getIngestionPolicy } from '@/lib/ingestion/policy';
 import { runtimeOperationalMetrics } from '@/lib/metrics/operational/registry';
+import { processPendingJobsByType } from '@/lib/jobs/queue';
 
 // Fail closed rather than skipping certification or truncating a shared database.
 const database = new URL(process.env.DATABASE_URL ?? 'http://missing');
@@ -137,6 +138,77 @@ afterAll(async () => {
 });
 
 describe('PostgreSQL ingestion durability', () => {
+  it('refills an independent job slot while another claimed job waits on PostgreSQL', async () => {
+    const jobs = await Promise.all(
+      [true, false, false].map((slotHold, index) =>
+        prisma.backgroundJob.create({
+          data: {
+            type: 'NOTIFICATION',
+            scheduledAt: new Date(Date.UTC(2000, 0, 1, 0, 0, index)),
+            payload: { slotHold },
+          },
+        })
+      )
+    );
+    let release!: () => void;
+    let ready!: () => void;
+    const acquired = new Promise<void>(resolve => (ready = resolve));
+    const held = new Promise<void>(resolve => (release = resolve));
+    let holder: Promise<unknown> | undefined;
+    let processing: ReturnType<typeof processPendingJobsByType> | undefined;
+    try {
+      // Disposable database only: block retirement of one fixture job, without
+      // blocking the initial SKIP LOCKED claim or other jobs' completion.
+      await prisma.$executeRawUnsafe(`CREATE FUNCTION ingestion_test_hold_slot() RETURNS trigger LANGUAGE plpgsql AS $$
+        BEGIN
+          IF NEW.status = 'CANCELLED' AND NEW.payload->>'slotHold' = 'true' THEN
+            PERFORM pg_advisory_xact_lock(hashtextextended(NEW.id, 0));
+          END IF;
+          RETURN NEW;
+        END $$`);
+      await prisma.$executeRawUnsafe(`CREATE TRIGGER ingestion_test_hold_slot
+        BEFORE UPDATE ON "BackgroundJob" FOR EACH ROW EXECUTE FUNCTION ingestion_test_hold_slot()`);
+      holder = prisma.$transaction(
+        async tx => {
+          await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${jobs[0].id}, 0))`;
+          ready();
+          await held;
+        },
+        { timeout: 15000 }
+      );
+      await Promise.race([
+        acquired,
+        holder.then(() => {
+          throw new Error('Slot lock fixture ended before acquiring its lock');
+        }),
+      ]);
+      processing = processPendingJobsByType('NOTIFICATION', 3, 2);
+      const deadline = Date.now() + 5000;
+      let statuses: string[] = [];
+      do {
+        const rows = await prisma.backgroundJob.findMany({
+          where: { id: { in: jobs.map(job => job.id) } },
+          select: { id: true, status: true },
+        });
+        statuses = jobs.map(job => rows.find(row => row.id === job.id)!.status);
+        if (statuses[2] === 'CANCELLED') break;
+        await new Promise(resolve => setTimeout(resolve, 10));
+      } while (Date.now() < deadline);
+      expect(statuses).toEqual(['PROCESSING', 'CANCELLED', 'CANCELLED']);
+      release();
+      await holder;
+      await expect(processing).resolves.toEqual({ processed: 3, failed: 0, total: 3 });
+    } finally {
+      release();
+      await Promise.allSettled([holder, processing]);
+      await prisma.$executeRawUnsafe(
+        'DROP TRIGGER IF EXISTS ingestion_test_hold_slot ON "BackgroundJob"'
+      );
+      await prisma.$executeRawUnsafe('DROP FUNCTION IF EXISTS ingestion_test_hold_slot()');
+      await prisma.backgroundJob.deleteMany({ where: { id: { in: jobs.map(job => job.id) } } });
+    }
+  });
+
   it('recovers a terminated processing connection without losing its event or duplicating side effects', async () => {
     const previousRole = process.env.OPSKNIGHT_PROCESS_ROLE;
     process.env.OPSKNIGHT_PROCESS_ROLE = 'integrated';
