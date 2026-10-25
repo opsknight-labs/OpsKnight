@@ -165,12 +165,12 @@ describe('PostgreSQL ingestion durability', () => {
     try {
       await prisma.chatOpsConfig.upsert({ where: { id: 'default' },
         create: { enabled: false }, update: { enabled: false } });
-      await processEventSideEffect(payload);
+      await processEventSideEffect(payload, 1);
       expect(await prisma.warRoomProviderEventDelivery.count({ where: { incidentId: incident.id } })).toBe(0);
       // This durable parent was enqueued before enablement but not yet executed.
       const queued = { ...payload, sourceEventId: randomUUID() };
       await prisma.chatOpsConfig.update({ where: { id: 'default' }, data: { enabled: true } });
-      await processEventSideEffect(queued);
+      await processEventSideEffect(queued, 1);
       expect(await prisma.warRoomProviderEventDelivery.count({ where: { incidentId: incident.id } })).toBe(2);
       await prisma.chatOpsConfig.update({ where: { id: 'default' }, data: { enabled: false } });
       const recovery = { ...payload, sourceEventId: randomUUID() };
@@ -179,10 +179,40 @@ describe('PostgreSQL ingestion durability', () => {
         kind: 'TRIGGER', idempotencyKey: warRoomIdempotencyKey(event), eventPayload: event });
       expect(await prisma.backgroundJob.count({ where: { type: 'WAR_ROOM_PROVIDER_EVENT',
         payload: { path: ['deliveryId'], equals: delivery.id } } })).toBe(0);
-      await processEventSideEffect(recovery);
+      await processEventSideEffect(recovery, 2);
       expect(await prisma.backgroundJob.count({ where: { type: 'WAR_ROOM_PROVIDER_EVENT',
         payload: { path: ['deliveryId'], equals: delivery.id } } })).toBe(1);
-      expect(await prisma.warRoomProviderEventDelivery.count({ where: { incidentId: incident.id } })).toBe(3);
+      expect(await prisma.warRoomProviderEventDelivery.count({ where: { incidentId: incident.id } })).toBe(4);
+      // A reclaimed parent must wait for an older producer's uncommitted
+      // unique-key delivery, not conclude that disabled config makes it absent.
+      const late = { ...payload, sourceEventId: randomUUID() };
+      const lateEvent = { kind: 'TRIGGER' as const, incidentId: incident.id, incidentEventId: late.sourceEventId };
+      let releaseWriter!: () => void;
+      let inserted!: () => void;
+      const held = new Promise<void>(resolve => { releaseWriter = resolve; });
+      const ready = new Promise<void>(resolve => { inserted = resolve; });
+      const lateId = randomUUID();
+      const writer = prisma.$transaction(async tx => {
+        await tx.warRoomProviderEventDelivery.create({ data: {
+          id: lateId, provider: 'SLACK', incidentId: incident.id, kind: 'TRIGGER',
+          idempotencyKey: warRoomIdempotencyKey(lateEvent), eventPayload: lateEvent,
+        } });
+        inserted();
+        await held;
+      }, { timeout: 10000 });
+      await Promise.race([ready, writer.then(() => { throw new Error('Writer ended before overlap'); })]);
+      let retryFinished = false;
+      const retry = processEventSideEffect(late, 2).then(() => { retryFinished = true; });
+      try {
+        await new Promise(resolve => setTimeout(resolve, 50));
+        expect(retryFinished).toBe(false);
+      } finally {
+        releaseWriter();
+        await writer;
+        await retry;
+      }
+      expect(await prisma.backgroundJob.count({ where: { type: 'WAR_ROOM_PROVIDER_EVENT',
+        payload: { path: ['deliveryId'], equals: lateId } } })).toBe(1);
     } finally {
       if (previous) await prisma.chatOpsConfig.update({ where: { id: 'default' }, data: { enabled: previous.enabled } });
       else await prisma.chatOpsConfig.deleteMany({ where: { id: 'default' } });

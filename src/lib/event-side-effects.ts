@@ -381,7 +381,10 @@ async function archiveWarRoomIfStillResolved(payload: EventSideEffectPayload): P
   });
 }
 
-export async function processEventSideEffect(payload: EventSideEffectPayload): Promise<void> {
+export async function processEventSideEffect(
+  payload: EventSideEffectPayload,
+  parentAttempt?: number
+): Promise<void> {
   if (
     payload.task !== 'EVENT_SIDE_EFFECT' ||
     !payload.effect ||
@@ -404,7 +407,7 @@ export async function processEventSideEffect(payload: EventSideEffectPayload): P
       return;
     case 'TRIGGER_WAR_ROOM': {
       const { handleIncidentWarRoomEvent } = await import('./war-room/engine');
-      const plan = await planIncidentEffects();
+      const plan = await planIncidentEffects(parentAttempt);
       await handleIncidentWarRoomEvent({
         kind: 'TRIGGER',
         incidentId: payload.incidentId,

@@ -1451,7 +1451,7 @@ export async function processJob(jobInput: QueuedJob | string | null): Promise<b
           return false;
         }
         const { processEventSideEffect } = await import('../event-side-effects');
-        await processEventSideEffect(job.payload as unknown as EventSideEffectPayload);
+        await processEventSideEffect(job.payload as unknown as EventSideEffectPayload, claimAttempt);
         await markJobCompleted(job.id, claimAttempt, job.claimToken);
         return true;
       }

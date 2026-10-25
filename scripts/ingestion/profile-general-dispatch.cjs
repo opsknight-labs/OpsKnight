@@ -14,7 +14,7 @@ let finishProfile;
   assert.equal(process.env.OPSKNIGHT_PROCESS_ROLE, 'general-worker');
   assert.equal(process.env.DATABASE_POOL_SIZE_GENERAL_WORKER, '5');
   const fixture = await prepareStageFixture(db, 'effects-only', 300);
-  const effectPlan = await require('../../src/lib/incident-effect-planner').planIncidentEffects();
+  const effectPlan = await require('../../src/lib/incident-effect-planner').planIncidentEffects(1);
   const expectedProviderJobs = effectPlan.collaboration === 'DISABLED' ? 0 : 600;
   finishProfile = await require('./database-profile.cjs')(db);
   const started = performance.now(),
