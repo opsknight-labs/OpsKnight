@@ -9,7 +9,7 @@ vi.mock('@/lib/rbac', () => ({ getCurrentAuthorizationActor: mocks.actor }));
 vi.mock('@/lib/realtime-change-control-plane', () => ({
   getRealtimeChangeGenerationAtLeast: mocks.generation,
 }));
-vi.mock('@/lib/dashboard/live-incidents', () => ({ getLiveDashboardSnapshot: mocks.snapshot }));
+vi.mock('@/lib/dashboard/live-incidents', () => ({ resolveLiveDashboardSnapshot: mocks.snapshot }));
 vi.mock('@/lib/logger', () => ({ logger: { error: vi.fn() } }));
 
 import { GET } from '@/app/api/dashboard/live/route';
@@ -22,7 +22,7 @@ describe('GET /api/dashboard/live', () => {
     vi.clearAllMocks();
     mocks.actor.mockResolvedValue({ id: 'user-1', role: 'USER', teamIds: ['t'] });
     mocks.generation.mockResolvedValue('7');
-    mocks.snapshot.mockResolvedValue({ incidents: [], total: 0 });
+    mocks.snapshot.mockResolvedValue({ etag: 'W/"v1"', snapshot: { incidents: [], total: 0 } });
   });
 
   it('serves the authorization-scoped snapshot with no-store caching', async () => {
@@ -47,48 +47,32 @@ describe('GET /api/dashboard/live', () => {
         assignment: 'unassigned',
         search: 'api',
       },
-      { limit: 20, generation: '7', pinIds: ['inc-2', 'inc-1'] }
+      expect.objectContaining({ limit: 20, generation: '7', pinIds: ['inc-2', 'inc-1'] })
     );
   });
 
-  it('answers an unchanged projection with an empty 304 and ignores read-time fields', async () => {
-    mocks.snapshot.mockResolvedValueOnce({
-      incidents: [{ id: 'a' }],
-      total: 1,
-      asOf: '2026-10-25T10:00:00.000Z',
-      generation: '7',
-    });
-    const first = await GET(url());
-    const etag = first.headers.get('ETag');
-    expect(first.status).toBe(200);
-    expect(etag).toMatch(/^W\/"/);
-
-    // Same material content, different read time and generation: still validates.
-    mocks.snapshot.mockResolvedValueOnce({
-      incidents: [{ id: 'a' }],
-      total: 1,
-      asOf: '2026-10-25T10:00:05.000Z',
-      generation: '8',
-    });
-    const revalidated = await GET(
-      new Request('http://localhost/api/dashboard/live', { headers: { 'If-None-Match': etag! } })
+  it('answers a proven-unchanged projection with an empty 304 before anything is derived', async () => {
+    mocks.snapshot.mockResolvedValueOnce({ etag: 'W/"abc"', snapshot: null, generation: '9' });
+    const response = await GET(
+      new Request('http://localhost/api/dashboard/live?limit=50', {
+        headers: { 'If-None-Match': 'W/"abc"' },
+      })
     );
-    expect(revalidated.status).toBe(304);
-    expect(await revalidated.text()).toBe('');
-    expect(revalidated.headers.get('Cache-Control')).toBe('private, no-store');
+    expect(response.status).toBe(304);
+    expect(await response.text()).toBe('');
+    expect(response.headers.get('ETag')).toBe('W/"abc"');
+    expect(response.headers.get('X-Live-Generation')).toBe('9');
+    expect(response.headers.get('Cache-Control')).toBe('private, no-store');
+    expect(mocks.snapshot.mock.calls[0][2]).toMatchObject({ ifNoneMatch: 'W/"abc"' });
 
-    // A material change produces a new validator and a full body.
     mocks.snapshot.mockResolvedValueOnce({
-      incidents: [{ id: 'a' }, { id: 'b' }],
-      total: 2,
-      asOf: '2026-10-25T10:00:10.000Z',
-      generation: '9',
+      etag: 'W/"def"',
+      snapshot: { incidents: [{ id: 'a' }], total: 1 },
     });
-    const changed = await GET(
-      new Request('http://localhost/api/dashboard/live', { headers: { 'If-None-Match': etag! } })
-    );
+    const changed = await GET(url());
     expect(changed.status).toBe(200);
-    expect(changed.headers.get('ETag')).not.toBe(etag);
+    expect(changed.headers.get('ETag')).toBe('W/"def"');
+    expect(changed.headers.get('Server-Timing')).toContain('snapshot;dur=');
   });
 
   it('defaults to the all-active view', async () => {

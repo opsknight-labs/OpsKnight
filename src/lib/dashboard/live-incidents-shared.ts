@@ -187,6 +187,32 @@ export function liveQueryToParams(
   return params;
 }
 
+/**
+ * Position token for keyset paging. Isomorphic (no Buffer) and decodable by the server, which
+ * treats it as nothing more than a position inside the viewer's authorization scope.
+ */
+export function liveCursorFor(row: { createdAt: string; id: string }): string {
+  return btoa(JSON.stringify([row.createdAt, row.id]))
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/, '');
+}
+
+/** Views the database page endpoint can serve (`breaching` is derived from SLA state). */
+export const LIVE_PAGEABLE_VIEW_LIST = [
+  'active',
+  'critical',
+  'mine',
+  'my_teams',
+  'unassigned',
+] as const;
+
+export function canPageQuery(query: LiveIncidentQuery): boolean {
+  return (
+    query.sort === 'newest' && (LIVE_PAGEABLE_VIEW_LIST as readonly string[]).includes(query.view)
+  );
+}
+
 export function liveQueryKey(query: LiveIncidentQuery): string {
   return liveQueryToParams(query).toString();
 }
@@ -276,6 +302,11 @@ export type LiveFacets = {
 };
 
 export type LiveSummary = {
+  /**
+   * Active incidents visible to the viewer regardless of the scope switch. Drives the sidebar
+   * badge, so it never shrinks when the dashboard is narrowed to "Mine".
+   */
+  visibleActive: number;
   /** Incidents whose next SLA deadline is still ahead but within 10 minutes. */
   slaDueSoon: number;
   /** Incidents that breached their SLA within the last hour (still recoverable signal). */
@@ -307,6 +338,23 @@ export type LiveAttentionItem = {
   reason: LiveAttentionReason;
   label: string;
   tone: 'rose' | 'amber' | 'violet';
+};
+
+/**
+ * How trustworthy each part of a snapshot is. `window` means derived from the bounded in-memory
+ * working set (the newest incidents plus older critical/unowned/escalating/SLA-hinted ones) and
+ * therefore possibly incomplete when `truncated`; `exact` means read from the database for the
+ * viewer's whole authorization scope; `capped` means a bounded read hit its row cap.
+ */
+export type LiveAccuracy = {
+  /** Headline counters (active, triggered, acknowledged, critical, unassigned). */
+  counters: 'exact' | 'window';
+  /** `total`, facet counts and per-view counts for the current query. */
+  filtered: 'exact' | 'window';
+  /** SLA-at-risk, due-soon, breached and the SLA attention list. Never exact when truncated. */
+  sla: 'exact' | 'window';
+  /** 24h trend series and MTTA/MTTR. */
+  trend: 'exact' | 'capped';
 };
 
 /** Last-24h activity in the viewer's scope (hourly buckets, oldest first). */
@@ -361,11 +409,13 @@ export type LiveSnapshot = {
   truncated: boolean;
   /** Incidents held in the in-memory working set this snapshot was derived from. */
   workingSet: number;
+  accuracy: LiveAccuracy;
   /**
-   * True when the headline counters and total are exact for the viewer's visible population:
-   * either the working set is complete or the counters were read from the database.
+   * Newest active critical incidents across the viewer's whole visible set, independent of the
+   * current filters and scope. Feeds global critical alerts when the console runs on the
+   * signal-only realtime stream.
    */
-  countsExact: boolean;
+  alerts: LiveIncident[];
   asOf: string;
   generation: string | null;
 };

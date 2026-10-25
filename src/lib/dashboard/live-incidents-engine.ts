@@ -26,7 +26,7 @@ import {
 export type { LiveSetRow };
 
 /** Drops the raw SLA inputs; only the derived signal is sent to clients. */
-function toWire(row: LiveSetRow, sla: LiveSlaSignal): LiveIncident {
+export function toWire(row: LiveSetRow, sla: LiveSlaSignal): LiveIncident {
   const {
     acknowledgedAt: _acknowledgedAt,
     slaFirstAcknowledgedAt: _slaFirstAcknowledgedAt,
@@ -366,8 +366,11 @@ export function deriveTrend(
   return trend;
 }
 
+const ALERT_LIMIT = 20;
+
 export type LiveDerivation = {
   incidents: LiveIncident[];
+  alerts: LiveIncident[];
   total: number;
   facets: LiveFacets;
   summary: LiveSummary;
@@ -424,6 +427,7 @@ function deriveCore(
   );
 
   const summary: LiveSummary = {
+    visibleActive: all.length,
     active: rows.length,
     triggered: 0,
     acknowledged: 0,
@@ -469,6 +473,7 @@ function deriveCore(
 
   return {
     incidents: matching.slice(0, limit),
+    alerts: all.filter(isCriticalIncident).slice(0, ALERT_LIMIT),
     total: matching.length,
     facets: { views, services, teams, status, urgency, assignment },
     summary,
@@ -528,6 +533,7 @@ export function personalizeDerivation(
   const byId = new Map(shared.all.map(row => [row.id, row]));
   return {
     incidents: shared.matching.slice(0, limit),
+    alerts: shared.alerts,
     total: shared.matching.length,
     facets: {
       ...shared.facets,

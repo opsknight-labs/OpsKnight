@@ -4,12 +4,15 @@ import {
   createContext,
   createElement,
   Fragment,
+  useCallback,
   useContext,
   useEffect,
+  useMemo,
   useState,
   useRef,
   type ReactNode,
 } from 'react';
+import { usePathname } from 'next/navigation';
 import { logger } from '@/lib/logger';
 import {
   notifySessionExpired,
@@ -121,7 +124,8 @@ function useRealtimeConnection(mode: RealtimeMode) {
 
   useEffect(() => {
     let mounted = true;
-    authorizationRevoked.current = false;
+    // A revoked session stays revoked across mode changes and reconnects; only a fresh page load
+    // after signing in again (a new provider instance) may open the stream again.
 
     const connect = () => {
       if (
@@ -248,25 +252,53 @@ function useRealtimeConnection(mode: RealtimeMode) {
   };
 }
 
-type RealtimeContextValue = ReturnType<typeof useRealtimeConnection>;
-const RealtimeContext = createContext<RealtimeContextValue | null>(null);
+/**
+ * What a screen that reads its own authorized data can feed back to the console-wide consumers
+ * (global critical alerts, sidebar badge) while the stream runs in signal-only mode, so those
+ * features keep working without every stream also carrying the legacy incident/metrics payloads.
+ */
+export type RealtimeProjection = {
+  recentIncidents: RealtimeIncident[];
+  activeIncidentCount: number | null;
+};
 
-function RealtimeRootProvider({
-  children,
-  mode,
-}: {
-  children?: ReactNode;
+type RealtimeContextValue = ReturnType<typeof useRealtimeConnection> & {
   mode: RealtimeMode;
-}) {
-  const value = useRealtimeConnection(mode);
-  return createElement(RealtimeContext.Provider, { value }, children);
+  /** Active incidents visible to the viewer: from the stream in `full`, from the screen in `signal`. */
+  activeIncidentCount: number | null;
+};
+const RealtimeContext = createContext<RealtimeContextValue | null>(null);
+const RealtimePublishContext = createContext<
+  ((projection: RealtimeProjection | null) => void) | null
+>(null);
+
+function RealtimeRootProvider({ children, mode }: { children?: ReactNode; mode: RealtimeMode }) {
+  const connection = useRealtimeConnection(mode);
+  const [projection, setProjection] = useState<RealtimeProjection | null>(null);
+  const publish = useCallback((next: RealtimeProjection | null) => setProjection(next), []);
+  const value = useMemo<RealtimeContextValue>(() => {
+    const fromScreen = mode === 'signal' ? projection : null;
+    return {
+      ...connection,
+      mode,
+      recentIncidents: fromScreen?.recentIncidents ?? connection.recentIncidents,
+      activeIncidentCount:
+        fromScreen?.activeIncidentCount ??
+        (typeof connection.metrics?.active === 'number' ? connection.metrics.active : null),
+    };
+  }, [connection, mode, projection]);
+  return createElement(
+    RealtimePublishContext.Provider,
+    { value: publish },
+    createElement(RealtimeContext.Provider, { value }, children)
+  );
 }
 
 export function RealtimeProvider({
   children,
   mode = 'full',
 }: {
-  children: ReactNode;
+  children?: ReactNode;
   mode?: RealtimeMode;
 }) {
   const existing = useContext(RealtimeContext);
@@ -284,4 +316,20 @@ export function useRealtime(): RealtimeContextValue {
 /** Optionally consume the realtime connection if inside RealtimeProvider; returns null otherwise. */
 export function useOptionalRealtime(): RealtimeContextValue | null {
   return useContext(RealtimeContext);
+}
+
+/**
+ * Console shell provider: every route keeps the full legacy payloads except the dashboard, which
+ * reads its own authorized snapshot and therefore needs only change signals. Switching routes
+ * switches the stream mode on the same provider instance, so there is never more than one
+ * EventSource and the previous one is closed before the next opens.
+ */
+export function RouteAwareRealtimeProvider({ children }: { children: ReactNode }) {
+  const pathname = usePathname();
+  return createElement(RealtimeProvider, { mode: pathname === '/' ? 'signal' : 'full' }, children);
+}
+
+/** The publisher for console-wide realtime consumers; null outside a provider. */
+export function useRealtimePublisher() {
+  return useContext(RealtimePublishContext);
 }

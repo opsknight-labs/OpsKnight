@@ -14,6 +14,12 @@ import {
   getRealtimeChangeGeneration,
   subscribeToRealtimeChanges,
 } from '@/lib/realtime-change-control-plane';
+import {
+  isRealtimeDraining,
+  recordRealtimeStreamClosed,
+  registerRealtimeStream,
+  type StreamCloseReason,
+} from '@/lib/realtime-stream-registry';
 
 const HEARTBEAT_MS = 15_000;
 // Spread authorization rechecks so thousands of streams opened together do not re-validate in
@@ -31,6 +37,13 @@ const MAX_QUEUED_CHUNKS = 64;
  * mode additionally streams the legacy incident and metrics projections used across the console.
  */
 export async function GET(req: NextRequest) {
+  // A draining replica refuses new streams so load balancers and browsers move to a live one.
+  if (isRealtimeDraining()) {
+    return new Response('Server is shutting down', {
+      status: 503,
+      headers: { 'Retry-After': '5' },
+    });
+  }
   try {
     // Get current user for authorization
     const user = await getCurrentUser();
@@ -58,12 +71,16 @@ export async function GET(req: NextRequest) {
         let isClosed = false;
 
         let heartbeatTimer: NodeJS.Timeout | null = null;
+        let closeReason: StreamCloseReason = 'client';
+        let unregister: () => void = () => {};
         let unsubscribeChanges: () => void = () => {};
         let isPolling = false;
         let pendingGeneration: string | null | undefined;
 
         cleanup = () => {
+          if (!isClosed) recordRealtimeStreamClosed(closeReason);
           isClosed = true;
+          unregister();
           unsubscribeChanges();
           if (heartbeatTimer) {
             clearTimeout(heartbeatTimer);
@@ -90,10 +107,12 @@ export async function GET(req: NextRequest) {
                   component: 'api-realtime-stream',
                   userId: user.id,
                 });
+                closeReason = 'slow_consumer';
                 cleanup();
               }
             } catch (error) {
               logger.error('Error sending SSE data', { component: 'api-realtime-stream', error });
+              closeReason = 'error';
               cleanup();
             }
           }
@@ -197,6 +216,10 @@ export async function GET(req: NextRequest) {
           cleanup();
           return;
         }
+        unregister = registerRealtimeStream(signalOnly ? 'signal' : 'full', reason => {
+          closeReason = reason;
+          cleanup();
+        });
 
         // Establish a durable generation baseline, load the initial projection,
         // then subscribe this connection to the process-wide change fanout.
@@ -226,6 +249,7 @@ export async function GET(req: NextRequest) {
               !hasSameStreamAuthorizationScope(streamAuthorization, nextAuthorization)
             ) {
               send(JSON.stringify({ type: 'authorization_revoked' }));
+              closeReason = 'revoked';
               cleanup();
               return;
             }
@@ -237,6 +261,7 @@ export async function GET(req: NextRequest) {
             });
             // Fail closed: terminate stream on authorization recheck failure
             send(JSON.stringify({ type: 'authorization_revoked' }));
+            closeReason = 'revoked';
             cleanup();
             return;
           }

@@ -88,6 +88,8 @@ Meeting gauges are `opsknight_meeting_state`, `opsknight_meeting_health`, and `o
 ## Realtime, status-page, and fanout families
 
 - Realtime instance state: `opsknight_realtime_subscribers{stream}`, `opsknight_realtime_observed_generation`, `opsknight_realtime_change_age_seconds`, and counter `opsknight_realtime_clock_errors_total`.
+- Realtime streams and cache: `opsknight_realtime_streams_active{mode}`, counters `opsknight_realtime_streams_opened_total{mode}` and `opsknight_realtime_streams_closed_total{reason}`, and gauges `opsknight_realtime_cache_bytes` and `opsknight_realtime_cache_entries`.
+- Live dashboard: counter `opsknight_dashboard_live_requests_total{result}`, histograms `opsknight_dashboard_live_request_duration_seconds` and `opsknight_dashboard_live_set_duration_seconds`, counter `opsknight_dashboard_live_partition_reads_total{result}`, and gauge `opsknight_dashboard_live_generation_lag`. See `docs/operations/live-dashboard-realtime.md`.
 - Snapshot health: `opsknight_status_page_snapshot_dirty`, `opsknight_status_page_snapshot_oldest_age_seconds`, `opsknight_status_page_snapshot_bytes`, and `opsknight_status_snapshot_revision_lag`.
 - Publication health: `opsknight_status_page_publication_failed`, `opsknight_status_page_fail_closed`, plus publication duration/attempt counters labelled by bounded change class and outcome.
 - Fanout: `opsknight_status_page_fanout_total`, `opsknight_status_fanout_campaign_total`, `opsknight_status_fanout_materialized`, and `opsknight_status_fanout_failed`.

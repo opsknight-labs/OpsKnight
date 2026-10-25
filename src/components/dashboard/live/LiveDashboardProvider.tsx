@@ -12,7 +12,7 @@ import {
   type ReactNode,
 } from 'react';
 import { useRouter } from 'next/navigation';
-import { useRealtime } from '@/hooks/useRealtime';
+import { useRealtime, useRealtimePublisher, type RealtimeIncident } from '@/hooks/useRealtime';
 import {
   DEFAULT_LIVE_QUERY,
   LIVE_MAX_PINS,
@@ -21,6 +21,8 @@ import {
   countLiveFeedChanges,
   diffLiveIncidents,
   isCriticalIncident,
+  canPageQuery,
+  liveCursorFor,
   liveQueryKey,
   liveQueryToParams,
   resolveConnectionHealth,
@@ -41,7 +43,15 @@ const MIN_RECONCILE_GAP_MS = 1_000;
 const MAX_RECONCILE_GAP_MS = 5_000;
 const RECONCILE_JITTER_MS = 150;
 const SAFETY_RECONCILE_MS = 30_000;
-const FAILURE_RETRY_MS = 5_000;
+// Recoverable failures back off exponentially (with jitter) up to a ceiling, and reset on success.
+const FAILURE_RETRY_BASE_MS = 5_000;
+const FAILURE_RETRY_MAX_MS = 60_000;
+// A snapshot that reflects an older generation than a realtime signal already announced triggers a
+// bounded catch-up: a few attempts with growing delay, then the 30s safety tick takes over.
+const CATCHUP_BASE_MS = 600;
+const CATCHUP_MAX_ATTEMPTS = 4;
+// A request that has not answered by now is treated as failed instead of blocking all reads.
+const REQUEST_TIMEOUT_MS = 15_000;
 const CLOCK_TICK_MS = 5_000;
 export const LIVE_QUERY_STORAGE_PREFIX = 'opsknight:dashboard:live-query:v1:';
 const ALERTS_STORAGE_KEY = 'opsknight:dashboard:critical-alerts:v1';
@@ -51,7 +61,53 @@ export type LiveDensity = 'comfortable' | 'compact';
 
 export type OptimisticPatch = Partial<Pick<LiveIncident, 'status' | 'assignee'>>;
 
-type ReconcileReason = 'realtime' | 'filter' | 'safety' | 'retry' | 'manual' | 'coalesced';
+type ReconcileReason =
+  'realtime' | 'filter' | 'safety' | 'retry' | 'manual' | 'coalesced' | 'catchup';
+
+/** Realtime generations are monotonic database sequence numbers carried as decimal strings. */
+function generationAfter(a: string | null | undefined, b: string | null | undefined): boolean {
+  if (!a || !b || !/^\d+$/.test(a) || !/^\d+$/.test(b)) return false;
+  return BigInt(a) > BigInt(b);
+}
+function maxGeneration(a: string | null, b: string | null | undefined): string | null {
+  if (!b || !/^\d+$/.test(b)) return a;
+  return generationAfter(b, a) || a === null ? b : a;
+}
+
+/**
+ * Feeds console-wide realtime consumers (global critical alerts, sidebar badge) from this
+ * screen's authorized snapshot while the stream carries only change signals. Incidents that left
+ * the critical set are announced once as RESOLVED so banners clear.
+ */
+function useRealtimeBridge(snapshot: LiveSnapshot | null) {
+  const publish = useRealtimePublisher();
+  const known = useRef(new Map<string, LiveIncident>());
+  useEffect(() => {
+    if (!publish) return;
+    if (!snapshot) {
+      publish(null);
+      return;
+    }
+    // During a rolling deployment an older replica may answer without the newer fields; skip the
+    // bridge then rather than announcing an empty critical set.
+    if (!Array.isArray(snapshot.alerts)) return;
+    const present = new Set(snapshot.alerts.map(item => item.id));
+    const departed = [...known.current.values()]
+      .filter(item => !present.has(item.id))
+      .map(item => ({ ...item, status: 'RESOLVED' }));
+    known.current = new Map(snapshot.alerts.map(item => [item.id, item]));
+    publish({
+      recentIncidents: [...snapshot.alerts, ...departed] as unknown as RealtimeIncident[],
+      activeIncidentCount: snapshot.summary.visibleActive ?? null,
+    });
+  }, [snapshot, publish]);
+  useEffect(
+    () => () => {
+      publish?.(null);
+    },
+    [publish]
+  );
+}
 
 export type LiveDashboardContextValue = {
   currentUserId: string;
@@ -89,6 +145,14 @@ export type LiveDashboardContextValue = {
   selectedIncidentId: string | null;
   selectedIncident: LiveIncident | null;
   selectIncident: (id: string | null) => void;
+  /** Rows beyond the snapshot's window, read from the database by keyset cursor. */
+  olderIncidents: LiveIncident[];
+  canLoadOlder: boolean;
+  loadingOlder: boolean;
+  olderError: boolean;
+  loadOlder: () => void;
+  /** A realtime signal announced a newer generation than the last read reflects. */
+  catchingUp: boolean;
 };
 
 const LiveDashboardContext = createContext<LiveDashboardContextValue | null>(null);
@@ -218,12 +282,28 @@ export function LiveDashboardProvider({
     initialSnapshot?.query ?? DEFAULT_LIVE_QUERY
   );
   const [snapshot, setSnapshot] = useState<LiveSnapshot | null>(initialSnapshot);
+  useRealtimeBridge(snapshot);
   const [displayed, setDisplayed] = useState<LiveSnapshot | null>(initialSnapshot);
   const [paused, setPaused] = useState(false);
   const [syncedAt, setSyncedAt] = useState<number | null>(() =>
     initialSnapshot ? Date.parse(initialSnapshot.asOf) : null
   );
   const [syncError, setSyncError] = useState(false);
+  const [older, setOlder] = useState<{
+    key: string;
+    rows: LiveIncident[];
+    cursor: string | null;
+    done: boolean;
+  } | null>(null);
+  const [loadingOlder, setLoadingOlder] = useState(false);
+  const [olderError, setOlderError] = useState(false);
+  const olderAbortRef = useRef<AbortController | null>(null);
+  const [selectedIncidentId, setSelectedIncidentId] = useState<string | null>(null);
+  const [cachedIncident, setCachedIncident] = useState<LiveIncident | null>(null);
+  // Inspector-only context (routing rule, runbook, policy, dedup key) is loaded on demand for
+  // the one open incident instead of being carried by every row of the bulk feed.
+  const [detail, setDetail] = useState<LiveIncident | null>(null);
+
   const [loading, setLoading] = useState(initialSnapshot === null);
   const [highlightUntil, setHighlightUntil] = useState<ReadonlyMap<string, number>>(new Map());
   const [optimistic, setOptimistic] = useState<ReadonlyMap<string, OptimisticPatch>>(new Map());
@@ -276,9 +356,20 @@ export function LiveDashboardProvider({
   const displayedRef = useRef(displayed);
   const pausedRef = useRef(paused);
   const generationRef = useRef<string | null>(changeGeneration);
+  // Highest generation announced by a realtime signal, and highest generation a successful read
+  // is known to reflect. Both only ever move forward.
+  const signalGenerationRef = useRef<string | null>(changeGeneration);
+  const appliedGenerationRef = useRef<string | null>(initialSnapshot?.generation ?? null);
+  const failuresRef = useRef(0);
+  const catchupAttemptsRef = useRef(0);
+  const catchupTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const authFailedRef = useRef(false);
+  const [catchingUp, setCatchingUp] = useState(false);
+  const [behind, setBehind] = useState(false);
   const alertsRef = useRef(criticalAlerts);
   useEffect(() => {
-    generationRef.current = changeGeneration;
+    generationRef.current = maxGeneration(generationRef.current, changeGeneration);
+    signalGenerationRef.current = maxGeneration(signalGenerationRef.current, changeGeneration);
   }, [changeGeneration]);
   useEffect(() => {
     alertsRef.current = criticalAlerts;
@@ -338,8 +429,64 @@ export function LiveDashboardProvider({
     [notifyNewCritical]
   );
 
+  // Compare what the last read reflects with what realtime signals announced; schedule a bounded
+  // catch-up when it is behind and report honestly when catching up has been given up on.
+  const evaluateCatchUp = useCallback((forceBehind = false) => {
+    const behindNow =
+      forceBehind || generationAfter(signalGenerationRef.current, appliedGenerationRef.current);
+    if (!behindNow) {
+      catchupAttemptsRef.current = 0;
+      if (catchupTimerRef.current) clearTimeout(catchupTimerRef.current);
+      catchupTimerRef.current = null;
+      setCatchingUp(false);
+      setBehind(false);
+      return;
+    }
+    if (catchupAttemptsRef.current >= CATCHUP_MAX_ATTEMPTS) {
+      setCatchingUp(false);
+      setBehind(true);
+      return;
+    }
+    setCatchingUp(true);
+    if (catchupTimerRef.current) clearTimeout(catchupTimerRef.current);
+    const delay =
+      CATCHUP_BASE_MS * 2 ** catchupAttemptsRef.current + Math.floor(Math.random() * 250);
+    catchupAttemptsRef.current += 1;
+    catchupTimerRef.current = setTimeout(() => {
+      catchupTimerRef.current = null;
+      void reconcileRef.current('catchup');
+    }, delay);
+  }, []);
+
+  // Drop everything that was derived from the viewer's authorization when it is no longer valid.
+  const clearSensitiveState = useCallback(() => {
+    inFlightRef.current?.abort();
+    inFlightRef.current = null;
+    olderAbortRef.current?.abort();
+    for (const timer of [debounceRef, retryRef, catchupTimerRef]) {
+      if (timer.current) clearTimeout(timer.current);
+      timer.current = null;
+    }
+    snapshotRef.current = null;
+    displayedRef.current = null;
+    etagRef.current = null;
+    setSnapshot(null);
+    setDisplayed(null);
+    setOptimistic(new Map());
+    setHighlightUntil(new Map());
+    setOlder(null);
+    setSelectedIncidentId(null);
+    setCachedIncident(null);
+    setDetail(null);
+    setCatchingUp(false);
+    setBehind(false);
+    setLoading(false);
+  }, []);
+
   const reconcile = useCallback(
     async (reason: ReconcileReason) => {
+      // After a confirmed authorization failure nothing is retried; the user must sign in again.
+      if (authFailedRef.current) return;
       if (inFlightRef.current) {
         // Coalesce bursts: one follow-up fetch picks up everything that changed meanwhile.
         dirtyRef.current = true;
@@ -351,6 +498,13 @@ export function LiveDashboardProvider({
       inFlightRef.current = controller;
       const startedAt = Date.now();
       lastStartRef.current = startedAt;
+      let timedOut = false;
+      const timeout = setTimeout(() => {
+        timedOut = true;
+        controller.abort();
+      }, REQUEST_TIMEOUT_MS);
+      const superseded = () =>
+        seq !== seqRef.current || liveQueryKey(requested) !== liveQueryKey(queryRef.current);
       try {
         const params = liveQueryToParams(requested);
         const requestKey = `${liveQueryKey(requested)}|${pinsRef.current.join(',')}`;
@@ -376,23 +530,46 @@ export function LiveDashboardProvider({
           signal: controller.signal,
         });
         lastDurationRef.current = Date.now() - startedAt;
-        if (seq !== seqRef.current || liveQueryKey(requested) !== liveQueryKey(queryRef.current)) {
+        if (superseded()) return;
+        if (response.status === 401 || response.status === 403) {
+          // Retrying cannot fix this and must not hammer the server: stop and drop sensitive state.
+          authFailedRef.current = true;
+          clearSensitiveState();
           return;
         }
+        const reflected = response.headers.get('X-Live-Generation');
         if (response.status === 304) {
-          // Nothing materially changed: keep the current projection, refresh the sync clock.
+          // Unchanged since the response we hold. That is only "synchronized" if the replica that
+          // answered already reflects the generation a realtime signal announced.
+          failuresRef.current = 0;
+          appliedGenerationRef.current = maxGeneration(appliedGenerationRef.current, reflected);
           setSyncError(false);
           setSyncedAt(Date.now());
           setLoading(false);
+          evaluateCatchUp();
           return;
         }
         if (!response.ok) throw new Error(`live dashboard ${response.status}`);
         const etag = response.headers.get('ETag');
-        etagRef.current = etag ? { key: requestKey, etag } : null;
         const payload = (await response.json()) as { data: LiveSnapshot };
-        if (seq !== seqRef.current || liveQueryKey(requested) !== liveQueryKey(queryRef.current)) {
+        if (superseded()) return;
+        const payloadGeneration = reflected ?? payload.data.generation;
+        if (
+          generationAfter(appliedGenerationRef.current, payloadGeneration) &&
+          liveQueryKey(snapshotRef.current?.query ?? requested) === liveQueryKey(requested)
+        ) {
+          // An answer that reflects an older generation than one already applied (a lagging
+          // replica, a slow out-of-order response) must never replace newer state.
+          failuresRef.current = 0;
+          evaluateCatchUp(true);
           return;
         }
+        etagRef.current = etag ? { key: requestKey, etag } : null;
+        appliedGenerationRef.current = maxGeneration(
+          appliedGenerationRef.current,
+          payloadGeneration
+        );
+        failuresRef.current = 0;
         snapshotRef.current = payload.data;
         setSnapshot(payload.data);
         setSyncError(false);
@@ -401,13 +578,26 @@ export function LiveDashboardProvider({
         if (!pausedRef.current || reason === 'filter') {
           applyDisplayed(payload.data, reason !== 'filter');
         }
+        evaluateCatchUp();
       } catch (error) {
-        if ((error as Error)?.name === 'AbortError' || seq !== seqRef.current) return;
+        const aborted = (error as Error)?.name === 'AbortError';
+        if ((aborted && !timedOut) || superseded()) return;
+        // The last valid snapshot stays on screen; only the health state changes. A failed read
+        // never advances the applied generation, so the dashboard is never reported as current.
+        failuresRef.current += 1;
         setSyncError(true);
         setLoading(false);
         if (retryRef.current) clearTimeout(retryRef.current);
-        retryRef.current = setTimeout(() => void reconcileRef.current('retry'), FAILURE_RETRY_MS);
+        const ceiling = Math.min(
+          FAILURE_RETRY_MAX_MS,
+          FAILURE_RETRY_BASE_MS * 2 ** (failuresRef.current - 1)
+        );
+        retryRef.current = setTimeout(
+          () => void reconcileRef.current('retry'),
+          Math.round(ceiling * (0.5 + Math.random() / 2))
+        );
       } finally {
+        clearTimeout(timeout);
         if (inFlightRef.current === controller) inFlightRef.current = null;
         if (dirtyRef.current) {
           dirtyRef.current = false;
@@ -415,8 +605,9 @@ export function LiveDashboardProvider({
         }
       }
     },
-    [applyDisplayed]
+    [applyDisplayed, clearSensitiveState, evaluateCatchUp]
   );
+
   useEffect(() => {
     reconcileRef.current = reconcile;
   }, [reconcile]);
@@ -457,6 +648,9 @@ export function LiveDashboardProvider({
         }
       }
       setLoading(true);
+      olderAbortRef.current?.abort();
+      setOlder(null);
+      setOlderError(false);
       // Abort any request for the previous query so its response can never render.
       inFlightRef.current?.abort();
       inFlightRef.current = null;
@@ -499,6 +693,8 @@ export function LiveDashboardProvider({
     }
     if (signal === lastSignalRef.current) return;
     lastSignalRef.current = signal;
+    // A newer signal restarts the bounded catch-up budget.
+    catchupAttemptsRef.current = 0;
     scheduleReconcile();
   }, [revision, changeCount, scheduleReconcile]);
 
@@ -550,9 +746,19 @@ export function LiveDashboardProvider({
       inFlightRef.current?.abort();
       if (debounceRef.current) clearTimeout(debounceRef.current);
       if (retryRef.current) clearTimeout(retryRef.current);
+      if (catchupTimerRef.current) clearTimeout(catchupTimerRef.current);
     },
     []
   );
+
+  // Revoked authorization: stop reading and drop everything derived from the old authorization.
+  const lastRevokedRef = useRef(false);
+  useEffect(() => {
+    if (!isRevoked || lastRevokedRef.current) return;
+    lastRevokedRef.current = true;
+    authFailedRef.current = true;
+    clearSensitiveState();
+  }, [isRevoked, clearSensitiveState]);
 
   const togglePaused = useCallback(() => {
     if (pausedRef.current) {
@@ -565,12 +771,6 @@ export function LiveDashboardProvider({
       setPaused(true);
     }
   }, [applyDisplayed, scheduleReconcile]);
-
-  const [selectedIncidentId, setSelectedIncidentId] = useState<string | null>(null);
-  const [cachedIncident, setCachedIncident] = useState<LiveIncident | null>(null);
-  // Inspector-only context (routing rule, runbook, policy, dedup key) is loaded on demand for
-  // the one open incident instead of being carried by every row of the bulk feed.
-  const [detail, setDetail] = useState<LiveIncident | null>(null);
 
   const applyOptimistic = useCallback((id: string, patch: OptimisticPatch) => {
     setOptimistic(current => new Map(current).set(id, { ...current.get(id), ...patch }));
@@ -646,7 +846,8 @@ export function LiveDashboardProvider({
     now,
     everConnected,
   });
-  const health: LiveConnectionHealth = baseHealth === 'live' && syncError ? 'stale' : baseHealth;
+  const health: LiveConnectionHealth =
+    baseHealth === 'live' && (syncError || behind) ? 'stale' : baseHealth;
 
   const selectedIncidentInFeed = useMemo(() => {
     if (!selectedIncidentId) return null;
@@ -772,6 +973,70 @@ export function LiveDashboardProvider({
     [applyOptimistic, busyMap, currentUserId, currentUserName, refresh, showToast]
   );
 
+  const olderKey = liveQueryKey(query);
+  const olderRows = useMemo(() => {
+    if (!older || older.key !== olderKey) return [];
+    const shown = new Set(incidents.map(item => item.id));
+    return older.rows.filter(item => !shown.has(item.id));
+  }, [older, olderKey, incidents]);
+  const canLoadOlder =
+    canPageQuery(query) &&
+    displayed !== null &&
+    !(older && older.key === olderKey && older.done) &&
+    displayed.total > incidents.length + olderRows.length;
+
+  const loadOlder = useCallback(() => {
+    if (loadingOlder || !canPageQuery(queryRef.current)) return;
+    const requested = queryRef.current;
+    const key = liveQueryKey(requested);
+    const current = older && older.key === key ? older : null;
+    const last = current?.rows.at(-1) ?? displayedRef.current?.incidents.at(-1) ?? null;
+    const cursor = current ? current.cursor : last ? liveCursorFor(last) : null;
+    if (current?.done) return;
+    olderAbortRef.current?.abort();
+    const controller = new AbortController();
+    olderAbortRef.current = controller;
+    setLoadingOlder(true);
+    setOlderError(false);
+    const params = liveQueryToParams({ ...requested, sort: 'newest' });
+    params.set('limit', '25');
+    if (cursor) params.set('cursor', cursor);
+    void fetch(`/api/dashboard/live/page?${params.toString()}`, {
+      credentials: 'same-origin',
+      cache: 'no-store',
+      signal: controller.signal,
+    })
+      .then(async response => {
+        if (!response.ok) throw new Error(`live page ${response.status}`);
+        const payload = (await response.json()) as {
+          data: { incidents: LiveIncident[]; nextCursor: string | null };
+        };
+        // A response for a superseded query never renders.
+        if (controller.signal.aborted || liveQueryKey(queryRef.current) !== key) return;
+        setOlder(previous => {
+          const base = previous && previous.key === key ? previous.rows : [];
+          return {
+            key,
+            rows: [...base, ...payload.data.incidents],
+            cursor: payload.data.nextCursor,
+            done: payload.data.nextCursor === null,
+          };
+        });
+      })
+      .catch(error => {
+        if ((error as Error)?.name === 'AbortError') return;
+        setOlderError(true);
+      })
+      .finally(() => {
+        if (olderAbortRef.current === controller) {
+          olderAbortRef.current = null;
+          setLoadingOlder(false);
+        }
+      });
+  }, [loadingOlder, older]);
+
+  useEffect(() => () => olderAbortRef.current?.abort(), []);
+
   const value = useMemo<LiveDashboardContextValue>(
     () => ({
       currentUserId,
@@ -807,6 +1072,12 @@ export function LiveDashboardProvider({
       selectedIncidentId,
       selectedIncident,
       selectIncident,
+      olderIncidents: olderRows,
+      canLoadOlder,
+      loadingOlder,
+      olderError,
+      loadOlder,
+      catchingUp,
     }),
     [
       currentUserId,
@@ -842,6 +1113,12 @@ export function LiveDashboardProvider({
       selectedIncidentId,
       selectedIncident,
       selectIncident,
+      olderRows,
+      canLoadOlder,
+      loadingOlder,
+      olderError,
+      loadOlder,
+      catchingUp,
     ]
   );
 

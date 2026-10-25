@@ -16,6 +16,7 @@ import { visibleIncidentSource } from '@/lib/automation/presentation/source-visi
 
 import { createHash } from 'node:crypto';
 import { logger } from './logger';
+import { setOperationalGauge } from './metrics/operational/registry';
 import type { Prisma } from '@prisma/client';
 
 interface CacheEntry<T> {
@@ -59,11 +60,17 @@ function measure(data: unknown): { hash: string; bytes: number } {
   return { hash: createHash('sha1').update(json).digest('base64url'), bytes: json.length * 2 };
 }
 
+function publishCacheGauges(): void {
+  setOperationalGauge('opsknight_realtime_cache_bytes', totalBytes);
+  setOperationalGauge('opsknight_realtime_cache_entries', cache.size);
+}
+
 function dropEntry(key: string): void {
   const entry = cache.get(key);
   if (!entry) return;
   totalBytes -= entry.bytes;
   cache.delete(key);
+  publishCacheGauges();
 }
 
 function storeEntry(key: string, entry: CacheEntry<unknown>): void {
@@ -71,6 +78,7 @@ function storeEntry(key: string, entry: CacheEntry<unknown>): void {
   if (entry.bytes > MAX_ENTRY_BYTES) return;
   cache.set(key, entry);
   totalBytes += entry.bytes;
+  publishCacheGauges();
   // Map iteration order is insertion order, so the oldest entries are evicted first.
   for (const oldest of cache.keys()) {
     if (totalBytes <= MAX_CACHE_BYTES && cache.size <= MAX_CACHE_SIZE) break;
@@ -126,6 +134,47 @@ function maybeCleanup(): void {
 }
 
 /**
+ * Logical clock for ordering flight starts against callers' needs. Wall-clock milliseconds cannot
+ * order two events inside the same millisecond, which would let an older flight satisfy a newer need.
+ */
+let logicalClock = 0;
+const tick = () => ++logicalClock;
+/** Logical start of each in-flight fetch; a fetch that began after a caller's need satisfies it. */
+const inFlightStartedAt = new Map<string, number>();
+
+/**
+ * Start a single-flight fetch for `key` (the caller has already established there is none to join).
+ * A rejected fetch stores nothing, so a failure can never be mistaken for fresh data.
+ */
+function startFlight<T>(
+  key: string,
+  fetcher: () => Promise<T>,
+  ttlMs: number
+): Promise<CacheEntry<T>> {
+  const startedAt = tick();
+  const request: Promise<CacheEntry<T>> = fetcher()
+    .then(data => {
+      const entry = {
+        data,
+        expiresAt: Date.now() + ttlMs,
+        storedAt: Date.now(),
+        ...measure(data),
+      };
+      storeEntry(key, entry);
+      return entry;
+    })
+    .finally(() => {
+      if (inFlight.get(key) === request) {
+        inFlight.delete(key);
+        inFlightStartedAt.delete(key);
+      }
+    });
+  inFlight.set(key, request);
+  inFlightStartedAt.set(key, startedAt);
+  return request;
+}
+
+/**
  * Get cached data or fetch fresh data
  */
 export async function getCachedOrFetch<T>(
@@ -145,56 +194,58 @@ export async function getCachedOrFetch<T>(
 
   // Coalesce equivalent misses on this replica. Freshness begins only after
   // the fetch completes, so a slow query cannot populate an expired entry.
-  let request = inFlight.get(key) as Promise<CacheEntry<T>> | undefined;
-  if (!request) {
-    request = fetcher()
-      .then(data => {
-        const entry = {
-          data,
-          expiresAt: Date.now() + ttlMs,
-          storedAt: Date.now(),
-          ...measure(data),
-        };
-        storeEntry(key, entry);
-        return entry;
-      })
-      .finally(() => {
-        if (inFlight.get(key) === request) inFlight.delete(key);
-      });
-    inFlight.set(key, request);
-  }
+  const request =
+    (inFlight.get(key) as Promise<CacheEntry<T>> | undefined) ?? startFlight(key, fetcher, ttlMs);
   const entry = await request;
   return { data: entry.data, fromCache: false, hash: entry.hash };
 }
 
 /**
  * Like `getCachedOrFetch`, but a cached value is only served while `accept(data, ageMs)` holds.
- * Used to bound database work by time while still honoring a caller's freshness requirement:
- * concurrent callers share one fetch, and a rejected value is refetched once per call.
+ * It bounds database work by time while honoring a caller's freshness requirement:
+ *
+ * - concurrent callers share one fetch per key (single flight);
+ * - a fetch that was already running when the caller needed fresher data is NOT trusted to satisfy
+ *   it unless its result passes `accept`; otherwise a new fetch is started (or a fetch that began
+ *   after the need is joined);
+ * - a failed fetch never satisfies anyone and never populates the cache.
  */
 export async function getCachedWhenAcceptable<T>(
   key: string,
   fetcher: () => Promise<T>,
   ttlMs: number,
   accept: (data: T, ageMs: number) => boolean
-): Promise<{ data: T; fromCache: boolean }> {
+): Promise<{ data: T; fromCache: boolean; hash: string }> {
   maybeCleanup();
-  const existing = cache.get(key) as CacheEntry<T> | undefined;
+  const need = tick();
   const now = Date.now();
+  const existing = cache.get(key) as CacheEntry<T> | undefined;
   if (existing && now < existing.expiresAt && accept(existing.data, now - existing.storedAt)) {
-    return { data: existing.data, fromCache: true };
+    return { data: existing.data, fromCache: true, hash: existing.hash };
   }
+
   const pending = inFlight.get(key) as Promise<CacheEntry<T>> | undefined;
   if (pending) {
-    const shared = await pending;
-    if (accept(shared.data, Date.now() - shared.storedAt)) {
-      return { data: shared.data, fromCache: false };
+    if ((inFlightStartedAt.get(key) ?? 0) > need) {
+      const joined = await pending;
+      return { data: joined.data, fromCache: false, hash: joined.hash };
+    }
+    try {
+      const settled = await pending;
+      if (accept(settled.data, Date.now() - settled.storedAt)) {
+        return { data: settled.data, fromCache: false, hash: settled.hash };
+      }
+    } catch {
+      // A failed earlier fetch satisfies nobody; fall through to a fetch of our own.
     }
   }
-  // Start (or join a newer) fetch; `getCachedOrFetch` coalesces equivalent misses.
-  if (existing) dropEntry(key);
-  const result = await getCachedOrFetch(key, fetcher, ttlMs);
-  return { data: result.data, fromCache: result.fromCache };
+
+  // The cached or earlier value is unacceptable: fetch, or join a fetch that began after `need`.
+  const racing = inFlight.get(key) as Promise<CacheEntry<T>> | undefined;
+  const fresh =
+    racing && (inFlightStartedAt.get(key) ?? 0) > need ? racing : startFlight(key, fetcher, ttlMs);
+  const entry = await fresh;
+  return { data: entry.data, fromCache: false, hash: entry.hash };
 }
 
 /**
@@ -491,7 +542,10 @@ export function invalidateCache(pattern: string): number {
     }
   }
   for (const key of inFlight.keys()) {
-    if (key.includes(pattern)) inFlight.delete(key);
+    if (key.includes(pattern)) {
+      inFlight.delete(key);
+      inFlightStartedAt.delete(key);
+    }
   }
   return invalidated;
 }
@@ -513,5 +567,6 @@ export function getCacheStats(): { size: number; hitRate: number; bytes: number 
 export function clearCache(): void {
   cache.clear();
   inFlight.clear();
+  inFlightStartedAt.clear();
   totalBytes = 0;
 }

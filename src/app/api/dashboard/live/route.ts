@@ -1,10 +1,9 @@
-import { createHash } from 'node:crypto';
 import { z } from 'zod';
 import { getCurrentAuthorizationActor } from '@/lib/rbac';
 import { jsonError, jsonOk } from '@/lib/api-response';
 import { AppError, isAppError } from '@/lib/errors';
 import { getRealtimeChangeGenerationAtLeast } from '@/lib/realtime-change-control-plane';
-import { getLiveDashboardSnapshot } from '@/lib/dashboard/live-incidents';
+import { resolveLiveDashboardSnapshot } from '@/lib/dashboard/live-incidents';
 import {
   LIVE_ASSIGNMENT_OPTIONS,
   LIVE_INCIDENT_MAX_LIMIT,
@@ -17,6 +16,10 @@ import {
   LIVE_URGENCY_OPTIONS,
 } from '@/lib/dashboard/live-incidents-shared';
 import { logger } from '@/lib/logger';
+import {
+  addOperationalMetric,
+  observeOperationalHistogram,
+} from '@/lib/metrics/operational/registry';
 
 export const dynamic = 'force-dynamic';
 
@@ -56,7 +59,15 @@ function invalid(message: string) {
  * rail data, derived from one authorization-scoped active set shared by identical viewers.
  */
 export async function GET(request: Request) {
+  const requestStartedAt = performance.now();
   const timings: string[] = [];
+  const recordOutcome = (result: 'full' | 'not_modified' | 'error') => {
+    addOperationalMetric('opsknight_dashboard_live_requests_total', 1, { result });
+    observeOperationalHistogram(
+      'opsknight_dashboard_live_request_duration_seconds',
+      (performance.now() - requestStartedAt) / 1000
+    );
+  };
   const measure = async <T>(name: string, work: () => Promise<T> | T): Promise<T> => {
     const startedAt = performance.now();
     try {
@@ -89,8 +100,12 @@ export async function GET(request: Request) {
     const generation = await measure('generation', () =>
       getRealtimeChangeGenerationAtLeast(input.after ?? null).catch(() => null)
     );
-    const snapshot = await measure('snapshot', () =>
-      getLiveDashboardSnapshot(
+    const {
+      etag,
+      snapshot,
+      generation: reflected,
+    } = await measure('snapshot', () =>
+      resolveLiveDashboardSnapshot(
         actor,
         {
           scope: input.scope,
@@ -103,28 +118,33 @@ export async function GET(request: Request) {
           assignment: input.assignment,
           search: input.q,
         },
-        { limit: input.limit, generation, pinIds: input.ids }
+        {
+          limit: input.limit,
+          generation,
+          pinIds: input.ids,
+          ifNoneMatch: request.headers.get('if-none-match'),
+        }
       )
-    );
-    // Validator over the material projection (not the read timestamp or generation), so an
-    // unchanged view answers with an empty 304 instead of a full body and a client re-render.
-    const { asOf: _asOf, generation: _generation, ...material } = snapshot;
-    const etag = await measure(
-      'etag',
-      () => `W/"${createHash('sha1').update(JSON.stringify(material)).digest('base64url')}"`
     );
     const headers = {
       'Cache-Control': 'private, no-store',
       Vary: 'Cookie',
       ETag: etag,
       'Server-Timing': timings.join(', '),
+      // Lets a client tell "unchanged" apart from "unchanged because this replica is behind".
+      ...(reflected ? { 'X-Live-Generation': reflected } : {}),
     };
-    if (request.headers.get('if-none-match') === etag) {
+    // The validator was proven against the datasets before anything was derived or serialized.
+    if (snapshot === null) {
+      recordOutcome('not_modified');
       return new Response(null, { status: 304, headers });
     }
     // No legacy top-level aliases: they would serialize the whole projection twice.
-    return await measure('encode', () => jsonOk(snapshot, 200, headers, {}));
+    const body = await measure('encode', () => jsonOk(snapshot, 200, headers, {}));
+    recordOutcome('full');
+    return body;
   } catch (error) {
+    recordOutcome('error');
     if (isAppError(error)) return jsonError(error);
     logger.error('dashboard.live.failed', { error });
     return jsonError('Live dashboard temporarily unavailable', 503);

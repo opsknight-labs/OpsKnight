@@ -37,9 +37,28 @@ describe('dashboard live command contract', () => {
 
   it('uses realtime only as an invalidation signal for the authorized read path', () => {
     expect(provider).toContain('useRealtime()');
-    expect(provider).not.toContain('recentIncidents');
+    // It never consumes the legacy incident payload; it only publishes to console consumers.
+    expect(provider).not.toMatch(/\{[^}]*recentIncidents[^}]*\}\s*=\s*useRealtime\(\)/);
     expect(provider).toContain('/api/dashboard/live?');
     expect(provider).toContain("params.set('after'");
+  });
+
+  it('negotiates the cheapest stream per route with exactly one provider', () => {
+    const appLayout = readFileSync('src/app/(app)/layout.tsx', 'utf8');
+    const hook = readFileSync('src/hooks/useRealtime.ts', 'utf8');
+    const stream = readFileSync('src/app/api/realtime/stream/route.ts', 'utf8');
+    expect(appLayout).toContain('<RouteAwareRealtimeProvider>');
+    expect(appLayout).not.toContain('<RealtimeProvider>');
+    expect(hook).toContain("pathname === '/' ? 'signal' : 'full'");
+    expect(kioskLayout).toContain('<RealtimeProvider mode="signal">');
+    // One EventSource construction site, closed before any reconnect or mode change.
+    expect(hook.match(/new EventSource\(/g)).toHaveLength(1);
+    expect(hook).toContain("mode === 'signal' ? '/api/realtime/stream?mode=signal'");
+    // Signal subscribers never run the legacy projections.
+    expect(stream).toContain("req.nextUrl.searchParams.get('mode') === 'signal'");
+    expect(stream.indexOf('if (signalOnly)')).toBeLessThan(
+      stream.indexOf('getCachedRecentIncidents(')
+    );
   });
 
   it('keeps live data independent from historical reporting dates', () => {

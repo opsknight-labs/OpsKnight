@@ -132,6 +132,7 @@ describe('live projection engine', () => {
   it('summarizes the whole scoped set regardless of the current view', () => {
     const { summary } = derive({ view: 'mine', search: 'nothing-matches' });
     expect(summary).toEqual({
+      visibleActive: 4,
       active: 4,
       triggered: 3,
       acknowledged: 1,
@@ -332,5 +333,16 @@ describe('live projection engine', () => {
       expect(isActorNeutralQuery({ ...DEFAULT_LIVE_QUERY, view })).toBe(false);
     }
     expect(isActorNeutralQuery({ ...DEFAULT_LIVE_QUERY, scope: 'teams' })).toBe(false);
+  });
+
+  it('keeps the visible active count and critical alerts independent of scope and filters', () => {
+    const narrowed = derive({ scope: 'mine', view: 'unassigned', search: 'zzz' });
+    expect(narrowed.summary.active).toBeLessThan(4);
+    expect(narrowed.summary.visibleActive).toBe(4);
+    expect(narrowed.alerts.map(item => item.id)).toEqual(['critical-mine']);
+    // Same through the shared (actor-neutral) path and the full per-viewer path.
+    const full = derive({ view: 'critical' });
+    expect(full.summary.visibleActive).toBe(4);
+    expect(full.alerts.map(item => item.id)).toEqual(['critical-mine']);
   });
 });

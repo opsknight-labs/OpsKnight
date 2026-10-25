@@ -187,6 +187,12 @@ export default function LiveIncidentsPanel({
     setDensity,
     selectedIncidentId,
     selectIncident,
+    olderIncidents,
+    canLoadOlder,
+    loadingOlder,
+    olderError,
+    loadOlder,
+    catchingUp,
   } = live;
   const wallboard = variant === 'wallboard';
   // Desktop cockpit: the panel is viewport-sized and scrolls internally, so render every loaded
@@ -198,10 +204,13 @@ export default function LiveIncidentsPanel({
   const listRef = useRef<HTMLUListElement | null>(null);
 
   const visible = useMemo(
-    () => (fill || expanded ? incidents : incidents.slice(0, LIVE_INCIDENT_VISIBLE_ROWS)),
-    [expanded, fill, incidents]
+    () =>
+      fill || expanded
+        ? [...incidents, ...olderIncidents]
+        : incidents.slice(0, LIVE_INCIDENT_VISIBLE_ROWS),
+    [expanded, fill, incidents, olderIncidents]
   );
-  const hiddenLoaded = incidents.length - visible.length;
+  const hiddenLoaded = fill || expanded ? 0 : incidents.length - visible.length;
   const facetCount = countActiveFacets(query);
   const health_ = healthCopy(health);
   const isQueryLoading = loading && snapshot !== null;
@@ -402,6 +411,7 @@ export default function LiveIncidentsPanel({
         {paused ? 'Paused' : health_.label}
       </span>
       <span data-testid="live-incidents-synced">{formatSyncAge(syncedAt, now)}</span>
+      {catchingUp && !syncError && <span data-testid="live-catching-up">Catching up…</span>}
       {syncError && (
         <span className="text-amber-700 dark:text-amber-400">Sync failed — retrying</span>
       )}
@@ -409,10 +419,16 @@ export default function LiveIncidentsPanel({
       {snapshot?.truncated && (
         <span
           data-testid="live-window-note"
-          title="Headline counters are read from the database; the list and SLA signals cover the newest incidents plus older critical or unowned work."
+          title="Headline counters are read from the database. Filtered totals, facet counts and SLA signals are derived from the newest incidents plus older critical, unowned, escalating and SLA-imminent ones, so they can be incomplete."
         >
-          Window of {snapshot.workingSet.toLocaleString()} · totals{' '}
-          {snapshot.countsExact ? 'exact' : 'approximate'}
+          Working window of {snapshot.workingSet.toLocaleString()} · counters{' '}
+          {snapshot.accuracy?.counters ?? 'window'} · filtered{' '}
+          {snapshot.accuracy?.filtered ?? 'window'} · SLA {snapshot.accuracy?.sla ?? 'window'}
+        </span>
+      )}
+      {snapshot && snapshot.accuracy?.trend === 'capped' && (
+        <span data-testid="live-trend-capped" title="The 24h trend read hit its row cap.">
+          Trend capped
         </span>
       )}
     </p>
@@ -743,6 +759,21 @@ export default function LiveIncidentsPanel({
             <span className="hidden sm:block">{statusLine}</span>
           </div>
           <div className="flex items-center gap-2">
+            {canLoadOlder && (
+              <button
+                type="button"
+                onClick={loadOlder}
+                disabled={loadingOlder}
+                data-testid="live-load-older"
+                className="rounded-lg border border-border bg-card px-2.5 py-1 text-[11px] font-semibold text-foreground hover:bg-muted disabled:opacity-60 outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+              >
+                {loadingOlder
+                  ? 'Loading…'
+                  : olderError
+                    ? 'Retry loading older'
+                    : 'Load older incidents'}
+              </button>
+            )}
             {!fill && (hiddenLoaded > 0 || expanded) && (
               <button
                 type="button"

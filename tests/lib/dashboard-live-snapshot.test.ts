@@ -1,7 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const prismaMock = vi.hoisted(() => ({
-  incident: { findMany: vi.fn(), count: vi.fn() },
+  incident: { findMany: vi.fn(), findFirst: vi.fn(), count: vi.fn() },
+  alert: { groupBy: vi.fn(), count: vi.fn() },
+  incidentWatcher: { groupBy: vi.fn(), count: vi.fn() },
   incidentEvent: { findMany: vi.fn() },
   onCallSchedule: { findMany: vi.fn() },
 }));
@@ -20,9 +22,19 @@ vi.mock('@/lib/oncall-shifts', () => ({
   ]),
 }));
 
-import { getLiveDashboardSnapshot, resolveLiveScope } from '@/lib/dashboard/live-incidents';
+import {
+  decodeLiveCursor,
+  getLiveIncidentDetail,
+  encodeLiveCursor,
+  getLiveDashboardSnapshot,
+  getLiveIncidentPage,
+  liveQueryWhere,
+  resolveLiveDashboardSnapshot,
+  resolveLiveScope,
+} from '@/lib/dashboard/live-incidents';
 import { DEFAULT_LIVE_QUERY } from '@/lib/dashboard/live-incidents-shared';
 import { clearCache } from '@/lib/realtime-cache';
+import { getActiveOnCallShifts } from '@/lib/oncall-shifts';
 import type { AuthorizationActor } from '@/lib/authorization-policy';
 
 const admin = (id: string) =>
@@ -56,7 +68,6 @@ const dbRow = {
   team: null,
   assignee: { id: 'u2', name: '', email: 'b@example.com' },
   currentEscalationStep: null,
-  _count: { alerts: 2, watchers: 1 },
 };
 
 const trendRow = {
@@ -84,6 +95,14 @@ describe('getLiveDashboardSnapshot', () => {
       isActiveSetRead(args) ? [dbRow] : [trendRow]
     );
     prismaMock.incidentEvent.findMany.mockResolvedValue([]);
+    prismaMock.alert.groupBy.mockImplementation(
+      async ({ where }: { where: { incidentId: { in: string[] } } }) =>
+        where.incidentId.in.map(incidentId => ({ incidentId, _count: { _all: 2 } }))
+    );
+    prismaMock.incidentWatcher.groupBy.mockImplementation(
+      async ({ where }: { where: { incidentId: { in: string[] } } }) =>
+        where.incidentId.in.map(incidentId => ({ incidentId, _count: { _all: 1 } }))
+    );
     prismaMock.onCallSchedule.findMany.mockResolvedValue([
       { id: 's1', name: 'Primary' },
       { id: 's2', name: 'Secondary' },
@@ -331,7 +350,13 @@ describe('getLiveDashboardSnapshot', () => {
       generation: '20',
     });
     expect(snapshot.truncated).toBe(true);
-    expect(snapshot.countsExact).toBe(true);
+    expect(snapshot.accuracy).toEqual({
+      counters: 'exact',
+      filtered: 'exact',
+      sla: 'window',
+      trend: 'exact',
+    });
+    expect(snapshot.summary.visibleActive).toBe(12_345);
     expect(snapshot.summary).toMatchObject({
       active: 12_345,
       triggered: 9_000,
@@ -350,12 +375,263 @@ describe('getLiveDashboardSnapshot', () => {
       { generation: '20' }
     );
     expect(critical.incidents.map(item => item.id)).toContain('old-critical');
-    // A narrower scope cannot reuse database totals, so it reports approximate counters.
+    // Global alerts come from the whole visible set, not from the current filters.
+    expect(critical.alerts.map(item => item.id)).toContain('old-critical');
+    // A plain critical view maps to one exact counter; any extra filter falls back to the window.
+    expect(critical.accuracy.filtered).toBe('exact');
+    const filtered = await getLiveDashboardSnapshot(
+      admin('a1'),
+      { ...DEFAULT_LIVE_QUERY, view: 'critical', urgency: 'HIGH' },
+      { generation: '20' }
+    );
+    expect(filtered.accuracy.filtered).toBe('window');
+    expect(filtered.accuracy.counters).toBe('exact');
     const mine = await getLiveDashboardSnapshot(
       admin('a1'),
       { ...DEFAULT_LIVE_QUERY, scope: 'mine' },
       { generation: '20' }
     );
-    expect(mine.countsExact).toBe(false);
+    // Counters for another scope are exact too (read for that slice), but a derived total is not.
+    expect(mine.accuracy.counters).toBe('exact');
+    expect(mine.accuracy.sla).toBe('window');
+  });
+
+  it('proves an unchanged projection before deriving it, and never across users or data changes', async () => {
+    const first = await resolveLiveDashboardSnapshot(admin('a1'), DEFAULT_LIVE_QUERY, {
+      generation: '30',
+    });
+    expect(first.snapshot).not.toBeNull();
+    const again = await resolveLiveDashboardSnapshot(admin('a1'), DEFAULT_LIVE_QUERY, {
+      generation: '31',
+      ifNoneMatch: first.etag,
+    });
+    expect(again.snapshot).toBeNull();
+    expect(again.etag).toBe(first.etag);
+
+    // Another viewer, another query, another page size or other pins never validate.
+    for (const [actor, query, extra] of [
+      [admin('a2'), DEFAULT_LIVE_QUERY, {}],
+      [admin('a1'), { ...DEFAULT_LIVE_QUERY, view: 'critical' as const }, {}],
+      [admin('a1'), DEFAULT_LIVE_QUERY, { limit: 10 }],
+      [admin('a1'), DEFAULT_LIVE_QUERY, { pinIds: ['inc-1'] }],
+    ] as const) {
+      const other = await resolveLiveDashboardSnapshot(actor, query, {
+        generation: '31',
+        ifNoneMatch: first.etag,
+        ...extra,
+      });
+      expect(other.snapshot).not.toBeNull();
+      expect(other.etag).not.toBe(first.etag);
+    }
+
+    // A change in the data changes the validator (here: a new incident after the window).
+    vi.useFakeTimers({ toFake: ['Date'] });
+    try {
+      vi.setSystemTime(Date.now() + 1_000);
+      prismaMock.incident.findMany.mockImplementation(async args =>
+        isActiveSetRead(args) ? [dbRow, { ...dbRow, id: 'inc-2' }] : [trendRow]
+      );
+      const changed = await resolveLiveDashboardSnapshot(admin('a1'), DEFAULT_LIVE_QUERY, {
+        generation: '32',
+        ifNoneMatch: first.etag,
+      });
+      expect(changed.snapshot).not.toBeNull();
+      expect(changed.etag).not.toBe(first.etag);
+      // Time-driven SLA signals invalidate the validator once the bucket advances.
+      const stable = await resolveLiveDashboardSnapshot(admin('a1'), DEFAULT_LIVE_QUERY, {
+        generation: '32',
+      });
+      vi.setSystemTime(Date.now() + 6_000);
+      const later = await resolveLiveDashboardSnapshot(admin('a1'), DEFAULT_LIVE_QUERY, {
+        generation: '32',
+        ifNoneMatch: stable.etag,
+      });
+      expect(later.snapshot).not.toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('keeps alert and watcher counts out of the bulk read and reads them for the same ids', async () => {
+    const snapshot = await getLiveDashboardSnapshot(admin('a1'), DEFAULT_LIVE_QUERY, {
+      generation: '40',
+    });
+    expect(snapshot.incidents[0]).toMatchObject({ alertCount: 2, responderCount: 1 });
+    const select = activeSetCalls()[0][0].select;
+    expect(select).not.toHaveProperty('_count');
+    expect(prismaMock.alert.groupBy.mock.calls[0][0].where.incidentId.in).toEqual(['inc-1']);
+  });
+
+  describe('keyset page beyond the working set', () => {
+    const rows = (count: number, start = 0) =>
+      Array.from({ length: count }, (_, index) => ({
+        ...dbRow,
+        id: `page-${start + index}`,
+        automationSourceRestricted: false,
+        createdAt: new Date(Date.UTC(2026, 8, 1) - (start + index) * 1_000),
+      }));
+
+    it('stays inside the authorization scope and continues from a position-only cursor', async () => {
+      prismaMock.incident.findMany.mockResolvedValueOnce(rows(26));
+      const first = await getLiveIncidentPage(
+        scoped('user-a', ['team-a']),
+        { ...DEFAULT_LIVE_QUERY, view: 'critical' },
+        { limit: 25 }
+      );
+      expect(first.incidents).toHaveLength(25);
+      expect(first.nextCursor).not.toBeNull();
+      const firstArgs = prismaMock.incident.findMany.mock.calls.at(-1)![0];
+      expect(firstArgs.take).toBe(26);
+      expect(firstArgs.orderBy).toEqual([{ createdAt: 'desc' }, { id: 'desc' }]);
+      // The viewer's own read scope is always part of the predicate.
+      expect(JSON.stringify(firstArgs.where)).toContain('"assigneeId":"user-a"');
+      expect(JSON.stringify(firstArgs.where)).toContain('"visibility":"PUBLIC"');
+
+      prismaMock.incident.findMany.mockResolvedValueOnce(rows(3, 25));
+      const second = await getLiveIncidentPage(
+        scoped('user-a', ['team-a']),
+        { ...DEFAULT_LIVE_QUERY, view: 'critical' },
+        { limit: 25, cursor: first.nextCursor }
+      );
+      expect(second.nextCursor).toBeNull();
+      const secondWhere = JSON.stringify(prismaMock.incident.findMany.mock.calls.at(-1)![0].where);
+      expect(secondWhere).toContain('"id":{"lt":"page-24"}');
+      expect(secondWhere).toContain('"visibility":"PUBLIC"');
+    });
+
+    it('rejects forged cursors and views that cannot be paged from the database', async () => {
+      expect(decodeLiveCursor('garbage')).toBeNull();
+      expect(decodeLiveCursor(Buffer.from('{"a":1}').toString('base64url'))).toBeNull();
+      expect(
+        decodeLiveCursor(encodeLiveCursor({ createdAt: '2026-10-24T10:00:00.000Z', id: 'x' }))
+      ).toMatchObject({
+        id: 'x',
+      });
+      await expect(
+        getLiveIncidentPage(admin('a1'), DEFAULT_LIVE_QUERY, { cursor: 'garbage' })
+      ).rejects.toThrow('Invalid cursor');
+      await expect(
+        getLiveIncidentPage(admin('a1'), { ...DEFAULT_LIVE_QUERY, view: 'breaching' })
+      ).rejects.toThrow('cannot be paged');
+    });
+
+    it('never lets a restricted viewer match redacted titles through search', () => {
+      const query = { ...DEFAULT_LIVE_QUERY, search: 'customer-123' };
+      const restricted = JSON.stringify(liveQueryWhere(scoped('u', ['t']), query, false));
+      expect(restricted).toContain('"automationSourceRestricted":false');
+      expect(restricted).toContain('"automationDecision":null');
+      expect(restricted).toContain('"automationTraces":{"none":{}}');
+      const privileged = JSON.stringify(liveQueryWhere(admin('a'), query, true));
+      expect(privileged).not.toContain('automationSourceRestricted');
+    });
+
+    it('maps views, scope and facets to the same predicate the in-memory feed applies', () => {
+      const where = (partial: Partial<typeof DEFAULT_LIVE_QUERY>, actor = scoped('me', ['t1'])) =>
+        JSON.stringify(liveQueryWhere(actor, { ...DEFAULT_LIVE_QUERY, ...partial }, false));
+      expect(where({ view: 'unassigned' })).toContain('"assigneeId":null');
+      expect(where({ view: 'critical' })).toContain('"priority":"P1"');
+      expect(where({ view: 'mine' })).toContain('"assigneeId":"me"');
+      expect(where({ view: 'my_teams' })).toContain('"teamId":{"in":["t1"]}');
+      expect(where({ view: 'my_teams' }, scoped('me', []))).toContain('"id":{"in":[]}');
+      expect(where({ scope: 'mine' })).toContain('"assigneeId":"me"');
+      const facets = where({ status: 'OPEN', urgency: 'HIGH', serviceId: 's1' });
+      for (const fragment of ['"status":"OPEN"', '"urgency":"HIGH"', '"serviceId":"s1"']) {
+        expect(facets).toContain(fragment);
+      }
+    });
+  });
+
+  describe('authorization isolation of cached data', () => {
+    it('keys every partition by the full scope: team set, sensitivity and (for personal rows) the user', () => {
+      const a = resolveLiveScope(scoped('u1', ['t1', 't2']));
+      const b = resolveLiveScope(scoped('u2', ['t2', 't1']));
+      const other = resolveLiveScope(scoped('u3', ['t1']));
+      // Same team set shares the team-visible partition; personal partitions never match.
+      expect(a.partitions[0].key).toBe(b.partitions[0].key);
+      expect(a.partitions[1].key).not.toBe(b.partitions[1].key);
+      expect(a.partitions[0].key).not.toBe(other.partitions[0].key);
+      expect(a.partitions[1].key).toContain('u1');
+      expect(a.partitions[0].key).not.toContain('u1');
+      // Elevation or demotion selects different keys immediately.
+      const global = resolveLiveScope(admin('a1'));
+      expect(global.partitions).toHaveLength(1);
+      expect(global.partitions[0].key).not.toBe(a.partitions[0].key);
+      // Sensitivity is part of every key, so redacted and unredacted rows never mix.
+      const restrictedAuditor = resolveLiveScope({
+        id: 'x',
+        role: 'AUDITOR',
+        status: 'ACTIVE',
+        teamIds: [],
+      } as unknown as AuthorizationActor);
+      expect(restrictedAuditor.key).not.toBe(global.key);
+    });
+
+    it('re-reads the team partition when team membership changes instead of serving the old set', async () => {
+      await getLiveDashboardSnapshot(scoped('u1', ['team-a']), DEFAULT_LIVE_QUERY, {
+        generation: '60',
+      });
+      const before = activeSetCalls().length;
+      await getLiveDashboardSnapshot(scoped('u1', ['team-a', 'team-b']), DEFAULT_LIVE_QUERY, {
+        generation: '60',
+      });
+      const added = activeSetCalls().slice(before);
+      expect(added.some(call => whereOf(call).includes('team-b'))).toBe(true);
+      expect(
+        added.some(call => whereOf(call).includes('team-a') && !whereOf(call).includes('team-b'))
+      ).toBe(false);
+    });
+
+    it('never serves cached schedule or on-call data across different schedule authorization filters', async () => {
+      vi.mocked(getActiveOnCallShifts).mockClear();
+      await getLiveDashboardSnapshot(admin('a1'), DEFAULT_LIVE_QUERY, { generation: '70' });
+      await getLiveDashboardSnapshot(scoped('u1', ['team-a']), DEFAULT_LIVE_QUERY, {
+        generation: '70',
+      });
+      await getLiveDashboardSnapshot(scoped('u2', ['team-a']), DEFAULT_LIVE_QUERY, {
+        generation: '70',
+      });
+      await getLiveDashboardSnapshot(scoped('u3', ['team-z']), DEFAULT_LIVE_QUERY, {
+        generation: '70',
+      });
+      const filters = vi
+        .mocked(getActiveOnCallShifts)
+        .mock.calls.map(call => JSON.stringify(call[1]));
+      // Schedule visibility is user-specific for scoped viewers, so every distinct filter reads
+      // separately and no result is ever reused across filters; the same viewer shares its own read.
+      expect(new Set(filters).size).toBe(filters.length);
+      expect(filters).toHaveLength(4);
+      await getLiveDashboardSnapshot(scoped('u1', ['team-a']), DEFAULT_LIVE_QUERY, {
+        generation: '71',
+      });
+      expect(vi.mocked(getActiveOnCallShifts).mock.calls).toHaveLength(4);
+    });
+
+    it('applies the viewer scope and redaction to the inspector detail read', async () => {
+      prismaMock.incident.findFirst.mockResolvedValue({
+        ...dbRow,
+        dedupKey: 'k',
+        runbookExecutions: [],
+        automationDecision: {
+          incidentId: 'inc-1',
+          matchedRouteRuleName: 'rule',
+          escalationPolicyNameSnapshot: null,
+        },
+        service: { ...dbRow.service, policy: null },
+      });
+      prismaMock.alert.count.mockResolvedValue(3);
+      prismaMock.incidentWatcher.count.mockResolvedValue(1);
+      const detail = await getLiveIncidentDetail(scoped('u1', ['team-a']), 'inc-1');
+      const where = JSON.stringify(prismaMock.incident.findFirst.mock.calls[0][0].where);
+      expect(where).toContain('"id":"inc-1"');
+      expect(where).toContain('"assigneeId":"u1"');
+      expect(where).toContain('"visibility":"PUBLIC"');
+      expect(detail).toMatchObject({
+        title: 'Restricted alert content',
+        alertCount: 3,
+        responderCount: 1,
+      });
+      prismaMock.incident.findFirst.mockResolvedValue(null);
+      await expect(getLiveIncidentDetail(scoped('u9', []), 'inc-1')).resolves.toBeNull();
+    });
   });
 });

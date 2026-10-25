@@ -5,6 +5,11 @@ import { GET } from '@/app/api/realtime/stream/route';
 import prisma from '@/lib/prisma';
 import { getCurrentUser } from '@/lib/rbac';
 import { AppError } from '@/lib/errors';
+import {
+  activeRealtimeStreamCount,
+  drainRealtimeStreams,
+  resetRealtimeStreamRegistryForTests,
+} from '@/lib/realtime-stream-registry';
 
 const { recentIncidentsMock, dashboardMetricsMock, changeListeners } = vi.hoisted(() => ({
   recentIncidentsMock: vi.fn(),
@@ -22,14 +27,12 @@ vi.mock('@/lib/realtime-stream-authorization', async importOriginal => {
   return {
     ...actual,
     getRequestSessionJti: vi.fn().mockResolvedValue('test-jti'),
-    getRequestStreamAuthentication: vi
-      .fn()
-      .mockResolvedValue({
-        sessionJti: 'test-jti',
-        method: 'credentials',
-        policyVersion: 1,
-        expiresAt: Math.floor(Date.now() / 1000) + 3600,
-      }),
+    getRequestStreamAuthentication: vi.fn().mockResolvedValue({
+      sessionJti: 'test-jti',
+      method: 'credentials',
+      policyVersion: 1,
+      expiresAt: Math.floor(Date.now() / 1000) + 3600,
+    }),
   };
 });
 
@@ -72,6 +75,7 @@ describe('API Route - Realtime Stream', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     changeListeners.clear();
+    resetRealtimeStreamRegistryForTests();
     recentIncidentsMock.mockResolvedValue({ data: [], changed: true, hash: '[]' });
     dashboardMetricsMock.mockResolvedValue(null);
   });
@@ -256,6 +260,99 @@ describe('API Route - Realtime Stream', () => {
       chunks += 1;
     }
     expect(chunks).toBeLessThanOrEqual(80);
+    controller.abort();
+  });
+
+  async function readAll(response: Response): Promise<string> {
+    const reader = response.body!.getReader();
+    const decoder = new TextDecoder();
+    let text = '';
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) return text;
+      text += decoder.decode(value);
+    }
+  }
+
+  it.each([
+    ['the account is disabled', { status: 'DISABLED' }],
+    ['the role changed', { role: 'USER' }],
+    ['the token version advanced (all sessions revoked)', { tokenVersion: 1 }],
+  ])(
+    'ends the stream with authorization_revoked within one heartbeat when %s',
+    async (_label, change) => {
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+      try {
+        arrangeAdmin();
+        const controller = new AbortController();
+        const response = await GET(
+          new NextRequest('http://localhost:3000/api/realtime/stream?mode=signal', {
+            signal: controller.signal,
+          })
+        );
+        await vi.waitFor(() => expect(changeListeners.size).toBe(1));
+        vi.mocked(prisma.user.findUnique).mockResolvedValue({
+          id: 'user-1',
+          role: 'ADMIN',
+          status: 'ACTIVE',
+          tokenVersion: 0,
+          teamMemberships: [],
+          ...change,
+        } as never);
+        const finished = readAll(response);
+        // Heartbeat (15s) plus at most 2s of jitter bounds how long revoked access can last.
+        await vi.advanceTimersByTimeAsync(17_500);
+        const text = await finished;
+        expect(text).toContain('authorization_revoked');
+        expect(changeListeners.size).toBe(0);
+        controller.abort();
+      } finally {
+        vi.useRealTimers();
+      }
+    }
+  );
+
+  it('fails closed and releases its subscription when the authorization recheck throws', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    try {
+      arrangeAdmin();
+      const controller = new AbortController();
+      const response = await GET(
+        new NextRequest('http://localhost:3000/api/realtime/stream?mode=signal', {
+          signal: controller.signal,
+        })
+      );
+      await vi.waitFor(() => expect(changeListeners.size).toBe(1));
+      vi.mocked(prisma.user.findUnique).mockRejectedValue(new Error('db down'));
+      const finished = readAll(response);
+      await vi.advanceTimersByTimeAsync(17_500);
+      expect(await finished).toContain('authorization_revoked');
+      expect(changeListeners.size).toBe(0);
+      controller.abort();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('releases its subscription on shutdown drain and refuses new streams while draining', async () => {
+    arrangeAdmin();
+    const controller = new AbortController();
+    const response = await GET(
+      new NextRequest('http://localhost:3000/api/realtime/stream?mode=signal', {
+        signal: controller.signal,
+      })
+    );
+    await vi.waitFor(() => expect(changeListeners.size).toBe(1));
+    expect(activeRealtimeStreamCount()).toBe(1);
+    const finished = readAll(response);
+    expect(drainRealtimeStreams(10)).toBe(1);
+    await finished;
+    expect(changeListeners.size).toBe(0);
+    expect(activeRealtimeStreamCount()).toBe(0);
+
+    const refused = await GET(new NextRequest('http://localhost:3000/api/realtime/stream'));
+    expect(refused.status).toBe(503);
+    expect(refused.headers.get('Retry-After')).toBe('5');
     controller.abort();
   });
 
