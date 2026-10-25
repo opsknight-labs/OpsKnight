@@ -1,0 +1,71 @@
+{
+  "sourceRevision": "ee8f601faffbc9aeb4cc86f1dcf62ac205504379",
+  "imageId": "sha256:e6b0225696e5264fdbdc8b162a5854bc797c831abbe46fcc698c343a6d1c760d",
+  "runId": "28fa0f5b-87bf-4e67-9644-b2b2d98caeff",
+  "target": 10,
+  "duration": "30s",
+  "generalWorkerReplicas": 1,
+  "httpPassed": false,
+  "localSmtpPassed": true,
+  "diagnosticPassed": false,
+  "queueBounded": false,
+  "lastQueueSamples": [
+    {
+      "elapsedMs": 10045.404208,
+      "due": 4,
+      "oldestDueMs": 83.881,
+      "failed": 0
+    },
+    {
+      "elapsedMs": 20044.975082999998,
+      "due": 10,
+      "oldestDueMs": 44.618,
+      "failed": 0
+    },
+    {
+      "elapsedMs": 30040.620166,
+      "due": 58,
+      "oldestDueMs": 1128.768,
+      "failed": 0
+    },
+    {
+      "elapsedMs": 30611.650041,
+      "due": 0,
+      "oldestDueMs": 0,
+      "failed": 0
+    }
+  ],
+  "finalDrain": {
+    "observedAt": "2026-10-25T14:42:53.733364+00:00",
+    "dueUnfinished": 0,
+    "jobs": [
+      {
+        "type": "SCHEDULED_TASK",
+        "status": "COMPLETED",
+        "count": 1505
+      },
+      {
+        "type": "COMPLIANCE_EVALUATION_SWEEP",
+        "status": "PENDING",
+        "count": 1
+      },
+      {
+        "type": "COMPLIANCE_EVALUATION_SWEEP",
+        "status": "COMPLETED",
+        "count": 1
+      },
+      {
+        "type": "COMPLIANCE_DRIFT_PROJECT",
+        "status": "COMPLETED",
+        "count": 6
+      },
+      {
+        "type": "RUNBOOK",
+        "status": "COMPLETED",
+        "count": 301
+      }
+    ],
+    "deliveries": null
+  },
+  "scope": "CPU-profiled diagnostic only; no SMTP fixture. Not capacity evidence. All active job families inspected after owned topology cleanup. Not sustained, compact-budget, configured fanout, actual Runbook execution, HA, remote delivery or release certification. General workers increase from1 at50 to2 at100; web2/ingestion2/six support roles1CPU each, DB uncapped/shared Docker VM."
+}

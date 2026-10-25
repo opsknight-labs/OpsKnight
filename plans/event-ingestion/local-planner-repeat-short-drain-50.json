@@ -1,0 +1,81 @@
+{
+  "sourceRevision": "ee8f601faffbc9aeb4cc86f1dcf62ac205504379",
+  "imageId": "sha256:e6b0225696e5264fdbdc8b162a5854bc797c831abbe46fcc698c343a6d1c760d",
+  "runId": "424ecf59-a5f9-44ae-af9d-6d2d0c632806",
+  "target": 50,
+  "duration": "2m",
+  "generalWorkerReplicas": 1,
+  "httpPassed": false,
+  "localSmtpPassed": false,
+  "shortPreflightPassed": false,
+  "queueBounded": false,
+  "lastQueueSamples": [
+    {
+      "elapsedMs": 41151.619792,
+      "due": 356,
+      "oldestDueMs": 3469.167,
+      "failed": 0
+    },
+    {
+      "elapsedMs": 50454.37575,
+      "due": 184,
+      "oldestDueMs": 4163.039,
+      "failed": 0
+    },
+    {
+      "elapsedMs": 60860.026166999996,
+      "due": 449,
+      "oldestDueMs": 4862.563,
+      "failed": 0
+    },
+    {
+      "elapsedMs": 63599.02520899999,
+      "due": 549,
+      "oldestDueMs": 6575.431,
+      "failed": 0
+    }
+  ],
+  "finalDrain": {
+    "observedAt": "2026-10-25T14:38:21.539414+00:00",
+    "dueUnfinished": 244,
+    "jobs": [
+      {
+        "type": "SCHEDULED_TASK",
+        "status": "PENDING",
+        "count": 214
+      },
+      {
+        "type": "SCHEDULED_TASK",
+        "status": "PROCESSING",
+        "count": 30
+      },
+      {
+        "type": "SCHEDULED_TASK",
+        "status": "COMPLETED",
+        "count": 5181
+      },
+      {
+        "type": "COMPLIANCE_EVALUATION_SWEEP",
+        "status": "PENDING",
+        "count": 1
+      },
+      {
+        "type": "COMPLIANCE_EVALUATION_SWEEP",
+        "status": "COMPLETED",
+        "count": 1
+      },
+      {
+        "type": "COMPLIANCE_DRIFT_PROJECT",
+        "status": "COMPLETED",
+        "count": 6
+      },
+      {
+        "type": "RUNBOOK",
+        "status": "COMPLETED",
+        "count": 1085
+      }
+    ],
+    "deliveries": null
+  },
+  "scope": "Short fresh-incident default/unconfigured-provider smoke with one separate pinned-Automation SMTP fixture. All active job families inspected after owned topology cleanup. Not sustained, compact-budget, configured fanout, actual Runbook execution, HA, remote delivery or release certification. General workers increase from1 at50 to2 at100; web2/ingestion4/six support roles1CPU each, DB uncapped/shared Docker VM."
+}

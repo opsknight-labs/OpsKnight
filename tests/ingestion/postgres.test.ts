@@ -1,3 +1,4 @@
+import { prepareReceiptInsert, type ReceiptInsert } from '@/lib/ingestion/receipt-insert';
 import { processEventSideEffect } from '@/lib/event-side-effects';
 import { reserveIngestionBudget, reserveIngestionBudgets } from '@/lib/ingestion/budget';
 import { getMaintenanceClient, disconnectMaintenanceClient } from '@/lib/maintenance/database';
@@ -20,6 +21,7 @@ import {
 } from '@/lib/ingestion/postgres';
 import {
   decodeEnvelope,
+  encodeEnvelope,
   IngestionConflictError,
   IngestionLeaseLostError,
   IngestionUnavailableError,
@@ -152,6 +154,43 @@ afterAll(async () => {
 });
 
 describe('PostgreSQL ingestion durability', () => {
+  it('atomically inserts only reserved receipt ordinals and preserves prepared JSON', async () => {
+    const policy = (await getIngestionPolicy()).policy;
+    const stored = encodeEnvelope(envelope('raw-insert'));
+    const dangerous = "quote ' ); DROP TABLE nope; -- and \" json";
+    stored.event.payload.summary = dangerous;
+    const rows: ReceiptInsert[] = [0, 1, 2].map(index => ({
+      id: randomUUID(), receivedAt: new Date(stored.receivedAt), serviceId,
+      integrationId: 'integration', partitionKey: `insert-${index}`,
+      orderingKeys: [`insert:${randomUUID()}`], idempotencyKey: randomUUID(), contentHash: 'fixture-hash',
+      payloadBytes: 100, critical: true, envelope: stored,
+    }));
+    const insert = prepareReceiptInsert(rows);
+    stored.event.payload.summary = 'changed after preparation';
+    const before = await prisma.ingestionBudget.aggregate({ _sum: { pending: true, bytes: true } });
+    await prisma.$transaction(async tx => {
+      const shards = await reserveIngestionBudgets(tx, policy, [0, 1].map(() => ({
+        payloadBytes: 100, critical: true, preferredShard: 0,
+      })));
+      expect(shards.every(shard => shard !== undefined)).toBe(true);
+      await insert(tx, [shards[0], undefined, shards[1]]);
+    });
+    const inserted = await prisma.ingestionReceipt.findMany({ where: { id: { in: rows.map(row => row.id) } }, orderBy: { sequence: 'asc' } });
+    expect(inserted.map(row => row.id)).toEqual([rows[0].id, rows[2].id]);
+    expect(inserted.every(row => row.status === 'PENDING' && row.availableAt.getTime() === 0)).toBe(true);
+    expect(decodeEnvelope(inserted[0].envelope).event.payload.summary).toBe(dangerous);
+    const after = await prisma.ingestionBudget.aggregate({ _sum: { pending: true, bytes: true } });
+    expect(after._sum.pending! - before._sum.pending!).toBe(2);
+    expect(after._sum.bytes! - before._sum.bytes!).toBe(BigInt(200));
+    // An insertion constraint failure must roll back the reservation too.
+    const duplicate = prepareReceiptInsert([rows[0]]);
+    await expect(prisma.$transaction(async tx => {
+      const shards = await reserveIngestionBudgets(tx, policy, [{ payloadBytes: 100, critical: true, preferredShard: 0 }]);
+      await duplicate(tx, shards);
+    })).rejects.toThrow();
+    expect(await prisma.ingestionBudget.aggregate({ _sum: { pending: true, bytes: true } })).toEqual(after);
+  });
+
   it('plans collaboration at execution and recovers a committed child intent after disable', async () => {
     const previous = await prisma.chatOpsConfig.findUnique({ where: { id: 'default' } });
     const incident = await prisma.incident.create({ data: {

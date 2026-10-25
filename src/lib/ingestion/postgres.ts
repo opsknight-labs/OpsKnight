@@ -1,3 +1,4 @@
+import { prepareReceiptInsert } from './receipt-insert';
 import { reserveIngestionBudget, reserveIngestionBudgets } from './budget';
 import { DurableAppendBatcher } from './append-batcher';
 import { acquireTextAdvisoryLocks } from '@/lib/db-locks';
@@ -168,6 +169,7 @@ async function appendPostgresGroup(
           });
           return {
             entry,
+            id: randomUUID(),
             envelope,
             payloadBytes: Buffer.byteLength(JSON.stringify(envelope)),
             critical:
@@ -177,21 +179,9 @@ async function appendPostgresGroup(
           };
         })
       );
-      const reservations = await measureAdmissionStage('reservation', () =>
-        reserveIngestionBudgets(tx, policy, prepared)
-      );
-      const rows: Prisma.IngestionReceiptCreateManyInput[] = [];
-      for (const [index, item] of prepared.entries()) {
-        const budgetShard = reservations.at(index);
-        if (budgetShard === undefined) {
-          results.set(item.entry, {
-            error: new IngestionUnavailableError('Ingestion capacity exhausted'),
-          });
-          continue;
-        }
-        const id = randomUUID();
-        rows.push({
-          id,
+      const insertReceipts = measureAdmissionPreparation(() => prepareReceiptInsert(
+        prepared.map(item => ({
+          id: item.id,
           receivedAt: new Date(item.entry.envelope.receivedAt),
           serviceId: item.entry.envelope.serviceId,
           integrationId: item.entry.envelope.integrationId,
@@ -199,16 +189,24 @@ async function appendPostgresGroup(
           orderingKeys: item.entry.identities,
           idempotencyKey: item.entry.idempotencyKey,
           contentHash: item.entry.contentHash,
-          budgetShard,
           payloadBytes: item.payloadBytes,
           critical: item.critical,
-          availableAt: new Date(0),
-          envelope: item.envelope as Prisma.InputJsonValue,
-        });
-        results.set(item.entry, { receiptId: id, duplicate: false });
+          envelope: item.envelope,
+        }))
+      ));
+      const reservations = await measureAdmissionStage('reservation', () =>
+        reserveIngestionBudgets(tx, policy, prepared)
+      );
+      for (const [index, item] of prepared.entries()) {
+        if (reservations.at(index) === undefined) {
+          results.set(item.entry, {
+            error: new IngestionUnavailableError('Ingestion capacity exhausted'),
+          });
+          continue;
+        }
+        results.set(item.entry, { receiptId: item.id, duplicate: false });
       }
-      if (rows.length)
-        await measureAdmissionStage('insert', () => tx.ingestionReceipt.createMany({ data: rows }));
+      await measureAdmissionStage('insert', () => insertReceipts(tx, reservations));
     }
   }
   for (const { entry, original } of duplicates) {
