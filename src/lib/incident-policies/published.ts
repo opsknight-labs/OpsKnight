@@ -103,3 +103,35 @@ export async function readPublishedSupportPolicies(tx: Prisma.TransactionClient,
     })),
   }));
 }
+
+/** Classification and SLA selected at one authoritative statement snapshot.
+ * Scope order is explicit; sealed versions/rules are immutable. No cache or
+ * preparation-time mutable policy pointer is trusted across transactions.
+ */
+export async function readPublishedIncidentPolicies(
+  tx: Prisma.TransactionClient,
+  serviceId: string,
+  integrationId?: string | null
+): Promise<{ classification: Classification[]; sla: Sla[] }> {
+  const classificationKeys = [
+    ...(integrationId ? [`integration:${integrationId}`] : []),
+    `service:${serviceId}`,
+    'workspace',
+  ];
+  const slaKeys = [`service:${serviceId}`, 'workspace'];
+  const [row] = await tx.$queryRaw<Array<{ classification: Classification[]; sla: Sla[] }>>`
+    WITH classification_snapshots AS (
+      WITH scopes AS (SELECT key, position FROM unnest(${classificationKeys}::text[])
+        WITH ORDINALITY AS requested(key, position))
+      ${classificationSql}
+    ), sla_snapshots AS (
+      WITH scopes AS (SELECT key, position FROM unnest(${slaKeys}::text[])
+        WITH ORDINALITY AS requested(key, position))
+      ${slaSql}
+    )
+    SELECT (SELECT COALESCE(jsonb_agg(snapshot ORDER BY array_position(${classificationKeys}::text[], snapshot->>'scopeKey')), '[]'::jsonb) FROM classification_snapshots) AS classification,
+      (SELECT COALESCE(jsonb_agg(snapshot ORDER BY array_position(${slaKeys}::text[], snapshot->>'scopeKey')), '[]'::jsonb) FROM sla_snapshots) AS sla
+  `;
+  if (!row) throw new Error('Incident policy snapshot unavailable');
+  return row;
+}

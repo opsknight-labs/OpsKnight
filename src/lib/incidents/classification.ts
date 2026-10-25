@@ -94,11 +94,13 @@ export async function resolveIncidentClassification(
     explicitPriority?: string | null;
     explicitUrgency?: IncidentUrgency | null;
     alertSeverity?: AlertSeverity | null;
-  }
+  },
+  publishedPolicies?: Awaited<ReturnType<typeof readPublishedClassificationPolicies>>
 ): Promise<IncidentClassification> {
   const explicitPriority = normalizeIncidentPriority(input.explicitPriority);
   const severity = input.alertSeverity ?? null;
-  const policies = await loadPolicies(tx, input.serviceId, input.integrationId);
+  const policies =
+    publishedPolicies ?? (await loadPolicies(tx, input.serviceId, input.integrationId));
   const fallback = severity ? defaultAlertClassification(severity) : null;
   let priority = explicitPriority;
   let priorityCleared = false;
