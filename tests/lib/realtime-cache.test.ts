@@ -1,6 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { clearCache, getCachedOrFetch, getCachedRecentIncidents } from '@/lib/realtime-cache';
+import {
+  clearCache,
+  getCacheStats,
+  getCachedOrFetch,
+  getCachedRecentIncidents,
+} from '@/lib/realtime-cache';
 
 describe('realtime cache', () => {
   beforeEach(() => clearCache());
@@ -39,6 +44,54 @@ describe('realtime cache', () => {
       vi.useRealTimers();
     }
   });
+  it('detects change with a compact digest instead of retaining the serialized payload', async () => {
+    const big = { rows: Array.from({ length: 500 }, (_, index) => ({ index, text: 'x'.repeat(40) })) };
+    const first = await getCachedOrFetch('digest', async () => big, 1_000);
+    expect(first.hash.length).toBeLessThan(64);
+    const same = await getCachedOrFetch('digest-same', async () => structuredClone(big), 1_000);
+    expect(same.hash).toBe(first.hash);
+    const changed = await getCachedOrFetch(
+      'digest-changed',
+      async () => ({ rows: [...big.rows, { index: -1, text: '' }] }),
+      1_000
+    );
+    expect(changed.hash).not.toBe(first.hash);
+    expect(getCacheStats().bytes).toBeGreaterThan(0);
+  });
+
+  it('evicts oldest entries to stay inside the byte budget and skips oversized entries', async () => {
+    vi.resetModules();
+    vi.stubEnv('REALTIME_CACHE_MAX_BYTES', String(40_000));
+    try {
+      const fresh = await import('@/lib/realtime-cache');
+      fresh.clearCache();
+      const payload = (seed: number) => ({ seed, text: 'y'.repeat(4_000) });
+      for (let index = 0; index < 12; index += 1) {
+        await fresh.getCachedOrFetch(`budget:${index}`, async () => payload(index), 60_000);
+      }
+      const stats = fresh.getCacheStats();
+      expect(stats.bytes).toBeLessThanOrEqual(40_000);
+      expect(stats.size).toBeLessThan(12);
+      // The newest entry survives; the oldest was evicted and must be refetched.
+      const newest = vi.fn(async () => payload(11));
+      await expect(fresh.getCachedOrFetch('budget:11', newest, 60_000)).resolves.toMatchObject({
+        fromCache: true,
+      });
+      const oldest = vi.fn(async () => payload(0));
+      await fresh.getCachedOrFetch('budget:0', oldest, 60_000);
+      expect(oldest).toHaveBeenCalledTimes(1);
+
+      // An entry above a quarter of the budget is returned but never retained.
+      const huge = vi.fn(async () => ({ text: 'z'.repeat(20_000) }));
+      await fresh.getCachedOrFetch('huge', huge, 60_000);
+      await fresh.getCachedOrFetch('huge', huge, 60_000);
+      expect(huge).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.unstubAllEnvs();
+      vi.resetModules();
+    }
+  });
+
   it('does not share sensitive alert source projections with globally scoped restricted readers', async () => {
     const { default: prisma } = await import('@/lib/prisma');
     vi.mocked(prisma.incident.findMany).mockResolvedValue([

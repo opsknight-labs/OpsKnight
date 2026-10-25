@@ -16,7 +16,9 @@ describe('dashboard authorization contract', () => {
     expect(page).not.toContain('calculateActorSLAMetrics(');
     // Every live read (incidents and activity) is derived from incidentReadWhere.
     expect(live).toContain('incidentReadWhere(actor)');
-    expect(live).toContain('{ incident: scope.where }');
+    // Partitions come from the same policy parts that compose incidentReadWhere.
+    expect(live).toContain('incidentReadWhereParts(actor)');
+    expect(live).toContain('{ incident: partition.where }');
     // Live on-call and schedule coverage reads are scoped to scheduleReadWhere.
     expect(live).toContain('scheduleReadWhere(actor)');
     expect(live).toContain('{ where: scheduleWhere }');

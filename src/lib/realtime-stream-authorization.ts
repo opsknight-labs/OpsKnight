@@ -157,6 +157,41 @@ export async function resolveStreamAuthorization(
   }
 }
 
+const COALESCE_TTL_MS = 1_500;
+const coalesced = new Map<string, Promise<StreamAuthorization | null>>();
+
+/**
+ * Streams of the same session (multiple tabs, reconnect storms) share one recheck inside a
+ * short window. The window is far below the heartbeat interval, so revocation latency is
+ * unchanged; the result is never reused across sessions or users.
+ */
+export function resolveStreamAuthorizationCoalesced(
+  userId: string,
+  expectedTokenVersion: number,
+  sessionJti?: string | null,
+  authentication?: StreamAuthentication | null
+): Promise<StreamAuthorization | null> {
+  if (!sessionJti) return Promise.resolve(null);
+  const key = `${userId}:${expectedTokenVersion}:${sessionJti}`;
+  const existing = coalesced.get(key);
+  if (existing) return existing;
+  const pending = resolveStreamAuthorization(
+    userId,
+    expectedTokenVersion,
+    sessionJti,
+    authentication
+  );
+  coalesced.set(key, pending);
+  const timer = setTimeout(() => {
+    if (coalesced.get(key) === pending) coalesced.delete(key);
+  }, COALESCE_TTL_MS);
+  timer.unref?.();
+  pending.catch(() => {
+    if (coalesced.get(key) === pending) coalesced.delete(key);
+  });
+  return pending;
+}
+
 export function hasSameStreamAuthorizationScope(
   current: StreamAuthorization,
   next: StreamAuthorization

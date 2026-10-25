@@ -223,7 +223,8 @@ export type LiveSlaSignal = {
   deadline: string | null;
 };
 
-export type LiveIncident = LiveSlaFields & {
+/** Row content shared by the server working set and the wire format. */
+export type LiveIncidentCore = {
   id: string;
   /** Escalation step (1-based) while escalating, otherwise null. */
   escalationLevel: number | null;
@@ -239,7 +240,6 @@ export type LiveIncident = LiveSlaFields & {
   service: { id: string; name: string; teamId: string | null };
   team: { id: string; name: string } | null;
   assignee: { id: string; name: string } | null;
-  sla: LiveSlaSignal;
   /** Dedup key if assigned by inbound alert grouping, otherwise null. */
   dedupKey?: string | null;
   /** Service escalation policy name if configured. */
@@ -254,6 +254,15 @@ export type LiveIncident = LiveSlaFields & {
     failureCode: string | null;
   } | null;
 };
+
+/**
+ * What the server holds per active incident: the row plus the raw SLA inputs needed to derive
+ * the signal at request time. These inputs never leave the server.
+ */
+export type LiveSetRow = LiveIncidentCore & LiveSlaFields;
+
+/** Wire format: the row plus the server-derived SLA signal (no raw SLA inputs). */
+export type LiveIncident = LiveIncidentCore & { sla: LiveSlaSignal };
 
 export type LiveFacetOption = { id: string; name: string; count: number; critical: number };
 
@@ -348,8 +357,15 @@ export type LiveSnapshot = {
     activity: LiveActivityItem[];
     onCall: LiveOnCallShift[];
   };
-  /** True when the scoped active set exceeded the in-memory projection cap. */
+  /** True when the scoped active set exceeded the in-memory working-set window. */
   truncated: boolean;
+  /** Incidents held in the in-memory working set this snapshot was derived from. */
+  workingSet: number;
+  /**
+   * True when the headline counters and total are exact for the viewer's visible population:
+   * either the working set is complete or the counters were read from the database.
+   */
+  countsExact: boolean;
   asOf: string;
   generation: string | null;
 };

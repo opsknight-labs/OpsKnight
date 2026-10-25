@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const prismaMock = vi.hoisted(() => ({
-  incident: { findMany: vi.fn() },
+  incident: { findMany: vi.fn(), count: vi.fn() },
   incidentEvent: { findMany: vi.fn() },
   onCallSchedule: { findMany: vi.fn() },
 }));
@@ -70,10 +70,11 @@ const trendRow = {
   service: { teamId: 'team-a' },
 };
 
-/** The active-set read selects `id`; the 24h trend read does not. */
-const isActiveSetRead = (args: { select?: { id?: boolean } }) => args.select?.id === true;
+/** Only the bulk feed projection selects `title`; trend reads do not. */
+const isActiveSetRead = (args: { select?: { title?: boolean } }) => args.select?.title === true;
 const activeSetCalls = () =>
   prismaMock.incident.findMany.mock.calls.filter(([args]) => isActiveSetRead(args));
+const whereOf = (call: unknown[]) => JSON.stringify((call[0] as { where: unknown }).where);
 
 describe('getLiveDashboardSnapshot', () => {
   beforeEach(() => {
@@ -93,15 +94,45 @@ describe('getLiveDashboardSnapshot', () => {
     await getLiveDashboardSnapshot(scoped('user-a', ['team-a']), DEFAULT_LIVE_QUERY, {
       generation: '1',
     });
-    const args = activeSetCalls()[0][0];
-    expect(args.orderBy).toEqual([{ createdAt: 'desc' }, { id: 'desc' }]);
-    expect(args.take).toBe(2001);
-    expect(args.where.AND).toContainEqual({ status: { in: ['OPEN', 'ACKNOWLEDGED'] } });
-    expect(JSON.stringify(args.where)).toContain('"assigneeId":"user-a"');
-    expect(JSON.stringify(args.where)).not.toContain('createdAt');
-    expect(JSON.stringify(prismaMock.incidentEvent.findMany.mock.calls[0][0].where)).toContain(
-      '"assigneeId":"user-a"'
-    );
+    // Two partitions: the team-shared window and this user's small personal set.
+    const calls = activeSetCalls();
+    expect(calls).toHaveLength(2);
+    const shared = calls.find(call => whereOf(call).includes('"teamId"'))!;
+    const personal = calls.find(call => whereOf(call).includes('"assigneeId":"user-a"'))!;
+    for (const [args] of [shared, personal]) {
+      expect(args.orderBy).toEqual([{ createdAt: 'desc' }, { id: 'desc' }]);
+      expect(args.where.AND).toContainEqual({ status: { in: ['OPEN', 'ACKNOWLEDGED'] } });
+      expect(JSON.stringify(args.where)).not.toContain('createdAt');
+    }
+    expect(shared[0].take).toBe(2001);
+    expect(personal[0].take).toBe(501);
+    expect(whereOf(shared)).not.toContain('user-a');
+    expect(whereOf(shared)).toContain('"visibility":"PUBLIC"');
+    expect(
+      prismaMock.incidentEvent.findMany.mock.calls
+        .map(call => JSON.stringify(call[0].where))
+        .some(where => where.includes('"assigneeId":"user-a"'))
+    ).toBe(true);
+  });
+
+  it('shares the team partition between users of the same teams; only personal reads are per user', async () => {
+    await Promise.all([
+      getLiveDashboardSnapshot(scoped('u1', ['team-a', 'team-b']), DEFAULT_LIVE_QUERY, {
+        generation: '2',
+      }),
+      getLiveDashboardSnapshot(scoped('u2', ['team-b', 'team-a']), DEFAULT_LIVE_QUERY, {
+        generation: '2',
+      }),
+      getLiveDashboardSnapshot(scoped('u3', ['team-c']), DEFAULT_LIVE_QUERY, { generation: '2' }),
+    ]);
+    const calls = activeSetCalls();
+    const sharedReads = calls.filter(call => whereOf(call).includes('"visibility":"PUBLIC"'));
+    const personalReads = calls.filter(call => !whereOf(call).includes('"visibility":"PUBLIC"'));
+    // team-a+team-b once, team-c once; three personal reads.
+    expect(sharedReads).toHaveLength(2);
+    expect(personalReads).toHaveLength(3);
+    // Different team sets never share rows.
+    expect(sharedReads.map(call => whereOf(call).includes('team-c')).sort()).toEqual([false, true]);
   });
 
   it('shares one query across viewers with the same scope and generation', async () => {
@@ -123,12 +154,35 @@ describe('getLiveDashboardSnapshot', () => {
       ),
     ]);
     expect(activeSetCalls()).toHaveLength(1);
-    await getLiveDashboardSnapshot(admin('a1'), DEFAULT_LIVE_QUERY, { generation: '6' });
-    expect(activeSetCalls()).toHaveLength(2);
-    // Trends refresh on a fixed cadence, not on every realtime generation.
+    // A newer generation inside the freshness window is served from the shared read ...
+    const early = await getLiveDashboardSnapshot(admin('a1'), DEFAULT_LIVE_QUERY, {
+      generation: '6',
+    });
+    expect(activeSetCalls()).toHaveLength(1);
+    // ... and the snapshot honestly reports the older generation it reflects.
+    expect(early.generation).toBe('5');
+    // Once the window passes, a viewer that knows of a newer generation triggers one re-read.
+    vi.useFakeTimers({ toFake: ['Date'] });
+    try {
+      vi.setSystemTime(Date.now() + 1_000);
+      const later = await getLiveDashboardSnapshot(admin('a1'), DEFAULT_LIVE_QUERY, {
+        generation: '6',
+      });
+      expect(later.generation).toBe('6');
+      expect(activeSetCalls()).toHaveLength(2);
+      // A viewer that already knows only generation 6 is satisfied by that read.
+      await getLiveDashboardSnapshot(admin('a2'), DEFAULT_LIVE_QUERY, { generation: '6' });
+      vi.setSystemTime(Date.now() + 5_000);
+      await getLiveDashboardSnapshot(admin('a2'), DEFAULT_LIVE_QUERY, { generation: '6' });
+      expect(activeSetCalls()).toHaveLength(2);
+    } finally {
+      vi.useRealTimers();
+    }
+    // Trends refresh on a fixed cadence, not on every realtime generation: one indexed read
+    // each for created, acknowledged and resolved incidents, shared by every viewer.
     expect(
       prismaMock.incident.findMany.mock.calls.filter(([args]) => !isActiveSetRead(args))
-    ).toHaveLength(1);
+    ).toHaveLength(3);
   });
 
   it('never shares a scoped set between different users or team sets', () => {
@@ -151,10 +205,20 @@ describe('getLiveDashboardSnapshot', () => {
     expect(snapshot.incidents[0]).toMatchObject({
       title: 'Restricted alert content',
       createdAt: '2026-10-24T10:00:00.000Z',
-      slaPausedMs: 0,
       team: { id: 'team-a', name: 'Alpha' },
       assignee: { id: 'u2', name: 'b@example.com' },
     });
+    // Raw SLA inputs and inspector-only context never travel in the bulk feed.
+    for (const key of [
+      'slaPausedMs',
+      'slaAckTargetMs',
+      'acknowledgedAt',
+      'dedupKey',
+      'latestRunbook',
+    ]) {
+      expect(snapshot.incidents[0]).not.toHaveProperty(key);
+    }
+    expect(snapshot.incidents[0].sla).toBeDefined();
     expect(snapshot.summary.active).toBe(1);
     expect(snapshot.incidents[0]).toMatchObject({
       escalationLevel: null,
@@ -233,5 +297,65 @@ describe('getLiveDashboardSnapshot', () => {
     expect(snapshot.coverage.scheduleCount).toBe(0);
     expect(snapshot.coverage.gaps).toEqual([]);
     expect(snapshot.rail.onCall).toEqual([]);
+  });
+
+  it('keeps counters exact and surfaces older critical work when the window is truncated', async () => {
+    const many = Array.from({ length: 2_001 }, (_, index) => ({
+      ...dbRow,
+      id: `new-${index}`,
+      urgency: 'LOW',
+      priority: 'P4',
+      assignee: { id: 'u9', name: 'N', email: 'n@example.com' },
+      createdAt: new Date(Date.UTC(2026, 9, 24, 10, 0, 0) - index * 1_000),
+    }));
+    const oldCritical = {
+      ...dbRow,
+      id: 'old-critical',
+      automationSourceRestricted: false,
+      createdAt: new Date('2026-09-01T00:00:00.000Z'),
+      assignee: null,
+    };
+    prismaMock.incident.findMany.mockImplementation(async args => {
+      if (!isActiveSetRead(args)) return [];
+      return JSON.stringify(args.where).includes('"createdAt"') ? [oldCritical] : many;
+    });
+    prismaMock.incident.count.mockImplementation(async ({ where }: { where: unknown }) => {
+      const json = JSON.stringify(where);
+      if (json.includes('"status":"OPEN"')) return 9_000;
+      if (json.includes('"priority":"P1"') && json.includes('"assigneeId":null')) return 41;
+      if (json.includes('"priority":"P1"')) return 300;
+      if (json.includes('"assigneeId":null')) return 700;
+      return 12_345;
+    });
+    const snapshot = await getLiveDashboardSnapshot(admin('a1'), DEFAULT_LIVE_QUERY, {
+      generation: '20',
+    });
+    expect(snapshot.truncated).toBe(true);
+    expect(snapshot.countsExact).toBe(true);
+    expect(snapshot.summary).toMatchObject({
+      active: 12_345,
+      triggered: 9_000,
+      acknowledged: 3_345,
+      critical: 300,
+      unassigned: 700,
+      unassignedCritical: 41,
+    });
+    expect(snapshot.total).toBe(12_345);
+    expect(snapshot.workingSet).toBe(2_001);
+    // The older critical, unowned incident is still reachable beyond the newest-2000 window.
+    expect(snapshot.pinned).toEqual([]);
+    const critical = await getLiveDashboardSnapshot(
+      admin('a1'),
+      { ...DEFAULT_LIVE_QUERY, view: 'critical' },
+      { generation: '20' }
+    );
+    expect(critical.incidents.map(item => item.id)).toContain('old-critical');
+    // A narrower scope cannot reuse database totals, so it reports approximate counters.
+    const mine = await getLiveDashboardSnapshot(
+      admin('a1'),
+      { ...DEFAULT_LIVE_QUERY, scope: 'mine' },
+      { generation: '20' }
+    );
+    expect(mine.countsExact).toBe(false);
   });
 });

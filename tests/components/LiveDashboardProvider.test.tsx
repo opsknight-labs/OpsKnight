@@ -38,16 +38,6 @@ function snapshot(ids: string[], query = DEFAULT_LIVE_QUERY): LiveSnapshot {
       escalationStatus: null,
       createdAt: new Date(Date.UTC(2026, 9, 24, 12, 0, 59 - index)).toISOString(),
       updatedAt: '2026-10-24T12:00:00.000Z',
-      acknowledgedAt: null,
-      slaFirstAcknowledgedAt: null,
-      slaAckTargetMs: null,
-      slaResolveTargetMs: null,
-      slaTargetSource: null,
-      slaTargetCapturedAt: null,
-      slaPausedMs: 0,
-      slaPauseStartedAt: null,
-      slaAckElapsedMs: null,
-      slaResolveElapsedMs: null,
       service: { id: 'svc', name: 'API', teamId: null },
       team: null,
       assignee: null,
@@ -92,6 +82,8 @@ function snapshot(ids: string[], query = DEFAULT_LIVE_QUERY): LiveSnapshot {
     coverage: { me: { onCall: false, schedules: [], until: null }, gaps: [], scheduleCount: 0 },
     rail: { myQueue: [], slaRisk: [], servicesAtRisk: [], activity: [], onCall: [] },
     truncated: false,
+    workingSet: ids.length,
+    countsExact: true,
     asOf: '2026-10-24T12:01:00.000Z',
     generation: '1',
   };
@@ -113,12 +105,17 @@ function Probe() {
   );
 }
 
-const respond = (body: LiveSnapshot) =>
-  Promise.resolve(new Response(JSON.stringify({ data: body }), { status: 200 }));
+const respond = (body: LiveSnapshot, etag?: string) =>
+  Promise.resolve(
+    new Response(JSON.stringify({ data: body }), {
+      status: 200,
+      headers: etag ? { ETag: etag } : undefined,
+    })
+  );
 
-async function flush() {
+async function flush(ms = 400) {
   await act(async () => {
-    await vi.advanceTimersByTimeAsync(100);
+    await vi.advanceTimersByTimeAsync(ms);
   });
 }
 
@@ -159,6 +156,79 @@ describe('LiveDashboardProvider', () => {
     expect(String(fetchMock.mock.calls[0][0])).toContain('after=42');
     expect(screen.getByTestId('ids').textContent).toBe('b,a');
     expect(screen.getByTestId('highlighted').textContent).toBe('b');
+  });
+
+  const rerenderProvider = (view: ReturnType<typeof mount>) =>
+    view.rerender(
+      <LiveDashboardProvider initialSnapshot={snapshot(['a'])} currentUserId="me">
+        <Probe />
+      </LiveDashboardProvider>
+    );
+
+  it('rate limits bursts of realtime signals to one read per gap without starving', async () => {
+    const view = mount();
+    fetchMock.mockImplementation(() => respond(snapshot(['a'])));
+    realtime.value = { ...realtime.value, changeCount: 1, changeGeneration: '1' };
+    rerenderProvider(view);
+    await flush(300);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    // A steady stream of signals inside the gap collapses into exactly one follow-up read.
+    for (let count = 2; count <= 12; count += 1) {
+      realtime.value = { ...realtime.value, changeCount: count, changeGeneration: String(count) };
+      rerenderProvider(view);
+      await flush(40);
+    }
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    await flush(1_200);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(String(fetchMock.mock.calls[1][0])).toContain('after=');
+    await flush(3_000);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('ignores legacy revision bumps once change signals flow', async () => {
+    const view = mount();
+    fetchMock.mockImplementation(() => respond(snapshot(['a'])));
+    realtime.value = { ...realtime.value, changeCount: 1, changeGeneration: '1' };
+    rerenderProvider(view);
+    await flush(300);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    for (let revision = 1; revision <= 5; revision += 1) {
+      realtime.value = { ...realtime.value, revision };
+      rerenderProvider(view);
+    }
+    await flush(2_000);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not read in a hidden tab and revalidates unchanged views with a 304', async () => {
+    const view = mount();
+    fetchMock
+      .mockImplementationOnce(() => respond(snapshot(['a', 'b']), 'W/"v1"'))
+      .mockImplementation(() => Promise.resolve(new Response(null, { status: 304 })));
+    realtime.value = { ...realtime.value, changeCount: 1, changeGeneration: '1' };
+    rerenderProvider(view);
+    await flush(300);
+    expect(screen.getByTestId('ids').textContent).toBe('a,b');
+
+    realtime.value = { ...realtime.value, changeCount: 2, changeGeneration: '2' };
+    rerenderProvider(view);
+    await flush(1_500);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    const init = fetchMock.mock.calls[1][1] as RequestInit;
+    expect((init.headers as Record<string, string>)['If-None-Match']).toBe('W/"v1"');
+    expect(screen.getByTestId('ids').textContent).toBe('a,b');
+
+    const visibility = vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden');
+    try {
+      realtime.value = { ...realtime.value, changeCount: 3, changeGeneration: '3' };
+      rerenderProvider(view);
+      await flush(3_000);
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+    } finally {
+      visibility.mockRestore();
+    }
   });
 
   it('buffers updates while paused and applies them on resume', async () => {

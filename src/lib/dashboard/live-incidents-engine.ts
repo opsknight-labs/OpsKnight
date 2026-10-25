@@ -11,6 +11,7 @@ import {
   type LiveIncidentQuery,
   type LiveIncidentView,
   type LiveScope,
+  type LiveSetRow,
   type LiveSlaSignal,
   type LiveSummary,
   type LiveTrend,
@@ -22,7 +23,25 @@ import {
  * rail widgets are all computed here, so filter changes and additional viewers cost no queries.
  */
 
-export type LiveSetRow = Omit<LiveIncident, 'sla'>;
+export type { LiveSetRow };
+
+/** Drops the raw SLA inputs; only the derived signal is sent to clients. */
+function toWire(row: LiveSetRow, sla: LiveSlaSignal): LiveIncident {
+  const {
+    acknowledgedAt: _acknowledgedAt,
+    slaFirstAcknowledgedAt: _slaFirstAcknowledgedAt,
+    slaAckTargetMs: _slaAckTargetMs,
+    slaResolveTargetMs: _slaResolveTargetMs,
+    slaTargetSource: _slaTargetSource,
+    slaTargetCapturedAt: _slaTargetCapturedAt,
+    slaPausedMs: _slaPausedMs,
+    slaPauseStartedAt: _slaPauseStartedAt,
+    slaAckElapsedMs: _slaAckElapsedMs,
+    slaResolveElapsedMs: _slaResolveElapsedMs,
+    ...core
+  } = row;
+  return { ...core, sla };
+}
 
 export type LiveEngineContext = { actorId: string; teamIds: readonly string[]; now: number };
 
@@ -359,15 +378,16 @@ export type LiveDerivation = {
   servicesAtRisk: LiveFacetOption[];
 };
 
-export function deriveLiveProjection(
+/** Core derivation; also exposes the sorted rows and full match list for sharing. */
+function deriveCore(
   set: LiveSetRow[],
   query: LiveIncidentQuery,
   ctx: LiveEngineContext,
   limit: number,
   options: { pinIds?: readonly string[] } = {}
-): LiveDerivation {
+): LiveDerivation & { all: LiveIncident[]; matching: LiveIncident[] } {
   const all: LiveIncident[] = set
-    .map(row => ({ ...row, sla: computeSlaSignal(row, ctx.now) }))
+    .map(row => toWire(row, computeSlaSignal(row, ctx.now)))
     .sort(compareNewestFirst);
   const rows = all.filter(row => matchesScope(row, query.scope, ctx));
 
@@ -457,5 +477,104 @@ export function deriveLiveProjection(
     myQueue,
     slaRisk,
     servicesAtRisk,
+    all,
+    matching,
   };
+}
+
+/**
+ * The actor-independent part of a derivation. For viewers of the whole visible population (scope
+ * "all", a view that does not depend on who is asking) every projection except "mine", "my teams",
+ * the personal queue and pins is identical for all of them, so it is computed once and shared.
+ */
+export type SharedDerivation = LiveDerivation & { all: LiveIncident[]; matching: LiveIncident[] };
+
+const NO_ACTOR = '\u0000';
+
+export function isActorNeutralQuery(query: LiveIncidentQuery): boolean {
+  return query.scope === 'all' && query.view !== 'mine' && query.view !== 'my_teams';
+}
+
+export function deriveShared(
+  set: LiveSetRow[],
+  query: LiveIncidentQuery,
+  now: number
+): SharedDerivation {
+  return deriveCore(set, query, { actorId: NO_ACTOR, teamIds: [], now }, 0);
+}
+
+/** Adds the viewer-specific parts to a shared derivation without re-deriving the population. */
+export function personalizeDerivation(
+  shared: SharedDerivation,
+  query: LiveIncidentQuery,
+  ctx: LiveEngineContext,
+  limit: number,
+  pinIds: readonly string[] = []
+): LiveDerivation {
+  const mineRows: LiveIncident[] = [];
+  let mineMatching = 0;
+  let teamsMatching = 0;
+  for (const row of shared.all) {
+    const isMine = row.assignee?.id === ctx.actorId;
+    const inMyTeams = inTeams(row, ctx.teamIds);
+    if (!isMine && !inMyTeams) continue;
+    if (isMine) mineRows.push(row);
+    if (matchesFacetsExcept(row, query)) {
+      if (isMine) mineMatching += 1;
+      if (inMyTeams) teamsMatching += 1;
+    }
+  }
+  const severity = (row: LiveIncident) => (isCriticalIncident(row) ? 0 : 1);
+  const byId = new Map(shared.all.map(row => [row.id, row]));
+  return {
+    incidents: shared.matching.slice(0, limit),
+    total: shared.matching.length,
+    facets: {
+      ...shared.facets,
+      views: { ...shared.facets.views, mine: mineMatching, my_teams: teamsMatching },
+    },
+    summary: { ...shared.summary, mine: mineRows.length },
+    pinned: pinIds.slice(0, LIVE_MAX_PINS).flatMap(id => byId.get(id) ?? []),
+    attention: shared.attention,
+    myQueue: [...mineRows]
+      .sort((a, b) => severity(a) - severity(b) || compareNewestFirst(a, b))
+      .slice(0, RAIL_LIMIT),
+    slaRisk: shared.slaRisk,
+    servicesAtRisk: shared.servicesAtRisk,
+  };
+}
+
+export function deriveLiveProjection(
+  set: LiveSetRow[],
+  query: LiveIncidentQuery,
+  ctx: LiveEngineContext,
+  limit: number,
+  options: { pinIds?: readonly string[] } = {}
+): LiveDerivation {
+  if (isActorNeutralQuery(query)) {
+    return personalizeDerivation(
+      deriveShared(set, query, ctx.now),
+      query,
+      ctx,
+      limit,
+      options.pinIds
+    );
+  }
+  return deriveUnshared(set, query, ctx, limit, options);
+}
+
+/** Full per-viewer derivation. Also the reference the shared path is verified against. */
+export function deriveUnshared(
+  set: LiveSetRow[],
+  query: LiveIncidentQuery,
+  ctx: LiveEngineContext,
+  limit: number,
+  options: { pinIds?: readonly string[] } = {}
+): LiveDerivation {
+  const {
+    all: _all,
+    matching: _matching,
+    ...derivation
+  } = deriveCore(set, query, ctx, limit, options);
+  return derivation;
 }

@@ -173,6 +173,92 @@ describe('API Route - Realtime Stream', () => {
     controller.abort();
   });
 
+  const adminUser = {
+    id: 'user-1',
+    role: 'ADMIN',
+    email: 'admin@example.com',
+    name: 'Admin',
+    timeZone: 'UTC',
+    status: 'ACTIVE',
+    tokenVersion: 0,
+    invitationGeneration: 0,
+    gender: null,
+    department: null,
+    jobTitle: null,
+    avatarUrl: null,
+    phoneNumber: null,
+    emailNotificationsEnabled: false,
+    smsNotificationsEnabled: false,
+    voiceNotificationsEnabled: false,
+    pushNotificationsEnabled: false,
+    whatsappNotificationsEnabled: false,
+  } satisfies Awaited<ReturnType<typeof getCurrentUser>>;
+
+  function arrangeAdmin() {
+    vi.mocked(getCurrentUser).mockResolvedValue(adminUser);
+    vi.mocked(prisma.user.findUnique).mockResolvedValue({
+      id: 'user-1',
+      role: 'ADMIN',
+      status: 'ACTIVE',
+      tokenVersion: 0,
+      teamMemberships: [],
+    } as never);
+  }
+
+  it('signal mode streams only compact change signals and skips legacy projections', async () => {
+    arrangeAdmin();
+    const controller = new AbortController();
+    const response = await GET(
+      new NextRequest('http://localhost:3000/api/realtime/stream?mode=signal', {
+        signal: controller.signal,
+      })
+    );
+    expect(response.status).toBe(200);
+    await vi.waitFor(() => expect(changeListeners.size).toBe(1));
+    await Promise.all([...changeListeners].map(listener => listener('11')));
+
+    const reader = response.body!.getReader();
+    const decoder = new TextDecoder();
+    let text = '';
+    while (!text.includes('"generation":"11"')) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      text += decoder.decode(value);
+    }
+    expect(text).toContain('"type":"connected"');
+    expect(text).toContain('"type":"changed"');
+    expect(text).not.toContain('incidents_updated');
+    expect(text).not.toContain('metrics_updated');
+    expect(recentIncidentsMock).not.toHaveBeenCalled();
+    expect(dashboardMetricsMock).not.toHaveBeenCalled();
+    controller.abort();
+  });
+
+  it('closes a consumer that stops reading instead of buffering without bound', async () => {
+    arrangeAdmin();
+    const controller = new AbortController();
+    const response = await GET(
+      new NextRequest('http://localhost:3000/api/realtime/stream?mode=signal', {
+        signal: controller.signal,
+      })
+    );
+    await vi.waitFor(() => expect(changeListeners.size).toBe(1));
+    for (let generation = 11; generation < 300; generation += 1) {
+      await Promise.all([...changeListeners].map(listener => listener(String(generation))));
+    }
+    // The stream was closed server-side: no listener remains and the reader terminates.
+    await vi.waitFor(() => expect(changeListeners.size).toBe(0));
+    const reader = response.body!.getReader();
+    let chunks = 0;
+    for (;;) {
+      const { done } = await reader.read();
+      if (done) break;
+      chunks += 1;
+    }
+    expect(chunks).toBeLessThanOrEqual(80);
+    controller.abort();
+  });
+
   it('returns 401 when unauthenticated (AUTHENTICATION_REQUIRED)', async () => {
     vi.mocked(getCurrentUser).mockRejectedValue(
       new AppError({ code: 'AUTHENTICATION_REQUIRED', userMessage: 'Authentication required' })

@@ -14,13 +14,18 @@ import { visibleIncidentSource } from '@/lib/automation/presentation/source-visi
  * - User-specific data: 5-second TTL with user-scoped keys
  */
 
+import { createHash } from 'node:crypto';
 import { logger } from './logger';
 import type { Prisma } from '@prisma/client';
 
 interface CacheEntry<T> {
   data: T;
   expiresAt: number;
+  /** Compact content digest used for change detection; never the serialized payload itself. */
   hash: string;
+  /** Estimated retained size, used for the memory budget. */
+  bytes: number;
+  storedAt: number;
 }
 
 // Global cache store
@@ -33,14 +38,45 @@ const INCIDENT_TTL_MS = 3000; // 3 seconds for incident data
 const METRICS_TTL_MS = 5000; // 5 seconds for metrics
 const CLEANUP_INTERVAL_MS = 30000; // Clean up every 30 seconds
 const MAX_CACHE_SIZE = 5000; // Prevent unbounded growth
+// Entry count alone does not bound memory: one dashboard active set can hold thousands of
+// incidents. The budget is weighted by estimated bytes (UTF-16 serialized size).
+const DEFAULT_MAX_CACHE_BYTES = 96 * 1024 * 1024;
+const configuredBudget = Number(process.env.REALTIME_CACHE_MAX_BYTES);
+const MAX_CACHE_BYTES =
+  Number.isFinite(configuredBudget) && configuredBudget > 0
+    ? configuredBudget
+    : DEFAULT_MAX_CACHE_BYTES;
+// An entry larger than this share of the budget is served to its callers but not retained.
+const MAX_ENTRY_BYTES = Math.floor(MAX_CACHE_BYTES / 4);
+
+let totalBytes = 0;
 
 let lastCleanup = Date.now();
 
-/**
- * Generate a simple hash for change detection
- */
-function hashData(data: unknown): string {
-  return JSON.stringify(data);
+/** Serialize once; the digest replaces the retained JSON string used for change detection. */
+function measure(data: unknown): { hash: string; bytes: number } {
+  const json = JSON.stringify(data) ?? '';
+  return { hash: createHash('sha1').update(json).digest('base64url'), bytes: json.length * 2 };
+}
+
+function dropEntry(key: string): void {
+  const entry = cache.get(key);
+  if (!entry) return;
+  totalBytes -= entry.bytes;
+  cache.delete(key);
+}
+
+function storeEntry(key: string, entry: CacheEntry<unknown>): void {
+  dropEntry(key);
+  if (entry.bytes > MAX_ENTRY_BYTES) return;
+  cache.set(key, entry);
+  totalBytes += entry.bytes;
+  // Map iteration order is insertion order, so the oldest entries are evicted first.
+  for (const oldest of cache.keys()) {
+    if (totalBytes <= MAX_CACHE_BYTES && cache.size <= MAX_CACHE_SIZE) break;
+    if (oldest === key) continue;
+    dropEntry(oldest);
+  }
 }
 
 /**
@@ -52,7 +88,7 @@ function cleanupExpiredEntries(): void {
 
   for (const [key, entry] of cache) {
     if (now >= entry.expiresAt) {
-      cache.delete(key);
+      dropEntry(key);
       cleaned++;
     }
   }
@@ -63,7 +99,7 @@ function cleanupExpiredEntries(): void {
     entries.sort((a, b) => a[1].expiresAt - b[1].expiresAt);
     const toRemove = entries.slice(0, cache.size - MAX_CACHE_SIZE + 100);
     for (const [key] of toRemove) {
-      cache.delete(key);
+      dropEntry(key);
       cleaned++;
     }
   }
@@ -80,7 +116,11 @@ function cleanupExpiredEntries(): void {
  */
 function maybeCleanup(): void {
   const now = Date.now();
-  if (now - lastCleanup >= CLEANUP_INTERVAL_MS || cache.size > MAX_CACHE_SIZE) {
+  if (
+    now - lastCleanup >= CLEANUP_INTERVAL_MS ||
+    cache.size > MAX_CACHE_SIZE ||
+    totalBytes > MAX_CACHE_BYTES
+  ) {
     cleanupExpiredEntries();
   }
 }
@@ -109,8 +149,13 @@ export async function getCachedOrFetch<T>(
   if (!request) {
     request = fetcher()
       .then(data => {
-        const entry = { data, expiresAt: Date.now() + ttlMs, hash: hashData(data) };
-        cache.set(key, entry);
+        const entry = {
+          data,
+          expiresAt: Date.now() + ttlMs,
+          storedAt: Date.now(),
+          ...measure(data),
+        };
+        storeEntry(key, entry);
         return entry;
       })
       .finally(() => {
@@ -120,6 +165,36 @@ export async function getCachedOrFetch<T>(
   }
   const entry = await request;
   return { data: entry.data, fromCache: false, hash: entry.hash };
+}
+
+/**
+ * Like `getCachedOrFetch`, but a cached value is only served while `accept(data, ageMs)` holds.
+ * Used to bound database work by time while still honoring a caller's freshness requirement:
+ * concurrent callers share one fetch, and a rejected value is refetched once per call.
+ */
+export async function getCachedWhenAcceptable<T>(
+  key: string,
+  fetcher: () => Promise<T>,
+  ttlMs: number,
+  accept: (data: T, ageMs: number) => boolean
+): Promise<{ data: T; fromCache: boolean }> {
+  maybeCleanup();
+  const existing = cache.get(key) as CacheEntry<T> | undefined;
+  const now = Date.now();
+  if (existing && now < existing.expiresAt && accept(existing.data, now - existing.storedAt)) {
+    return { data: existing.data, fromCache: true };
+  }
+  const pending = inFlight.get(key) as Promise<CacheEntry<T>> | undefined;
+  if (pending) {
+    const shared = await pending;
+    if (accept(shared.data, Date.now() - shared.storedAt)) {
+      return { data: shared.data, fromCache: false };
+    }
+  }
+  // Start (or join a newer) fetch; `getCachedOrFetch` coalesces equivalent misses.
+  if (existing) dropEntry(key);
+  const result = await getCachedOrFetch(key, fetcher, ttlMs);
+  return { data: result.data, fromCache: result.fromCache };
 }
 
 /**
@@ -411,7 +486,7 @@ export function invalidateCache(pattern: string): number {
   let invalidated = 0;
   for (const key of cache.keys()) {
     if (key.includes(pattern)) {
-      cache.delete(key);
+      dropEntry(key);
       invalidated++;
     }
   }
@@ -424,9 +499,10 @@ export function invalidateCache(pattern: string): number {
 /**
  * Get cache statistics
  */
-export function getCacheStats(): { size: number; hitRate: number } {
+export function getCacheStats(): { size: number; hitRate: number; bytes: number } {
   return {
     size: cache.size,
+    bytes: totalBytes,
     hitRate: 0, // Would need to track hits/misses to calculate
   };
 }
@@ -437,4 +513,5 @@ export function getCacheStats(): { size: number; hitRate: number } {
 export function clearCache(): void {
   cache.clear();
   inFlight.clear();
+  totalBytes = 0;
 }

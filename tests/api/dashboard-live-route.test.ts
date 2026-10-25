@@ -1,13 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
-  session: vi.fn(),
   actor: vi.fn(),
   generation: vi.fn(),
   snapshot: vi.fn(),
 }));
-vi.mock('next-auth', () => ({ getServerSession: mocks.session }));
-vi.mock('@/lib/auth', () => ({ getAuthOptions: vi.fn().mockResolvedValue({}) }));
 vi.mock('@/lib/rbac', () => ({ getCurrentAuthorizationActor: mocks.actor }));
 vi.mock('@/lib/realtime-change-control-plane', () => ({
   getRealtimeChangeGenerationAtLeast: mocks.generation,
@@ -16,13 +13,13 @@ vi.mock('@/lib/dashboard/live-incidents', () => ({ getLiveDashboardSnapshot: moc
 vi.mock('@/lib/logger', () => ({ logger: { error: vi.fn() } }));
 
 import { GET } from '@/app/api/dashboard/live/route';
+import { AppError } from '@/lib/errors';
 
 const url = (query = '') => new Request(`http://localhost/api/dashboard/live${query}`);
 
 describe('GET /api/dashboard/live', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.session.mockResolvedValue({ user: { id: 'user-1' } });
     mocks.actor.mockResolvedValue({ id: 'user-1', role: 'USER', teamIds: ['t'] });
     mocks.generation.mockResolvedValue('7');
     mocks.snapshot.mockResolvedValue({ incidents: [], total: 0 });
@@ -54,6 +51,46 @@ describe('GET /api/dashboard/live', () => {
     );
   });
 
+  it('answers an unchanged projection with an empty 304 and ignores read-time fields', async () => {
+    mocks.snapshot.mockResolvedValueOnce({
+      incidents: [{ id: 'a' }],
+      total: 1,
+      asOf: '2026-10-25T10:00:00.000Z',
+      generation: '7',
+    });
+    const first = await GET(url());
+    const etag = first.headers.get('ETag');
+    expect(first.status).toBe(200);
+    expect(etag).toMatch(/^W\/"/);
+
+    // Same material content, different read time and generation: still validates.
+    mocks.snapshot.mockResolvedValueOnce({
+      incidents: [{ id: 'a' }],
+      total: 1,
+      asOf: '2026-10-25T10:00:05.000Z',
+      generation: '8',
+    });
+    const revalidated = await GET(
+      new Request('http://localhost/api/dashboard/live', { headers: { 'If-None-Match': etag! } })
+    );
+    expect(revalidated.status).toBe(304);
+    expect(await revalidated.text()).toBe('');
+    expect(revalidated.headers.get('Cache-Control')).toBe('private, no-store');
+
+    // A material change produces a new validator and a full body.
+    mocks.snapshot.mockResolvedValueOnce({
+      incidents: [{ id: 'a' }, { id: 'b' }],
+      total: 2,
+      asOf: '2026-10-25T10:00:10.000Z',
+      generation: '9',
+    });
+    const changed = await GET(
+      new Request('http://localhost/api/dashboard/live', { headers: { 'If-None-Match': etag! } })
+    );
+    expect(changed.status).toBe(200);
+    expect(changed.headers.get('ETag')).not.toBe(etag);
+  });
+
   it('defaults to the all-active view', async () => {
     await GET(url());
     expect(mocks.generation).toHaveBeenCalledWith(null);
@@ -67,7 +104,7 @@ describe('GET /api/dashboard/live', () => {
   });
 
   it('rejects unauthenticated, unknown, duplicate and malformed parameters', async () => {
-    mocks.session.mockResolvedValueOnce(null);
+    mocks.actor.mockRejectedValueOnce(new AppError({ code: 'AUTHENTICATION_REQUIRED' }));
     await expect(GET(url())).resolves.toMatchObject({ status: 401 });
     for (const query of [
       '?view=ACTIVE',

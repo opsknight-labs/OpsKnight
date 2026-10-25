@@ -34,6 +34,12 @@ import { useToast } from '@/hooks/use-product-notification';
 
 const HIGHLIGHT_MS = 4_000;
 const REALTIME_DEBOUNCE_MS = 75;
+// Realtime-triggered re-reads are rate limited per viewer: during a burst of incident changes
+// each console performs at most one read per gap, scaled up when the server is slow, with a small
+// random offset so thousands of viewers do not read in lockstep. An idle dashboard is unaffected.
+const MIN_RECONCILE_GAP_MS = 1_000;
+const MAX_RECONCILE_GAP_MS = 5_000;
+const RECONCILE_JITTER_MS = 150;
 const SAFETY_RECONCILE_MS = 30_000;
 const FAILURE_RETRY_MS = 5_000;
 const CLOCK_TICK_MS = 5_000;
@@ -281,6 +287,10 @@ export function LiveDashboardProvider({
   const dirtyRef = useRef(false);
   const seqRef = useRef(0);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastStartRef = useRef(0);
+  const lastDurationRef = useRef(0);
+  // Validator of the last full response, only valid for the exact request it answered.
+  const etagRef = useRef<{ key: string; etag: string } | null>(null);
   const retryRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const reconcileRef = useRef<(reason: ReconcileReason) => Promise<void>>(async () => {});
 
@@ -339,16 +349,46 @@ export function LiveDashboardProvider({
       const seq = ++seqRef.current;
       const controller = new AbortController();
       inFlightRef.current = controller;
+      const startedAt = Date.now();
+      lastStartRef.current = startedAt;
       try {
         const params = liveQueryToParams(requested);
+        const requestKey = `${liveQueryKey(requested)}|${pinsRef.current.join(',')}`;
         if (generationRef.current) params.set('after', generationRef.current);
         if (pinsRef.current.length) params.set('ids', pinsRef.current.join(','));
+        const headers: Record<string, string> = {};
+        const known = etagRef.current;
+        const current = snapshotRef.current;
+        if (
+          reason !== 'manual' &&
+          reason !== 'filter' &&
+          known &&
+          known.key === requestKey &&
+          current &&
+          liveQueryKey(current.query) === liveQueryKey(requested)
+        ) {
+          headers['If-None-Match'] = known.etag;
+        }
         const response = await fetch(`/api/dashboard/live?${params.toString()}`, {
           credentials: 'same-origin',
           cache: 'no-store',
+          headers,
           signal: controller.signal,
         });
+        lastDurationRef.current = Date.now() - startedAt;
+        if (seq !== seqRef.current || liveQueryKey(requested) !== liveQueryKey(queryRef.current)) {
+          return;
+        }
+        if (response.status === 304) {
+          // Nothing materially changed: keep the current projection, refresh the sync clock.
+          setSyncError(false);
+          setSyncedAt(Date.now());
+          setLoading(false);
+          return;
+        }
         if (!response.ok) throw new Error(`live dashboard ${response.status}`);
+        const etag = response.headers.get('ETag');
+        etagRef.current = etag ? { key: requestKey, etag } : null;
         const payload = (await response.json()) as { data: LiveSnapshot };
         if (seq !== seqRef.current || liveQueryKey(requested) !== liveQueryKey(queryRef.current)) {
           return;
@@ -382,11 +422,22 @@ export function LiveDashboardProvider({
   }, [reconcile]);
 
   const scheduleReconcile = useCallback(() => {
-    if (debounceRef.current) clearTimeout(debounceRef.current);
+    // A hidden tab has no realtime connection and re-reads when it becomes visible again.
+    if (document.visibilityState === 'hidden') return;
+    // A pending read already covers every signal that arrives before it fires; resetting the
+    // timer instead would let a steady stream of changes postpone the read forever.
+    if (debounceRef.current) return;
+    const gap = Math.min(
+      MAX_RECONCILE_GAP_MS,
+      Math.max(MIN_RECONCILE_GAP_MS, lastDurationRef.current * 3)
+    );
+    const wait =
+      Math.max(REALTIME_DEBOUNCE_MS, lastStartRef.current + gap - Date.now()) +
+      Math.floor(Math.random() * RECONCILE_JITTER_MS);
     debounceRef.current = setTimeout(() => {
       debounceRef.current = null;
       void reconcileRef.current('realtime');
-    }, REALTIME_DEBOUNCE_MS);
+    }, wait);
   }, []);
 
   const commitQuery = useCallback(
@@ -439,7 +490,9 @@ export function LiveDashboardProvider({
   // Realtime signals only invalidate; the authorized API projection is the source of truth.
   const lastSignalRef = useRef<string | null>(null);
   useEffect(() => {
-    const signal = `${revision}:${changeCount}`;
+    // `changed` signals carry the durable generation and are the only trigger once they flow;
+    // legacy `revision` bumps (one per incident/metrics payload) are not a second signal.
+    const signal = changeCount > 0 ? `c:${changeCount}` : `r:${revision}`;
     if (lastSignalRef.current === null) {
       lastSignalRef.current = signal;
       return;
@@ -515,6 +568,9 @@ export function LiveDashboardProvider({
 
   const [selectedIncidentId, setSelectedIncidentId] = useState<string | null>(null);
   const [cachedIncident, setCachedIncident] = useState<LiveIncident | null>(null);
+  // Inspector-only context (routing rule, runbook, policy, dedup key) is loaded on demand for
+  // the one open incident instead of being carried by every row of the bulk feed.
+  const [detail, setDetail] = useState<LiveIncident | null>(null);
 
   const applyOptimistic = useCallback((id: string, patch: OptimisticPatch) => {
     setOptimistic(current => new Map(current).set(id, { ...current.get(id), ...patch }));
@@ -605,36 +661,51 @@ export function LiveDashboardProvider({
 
   const selectedIncident = useMemo(() => {
     if (!selectedIncidentId) return null;
-    if (selectedIncidentInFeed) return selectedIncidentInFeed;
-    if (cachedIncident && cachedIncident.id === selectedIncidentId) return cachedIncident;
-    return null;
-  }, [selectedIncidentId, selectedIncidentInFeed, cachedIncident]);
+    const base =
+      selectedIncidentInFeed ??
+      (cachedIncident && cachedIncident.id === selectedIncidentId ? cachedIncident : null);
+    if (!base) return null;
+    if (!detail || detail.id !== selectedIncidentId) return base;
+    return {
+      ...base,
+      dedupKey: detail.dedupKey,
+      escalationPolicyName: detail.escalationPolicyName,
+      routeRuleName: detail.routeRuleName,
+      latestRunbook: detail.latestRunbook,
+    };
+  }, [selectedIncidentId, selectedIncidentInFeed, cachedIncident, detail]);
 
-  // If selectedIncidentId is set but not found in current feed/snapshot (e.g. filtered out), fetch it
+  // Load the authorized detail for the open incident; re-read when the feed row changes so the
+  // enrichment stays current. Also covers incidents filtered out of the current feed page.
+  const selectedUpdatedAt = selectedIncidentInFeed?.updatedAt ?? null;
   useEffect(() => {
-    if (!selectedIncidentId || selectedIncidentInFeed) return;
-    if (cachedIncident && cachedIncident.id === selectedIncidentId) return;
-
+    if (!selectedIncidentId) return;
     let cancelled = false;
-    fetch(`/api/dashboard/live/incidents/${encodeURIComponent(selectedIncidentId)}`)
+    fetch(`/api/dashboard/live/incidents/${encodeURIComponent(selectedIncidentId)}`, {
+      credentials: 'same-origin',
+      cache: 'no-store',
+    })
       .then(res => (res.ok ? res.json() : null))
       .then(data => {
-        if (!cancelled && data?.data?.incident) {
-          setCachedIncident(data.data.incident);
-        }
+        const incident = data?.data?.incident as LiveIncident | undefined;
+        if (cancelled || !incident) return;
+        setDetail(incident);
+        setCachedIncident(previous =>
+          previous && previous.id === incident.id ? previous : incident
+        );
       })
       .catch(() => {});
-
     return () => {
       cancelled = true;
     };
-  }, [selectedIncidentId, selectedIncidentInFeed, cachedIncident]);
+  }, [selectedIncidentId, selectedUpdatedAt]);
 
   const selectIncident = useCallback(
     (id: string | null) => {
       setSelectedIncidentId(id);
       if (!id) {
         setCachedIncident(null);
+        setDetail(null);
       } else {
         const match =
           incidents.find(i => i.id === id) ??

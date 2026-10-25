@@ -7,7 +7,22 @@ import {
   type AuthorizationActor,
 } from '@/lib/authorization-policy';
 
-export function incidentReadWhere(actor: AuthorizationActor): Prisma.IncidentWhereInput {
+export type IncidentReadParts =
+  | { global: true }
+  | {
+      global: false;
+      /** Visible to this actor individually (assigned or watching): unique per user. */
+      personal: Prisma.IncidentWhereInput[];
+      /** Visible through team membership: identical for every actor with the same team set. */
+      shared: Prisma.IncidentWhereInput;
+    };
+
+/**
+ * The single source of truth for scoped incident visibility. `incidentReadWhere` is composed from
+ * these parts, so projections that cache the team-shared part once per team set and the
+ * per-user part separately can never drift from the authorization policy.
+ */
+export function incidentReadWhereParts(actor: AuthorizationActor): IncidentReadParts {
   const decision = authorize({ actor, action: AUTHORIZATION_ACTIONS.INCIDENT_READ });
   if (!decision.allowed) {
     throw new AuthorizationError(
@@ -15,24 +30,28 @@ export function incidentReadWhere(actor: AuthorizationActor): Prisma.IncidentWhe
       CAPABILITIES.INCIDENT_READ_SCOPED
     );
   }
-  if (decision.scope === 'global') return {};
+  if (decision.scope === 'global') return { global: true };
   return {
-    OR: [
-      { assigneeId: actor.id },
-      { watchers: { some: { userId: actor.id } } },
-      {
-        AND: [
-          { visibility: 'PUBLIC' },
-          {
-            OR: [
-              { teamId: { in: [...actor.teamIds] } },
-              { service: { teamId: { in: [...actor.teamIds] } } },
-            ],
-          },
-        ],
-      },
-    ],
+    global: false,
+    personal: [{ assigneeId: actor.id }, { watchers: { some: { userId: actor.id } } }],
+    shared: {
+      AND: [
+        { visibility: 'PUBLIC' },
+        {
+          OR: [
+            { teamId: { in: [...actor.teamIds] } },
+            { service: { teamId: { in: [...actor.teamIds] } } },
+          ],
+        },
+      ],
+    },
   };
+}
+
+export function incidentReadWhere(actor: AuthorizationActor): Prisma.IncidentWhereInput {
+  const parts = incidentReadWhereParts(actor);
+  if (parts.global) return {};
+  return { OR: [...parts.personal, parts.shared] };
 }
 
 export function serviceReadWhere(actor: AuthorizationActor): Prisma.ServiceWhereInput {

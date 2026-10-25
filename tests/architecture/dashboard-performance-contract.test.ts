@@ -23,9 +23,25 @@ describe('dashboard query isolation contract', () => {
 
   it('keeps live reads bounded, shared per scope and free of pause-history joins', () => {
     expect(live).not.toContain('slaPauses:');
-    expect(live).toContain('take: LIVE_SET_CAP + 1');
+    expect(live).toContain('take: partition.cap + 1');
     expect(live).toContain('getCachedOrFetch(');
-    expect(live).toMatch(/live-set:\$\{scope\.key\}:g:\$\{generation/);
+    // Team-shared rows are cached once per team set; only the small personal part is per user.
+    expect(live).toMatch(/`teams:\$\{teams\}:\$\{flag\}`/);
+    // Reads are bounded by time windows, not by per-change cache keys.
+    expect(live).toContain('getCachedWhenAcceptable');
+    expect(live).toMatch(/`\$\{name\}:\$\{partition\.key\}`/);
+    expect(live).not.toMatch(/live-set:.*g:\$\{generation/);
+    // Inspector-only relations are not part of the bulk feed projection.
+    const bulk = live.slice(
+      live.indexOf('const liveSetSelect'),
+      live.indexOf('const liveDetailSelect')
+    );
+    for (const heavy of ['runbookExecutions', 'policy:', 'matchedRouteRuleName', 'dedupKey']) {
+      expect(bulk).not.toContain(heavy);
+    }
+    // Schedule caches are keyed by the authorization filter, never by user id alone.
+    expect(live).toContain('scheduleScopeKey(scheduleWhere)');
+    expect(live).not.toMatch(/live-oncall:\$\{actor\.id\}/);
   });
 
   it('does not rely on a full route refresh for realtime updates', () => {

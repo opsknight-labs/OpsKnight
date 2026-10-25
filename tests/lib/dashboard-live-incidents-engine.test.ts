@@ -3,7 +3,11 @@ import {
   computeSlaSignal,
   deriveAttention,
   deriveLiveProjection,
+  deriveShared,
   deriveTrend,
+  deriveUnshared,
+  isActorNeutralQuery,
+  personalizeDerivation,
   type LiveSetRow,
   type LiveTrendRow,
 } from '@/lib/dashboard/live-incidents-engine';
@@ -272,5 +276,61 @@ describe('live projection engine', () => {
     const teams = deriveTrend(rows, 'teams', ctx);
     expect(teams.createdLastHour).toBe(1);
     expect(deriveTrend(rows, 'mine', ctx).createdLastHour).toBe(0);
+  });
+
+  it('shares the actor-independent derivation and personalizes it identically to a full derivation', () => {
+    const big: LiveSetRow[] = Array.from({ length: 240 }, (_, index) =>
+      row(`bulk-${index}`, {
+        urgency: index % 7 === 0 ? 'HIGH' : index % 3 === 0 ? 'MEDIUM' : 'LOW',
+        priority: index % 7 === 0 ? 'P1' : 'P3',
+        status: index % 4 === 0 ? 'ACKNOWLEDGED' : 'OPEN',
+        createdAt: new Date(NOW - (index + 1) * 90_000).toISOString(),
+        service: {
+          id: `svc-${index % 5}`,
+          name: `Service ${index % 5}`,
+          teamId: `team-${index % 3}`,
+        },
+        team: index % 2 ? { id: `team-${index % 3}`, name: `Team ${index % 3}` } : null,
+        assignee:
+          index % 5 === 0
+            ? { id: 'me', name: 'Me' }
+            : index % 4 === 0
+              ? { id: 'peer', name: 'Peer' }
+              : null,
+        ...(index % 6 === 0 ? withSla(new Date(NOW - 20 * 60_000).toISOString(), 15 * 60_000) : {}),
+      })
+    );
+    const actors = [
+      { actorId: 'me', teamIds: ['team-1'], now: NOW },
+      { actorId: 'peer', teamIds: ['team-0', 'team-2'], now: NOW },
+      { actorId: 'nobody', teamIds: [], now: NOW },
+    ];
+    const queries: Array<Partial<LiveIncidentQuery>> = [
+      {},
+      { view: 'critical' },
+      { view: 'unassigned' },
+      { view: 'breaching' },
+      { serviceId: 'svc-2' },
+      { teamId: 'team-1', status: 'OPEN' },
+      { urgency: 'HIGH', assignment: 'unassigned' },
+      { search: 'bulk-1' },
+      { sort: 'attention' },
+    ];
+    for (const partial of queries) {
+      const query = { ...DEFAULT_LIVE_QUERY, ...partial };
+      expect(isActorNeutralQuery(query)).toBe(true);
+      const shared = deriveShared(big, query, NOW);
+      for (const ctxForActor of actors) {
+        const pins = ['bulk-3', 'missing', 'bulk-9'];
+        const viaShared = personalizeDerivation(shared, query, ctxForActor, 20, pins);
+        const reference = deriveUnshared(big, query, ctxForActor, 20, { pinIds: pins });
+        expect(viaShared).toEqual(reference);
+      }
+    }
+    // Queries that depend on the viewer are never shared.
+    for (const view of ['mine', 'my_teams'] as const) {
+      expect(isActorNeutralQuery({ ...DEFAULT_LIVE_QUERY, view })).toBe(false);
+    }
+    expect(isActorNeutralQuery({ ...DEFAULT_LIVE_QUERY, scope: 'teams' })).toBe(false);
   });
 });

@@ -407,7 +407,13 @@ export default function LiveIncidentsPanel({
       )}
       {health === 'offline' && <span>Showing last known state</span>}
       {snapshot?.truncated && (
-        <span>Showing newest {snapshot.summary.active.toLocaleString()}</span>
+        <span
+          data-testid="live-window-note"
+          title="Headline counters are read from the database; the list and SLA signals cover the newest incidents plus older critical or unowned work."
+        >
+          Window of {snapshot.workingSet.toLocaleString()} · totals{' '}
+          {snapshot.countsExact ? 'exact' : 'approximate'}
+        </span>
       )}
     </p>
   );

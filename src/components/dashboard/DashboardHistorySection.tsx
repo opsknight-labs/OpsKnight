@@ -29,6 +29,7 @@ import {
 import { cn } from '@/lib/utils';
 import {
   DashboardAnalyticsProvider,
+  useActivateDashboardAnalytics,
   useDashboardAnalytics,
 } from '@/components/dashboard/DashboardAnalyticsProvider';
 import { DashboardAnalyticsHeatmap } from '@/components/dashboard/DashboardAnalyticsWidgets';
@@ -590,7 +591,8 @@ function InsightsContent() {
             <h3 className="dash-heading-sm">Team load</h3>
             {data.assigneeLoad && data.assigneeLoad.length > 0 && (
               <span className="font-mono text-[11px] text-muted-foreground tabular-nums">
-                {data.assigneeLoad.filter(a => a.count > 0).length} active responder{data.assigneeLoad.filter(a => a.count > 0).length === 1 ? '' : 's'}
+                {data.assigneeLoad.filter(a => a.count > 0).length} active responder
+                {data.assigneeLoad.filter(a => a.count > 0).length === 1 ? '' : 's'}
               </span>
             )}
           </div>
@@ -607,6 +609,7 @@ function InsightsContent() {
 export default function DashboardHistorySection() {
   const { query, setQuery } = useHistoryQuery();
   const { ref, visible } = useNearViewport<HTMLDivElement>();
+  useActivateDashboardAnalytics(visible);
   return (
     <section
       aria-labelledby="dashboard-history-heading"

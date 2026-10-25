@@ -1,6 +1,5 @@
-import { getServerSession } from 'next-auth';
+import { createHash } from 'node:crypto';
 import { z } from 'zod';
-import { getAuthOptions } from '@/lib/auth';
 import { getCurrentAuthorizationActor } from '@/lib/rbac';
 import { jsonError, jsonOk } from '@/lib/api-response';
 import { AppError, isAppError } from '@/lib/errors';
@@ -57,8 +56,25 @@ function invalid(message: string) {
  * rail data, derived from one authorization-scoped active set shared by identical viewers.
  */
 export async function GET(request: Request) {
-  const session = await getServerSession(await getAuthOptions());
-  if (!session) return jsonError(new AppError({ code: 'AUTHENTICATION_REQUIRED' }));
+  const timings: string[] = [];
+  const measure = async <T>(name: string, work: () => Promise<T> | T): Promise<T> => {
+    const startedAt = performance.now();
+    try {
+      return await work();
+    } finally {
+      timings.push(`${name};dur=${(performance.now() - startedAt).toFixed(1)}`);
+    }
+  };
+
+  // One authentication pass: the actor lookup validates the session and fails closed itself.
+  let actor: Awaited<ReturnType<typeof getCurrentAuthorizationActor>>;
+  try {
+    actor = await measure('auth', () => getCurrentAuthorizationActor());
+  } catch (error) {
+    if (isAppError(error)) return jsonError(error);
+    logger.error('dashboard.live.auth_failed', { error });
+    return jsonError('Live dashboard temporarily unavailable', 503);
+  }
 
   const params = new URL(request.url).searchParams;
   const keys = [...new Set(params.keys())];
@@ -70,26 +86,44 @@ export async function GET(request: Request) {
   const input = parsed.data;
 
   try {
-    const actor = await getCurrentAuthorizationActor();
-    const generation = await getRealtimeChangeGenerationAtLeast(input.after ?? null).catch(
-      () => null
+    const generation = await measure('generation', () =>
+      getRealtimeChangeGenerationAtLeast(input.after ?? null).catch(() => null)
     );
-    const snapshot = await getLiveDashboardSnapshot(
-      actor,
-      {
-        scope: input.scope,
-        sort: input.sort,
-        view: input.view,
-        serviceId: input.service ?? null,
-        teamId: input.team ?? null,
-        status: input.status,
-        urgency: input.urgency,
-        assignment: input.assignment,
-        search: input.q,
-      },
-      { limit: input.limit, generation, pinIds: input.ids }
+    const snapshot = await measure('snapshot', () =>
+      getLiveDashboardSnapshot(
+        actor,
+        {
+          scope: input.scope,
+          sort: input.sort,
+          view: input.view,
+          serviceId: input.service ?? null,
+          teamId: input.team ?? null,
+          status: input.status,
+          urgency: input.urgency,
+          assignment: input.assignment,
+          search: input.q,
+        },
+        { limit: input.limit, generation, pinIds: input.ids }
+      )
     );
-    return jsonOk(snapshot, 200, { 'Cache-Control': 'private, no-store', Vary: 'Cookie' });
+    // Validator over the material projection (not the read timestamp or generation), so an
+    // unchanged view answers with an empty 304 instead of a full body and a client re-render.
+    const { asOf: _asOf, generation: _generation, ...material } = snapshot;
+    const etag = await measure(
+      'etag',
+      () => `W/"${createHash('sha1').update(JSON.stringify(material)).digest('base64url')}"`
+    );
+    const headers = {
+      'Cache-Control': 'private, no-store',
+      Vary: 'Cookie',
+      ETag: etag,
+      'Server-Timing': timings.join(', '),
+    };
+    if (request.headers.get('if-none-match') === etag) {
+      return new Response(null, { status: 304, headers });
+    }
+    // No legacy top-level aliases: they would serialize the whole projection twice.
+    return await measure('encode', () => jsonOk(snapshot, 200, headers, {}));
   } catch (error) {
     if (isAppError(error)) return jsonError(error);
     logger.error('dashboard.live.failed', { error });

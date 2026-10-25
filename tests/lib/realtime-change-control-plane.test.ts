@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import prisma from '@/lib/prisma';
 import {
   getRealtimeChangeGeneration,
+  getRealtimeChangeGenerationAtLeast,
   getRealtimeControlPlaneStatus,
   resetRealtimeControlPlaneForTests,
   subscribeToRealtimeChanges,
@@ -96,5 +97,26 @@ describe('realtime change control plane', () => {
 
     await expect(Promise.all([first, second])).resolves.toEqual(['9', '9']);
     expect(prisma.realtimeChange.findFirst).toHaveBeenCalledTimes(1);
+  });
+
+  it('shares one clock read between concurrent requests on a replica without subscribers', async () => {
+    vi.mocked(prisma.realtimeChange.findFirst).mockResolvedValue({
+      id: BigInt(90),
+      changedAt: new Date(),
+    });
+    const generations = await Promise.all(
+      Array.from({ length: 50 }, () => getRealtimeChangeGenerationAtLeast(null))
+    );
+    expect(new Set(generations)).toEqual(new Set(['90']));
+    expect(prisma.realtimeChange.findFirst).toHaveBeenCalledTimes(1);
+    // Inside the memo window a satisfied request needs no read; an unsatisfied one still reads.
+    await getRealtimeChangeGenerationAtLeast('90');
+    expect(prisma.realtimeChange.findFirst).toHaveBeenCalledTimes(1);
+    vi.mocked(prisma.realtimeChange.findFirst).mockResolvedValue({
+      id: BigInt(91),
+      changedAt: new Date(),
+    });
+    await expect(getRealtimeChangeGenerationAtLeast('91')).resolves.toBe('91');
+    expect(prisma.realtimeChange.findFirst).toHaveBeenCalledTimes(2);
   });
 });

@@ -17,6 +17,7 @@ type AnalyticsState = {
 };
 
 const DashboardAnalyticsContext = createContext<AnalyticsState | null>(null);
+const DashboardAnalyticsActivationContext = createContext<(() => void) | null>(null);
 
 export function DashboardAnalyticsProvider({
   query,
@@ -26,6 +27,10 @@ export function DashboardAnalyticsProvider({
   children: React.ReactNode;
 }) {
   const [analytics, setAnalytics] = useState<AnalyticsState>({ data: null, state: 'loading' });
+  // Historical analytics are expensive aggregates. Nothing is requested until the section that
+  // renders them approaches the viewport (see `useActivateDashboardAnalytics`).
+  const [activated, setActivated] = useState(false);
+  const activate = useCallback(() => setActivated(true), []);
   const requestRef = useRef<AbortController | null>(null);
   const retryTimerRef = useRef<number | null>(null);
   const lastSuccessAtRef = useRef(0);
@@ -92,16 +97,8 @@ export function DashboardAnalyticsProvider({
   }, [load]);
 
   useEffect(() => {
-    // Historical analytics never compete with the live, above-the-fold projection: the single
-    // request starts once the browser is idle (bounded so it still loads promptly).
-    let idleHandle: number | null = null;
-    let idleTimer: number | null = null;
-    const start = () => void load();
-    if (typeof window.requestIdleCallback === 'function') {
-      idleHandle = window.requestIdleCallback(start, { timeout: 2_500 });
-    } else {
-      idleTimer = window.setTimeout(start, 500);
-    }
+    if (!activated) return;
+    void load();
     let reconciliationTimer: number | null = null;
     const scheduleReconciliation = () => {
       const delay = 5 * 60_000 + Math.floor(Math.random() * 2 * 60_000);
@@ -122,21 +119,29 @@ export function DashboardAnalyticsProvider({
     document.addEventListener('visibilitychange', resume);
     window.addEventListener('online', resume);
     return () => {
-      if (idleHandle !== null) window.cancelIdleCallback?.(idleHandle);
-      if (idleTimer !== null) window.clearTimeout(idleTimer);
       requestRef.current?.abort();
       if (retryTimerRef.current !== null) window.clearTimeout(retryTimerRef.current);
       if (reconciliationTimer !== null) window.clearTimeout(reconciliationTimer);
       document.removeEventListener('visibilitychange', resume);
       window.removeEventListener('online', resume);
     };
-  }, [load]);
+  }, [load, activated]);
 
   return (
-    <DashboardAnalyticsContext.Provider value={analytics}>
-      {children}
-    </DashboardAnalyticsContext.Provider>
+    <DashboardAnalyticsActivationContext.Provider value={activate}>
+      <DashboardAnalyticsContext.Provider value={analytics}>
+        {children}
+      </DashboardAnalyticsContext.Provider>
+    </DashboardAnalyticsActivationContext.Provider>
   );
+}
+
+/** Starts the (otherwise dormant) analytics request once `enabled` becomes true. */
+export function useActivateDashboardAnalytics(enabled: boolean) {
+  const activate = useContext(DashboardAnalyticsActivationContext);
+  useEffect(() => {
+    if (enabled) activate?.();
+  }, [activate, enabled]);
 }
 
 export function useDashboardAnalytics() {

@@ -18,7 +18,7 @@ export default async function KioskLayout({ children }: { children: React.ReactN
   return (
     <AuthenticatedClientProviders initialSession={requestContext.session}>
       <TimezoneProvider initialTimeZone={requestContext.user.timeZone || 'UTC'}>
-        <RealtimeProvider>{children}</RealtimeProvider>
+        <RealtimeProvider mode="signal">{children}</RealtimeProvider>
       </TimezoneProvider>
     </AuthenticatedClientProviders>
   );

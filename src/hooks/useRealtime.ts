@@ -53,7 +53,14 @@ export type RealtimeMetrics = {
 
 export type RealtimeIncident = Record<string, unknown>;
 
-function useRealtimeConnection() {
+/**
+ * `full` keeps the legacy incident/metrics payloads used across the console. `signal` receives
+ * only compact change signals (generation + heartbeat); the subscriber reads authoritative data
+ * from its own authorized API. Always-on displays use `signal`.
+ */
+export type RealtimeMode = 'full' | 'signal';
+
+function useRealtimeConnection(mode: RealtimeMode) {
   const [isConnected, setIsConnected] = useState(false);
   const [metrics, setMetrics] = useState<RealtimeMetrics | null>(null);
   const [recentIncidents, setRecentIncidents] = useState<RealtimeIncident[]>([]);
@@ -127,7 +134,9 @@ function useRealtimeConnection() {
       }
 
       try {
-        const eventSource = new EventSource('/api/realtime/stream');
+        const eventSource = new EventSource(
+          mode === 'signal' ? '/api/realtime/stream?mode=signal' : '/api/realtime/stream'
+        );
         eventSourceRef.current = eventSource;
 
         eventSource.onopen = () => {
@@ -223,7 +232,7 @@ function useRealtimeConnection() {
       eventSourceRef.current = null;
       if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
     };
-  }, [reconnectTrigger]);
+  }, [reconnectTrigger, mode]);
 
   return {
     isConnected,
@@ -242,15 +251,27 @@ function useRealtimeConnection() {
 type RealtimeContextValue = ReturnType<typeof useRealtimeConnection>;
 const RealtimeContext = createContext<RealtimeContextValue | null>(null);
 
-function RealtimeRootProvider({ children }: { children: ReactNode }) {
-  const value = useRealtimeConnection();
+function RealtimeRootProvider({
+  children,
+  mode,
+}: {
+  children?: ReactNode;
+  mode: RealtimeMode;
+}) {
+  const value = useRealtimeConnection(mode);
   return createElement(RealtimeContext.Provider, { value }, children);
 }
 
-export function RealtimeProvider({ children }: { children: ReactNode }) {
+export function RealtimeProvider({
+  children,
+  mode = 'full',
+}: {
+  children: ReactNode;
+  mode?: RealtimeMode;
+}) {
   const existing = useContext(RealtimeContext);
   if (existing) return createElement(Fragment, null, children);
-  return createElement(RealtimeRootProvider, null, children);
+  return createElement(RealtimeRootProvider, { mode }, children);
 }
 
 /** Consume the single realtime connection owned by the nearest provider. */
