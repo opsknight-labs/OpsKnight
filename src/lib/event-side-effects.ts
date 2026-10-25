@@ -133,10 +133,12 @@ async function sendTriggerServiceNotification(payload: EventSideEffectPayload): 
   );
 }
 async function notifyCreatedIncidentStatusPage(payload: EventSideEffectPayload): Promise<void> {
-  if (!(await sideEffectSnapshotStillCurrent(payload))) return;
   const { notifyStatusPageSubscribers } = await import('./status-page-notifications');
   requireDelivery(
-    await notifyStatusPageSubscribers(payload.incidentId, 'triggered', payload.eventOrderAt),
+    await notifyStatusPageSubscribers(payload.incidentId, 'triggered', payload.eventOrderAt, {
+      status: payload.incidentStatus,
+      escalationGeneration: payload.escalationGeneration,
+    }),
     'status page notification'
   );
 }

@@ -12,6 +12,7 @@ import {
   inviteTeamToWarRoom as mockedInviteTeamToWarRoom,
 } from '@/lib/chatops/war-room';
 import prisma from '@/lib/prisma';
+import { notifyStatusPageSubscribers } from '@/lib/status-page-notifications';
 import { maybeAutoProvisionIncidentMeeting } from '@/lib/incident-collaboration/meeting-store';
 import { processEventSideEffect } from '@/lib/event-side-effects';
 import type { EventSideEffectPayload } from '@/lib/event-outbox';
@@ -504,5 +505,23 @@ describe('durable meeting planning recovery', () => {
     expect(calls[0][0]).toMatchObject({
       incidentEventId: event.sourceEventId, incidentId: event.incidentId,
     });
+  });
+});
+
+
+describe('status-page planning boundary', () => {
+  it('passes the captured fence to the fresh subscriber read without a duplicate read', async () => {
+    vi.clearAllMocks();
+    vi.mocked(notifyStatusPageSubscribers).mockResolvedValue({ success: true, sent: 0, failed: 0 });
+    const event = { ...payload('TRIGGER_STATUS_PAGE', 'STATUS_PAGE'),
+      incidentStatus: 'OPEN' as const, escalationGeneration: 7 };
+    await processEventSideEffect(event);
+    expect(prismaMock.incident.findUnique).not.toHaveBeenCalled();
+    expect(notifyStatusPageSubscribers).toHaveBeenCalledWith(
+      event.incidentId, 'triggered', event.eventOrderAt,
+      { status: 'OPEN', escalationGeneration: 7 }
+    );
+    vi.mocked(notifyStatusPageSubscribers).mockResolvedValueOnce({ success: false, sent: 0, failed: 1 });
+    await expect(processEventSideEffect(event)).rejects.toThrow('status page notification failed');
   });
 });
