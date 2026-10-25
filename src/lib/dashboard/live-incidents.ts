@@ -9,12 +9,18 @@ import { visibleIncidentSource } from '@/lib/automation/presentation/source-visi
 import { getCachedOrFetch } from '@/lib/realtime-cache';
 import { getActiveOnCallShifts } from '@/lib/oncall-shifts';
 import { observeOperationalHistogram } from '@/lib/metrics/operational/registry';
-import { deriveLiveProjection, type LiveSetRow } from './live-incidents-engine';
+import {
+  deriveLiveProjection,
+  deriveTrend,
+  type LiveSetRow,
+  type LiveTrendRow,
+} from './live-incidents-engine';
 import {
   LIVE_ACTIVE_STATUSES,
   LIVE_INCIDENT_DEFAULT_LIMIT,
   LIVE_INCIDENT_MAX_LIMIT,
   type LiveActivityItem,
+  type LiveCoverage,
   type LiveIncidentQuery,
   type LiveOnCallShift,
   type LiveSnapshot,
@@ -27,6 +33,9 @@ const LIVE_SET_TTL_MS = 15_000;
 const ACTIVITY_TTL_MS = 15_000;
 const ONCALL_TTL_MS = 60_000;
 const ACTIVITY_LIMIT = 12;
+const TREND_TTL_MS = 60_000;
+/** Bound on incidents touched in 24h that feed trends; larger windows truncate gracefully. */
+const TREND_CAP = 5_000;
 
 const liveSetSelect = {
   id: true,
@@ -38,6 +47,7 @@ const liveSetSelect = {
   urgency: true,
   priority: true,
   escalationStatus: true,
+  currentEscalationStep: true,
   createdAt: true,
   updatedAt: true,
   acknowledgedAt: true,
@@ -55,6 +65,7 @@ const liveSetSelect = {
   },
   team: { select: { id: true, name: true } },
   assignee: { select: { id: true, name: true, email: true } },
+  _count: { select: { alerts: true, watchers: true } },
 } satisfies Prisma.IncidentSelect;
 
 type LiveScope = { key: string; where: Prisma.IncidentWhereInput; sensitive: boolean };
@@ -103,6 +114,12 @@ async function loadActiveSet(scope: LiveScope, generation: string | null) {
           urgency: visible.urgency,
           priority: visible.priority,
           escalationStatus: visible.escalationStatus,
+          escalationLevel:
+            visible.escalationStatus === 'ESCALATING' && visible.currentEscalationStep !== null
+              ? visible.currentEscalationStep + 1
+              : null,
+          alertCount: row._count.alerts,
+          responderCount: row._count.watchers,
           createdAt: visible.createdAt.toISOString(),
           updatedAt: visible.updatedAt.toISOString(),
           acknowledgedAt: iso(visible.acknowledgedAt),
@@ -189,6 +206,8 @@ async function loadOnCall(): Promise<LiveOnCallShift[]> {
     async () =>
       (await getActiveOnCallShifts(new Date())).map(shift => ({
         id: shift.id,
+        scheduleId: shift.scheduleId,
+        end: shift.end.toISOString(),
         scheduleName: shift.schedule.name,
         user: {
           id: shift.user.id ?? null,
@@ -202,10 +221,90 @@ async function loadOnCall(): Promise<LiveOnCallShift[]> {
   return result.data;
 }
 
+async function loadTrendRows(scope: LiveScope, generation: string | null): Promise<LiveTrendRow[]> {
+  // Minute bucket keeps "last 24h" honest even when nothing changes.
+  const minute = Math.floor(Date.now() / TREND_TTL_MS);
+  const result = await getCachedOrFetch(
+    `live-trend:${scope.key}:g:${generation ?? 'none'}:m:${minute}`,
+    async () => {
+      const since = new Date(Date.now() - 24 * 60 * 60_000);
+      const rows = await prisma.incident.findMany({
+        where: {
+          AND: [
+            scope.where,
+            {
+              OR: [
+                { createdAt: { gte: since } },
+                { acknowledgedAt: { gte: since } },
+                { resolvedAt: { gte: since } },
+              ],
+            },
+          ],
+        },
+        select: {
+          createdAt: true,
+          acknowledgedAt: true,
+          resolvedAt: true,
+          urgency: true,
+          priority: true,
+          assigneeId: true,
+          teamId: true,
+          service: { select: { teamId: true } },
+        },
+        orderBy: { createdAt: 'desc' },
+        take: TREND_CAP,
+      });
+      return rows.map((row): LiveTrendRow => ({
+        createdAt: row.createdAt.toISOString(),
+        acknowledgedAt: iso(row.acknowledgedAt),
+        resolvedAt: iso(row.resolvedAt),
+        critical: row.urgency === 'HIGH' || row.priority === 'P1',
+        assigneeId: row.assigneeId,
+        teamId: row.teamId,
+        serviceTeamId: row.service.teamId,
+      }));
+    },
+    TREND_TTL_MS
+  );
+  return result.data;
+}
+
+async function loadSchedules(): Promise<Array<{ id: string; name: string }>> {
+  const bucket = Math.floor(Date.now() / ONCALL_TTL_MS);
+  const result = await getCachedOrFetch(
+    `live-schedules:${bucket}`,
+    () =>
+      prisma.onCallSchedule.findMany({
+        select: { id: true, name: true },
+        orderBy: { name: 'asc' },
+      }),
+    ONCALL_TTL_MS
+  );
+  return result.data;
+}
+
+function deriveCoverage(
+  actorId: string,
+  shifts: LiveOnCallShift[],
+  schedules: Array<{ id: string; name: string }>
+): LiveCoverage {
+  const mine = shifts.filter(shift => shift.user.id === actorId);
+  const covered = new Set(shifts.map(shift => shift.scheduleId));
+  const until = mine.reduce<string | null>(
+    (latest, shift) => (latest === null || shift.end > latest ? shift.end : latest),
+    null
+  );
+  return {
+    me: { onCall: mine.length > 0, schedules: [...new Set(mine.map(s => s.scheduleName))], until },
+    gaps: schedules.filter(schedule => !covered.has(schedule.id)),
+    scheduleCount: schedules.length,
+  };
+}
+
 export async function getLiveDashboardSnapshot(
   actor: AuthorizationActor,
   query: LiveIncidentQuery,
-  options: { limit?: number; generation?: string | null } = {}
+  options: { limit?: number; generation?: string | null; pinIds?: readonly string[] } = {}
 ): Promise<LiveSnapshot> {
   const limit = Math.min(
     Math.max(1, Math.floor(options.limit ?? LIVE_INCIDENT_DEFAULT_LIMIT)),
@@ -213,23 +312,25 @@ export async function getLiveDashboardSnapshot(
   );
   const generation = options.generation ?? null;
   const scope = resolveLiveScope(actor);
-  const [{ set, truncated }, activity, onCall] = await Promise.all([
+  const [{ set, truncated }, activity, onCall, trendRows, schedules] = await Promise.all([
     loadActiveSet(scope, generation),
     loadActivity(scope, generation).catch(() => [] as LiveActivityItem[]),
     loadOnCall().catch(() => [] as LiveOnCallShift[]),
+    loadTrendRows(scope, generation).catch(() => [] as LiveTrendRow[]),
+    loadSchedules().catch(() => [] as Array<{ id: string; name: string }>),
   ]);
-  const derived = deriveLiveProjection(
-    set,
-    query,
-    { actorId: actor.id, teamIds: [...actor.teamIds], now: Date.now() },
-    limit
-  );
+  const ctx = { actorId: actor.id, teamIds: [...actor.teamIds], now: Date.now() };
+  const derived = deriveLiveProjection(set, query, ctx, limit, { pinIds: options.pinIds });
   return {
     query,
     incidents: derived.incidents,
     total: derived.total,
     facets: derived.facets,
     summary: derived.summary,
+    pinned: derived.pinned,
+    attention: derived.attention,
+    trend: deriveTrend(trendRows, query.scope, ctx),
+    coverage: deriveCoverage(actor.id, onCall, schedules),
     rail: {
       myQueue: derived.myQueue,
       slaRisk: derived.slaRisk,

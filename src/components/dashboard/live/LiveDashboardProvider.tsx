@@ -15,6 +15,7 @@ import { useRouter } from 'next/navigation';
 import { useRealtime } from '@/hooks/useRealtime';
 import {
   DEFAULT_LIVE_QUERY,
+  LIVE_MAX_PINS,
   LIVE_URL_PARAMS,
   coerceLiveQuery,
   countLiveFeedChanges,
@@ -36,6 +37,9 @@ const FAILURE_RETRY_MS = 5_000;
 const CLOCK_TICK_MS = 5_000;
 export const LIVE_QUERY_STORAGE_PREFIX = 'opsknight:dashboard:live-query:v1:';
 const ALERTS_STORAGE_KEY = 'opsknight:dashboard:critical-alerts:v1';
+const PINS_STORAGE_PREFIX = 'opsknight:dashboard:pins:v1:';
+const DENSITY_STORAGE_KEY = 'opsknight:dashboard:density:v1';
+export type LiveDensity = 'comfortable' | 'compact';
 
 export type OptimisticPatch = Partial<Pick<LiveIncident, 'status' | 'assignee'>>;
 
@@ -64,6 +68,10 @@ export type LiveDashboardContextValue = {
   applyOptimistic: (id: string, patch: OptimisticPatch) => () => void;
   criticalAlerts: boolean;
   setCriticalAlerts: (enabled: boolean) => void;
+  pins: readonly string[];
+  togglePin: (id: string) => void;
+  density: LiveDensity;
+  setDensity: (density: LiveDensity) => void;
 };
 
 const LiveDashboardContext = createContext<LiveDashboardContextValue | null>(null);
@@ -106,6 +114,31 @@ function subscribeAlerts(onChange: () => void) {
     window.removeEventListener('storage', onChange);
   };
 }
+const storageListeners = new Set<() => void>();
+function subscribeStorage(onChange: () => void) {
+  storageListeners.add(onChange);
+  window.addEventListener('storage', onChange);
+  return () => {
+    storageListeners.delete(onChange);
+    window.removeEventListener('storage', onChange);
+  };
+}
+function readStorage(key: string): string | null {
+  try {
+    return window.localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+function writeStorage(key: string, value: string) {
+  try {
+    window.localStorage.setItem(key, value);
+  } catch {
+    // Preferences are best-effort.
+  }
+  storageListeners.forEach(notify => notify());
+}
+
 function readAlertsPreference(): boolean {
   try {
     return window.localStorage.getItem(ALERTS_STORAGE_KEY) === 'on';
@@ -181,6 +214,34 @@ export function LiveDashboardProvider({
   );
   const criticalAlerts = useSyncExternalStore(subscribeAlerts, readAlertsPreference, () => false);
   const everConnected = connectionEpoch > 0;
+  const pinsKey = PINS_STORAGE_PREFIX + currentUserId;
+  const pinsRaw = useSyncExternalStore(
+    subscribeStorage,
+    () => readStorage(pinsKey),
+    () => null
+  );
+  const pins = useMemo<readonly string[]>(() => {
+    try {
+      const parsed: unknown = pinsRaw ? JSON.parse(pinsRaw) : [];
+      return Array.isArray(parsed)
+        ? parsed.filter((id): id is string => typeof id === 'string').slice(0, LIVE_MAX_PINS)
+        : [];
+    } catch {
+      return [];
+    }
+  }, [pinsRaw]);
+  const pinsRef = useRef(pins);
+  useEffect(() => {
+    pinsRef.current = pins;
+  }, [pins]);
+  const density: LiveDensity =
+    useSyncExternalStore(
+      subscribeStorage,
+      () => readStorage(DENSITY_STORAGE_KEY),
+      () => null
+    ) === 'compact'
+      ? 'compact'
+      : 'comfortable';
   const router = useRouter();
   const routerRef = useRef(router);
   useEffect(() => {
@@ -264,6 +325,7 @@ export function LiveDashboardProvider({
       try {
         const params = liveQueryToParams(requested);
         if (generationRef.current) params.set('after', generationRef.current);
+        if (pinsRef.current.length) params.set('ids', pinsRef.current.join(','));
         const response = await fetch(`/api/dashboard/live?${params.toString()}`, {
           credentials: 'same-origin',
           cache: 'no-store',
@@ -459,6 +521,23 @@ export function LiveDashboardProvider({
 
   const refresh = useCallback(() => void reconcileRef.current('manual'), []);
 
+  const togglePin = useCallback(
+    (id: string) => {
+      const current = pinsRef.current;
+      const next = current.includes(id)
+        ? current.filter(pin => pin !== id)
+        : [id, ...current].slice(0, LIVE_MAX_PINS);
+      pinsRef.current = next;
+      writeStorage(pinsKey, JSON.stringify(next));
+      void reconcileRef.current('manual');
+    },
+    [pinsKey]
+  );
+  const setDensity = useCallback(
+    (value: LiveDensity) => writeStorage(DENSITY_STORAGE_KEY, value),
+    []
+  );
+
   const incidents = useMemo(() => {
     const rows = displayed?.incidents ?? [];
     if (optimistic.size === 0) return rows;
@@ -508,6 +587,10 @@ export function LiveDashboardProvider({
       applyOptimistic,
       criticalAlerts,
       setCriticalAlerts,
+      pins,
+      togglePin,
+      density,
+      setDensity,
     }),
     [
       currentUserId,
@@ -530,6 +613,10 @@ export function LiveDashboardProvider({
       applyOptimistic,
       criticalAlerts,
       setCriticalAlerts,
+      pins,
+      togglePin,
+      density,
+      setDensity,
     ]
   );
 

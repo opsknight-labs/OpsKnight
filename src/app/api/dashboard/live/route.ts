@@ -10,7 +10,10 @@ import {
   LIVE_ASSIGNMENT_OPTIONS,
   LIVE_INCIDENT_MAX_LIMIT,
   LIVE_INCIDENT_VIEWS,
+  LIVE_MAX_PINS,
+  LIVE_SCOPES,
   LIVE_SEARCH_MAX_LENGTH,
+  LIVE_SORTS,
   LIVE_STATUS_OPTIONS,
   LIVE_URGENCY_OPTIONS,
 } from '@/lib/dashboard/live-incidents-shared';
@@ -21,6 +24,8 @@ export const dynamic = 'force-dynamic';
 const id = z.string().regex(/^[A-Za-z0-9_-]{1,100}$/);
 const querySchema = z
   .object({
+    scope: z.enum(LIVE_SCOPES).default('all'),
+    sort: z.enum(LIVE_SORTS).default('newest'),
     view: z.enum(LIVE_INCIDENT_VIEWS).default('active'),
     service: id.optional(),
     team: id.optional(),
@@ -32,6 +37,13 @@ const querySchema = z
     after: z
       .string()
       .regex(/^\d{1,20}$/)
+      .optional(),
+    // Personally pinned incidents, comma separated; still resolved inside the authorized set.
+    ids: z
+      .string()
+      .regex(/^[A-Za-z0-9_-]{1,100}(,[A-Za-z0-9_-]{1,100})*$/)
+      .transform(value => value.split(','))
+      .refine(value => value.length <= LIVE_MAX_PINS)
       .optional(),
   })
   .strict();
@@ -65,6 +77,8 @@ export async function GET(request: Request) {
     const snapshot = await getLiveDashboardSnapshot(
       actor,
       {
+        scope: input.scope,
+        sort: input.sort,
         view: input.view,
         serviceId: input.service ?? null,
         teamId: input.team ?? null,
@@ -73,7 +87,7 @@ export async function GET(request: Request) {
         assignment: input.assignment,
         search: input.q,
       },
-      { limit: input.limit, generation }
+      { limit: input.limit, generation, pinIds: input.ids }
     );
     return jsonOk(snapshot, 200, { 'Cache-Control': 'private, no-store', Vary: 'Cookie' });
   } catch (error) {

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import {
+  ArrowDownWideNarrow,
   ArrowRight,
   CheckCircle2,
   Download,
@@ -12,6 +13,7 @@ import {
   Pause,
   Play,
   RefreshCw,
+  X,
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -19,6 +21,8 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/shadcn/dropdown-menu';
@@ -29,17 +33,20 @@ import { reassignIncident, updateIncidentStatus } from '@/app/(app)/incidents/ac
 import { buildIncidentListHref } from '@/lib/incident-links';
 import {
   LIVE_INCIDENT_VISIBLE_ROWS,
+  LIVE_MAX_PINS,
   countActiveFacets,
   liveQueryKey,
   liveViewLabel,
   type LiveConnectionHealth,
   type LiveIncident,
   type LiveIncidentQuery,
+  type LiveSort,
 } from '@/lib/dashboard/live-incidents-shared';
 import { useLiveDashboard } from './LiveDashboardProvider';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { LIVE_ROW_GRID, LIVE_ROW_GRID_TV, LiveIncidentRow } from './LiveIncidentRow';
-import { LiveToolbar, LiveViewTabs, type LiveDirectoryOption } from './LiveFilterBar';
+import { LiveActiveFilters, LiveToolbar, type LiveDirectoryOption } from './LiveFilterBar';
+import type { LiveDensity } from './LiveDashboardProvider';
 
 function healthCopy(health: LiveConnectionHealth): { label: string; dot: string; text: string } {
   switch (health) {
@@ -164,6 +171,11 @@ export default function LiveIncidentsPanel({
     currentUserId,
     criticalAlerts,
     setCriticalAlerts,
+    setQuery,
+    pins,
+    togglePin,
+    density,
+    setDensity,
   } = live;
   const wallboard = variant === 'wallboard';
   // Desktop cockpit: the panel is viewport-sized and scrolls internally, so render every loaded
@@ -383,14 +395,18 @@ export default function LiveIncidentsPanel({
       data-loading={loading ? 'true' : 'false'}
       className="flex h-full min-h-0 flex-col overflow-hidden rounded-xl border border-border bg-card shadow-[0_1px_2px_rgba(16,24,40,0.05)]"
     >
-      <header className="shrink-0 space-y-2.5 border-b border-border px-3 pb-2.5 pt-3 sm:px-4">
+      <header
+        className={
+          wallboard ? 'sr-only' : 'shrink-0 space-y-2 border-b border-border px-3 py-2.5 sm:px-4'
+        }
+      >
         {wallboard ? (
           <h2 id="live-incidents-heading" className="sr-only">
             Live Incidents
           </h2>
         ) : (
           <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-            <div className="flex min-w-0 items-center gap-2">
+            <div className="flex min-w-0 shrink-0 items-center gap-2">
               <span
                 aria-hidden
                 className={cn(
@@ -400,10 +416,7 @@ export default function LiveIncidentsPanel({
                     : 'bg-slate-400'
                 )}
               />
-              <h2
-                id="live-incidents-heading"
-                className="whitespace-nowrap text-[15px] font-semibold tracking-tight text-foreground"
-              >
+              <h2 id="live-incidents-heading" className="dash-heading whitespace-nowrap">
                 Live Incidents
               </h2>
               <Badge
@@ -412,14 +425,41 @@ export default function LiveIncidentsPanel({
                 data-testid="live-incidents-total"
                 className="tabular-nums"
               >
-                {total.toLocaleString()}{' '}
-                {query.view === 'active' && facetCount === 0 ? 'active' : 'matching'}
+                {query.view === 'active' && facetCount === 0
+                  ? `${total.toLocaleString()} active`
+                  : `${total.toLocaleString()} of ${(snapshot?.summary.active ?? total).toLocaleString()}`}
               </Badge>
             </div>
-            <div className="order-3 w-full min-w-0 2xl:order-none 2xl:w-auto 2xl:flex-1">
-              <LiveViewTabs />
-            </div>
-            <div className="ml-auto flex shrink-0 items-center gap-1.5">
+            <div className="ml-auto flex min-w-0 flex-wrap items-center justify-end gap-1.5">
+              <LiveToolbar services={services} teams={teams} />
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    type="button"
+                    data-testid="live-sort"
+                    className="inline-flex h-8 items-center gap-1.5 whitespace-nowrap rounded-lg border border-border bg-card px-2.5 text-xs font-medium shadow-2xs hover:bg-muted outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+                  >
+                    <ArrowDownWideNarrow className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                    {query.sort === 'attention' ? 'Needs attention' : 'Newest'}
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-56">
+                  <DropdownMenuLabel className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                    Sort
+                  </DropdownMenuLabel>
+                  <DropdownMenuRadioGroup
+                    value={query.sort}
+                    onValueChange={value => setQuery({ sort: value as LiveSort })}
+                  >
+                    <DropdownMenuRadioItem value="newest" data-testid="live-sort-newest">
+                      Newest first
+                    </DropdownMenuRadioItem>
+                    <DropdownMenuRadioItem value="attention" data-testid="live-sort-attention">
+                      Needs attention first
+                    </DropdownMenuRadioItem>
+                  </DropdownMenuRadioGroup>
+                </DropdownMenuContent>
+              </DropdownMenu>
               <button
                 type="button"
                 onClick={togglePaused}
@@ -436,9 +476,12 @@ export default function LiveIncidentsPanel({
                 {paused ? (
                   <Play className="h-3 w-3 shrink-0" aria-hidden />
                 ) : (
-                  <Pause className="h-3 w-3 shrink-0" aria-hidden />
+                  <span
+                    aria-hidden
+                    className="h-1.5 w-1.5 rounded-full bg-emerald-500 motion-safe:animate-pulse"
+                  />
                 )}
-                {paused ? 'Resume' : 'Pause'}
+                {paused ? 'Paused' : 'Live'}
                 {paused && pendingCount > 0 && (
                   <span
                     data-testid="live-pending-count"
@@ -461,6 +504,19 @@ export default function LiveIncidentsPanel({
                   </button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-64">
+                  <DropdownMenuLabel className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                    Row density
+                  </DropdownMenuLabel>
+                  <DropdownMenuRadioGroup
+                    value={density}
+                    onValueChange={value => setDensity(value as LiveDensity)}
+                  >
+                    <DropdownMenuRadioItem value="comfortable">Comfortable</DropdownMenuRadioItem>
+                    <DropdownMenuRadioItem value="compact" data-testid="live-density-compact">
+                      Compact
+                    </DropdownMenuRadioItem>
+                  </DropdownMenuRadioGroup>
+                  <DropdownMenuSeparator />
                   <DropdownMenuItem onSelect={refresh} data-testid="live-refresh">
                     <RefreshCw className="mr-2 h-3.5 w-3.5" aria-hidden />
                     Refresh now
@@ -509,9 +565,47 @@ export default function LiveIncidentsPanel({
             </div>
           </div>
         )}
-        {wallboard && <LiveViewTabs />}
-        {!wallboard && <LiveToolbar services={services} teams={teams} />}
+        {!wallboard && <LiveActiveFilters services={services} teams={teams} />}
       </header>
+
+      {!wallboard && snapshot && snapshot.pinned.length > 0 && (
+        <div
+          className="flex shrink-0 items-center gap-2 overflow-x-auto border-b border-border/70 bg-muted/30 px-4 py-1.5 [scrollbar-width:none]"
+          data-testid="live-pinned"
+        >
+          <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+            Pinned {snapshot.pinned.length}/{LIVE_MAX_PINS}
+          </span>
+          {snapshot.pinned.map(item => (
+            <span
+              key={item.id}
+              className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-border bg-card py-0.5 pl-2 pr-1 text-[11px] font-medium shadow-2xs"
+            >
+              <Link
+                href={`/incidents/${item.id}`}
+                className="max-w-[16rem] truncate hover:text-primary"
+              >
+                <span
+                  className={cn(
+                    'mr-1.5 inline-block h-1.5 w-1.5 rounded-full align-middle',
+                    item.status === 'OPEN' ? 'bg-rose-500' : 'bg-amber-500'
+                  )}
+                  aria-hidden
+                />
+                {item.title}
+              </Link>
+              <button
+                type="button"
+                onClick={() => togglePin(item.id)}
+                aria-label={`Unpin ${item.title}`}
+                className="rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+              >
+                <X className="h-3 w-3" aria-hidden />
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
 
       <div
         aria-hidden
@@ -588,6 +682,9 @@ export default function LiveIncidentsPanel({
                 onAssignSelf={assignSelf}
                 onFocusRow={setFocusedIndex}
                 tv={wallboard}
+                density={density}
+                pinned={pins.includes(incident.id)}
+                onTogglePin={togglePin}
               />
             ))}
           </ul>

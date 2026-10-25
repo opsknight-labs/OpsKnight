@@ -11,15 +11,32 @@ import {
   type ReactNode,
 } from 'react';
 import Link from 'next/link';
-import { ArrowRight, TrendingUp } from 'lucide-react';
-import { DashboardAnalyticsProvider } from '@/components/dashboard/DashboardAnalyticsProvider';
 import {
-  DashboardAnalyticsHeatmap,
-  DashboardPerformanceAnalytics,
-  DashboardTeamLoadAnalytics,
-} from '@/components/dashboard/DashboardAnalyticsWidgets';
-
-import type { HistoryQuery } from '@/lib/dashboard/live-incidents-shared';
+  AlertTriangle,
+  ArrowRight,
+  ArrowUpRight,
+  CheckCheck,
+  CheckCircle2,
+  Clock3,
+  MessageSquare,
+  TrendingUp,
+  UserPlus,
+  type LucideIcon,
+} from 'lucide-react';
+import { cn } from '@/lib/utils';
+import {
+  DashboardAnalyticsProvider,
+  useDashboardAnalytics,
+} from '@/components/dashboard/DashboardAnalyticsProvider';
+import { DashboardAnalyticsHeatmap } from '@/components/dashboard/DashboardAnalyticsWidgets';
+import CompactTeamLoad from '@/components/dashboard/compact/CompactTeamLoad';
+import {
+  HISTORY_RANGES,
+  formatIncidentAge,
+  type HistoryQuery,
+  type LiveActivityItem,
+} from '@/lib/dashboard/live-incidents-shared';
+import { useLiveDashboard } from './live/LiveDashboardProvider';
 
 type HistoryContextValue = {
   query: HistoryQuery;
@@ -34,9 +51,9 @@ export function useHistoryQuery(): HistoryContextValue {
 }
 
 /**
- * Owns the dashboard reporting period (selected once, in the command strip). It lives in client
- * state and the URL (replaceState), so a change refetches the single analytics projection without
- * re-rendering the server page or touching live data. Deep filtering lives on /analytics.
+ * Owns the dashboard reporting period. It lives in client state and the URL (replaceState), so a
+ * change refetches the single analytics projection without re-rendering the server page or
+ * touching live data. Deep filtering lives on /analytics.
  */
 export function DashboardHistoryProvider({
   initialQuery,
@@ -86,50 +103,427 @@ function useNearViewport<T extends Element>(rootMargin = '400px') {
   return { ref, visible };
 }
 
-export default function DashboardHistorySection() {
-  const { query } = useHistoryQuery();
-  const { ref, visible } = useNearViewport<HTMLDivElement>();
+const card = 'rounded-xl border border-border bg-card shadow-[0_1px_2px_rgba(16,24,40,0.05)]';
 
+function formatMinutes(value: number | null | undefined): string {
+  if (value === null || value === undefined || !Number.isFinite(value)) return '—';
+  if (value < 60) return `${Math.max(1, Math.round(value))}m`;
+  if (value < 1440) return `${(value / 60).toFixed(1)}h`;
+  return `${(value / 1440).toFixed(1)}d`;
+}
+
+/** Lower is better for MTTA/MTTR: a decrease is good news. */
+function TimeDelta({
+  current,
+  previous,
+  range,
+}: {
+  current: number | null;
+  previous: number | null;
+  range: string;
+}) {
+  if (current === null || previous === null || previous <= 0) {
+    return <p className="text-[11px] text-muted-foreground">No prior-period sample</p>;
+  }
+  const diff = current - previous;
+  if (Math.abs(diff) < 1) {
+    return <p className="text-[11px] text-muted-foreground">No change vs prior {range}d</p>;
+  }
+  const better = diff < 0;
+  return (
+    <p
+      className={cn(
+        'text-[11px] font-semibold',
+        better ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'
+      )}
+    >
+      {better ? '▼' : '▲'} {formatMinutes(Math.abs(diff))} vs prior {range}d
+    </p>
+  );
+}
+
+function Kpi({
+  label,
+  value,
+  footer,
+  testId,
+}: {
+  label: string;
+  value: string;
+  footer: ReactNode;
+  testId: string;
+}) {
+  return (
+    <div className={cn(card, 'p-3')} data-testid={testId}>
+      <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+        {label}
+      </p>
+      <p className="font-display text-2xl font-bold tabular-nums text-foreground">{value}</p>
+      {footer}
+    </div>
+  );
+}
+
+function ComplianceBar({ value }: { value: number | null }) {
+  const pct = value === null ? 0 : Math.max(0, Math.min(100, value));
+  return (
+    <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-muted" aria-hidden>
+      <div
+        className={cn(
+          'h-full rounded-full',
+          pct >= 95 ? 'bg-emerald-500' : pct >= 80 ? 'bg-amber-500' : 'bg-rose-500'
+        )}
+        style={{ width: `${pct}%` }}
+      />
+    </div>
+  );
+}
+
+/** Created vs resolved area chart in plain SVG (no chart runtime on the dashboard). */
+function FlowChart({
+  series,
+}: {
+  series: Array<{ label: string; count: number; resolveCount: number }>;
+}) {
+  if (series.length < 2) {
+    return (
+      <p className="flex h-40 items-center justify-center text-xs text-muted-foreground">
+        Not enough data in this period yet
+      </p>
+    );
+  }
+  const width = 600;
+  const height = 150;
+  const max = Math.max(1, ...series.map(point => Math.max(point.count, point.resolveCount)));
+  const x = (index: number) => (index / (series.length - 1)) * width;
+  const y = (value: number) => height - 8 - (value / max) * (height - 24);
+  const line = (key: 'count' | 'resolveCount') =>
+    series
+      .map(
+        (point, index) =>
+          `${index === 0 ? 'M' : 'L'}${x(index).toFixed(1)},${y(point[key]).toFixed(1)}`
+      )
+      .join(' ');
+  const area = (key: 'count' | 'resolveCount') => `${line(key)} L${width},${height} L0,${height} Z`;
+  const totalCreated = series.reduce((sum, point) => sum + point.count, 0);
+  const totalResolved = series.reduce((sum, point) => sum + point.resolveCount, 0);
+  return (
+    <figure>
+      <svg
+        viewBox={`0 0 ${width} ${height}`}
+        preserveAspectRatio="none"
+        className="h-40 w-full"
+        role="img"
+        aria-label={`${totalCreated} incidents created and ${totalResolved} resolved in this period`}
+      >
+        <defs>
+          <linearGradient id="flow-created" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stopColor="#fb7185" stopOpacity="0.32" />
+            <stop offset="1" stopColor="#fb7185" stopOpacity="0" />
+          </linearGradient>
+          <linearGradient id="flow-resolved" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stopColor="#34d399" stopOpacity="0.28" />
+            <stop offset="1" stopColor="#34d399" stopOpacity="0" />
+          </linearGradient>
+        </defs>
+        <path d={area('count')} fill="url(#flow-created)" />
+        <path
+          d={line('count')}
+          fill="none"
+          stroke="#f43f5e"
+          strokeWidth="2"
+          vectorEffect="non-scaling-stroke"
+        />
+        <path d={area('resolveCount')} fill="url(#flow-resolved)" />
+        <path
+          d={line('resolveCount')}
+          fill="none"
+          stroke="#10b981"
+          strokeWidth="2"
+          vectorEffect="non-scaling-stroke"
+        />
+      </svg>
+      <figcaption className="mt-1 flex justify-between text-[10px] text-muted-foreground">
+        <span>{series[0]?.label}</span>
+        <span>{series.at(-1)?.label}</span>
+      </figcaption>
+    </figure>
+  );
+}
+
+const ACTIVITY_FILTERS = [
+  { key: 'all', label: 'All', types: null },
+  { key: 'ack', label: 'Acks', types: ['ACKNOWLEDGED'] },
+  { key: 'esc', label: 'Escalations', types: ['ESCALATED'] },
+  { key: 'sla', label: 'SLA', types: ['SLA_WARNING', 'SLA_BREACHED'] },
+  { key: 'resolved', label: 'Resolved', types: ['AUTO_RESOLVED', 'MANUAL_RESOLVED'] },
+] as const;
+
+function activityIcon(type: string | null): { icon: LucideIcon; tone: string } {
+  switch (type) {
+    case 'ACKNOWLEDGED':
+      return {
+        icon: CheckCheck,
+        tone: 'bg-amber-100 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300',
+      };
+    case 'ESCALATED':
+      return {
+        icon: ArrowUpRight,
+        tone: 'bg-violet-100 text-violet-700 dark:bg-violet-950/60 dark:text-violet-300',
+      };
+    case 'SLA_WARNING':
+    case 'SLA_BREACHED':
+      return {
+        icon: Clock3,
+        tone: 'bg-rose-100 text-rose-700 dark:bg-rose-950/60 dark:text-rose-300',
+      };
+    case 'AUTO_RESOLVED':
+    case 'MANUAL_RESOLVED':
+      return {
+        icon: CheckCircle2,
+        tone: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300',
+      };
+    case 'ASSIGNMENT':
+      return {
+        icon: UserPlus,
+        tone: 'bg-blue-100 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300',
+      };
+    case 'COMMENT':
+      return {
+        icon: MessageSquare,
+        tone: 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300',
+      };
+    default:
+      return {
+        icon: AlertTriangle,
+        tone: 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300',
+      };
+  }
+}
+
+function ActivityTimeline() {
+  const { snapshot, now } = useLiveDashboard();
+  const [filter, setFilter] = useState<(typeof ACTIVITY_FILTERS)[number]['key']>('all');
+  const items: LiveActivityItem[] = snapshot?.rail.activity ?? [];
+  const active = ACTIVITY_FILTERS.find(option => option.key === filter);
+  const visible = items
+    .filter(
+      item =>
+        !active?.types ||
+        (item.type !== null && (active.types as readonly string[]).includes(item.type))
+    )
+    .slice(0, 8);
+  return (
+    <div className={cn(card, 'p-4')} data-testid="rail-activity">
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <h3 className="dash-heading-sm">Recent activity</h3>
+        <div role="radiogroup" aria-label="Activity type" className="flex flex-wrap gap-1">
+          {ACTIVITY_FILTERS.map(option => (
+            <button
+              key={option.key}
+              type="button"
+              role="radio"
+              aria-checked={filter === option.key}
+              onClick={() => setFilter(option.key)}
+              className={cn(
+                'rounded-full px-2 py-0.5 text-[11px] font-medium outline-none focus-visible:ring-2 focus-visible:ring-primary/50',
+                filter === option.key
+                  ? 'bg-foreground text-background'
+                  : 'border border-border text-muted-foreground hover:text-foreground'
+              )}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
+      </div>
+      {visible.length === 0 ? (
+        <p className="py-6 text-center text-xs text-muted-foreground">No matching activity</p>
+      ) : (
+        <ol className="space-y-2.5">
+          {visible.map(item => {
+            const { icon: Icon, tone } = activityIcon(item.type);
+            return (
+              <li key={item.id} className="flex gap-2.5">
+                <span
+                  className={cn(
+                    'flex h-6 w-6 shrink-0 items-center justify-center rounded-full',
+                    tone
+                  )}
+                  aria-hidden
+                >
+                  <Icon className="h-3.5 w-3.5" />
+                </span>
+                <div className="min-w-0">
+                  <p className="line-clamp-2 text-[12px] text-foreground">{item.message}</p>
+                  <p className="truncate text-[11px] text-muted-foreground">
+                    <Link
+                      href={`/incidents/${item.incidentId}`}
+                      className="font-medium text-primary hover:underline"
+                    >
+                      {item.incidentTitle}
+                    </Link>{' '}
+                    · {formatIncidentAge(item.createdAt, now)} ago
+                  </p>
+                </div>
+              </li>
+            );
+          })}
+        </ol>
+      )}
+    </div>
+  );
+}
+
+function InsightsContent() {
+  const { data, state } = useDashboardAnalytics();
+  const { query } = useHistoryQuery();
+  if (!data) {
+    return (
+      <p className={cn(card, 'p-6 text-center text-sm text-muted-foreground')} role="status">
+        {state === 'loading' ? 'Loading trends…' : 'Trends are temporarily unavailable.'}
+      </p>
+    );
+  }
+  const previous = data.previousPeriod?.available ? data.previousPeriod : null;
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+        <div className={cn(card, 'p-4 lg:col-span-2')} data-testid="insight-flow">
+          <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <h3 className="dash-heading-sm">Incident flow</h3>
+              <p className="text-[11px] text-muted-foreground">
+                {data.totalIncidents} created in the last {query.range} days
+                {previous ? ` · ${previous.totalIncidents} in the prior period` : ''}
+              </p>
+            </div>
+            <span className="flex items-center gap-3 text-[11px] text-muted-foreground">
+              <span className="flex items-center gap-1.5">
+                <span className="h-2 w-2 rounded-sm bg-rose-400" aria-hidden />
+                Created
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="h-2 w-2 rounded-sm bg-emerald-400" aria-hidden />
+                Resolved
+              </span>
+            </span>
+          </div>
+          <FlowChart series={data.trendSeries ?? []} />
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <Kpi
+            testId="insight-mtta"
+            label="MTTA"
+            value={formatMinutes(data.mtta)}
+            footer={
+              <TimeDelta
+                current={data.mtta}
+                previous={previous?.mtta ?? null}
+                range={query.range}
+              />
+            }
+          />
+          <Kpi
+            testId="insight-mttr"
+            label="MTTR"
+            value={formatMinutes(data.mttr)}
+            footer={
+              <TimeDelta
+                current={data.mttr}
+                previous={previous?.mttr ?? null}
+                range={query.range}
+              />
+            }
+          />
+          <Kpi
+            testId="insight-ack-sla"
+            label="Ack SLA"
+            value={data.ackCompliance === null ? '—' : `${Math.round(data.ackCompliance)}%`}
+            footer={<ComplianceBar value={data.ackCompliance} />}
+          />
+          <Kpi
+            testId="insight-resolve-sla"
+            label="Resolve SLA"
+            value={data.resolveCompliance === null ? '—' : `${Math.round(data.resolveCompliance)}%`}
+            footer={<ComplianceBar value={data.resolveCompliance} />}
+          />
+        </div>
+      </div>
+      <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-2">
+        <ActivityTimeline />
+        <div className={cn(card, 'p-4')} data-testid="insight-team-load">
+          <h3 className="dash-heading-sm mb-2">Team load</h3>
+          <CompactTeamLoad assigneeLoad={data.assigneeLoad} />
+        </div>
+      </div>
+      <DashboardAnalyticsHeatmap />
+    </div>
+  );
+}
+
+export default function DashboardHistorySection() {
+  const { query, setQuery } = useHistoryQuery();
+  const { ref, visible } = useNearViewport<HTMLDivElement>();
   return (
     <section
       aria-labelledby="dashboard-history-heading"
       data-testid="dashboard-history"
-      className="space-y-3"
+      className="space-y-3 pt-1"
     >
-      <div className="flex items-end justify-between gap-3 px-1">
+      <div className="flex flex-wrap items-end justify-between gap-3 px-1">
         <div>
           <h2
             id="dashboard-history-heading"
-            className="flex items-center gap-2 text-sm font-bold text-foreground"
+            className="dash-heading flex items-center gap-2 font-display text-[15px] font-semibold text-foreground"
           >
             <TrendingUp className="h-4 w-4 text-primary" aria-hidden />
-            Trends · last {query.range} days
+            Trends &amp; insights
           </h2>
           <p className="text-[11px] text-muted-foreground">
-            Uses the reporting period selected in the Command Center.
+            The reporting period applies to this section only; everything above is live.
           </p>
         </div>
-        <Link
-          href={`/analytics?range=${query.range}`}
-          className="inline-flex items-center gap-1 text-[11px] font-semibold text-muted-foreground hover:text-primary"
-        >
-          Open full analytics
-          <ArrowRight className="h-3 w-3 shrink-0" aria-hidden />
-        </Link>
+        <div className="flex items-center gap-2">
+          <div
+            role="radiogroup"
+            aria-label="Reporting period"
+            data-testid="command-period"
+            className="inline-flex h-8 items-center rounded-lg border border-border bg-card p-0.5 text-xs font-semibold shadow-2xs"
+          >
+            {HISTORY_RANGES.map(range => (
+              <button
+                key={range}
+                type="button"
+                role="radio"
+                aria-checked={query.range === range}
+                data-testid={`period-${range}`}
+                onClick={() => setQuery({ range })}
+                className={cn(
+                  'h-full rounded-md px-3 outline-none focus-visible:ring-2 focus-visible:ring-primary/50',
+                  query.range === range
+                    ? 'bg-foreground text-background'
+                    : 'text-muted-foreground hover:text-foreground'
+                )}
+              >
+                {range}d
+              </button>
+            ))}
+          </div>
+          <Link
+            href={`/analytics?range=${query.range}`}
+            className="inline-flex items-center gap-1 text-[11px] font-semibold text-muted-foreground hover:text-primary"
+          >
+            Full analytics
+            <ArrowRight className="h-3 w-3 shrink-0" aria-hidden />
+          </Link>
+        </div>
       </div>
-
-      {/* Chart rendering is deferred until the section approaches the viewport. */}
       <div ref={ref} className="min-h-[22rem]">
         {visible ? (
-          <div className="space-y-4 sm:space-y-5">
-            <DashboardAnalyticsHeatmap />
-            <div className="grid grid-cols-1 items-start gap-4 sm:gap-5 lg:grid-cols-2">
-              <DashboardPerformanceAnalytics />
-              <DashboardTeamLoadAnalytics />
-            </div>
-          </div>
+          <InsightsContent />
         ) : (
-          <div className="h-[22rem] rounded-2xl border border-dashed border-border" aria-hidden />
+          <div className={cn(card, 'h-[22rem] border-dashed')} aria-hidden />
         )}
       </div>
     </section>

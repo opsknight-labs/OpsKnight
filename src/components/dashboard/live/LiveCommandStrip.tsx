@@ -1,190 +1,184 @@
 'use client';
 
 import Link from 'next/link';
-import {
-  AlertOctagon,
-  BellRing,
-  CheckCheck,
-  Clock3,
-  Monitor,
-  UserX,
-  VolumeX,
-  type LucideIcon,
-} from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { Monitor } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import LiveClock from '@/components/dashboard/LiveClock';
-import { useRealtime } from '@/hooks/useRealtime';
-import { useDashboardAnalytics } from '@/components/dashboard/DashboardAnalyticsProvider';
-import { useHistoryQuery } from '@/components/dashboard/DashboardHistorySection';
 import {
-  HISTORY_RANGES,
+  LIVE_SCOPES,
   type LiveIncidentQuery,
+  type LiveScope,
+  type LiveSnapshot,
   type LiveSummary,
 } from '@/lib/dashboard/live-incidents-shared';
 import { useLiveDashboard } from './LiveDashboardProvider';
 
 type Tone = 'rose' | 'amber' | 'emerald' | 'default';
 
-function toneClasses(tone: Tone, active: boolean): { tile: string; value: string; icon: string } {
-  const ring = active ? 'ring-2 ring-white/40' : '';
-  switch (tone) {
-    case 'rose':
-      return {
-        tile: cn(
-          'border-rose-500/30 bg-rose-950/20 hover:border-rose-500/50 hover:bg-rose-950/30',
-          ring
-        ),
-        value: 'text-rose-400',
-        icon: 'text-rose-400/80',
-      };
-    case 'amber':
-      return {
-        tile: cn(
-          'border-amber-500/30 bg-amber-950/20 hover:border-amber-500/50 hover:bg-amber-950/30',
-          ring
-        ),
-        value: 'text-amber-400',
-        icon: 'text-amber-400/80',
-      };
-    case 'emerald':
-      return {
-        tile: cn('border-emerald-500/30 bg-emerald-950/20', ring),
-        value: 'text-emerald-400',
-        icon: 'text-emerald-400/80',
-      };
-    default:
-      return {
-        tile: cn(
-          'border-zinc-800/80 bg-zinc-900/60 hover:border-zinc-700/80 hover:bg-zinc-800/60',
-          ring
-        ),
-        value: 'text-white',
-        icon: 'text-slate-500',
-      };
-  }
-}
+type MetricEmphasis = 'critical' | 'warning' | 'none';
 
-function StatTile({
+/**
+ * One cell of the metrics row. Deliberately typographic: no per-tile chrome,
+ * badges or charts. Colour is reserved for numbers that demand action.
+ */
+function Metric({
   label,
   value,
-  hint,
-  tone,
-  icon: Icon,
-  active = false,
+  context,
+  emphasis,
+  active,
   onClick,
-  href,
   testId,
+  title,
 }: {
   label: string;
-  value: string | number;
-  hint?: string;
-  tone: Tone;
-  icon: LucideIcon;
-  active?: boolean;
-  onClick?: () => void;
-  href?: string;
+  value: number | null;
+  context: React.ReactNode;
+  emphasis: MetricEmphasis;
+  active: boolean;
+  onClick: () => void;
   testId: string;
+  title: string;
 }) {
-  const classes = toneClasses(tone, active);
-  const body = (
-    <>
-      <span className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
-        <Icon className={cn('h-3.5 w-3.5 shrink-0', classes.icon)} aria-hidden />
-        {label}
-      </span>
-      <span
-        className={cn(
-          'mt-1.5 block text-3xl font-extrabold leading-none tabular-nums tracking-tight',
-          classes.value
-        )}
-      >
-        {value}
-      </span>
-      {hint && <span className="mt-1.5 block truncate text-[11px] text-slate-400">{hint}</span>}
-    </>
-  );
-  const className = cn(
-    'flex min-h-[6.25rem] min-w-0 flex-col items-start justify-center rounded-xl border px-4 py-3 text-left shadow-xs backdrop-blur-xs transition-all outline-none',
-    'focus-visible:ring-2 focus-visible:ring-white/50',
-    classes.tile
-  );
-  if (href) {
-    return (
-      <Link href={href} className={className} data-testid={testId}>
-        {body}
-      </Link>
-    );
-  }
+  const valueClass =
+    value === null || value === 0
+      ? 'text-zinc-500'
+      : emphasis === 'critical'
+        ? 'text-rose-400'
+        : emphasis === 'warning'
+          ? 'text-amber-300'
+          : 'text-zinc-50';
   return (
     <button
       type="button"
       onClick={onClick}
       aria-pressed={active}
-      title={`Show ${label.toLowerCase()} incidents in the live feed`}
-      className={className}
       data-testid={testId}
+      title={title}
+      data-icon-button
+      className={cn(
+        'group relative min-w-0 bg-[#0c0c0f] px-4 py-3.5 text-left sm:px-5 sm:py-4 outline-none transition-colors',
+        'hover:bg-[#121216] focus-visible:bg-[#121216] focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-zinc-500',
+        active && 'bg-[#141418]'
+      )}
     >
-      {body}
+      <span className="block truncate text-[12px] font-medium text-zinc-400 group-hover:text-zinc-300">
+        {label}
+      </span>
+      <span
+        className={cn(
+          'mt-2 block font-display text-[32px] font-semibold leading-none tabular-nums tracking-[-0.03em]',
+          valueClass
+        )}
+      >
+        {value ?? '—'}
+      </span>
+      <span className="mt-2 block truncate text-[12px] text-zinc-500">{context}</span>
+      {active && (
+        <span aria-hidden className="absolute inset-x-5 bottom-0 h-0.5 rounded-full bg-zinc-200" />
+      )}
     </button>
   );
 }
 
 function formatMinutes(value: number | null | undefined): string {
   if (value === null || value === undefined || !Number.isFinite(value)) return '—';
-  if (value < 60) return `${Math.round(value)}m`;
+  if (value < 60) return `${Math.max(1, Math.round(value))}m`;
   if (value < 1440) return `${(value / 60).toFixed(1)}h`;
   return `${(value / 1440).toFixed(1)}d`;
 }
 
-export function buildInsight(summary: LiveSummary | null): {
+type Fragment = {
   text: string;
-  tone: Tone;
-} {
-  if (!summary) return { text: 'Connecting to live data…', tone: 'default' };
-  if (summary.slaBreached > 0)
-    return {
-      text: `${summary.slaBreached} incident${summary.slaBreached === 1 ? ' has' : 's have'} breached SLA`,
+  tone: 'rose' | 'amber' | 'muted';
+  patch?: Partial<LiveIncidentQuery>;
+};
+
+/** Plain-language situation summary; each fragment focuses the feed on what it describes. */
+export function buildNarrative(snapshot: LiveSnapshot | null): Fragment[] {
+  if (!snapshot) return [{ text: 'Connecting to live data…', tone: 'muted' }];
+  const { summary, trend } = snapshot;
+  if (summary.active === 0) return [];
+  const fragments: Fragment[] = [];
+  const hotspot = snapshot.rail.servicesAtRisk.find(service => service.critical > 0);
+  if (hotspot) {
+    fragments.push({
+      text: `${hotspot.critical} critical on ${hotspot.name}`,
       tone: 'rose',
-    };
+      patch: { view: 'critical', serviceId: hotspot.id },
+    });
+  } else if (summary.critical > 0) {
+    fragments.push({
+      text: `${summary.critical} critical`,
+      tone: 'rose',
+      patch: { view: 'critical' },
+    });
+  }
+  if (summary.slaDueSoon > 0) {
+    fragments.push({
+      text: `${summary.slaDueSoon} near SLA deadline`,
+      tone: 'amber',
+      patch: { view: 'breaching' },
+    });
+  }
+  if (summary.unassignedCritical > 0) {
+    fragments.push({
+      text: `${summary.unassignedCritical} critical unowned`,
+      tone: 'rose',
+      patch: { view: 'unassigned', urgency: 'all' },
+    });
+  } else if (summary.unassigned > 0) {
+    fragments.push({
+      text: `${summary.unassigned} unassigned`,
+      tone: 'muted',
+      patch: { view: 'unassigned' },
+    });
+  }
+  if (trend.createdLastHour > 0) {
+    fragments.push({ text: `+${trend.createdLastHour} new this hour`, tone: 'muted' });
+  }
+  return fragments;
+}
+
+/** Back-compat helper used by the wallboard headline. */
+export function buildInsight(summary: LiveSummary | null): { text: string; tone: Tone } {
+  if (!summary) return { text: 'Connecting to live data…', tone: 'default' };
   if (summary.critical > 0)
     return {
       text: `${summary.critical} critical incident${summary.critical === 1 ? '' : 's'} need attention`,
       tone: 'rose',
     };
+  if (summary.slaAtRisk > 0)
+    return { text: `${summary.slaAtRisk} incidents at SLA risk`, tone: 'amber' };
   if (summary.unassigned > 0)
-    return {
-      text: `${summary.unassigned} active incident${summary.unassigned === 1 ? ' is' : 's are'} unassigned`,
-      tone: 'amber',
-    };
+    return { text: `${summary.unassigned} active incidents are unassigned`, tone: 'amber' };
   if (summary.active > 0)
     return { text: `${summary.active} active, all owned and within SLA`, tone: 'amber' };
   return { text: 'All clear — no active incidents', tone: 'emerald' };
 }
 
+const SCOPE_LABEL: Record<LiveScope, string> = { all: 'All', teams: 'My teams', mine: 'Mine' };
+
 export default function LiveCommandStrip({
   scopeMode,
-  initialMuted,
   timeZone,
 }: {
   timeZone: string;
   scopeMode: 'GLOBAL' | 'SCOPED' | 'NONE';
-  initialMuted: { snoozed: number; suppressed: number };
 }) {
+  const router = useRouter();
   const { snapshot, query, setQuery } = useLiveDashboard();
-  const { metrics } = useRealtime();
-  const analytics = useDashboardAnalytics();
-  const history = useHistoryQuery();
   const summary = snapshot?.summary ?? null;
-  const snoozed = metrics?.snoozed ?? initialMuted.snoozed;
-  const suppressed = metrics?.suppressed ?? initialMuted.suppressed;
-  const insight = buildInsight(summary);
+  const trend = snapshot?.trend ?? null;
+  const narrative = buildNarrative(snapshot);
 
   const status =
     scopeMode === 'NONE'
-      ? { label: 'No operational scope', dot: 'bg-slate-400', text: 'text-slate-300' }
+      ? { label: 'No operational scope', dot: 'bg-zinc-500', text: 'text-zinc-400' }
       : !summary
-        ? { label: 'Connecting', dot: 'bg-slate-400', text: 'text-slate-300' }
-        : summary.critical > 0 || summary.slaBreached > 0
+        ? { label: 'Connecting', dot: 'bg-zinc-500', text: 'text-zinc-400' }
+        : summary.critical > 0 || summary.slaDueSoon > 0
           ? { label: 'Critical', dot: 'bg-rose-500', text: 'text-rose-300' }
           : summary.active > 0
             ? { label: 'Degraded', dot: 'bg-amber-400', text: 'text-amber-200' }
@@ -192,100 +186,102 @@ export default function LiveCommandStrip({
 
   const isFocused = (patch: Partial<LiveIncidentQuery>) =>
     Object.entries(patch).every(([key, value]) => query[key as keyof LiveIncidentQuery] === value);
-  const focus = (patch: Partial<LiveIncidentQuery>) => {
-    const reset: Partial<LiveIncidentQuery> = { view: 'active', status: 'all', assignment: 'all' };
+  const reset: Partial<LiveIncidentQuery> = { view: 'active', status: 'all', assignment: 'all' };
+  const focus = (patch: Partial<LiveIncidentQuery>) =>
     setQuery(isFocused(patch) ? reset : { ...reset, ...patch });
-  };
-  const tone = (count: number | undefined, positive: Tone): Tone =>
-    (count ?? 0) > 0 ? positive : 'default';
+  const lastHour = (count: number | undefined, verb: string) =>
+    trend ? (count ? `+${count} ${verb} · last hour` : `None ${verb} · last hour`) : '\u00a0';
 
   return (
     <section
       data-testid="command-center"
       aria-label="Command center"
-      className="relative overflow-hidden rounded-xl border border-zinc-800/80 bg-gradient-to-b from-[#121216] to-[#09090b] p-4 text-slate-100 shadow-xl ring-1 ring-white/5 md:p-5"
+      className="overflow-hidden rounded-xl border border-zinc-800 bg-[#0c0c0f] text-zinc-100"
     >
-      <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-        <div className="min-w-0 space-y-2">
-          <div className="flex flex-wrap items-center gap-3">
-            <h1 className="text-2xl font-extrabold tracking-tight text-white md:text-3xl">
-              Command Center
-            </h1>
-            <LiveClock timeZone={timeZone} />
-          </div>
-          <div className="flex flex-wrap items-center gap-2 text-sm">
-            <span className="font-medium text-slate-300">
-              {scopeMode === 'GLOBAL' ? 'System status:' : 'Your operational scope:'}
-            </span>
+      <div className="flex flex-col gap-3 px-5 pb-4 pt-4 lg:flex-row lg:items-start lg:justify-between">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
+            <h1 className="dash-hero-title">Command Center</h1>
             <span
-              className={cn(
-                'inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide',
-                status.text
-              )}
               data-testid="command-status"
+              className={cn('inline-flex items-center gap-2 text-[13px] font-medium', status.text)}
             >
-              <span className={cn('h-1.5 w-1.5 rounded-full', status.dot)} aria-hidden />
+              <span className={cn('h-2 w-2 rounded-full', status.dot)} aria-hidden />
               {status.label}
             </span>
-            <span
-              data-testid="command-insight"
-              aria-live="polite"
-              className={cn(
-                'text-xs',
-                insight.tone === 'rose'
-                  ? 'text-rose-300'
-                  : insight.tone === 'amber'
-                    ? 'text-amber-200'
-                    : insight.tone === 'emerald'
-                      ? 'text-emerald-300'
-                      : 'text-slate-400'
-              )}
-            >
-              {insight.text}
-            </span>
           </div>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <div
-            className="flex h-8 items-center gap-3 rounded-lg border border-zinc-800 bg-zinc-900/70 px-3 text-[11px] text-slate-400"
-            title="Mean time to acknowledge / resolve for the reporting period"
-            data-testid="command-mtt"
+          <p
+            data-testid="command-insight"
+            aria-live="polite"
+            className="mt-2 text-[13px] leading-6 text-zinc-400"
           >
-            <span>
-              MTTA{' '}
-              <strong className="font-semibold tabular-nums text-white">
-                {formatMinutes(analytics.data?.mtta)}
-              </strong>
-            </span>
-            <span>
-              MTTR{' '}
-              <strong className="font-semibold tabular-nums text-white">
-                {formatMinutes(analytics.data?.mttr)}
-              </strong>
-            </span>
-          </div>
+            {narrative.length === 0 ? (
+              <span className="text-zinc-300">
+                No active incidents{query.scope !== 'all' ? ' in this scope' : ''}. Everything is
+                quiet.
+              </span>
+            ) : (
+              narrative.map((fragment, index) => (
+                <span key={fragment.text}>
+                  {index > 0 && (
+                    <span aria-hidden className="mx-2 text-zinc-700">
+                      /
+                    </span>
+                  )}
+                  {fragment.patch ? (
+                    <button
+                      type="button"
+                      data-icon-button
+                      onClick={() => setQuery({ ...reset, ...fragment.patch })}
+                      className={cn(
+                        'rounded-sm p-0 font-medium decoration-1 underline-offset-4 outline-none hover:underline focus-visible:underline',
+                        fragment.tone === 'rose'
+                          ? 'text-rose-300'
+                          : fragment.tone === 'amber'
+                            ? 'text-amber-200'
+                            : 'text-zinc-200'
+                      )}
+                    >
+                      {fragment.text}
+                    </button>
+                  ) : (
+                    <span>{fragment.text}</span>
+                  )}
+                </span>
+              ))
+            )}
+          </p>
+        </div>
+        <div className="flex shrink-0 flex-wrap items-center gap-2 sm:gap-3">
+          <span className="hidden sm:inline">
+            <LiveClock timeZone={timeZone} variant="plain" />
+          </span>
           <div
             role="radiogroup"
-            aria-label="Reporting period for MTTA, MTTR and trends"
-            className="inline-flex h-8 items-center rounded-lg border border-zinc-800 bg-zinc-900/70 p-0.5"
-            data-testid="command-period"
+            aria-label="Incident scope"
+            data-testid="scope-switch"
+            className="inline-flex h-8 items-center rounded-md border border-zinc-800 p-0.5 text-[12px] font-medium"
           >
-            {HISTORY_RANGES.map(range => (
+            {LIVE_SCOPES.map(scope => (
               <button
-                key={range}
+                key={scope}
                 type="button"
                 role="radio"
-                aria-checked={history.query.range === range}
-                data-testid={`period-${range}`}
-                onClick={() => history.setQuery({ range })}
+                aria-checked={query.scope === scope}
+                data-testid={`scope-${scope}`}
+                data-icon-button
+                onClick={() => setQuery({ scope })}
                 className={cn(
-                  'h-full rounded-md px-2.5 text-[11px] font-semibold outline-none focus-visible:ring-2 focus-visible:ring-white/40',
-                  history.query.range === range
-                    ? 'bg-zinc-700 text-white'
-                    : 'text-slate-400 hover:text-white'
+                  'h-full whitespace-nowrap rounded px-2.5 outline-none transition-colors focus-visible:ring-2 focus-visible:ring-zinc-500',
+                  query.scope === scope
+                    ? 'bg-zinc-800 text-zinc-50'
+                    : 'text-zinc-400 hover:text-zinc-100'
                 )}
               >
-                {range}d
+                {SCOPE_LABEL[scope]}
+                {scope === 'mine' && summary ? (
+                  <span className="ml-1 tabular-nums text-zinc-500">{summary.mine}</span>
+                ) : null}
               </button>
             ))}
           </div>
@@ -293,76 +289,100 @@ export default function LiveCommandStrip({
             href="/wallboard"
             data-testid="command-wallboard"
             title="Full-screen view for office TVs and NOC screens"
-            className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-zinc-700 bg-zinc-900 px-3 text-xs font-semibold text-slate-200 hover:bg-zinc-800 outline-none focus-visible:ring-2 focus-visible:ring-white/50"
+            className="inline-flex h-8 items-center gap-1.5 rounded-md border border-zinc-800 px-2.5 text-[12px] font-medium text-zinc-300 outline-none transition-colors hover:bg-zinc-900 hover:text-zinc-50 focus-visible:ring-2 focus-visible:ring-zinc-500"
           >
             <Monitor className="h-3.5 w-3.5 shrink-0" aria-hidden />
-            Wallboard
+            <span className="hidden sm:inline">Wallboard</span>
+            <span className="sr-only sm:hidden">Wallboard</span>
           </Link>
         </div>
       </div>
 
       <div
-        className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6"
+        className="grid grid-cols-2 gap-px border-t border-zinc-800 bg-zinc-800 md:grid-cols-3 xl:grid-cols-6"
         data-testid="command-center-counters"
       >
-        <StatTile
+        <Metric
           testId="counter-triggered"
           label="Triggered"
-          hint="Not yet acknowledged"
-          icon={BellRing}
-          value={summary?.triggered ?? '—'}
-          tone={tone(summary?.triggered, 'rose')}
+          title="Show triggered incidents in the live feed"
+          value={summary?.triggered ?? null}
+          context={lastHour(trend?.createdLastHour, 'new')}
+          emphasis="none"
           active={isFocused({ status: 'OPEN' })}
           onClick={() => focus({ status: 'OPEN' })}
         />
-        <StatTile
+        <Metric
           testId="counter-critical"
           label="Critical"
-          hint="High urgency or P1"
-          icon={AlertOctagon}
-          value={summary?.critical ?? '—'}
-          tone={tone(summary?.critical, 'rose')}
+          title="Show P1 / high-urgency incidents in the live feed"
+          value={summary?.critical ?? null}
+          context={lastHour(trend?.createdCriticalLastHour, 'new')}
+          emphasis="critical"
           active={isFocused({ view: 'critical' })}
           onClick={() => focus({ view: 'critical' })}
         />
-        <StatTile
+        <Metric
           testId="counter-acknowledged"
           label="Acknowledged"
-          hint="Being worked"
-          icon={CheckCheck}
-          value={summary?.acknowledged ?? '—'}
-          tone={tone(summary?.acknowledged, 'amber')}
+          title="Show acknowledged incidents in the live feed"
+          value={summary?.acknowledged ?? null}
+          context={lastHour(trend?.acknowledgedLastHour, 'acked')}
+          emphasis="none"
           active={isFocused({ status: 'ACKNOWLEDGED' })}
           onClick={() => focus({ status: 'ACKNOWLEDGED' })}
         />
-        <StatTile
+        <Metric
           testId="counter-unassigned"
           label="Unassigned"
-          hint="No owner"
-          icon={UserX}
-          value={summary?.unassigned ?? '—'}
-          tone={tone(summary?.unassigned, 'amber')}
+          title="Show incidents without an owner in the live feed"
+          value={summary?.unassigned ?? null}
+          context={
+            summary?.unassignedCritical ? (
+              <span className="text-rose-300/90">
+                {summary.unassignedCritical} of them critical
+              </span>
+            ) : summary ? (
+              'All critical work is owned'
+            ) : (
+              '\u00a0'
+            )
+          }
+          emphasis={summary?.unassignedCritical ? 'warning' : 'none'}
           active={isFocused({ view: 'unassigned' })}
           onClick={() => focus({ view: 'unassigned' })}
         />
-        <StatTile
+        <Metric
           testId="counter-sla"
-          label="SLA risk"
-          hint={summary ? `${summary.slaBreached} breached` : undefined}
-          icon={Clock3}
-          value={summary?.slaAtRisk ?? '—'}
-          tone={(summary?.slaBreached ?? 0) > 0 ? 'rose' : tone(summary?.slaAtRisk, 'amber')}
+          label="SLA at risk"
+          title="Due within 30 minutes or breached in the last hour"
+          value={summary?.slaAtRisk ?? null}
+          context={
+            summary?.slaDueSoon ? (
+              <span className="text-amber-200/90">{summary.slaDueSoon} due within 10 min</span>
+            ) : summary ? (
+              `${summary.slaBreached} breached overall`
+            ) : (
+              '\u00a0'
+            )
+          }
+          emphasis="warning"
           active={isFocused({ view: 'breaching' })}
           onClick={() => focus({ view: 'breaching' })}
         />
-        <StatTile
-          testId="counter-muted"
-          label="Muted"
-          hint={`${snoozed} snoozed · ${suppressed} suppressed`}
-          icon={VolumeX}
-          value={snoozed + suppressed}
-          tone="default"
-          href="/incidents?filter=muted"
+        <Metric
+          testId="counter-resolved"
+          label="Resolved · 24h"
+          title="Open resolved incidents"
+          value={trend?.resolved24h ?? null}
+          context={
+            trend
+              ? `MTTA ${formatMinutes(trend.mtta24h)} · MTTR ${formatMinutes(trend.mttr24h)}`
+              : '\u00a0'
+          }
+          emphasis="none"
+          active={false}
+          onClick={() => router.push('/incidents?filter=resolved')}
         />
       </div>
     </section>

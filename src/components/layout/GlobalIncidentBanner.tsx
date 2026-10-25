@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowRight, ChevronLeft, ChevronRight, X, Clock } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -32,6 +33,7 @@ export default function GlobalIncidentBanner() {
     resumeAutoDismiss,
   } = useIncidentAlert();
 
+  const pathname = usePathname();
   const [isHovered, setIsHovered] = useState(false);
 
   // Tick for elapsed duration every 30 seconds
@@ -41,7 +43,8 @@ export default function GlobalIncidentBanner() {
     return () => clearInterval(timer);
   }, []);
 
-  if (!isBannerVisible || !currentIncident) {
+  // The dashboard's Command Center and live feed already carry this signal (and need the space).
+  if (!isBannerVisible || !currentIncident || pathname === '/') {
     return null;
   }
 

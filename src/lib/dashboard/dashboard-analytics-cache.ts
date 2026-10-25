@@ -38,6 +38,15 @@ export type DashboardAnalyticsSnapshot = {
     criticalCount?: number;
   }>;
   assigneeLoad: Array<{ id: string; name: string | null; count: number }>;
+  /** Created vs resolved per bucket for the selected period (incident flow chart). */
+  trendSeries: Array<{ key: string; label: string; count: number; resolveCount: number }>;
+  previousPeriod: {
+    available: boolean;
+    mtta: number | null;
+    mttr: number | null;
+    totalIncidents: number;
+  };
+  totalIncidents: number;
   effectiveStart: string;
   effectiveEnd: string;
   isClipped: boolean;
@@ -145,6 +154,19 @@ async function calculate(
         name: item.name,
         count: item.count,
       })),
+      trendSeries: (metrics.trendSeries ?? []).map(point => ({
+        key: point.key,
+        label: point.label,
+        count: point.count,
+        resolveCount: point.resolveCount,
+      })),
+      previousPeriod: {
+        available: metrics.previousPeriod?.available !== false,
+        mtta: metrics.previousPeriod?.mtta ?? null,
+        mttr: metrics.previousPeriod?.mttr ?? null,
+        totalIncidents: metrics.previousPeriod?.totalIncidents ?? 0,
+      },
+      totalIncidents: metrics.totalIncidents,
       effectiveStart: metrics.effectiveStart.toISOString(),
       effectiveEnd: metrics.effectiveEnd.toISOString(),
       isClipped: metrics.isClipped,

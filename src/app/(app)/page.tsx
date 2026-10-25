@@ -4,7 +4,6 @@ import { getRequestActorContext } from '@/lib/request-actor-context';
 import { serviceReadWhere, teamReadWhere } from '@/lib/authorization-filters';
 import { CAPABILITIES, hasCapability } from '@/lib/authorization';
 import { getRealtimeChangeGeneration } from '@/lib/realtime-change-control-plane';
-import { getCachedDashboardMetrics } from '@/lib/realtime-cache';
 import { getLiveDashboardSnapshot } from '@/lib/dashboard/live-incidents';
 import { liveQueryFromParams, parseHistoryRange } from '@/lib/dashboard/live-incidents-shared';
 import { logger } from '@/lib/logger';
@@ -12,7 +11,7 @@ import { LiveDashboardProvider } from '@/components/dashboard/live/LiveDashboard
 import LiveCommandStrip from '@/components/dashboard/live/LiveCommandStrip';
 import DashboardCockpit from '@/components/dashboard/live/DashboardCockpit';
 import LiveIncidentsPanel from '@/components/dashboard/live/LiveIncidentsPanel';
-import { ActivityCard, OnCallCard, OpsPulsePanel } from '@/components/dashboard/live/ResponderRail';
+import { OpsPulsePanel } from '@/components/dashboard/live/ResponderRail';
 import DashboardHistorySection, {
   DashboardHistoryProvider,
 } from '@/components/dashboard/DashboardHistorySection';
@@ -52,7 +51,7 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
   const historyQuery = { range: parseHistoryRange(urlParams.get('range')) };
   const generation = await getRealtimeChangeGeneration().catch(() => null);
 
-  const [snapshot, services, teams, metrics] = await Promise.all([
+  const [snapshot, services, teams] = await Promise.all([
     getLiveDashboardSnapshot(actor, liveQuery, { generation }).catch(error => {
       logger.warn('dashboard.live.initial_failed', {
         error: error instanceof Error ? error.message : String(error),
@@ -69,9 +68,6 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
       select: { id: true, name: true },
       orderBy: { name: 'asc' },
     }),
-    getCachedDashboardMetrics(actor.id, actor.role, [...actor.teamIds], undefined, generation)
-      .then(result => result?.data ?? null)
-      .catch(() => null),
   ]);
 
   const scopeMode = hasCapability(actor.role, CAPABILITIES.INCIDENT_READ_ALL)
@@ -85,14 +81,7 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
     <DashboardHistoryProvider initialQuery={historyQuery}>
       <LiveDashboardProvider initialSnapshot={snapshot} currentUserId={user.id}>
         <div className="w-full space-y-4 px-3 py-3 sm:px-4 md:px-6 lg:px-6">
-          <LiveCommandStrip
-            scopeMode={scopeMode}
-            timeZone={timeZone}
-            initialMuted={{
-              snoozed: metrics?.snoozed ?? 0,
-              suppressed: metrics?.suppressed ?? 0,
-            }}
-          />
+          <LiveCommandStrip scopeMode={scopeMode} timeZone={timeZone} />
 
           <DashboardCockpit
             feed={
@@ -107,14 +96,6 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
             }
             rail={<OpsPulsePanel />}
           />
-
-          <section
-            aria-label="Responders"
-            className="grid grid-cols-1 items-start gap-4 lg:grid-cols-2"
-          >
-            <OnCallCard />
-            <ActivityCard />
-          </section>
 
           <DashboardHistorySection />
         </div>

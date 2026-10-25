@@ -52,6 +52,12 @@ export function parseHistoryRange(value: string | null | undefined): HistoryRang
   return value === '7' || value === '90' ? value : '30';
 }
 
+export const LIVE_SCOPES = ['all', 'teams', 'mine'] as const;
+export type LiveScope = (typeof LIVE_SCOPES)[number];
+export const LIVE_SORTS = ['newest', 'attention'] as const;
+export type LiveSort = (typeof LIVE_SORTS)[number];
+export const LIVE_MAX_PINS = 5;
+
 export const LIVE_STATUS_OPTIONS = ['all', 'OPEN', 'ACKNOWLEDGED'] as const;
 export const LIVE_URGENCY_OPTIONS = ['all', 'HIGH', 'MEDIUM', 'LOW'] as const;
 export const LIVE_ASSIGNMENT_OPTIONS = ['all', 'unassigned', 'assigned'] as const;
@@ -66,6 +72,9 @@ export const LIVE_INCIDENT_VISIBLE_ROWS = 10;
 export const LIVE_SEARCH_MAX_LENGTH = 120;
 
 export type LiveIncidentQuery = {
+  /** Page-wide population: everything visible, my teams' incidents, or mine. */
+  scope: LiveScope;
+  sort: LiveSort;
   view: LiveIncidentView;
   serviceId: string | null;
   teamId: string | null;
@@ -76,6 +85,8 @@ export type LiveIncidentQuery = {
 };
 
 export const DEFAULT_LIVE_QUERY: LiveIncidentQuery = {
+  scope: 'all',
+  sort: 'newest',
   view: 'active',
   serviceId: null,
   teamId: null,
@@ -87,6 +98,8 @@ export const DEFAULT_LIVE_QUERY: LiveIncidentQuery = {
 
 /** URL parameter names; prefixed so they never collide with the history filters. */
 export const LIVE_URL_PARAMS = {
+  scope: 'lscope',
+  sort: 'lsort',
   view: 'lview',
   serviceId: 'lservice',
   teamId: 'lteam',
@@ -98,6 +111,8 @@ export const LIVE_URL_PARAMS = {
 
 /** API parameter names for /api/dashboard/live. */
 export const LIVE_API_PARAMS = {
+  scope: 'scope',
+  sort: 'sort',
   view: 'view',
   serviceId: 'service',
   teamId: 'team',
@@ -125,6 +140,8 @@ export function normalizeSearch(value: unknown): string {
 /** Lenient parse for persisted preferences / URLs; invalid fields fall back to defaults. */
 export function coerceLiveQuery(raw: Partial<Record<keyof LiveIncidentQuery, unknown>>) {
   return {
+    scope: pick(LIVE_SCOPES, raw.scope, 'all'),
+    sort: pick(LIVE_SORTS, raw.sort, 'newest'),
     view: pick(LIVE_INCIDENT_VIEWS, raw.view, 'active'),
     serviceId: isValidId(raw.serviceId) ? raw.serviceId : null,
     teamId: isValidId(raw.teamId) ? raw.teamId : null,
@@ -140,6 +157,8 @@ export function liveQueryFromParams(
   names: Record<keyof LiveIncidentQuery, string> = LIVE_URL_PARAMS
 ): LiveIncidentQuery {
   return coerceLiveQuery({
+    scope: params.get(names.scope),
+    sort: params.get(names.sort),
     view: params.get(names.view),
     serviceId: params.get(names.serviceId),
     teamId: params.get(names.teamId),
@@ -156,6 +175,8 @@ export function liveQueryToParams(
   names: Record<keyof LiveIncidentQuery, string> = LIVE_API_PARAMS
 ): URLSearchParams {
   const params = new URLSearchParams();
+  if (query.scope !== 'all') params.set(names.scope, query.scope);
+  if (query.sort !== 'newest') params.set(names.sort, query.sort);
   if (query.view !== 'active') params.set(names.view, query.view);
   if (query.serviceId) params.set(names.serviceId, query.serviceId);
   if (query.teamId) params.set(names.teamId, query.teamId);
@@ -204,6 +225,10 @@ export type LiveSlaSignal = {
 
 export type LiveIncident = LiveSlaFields & {
   id: string;
+  /** Escalation step (1-based) while escalating, otherwise null. */
+  escalationLevel: number | null;
+  alertCount: number;
+  responderCount: number;
   title: string;
   status: 'OPEN' | 'ACKNOWLEDGED';
   urgency: 'HIGH' | 'MEDIUM' | 'LOW';
@@ -229,6 +254,10 @@ export type LiveFacets = {
 };
 
 export type LiveSummary = {
+  /** Incidents that have breached or are due within 10 minutes. */
+  slaDueSoon: number;
+  /** Unassigned incidents that are critical. */
+  unassignedCritical: number;
   active: number;
   triggered: number;
   acknowledged: number;
@@ -248,8 +277,39 @@ export type LiveActivityItem = {
   createdAt: string;
 };
 
+export type LiveAttentionReason = 'sla' | 'unowned' | 'escalated';
+export type LiveAttentionItem = {
+  incident: LiveIncident;
+  reason: LiveAttentionReason;
+  label: string;
+  tone: 'rose' | 'amber' | 'violet';
+};
+
+/** Last-24h activity in the viewer's scope (hourly buckets, oldest first). */
+export type LiveTrend = {
+  created: number[];
+  createdCritical: number[];
+  acknowledged: number[];
+  resolved: number[];
+  createdLastHour: number;
+  createdCriticalLastHour: number;
+  acknowledgedLastHour: number;
+  resolved24h: number;
+  /** Minutes; null when there is no sample. */
+  mtta24h: number | null;
+  mttr24h: number | null;
+};
+
+export type LiveCoverage = {
+  me: { onCall: boolean; schedules: string[]; until: string | null };
+  gaps: Array<{ id: string; name: string }>;
+  scheduleCount: number;
+};
+
 export type LiveOnCallShift = {
   id: string;
+  scheduleId: string;
+  end: string;
   scheduleName: string;
   user: { id: string | null; name: string; avatarUrl: string | null; gender: string | null };
 };
@@ -262,6 +322,10 @@ export type LiveSnapshot = {
   total: number;
   facets: LiveFacets;
   summary: LiveSummary;
+  pinned: LiveIncident[];
+  attention: LiveAttentionItem[];
+  trend: LiveTrend;
+  coverage: LiveCoverage;
   rail: {
     myQueue: LiveIncident[];
     slaRisk: LiveIncident[];
