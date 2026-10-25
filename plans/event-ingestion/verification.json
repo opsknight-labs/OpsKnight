@@ -2001,5 +2001,35 @@
     "lintWarnings": 0,
     "realHeldTransactionPolls": 7,
     "connectionLimit": 1
+  },
+  "phase0StageIsolation": {
+    "status": "source-verified-native-pending",
+    "modes": [
+      "admission-only",
+      "incident-only",
+      "effects-only",
+      "full-stack"
+    ],
+    "defaultRuntimeUnchanged": true,
+    "optionalHttpOnlyRole": "http",
+    "fullUnit": {
+      "files": 952,
+      "passed": 9994,
+      "skipped": 7
+    },
+    "finalFocused": {
+      "files": 7,
+      "passed": 52
+    },
+    "realIngestionDatabasePassed": 67,
+    "migrations": 337,
+    "typescript": "passed",
+    "lint": {
+      "errors": 0,
+      "warnings": 0
+    },
+    "publicationPreflight": "local-stage-publication-preflight.json",
+    "substituteReviews": "No remaining actionable findings after fixes; static only, not branded certification",
+    "certified": false
   }
 }

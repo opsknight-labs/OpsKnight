@@ -330,6 +330,15 @@ export const OPERATIONAL_METRICS = [
     buckets: [0.1, 0.5, 1, 3, 8, 15, 30, 60, 120, 250, 500],
   },
   {
+    name: 'opsknight_event_stage_duration_ms',
+    help: 'Incident transaction driver intervals; acquire includes pool/BEGIN, finalize includes commit/rollback handoff, not pure WAL time',
+    kind: 'histogram',
+    labels: ['stage', 'outcome'],
+    scope: 'counter',
+    estimatedMaxSeries: 104,
+    buckets: [1, 5, 10, 25, 50, 100, 250, 500, 1000, 5000],
+  },
+  {
     name: 'opsknight_event_transaction_duration_ms',
     help: 'Committed event incident transaction duration including retry and commit time in milliseconds',
     kind: 'histogram',

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createRequire } from 'node:module';
-const { parseAdmissionStages } = createRequire(import.meta.url)(
+const { parseAdmissionStages, parseEventStages } = createRequire(import.meta.url)(
   '../../scripts/ingestion/admission-stage-snapshot.cjs'
 );
 
@@ -42,4 +42,16 @@ describe('bounded native admission telemetry', () => {
       )
     ).toThrow();
   });
+});
+
+it('keeps event driver stages separate and rejects identity labels', () => {
+  const body =
+    'opsknight_event_stage_duration_ms_count{stage="transaction-acquire",outcome="success"} 2';
+  expect(parseAdmissionStages(body)).toEqual([]);
+  expect(parseEventStages(body)).toEqual([
+    { stage: 'transaction-acquire', outcome: 'success', count: 2, buckets: [] },
+  ]);
+  expect(() =>
+    parseEventStages(body.replace('outcome="success"', 'outcome="success",incidentId="private"'))
+  ).toThrow();
 });

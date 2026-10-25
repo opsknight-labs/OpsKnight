@@ -14,6 +14,7 @@ import { sanitizeIntegrationEnvelope } from './integrations/payload-security';
 import { EVENT_TRANSACTION_MAX_ATTEMPTS } from './config';
 import { normalizeDedupKeys, lockEventDedupKeys } from './incidents/event-identity';
 import { runReadCommittedTransaction } from './db-utils';
+import { observeTransactionTiming } from './metrics/operational/transaction-timing';
 import {
   enqueueEventSideEffects,
   enqueueLifecycleSideEffects,
@@ -688,12 +689,16 @@ export async function processEvent(
     });
     return { action: 'ignored', reason: `Unknown event action: ${event_action}` };
   };
-  const result = await runReadCommittedTransaction(async tx => {
-    if (processingLease) await lockProcessingReceipt(tx, processingLease);
-    const outcome = await execute(tx);
-    if (processingLease) await completeProcessingReceipt(tx, processingLease, outcome);
-    return outcome;
-  }, EVENT_TRANSACTION_MAX_ATTEMPTS);
+  const result = await runReadCommittedTransaction(
+    async tx => {
+      if (processingLease) await lockProcessingReceipt(tx, processingLease);
+      const outcome = await execute(tx);
+      if (processingLease) await completeProcessingReceipt(tx, processingLease, outcome);
+      return outcome;
+    },
+    EVENT_TRANSACTION_MAX_ATTEMPTS,
+    timing => observeTransactionTiming('event', timing)
+  );
   observeOperationalHistogram(
     'opsknight_event_transaction_duration_ms',
     performance.now() - transactionStarted,

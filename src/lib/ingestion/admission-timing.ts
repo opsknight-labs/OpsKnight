@@ -1,3 +1,4 @@
+import { observeTransactionTiming } from '@/lib/metrics/operational/transaction-timing';
 import type { Prisma } from '@prisma/client';
 import { runReadCommittedTransaction, TRANSACTION_MAX_ATTEMPTS_HIGH_LOAD } from '@/lib/db-utils';
 import { isExplicitTransactionRetry } from '@/lib/transaction-retry';
@@ -64,11 +65,7 @@ export async function runIngestionAdmissionTransaction<T>(
       operation,
       TRANSACTION_MAX_ATTEMPTS_HIGH_LOAD,
       timing => {
-        observeOperationalHistogram(
-          'opsknight_ingestion_admission_stage_duration_ms',
-          timing.durationMs,
-          { stage: `transaction-${timing.phase}`, outcome: timing.outcome }
-        );
+        observeTransactionTiming('ingestion_admission', timing);
         if (timing.phase === 'backoff' && timing.retryReason === 'explicit')
           addOperationalMetric('opsknight_ingestion_capacity_reservation_retries_total', 1);
       }

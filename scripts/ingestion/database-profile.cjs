@@ -30,7 +30,8 @@ module.exports = async function startDatabaseProfile(prisma) {
     return value;
   };
   const [diagnosticSettings] = await prisma.$queryRaw`
-    SELECT current_setting('track_wal_io_timing') = 'on' AS "walIoTimingEnabled"
+    SELECT current_setting('track_wal_io_timing') = 'on' AS "walIoTimingEnabled",
+      current_setting('pg_stat_statements.track') AS "statementTracking"
   `;
   const baseline = new Map((await statements()).map(row => [row.id, row]));
   const before = await counters();
@@ -178,6 +179,7 @@ module.exports = async function startDatabaseProfile(prisma) {
         'Owned local test database; PostgreSQL execution statistics exclude client/pool/network time. Cluster WAL includes all databases on this owned test instance.',
       elapsedMs,
       counters: deltaCounters,
+      totalStatementWalBytes: rows.reduce((sum, row) => sum + row.walBytes, 0),
       totalQueryCalls: rows.reduce((sum, row) => sum + row.calls, 0),
       totalDatabaseExecutionMs: rows.reduce((sum, row) => sum + row.executionMs, 0),
       topQueriesByExecutionTime: rows.sort((a, b) => b.executionMs - a.executionMs).slice(0, 30),

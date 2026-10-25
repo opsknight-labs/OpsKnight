@@ -8,6 +8,7 @@ describe('Prisma datasource pool safety', () => {
       WEB_DATABASE_URL: 'postgresql://pool/app',
     };
     expect(selectPrismaDatasourceUrl('web', env)).toBe('postgresql://pool/app');
+    expect(selectPrismaDatasourceUrl('http', env)).toBe('postgresql://pool/app');
     expect(selectPrismaDatasourceUrl('critical-worker', env)).toBe('postgresql://direct/app');
     expect(selectPrismaDatasourceUrl('web', { DATABASE_URL: env.DATABASE_URL })).toBe(
       'postgresql://direct/app'

@@ -47,6 +47,14 @@ describe('public readiness response', () => {
     expect((await GET(request())).status).toBe(200);
   });
 
+  it('allows explicit HTTP-only readiness without starting an ingestion fallback', async () => {
+    process.env.OPSKNIGHT_PROCESS_ROLE = 'http';
+    process.env.OPSKNIGHT_INGESTION_MODE = 'postgres';
+    const response = await GET(new NextRequest('http://localhost/api/health?mode=readiness'));
+    expect(response.status).toBe(200);
+    expect((await response.json()).checks.ingestionWorker).toBeUndefined();
+  });
+
   it('reports failed ingestion maintenance as degraded while consumption remains live', async () => {
     process.env.OPSKNIGHT_PROCESS_ROLE = 'ingestion-worker';
     process.env.OPSKNIGHT_INGESTION_MODE = 'postgres';

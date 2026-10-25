@@ -16,6 +16,14 @@ describe('runtime process roles', () => {
     expect(shouldRunIngestionConsumer('ingestion-worker', 'sync')).toBe(false);
   });
 
+  it('keeps explicit HTTP-only servers independent of consumers without changing upgrade defaults', () => {
+    expect(getOpsKnightProcessRole('http')).toBe('http');
+    expect(shouldRunIngestionConsumer('http', 'postgres')).toBe(false);
+    expect(shouldRunIngestionConsumer('web', 'postgres')).toBe(true);
+    expect(getRuntimeResponsibilities('http')).toEqual(getRuntimeResponsibilities('web'));
+    expect(getOpsKnightProcessRole(undefined)).toBe('integrated');
+  });
+
   it('preserves the integrated runtime by default and processes durable jobs in-process', () => {
     expect(getOpsKnightProcessRole(undefined)).toBe('integrated');
     expect(getRuntimeResponsibilities('integrated')).toEqual({

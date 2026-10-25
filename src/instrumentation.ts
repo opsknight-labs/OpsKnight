@@ -78,8 +78,12 @@ export async function register() {
     const { validateProductionEnv } = await import('./lib/env-validation');
     validateProductionEnv();
 
-    const { getOpsKnightProcessRole, getRuntimeResponsibilities, shouldRunIngestionConsumer } =
-      await import('./lib/runtime-role');
+    const {
+      getOpsKnightProcessRole,
+      getRuntimeResponsibilities,
+      shouldRunIngestionConsumer,
+      isDedicatedHttpRole,
+    } = await import('./lib/runtime-role');
     const role = getOpsKnightProcessRole();
     const responsibilities = getRuntimeResponsibilities(role);
     const { ingestionConfig } = await import('./lib/ingestion/config');
@@ -95,7 +99,7 @@ export async function register() {
       startIngestionWorker();
       stopIngestionWorkerService = stopIngestionWorker;
     }
-    if (role === 'web' || role === 'integrated') {
+    if (isDedicatedHttpRole(role) || role === 'integrated') {
       const { observeAuthenticationReplica } = await import('./lib/auth-control/replicas');
       await observeAuthenticationReplica();
       authenticationHeartbeat = setInterval(() => {
