@@ -343,10 +343,10 @@ async function main() {
   // delivery. Report unfinished fixture effects separately from receipt drain.
   const sideEffectJobs = await prisma.$queryRaw`
     SELECT job.status::text AS status, COUNT(*)::int AS count,
-      COUNT(*) FILTER (WHERE job.status = 'PENDING'::"JobStatus"
+      COUNT(*) FILTER (WHERE job.status IN ('PENDING'::"JobStatus", 'PENDING_V2'::"JobStatus")
         AND job."scheduledAt" <= CURRENT_TIMESTAMP)::int AS due,
       COALESCE(MAX(EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - job."scheduledAt")) * 1000)
-        FILTER (WHERE job.status = 'PENDING'::"JobStatus"
+        FILTER (WHERE job.status IN ('PENDING'::"JobStatus", 'PENDING_V2'::"JobStatus")
           AND job."scheduledAt" <= CURRENT_TIMESTAMP), 0)::double precision AS "oldestDueAgeMs"
     FROM "BackgroundJob" job
     JOIN "Incident" incident ON incident.id = job.payload->>'incidentId'

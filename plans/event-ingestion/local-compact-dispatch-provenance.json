@@ -1,0 +1,126 @@
+{
+  "baseRevision": "9069c7b079484c45e7b45a5cfd5af12d5f4ad9e1",
+  "runs": [
+    {
+      "passed": true,
+      "elapsedMs": 3590.049333000001,
+      "cpuMs": 5959.812,
+      "queriesPerUnit": 30.303333333333335,
+      "processed": 1500,
+      "jobs": [
+        {
+          "_count": {
+            "_all": 1500
+          },
+          "type": "SCHEDULED_TASK",
+          "status": "COMPLETED"
+        },
+        {
+          "_count": {
+            "_all": 300
+          },
+          "type": "RUNBOOK",
+          "status": "PENDING"
+        }
+      ],
+      "label": "a1",
+      "variant": "baseline",
+      "database": "ingestion_test_http_compact_dispatch_a1_20261026"
+    },
+    {
+      "passed": true,
+      "elapsedMs": 3106.900333,
+      "cpuMs": 4389.508,
+      "queriesPerUnit": 22.813333333333333,
+      "processed": 600,
+      "jobs": [
+        {
+          "_count": {
+            "_all": 600
+          },
+          "type": "SCHEDULED_TASK",
+          "status": "COMPLETED"
+        },
+        {
+          "_count": {
+            "_all": 300
+          },
+          "type": "RUNBOOK",
+          "status": "PENDING"
+        }
+      ],
+      "label": "b1",
+      "variant": "candidate",
+      "database": "ingestion_test_http_compact_dispatch_b1_20261026"
+    },
+    {
+      "passed": true,
+      "elapsedMs": 2781.8475829999998,
+      "cpuMs": 3939.28,
+      "queriesPerUnit": 22.85,
+      "processed": 600,
+      "jobs": [
+        {
+          "_count": {
+            "_all": 600
+          },
+          "type": "SCHEDULED_TASK",
+          "status": "COMPLETED"
+        },
+        {
+          "_count": {
+            "_all": 300
+          },
+          "type": "RUNBOOK",
+          "status": "PENDING"
+        }
+      ],
+      "label": "b2",
+      "variant": "candidate",
+      "database": "ingestion_test_http_compact_dispatch_b2_20261026"
+    },
+    {
+      "passed": true,
+      "elapsedMs": 10842.272541999999,
+      "cpuMs": 8384.779,
+      "queriesPerUnit": 30.67,
+      "processed": 1500,
+      "jobs": [
+        {
+          "_count": {
+            "_all": 1500
+          },
+          "type": "SCHEDULED_TASK",
+          "status": "COMPLETED"
+        },
+        {
+          "_count": {
+            "_all": 300
+          },
+          "type": "RUNBOOK",
+          "status": "PENDING"
+        }
+      ],
+      "label": "a2",
+      "variant": "baseline",
+      "database": "ingestion_test_http_compact_dispatch_a2_20261026"
+    }
+  ],
+  "sourceSha256": {
+    "baseline": {
+      "src/lib/event-outbox.ts": "9225fa260861445c14dbaa2807c9b4109a8a483a710c9a8549f486237227198a",
+      "src/lib/jobs/queue.ts": "11baca69a1c68cbd4259a3770ee67982510999eed24c76b7686ff214933525e9",
+      "src/lib/incident-effect-dispatch.ts": null,
+      "scripts/ingestion/capacity-stages.cjs": "bbc342e16d9e8b30ea4e6634abceb8ba1d178f36c4717f72059e3c7ff3959f6e",
+      "scripts/ingestion/profile-general-dispatch.cjs": "4a39cf2c9fed00d2ee32e2681cc4c5688b206a76ca15531546a596bf103ac759"
+    },
+    "candidate": {
+      "src/lib/event-outbox.ts": "073dffed71cf03a99c16b4bce20b2cf748b3098dbe6c8a71824638f4d324af0a",
+      "src/lib/jobs/queue.ts": "ad5cf850da186bac931ae11d8d8ff8a283081bf0c1f3a11dac3a34f702009331",
+      "src/lib/incident-effect-dispatch.ts": "d07fac70ba9c74ba1df4dc39c9883c2d3cb18965cf51b35e12b0cf7d81459a66",
+      "scripts/ingestion/capacity-stages.cjs": "c0cc2d2f43849dce41d680a02fe641ab85fa11648254f3ed34814ab5cdd5201f",
+      "scripts/ingestion/profile-general-dispatch.cjs": "cc082a247a46f31d9f31df98c68e24cfabb8b4b40b719ccf177064fbf0712b0c"
+    }
+  },
+  "scope": "Host-process A-B-B-A, same339-migration DB schema/pool5/concurrency15 and300default incidents. Runbook evaluation intentionally held. Compact ordinary planning compared with legacy initial fanout. Not native/full-stack/configured-provider/HA certification."
+}
