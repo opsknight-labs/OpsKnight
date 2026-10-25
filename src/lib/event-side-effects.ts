@@ -1,3 +1,4 @@
+import { planIncidentEffects } from './incident-effect-planner';
 import prisma from './prisma';
 import { executeEscalation } from './notifications';
 import { logger } from './logger';
@@ -403,11 +404,13 @@ export async function processEventSideEffect(payload: EventSideEffectPayload): P
       return;
     case 'TRIGGER_WAR_ROOM': {
       const { handleIncidentWarRoomEvent } = await import('./war-room/engine');
+      const plan = await planIncidentEffects();
       await handleIncidentWarRoomEvent({
         kind: 'TRIGGER',
         incidentId: payload.incidentId,
         incidentEventId: payload.sourceEventId,
-      });
+      }, plan);
+      if (plan.collaboration === 'DISABLED') return;
       try {
         const { maybeAutoProvisionIncidentMeeting } =
           await import('./incident-collaboration/meeting-store');

@@ -34,6 +34,10 @@ vi.mock('@/lib/incident-collaboration/meeting-store', () => ({
   closeIncidentMeeting: vi.fn().mockResolvedValue(undefined),
 }));
 
+vi.mock('@/lib/incident-effect-planner', () => ({
+  planIncidentEffects: vi.fn().mockResolvedValue({ collaboration: 'EXECUTE', chatOpsRevision: 1 }),
+}));
+
 vi.mock('@/lib/notifications', () => ({ executeEscalation: vi.fn() }));
 vi.mock('@/lib/service-notifications', () => ({ sendServiceNotifications: vi.fn() }));
 vi.mock('@/lib/user-notifications', () => ({ sendIncidentNotifications: vi.fn() }));

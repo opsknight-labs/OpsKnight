@@ -58,6 +58,8 @@ export type WarRoomIncidentEvent = {
  */
 export interface WarRoomProviderAdapter {
   readonly provider: WarRoomProviderName;
+  /** Opt in only when TRIGGER provisioning obeys the canonical ChatOps switch. */
+  readonly usesChatOpsPolicy?: boolean;
   readonly capabilities: WarRoomProviderCapabilities;
 
   provision(warRoomId: string, provisioningToken: string, opts?: { reconciliationOnly?: boolean }): Promise<void>;
