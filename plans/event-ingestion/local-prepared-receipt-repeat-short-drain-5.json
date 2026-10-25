@@ -1,0 +1,76 @@
+{
+  "sourceRevision": "f159a76d3b82203f9ec397e59049bd09c4b8b7e5",
+  "imageId": "sha256:84724613803dfe02366474810f89b91fc00f2a50c31b6f1d3d41103f9abe6524",
+  "runId": "dd19eea5-8412-43c9-a217-647039f23333",
+  "target": 5,
+  "duration": "1m",
+  "generalWorkerReplicas": 1,
+  "httpPassed": false,
+  "localSmtpPassed": true,
+  "shortPreflightPassed": false,
+  "queueBounded": true,
+  "lastQueueSamples": [
+    {
+      "elapsedMs": 40046.30225,
+      "due": 2,
+      "oldestDueMs": 433.069,
+      "failed": 0
+    },
+    {
+      "elapsedMs": 50044.572917000005,
+      "due": 4,
+      "oldestDueMs": 839.872,
+      "failed": 0
+    },
+    {
+      "elapsedMs": 60035.005417,
+      "due": 1,
+      "oldestDueMs": 38.411,
+      "failed": 0
+    },
+    {
+      "elapsedMs": 60565.234667000004,
+      "due": 6,
+      "oldestDueMs": 568.565,
+      "failed": 0
+    }
+  ],
+  "finalDrain": {
+    "observedAt": "2026-10-25T15:44:25.34713+00:00",
+    "dueUnfinished": 0,
+    "jobs": [
+      {
+        "type": "ESCALATION",
+        "status": "COMPLETED",
+        "count": 1
+      },
+      {
+        "type": "SCHEDULED_TASK",
+        "status": "COMPLETED",
+        "count": 1512
+      },
+      {
+        "type": "COMPLIANCE_EVALUATION_SWEEP",
+        "status": "PENDING",
+        "count": 1
+      },
+      {
+        "type": "COMPLIANCE_EVALUATION_SWEEP",
+        "status": "COMPLETED",
+        "count": 1
+      },
+      {
+        "type": "COMPLIANCE_DRIFT_PROJECT",
+        "status": "COMPLETED",
+        "count": 6
+      },
+      {
+        "type": "RUNBOOK",
+        "status": "COMPLETED",
+        "count": 302
+      }
+    ],
+    "deliveries": null
+  },
+  "scope": "Short fresh-incident default/unconfigured-provider smoke with one separate pinned-Automation SMTP fixture. All active job families inspected after owned topology cleanup. Not sustained, compact-budget, configured fanout, actual Runbook execution, HA, remote delivery or release certification. General workers1; web2/ingestion4/six support roles1CPU each, DB uncapped/shared Docker VM."
+}
