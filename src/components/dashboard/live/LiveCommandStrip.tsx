@@ -193,7 +193,7 @@ const SCOPE_LABEL = new Map<LiveScope, string>([
 ]);
 
 export default function LiveCommandStrip({
-  scopeMode,
+  scopeMode: _scopeMode,
   timeZone,
 }: {
   timeZone: string;
@@ -205,17 +205,6 @@ export default function LiveCommandStrip({
   const summary = snapshot?.summary ?? null;
   const trend = snapshot?.trend ?? null;
   const narrative = buildNarrative(snapshot);
-
-  const status =
-    scopeMode === 'NONE'
-      ? { label: 'No operational scope', dot: 'bg-zinc-500', text: 'text-zinc-400' }
-      : !summary
-        ? { label: 'Connecting', dot: 'bg-zinc-500', text: 'text-zinc-400' }
-        : summary.critical > 0 || summary.slaDueSoon > 0 || summary.slaRecentlyBreached > 0
-          ? { label: 'Critical', dot: 'bg-rose-500 motion-safe:animate-pulse', text: 'text-rose-300' }
-          : summary.active > 0
-            ? { label: 'Degraded', dot: 'bg-amber-400', text: 'text-amber-200' }
-            : { label: 'Operational', dot: 'bg-emerald-400', text: 'text-emerald-300' };
 
   const isFocused = (patch: Partial<LiveIncidentQuery>) =>
     Object.entries(patch).every(([key, value]) => query[key as keyof LiveIncidentQuery] === value);
@@ -250,15 +239,8 @@ export default function LiveCommandStrip({
     >
       <div className="flex flex-col gap-2.5 px-4 pb-3 pt-3 lg:flex-row lg:items-start lg:justify-between sm:px-5 sm:pb-3 sm:pt-3.5">
         <div className="min-w-0">
-          <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
+          <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
             <h1 className="dash-hero-title">Command Center</h1>
-            <span
-              data-testid="command-status"
-              className={cn('inline-flex items-center gap-2 text-[13px] font-medium', status.text)}
-            >
-              <span className={cn('h-2 w-2 rounded-full', status.dot)} aria-hidden />
-              {status.label}
-            </span>
             <div
               className="hidden sm:inline-flex items-center gap-1.5 rounded-md border border-zinc-800 bg-zinc-900/60 px-2 py-0.5 text-[11px] font-mono text-zinc-400"
               title={`Real-time incident arrival rate: ${trend?.createdLastHour ?? 0} created last hour`}
