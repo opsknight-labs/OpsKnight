@@ -7,7 +7,8 @@ vi.mock('@/lib/prisma', () => ({
     {},
     {
       get(_t, prop: string) {
-        return (prismaMock[prop] ??= {});
+        if (!Object.hasOwn(prismaMock, prop)) Reflect.set(prismaMock, prop, {});
+        return Reflect.get(prismaMock, prop);
       },
     },
   ),
@@ -38,7 +39,7 @@ vi.mock('@/lib/war-room/providers/slack/projection', () => ({
 }));
 
 function resetPrismaMock() {
-  for (const k of Object.keys(prismaMock)) delete (prismaMock as Record<string, unknown>)[k];
+  for (const k of Object.keys(prismaMock)) Reflect.deleteProperty(prismaMock, k);
   (prismaMock as Record<string, unknown>).backgroundJob = {
     findMany: vi.fn().mockResolvedValue([]),
     findFirst: vi.fn().mockResolvedValue(null),
@@ -122,10 +123,9 @@ describe('WarRoomProviderEventDelivery durability', () => {
     const prisma = (await import('@/lib/prisma')).default as unknown as Record<string, unknown>;
     const delivery = prisma.warRoomProviderEventDelivery as unknown as {
       findUnique: ReturnType<typeof vi.fn>;
-      updateMany: ReturnType<typeof vi.fn>;
     };
     delivery.findUnique = vi.fn().mockResolvedValue({ id: 'd1', status: 'PENDING', leaseExpiresAt: null });
-    delivery.updateMany = vi.fn().mockResolvedValue({ count: 0 });
+    prismaMock.$executeRaw = vi.fn().mockResolvedValue(0);
     await expect(claimWarRoomDelivery({ provider: 'SLACK', idempotencyKey: 'k1' })).rejects.toMatchObject({
       name: 'WarRoomRetryableError',
       retryBudgetNeutral: true,

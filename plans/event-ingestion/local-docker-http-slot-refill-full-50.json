@@ -1,0 +1,2778 @@
+{
+  "measuredAt": "2026-10-25T06:09:39.273Z",
+  "capacityStage": "full-stack",
+  "candidate": {
+    "fullStackProcesses": true,
+    "kind": "docker",
+    "nodeVersion": "v20.20.2",
+    "imageId": "sha256:27556f269ad568c351e3e699746e1ea4da13652b176ad04f2096bbea96c46dee",
+    "sourceRevision": "f215d4b3e",
+    "capacityStage": "full-stack",
+    "webReplicas": 2,
+    "workerReplicas": 4,
+    "webCpus": 1,
+    "workerCpus": 1,
+    "cpuProfiling": false,
+    "certificationRunId": "afd2afe7-0351-4789-9d43-d04c0d6f0fc1",
+    "sourceProvenance": "Immutable image ID and producer-supplied OCI revision label; no signed build attestation"
+  },
+  "runtime": "v20.20.2",
+  "scope": "Local Docker gateway and image ingestion consumers sharing an isolated PostgreSQL container network; not enterprise HA certification",
+  "quotaReplayChecks": [
+    {
+      "provider": "EVENTS_API_V2",
+      "accepted": 1,
+      "completed": 1,
+      "concurrentRetries": 12,
+      "originalReceiptsRecovered": true,
+      "unknownIdentityRejected": true,
+      "changedContentRejected": true,
+      "invalidCredentialRejected": true
+    },
+    {
+      "provider": "WEBHOOK",
+      "accepted": 1,
+      "completed": 1,
+      "concurrentRetries": 12,
+      "originalReceiptsRecovered": true,
+      "unknownIdentityRejected": true,
+      "changedContentRejected": true,
+      "invalidCredentialRejected": true
+    },
+    {
+      "provider": "PAGERDUTY",
+      "accepted": 1,
+      "completed": 1,
+      "concurrentRetries": 12,
+      "originalReceiptsRecovered": true,
+      "unknownIdentityRejected": true,
+      "changedContentRejected": true,
+      "invalidCredentialRejected": true
+    },
+    {
+      "provider": "PROMETHEUS",
+      "accepted": 2,
+      "completed": 2,
+      "concurrentRetries": 12,
+      "originalReceiptsRecovered": true,
+      "unknownIdentityRejected": true,
+      "changedContentRejected": true,
+      "invalidCredentialRejected": true
+    }
+  ],
+  "warmup": {
+    "events": 100,
+    "completed": 100,
+    "durationMs": 5743.892625,
+    "scope": "Separate reconciled warmup fixture; excluded from measured load counts and database profile"
+  },
+  "databaseProfile": {
+    "diagnosticSettings": {
+      "walIoTimingEnabled": false,
+      "statementTracking": "top"
+    },
+    "scope": "Owned local test database; PostgreSQL execution statistics exclude client/pool/network time. Cluster WAL includes all databases on this owned test instance.",
+    "elapsedMs": 301703.201625,
+    "counters": {
+      "commits": 406148,
+      "rollbacks": 79,
+      "deadlocks": 0,
+      "tempBytes": 4295510,
+      "inserts": 577465,
+      "updates": 239122,
+      "deletes": 68208,
+      "clusterWalBytes": 1171400296,
+      "clusterWalBuffersFull": 0,
+      "clusterWalWrites": 119353,
+      "clusterWalSyncs": 117612,
+      "clusterWalWriteTimeMs": 0,
+      "clusterWalSyncTimeMs": 0
+    },
+    "totalStatementWalBytes": 694869319,
+    "totalQueryCalls": 890455,
+    "totalDatabaseExecutionMs": 236199.98177800077,
+    "topQueriesByExecutionTime": [
+      {
+        "fingerprint": "90a270cfb4505b7d16b6e8e71373374f6be239187a6e1dc7dd276bf4ffe4a09c",
+        "operation": "WITH",
+        "model": "IngestionReceipt",
+        "calls": 14445,
+        "executionMs": 42540.08533400001,
+        "meanExecutionMs": 2.944969562755279,
+        "rows": 14445,
+        "blocksHit": 1795897,
+        "blocksRead": 1178,
+        "blocksDirtied": 1666,
+        "tempBlocksWritten": 0,
+        "walBytes": 25167266
+      },
+      {
+        "fingerprint": "2e272ad09a7bb53eb25ae791b9f795cdd5fb9198c83ecf75747153f748571910",
+        "operation": "WITH",
+        "model": "BackgroundJob",
+        "calls": 2723,
+        "executionMs": 31707.18263699997,
+        "meanExecutionMs": 11.644209561880269,
+        "rows": 14445,
+        "blocksHit": 16344100,
+        "blocksRead": 172,
+        "blocksDirtied": 425,
+        "tempBlocksWritten": 0,
+        "walBytes": 15681454
+      },
+      {
+        "fingerprint": "3877dfc6d28a0828c4b438453b7fd8ee4ca17e491d82de0dd313b4ca33cf9a7a",
+        "operation": "INSERT",
+        "model": "Incident",
+        "calls": 14445,
+        "executionMs": 29296.99137599992,
+        "meanExecutionMs": 2.028175242367596,
+        "rows": 14445,
+        "blocksHit": 1643665,
+        "blocksRead": 1785,
+        "blocksDirtied": 27041,
+        "tempBlocksWritten": 0,
+        "walBytes": 207807303
+      },
+      {
+        "fingerprint": "0a8ae0887efbc19b70e6bc5b3d2d423eb4d6bde010693667eae4611051a1c2f8",
+        "operation": "INSERT",
+        "model": "IngestionQuota",
+        "calls": 13590,
+        "executionMs": 24226.62197499999,
+        "meanExecutionMs": 1.7826800570272252,
+        "rows": 13590,
+        "blocksHit": 183503,
+        "blocksRead": 163,
+        "blocksDirtied": 112,
+        "tempBlocksWritten": 0,
+        "walBytes": 4137425
+      },
+      {
+        "fingerprint": "916557531bc8dc0329a2cb23bcc11202a88eba33ce26dbe78fecb2a02b29b5a6",
+        "operation": "INSERT",
+        "model": "Alert",
+        "calls": 14445,
+        "executionMs": 13978.404948999974,
+        "meanExecutionMs": 0.9676985080650726,
+        "rows": 14445,
+        "blocksHit": 766091,
+        "blocksRead": 1015,
+        "blocksDirtied": 25277,
+        "tempBlocksWritten": 0,
+        "walBytes": 183112717
+      },
+      {
+        "fingerprint": "0cbaffe59a330ae82b29ddd57f93653a2ed24ea56114b345ed6adfa11a94150b",
+        "operation": "WITH",
+        "model": "IngestionReceipt",
+        "calls": 20721,
+        "executionMs": 13500.182163000036,
+        "meanExecutionMs": 0.6515217490951226,
+        "rows": 14445,
+        "blocksHit": 2111988,
+        "blocksRead": 898,
+        "blocksDirtied": 1291,
+        "tempBlocksWritten": 0,
+        "walBytes": 29621848
+      },
+      {
+        "fingerprint": "30963f58d782f606b8c9ed931b52de9e177814f2008cc3bfe9c219de4fd45ca6",
+        "operation": "UPDATE",
+        "model": "BackgroundJob",
+        "calls": 47250,
+        "executionMs": 10799.248815999927,
+        "meanExecutionMs": 0.22855553049735294,
+        "rows": 47250,
+        "blocksHit": 1046812,
+        "blocksRead": 994,
+        "blocksDirtied": 2086,
+        "tempBlocksWritten": 0,
+        "walBytes": 42174042
+      },
+      {
+        "fingerprint": "aea7c743b0465f2e21853d08bba720b441a7b50fee46014e4899536ee1bde2d1",
+        "operation": "SELECT",
+        "model": "Incident",
+        "calls": 35313,
+        "executionMs": 5539.387893000015,
+        "meanExecutionMs": 0.156865400645655,
+        "rows": 35313,
+        "blocksHit": 240761,
+        "blocksRead": 6754,
+        "blocksDirtied": 2,
+        "tempBlocksWritten": 0,
+        "walBytes": 163256
+      },
+      {
+        "fingerprint": "b3dfa04d369f86c901a97f668e743cac20ef550e88fbe2571a8962bad43abce7",
+        "operation": "INSERT",
+        "model": "BackgroundJob",
+        "calls": 25772,
+        "executionMs": 4734.495527999997,
+        "meanExecutionMs": 0.18370695048890257,
+        "rows": 25772,
+        "blocksHit": 373456,
+        "blocksRead": 403,
+        "blocksDirtied": 1163,
+        "tempBlocksWritten": 0,
+        "walBytes": 21859169
+      },
+      {
+        "fingerprint": "0f3c633af3a52170228bacdeebedd774a65608ca8203fad91dac8bda318dba46",
+        "operation": "SELECT",
+        "model": "Incident",
+        "calls": 32,
+        "executionMs": 4409.537832,
+        "meanExecutionMs": 137.79805725,
+        "rows": 155,
+        "blocksHit": 3610153,
+        "blocksRead": 3472,
+        "blocksDirtied": 117,
+        "tempBlocksWritten": 0,
+        "walBytes": 25186
+      },
+      {
+        "fingerprint": "a22c42938c6453c6db8c34a0778502b1aa92db0f435cb97bc342d9d88686ba41",
+        "operation": "UPDATE",
+        "model": "Incident",
+        "calls": 5688,
+        "executionMs": 3649.493900000005,
+        "meanExecutionMs": 0.6416128516174411,
+        "rows": 5688,
+        "blocksHit": 149328,
+        "blocksRead": 1642,
+        "blocksDirtied": 2354,
+        "tempBlocksWritten": 0,
+        "walBytes": 10727869
+      },
+      {
+        "fingerprint": "75eb9c7286e8c72265cadccad8ee4bdd2fb86042bb572e86ad5b06ef8fee1a39",
+        "operation": "SELECT",
+        "model": "Incident",
+        "calls": 14445,
+        "executionMs": 3621.155895000013,
+        "meanExecutionMs": 0.2506857663551411,
+        "rows": 14445,
+        "blocksHit": 101359,
+        "blocksRead": 0,
+        "blocksDirtied": 0,
+        "tempBlocksWritten": 0,
+        "walBytes": 0
+      },
+      {
+        "fingerprint": "c4b24a97e041f50687766aac2904840e29dafa99542e5164fc0d134cfa7a3c97",
+        "operation": "WITH",
+        "model": "IncidentClassificationPolicy",
+        "calls": 14445,
+        "executionMs": 3619.286154000022,
+        "meanExecutionMs": 0.25055632772585823,
+        "rows": 14445,
+        "blocksHit": 87034,
+        "blocksRead": 0,
+        "blocksDirtied": 0,
+        "tempBlocksWritten": 0,
+        "walBytes": 0
+      },
+      {
+        "fingerprint": "98fe350c4a0ab1afb40baf065bedcfb9a8f8e689425dec0d79ab0469ace21033",
+        "operation": "INSERT",
+        "model": "IncidentEvent",
+        "calls": 14445,
+        "executionMs": 3561.355589000002,
+        "meanExecutionMs": 0.24654590439598492,
+        "rows": 14445,
+        "blocksHit": 271670,
+        "blocksRead": 132,
+        "blocksDirtied": 1156,
+        "tempBlocksWritten": 0,
+        "walBytes": 12633106
+      },
+      {
+        "fingerprint": "a345d0422fb6a8b1a0af3647593d59025d10ed563d20a0981c277d3f7e804fa3",
+        "operation": "WITH",
+        "model": "IncidentSlaPolicy",
+        "calls": 14445,
+        "executionMs": 2729.6225680000007,
+        "meanExecutionMs": 0.18896660214607136,
+        "rows": 14445,
+        "blocksHit": 72225,
+        "blocksRead": 0,
+        "blocksDirtied": 0,
+        "tempBlocksWritten": 0,
+        "walBytes": 0
+      },
+      {
+        "fingerprint": "585d1bed9eb52ac53da1000786f143d1c74f045408f43a5d03f42f722f5b3bcc",
+        "operation": "SELECT",
+        "model": "IngestionReceipt",
+        "calls": 14445,
+        "executionMs": 2538.4637610000023,
+        "meanExecutionMs": 0.17573303987538957,
+        "rows": 14445,
+        "blocksHit": 71469,
+        "blocksRead": 0,
+        "blocksDirtied": 0,
+        "tempBlocksWritten": 0,
+        "walBytes": 913896
+      },
+      {
+        "fingerprint": "75aba72f4e6b6fa4573e704b55d3001df3cd1eb182a1bc46e47e8e4ea451e72c",
+        "operation": "WITH",
+        "model": "BackgroundJob",
+        "calls": 316,
+        "executionMs": 1937.915964,
+        "meanExecutionMs": 6.132645455696203,
+        "rows": 31600,
+        "blocksHit": 994375,
+        "blocksRead": 855,
+        "blocksDirtied": 2846,
+        "tempBlocksWritten": 0,
+        "walBytes": 50390111
+      },
+      {
+        "fingerprint": "9789d52f0d240347a1c53486c835e3626e112732b17d94edcfb71b8980d6c5c8",
+        "operation": "SELECT",
+        "model": "SystemConfig",
+        "calls": 27693,
+        "executionMs": 1414.0532240000027,
+        "meanExecutionMs": 0.05106175654497536,
+        "rows": 27693,
+        "blocksHit": 55386,
+        "blocksRead": 0,
+        "blocksDirtied": 0,
+        "tempBlocksWritten": 0,
+        "walBytes": 0
+      },
+      {
+        "fingerprint": "3847b7d89b45adb9334417c574b6ff363735036d4fe560cdd3680f731cc64071",
+        "operation": "SELECT",
+        "model": "other",
+        "calls": 14413,
+        "executionMs": 1273.563955000003,
+        "meanExecutionMs": 0.08836216991604823,
+        "rows": 14413,
+        "blocksHit": 28826,
+        "blocksRead": 0,
+        "blocksDirtied": 0,
+        "tempBlocksWritten": 0,
+        "walBytes": 0
+      },
+      {
+        "fingerprint": "ce09b7dbdf6713e137a0eb8e8eddb777ff0a989d63541cbe3cd4645f5dcd456b",
+        "operation": "SELECT",
+        "model": "IngestionReceipt",
+        "calls": 32,
+        "executionMs": 1141.002499,
+        "meanExecutionMs": 35.65632809375,
+        "rows": 32,
+        "blocksHit": 15161,
+        "blocksRead": 10369,
+        "blocksDirtied": 298,
+        "tempBlocksWritten": 0,
+        "walBytes": 466170
+      },
+      {
+        "fingerprint": "f8445f14ad5859ba10a1b0e3ae9cdd41f7f095b4d1c41b2f6264176462776641",
+        "operation": "INSERT",
+        "model": "other",
+        "calls": 11328,
+        "executionMs": 1121.61374,
+        "meanExecutionMs": 0.09901251235875706,
+        "rows": 11328,
+        "blocksHit": 132107,
+        "blocksRead": 1332,
+        "blocksDirtied": 2246,
+        "tempBlocksWritten": 0,
+        "walBytes": 12598373
+      },
+      {
+        "fingerprint": "87410264153b2bc89e723d9da901f3fb247430b8c9518dfeffc269ad8c6b81e7",
+        "operation": "SELECT",
+        "model": "Service",
+        "calls": 23292,
+        "executionMs": 1118.5974189999993,
+        "meanExecutionMs": 0.04802496217585434,
+        "rows": 23292,
+        "blocksHit": 46611,
+        "blocksRead": 0,
+        "blocksDirtied": 0,
+        "tempBlocksWritten": 0,
+        "walBytes": 0
+      },
+      {
+        "fingerprint": "e0b36f6ac9bade48a6eecc48590d7acd9671cf6b69741822a10eb8a1afaf4f52",
+        "operation": "SELECT",
+        "model": "IngestionBudget",
+        "calls": 12374,
+        "executionMs": 1051.0767049999981,
+        "meanExecutionMs": 0.08494235534184566,
+        "rows": 14165,
+        "blocksHit": 115100,
+        "blocksRead": 0,
+        "blocksDirtied": 11,
+        "tempBlocksWritten": 0,
+        "walBytes": 848036
+      },
+      {
+        "fingerprint": "8fa329ae39ba4f6766f729031ee3ebf541c72e60b75a5772dfef2c3b466a6372",
+        "operation": "SELECT",
+        "model": "Alert",
+        "calls": 14445,
+        "executionMs": 1049.6026440000012,
+        "meanExecutionMs": 0.07266200373831784,
+        "rows": 14445,
+        "blocksHit": 54440,
+        "blocksRead": 0,
+        "blocksDirtied": 19,
+        "tempBlocksWritten": 0,
+        "walBytes": 0
+      },
+      {
+        "fingerprint": "8faa9eceb8c66993f1fce2b88d45d903e679e8bf94f1258690b448374eb35904",
+        "operation": "SELECT",
+        "model": "Incident",
+        "calls": 14445,
+        "executionMs": 1032.528422000003,
+        "meanExecutionMs": 0.07147998767739723,
+        "rows": 0,
+        "blocksHit": 81534,
+        "blocksRead": 271,
+        "blocksDirtied": 0,
+        "tempBlocksWritten": 0,
+        "walBytes": 1711
+      },
+      {
+        "fingerprint": "043117c34b567ae81eeab4b26ac470c668d495119d2665dc7a033ab841f46cbf",
+        "operation": "OTHER",
+        "model": "other",
+        "calls": 301,
+        "executionMs": 998.593749,
+        "meanExecutionMs": 3.3175872059800664,
+        "rows": 21,
+        "blocksHit": 602,
+        "blocksRead": 0,
+        "blocksDirtied": 0,
+        "tempBlocksWritten": 0,
+        "walBytes": 0
+      },
+      {
+        "fingerprint": "f7eea9baf29b334e1a4f5b802deae5a42bd9442562429c01a56eef9a0ae2c30a",
+        "operation": "WITH",
+        "model": "other",
+        "calls": 26819,
+        "executionMs": 782.359357000002,
+        "meanExecutionMs": 0.029171831798351987,
+        "rows": 72225,
+        "blocksHit": 0,
+        "blocksRead": 0,
+        "blocksDirtied": 0,
+        "tempBlocksWritten": 0,
+        "walBytes": 0
+      },
+      {
+        "fingerprint": "e6f7def99f64e163e7fddd094e9c7050d99884d5184a0782977f2b930c1b53f9",
+        "operation": "SELECT",
+        "model": "Service",
+        "calls": 14445,
+        "executionMs": 761.1387880000028,
+        "meanExecutionMs": 0.05269219716164782,
+        "rows": 14445,
+        "blocksHit": 28998,
+        "blocksRead": 4,
+        "blocksDirtied": 0,
+        "tempBlocksWritten": 0,
+        "walBytes": 0
+      },
+      {
+        "fingerprint": "a340b7a8c62fcb81b3a07c3d283bb435dfbbb1e0701caacfc718d5e68ef2a5c7",
+        "operation": "SELECT",
+        "model": "Alert",
+        "calls": 14445,
+        "executionMs": 747.0675929999982,
+        "meanExecutionMs": 0.05171807497403933,
+        "rows": 0,
+        "blocksHit": 29644,
+        "blocksRead": 0,
+        "blocksDirtied": 0,
+        "tempBlocksWritten": 0,
+        "walBytes": 0
+      },
+      {
+        "fingerprint": "36c00c6d5b67b72eec478123333fa1c8182cc013001e504749d7a6cc01896ffe",
+        "operation": "UPDATE",
+        "model": "IngestionBudget",
+        "calls": 11641,
+        "executionMs": 691.730472000002,
+        "meanExecutionMs": 0.05942191151962907,
+        "rows": 11641,
+        "blocksHit": 46663,
+        "blocksRead": 0,
+        "blocksDirtied": 0,
+        "tempBlocksWritten": 0,
+        "walBytes": 887480
+      }
+    ],
+    "activitySamples": 301,
+    "activitySampleErrors": 0,
+    "waits": [
+      {
+        "state": "active",
+        "type": "IO",
+        "event": "WALSync",
+        "summedConnections": 96,
+        "maxConnections": 1,
+        "averageConnectionsPerSample": 0.31893687707641194
+      },
+      {
+        "state": "active",
+        "type": "LWLock",
+        "event": "WALWrite",
+        "summedConnections": 154,
+        "maxConnections": 10,
+        "averageConnectionsPerSample": 0.5116279069767442
+      },
+      {
+        "state": "active",
+        "type": "CPU",
+        "event": "running",
+        "summedConnections": 592,
+        "maxConnections": 12,
+        "averageConnectionsPerSample": 1.9667774086378738
+      },
+      {
+        "state": "idle",
+        "type": "Client",
+        "event": "ClientRead",
+        "summedConnections": 17548,
+        "maxConnections": 66,
+        "averageConnectionsPerSample": 58.29900332225914
+      },
+      {
+        "state": "idle in transaction",
+        "type": "Client",
+        "event": "ClientRead",
+        "summedConnections": 1250,
+        "maxConnections": 20,
+        "averageConnectionsPerSample": 4.152823920265781
+      },
+      {
+        "state": "idle in transaction",
+        "type": "CPU",
+        "event": "running",
+        "summedConnections": 116,
+        "maxConnections": 4,
+        "averageConnectionsPerSample": 0.3853820598006645
+      },
+      {
+        "state": "active",
+        "type": "Lock",
+        "event": "transactionid",
+        "summedConnections": 47,
+        "maxConnections": 7,
+        "averageConnectionsPerSample": 0.15614617940199335
+      },
+      {
+        "state": "idle",
+        "type": "CPU",
+        "event": "running",
+        "summedConnections": 91,
+        "maxConnections": 3,
+        "averageConnectionsPerSample": 0.3023255813953488
+      },
+      {
+        "state": "active",
+        "type": "Client",
+        "event": "ClientRead",
+        "summedConnections": 105,
+        "maxConnections": 7,
+        "averageConnectionsPerSample": 0.3488372093023256
+      },
+      {
+        "state": "active",
+        "type": "Timeout",
+        "event": "VacuumDelay",
+        "summedConnections": 30,
+        "maxConnections": 1,
+        "averageConnectionsPerSample": 0.09966777408637874
+      },
+      {
+        "state": "idle",
+        "type": "LWLock",
+        "event": "LockManager",
+        "summedConnections": 1,
+        "maxConnections": 1,
+        "averageConnectionsPerSample": 0.0033222591362126247
+      },
+      {
+        "state": "idle",
+        "type": "LWLock",
+        "event": "WALWrite",
+        "summedConnections": 3,
+        "maxConnections": 1,
+        "averageConnectionsPerSample": 0.009966777408637873
+      },
+      {
+        "state": "idle in transaction",
+        "type": "LWLock",
+        "event": "WALInsert",
+        "summedConnections": 1,
+        "maxConnections": 1,
+        "averageConnectionsPerSample": 0.0033222591362126247
+      },
+      {
+        "state": "active",
+        "type": "IO",
+        "event": "DataFileRead",
+        "summedConnections": 11,
+        "maxConnections": 2,
+        "averageConnectionsPerSample": 0.036544850498338874
+      },
+      {
+        "state": "active",
+        "type": "IO",
+        "event": "DataFileExtend",
+        "summedConnections": 3,
+        "maxConnections": 1,
+        "averageConnectionsPerSample": 0.009966777408637873
+      },
+      {
+        "state": "idle",
+        "type": "IO",
+        "event": "WALSync",
+        "summedConnections": 3,
+        "maxConnections": 1,
+        "averageConnectionsPerSample": 0.009966777408637873
+      },
+      {
+        "state": "active",
+        "type": "LWLock",
+        "event": "pg_stat_statements",
+        "summedConnections": 4,
+        "maxConnections": 3,
+        "averageConnectionsPerSample": 0.013289036544850499
+      },
+      {
+        "state": "active",
+        "type": "IO",
+        "event": "WALWrite",
+        "summedConnections": 4,
+        "maxConnections": 1,
+        "averageConnectionsPerSample": 0.013289036544850499
+      },
+      {
+        "state": "active",
+        "type": "LWLock",
+        "event": "BufferContent",
+        "summedConnections": 4,
+        "maxConnections": 3,
+        "averageConnectionsPerSample": 0.013289036544850499
+      },
+      {
+        "state": "active",
+        "type": "IPC",
+        "event": "XactGroupUpdate",
+        "summedConnections": 1,
+        "maxConnections": 1,
+        "averageConnectionsPerSample": 0.0033222591362126247
+      },
+      {
+        "state": "active",
+        "type": "LWLock",
+        "event": "WALInsert",
+        "summedConnections": 4,
+        "maxConnections": 4,
+        "averageConnectionsPerSample": 0.013289036544850499
+      },
+      {
+        "state": "active",
+        "type": "LWLock",
+        "event": "BufferMapping",
+        "summedConnections": 1,
+        "maxConnections": 1,
+        "averageConnectionsPerSample": 0.0033222591362126247
+      },
+      {
+        "state": "active",
+        "type": "IO",
+        "event": "DataFileWrite",
+        "summedConnections": 2,
+        "maxConnections": 1,
+        "averageConnectionsPerSample": 0.006644518272425249
+      },
+      {
+        "state": "active",
+        "type": "LWLock",
+        "event": "LockManager",
+        "summedConnections": 3,
+        "maxConnections": 2,
+        "averageConnectionsPerSample": 0.009966777408637873
+      },
+      {
+        "state": "idle in transaction",
+        "type": "IO",
+        "event": "WALSync",
+        "summedConnections": 1,
+        "maxConnections": 1,
+        "averageConnectionsPerSample": 0.0033222591362126247
+      }
+    ],
+    "blockerSamples": [
+      {
+        "waitingOperation": "quota",
+        "waitType": "Lock",
+        "waitEvent": "transactionid",
+        "holderOperation": "quota",
+        "holderState": "active",
+        "maxHolderTransactionAgeMs": 206.081,
+        "summedPairs": 16,
+        "maxPairs": 5
+      },
+      {
+        "waitingOperation": "other",
+        "waitType": "Lock",
+        "waitEvent": "transactionid",
+        "holderOperation": "ordering",
+        "holderState": "active",
+        "maxHolderTransactionAgeMs": 84.859,
+        "summedPairs": 1,
+        "maxPairs": 1
+      },
+      {
+        "waitingOperation": "receipt-completion",
+        "waitType": "Lock",
+        "waitEvent": "transactionid",
+        "holderOperation": "receipt-append",
+        "holderState": "active",
+        "maxHolderTransactionAgeMs": 593.98,
+        "summedPairs": 4,
+        "maxPairs": 3
+      },
+      {
+        "waitingOperation": "receipt-completion",
+        "waitType": "Lock",
+        "waitEvent": "transactionid",
+        "holderOperation": "receipt-append",
+        "holderState": "idle in transaction",
+        "maxHolderTransactionAgeMs": 3535.831,
+        "summedPairs": 5,
+        "maxPairs": 3
+      },
+      {
+        "waitingOperation": "quota",
+        "waitType": "Lock",
+        "waitEvent": "transactionid",
+        "holderOperation": "quota",
+        "holderState": "idle",
+        "maxHolderTransactionAgeMs": 0,
+        "summedPairs": 1,
+        "maxPairs": 1
+      },
+      {
+        "waitingOperation": "other",
+        "waitType": "Client",
+        "waitEvent": "ClientRead",
+        "holderOperation": "quota",
+        "holderState": "idle",
+        "maxHolderTransactionAgeMs": 0,
+        "summedPairs": 3,
+        "maxPairs": 3
+      },
+      {
+        "waitingOperation": "receipt-completion",
+        "waitType": "Lock",
+        "waitEvent": "transactionid",
+        "holderOperation": "budget",
+        "holderState": "idle in transaction",
+        "maxHolderTransactionAgeMs": 3611.96,
+        "summedPairs": 8,
+        "maxPairs": 5
+      },
+      {
+        "waitingOperation": "quota",
+        "waitType": null,
+        "waitEvent": null,
+        "holderOperation": "quota",
+        "holderState": "active",
+        "maxHolderTransactionAgeMs": 25.236,
+        "summedPairs": 1,
+        "maxPairs": 1
+      },
+      {
+        "waitingOperation": "receipt-completion",
+        "waitType": null,
+        "waitEvent": null,
+        "holderOperation": "budget",
+        "holderState": "idle in transaction",
+        "maxHolderTransactionAgeMs": 182.576,
+        "summedPairs": 1,
+        "maxPairs": 1
+      }
+    ],
+    "blockerScope": "Sampled blocker statement categories and transaction age; a transaction can retain locks acquired by an earlier statement. Fixed SQL-side labels only, no query text, parameters, backend IDs or credentials retained."
+  },
+  "fixtureServiceId": "cmvnfaj2v0000fhffdlft8fty",
+  "atAdmissionEnd": {
+    "completed": 14445,
+    "pending": 0,
+    "oldestPendingAgeMs": 0
+  },
+  "backlogDuringLoad": {
+    "scope": "Sampled during offered load, before receipt drain. Fixture receipts and initial event-side-effect lanes only; excludes child/provider jobs and external delivery. Two aggregate queries per sample add diagnostic overhead. Not downstream certification.",
+    "intervalMs": 10000,
+    "errors": 0,
+    "truncated": false,
+    "passed": true,
+    "samples": [
+      {
+        "elapsedMs": 42.19258300000001,
+        "receipts": {
+          "accepted": 0,
+          "completed": 0,
+          "pending": 0,
+          "oldestPendingAgeMs": 0
+        },
+        "effects": []
+      },
+      {
+        "elapsedMs": 10066.965166999998,
+        "receipts": {
+          "accepted": 458,
+          "completed": 442,
+          "pending": 16,
+          "oldestPendingAgeMs": 140.218
+        },
+        "effects": [
+          {
+            "lane": "PERSONAL_NOTIFICATION",
+            "total": 443,
+            "completed": 45,
+            "due": 395,
+            "processing": 3,
+            "failed": 0,
+            "oldestDueAgeMs": 8720.51
+          },
+          {
+            "lane": "SERVICE_NOTIFICATION",
+            "total": 443,
+            "completed": 47,
+            "due": 395,
+            "processing": 1,
+            "failed": 0,
+            "oldestDueAgeMs": 8720.789
+          },
+          {
+            "lane": "STATUS_PAGE",
+            "total": 443,
+            "completed": 45,
+            "due": 395,
+            "processing": 3,
+            "failed": 0,
+            "oldestDueAgeMs": 8721.138
+          },
+          {
+            "lane": "WAR_ROOM",
+            "total": 443,
+            "completed": 41,
+            "due": 395,
+            "processing": 7,
+            "failed": 0,
+            "oldestDueAgeMs": 8721.197
+          },
+          {
+            "lane": "WEBHOOK",
+            "total": 443,
+            "completed": 48,
+            "due": 394,
+            "processing": 1,
+            "failed": 0,
+            "oldestDueAgeMs": 8613.452
+          }
+        ]
+      },
+      {
+        "elapsedMs": 20086.337625,
+        "receipts": {
+          "accepted": 964,
+          "completed": 950,
+          "pending": 14,
+          "oldestPendingAgeMs": 668.206
+        },
+        "effects": [
+          {
+            "lane": "PERSONAL_NOTIFICATION",
+            "total": 951,
+            "completed": 158,
+            "due": 773,
+            "processing": 20,
+            "failed": 0,
+            "oldestDueAgeMs": 15817.811
+          },
+          {
+            "lane": "SERVICE_NOTIFICATION",
+            "total": 951,
+            "completed": 158,
+            "due": 774,
+            "processing": 19,
+            "failed": 0,
+            "oldestDueAgeMs": 15824.043
+          },
+          {
+            "lane": "STATUS_PAGE",
+            "total": 951,
+            "completed": 158,
+            "due": 774,
+            "processing": 19,
+            "failed": 0,
+            "oldestDueAgeMs": 15824.366
+          },
+          {
+            "lane": "WAR_ROOM",
+            "total": 951,
+            "completed": 158,
+            "due": 774,
+            "processing": 19,
+            "failed": 0,
+            "oldestDueAgeMs": 15827.979
+          },
+          {
+            "lane": "WEBHOOK",
+            "total": 951,
+            "completed": 159,
+            "due": 773,
+            "processing": 19,
+            "failed": 0,
+            "oldestDueAgeMs": 15822.818
+          }
+        ]
+      },
+      {
+        "elapsedMs": 30065.418875,
+        "receipts": {
+          "accepted": 1487,
+          "completed": 1485,
+          "pending": 2,
+          "oldestPendingAgeMs": 30.749
+        },
+        "effects": [
+          {
+            "lane": "PERSONAL_NOTIFICATION",
+            "total": 1485,
+            "completed": 372,
+            "due": 1101,
+            "processing": 12,
+            "failed": 0,
+            "oldestDueAgeMs": 21834.956
+          },
+          {
+            "lane": "SERVICE_NOTIFICATION",
+            "total": 1485,
+            "completed": 376,
+            "due": 1102,
+            "processing": 7,
+            "failed": 0,
+            "oldestDueAgeMs": 21840.693
+          },
+          {
+            "lane": "STATUS_PAGE",
+            "total": 1485,
+            "completed": 377,
+            "due": 1102,
+            "processing": 6,
+            "failed": 0,
+            "oldestDueAgeMs": 21841.036
+          },
+          {
+            "lane": "WAR_ROOM",
+            "total": 1485,
+            "completed": 376,
+            "due": 1102,
+            "processing": 7,
+            "failed": 0,
+            "oldestDueAgeMs": 21841.687
+          },
+          {
+            "lane": "WEBHOOK",
+            "total": 1485,
+            "completed": 373,
+            "due": 1101,
+            "processing": 11,
+            "failed": 0,
+            "oldestDueAgeMs": 21836.719
+          }
+        ]
+      },
+      {
+        "elapsedMs": 40109.17049999999,
+        "receipts": {
+          "accepted": 1986,
+          "completed": 1985,
+          "pending": 1,
+          "oldestPendingAgeMs": 10.669
+        },
+        "effects": [
+          {
+            "lane": "PERSONAL_NOTIFICATION",
+            "total": 1986,
+            "completed": 658,
+            "due": 1324,
+            "processing": 4,
+            "failed": 0,
+            "oldestDueAgeMs": 25953.281
+          },
+          {
+            "lane": "SERVICE_NOTIFICATION",
+            "total": 1986,
+            "completed": 660,
+            "due": 1324,
+            "processing": 2,
+            "failed": 0,
+            "oldestDueAgeMs": 25953.481
+          },
+          {
+            "lane": "STATUS_PAGE",
+            "total": 1986,
+            "completed": 661,
+            "due": 1324,
+            "processing": 1,
+            "failed": 0,
+            "oldestDueAgeMs": 25953.936
+          },
+          {
+            "lane": "WAR_ROOM",
+            "total": 1986,
+            "completed": 655,
+            "due": 1325,
+            "processing": 6,
+            "failed": 0,
+            "oldestDueAgeMs": 25962.529
+          },
+          {
+            "lane": "WEBHOOK",
+            "total": 1986,
+            "completed": 660,
+            "due": 1324,
+            "processing": 2,
+            "failed": 0,
+            "oldestDueAgeMs": 25955.479
+          }
+        ]
+      },
+      {
+        "elapsedMs": 50075.884917,
+        "receipts": {
+          "accepted": 2486,
+          "completed": 2485,
+          "pending": 1,
+          "oldestPendingAgeMs": 9.731
+        },
+        "effects": [
+          {
+            "lane": "PERSONAL_NOTIFICATION",
+            "total": 2485,
+            "completed": 955,
+            "due": 1515,
+            "processing": 15,
+            "failed": 0,
+            "oldestDueAgeMs": 29617.971
+          },
+          {
+            "lane": "SERVICE_NOTIFICATION",
+            "total": 2485,
+            "completed": 958,
+            "due": 1515,
+            "processing": 12,
+            "failed": 0,
+            "oldestDueAgeMs": 29618.525
+          },
+          {
+            "lane": "STATUS_PAGE",
+            "total": 2485,
+            "completed": 956,
+            "due": 1515,
+            "processing": 14,
+            "failed": 0,
+            "oldestDueAgeMs": 29619.608
+          },
+          {
+            "lane": "WAR_ROOM",
+            "total": 2485,
+            "completed": 954,
+            "due": 1515,
+            "processing": 16,
+            "failed": 0,
+            "oldestDueAgeMs": 29620.265
+          },
+          {
+            "lane": "WEBHOOK",
+            "total": 2485,
+            "completed": 956,
+            "due": 1515,
+            "processing": 14,
+            "failed": 0,
+            "oldestDueAgeMs": 29620.626
+          }
+        ]
+      },
+      {
+        "elapsedMs": 60099.62337500001,
+        "receipts": {
+          "accepted": 2986,
+          "completed": 2984,
+          "pending": 2,
+          "oldestPendingAgeMs": 35.75
+        },
+        "effects": [
+          {
+            "lane": "PERSONAL_NOTIFICATION",
+            "total": 2984,
+            "completed": 1150,
+            "due": 1834,
+            "processing": 0,
+            "failed": 0,
+            "oldestDueAgeMs": 36655.458
+          },
+          {
+            "lane": "SERVICE_NOTIFICATION",
+            "total": 2984,
+            "completed": 1150,
+            "due": 1834,
+            "processing": 0,
+            "failed": 0,
+            "oldestDueAgeMs": 36656.269
+          },
+          {
+            "lane": "STATUS_PAGE",
+            "total": 2984,
+            "completed": 1150,
+            "due": 1834,
+            "processing": 0,
+            "failed": 0,
+            "oldestDueAgeMs": 36656.79
+          },
+          {
+            "lane": "WAR_ROOM",
+            "total": 2984,
+            "completed": 1150,
+            "due": 1834,
+            "processing": 0,
+            "failed": 0,
+            "oldestDueAgeMs": 36657.852
+          },
+          {
+            "lane": "WEBHOOK",
+            "total": 2984,
+            "completed": 1150,
+            "due": 1834,
+            "processing": 0,
+            "failed": 0,
+            "oldestDueAgeMs": 36659.012
+          }
+        ]
+      },
+      {
+        "elapsedMs": 70215.2875,
+        "receipts": {
+          "accepted": 3486,
+          "completed": 3482,
+          "pending": 4,
+          "oldestPendingAgeMs": 55.923
+        },
+        "effects": [
+          {
+            "lane": "PERSONAL_NOTIFICATION",
+            "total": 3482,
+            "completed": 1300,
+            "due": 2163,
+            "processing": 19,
+            "failed": 0,
+            "oldestDueAgeMs": 43452.253
+          },
+          {
+            "lane": "SERVICE_NOTIFICATION",
+            "total": 3482,
+            "completed": 1300,
+            "due": 2163,
+            "processing": 19,
+            "failed": 0,
+            "oldestDueAgeMs": 43454.609
+          },
+          {
+            "lane": "STATUS_PAGE",
+            "total": 3482,
+            "completed": 1300,
+            "due": 2164,
+            "processing": 18,
+            "failed": 0,
+            "oldestDueAgeMs": 43481.015
+          },
+          {
+            "lane": "WAR_ROOM",
+            "total": 3482,
+            "completed": 1300,
+            "due": 2164,
+            "processing": 18,
+            "failed": 0,
+            "oldestDueAgeMs": 43483.115
+          },
+          {
+            "lane": "WEBHOOK",
+            "total": 3482,
+            "completed": 1300,
+            "due": 2163,
+            "processing": 19,
+            "failed": 0,
+            "oldestDueAgeMs": 43459.799
+          }
+        ]
+      },
+      {
+        "elapsedMs": 80095.567333,
+        "receipts": {
+          "accepted": 3986,
+          "completed": 3984,
+          "pending": 2,
+          "oldestPendingAgeMs": 34.225
+        },
+        "effects": [
+          {
+            "lane": "PERSONAL_NOTIFICATION",
+            "total": 3984,
+            "completed": 1536,
+            "due": 2432,
+            "processing": 16,
+            "failed": 0,
+            "oldestDueAgeMs": 48709.73
+          },
+          {
+            "lane": "SERVICE_NOTIFICATION",
+            "total": 3984,
+            "completed": 1541,
+            "due": 2432,
+            "processing": 11,
+            "failed": 0,
+            "oldestDueAgeMs": 48711.482
+          },
+          {
+            "lane": "STATUS_PAGE",
+            "total": 3984,
+            "completed": 1538,
+            "due": 2433,
+            "processing": 13,
+            "failed": 0,
+            "oldestDueAgeMs": 48734.915
+          },
+          {
+            "lane": "WAR_ROOM",
+            "total": 3984,
+            "completed": 1536,
+            "due": 2433,
+            "processing": 15,
+            "failed": 0,
+            "oldestDueAgeMs": 48735.29
+          },
+          {
+            "lane": "WEBHOOK",
+            "total": 3984,
+            "completed": 1540,
+            "due": 2432,
+            "processing": 12,
+            "failed": 0,
+            "oldestDueAgeMs": 48714.463
+          }
+        ]
+      },
+      {
+        "elapsedMs": 90142.72658300001,
+        "receipts": {
+          "accepted": 4486,
+          "completed": 4482,
+          "pending": 4,
+          "oldestPendingAgeMs": 65.997
+        },
+        "effects": [
+          {
+            "lane": "PERSONAL_NOTIFICATION",
+            "total": 4482,
+            "completed": 1762,
+            "due": 2717,
+            "processing": 3,
+            "failed": 0,
+            "oldestDueAgeMs": 54492.097
+          },
+          {
+            "lane": "SERVICE_NOTIFICATION",
+            "total": 4482,
+            "completed": 1761,
+            "due": 2718,
+            "processing": 3,
+            "failed": 0,
+            "oldestDueAgeMs": 54513.408
+          },
+          {
+            "lane": "STATUS_PAGE",
+            "total": 4482,
+            "completed": 1761,
+            "due": 2718,
+            "processing": 3,
+            "failed": 0,
+            "oldestDueAgeMs": 54513.799
+          },
+          {
+            "lane": "WAR_ROOM",
+            "total": 4482,
+            "completed": 1757,
+            "due": 2718,
+            "processing": 7,
+            "failed": 0,
+            "oldestDueAgeMs": 54514.766
+          },
+          {
+            "lane": "WEBHOOK",
+            "total": 4482,
+            "completed": 1764,
+            "due": 2717,
+            "processing": 1,
+            "failed": 0,
+            "oldestDueAgeMs": 54496.053
+          }
+        ]
+      },
+      {
+        "elapsedMs": 100276.186208,
+        "receipts": {
+          "accepted": 4955,
+          "completed": 4954,
+          "pending": 1,
+          "oldestPendingAgeMs": 108.754
+        },
+        "effects": [
+          {
+            "lane": "PERSONAL_NOTIFICATION",
+            "total": 4954,
+            "completed": 1949,
+            "due": 2996,
+            "processing": 9,
+            "failed": 0,
+            "oldestDueAgeMs": 60740.416
+          },
+          {
+            "lane": "SERVICE_NOTIFICATION",
+            "total": 4954,
+            "completed": 1951,
+            "due": 2996,
+            "processing": 7,
+            "failed": 0,
+            "oldestDueAgeMs": 60744.913
+          },
+          {
+            "lane": "STATUS_PAGE",
+            "total": 4954,
+            "completed": 1953,
+            "due": 2996,
+            "processing": 5,
+            "failed": 0,
+            "oldestDueAgeMs": 60747.08
+          },
+          {
+            "lane": "WAR_ROOM",
+            "total": 4954,
+            "completed": 1951,
+            "due": 2997,
+            "processing": 6,
+            "failed": 0,
+            "oldestDueAgeMs": 60772.305
+          },
+          {
+            "lane": "WEBHOOK",
+            "total": 4954,
+            "completed": 1945,
+            "due": 2996,
+            "processing": 13,
+            "failed": 0,
+            "oldestDueAgeMs": 60750.531
+          }
+        ]
+      },
+      {
+        "elapsedMs": 110447.788792,
+        "receipts": {
+          "accepted": 5463,
+          "completed": 5462,
+          "pending": 1,
+          "oldestPendingAgeMs": 413.778
+        },
+        "effects": [
+          {
+            "lane": "PERSONAL_NOTIFICATION",
+            "total": 5462,
+            "completed": 2121,
+            "due": 3340,
+            "processing": 1,
+            "failed": 0,
+            "oldestDueAgeMs": 67623.064
+          },
+          {
+            "lane": "SERVICE_NOTIFICATION",
+            "total": 5462,
+            "completed": 2122,
+            "due": 3340,
+            "processing": 0,
+            "failed": 0,
+            "oldestDueAgeMs": 67626.399
+          },
+          {
+            "lane": "STATUS_PAGE",
+            "total": 5462,
+            "completed": 2121,
+            "due": 3340,
+            "processing": 1,
+            "failed": 0,
+            "oldestDueAgeMs": 67628.857
+          },
+          {
+            "lane": "WAR_ROOM",
+            "total": 5462,
+            "completed": 2119,
+            "due": 3340,
+            "processing": 3,
+            "failed": 0,
+            "oldestDueAgeMs": 67631.311
+          },
+          {
+            "lane": "WEBHOOK",
+            "total": 5462,
+            "completed": 2123,
+            "due": 3339,
+            "processing": 0,
+            "failed": 0,
+            "oldestDueAgeMs": 67623.834
+          }
+        ]
+      },
+      {
+        "elapsedMs": 120399.047625,
+        "receipts": {
+          "accepted": 5952,
+          "completed": 5951,
+          "pending": 1,
+          "oldestPendingAgeMs": 149.401
+        },
+        "effects": [
+          {
+            "lane": "PERSONAL_NOTIFICATION",
+            "total": 5951,
+            "completed": 2281,
+            "due": 3670,
+            "processing": 0,
+            "failed": 0,
+            "oldestDueAgeMs": 74407.626
+          },
+          {
+            "lane": "SERVICE_NOTIFICATION",
+            "total": 5951,
+            "completed": 2281,
+            "due": 3670,
+            "processing": 0,
+            "failed": 0,
+            "oldestDueAgeMs": 74409.42
+          },
+          {
+            "lane": "STATUS_PAGE",
+            "total": 5951,
+            "completed": 2281,
+            "due": 3670,
+            "processing": 0,
+            "failed": 0,
+            "oldestDueAgeMs": 74410.151
+          },
+          {
+            "lane": "WAR_ROOM",
+            "total": 5951,
+            "completed": 2281,
+            "due": 3670,
+            "processing": 0,
+            "failed": 0,
+            "oldestDueAgeMs": 74411.563
+          },
+          {
+            "lane": "WEBHOOK",
+            "total": 5951,
+            "completed": 2281,
+            "due": 3670,
+            "processing": 0,
+            "failed": 0,
+            "oldestDueAgeMs": 74413.604
+          }
+        ]
+      },
+      {
+        "elapsedMs": 130140.595625,
+        "receipts": {
+          "accepted": 6442,
+          "completed": 6436,
+          "pending": 6,
+          "oldestPendingAgeMs": 91.775
+        },
+        "effects": [
+          {
+            "lane": "PERSONAL_NOTIFICATION",
+            "total": 6436,
+            "completed": 2380,
+            "due": 4039,
+            "processing": 17,
+            "failed": 0,
+            "oldestDueAgeMs": 81817.596
+          },
+          {
+            "lane": "SERVICE_NOTIFICATION",
+            "total": 6436,
+            "completed": 2387,
+            "due": 4039,
+            "processing": 10,
+            "failed": 0,
+            "oldestDueAgeMs": 81820.778
+          },
+          {
+            "lane": "STATUS_PAGE",
+            "total": 6436,
+            "completed": 2383,
+            "due": 4039,
+            "processing": 14,
+            "failed": 0,
+            "oldestDueAgeMs": 81825.465
+          },
+          {
+            "lane": "WAR_ROOM",
+            "total": 6436,
+            "completed": 2380,
+            "due": 4039,
+            "processing": 17,
+            "failed": 0,
+            "oldestDueAgeMs": 81827.286
+          },
+          {
+            "lane": "WEBHOOK",
+            "total": 6436,
+            "completed": 2382,
+            "due": 4039,
+            "processing": 15,
+            "failed": 0,
+            "oldestDueAgeMs": 81831.536
+          }
+        ]
+      },
+      {
+        "elapsedMs": 140405.062917,
+        "receipts": {
+          "accepted": 6842,
+          "completed": 6825,
+          "pending": 17,
+          "oldestPendingAgeMs": 444.422
+        },
+        "effects": [
+          {
+            "lane": "PERSONAL_NOTIFICATION",
+            "total": 6825,
+            "completed": 2475,
+            "due": 4350,
+            "processing": 0,
+            "failed": 0,
+            "oldestDueAgeMs": 90519.527
+          },
+          {
+            "lane": "SERVICE_NOTIFICATION",
+            "total": 6825,
+            "completed": 2475,
+            "due": 4350,
+            "processing": 0,
+            "failed": 0,
+            "oldestDueAgeMs": 90521.695
+          },
+          {
+            "lane": "STATUS_PAGE",
+            "total": 6825,
+            "completed": 2475,
+            "due": 4350,
+            "processing": 0,
+            "failed": 0,
+            "oldestDueAgeMs": 90527.455
+          },
+          {
+            "lane": "WAR_ROOM",
+            "total": 6825,
+            "completed": 2475,
+            "due": 4350,
+            "processing": 0,
+            "failed": 0,
+            "oldestDueAgeMs": 90528.267
+          },
+          {
+            "lane": "WEBHOOK",
+            "total": 6825,
+            "completed": 2475,
+            "due": 4350,
+            "processing": 0,
+            "failed": 0,
+            "oldestDueAgeMs": 90531.165
+          }
+        ]
+      },
+      {
+        "elapsedMs": 150212.357375,
+        "receipts": {
+          "accepted": 7153,
+          "completed": 7143,
+          "pending": 10,
+          "oldestPendingAgeMs": 129.754
+        },
+        "effects": [
+          {
+            "lane": "PERSONAL_NOTIFICATION",
+            "total": 7144,
+            "completed": 2538,
+            "due": 4606,
+            "processing": 0,
+            "failed": 0,
+            "oldestDueAgeMs": 99008.513
+          },
+          {
+            "lane": "SERVICE_NOTIFICATION",
+            "total": 7144,
+            "completed": 2538,
+            "due": 4606,
+            "processing": 0,
+            "failed": 0,
+            "oldestDueAgeMs": 99013.59
+          },
+          {
+            "lane": "STATUS_PAGE",
+            "total": 7144,
+            "completed": 2538,
+            "due": 4606,
+            "processing": 0,
+            "failed": 0,
+            "oldestDueAgeMs": 99018.02
+          },
+          {
+            "lane": "WAR_ROOM",
+            "total": 7144,
+            "completed": 2537,
+            "due": 4606,
+            "processing": 1,
+            "failed": 0,
+            "oldestDueAgeMs": 99022.192
+          },
+          {
+            "lane": "WEBHOOK",
+            "total": 7144,
+            "completed": 2538,
+            "due": 4606,
+            "processing": 0,
+            "failed": 0,
+            "oldestDueAgeMs": 99023.25
+          }
+        ]
+      },
+      {
+        "elapsedMs": 160249.630625,
+        "receipts": {
+          "accepted": 7682,
+          "completed": 7676,
+          "pending": 6,
+          "oldestPendingAgeMs": 183.891
+        },
+        "effects": [
+          {
+            "lane": "PERSONAL_NOTIFICATION",
+            "total": 7676,
+            "completed": 2767,
+            "due": 4893,
+            "processing": 16,
+            "failed": 0,
+            "oldestDueAgeMs": 104022.66
+          },
+          {
+            "lane": "SERVICE_NOTIFICATION",
+            "total": 7676,
+            "completed": 2769,
+            "due": 4893,
+            "processing": 14,
+            "failed": 0,
+            "oldestDueAgeMs": 104024.101
+          },
+          {
+            "lane": "STATUS_PAGE",
+            "total": 7676,
+            "completed": 2770,
+            "due": 4894,
+            "processing": 12,
+            "failed": 0,
+            "oldestDueAgeMs": 104027.919
+          },
+          {
+            "lane": "WAR_ROOM",
+            "total": 7676,
+            "completed": 2766,
+            "due": 4894,
+            "processing": 16,
+            "failed": 0,
+            "oldestDueAgeMs": 104030.014
+          },
+          {
+            "lane": "WEBHOOK",
+            "total": 7676,
+            "completed": 2771,
+            "due": 4893,
+            "processing": 12,
+            "failed": 0,
+            "oldestDueAgeMs": 104031.971
+          }
+        ]
+      },
+      {
+        "elapsedMs": 170170.90858299998,
+        "receipts": {
+          "accepted": 8182,
+          "completed": 8179,
+          "pending": 3,
+          "oldestPendingAgeMs": 71.968
+        },
+        "effects": [
+          {
+            "lane": "PERSONAL_NOTIFICATION",
+            "total": 8179,
+            "completed": 3011,
+            "due": 5152,
+            "processing": 16,
+            "failed": 0,
+            "oldestDueAgeMs": 109189.338
+          },
+          {
+            "lane": "SERVICE_NOTIFICATION",
+            "total": 8179,
+            "completed": 3016,
+            "due": 5152,
+            "processing": 11,
+            "failed": 0,
+            "oldestDueAgeMs": 109191.202
+          },
+          {
+            "lane": "STATUS_PAGE",
+            "total": 8179,
+            "completed": 3014,
+            "due": 5153,
+            "processing": 12,
+            "failed": 0,
+            "oldestDueAgeMs": 109224.583
+          },
+          {
+            "lane": "WAR_ROOM",
+            "total": 8179,
+            "completed": 3014,
+            "due": 5153,
+            "processing": 12,
+            "failed": 0,
+            "oldestDueAgeMs": 109225.437
+          },
+          {
+            "lane": "WEBHOOK",
+            "total": 8179,
+            "completed": 3011,
+            "due": 5152,
+            "processing": 16,
+            "failed": 0,
+            "oldestDueAgeMs": 109197.877
+          }
+        ]
+      },
+      {
+        "elapsedMs": 180826.318875,
+        "receipts": {
+          "accepted": 8675,
+          "completed": 8671,
+          "pending": 4,
+          "oldestPendingAgeMs": 304.423
+        },
+        "effects": [
+          {
+            "lane": "PERSONAL_NOTIFICATION",
+            "total": 8671,
+            "completed": 3216,
+            "due": 5450,
+            "processing": 5,
+            "failed": 0,
+            "oldestDueAgeMs": 115947.997
+          },
+          {
+            "lane": "SERVICE_NOTIFICATION",
+            "total": 8671,
+            "completed": 3219,
+            "due": 5450,
+            "processing": 2,
+            "failed": 0,
+            "oldestDueAgeMs": 115966.669
+          },
+          {
+            "lane": "STATUS_PAGE",
+            "total": 8671,
+            "completed": 3214,
+            "due": 5451,
+            "processing": 6,
+            "failed": 0,
+            "oldestDueAgeMs": 115973.255
+          },
+          {
+            "lane": "WAR_ROOM",
+            "total": 8671,
+            "completed": 3215,
+            "due": 5451,
+            "processing": 5,
+            "failed": 0,
+            "oldestDueAgeMs": 115974.215
+          },
+          {
+            "lane": "WEBHOOK",
+            "total": 8671,
+            "completed": 3216,
+            "due": 5450,
+            "processing": 5,
+            "failed": 0,
+            "oldestDueAgeMs": 115997.761
+          }
+        ]
+      },
+      {
+        "elapsedMs": 190147.466,
+        "receipts": {
+          "accepted": 8934,
+          "completed": 8932,
+          "pending": 2,
+          "oldestPendingAgeMs": 59.664
+        },
+        "effects": [
+          {
+            "lane": "PERSONAL_NOTIFICATION",
+            "total": 8933,
+            "completed": 3261,
+            "due": 5660,
+            "processing": 12,
+            "failed": 0,
+            "oldestDueAgeMs": 124286.511
+          },
+          {
+            "lane": "SERVICE_NOTIFICATION",
+            "total": 8933,
+            "completed": 3260,
+            "due": 5660,
+            "processing": 13,
+            "failed": 0,
+            "oldestDueAgeMs": 124287.688
+          },
+          {
+            "lane": "STATUS_PAGE",
+            "total": 8933,
+            "completed": 3265,
+            "due": 5661,
+            "processing": 7,
+            "failed": 0,
+            "oldestDueAgeMs": 124302.777
+          },
+          {
+            "lane": "WAR_ROOM",
+            "total": 8933,
+            "completed": 3260,
+            "due": 5661,
+            "processing": 12,
+            "failed": 0,
+            "oldestDueAgeMs": 124303.978
+          },
+          {
+            "lane": "WEBHOOK",
+            "total": 8933,
+            "completed": 3264,
+            "due": 5660,
+            "processing": 9,
+            "failed": 0,
+            "oldestDueAgeMs": 124290.093
+          }
+        ]
+      },
+      {
+        "elapsedMs": 200160.98462499998,
+        "receipts": {
+          "accepted": 9431,
+          "completed": 9429,
+          "pending": 2,
+          "oldestPendingAgeMs": 68.162
+        },
+        "effects": [
+          {
+            "lane": "PERSONAL_NOTIFICATION",
+            "total": 9429,
+            "completed": 3447,
+            "due": 5973,
+            "processing": 9,
+            "failed": 0,
+            "oldestDueAgeMs": 130379.914
+          },
+          {
+            "lane": "SERVICE_NOTIFICATION",
+            "total": 9429,
+            "completed": 3451,
+            "due": 5974,
+            "processing": 4,
+            "failed": 0,
+            "oldestDueAgeMs": 130392.826
+          },
+          {
+            "lane": "STATUS_PAGE",
+            "total": 9429,
+            "completed": 3443,
+            "due": 5974,
+            "processing": 12,
+            "failed": 0,
+            "oldestDueAgeMs": 130393.229
+          },
+          {
+            "lane": "WAR_ROOM",
+            "total": 9429,
+            "completed": 3443,
+            "due": 5974,
+            "processing": 12,
+            "failed": 0,
+            "oldestDueAgeMs": 130394.533
+          },
+          {
+            "lane": "WEBHOOK",
+            "total": 9429,
+            "completed": 3448,
+            "due": 5973,
+            "processing": 8,
+            "failed": 0,
+            "oldestDueAgeMs": 130390.949
+          }
+        ]
+      },
+      {
+        "elapsedMs": 210137.064792,
+        "receipts": {
+          "accepted": 9935,
+          "completed": 9933,
+          "pending": 2,
+          "oldestPendingAgeMs": 40.182
+        },
+        "effects": [
+          {
+            "lane": "PERSONAL_NOTIFICATION",
+            "total": 9933,
+            "completed": 3696,
+            "due": 6237,
+            "processing": 0,
+            "failed": 0,
+            "oldestDueAgeMs": 135808.908
+          },
+          {
+            "lane": "SERVICE_NOTIFICATION",
+            "total": 9933,
+            "completed": 3696,
+            "due": 6237,
+            "processing": 0,
+            "failed": 0,
+            "oldestDueAgeMs": 135809.917
+          },
+          {
+            "lane": "STATUS_PAGE",
+            "total": 9933,
+            "completed": 3696,
+            "due": 6237,
+            "processing": 0,
+            "failed": 0,
+            "oldestDueAgeMs": 135810.966
+          },
+          {
+            "lane": "WAR_ROOM",
+            "total": 9933,
+            "completed": 3694,
+            "due": 6237,
+            "processing": 2,
+            "failed": 0,
+            "oldestDueAgeMs": 135816.411
+          },
+          {
+            "lane": "WEBHOOK",
+            "total": 9933,
+            "completed": 3696,
+            "due": 6237,
+            "processing": 0,
+            "failed": 0,
+            "oldestDueAgeMs": 135812.857
+          }
+        ]
+      },
+      {
+        "elapsedMs": 220158.23920799998,
+        "receipts": {
+          "accepted": 10433,
+          "completed": 10431,
+          "pending": 2,
+          "oldestPendingAgeMs": 74.099
+        },
+        "effects": [
+          {
+            "lane": "PERSONAL_NOTIFICATION",
+            "total": 10431,
+            "completed": 3920,
+            "due": 6501,
+            "processing": 10,
+            "failed": 0,
+            "oldestDueAgeMs": 141188.961
+          },
+          {
+            "lane": "SERVICE_NOTIFICATION",
+            "total": 10431,
+            "completed": 3921,
+            "due": 6501,
+            "processing": 9,
+            "failed": 0,
+            "oldestDueAgeMs": 141197.335
+          },
+          {
+            "lane": "STATUS_PAGE",
+            "total": 10431,
+            "completed": 3917,
+            "due": 6501,
+            "processing": 13,
+            "failed": 0,
+            "oldestDueAgeMs": 141198.513
+          },
+          {
+            "lane": "WAR_ROOM",
+            "total": 10431,
+            "completed": 3919,
+            "due": 6502,
+            "processing": 10,
+            "failed": 0,
+            "oldestDueAgeMs": 141210.855
+          },
+          {
+            "lane": "WEBHOOK",
+            "total": 10431,
+            "completed": 3926,
+            "due": 6501,
+            "processing": 4,
+            "failed": 0,
+            "oldestDueAgeMs": 141193.608
+          }
+        ]
+      },
+      {
+        "elapsedMs": 230341.54883299998,
+        "receipts": {
+          "accepted": 10935,
+          "completed": 10933,
+          "pending": 2,
+          "oldestPendingAgeMs": 168.751
+        },
+        "effects": [
+          {
+            "lane": "PERSONAL_NOTIFICATION",
+            "total": 10933,
+            "completed": 4084,
+            "due": 6849,
+            "processing": 0,
+            "failed": 0,
+            "oldestDueAgeMs": 148252.878
+          },
+          {
+            "lane": "SERVICE_NOTIFICATION",
+            "total": 10933,
+            "completed": 4083,
+            "due": 6850,
+            "processing": 0,
+            "failed": 0,
+            "oldestDueAgeMs": 148291.912
+          },
+          {
+            "lane": "STATUS_PAGE",
+            "total": 10933,
+            "completed": 4083,
+            "due": 6850,
+            "processing": 0,
+            "failed": 0,
+            "oldestDueAgeMs": 148294.75
+          },
+          {
+            "lane": "WAR_ROOM",
+            "total": 10933,
+            "completed": 4083,
+            "due": 6850,
+            "processing": 0,
+            "failed": 0,
+            "oldestDueAgeMs": 148299.563
+          },
+          {
+            "lane": "WEBHOOK",
+            "total": 10933,
+            "completed": 4084,
+            "due": 6849,
+            "processing": 0,
+            "failed": 0,
+            "oldestDueAgeMs": 148261.918
+          }
+        ]
+      },
+      {
+        "elapsedMs": 240215.88712499998,
+        "receipts": {
+          "accepted": 11434,
+          "completed": 11430,
+          "pending": 4,
+          "oldestPendingAgeMs": 120.301
+        },
+        "effects": [
+          {
+            "lane": "PERSONAL_NOTIFICATION",
+            "total": 11430,
+            "completed": 4235,
+            "due": 7178,
+            "processing": 17,
+            "failed": 0,
+            "oldestDueAgeMs": 154801.251
+          },
+          {
+            "lane": "SERVICE_NOTIFICATION",
+            "total": 11430,
+            "completed": 4240,
+            "due": 7178,
+            "processing": 12,
+            "failed": 0,
+            "oldestDueAgeMs": 154809.213
+          },
+          {
+            "lane": "STATUS_PAGE",
+            "total": 11430,
+            "completed": 4241,
+            "due": 7178,
+            "processing": 11,
+            "failed": 0,
+            "oldestDueAgeMs": 154810.944
+          },
+          {
+            "lane": "WAR_ROOM",
+            "total": 11430,
+            "completed": 4238,
+            "due": 7179,
+            "processing": 13,
+            "failed": 0,
+            "oldestDueAgeMs": 154833.114
+          },
+          {
+            "lane": "WEBHOOK",
+            "total": 11430,
+            "completed": 4240,
+            "due": 7178,
+            "processing": 12,
+            "failed": 0,
+            "oldestDueAgeMs": 154814.452
+          }
+        ]
+      },
+      {
+        "elapsedMs": 250176.425208,
+        "receipts": {
+          "accepted": 11935,
+          "completed": 11934,
+          "pending": 1,
+          "oldestPendingAgeMs": 16.862
+        },
+        "effects": [
+          {
+            "lane": "PERSONAL_NOTIFICATION",
+            "total": 11934,
+            "completed": 4472,
+            "due": 7444,
+            "processing": 18,
+            "failed": 0,
+            "oldestDueAgeMs": 159964.662
+          },
+          {
+            "lane": "SERVICE_NOTIFICATION",
+            "total": 11934,
+            "completed": 4472,
+            "due": 7444,
+            "processing": 18,
+            "failed": 0,
+            "oldestDueAgeMs": 159966.486
+          },
+          {
+            "lane": "STATUS_PAGE",
+            "total": 11934,
+            "completed": 4472,
+            "due": 7444,
+            "processing": 18,
+            "failed": 0,
+            "oldestDueAgeMs": 159968.702
+          },
+          {
+            "lane": "WAR_ROOM",
+            "total": 11934,
+            "completed": 4472,
+            "due": 7445,
+            "processing": 17,
+            "failed": 0,
+            "oldestDueAgeMs": 160007.389
+          },
+          {
+            "lane": "WEBHOOK",
+            "total": 11934,
+            "completed": 4473,
+            "due": 7444,
+            "processing": 17,
+            "failed": 0,
+            "oldestDueAgeMs": 159971.568
+          }
+        ]
+      },
+      {
+        "elapsedMs": 260139.02224999998,
+        "receipts": {
+          "accepted": 12435,
+          "completed": 12434,
+          "pending": 1,
+          "oldestPendingAgeMs": 25.681
+        },
+        "effects": [
+          {
+            "lane": "PERSONAL_NOTIFICATION",
+            "total": 12434,
+            "completed": 4744,
+            "due": 7682,
+            "processing": 8,
+            "failed": 0,
+            "oldestDueAgeMs": 164717.125
+          },
+          {
+            "lane": "SERVICE_NOTIFICATION",
+            "total": 12434,
+            "completed": 4747,
+            "due": 7682,
+            "processing": 5,
+            "failed": 0,
+            "oldestDueAgeMs": 164718.596
+          },
+          {
+            "lane": "STATUS_PAGE",
+            "total": 12434,
+            "completed": 4742,
+            "due": 7683,
+            "processing": 9,
+            "failed": 0,
+            "oldestDueAgeMs": 164739.823
+          },
+          {
+            "lane": "WAR_ROOM",
+            "total": 12434,
+            "completed": 4743,
+            "due": 7683,
+            "processing": 8,
+            "failed": 0,
+            "oldestDueAgeMs": 164740.412
+          },
+          {
+            "lane": "WEBHOOK",
+            "total": 12434,
+            "completed": 4745,
+            "due": 7682,
+            "processing": 7,
+            "failed": 0,
+            "oldestDueAgeMs": 164721.677
+          }
+        ]
+      },
+      {
+        "elapsedMs": 270162.200917,
+        "receipts": {
+          "accepted": 12935,
+          "completed": 12934,
+          "pending": 1,
+          "oldestPendingAgeMs": 37.551
+        },
+        "effects": [
+          {
+            "lane": "PERSONAL_NOTIFICATION",
+            "total": 12934,
+            "completed": 4954,
+            "due": 7980,
+            "processing": 0,
+            "failed": 0,
+            "oldestDueAgeMs": 169997.317
+          },
+          {
+            "lane": "SERVICE_NOTIFICATION",
+            "total": 12934,
+            "completed": 4954,
+            "due": 7980,
+            "processing": 0,
+            "failed": 0,
+            "oldestDueAgeMs": 169998.756
+          },
+          {
+            "lane": "STATUS_PAGE",
+            "total": 12934,
+            "completed": 4954,
+            "due": 7980,
+            "processing": 0,
+            "failed": 0,
+            "oldestDueAgeMs": 170001.399
+          },
+          {
+            "lane": "WAR_ROOM",
+            "total": 12934,
+            "completed": 4954,
+            "due": 7980,
+            "processing": 0,
+            "failed": 0,
+            "oldestDueAgeMs": 170003.482
+          },
+          {
+            "lane": "WEBHOOK",
+            "total": 12934,
+            "completed": 4955,
+            "due": 7979,
+            "processing": 0,
+            "failed": 0,
+            "oldestDueAgeMs": 169907.561
+          }
+        ]
+      },
+      {
+        "elapsedMs": 280176.67662499996,
+        "receipts": {
+          "accepted": 13435,
+          "completed": 13431,
+          "pending": 4,
+          "oldestPendingAgeMs": 68.27
+        },
+        "effects": [
+          {
+            "lane": "PERSONAL_NOTIFICATION",
+            "total": 13431,
+            "completed": 5166,
+            "due": 8258,
+            "processing": 7,
+            "failed": 0,
+            "oldestDueAgeMs": 176325.274
+          },
+          {
+            "lane": "SERVICE_NOTIFICATION",
+            "total": 13431,
+            "completed": 5164,
+            "due": 8259,
+            "processing": 8,
+            "failed": 0,
+            "oldestDueAgeMs": 176351.917
+          },
+          {
+            "lane": "STATUS_PAGE",
+            "total": 13431,
+            "completed": 5167,
+            "due": 8259,
+            "processing": 5,
+            "failed": 0,
+            "oldestDueAgeMs": 176353.553
+          },
+          {
+            "lane": "WAR_ROOM",
+            "total": 13431,
+            "completed": 5166,
+            "due": 8259,
+            "processing": 6,
+            "failed": 0,
+            "oldestDueAgeMs": 176354.607
+          },
+          {
+            "lane": "WEBHOOK",
+            "total": 13431,
+            "completed": 5165,
+            "due": 8258,
+            "processing": 8,
+            "failed": 0,
+            "oldestDueAgeMs": 176332.105
+          }
+        ]
+      },
+      {
+        "elapsedMs": 290165.498708,
+        "receipts": {
+          "accepted": 13935,
+          "completed": 13931,
+          "pending": 4,
+          "oldestPendingAgeMs": 61.15
+        },
+        "effects": [
+          {
+            "lane": "PERSONAL_NOTIFICATION",
+            "total": 13931,
+            "completed": 5352,
+            "due": 8573,
+            "processing": 6,
+            "failed": 0,
+            "oldestDueAgeMs": 181933.362
+          },
+          {
+            "lane": "SERVICE_NOTIFICATION",
+            "total": 13931,
+            "completed": 5349,
+            "due": 8573,
+            "processing": 9,
+            "failed": 0,
+            "oldestDueAgeMs": 181935.964
+          },
+          {
+            "lane": "STATUS_PAGE",
+            "total": 13931,
+            "completed": 5354,
+            "due": 8573,
+            "processing": 4,
+            "failed": 0,
+            "oldestDueAgeMs": 181936.859
+          },
+          {
+            "lane": "WAR_ROOM",
+            "total": 13931,
+            "completed": 5351,
+            "due": 8573,
+            "processing": 7,
+            "failed": 0,
+            "oldestDueAgeMs": 181937.985
+          },
+          {
+            "lane": "WEBHOOK",
+            "total": 13931,
+            "completed": 5351,
+            "due": 8573,
+            "processing": 7,
+            "failed": 0,
+            "oldestDueAgeMs": 181939.583
+          }
+        ]
+      },
+      {
+        "elapsedMs": 300413.97229199996,
+        "receipts": {
+          "accepted": 14426,
+          "completed": 14420,
+          "pending": 6,
+          "oldestPendingAgeMs": 347.706
+        },
+        "effects": [
+          {
+            "lane": "PERSONAL_NOTIFICATION",
+            "total": 14422,
+            "completed": 5600,
+            "due": 8811,
+            "processing": 11,
+            "failed": 0,
+            "oldestDueAgeMs": 187251.794
+          },
+          {
+            "lane": "SERVICE_NOTIFICATION",
+            "total": 14422,
+            "completed": 5600,
+            "due": 8811,
+            "processing": 11,
+            "failed": 0,
+            "oldestDueAgeMs": 187271.243
+          },
+          {
+            "lane": "STATUS_PAGE",
+            "total": 14422,
+            "completed": 5603,
+            "due": 8811,
+            "processing": 8,
+            "failed": 0,
+            "oldestDueAgeMs": 187275.599
+          },
+          {
+            "lane": "WAR_ROOM",
+            "total": 14422,
+            "completed": 5599,
+            "due": 8812,
+            "processing": 11,
+            "failed": 0,
+            "oldestDueAgeMs": 187280.913
+          },
+          {
+            "lane": "WEBHOOK",
+            "total": 14422,
+            "completed": 5605,
+            "due": 8811,
+            "processing": 6,
+            "failed": 0,
+            "oldestDueAgeMs": 187280.899
+          }
+        ]
+      },
+      {
+        "elapsedMs": 301289.1225,
+        "receipts": {
+          "accepted": 14445,
+          "completed": 14445,
+          "pending": 0,
+          "oldestPendingAgeMs": 0
+        },
+        "effects": [
+          {
+            "lane": "PERSONAL_NOTIFICATION",
+            "total": 14445,
+            "completed": 5608,
+            "due": 8834,
+            "processing": 3,
+            "failed": 0,
+            "oldestDueAgeMs": 188132.801
+          },
+          {
+            "lane": "SERVICE_NOTIFICATION",
+            "total": 14445,
+            "completed": 5610,
+            "due": 8834,
+            "processing": 1,
+            "failed": 0,
+            "oldestDueAgeMs": 188155.943
+          },
+          {
+            "lane": "STATUS_PAGE",
+            "total": 14445,
+            "completed": 5611,
+            "due": 8834,
+            "processing": 0,
+            "failed": 0,
+            "oldestDueAgeMs": 188158.104
+          },
+          {
+            "lane": "WAR_ROOM",
+            "total": 14445,
+            "completed": 5609,
+            "due": 8835,
+            "processing": 1,
+            "failed": 0,
+            "oldestDueAgeMs": 188160.845
+          },
+          {
+            "lane": "WEBHOOK",
+            "total": 14445,
+            "completed": 5610,
+            "due": 8834,
+            "processing": 1,
+            "failed": 0,
+            "oldestDueAgeMs": 188162.435
+          }
+        ]
+      }
+    ]
+  },
+  "admissionQuiescence": {
+    "passed": true,
+    "elapsedMs": 18.124167000001762,
+    "polls": 1,
+    "scope": "Disposable HTTP fixture admission closed after offered load; pre-barrier database transactions settled before final reconciliation. Policy remains paused through topology cleanup. Not notification drain or HTTP timeout prevention."
+  },
+  "endToEndLatency": {
+    "maxMs": 5944,
+    "p50Ms": 60,
+    "p95Ms": 695,
+    "p99Ms": 1592.0399999999988
+  },
+  "completionLatencyLimitMs": 1000,
+  "completionLatencyPassed": true,
+  "admissionThresholdsPassed": false,
+  "targetRps": 50,
+  "workload": "many-key",
+  "payloadBytes": 10000,
+  "payloadPattern": "random",
+  "duration": "5m",
+  "loadExit": 99,
+  "acknowledged": 14445,
+  "accepted": 14445,
+  "completed": 14445,
+  "alerts": 14445,
+  "incidents": 14445,
+  "pending": 0,
+  "ambiguousSubmissions": 0,
+  "sideEffectJobs": {
+    "scope": "Measured fixture incident outbox jobs after receipt drain; excludes preflight, other job families and external-provider completion. Not a downstream drain certification.",
+    "statuses": [
+      {
+        "status": "PENDING",
+        "count": 44085,
+        "due": 44085,
+        "oldestDueAgeMs": 188096.441
+      },
+      {
+        "status": "PROCESSING",
+        "count": 65,
+        "due": 0,
+        "oldestDueAgeMs": 0
+      },
+      {
+        "status": "COMPLETED",
+        "count": 28075,
+        "due": 0,
+        "oldestDueAgeMs": 0
+      }
+    ]
+  },
+  "oldestPendingAgeMs": 0,
+  "ingressMs": 300913.7145,
+  "completedMs": 301401.304667,
+  "acceptedPerSecond": 48.00379412417907,
+  "completedPerSecondIncludingDrain": 47.92613627190301,
+  "reconciled": true,
+  "metrics": {
+    "vus_max": {
+      "max": 129,
+      "value": 129,
+      "min": 50
+    },
+    "http_req_duration{expected_response:true}": {
+      "med": 28.605,
+      "max": 6650.575,
+      "p(90)": 380.40280000000007,
+      "p(95)": 664.7793999999988,
+      "avg": 160.73147545863608,
+      "min": 15.643
+    },
+    "http_req_sending": {
+      "med": 0.067,
+      "max": 24.899,
+      "p(90)": 0.132,
+      "p(95)": 0.21314999999999934,
+      "avg": 0.10551367475532979,
+      "min": 0.02
+    },
+    "http_req_duration": {
+      "avg": 176.410896232739,
+      "min": 5.811,
+      "med": 29.5815,
+      "max": 6650.575,
+      "p(90)": 413.37510000000026,
+      "p(95)": 726.3036500000001,
+      "thresholds": {
+        "p(95)<100": true
+      }
+    },
+    "http_reqs": {
+      "count": 14918,
+      "rate": 49.6972185797972
+    },
+    "iterations": {
+      "count": 14918,
+      "rate": 49.6972185797972
+    },
+    "dropped_iterations": {
+      "count": 83,
+      "rate": 0.2765028249177616,
+      "thresholds": {
+        "count==0": true
+      }
+    },
+    "http_req_connecting": {
+      "p(95)": 0,
+      "avg": 0.009060866067837507,
+      "min": 0,
+      "med": 0,
+      "max": 14.942,
+      "p(90)": 0
+    },
+    "ingestion_capacity_rejected": {
+      "count": 469,
+      "rate": 1.562407528752171
+    },
+    "ingestion_acceptance_success": {
+      "passes": 14445,
+      "fails": 473,
+      "thresholds": {
+        "rate>=0.999": true
+      },
+      "value": 0.9682933369084328
+    },
+    "http_req_tls_handshaking": {
+      "p(95)": 0,
+      "avg": 0,
+      "min": 0,
+      "med": 0,
+      "max": 0,
+      "p(90)": 0
+    },
+    "http_req_failed": {
+      "passes": 473,
+      "fails": 14445,
+      "value": 0.031706663091567236
+    },
+    "ingestion_durable_accepted": {
+      "count": 14445,
+      "rate": 48.1214856136996
+    },
+    "data_received": {
+      "count": 19661260,
+      "rate": 65498.722065573376
+    },
+    "vus": {
+      "value": 9,
+      "min": 1,
+      "max": 127
+    },
+    "ingestion_rejected_http_503": {
+      "count": 469,
+      "rate": 1.562407528752171
+    },
+    "http_req_receiving": {
+      "med": 0.061,
+      "max": 11.154,
+      "p(90)": 0.103,
+      "p(95)": 0.15014999999999934,
+      "avg": 0.085028355007374,
+      "min": 0.008
+    },
+    "http_req_blocked": {
+      "avg": 0.01959632658533116,
+      "min": 0.002,
+      "med": 0.006,
+      "max": 15.044,
+      "p(90)": 0.009,
+      "p(95)": 0.012
+    },
+    "http_req_waiting": {
+      "p(90)": 413.0235,
+      "p(95)": 726.0019499999999,
+      "avg": 176.22035420297593,
+      "min": 5.714,
+      "med": 29.421,
+      "max": 6650.373
+    },
+    "data_sent": {
+      "count": 156333634,
+      "rate": 520803.5112127642
+    },
+    "iteration_duration": {
+      "min": 6.097333,
+      "med": 29.967104,
+      "max": 6651.014625,
+      "p(90)": 413.75320890000023,
+      "p(95)": 727.2131419499995,
+      "avg": 176.95548827349558
+    },
+    "ingestion_rejected_http_502": {
+      "count": 4,
+      "rate": 0.013325437345434295
+    },
+    "checks": {
+      "passes": 14445,
+      "fails": 473,
+      "value": 0.9682933369084328
+    }
+  },
+  "passed": false,
+  "certifiedEnterprise": false
+}
