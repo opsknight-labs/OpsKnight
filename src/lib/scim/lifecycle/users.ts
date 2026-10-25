@@ -18,6 +18,7 @@ import {
 } from '../protocol/validation';
 import { patchUser, type UserDocument } from '../protocol/patch';
 import { json } from '../protocol/http';
+import { resolveScimPublicOrigin } from '../protocol/origin';
 import { event } from './events';
 import { reconcileTeam } from './membership';
 import { applyProfileAuthority, requestedProfileFields } from './profile';
@@ -65,7 +66,7 @@ export async function users(request: NextRequest, id?: string) {
     request,
     request.method === 'GET' ? 'users:read' : 'users:write'
   );
-  const origin = request.nextUrl.origin;
+  const origin = await resolveScimPublicOrigin();
   if (request.method === 'GET') {
     if (id) {
       const identity = await prisma.scimIdentity.findFirst({

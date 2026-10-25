@@ -8,6 +8,7 @@ import { authorize, recheck } from '../security/credentials';
 import { groupSchema, pagination, parse, readBody, ScimFailure } from '../protocol/validation';
 import { patchGroup, type GroupDocument } from '../protocol/patch';
 import { json } from '../protocol/http';
+import { resolveScimPublicOrigin } from '../protocol/origin';
 import { event } from './events';
 import { reconcileTeam } from './membership';
 
@@ -50,7 +51,7 @@ export async function groups(request: NextRequest, id?: string) {
     request,
     request.method === 'GET' ? 'groups:read' : 'groups:write'
   );
-  const origin = request.nextUrl.origin;
+  const origin = await resolveScimPublicOrigin();
   const exclude = (request.nextUrl.searchParams.get('excludedAttributes') ?? '')
     .split(',')
     .some(a => a.trim().toLowerCase() === 'members');

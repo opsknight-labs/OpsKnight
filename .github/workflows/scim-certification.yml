@@ -47,6 +47,7 @@ jobs:
       SCIM_E2E_BASE_URL: http://localhost:3028
       SCIM_E2E_ADMIN_EMAIL: scim-admin@example.test
       SCIM_E2E_ADMIN_PASSWORD: SCIM disposable CI certification passphrase!
+      SCIM_ALLOW_PRIVATE_NETWORK: 'true'
     steps:
       - uses: actions/checkout@v4
         with: { fetch-depth: 0 }
@@ -88,13 +89,13 @@ jobs:
           cp -R .next-scim-production/static/. .next-scim-production/standalone/.next-scim-production/static/
       - name: Start standalone SCIM fixture
         run: |
-          HOSTNAME=127.0.0.1 PORT=3028 node .next-scim-production/standalone/server.js > /tmp/scim-server.log 2>&1 &
+          HOSTNAME=127.0.0.1 PORT=3028 SCIM_ALLOW_PRIVATE_NETWORK=true node .next-scim-production/standalone/server.js > /tmp/scim-server.log 2>&1 &
           echo "$!" > /tmp/scim-server.pid
       - run: node scripts/scim/wait-for-server.mjs http://localhost:3028 /tmp/scim-server.log /tmp/scim-server.pid
       - run: npm run certify:scim:http
       - name: Start standalone SCIM replica
         run: |
-          HOSTNAME=127.0.0.1 PORT=3029 NEXTAUTH_URL=http://localhost:3029 node .next-scim-production/standalone/server.js > /tmp/scim-replica.log 2>&1 &
+          HOSTNAME=127.0.0.1 PORT=3029 NEXTAUTH_URL=http://localhost:3029 SCIM_ALLOW_PRIVATE_NETWORK=true node .next-scim-production/standalone/server.js > /tmp/scim-replica.log 2>&1 &
           echo "$!" > /tmp/scim-replica.pid
       - run: node scripts/scim/wait-for-server.mjs http://localhost:3029 /tmp/scim-replica.log /tmp/scim-replica.pid
       - run: npm run certify:scim:replicas && npm run certify:scim:sessions
