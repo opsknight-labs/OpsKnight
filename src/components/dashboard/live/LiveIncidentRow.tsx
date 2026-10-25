@@ -14,7 +14,7 @@ import {
 
 /** Shared column templates so the desktop header and rows always align. */
 export const LIVE_ROW_GRID =
-  'md:grid-cols-[2.75rem_minmax(0,1fr)_6.75rem_8rem_minmax(0,8.5rem)_5.25rem]';
+  'md:grid-cols-[2.75rem_minmax(0,1fr)_6.75rem_7.5rem_minmax(0,8rem)_7.75rem]';
 export const LIVE_ROW_GRID_TV = 'md:grid-cols-[3.5em_minmax(0,1fr)_7.5em_9.5em_minmax(0,10em)]';
 
 const HOUR = 3_600_000;
@@ -38,7 +38,7 @@ export function SlaChip({
   const phase = sla.phase === 'resolve' ? 'Resolve' : 'Ack';
   if (!sla.deadline) {
     return hideWhenNone ? null : (
-      <span className="text-[11px] text-muted-foreground/70" aria-label="No SLA target">
+      <span className="font-mono text-[11px] text-muted-foreground/60" aria-label="No SLA target">
         —
       </span>
     );
@@ -47,7 +47,7 @@ export function SlaChip({
   const textSize = size === 'tv' ? 'text-[0.8em]' : 'text-[11px]';
   if (delta > 30 * 60_000 && sla.warning === 'NONE') {
     return hideWhenNone ? null : (
-      <span className={cn(textSize, 'text-muted-foreground')} data-sla="ok">
+      <span className={cn(textSize, 'font-mono text-muted-foreground/80')} data-sla="ok">
         {phase} in {formatCountdown(sla.deadline, now).replace(' left', '')}
       </span>
     );
@@ -57,7 +57,7 @@ export function SlaChip({
       <span
         className={cn(
           textSize,
-          'whitespace-nowrap font-medium tabular-nums text-rose-700/80 dark:text-rose-400/80'
+          'whitespace-nowrap font-mono font-medium tabular-nums text-rose-700/80 dark:text-rose-400/80'
         )}
         data-testid="live-sla-chip"
         data-sla="breached-long"
@@ -77,11 +77,11 @@ export function SlaChip({
       data-sla={breached ? 'breached' : 'approaching'}
       title={`${phase} SLA ${breached ? 'breached' : 'due soon'}`}
       className={cn(
-        'inline-flex max-w-full items-center gap-1 whitespace-nowrap rounded-md border font-semibold tabular-nums',
+        'inline-flex max-w-full items-center gap-1.5 whitespace-nowrap rounded border font-mono font-semibold tabular-nums',
         size === 'tv' ? 'px-2 py-0.5 text-[0.8em]' : 'px-1.5 py-0.5 text-[11px]',
         breached
-          ? 'border-rose-300 bg-rose-50 text-rose-700 dark:border-rose-900/60 dark:bg-rose-950/40 dark:text-rose-300'
-          : 'border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-300'
+          ? 'border-rose-500/30 bg-rose-500/10 text-rose-700 dark:text-rose-400'
+          : 'border-amber-500/30 bg-amber-500/10 text-amber-800 dark:text-amber-300'
       )}
     >
       <Clock3
@@ -120,7 +120,7 @@ type RowProps = {
 };
 
 const iconButton =
-  'inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-border bg-card p-0 text-foreground disabled:opacity-50 outline-none focus-visible:ring-2 focus-visible:ring-primary/50';
+  'inline-flex h-7 min-w-7 px-1.5 shrink-0 items-center justify-center gap-1 rounded-md border border-border/80 bg-card text-foreground disabled:opacity-50 outline-none focus-visible:ring-2 focus-visible:ring-primary/50 text-xs shadow-2xs transition-colors';
 
 function initialsOf(name: string): string {
   return name
@@ -151,7 +151,6 @@ export const LiveIncidentRow = memo(function LiveIncidentRow({
   density = 'comfortable',
   tv = false,
 }: RowProps) {
-  const accent = incident.status === 'OPEN' ? 'bg-rose-500/70' : null;
   const showAck = canAcknowledge && incident.status === 'OPEN';
   const showAssign = canAssignSelf && !isMine && incident.assignee !== null;
   const compact = density === 'compact' && !tv;
@@ -229,19 +228,21 @@ export const LiveIncidentRow = memo(function LiveIncidentRow({
         onSelectRow?.(incident);
       }}
       className={cn(
-        'group relative cursor-pointer transition-colors duration-200',
+        'group relative cursor-pointer border-l-[3px] transition-colors duration-150',
+        incident.status === 'OPEN'
+          ? 'border-l-rose-500 bg-rose-500/[0.02]'
+          : incident.sla.warning === 'APPROACHING' || incident.sla.warning === 'BREACHED'
+            ? 'border-l-amber-500 bg-amber-500/[0.02]'
+            : 'border-l-transparent',
         'hover:bg-muted/40 focus-within:bg-muted/40',
         highlighted ? 'bg-primary/[0.07]' : '',
         focused && 'bg-muted/60',
         isSelected && 'bg-primary/5 dark:bg-primary/10 ring-1 ring-inset ring-primary/40'
       )}
     >
-      {accent && (
-        <span aria-hidden className={cn('absolute bottom-0 left-0 top-0 w-[2px]', accent)} />
-      )}
       <div
         className={cn(
-          'grid items-center gap-x-3 pl-4 pr-3',
+          'grid items-center gap-x-3 pl-3.5 pr-3',
           tv
             ? 'gap-y-1 py-[0.9vh] md:gap-x-4'
             : compact
@@ -283,41 +284,41 @@ export const LiveIncidentRow = memo(function LiveIncidentRow({
           {!compact && (
             <span
               className={cn(
-                'flex min-w-0 items-center gap-1.5 text-muted-foreground',
+                'flex min-w-0 flex-wrap items-center gap-1.5 text-muted-foreground',
                 tv ? 'text-[0.85em]' : 'text-xs'
               )}
             >
-              <span className="truncate">
+              <span className="truncate font-medium text-foreground/80">
                 {incident.service.name}
                 {incident.team ? ` · ${incident.team.name}` : ''}
               </span>
-              <span aria-hidden className="text-muted-foreground/50">
-                ·
+              <span aria-hidden className="text-muted-foreground/40 font-mono">
+                /
               </span>
               <time
                 dateTime={incident.createdAt}
                 title={new Date(incident.createdAt).toLocaleString()}
-                className="shrink-0 font-medium tabular-nums"
+                className="shrink-0 font-mono text-[11px] tabular-nums"
               >
                 {formatIncidentAge(incident.createdAt, now)}
               </time>
-              {incident.escalationLevel !== null && (
-                <span className="shrink-0 rounded bg-violet-50 px-1 font-semibold text-violet-700 dark:bg-violet-950/50 dark:text-violet-300">
-                  Esc L{incident.escalationLevel}
+              {incident.alertCount > 1 && (
+                <span className="inline-flex items-center gap-1 font-mono text-[10px] rounded border border-border/70 bg-muted/40 px-1.5 py-0.2 text-muted-foreground tabular-nums">
+                  {incident.alertCount} signals · dedup
                 </span>
               )}
-              {incident.alertCount > 1 && (
-                <span className="shrink-0 rounded bg-muted px-1 font-medium tabular-nums">
-                  ×{incident.alertCount} alerts
+              {incident.escalationLevel !== null && (
+                <span className="shrink-0 font-mono text-[10px] rounded border border-amber-500/30 bg-amber-500/10 px-1.5 py-0.2 text-amber-700 dark:text-amber-400 font-semibold">
+                  Esc T{incident.escalationLevel}
                 </span>
               )}
               {incident.responderCount > 0 && (
-                <span className="hidden shrink-0 rounded bg-muted px-1 font-medium tabular-nums lg:inline">
+                <span className="hidden shrink-0 font-mono text-[10px] rounded bg-muted/60 px-1 tabular-nums text-muted-foreground lg:inline">
                   {incident.responderCount} watching
                 </span>
               )}
               {isNew && !tv && (
-                <span className="shrink-0 rounded bg-blue-50 px-1 text-[10px] font-bold uppercase text-blue-700 dark:bg-blue-950/50 dark:text-blue-300">
+                <span className="shrink-0 rounded border border-blue-500/30 bg-blue-500/10 px-1 font-mono text-[10px] font-bold uppercase text-blue-700 dark:text-blue-300">
                   New
                 </span>
               )}
@@ -340,7 +341,7 @@ export const LiveIncidentRow = memo(function LiveIncidentRow({
         </span>
 
         {!tv && (
-          <span className="flex items-center justify-end gap-1 self-start md:self-center">
+          <span className="flex items-center justify-end gap-1.5 self-start md:self-center">
             {showAck && (
               <button
                 type="button"
@@ -359,6 +360,9 @@ export const LiveIncidentRow = memo(function LiveIncidentRow({
                 ) : (
                   <Check className="h-3.5 w-3.5 shrink-0" aria-hidden />
                 )}
+                <kbd className="hidden group-hover:inline-block font-mono text-[9px] text-muted-foreground/70" aria-hidden>
+                  A
+                </kbd>
               </button>
             )}
             {showAssign && (
@@ -379,13 +383,16 @@ export const LiveIncidentRow = memo(function LiveIncidentRow({
                 ) : (
                   <UserPlus className="h-3.5 w-3.5 shrink-0" aria-hidden />
                 )}
+                <kbd className="hidden group-hover:inline-block font-mono text-[9px] text-muted-foreground/70" aria-hidden>
+                  M
+                </kbd>
               </button>
             )}
             <button
               type="button"
               data-testid="live-inspect"
               onClick={() => onSelectRow?.(incident)}
-              title={isSelected ? 'Close inspector' : 'Inspect details'}
+              title={isSelected ? 'Close inspector (Esc)' : 'Inspect details (Space)'}
               aria-label={`Inspect ${incident.title}`}
               aria-pressed={isSelected}
               className={cn(
@@ -396,6 +403,9 @@ export const LiveIncidentRow = memo(function LiveIncidentRow({
               )}
             >
               <PanelRight className="h-3.5 w-3.5 shrink-0" aria-hidden />
+              <kbd className="hidden group-hover:inline-block font-mono text-[9px] text-muted-foreground/70" aria-hidden>
+                O
+              </kbd>
             </button>
             <button
               type="button"

@@ -138,6 +138,9 @@ export function IncidentInspector({
               <Check className="h-3.5 w-3.5" aria-hidden />
             )}
             Acknowledge
+            <kbd className="ml-0.5 rounded border border-amber-500/30 bg-amber-500/10 px-1 font-mono text-[9px] text-amber-800 dark:text-amber-300">
+              A
+            </kbd>
           </button>
         )}
         {showAssign && (
@@ -154,6 +157,9 @@ export function IncidentInspector({
               <UserPlus className="h-3.5 w-3.5" aria-hidden />
             )}
             Assign to me
+            <kbd className="ml-0.5 rounded border border-primary/30 bg-primary/10 px-1 font-mono text-[9px] text-primary">
+              M
+            </kbd>
           </button>
         )}
         <Link

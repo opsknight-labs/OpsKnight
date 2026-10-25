@@ -231,6 +231,27 @@ export default function LiveCommandStrip({
               <span className={cn('h-2 w-2 rounded-full', status.dot)} aria-hidden />
               {status.label}
             </span>
+            <div
+              className="hidden sm:inline-flex items-center gap-1.5 rounded-md border border-zinc-800 bg-zinc-900/60 px-2 py-0.5 text-[11px] font-mono text-zinc-400"
+              title="Real-time incident velocity (signals created last hour)"
+            >
+              <span className="text-[10px] uppercase tracking-wider font-semibold text-zinc-500">Pulse</span>
+              <div className="flex items-end gap-0.5 h-3" aria-hidden>
+                <span className="w-1 rounded-xs bg-zinc-700 h-1.5" />
+                <span className="w-1 rounded-xs bg-zinc-700 h-2" />
+                <span className="w-1 rounded-xs bg-amber-500/70 h-2.5" />
+                <span
+                  className={cn(
+                    'w-1 rounded-xs',
+                    (summary?.critical ?? 0) > 0 ? 'bg-rose-500 h-3 motion-safe:animate-pulse' : 'bg-zinc-600 h-2'
+                  )}
+                />
+                <span className="w-1 rounded-xs bg-emerald-500/70 h-2" />
+              </div>
+              <span className="tabular-nums font-semibold text-zinc-300">
+                {trend?.createdLastHour ?? 0}/h
+              </span>
+            </div>
           </div>
           <p
             data-testid="command-insight"
