@@ -2,6 +2,9 @@
 /* eslint-disable security/detect-non-literal-fs-filename -- Paths are validated fixture evidence destinations or files inside this run's private temporary directory. */
 require('./isolated-runtime.cjs');
 const assert = require('node:assert/strict');
+const capacityStage = require('./capacity-stages.cjs').capacityStage(
+  process.env.INGESTION_CAPACITY_STAGE
+);
 const { spawn } = require('node:child_process');
 const { randomUUID, randomBytes } = require('node:crypto');
 const {
@@ -40,6 +43,8 @@ let loadActive = false;
 let cancelled = false;
 const profiles = [];
 const cpuProfiling = process.env.INGESTION_CPU_PROFILE === 'true';
+const workerOnlyStage = ['incident-only', 'effects-only'].includes(capacityStage);
+const admissionOnly = capacityStage === 'admission-only';
 for (const signal of ['SIGINT', 'SIGTERM'])
   process.once(signal, () => {
     cancelled = true;
@@ -205,7 +210,7 @@ async function main() {
         /^[a-z0-9_]+$/.test(localUrl.pathname.slice('/ingestion_test_http_'.length)))
   );
   assert.equal(localUrl.port, '55445');
-  if (process.env.INGESTION_DB_PROFILE === 'true') {
+  if (workerOnlyStage || process.env.INGESTION_DB_PROFILE === 'true') {
     // Fail before starting replicas when a newly created fixture database has
     // not enabled the explicitly requested diagnostic extension.
     await prisma.$queryRaw`SELECT calls FROM pg_stat_statements LIMIT 0`;
@@ -222,16 +227,22 @@ async function main() {
   const imageInfo = JSON.parse(await invoke(['image', 'inspect', image]))[0];
   const revision = imageInfo.Config.Labels['org.opencontainers.image.revision'];
   assert.ok(revision && revision !== 'unknown', 'Candidate must have a source revision label');
-  const webReplicas = Number(process.env.INGESTION_WEB_REPLICAS || 2);
-  const workerReplicas = Number(process.env.INGESTION_WORKER_REPLICAS ?? 4);
+  const webReplicas = workerOnlyStage ? 0 : Number(process.env.INGESTION_WEB_REPLICAS || 2);
+  const workerReplicas =
+    admissionOnly || capacityStage === 'effects-only'
+      ? 0
+      : Number(process.env.INGESTION_WORKER_REPLICAS ?? 4);
   const automaticMode = process.env.INGESTION_DOCKER_DEFAULT_MODE === 'true';
-  const workerMetricsChecks = process.env.INGESTION_DOCKER_WORKER_METRICS_CHECKS === 'true';
+  const workerMetricsChecks =
+    !admissionOnly && process.env.INGESTION_DOCKER_WORKER_METRICS_CHECKS === 'true';
   const admissionMetricsChecks = process.env.INGESTION_DOCKER_ADMISSION_METRICS_CHECKS === 'true';
   const webCpus = Number(process.env.INGESTION_WEB_CPUS || 1);
   const workerCpus = Number(process.env.INGESTION_WORKER_CPUS || 1);
   for (const cpus of [webCpus, workerCpus])
     assert.ok(Number.isFinite(cpus) && cpus >= 0.25 && cpus <= 4);
-  assert.ok(Number.isInteger(webReplicas) && webReplicas >= 1 && webReplicas <= 4);
+  assert.ok(
+    Number.isInteger(webReplicas) && webReplicas >= (workerOnlyStage ? 0 : 1) && webReplicas <= 4
+  );
   assert.ok(Number.isInteger(workerReplicas) && workerReplicas >= 0 && workerReplicas <= 8);
   const generalWorkerReplicas = Number(process.env.INGESTION_GENERAL_WORKER_REPLICAS ?? 1);
   assert.ok(
@@ -255,9 +266,41 @@ async function main() {
   const supportingPools = Object.fromEntries(
     supportingRoles.map(item => [item.poolName, String(item.pool)])
   );
-  const fullStack = process.env.INGESTION_DOCKER_FULL_STACK === 'true';
+  const fullStack =
+    capacityStage === 'effects-only' ||
+    (capacityStage === 'full-stack' && process.env.INGESTION_DOCKER_FULL_STACK === 'true');
   const usePgBouncer = process.env.INGESTION_DOCKER_PGBOUNCER === 'true';
   const pgBouncerCompatibility = process.env.INGESTION_PGBOUNCER_COMPATIBILITY !== 'false';
+  if (capacityStage !== 'full-stack') {
+    assert.notEqual(
+      process.env.INGESTION_DOCKER_KILL_WORKER,
+      'true',
+      'Fault injection belongs to full-stack verification'
+    );
+    assert.notEqual(
+      process.env.INGESTION_DOCKER_SMTP_CHECK,
+      'true',
+      'Provider delivery belongs to full-stack verification'
+    );
+    assert.equal(
+      Number(process.env.INGESTION_WARMUP_EVENTS || 0),
+      0,
+      'Stage profiles exclude consumer warmup'
+    );
+  }
+  if (workerOnlyStage) {
+    assert.ok(
+      !cpuProfiling && !usePgBouncer,
+      'Worker-stage profiles use cgroup CPU and direct database connections'
+    );
+    assert.notEqual(process.env.INGESTION_HTTP_PROVIDER_CHECKS, 'true');
+    assert.notEqual(process.env.INGESTION_HTTP_LIFECYCLE_CHECKS, 'true');
+    assert.notEqual(process.env.INGESTION_HTTP_QUOTA_REPLAY_CHECKS, 'true');
+    assert.notEqual(process.env.INGESTION_HTTP_REQUEST_GATE_CHECKS, 'true');
+    assert.notEqual(process.env.INGESTION_DOCKER_ADMISSION_METRICS_CHECKS, 'true');
+    assert.notEqual(process.env.INGESTION_DOCKER_WORKER_METRICS_CHECKS, 'true');
+  }
+
   const pgBouncerName = `${prefix}-pgbouncer`;
   const capacity = calculateRuntimeCapacity({
     PGBOUNCER_ENABLED: String(usePgBouncer),
@@ -266,7 +309,7 @@ async function main() {
     PGBOUNCER_RESERVE_POOL_SIZE: '5',
     ...supportingPools,
     OPSKNIGHT_RUNTIME_MODE: 'split',
-    WEB_REPLICAS: String(webReplicas),
+    WEB_REPLICAS: String(webReplicas || 2),
     DATABASE_POOL_SIZE_WEB: '10',
     INGESTION_WORKER_REPLICAS: String(workerReplicas),
     GENERAL_WORKER_REPLICAS: String(generalWorkerReplicas),
@@ -274,7 +317,7 @@ async function main() {
     DATABASE_CONNECTION_RESERVE: '15',
     DATABASE_MAX_CONNECTIONS: String(limits.maximum),
   });
-  if (workerReplicas === 0) {
+  if (workerReplicas === 0 && capacityStage === 'full-stack') {
     assert.ok(automaticMode, 'Fallback-only certification must omit the mode override');
     assert.notEqual(
       process.env.INGESTION_DOCKER_KILL_WORKER,
@@ -291,6 +334,13 @@ async function main() {
     0,
     'Resolve previous unfinished test work before a fresh topology capacity run'
   );
+  const stageFixture = workerOnlyStage
+    ? await require('./capacity-stages.cjs').prepareStageFixture(
+        prisma,
+        capacityStage,
+        Number(process.env.INGESTION_STAGE_EVENTS || 1000)
+      )
+    : undefined;
   const port = Number(process.env.INGESTION_PORT || 3210);
   assert.ok(Number.isInteger(port) && port >= 3200 && port <= 65535);
   const baseUrl = `http://127.0.0.1:${port}`;
@@ -511,9 +561,9 @@ async function main() {
       '--label',
       `opsknight.ingestion-cert-run=${runId}`,
       '--cpus',
-      String(role === 'web' ? webCpus : workerCpus),
+      String(role === 'web' || role === 'http' ? webCpus : workerCpus),
       '--memory',
-      role === 'web' ? '1g' : '768m',
+      role === 'web' || role === 'http' ? '1g' : '768m',
       '--health-interval',
       '5s',
       '--health-timeout',
@@ -533,7 +583,7 @@ async function main() {
   const webNames = [];
   for (let index = 0; index < webReplicas; index++) {
     const name = `${prefix}-web-${index}`;
-    await start(name, 'web', index === 0);
+    await start(name, admissionOnly ? 'http' : 'web', index === 0);
     webNames.push(name);
   }
   const workers = [];
@@ -609,6 +659,35 @@ async function main() {
       verifiedThrough: 'PostgreSQL client addresses matched to owned container IPs',
     };
   }
+  if (workerOnlyStage) {
+    assert.ok(!usePgBouncer, 'Worker-only profiles use the existing direct worker datasource');
+    evidence.image = { id: imageInfo.Id, revision };
+    evidence.topology = {
+      capacityStage,
+      webReplicas,
+      workerReplicas,
+      supportingRoles: fullStack ? supportingRoles : [],
+      capacity,
+      capacityScope:
+        'Conservative full deployment pool reservation; actual active processes listed separately',
+    };
+    evidence.resourcesBeforePreflight = await Promise.all(processNames.map(resources));
+    evidence.stageEvidence = await require('./capacity-stages.cjs').measureStage(
+      prisma,
+      stageFixture,
+      Number(process.env.INGESTION_STAGE_TIMEOUT_MS || 120000)
+    );
+    evidence.resourcesAfterLoad = await Promise.all(processNames.map(resources));
+    evidence.cpuDelta = require('./capacity-stages.cjs').cpuUsageDelta(
+      evidence.resourcesBeforePreflight,
+      evidence.resourcesAfterLoad
+    );
+    assert.ok(
+      evidence.stageEvidence.passed,
+      'Native stage failed reconciliation or drain deadline'
+    );
+    return;
+  }
   const proxyRef = process.env.INGESTION_PROXY_IMAGE || 'nginx:stable-alpine';
   try {
     await invoke(['image', 'inspect', proxyRef]);
@@ -667,6 +746,8 @@ location / { proxy_pass http://gateways; proxy_http_version 1.1; proxy_set_heade
     proxyImageId: proxy.Id,
   };
   evidence.topology = {
+    capacityStage,
+    httpRole: admissionOnly ? 'http' : 'web',
     fullStackProcesses: fullStack,
     edgeBackpressure: edgeBackpressure
       ? {
@@ -676,7 +757,7 @@ location / { proxy_pass http://gateways; proxy_http_version 1.1; proxy_set_heade
         }
       : false,
     automaticMode,
-    webFallbackOnly: workerReplicas === 0,
+    webFallbackOnly: workerReplicas === 0 && !admissionOnly,
     webUsesPgBouncer: usePgBouncer,
     supportingRoles: fullStack
       ? supportingRoles.map(({ role, replicas, pool }) => ({ role, replicas, pool }))
@@ -700,6 +781,7 @@ location / { proxy_pass http://gateways; proxy_http_version 1.1; proxy_set_heade
     nodeVersion: candidateNodeVersion,
     imageId: imageInfo.Id,
     sourceRevision: revision,
+    capacityStage,
     webReplicas,
     workerReplicas,
     webCpus,
@@ -719,7 +801,7 @@ location / { proxy_pass http://gateways; proxy_http_version 1.1; proxy_set_heade
       ...process.env,
       ENCRYPTION_KEY: encryptionKey,
       INGESTION_EXTERNAL_BASE_URL: baseUrl,
-      INGESTION_EXTERNAL_CONSUMERS: 'true',
+      INGESTION_EXTERNAL_CONSUMERS: admissionOnly ? 'false' : 'true',
       INGESTION_HTTP_EVIDENCE: httpEvidencePath,
       INGESTION_CANDIDATE_METADATA: JSON.stringify(candidate),
     },
@@ -780,6 +862,16 @@ location / { proxy_pass http://gateways; proxy_http_version 1.1; proxy_set_heade
     child.once('exit', resolve);
   });
   evidence.resourcesAfterLoad = await Promise.all(processNames.map(resources));
+  evidence.cpuDelta = chaosRequested
+    ? {
+        unavailable: true,
+        scope:
+          'Deliberate worker termination invalidates complete per-process CPU deltas; raw snapshots retained. Recovery is checked separately.',
+      }
+    : require('./capacity-stages.cjs').cpuUsageDelta(
+        evidence.resourcesBeforePreflight,
+        evidence.resourcesAfterLoad
+      );
   if (usePgBouncer) evidence.pgbouncer.resourcesAfter = await resources(pgBouncerName);
   if (process.env.INGESTION_HTTP_PROVIDER_CHECKS === 'true') {
     for (const name of processNames) {

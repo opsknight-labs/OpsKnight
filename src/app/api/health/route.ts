@@ -6,6 +6,7 @@ import {
   getOpsKnightProcessRole,
   getRuntimeResponsibilities,
   shouldRunIngestionConsumer,
+  isDedicatedHttpRole,
 } from '@/lib/runtime-role';
 import { getIngestionWorkerHealth } from '@/lib/ingestion/worker-health';
 import { logger } from '@/lib/logger';
@@ -200,7 +201,7 @@ export async function GET(request: NextRequest) {
   const workerRequired = Boolean(responsibilities?.startJobWorker);
   const controlPlaneRequired =
     process.env.NOTIFICATION_CONTROL_PLANE_STRICT === 'true' &&
-    (getOpsKnightProcessRole() === 'web' || getOpsKnightProcessRole() === 'integrated');
+    (isDedicatedHttpRole(getOpsKnightProcessRole()) || getOpsKnightProcessRole() === 'integrated');
 
   const criticalFailure =
     mode === 'readiness'

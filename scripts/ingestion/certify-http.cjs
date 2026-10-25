@@ -2,6 +2,11 @@
 /* eslint-disable security/detect-non-literal-fs-filename -- Evidence paths belong to this local fixture and its private temporary directory. */
 require('./isolated-runtime.cjs');
 const assert = require('node:assert/strict');
+const capacityStage = require('./capacity-stages.cjs').capacityStage(
+  process.env.INGESTION_CAPACITY_STAGE
+);
+assert.ok(['full-stack', 'admission-only'].includes(capacityStage));
+const admissionOnly = capacityStage === 'admission-only';
 const { spawn, spawnSync } = require('node:child_process');
 const { randomUUID, randomBytes } = require('node:crypto');
 const { readFileSync, writeFileSync, mkdtempSync, rmSync } = require('node:fs');
@@ -33,6 +38,25 @@ async function main() {
     /^\/ingestion_test_http[_a-z0-9]*$/,
     'HTTP fixture requires its own dedicated database'
   );
+  if (admissionOnly) {
+    assert.match(
+      process.env.INGESTION_DURATION || '60s',
+      /^[1-9][0-9]?s$/,
+      'Admission-only profiling is bounded to 99 seconds'
+    );
+    for (const flag of [
+      process.env.INGESTION_HTTP_PROVIDER_CHECKS,
+      process.env.INGESTION_HTTP_LIFECYCLE_CHECKS,
+      process.env.INGESTION_HTTP_QUOTA_REPLAY_CHECKS,
+      process.env.INGESTION_HTTP_REQUEST_GATE_CHECKS,
+    ])
+      assert.notEqual(flag, 'true', 'Provider/lifecycle checks require active consumers');
+    assert.equal(
+      Number(process.env.INGESTION_WARMUP_EVENTS || 0),
+      0,
+      'Consumer warmup is not admission-only work'
+    );
+  }
   const service = await prisma.service.create({ data: { name: `HTTP load ${runId}` } });
   const integration = await prisma.integration.create({
     data: {
@@ -50,7 +74,8 @@ async function main() {
     ['127.0.0.1', 'localhost'].includes(candidateUrl.hostname) && candidateUrl.protocol === 'http:',
     'HTTP certification only targets a local isolated candidate'
   );
-  if (external) assert.equal(process.env.INGESTION_EXTERNAL_CONSUMERS, 'true');
+  if (external)
+    assert.equal(process.env.INGESTION_EXTERNAL_CONSUMERS, admissionOnly ? 'false' : 'true');
   if (!external)
     server = spawn(process.execPath, ['.next/standalone/server.js'], {
       stdio: ['ignore', 'pipe', 'pipe'],
@@ -59,7 +84,7 @@ async function main() {
         NODE_ENV: 'production',
         PORT: String(port),
         HOSTNAME: '127.0.0.1',
-        OPSKNIGHT_PROCESS_ROLE: 'web',
+        OPSKNIGHT_PROCESS_ROLE: admissionOnly ? 'http' : 'web',
         OPSKNIGHT_INGESTION_MODE: 'postgres',
         OPSKNIGHT_INGESTION_EVENTS_PER_MINUTE: '10000000',
         NEXTAUTH_URL: baseUrl,
@@ -143,7 +168,7 @@ async function main() {
   if (process.env.INGESTION_DB_PROFILE === 'true')
     finishDatabaseProfile = await require('./database-profile.cjs')(prisma);
   // Execute real ingestion processing independently of request completion.
-  if (!external)
+  if (!external && !admissionOnly)
     worker = (async () => {
       while (!draining) {
         const count = await consumeIngestionBatch(4);
@@ -206,6 +231,62 @@ async function main() {
   `;
   stage = 'admission-quiescence';
   const admissionQuiescence = await require('./quiesce-admission.cjs')();
+  if (admissionOnly) {
+    const summary = JSON.parse(readFileSync(summaryPath, 'utf8'));
+    const acknowledged = summary.metrics.ingestion_durable_accepted?.count || 0;
+    const where = { serviceId: service.id };
+    const [accepted, pending, claimed, incidents, alerts] = await Promise.all([
+      prisma.ingestionReceipt.count({ where }),
+      prisma.ingestionReceipt.count({ where: { ...where, status: 'PENDING' } }),
+      prisma.ingestionReceipt.count({ where: { ...where, attempts: { gt: 0 } } }),
+      prisma.incident.count({ where }),
+      prisma.alert.count({ where }),
+    ]);
+    const databaseProfile = finishDatabaseProfile ? await finishDatabaseProfile() : undefined;
+    finishDatabaseProfile = undefined;
+    const reconciled =
+      accepted > 0 &&
+      accepted === acknowledged &&
+      pending === accepted &&
+      claimed === 0 &&
+      incidents === 0 &&
+      alerts === 0;
+    const result = {
+      measuredAt: new Date().toISOString(),
+      capacityStage,
+      candidate,
+      runtime: process.version,
+      scope:
+        'Bounded native HTTP authentication, quota and durable append with HTTP-only replicas and no consumers. Pending receipts are intentionally retained under normal hard budgets. Not incident/effect processing or sustained capacity certification.',
+      targetRps: Number(process.env.INGESTION_TARGET_RPS || 1000),
+      duration: process.env.INGESTION_DURATION || '60s',
+      accepted,
+      acknowledged,
+      pending,
+      claimed,
+      incidents,
+      alerts,
+      ambiguousSubmissions: accepted - acknowledged,
+      receiptDrainPerformed: false,
+      admissionQuiescence,
+      backlogDuringLoad,
+      databaseProfile,
+      ingressMs,
+      acceptedPerSecond: (accepted * 1000) / ingressMs,
+      metrics: summary.metrics,
+      loadExit,
+      reconciled,
+      passed: loadExit === 0 && reconciled && (!backlogDuringLoad || backlogDuringLoad.passed),
+      certifiedEnterprise: false,
+    };
+    writeFileSync(
+      process.env.INGESTION_HTTP_EVIDENCE || 'plans/event-ingestion/local-http-load.json',
+      JSON.stringify(result, null, 2) + '\n'
+    );
+    evidenceWritten = true;
+    assert.ok(result.passed, 'Admission-only HTTP thresholds or ledger reconciliation failed');
+    return;
+  }
   draining = true;
   await worker;
   if (workerFault) throw workerFault;
@@ -277,6 +358,7 @@ async function main() {
   finishDatabaseProfile = undefined;
   const evidence = {
     measuredAt: new Date().toISOString(),
+    capacityStage,
     candidate,
     runtime: process.version,
     scope: external

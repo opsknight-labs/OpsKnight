@@ -3,6 +3,7 @@ import { resolveIngestionMode } from './ingestion/mode';
 export const OPSKNIGHT_PROCESS_ROLES = [
   'integrated',
   'web',
+  'http',
   'scheduler',
   'worker',
   'general-worker',
@@ -76,6 +77,7 @@ export function getRuntimeResponsibilities(
         startIsolatedRunbookWorker: true,
       };
     case 'web':
+    case 'http':
     case 'ingestion-worker':
       return {
         startScheduler: false,
@@ -178,4 +180,10 @@ export function shouldRunIngestionConsumer(
   return (
     mode === 'postgres' && (role === 'integrated' || role === 'web' || role === 'ingestion-worker')
   );
+}
+
+/** Dedicated HTTP roles share authentication and pool policy. Only web owns
+ * the compatibility ingestion fallback; http requires dedicated consumers. */
+export function isDedicatedHttpRole(role: string): role is 'web' | 'http' {
+  return role === 'web' || role === 'http';
 }

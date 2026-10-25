@@ -1,3 +1,5 @@
+import { isDedicatedHttpRole } from './runtime-role';
+
 const DEFAULT_POOL_SIZE = 10;
 
 export function selectPrismaDatasourceUrl(
@@ -7,7 +9,7 @@ export function selectPrismaDatasourceUrl(
     WEB_DATABASE_URL: process.env.WEB_DATABASE_URL,
   }
 ): string | undefined {
-  return role === 'web' ? (env.WEB_DATABASE_URL ?? env.DATABASE_URL) : env.DATABASE_URL;
+  return isDedicatedHttpRole(role) ? (env.WEB_DATABASE_URL ?? env.DATABASE_URL) : env.DATABASE_URL;
 }
 
 function poolSize(value: string | undefined): number {
