@@ -1,23 +1,24 @@
 ---
 title: Use the Command Center
 order: 2
-description: Scope, interpret, verify, and export the operational information on the OpsKnight home dashboard.
+description: Watch live incidents, focus the feed, and read operational trends on the OpsKnight home dashboard and TV wallboard.
 type: how-to
 product_area: analytics
 audience: [responder, administrator]
 reader: { status: READER_COMPLETE, task: Use the Command Center to assess operational state and select the next incident-response action. }
 verification:
   level: source
-  verified_at: 2026-10-02
+  verified_at: 2026-10-25
   evidence:
     - src/app/(app)/page.tsx
-    - src/components/dashboard/DashboardCommandCenter.tsx
-    - src/components/dashboard/widgets/SLABreachAlertsWidget.tsx
-    - src/components/dashboard/OnCallWidget.tsx
-    - src/components/dashboard/QuickActionsPanel.tsx
-    - src/components/dashboard/DashboardAnalyticsWidgets.tsx
-    - src/components/incident/IncidentsListTable.tsx
-    - src/components/DashboardExport.tsx
+    - src/components/dashboard/live/LiveCommandStrip.tsx
+    - src/components/dashboard/live/LiveIncidentsPanel.tsx
+    - src/components/dashboard/live/LiveFilterBar.tsx
+    - src/components/dashboard/live/ResponderRail.tsx
+    - src/components/dashboard/DashboardHistorySection.tsx
+    - src/components/dashboard/live/LiveWallboard.tsx
+    - src/lib/dashboard/live-incidents-engine.ts
+    - src/app/api/dashboard/live/route.ts
 ---
 
 # Use the Command Center
@@ -25,101 +26,140 @@ verification:
 ## Before you begin
 
 Sign in and confirm that your team membership and incident permissions are
-current. Counts are authorization-scoped: two users can legitimately see
-different results. Choose a known incident and service if you need to validate
-the dashboard against source records.
+current. Everything on the page is authorization-scoped: two users can
+legitimately see different incidents and counts.
 
 ## Open the feature
 
-Select **Dashboard** in the main navigation or open `/`. Read the system-status
-indicator first, then confirm the displayed time range and active filters before
-interpreting any number.
+Select **Dashboard** in the main navigation or open `/`. The page has three
+zones, top to bottom:
 
-## Configure the view
+1. **Command Center**: current state at a glance.
+2. **Live Incidents** with **Ops Pulse** beside it, sized so the whole panel fits
+   on a desktop screen without scrolling the page.
+3. **Trends & insights**: historical analytics for a selectable period.
 
-1. Select the required preset or custom time range.
-2. Narrow the population by service, assignee, urgency, or text search when the
-   controls are available to your role.
-3. Clear filters before treating a number as workspace-wide.
-4. Follow a metric card or queue item into its incident list and preserve the
-   resulting query parameters when sharing the view.
+## Read the Command Center
 
-The headline cards distinguish incidents in the selected range from current
-state. Active combines triggered and acknowledged incidents; muted state can
-include snoozed and suppressed incidents. Resolved is measured for the selected
-window. Unassigned identifies incidents without an assignee.
+- **Status** shows *Operational*, *Degraded* (active incidents, none critical),
+  or *Critical* (a critical incident, an SLA deadline within 10 minutes, or an
+  SLA breached in the last hour).
+- The **summary line** describes the situation in words, for example
+  "5 critical on API Gateway / 2 due within 10 min / 3 critical unowned".
+  Each phrase is a link that focuses the live feed on exactly those incidents.
+- The **scope switch** chooses whose incidents the page shows: **All**,
+  **My teams** (team-owned plus assigned to you), or **Mine**.
+- **Wallboard** opens the TV view described below.
 
-## How the Command Center works
+The metrics row counts the current active set in the chosen scope:
 
-- **System status** summarizes the current operational condition.
-- **Ops Pulse** groups the most immediate responder signals.
-- **My Queue** prioritizes incidents assigned to the signed-in responder.
-- **Critical Focus** surfaces high-impact work requiring attention.
-- **Services at Risk** groups services affected by active incident pressure.
-- **Smart Insights** provides computed observations; validate an insight against
-  the underlying incidents before using it in a decision or report.
-- **On-call context** shows current coverage based on schedules visible to you.
-- **SLA Alerts** shows approaching or breached acknowledgement/resolution targets
-  and links the responder to the affected work.
-- **Quick Actions** opens the Create Incident modal or navigates to Analytics and
-  Services. Creating an incident is a mutation; verify the form before submit.
-- **Incident History Heatmap** visualizes incident volume across the displayed
-  historical buckets. Treat color intensity as a comparative signal and inspect
-  the underlying incidents before drawing a conclusion.
-- **Latest incidents** is a read-only recent-incident table scoped by the active
-  dashboard filters and time window. Open a row to respond on the incident page.
-- **Performance** summarizes MTTA, MTTR, acknowledgement-SLA compliance, and
-  resolution-SLA compliance for the dashboard scope. Empty/unavailable data is
-  different from a measured zero.
-- **Team Load** summarizes operational load by responder/team using the current
-  analytics snapshot; use it to investigate distribution, not as a standalone
-  performance assessment.
-- **Who's On-Call** lists current visible shifts. Validate coverage on the owning
-  schedule before relying on it for a handoff.
+| Metric | Meaning |
+| --- | --- |
+| Triggered | Active and not yet acknowledged. |
+| Critical | P1 or high urgency. |
+| Acknowledged | Being worked. |
+| Unassigned | No owner; the line below shows how many of them are critical. |
+| SLA at risk | Next SLA deadline within 30 minutes, or breached in the last hour. |
+| Resolved · 24h | Resolved in the last 24 hours, with MTTA and MTTR for that window. |
 
-Realtime updates can refresh current incident metrics after incident events.
-When population filters are active, the client requests filtered metrics so a
-live workspace-wide count does not silently replace the scoped count. The view
-also exposes an “as of”/data-state context where the metric contract supplies
-one. Retention can clip historical ranges; a clipped result is not a complete
-all-time record.
+Select a metric to focus the live feed on it; select it again to return to all
+active incidents. **Resolved · 24h** opens the resolved list on the Incidents
+page.
+
+## Work the Live Incidents panel
+
+New incidents enter at the top within a couple of seconds, newest first.
+Acknowledgement, reassignment, and escalation update rows in place. Resolved
+incidents leave the feed.
+
+1. Narrow the feed with **Search** (press `/`), **Service**, and **Filters**.
+   Filters contains **Show** (All active, Critical, Mine, My teams, Unassigned,
+   SLA risk), Team, Status, Urgency, and Assignment. Active choices appear as
+   removable chips under **Filtered by**.
+2. Use **Sort** to switch between **Newest first** and **Needs attention first**
+   (critical, then SLA risk, then unowned).
+3. Select **Live** to pause updates (press `p`). While paused, changes are
+   buffered and counted as *pending*; resume to apply them.
+4. Pin up to five incidents with the star. Pinned incidents stay in a strip at
+   the top regardless of filters. Pins and row density are saved in this
+   browser.
+5. Act from the row: acknowledge (`a`), assign to yourself (`m`, or **+ Assign**
+   on unowned rows), or open the incident. Move between rows with `j` and `k`.
+6. Select **View all incidents** to open the same filters on the Incidents page.
+
+The footer shows connection health (**Live**, **Stale**, **Offline**, or
+**Session expired**) and when data was last synchronized. After a reconnect,
+a filter change, or a missed update, the panel re-reads the authoritative list
+instead of trusting buffered events.
+
+## Use Ops Pulse
+
+- **You**: whether you are on call and how many incidents are assigned to you.
+- **Needs attention**: up to six incidents that are about to breach or have
+  breached an SLA, critical without an owner, or escalated to level 2 or higher.
+  **Sort feed** applies the same ordering to the live feed.
+- **Hotspots**: services with the most active and critical incidents; select a
+  service to focus the feed on it.
+- **On call now**: current responders, plus schedules that currently have
+  nobody on call (coverage gaps).
+
+## Read Trends & insights
+
+The period selector in this section changes only historical analytics. It
+never filters the live feed or the Command Center counts. The section shows
+created versus resolved incidents over the period, MTTA and MTTR compared with
+the previous period, acknowledgement and resolution SLA compliance, an activity
+timeline with type filters, team load, and the incident heatmap. Empty or
+unavailable data is different from a measured zero.
+
+## Show the dashboard on a TV (Wallboard)
+
+Open **Wallboard** or `/wallboard` on the screen's browser and sign in once.
+The wallboard is read-only and has no navigation chrome. It:
+
+- enters true fullscreen with **Fullscreen** or `F` (hiding browser toolbars
+  where the browser allows it; TV browsers that refuse the request keep working
+  in a maximized window);
+- cycles through views every 20 seconds (`Space` or **Auto-cycle** pauses;
+  `?cycle=off` disables it);
+- scales text with `+` and `-` or `?scale=` for distant screens;
+- keeps the screen awake where supported, hides an idle cursor, shifts content
+  slightly every few minutes to limit burn-in, and reloads itself every
+  12 hours.
 
 ## Verify the result
 
-1. Open a headline count and compare the returned incident list with its label,
-   selected range, and filters.
-2. Change one controlled test incident and confirm the current-state card updates
-   after the realtime event or a manual refresh.
-3. Compare **My Queue** with the same assignee filter on the Incidents page.
-4. Open an SLA warning and verify the incident deadline and state.
-5. Compare the heatmap and Latest incidents with the same window on Incidents.
-6. Compare Performance and Team Load with Analytics using equivalent scope.
-7. Follow an on-call entry to its schedule and confirm current coverage.
-8. If your role permits export, export the selected view and confirm its scope
-   matches the visible filters rather than assuming it is workspace-wide.
+1. Create a test incident and confirm it appears at the top of the feed without
+   a page refresh.
+2. Acknowledge it and confirm the row updates in place; resolve it and confirm
+   it leaves the feed.
+3. Select a metric and compare the feed with the equivalent Incidents page
+   filter (**View all incidents**).
+4. Switch the scope to **Mine** and compare it with your assigned incidents.
+5. Change the Trends & insights period and confirm the live feed is unchanged.
 
 ## Change or undo the view
 
-Filters and ranges change the view, not incident records. Clear each filter or
-return to the default range to restore the baseline. An incident action reached
-through a dashboard link is a separate mutation and must be reversed, where the
-incident workflow permits, from the incident itself.
+Scope, filters, sort, pause, pins, and density change only your view, never
+incident records. Select **Clear all** (or remove each chip) and switch the
+scope to **All** to return to the default. Incident actions taken from the feed
+are real mutations; reverse them from the incident itself where the workflow
+permits.
 
 ## Troubleshooting
 
-- **A count differs from another user's count:** compare roles, team membership,
-  service access, filters, range, timezone, and retention clipping.
-- **A count looks stale:** wait for the live update, use refresh, then verify the
-  source incident. A degraded live channel must not be treated as proof that no
-  incident changed.
-- **A panel is empty:** clear filters and confirm relevant seeded or production
-  records exist and are visible to the user.
-- **Export is unavailable:** the current role or visibility scope may not allow
-  export. Ask an administrator to review permissions; do not broaden access only
-  to obtain a report.
-- **An SLA number is unexpected:** compare the incident's immutable selected SLA
-  targets and lifecycle timestamps with the current policy; later policy changes
-  do not rewrite an existing incident's contract.
+- **A count differs from another user's count:** compare roles, team
+  membership, service access, scope, and filters.
+- **The footer says Stale or Offline:** the live channel is degraded. Data is
+  re-read automatically when it recovers; do not treat a quiet feed as proof
+  that nothing changed.
+- **A new incident did not appear:** check whether updates are paused, whether a
+  filter or scope excludes it, and whether you are allowed to see its service.
+- **The feed is empty:** clear filters, switch the scope to **All**, and confirm
+  relevant records exist and are visible to you.
+- **An SLA number is unexpected:** compare the incident's selected SLA targets
+  and lifecycle timestamps with the current policy; later policy changes do not
+  rewrite an existing incident's contract.
 
 ## Next steps
 

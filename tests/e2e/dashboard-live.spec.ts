@@ -89,6 +89,8 @@ async function openDashboard(page: Page, path = '/?lview=active') {
   // An explicit view in the URL bypasses the per-user saved view from earlier tests.
   await page.goto(path);
   const panel = page.getByTestId('live-incidents-panel');
+  // Streaming SSR briefly parks the server copy in a hidden container before swapping it in.
+  await expect(panel).toHaveCount(1);
   await expect(panel).toBeVisible();
   await expect(panel).toHaveAttribute('data-loading', 'false');
   await expect(panel).toHaveAttribute('data-connection', 'live');
@@ -629,6 +631,7 @@ test.describe.serial('dashboard live incidents', () => {
     await openDashboard(page);
     const header = page.getByText('Prio', { exact: true });
     const firstRow = page.getByTestId('live-incident-row').first();
+    await expect(firstRow).toBeVisible();
     const box = await firstRow.boundingBox();
     if (testInfo.project.name.startsWith('mobile')) {
       await expect(header).toBeHidden();
@@ -643,6 +646,7 @@ test.describe.serial('dashboard live incidents', () => {
     expect(overflow).toBeLessThanOrEqual(1);
     // Live data stays ahead of history on every viewport.
     const live = await page.getByTestId('live-incidents-panel').boundingBox();
+    await page.locator('#dashboard-history-heading').waitFor({ state: 'attached' });
     const history = await page.locator('#dashboard-history-heading').boundingBox();
     expect(live!.y).toBeLessThan(history!.y);
   });
