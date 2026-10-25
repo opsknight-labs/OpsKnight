@@ -59,6 +59,18 @@ export function preconditionFailed(): AppError {
   return new AppError({ code: 'PRECONDITION_FAILED' });
 }
 
+function isPrismaP2025(error: unknown): boolean {
+  if (error instanceof Prisma.PrismaClientKnownRequestError) {
+    return error.code === 'P2025';
+  }
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'code' in error &&
+    (error as { code: unknown }).code === 'P2025'
+  );
+}
+
 /**
  * Run a write that used `ifMatchWhere`, translating "record not found" (the
  * version no longer matches) into 412. Without If-Match, errors pass through.
@@ -67,11 +79,7 @@ export async function withIfMatch<T>(expected: number | null, run: () => Promise
   try {
     return await run();
   } catch (error) {
-    if (
-      expected !== null &&
-      error instanceof Prisma.PrismaClientKnownRequestError &&
-      error.code === 'P2025'
-    ) {
+    if (expected !== null && isPrismaP2025(error)) {
       throw preconditionFailed();
     }
     throw error;

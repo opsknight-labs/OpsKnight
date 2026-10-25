@@ -382,7 +382,7 @@ export default function ServiceRunbooks({
       )}
 
       {/* Redesigned Clean & Robust Filter Card matching LibraryFilterBar */}
-      {(bindings.length > 0 || hasActiveFilters) && (
+      {(bindings.length > 0 || hasActiveFilters || canManage) && (
         <Card className="border border-border/80 shadow-2xs transition-colors">
           <CardHeader className="py-2.5 px-3.5 sm:px-4">
             <div className="flex flex-wrap items-center justify-between gap-2">

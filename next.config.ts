@@ -203,6 +203,10 @@ const nextConfig: NextConfig = {
       },
     ];
   },
+  typescript: {
+    // Dedicated typecheck step runs in CI/cert; skip inside container bundle to avoid OOM
+    ignoreBuildErrors: Boolean(process.env.SKIP_BUILD_TYPECHECK === 'true'),
+  },
   webpack: (config, { isServer }) => {
     if (isServer) {
       // eslint-disable-next-line @typescript-eslint/no-require-imports

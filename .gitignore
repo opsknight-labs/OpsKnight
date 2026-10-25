@@ -58,7 +58,8 @@ query_*.js
 verify_fix.ts
 *.sql
 !prisma/migrations/**/*.sql
-/reports/
+/reports/*
+!/reports/api-v2-certification/
 /ci-artifacts/
 /screenshots/
 /test-results/
@@ -124,3 +125,9 @@ __pycache__/
 # Isolated SCIM replica certification build
 /.next-scim-replica/
 /.next-scim-production/
+
+# Ephemeral test certification key pools & fixtures
+/tests/certification/*.json
+.env.certification
+reports/**/EVIDENCE/*.png
+reports/**/*.png

@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server';
 import { describe, expect, it } from 'vitest';
-import { etagFor, ifMatchWhere, parseIfMatch } from '@/lib/api-v2/concurrency';
+import { etagFor, ifMatchWhere, parseIfMatch, withIfMatch } from '@/lib/api-v2/concurrency';
 
 const req = (ifMatch?: string) =>
   new NextRequest('http://localhost:3000/api/v2/teams/t1', {
@@ -47,5 +47,46 @@ describe('API v2 ETag / If-Match', () => {
     expect(() => parseIfMatch(req('"1", "2"'))).toThrowError(
       expect.objectContaining({ code: 'VALIDATION_FAILED' })
     );
+  });
+
+  describe('withIfMatch (DEF-05 regression)', () => {
+    it('translates P2025 into PRECONDITION_FAILED (412) even across bundler/chunk boundaries', async () => {
+      // Simulate error where code === 'P2025' but not instanceof Prisma.PrismaClientKnownRequestError
+      const syntheticChunkError = Object.assign(new Error('Record to update not found.'), {
+        code: 'P2025',
+        clientVersion: '5.10.0',
+      });
+
+      await expect(
+        withIfMatch(3, async () => {
+          throw syntheticChunkError;
+        })
+      ).rejects.toMatchObject({
+        code: 'PRECONDITION_FAILED',
+        status: 412,
+      });
+    });
+
+    it('passes through other Prisma errors and non-P2025 errors', async () => {
+      const otherError = Object.assign(new Error('Unique constraint failed'), {
+        code: 'P2002',
+      });
+
+      await expect(
+        withIfMatch(3, async () => {
+          throw otherError;
+        })
+      ).rejects.toThrow('Unique constraint failed');
+    });
+
+    it('passes through P2025 when expected is null (unconditional write)', async () => {
+      const p2025Error = Object.assign(new Error('Record not found'), { code: 'P2025' });
+
+      await expect(
+        withIfMatch(null, async () => {
+          throw p2025Error;
+        })
+      ).rejects.toThrow('Record not found');
+    });
   });
 });

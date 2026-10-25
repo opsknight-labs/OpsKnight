@@ -1,0 +1,117 @@
+x-app-environment: &app-env
+  NODE_ENV: production
+  DATABASE_URL: ${INTERNAL_DATABASE_URL:-postgresql://${POSTGRES_USER:-opsknight}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-opsknight}?sslmode=disable}
+  DIRECT_DATABASE_URL: ${INTERNAL_DIRECT_DATABASE_URL:-postgresql://${POSTGRES_USER:-opsknight}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-opsknight}?sslmode=disable}
+  NEXTAUTH_URL: ${NEXTAUTH_URL:-http://127.0.0.1:3900}
+  NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-http://127.0.0.1:3900}
+  NEXTAUTH_SECRET: ${NEXTAUTH_SECRET}
+  API_KEY_SECRET: ${API_KEY_SECRET}
+  ENCRYPTION_KEY: ${ENCRYPTION_KEY}
+  SETUP_SECRET: ${SETUP_SECRET}
+  INTEGRATION_RATE_LIMIT: 'false'
+  TRUST_PROXY_HEADERS: 'true'
+  TRUSTED_PROXY_HOPS: '1'
+  APP_HOST_ALIASES: 'proxy:3000,localhost:3900,127.0.0.1:3900,localhost:3000,localhost:3901,127.0.0.1:3901,web:3000,web-direct:3000'
+  REDIRECT_TO_CANONICAL_HOST: 'false'
+  ALLOW_INSECURE_SECRETS: 'false'
+  NOTIFICATION_CONTROL_PLANE_PERSONAL: 'true'
+  PORT: '3000'
+  HOSTNAME: '0.0.0.0'
+  NEXT_TELEMETRY_DISABLED: '1'
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-opsknight}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-opsknight}
+    healthcheck:
+      test: [CMD-SHELL, pg_isready -U opsknight -d opsknight]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+    ports:
+      - '127.0.0.1:55490:5432'
+    volumes:
+      - opsknight_cert_v2_pgdata:/var/lib/postgresql/data
+    networks:
+      - cert-v2-net
+
+  migration:
+    image: opsknight:fdabcf67b45ae772d9c4413dc4a915f5b1ea3cfc
+    pull_policy: never
+    restart: 'no'
+    environment:
+      <<: *app-env
+      OPSKNIGHT_MIGRATION_ONLY: 'true'
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - cert-v2-net
+
+  web:
+    image: opsknight:fdabcf67b45ae772d9c4413dc4a915f5b1ea3cfc
+    pull_policy: never
+    restart: unless-stopped
+    environment:
+      <<: *app-env
+      OPSKNIGHT_SKIP_MIGRATIONS: 'true'
+      OPSKNIGHT_PROCESS_ROLE: web
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - cert-v2-net
+
+  web-direct:
+    image: opsknight:fdabcf67b45ae772d9c4413dc4a915f5b1ea3cfc
+    pull_policy: never
+    restart: unless-stopped
+    environment:
+      <<: *app-env
+      OPSKNIGHT_SKIP_MIGRATIONS: 'true'
+      OPSKNIGHT_PROCESS_ROLE: web
+      TRUST_PROXY_HEADERS: 'false'
+    ports:
+      - '127.0.0.1:3901:3000'
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - cert-v2-net
+
+  worker:
+    image: opsknight:fdabcf67b45ae772d9c4413dc4a915f5b1ea3cfc
+    pull_policy: never
+    restart: unless-stopped
+    environment:
+      <<: *app-env
+      OPSKNIGHT_SKIP_MIGRATIONS: 'true'
+      OPSKNIGHT_PROCESS_ROLE: worker
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - cert-v2-net
+
+  proxy:
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    ports:
+      - '127.0.0.1:3900:3000'
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - web
+    networks:
+      - cert-v2-net
+
+volumes:
+  opsknight_cert_v2_pgdata:
+
+networks:
+  cert-v2-net:
+    driver: bridge

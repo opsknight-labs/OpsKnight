@@ -186,9 +186,10 @@ export function loadSeedManifest() {
   }
 
   const fallbackApiKeys = [];
+  const envKey = __ENV.API_KEY || __ENV.LOAD_API_KEY || '';
   for (let i = 1; i <= 12; i++) {
     const padded = String(i).padStart(4, '0');
-    fallbackApiKeys.push(`ok_load_cert_token_${padded}_9f8e7d6c5b4a3f2e1d0c9b8a7f6e5d4c`);
+    fallbackApiKeys.push(envKey || `ok_load_token_${padded}`);
   }
 
   return {
