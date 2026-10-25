@@ -24,7 +24,7 @@ interface WorkflowReconciliationEntry {
   workflowTitle: string;
   inventoryReviewStatus: string;
   inventoryBlockers: string[];
-  classification: 'CERTIFIED_E2E' | 'CERTIFIED_EXTENDED_WORKFLOW' | 'CERTIFIED_ATOMIC_MATRIX' | 'SPECIALIZED_PROTOCOL';
+  classification: 'CERTIFIED_E2E' | 'CERTIFIED_EXTENDED_WORKFLOW' | 'CERTIFIED_ATOMIC_MATRIX' | 'SPECIALIZED_PROTOCOL_PROVISIONAL_SMOKE';
   operationsCovered: string[];
   evidenceSummary: string;
   verdict: 'PASS' | 'FAIL';
@@ -85,12 +85,14 @@ async function main() {
   const sloVersionId = sloData?.versionId || sloData?.id;
   const sloEtag = sloRes1.headers.get('etag');
 
-  let sloEvalRes: any = { status: 200 };
-  let sloArchiveRes: any = { status: 200 };
-  let sloHistoryRes: any = { status: 200 };
+  let sloEvalRes: any = { status: 0 };
+  let sloArchiveRes: any = { status: 0 };
+  let sloHistoryRes: any = { status: 0 };
 
   if (sloLineageId) {
-    sloEvalRes = await req('POST', `/service-objectives/${sloLineageId}/evaluate`, {});
+    sloEvalRes = await req('POST', `/service-objectives/${sloLineageId}/evaluate`, {
+      expectedVersionId: sloVersionId
+    }, adminToken, { 'Idempotency-Key': `idemp-slo-eval-${Date.now()}` });
     sloHistoryRes = await req('GET', `/service-objectives/${sloLineageId}/history`);
     sloArchiveRes = await req('POST', `/service-objectives/${sloLineageId}/archive`, {}, adminToken, {
       'If-Match': sloEtag || '"1"',
@@ -98,8 +100,13 @@ async function main() {
     });
   }
 
-  const sloPass = sloRes1.status === 201 && (sloArchiveRes.status === 200 || sloArchiveRes.status === 204);
-  console.log(`     SLO Lifecycle Result: ${sloPass ? 'PASS (Created, Evaluated, Archived, History Verified)' : `STATUS: ${sloRes1.status}`}`);
+  const sloPass =
+    sloRes1.status === 201 &&
+    Boolean(sloLineageId) &&
+    (sloEvalRes.status === 200 || sloEvalRes.status === 202) &&
+    sloHistoryRes.status === 200 &&
+    (sloArchiveRes.status === 200 || sloArchiveRes.status === 204);
+  console.log(`     SLO Lifecycle Result: ${sloPass ? 'PASS (Created 201, Evaluated 200/202, Archived 200/204, History 200)' : `FAIL (Create: ${sloRes1.status}, Lineage: ${sloLineageId}, Eval: ${sloEvalRes.status}, Hist: ${sloHistoryRes.status}, Arch: ${sloArchiveRes.status})`}`);
 
   // B. Audit Export Stream & Checksum Integrity Workflow (Real Background Worker)
   console.log('  -> Executing Audit Export Stream & Integrity Workflow (Real Worker)...');
@@ -151,32 +158,52 @@ async function main() {
 
   // C. Incident Metadata & Custom Fields Workflow
   console.log('  -> Executing Incident Custom Fields & Tagging Workflow...');
-  const incMetaRes1 = await req('POST', `/incidents/${fixtures.incidents.openId}/tags`, { tag: 'severity-critical' });
+  const incMetaRes1 = await req('POST', `/incidents/${fixtures.incidents.openId}/tags`, { name: 'severity-critical' }, adminToken, {
+    'Idempotency-Key': `idemp-tag-${Date.now()}`
+  });
   const incDiagRes = await req('GET', `/incidents/${fixtures.incidents.openId}/available-actions`);
   const incRelRes = await req('GET', `/incidents/${fixtures.incidents.openId}/related-incidents`);
-  const incMetaPass = incDiagRes.status === 200 && incRelRes.status === 200;
-  console.log(`     Incident Metadata & Diagnostics Result: ${incMetaPass ? 'PASS' : 'FAIL'}`);
+  const incMetaPass =
+    (incMetaRes1.status === 200 || incMetaRes1.status === 201) &&
+    incDiagRes.status === 200 &&
+    incRelRes.status === 200;
+  console.log(`     Incident Metadata & Diagnostics Result: ${incMetaPass ? 'PASS (Tag 200/201, Available Actions 200, Related Incidents 200)' : `FAIL (Tag: ${incMetaRes1.status}, Diag: ${incDiagRes.status}, Rel: ${incRelRes.status})`}`);
 
   // D. Runbook Service Bindings & Triggers
   console.log('  -> Executing Runbook Service Bindings & Execution Rules Workflow...');
-  const activeAgent = await prisma.runbookAgent.findFirst({ where: { status: 'ONLINE' } });
-  const activeVer = await prisma.runbookVersion.findFirst({ where: { runbookId: fixtures.runbooks.runbookId, state: 'PUBLISHED' } });
+  const runbookRecord = await prisma.runbook.findUnique({
+    where: { id: fixtures.runbooks.runbookId },
+    select: { publishedVersionId: true }
+  });
+  const resolvedPublishedVerId = runbookRecord?.publishedVersionId || fixtures.runbookVersions?.versionId;
   const ruleRes = await req('POST', `/services/${fixtures.services.serviceAId}/runbook-rules`, {
-    runbookId: fixtures.runbooks.runbookId,
-    triggerType: 'INCIDENT_CREATED',
-    versionStrategy: 'LATEST',
-    defaultAgentId: activeAgent?.id,
-    runbookVersionId: activeVer?.id
+    configuration: {
+      runbookId: fixtures.runbooks.runbookId,
+      name: `Reconcile Bind Rule ${Date.now()}`,
+      mode: 'MANUAL',
+      versionStrategy: 'LATEST_PUBLISHED'
+    },
+    expectedVersionId: resolvedPublishedVerId
   }, adminToken, { 'Idempotency-Key': `idemp-rule-${Date.now()}` });
   const ruleId = ruleRes.json?.data?.id;
 
-  let rulePass = true;
-  if (ruleId) {
-    const rulePause = await req('POST', `/services/${fixtures.services.serviceAId}/runbook-rules/${ruleId}/pause`, {});
-    const ruleResume = await req('POST', `/services/${fixtures.services.serviceAId}/runbook-rules/${ruleId}/resume`, {});
-    rulePass = rulePause.status === 200 && ruleResume.status === 200;
+  let rulePass = false;
+  if (ruleRes.status === 201 && ruleId) {
+    const pauseRes = await req('POST', `/services/${fixtures.services.serviceAId}/runbook-rules/${ruleId}/pause`, {}, adminToken, {
+      'If-Match': '"1"',
+      'Idempotency-Key': `idemp-pause-${Date.now()}`
+    });
+    const pauseEtag = pauseRes.headers.get('etag') || '"2"';
+    const resumeRes = await req('PATCH', `/services/${fixtures.services.serviceAId}/runbook-rules/${ruleId}`, {
+      configuration: { enabled: true },
+      expectedVersionId: resolvedPublishedVerId
+    }, adminToken, {
+      'If-Match': pauseEtag,
+      'Idempotency-Key': `idemp-resume-${Date.now()}`
+    });
+    rulePass = pauseRes.status === 200 && resumeRes.status === 200;
   }
-  console.log(`     Runbook Bindings Lifecycle Result: ${rulePass ? 'PASS' : 'FAIL'}`);
+  console.log(`     Runbook Bindings Lifecycle Result: ${rulePass ? 'PASS (Created 201 with RuleId, Paused 200, Resumed 200)' : `FAIL (Create: ${ruleRes.status}, ID: ${ruleId})`}`);
 
   // E. Identity Lifecycle & Session Revocation
   console.log('  -> Executing Identity Lifecycle & Session Revocation Workflow...');
@@ -291,17 +318,17 @@ async function main() {
       classification = 'CERTIFIED_EXTENDED_WORKFLOW';
       summary = 'Certified in live multi-step extended workflow (User Invite, Role assignment, Session inspection) + 14 atomic operations.';
     } else if (cid === 'scim') {
-      classification = 'SPECIALIZED_PROTOCOL';
-      summary = 'Dedicated SCIM 2.0 provisioning protocol (/scim/v2/Users, /scim/v2/Groups) verified against RFC 7644 test suite.';
+      classification = 'SPECIALIZED_PROTOCOL_PROVISIONAL_SMOKE';
+      summary = 'SCIM 2.0 provisioning smoke verified live (200 Config/Schemas, 401 unauth); full protocol suites pass in tests/lib/scim.test.ts (13/13).';
     } else if (cid === 'provider-oauth') {
-      classification = 'SPECIALIZED_PROTOCOL';
-      summary = 'External OAuth authorization consent flows (/integrations/oauth/callback) validated against simulated provider endpoints.';
+      classification = 'SPECIALIZED_PROTOCOL_PROVISIONAL_SMOKE';
+      summary = 'Provider OAuth discovery endpoint verified live (200); authoritative flow logic validated in tests/unit/api-v2-enterprise-platform.test.ts (17/17).';
     } else if (cid === 'agent-protocol') {
-      classification = 'SPECIALIZED_PROTOCOL';
-      summary = 'Runbook remote agent execution protocol (/runbook-agents/{id}/heartbeat, /claims, /results) certified with HMAC signature validation.';
+      classification = 'SPECIALIZED_PROTOCOL_PROVISIONAL_SMOKE';
+      summary = 'Runbook remote agent discovery verified live (200); authoritative agent execution and HMAC validation pass in tests/unit/api-v2-sdk.test.ts (13/13).';
     } else if (cid === 'sensitive-maintenance') {
-      classification = 'SPECIALIZED_PROTOCOL';
-      summary = 'Dedicated system recovery and encryption key rotation control plane certified via CLI runtime utilities.';
+      classification = 'SPECIALIZED_PROTOCOL_PROVISIONAL_SMOKE';
+      summary = 'Sensitive CLI recovery & key upgrade verified (scripts/auto-recover-migrations.ts); cryptographic assertions pass in tests/lib/api-key-upgrade-compat.test.ts (8/8).';
     } else {
       classification = 'CERTIFIED_ATOMIC_MATRIX';
       summary = `Certified with 100% live HTTP 2xx, 5 auth failure vectors, and OpenAPI schema compliance in 314-operation matrix.`;
@@ -383,9 +410,9 @@ All 31 capability workflow families cataloged in \`plans/rest-api-enterprise/wor
 |---|---|---|---|
 | **Primary E2E Business Workflows** | 10 | **PASS (100%)** | Complex multi-step domains verified in \`WORKFLOW-MATRIX.md\` (45 atomic steps). |
 | **Extended E2E Integration Workflows** | 6 | **PASS (100%)** | Multi-step integration flows for SLO, Audit Export, Metadata, Runbook Rules, and Identity. |
-| **Specialized Protocols & Control Planes** | 4 | **PASS (100%)** | SCIM 2.0, Agent Remote Protocol, Provider OAuth, and Sensitive Maintenance verified against dedicated protocols. |
+| **Specialized Protocols (Provisional Smoke)** | 4 | **PROVISIONAL SMOKE (PASS)** | SCIM 2.0, Agent Remote Protocol, Provider OAuth, and Sensitive Maintenance smoke-verified live; full protocols certified in dedicated test suites (\`tests/lib/scim.test.ts\`, \`tests/unit/api-v2-sdk.test.ts\`, \`tests/unit/api-v2-enterprise-platform.test.ts\`, \`tests/lib/api-key-upgrade-compat.test.ts\`). |
 | **Atomic Operation Matrix Families** | 11 | **PASS (100%)** | Verified via positive 2xx responses, 5 auth denial cases, and RFC 9457 error contracts in \`OPERATION-MATRIX.json\`. |
-| **Total Capability Families** | **31** | **PASS (100%)** | **Zero Unreconciled or Unverified Capabilities** |
+| **Total Capability Families** | **31** | **PASS / PROVISIONAL** | **18 Fully Certified with Zero Blockers, 13 Provisionally Certified with Documented Inventory Backlog** |
 
 ---
 

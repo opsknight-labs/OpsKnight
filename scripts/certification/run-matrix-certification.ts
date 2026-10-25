@@ -2753,12 +2753,21 @@ async function main() {
       } else if (idempotencyMode === 'natural') {
         // Natural idempotency: replaying an idempotent write must produce:
         // - Matching status (200/204) for state updates
+        // - For 200/201 creations: verify exact matching resource ID (idempotent upsert without duplicate creation)
         // - Precondition failure (412) if monotonic revision advanced
         // - Unique constraint conflict (409) or quota rejection (403) preventing duplicate creation
         const matchesStatus = replayRes.status === posRes.status;
+        let identicalEntity = true;
+        if (matchesStatus && (posRes.status === 200 || posRes.status === 201)) {
+          const posId = posRes.json?.data?.id || posRes.json?.id;
+          const repId = replayRes.json?.data?.id || replayRes.json?.id;
+          if (posId && repId) {
+            identicalEntity = posId === repId;
+          }
+        }
         const isPreconditionFailed = replayRes.status === 412;
         const isUniquenessConstraint = (posRes.status === 201 || posRes.status === 200) && (replayRes.status === 409 || replayRes.status === 403);
-        idempotentPass = matchesStatus || isPreconditionFailed || isUniquenessConstraint;
+        idempotentPass = (matchesStatus && identicalEntity) || isPreconditionFailed || isUniquenessConstraint;
       } else if (idempotencyMode === 'never') {
         // Non-idempotent operations ('never') must NOT replay cached responses or set idempotency-replayed
         const replayedHeader = replayRes.headers.get('idempotency-replayed');
