@@ -34,6 +34,7 @@ export const options = {
 export function sustainedWorkload() {
   // Rotate token by VU and iteration
   const tokenIndex = (__VU + __ITER) % keyPool.length;
+  // eslint-disable-next-line security/detect-object-injection
   const token = keyPool[tokenIndex];
 
   const headers = {
