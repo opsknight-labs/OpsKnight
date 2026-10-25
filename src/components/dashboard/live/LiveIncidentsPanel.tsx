@@ -73,10 +73,12 @@ function healthCopy(health: LiveConnectionHealth): { label: string; dot: string;
 const SHORTCUTS: Array<[string, string]> = [
   ['j / k', 'Next / previous incident'],
   ['Enter', 'Open the focused incident'],
+  ['o / Space', 'Inspect focused incident'],
   ['a', 'Acknowledge focused incident'],
   ['m', 'Assign focused incident to me'],
   ['/', 'Search live incidents'],
   ['p', 'Pause / resume live updates'],
+  ['Esc', 'Close details inspector'],
 ];
 
 export function viewAllHref(query: LiveIncidentQuery, currentUserId: string): string {
@@ -182,6 +184,8 @@ export default function LiveIncidentsPanel({
     togglePin,
     density,
     setDensity,
+    selectedIncidentId,
+    selectIncident,
   } = live;
   const wallboard = variant === 'wallboard';
   // Desktop cockpit: the panel is viewport-sized and scrolls internally, so render every loaded
@@ -312,6 +316,19 @@ export default function LiveIncidentsPanel({
           event.preventDefault();
           togglePaused();
           return;
+        case 'o':
+        case ' ':
+          if (focused && !wallboard) {
+            event.preventDefault();
+            selectIncident(selectedIncidentId === focused.id ? null : focused.id);
+          }
+          return;
+        case 'Escape':
+          if (selectedIncidentId) {
+            event.preventDefault();
+            selectIncident(null);
+          }
+          return;
       }
     };
     window.addEventListener('keydown', onKeyDown);
@@ -324,6 +341,8 @@ export default function LiveIncidentsPanel({
     currentUserId,
     focusRow,
     focusedIndex,
+    selectIncident,
+    selectedIncidentId,
     togglePaused,
     visible,
     wallboard,
@@ -547,7 +566,7 @@ export default function LiveIncidentsPanel({
                   <DropdownMenuItem asChild>
                     <Link href="/wallboard">
                       <Monitor className="mr-2 h-3.5 w-3.5" aria-hidden />
-                      Open wallboard (TV mode)
+                      Open Operations Console (TV mode)
                     </Link>
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
@@ -680,6 +699,7 @@ export default function LiveIncidentsPanel({
                 now={now}
                 highlighted={highlighted.has(incident.id)}
                 focused={focusedIndex === index}
+                isSelected={selectedIncidentId === incident.id}
                 canAcknowledge={canAcknowledge && !wallboard}
                 canAssignSelf={canAssignSelf && !wallboard}
                 isMine={incident.assignee?.id === currentUserId}
@@ -687,6 +707,9 @@ export default function LiveIncidentsPanel({
                 onAcknowledge={acknowledge}
                 onAssignSelf={assignSelf}
                 onFocusRow={setFocusedIndex}
+                onSelectRow={item =>
+                  selectIncident(selectedIncidentId === item.id ? null : item.id)
+                }
                 tv={wallboard}
                 density={density}
                 pinned={pins.includes(incident.id)}

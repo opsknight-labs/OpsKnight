@@ -11,7 +11,7 @@ import LiveWallboard from '@/components/dashboard/live/LiveWallboard';
 export const revalidate = 0;
 
 export const metadata: Metadata = {
-  title: 'Incident Wallboard · OpsKnight',
+  title: 'Operations Console · OpsKnight',
   robots: { index: false, follow: false },
 };
 

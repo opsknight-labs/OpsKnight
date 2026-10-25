@@ -29,6 +29,8 @@ import {
   type LiveIncidentQuery,
   type LiveSnapshot,
 } from '@/lib/dashboard/live-incidents-shared';
+import { reassignIncident, updateIncidentStatus } from '@/app/(app)/incidents/actions';
+import { useToast } from '@/hooks/use-product-notification';
 
 const HIGHLIGHT_MS = 4_000;
 const REALTIME_DEBOUNCE_MS = 75;
@@ -47,6 +49,12 @@ type ReconcileReason = 'realtime' | 'filter' | 'safety' | 'retry' | 'manual' | '
 
 export type LiveDashboardContextValue = {
   currentUserId: string;
+  currentUserName: string;
+  canAcknowledge: boolean;
+  canAssignSelf: boolean;
+  busyMap: Record<string, 'ack' | 'assign'>;
+  acknowledgeIncident: (incident: LiveIncident) => Promise<void>;
+  assignIncidentToMe: (incident: LiveIncident) => Promise<void>;
   query: LiveIncidentQuery;
   setQuery: (next: Partial<LiveIncidentQuery>, options?: { persist?: boolean }) => void;
   resetQuery: () => void;
@@ -72,6 +80,8 @@ export type LiveDashboardContextValue = {
   togglePin: (id: string) => void;
   density: LiveDensity;
   setDensity: (density: LiveDensity) => void;
+  selectedIncidentId: string | null;
+  selectIncident: (id: string | null) => void;
 };
 
 const LiveDashboardContext = createContext<LiveDashboardContextValue | null>(null);
@@ -172,11 +182,17 @@ function playAlertTone() {
 export function LiveDashboardProvider({
   initialSnapshot,
   currentUserId,
+  currentUserName = '',
+  canAcknowledge = false,
+  canAssignSelf = false,
   persistQuery = true,
   children,
 }: {
   initialSnapshot: LiveSnapshot | null;
   currentUserId: string;
+  currentUserName?: string;
+  canAcknowledge?: boolean;
+  canAssignSelf?: boolean;
   /** Shared displays (wallboards) are driven by their URL, never by a personal saved view. */
   persistQuery?: boolean;
   children: ReactNode;
@@ -564,9 +580,73 @@ export function LiveDashboardProvider({
   });
   const health: LiveConnectionHealth = baseHealth === 'live' && syncError ? 'stale' : baseHealth;
 
+  const [selectedIncidentId, setSelectedIncidentId] = useState<string | null>(null);
+  const selectIncident = useCallback((id: string | null) => {
+    setSelectedIncidentId(id);
+  }, []);
+
+  const [busyMap, setBusyMap] = useState<Record<string, 'ack' | 'assign'>>({});
+  const { showToast } = useToast();
+
+  const acknowledgeIncident = useCallback(
+    async (incident: LiveIncident) => {
+      if (busyMap[incident.id]) return;
+      setBusyMap(prev => ({ ...prev, [incident.id]: 'ack' }));
+      const rollback = applyOptimistic(incident.id, { status: 'ACKNOWLEDGED' });
+      try {
+        await updateIncidentStatus(incident.id, 'ACKNOWLEDGED', 'OPEN');
+        showToast(`Acknowledged “${incident.title}”`, 'success');
+        refresh();
+      } catch (error) {
+        rollback();
+        const { getUserFacingErrorMessage } = await import('@/lib/user-facing-error');
+        showToast(getUserFacingErrorMessage(error) || 'Could not acknowledge incident', 'error');
+      } finally {
+        setBusyMap(prev => {
+          const next = { ...prev };
+          delete next[incident.id];
+          return next;
+        });
+      }
+    },
+    [applyOptimistic, busyMap, refresh, showToast]
+  );
+
+  const assignIncidentToMe = useCallback(
+    async (incident: LiveIncident) => {
+      if (busyMap[incident.id]) return;
+      setBusyMap(prev => ({ ...prev, [incident.id]: 'assign' }));
+      const rollback = applyOptimistic(incident.id, {
+        assignee: { id: currentUserId, name: currentUserName || 'You' },
+      });
+      try {
+        await reassignIncident(incident.id, currentUserId);
+        showToast(`Assigned “${incident.title}” to you`, 'success');
+        refresh();
+      } catch (error) {
+        rollback();
+        const { getUserFacingErrorMessage } = await import('@/lib/user-facing-error');
+        showToast(getUserFacingErrorMessage(error) || 'Could not assign incident', 'error');
+      } finally {
+        setBusyMap(prev => {
+          const next = { ...prev };
+          delete next[incident.id];
+          return next;
+        });
+      }
+    },
+    [applyOptimistic, busyMap, currentUserId, currentUserName, refresh, showToast]
+  );
+
   const value = useMemo<LiveDashboardContextValue>(
     () => ({
       currentUserId,
+      currentUserName,
+      canAcknowledge,
+      canAssignSelf,
+      busyMap,
+      acknowledgeIncident,
+      assignIncidentToMe,
       query,
       setQuery,
       resetQuery,
@@ -590,9 +670,17 @@ export function LiveDashboardProvider({
       togglePin,
       density,
       setDensity,
+      selectedIncidentId,
+      selectIncident,
     }),
     [
       currentUserId,
+      currentUserName,
+      canAcknowledge,
+      canAssignSelf,
+      busyMap,
+      acknowledgeIncident,
+      assignIncidentToMe,
       query,
       setQuery,
       resetQuery,
@@ -616,6 +704,8 @@ export function LiveDashboardProvider({
       togglePin,
       density,
       setDensity,
+      selectedIncidentId,
+      selectIncident,
     ]
   );
 

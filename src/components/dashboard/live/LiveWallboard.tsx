@@ -317,7 +317,7 @@ export default function LiveWallboard({ timeZone }: { timeZone: string }) {
         <header className="mb-[1.2vh] flex flex-wrap items-center justify-between rounded-2xl border border-zinc-800 bg-gradient-to-b from-[#121216] to-[#09090b] px-[1.5vw] py-[1.2vh] text-slate-100">
           <div className="mr-[2vw] min-w-0">
             <div className="flex items-center">
-              <h1 className="dash-wallboard-title mr-4">Incident Wallboard</h1>
+              <h1 className="dash-wallboard-title mr-4">Operations Console</h1>
               <LiveClock timeZone={timeZone} />
             </div>
             <p

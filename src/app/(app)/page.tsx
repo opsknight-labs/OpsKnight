@@ -77,9 +77,21 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
       : ('NONE' as const);
   const timeZone = user.timeZone || 'UTC';
 
+  const canAcknowledge =
+    hasCapability(actor.role, CAPABILITIES.OPERATIONS_MANAGE) ||
+    hasCapability(actor.role, CAPABILITIES.INCIDENT_ACKNOWLEDGE_SCOPED);
+  const canAssignSelf = hasCapability(actor.role, CAPABILITIES.OPERATIONS_MANAGE);
+  const currentUserName = user.name || user.email;
+
   return (
     <DashboardHistoryProvider initialQuery={historyQuery}>
-      <LiveDashboardProvider initialSnapshot={snapshot} currentUserId={user.id}>
+      <LiveDashboardProvider
+        initialSnapshot={snapshot}
+        currentUserId={user.id}
+        currentUserName={currentUserName}
+        canAcknowledge={canAcknowledge}
+        canAssignSelf={canAssignSelf}
+      >
         <div className="w-full space-y-4 px-3 py-3 sm:px-4 md:px-6 lg:px-6">
           <LiveCommandStrip scopeMode={scopeMode} timeZone={timeZone} />
 
@@ -88,13 +100,10 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
               <LiveIncidentsPanel
                 services={services}
                 teams={teams}
-                canAcknowledge={
-                  hasCapability(actor.role, CAPABILITIES.OPERATIONS_MANAGE) ||
-                  hasCapability(actor.role, CAPABILITIES.INCIDENT_ACKNOWLEDGE_SCOPED)
-                }
-                canAssignSelf={hasCapability(actor.role, CAPABILITIES.OPERATIONS_MANAGE)}
+                canAcknowledge={canAcknowledge}
+                canAssignSelf={canAssignSelf}
                 canExport={hasCapability(actor.role, CAPABILITIES.REPORT_EXPORT)}
-                currentUserName={user.name || user.email}
+                currentUserName={currentUserName}
               />
             }
             rail={<OpsPulsePanel />}

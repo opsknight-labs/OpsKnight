@@ -2,7 +2,7 @@
 
 import { memo } from 'react';
 import Link from 'next/link';
-import { Check, Clock3, Loader2, Plus, Star, UserPlus, UserRound } from 'lucide-react';
+import { Check, Clock3, Loader2, PanelRight, Plus, Star, UserPlus, UserRound } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import PriorityBadge from '@/components/incident/PriorityBadge';
 import { Badge } from '@/components/ui/shadcn/badge';
@@ -104,6 +104,7 @@ type RowProps = {
   now: number;
   highlighted: boolean;
   focused: boolean;
+  isSelected?: boolean;
   canAcknowledge: boolean;
   canAssignSelf: boolean;
   isMine: boolean;
@@ -113,6 +114,7 @@ type RowProps = {
   onAssignSelf: (incident: LiveIncident) => void;
   onTogglePin: (id: string) => void;
   onFocusRow: (index: number) => void;
+  onSelectRow?: (incident: LiveIncident) => void;
   density?: 'comfortable' | 'compact';
   tv?: boolean;
 };
@@ -135,6 +137,7 @@ export const LiveIncidentRow = memo(function LiveIncidentRow({
   now,
   highlighted,
   focused,
+  isSelected = false,
   canAcknowledge,
   canAssignSelf,
   isMine,
@@ -144,6 +147,7 @@ export const LiveIncidentRow = memo(function LiveIncidentRow({
   onAssignSelf,
   onTogglePin,
   onFocusRow,
+  onSelectRow,
   density = 'comfortable',
   tv = false,
 }: RowProps) {
@@ -218,11 +222,18 @@ export const LiveIncidentRow = memo(function LiveIncidentRow({
       data-status={incident.status}
       data-highlighted={highlighted ? 'true' : 'false'}
       data-focused={focused ? 'true' : 'false'}
+      data-selected={isSelected ? 'true' : 'false'}
+      onClick={e => {
+        const target = e.target as HTMLElement;
+        if (target.closest('button, a')) return;
+        onSelectRow?.(incident);
+      }}
       className={cn(
-        'group relative transition-colors duration-700',
+        'group relative cursor-pointer transition-colors duration-200',
         'hover:bg-muted/40 focus-within:bg-muted/40',
         highlighted ? 'bg-primary/[0.07]' : '',
-        focused && 'bg-muted/60'
+        focused && 'bg-muted/60',
+        isSelected && 'bg-primary/5 dark:bg-primary/10 ring-1 ring-inset ring-primary/40'
       )}
     >
       {accent && (
@@ -263,9 +274,8 @@ export const LiveIncidentRow = memo(function LiveIncidentRow({
             title={incident.title}
             className={cn(
               'block rounded-sm font-semibold text-foreground outline-none',
-              tv ? 'truncate' : 'line-clamp-2 break-words md:line-clamp-none md:truncate',
-              'hover:text-primary focus-visible:ring-2 focus-visible:ring-primary/50',
-              tv ? 'text-[1.15em]' : 'text-[13px] leading-5'
+              tv ? 'truncate text-[1.15em]' : 'line-clamp-2 break-words text-sm leading-5 md:line-clamp-none md:truncate',
+              'hover:text-primary focus-visible:ring-2 focus-visible:ring-primary/50'
             )}
           >
             {incident.title}
@@ -274,7 +284,7 @@ export const LiveIncidentRow = memo(function LiveIncidentRow({
             <span
               className={cn(
                 'flex min-w-0 items-center gap-1.5 text-muted-foreground',
-                tv ? 'text-[0.85em]' : 'text-[11px]'
+                tv ? 'text-[0.85em]' : 'text-xs'
               )}
             >
               <span className="truncate">
@@ -371,6 +381,22 @@ export const LiveIncidentRow = memo(function LiveIncidentRow({
                 )}
               </button>
             )}
+            <button
+              type="button"
+              data-testid="live-inspect"
+              onClick={() => onSelectRow?.(incident)}
+              title={isSelected ? 'Close inspector' : 'Inspect details'}
+              aria-label={`Inspect ${incident.title}`}
+              aria-pressed={isSelected}
+              className={cn(
+                iconButton,
+                isSelected
+                  ? 'border-primary bg-primary/10 text-primary'
+                  : 'hover:border-primary/50 hover:text-primary'
+              )}
+            >
+              <PanelRight className="h-3.5 w-3.5 shrink-0" aria-hidden />
+            </button>
             <button
               type="button"
               data-testid="live-pin"

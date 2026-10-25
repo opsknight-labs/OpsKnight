@@ -45,10 +45,10 @@ function Metric({
     value === null || value === 0
       ? 'text-zinc-500'
       : emphasis === 'critical'
-        ? 'text-rose-400'
+        ? 'text-rose-400 font-bold'
         : emphasis === 'warning'
-          ? 'text-amber-300'
-          : 'text-zinc-50';
+          ? 'text-amber-300 font-bold'
+          : 'text-zinc-50 font-bold';
   return (
     <button
       type="button"
@@ -63,16 +63,24 @@ function Metric({
         active && 'bg-[#141418]'
       )}
     >
-      <span className="block truncate text-[12px] font-medium text-zinc-400 group-hover:text-zinc-300">
-        {label}
-      </span>
+      <div className="flex items-center justify-between gap-2">
+        <span className="block truncate text-[12px] font-medium text-zinc-400 group-hover:text-zinc-300">
+          {label}
+        </span>
+        {emphasis === 'critical' && value !== null && value > 0 && (
+          <span className="h-1.5 w-1.5 rounded-full bg-rose-500 motion-safe:animate-pulse" aria-hidden />
+        )}
+        {emphasis === 'warning' && value !== null && value > 0 && (
+          <span className="h-1.5 w-1.5 rounded-full bg-amber-400" aria-hidden />
+        )}
+      </div>
       <span
         className={cn(
-          'mt-2 block font-display text-[32px] font-semibold leading-none tabular-nums tracking-[-0.03em]',
+          'mt-2 block font-display text-[30px] sm:text-[32px] leading-none tabular-nums tracking-[-0.03em]',
           valueClass
         )}
       >
-        {value ?? '—'}
+        {value !== null && value < 10 && value > 0 ? `0${value}` : (value ?? '—')}
       </span>
       <span className="mt-2 block truncate text-[12px] text-zinc-500">{context}</span>
       {active && (
@@ -190,7 +198,7 @@ export default function LiveCommandStrip({
       : !summary
         ? { label: 'Connecting', dot: 'bg-zinc-500', text: 'text-zinc-400' }
         : summary.critical > 0 || summary.slaDueSoon > 0 || summary.slaRecentlyBreached > 0
-          ? { label: 'Critical', dot: 'bg-rose-500', text: 'text-rose-300' }
+          ? { label: 'Critical', dot: 'bg-rose-500 motion-safe:animate-pulse', text: 'text-rose-300' }
           : summary.active > 0
             ? { label: 'Degraded', dot: 'bg-amber-400', text: 'text-amber-200' }
             : { label: 'Operational', dot: 'bg-emerald-400', text: 'text-emerald-300' };
@@ -207,27 +215,35 @@ export default function LiveCommandStrip({
     <section
       data-testid="command-center"
       aria-label="Command center"
-      className="overflow-hidden rounded-xl border border-zinc-800 bg-[#0c0c0f] text-zinc-100"
+      className="overflow-hidden rounded-xl border border-border dark:border-zinc-800 shadow-xs"
     >
-      <div className="flex flex-col gap-3 px-5 pb-4 pt-4 lg:flex-row lg:items-start lg:justify-between">
+      {/* Top Header: Theme-aware surface (clean and integrated in light mode, sleek dark in dark mode) */}
+      <div className="flex flex-col gap-3 bg-card px-5 pb-4 pt-4 text-card-foreground border-b border-border dark:border-zinc-800 lg:flex-row lg:items-start lg:justify-between">
         <div className="min-w-0">
           <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
-            <h1 className="dash-hero-title">Command Center</h1>
+            <h1 className="dash-hero-title text-foreground">Command Center</h1>
             <span
               data-testid="command-status"
-              className={cn('inline-flex items-center gap-2 text-[13px] font-medium', status.text)}
+              className={cn(
+                'inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-semibold',
+                status.dot.includes('rose')
+                  ? 'bg-rose-500/10 text-rose-600 dark:text-rose-400'
+                  : status.dot.includes('amber')
+                    ? 'bg-amber-500/10 text-amber-700 dark:text-amber-300'
+                    : 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400'
+              )}
             >
-              <span className={cn('h-2 w-2 rounded-full', status.dot)} aria-hidden />
+              <span className={cn('h-1.5 w-1.5 rounded-full', status.dot)} aria-hidden />
               {status.label}
             </span>
           </div>
           <p
             data-testid="command-insight"
             aria-live="polite"
-            className="mt-2 text-[13px] leading-6 text-zinc-400"
+            className="mt-2 text-[13px] leading-6 text-muted-foreground"
           >
             {narrative.length === 0 ? (
-              <span className="text-zinc-300">
+              <span className="text-muted-foreground">
                 No active incidents{query.scope !== 'all' ? ' in this scope' : ''}. Everything is
                 quiet.
               </span>
@@ -235,7 +251,7 @@ export default function LiveCommandStrip({
               narrative.map((fragment, index) => (
                 <span key={fragment.text}>
                   {index > 0 && (
-                    <span aria-hidden className="mx-2 text-zinc-700">
+                    <span aria-hidden className="mx-2 text-muted-foreground/40">
                       /
                     </span>
                   )}
@@ -247,10 +263,10 @@ export default function LiveCommandStrip({
                       className={cn(
                         'rounded-sm p-0 font-medium decoration-1 underline-offset-4 outline-none hover:underline focus-visible:underline',
                         fragment.tone === 'rose'
-                          ? 'text-rose-300'
+                          ? 'text-rose-600 dark:text-rose-400 font-semibold'
                           : fragment.tone === 'amber'
-                            ? 'text-amber-200'
-                            : 'text-zinc-200'
+                            ? 'text-amber-700 dark:text-amber-300 font-semibold'
+                            : 'text-foreground font-semibold'
                       )}
                     >
                       {fragment.text}
@@ -271,7 +287,7 @@ export default function LiveCommandStrip({
             role="radiogroup"
             aria-label="Incident scope"
             data-testid="scope-switch"
-            className="inline-flex h-8 items-center rounded-md border border-zinc-800 p-0.5 text-[12px] font-medium"
+            className="inline-flex h-8 items-center rounded-lg border border-border dark:border-zinc-800 bg-muted/40 dark:bg-zinc-900/60 p-0.5 text-[12px] font-medium"
           >
             {LIVE_SCOPES.map(scope => (
               <button
@@ -283,15 +299,17 @@ export default function LiveCommandStrip({
                 data-icon-button
                 onClick={() => setQuery({ scope })}
                 className={cn(
-                  'h-full whitespace-nowrap rounded px-2.5 outline-none transition-colors focus-visible:ring-2 focus-visible:ring-zinc-500',
+                  'h-full whitespace-nowrap rounded-md px-2.5 outline-none transition-colors focus-visible:ring-2 focus-visible:ring-primary/50',
                   query.scope === scope
-                    ? 'bg-zinc-800 text-zinc-50'
-                    : 'text-zinc-400 hover:text-zinc-100'
+                    ? 'bg-card text-foreground shadow-2xs font-semibold dark:bg-zinc-800 dark:text-zinc-50'
+                    : 'text-muted-foreground hover:text-foreground dark:text-zinc-400 dark:hover:text-zinc-100'
                 )}
               >
                 {SCOPE_LABEL.get(scope)}
                 {scope === 'mine' && summary ? (
-                  <span className="ml-1 tabular-nums text-zinc-500">{summary.mine}</span>
+                  <span className="ml-1.5 rounded-full bg-muted dark:bg-zinc-800/80 px-1.5 py-0.2 text-[10px] tabular-nums font-semibold text-muted-foreground dark:text-zinc-400">
+                    {summary.mine}
+                  </span>
                 ) : null}
               </button>
             ))}
@@ -299,23 +317,24 @@ export default function LiveCommandStrip({
           <Link
             href="/wallboard"
             data-testid="command-wallboard"
-            title="Full-screen view for office TVs and NOC screens"
-            className="inline-flex h-8 items-center gap-1.5 rounded-md border border-zinc-800 px-2.5 text-[12px] font-medium text-zinc-300 outline-none transition-colors hover:bg-zinc-900 hover:text-zinc-50 focus-visible:ring-2 focus-visible:ring-zinc-500"
+            title="Full-screen operations command console for office TVs and NOC screens"
+            className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-border dark:border-zinc-800 bg-card dark:bg-[#0c0c0f] px-2.5 text-[12px] font-medium text-foreground dark:text-zinc-300 shadow-2xs outline-none transition-colors hover:bg-muted dark:hover:bg-zinc-900 hover:text-foreground dark:hover:text-zinc-50 focus-visible:ring-2 focus-visible:ring-primary/50"
           >
             <Monitor className="h-3.5 w-3.5 shrink-0" aria-hidden />
-            <span className="hidden sm:inline">Wallboard</span>
-            <span className="sr-only sm:hidden">Wallboard</span>
+            <span className="hidden sm:inline">Operations Console</span>
+            <span className="sr-only sm:hidden">Operations Console</span>
           </Link>
         </div>
       </div>
 
+      {/* Bottom Telemetry Strip: Dark avionics / instrument ribbon */}
       <div
         className="grid grid-cols-2 gap-px border-t border-zinc-800 bg-zinc-800 md:grid-cols-3 xl:grid-cols-6"
         data-testid="command-center-counters"
       >
         <Metric
           testId="counter-triggered"
-          label="Triggered"
+          label="Awaiting response"
           title="Show triggered incidents in the live feed"
           value={summary?.triggered ?? null}
           context={lastHour(trend?.createdLastHour, 'new')}
@@ -332,36 +351,6 @@ export default function LiveCommandStrip({
           emphasis="critical"
           active={isFocused({ view: 'critical' })}
           onClick={() => focus({ view: 'critical' })}
-        />
-        <Metric
-          testId="counter-acknowledged"
-          label="Acknowledged"
-          title="Show acknowledged incidents in the live feed"
-          value={summary?.acknowledged ?? null}
-          context={lastHour(trend?.acknowledgedLastHour, 'acked')}
-          emphasis="none"
-          active={isFocused({ status: 'ACKNOWLEDGED' })}
-          onClick={() => focus({ status: 'ACKNOWLEDGED' })}
-        />
-        <Metric
-          testId="counter-unassigned"
-          label="Unassigned"
-          title="Show incidents without an owner in the live feed"
-          value={summary?.unassigned ?? null}
-          context={
-            summary?.unassignedCritical ? (
-              <span className="text-rose-300/90">
-                {summary.unassignedCritical} of them critical
-              </span>
-            ) : summary ? (
-              'All critical work is owned'
-            ) : (
-              '\u00a0'
-            )
-          }
-          emphasis={summary?.unassignedCritical ? 'warning' : 'none'}
-          active={isFocused({ view: 'unassigned' })}
-          onClick={() => focus({ view: 'unassigned' })}
         />
         <Metric
           testId="counter-sla"
@@ -389,6 +378,36 @@ export default function LiveCommandStrip({
           emphasis="warning"
           active={isFocused({ view: 'breaching' })}
           onClick={() => focus({ view: 'breaching' })}
+        />
+        <Metric
+          testId="counter-unassigned"
+          label="Unassigned"
+          title="Show incidents without an owner in the live feed"
+          value={summary?.unassigned ?? null}
+          context={
+            summary?.unassignedCritical ? (
+              <span className="text-rose-300/90">
+                {summary.unassignedCritical} of them critical
+              </span>
+            ) : summary ? (
+              'All critical work is owned'
+            ) : (
+              '\u00a0'
+            )
+          }
+          emphasis={summary?.unassignedCritical ? 'warning' : 'none'}
+          active={isFocused({ view: 'unassigned' })}
+          onClick={() => focus({ view: 'unassigned' })}
+        />
+        <Metric
+          testId="counter-acknowledged"
+          label="Acknowledged"
+          title="Show acknowledged incidents in the live feed"
+          value={summary?.acknowledged ?? null}
+          context={lastHour(trend?.acknowledgedLastHour, 'acked')}
+          emphasis="none"
+          active={isFocused({ status: 'ACKNOWLEDGED' })}
+          onClick={() => focus({ status: 'ACKNOWLEDGED' })}
         />
         <Metric
           testId="counter-resolved"

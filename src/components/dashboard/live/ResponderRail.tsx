@@ -47,13 +47,13 @@ function RailCard({
 }) {
   const toneClass =
     tone === 'violet'
-      ? 'bg-violet-500/10 text-violet-600 dark:text-violet-300'
+      ? 'bg-muted text-foreground'
       : tone === 'amber'
-        ? 'bg-amber-500/10 text-amber-600 dark:text-amber-300'
+        ? 'bg-amber-500/10 text-amber-700 dark:text-amber-400'
         : tone === 'rose'
-          ? 'bg-rose-500/10 text-rose-600 dark:text-rose-300'
+          ? 'bg-rose-500/10 text-rose-700 dark:text-rose-400'
           : tone === 'sky'
-            ? 'bg-sky-500/10 text-sky-600 dark:text-sky-300'
+            ? 'bg-muted text-foreground'
             : 'bg-muted text-muted-foreground';
   const actionClass =
     'shrink-0 rounded-md px-1.5 py-0.5 text-[11px] font-semibold text-muted-foreground hover:bg-muted hover:text-foreground outline-none focus-visible:ring-2 focus-visible:ring-primary/50';
@@ -287,9 +287,9 @@ function formatUntil(iso: string | null, now: number): string {
 }
 
 const ATTENTION_TONE: Record<'rose' | 'amber' | 'violet', string> = {
-  rose: 'bg-rose-100 text-rose-700 dark:bg-rose-950/60 dark:text-rose-300',
-  amber: 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300',
-  violet: 'bg-violet-100 text-violet-700 dark:bg-violet-950/60 dark:text-violet-300',
+  rose: 'bg-rose-500/10 text-rose-700 dark:text-rose-400 font-semibold',
+  amber: 'bg-amber-500/10 text-amber-800 dark:text-amber-400 font-semibold',
+  violet: 'bg-muted text-foreground font-semibold',
 };
 
 /**
@@ -311,12 +311,12 @@ export function OpsPulsePanel() {
     <section
       aria-labelledby="ops-pulse-heading"
       data-testid="ops-pulse"
-      className="flex h-full min-h-0 flex-col overflow-hidden rounded-xl border border-border bg-card shadow-[0_1px_2px_rgba(16,24,40,0.05)]"
+      className="flex h-full min-h-0 flex-col overflow-hidden rounded-xl border border-border bg-card shadow-xs"
     >
       <header className="flex shrink-0 items-center gap-2.5 border-b border-border px-4 py-2.5">
         <span
           aria-hidden
-          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary"
+          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-muted text-foreground"
         >
           <Activity className="h-3.5 w-3.5" />
         </span>
@@ -324,38 +324,33 @@ export function OpsPulsePanel() {
           <h2 id="ops-pulse-heading" className="dash-heading whitespace-nowrap">
             Ops Pulse
           </h2>
-          <p className="truncate text-[11px] text-muted-foreground">What needs you next</p>
+          <p className="truncate text-xs text-muted-foreground">What needs you next</p>
         </div>
       </header>
       <div className="min-h-0 flex-1 divide-y divide-border/70 overflow-y-auto overscroll-contain">
         <section className="px-4 py-3" data-testid="pulse-you">
           <div
             className={cn(
-              'rounded-lg p-2.5 ring-1',
+              'rounded-lg p-2.5 border',
               coverage?.me.onCall
-                ? 'bg-gradient-to-r from-violet-50 to-transparent ring-violet-200 dark:from-violet-950/40 dark:ring-violet-900/60'
-                : 'bg-muted/40 ring-border'
+                ? 'border-primary/30 bg-primary/5 dark:bg-primary/10'
+                : 'border-border bg-muted/30'
             )}
           >
             <div className="flex items-center gap-2.5">
               <span
                 aria-hidden
                 className={cn(
-                  'flex h-8 w-8 shrink-0 items-center justify-center rounded-full',
+                  'flex h-7 w-7 shrink-0 items-center justify-center rounded-full',
                   coverage?.me.onCall
-                    ? 'bg-violet-600 text-white'
+                    ? 'bg-primary/20 text-primary font-bold'
                     : 'bg-muted text-muted-foreground'
                 )}
               >
-                <UserRound className="h-4 w-4" />
+                <UserRound className="h-3.5 w-3.5" />
               </span>
               <div className="min-w-0 flex-1">
-                <p
-                  className={cn(
-                    'truncate text-[12px] font-semibold',
-                    coverage?.me.onCall ? 'text-violet-900 dark:text-violet-200' : 'text-foreground'
-                  )}
-                >
+                <p className="truncate text-xs font-semibold text-foreground">
                   {coverage?.me.onCall
                     ? `You're on call · ${coverage.me.schedules.join(', ')}`
                     : 'Not on call'}
@@ -367,7 +362,7 @@ export function OpsPulsePanel() {
               </div>
               <Link
                 href={queueHref}
-                className="shrink-0 rounded-md px-1.5 py-0.5 text-[11px] font-semibold text-primary hover:bg-primary/10"
+                className="shrink-0 rounded-md px-1.5 py-0.5 text-xs font-semibold text-primary hover:bg-primary/10"
               >
                 Queue →
               </Link>
