@@ -1,0 +1,156 @@
+{
+  "baselineRevision": "ee8f601faffbc9aeb4cc86f1dcf62ac205504379",
+  "archiveSha256": "5115feb6e74289f7f5bc3447fc638562ac578928018d99879580e4f6a352c1fc",
+  "candidateFiles": {
+    "src/lib/ingestion/postgres.ts": "164a44df8ddd7970cea74e26002f32abebe7e767a32a5ae6f5c74618c86272dc",
+    "src/lib/ingestion/receipt-insert.ts": "7dfc542fc2311786e618fe66fad0a158c8b60c24c248e542b27791ae9196d0b8"
+  },
+  "runs": [
+    {
+      "label": "a1",
+      "database": "ingestion_test_http_receipt_a1_20261025",
+      "preflight": {
+        "database": "ingestion_test_http_receipt_a1_20261025",
+        "migrations": 338,
+        "synchronousCommit": "on",
+        "walIoTiming": "off",
+        "clockMidpointOffsetMs": 1.5,
+        "clockRoundTripMs": 7,
+        "policy": {
+          "paused": false,
+          "revision": 1,
+          "policy": {
+            "concurrency": 4,
+            "leaseMs": 5000,
+            "pollMs": 100,
+            "maxPending": 1000000,
+            "maxPendingBytes": 10737418240,
+            "payloadRetentionHours": 24,
+            "receiptRetentionDays": 90,
+            "criticalReservePercent": 10,
+            "quotas": {
+              "eventsPerMinute": 10000000,
+              "eventsBurst": 10000000,
+              "integrationPerMinute": 10000000,
+              "integrationBurst": 10000000
+            }
+          }
+        }
+      }
+    },
+    {
+      "label": "b1",
+      "database": "ingestion_test_http_receipt_b1_20261025",
+      "preflight": {
+        "database": "ingestion_test_http_receipt_b1_20261025",
+        "migrations": 338,
+        "synchronousCommit": "on",
+        "walIoTiming": "off",
+        "clockMidpointOffsetMs": 0,
+        "clockRoundTripMs": 4,
+        "policy": {
+          "paused": false,
+          "revision": 1,
+          "policy": {
+            "concurrency": 4,
+            "leaseMs": 5000,
+            "pollMs": 100,
+            "maxPending": 1000000,
+            "maxPendingBytes": 10737418240,
+            "payloadRetentionHours": 24,
+            "receiptRetentionDays": 90,
+            "criticalReservePercent": 10,
+            "quotas": {
+              "eventsPerMinute": 10000000,
+              "eventsBurst": 10000000,
+              "integrationPerMinute": 10000000,
+              "integrationBurst": 10000000
+            }
+          }
+        }
+      }
+    },
+    {
+      "label": "b2",
+      "database": "ingestion_test_http_receipt_b2_20261025",
+      "preflight": {
+        "database": "ingestion_test_http_receipt_b2_20261025",
+        "migrations": 338,
+        "synchronousCommit": "on",
+        "walIoTiming": "off",
+        "clockMidpointOffsetMs": 0,
+        "clockRoundTripMs": 4,
+        "policy": {
+          "paused": false,
+          "revision": 1,
+          "policy": {
+            "concurrency": 4,
+            "leaseMs": 5000,
+            "pollMs": 100,
+            "maxPending": 1000000,
+            "maxPendingBytes": 10737418240,
+            "payloadRetentionHours": 24,
+            "receiptRetentionDays": 90,
+            "criticalReservePercent": 10,
+            "quotas": {
+              "eventsPerMinute": 10000000,
+              "eventsBurst": 10000000,
+              "integrationPerMinute": 10000000,
+              "integrationBurst": 10000000
+            }
+          }
+        }
+      }
+    },
+    {
+      "label": "a2",
+      "database": "ingestion_test_http_receipt_a2_20261025",
+      "preflight": {
+        "database": "ingestion_test_http_receipt_a2_20261025",
+        "migrations": 338,
+        "synchronousCommit": "on",
+        "walIoTiming": "off",
+        "clockMidpointOffsetMs": 0.5,
+        "clockRoundTripMs": 3,
+        "policy": {
+          "paused": false,
+          "revision": 1,
+          "policy": {
+            "concurrency": 4,
+            "leaseMs": 5000,
+            "pollMs": 100,
+            "maxPending": 1000000,
+            "maxPendingBytes": 10737418240,
+            "payloadRetentionHours": 24,
+            "receiptRetentionDays": 90,
+            "criticalReservePercent": 10,
+            "quotas": {
+              "eventsPerMinute": 10000000,
+              "eventsBurst": 10000000,
+              "integrationPerMinute": 10000000,
+              "integrationBurst": 10000000
+            }
+          }
+        }
+      }
+    }
+  ],
+  "scope": "Sequential host-process A-B-B-A admission-only diagnostic, immutable source copies prior to formatting, 1000 unique10KB random events/run, concurrency16/pool5, one warmup removed. Every accepted receipt and capacity counter reconciled. No HTTP/auth/consumers/incident effects or native resource-capacity certification. Baseline ee8f601f, candidate two-file overlay. Producer SHA256 provenance is not signed attestation.",
+  "comparison": {
+    "cpuMs": {
+      "baselineMean": 1202.1109999999999,
+      "candidateMean": 1037.8355,
+      "changePercent": -13.665584958460574
+    },
+    "elapsedMs": {
+      "baselineMean": 2919.2896455,
+      "candidateMean": 2315.419896,
+      "changePercent": -20.685503078834532
+    },
+    "queriesPerEvent": {
+      "baselineMean": 0.635,
+      "candidateMean": 0.6375,
+      "changePercent": 0.3937007874015741
+    }
+  }
+}

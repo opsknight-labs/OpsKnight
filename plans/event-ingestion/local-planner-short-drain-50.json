@@ -1,0 +1,76 @@
+{
+  "sourceRevision": "ee8f601faffbc9aeb4cc86f1dcf62ac205504379",
+  "imageId": "sha256:e6b0225696e5264fdbdc8b162a5854bc797c831abbe46fcc698c343a6d1c760d",
+  "runId": "a2f74f78-f107-4983-b34c-cb65c87a1ab0",
+  "target": 50,
+  "duration": "2m",
+  "generalWorkerReplicas": 1,
+  "httpPassed": false,
+  "localSmtpPassed": true,
+  "shortPreflightPassed": false,
+  "queueBounded": false,
+  "lastQueueSamples": [
+    {
+      "elapsedMs": 100095.003,
+      "due": 191,
+      "oldestDueMs": 815.245,
+      "failed": 0
+    },
+    {
+      "elapsedMs": 110132.37833400001,
+      "due": 109,
+      "oldestDueMs": 601.51,
+      "failed": 0
+    },
+    {
+      "elapsedMs": 120206.315542,
+      "due": 297,
+      "oldestDueMs": 2097.864,
+      "failed": 0
+    },
+    {
+      "elapsedMs": 121034.673084,
+      "due": 357,
+      "oldestDueMs": 2351.253,
+      "failed": 0
+    }
+  ],
+  "finalDrain": {
+    "observedAt": "2026-10-25T14:30:24.199841+00:00",
+    "dueUnfinished": 0,
+    "jobs": [
+      {
+        "type": "ESCALATION",
+        "status": "COMPLETED",
+        "count": 1
+      },
+      {
+        "type": "SCHEDULED_TASK",
+        "status": "COMPLETED",
+        "count": 20600
+      },
+      {
+        "type": "COMPLIANCE_EVALUATION_SWEEP",
+        "status": "PENDING",
+        "count": 1
+      },
+      {
+        "type": "COMPLIANCE_EVALUATION_SWEEP",
+        "status": "COMPLETED",
+        "count": 1
+      },
+      {
+        "type": "COMPLIANCE_DRIFT_PROJECT",
+        "status": "COMPLETED",
+        "count": 6
+      },
+      {
+        "type": "RUNBOOK",
+        "status": "COMPLETED",
+        "count": 4120
+      }
+    ],
+    "deliveries": null
+  },
+  "scope": "Short fresh-incident default/unconfigured-provider smoke with one separate pinned-Automation SMTP fixture. All active job families inspected after owned topology cleanup. Not sustained, compact-budget, configured fanout, actual Runbook execution, HA, remote delivery or release certification. General workers increase from1 at50 to2 at100; web2/ingestion2/six support roles1CPU each, DB uncapped/shared Docker VM."
+}

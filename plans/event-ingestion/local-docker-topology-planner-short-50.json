@@ -1,0 +1,879 @@
+{
+  "runId": "a2f74f78-f107-4983-b34c-cb65c87a1ab0",
+  "certifiedEnterprise": false,
+  "cleanupFailures": [],
+  "chaos": [],
+  "smtpCapture": {
+    "imageId": "sha256:0790692be935ea4420d085694f7985b1f692ca6a8771ab0e0bd8ba75ac180498",
+    "localOnly": true,
+    "remoteDeliveryCertified": false
+  },
+  "modeOverrideAbsentFromContainers": true,
+  "image": {
+    "nodeVersion": "v20.20.2",
+    "id": "sha256:e6b0225696e5264fdbdc8b162a5854bc797c831abbe46fcc698c343a6d1c760d",
+    "revision": "ee8f601faffbc9aeb4cc86f1dcf62ac205504379",
+    "proxyImageId": "sha256:47928bf67eb62a1863cb08d9ecb52d3e704304ba614eaee17884204677702951"
+  },
+  "topology": {
+    "capacityStage": "full-stack",
+    "responderSaturation": false,
+    "httpRole": "web",
+    "fullStackProcesses": true,
+    "edgeBackpressure": false,
+    "automaticMode": true,
+    "webFallbackOnly": false,
+    "webUsesPgBouncer": false,
+    "supportingRoles": [
+      {
+        "role": "scheduler",
+        "replicas": 1,
+        "pool": 2
+      },
+      {
+        "role": "general-worker",
+        "replicas": 1,
+        "pool": 5
+      },
+      {
+        "role": "critical-worker",
+        "replicas": 1,
+        "pool": 5
+      },
+      {
+        "role": "bulk-worker",
+        "replicas": 1,
+        "pool": 3
+      },
+      {
+        "role": "runbook-worker",
+        "replicas": 1,
+        "pool": 5
+      },
+      {
+        "role": "status-projector",
+        "replicas": 1,
+        "pool": 2
+      }
+    ],
+    "externalEffectsCertified": false,
+    "webReplicas": 2,
+    "workerReplicas": 2,
+    "workerConcurrency": 4,
+    "leaseMs": 5000,
+    "controlRevision": 1,
+    "webPool": 10,
+    "workerPool": 5,
+    "webCpus": 1,
+    "workerCpus": 1,
+    "cpuProfiling": false,
+    "capacity": {
+      "mode": "split",
+      "pgbouncer": false,
+      "webConnections": 20,
+      "directWorkerConnections": 33,
+      "totalDemand": 68,
+      "connectionReserve": 15,
+      "maxConnections": 100,
+      "safe": true,
+      "headroom": 32,
+      "breakdown": {
+        "ingestionWorker": {
+          "replicas": 2,
+          "pool": 5,
+          "total": 10
+        },
+        "web": {
+          "replicas": 2,
+          "pool": 10,
+          "effective": 20
+        },
+        "pgbouncer": null,
+        "scheduler": {
+          "replicas": 1,
+          "pool": 2,
+          "total": 3,
+          "artifactMaintenanceConnections": 1
+        },
+        "generalWorker": {
+          "replicas": 1,
+          "pool": 5,
+          "total": 5
+        },
+        "criticalWorker": {
+          "replicas": 1,
+          "pool": 5,
+          "total": 5
+        },
+        "bulkWorker": {
+          "replicas": 1,
+          "pool": 3,
+          "total": 3
+        },
+        "runbookWorker": {
+          "replicas": 1,
+          "pool": 5,
+          "total": 5
+        },
+        "statusProjector": {
+          "replicas": 1,
+          "pool": 2,
+          "total": 2
+        }
+      }
+    }
+  },
+  "resourcesBeforePreflight": [
+    {
+      "name": "ingestion-cert-a2f74f78-web-0",
+      "running": true,
+      "oomKilled": false,
+      "exitCode": 0,
+      "limits": {
+        "cpuCores": 1,
+        "memoryBytes": 1073741824
+      },
+      "cgroup": {
+        "cpu": {
+          "usage_usec": 8657233,
+          "user_usec": 6506823,
+          "system_usec": 2150409,
+          "nice_usec": 0,
+          "nr_periods": 601,
+          "nr_throttled": 46,
+          "throttled_usec": 3245144,
+          "nr_bursts": 0,
+          "burst_usec": 0
+        },
+        "memoryCurrentBytes": 154673152,
+        "memoryPeakBytes": 213901312,
+        "memoryEvents": {
+          "low": 0,
+          "high": 0,
+          "max": 0,
+          "oom": 0,
+          "oom_kill": 0,
+          "oom_group_kill": 0,
+          "sock_throttled": 0
+        }
+      }
+    },
+    {
+      "name": "ingestion-cert-a2f74f78-web-1",
+      "running": true,
+      "oomKilled": false,
+      "exitCode": 0,
+      "limits": {
+        "cpuCores": 1,
+        "memoryBytes": 1073741824
+      },
+      "cgroup": {
+        "cpu": {
+          "usage_usec": 7041630,
+          "user_usec": 5387355,
+          "system_usec": 1654275,
+          "nice_usec": 0,
+          "nr_periods": 537,
+          "nr_throttled": 35,
+          "throttled_usec": 2262015,
+          "nr_bursts": 0,
+          "burst_usec": 0
+        },
+        "memoryCurrentBytes": 137334784,
+        "memoryPeakBytes": 184360960,
+        "memoryEvents": {
+          "low": 0,
+          "high": 0,
+          "max": 0,
+          "oom": 0,
+          "oom_kill": 0,
+          "oom_group_kill": 0,
+          "sock_throttled": 0
+        }
+      }
+    },
+    {
+      "name": "ingestion-cert-a2f74f78-worker-0",
+      "running": true,
+      "oomKilled": false,
+      "exitCode": 0,
+      "limits": {
+        "cpuCores": 1,
+        "memoryBytes": 805306368
+      },
+      "cgroup": {
+        "cpu": {
+          "usage_usec": 9631296,
+          "user_usec": 7335809,
+          "system_usec": 2295487,
+          "nice_usec": 0,
+          "nr_periods": 798,
+          "nr_throttled": 52,
+          "throttled_usec": 4128413,
+          "nr_bursts": 0,
+          "burst_usec": 0
+        },
+        "memoryCurrentBytes": 141459456,
+        "memoryPeakBytes": 196481024,
+        "memoryEvents": {
+          "low": 0,
+          "high": 0,
+          "max": 0,
+          "oom": 0,
+          "oom_kill": 0,
+          "oom_group_kill": 0,
+          "sock_throttled": 0
+        }
+      }
+    },
+    {
+      "name": "ingestion-cert-a2f74f78-worker-1",
+      "running": true,
+      "oomKilled": false,
+      "exitCode": 0,
+      "limits": {
+        "cpuCores": 1,
+        "memoryBytes": 805306368
+      },
+      "cgroup": {
+        "cpu": {
+          "usage_usec": 8890548,
+          "user_usec": 6443738,
+          "system_usec": 2446809,
+          "nice_usec": 0,
+          "nr_periods": 729,
+          "nr_throttled": 39,
+          "throttled_usec": 2349872,
+          "nr_bursts": 0,
+          "burst_usec": 0
+        },
+        "memoryCurrentBytes": 148791296,
+        "memoryPeakBytes": 197410816,
+        "memoryEvents": {
+          "low": 0,
+          "high": 0,
+          "max": 0,
+          "oom": 0,
+          "oom_kill": 0,
+          "oom_group_kill": 0,
+          "sock_throttled": 0
+        }
+      }
+    },
+    {
+      "name": "ingestion-cert-a2f74f78-scheduler",
+      "running": true,
+      "oomKilled": false,
+      "exitCode": 0,
+      "limits": {
+        "cpuCores": 1,
+        "memoryBytes": 805306368
+      },
+      "cgroup": {
+        "cpu": {
+          "usage_usec": 8785511,
+          "user_usec": 6622344,
+          "system_usec": 2163166,
+          "nice_usec": 0,
+          "nr_periods": 265,
+          "nr_throttled": 42,
+          "throttled_usec": 2673843,
+          "nr_bursts": 0,
+          "burst_usec": 0
+        },
+        "memoryCurrentBytes": 161390592,
+        "memoryPeakBytes": 191389696,
+        "memoryEvents": {
+          "low": 0,
+          "high": 0,
+          "max": 0,
+          "oom": 0,
+          "oom_kill": 0,
+          "oom_group_kill": 0,
+          "sock_throttled": 0
+        }
+      }
+    },
+    {
+      "name": "ingestion-cert-a2f74f78-general-worker",
+      "running": true,
+      "oomKilled": false,
+      "exitCode": 0,
+      "limits": {
+        "cpuCores": 1,
+        "memoryBytes": 805306368
+      },
+      "cgroup": {
+        "cpu": {
+          "usage_usec": 5015881,
+          "user_usec": 3787189,
+          "system_usec": 1228691,
+          "nice_usec": 0,
+          "nr_periods": 144,
+          "nr_throttled": 35,
+          "throttled_usec": 1472909,
+          "nr_bursts": 0,
+          "burst_usec": 0
+        },
+        "memoryCurrentBytes": 139636736,
+        "memoryPeakBytes": 184680448,
+        "memoryEvents": {
+          "low": 0,
+          "high": 0,
+          "max": 0,
+          "oom": 0,
+          "oom_kill": 0,
+          "oom_group_kill": 0,
+          "sock_throttled": 0
+        }
+      }
+    },
+    {
+      "name": "ingestion-cert-a2f74f78-critical-worker",
+      "running": true,
+      "oomKilled": false,
+      "exitCode": 0,
+      "limits": {
+        "cpuCores": 1,
+        "memoryBytes": 805306368
+      },
+      "cgroup": {
+        "cpu": {
+          "usage_usec": 5555039,
+          "user_usec": 4382570,
+          "system_usec": 1172468,
+          "nice_usec": 0,
+          "nr_periods": 133,
+          "nr_throttled": 33,
+          "throttled_usec": 2397539,
+          "nr_bursts": 0,
+          "burst_usec": 0
+        },
+        "memoryCurrentBytes": 139362304,
+        "memoryPeakBytes": 185077760,
+        "memoryEvents": {
+          "low": 0,
+          "high": 0,
+          "max": 0,
+          "oom": 0,
+          "oom_kill": 0,
+          "oom_group_kill": 0,
+          "sock_throttled": 0
+        }
+      }
+    },
+    {
+      "name": "ingestion-cert-a2f74f78-bulk-worker",
+      "running": true,
+      "oomKilled": false,
+      "exitCode": 0,
+      "limits": {
+        "cpuCores": 1,
+        "memoryBytes": 805306368
+      },
+      "cgroup": {
+        "cpu": {
+          "usage_usec": 7578502,
+          "user_usec": 5891456,
+          "system_usec": 1687046,
+          "nice_usec": 0,
+          "nr_periods": 136,
+          "nr_throttled": 37,
+          "throttled_usec": 4226424,
+          "nr_bursts": 0,
+          "burst_usec": 0
+        },
+        "memoryCurrentBytes": 137269248,
+        "memoryPeakBytes": 183181312,
+        "memoryEvents": {
+          "low": 0,
+          "high": 0,
+          "max": 0,
+          "oom": 0,
+          "oom_kill": 0,
+          "oom_group_kill": 0,
+          "sock_throttled": 0
+        }
+      }
+    },
+    {
+      "name": "ingestion-cert-a2f74f78-runbook-worker",
+      "running": true,
+      "oomKilled": false,
+      "exitCode": 0,
+      "limits": {
+        "cpuCores": 1,
+        "memoryBytes": 805306368
+      },
+      "cgroup": {
+        "cpu": {
+          "usage_usec": 7550070,
+          "user_usec": 5698877,
+          "system_usec": 1851193,
+          "nice_usec": 0,
+          "nr_periods": 119,
+          "nr_throttled": 37,
+          "throttled_usec": 2801869,
+          "nr_bursts": 0,
+          "burst_usec": 0
+        },
+        "memoryCurrentBytes": 173162496,
+        "memoryPeakBytes": 218808320,
+        "memoryEvents": {
+          "low": 0,
+          "high": 0,
+          "max": 0,
+          "oom": 0,
+          "oom_kill": 0,
+          "oom_group_kill": 0,
+          "sock_throttled": 0
+        }
+      }
+    },
+    {
+      "name": "ingestion-cert-a2f74f78-status-projector",
+      "running": true,
+      "oomKilled": false,
+      "exitCode": 0,
+      "limits": {
+        "cpuCores": 1,
+        "memoryBytes": 805306368
+      },
+      "cgroup": {
+        "cpu": {
+          "usage_usec": 9440818,
+          "user_usec": 6822997,
+          "system_usec": 2617820,
+          "nice_usec": 0,
+          "nr_periods": 108,
+          "nr_throttled": 59,
+          "throttled_usec": 2978846,
+          "nr_bursts": 0,
+          "burst_usec": 0
+        },
+        "memoryCurrentBytes": 147398656,
+        "memoryPeakBytes": 184479744,
+        "memoryEvents": {
+          "low": 0,
+          "high": 0,
+          "max": 0,
+          "oom": 0,
+          "oom_kill": 0,
+          "oom_group_kill": 0,
+          "sock_throttled": 0
+        }
+      }
+    }
+  ],
+  "smtpDelivery": {
+    "receiptId": "1ecbc547-96f9-444f-8699-fcfc5271602e",
+    "incidentId": "cmvnxahu100dlbnrramae6r6d",
+    "notificationId": "notification_33a23a7a7adce7c53da72900f1b81fd",
+    "smtpCaptured": true,
+    "durableDeliveryRecorded": true,
+    "captureObservedMs": 11033,
+    "startedDuringLoad": true,
+    "capturedDuringLoad": true,
+    "provider": "smtp",
+    "pinnedAutomationVerified": true,
+    "sourceSeverity": "warning",
+    "finalPriority": "P1",
+    "scope": "Real application workers and SMTP transport to owned local capture only; no Internet delivery or remote mailbox certification"
+  },
+  "resourcesAfterLoad": [
+    {
+      "name": "ingestion-cert-a2f74f78-web-0",
+      "running": true,
+      "oomKilled": false,
+      "exitCode": 0,
+      "limits": {
+        "cpuCores": 1,
+        "memoryBytes": 1073741824
+      },
+      "cgroup": {
+        "cpu": {
+          "usage_usec": 85127339,
+          "user_usec": 72404164,
+          "system_usec": 12723174,
+          "nice_usec": 0,
+          "nr_periods": 1809,
+          "nr_throttled": 353,
+          "throttled_usec": 22372704,
+          "nr_bursts": 0,
+          "burst_usec": 0
+        },
+        "memoryCurrentBytes": 225460224,
+        "memoryPeakBytes": 235905024,
+        "memoryEvents": {
+          "low": 0,
+          "high": 0,
+          "max": 0,
+          "oom": 0,
+          "oom_kill": 0,
+          "oom_group_kill": 0,
+          "sock_throttled": 0
+        }
+      }
+    },
+    {
+      "name": "ingestion-cert-a2f74f78-web-1",
+      "running": true,
+      "oomKilled": false,
+      "exitCode": 0,
+      "limits": {
+        "cpuCores": 1,
+        "memoryBytes": 1073741824
+      },
+      "cgroup": {
+        "cpu": {
+          "usage_usec": 93176495,
+          "user_usec": 80544400,
+          "system_usec": 12632094,
+          "nice_usec": 0,
+          "nr_periods": 1784,
+          "nr_throttled": 392,
+          "throttled_usec": 23640061,
+          "nr_bursts": 0,
+          "burst_usec": 0
+        },
+        "memoryCurrentBytes": 205824000,
+        "memoryPeakBytes": 220094464,
+        "memoryEvents": {
+          "low": 0,
+          "high": 0,
+          "max": 0,
+          "oom": 0,
+          "oom_kill": 0,
+          "oom_group_kill": 0,
+          "sock_throttled": 0
+        }
+      }
+    },
+    {
+      "name": "ingestion-cert-a2f74f78-worker-0",
+      "running": true,
+      "oomKilled": false,
+      "exitCode": 0,
+      "limits": {
+        "cpuCores": 1,
+        "memoryBytes": 805306368
+      },
+      "cgroup": {
+        "cpu": {
+          "usage_usec": 90537766,
+          "user_usec": 69906271,
+          "system_usec": 20631494,
+          "nice_usec": 0,
+          "nr_periods": 2088,
+          "nr_throttled": 269,
+          "throttled_usec": 14431563,
+          "nr_bursts": 0,
+          "burst_usec": 0
+        },
+        "memoryCurrentBytes": 184127488,
+        "memoryPeakBytes": 196481024,
+        "memoryEvents": {
+          "low": 0,
+          "high": 0,
+          "max": 0,
+          "oom": 0,
+          "oom_kill": 0,
+          "oom_group_kill": 0,
+          "sock_throttled": 0
+        }
+      }
+    },
+    {
+      "name": "ingestion-cert-a2f74f78-worker-1",
+      "running": true,
+      "oomKilled": false,
+      "exitCode": 0,
+      "limits": {
+        "cpuCores": 1,
+        "memoryBytes": 805306368
+      },
+      "cgroup": {
+        "cpu": {
+          "usage_usec": 94272126,
+          "user_usec": 72225550,
+          "system_usec": 22046576,
+          "nice_usec": 0,
+          "nr_periods": 2019,
+          "nr_throttled": 281,
+          "throttled_usec": 15220724,
+          "nr_bursts": 0,
+          "burst_usec": 0
+        },
+        "memoryCurrentBytes": 174694400,
+        "memoryPeakBytes": 197410816,
+        "memoryEvents": {
+          "low": 0,
+          "high": 0,
+          "max": 0,
+          "oom": 0,
+          "oom_kill": 0,
+          "oom_group_kill": 0,
+          "sock_throttled": 0
+        }
+      }
+    },
+    {
+      "name": "ingestion-cert-a2f74f78-scheduler",
+      "running": true,
+      "oomKilled": false,
+      "exitCode": 0,
+      "limits": {
+        "cpuCores": 1,
+        "memoryBytes": 805306368
+      },
+      "cgroup": {
+        "cpu": {
+          "usage_usec": 19038309,
+          "user_usec": 14573250,
+          "system_usec": 4465058,
+          "nice_usec": 0,
+          "nr_periods": 781,
+          "nr_throttled": 61,
+          "throttled_usec": 3170529,
+          "nr_bursts": 0,
+          "burst_usec": 0
+        },
+        "memoryCurrentBytes": 161431552,
+        "memoryPeakBytes": 191389696,
+        "memoryEvents": {
+          "low": 0,
+          "high": 0,
+          "max": 0,
+          "oom": 0,
+          "oom_kill": 0,
+          "oom_group_kill": 0,
+          "sock_throttled": 0
+        }
+      }
+    },
+    {
+      "name": "ingestion-cert-a2f74f78-general-worker",
+      "running": true,
+      "oomKilled": false,
+      "exitCode": 0,
+      "limits": {
+        "cpuCores": 1,
+        "memoryBytes": 805306368
+      },
+      "cgroup": {
+        "cpu": {
+          "usage_usec": 99422711,
+          "user_usec": 77914295,
+          "system_usec": 21508415,
+          "nice_usec": 0,
+          "nr_periods": 1389,
+          "nr_throttled": 543,
+          "throttled_usec": 24909975,
+          "nr_bursts": 0,
+          "burst_usec": 0
+        },
+        "memoryCurrentBytes": 184111104,
+        "memoryPeakBytes": 186454016,
+        "memoryEvents": {
+          "low": 0,
+          "high": 0,
+          "max": 0,
+          "oom": 0,
+          "oom_kill": 0,
+          "oom_group_kill": 0,
+          "sock_throttled": 0
+        }
+      }
+    },
+    {
+      "name": "ingestion-cert-a2f74f78-critical-worker",
+      "running": true,
+      "oomKilled": false,
+      "exitCode": 0,
+      "limits": {
+        "cpuCores": 1,
+        "memoryBytes": 805306368
+      },
+      "cgroup": {
+        "cpu": {
+          "usage_usec": 96799532,
+          "user_usec": 74356162,
+          "system_usec": 22443369,
+          "nice_usec": 0,
+          "nr_periods": 1379,
+          "nr_throttled": 503,
+          "throttled_usec": 23754557,
+          "nr_bursts": 0,
+          "burst_usec": 0
+        },
+        "memoryCurrentBytes": 218984448,
+        "memoryPeakBytes": 221736960,
+        "memoryEvents": {
+          "low": 0,
+          "high": 0,
+          "max": 0,
+          "oom": 0,
+          "oom_kill": 0,
+          "oom_group_kill": 0,
+          "sock_throttled": 0
+        }
+      }
+    },
+    {
+      "name": "ingestion-cert-a2f74f78-bulk-worker",
+      "running": true,
+      "oomKilled": false,
+      "exitCode": 0,
+      "limits": {
+        "cpuCores": 1,
+        "memoryBytes": 805306368
+      },
+      "cgroup": {
+        "cpu": {
+          "usage_usec": 18373661,
+          "user_usec": 14111473,
+          "system_usec": 4262188,
+          "nice_usec": 0,
+          "nr_periods": 576,
+          "nr_throttled": 42,
+          "throttled_usec": 4335971,
+          "nr_bursts": 0,
+          "burst_usec": 0
+        },
+        "memoryCurrentBytes": 143331328,
+        "memoryPeakBytes": 183181312,
+        "memoryEvents": {
+          "low": 0,
+          "high": 0,
+          "max": 0,
+          "oom": 0,
+          "oom_kill": 0,
+          "oom_group_kill": 0,
+          "sock_throttled": 0
+        }
+      }
+    },
+    {
+      "name": "ingestion-cert-a2f74f78-runbook-worker",
+      "running": true,
+      "oomKilled": false,
+      "exitCode": 0,
+      "limits": {
+        "cpuCores": 1,
+        "memoryBytes": 805306368
+      },
+      "cgroup": {
+        "cpu": {
+          "usage_usec": 46736371,
+          "user_usec": 35734468,
+          "system_usec": 11001902,
+          "nice_usec": 0,
+          "nr_periods": 1315,
+          "nr_throttled": 89,
+          "throttled_usec": 7606613,
+          "nr_bursts": 0,
+          "burst_usec": 0
+        },
+        "memoryCurrentBytes": 159383552,
+        "memoryPeakBytes": 218808320,
+        "memoryEvents": {
+          "low": 0,
+          "high": 0,
+          "max": 0,
+          "oom": 0,
+          "oom_kill": 0,
+          "oom_group_kill": 0,
+          "sock_throttled": 0
+        }
+      }
+    },
+    {
+      "name": "ingestion-cert-a2f74f78-status-projector",
+      "running": true,
+      "oomKilled": false,
+      "exitCode": 0,
+      "limits": {
+        "cpuCores": 1,
+        "memoryBytes": 805306368
+      },
+      "cgroup": {
+        "cpu": {
+          "usage_usec": 19347419,
+          "user_usec": 14400999,
+          "system_usec": 4946419,
+          "nice_usec": 0,
+          "nr_periods": 538,
+          "nr_throttled": 77,
+          "throttled_usec": 4597978,
+          "nr_bursts": 0,
+          "burst_usec": 0
+        },
+        "memoryCurrentBytes": 142200832,
+        "memoryPeakBytes": 184479744,
+        "memoryEvents": {
+          "low": 0,
+          "high": 0,
+          "max": 0,
+          "oom": 0,
+          "oom_kill": 0,
+          "oom_group_kill": 0,
+          "sock_throttled": 0
+        }
+      }
+    }
+  ],
+  "cpuDelta": {
+    "processes": [
+      {
+        "name": "ingestion-cert-a2f74f78-web-0",
+        "cpuSeconds": 76.470106
+      },
+      {
+        "name": "ingestion-cert-a2f74f78-web-1",
+        "cpuSeconds": 86.134865
+      },
+      {
+        "name": "ingestion-cert-a2f74f78-worker-0",
+        "cpuSeconds": 80.90647
+      },
+      {
+        "name": "ingestion-cert-a2f74f78-worker-1",
+        "cpuSeconds": 85.381578
+      },
+      {
+        "name": "ingestion-cert-a2f74f78-scheduler",
+        "cpuSeconds": 10.252798
+      },
+      {
+        "name": "ingestion-cert-a2f74f78-general-worker",
+        "cpuSeconds": 94.40683
+      },
+      {
+        "name": "ingestion-cert-a2f74f78-critical-worker",
+        "cpuSeconds": 91.244493
+      },
+      {
+        "name": "ingestion-cert-a2f74f78-bulk-worker",
+        "cpuSeconds": 10.795159
+      },
+      {
+        "name": "ingestion-cert-a2f74f78-runbook-worker",
+        "cpuSeconds": 39.186301
+      },
+      {
+        "name": "ingestion-cert-a2f74f78-status-projector",
+        "cpuSeconds": 9.906601
+      }
+    ],
+    "totalCpuSeconds": 584.685201,
+    "scope": "Per-process cgroup CPU deltas over resource snapshot interval; includes diagnostic overhead. Full-stack/admission interval also includes configured preflight and warmup."
+  },
+  "downstreamChecks": {
+    "notificationPassed": true
+  },
+  "httpEvidence": "plans/event-ingestion/local-docker-http-planner-short-50.json",
+  "httpExit": 1,
+  "httpPassed": false,
+  "error": "Docker topology failed the configured end-to-end thresholds\n\n1 !== 0\n",
+  "measuredAt": "2026-10-25T14:30:24.131Z"
+}

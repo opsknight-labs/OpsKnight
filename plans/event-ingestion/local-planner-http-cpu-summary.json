@@ -1,0 +1,439 @@
+{
+  "scope": "Lower-load CPU diagnostic. Self samples in V8 only; native Prisma engine and whole-process CPU are not attributed. Includes startup/idle/collection overhead, not a capacity benchmark. Raw profiles retained locally with SHA256 references.",
+  "profiles": [
+    {
+      "file": "ingestion-cert-28fa0f5b-web-0.cpuprofile",
+      "sha256": "ce51f765527f6c65b1d2cfe45da7086fb53d66841ce36f80c076edbf75421042",
+      "totalSamples": 24761,
+      "topSelfSamples": [
+        {
+          "function": "(idle)",
+          "source": "",
+          "line": 0,
+          "samples": 22038
+        },
+        {
+          "function": "(garbage collector)",
+          "source": "",
+          "line": 0,
+          "samples": 220
+        },
+        {
+          "function": "(program)",
+          "source": "",
+          "line": 0,
+          "samples": 202
+        },
+        {
+          "function": "custom_gc",
+          "source": "",
+          "line": 0,
+          "samples": 62
+        },
+        {
+          "function": "parseEngineResponse",
+          "source": "file://node_modules/@prisma/client/runtime/library.js",
+          "line": 112,
+          "samples": 28
+        },
+        {
+          "function": "parseEngineResponse",
+          "source": "file://node_modules/@prisma/client/runtime/library.js",
+          "line": 112,
+          "samples": 28
+        },
+        {
+          "function": "(anonymous)",
+          "source": "file://node_modules/@prisma/client/runtime/library.js",
+          "line": 112,
+          "samples": 25
+        },
+        {
+          "function": "runMicrotasks",
+          "source": "",
+          "line": 0,
+          "samples": 24
+        },
+        {
+          "function": "request",
+          "source": "file://node_modules/@prisma/client/runtime/library.js",
+          "line": 112,
+          "samples": 17
+        },
+        {
+          "function": "processTimers",
+          "source": "node:internal/timers",
+          "line": 504,
+          "samples": 17
+        },
+        {
+          "function": "logger",
+          "source": "file://node_modules/@prisma/client/runtime/library.js",
+          "line": 112,
+          "samples": 16
+        },
+        {
+          "function": "handleRequestImpl",
+          "source": "file://node_modules/next/dist/server/base-server.js",
+          "line": 529,
+          "samples": 14
+        },
+        {
+          "function": "mapQueryEngineResult",
+          "source": "file://node_modules/@prisma/client/runtime/library.js",
+          "line": 121,
+          "samples": 14
+        },
+        {
+          "function": "writeUtf8String",
+          "source": "",
+          "line": 0,
+          "samples": 13
+        },
+        {
+          "function": "(anonymous)",
+          "source": "file://.next/server/chunks/69921.js",
+          "line": 4,
+          "samples": 12
+        },
+        {
+          "function": "Date1",
+          "source": "file://node_modules/next/dist/server/node-environment-extensions/date.js",
+          "line": 30,
+          "samples": 11
+        },
+        {
+          "function": "(anonymous)",
+          "source": "file://.next/server/chunks/36525.js",
+          "line": 31,
+          "samples": 11
+        },
+        {
+          "function": "request",
+          "source": "file://node_modules/@prisma/client/runtime/library.js",
+          "line": 112,
+          "samples": 10
+        },
+        {
+          "function": "_executeRequest",
+          "source": "file://node_modules/@prisma/client/runtime/library.js",
+          "line": 130,
+          "samples": 10
+        },
+        {
+          "function": "Bd",
+          "source": "file://node_modules/@prisma/client/runtime/library.js",
+          "line": 31,
+          "samples": 10
+        },
+        {
+          "function": "b7",
+          "source": "file://.next/server/src/middleware.js",
+          "line": 9,
+          "samples": 10
+        },
+        {
+          "function": "prepareImpl",
+          "source": "file://node_modules/next/dist/compiled/next-server/app-route.runtime.prod.js",
+          "line": 1,
+          "samples": 9
+        },
+        {
+          "function": "handleRoute",
+          "source": "file://node_modules/next/dist/server/lib/router-utils/resolve-routes.js",
+          "line": 225,
+          "samples": 9
+        },
+        {
+          "function": "v",
+          "source": "file://.next/server/chunks/92970.js",
+          "line": 270,
+          "samples": 9
+        },
+        {
+          "function": "p",
+          "source": "file://.next/server/chunks/26267.js",
+          "line": 13,
+          "samples": 9
+        },
+        {
+          "function": "BubbledError",
+          "source": "file://node_modules/next/dist/server/lib/trace/tracer.js",
+          "line": 65,
+          "samples": 8
+        },
+        {
+          "function": "_executeRequest",
+          "source": "file://node_modules/@prisma/client/runtime/library.js",
+          "line": 130,
+          "samples": 8
+        },
+        {
+          "function": "p",
+          "source": "file://.next/server/chunks/26267.js",
+          "line": 13,
+          "samples": 8
+        },
+        {
+          "function": "update",
+          "source": "",
+          "line": 0,
+          "samples": 8
+        },
+        {
+          "function": "l",
+          "source": "file://.next/server/chunks/69921.js",
+          "line": 4,
+          "samples": 8
+        },
+        {
+          "function": "decode",
+          "source": "",
+          "line": 0,
+          "samples": 8
+        },
+        {
+          "function": "w",
+          "source": "file://.next/serverapi/events/route.js",
+          "line": 1,
+          "samples": 7
+        },
+        {
+          "function": "dispatchBatches",
+          "source": "file://node_modules/@prisma/client/runtime/library.js",
+          "line": 121,
+          "samples": 7
+        },
+        {
+          "function": "singleLoader",
+          "source": "file://node_modules/@prisma/client/runtime/library.js",
+          "line": 121,
+          "samples": 7
+        },
+        {
+          "function": "log",
+          "source": "file://.next/server/chunks/69921.js",
+          "line": 4,
+          "samples": 7
+        }
+      ]
+    },
+    {
+      "file": "ingestion-cert-28fa0f5b-worker-0.cpuprofile",
+      "sha256": "fb943be46430b0869b50b0218a14f0dd7c81691da9c8d2b80d65a5cca3408dc6",
+      "totalSamples": 24132,
+      "topSelfSamples": [
+        {
+          "function": "(idle)",
+          "source": "",
+          "line": 0,
+          "samples": 22190
+        },
+        {
+          "function": "(program)",
+          "source": "",
+          "line": 0,
+          "samples": 238
+        },
+        {
+          "function": "(garbage collector)",
+          "source": "",
+          "line": 0,
+          "samples": 186
+        },
+        {
+          "function": "version",
+          "source": "",
+          "line": 0,
+          "samples": 103
+        },
+        {
+          "function": "(anonymous)",
+          "source": "file://node_modules/@prisma/client/runtime/library.js",
+          "line": 31,
+          "samples": 63
+        },
+        {
+          "function": "parseEngineResponse",
+          "source": "file://node_modules/@prisma/client/runtime/library.js",
+          "line": 112,
+          "samples": 58
+        },
+        {
+          "function": "parseEngineResponse",
+          "source": "file://node_modules/@prisma/client/runtime/library.js",
+          "line": 112,
+          "samples": 42
+        },
+        {
+          "function": "request",
+          "source": "file://node_modules/@prisma/client/runtime/library.js",
+          "line": 112,
+          "samples": 39
+        },
+        {
+          "function": "ai",
+          "source": "file://.next/server/chunks/2986.js",
+          "line": 189,
+          "samples": 25
+        },
+        {
+          "function": "(anonymous)",
+          "source": "file://node_modules/@prisma/client/runtime/library.js",
+          "line": 112,
+          "samples": 23
+        },
+        {
+          "function": "Date1",
+          "source": "file://node_modules/next/dist/server/node-environment-extensions/date.js",
+          "line": 30,
+          "samples": 20
+        },
+        {
+          "function": "mapQueryEngineResult",
+          "source": "file://node_modules/@prisma/client/runtime/library.js",
+          "line": 121,
+          "samples": 20
+        },
+        {
+          "function": "version",
+          "source": "",
+          "line": 0,
+          "samples": 15
+        },
+        {
+          "function": "(anonymous)",
+          "source": "file://node_modules/@prisma/client/runtime/library.js",
+          "line": 31,
+          "samples": 15
+        },
+        {
+          "function": "logger",
+          "source": "file://node_modules/@prisma/client/runtime/library.js",
+          "line": 112,
+          "samples": 14
+        },
+        {
+          "function": "_request",
+          "source": "file://node_modules/@prisma/client/runtime/library.js",
+          "line": 130,
+          "samples": 14
+        },
+        {
+          "function": "(anonymous)",
+          "source": "file://.next/server/chunks/2986.js",
+          "line": 195,
+          "samples": 14
+        },
+        {
+          "function": "request",
+          "source": "file://node_modules/@prisma/client/runtime/library.js",
+          "line": 112,
+          "samples": 12
+        },
+        {
+          "function": "q",
+          "source": "file://.next/server/chunks/2986.js",
+          "line": 189,
+          "samples": 12
+        },
+        {
+          "function": "runMicrotasks",
+          "source": "",
+          "line": 0,
+          "samples": 11
+        },
+        {
+          "function": "_executeRequest",
+          "source": "file://node_modules/@prisma/client/runtime/library.js",
+          "line": 130,
+          "samples": 10
+        },
+        {
+          "function": "dispatchBatches",
+          "source": "file://node_modules/@prisma/client/runtime/library.js",
+          "line": 121,
+          "samples": 10
+        },
+        {
+          "function": "El",
+          "source": "file://node_modules/@prisma/client/runtime/library.js",
+          "line": 114,
+          "samples": 9
+        },
+        {
+          "function": "nestArgument",
+          "source": "file://node_modules/@prisma/client/runtime/library.js",
+          "line": 29,
+          "samples": 9
+        },
+        {
+          "function": "nestArgument",
+          "source": "file://node_modules/@prisma/client/runtime/library.js",
+          "line": 29,
+          "samples": 9
+        },
+        {
+          "function": "request",
+          "source": "file://node_modules/@prisma/client/runtime/library.js",
+          "line": 112,
+          "samples": 9
+        },
+        {
+          "function": "yt",
+          "source": "file://node_modules/@prisma/client/runtime/library.js",
+          "line": 21,
+          "samples": 9
+        },
+        {
+          "function": "processTimers",
+          "source": "node:internal/timers",
+          "line": 504,
+          "samples": 8
+        },
+        {
+          "function": "(anonymous)",
+          "source": "file://node_modules/@prisma/client/runtime/library.js",
+          "line": 121,
+          "samples": 8
+        },
+        {
+          "function": "(anonymous)",
+          "source": "file://.next/server/chunks/54368.js",
+          "line": 4,
+          "samples": 8
+        },
+        {
+          "function": "version",
+          "source": "",
+          "line": 0,
+          "samples": 8
+        },
+        {
+          "function": "promiseBeforeHook",
+          "source": "node:internal/async_hooks",
+          "line": 338,
+          "samples": 8
+        },
+        {
+          "function": "request",
+          "source": "file://node_modules/@prisma/client/runtime/library.js",
+          "line": 121,
+          "samples": 7
+        },
+        {
+          "function": "nestArgument",
+          "source": "file://node_modules/@prisma/client/runtime/library.js",
+          "line": 29,
+          "samples": 7
+        },
+        {
+          "function": "e",
+          "source": "file://node_modules/@prisma/client/runtime/library.js",
+          "line": 29,
+          "samples": 7
+        }
+      ]
+    }
+  ]
+}
