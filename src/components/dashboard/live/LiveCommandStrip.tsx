@@ -14,6 +14,7 @@ import {
   type LiveSnapshot,
   type LiveSummary,
 } from '@/lib/dashboard/live-incidents-shared';
+import { enterFullscreen, isFullscreenSupported } from '@/lib/fullscreen';
 import { useLiveDashboard } from './LiveDashboardProvider';
 import { useOptionalHistoryQuery } from '@/components/dashboard/DashboardHistorySection';
 
@@ -376,6 +377,11 @@ export default function LiveCommandStrip({
           <Link
             href="/wallboard"
             data-testid="command-wallboard"
+            onClick={() => {
+              if (isFullscreenSupported()) {
+                void enterFullscreen(document.documentElement).catch(() => {});
+              }
+            }}
             title="Full-screen operations command console for office TVs and NOC screens"
             className="inline-flex h-8 items-center gap-1.5 rounded-md border border-zinc-800 px-2.5 text-[12px] font-medium text-zinc-300 outline-none transition-colors hover:bg-zinc-900 hover:text-zinc-50 focus-visible:ring-2 focus-visible:ring-zinc-500"
           >

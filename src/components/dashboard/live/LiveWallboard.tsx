@@ -208,7 +208,12 @@ export default function LiveWallboard({ timeZone }: { timeZone: string }) {
   }, [cycle, hasCritical, query.view, setQuery]);
 
   useEffect(() => {
-    const onChange = () => setFullscreen(getFullscreenElement() !== null);
+    const onChange = () => {
+      const active = getFullscreenElement() !== null;
+      setFullscreen(active);
+      if (active) setFullscreenHint(false);
+    };
+    onChange();
     for (const event of FULLSCREEN_CHANGE_EVENTS) document.addEventListener(event, onChange);
     return () => {
       for (const event of FULLSCREEN_CHANGE_EVENTS) document.removeEventListener(event, onChange);
@@ -232,11 +237,20 @@ export default function LiveWallboard({ timeZone }: { timeZone: string }) {
   const toggleFullscreen = useCallback(async () => {
     if (getFullscreenElement()) {
       await exitFullscreen();
+      setFullscreen(false);
+      setFullscreenHint(false);
       return;
     }
-    const entered =
-      isFullscreenSupported() && rootRef.current ? await enterFullscreen(rootRef.current) : false;
-    setFullscreenHint(!entered);
+    const target = rootRef.current;
+    if (!target) return;
+    const entered = isFullscreenSupported() ? await enterFullscreen(target) : false;
+    if (entered) {
+      setFullscreen(true);
+      setFullscreenHint(false);
+    } else {
+      setFullscreen(false);
+      setFullscreenHint(true);
+    }
   }, []);
 
   // Keyboard and TV-remote shortcuts (the global app shortcuts are not mounted on this route).
@@ -409,7 +423,14 @@ export default function LiveWallboard({ timeZone }: { timeZone: string }) {
               )}
               {fullscreen ? 'Exit fullscreen' : 'Fullscreen (F)'}
             </button>
-            <Link href="/" data-testid="wallboard-exit" className={controlClass}>
+            <Link
+              href="/"
+              data-testid="wallboard-exit"
+              onClick={() => {
+                if (getFullscreenElement()) void exitFullscreen();
+              }}
+              className={controlClass}
+            >
               <X className="h-3.5 w-3.5 shrink-0" aria-hidden />
               Exit
             </Link>

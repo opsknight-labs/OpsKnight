@@ -35,6 +35,7 @@ export const FULLSCREEN_CHANGE_EVENTS = [
 ] as const;
 
 export function getFullscreenElement(doc: Document = document): Element | null {
+  if (typeof doc === 'undefined') return null;
   const vendor = doc as VendorDocument;
   return (
     doc.fullscreenElement ??
@@ -47,6 +48,7 @@ export function getFullscreenElement(doc: Document = document): Element | null {
 }
 
 export function isFullscreenSupported(doc: Document = document): boolean {
+  if (typeof doc === 'undefined') return false;
   const vendor = doc as VendorDocument;
   const element = doc.documentElement as VendorElement;
   const enabled =
@@ -66,7 +68,10 @@ export function isFullscreenSupported(doc: Document = document): boolean {
 
 /** Resolves true when the element is (or was already) fullscreen. Never throws. */
 export async function enterFullscreen(element: HTMLElement): Promise<boolean> {
-  if (getFullscreenElement(element.ownerDocument) === element) return true;
+  if (typeof document === 'undefined') return false;
+  const doc = element.ownerDocument || document;
+  if (getFullscreenElement(doc) !== null) return true;
+
   const vendor = element as VendorElement;
   const request =
     element.requestFullscreen ??
@@ -74,22 +79,80 @@ export async function enterFullscreen(element: HTMLElement): Promise<boolean> {
     vendor.webkitRequestFullScreen ??
     vendor.mozRequestFullScreen ??
     vendor.msRequestFullscreen;
-  if (!request) return false;
-  try {
-    // navigationUI: 'hide' asks mobile/TV Chromium to hide its system bars as well.
-    await request.call(element, { navigationUI: 'hide' });
-  } catch {
+
+  if (!request) {
+    // If element doesn't have it, try documentElement as fallback
+    const rootRequest =
+      doc.documentElement.requestFullscreen ??
+      (doc.documentElement as VendorElement).webkitRequestFullscreen;
+    if (!rootRequest) return false;
     try {
-      await request.call(element);
+      const res = rootRequest.call(doc.documentElement);
+      if (res instanceof Promise) await res;
     } catch {
       return false;
     }
+  } else {
+    try {
+      const res = request.call(element);
+      if (res instanceof Promise) await res;
+    } catch {
+      // Fallback to documentElement if element-level fullscreen is rejected
+      try {
+        const rootRequest =
+          doc.documentElement.requestFullscreen ??
+          (doc.documentElement as VendorElement).webkitRequestFullscreen;
+        if (rootRequest) {
+          const res = rootRequest.call(doc.documentElement);
+          if (res instanceof Promise) await res;
+        } else {
+          return false;
+        }
+      } catch {
+        return false;
+      }
+    }
   }
-  return getFullscreenElement(element.ownerDocument) !== null;
+
+  // Check immediately
+  if (getFullscreenElement(doc) !== null) return true;
+
+  // For browsers that transition asynchronously (WebKit/Safari), wait for event or state change
+  return new Promise<boolean>(resolve => {
+    let resolved = false;
+    const finish = (result: boolean) => {
+      if (!resolved) {
+        resolved = true;
+        cleanup();
+        resolve(result);
+      }
+    };
+
+    const onChange = () => {
+      finish(getFullscreenElement(doc) !== null);
+    };
+
+    const timer = setTimeout(() => {
+      finish(getFullscreenElement(doc) !== null);
+    }, 600);
+
+    const cleanup = () => {
+      clearTimeout(timer);
+      for (const event of FULLSCREEN_CHANGE_EVENTS) {
+        doc.removeEventListener(event, onChange);
+        element.removeEventListener(event, onChange);
+      }
+    };
+
+    for (const event of FULLSCREEN_CHANGE_EVENTS) {
+      doc.addEventListener(event, onChange, { once: true });
+      element.addEventListener(event, onChange, { once: true });
+    }
+  });
 }
 
 export async function exitFullscreen(doc: Document = document): Promise<void> {
-  if (!getFullscreenElement(doc)) return;
+  if (typeof doc === 'undefined') return;
   const vendor = doc as VendorDocument;
   const exit =
     doc.exitFullscreen ??
@@ -98,7 +161,8 @@ export async function exitFullscreen(doc: Document = document): Promise<void> {
     vendor.mozCancelFullScreen ??
     vendor.msExitFullscreen;
   try {
-    await exit?.call(doc);
+    const res = exit?.call(doc);
+    if (res instanceof Promise) await res;
   } catch {
     // Already exited (e.g. the user pressed Esc or the TV back button).
   }

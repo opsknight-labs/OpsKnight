@@ -45,6 +45,7 @@ import { useLiveDashboard, type LiveDensity } from './LiveDashboardProvider';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { LIVE_ROW_GRID, LIVE_ROW_GRID_TV, LiveIncidentRow } from './LiveIncidentRow';
 import { LiveActiveFilters, LiveToolbar, type LiveDirectoryOption } from './LiveFilterBar';
+import { enterFullscreen, isFullscreenSupported } from '@/lib/fullscreen';
 
 function healthCopy(health: LiveConnectionHealth): { label: string; dot: string; text: string } {
   switch (health) {
@@ -564,7 +565,14 @@ export default function LiveIncidentsPanel({
                     </DropdownMenuItem>
                   )}
                   <DropdownMenuItem asChild>
-                    <Link href="/wallboard">
+                    <Link
+                      href="/wallboard"
+                      onClick={() => {
+                        if (isFullscreenSupported()) {
+                          void enterFullscreen(document.documentElement).catch(() => {});
+                        }
+                      }}
+                    >
                       <Monitor className="mr-2 h-3.5 w-3.5" aria-hidden />
                       Open Operations Console (TV mode)
                     </Link>
