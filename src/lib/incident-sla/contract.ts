@@ -24,9 +24,12 @@ export type NewIncidentSlaContract = {
  */
 export async function resolveNewIncidentSlaContract(
   tx: Prisma.TransactionClient,
-  input: { serviceId: string; priority?: string | null; now: Date }
+  input: { serviceId: string; priority?: string | null; now: Date },
+  publishedPolicies?: Awaited<ReturnType<typeof readPublishedSlaPolicies>>
 ): Promise<NewIncidentSlaContract> {
-  const policies = await readPublishedSlaPolicies(tx, [`service:${input.serviceId}`, 'workspace']);
+  const policies =
+    publishedPolicies ??
+    (await readPublishedSlaPolicies(tx, [`service:${input.serviceId}`, 'workspace']));
   const service = policies.find(policy => policy.scopeKey === `service:${input.serviceId}`);
   const workspace = policies.find(policy => policy.scopeKey === 'workspace');
   const match = input.priority

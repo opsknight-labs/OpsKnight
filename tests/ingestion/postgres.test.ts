@@ -1,3 +1,6 @@
+import { readPublishedIncidentPolicies, readPublishedClassificationPolicies, readPublishedSlaPolicies } from '@/lib/incident-policies/published';
+import { resolveIncidentClassification } from '@/lib/incidents/classification';
+import { resolveNewIncidentSlaContract } from '@/lib/incident-sla/contract';
 import { prepareReceiptInsert, type ReceiptInsert } from '@/lib/ingestion/receipt-insert';
 import { processEventSideEffect } from '@/lib/event-side-effects';
 import { reserveIngestionBudget, reserveIngestionBudgets } from '@/lib/ingestion/budget';
@@ -154,6 +157,29 @@ afterAll(async () => {
 });
 
 describe('PostgreSQL ingestion durability', () => {
+  it('shares one authoritative published policy snapshot without re-reading during resolution', async () => {
+    await prisma.$transaction(async tx => {
+      const keys = ['integration:integration', `service:${serviceId}`, 'workspace'];
+      const expectedClassification = await readPublishedClassificationPolicies(tx, keys);
+      const expectedSla = await readPublishedSlaPolicies(tx, [`service:${serviceId}`, 'workspace']);
+      const query = vi.spyOn(tx, '$queryRaw');
+      try {
+        const snapshot = await readPublishedIncidentPolicies(tx, serviceId, 'integration');
+        expect(snapshot.classification).toEqual(expectedClassification);
+        expect(snapshot.sla).toEqual(expectedSla);
+        expect(query).toHaveBeenCalledTimes(1);
+        const classification = await resolveIncidentClassification(tx, {
+          serviceId, integrationId: 'integration', alertSeverity: 'critical',
+        }, snapshot.classification);
+        const contract = await resolveNewIncidentSlaContract(tx, {
+          serviceId, priority: classification.priority, now: new Date(),
+        }, snapshot.sla);
+        expect(contract.ackTargetMs).toBeGreaterThan(0);
+        expect(query).toHaveBeenCalledTimes(1);
+      } finally { query.mockRestore(); }
+    });
+  });
+
   it('atomically inserts only reserved receipt ordinals and preserves prepared JSON', async () => {
     const policy = (await getIngestionPolicy()).policy;
     const stored = encodeEnvelope(envelope('raw-insert'));
@@ -622,7 +648,7 @@ describe('PostgreSQL ingestion durability', () => {
           select: { id: true, status: true },
         });
         statuses = jobs.map(job => rows.find(row => row.id === job.id)!.status);
-        if (statuses[2] === 'CANCELLED') break;
+        if (statuses[1] === 'CANCELLED' && statuses[2] === 'CANCELLED') break;
         await new Promise(resolve => setTimeout(resolve, 10));
       } while (Date.now() < deadline);
       expect(statuses).toEqual(['PROCESSING', 'CANCELLED', 'CANCELLED']);

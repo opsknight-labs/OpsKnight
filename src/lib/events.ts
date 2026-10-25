@@ -21,6 +21,7 @@ import {
   enqueueIncidentCreatedRunbookEvaluation,
 } from './event-outbox';
 import { applyIncidentLifecycleCommand } from './incidents/lifecycle';
+import { readPublishedIncidentPolicies } from './incident-policies/published';
 import { resolveNewIncidentSlaContract } from './incident-sla/contract';
 import { resolveIncidentClassification } from './incidents/classification';
 import { deriveNewIncidentSlaTransition } from './incident-sla/next-transition';
@@ -146,6 +147,15 @@ export async function processEvent(
   }
 
   const normalizedSource = truncateString(normalizeText(eventData.source.trim()), 500);
+  // Event-only preparation has no dependency on the locked incident or policy.
+  const sanitizedTitle = truncateString(normalizeText(eventData.summary.trim()), 500);
+  const rawDescription =
+    event_action === 'trigger' && eventData.custom_details
+      ? JSON.stringify(eventData.custom_details, null, 2)
+      : null;
+  const truncatedDescription = rawDescription
+    ? truncateString(rawDescription, MAX_DESCRIPTION_LENGTH)
+    : null;
 
   const transactionStarted = performance.now();
   const execute = async (tx: Prisma.TransactionClient) => {
@@ -324,35 +334,33 @@ export async function processEvent(
       });
 
       // Create New Incident with proper severity → urgency mapping
-      const classification = await resolveIncidentClassification(tx, {
-        serviceId,
-        integrationId,
-        alertSeverity: eventData.severity,
-      });
+      const publishedPolicies = await readPublishedIncidentPolicies(tx, serviceId, integrationId);
+      const classification = await resolveIncidentClassification(
+        tx,
+        {
+          serviceId,
+          integrationId,
+          alertSeverity: eventData.severity,
+        },
+        publishedPolicies.classification
+      );
       const urgency = classification.urgency;
       const automation = await prepareAutomation(tx, envelope, classification, service.policy);
       const finalPriority = automation?.finalPriority ?? classification.priority;
 
-      // Keep canonical text in persistence. React/email/API boundaries are
-      // responsible for context-appropriate output escaping.
-      const sanitizedTitle = truncateString(normalizeText(eventData.summary.trim()), 500);
-
       // Creation is not a lifecycle transition. A buffered upstream resolve may
       // legitimately create the incident directly in its terminal state.
       if (recentResolveAlert) {
-        const rawDescription = eventData.custom_details
-          ? JSON.stringify(eventData.custom_details, null, 2)
-          : null;
-        const truncatedDescription = rawDescription
-          ? truncateString(rawDescription, MAX_DESCRIPTION_LENGTH)
-          : null;
-
         const resolutionAt = new Date();
-        const resolvedSla = await resolveNewIncidentSlaContract(tx, {
-          serviceId,
-          priority: finalPriority,
-          now: resolutionAt,
-        });
+        const resolvedSla = await resolveNewIncidentSlaContract(
+          tx,
+          {
+            serviceId,
+            priority: finalPriority,
+            now: resolutionAt,
+          },
+          publishedPolicies.sla
+        );
         const resolvedIncident = await tx.incident.create({
           data: {
             title: sanitizedTitle,
@@ -449,22 +457,18 @@ export async function processEvent(
         };
       }
 
-      // Truncate description to prevent DB insert failures on very long payloads
-      const rawDescription = eventData.custom_details
-        ? JSON.stringify(eventData.custom_details, null, 2)
-        : null;
-      const truncatedDescription = rawDescription
-        ? truncateString(rawDescription, MAX_DESCRIPTION_LENGTH)
-        : null;
-
       // Initial OPEN/SUPPRESSED state is creation policy, not a transition of an
       // existing incident, so it intentionally remains in the ingestion path.
       const incidentCreatedAt = new Date();
-      const newSla = await resolveNewIncidentSlaContract(tx, {
-        serviceId,
-        priority: finalPriority,
-        now: incidentCreatedAt,
-      });
+      const newSla = await resolveNewIncidentSlaContract(
+        tx,
+        {
+          serviceId,
+          priority: finalPriority,
+          now: incidentCreatedAt,
+        },
+        publishedPolicies.sla
+      );
       const engagement = resolveIncidentEngagement({
         urgency,
         supportHours: await resolveSupportHours(tx, { serviceId, at: incidentCreatedAt }),

@@ -1,0 +1,56 @@
+{
+  "sourceRevision": "f159a76d3b82203f9ec397e59049bd09c4b8b7e5",
+  "runs": [
+    {
+      "label": "a1",
+      "variant": "baseline",
+      "database": "ingestion_test_phase1_a1_20261026",
+      "cpuMs": 2881.778,
+      "elapsedMs": 1877.3067499999997,
+      "queriesPerEvent": 20.83,
+      "operationP95Ms": 27.117541999999958
+    },
+    {
+      "label": "b1",
+      "variant": "candidate",
+      "database": "ingestion_test_phase1_b1_20261026",
+      "cpuMs": 3059.169,
+      "elapsedMs": 2103.855875,
+      "queriesPerEvent": 19.42,
+      "operationP95Ms": 35.13949999999977
+    },
+    {
+      "label": "b2",
+      "variant": "candidate",
+      "database": "ingestion_test_phase1_b2_20261026",
+      "cpuMs": 2835.951,
+      "elapsedMs": 1922.0661250000003,
+      "queriesPerEvent": 19.003333333333334,
+      "operationP95Ms": 27.364666999999827
+    },
+    {
+      "label": "a2",
+      "variant": "baseline",
+      "database": "ingestion_test_phase1_a2_20261026",
+      "cpuMs": 2945.135,
+      "elapsedMs": 1908.869334,
+      "queriesPerEvent": 20.423333333333332,
+      "operationP95Ms": 29.686957999999777
+    }
+  ],
+  "sourceSha256": {
+    "baseline": {
+      "src/lib/events.ts": "2c87b7887ed46f2b1ec332f84f867d43e6063ed345f5fd1b0a92a8caf316ccd7",
+      "src/lib/incident-policies/published.ts": "b42b64a70642502707cae02e1334aa3f20db763ebe66c0813ebb1d54f57fedd9",
+      "src/lib/incidents/classification.ts": "a2b15bf73bc8a3afaaaee481ebb086a5b679f99414fa1f5b328759fb831408d0",
+      "src/lib/incident-sla/contract.ts": "8dc5f22a649fe56ac61819becc8cfa3c0377637b295a7c0a70ecf4e109d29453"
+    },
+    "candidate": {
+      "src/lib/events.ts": "4379bd1e6322916e2ad92121b43a3874fbb393e4886973b16536614c8cc7d9fb",
+      "src/lib/incident-policies/published.ts": "93326914767176588a8b39eae4571045fec5d6064fd88a35c0e62ea9b17951a0",
+      "src/lib/incidents/classification.ts": "b38a5ff3ea38e09e6d11450f1981c0d785cb9890d6acabb71a759f00fe9f9a37",
+      "src/lib/incident-sla/contract.ts": "c0a8c968f1dcb5ca95717b32c9537badb9a3e01affbdc27208d2e0e9e64a3b4c"
+    }
+  },
+  "scope": "Private host admission-only A-B-B-A, 300new incidents/concurrency4/pool5 after30warmups. Candidate combines authoritative policy reads and prepares event-only description beforeTX. Host only, no native or fullstack proof."
+}
