@@ -2753,7 +2753,8 @@ async function main() {
       } else if (idempotencyMode === 'natural') {
         // Natural idempotency: replaying an idempotent write must produce:
         // - Matching status (200/204) for state updates
-        // - For 200/201 creations: verify exact matching resource ID (idempotent upsert without duplicate creation)
+        // - For 200/201 creations: verify exact matching resource ID (idempotent upsert without duplicate creation).
+        //   If neither response exposes an entity ID, inspect payload/database or require matching digest; never silently pass.
         // - Precondition failure (412) if monotonic revision advanced
         // - Unique constraint conflict (409) or quota rejection (403) preventing duplicate creation
         const matchesStatus = replayRes.status === posRes.status;
@@ -2763,6 +2764,12 @@ async function main() {
           const repId = replayRes.json?.data?.id || replayRes.json?.id;
           if (posId && repId) {
             identicalEntity = posId === repId;
+          } else {
+            // Missing entity IDs in creation response must not silently pass as identical.
+            // Require matching payload checksum / deterministic data representation.
+            const posDataSha = computeCanonicalChecksum(posRes.json?.data || posRes.json);
+            const repDataSha = computeCanonicalChecksum(replayRes.json?.data || replayRes.json);
+            identicalEntity = Boolean(posDataSha && repDataSha && posDataSha === repDataSha);
           }
         }
         const isPreconditionFailed = replayRes.status === 412;
