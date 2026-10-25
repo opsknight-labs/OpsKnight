@@ -1,0 +1,223 @@
+{
+  "certifiedEnterprise": false,
+  "sourceRevision": "dca60b9a399762360ce6113ba3d5c8da1f15722e",
+  "controllerRevision": "6b58c3bee",
+  "passed": true,
+  "scope": "Separate inspector-sampled effects diagnostic. Startup, cgroup throttling, Node idle time and inspector overhead limit CPU attribution; Prisma native engine threads are not measured by the JavaScript sampling profile. Not a capacity gate.",
+  "profiles": [
+    {
+      "role": "general",
+      "sha256": "5f621f7be4bbd16838e6fb281f086eb5be09cee47943b119daf0e2d455ded85b",
+      "sampleCount": 20643,
+      "topSelfSamples": [
+        {
+          "function": "(idle)",
+          "module": "",
+          "samples": 13877
+        },
+        {
+          "function": "",
+          "module": "node_modules/@prisma/client/runtime/library.js",
+          "samples": 1424
+        },
+        {
+          "function": "(garbage collector)",
+          "module": "",
+          "samples": 1246
+        },
+        {
+          "function": "parseEngineResponse",
+          "module": "node_modules/@prisma/client/runtime/library.js",
+          "samples": 509
+        },
+        {
+          "function": "custom_gc",
+          "module": "",
+          "samples": 364
+        },
+        {
+          "function": "(program)",
+          "module": "",
+          "samples": 347
+        },
+        {
+          "function": "request",
+          "module": "node_modules/@prisma/client/runtime/library.js",
+          "samples": 313
+        },
+        {
+          "function": "Te",
+          "module": "node_modules/@prisma/client/runtime/library.js",
+          "samples": 176
+        },
+        {
+          "function": "_propagate",
+          "module": "node:async_hooks",
+          "samples": 174
+        },
+        {
+          "function": "nestArgument",
+          "module": "node_modules/@prisma/client/runtime/library.js",
+          "samples": 119
+        },
+        {
+          "function": "Bd",
+          "module": "node_modules/@prisma/client/runtime/library.js",
+          "samples": 91
+        },
+        {
+          "function": "get",
+          "module": "node_modules/@prisma/client/runtime/library.js",
+          "samples": 89
+        },
+        {
+          "function": "promiseInitHook",
+          "module": "node:internal/async_hooks",
+          "samples": 84
+        },
+        {
+          "function": "_request",
+          "module": "node_modules/@prisma/client/runtime/library.js",
+          "samples": 83
+        },
+        {
+          "function": "Date1",
+          "module": "node_modules/next/dist/server/node-environment-extensions/date.js",
+          "samples": 68
+        },
+        {
+          "function": "yt",
+          "module": "node_modules/@prisma/client/runtime/library.js",
+          "samples": 65
+        },
+        {
+          "function": "requestBatch",
+          "module": "node_modules/@prisma/client/runtime/library.js",
+          "samples": 63
+        },
+        {
+          "function": "l",
+          "module": "node_modules/@prisma/client/runtime/library.js",
+          "samples": 60
+        },
+        {
+          "function": "promiseAfterHook",
+          "module": "node:internal/async_hooks",
+          "samples": 43
+        },
+        {
+          "function": "lookupPublicResource",
+          "module": "node:internal/async_hooks",
+          "samples": 43
+        }
+      ]
+    },
+    {
+      "role": "critical",
+      "sha256": "fcc1a076ad3887754806d1a6950cfcf7963534944b876f1848ec65f8c2f16a2b",
+      "sampleCount": 24593,
+      "topSelfSamples": [
+        {
+          "function": "(idle)",
+          "module": "",
+          "samples": 22439
+        },
+        {
+          "function": "(garbage collector)",
+          "module": "",
+          "samples": 396
+        },
+        {
+          "function": "",
+          "module": "node_modules/@prisma/client/runtime/library.js",
+          "samples": 363
+        },
+        {
+          "function": "parseEngineResponse",
+          "module": "node_modules/@prisma/client/runtime/library.js",
+          "samples": 140
+        },
+        {
+          "function": "(program)",
+          "module": "",
+          "samples": 119
+        },
+        {
+          "function": "Te",
+          "module": "node_modules/@prisma/client/runtime/library.js",
+          "samples": 102
+        },
+        {
+          "function": "custom_gc",
+          "module": "",
+          "samples": 96
+        },
+        {
+          "function": "request",
+          "module": "node_modules/@prisma/client/runtime/library.js",
+          "samples": 92
+        },
+        {
+          "function": "Bd",
+          "module": "node_modules/@prisma/client/runtime/library.js",
+          "samples": 69
+        },
+        {
+          "function": "_propagate",
+          "module": "node:async_hooks",
+          "samples": 39
+        },
+        {
+          "function": "yt",
+          "module": "node_modules/@prisma/client/runtime/library.js",
+          "samples": 26
+        },
+        {
+          "function": "fo",
+          "module": "node_modules/@prisma/client/runtime/library.js",
+          "samples": 25
+        },
+        {
+          "function": "Date1",
+          "module": "node_modules/next/dist/server/node-environment-extensions/date.js",
+          "samples": 25
+        },
+        {
+          "function": "get",
+          "module": "node_modules/@prisma/client/runtime/library.js",
+          "samples": 21
+        },
+        {
+          "function": "nestArgument",
+          "module": "node_modules/@prisma/client/runtime/library.js",
+          "samples": 21
+        },
+        {
+          "function": "l",
+          "module": "node_modules/@prisma/client/runtime/library.js",
+          "samples": 20
+        },
+        {
+          "function": "dispatchBatches",
+          "module": "node_modules/@prisma/client/runtime/library.js",
+          "samples": 18
+        },
+        {
+          "function": "l",
+          "module": ".next/server/chunks/54368.js",
+          "samples": 17
+        },
+        {
+          "function": "_request",
+          "module": "node_modules/@prisma/client/runtime/library.js",
+          "samples": 15
+        },
+        {
+          "function": "o",
+          "module": ".next/server/chunks/99421.js",
+          "samples": 14
+        }
+      ]
+    }
+  ]
+}
