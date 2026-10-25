@@ -191,6 +191,39 @@ describe('PostgreSQL ingestion durability', () => {
     expect(await prisma.ingestionBudget.aggregate({ _sum: { pending: true, bytes: true } })).toEqual(after);
   });
 
+  it('inserts a single prepared receipt without changing its captured identity or payload', async () => {
+    const stored = encodeEnvelope(envelope('single-values'));
+    const receivedAt = new Date(stored.receivedAt);
+    const orderingKeys = [`single:${randomUUID()}`];
+    const id = randomUUID();
+    const row: ReceiptInsert = {
+      id, receivedAt, serviceId, integrationId: 'integration', partitionKey: 'single-values',
+      orderingKeys, idempotencyKey: randomUUID(), contentHash: 'single-hash',
+      payloadBytes: 100, critical: true, envelope: stored,
+    };
+    const expectedAt = receivedAt.getTime();
+    const expectedKeys = [...orderingKeys];
+    const summary = "quoted ' value with \" JSON";
+    stored.event.payload.summary = summary;
+    const insert = prepareReceiptInsert([row]);
+    stored.event.payload.summary = 'mutated';
+    receivedAt.setTime(0);
+    orderingKeys.push('mutated');
+    row.id = 'mutated';
+    await prisma.$transaction(async tx => {
+      const shards = await reserveIngestionBudgets(tx, (await getIngestionPolicy(tx)).policy, [{
+        payloadBytes: 100, critical: true, preferredShard: 0,
+      }]);
+      await insert(tx, shards);
+    });
+    const receipt = await prisma.ingestionReceipt.findUniqueOrThrow({ where: { id } });
+    expect(receipt.receivedAt?.getTime()).toBe(expectedAt);
+    expect(receipt.orderingKeys).toEqual(expectedKeys);
+    expect(decodeEnvelope(receipt.envelope).event.payload.summary).toBe(summary);
+    expect(receipt.availableAt.getTime()).toBe(0);
+    expect(receipt.status).toBe('PENDING');
+  });
+
   it('plans collaboration at execution and recovers a committed child intent after disable', async () => {
     const previous = await prisma.chatOpsConfig.findUnique({ where: { id: 'default' } });
     const incident = await prisma.incident.create({ data: {
