@@ -56,7 +56,7 @@ describe('actor-scoped page read contract', () => {
     expect(pages.responderSnapshot).toContain('calculateActorSLAMetrics(actor');
 
     expect(pages.dashboard).not.toContain('calculateActorSLAMetrics(');
-    expect(pages.dashboard).toContain('getDashboardOperationalSnapshot(actor');
+    expect(pages.dashboard).toContain('getLiveDashboardSnapshot(actor');
   });
 
   it.each([

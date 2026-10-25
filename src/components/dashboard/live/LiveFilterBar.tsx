@@ -1,7 +1,15 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Briefcase, Check, ChevronsUpDown, Search, Users, X } from 'lucide-react';
+import {
+  Briefcase,
+  Check,
+  ChevronsUpDown,
+  Search,
+  SlidersHorizontal,
+  Users,
+  X,
+} from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/shadcn/button';
 import { Input } from '@/components/ui/shadcn/input';
@@ -15,16 +23,8 @@ import {
   CommandList,
 } from '@/components/ui/shadcn/command';
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/shadcn/select';
-import {
   LIVE_INCIDENT_VIEWS,
-  LIVE_VIEW_LABELS,
-  countActiveFacets,
+  liveViewLabel,
   type LiveFacetOption,
   type LiveIncidentQuery,
 } from '@/lib/dashboard/live-incidents-shared';
@@ -33,19 +33,18 @@ import { useLiveDashboard } from './LiveDashboardProvider';
 export type LiveDirectoryOption = { id: string; name: string };
 
 const SEARCH_DEBOUNCE_MS = 250;
-const triggerClass =
-  'h-8 text-xs bg-card border-border hover:border-slate-300 rounded-lg shadow-2xs px-2.5';
+const controlClass =
+  'h-8 rounded-lg border-border bg-card px-2.5 text-xs shadow-2xs hover:border-slate-300';
 
-function mergeOptions(
-  directory: LiveDirectoryOption[],
-  facets: LiveFacetOption[]
-): Array<LiveFacetOption> {
-  const byId = new Map(facets.map(option => [option.id, option]));
-  const merged = facets.slice();
-  for (const entry of directory) {
-    if (!byId.has(entry.id)) merged.push({ ...entry, count: 0, critical: 0 });
-  }
-  return merged;
+/** Facet options with live counts first, then the rest of the viewer's directory at zero. */
+function mergeOptions(directory: LiveDirectoryOption[], facets: LiveFacetOption[]) {
+  const seen = new Set(facets.map(option => option.id));
+  return [
+    ...facets,
+    ...directory
+      .filter(entry => !seen.has(entry.id))
+      .map(entry => ({ ...entry, count: 0, critical: 0 })),
+  ];
 }
 
 function FacetCombobox({
@@ -55,6 +54,7 @@ function FacetCombobox({
   value,
   options,
   onChange,
+  className,
 }: {
   label: string;
   icon: React.ReactNode;
@@ -62,6 +62,7 @@ function FacetCombobox({
   value: string | null;
   options: LiveFacetOption[];
   onChange: (id: string | null) => void;
+  className?: string;
 }) {
   const [open, setOpen] = useState(false);
   const selected = options.find(option => option.id === value);
@@ -75,24 +76,23 @@ function FacetCombobox({
           aria-label={`Filter live incidents by ${label.toLowerCase()}`}
           data-testid={testId}
           className={cn(
-            triggerClass,
-            'w-full justify-between font-normal',
-            value && 'border-primary/50 bg-primary/5'
+            controlClass,
+            'justify-between gap-1.5 font-normal',
+            value && 'border-primary/50 bg-primary/5 text-primary',
+            className
           )}
         >
           <span className="flex min-w-0 items-center gap-1.5">
             {icon}
-            <span className="truncate">
-              {selected?.name ?? (value ? label : `All ${label.toLowerCase()}s`)}
-            </span>
+            <span className="truncate">{selected?.name ?? `All ${label.toLowerCase()}s`}</span>
           </span>
-          <ChevronsUpDown className="ml-1 h-3.5 w-3.5 shrink-0 opacity-50" aria-hidden />
+          <ChevronsUpDown className="h-3.5 w-3.5 shrink-0 opacity-50" aria-hidden />
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-[18rem] p-0 rounded-lg shadow-lg" align="start">
+      <PopoverContent className="w-[18rem] rounded-lg p-0 shadow-lg" align="start">
         <Command>
           <CommandInput placeholder={`Search ${label.toLowerCase()}s…`} className="h-8 text-xs" />
-          <CommandList className="max-h-[260px]">
+          <CommandList className="max-h-[280px]">
             <CommandEmpty className="py-4 text-center text-xs text-muted-foreground">
               No {label.toLowerCase()}s found.
             </CommandEmpty>
@@ -122,7 +122,7 @@ function FacetCombobox({
                   <span className="flex-1 truncate">{option.name}</span>
                   {option.critical > 0 && (
                     <span className="ml-2 rounded bg-rose-500/10 px-1 text-[10px] font-bold text-rose-600 dark:text-rose-400">
-                      {option.critical}!
+                      {option.critical} crit
                     </span>
                   )}
                   <span
@@ -146,18 +146,68 @@ function FacetCombobox({
   );
 }
 
+function Segmented<T extends string>({
+  label,
+  value,
+  options,
+  onChange,
+  testId,
+}: {
+  label: string;
+  value: T;
+  options: Array<{ value: T; label: string; count?: number }>;
+  onChange: (value: T) => void;
+  testId: string;
+}) {
+  return (
+    <fieldset>
+      <legend className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+        {label}
+      </legend>
+      <div
+        role="radiogroup"
+        aria-label={label}
+        className="grid grid-cols-3 gap-1"
+        data-testid={testId}
+      >
+        {options.map(option => (
+          <button
+            key={option.value}
+            type="button"
+            role="radio"
+            aria-checked={value === option.value}
+            data-value={option.value}
+            onClick={() => onChange(option.value)}
+            className={cn(
+              'rounded-md border px-2 py-1 text-[11px] font-medium outline-none focus-visible:ring-2 focus-visible:ring-primary/50',
+              value === option.value
+                ? 'border-primary/50 bg-primary/10 text-primary'
+                : 'border-border bg-card text-foreground hover:bg-muted'
+            )}
+          >
+            {option.label}
+            {option.count !== undefined && (
+              <span className="ml-1 tabular-nums text-muted-foreground">{option.count}</span>
+            )}
+          </button>
+        ))}
+      </div>
+    </fieldset>
+  );
+}
+
 export function LiveViewTabs() {
   const { query, setQuery, snapshot } = useLiveDashboard();
-  const counts = snapshot?.facets.views;
+  const counts = new Map(Object.entries(snapshot?.facets.views ?? {}));
   return (
     <div
       role="tablist"
       aria-label="Live incident views"
-      className="flex max-w-full gap-1 overflow-x-auto rounded-lg border border-border bg-muted/40 p-0.5 [scrollbar-width:none]"
+      className="flex min-w-0 max-w-full gap-0.5 overflow-x-auto rounded-lg border border-border bg-muted/40 p-0.5 [scrollbar-width:none]"
     >
       {LIVE_INCIDENT_VIEWS.map(view => {
         const active = query.view === view;
-        const count = counts?.[view];
+        const count = counts.get(view);
         return (
           <button
             key={view}
@@ -167,14 +217,14 @@ export function LiveViewTabs() {
             data-testid={`live-view-${view}`}
             onClick={() => setQuery({ view })}
             className={cn(
-              'inline-flex shrink-0 items-center gap-1.5 rounded-md px-2.5 py-1 text-[11px] font-semibold transition-colors outline-none',
+              'inline-flex h-7 shrink-0 items-center gap-1.5 rounded-md px-2.5 text-[11px] font-semibold transition-colors outline-none',
               'focus-visible:ring-2 focus-visible:ring-primary/50',
               active
                 ? 'bg-card text-foreground shadow-xs'
                 : 'text-muted-foreground hover:text-foreground'
             )}
           >
-            {LIVE_VIEW_LABELS[view]}
+            {liveViewLabel(view)}
             {count !== undefined && (
               <span
                 className={cn(
@@ -196,7 +246,11 @@ export function LiveViewTabs() {
   );
 }
 
-export function LiveFilterBar({
+/**
+ * One compact row: search, service and a "More" popover for the remaining facets.
+ * Active facets render as removable chips underneath, so the feed never jumps around.
+ */
+export function LiveToolbar({
   services,
   teams,
 }: {
@@ -206,9 +260,12 @@ export function LiveFilterBar({
   const { query, setQuery, snapshot } = useLiveDashboard();
   const facets = snapshot?.facets;
   const [search, setSearch] = useState(query.search);
+  const [syncedSearch, setSyncedSearch] = useState(query.search);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  useEffect(() => setSearch(query.search), [query.search]);
+  if (syncedSearch !== query.search) {
+    setSyncedSearch(query.search);
+    setSearch(query.search);
+  }
   useEffect(
     () => () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
@@ -231,20 +288,22 @@ export function LiveFilterBar({
     debounceRef.current = setTimeout(() => setQuery({ search: value }), SEARCH_DEBOUNCE_MS);
   };
 
-  const chips: Array<{
-    key: keyof LiveIncidentQuery;
-    label: string;
-    clear: Partial<LiveIncidentQuery>;
-  }> = [];
+  const moreCount =
+    (query.teamId ? 1 : 0) +
+    (query.status !== 'all' ? 1 : 0) +
+    (query.urgency !== 'all' ? 1 : 0) +
+    (query.assignment !== 'all' ? 1 : 0);
+
+  const chips: Array<{ key: string; label: string; clear: Partial<LiveIncidentQuery> }> = [];
   if (query.serviceId)
     chips.push({
-      key: 'serviceId',
-      label: `Service: ${serviceOptions.find(option => option.id === query.serviceId)?.name ?? 'Selected'}`,
+      key: 'service',
+      label: serviceOptions.find(option => option.id === query.serviceId)?.name ?? 'Service',
       clear: { serviceId: null },
     });
   if (query.teamId)
     chips.push({
-      key: 'teamId',
+      key: 'team',
       label: `Team: ${teamOptions.find(option => option.id === query.teamId)?.name ?? 'Selected'}`,
       clear: { teamId: null },
     });
@@ -255,7 +314,11 @@ export function LiveFilterBar({
       clear: { status: 'all' },
     });
   if (query.urgency !== 'all')
-    chips.push({ key: 'urgency', label: `${query.urgency} urgency`, clear: { urgency: 'all' } });
+    chips.push({
+      key: 'urgency',
+      label: `${query.urgency.charAt(0)}${query.urgency.slice(1).toLowerCase()} urgency`,
+      clear: { urgency: 'all' },
+    });
   if (query.assignment !== 'all')
     chips.push({
       key: 'assignment',
@@ -267,8 +330,8 @@ export function LiveFilterBar({
 
   return (
     <div className="space-y-2">
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-6">
-        <div className="relative col-span-2 sm:col-span-3 xl:col-span-1">
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="relative min-w-[12rem] flex-1 sm:max-w-xs">
           <Search
             className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground"
             aria-hidden
@@ -284,10 +347,14 @@ export function LiveFilterBar({
                 (event.target as HTMLInputElement).blur();
               }
             }}
-            placeholder="Search live incidents  ( / )"
+            placeholder="Search title or service"
             aria-label="Search live incidents"
-            className={cn(triggerClass, 'pl-8 w-full')}
+            aria-keyshortcuts="/"
+            className={cn(controlClass, 'w-full pl-8 pr-8')}
           />
+          <kbd className="pointer-events-none absolute right-2 top-1/2 hidden -translate-y-1/2 rounded border border-border bg-muted px-1 font-mono text-[10px] text-muted-foreground sm:block">
+            /
+          </kbd>
         </div>
         <FacetCombobox
           label="Service"
@@ -296,73 +363,111 @@ export function LiveFilterBar({
           value={query.serviceId}
           options={serviceOptions}
           onChange={serviceId => setQuery({ serviceId })}
+          className="w-full max-w-[13rem] sm:w-auto"
         />
-        <FacetCombobox
-          label="Team"
-          testId="live-filter-team"
-          icon={<Users className="h-3.5 w-3.5 shrink-0 text-violet-500" aria-hidden />}
-          value={query.teamId}
-          options={teamOptions}
-          onChange={teamId => setQuery({ teamId })}
-        />
-        <Select
-          value={query.status}
-          onValueChange={value => setQuery({ status: value as LiveIncidentQuery['status'] })}
-        >
-          <SelectTrigger
-            className={triggerClass}
-            aria-label="Filter by status"
-            data-testid="live-filter-status"
-          >
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All statuses</SelectItem>
-            <SelectItem value="OPEN">Triggered ({facets?.status.OPEN ?? 0})</SelectItem>
-            <SelectItem value="ACKNOWLEDGED">
-              Acknowledged ({facets?.status.ACKNOWLEDGED ?? 0})
-            </SelectItem>
-          </SelectContent>
-        </Select>
-        <Select
-          value={query.urgency}
-          onValueChange={value => setQuery({ urgency: value as LiveIncidentQuery['urgency'] })}
-        >
-          <SelectTrigger
-            className={triggerClass}
-            aria-label="Filter by urgency"
-            data-testid="live-filter-urgency"
-          >
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All urgencies</SelectItem>
-            <SelectItem value="HIGH">High ({facets?.urgency.HIGH ?? 0})</SelectItem>
-            <SelectItem value="MEDIUM">Medium ({facets?.urgency.MEDIUM ?? 0})</SelectItem>
-            <SelectItem value="LOW">Low ({facets?.urgency.LOW ?? 0})</SelectItem>
-          </SelectContent>
-        </Select>
-        <Select
-          value={query.assignment}
-          onValueChange={value =>
-            setQuery({ assignment: value as LiveIncidentQuery['assignment'] })
-          }
-        >
-          <SelectTrigger
-            className={triggerClass}
-            aria-label="Filter by assignment"
-            data-testid="live-filter-assignment"
-          >
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Anyone</SelectItem>
-            <SelectItem value="unassigned">
-              Unassigned ({facets?.assignment.unassigned ?? 0})
-            </SelectItem>
-            <SelectItem value="assigned">Assigned ({facets?.assignment.assigned ?? 0})</SelectItem>
-          </SelectContent>
-        </Select>
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button
+              variant="outline"
+              data-testid="live-more-filters"
+              className={cn(
+                controlClass,
+                'gap-1.5 font-semibold',
+                moreCount > 0 && 'border-primary/50 bg-primary/5 text-primary'
+              )}
+            >
+              <SlidersHorizontal className="h-3.5 w-3.5 shrink-0" aria-hidden />
+              Filters
+              {moreCount > 0 && (
+                <span className="rounded-full bg-primary px-1.5 text-[10px] font-bold text-primary-foreground">
+                  {moreCount}
+                </span>
+              )}
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent align="end" className="w-[22rem] max-w-[calc(100vw-2rem)] space-y-3 p-3">
+            <div>
+              <p className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                Team
+              </p>
+              <FacetCombobox
+                label="Team"
+                testId="live-filter-team"
+                icon={<Users className="h-3.5 w-3.5 shrink-0 text-violet-500" aria-hidden />}
+                value={query.teamId}
+                options={teamOptions}
+                onChange={teamId => setQuery({ teamId })}
+                className="w-full"
+              />
+            </div>
+            <Segmented
+              label="Status"
+              testId="live-filter-status"
+              value={query.status}
+              onChange={status => setQuery({ status })}
+              options={[
+                { value: 'all', label: 'Any' },
+                { value: 'OPEN', label: 'Triggered', count: facets?.status.OPEN },
+                { value: 'ACKNOWLEDGED', label: 'Acked', count: facets?.status.ACKNOWLEDGED },
+              ]}
+            />
+            <fieldset>
+              <legend className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                Urgency
+              </legend>
+              <div
+                role="radiogroup"
+                aria-label="Urgency"
+                className="grid grid-cols-4 gap-1"
+                data-testid="live-filter-urgency"
+              >
+                {(
+                  [
+                    ['all', 'Any', undefined],
+                    ['HIGH', 'High', facets?.urgency.HIGH],
+                    ['MEDIUM', 'Med', facets?.urgency.MEDIUM],
+                    ['LOW', 'Low', facets?.urgency.LOW],
+                  ] as const
+                ).map(([value, label, count]) => (
+                  <button
+                    key={value}
+                    type="button"
+                    role="radio"
+                    aria-checked={query.urgency === value}
+                    data-value={value}
+                    onClick={() => setQuery({ urgency: value })}
+                    className={cn(
+                      'rounded-md border px-1.5 py-1 text-[11px] font-medium outline-none focus-visible:ring-2 focus-visible:ring-primary/50',
+                      query.urgency === value
+                        ? 'border-primary/50 bg-primary/10 text-primary'
+                        : 'border-border bg-card text-foreground hover:bg-muted'
+                    )}
+                  >
+                    {label}
+                    {count !== undefined && (
+                      <span className="ml-1 tabular-nums text-muted-foreground">{count}</span>
+                    )}
+                  </button>
+                ))}
+              </div>
+            </fieldset>
+            <Segmented
+              label="Assignment"
+              testId="live-filter-assignment"
+              value={query.assignment}
+              onChange={assignment => setQuery({ assignment })}
+              options={[
+                { value: 'all', label: 'Anyone' },
+                {
+                  value: 'unassigned',
+                  label: 'Unassigned',
+                  count: facets?.assignment.unassigned,
+                },
+                { value: 'assigned', label: 'Assigned', count: facets?.assignment.assigned },
+              ]}
+            />
+          </PopoverContent>
+        </Popover>
       </div>
       {chips.length > 0 && (
         <div className="flex flex-wrap items-center gap-1.5" data-testid="live-filter-chips">
@@ -371,14 +476,14 @@ export function LiveFilterBar({
               key={chip.key}
               type="button"
               onClick={() => setQuery(chip.clear)}
-              className="inline-flex items-center gap-1 rounded-full border border-border bg-muted/60 px-2 py-0.5 text-[11px] font-medium text-foreground hover:bg-muted outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+              className="inline-flex items-center gap-1 rounded-full border border-primary/30 bg-primary/5 px-2 py-0.5 text-[11px] font-medium text-foreground hover:bg-primary/10 outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
               aria-label={`Remove filter ${chip.label}`}
             >
               {chip.label}
-              <X className="h-3 w-3" aria-hidden />
+              <X className="h-3 w-3 shrink-0" aria-hidden />
             </button>
           ))}
-          {countActiveFacets(query) > 1 && (
+          {chips.length > 1 && (
             <button
               type="button"
               data-testid="live-clear-filters"
@@ -392,7 +497,7 @@ export function LiveFilterBar({
                   search: '',
                 })
               }
-              className="text-[11px] font-semibold text-muted-foreground hover:text-foreground underline-offset-2 hover:underline"
+              className="text-[11px] font-semibold text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
             >
               Clear all
             </button>

@@ -1,26 +1,33 @@
 'use client';
 
 import Link from 'next/link';
-import { BarChart3, Monitor, Plus } from 'lucide-react';
+import { Monitor } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/shadcn/badge';
 import LiveClock from '@/components/dashboard/LiveClock';
 import { useRealtime } from '@/hooks/useRealtime';
-import { useCreateIncidentModal } from '@/contexts/IncidentCreationModalContext';
 import { useDashboardAnalytics } from '@/components/dashboard/DashboardAnalyticsProvider';
-import { historyRangeLabel, useHistoryQuery } from '@/components/dashboard/DashboardHistorySection';
+import { useHistoryQuery } from '@/components/dashboard/DashboardHistorySection';
+import { HISTORY_RANGES } from '@/lib/dashboard/live-incidents-shared';
 import type { LiveIncidentQuery, LiveSummary } from '@/lib/dashboard/live-incidents-shared';
 import { useLiveDashboard } from './LiveDashboardProvider';
 
 type Tone = 'rose' | 'amber' | 'emerald' | 'violet' | 'default';
 
-const TONE: Record<Tone, string> = {
-  rose: 'border-rose-500/35 bg-rose-950/25 text-rose-300',
-  amber: 'border-amber-500/35 bg-amber-950/25 text-amber-300',
-  emerald: 'border-emerald-500/30 bg-emerald-950/20 text-emerald-300',
-  violet: 'border-violet-500/30 bg-violet-950/20 text-violet-300',
-  default: 'border-zinc-800/80 bg-zinc-900/60 text-white',
-};
+function toneClass(tone: Tone): string {
+  switch (tone) {
+    case 'rose':
+      return 'border-rose-500/35 bg-rose-950/25 text-rose-300';
+    case 'amber':
+      return 'border-amber-500/35 bg-amber-950/25 text-amber-300';
+    case 'emerald':
+      return 'border-emerald-500/30 bg-emerald-950/20 text-emerald-300';
+    case 'violet':
+      return 'border-violet-500/30 bg-violet-950/20 text-violet-300';
+    default:
+      return 'border-zinc-800/80 bg-zinc-900/60 text-white';
+  }
+}
 
 function Counter({
   label,
@@ -53,7 +60,7 @@ function Counter({
   const className = cn(
     'min-w-0 rounded-xl border px-3 py-2 text-left transition-colors outline-none',
     'hover:brightness-125 focus-visible:ring-2 focus-visible:ring-white/40',
-    TONE[tone],
+    toneClass(tone),
     active && 'ring-2 ring-white/40'
   );
   if (href) {
@@ -108,19 +115,16 @@ export function buildInsight(summary: LiveSummary | null): { text: string; tone:
 export default function LiveCommandStrip({
   scopeMode,
   initialMuted,
-  canCreate,
   timeZone,
 }: {
   timeZone: string;
   scopeMode: 'GLOBAL' | 'SCOPED' | 'NONE';
   initialMuted: { snoozed: number; suppressed: number };
-  canCreate: boolean;
 }) {
   const { snapshot, query, setQuery } = useLiveDashboard();
   const { metrics } = useRealtime();
-  const { openCreateIncident } = useCreateIncidentModal();
   const analytics = useDashboardAnalytics();
-  const rangeLabel = historyRangeLabel(useHistoryQuery().query);
+  const history = useHistoryQuery();
   const summary = snapshot?.summary ?? null;
   const snoozed = metrics?.snoozed ?? initialMuted.snoozed;
   const suppressed = metrics?.suppressed ?? initialMuted.suppressed;
@@ -185,49 +189,56 @@ export default function LiveCommandStrip({
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <div
-            className="hidden sm:flex items-center gap-3 rounded-lg border border-zinc-800 bg-zinc-900/60 px-3 py-1.5 text-[11px] text-slate-300"
-            title={`Mean time to acknowledge / resolve (${rangeLabel})`}
+            className="flex items-center gap-3 rounded-lg border border-zinc-800 bg-zinc-900/60 px-3 py-1.5 text-[11px] text-slate-300"
+            title="Mean time to acknowledge / resolve for the reporting period"
             data-testid="command-mtt"
           >
             <span>
               MTTA{' '}
-              <strong className="text-white tabular-nums">
+              <strong className="tabular-nums text-white">
                 {formatMinutes(analytics.data?.mtta)}
               </strong>
             </span>
             <span>
               MTTR{' '}
-              <strong className="text-white tabular-nums">
+              <strong className="tabular-nums text-white">
                 {formatMinutes(analytics.data?.mttr)}
               </strong>
             </span>
-            <span className="text-slate-500">{rangeLabel}</span>
           </div>
-          {canCreate && (
-            <button
-              type="button"
-              onClick={() => openCreateIncident()}
-              data-testid="command-create-incident"
-              className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-rose-500/50 bg-rose-600 px-3 text-xs font-semibold text-white shadow-sm hover:bg-rose-500 outline-none focus-visible:ring-2 focus-visible:ring-white/50"
-            >
-              <Plus className="h-3.5 w-3.5" aria-hidden />
-              Create incident
-            </button>
-          )}
+          <div
+            role="radiogroup"
+            aria-label="Reporting period for MTTA, MTTR and trends"
+            className="inline-flex rounded-lg border border-zinc-800 bg-zinc-900/60 p-0.5"
+            data-testid="command-period"
+          >
+            {HISTORY_RANGES.map(range => (
+              <button
+                key={range}
+                type="button"
+                role="radio"
+                aria-checked={history.query.range === range}
+                data-testid={`period-${range}`}
+                onClick={() => history.setQuery({ range })}
+                className={cn(
+                  'rounded-md px-2.5 py-1 text-[11px] font-semibold outline-none focus-visible:ring-2 focus-visible:ring-white/40',
+                  history.query.range === range
+                    ? 'bg-zinc-700 text-white'
+                    : 'text-slate-400 hover:text-white'
+                )}
+              >
+                {range}d
+              </button>
+            ))}
+          </div>
           <Link
-            href="/?view=wallboard"
+            href="/wallboard"
             data-testid="command-wallboard"
+            title="Full-screen view for office TVs and NOC screens"
             className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-zinc-700 bg-zinc-900 px-3 text-xs font-semibold text-slate-200 hover:bg-zinc-800 outline-none focus-visible:ring-2 focus-visible:ring-white/50"
           >
-            <Monitor className="h-3.5 w-3.5" aria-hidden />
+            <Monitor className="h-3.5 w-3.5 shrink-0" aria-hidden />
             Wallboard
-          </Link>
-          <Link
-            href="/analytics"
-            className="hidden md:inline-flex h-8 items-center gap-1.5 rounded-lg border border-zinc-700 bg-zinc-900 px-3 text-xs font-semibold text-slate-200 hover:bg-zinc-800 outline-none focus-visible:ring-2 focus-visible:ring-white/50"
-          >
-            <BarChart3 className="h-3.5 w-3.5" aria-hidden />
-            Analytics
           </Link>
         </div>
       </div>

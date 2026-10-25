@@ -215,7 +215,7 @@ export function ActivityCard() {
         {items.length === 0 ? (
           <li className="text-xs text-muted-foreground">No recent activity</li>
         ) : (
-          items.slice(0, 8).map(item => (
+          items.slice(0, 6).map(item => (
             <li key={item.id} className="relative">
               <span
                 aria-hidden
@@ -225,7 +225,9 @@ export function ActivityCard() {
                 href={`/incidents/${item.incidentId}`}
                 className="block rounded outline-none hover:text-primary focus-visible:ring-2 focus-visible:ring-primary/50"
               >
-                <span className="line-clamp-2 text-[11px] text-foreground">{item.message}</span>
+                <span className="block truncate text-[11px] text-foreground" title={item.message}>
+                  {item.message}
+                </span>
                 <span className="block truncate text-[10px] text-muted-foreground">
                   {item.incidentTitle} · {formatIncidentAge(item.createdAt, now)}
                 </span>
@@ -238,71 +240,74 @@ export function ActivityCard() {
   );
 }
 
-export function ServicesAtRiskStrip() {
+export function ServicesAtRiskCard() {
   const { snapshot, query, setQuery } = useLiveDashboard();
-  const services = snapshot?.rail.servicesAtRisk ?? [];
+  const services = (snapshot?.rail.servicesAtRisk ?? []).slice(0, 6);
+  const max = Math.max(1, ...services.map(service => service.count));
   return (
-    <section
-      aria-labelledby="services-at-risk-heading"
-      data-testid="services-at-risk"
-      className="rounded-2xl border border-border bg-card p-3 shadow-xs sm:p-4"
+    <SidebarWidget
+      title="Services at Risk"
+      subtitle="Click a service to filter the live feed"
+      iconBg={WIDGET_ICON_BG.red}
+      icon={<Server className="h-4 w-4" />}
+      actions={[{ label: 'All services', href: '/services' }]}
     >
-      <div className="mb-2 flex items-center justify-between gap-2">
-        <h2
-          id="services-at-risk-heading"
-          className="flex items-center gap-2 text-sm font-bold text-foreground"
-        >
-          <Server className="h-4 w-4 text-primary" aria-hidden />
-          Services at Risk
-        </h2>
-        <Link
-          href="/services"
-          className="text-[11px] font-semibold text-muted-foreground hover:text-primary"
-        >
-          All services &rarr;
-        </Link>
-      </div>
-      {services.length === 0 ? (
-        <EmptyLine
-          icon={<CheckCircle2 className="h-4 w-4 text-emerald-500" aria-hidden />}
-          text="No service has active incidents"
-        />
-      ) : (
-        <div className="flex gap-2 overflow-x-auto pb-1 [scrollbar-width:thin]">
-          {services.map(service => {
+      <ul className="space-y-1" data-testid="services-at-risk">
+        {services.length === 0 ? (
+          <li>
+            <EmptyLine
+              icon={<CheckCircle2 className="h-4 w-4 text-emerald-500" aria-hidden />}
+              text="No service has active incidents"
+            />
+          </li>
+        ) : (
+          services.map(service => {
             const selected = query.serviceId === service.id;
             return (
-              <button
-                key={service.id}
-                type="button"
-                aria-pressed={selected}
-                title="Filter live incidents by this service"
-                onClick={() => setQuery({ serviceId: selected ? null : service.id })}
-                className={cn(
-                  'min-w-[10rem] max-w-[14rem] shrink-0 rounded-xl border px-3 py-2 text-left transition-colors outline-none focus-visible:ring-2 focus-visible:ring-primary/50',
-                  selected
-                    ? 'border-primary/60 bg-primary/5'
-                    : service.critical > 0
-                      ? 'border-rose-300/70 bg-rose-50/60 hover:bg-rose-50 dark:border-rose-900/50 dark:bg-rose-950/20'
-                      : 'border-border bg-muted/30 hover:bg-muted/60'
-                )}
-              >
-                <span className="block truncate text-xs font-semibold text-foreground">
-                  {service.name}
-                </span>
-                <span className="mt-0.5 flex items-center gap-2 text-[11px] text-muted-foreground">
-                  <span className="tabular-nums">{service.count} active</span>
-                  {service.critical > 0 && (
-                    <span className="rounded bg-rose-500 px-1 text-[10px] font-bold text-white tabular-nums">
-                      {service.critical} critical
-                    </span>
+              <li key={service.id}>
+                <button
+                  type="button"
+                  aria-pressed={selected}
+                  data-testid="service-at-risk"
+                  onClick={() => setQuery({ serviceId: selected ? null : service.id })}
+                  className={cn(
+                    'w-full rounded-lg px-2 py-1.5 text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-primary/50',
+                    selected ? 'bg-primary/10' : 'hover:bg-muted/60'
                   )}
-                </span>
-              </button>
+                >
+                  <span className="flex items-center justify-between gap-2">
+                    <span className="truncate text-xs font-semibold text-foreground">
+                      {service.name}
+                    </span>
+                    <span className="flex shrink-0 items-center gap-1.5 text-[10px] tabular-nums">
+                      {service.critical > 0 && (
+                        <span className="rounded bg-rose-500/10 px-1 font-bold text-rose-700 dark:text-rose-300">
+                          {service.critical} critical
+                        </span>
+                      )}
+                      <span className="font-semibold text-muted-foreground">
+                        {service.count} active
+                      </span>
+                    </span>
+                  </span>
+                  <span
+                    className="mt-1 block h-1 overflow-hidden rounded-full bg-muted"
+                    aria-hidden
+                  >
+                    <span
+                      className={cn(
+                        'block h-full rounded-full',
+                        service.critical > 0 ? 'bg-rose-500' : 'bg-amber-500'
+                      )}
+                      style={{ width: `${Math.max(6, Math.round((service.count / max) * 100))}%` }}
+                    />
+                  </span>
+                </button>
+              </li>
             );
-          })}
-        </div>
-      )}
-    </section>
+          })
+        )}
+      </ul>
+    </SidebarWidget>
   );
 }

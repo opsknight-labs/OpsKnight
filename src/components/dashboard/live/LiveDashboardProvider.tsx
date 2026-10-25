@@ -18,7 +18,6 @@ import {
   countLiveFeedChanges,
   diffLiveIncidents,
   isCriticalIncident,
-  liveQueryFromParams,
   liveQueryKey,
   liveQueryToParams,
   resolveConnectionHealth,
@@ -112,10 +111,13 @@ function playAlertTone() {
 export function LiveDashboardProvider({
   initialSnapshot,
   currentUserId,
+  persistQuery = true,
   children,
 }: {
   initialSnapshot: LiveSnapshot | null;
   currentUserId: string;
+  /** Shared displays (wallboards) are driven by their URL, never by a personal saved view. */
+  persistQuery?: boolean;
   children: ReactNode;
 }) {
   const {
@@ -277,7 +279,7 @@ export function LiveDashboardProvider({
       queryRef.current = next;
       setQueryState(next);
       writeQueryToUrl(next);
-      if (persist) {
+      if (persist && persistQuery) {
         try {
           window.localStorage.setItem(
             LIVE_QUERY_STORAGE_PREFIX + currentUserId,
@@ -294,7 +296,7 @@ export function LiveDashboardProvider({
       dirtyRef.current = false;
       void reconcileRef.current('filter');
     },
-    [currentUserId]
+    [currentUserId, persistQuery]
   );
 
   const setQuery = useCallback(
@@ -308,7 +310,7 @@ export function LiveDashboardProvider({
   useEffect(() => {
     try {
       const params = new URLSearchParams(window.location.search);
-      if (!hasLiveUrlParams(params)) {
+      if (persistQuery && !hasLiveUrlParams(params)) {
         const stored = window.localStorage.getItem(LIVE_QUERY_STORAGE_PREFIX + currentUserId);
         if (stored) commitQuery(coerceLiveQuery(JSON.parse(stored)), false);
       }
@@ -316,7 +318,7 @@ export function LiveDashboardProvider({
     } catch {
       // Ignore malformed or unavailable storage.
     }
-  }, [commitQuery, currentUserId]);
+  }, [commitQuery, currentUserId, persistQuery]);
 
   // Realtime signals only invalidate; the authorized API projection is the source of truth.
   const lastSignalRef = useRef<string | null>(null);

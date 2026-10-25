@@ -2,10 +2,6 @@ import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 
 const adoptedPaths = [
-  [
-    'src/lib/dashboard/dashboard-operational-snapshot.ts',
-    readFileSync('src/lib/dashboard/dashboard-operational-snapshot.ts', 'utf8'),
-  ],
   ['src/app/api/widgets/data/route.ts', readFileSync('src/app/api/widgets/data/route.ts', 'utf8')],
   [
     'src/app/api/widgets/stream/route.ts',

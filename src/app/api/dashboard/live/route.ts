@@ -49,11 +49,10 @@ export async function GET(request: Request) {
   if (!session) return jsonError(new AppError({ code: 'AUTHENTICATION_REQUIRED' }));
 
   const params = new URL(request.url).searchParams;
-  const raw: Record<string, string> = {};
-  for (const key of new Set(params.keys())) {
-    if (params.getAll(key).length > 1) return invalid(`Duplicate ${key}`);
-    raw[key] = params.get(key) ?? '';
-  }
+  const keys = [...new Set(params.keys())];
+  const duplicate = keys.find(key => params.getAll(key).length > 1);
+  if (duplicate) return invalid(`Duplicate ${duplicate}`);
+  const raw = Object.fromEntries(keys.map(key => [key, params.get(key) ?? '']));
   const parsed = querySchema.safeParse(raw);
   if (!parsed.success) return invalid('Invalid live dashboard query');
   const input = parsed.data;

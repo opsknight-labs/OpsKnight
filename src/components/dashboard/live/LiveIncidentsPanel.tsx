@@ -4,46 +4,65 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
-  Bell,
-  BellOff,
   CheckCircle2,
   Download,
   Keyboard,
+  Monitor,
+  MoreHorizontal,
   Pause,
   Play,
-  Radio,
   RefreshCw,
-  SlidersHorizontal,
 } from 'lucide-react';
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/shadcn/dropdown-menu';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/shadcn/badge';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/shadcn/popover';
 import { useToast } from '@/hooks/use-product-notification';
 import { reassignIncident, updateIncidentStatus } from '@/app/(app)/incidents/actions';
 import { buildIncidentListHref } from '@/lib/incident-links';
 import {
   LIVE_INCIDENT_VISIBLE_ROWS,
-  LIVE_VIEW_LABELS,
   countActiveFacets,
+  liveQueryKey,
+  liveViewLabel,
   type LiveConnectionHealth,
   type LiveIncident,
   type LiveIncidentQuery,
 } from '@/lib/dashboard/live-incidents-shared';
 import { useLiveDashboard } from './LiveDashboardProvider';
 import { LIVE_ROW_GRID, LIVE_ROW_GRID_TV, LiveIncidentRow } from './LiveIncidentRow';
-import { LiveFilterBar, LiveViewTabs, type LiveDirectoryOption } from './LiveFilterBar';
+import { LiveToolbar, LiveViewTabs, type LiveDirectoryOption } from './LiveFilterBar';
 
-const HEALTH_COPY: Record<LiveConnectionHealth, { label: string; dot: string; text: string }> = {
-  live: { label: 'Live', dot: 'bg-emerald-500', text: 'text-emerald-700 dark:text-emerald-400' },
-  connecting: { label: 'Connecting', dot: 'bg-slate-400', text: 'text-muted-foreground' },
-  stale: { label: 'Stale', dot: 'bg-amber-500', text: 'text-amber-700 dark:text-amber-400' },
-  offline: { label: 'Offline', dot: 'bg-rose-500', text: 'text-rose-700 dark:text-rose-400' },
-  revoked: {
-    label: 'Session expired',
-    dot: 'bg-rose-500',
-    text: 'text-rose-700 dark:text-rose-400',
-  },
-};
+function healthCopy(health: LiveConnectionHealth): { label: string; dot: string; text: string } {
+  switch (health) {
+    case 'live':
+      return {
+        label: 'Live',
+        dot: 'bg-emerald-500',
+        text: 'text-emerald-700 dark:text-emerald-400',
+      };
+    case 'stale':
+      return { label: 'Stale', dot: 'bg-amber-500', text: 'text-amber-700 dark:text-amber-400' };
+    case 'offline':
+      return { label: 'Offline', dot: 'bg-rose-500', text: 'text-rose-700 dark:text-rose-400' };
+    case 'revoked':
+      return {
+        label: 'Session expired',
+        dot: 'bg-rose-500',
+        text: 'text-rose-700 dark:text-rose-400',
+      };
+    case 'connecting':
+    default:
+      return { label: 'Connecting', dot: 'bg-slate-400', text: 'text-muted-foreground' };
+  }
+}
 
 const SHORTCUTS: Array<[string, string]> = [
   ['j / k', 'Next / previous incident'],
@@ -148,7 +167,6 @@ export default function LiveIncidentsPanel({
   } = live;
   const wallboard = variant === 'wallboard';
   const [expanded, setExpanded] = useState(wallboard);
-  const [filtersOpen, setFiltersOpen] = useState(false);
   const [focusedIndex, setFocusedIndex] = useState<number | null>(null);
   const [busy, setBusy] = useState<Record<string, 'ack' | 'assign'>>({});
   const listRef = useRef<HTMLUListElement | null>(null);
@@ -159,10 +177,15 @@ export default function LiveIncidentsPanel({
   );
   const hiddenLoaded = incidents.length - visible.length;
   const facetCount = countActiveFacets(query);
-  const healthCopy = HEALTH_COPY[health];
+  const health_ = healthCopy(health);
   const isQueryLoading = loading && snapshot !== null;
 
-  useEffect(() => setFocusedIndex(null), [query]);
+  // Reset keyboard focus whenever the query changes.
+  const [focusQueryKey, setFocusQueryKey] = useState(() => liveQueryKey(query));
+  if (focusQueryKey !== liveQueryKey(query)) {
+    setFocusQueryKey(liveQueryKey(query));
+    setFocusedIndex(null);
+  }
 
   const acknowledge = useCallback(
     async (incident: LiveIncident) => {
@@ -236,7 +259,8 @@ export default function LiveIncidentsPanel({
         gPressedAt.current = 0;
         return;
       }
-      const focused = focusedIndex !== null ? visible[focusedIndex] : undefined;
+      const focused =
+        focusedIndex !== null ? visible.slice(focusedIndex, focusedIndex + 1)[0] : undefined;
       switch (key) {
         case 'j':
           event.preventDefault();
@@ -261,8 +285,7 @@ export default function LiveIncidentsPanel({
           return;
         case '/':
           event.preventDefault();
-          setFiltersOpen(true);
-          requestAnimationFrame(() => document.getElementById('live-incident-search')?.focus());
+          document.getElementById('live-incident-search')?.focus();
           return;
         case 'p':
           event.preventDefault();
@@ -338,48 +361,34 @@ export default function LiveIncidentsPanel({
         wallboard && 'h-full'
       )}
     >
-      <header className="space-y-3 border-b border-border p-3 sm:p-4">
-        {/* The wallboard has its own header; keep this one for assistive tech only. */}
-        <div
-          className={cn(
-            'flex flex-wrap items-center justify-between gap-2',
-            wallboard && 'sr-only'
-          )}
-        >
-          <div className="flex min-w-0 items-center gap-3">
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-rose-200/50 bg-rose-500/10 text-rose-600 dark:border-rose-900/50">
-              <Radio className="h-4 w-4" aria-hidden />
-            </div>
-            <div className="min-w-0">
-              <div className="flex items-center gap-2">
-                <h2
-                  id="live-incidents-heading"
-                  className={cn('font-bold text-foreground', wallboard ? 'text-xl' : 'text-sm')}
-                >
-                  Live Incidents
-                </h2>
-                <Badge variant="outline" size="xs" data-testid="live-incidents-total">
-                  {total.toLocaleString()}{' '}
-                  {query.view === 'active' && facetCount === 0 ? 'active' : 'matching'}
-                </Badge>
-              </div>
+      <header className="space-y-2.5 border-b border-border p-3 sm:px-4">
+        {!wallboard && (
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex min-w-0 items-center gap-2.5">
+              <h2 id="live-incidents-heading" className="text-sm font-bold text-foreground">
+                Live Incidents
+              </h2>
+              <Badge variant="outline" size="xs" data-testid="live-incidents-total">
+                {total.toLocaleString()}{' '}
+                {query.view === 'active' && facetCount === 0 ? 'active' : 'matching'}
+              </Badge>
               <p
-                className="flex flex-wrap items-center gap-x-2 text-[11px] text-muted-foreground"
+                className="hidden min-w-0 items-center gap-x-2 truncate text-[11px] text-muted-foreground sm:flex"
                 aria-live="polite"
                 data-testid="live-incidents-status"
               >
                 <span
-                  className={cn('inline-flex items-center gap-1.5 font-semibold', healthCopy.text)}
+                  className={cn('inline-flex items-center gap-1.5 font-semibold', health_.text)}
                 >
                   <span
                     aria-hidden
                     className={cn(
                       'h-1.5 w-1.5 rounded-full',
-                      healthCopy.dot,
+                      health_.dot,
                       health === 'live' && !paused && 'motion-safe:animate-pulse'
                     )}
                   />
-                  {paused ? 'Paused' : healthCopy.label}
+                  {paused ? 'Paused' : health_.label}
                 </span>
                 <span data-testid="live-incidents-synced">{formatSyncAge(syncedAt, now)}</span>
                 {syncError && (
@@ -391,10 +400,7 @@ export default function LiveIncidentsPanel({
                 )}
               </p>
             </div>
-          </div>
-
-          {!wallboard && (
-            <div className="flex flex-wrap items-center gap-1.5">
+            <div className="flex shrink-0 items-center gap-1.5">
               <button
                 type="button"
                 onClick={togglePaused}
@@ -409,9 +415,9 @@ export default function LiveIncidentsPanel({
                 )}
               >
                 {paused ? (
-                  <Play className="h-3 w-3" aria-hidden />
+                  <Play className="h-3 w-3 shrink-0" aria-hidden />
                 ) : (
-                  <Pause className="h-3 w-3" aria-hidden />
+                  <Pause className="h-3 w-3 shrink-0" aria-hidden />
                 )}
                 {paused ? 'Resume' : 'Pause'}
                 {paused && pendingCount > 0 && (
@@ -424,119 +430,73 @@ export default function LiveIncidentsPanel({
                 )}
                 <span className="sr-only">live updates</span>
               </button>
-              <button
-                type="button"
-                onClick={() => setCriticalAlerts(!criticalAlerts)}
-                aria-pressed={criticalAlerts}
-                data-testid="live-alerts-toggle"
-                title={
-                  criticalAlerts
-                    ? 'Critical alerts on (background tab)'
-                    : 'Alert me about new critical incidents'
-                }
-                className={cn(
-                  'inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border p-0 outline-none focus-visible:ring-2 focus-visible:ring-primary/50',
-                  criticalAlerts
-                    ? 'border-rose-400/60 bg-rose-500/10 text-rose-700 dark:text-rose-300'
-                    : 'border-border bg-card text-muted-foreground hover:bg-muted hover:text-foreground'
-                )}
-              >
-                {criticalAlerts ? (
-                  <Bell className="h-3.5 w-3.5 shrink-0" aria-hidden />
-                ) : (
-                  <BellOff className="h-3.5 w-3.5 shrink-0" aria-hidden />
-                )}
-                <span className="sr-only">Critical incident alerts</span>
-              </button>
-              <button
-                type="button"
-                onClick={refresh}
-                title="Refresh now"
-                data-testid="live-refresh"
-                className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border p-0 border-border bg-card text-muted-foreground hover:bg-muted hover:text-foreground outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
-              >
-                <RefreshCw
-                  className={cn(
-                    'h-3.5 w-3.5 shrink-0',
-                    isQueryLoading && 'motion-safe:animate-spin'
-                  )}
-                  aria-hidden
-                />
-                <span className="sr-only">Refresh live incidents</span>
-              </button>
-              {canExport && (
-                <button
-                  type="button"
-                  onClick={exportCsv}
-                  title="Export loaded incidents as CSV"
-                  data-testid="live-export"
-                  disabled={incidents.length === 0}
-                  className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border p-0 border-border bg-card text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-50 outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
-                >
-                  <Download className="h-3.5 w-3.5 shrink-0" aria-hidden />
-                  <span className="sr-only">Export CSV</span>
-                </button>
-              )}
-              <Popover>
-                <PopoverTrigger asChild>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
                   <button
                     type="button"
-                    title="Keyboard shortcuts"
-                    className="hidden md:inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border p-0 border-border bg-card text-muted-foreground hover:bg-muted hover:text-foreground outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+                    data-testid="live-more-actions"
+                    aria-label="More live incident actions"
+                    className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-border bg-card p-0 text-muted-foreground hover:bg-muted hover:text-foreground outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
                   >
-                    <Keyboard className="h-3.5 w-3.5 shrink-0" aria-hidden />
-                    <span className="sr-only">Keyboard shortcuts</span>
+                    <MoreHorizontal className="h-4 w-4 shrink-0" aria-hidden />
                   </button>
-                </PopoverTrigger>
-                <PopoverContent align="end" className="w-64 p-3">
-                  <p className="mb-2 text-xs font-bold text-foreground">Live incident shortcuts</p>
-                  <dl className="space-y-1">
-                    {SHORTCUTS.map(([keys, description]) => (
-                      <div
-                        key={keys}
-                        className="flex items-center justify-between gap-3 text-[11px]"
-                      >
-                        <dt className="text-muted-foreground">{description}</dt>
-                        <dd>
-                          <kbd className="rounded border border-border bg-muted px-1.5 py-0.5 font-mono text-[10px]">
-                            {keys}
-                          </kbd>
-                        </dd>
-                      </div>
-                    ))}
-                  </dl>
-                </PopoverContent>
-              </Popover>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-64">
+                  <DropdownMenuItem onSelect={refresh} data-testid="live-refresh">
+                    <RefreshCw className="mr-2 h-3.5 w-3.5" aria-hidden />
+                    Refresh now
+                  </DropdownMenuItem>
+                  <DropdownMenuCheckboxItem
+                    checked={criticalAlerts}
+                    onCheckedChange={checked => setCriticalAlerts(checked === true)}
+                    data-testid="live-alerts-toggle"
+                  >
+                    Alert me about new critical incidents
+                  </DropdownMenuCheckboxItem>
+                  {canExport && (
+                    <DropdownMenuItem
+                      onSelect={exportCsv}
+                      disabled={incidents.length === 0}
+                      data-testid="live-export"
+                    >
+                      <Download className="mr-2 h-3.5 w-3.5" aria-hidden />
+                      Export loaded incidents (CSV)
+                    </DropdownMenuItem>
+                  )}
+                  <DropdownMenuItem asChild>
+                    <Link href="/wallboard">
+                      <Monitor className="mr-2 h-3.5 w-3.5" aria-hidden />
+                      Open wallboard (TV mode)
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuLabel className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-muted-foreground">
+                    <Keyboard className="h-3 w-3" aria-hidden />
+                    Shortcuts
+                  </DropdownMenuLabel>
+                  {SHORTCUTS.map(([keys, description]) => (
+                    <div
+                      key={keys}
+                      className="flex items-center justify-between gap-3 px-2 py-1 text-[11px] text-muted-foreground"
+                    >
+                      <span>{description}</span>
+                      <kbd className="rounded border border-border bg-muted px-1.5 py-0.5 font-mono text-[10px]">
+                        {keys}
+                      </kbd>
+                    </div>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
-          )}
-        </div>
-
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <LiveViewTabs />
-          {!wallboard && (
-            <button
-              type="button"
-              onClick={() => setFiltersOpen(open => !open)}
-              aria-expanded={filtersOpen || facetCount > 0}
-              aria-controls="live-filter-region"
-              data-testid="live-filters-toggle"
-              className={cn(
-                'inline-flex h-8 items-center gap-1.5 rounded-lg border px-2.5 text-[11px] font-semibold outline-none focus-visible:ring-2 focus-visible:ring-primary/50',
-                facetCount > 0
-                  ? 'border-primary/50 bg-primary/5 text-primary'
-                  : 'border-border bg-card text-foreground hover:bg-muted'
-              )}
-            >
-              <SlidersHorizontal className="h-3.5 w-3.5" aria-hidden />
-              Filters{facetCount > 0 ? ` · ${facetCount}` : ''}
-            </button>
-          )}
-        </div>
-        {!wallboard && (filtersOpen || facetCount > 0) && (
-          <div id="live-filter-region">
-            <LiveFilterBar services={services} teams={teams} />
           </div>
         )}
+        {wallboard && (
+          <h2 id="live-incidents-heading" className="sr-only">
+            Live Incidents
+          </h2>
+        )}
+        <LiveViewTabs />
+        {!wallboard && <LiveToolbar services={services} teams={teams} />}
       </header>
 
       <div
@@ -583,14 +543,14 @@ export default function LiveIncidentsPanel({
             <p className="text-xs text-muted-foreground">
               {query.view === 'active' && facetCount === 0
                 ? 'All clear. New incidents will appear here automatically.'
-                : `No active incidents match “${LIVE_VIEW_LABELS[query.view]}”${facetCount ? ' with these filters' : ''}.`}
+                : `No active incidents match “${liveViewLabel(query.view)}”${facetCount ? ' with these filters' : ''}.`}
             </p>
           </div>
         ) : (
           <ul
             ref={listRef}
             className="divide-y divide-border"
-            aria-label={`${LIVE_VIEW_LABELS[query.view]} incidents, newest first`}
+            aria-label={`${liveViewLabel(query.view)} incidents, newest first`}
             data-testid="live-incidents-list"
           >
             {visible.map((incident, index) => (

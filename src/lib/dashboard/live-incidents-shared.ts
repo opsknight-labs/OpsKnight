@@ -25,6 +25,33 @@ export const LIVE_VIEW_LABELS: Record<LiveIncidentView, string> = {
   breaching: 'SLA Risk',
 };
 
+export function liveViewLabel(view: LiveIncidentView): string {
+  switch (view) {
+    case 'critical':
+      return 'Critical';
+    case 'mine':
+      return 'Mine';
+    case 'my_teams':
+      return 'My Teams';
+    case 'unassigned':
+      return 'Unassigned';
+    case 'breaching':
+      return 'SLA Risk';
+    case 'active':
+    default:
+      return 'All Active';
+  }
+}
+
+/** Dashboard reporting period (MTTA/MTTR and trends). Live state is never range-bound. */
+export const HISTORY_RANGES = ['7', '30', '90'] as const;
+export type HistoryRange = (typeof HISTORY_RANGES)[number];
+export type HistoryQuery = { range: HistoryRange };
+
+export function parseHistoryRange(value: string | null | undefined): HistoryRange {
+  return value === '7' || value === '90' ? value : '30';
+}
+
 export const LIVE_STATUS_OPTIONS = ['all', 'OPEN', 'ACKNOWLEDGED'] as const;
 export const LIVE_URGENCY_OPTIONS = ['all', 'HIGH', 'MEDIUM', 'LOW'] as const;
 export const LIVE_ASSIGNMENT_OPTIONS = ['all', 'unassigned', 'assigned'] as const;

@@ -170,17 +170,18 @@ export function deriveLiveProjection(
   const inView = rows.filter(row => matchesView(row, query.view, ctx));
   const matching = inView.filter(row => matchesFacetsExcept(row, query));
 
-  const views = Object.fromEntries(
-    LIVE_INCIDENT_VIEWS.map(view => [view, 0])
-  ) as LiveFacets['views'];
+  const viewCounts = new Map<LiveIncidentView, number>(LIVE_INCIDENT_VIEWS.map(view => [view, 0]));
   const status = { OPEN: 0, ACKNOWLEDGED: 0 };
   const urgency = { HIGH: 0, MEDIUM: 0, LOW: 0 };
   const assignment = { assigned: 0, unassigned: 0 };
   for (const row of rows) {
     if (matchesFacetsExcept(row, query)) {
-      for (const view of LIVE_INCIDENT_VIEWS) if (matchesView(row, view, ctx)) views[view] += 1;
+      for (const view of LIVE_INCIDENT_VIEWS) {
+        if (matchesView(row, view, ctx)) viewCounts.set(view, (viewCounts.get(view) ?? 0) + 1);
+      }
     }
   }
+  const views = Object.fromEntries(viewCounts) as LiveFacets['views'];
   for (const row of inView) {
     if (matchesFacetsExcept(row, query, 'status')) status[row.status] += 1;
     if (matchesFacetsExcept(row, query, 'urgency')) urgency[row.urgency] += 1;
