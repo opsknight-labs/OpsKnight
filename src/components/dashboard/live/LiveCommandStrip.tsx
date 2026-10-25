@@ -6,6 +6,7 @@ import { Monitor } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import LiveClock from '@/components/dashboard/LiveClock';
 import {
+  HISTORY_RANGES,
   LIVE_SCOPES,
   type LiveIncidentQuery,
   type LiveScope,
@@ -13,6 +14,7 @@ import {
   type LiveSummary,
 } from '@/lib/dashboard/live-incidents-shared';
 import { useLiveDashboard } from './LiveDashboardProvider';
+import { useOptionalHistoryQuery } from '@/components/dashboard/DashboardHistorySection';
 
 type Tone = 'rose' | 'amber' | 'emerald' | 'default';
 
@@ -188,6 +190,7 @@ export default function LiveCommandStrip({
 }) {
   const router = useRouter();
   const { snapshot, query, setQuery } = useLiveDashboard();
+  const history = useOptionalHistoryQuery();
   const summary = snapshot?.summary ?? null;
   const trend = snapshot?.trend ?? null;
   const narrative = buildNarrative(snapshot);
@@ -215,35 +218,27 @@ export default function LiveCommandStrip({
     <section
       data-testid="command-center"
       aria-label="Command center"
-      className="overflow-hidden rounded-xl border border-border dark:border-zinc-800 shadow-xs"
+      className="overflow-hidden rounded-xl border border-zinc-800 bg-[#0c0c0f] text-zinc-100"
     >
-      {/* Top Header: Theme-aware surface (clean and integrated in light mode, sleek dark in dark mode) */}
-      <div className="flex flex-col gap-3 bg-card px-5 pb-4 pt-4 text-card-foreground border-b border-border dark:border-zinc-800 lg:flex-row lg:items-start lg:justify-between">
+      <div className="flex flex-col gap-3 px-5 pb-4 pt-4 lg:flex-row lg:items-start lg:justify-between">
         <div className="min-w-0">
           <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
-            <h1 className="dash-hero-title text-foreground">Command Center</h1>
+            <h1 className="dash-hero-title">Command Center</h1>
             <span
               data-testid="command-status"
-              className={cn(
-                'inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-semibold',
-                status.dot.includes('rose')
-                  ? 'bg-rose-500/10 text-rose-600 dark:text-rose-400'
-                  : status.dot.includes('amber')
-                    ? 'bg-amber-500/10 text-amber-700 dark:text-amber-300'
-                    : 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400'
-              )}
+              className={cn('inline-flex items-center gap-2 text-[13px] font-medium', status.text)}
             >
-              <span className={cn('h-1.5 w-1.5 rounded-full', status.dot)} aria-hidden />
+              <span className={cn('h-2 w-2 rounded-full', status.dot)} aria-hidden />
               {status.label}
             </span>
           </div>
           <p
             data-testid="command-insight"
             aria-live="polite"
-            className="mt-2 text-[13px] leading-6 text-muted-foreground"
+            className="mt-2 text-[13px] leading-6 text-zinc-400"
           >
             {narrative.length === 0 ? (
-              <span className="text-muted-foreground">
+              <span className="text-zinc-300">
                 No active incidents{query.scope !== 'all' ? ' in this scope' : ''}. Everything is
                 quiet.
               </span>
@@ -251,7 +246,7 @@ export default function LiveCommandStrip({
               narrative.map((fragment, index) => (
                 <span key={fragment.text}>
                   {index > 0 && (
-                    <span aria-hidden className="mx-2 text-muted-foreground/40">
+                    <span aria-hidden className="mx-2 text-zinc-700">
                       /
                     </span>
                   )}
@@ -263,10 +258,10 @@ export default function LiveCommandStrip({
                       className={cn(
                         'rounded-sm p-0 font-medium decoration-1 underline-offset-4 outline-none hover:underline focus-visible:underline',
                         fragment.tone === 'rose'
-                          ? 'text-rose-600 dark:text-rose-400 font-semibold'
+                          ? 'text-rose-300'
                           : fragment.tone === 'amber'
-                            ? 'text-amber-700 dark:text-amber-300 font-semibold'
-                            : 'text-foreground font-semibold'
+                            ? 'text-amber-200'
+                            : 'text-zinc-200'
                       )}
                     >
                       {fragment.text}
@@ -287,7 +282,7 @@ export default function LiveCommandStrip({
             role="radiogroup"
             aria-label="Incident scope"
             data-testid="scope-switch"
-            className="inline-flex h-8 items-center rounded-lg border border-border dark:border-zinc-800 bg-muted/40 dark:bg-zinc-900/60 p-0.5 text-[12px] font-medium"
+            className="inline-flex h-8 items-center rounded-md border border-zinc-800 p-0.5 text-[12px] font-medium"
           >
             {LIVE_SCOPES.map(scope => (
               <button
@@ -299,26 +294,52 @@ export default function LiveCommandStrip({
                 data-icon-button
                 onClick={() => setQuery({ scope })}
                 className={cn(
-                  'h-full whitespace-nowrap rounded-md px-2.5 outline-none transition-colors focus-visible:ring-2 focus-visible:ring-primary/50',
+                  'h-full whitespace-nowrap rounded px-2.5 outline-none transition-colors focus-visible:ring-2 focus-visible:ring-zinc-500',
                   query.scope === scope
-                    ? 'bg-card text-foreground shadow-2xs font-semibold dark:bg-zinc-800 dark:text-zinc-50'
-                    : 'text-muted-foreground hover:text-foreground dark:text-zinc-400 dark:hover:text-zinc-100'
+                    ? 'bg-zinc-800 text-zinc-50'
+                    : 'text-zinc-400 hover:text-zinc-100'
                 )}
               >
                 {SCOPE_LABEL.get(scope)}
                 {scope === 'mine' && summary ? (
-                  <span className="ml-1.5 rounded-full bg-muted dark:bg-zinc-800/80 px-1.5 py-0.2 text-[10px] tabular-nums font-semibold text-muted-foreground dark:text-zinc-400">
-                    {summary.mine}
-                  </span>
+                  <span className="ml-1 tabular-nums text-zinc-500">{summary.mine}</span>
                 ) : null}
               </button>
             ))}
           </div>
+          {history && (
+            <div
+              role="radiogroup"
+              aria-label="Reporting period"
+              data-testid="command-period"
+              className="inline-flex h-8 items-center rounded-md border border-zinc-800 p-0.5 text-[12px] font-medium"
+            >
+              {HISTORY_RANGES.map(range => (
+                <button
+                  key={range}
+                  type="button"
+                  role="radio"
+                  aria-checked={history.query.range === range}
+                  data-testid={`period-${range}`}
+                  onClick={() => history.setQuery({ range })}
+                  title={`Analytics reporting period: ${range} days`}
+                  className={cn(
+                    'h-full whitespace-nowrap rounded px-2.5 outline-none transition-colors focus-visible:ring-2 focus-visible:ring-zinc-500',
+                    history.query.range === range
+                      ? 'bg-zinc-800 text-zinc-50 font-semibold'
+                      : 'text-zinc-400 hover:text-zinc-100'
+                  )}
+                >
+                  {range}d
+                </button>
+              ))}
+            </div>
+          )}
           <Link
             href="/wallboard"
             data-testid="command-wallboard"
             title="Full-screen operations command console for office TVs and NOC screens"
-            className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-border dark:border-zinc-800 bg-card dark:bg-[#0c0c0f] px-2.5 text-[12px] font-medium text-foreground dark:text-zinc-300 shadow-2xs outline-none transition-colors hover:bg-muted dark:hover:bg-zinc-900 hover:text-foreground dark:hover:text-zinc-50 focus-visible:ring-2 focus-visible:ring-primary/50"
+            className="inline-flex h-8 items-center gap-1.5 rounded-md border border-zinc-800 px-2.5 text-[12px] font-medium text-zinc-300 outline-none transition-colors hover:bg-zinc-900 hover:text-zinc-50 focus-visible:ring-2 focus-visible:ring-zinc-500"
           >
             <Monitor className="h-3.5 w-3.5 shrink-0" aria-hidden />
             <span className="hidden sm:inline">Operations Console</span>
@@ -327,7 +348,6 @@ export default function LiveCommandStrip({
         </div>
       </div>
 
-      {/* Bottom Telemetry Strip: Dark avionics / instrument ribbon */}
       <div
         className="grid grid-cols-2 gap-px border-t border-zinc-800 bg-zinc-800 md:grid-cols-3 xl:grid-cols-6"
         data-testid="command-center-counters"
