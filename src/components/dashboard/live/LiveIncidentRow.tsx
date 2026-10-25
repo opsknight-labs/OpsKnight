@@ -340,7 +340,7 @@ export const LiveIncidentRow = memo(function LiveIncidentRow({
         </span>
 
         {!tv && (
-          <span className="flex items-center justify-end gap-1 self-start transition-opacity md:self-center md:opacity-0 md:group-focus-within:opacity-100 md:group-hover:opacity-100">
+          <span className="flex items-center justify-end gap-1 self-start md:self-center">
             {showAck && (
               <button
                 type="button"
