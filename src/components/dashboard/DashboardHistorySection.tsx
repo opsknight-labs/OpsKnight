@@ -318,7 +318,7 @@ function ActivityTimeline() {
     )
     .slice(0, 10);
   return (
-    <div className={cn(card, 'flex flex-col h-[340px] p-4')} data-testid="rail-activity">
+    <div className={cn(card, 'flex flex-col h-[395px] p-4')} data-testid="rail-activity">
       <div className="mb-3 flex shrink-0 flex-wrap items-center justify-between gap-2">
         <h3 className="dash-heading-sm">Recent activity</h3>
         <div role="radiogroup" aria-label="Activity type" className="flex flex-wrap gap-1">
@@ -342,40 +342,55 @@ function ActivityTimeline() {
         </div>
       </div>
       {visible.length === 0 ? (
-        <div className="flex flex-1 items-center justify-center text-center text-xs text-muted-foreground">
-          No matching activity
+        <div
+          className="flex h-full min-h-[140px] flex-col items-center justify-center rounded-lg border border-dashed border-border bg-muted/20 p-4 text-center"
+          role="status"
+          aria-label="No matching activity"
+        >
+          <div className="text-xs font-medium text-muted-foreground">No matching activity</div>
         </div>
       ) : (
-        <ol className="flex-1 space-y-2.5 overflow-y-auto overscroll-contain pr-1.5">
-          {visible.map(item => {
-            const { icon: Icon, tone } = activityIcon(item.type);
-            return (
-              <li key={item.id} className="flex gap-2.5">
-                <span
-                  className={cn(
-                    'flex h-6 w-6 shrink-0 items-center justify-center rounded-full',
-                    tone
-                  )}
-                  aria-hidden
-                >
-                  <Icon className="h-3.5 w-3.5" />
-                </span>
-                <div className="min-w-0 flex-1">
-                  <p className="line-clamp-2 text-[12px] text-foreground">{item.message}</p>
-                  <p className="truncate text-[11px] text-muted-foreground">
-                    <Link
-                      href={`/incidents/${item.incidentId}`}
-                      className="font-medium text-primary hover:underline"
+        <div className="flex-1 overflow-y-auto overscroll-contain pr-1">
+          <ol className="flex flex-col gap-2" role="list" aria-label="Recent activity log">
+            {visible.map(item => {
+              const { icon: Icon, tone } = activityIcon(item.type);
+              return (
+                <li key={item.id} role="listitem">
+                  <Link
+                    href={`/incidents/${item.incidentId}`}
+                    className="group flex items-center gap-2.5 rounded-lg border border-border bg-card px-2.5 py-1.5 shadow-2xs transition-all hover:border-slate-300 dark:bg-[#121216] dark:hover:border-zinc-700 outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+                  >
+                    <span
+                      className={cn(
+                        'flex h-7 w-7 shrink-0 items-center justify-center rounded-lg shadow-2xs',
+                        tone
+                      )}
+                      aria-hidden
                     >
-                      {item.incidentTitle}
-                    </Link>{' '}
-                    · {formatIncidentAge(item.createdAt, now)} ago
-                  </p>
-                </div>
-              </li>
-            );
-          })}
-        </ol>
+                      <Icon className="h-3.5 w-3.5" />
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center justify-between gap-2">
+                        <p
+                          className="truncate text-xs font-semibold text-foreground transition-colors group-hover:text-primary"
+                          title={item.message}
+                        >
+                          {item.message}
+                        </p>
+                        <span className="shrink-0 font-mono text-[10px] text-muted-foreground tabular-nums">
+                          {formatIncidentAge(item.createdAt, now)} ago
+                        </span>
+                      </div>
+                      <p className="mt-0.5 truncate text-[11px] text-muted-foreground">
+                        <span className="font-medium text-foreground/80">{item.incidentTitle}</span>
+                      </p>
+                    </div>
+                  </Link>
+                </li>
+              );
+            })}
+          </ol>
+        </div>
       )}
     </div>
   );
@@ -458,7 +473,7 @@ function InsightsContent() {
       </div>
       <div className="grid grid-cols-1 items-stretch gap-4 lg:grid-cols-2">
         <ActivityTimeline />
-        <div className={cn(card, 'flex flex-col h-[340px] p-4')} data-testid="insight-team-load">
+        <div className={cn(card, 'flex flex-col h-[395px] p-4')} data-testid="insight-team-load">
           <div className="mb-3 flex shrink-0 items-center justify-between">
             <h3 className="dash-heading-sm">Team load</h3>
             {data.assigneeLoad && data.assigneeLoad.length > 0 && (
