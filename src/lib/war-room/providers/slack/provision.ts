@@ -25,8 +25,7 @@ function getSlackChannelUrl(channelId: string, workspaceId?: string | null): str
 const AMBIGUOUS_RECONCILIATION_WINDOW_MS = 15 * 60_000;
 
 type RequestResult =
-  | { accepted: true; warRoomId: string; state: string }
-  | { accepted: false; code: string };
+  { accepted: true; warRoomId: string; state: string } | { accepted: false; code: string };
 
 function slugify(name: string, maxLen = 40): string {
   return name
@@ -161,9 +160,21 @@ export async function requestSlackWarRoom(
   const result = await runSerializableTransaction(async tx => {
     const incident = await tx.incident.findUnique({
       where: { id: incidentId },
-      include: {
+      select: {
+        status: true,
+        urgency: true,
+        priority: true,
+        visibility: true,
+        serviceId: true,
+        assigneeId: true,
         service: {
-          include: { slackIntegration: { select: { workspaceId: true } } },
+          select: {
+            id: true,
+            autoCreateWarRoom: true,
+            microsoftTeamsWarRoomAutoCreate: true,
+            warRoomVideoBridge: true,
+            slackIntegration: { select: { workspaceId: true } },
+          },
         },
       },
     });
@@ -182,13 +193,14 @@ export async function requestSlackWarRoom(
     const slackWorkspaceId =
       incident.service.slackIntegration?.workspaceId || globalIntegration?.workspaceId || null;
 
-    const { getGlobalWarRoomPolicy, getServiceWarRoomPolicy, resolveIncidentCollaborationPolicy } =
+    const { getIncidentCollaborationPolicies, resolveIncidentCollaborationPolicy } =
       await import('@/lib/incident-collaboration/policy');
 
-    const [globalPolicy, servicePolicy] = await Promise.all([
-      getGlobalWarRoomPolicy(tx),
-      incident.serviceId ? getServiceWarRoomPolicy(incident.serviceId, tx) : null,
-    ]);
+    const { globalPolicy, servicePolicy } = await getIncidentCollaborationPolicies(
+      incident.service,
+      tx,
+      config
+    );
 
     const canonicalPolicy = resolveIncidentCollaborationPolicy({
       incident: {
@@ -224,17 +236,14 @@ export async function requestSlackWarRoom(
         }
       : null;
 
-    // Fetch incident visibility for policy
-    const policyIncident = await tx.incident.findUnique({
-      where: { id: incidentId },
-      select: { urgency: true, priority: true, visibility: true },
-    });
+    // Reuse the incident read in this same SERIALIZABLE transaction. A second
+    // read cannot observe a newer committed incident within this snapshot.
     // Slack war rooms are always open to the entire organization regardless of
     // status-page public/private visibility.
     const decision = evaluateWarRoomPolicy({
       incident: {
-        urgency: policyIncident?.urgency ?? incident.urgency,
-        priority: policyIncident?.priority ?? incident.priority,
+        urgency: incident.urgency,
+        priority: incident.priority,
         visibility: 'PUBLIC',
       },
       service: { autoCreate: effectiveAutoCreate },

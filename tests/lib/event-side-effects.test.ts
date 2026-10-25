@@ -12,6 +12,7 @@ import {
   inviteTeamToWarRoom as mockedInviteTeamToWarRoom,
 } from '@/lib/chatops/war-room';
 import prisma from '@/lib/prisma';
+import { maybeAutoProvisionIncidentMeeting } from '@/lib/incident-collaboration/meeting-store';
 import { processEventSideEffect } from '@/lib/event-side-effects';
 import type { EventSideEffectPayload } from '@/lib/event-outbox';
 import { handleIncidentWarRoomEvent as mockedHandleIncidentWarRoomEvent, closeIncidentWarRoomsNeutral as mockedCloseIncidentWarRoomsNeutral } from '@/lib/war-room/engine';
@@ -25,6 +26,11 @@ vi.mock('@/lib/logger', () => ({
     warn: vi.fn(),
     debug: vi.fn(),
   },
+}));
+
+vi.mock('@/lib/incident-collaboration/meeting-store', () => ({
+  maybeAutoProvisionIncidentMeeting: vi.fn().mockResolvedValue(undefined),
+  closeIncidentMeeting: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock('@/lib/notifications', () => ({ executeEscalation: vi.fn() }));
@@ -477,5 +483,26 @@ describe('event durable side effects', () => {
     await expect(processEventSideEffect(invalid)).rejects.toThrow(
       /Unknown EVENT_SIDE_EFFECT effect/
     );
+  });
+});
+
+describe('durable meeting planning recovery', () => {
+  it('retries a failed planning read using the same source identity', async () => {
+    handleIncidentWarRoomEventMock.mockReset().mockResolvedValue(undefined);
+    vi.mocked(maybeAutoProvisionIncidentMeeting)
+      .mockReset()
+      .mockRejectedValueOnce(new Error('configuration database unavailable'))
+      .mockResolvedValueOnce(undefined);
+    const event = payload('TRIGGER_WAR_ROOM', 'WAR_ROOM');
+    await expect(processEventSideEffect(event)).rejects.toThrow(
+      'configuration database unavailable'
+    );
+    await expect(processEventSideEffect(event)).resolves.toBeUndefined();
+    const calls = handleIncidentWarRoomEventMock.mock.calls.slice(-2);
+    expect(calls).toHaveLength(2);
+    expect(calls[0][0]).toEqual(calls[1][0]);
+    expect(calls[0][0]).toMatchObject({
+      incidentEventId: event.sourceEventId, incidentId: event.incidentId,
+    });
   });
 });

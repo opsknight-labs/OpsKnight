@@ -418,6 +418,10 @@ export async function processEventSideEffect(payload: EventSideEffectPayload): P
             error: err instanceof Error ? err.message : String(err),
           }
         );
+        // Keep this durable parent retryable when configuration or meeting
+        // planning is unavailable. Replays retain sourceEventId; provider
+        // deliveries and meeting provisioning keep their existing fences.
+        throw err;
       }
       return;
     }

@@ -1392,12 +1392,17 @@ export async function maybeAutoProvisionIncidentMeeting(incidentId: string): Pro
 
   const incident = await prisma.incident.findUnique({
     where: { id: incidentId },
-    include: {
+    select: {
+      title: true,
+      status: true,
+      urgency: true,
+      priority: true,
+      visibility: true,
       service: {
         select: {
           id: true,
-          name: true,
           autoCreateWarRoom: true,
+          microsoftTeamsWarRoomAutoCreate: true,
           warRoomVideoBridge: true,
           warRoomCustomBridgeUrl: true,
         },
@@ -1412,12 +1417,11 @@ export async function maybeAutoProvisionIncidentMeeting(incidentId: string): Pro
     return; // Already active or provisioning
   }
 
-  const { getGlobalWarRoomPolicy, getServiceWarRoomPolicy, resolveIncidentCollaborationPolicy } =
+  const { getIncidentCollaborationPolicies, resolveIncidentCollaborationPolicy } =
     await import('./policy');
 
-  const [globalPolicy, servicePolicy, teamsConfig] = await Promise.all([
-    getGlobalWarRoomPolicy(),
-    incident.serviceId ? getServiceWarRoomPolicy(incident.serviceId) : null,
+  const [{ globalPolicy, servicePolicy }, teamsConfig] = await Promise.all([
+    getIncidentCollaborationPolicies(incident.service),
     prisma.microsoftTeamsConfig?.findUnique
       ? prisma.microsoftTeamsConfig.findUnique({
           where: { id: 'default' },
