@@ -1,3 +1,4 @@
+import type { IncidentStatus } from '@prisma/client';
 import prisma from '@/lib/prisma';
 import { NOTIFICATION_PRIORITY, statusNotificationPriority } from '@/lib/notification-priority';
 import { issueUnsubscribeTokensBatch } from '@/lib/status-pages/subscription-tokens';
@@ -48,20 +49,42 @@ export async function notifyStatusPageSubscribers(
     | 'acknowledged'
     | 'snoozed'
     | 'suppressed',
-  deliveryKey?: string
+  deliveryKey?: string,
+  expectedIncident?: { status?: IncidentStatus; escalationGeneration?: number }
 ): Promise<{ success: boolean; sent: number; failed: number; skipped?: boolean }> {
   let totalSent = 0;
   let totalFailed = 0;
   try {
     const incident = await prisma.incident.findUnique({
       where: { id: incidentId },
-      include: {
-        service: true,
+      select: {
+        id: true,
+        title: true,
+        description: true,
+        status: true,
+        visibility: true,
+        escalationGeneration: true,
+        serviceId: true,
+        createdAt: true,
+        updatedAt: true,
+        acknowledgedAt: true,
+        resolvedAt: true,
+        service: { select: { name: true } },
       },
     });
 
     if (!incident) {
       logger.error(`Incident ${incidentId} not found for status page notifications`);
+      return { success: true, sent: 0, failed: 0, skipped: true };
+    }
+
+    // Validate the outbox generation against the same fresh row used to plan
+    // subscriber delivery. Never trust a serialized incident snapshot here.
+    if (
+      (expectedIncident?.status != null && incident.status !== expectedIncident.status) ||
+      (expectedIncident?.escalationGeneration != null &&
+        incident.escalationGeneration !== expectedIncident.escalationGeneration)
+    ) {
       return { success: true, sent: 0, failed: 0, skipped: true };
     }
 
