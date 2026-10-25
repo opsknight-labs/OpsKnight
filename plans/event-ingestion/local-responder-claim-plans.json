@@ -1,0 +1,950 @@
+{
+  "certifiedEnterprise": false,
+  "passed": true,
+  "recordedAt": "2026-10-25T07:25:58.828Z",
+  "scope": "Rollback-only captured production claim SQL, 30,000 synthetic active rows on an owned fixture. Opposite lane ordered first; two existing lane indexes enabled vs transactionally dropped. No handler execution, native-image, historical-storage or throughput certification.",
+  "repeats": [
+    {
+      "lane": "critical",
+      "newIndexes": false,
+      "executionMs": 42.075,
+      "planningMs": 2.027,
+      "plan": {
+        "Node Type": "ModifyTable",
+        "Relation Name": "BackgroundJob",
+        "Actual Total Time": 41.756,
+        "Actual Rows": 50,
+        "Actual Loops": 1,
+        "Shared Hit Blocks": 52235,
+        "Shared Read Blocks": 0,
+        "Plans": [
+          {
+            "Node Type": "Limit",
+            "Actual Total Time": 40.116,
+            "Actual Rows": 50,
+            "Actual Loops": 1,
+            "Shared Hit Blocks": 50927,
+            "Shared Read Blocks": 0,
+            "Plans": [
+              {
+                "Node Type": "LockRows",
+                "Actual Total Time": 40.111,
+                "Actual Rows": 50,
+                "Actual Loops": 1,
+                "Shared Hit Blocks": 50927,
+                "Shared Read Blocks": 0,
+                "Plans": [
+                  {
+                    "Node Type": "Sort",
+                    "Actual Total Time": 40.02,
+                    "Actual Rows": 50,
+                    "Actual Loops": 1,
+                    "Shared Hit Blocks": 50877,
+                    "Shared Read Blocks": 0,
+                    "Plans": [
+                      {
+                        "Node Type": "Result",
+                        "Actual Total Time": 26.012,
+                        "Actual Rows": 10001,
+                        "Actual Loops": 1,
+                        "Shared Hit Blocks": 50877,
+                        "Shared Read Blocks": 0,
+                        "Plans": [
+                          {
+                            "Node Type": "Bitmap Heap Scan",
+                            "Relation Name": "BackgroundJob",
+                            "Actual Total Time": 25.175,
+                            "Actual Rows": 10001,
+                            "Actual Loops": 1,
+                            "Rows Removed by Index Recheck": 0,
+                            "Rows Removed by Filter": 0,
+                            "Shared Hit Blocks": 50877,
+                            "Shared Read Blocks": 0,
+                            "Plans": [
+                              {
+                                "Node Type": "BitmapOr",
+                                "Actual Total Time": 1.222,
+                                "Actual Rows": 0,
+                                "Actual Loops": 1,
+                                "Shared Hit Blocks": 131,
+                                "Shared Read Blocks": 0,
+                                "Plans": [
+                                  {
+                                    "Node Type": "Bitmap Index Scan",
+                                    "Index Name": "BackgroundJob_announcement_fanout_v2_live_idx",
+                                    "Actual Total Time": 0.006,
+                                    "Actual Rows": 0,
+                                    "Actual Loops": 1,
+                                    "Shared Hit Blocks": 1,
+                                    "Shared Read Blocks": 0
+                                  },
+                                  {
+                                    "Node Type": "Bitmap Index Scan",
+                                    "Index Name": "BackgroundJob_event_side_effect_order_live_idx",
+                                    "Actual Total Time": 1.194,
+                                    "Actual Rows": 20000,
+                                    "Actual Loops": 1,
+                                    "Shared Hit Blocks": 130,
+                                    "Shared Read Blocks": 0
+                                  }
+                                ]
+                              },
+                              {
+                                "Node Type": "Index Scan",
+                                "Index Name": "BackgroundJob_event_side_effect_order_live_idx",
+                                "Relation Name": "BackgroundJob",
+                                "Actual Total Time": 0.002,
+                                "Actual Rows": 0,
+                                "Actual Loops": 10001,
+                                "Rows Removed by Index Recheck": 0,
+                                "Rows Removed by Filter": 1,
+                                "Shared Hit Blocks": 50001,
+                                "Shared Read Blocks": 0
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "Node Type": "Nested Loop",
+            "Actual Total Time": 40.467,
+            "Actual Rows": 50,
+            "Actual Loops": 1,
+            "Shared Hit Blocks": 51155,
+            "Shared Read Blocks": 0,
+            "Plans": [
+              {
+                "Node Type": "Aggregate",
+                "Actual Total Time": 40.174,
+                "Actual Rows": 50,
+                "Actual Loops": 1,
+                "Shared Hit Blocks": 50927,
+                "Shared Read Blocks": 0,
+                "Plans": [
+                  {
+                    "Node Type": "CTE Scan",
+                    "Actual Total Time": 40.142,
+                    "Actual Rows": 50,
+                    "Actual Loops": 1,
+                    "Shared Hit Blocks": 50927,
+                    "Shared Read Blocks": 0
+                  }
+                ]
+              },
+              {
+                "Node Type": "Index Scan",
+                "Index Name": "BackgroundJob_pkey",
+                "Relation Name": "BackgroundJob",
+                "Actual Total Time": 0.003,
+                "Actual Rows": 1,
+                "Actual Loops": 50,
+                "Rows Removed by Index Recheck": 0,
+                "Shared Hit Blocks": 214,
+                "Shared Read Blocks": 0
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "lane": "critical",
+      "newIndexes": true,
+      "executionMs": 1.796,
+      "planningMs": 1.339,
+      "plan": {
+        "Node Type": "ModifyTable",
+        "Relation Name": "BackgroundJob",
+        "Actual Total Time": 1.678,
+        "Actual Rows": 50,
+        "Actual Loops": 1,
+        "Shared Hit Blocks": 1805,
+        "Shared Read Blocks": 0,
+        "Plans": [
+          {
+            "Node Type": "Limit",
+            "Actual Total Time": 0.206,
+            "Actual Rows": 50,
+            "Actual Loops": 1,
+            "Shared Hit Blocks": 399,
+            "Shared Read Blocks": 0,
+            "Plans": [
+              {
+                "Node Type": "LockRows",
+                "Actual Total Time": 0.202,
+                "Actual Rows": 50,
+                "Actual Loops": 1,
+                "Shared Hit Blocks": 399,
+                "Shared Read Blocks": 0,
+                "Plans": [
+                  {
+                    "Node Type": "Result",
+                    "Actual Total Time": 0.181,
+                    "Actual Rows": 50,
+                    "Actual Loops": 1,
+                    "Shared Hit Blocks": 349,
+                    "Shared Read Blocks": 0,
+                    "Plans": [
+                      {
+                        "Node Type": "Index Scan",
+                        "Index Name": "BackgroundJob_responder_live_order_idx",
+                        "Relation Name": "BackgroundJob",
+                        "Actual Total Time": 0.176,
+                        "Actual Rows": 50,
+                        "Actual Loops": 1,
+                        "Rows Removed by Index Recheck": 0,
+                        "Rows Removed by Filter": 0,
+                        "Shared Hit Blocks": 349,
+                        "Shared Read Blocks": 0,
+                        "Plans": [
+                          {
+                            "Node Type": "Index Scan",
+                            "Index Name": "BackgroundJob_event_side_effect_order_live_idx",
+                            "Relation Name": "BackgroundJob",
+                            "Actual Total Time": 0.002,
+                            "Actual Rows": 0,
+                            "Actual Loops": 50,
+                            "Rows Removed by Index Recheck": 0,
+                            "Rows Removed by Filter": 1,
+                            "Shared Hit Blocks": 248,
+                            "Shared Read Blocks": 0
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "Node Type": "Nested Loop",
+            "Actual Total Time": 0.461,
+            "Actual Rows": 50,
+            "Actual Loops": 1,
+            "Shared Hit Blocks": 599,
+            "Shared Read Blocks": 0,
+            "Plans": [
+              {
+                "Node Type": "Aggregate",
+                "Actual Total Time": 0.258,
+                "Actual Rows": 50,
+                "Actual Loops": 1,
+                "Shared Hit Blocks": 399,
+                "Shared Read Blocks": 0,
+                "Plans": [
+                  {
+                    "Node Type": "CTE Scan",
+                    "Actual Total Time": 0.223,
+                    "Actual Rows": 50,
+                    "Actual Loops": 1,
+                    "Shared Hit Blocks": 399,
+                    "Shared Read Blocks": 0
+                  }
+                ]
+              },
+              {
+                "Node Type": "Index Scan",
+                "Index Name": "BackgroundJob_pkey",
+                "Relation Name": "BackgroundJob",
+                "Actual Total Time": 0.002,
+                "Actual Rows": 1,
+                "Actual Loops": 50,
+                "Rows Removed by Index Recheck": 0,
+                "Shared Hit Blocks": 200,
+                "Shared Read Blocks": 0
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "lane": "critical",
+      "newIndexes": true,
+      "executionMs": 2.464,
+      "planningMs": 1.073,
+      "plan": {
+        "Node Type": "ModifyTable",
+        "Relation Name": "BackgroundJob",
+        "Actual Total Time": 2.33,
+        "Actual Rows": 50,
+        "Actual Loops": 1,
+        "Shared Hit Blocks": 1840,
+        "Shared Read Blocks": 0,
+        "Plans": [
+          {
+            "Node Type": "Limit",
+            "Actual Total Time": 0.255,
+            "Actual Rows": 50,
+            "Actual Loops": 1,
+            "Shared Hit Blocks": 446,
+            "Shared Read Blocks": 0,
+            "Plans": [
+              {
+                "Node Type": "LockRows",
+                "Actual Total Time": 0.251,
+                "Actual Rows": 50,
+                "Actual Loops": 1,
+                "Shared Hit Blocks": 446,
+                "Shared Read Blocks": 0,
+                "Plans": [
+                  {
+                    "Node Type": "Result",
+                    "Actual Total Time": 0.228,
+                    "Actual Rows": 50,
+                    "Actual Loops": 1,
+                    "Shared Hit Blocks": 396,
+                    "Shared Read Blocks": 0,
+                    "Plans": [
+                      {
+                        "Node Type": "Index Scan",
+                        "Index Name": "BackgroundJob_responder_live_order_idx",
+                        "Relation Name": "BackgroundJob",
+                        "Actual Total Time": 0.22,
+                        "Actual Rows": 50,
+                        "Actual Loops": 1,
+                        "Rows Removed by Index Recheck": 0,
+                        "Rows Removed by Filter": 0,
+                        "Shared Hit Blocks": 396,
+                        "Shared Read Blocks": 0,
+                        "Plans": [
+                          {
+                            "Node Type": "Index Scan",
+                            "Index Name": "BackgroundJob_event_side_effect_order_live_idx",
+                            "Relation Name": "BackgroundJob",
+                            "Actual Total Time": 0.002,
+                            "Actual Rows": 0,
+                            "Actual Loops": 50,
+                            "Rows Removed by Index Recheck": 0,
+                            "Rows Removed by Filter": 1,
+                            "Shared Hit Blocks": 248,
+                            "Shared Read Blocks": 0
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "Node Type": "Nested Loop",
+            "Actual Total Time": 0.538,
+            "Actual Rows": 50,
+            "Actual Loops": 1,
+            "Shared Hit Blocks": 646,
+            "Shared Read Blocks": 0,
+            "Plans": [
+              {
+                "Node Type": "Aggregate",
+                "Actual Total Time": 0.337,
+                "Actual Rows": 50,
+                "Actual Loops": 1,
+                "Shared Hit Blocks": 446,
+                "Shared Read Blocks": 0,
+                "Plans": [
+                  {
+                    "Node Type": "CTE Scan",
+                    "Actual Total Time": 0.312,
+                    "Actual Rows": 50,
+                    "Actual Loops": 1,
+                    "Shared Hit Blocks": 446,
+                    "Shared Read Blocks": 0
+                  }
+                ]
+              },
+              {
+                "Node Type": "Index Scan",
+                "Index Name": "BackgroundJob_pkey",
+                "Relation Name": "BackgroundJob",
+                "Actual Total Time": 0.002,
+                "Actual Rows": 1,
+                "Actual Loops": 50,
+                "Rows Removed by Index Recheck": 0,
+                "Shared Hit Blocks": 200,
+                "Shared Read Blocks": 0
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "lane": "critical",
+      "newIndexes": false,
+      "executionMs": 45.42,
+      "planningMs": 1.006,
+      "plan": {
+        "Node Type": "ModifyTable",
+        "Relation Name": "BackgroundJob",
+        "Actual Total Time": 45.028,
+        "Actual Rows": 50,
+        "Actual Loops": 1,
+        "Shared Hit Blocks": 33375,
+        "Shared Read Blocks": 0,
+        "Plans": [
+          {
+            "Node Type": "Limit",
+            "Actual Total Time": 42.885,
+            "Actual Rows": 50,
+            "Actual Loops": 1,
+            "Shared Hit Blocks": 32064,
+            "Shared Read Blocks": 0,
+            "Plans": [
+              {
+                "Node Type": "LockRows",
+                "Actual Total Time": 42.88,
+                "Actual Rows": 50,
+                "Actual Loops": 1,
+                "Shared Hit Blocks": 32064,
+                "Shared Read Blocks": 0,
+                "Plans": [
+                  {
+                    "Node Type": "Sort",
+                    "Actual Total Time": 42.808,
+                    "Actual Rows": 50,
+                    "Actual Loops": 1,
+                    "Shared Hit Blocks": 32014,
+                    "Shared Read Blocks": 0,
+                    "Plans": [
+                      {
+                        "Node Type": "Result",
+                        "Actual Total Time": 24.995,
+                        "Actual Rows": 10001,
+                        "Actual Loops": 1,
+                        "Shared Hit Blocks": 32014,
+                        "Shared Read Blocks": 0,
+                        "Plans": [
+                          {
+                            "Node Type": "Bitmap Heap Scan",
+                            "Relation Name": "BackgroundJob",
+                            "Actual Total Time": 24.086,
+                            "Actual Rows": 10001,
+                            "Actual Loops": 1,
+                            "Rows Removed by Index Recheck": 0,
+                            "Rows Removed by Filter": 0,
+                            "Shared Hit Blocks": 32014,
+                            "Shared Read Blocks": 0,
+                            "Plans": [
+                              {
+                                "Node Type": "BitmapOr",
+                                "Actual Total Time": 0.686,
+                                "Actual Rows": 0,
+                                "Actual Loops": 1,
+                                "Shared Hit Blocks": 131,
+                                "Shared Read Blocks": 0,
+                                "Plans": [
+                                  {
+                                    "Node Type": "Bitmap Index Scan",
+                                    "Index Name": "BackgroundJob_announcement_fanout_v2_live_idx",
+                                    "Actual Total Time": 0.001,
+                                    "Actual Rows": 0,
+                                    "Actual Loops": 1,
+                                    "Shared Hit Blocks": 1,
+                                    "Shared Read Blocks": 0
+                                  },
+                                  {
+                                    "Node Type": "Bitmap Index Scan",
+                                    "Index Name": "BackgroundJob_event_side_effect_order_live_idx",
+                                    "Actual Total Time": 0.683,
+                                    "Actual Rows": 10728,
+                                    "Actual Loops": 1,
+                                    "Shared Hit Blocks": 130,
+                                    "Shared Read Blocks": 0
+                                  }
+                                ]
+                              },
+                              {
+                                "Node Type": "Index Scan",
+                                "Index Name": "BackgroundJob_event_side_effect_order_live_idx",
+                                "Relation Name": "BackgroundJob",
+                                "Actual Total Time": 0.002,
+                                "Actual Rows": 0,
+                                "Actual Loops": 10001,
+                                "Rows Removed by Index Recheck": 0,
+                                "Rows Removed by Filter": 1,
+                                "Shared Hit Blocks": 31455,
+                                "Shared Read Blocks": 0
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "Node Type": "Nested Loop",
+            "Actual Total Time": 43.325,
+            "Actual Rows": 50,
+            "Actual Loops": 1,
+            "Shared Hit Blocks": 32264,
+            "Shared Read Blocks": 0,
+            "Plans": [
+              {
+                "Node Type": "Aggregate",
+                "Actual Total Time": 42.942,
+                "Actual Rows": 50,
+                "Actual Loops": 1,
+                "Shared Hit Blocks": 32064,
+                "Shared Read Blocks": 0,
+                "Plans": [
+                  {
+                    "Node Type": "CTE Scan",
+                    "Actual Total Time": 42.906,
+                    "Actual Rows": 50,
+                    "Actual Loops": 1,
+                    "Shared Hit Blocks": 32064,
+                    "Shared Read Blocks": 0
+                  }
+                ]
+              },
+              {
+                "Node Type": "Index Scan",
+                "Index Name": "BackgroundJob_pkey",
+                "Relation Name": "BackgroundJob",
+                "Actual Total Time": 0.004,
+                "Actual Rows": 1,
+                "Actual Loops": 50,
+                "Rows Removed by Index Recheck": 0,
+                "Shared Hit Blocks": 200,
+                "Shared Read Blocks": 0
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "lane": "general",
+      "newIndexes": false,
+      "executionMs": 22.711,
+      "planningMs": 1.428,
+      "plan": {
+        "Node Type": "ModifyTable",
+        "Relation Name": "BackgroundJob",
+        "Actual Total Time": 22.533,
+        "Actual Rows": 100,
+        "Actual Loops": 1,
+        "Shared Hit Blocks": 12578,
+        "Shared Read Blocks": 17,
+        "Plans": [
+          {
+            "Node Type": "Limit",
+            "Actual Total Time": 19.219,
+            "Actual Rows": 100,
+            "Actual Loops": 1,
+            "Shared Hit Blocks": 10114,
+            "Shared Read Blocks": 17,
+            "Plans": [
+              {
+                "Node Type": "LockRows",
+                "Actual Total Time": 19.211,
+                "Actual Rows": 100,
+                "Actual Loops": 1,
+                "Shared Hit Blocks": 10114,
+                "Shared Read Blocks": 17,
+                "Plans": [
+                  {
+                    "Node Type": "Index Scan",
+                    "Index Name": "BackgroundJob_claim_live_order_idx",
+                    "Relation Name": "BackgroundJob",
+                    "Actual Total Time": 19.167,
+                    "Actual Rows": 100,
+                    "Actual Loops": 1,
+                    "Rows Removed by Index Recheck": 0,
+                    "Rows Removed by Filter": 20000,
+                    "Shared Hit Blocks": 10014,
+                    "Shared Read Blocks": 17,
+                    "Plans": [
+                      {
+                        "Node Type": "Index Scan",
+                        "Index Name": "BackgroundJob_event_side_effect_order_live_idx",
+                        "Relation Name": "BackgroundJob",
+                        "Actual Total Time": 0,
+                        "Actual Rows": 0,
+                        "Actual Loops": 0,
+                        "Rows Removed by Index Recheck": 0,
+                        "Rows Removed by Filter": 0,
+                        "Shared Hit Blocks": 0,
+                        "Shared Read Blocks": 0
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "Node Type": "Nested Loop",
+            "Actual Total Time": 19.863,
+            "Actual Rows": 100,
+            "Actual Loops": 1,
+            "Shared Hit Blocks": 10624,
+            "Shared Read Blocks": 17,
+            "Plans": [
+              {
+                "Node Type": "Aggregate",
+                "Actual Total Time": 19.342,
+                "Actual Rows": 100,
+                "Actual Loops": 1,
+                "Shared Hit Blocks": 10114,
+                "Shared Read Blocks": 17,
+                "Plans": [
+                  {
+                    "Node Type": "CTE Scan",
+                    "Actual Total Time": 19.266,
+                    "Actual Rows": 100,
+                    "Actual Loops": 1,
+                    "Shared Hit Blocks": 10114,
+                    "Shared Read Blocks": 17
+                  }
+                ]
+              },
+              {
+                "Node Type": "Index Scan",
+                "Index Name": "BackgroundJob_pkey",
+                "Relation Name": "BackgroundJob",
+                "Actual Total Time": 0.003,
+                "Actual Rows": 1,
+                "Actual Loops": 100,
+                "Rows Removed by Index Recheck": 0,
+                "Shared Hit Blocks": 469,
+                "Shared Read Blocks": 0
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "lane": "general",
+      "newIndexes": true,
+      "executionMs": 16.123,
+      "planningMs": 1.309,
+      "plan": {
+        "Node Type": "ModifyTable",
+        "Relation Name": "BackgroundJob",
+        "Actual Total Time": 15.99,
+        "Actual Rows": 100,
+        "Actual Loops": 1,
+        "Shared Hit Blocks": 10499,
+        "Shared Read Blocks": 16,
+        "Plans": [
+          {
+            "Node Type": "Limit",
+            "Actual Total Time": 11.59,
+            "Actual Rows": 100,
+            "Actual Loops": 1,
+            "Shared Hit Blocks": 7792,
+            "Shared Read Blocks": 16,
+            "Plans": [
+              {
+                "Node Type": "LockRows",
+                "Actual Total Time": 11.583,
+                "Actual Rows": 100,
+                "Actual Loops": 1,
+                "Shared Hit Blocks": 7792,
+                "Shared Read Blocks": 16,
+                "Plans": [
+                  {
+                    "Node Type": "Index Scan",
+                    "Index Name": "BackgroundJob_general_live_order_idx",
+                    "Relation Name": "BackgroundJob",
+                    "Actual Total Time": 11.537,
+                    "Actual Rows": 100,
+                    "Actual Loops": 1,
+                    "Rows Removed by Index Recheck": 0,
+                    "Rows Removed by Filter": 10000,
+                    "Shared Hit Blocks": 7692,
+                    "Shared Read Blocks": 16,
+                    "Plans": [
+                      {
+                        "Node Type": "Index Scan",
+                        "Index Name": "BackgroundJob_event_side_effect_order_live_idx",
+                        "Relation Name": "BackgroundJob",
+                        "Actual Total Time": 0,
+                        "Actual Rows": 0,
+                        "Actual Loops": 0,
+                        "Rows Removed by Index Recheck": 0,
+                        "Rows Removed by Filter": 0,
+                        "Shared Hit Blocks": 0,
+                        "Shared Read Blocks": 0
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "Node Type": "Nested Loop",
+            "Actual Total Time": 12.213,
+            "Actual Rows": 100,
+            "Actual Loops": 1,
+            "Shared Hit Blocks": 8248,
+            "Shared Read Blocks": 16,
+            "Plans": [
+              {
+                "Node Type": "Aggregate",
+                "Actual Total Time": 11.699,
+                "Actual Rows": 100,
+                "Actual Loops": 1,
+                "Shared Hit Blocks": 7792,
+                "Shared Read Blocks": 16,
+                "Plans": [
+                  {
+                    "Node Type": "CTE Scan",
+                    "Actual Total Time": 11.625,
+                    "Actual Rows": 100,
+                    "Actual Loops": 1,
+                    "Shared Hit Blocks": 7792,
+                    "Shared Read Blocks": 16
+                  }
+                ]
+              },
+              {
+                "Node Type": "Index Scan",
+                "Index Name": "BackgroundJob_pkey",
+                "Relation Name": "BackgroundJob",
+                "Actual Total Time": 0.003,
+                "Actual Rows": 1,
+                "Actual Loops": 100,
+                "Rows Removed by Index Recheck": 0,
+                "Shared Hit Blocks": 436,
+                "Shared Read Blocks": 0
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "lane": "general",
+      "newIndexes": true,
+      "executionMs": 10.757,
+      "planningMs": 0.781,
+      "plan": {
+        "Node Type": "ModifyTable",
+        "Relation Name": "BackgroundJob",
+        "Actual Total Time": 10.638,
+        "Actual Rows": 100,
+        "Actual Loops": 1,
+        "Shared Hit Blocks": 5869,
+        "Shared Read Blocks": 0,
+        "Plans": [
+          {
+            "Node Type": "Limit",
+            "Actual Total Time": 7.044,
+            "Actual Rows": 100,
+            "Actual Loops": 1,
+            "Shared Hit Blocks": 3174,
+            "Shared Read Blocks": 0,
+            "Plans": [
+              {
+                "Node Type": "LockRows",
+                "Actual Total Time": 7.036,
+                "Actual Rows": 100,
+                "Actual Loops": 1,
+                "Shared Hit Blocks": 3174,
+                "Shared Read Blocks": 0,
+                "Plans": [
+                  {
+                    "Node Type": "Index Scan",
+                    "Index Name": "BackgroundJob_general_live_order_idx",
+                    "Relation Name": "BackgroundJob",
+                    "Actual Total Time": 6.988,
+                    "Actual Rows": 100,
+                    "Actual Loops": 1,
+                    "Rows Removed by Index Recheck": 0,
+                    "Rows Removed by Filter": 10000,
+                    "Shared Hit Blocks": 3074,
+                    "Shared Read Blocks": 0,
+                    "Plans": [
+                      {
+                        "Node Type": "Index Scan",
+                        "Index Name": "BackgroundJob_event_side_effect_order_live_idx",
+                        "Relation Name": "BackgroundJob",
+                        "Actual Total Time": 0,
+                        "Actual Rows": 0,
+                        "Actual Loops": 0,
+                        "Rows Removed by Index Recheck": 0,
+                        "Rows Removed by Filter": 0,
+                        "Shared Hit Blocks": 0,
+                        "Shared Read Blocks": 0
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "Node Type": "Nested Loop",
+            "Actual Total Time": 7.655,
+            "Actual Rows": 100,
+            "Actual Loops": 1,
+            "Shared Hit Blocks": 3630,
+            "Shared Read Blocks": 0,
+            "Plans": [
+              {
+                "Node Type": "Aggregate",
+                "Actual Total Time": 7.144,
+                "Actual Rows": 100,
+                "Actual Loops": 1,
+                "Shared Hit Blocks": 3174,
+                "Shared Read Blocks": 0,
+                "Plans": [
+                  {
+                    "Node Type": "CTE Scan",
+                    "Actual Total Time": 7.079,
+                    "Actual Rows": 100,
+                    "Actual Loops": 1,
+                    "Shared Hit Blocks": 3174,
+                    "Shared Read Blocks": 0
+                  }
+                ]
+              },
+              {
+                "Node Type": "Index Scan",
+                "Index Name": "BackgroundJob_pkey",
+                "Relation Name": "BackgroundJob",
+                "Actual Total Time": 0.003,
+                "Actual Rows": 1,
+                "Actual Loops": 100,
+                "Rows Removed by Index Recheck": 0,
+                "Shared Hit Blocks": 436,
+                "Shared Read Blocks": 0
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "lane": "general",
+      "newIndexes": false,
+      "executionMs": 13.363,
+      "planningMs": 0.715,
+      "plan": {
+        "Node Type": "ModifyTable",
+        "Relation Name": "BackgroundJob",
+        "Actual Total Time": 13.225,
+        "Actual Rows": 100,
+        "Actual Loops": 1,
+        "Shared Hit Blocks": 8102,
+        "Shared Read Blocks": 0,
+        "Plans": [
+          {
+            "Node Type": "Limit",
+            "Actual Total Time": 10.486,
+            "Actual Rows": 100,
+            "Actual Loops": 1,
+            "Shared Hit Blocks": 5657,
+            "Shared Read Blocks": 0,
+            "Plans": [
+              {
+                "Node Type": "LockRows",
+                "Actual Total Time": 10.478,
+                "Actual Rows": 100,
+                "Actual Loops": 1,
+                "Shared Hit Blocks": 5657,
+                "Shared Read Blocks": 0,
+                "Plans": [
+                  {
+                    "Node Type": "Index Scan",
+                    "Index Name": "BackgroundJob_claim_live_order_idx",
+                    "Relation Name": "BackgroundJob",
+                    "Actual Total Time": 10.442,
+                    "Actual Rows": 100,
+                    "Actual Loops": 1,
+                    "Rows Removed by Index Recheck": 0,
+                    "Rows Removed by Filter": 20000,
+                    "Shared Hit Blocks": 5557,
+                    "Shared Read Blocks": 0,
+                    "Plans": [
+                      {
+                        "Node Type": "Index Scan",
+                        "Index Name": "BackgroundJob_event_side_effect_order_live_idx",
+                        "Relation Name": "BackgroundJob",
+                        "Actual Total Time": 0,
+                        "Actual Rows": 0,
+                        "Actual Loops": 0,
+                        "Rows Removed by Index Recheck": 0,
+                        "Rows Removed by Filter": 0,
+                        "Shared Hit Blocks": 0,
+                        "Shared Read Blocks": 0
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "Node Type": "Nested Loop",
+            "Actual Total Time": 11.022,
+            "Actual Rows": 100,
+            "Actual Loops": 1,
+            "Shared Hit Blocks": 6113,
+            "Shared Read Blocks": 0,
+            "Plans": [
+              {
+                "Node Type": "Aggregate",
+                "Actual Total Time": 10.59,
+                "Actual Rows": 100,
+                "Actual Loops": 1,
+                "Shared Hit Blocks": 5657,
+                "Shared Read Blocks": 0,
+                "Plans": [
+                  {
+                    "Node Type": "CTE Scan",
+                    "Actual Total Time": 10.529,
+                    "Actual Rows": 100,
+                    "Actual Loops": 1,
+                    "Shared Hit Blocks": 5657,
+                    "Shared Read Blocks": 0
+                  }
+                ]
+              },
+              {
+                "Node Type": "Index Scan",
+                "Index Name": "BackgroundJob_pkey",
+                "Relation Name": "BackgroundJob",
+                "Actual Total Time": 0.003,
+                "Actual Rows": 1,
+                "Actual Loops": 100,
+                "Rows Removed by Index Recheck": 0,
+                "Shared Hit Blocks": 436,
+                "Shared Read Blocks": 0
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ],
+  "probeSource": "const assert = require('node:assert/strict');\nconst fs = require('node:fs');\nrequire(process.cwd()+'/scripts/ingestion/isolated-runtime.cjs');\nconst db = require(process.cwd()+'/src/lib/prisma').default;\nconst {claimPendingJobs,claimPendingOperationalJobs,GENERAL_WORKER_EXCLUDED_JOB_TYPES} = require(process.cwd()+'/src/lib/jobs/queue');\nconst fields = new Set(['Node Type','Relation Name','Index Name','Actual Total Time','Actual Rows','Actual Loops','Rows Removed by Filter','Rows Removed by Index Recheck','Shared Hit Blocks','Shared Read Blocks']);\nconst bounded = node=>Object.fromEntries(Object.entries(node).flatMap(([key,value])=>key==='Plans'?[[key,value.map(bounded)]]:fields.has(key)?[[key,value]]:[]));\n(async()=>{\n const expected='ingestion_test_http_responder_preflight_20261025';\n assert.equal(new URL(process.env.DATABASE_URL).pathname,'/'+expected);\n const [state]=await db.$queryRaw`SELECT current_database() AS name,(SELECT count(*)::int FROM pg_stat_activity WHERE datname=current_database() AND pid<>pg_backend_pid() AND backend_type='client backend') AS clients`;\n assert.equal(state.name,expected);assert.equal(state.clients,0);\n assert.equal(await db.backgroundJob.count({where:{id:{startsWith:'responder-pressure-'}}}),20000);\n await db.$executeRaw`INSERT INTO \"BackgroundJob\" (id,type,payload,\"scheduledAt\",\"updatedAt\") SELECT 'responder-plan-'||n,'SCHEDULED_TASK'::\"JobType\",jsonb_build_object('task','EVENT_SIDE_EFFECT','lane','PERSONAL_NOTIFICATION','incidentId','owned-plan-'||n,'eventOrderAt','2000-01-01T00:00:00.000Z','effect','TRIGGER_ESCALATION_NOTIFICATIONS'),'2000-01-01'::timestamptz,clock_timestamp() FROM generate_series(1,10000) n`;\n const statements=[]; const original=db.$queryRaw;\n db.$queryRaw=async s=>{statements.push(s);return [];};\n try {\n  await claimPendingJobs(50,'SCHEDULED_TASK',[],{criticalEffectsOnly:true});\n  await claimPendingOperationalJobs(100,GENERAL_WORKER_EXCLUDED_JOB_TYPES,{excludeCriticalEffects:true});\n }finally{db.$queryRaw=original;}\n assert.equal(statements.length,3);\n const repeats=[];const rollback=new Error('rollback-plan');\n for(const lane of ['critical','general']){\n  // Opposite-lane rows are deliberately older than the desired lane.\n  if(lane==='critical') {\n   await db.$executeRaw`UPDATE \"BackgroundJob\" SET \"scheduledAt\"='1999-01-01'::timestamptz WHERE id LIKE 'responder-pressure-%'`;\n   await db.$executeRaw`UPDATE \"BackgroundJob\" SET \"scheduledAt\"='2000-01-01'::timestamptz WHERE id LIKE 'responder-plan-%'`;\n  }else{\n   await db.$executeRaw`UPDATE \"BackgroundJob\" SET \"scheduledAt\"='2000-01-01'::timestamptz WHERE id LIKE 'responder-pressure-%'`;\n   await db.$executeRaw`UPDATE \"BackgroundJob\" SET \"scheduledAt\"='1999-01-01'::timestamptz WHERE id LIKE 'responder-plan-%'`;\n  }\n  await db.$executeRaw`ANALYZE \"BackgroundJob\"`;\n  const statement=lane==='critical'?statements[0]:statements[2];\n  for(const newIndexes of [false,true,true,false]){\n   try{await db.$transaction(async tx=>{\n    if(!newIndexes){await tx.$executeRaw`DROP INDEX \"BackgroundJob_responder_live_order_idx\"`;await tx.$executeRaw`DROP INDEX \"BackgroundJob_general_live_order_idx\"`;}\n    const rows=await tx.$queryRawUnsafe('EXPLAIN (ANALYZE,BUFFERS,FORMAT JSON) '+statement.text,...statement.values);\n    const result=rows[0]['QUERY PLAN'][0]; repeats.push({lane,newIndexes,executionMs:result['Execution Time'],planningMs:result['Planning Time'],plan:bounded(result.Plan)});\n    throw rollback;\n   },{timeout:60000,maxWait:2000});}catch(e){if(e!==rollback)throw e;}\n  }\n }\n assert.equal(await db.backgroundJob.count({where:{status:'PROCESSING'}}),0);\n const evidence={certifiedEnterprise:false,passed:true,recordedAt:new Date().toISOString(),scope:'Rollback-only captured production claim SQL, 30,000 synthetic active rows on an owned fixture. Opposite lane ordered first; two existing lane indexes enabled vs transactionally dropped. No handler execution, native-image, historical-storage or throughput certification.',repeats};\n fs.writeFileSync('/private/tmp/ingestion-responder-plan-probe.json',JSON.stringify(evidence,null,2)+'\\n');\n console.log(JSON.stringify(repeats.map(({lane,newIndexes,executionMs})=>({lane,newIndexes,executionMs}))));\n})().catch(e=>{console.error(e);process.exitCode=1;}).finally(()=>db.$disconnect());\n",
+  "probeSourceSha256": "c6edbab9c81ba725c3c3e1b603284d2aa11a5753b480455d0f1f1111f977595f",
+  "sourceFiles": {
+    "src/lib/jobs/queue.ts": "774f919ec6300758a605194a5e88e8d67bde26000c48d20cc09690a97dbbd205",
+    "prisma/migrations/20261025020000_background_job_responder_lanes/migration.sql": "15124616ba68abb884fcca0f0e72f9abb7a5d9fc5981dce5c13aaadf1af96a55"
+  },
+  "sourceProvenance": "Working-tree producer file hashes, not signed attestation; recorded before candidate commit.",
+  "limitations": [
+    "Rollback claims create storage churn and warm caches across repeats.",
+    "General index still scans and filters 10,000 older bulk rows; timing ranges overlap.",
+    "The fixture has 30,000 active synthetic rows, not millions of historical records."
+  ]
+}

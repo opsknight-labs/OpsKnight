@@ -115,9 +115,7 @@ async function collectStageMetrics(names, domain) {
       snapshots.some(row =>
         row.stages?.some(
           stage =>
-            stage.stage === 'transaction-finalize' &&
-            stage.outcome === 'success' &&
-            stage.count > 0
+            stage.stage === 'transaction-finalize' && stage.outcome === 'success' && stage.count > 0
         )
       ),
   };
@@ -311,6 +309,23 @@ async function main() {
   const fullStack =
     capacityStage === 'effects-only' ||
     (capacityStage === 'full-stack' && process.env.INGESTION_DOCKER_FULL_STACK === 'true');
+  const responderChecks = process.env.INGESTION_DOCKER_RESPONDER_CHECKS === 'true';
+  assert.ok(
+    !responderChecks ||
+      (capacityStage === 'full-stack' &&
+        fullStack &&
+        process.env.INGESTION_DOCKER_SMTP_CHECK === 'true'),
+    'Responder saturation checks require a full-stack SMTP fixture'
+  );
+  if (responderChecks) {
+    const duration = /^([1-9][0-9]*)(s|m|h)$/.exec(process.env.INGESTION_DURATION || '30s');
+    const seconds =
+      duration && Number(duration[1]) * (duration[2] === 'h' ? 3600 : duration[2] === 'm' ? 60 : 1);
+    assert.ok(
+      Number.isFinite(seconds) && seconds >= 60,
+      'Responder saturation needs at least 60 seconds of load'
+    );
+  }
   const usePgBouncer = process.env.INGESTION_DOCKER_PGBOUNCER === 'true';
   const pgBouncerCompatibility = process.env.INGESTION_PGBOUNCER_COMPATIBILITY !== 'false';
   if (capacityStage !== 'full-stack') {
@@ -580,7 +595,10 @@ async function main() {
     }
     assert.ok(ready, 'Owned SMTP capture did not become ready');
     process.env.ENCRYPTION_KEY = encryptionKey;
-    exerciseNotification = await require('./notification-http-checks.cjs')({
+    const prepareNotification = responderChecks
+      ? require('./responder-http-checks.cjs')
+      : require('./notification-http-checks.cjs');
+    exerciseNotification = await prepareNotification({
       prisma,
       smtpHost: smtpName,
       captureUrl,
@@ -797,6 +815,7 @@ location / { proxy_pass http://gateways; proxy_http_version 1.1; proxy_set_heade
   };
   evidence.topology = {
     capacityStage,
+    responderSaturation: responderChecks,
     httpRole: admissionOnly ? 'http' : 'web',
     fullStackProcesses: fullStack,
     edgeBackpressure: edgeBackpressure
@@ -832,6 +851,7 @@ location / { proxy_pass http://gateways; proxy_http_version 1.1; proxy_set_heade
     imageId: imageInfo.Id,
     sourceRevision: revision,
     capacityStage,
+    functionalFaultProfile: responderChecks ? 'responder-saturation' : undefined,
     webReplicas,
     workerReplicas,
     webCpus,
@@ -870,7 +890,10 @@ location / { proxy_pass http://gateways; proxy_http_version 1.1; proxy_set_heade
               baseUrl,
               loadActive: () => loadActive,
             });
-            resolve(evidence.smtpDelivery.capturedDuringLoad);
+            resolve(
+              evidence.smtpDelivery.capturedDuringLoad &&
+                evidence.smtpDelivery.responderChecksPassed !== false
+            );
           } catch (error) {
             evidence.smtpDelivery = { passed: false, error: error.message };
             resolve(false);

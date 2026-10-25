@@ -195,6 +195,32 @@ describe('deployment configuration invariants', () => {
     expect(validation).toContain('opsknight-helm-migration-upgrade-job.yaml');
   });
 
+  it('requires valid live job lane indexes before starting migration-skipping replicas', async () => {
+    const readiness = require('../../scripts/wait-for-database-ready.cjs') as {
+      REQUIRED_INDEXES: string[];
+      readinessProblem: (
+        prisma: { $queryRawUnsafe: ReturnType<typeof vi.fn> },
+        expectedMigrations: string[]
+      ) => Promise<string | null>;
+    };
+    for (const name of [
+      'BackgroundJob_claim_live_order_idx',
+      'BackgroundJob_responder_live_order_idx',
+      'BackgroundJob_general_live_order_idx',
+    ]) {
+      expect(readiness.REQUIRED_INDEXES).toContain(name);
+      for (const missing of [true, false]) {
+        const indexes = readiness.REQUIRED_INDEXES.filter(index => !missing || index !== name).map(
+          index => ({ name: index, valid: index !== name })
+        );
+        const query = vi.fn().mockResolvedValueOnce([]).mockResolvedValueOnce(indexes);
+        await expect(readiness.readinessProblem({ $queryRawUnsafe: query }, [])).resolves.toContain(
+          name
+        );
+      }
+    }
+  });
+
   it('allows LEGACY runtimes to become ready without the optional SLA scheduler index', async () => {
     const readiness = require('../../scripts/wait-for-database-ready.cjs') as {
       REQUIRED_INDEXES: string[];

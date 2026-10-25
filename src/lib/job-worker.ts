@@ -199,6 +199,17 @@ function withIdleJitter(delayMs: number): number {
   return delayMs + Math.floor(Math.random() * jitterWindow);
 }
 
+function processCriticalIncidentEffects(config: JobWorkerConfig) {
+  // Move the entire personal-notification lane together: lifecycle updates
+  // retain the same predecessor fence as initial responder engagement.
+  return processPendingJobsByType(
+    'SCHEDULED_TASK',
+    Math.min(config.batchSize, 50),
+    Math.min(config.concurrency, 10),
+    { criticalEffectsOnly: true }
+  );
+}
+
 function scheduleNextRun(delayMs: number): void {
   if (!workerState.initialized) return;
 
@@ -351,11 +362,14 @@ async function runOnce(): Promise<void> {
         concurrency: Math.min(workerState.workerConfig.concurrency, 10),
       });
       const notifications = await runCriticalNotificationCycle();
+      const responderEffects = await processCriticalIncidentEffects(workerState.workerConfig);
       const laneErrors = [...escalation.errors, ...notifications.errors];
       if (escalation.jobsFailed > 0)
         laneErrors.push(`${escalation.jobsFailed} escalation job(s) failed`);
       if (notifications.centralFailed > 0)
         laneErrors.push(`${notifications.centralFailed} central notification(s) failed`);
+      if (responderEffects.failed > 0)
+        laneErrors.push(`${responderEffects.failed} responder planning job(s) failed`);
       if (laneErrors.length > 0) {
         workerState.lastError = laneErrors.join('; ');
         logger.warn('[JobWorker] Critical lane degraded', { errors: laneErrors });
@@ -364,6 +378,7 @@ async function runOnce(): Promise<void> {
         workerState.lastError = null;
       }
       const busy =
+        responderEffects.total > 0 ||
         criticalEscalationCycleWasBusy(escalation) ||
         criticalNotificationCycleWasBusy(notifications);
       scheduleNextRun(
@@ -440,6 +455,7 @@ async function runOnce(): Promise<void> {
     // a second must not wait on the maintenance lease to be delivered, so its
     // recovery runs on every replica too.
     const notifications = await runCriticalNotificationCycle();
+    const responderEffects = await processCriticalIncidentEffects(workerState.workerConfig);
 
     if (
       !workerState.excludeRunbookJobs &&
@@ -489,6 +505,9 @@ async function runOnce(): Promise<void> {
     if (notifications.centralFailed > 0) {
       laneErrors.push(`${notifications.centralFailed} central notification(s) failed`);
     }
+    if (responderEffects.failed > 0) {
+      laneErrors.push(`${responderEffects.failed} responder planning job(s) failed`);
+    }
     if (laneErrors.length === 0) {
       workerState.lastSuccessAt = new Date();
       workerState.lastError = null;
@@ -503,10 +522,12 @@ async function runOnce(): Promise<void> {
       claimed: result.total,
       escalation,
       notifications,
+      responderEffects,
       durationMs: Date.now() - batchStartedAt,
     });
 
     const busy =
+      responderEffects.total > 0 ||
       result.total > 0 ||
       criticalEscalationCycleWasBusy(escalation) ||
       criticalNotificationCycleWasBusy(notifications) ||

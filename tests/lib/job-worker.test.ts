@@ -230,7 +230,7 @@ describe('dedicated job worker', () => {
     );
   });
 
-  it('runs both critical lanes on every replica, ahead of the general queue', async () => {
+  it('runs escalation, delivery and responder planning before general work', async () => {
     const order: string[] = [];
     vi.mocked(runCriticalEscalationCycle).mockImplementation(async () => {
       order.push('escalation');
@@ -261,13 +261,46 @@ describe('dedicated job worker', () => {
       order.push('queue');
       return { processed: 0, failed: 0, total: 0 };
     });
+    vi.mocked(processPendingJobsByType).mockImplementation(async type => {
+      if (type === 'SCHEDULED_TASK') order.push('responders');
+      return { processed: 0, failed: 0, total: 0 };
+    });
 
     startJobWorker();
     await vi.advanceTimersByTimeAsync(0);
 
     // Paging work never queues behind lower-consequence jobs, and neither lane
     // depends on the maintenance scheduler's lease.
-    expect(order).toEqual(['escalation', 'notifications', 'queue']);
+    expect(order).toEqual(['escalation', 'notifications', 'responders', 'queue']);
+  });
+
+  it('keeps personal planning in the bounded critical lane and promptly refills its work', async () => {
+    vi.mocked(processPendingJobsByType).mockResolvedValue({ processed: 1, failed: 0, total: 1 });
+    startJobWorker('critical');
+    await vi.advanceTimersByTimeAsync(0);
+    expect(processPendingJobsByType).toHaveBeenCalledWith('SCHEDULED_TASK', 50, 10, {
+      criticalEffectsOnly: true,
+    });
+    expect(processPendingJobs).not.toHaveBeenCalled();
+    expect(processPendingGeneralJobs).not.toHaveBeenCalled();
+    expect(processPendingJobsByType).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(100);
+    expect(processPendingJobsByType).toHaveBeenCalledTimes(2);
+  });
+
+  it('reports responder-planning failures in critical health and clears them after recovery', async () => {
+    vi.mocked(processPendingJobsByType)
+      .mockResolvedValueOnce({ processed: 0, failed: 1, total: 1 })
+      .mockResolvedValue({ processed: 0, failed: 0, total: 0 });
+    startJobWorker('critical');
+    await vi.advanceTimersByTimeAsync(0);
+    expect(getJobWorkerStatus()).toMatchObject({
+      lastSuccessAt: null,
+      lastError: '1 responder planning job(s) failed',
+    });
+    await vi.advanceTimersByTimeAsync(100);
+    expect(getJobWorkerStatus().lastError).toBeNull();
+    expect(getJobWorkerStatus().lastSuccessAt).toBeInstanceOf(Date);
   });
 
   it('polls again promptly when only a critical lane found work', async () => {
