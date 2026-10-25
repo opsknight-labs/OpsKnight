@@ -19,6 +19,9 @@ import {
   CheckCircle2,
   Clock3,
   MessageSquare,
+  RotateCcw,
+  Target,
+  Timer,
   TrendingUp,
   UserPlus,
   type LucideIcon,
@@ -135,14 +138,18 @@ function TimeDelta({
   }
   const better = diff < 0;
   return (
-    <p
+    <span
       className={cn(
-        'text-[11px] font-semibold',
-        better ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'
+        'inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] font-semibold tabular-nums border shadow-2xs',
+        better
+          ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20'
+          : 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20'
       )}
     >
-      {better ? '▼' : '▲'} {formatMinutes(Math.abs(diff))} vs prior {range}d
-    </p>
+      <span>{better ? '▼' : '▲'}</span>
+      <span>{formatMinutes(Math.abs(diff))}</span>
+      <span className="font-normal opacity-75">vs prior {range}d</span>
+    </span>
   );
 }
 
@@ -151,19 +158,55 @@ function Kpi({
   value,
   footer,
   testId,
+  icon,
+  tone = 'primary',
 }: {
   label: string;
   value: string;
   footer: ReactNode;
   testId: string;
+  icon?: ReactNode;
+  tone?: 'amber' | 'violet' | 'emerald' | 'blue' | 'primary';
 }) {
+  const toneBg =
+    tone === 'amber'
+      ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20'
+      : tone === 'violet'
+        ? 'bg-violet-500/10 text-violet-600 dark:text-violet-400 border-violet-500/20'
+        : tone === 'emerald'
+          ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20'
+          : tone === 'blue'
+            ? 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20'
+            : 'bg-primary/10 text-primary border-primary/20';
+
   return (
-    <div className={cn(card, 'p-3')} data-testid={testId}>
-      <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-        {label}
+    <div
+      className={cn(
+        card,
+        'group flex flex-col justify-between p-3.5 transition-all hover:border-slate-300 dark:hover:border-zinc-700 hover:shadow-xs'
+      )}
+      data-testid={testId}
+    >
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+          {label}
+        </p>
+        {icon && (
+          <span
+            className={cn(
+              'flex h-6 w-6 shrink-0 items-center justify-center rounded-md border shadow-2xs',
+              toneBg
+            )}
+            aria-hidden
+          >
+            {icon}
+          </span>
+        )}
+      </div>
+      <p className="my-1 font-display text-2xl sm:text-3xl font-extrabold tabular-nums tracking-tight text-foreground">
+        {value}
       </p>
-      <p className="font-display text-2xl font-bold tabular-nums text-foreground">{value}</p>
-      {footer}
+      <div>{footer}</div>
     </div>
   );
 }
@@ -171,14 +214,20 @@ function Kpi({
 function ComplianceBar({ value }: { value: number | null }) {
   const pct = value === null ? 0 : Math.max(0, Math.min(100, value));
   return (
-    <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-muted" aria-hidden>
-      <div
-        className={cn(
-          'h-full rounded-full',
-          pct >= 95 ? 'bg-emerald-500' : pct >= 80 ? 'bg-amber-500' : 'bg-rose-500'
-        )}
-        style={{ width: `${pct}%` }}
-      />
+    <div className="mt-1 space-y-1">
+      <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted" aria-hidden>
+        <div
+          className={cn(
+            'h-full rounded-full transition-all duration-500',
+            pct >= 95
+              ? 'bg-gradient-to-r from-emerald-500 to-teal-400'
+              : pct >= 80
+                ? 'bg-gradient-to-r from-amber-500 to-amber-400'
+                : 'bg-gradient-to-r from-rose-500 to-rose-400'
+          )}
+          style={{ width: `${pct}%` }}
+        />
+      </div>
     </div>
   );
 }
@@ -222,20 +271,53 @@ function FlowChart({
       >
         <defs>
           <linearGradient id="flow-created" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0" stopColor="#fb7185" stopOpacity="0.32" />
-            <stop offset="1" stopColor="#fb7185" stopOpacity="0" />
+            <stop offset="0%" stopColor="#f43f5e" stopOpacity="0.36" />
+            <stop offset="60%" stopColor="#f43f5e" stopOpacity="0.10" />
+            <stop offset="100%" stopColor="#f43f5e" stopOpacity="0.0" />
           </linearGradient>
           <linearGradient id="flow-resolved" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0" stopColor="#34d399" stopOpacity="0.28" />
-            <stop offset="1" stopColor="#34d399" stopOpacity="0" />
+            <stop offset="0%" stopColor="#10b981" stopOpacity="0.30" />
+            <stop offset="60%" stopColor="#10b981" stopOpacity="0.08" />
+            <stop offset="100%" stopColor="#10b981" stopOpacity="0.0" />
           </linearGradient>
         </defs>
+        {/* Reference guide gridlines */}
+        <line
+          x1="0"
+          y1={height * 0.25}
+          x2={width}
+          y2={height * 0.25}
+          stroke="currentColor"
+          strokeDasharray="3 3"
+          className="text-border/40"
+        />
+        <line
+          x1="0"
+          y1={height * 0.5}
+          x2={width}
+          y2={height * 0.5}
+          stroke="currentColor"
+          strokeDasharray="3 3"
+          className="text-border/40"
+        />
+        <line
+          x1="0"
+          y1={height * 0.75}
+          x2={width}
+          y2={height * 0.75}
+          stroke="currentColor"
+          strokeDasharray="3 3"
+          className="text-border/40"
+        />
+
         <path d={area('count')} fill="url(#flow-created)" />
         <path
           d={line('count')}
           fill="none"
           stroke="#f43f5e"
-          strokeWidth="2"
+          strokeWidth="2.25"
+          strokeLinecap="round"
+          strokeLinejoin="round"
           vectorEffect="non-scaling-stroke"
         />
         <path d={area('resolveCount')} fill="url(#flow-resolved)" />
@@ -243,9 +325,31 @@ function FlowChart({
           d={line('resolveCount')}
           fill="none"
           stroke="#10b981"
-          strokeWidth="2"
+          strokeWidth="2.25"
+          strokeLinecap="round"
+          strokeLinejoin="round"
           vectorEffect="non-scaling-stroke"
         />
+
+        {/* Pulse end markers */}
+        {series.length > 0 && (
+          <>
+            <circle
+              cx={x(series.length - 1)}
+              cy={y(series.at(-1)?.count ?? 0)}
+              r="3.5"
+              fill="#f43f5e"
+              className="stroke-card stroke-2"
+            />
+            <circle
+              cx={x(series.length - 1)}
+              cy={y(series.at(-1)?.resolveCount ?? 0)}
+              r="3.5"
+              fill="#10b981"
+              className="stroke-card stroke-2"
+            />
+          </>
+        )}
       </svg>
       <figcaption className="mt-1 flex justify-between text-[10px] text-muted-foreground">
         <span>{series[0]?.label}</span>
@@ -437,6 +541,8 @@ function InsightsContent() {
             testId="insight-mtta"
             label="MTTA"
             value={formatMinutes(data.mtta)}
+            icon={<Timer className="h-3.5 w-3.5" />}
+            tone="amber"
             footer={
               <TimeDelta
                 current={data.mtta}
@@ -449,6 +555,8 @@ function InsightsContent() {
             testId="insight-mttr"
             label="MTTR"
             value={formatMinutes(data.mttr)}
+            icon={<RotateCcw className="h-3.5 w-3.5" />}
+            tone="violet"
             footer={
               <TimeDelta
                 current={data.mttr}
@@ -461,12 +569,16 @@ function InsightsContent() {
             testId="insight-ack-sla"
             label="Ack SLA"
             value={data.ackCompliance === null ? '—' : `${Math.round(data.ackCompliance)}%`}
+            icon={<CheckCheck className="h-3.5 w-3.5" />}
+            tone="emerald"
             footer={<ComplianceBar value={data.ackCompliance} />}
           />
           <Kpi
             testId="insight-resolve-sla"
             label="Resolve SLA"
             value={data.resolveCompliance === null ? '—' : `${Math.round(data.resolveCompliance)}%`}
+            icon={<Target className="h-3.5 w-3.5" />}
+            tone="blue"
             footer={<ComplianceBar value={data.resolveCompliance} />}
           />
         </div>
