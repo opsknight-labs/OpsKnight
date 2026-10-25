@@ -735,6 +735,18 @@ async function main() {
       capacityScope:
         'Conservative full deployment pool reservation; actual active processes listed separately',
     };
+    if (cpuProfiling) {
+      const targets =
+        capacityStage === 'effects-only'
+          ? supportingProcesses.filter(
+              name => name.includes('-general-worker') || name.endsWith('-critical-worker')
+            )
+          : workers.slice(0, 1);
+      assert.ok(targets.length > 0, 'Requested stage CPU profiling has no matching worker');
+      for (const name of targets) await startProfile(name);
+      evidence.cpuProfilingScope =
+        'Diagnostic inspector sampling of effects general/critical workers or the first incident worker. Includes profile-client and resource-snapshot overhead; never a capacity gate.';
+    }
     evidence.resourcesBeforePreflight = await Promise.all(processNames.map(resources));
     evidence.stageEvidence = await require('./capacity-stages.cjs').measureStage(
       prisma,
