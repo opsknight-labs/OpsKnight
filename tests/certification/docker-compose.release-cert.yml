@@ -1,13 +1,13 @@
 x-app-environment: &app-env
   NODE_ENV: production
-  DATABASE_URL: postgresql://opsknight:bf5efc57520313b61b4950d1ebf4f355@db:5432/opsknight?sslmode=disable
-  DIRECT_DATABASE_URL: postgresql://opsknight:bf5efc57520313b61b4950d1ebf4f355@db:5432/opsknight?sslmode=disable
-  NEXTAUTH_URL: http://127.0.0.1:3900
-  NEXT_PUBLIC_APP_URL: http://127.0.0.1:3900
-  NEXTAUTH_SECRET: 58f0d569691d29c35342bfcc0e7d787a3ec7febda7a7cfde7416b7495f28aaee
-  API_KEY_SECRET: d63f3fab7ed1d4bd07d921fac8ec8104b29f34e2587d62ccca2f6093a4f8934f
-  ENCRYPTION_KEY: c5b655532016bab28ed1353be22773e2720dbf88df71c5721dd4bc2239f6bfbe
-  SETUP_SECRET: a6f0dce93bf3da3f7964fc17b431baa7
+  DATABASE_URL: ${INTERNAL_DATABASE_URL:-postgresql://${POSTGRES_USER:-opsknight}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-opsknight}?sslmode=disable}
+  DIRECT_DATABASE_URL: ${INTERNAL_DIRECT_DATABASE_URL:-postgresql://${POSTGRES_USER:-opsknight}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-opsknight}?sslmode=disable}
+  NEXTAUTH_URL: ${NEXTAUTH_URL:-http://127.0.0.1:3900}
+  NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-http://127.0.0.1:3900}
+  NEXTAUTH_SECRET: ${NEXTAUTH_SECRET}
+  API_KEY_SECRET: ${API_KEY_SECRET}
+  ENCRYPTION_KEY: ${ENCRYPTION_KEY}
+  SETUP_SECRET: ${SETUP_SECRET}
   INTEGRATION_RATE_LIMIT: 'false'
   TRUST_PROXY_HEADERS: 'true'
   TRUSTED_PROXY_HOPS: '1'
@@ -24,9 +24,9 @@ services:
     image: postgres:16-alpine
     restart: unless-stopped
     environment:
-      POSTGRES_USER: opsknight
-      POSTGRES_PASSWORD: bf5efc57520313b61b4950d1ebf4f355
-      POSTGRES_DB: opsknight
+      POSTGRES_USER: ${POSTGRES_USER:-opsknight}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-opsknight}
     healthcheck:
       test: [CMD-SHELL, pg_isready -U opsknight -d opsknight]
       interval: 2s
@@ -61,8 +61,8 @@ services:
       OPSKNIGHT_SKIP_MIGRATIONS: 'true'
       OPSKNIGHT_PROCESS_ROLE: web
     depends_on:
-      migration:
-        condition: service_completed_successfully
+      db:
+        condition: service_healthy
     networks:
       - cert-v2-net
 
@@ -78,8 +78,8 @@ services:
     ports:
       - '127.0.0.1:3901:3000'
     depends_on:
-      migration:
-        condition: service_completed_successfully
+      db:
+        condition: service_healthy
     networks:
       - cert-v2-net
 
@@ -92,8 +92,8 @@ services:
       OPSKNIGHT_SKIP_MIGRATIONS: 'true'
       OPSKNIGHT_PROCESS_ROLE: worker
     depends_on:
-      migration:
-        condition: service_completed_successfully
+      db:
+        condition: service_healthy
     networks:
       - cert-v2-net
 

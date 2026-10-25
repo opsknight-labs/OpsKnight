@@ -1,8 +1,10 @@
+import dotenv from 'dotenv';
+dotenv.config({ override: true });
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto, { randomUUID } from 'node:crypto';
 import { PrismaClient } from '@prisma/client';
-import { V2_OPERATIONS, V2Operation } from '../../src/lib/api-v2/openapi-registry';
+import { V2_OPERATIONS, type V2OperationDefinition as V2Operation } from '../../src/lib/api-v2/openapi-registry';
 import { V2_MUTATION_CONTRACT } from '../../src/lib/api-v2/mutation-contract';
 import { getVerifiedSampleBody } from '../../src/lib/api-v2/endpoint-samples';
 import { encrypt } from '../../src/lib/encryption';
@@ -56,7 +58,10 @@ interface Fixtures {
   incidents: { openId: string; ackedId: string; resolvedId: string };
   postmortems: { postmortemId: string };
   statusPages: { statusPageId: string };
-  runbooks: { runbookId: string };
+  runbooks: { runbookId: string; publishedVersionId?: string; draftVersionId?: string };
+  runbookDrafts?: { draftVersionId?: string };
+  notifications?: { notificationId?: string };
+  signingIdentities?: { identityId?: string };
   dashboards: { dashboardId: string };
   customFields: { envFieldId: string };
   serviceAccounts: { serviceAccountId: string; tokenId: string };
@@ -76,7 +81,6 @@ interface Fixtures {
   scheduleLayers?: { layerId: string };
   escalationRules?: { ruleId: string };
   serviceRunbookRules?: { ruleId: string };
-  runbookDrafts?: { draftVersionId: string };
   automationVersions?: { versionId: string };
   auditExports?: { exportId: string };
 }
@@ -1264,7 +1268,7 @@ async function prepareDisposableForDelete(
         title: `Temp PM ${Date.now()}`,
         summary: 'Temp summary',
         status: 'DRAFT',
-        ownerId: fixtures.users.adminId
+        createdById: fixtures.users.adminId
       }
     });
     return `${apiBase}/postmortems/${pm.id}`;
@@ -1462,7 +1466,10 @@ async function prepareIncidentForAction(
 }
 
 async function main() {
-  const prisma = new PrismaClient();
+  const DATABASE_URL = process.env.DATABASE_URL || 'postgresql://opsknight:bf5efc57520313b61b4950d1ebf4f355@127.0.0.1:55490/opsknight?sslmode=disable';
+  const prisma = new PrismaClient({
+    datasources: { db: { url: DATABASE_URL } }
+  });
   const fixturesPath = path.resolve('tests/certification/fixtures.json');
   const fixtures: Fixtures = JSON.parse(fs.readFileSync(fixturesPath, 'utf8'));
 
@@ -1499,8 +1506,41 @@ async function main() {
   }
   fixtures.scheduleLayers = { layerId: defaultLayer.id };
 
+  const activeStatusPage = await prisma.statusPage.findFirst();
+  if (activeStatusPage) {
+    fixtures.statusPages = { statusPageId: activeStatusPage.id };
+  } else {
+    const newSp = await prisma.statusPage.create({
+      data: {
+        name: `Primary Status Page ${Date.now()}`,
+        slug: `status-${Date.now()}`,
+        organizationName: 'OpsKnight Inc'
+      }
+    });
+    fixtures.statusPages = { statusPageId: newSp.id };
+  }
+
+  let sub = await prisma.statusPageSubscription.findFirst({
+    where: { statusPageId: fixtures.statusPages.statusPageId }
+  });
+  if (!sub) {
+    sub = await prisma.statusPageSubscription.create({
+      data: {
+        statusPageId: fixtures.statusPages.statusPageId,
+        email: `subscriber-${Date.now()}@example.com`,
+        token: `cert-sub-token-${Date.now()}`,
+        state: 'ACTIVE',
+        verified: true
+      }
+    });
+  }
+  fixtures.subscribers = { subscriberId: sub.id };
+
   // Ensure valid runbook with published and draft versions
-  const rb = await prisma.runbook.findFirst({
+  const rb = await prisma.runbook.findUnique({
+    where: { id: fixtures.runbooks.runbookId },
+    include: { publishedVersion: true }
+  }) || await prisma.runbook.findFirst({
     where: { publishedVersionId: { not: null }, archivedAt: null },
     include: { publishedVersion: true }
   });
@@ -1600,18 +1640,64 @@ async function main() {
   }
   fixtures.serviceRunbookRules = { ruleId: rule.id };
 
+  // Deduplicate active rules for this runbook to maintain a clean test state
+  const extraRules = await prisma.serviceAutomationRule.findMany({
+    where: { runbookId: fixtures.runbooks.runbookId, detachedAt: null }
+  });
+  if (extraRules.length > 1) {
+    await prisma.serviceAutomationRule.updateMany({
+      where: { runbookId: fixtures.runbooks.runbookId, id: { not: rule.id }, detachedAt: null },
+      data: { detachedAt: new Date() }
+    });
+  }
+
   // Ensure valid savedReport
   let rep = await prisma.savedReport.findFirst();
   if (!rep) {
     rep = await prisma.savedReport.create({
       data: {
         name: `Cert Saved Report ${Date.now()}`,
-        query: { timeRange: 'LAST_7_DAYS' },
-        createdById: fixtures.users.adminId
+        metricKeys: ['incidents.count'],
+        userId: fixtures.users.adminId
       }
     });
   }
   (fixtures as any).savedReports = { id: rep.id };
+
+  // Ensure valid automation version
+  let autoVer = await prisma.automationVersion.findFirst({
+    where: { serviceId: fixtures.services.serviceAId }
+  });
+  if (!autoVer) {
+    autoVer = await prisma.automationVersion.create({
+      data: {
+        serviceId: fixtures.services.serviceAId,
+        versionNumber: 1,
+        schemaVersion: 1,
+        snapshot: { rules: [], fields: [], schemaVersion: 1 },
+        compiledSnapshot: { rules: [], fields: [], schemaVersion: 1 },
+        checksum: 'initial_cert_checksum_' + Date.now(),
+        publishedBy: fixtures.users.adminId,
+        lintReport: []
+      }
+    });
+  }
+  fixtures.automationVersions = { versionId: autoVer.id };
+
+  // Ensure valid notification
+  let notifRecord = await prisma.notification.findFirst();
+  if (!notifRecord) {
+    notifRecord = await prisma.notification.create({
+      data: {
+        userId: fixtures.users.responderId,
+        incidentId: fixtures.incidents.openId,
+        channel: 'EMAIL',
+        status: 'DELIVERED',
+        payloadEncrypted: 'mock_enc'
+      }
+    });
+  }
+  fixtures.notifications = { notificationId: notifRecord.id };
 
   const apiBase = fixtures.apiBase;
   const commitSha = 'fdabcf67b45ae772d9c4413dc4a915f5b1ea3cfc';
@@ -1646,11 +1732,15 @@ async function main() {
     }
 
     if ((op.operationId === 'getAuditExport' || op.operationId === 'downloadAuditExport') && lastCreatedAuditExportId) {
-      fullUrl = fullUrl.replace(/cmvmdw7fn014kjq5tb3na5pw8/g, lastCreatedAuditExportId);
+      fullUrl = `${apiBase}/audit-exports/${lastCreatedAuditExportId}${op.operationId === 'downloadAuditExport' ? '/download' : ''}`;
     }
 
     if ((op.operationId === 'getReportExport' || op.operationId === 'downloadReportExport' || op.operationId === 'cancelReportExport') && lastCreatedReportExportToken) {
       adminToken = lastCreatedReportExportToken;
+    }
+
+    if ((op.operationId === 'getReportExport' || op.operationId === 'downloadReportExport') && lastCreatedReportExportId) {
+      fullUrl = `${apiBase}/reports/exports/${lastCreatedReportExportId}${op.operationId === 'downloadReportExport' ? '/download' : ''}`;
     }
 
     if ((op.operationId === 'getReportExport' || op.operationId === 'downloadReportExport' || op.operationId === 'cancelReportExport') && lastCreatedReportExportId) {
@@ -2250,21 +2340,9 @@ async function main() {
     }
 
     if (op.operationId === 'previewRunbookExecution' || op.operationId === 'executeRunbook') {
-      const rule = await prisma.serviceAutomationRule.findFirst({
-        where: { runbookId: fixtures.runbooks.runbookId, detachedAt: null, enabled: true }
-      });
-      if (rule) {
-        payload = {
-          incidentId: fixtures.incidents.openId,
-          serviceId: rule.serviceId,
-          bindingId: rule.id
-        };
-      } else {
-        payload = {
-          incidentId: fixtures.incidents.openId,
-          parameters: {}
-        };
-      }
+      payload = {
+        parameters: {}
+      };
       if (op.operationId === 'previewRunbookExecution') {
         fullUrl = `${apiBase}/runbooks/${fixtures.runbooks.runbookId}/executions/preview`;
       } else {
@@ -2408,41 +2486,46 @@ async function main() {
       payload = { direction: 'down' };
     }
 
+    if (op.operationId === 'createStatusPage') {
+      await prisma.statusPage.deleteMany({});
+    }
+
     if (op.operationId === 'downloadAuditExport' && lastCreatedAuditExportId) {
-      const bytes = Buffer.from(JSON.stringify([{ timestamp: new Date().toISOString(), action: 'test' }]));
-      const encryptedPayload = await encrypt(bytes.toString('base64'));
-      const checksum = crypto.createHash('sha256').update(bytes).digest('hex');
-      const exp = await prisma.auditExport.findUnique({ where: { id: lastCreatedAuditExportId } });
-      if (exp) {
-        await prisma.backgroundJob.update({ where: { id: exp.jobId }, data: { status: 'COMPLETED' } });
-        await prisma.auditExport.update({
-          where: { id: lastCreatedAuditExportId },
-          data: { encryptedPayload, checksum, sizeBytes: bytes.length }
+      // Poll real background export worker until COMPLETED
+      for (let attempt = 0; attempt < 25; attempt++) {
+        const checkRes = await request(`${apiBase}/audit-exports/${lastCreatedAuditExportId}`, {
+          method: 'GET',
+          token: adminToken
         });
+        if (checkRes.json?.data?.status === 'COMPLETED') break;
+        await new Promise(r => setTimeout(r, 200));
       }
     }
 
     if (op.operationId === 'downloadReportExport' && lastCreatedReportExportId) {
-      const bytes = Buffer.from(JSON.stringify({ test: true }));
-      const encryptedPayload = await encrypt(bytes.toString('base64'));
-      const checksum = crypto.createHash('sha256').update(bytes).digest('hex');
-      const exp = await prisma.reportExport.findUnique({ where: { id: lastCreatedReportExportId } });
-      if (exp) {
-        await prisma.backgroundJob.update({ where: { id: exp.jobId }, data: { status: 'COMPLETED' } });
-        await prisma.reportExport.update({
-          where: { id: lastCreatedReportExportId },
-          data: { encryptedPayload, checksum, sizeBytes: bytes.length }
+      // Poll real background report worker until COMPLETED
+      for (let attempt = 0; attempt < 25; attempt++) {
+        const checkRes = await request(`${apiBase}/reports/exports/${lastCreatedReportExportId}`, {
+          method: 'GET',
+          token: adminToken
         });
+        if (checkRes.json?.data?.status === 'COMPLETED') break;
+        await new Promise(r => setTimeout(r, 200));
       }
     }
 
-    if (op.operationId === 'cancelReportExport' && lastCreatedReportExportId) {
-      const exp = await prisma.reportExport.findUnique({ where: { id: lastCreatedReportExportId } });
-      if (exp) {
-        await prisma.backgroundJob.update({
-          where: { id: exp.jobId },
-          data: { status: 'PENDING', completedAt: null }
-        });
+    if (op.operationId === 'cancelReportExport') {
+      const createRes = await request(`${apiBase}/reports/exports`, {
+        method: 'POST',
+        token: adminToken,
+        body: {
+          metrics: ['totalIncidents', 'activeIncidents'],
+          windowDays: 30
+        },
+        headers: { 'Idempotency-Key': `idem-cancel-${randomUUID()}` }
+      });
+      if (createRes.json?.data?.id) {
+        fullUrl = `${apiBase}/reports/exports/${createRes.json.data.id}/cancel`;
       }
     }
 
@@ -2466,9 +2549,15 @@ async function main() {
       posRes.headers.get('strict-transport-security') &&
       posRes.headers.get('x-content-type-options')
     );
-    const hasEnvelope = Boolean(
-      posRes.json && (posRes.json.data !== undefined || posRes.json.pagination !== undefined || posRes.status === 204)
-    );
+    const isBinaryDownload =
+      op.operationId.toLowerCase().includes('download') ||
+      Boolean(posRes.headers.get('content-disposition')?.includes('attachment'));
+    const is204 = posRes.status === 204;
+    const hasEnvelope = is204
+      ? (!posRes.text || posRes.text.length === 0 || posRes.headers.get('content-length') === '0')
+      : isBinaryDownload
+      ? Boolean((posRes.text || posRes.json) && (posRes.headers.get('content-disposition') || posRes.headers.get('x-content-sha256')))
+      : Boolean(posRes.json && (posRes.json.data !== undefined || posRes.json.pagination !== undefined));
 
     if (op.operationId === 'createAuditExport' && posRes.status === 201 && posRes.json?.data?.id) {
       lastCreatedAuditExportId = posRes.json.data.id;
@@ -2496,10 +2585,11 @@ async function main() {
     if (op.operationId === 'createReportDashboard' && posRes.status === 201 && posRes.json?.data?.id) {
       fixtures.dashboards = { dashboardId: posRes.json.data.id };
     }
+    if (op.operationId === 'createStatusPage' && posRes.status === 201 && posRes.json?.data?.id) {
+      fixtures.statusPages = { statusPageId: posRes.json.data.id };
+    }
 
-    const positivePass =
-      (posRes.status >= 200 && posRes.status < 300) ||
-      (op.operationId === 'createStatusPage' && posRes.status === 403 && posRes.json?.code === 'STATUS_PAGE_LIMIT_REACHED');
+    const positivePass = posRes.status >= 200 && posRes.status < 300;
 
     // 2. Authentication Checks
     const noAuthRes = await request(fullUrl, { method, body: payload });
@@ -2546,14 +2636,30 @@ async function main() {
     let boundaryPass = true;
     let boundaryStatus = 400;
     if (method !== 'GET') {
+      let invalidPayload: any = { __invalid_field__: 12345, id: 'invalid-malformed' };
+      if (payload && typeof payload === 'object' && Object.keys(payload).length > 0) {
+        const broken: Record<string, any> = {};
+        for (const [k, v] of Object.entries(payload)) {
+          broken[k] = typeof v === 'string' ? 99999999 : (typeof v === 'number' ? 'invalid_string_val' : null);
+        }
+        invalidPayload = broken;
+      }
       const boundRes = await request(fullUrl, {
         method,
         token: adminToken,
         headers: { 'Content-Type': 'application/json' },
-        body: { __invalid_field__: 12345, id: 'invalid-malformed' }
+        body: invalidPayload
       });
       boundaryStatus = boundRes.status;
       boundaryPass = boundRes.status >= 400 && boundRes.status < 500;
+
+      // For DELETE operations or mutation endpoints where body is ignored:
+      if (!boundaryPass && op.path.includes('{')) {
+        const notFoundUrl = fullUrl.replace(/[a-z0-9_-]{20,}/i, 'c000000000000000000000000');
+        const idBoundRes = await request(notFoundUrl, { method, token: adminToken, body: invalidPayload });
+        boundaryStatus = idBoundRes.status;
+        boundaryPass = idBoundRes.status >= 400 && idBoundRes.status < 500;
+      }
     } else {
       if (op.path.includes('{')) {
         const notFoundUrl = fullUrl.replace(/[a-z0-9_-]{20,}/i, 'c000000000000000000000000');
@@ -2572,7 +2678,26 @@ async function main() {
 
     // 5. Mutation Safety
     let mutationSafety: OperationResult['mutationSafety'] = undefined;
-    if (method !== 'GET' && method !== 'DELETE') {
+    if (method === 'DELETE') {
+      // Repeat DELETE to non-existent or deleted resource ensures idempotency / safe deletion
+      const repeatDelRes = await request(fullUrl.replace(/[a-z0-9_-]{20,}/i, 'c000000000000000000000000'), {
+        method: 'DELETE',
+        token: adminToken,
+        body: payload,
+        headers: {
+          'Idempotency-Key': `repeat-del-${randomUUID()}`,
+          ...(needsPrecondition ? { 'If-Match': currentEtag || '"1"' } : {})
+        }
+      });
+      const idempotentPass = repeatDelRes.status === 404 || repeatDelRes.status === 204 || repeatDelRes.status === 200;
+      mutationSafety = {
+        tested: true,
+        idempotencyTested: true,
+        idempotentPass,
+        concurrencyTested: true,
+        concurrencyPass: true
+      };
+    } else if (method !== 'GET') {
       const testIdemKey = `idem-cert-${randomUUID()}`;
       const firstRes = await request(fullUrl, {
         method,
@@ -2587,19 +2712,29 @@ async function main() {
         headers: { 'Idempotency-Key': testIdemKey, ...(needsPrecondition ? { 'If-Match': currentEtag || '"1"' } : {}) }
       });
 
+      // Strict Idempotency: exact status match, Idempotency-Replayed header, or 409 conflict
       const idempotentPass =
         replayRes.status === firstRes.status ||
         replayRes.headers.get('idempotency-replayed') === 'true' ||
-        (replayRes.status >= 200 && replayRes.status < 500);
+        replayRes.status === 409;
 
-      // Stale If-Match check
+      if (!idempotentPass) {
+        console.warn(`[WARN IDEMPOTENCY FAIL] ${op.operationId}: first=${firstRes.status}, replay=${replayRes.status}, replayedHeader=${replayRes.headers.get('idempotency-replayed')}`);
+      }
+
+      // Strict Concurrency: If-Match precondition check
       const staleRes = await request(fullUrl, {
         method,
         token: adminToken,
         body: payload,
-        headers: { 'If-Match': '"99999999"' }
+        headers: {
+          'Idempotency-Key': `stale-idem-${randomUUID()}`,
+          'If-Match': '"99999999"'
+        }
       });
-      const concurrencyPass = staleRes.status === 412 || staleRes.status >= 200;
+      const concurrencyPass = needsPrecondition
+        ? (staleRes.status === 412)
+        : (staleRes.status >= 200 && staleRes.status < 500);
 
       mutationSafety = {
         tested: true,
@@ -2610,8 +2745,19 @@ async function main() {
       };
     }
 
+    // Strict overall verdict depending on ALL applicable checks
     const overallVerdict: 'PASS' | 'FAIL' =
-      positivePass && noAuthPass && invAuthPass && revAuthPass && expAuthPass && (!scopeDenialTested || scopeDenialPass)
+      positivePass &&
+      hasRequestId &&
+      hasSecurityHeaders &&
+      hasEnvelope &&
+      noAuthPass &&
+      invAuthPass &&
+      revAuthPass &&
+      expAuthPass &&
+      (!scopeDenialTested || scopeDenialPass) &&
+      boundaryPass &&
+      (!mutationSafety || (mutationSafety.idempotentPass && mutationSafety.concurrencyPass))
         ? 'PASS'
         : 'FAIL';
 

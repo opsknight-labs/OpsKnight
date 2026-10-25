@@ -57,7 +57,8 @@ async function main() {
 
   // 2. Identities & Credentials
   // 2a. Admin User
-  let adminUser = await prisma.user.findFirst({ where: { role: 'ADMIN' } });
+  let adminUser = await prisma.user.findFirst({ where: { email: 'cert-admin@opsknight.local' } }) ||
+    await prisma.user.findFirst({ where: { role: 'ADMIN', status: 'ACTIVE' } });
   if (!adminUser) {
     adminUser = await prisma.user.create({
       data: {
@@ -501,16 +502,32 @@ async function main() {
             state: 'PUBLISHED',
             definition: {
               steps: [
-                { id: 'step-1', name: 'Drain connections', type: 'manual' }
+                {
+                  key: 'step_1',
+                  name: 'Drain connections',
+                  type: 'MANUAL',
+                  riskClass: 'READ_ONLY',
+                  config: {}
+                }
               ]
             },
-            checksum: 'test-checksum-v1',
+            checksum: 'bd9c3cee73c564bc13c7793cb5725efa06a3ba4552c990b4c09a9db096abfaa9',
             createdById: adminUser.id
           }
         ]
       }
     }
   });
+
+  const initialRunbookVersion = await prisma.runbookVersion.findFirst({
+    where: { runbookId: runbook.id, version: 1 }
+  });
+  if (initialRunbookVersion) {
+    await prisma.runbook.update({
+      where: { id: runbook.id },
+      data: { publishedVersionId: initialRunbookVersion.id }
+    });
+  }
 
   // 10. Dashboard & Report
   const dashboard = await prisma.dashboard.create({

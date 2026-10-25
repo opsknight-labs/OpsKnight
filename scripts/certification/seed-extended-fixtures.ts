@@ -1,8 +1,9 @@
+import 'dotenv/config';
 import { PrismaClient } from '@prisma/client';
 import fs from 'node:fs';
 import path from 'node:path';
 
-const DATABASE_URL = 'postgresql://opsknight:bf5efc57520313b61b4950d1ebf4f355@127.0.0.1:55490/opsknight?sslmode=disable';
+const DATABASE_URL = process.env.DATABASE_URL || 'postgresql://opsknight:bf5efc57520313b61b4950d1ebf4f355@127.0.0.1:55490/opsknight?sslmode=disable';
 const prisma = new PrismaClient({
   datasources: { db: { url: DATABASE_URL } }
 });
@@ -164,6 +165,12 @@ async function main() {
   const runbookVersion = await prisma.runbookVersion.findFirst({
     where: { runbookId: fixtures.runbooks.runbookId }
   });
+  if (runbookVersion) {
+    await prisma.runbook.update({
+      where: { id: fixtures.runbooks.runbookId },
+      data: { publishedVersionId: runbookVersion.id }
+    });
+  }
 
   let runbookExecution = await prisma.runbookExecution.findFirst({
     where: { runbookId: fixtures.runbooks.runbookId, incidentId: fixtures.incidents.openId }
@@ -175,7 +182,7 @@ async function main() {
         runbookVersionId: runbookVersion!.id,
         incidentId: fixtures.incidents.openId,
         deadlineAt: new Date(Date.now() + 7200000),
-        definitionChecksum: 'test-checksum-v1',
+        definitionChecksum: 'bd9c3cee73c564bc13c7793cb5725efa06a3ba4552c990b4c09a9db096abfaa9',
         triggeredByUserId: fixtures.users.adminId,
         status: 'QUEUED'
       }

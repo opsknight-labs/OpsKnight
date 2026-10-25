@@ -1,10 +1,11 @@
+import 'dotenv/config';
 import { PrismaClient } from '@prisma/client';
 import fs from 'node:fs';
 
 const prisma = new PrismaClient({
   datasources: {
     db: {
-      url: 'postgresql://opsknight:bf5efc57520313b61b4950d1ebf4f355@127.0.0.1:55490/opsknight?sslmode=disable'
+      url: process.env.DATABASE_URL || 'postgresql://opsknight:bf5efc57520313b61b4950d1ebf4f355@127.0.0.1:55490/opsknight?sslmode=disable'
     }
   }
 });

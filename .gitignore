@@ -128,3 +128,6 @@ __pycache__/
 
 # Ephemeral test certification key pools & fixtures
 /tests/certification/*.json
+.env.certification
+reports/**/EVIDENCE/*.png
+reports/**/*.png

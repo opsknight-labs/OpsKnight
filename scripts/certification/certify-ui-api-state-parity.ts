@@ -1,8 +1,10 @@
+import dotenv from 'dotenv';
+dotenv.config({ override: true });
 import fs from 'node:fs';
 import { chromium } from '@playwright/test';
 import { PrismaClient } from '@prisma/client';
 
-const DATABASE_URL = 'postgresql://opsknight:bf5efc57520313b61b4950d1ebf4f355@127.0.0.1:55490/opsknight?sslmode=disable';
+const DATABASE_URL = process.env.DATABASE_URL || 'postgresql://opsknight:bf5efc57520313b61b4950d1ebf4f355@127.0.0.1:55490/opsknight?sslmode=disable';
 const prisma = new PrismaClient({
   datasources: { db: { url: DATABASE_URL } }
 });
@@ -109,9 +111,61 @@ async function main() {
   console.log('Workflow 1 Parity: PASSED (Exact state synchronization from API to UI).\n');
 
   // -------------------------------------------------------------------------
-  // WORKFLOW 2: REST API Team Creation -> UI Navigation & Presentation Parity
+  // WORKFLOW 2: UI Mutation -> REST API v2 & Database Business State Parity
   // -------------------------------------------------------------------------
-  console.log('--- WORKFLOW 2: REST API Team Creation -> UI Teams Directory Parity ---');
+  console.log('--- WORKFLOW 2: UI Mutation -> REST API v2 & Database Parity ---');
+  console.log('Triggering "Resolve Incident" action directly through Browser UI DOM...');
+  const resolveBtn = page.locator('button:has-text("Resolve Incident"), button:has-text("Resolve")').first();
+  await resolveBtn.waitFor({ state: 'visible', timeout: 5000 });
+  await resolveBtn.click();
+  await page.waitForTimeout(500);
+
+  // If a modal popped up, fill resolution and confirm
+  const modalTextarea = page.locator('#resolution-note, textarea[name="resolution"]').first();
+  if (await modalTextarea.isVisible({ timeout: 3000 }).catch(() => false)) {
+    await modalTextarea.click();
+    await modalTextarea.fill('Resolved directly through automated browser UI verification with root cause remediation.');
+    await page.waitForTimeout(300);
+    const confirmBtn = page.locator('div[role="dialog"] button[type="submit"]').first();
+    await confirmBtn.waitFor({ state: 'visible', timeout: 5000 });
+    await confirmBtn.click();
+  }
+
+  await page.waitForTimeout(2000);
+  const updatedDomText = await page.textContent('body');
+  const resolvedInDom = updatedDomText?.toLowerCase().includes('resolved');
+  console.log(`UI DOM after action indicates 'Resolved': ${resolvedInDom ? 'YES' : 'NO'}`);
+  if (!resolvedInDom) {
+    throw new Error('UI did not transition to Resolved status after clicking Resolve button!');
+  }
+
+  // Verify business state in REST API v2
+  console.log('Querying REST API v2 for incident state...');
+  const verifyApiRes = await fetch(`${apiBase}/incidents/${incidentId}`, {
+    headers: { 'Authorization': `Bearer ${adminToken}` }
+  });
+  const verifyApiJson = await verifyApiRes.json();
+  const apiStatus = verifyApiJson?.data?.status;
+  console.log(`REST API v2 status: ${apiStatus} (Expected: 'RESOLVED')`);
+  if (apiStatus !== 'RESOLVED') {
+    throw new Error(`REST API v2 status mismatch after UI resolution! Received: ${apiStatus}`);
+  }
+
+  // Verify database row state in PostgreSQL
+  console.log('Querying PostgreSQL database directly for business state and resolvedAt timestamp...');
+  const dbIncident = await prisma.incident.findUnique({
+    where: { id: incidentId }
+  });
+  console.log(`Database row status: ${dbIncident?.status}, resolvedAt: ${dbIncident?.resolvedAt?.toISOString()}`);
+  if (dbIncident?.status !== 'RESOLVED' || !dbIncident?.resolvedAt) {
+    throw new Error(`PostgreSQL database row was not updated to RESOLVED with valid resolvedAt!`);
+  }
+  console.log('Workflow 2 Parity: PASSED (Exact UI -> API -> Database bidirectional transition verified).\n');
+
+  // -------------------------------------------------------------------------
+  // WORKFLOW 3: REST API Team Creation -> UI Navigation & Presentation Parity
+  // -------------------------------------------------------------------------
+  console.log('--- WORKFLOW 3: REST API Team Creation -> UI Teams Directory Parity ---');
   const teamName = `Alpha-Parity-Team-${Date.now()}`;
   const teamRes = await fetch(`${apiBase}/teams`, {
     method: 'POST',
@@ -137,12 +191,12 @@ async function main() {
   if (!teamInUI) {
     throw new Error(`Team created via REST API v2 not rendered in UI /teams directory!`);
   }
-  console.log('Workflow 2 Parity: PASSED (Exact representation in UI).\n');
+  console.log('Workflow 3 Parity: PASSED (Exact representation in UI).\n');
 
   // -------------------------------------------------------------------------
-  // WORKFLOW 3: Database & Timeline Parity Audit
+  // WORKFLOW 4: Database & Timeline Parity Audit
   // -------------------------------------------------------------------------
-  console.log('--- WORKFLOW 3: Database & Timeline Parity Audit ---');
+  console.log('--- WORKFLOW 4: Database & Timeline Parity Audit ---');
   // Query timeline from API
   const timelineRes = await fetch(`${apiBase}/incidents/${incidentId}/timeline`, {
     headers: { 'Authorization': `Bearer ${adminToken}` }
@@ -157,12 +211,10 @@ async function main() {
   });
   console.log(`Timeline events found in PostgreSQL: ${dbEvents.length}`);
 
-  if (events.length !== dbEvents.length) {
-    console.log(`Note on timeline projection: API projected ${events.length} unified timeline items, database has ${dbEvents.length} core audit events.`);
-  } else {
-    console.log('Exact 1:1 database row match.');
+  if (events.length === 0 || dbEvents.length === 0) {
+    throw new Error('Zero timeline events found in API or database!');
   }
-  console.log('Workflow 3 Parity: PASSED (Verified end-to-end database persistence).\n');
+  console.log('Workflow 4 Parity: PASSED (Verified end-to-end database persistence).\n');
 
   await browser.close();
 

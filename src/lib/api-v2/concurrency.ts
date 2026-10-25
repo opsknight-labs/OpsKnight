@@ -69,8 +69,8 @@ export async function withIfMatch<T>(expected: number | null, run: () => Promise
   } catch (error) {
     if (
       expected !== null &&
-      error instanceof Prisma.PrismaClientKnownRequestError &&
-      error.code === 'P2025'
+      (error instanceof Prisma.PrismaClientKnownRequestError || (error as any)?.code === 'P2025') &&
+      (error as any)?.code === 'P2025'
     ) {
       throw preconditionFailed();
     }

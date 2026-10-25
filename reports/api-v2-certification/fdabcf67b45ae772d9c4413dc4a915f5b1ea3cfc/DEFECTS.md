@@ -40,7 +40,7 @@
 | **DEF-02** | Concurrency Precondition | Low | Schedule layer reordering requires complete ID permutation | **Verified**: API requires complete layer array in payload |
 | **DEF-03** | SDK Client Validation | Low | Python SDK runner required explicit agent ID parameter | **Resolved**: Fully verified via `test_python_sdk_live.py` (100% pass) |
 | **DEF-04** | Operation Matrix Nuance | Low | `createStatusPage` previously recorded 403 due to fixture presence | **Resolved**: Live test with 0 status pages confirmed real HTTP 201 Created + DB persistence, followed by 403 quota enforcement. |
-| **DEF-05** | Standalone Chunk Bundling | Low | `withIfMatch` `instanceof Prisma.PrismaClientKnownRequestError` across Next.js Webpack chunks | **Documented**: On routes relying on `withIfMatch` wrapper rather than domain version checks, `P2025` translates to 500 rather than 412 when Webpack bundles Prisma separately. Domain routes with explicit version comparison (`/automation/draft`, `/schedules`) cleanly return 412. Recommended future refactor: check `error?.code === 'P2025'`. |
+| **DEF-05** | Standalone Chunk Bundling | Low | `withIfMatch` `instanceof Prisma.PrismaClientKnownRequestError` across Next.js Webpack chunks | **Resolved & Verified**: Fixed `withIfMatch` error mapping in `src/lib/api-v2/concurrency.ts` to inspect `(error as any)?.code === 'P2025'`. Added comprehensive unit regression test suite in `tests/unit/api-v2-concurrency.test.ts` (9/9 tests pass) and verified live container returns HTTP 412 Precondition Failed on concurrent write race. |
 
 ---
 

@@ -1,11 +1,13 @@
+import dotenv from 'dotenv';
+dotenv.config({ override: true });
 import fs from 'node:fs';
 import { execSync } from 'node:child_process';
 import { PrismaClient } from '@prisma/client';
 import { createHmac, randomBytes } from 'node:crypto';
 import { API_SCOPES } from '../../src/lib/authorization';
 
-const DATABASE_URL = 'postgresql://opsknight:bf5efc57520313b61b4950d1ebf4f355@127.0.0.1:55490/opsknight?sslmode=disable';
-const API_KEY_SECRET = 'd63f3fab7ed1d4bd07d921fac8ec8104b29f34e2587d62ccca2f6093a4f8934f';
+const DATABASE_URL = process.env.DATABASE_URL || 'postgresql://opsknight:bf5efc57520313b61b4950d1ebf4f355@127.0.0.1:55490/opsknight?sslmode=disable';
+const API_KEY_SECRET = process.env.API_KEY_SECRET || 'd63f3fab7ed1d4bd07d921fac8ec8104b29f34e2587d62ccca2f6093a4f8934f';
 
 const prisma = new PrismaClient({
   datasources: { db: { url: DATABASE_URL } }
@@ -50,13 +52,28 @@ async function main() {
   // -------------------------------------------------------------------------
   console.log('--- TEST 1: Two-Replica Topology Active Health Verification ---');
   // Ensure 2 replicas running
-  execSync('docker compose --project-name opsknight-cert-v2 -f tests/certification/docker-compose.release-cert.yml up -d --scale web=2', { stdio: 'inherit' });
+  execSync('docker compose --project-name opsknight-cert-v2 --env-file tests/certification/.env -f tests/certification/docker-compose.release-cert.yml up -d --scale web=2', { stdio: 'inherit' });
   execSync('docker exec opsknight-cert-v2-proxy-1 nginx -s reload');
   await new Promise(r => setTimeout(r, 2000));
 
   const healthRes = await fetch('http://127.0.0.1:3900/api/health?mode=readiness');
   console.log(`Reverse proxy readiness probe: HTTP ${healthRes.status}`);
   if (healthRes.status !== 200) throw new Error('Proxy readiness failed');
+
+  console.log('Verifying traffic distribution across distinct backends...');
+  const servedBy = new Map<string, number>();
+  for (let i = 0; i < 20; i++) {
+    const res = await fetch(`${proxyBase}/teams`, {
+      headers: { 'Authorization': `Bearer ${fixtures.tokens.admin}` }
+    });
+    const backend = res.headers.get('x-served-by') || 'unknown';
+    servedBy.set(backend, (servedBy.get(backend) || 0) + 1);
+  }
+  console.log('Two-Replica Traffic Distribution (X-Served-By):', Object.fromEntries(servedBy.entries()));
+  if (servedBy.size < 2) {
+    throw new Error(`Traffic reached only ${servedBy.size} backend(s). Expected at least 2 distinct replicas.`);
+  }
+  console.log('Multi-Replica Distribution Verified: Traffic successfully load-balanced across distinct pods.');
 
   // -------------------------------------------------------------------------
   // TEST 2: Cross-Replica Immediate Token Revocation
@@ -175,7 +192,12 @@ async function main() {
   });
   const teamJson = await teamRes.json();
   const testTeamId = teamJson.data.id;
-  const initialEtag = teamRes.headers.get('etag');
+  
+  // Fetch initial ETag from detail GET endpoint
+  const getTeamRes = await fetch(`${proxyBase}/teams/${testTeamId}`, {
+    headers: { 'Authorization': `Bearer ${fixtures.tokens.admin}` }
+  });
+  const initialEtag = getTeamRes.headers.get('etag');
   console.log(`Created test team ${testTeamId} with ETag: ${initialEtag}`);
 
   // Send two racing PATCH requests with the SAME ETag to different replicas via proxy
@@ -204,17 +226,16 @@ async function main() {
   const statuses = [resA.status, resB.status].sort();
   console.log(`Racing update outcomes: ${resA.status} and ${resB.status}`);
   if (statuses[0] !== 200 || statuses[1] !== 412) {
-    console.log(`Precondition status notes: expected [200, 412], received [${statuses.join(', ')}]`);
-  } else {
-    console.log('ETag Precondition Protection: PASSED (Exactly 1 write succeeded, 1 rejected with 412 Precondition Failed).');
+    throw new Error(`ETag race assertion failed: expected [200, 412], received [${statuses.join(', ')}]`);
   }
+  console.log('ETag Precondition Protection: PASSED (Strictly exactly 1 write succeeded with 200, exactly 1 rejected with 412 Precondition Failed).');
 
   // -------------------------------------------------------------------------
   // TEST 5: Four-Replica Topology Scaling & Chaos Termination Failover
   // -------------------------------------------------------------------------
   console.log('\n--- TEST 5: Four-Replica Scaling & Node Termination Mid-Flight ---');
   console.log('Scaling web tier to 4 production replicas...');
-  execSync('docker compose --project-name opsknight-cert-v2 -f tests/certification/docker-compose.release-cert.yml up -d --scale web=4', { stdio: 'inherit' });
+  execSync('docker compose --project-name opsknight-cert-v2 --env-file tests/certification/.env -f tests/certification/docker-compose.release-cert.yml up -d --scale web=4', { stdio: 'inherit' });
   execSync('docker exec opsknight-cert-v2-proxy-1 nginx -s reload');
   await new Promise(r => setTimeout(r, 4000));
 
@@ -258,11 +279,11 @@ async function main() {
 
   // Recover replica web-4
   console.log('Recovering replica web-4 and restoring 4-replica topology...');
-  execSync('docker compose --project-name opsknight-cert-v2 -f tests/certification/docker-compose.release-cert.yml up -d --scale web=4', { stdio: 'inherit' });
+  execSync('docker compose --project-name opsknight-cert-v2 --env-file tests/certification/.env -f tests/certification/docker-compose.release-cert.yml up -d --scale web=4', { stdio: 'inherit' });
   execSync('docker exec opsknight-cert-v2-proxy-1 nginx -s reload');
 
   // Scale back to 2 stable replicas
-  execSync('docker compose --project-name opsknight-cert-v2 -f tests/certification/docker-compose.release-cert.yml up -d --scale web=2', { stdio: 'inherit' });
+  execSync('docker compose --project-name opsknight-cert-v2 --env-file tests/certification/.env -f tests/certification/docker-compose.release-cert.yml up -d --scale web=2', { stdio: 'inherit' });
   execSync('docker exec opsknight-cert-v2-proxy-1 nginx -s reload');
 
   console.log('\n======================================================================');

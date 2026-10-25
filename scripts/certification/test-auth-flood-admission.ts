@@ -1,10 +1,12 @@
+import dotenv from 'dotenv';
+dotenv.config({ override: true });
 import fs from 'node:fs';
 import { PrismaClient } from '@prisma/client';
 import { createHmac, randomBytes } from 'node:crypto';
 import { API_SCOPES } from '../../src/lib/authorization';
 
-const DATABASE_URL = 'postgresql://opsknight:bf5efc57520313b61b4950d1ebf4f355@127.0.0.1:55490/opsknight?sslmode=disable';
-const API_KEY_SECRET = 'd63f3fab7ed1d4bd07d921fac8ec8104b29f34e2587d62ccca2f6093a4f8934f';
+const DATABASE_URL = process.env.DATABASE_URL || 'postgresql://opsknight:bf5efc57520313b61b4950d1ebf4f355@127.0.0.1:55490/opsknight?sslmode=disable';
+const API_KEY_SECRET = process.env.API_KEY_SECRET || 'd63f3fab7ed1d4bd07d921fac8ec8104b29f34e2587d62ccca2f6093a4f8934f';
 
 const prisma = new PrismaClient({
   datasources: { db: { url: DATABASE_URL } }
@@ -89,31 +91,107 @@ async function main() {
   console.log(`  Configured concurrency ceiling in response metadata: limit=${sample429?.body?.meta?.limit || 16}\n`);
 
   // -------------------------------------------------------------------------
-  // SCENARIO 2: Cold-Start Valid Credential Arriving Under Heavy Traffic
+  // SCENARIO 2: Cold-Start Valid Credential Arriving DURING Active Flood
   // -------------------------------------------------------------------------
-  console.log('--- SCENARIO 2: Cold-Start Valid Credential Under Traffic ---');
+  console.log('--- SCENARIO 2: Cold-Start Valid Credential Arriving DURING Active Flood ---');
   const coldKey = await createColdStartKey('Cold-Start Credential');
   console.log(`Minted fresh valid key: ${coldKey.token.slice(0, 16)}... (zero hint in cache)`);
 
-  const coldRes = await fetch(`${directBase}/incidents`, {
-    headers: { 'Authorization': `Bearer ${coldKey.token}` }
-  });
-  const coldJson = await coldRes.json().catch(() => null);
-  console.log(`Cold-start initial request status: HTTP ${coldRes.status}`);
-  if (coldRes.status === 200) {
-    console.log(`  Cold-start verification succeeded! Items returned: ${coldJson?.data?.length ?? 0}`);
+  // Start background hostile flood of invalid requests
+  let activeFloodRunning = true;
+  let backgroundFloodRequests = 0;
+  const floodPromise = (async () => {
+    while (activeFloodRunning) {
+      await Promise.all(
+        Array.from({ length: 20 }).map(() =>
+          fetch(`${directBase}/incidents`, {
+            headers: { 'Authorization': `Bearer ok_bogus_${randomBytes(8).toString('hex')}` }
+          }).then(() => { backgroundFloodRequests++; }).catch(() => {})
+        )
+      );
+    }
+  })();
+
+  // While flood is actively in-flight, send cold-start valid credential
+  console.log('Dispatching cold-start credential concurrently WHILE flood is actively saturating lane...');
+  let coldStatus = 0;
+  let coldJson: any = null;
+  let coldAttempts = 0;
+
+  for (let attempt = 0; attempt < 5; attempt++) {
+    coldAttempts++;
+    const res = await fetch(`${directBase}/incidents`, {
+      headers: { 'Authorization': `Bearer ${coldKey.token}` }
+    });
+    coldStatus = res.status;
+    if (res.status === 200) {
+      coldJson = await res.json().catch(() => null);
+      break;
+    } else if (res.status === 429) {
+      const waitSec = Number.parseInt(res.headers.get('retry-after') || '1', 10);
+      console.log(`  [Cold-Start] Shed under flood (HTTP 429), respecting Retry-After: ${waitSec}s...`);
+      await new Promise(r => setTimeout(r, waitSec * 1000));
+    }
   }
+
+  activeFloodRunning = false;
+  await floodPromise;
+  console.log(`Background flood sent ${backgroundFloodRequests} requests during cold-start test.`);
+  console.log(`Cold-start final status under active flood: HTTP ${coldStatus} (Attempts: ${coldAttempts})`);
+  if (coldStatus !== 200) {
+    throw new Error(`Cold start credential failed admission under flood! Final status: ${coldStatus}`);
+  }
+  console.log(`Cold-start admission verification: PASSED (Items returned: ${coldJson?.data?.length ?? 0})`);
 
   // Verify memory hint is now active
   const warmSubsequent = await fetch(`${directBase}/incidents`, {
     headers: { 'Authorization': `Bearer ${coldKey.token}` }
   });
-  console.log(`Subsequent warm request status: HTTP ${warmSubsequent.status} (Verified)\n`);
+  console.log(`Subsequent warm request status: HTTP ${warmSubsequent.status} (Verified fast-path hint)\n`);
 
   // -------------------------------------------------------------------------
-  // SCENARIO 3: Warm Valid Credential (Priority Lane) Under Hostile Flood
+  // SCENARIO 3: Same-IP / Shared NAT Over-Budget Concurrency Allowance
   // -------------------------------------------------------------------------
-  console.log('--- SCENARIO 3: Warm Valid Credential (Priority Lane) Under Hostile Flood ---');
+  console.log('--- SCENARIO 3: Same-IP / Shared NAT Over-Budget Concurrency Allowance ---');
+  console.log('Documented Thresholds:');
+  console.log('  FAILED_AUTH_ADMISSION_LIMIT = 60 per IP');
+  console.log('  OVER_BUDGET_IP_CONCURRENCY = 4 (Shared NAT protection)\n');
+
+  const natIp = '198.51.100.42';
+  console.log(`Simulating hostile flood of 65 bad credentials from NAT IP ${natIp}...`);
+
+  let nat401Count = 0;
+  let nat429Count = 0;
+  for (let i = 0; i < 65; i++) {
+    const res = await fetch(`${proxyBase}/incidents`, {
+      headers: {
+        'Authorization': `Bearer ok_nat_bad_${i}_${randomBytes(4).toString('hex')}`,
+        'X-Forwarded-For': natIp
+      }
+    });
+    if (res.status === 401) nat401Count++;
+    if (res.status === 429) nat429Count++;
+  }
+  console.log(`NAT IP traffic: 401s=${nat401Count}, 429s=${nat429Count}`);
+
+  // Now verify that a VALID credential from the SAME over-budget NAT IP succeeds via concurrency allowance
+  console.log(`Dispatching valid admin credential from the same over-budget NAT IP ${natIp}...`);
+  const validNatRes = await fetch(`${proxyBase}/incidents`, {
+    headers: {
+      'Authorization': `Bearer ${fixtures.tokens.admin}`,
+      'X-Forwarded-For': natIp
+    }
+  });
+  console.log(`Valid credential behind exhausted NAT IP returned: HTTP ${validNatRes.status}`);
+  if (validNatRes.status !== 200) {
+    throw new Error(`Legitimate client behind NAT was denied access after misbehaving client exhausted budget! Status: ${validNatRes.status}`);
+  }
+  console.log('Same-IP / NAT Concurrency Allowance: PASSED (Valid credential verified successfully).\n');
+
+  // -------------------------------------------------------------------------
+  // SCENARIO 4: Warm Valid Credential (Priority Lane) Under Hostile Flood
+  // -------------------------------------------------------------------------
+  console.log('--- SCENARIO 4: Warm Valid Credential (Priority Lane) Under Hostile Flood ---');
   console.log('Documented Invariants:');
   console.log('  PRIORITY_VERIFICATION_CONCURRENCY = 64');
   console.log('  Priority lane completely protects legitimate traffic during hostile attacks.\n');
@@ -157,7 +235,10 @@ async function main() {
   console.log(`  Total requests: 30`);
   console.log(`  HTTP 200 OK: ${legit200} (100.0%)`);
   console.log(`  HTTP 429 Dropped: ${legit429} (0.0%)`);
-  console.log(`  Priority Lane Immunity: VERIFIED — 100% throughput preserved for legitimate users.\n`);
+  if (legit200 !== 30) {
+    throw new Error(`Priority lane dropped legitimate requests! 200s: ${legit200}/30`);
+  }
+  console.log('Priority Lane Immunity: VERIFIED — 100% throughput preserved for legitimate users.\n');
 
   // Cleanup test key
   await prisma.apiKey.delete({ where: { id: coldKey.apiKey.id } });

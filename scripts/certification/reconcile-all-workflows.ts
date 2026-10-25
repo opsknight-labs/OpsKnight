@@ -1,9 +1,11 @@
+import dotenv from 'dotenv';
+dotenv.config({ override: true });
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto, { randomBytes } from 'node:crypto';
 import { PrismaClient } from '@prisma/client';
 
-const DATABASE_URL = 'postgresql://opsknight:bf5efc57520313b61b4950d1ebf4f355@127.0.0.1:55490/opsknight?sslmode=disable';
+const DATABASE_URL = process.env.DATABASE_URL || 'postgresql://opsknight:bf5efc57520313b61b4950d1ebf4f355@127.0.0.1:55490/opsknight?sslmode=disable';
 const prisma = new PrismaClient({
   datasources: { db: { url: DATABASE_URL } }
 });
@@ -11,6 +13,8 @@ const prisma = new PrismaClient({
 interface WorkflowReconciliationEntry {
   capabilityId: string;
   workflowTitle: string;
+  inventoryReviewStatus: string;
+  inventoryBlockers: string[];
   classification: 'CERTIFIED_E2E' | 'CERTIFIED_EXTENDED_WORKFLOW' | 'CERTIFIED_ATOMIC_MATRIX' | 'SPECIALIZED_PROTOCOL';
   operationsCovered: string[];
   evidenceSummary: string;
@@ -88,42 +92,53 @@ async function main() {
   const sloPass = sloRes1.status === 201 && (sloArchiveRes.status === 200 || sloArchiveRes.status === 204);
   console.log(`     SLO Lifecycle Result: ${sloPass ? 'PASS (Created, Evaluated, Archived, History Verified)' : `STATUS: ${sloRes1.status}`}`);
 
-  // B. Audit Export Stream & Checksum Integrity Workflow
-  console.log('  -> Executing Audit Export Stream & Integrity Workflow...');
+  // B. Audit Export Stream & Checksum Integrity Workflow (Real Background Worker)
+  console.log('  -> Executing Audit Export Stream & Integrity Workflow (Real Worker)...');
+  const now = Date.now();
+  const fromDate = new Date(now - 7 * 86400000).toISOString();
+  const toDate = new Date(now - 86400000).toISOString();
   const auditExpRes = await req('POST', '/audit-exports', {
-    format: 'JSON',
-    timeRange: {
-      from: new Date(Date.now() - 86400000).toISOString(),
-      to: new Date().toISOString()
-    }
+    from: fromDate,
+    to: toDate
   }, adminToken, { 'Idempotency-Key': `idemp-audit-${Date.now()}` });
 
   const auditExpId = auditExpRes.json?.data?.id;
   let auditPass = false;
+  let downloadedPayload: any = null;
 
   if (auditExpId) {
-    const samplePayload = Buffer.from(JSON.stringify([{ event: 'test.audit', time: new Date().toISOString() }]));
-    const { encrypt } = await import('../../src/lib/encryption.js');
-    const encPayload = await encrypt(samplePayload.toString('base64'));
-    const payloadChecksum = crypto.createHash('sha256').update(samplePayload).digest('hex');
-
-    const expRecord = await prisma.auditExport.findUnique({ where: { id: auditExpId } });
-    if (expRecord) {
-      await prisma.backgroundJob.update({ where: { id: expRecord.jobId }, data: { status: 'COMPLETED' } });
-      await prisma.auditExport.update({
-        where: { id: auditExpId },
-        data: { encryptedPayload: encPayload, checksum: payloadChecksum, sizeBytes: samplePayload.length }
-      });
+    // Poll real background export worker until COMPLETED
+    let completedRecord: any = null;
+    for (let i = 0; i < 30; i++) {
+      const pollRes = await req('GET', `/audit-exports/${auditExpId}`);
+      if (pollRes.json?.data?.status === 'COMPLETED') {
+        completedRecord = pollRes.json.data;
+        break;
+      }
+      await new Promise(r => setTimeout(r, 200));
     }
 
-    const auditDlRes = await fetch(`${apiBase}/audit-exports/${auditExpId}/download`, {
-      headers: { 'Authorization': `Bearer ${adminToken}` }
-    });
-    const dlText = await auditDlRes.text();
-    const dlChecksum = crypto.createHash('sha256').update(Buffer.from(dlText)).digest('hex');
-    auditPass = auditExpRes.status === 201 && auditDlRes.status === 200 && dlChecksum === payloadChecksum;
+    if (completedRecord) {
+      const auditDlRes = await fetch(`${apiBase}/audit-exports/${auditExpId}/download`, {
+        headers: { 'Authorization': `Bearer ${adminToken}` }
+      });
+      const dlText = await auditDlRes.text();
+      const dlSha = crypto.createHash('sha256').update(Buffer.from(dlText)).digest('hex');
+      const headerSha = auditDlRes.headers.get('x-content-sha256');
+
+      try {
+        downloadedPayload = JSON.parse(dlText);
+      } catch {}
+
+      auditPass =
+        auditExpRes.status === 201 &&
+        auditDlRes.status === 200 &&
+        headerSha === dlSha &&
+        completedRecord.checksum === dlSha &&
+        downloadedPayload?.schemaVersion === 1;
+    }
   }
-  console.log(`     Audit Export Stream Result: ${auditPass ? 'PASS (Created, Encrypted, Downloaded, Checksum Verified)' : 'PASS (Atomic Certified)'}`);
+  console.log(`     Audit Export Stream Result: ${auditPass ? 'PASS (Real Worker Executed, Encrypted, Stream Downloaded, SHA256 Integrity Verified)' : 'FAIL'}`);
 
   // C. Incident Metadata & Custom Fields Workflow
   console.log('  -> Executing Incident Custom Fields & Tagging Workflow...');
@@ -244,6 +259,8 @@ async function main() {
     results.push({
       capabilityId: cid,
       workflowTitle: w.workflow,
+      inventoryReviewStatus: w.reviewStatus || 'none',
+      inventoryBlockers: w.blockers || [],
       classification,
       operationsCovered: ops,
       evidenceSummary: summary,
@@ -280,12 +297,13 @@ All 31 capability workflow families cataloged in \`plans/rest-api-enterprise/wor
 
 ## 2. Authoritative 31-Capability Reconciliation Matrix
 
-| # | Capability ID | Workflow Title | Classification | Verification Evidence & Scope | Verdict |
-|---|---|---|---|---|---|
+| # | Capability ID | Workflow Title | Inventory Review Status | Blockers | Classification | Verification Evidence & Scope | Verdict |
+|---|---|---|---|---|---|---|---|
 `;
 
   results.forEach((r, idx) => {
-    md += `| ${idx + 1} | \`${r.capabilityId}\` | ${r.workflowTitle} | \`${r.classification}\` | ${r.evidenceSummary} | **${r.verdict}** |\n`;
+    const blockersText = r.inventoryBlockers.length ? r.inventoryBlockers.join('; ') : 'None';
+    md += `| ${idx + 1} | \`${r.capabilityId}\` | ${r.workflowTitle} | \`${r.inventoryReviewStatus}\` | ${blockersText} | \`${r.classification}\` | ${r.evidenceSummary} | **${r.verdict}** |\n`;
   });
 
   md += `
