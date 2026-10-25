@@ -589,7 +589,7 @@ async function main() {
   const workers = [];
   for (let index = 0; index < workerReplicas; index++) {
     const name = `${prefix}-worker-${index}`;
-    await start(name, 'ingestion-worker', false);
+    await start(name, 'ingestion-worker', webReplicas === 0 && index === 0);
     const readiness = JSON.parse(
       await invoke([
         'exec',
@@ -611,7 +611,11 @@ async function main() {
     for (const item of supportingRoles) {
       for (let index = 0; index < item.replicas; index++) {
         const name = `${prefix}-${item.role}${index ? `-${index}` : ''}`;
-        await start(name, item.role, false);
+        await start(
+          name,
+          item.role,
+          webReplicas === 0 && workerReplicas === 0 && supportingProcesses.length === 0
+        );
         supportingProcesses.push(name);
       }
     }
