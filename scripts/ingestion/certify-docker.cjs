@@ -347,8 +347,8 @@ async function main() {
   }
   if (workerOnlyStage) {
     assert.ok(
-      !cpuProfiling && !usePgBouncer,
-      'Worker-stage profiles use cgroup CPU and direct database connections'
+      !usePgBouncer,
+      'Worker-stage profiles use direct database connections'
     );
     assert.notEqual(process.env.INGESTION_HTTP_PROVIDER_CHECKS, 'true');
     assert.notEqual(process.env.INGESTION_HTTP_LIFECYCLE_CHECKS, 'true');
