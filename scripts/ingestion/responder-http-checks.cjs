@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-require-imports -- Owned native certification fixture reuses production event and Automation modules. */
 const assert = require('node:assert/strict');
 const { randomUUID } = require('node:crypto');
+const { AutomationMode } = require('@prisma/client');
 const { observeSmtpDelivery } = require('./smtp-capture.cjs');
 
 module.exports = async function prepareResponderChecks(options) {
@@ -234,7 +235,7 @@ module.exports = async function prepareResponderChecks(options) {
       );
       await prisma.serviceAutomationConfig.update({
         where: { serviceId: suppressed.id },
-        data: { mode: 'OFF' },
+        data: { mode: AutomationMode.DISABLED },
       });
     } finally {
       release();
@@ -310,7 +311,7 @@ module.exports = async function prepareResponderChecks(options) {
       },
       suppression: {
         capturedLiveVersionPreserved: true,
-        configChangedToOffWhileQueued: true,
+        configChangedToDisabledWhileQueued: true,
         noResponderIntent: true,
         noNotificationIntent: true,
         noCapturedMail: true,
