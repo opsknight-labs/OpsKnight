@@ -160,7 +160,7 @@ describe('deployment configuration invariants', () => {
       /if \$root\.Values\.migrations\.job\.enabled[\s\S]{0,100}OPSKNIGHT_SKIP_MIGRATIONS/
     );
     expect(integrated).toContain('name: OPSKNIGHT_SKIP_MIGRATIONS');
-    expect(integrated).toContain('value: "true"');
+    expect(integrated).toMatch(/value:\s*['"]true['"]/);
     expect(split.match(/name: OPSKNIGHT_SKIP_MIGRATIONS/g)).toHaveLength(7);
     expect(migration).toContain('kind: Job');
     expect(migration).toContain('name: OPSKNIGHT_MIGRATION_ONLY');
