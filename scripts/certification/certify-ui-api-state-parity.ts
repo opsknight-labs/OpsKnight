@@ -1,5 +1,5 @@
 import dotenv from 'dotenv';
-dotenv.config({ override: true });
+dotenv.config({ path: process.env.DOTENV_CONFIG_PATH || undefined, override: false });
 import fs from 'node:fs';
 import { chromium } from '@playwright/test';
 import { PrismaClient } from '@prisma/client';
@@ -7,14 +7,16 @@ import { PrismaClient } from '@prisma/client';
 function requireEnv(name: string): string {
   const value = process.env[name];
   if (!value || value.trim().length === 0) {
-    throw new Error(`[FATAL] Missing mandatory environment variable: ${name}. Configure it in .env or shell environment.`);
+    throw new Error(
+      `[FATAL] Missing mandatory environment variable: ${name}. Configure it in .env or shell environment.`
+    );
   }
   return value.trim();
 }
 
 const DATABASE_URL = requireEnv('DATABASE_URL');
 const prisma = new PrismaClient({
-  datasources: { db: { url: DATABASE_URL } }
+  datasources: { db: { url: DATABASE_URL } },
 });
 
 async function main() {
@@ -61,17 +63,17 @@ async function main() {
   const createRes = await fetch(`${apiBase}/incidents`, {
     method: 'POST',
     headers: {
-      'Authorization': `Bearer ${adminToken}`,
+      Authorization: `Bearer ${adminToken}`,
       'Content-Type': 'application/json',
-      'Idempotency-Key': `parity-create-${Date.now()}`
+      'Idempotency-Key': `parity-create-${Date.now()}`,
     },
     body: JSON.stringify({
       title: uniqueTitle,
       description: 'Verifying automated UI vs API state parity',
       serviceId: fixtures.services.serviceAId,
       urgency: 'HIGH',
-      priority: 'P1'
-    })
+      priority: 'P1',
+    }),
   });
 
   const createJson = await createRes.json();
@@ -82,7 +84,7 @@ async function main() {
   console.log('Acknowledging incident via API: POST /incidents/{id}/acknowledge...');
   const ackRes = await fetch(`${apiBase}/incidents/${incidentId}/acknowledge`, {
     method: 'POST',
-    headers: { 'Authorization': `Bearer ${adminToken}` }
+    headers: { Authorization: `Bearer ${adminToken}` },
   });
   const ackJson = await ackRes.json();
   console.log(`API Acknowledged status: ${ackJson.data.status}`);
@@ -95,7 +97,9 @@ async function main() {
   // Search or locate the incident in the DOM
   const pageContent = await page.textContent('body');
   const titleFoundInUI = pageContent?.includes(uniqueTitle);
-  console.log(`UI Incidents list contains title "${uniqueTitle}": ${titleFoundInUI ? 'YES' : 'NO'}`);
+  console.log(
+    `UI Incidents list contains title "${uniqueTitle}": ${titleFoundInUI ? 'YES' : 'NO'}`
+  );
   if (!titleFoundInUI) {
     throw new Error(`Incident title "${uniqueTitle}" created via API was not rendered in UI DOM!`);
   }
@@ -110,7 +114,9 @@ async function main() {
   const priorityInDom = detailDomText?.includes('P1');
 
   console.log(`UI Detail Page DOM Assertions:`);
-  console.log(`  Rendered status matches API ('ACKNOWLEDGED'): ${acknowledgedInDom ? 'PASSED' : 'FAILED'}`);
+  console.log(
+    `  Rendered status matches API ('ACKNOWLEDGED'): ${acknowledgedInDom ? 'PASSED' : 'FAILED'}`
+  );
   console.log(`  Rendered priority matches API ('P1'): ${priorityInDom ? 'PASSED' : 'FAILED'}`);
 
   if (!acknowledgedInDom) {
@@ -123,7 +129,9 @@ async function main() {
   // -------------------------------------------------------------------------
   console.log('--- WORKFLOW 2: UI Mutation -> REST API v2 & Database Parity ---');
   console.log('Triggering "Resolve Incident" action directly through Browser UI DOM...');
-  const resolveBtn = page.locator('button:has-text("Resolve Incident"), button:has-text("Resolve")').first();
+  const resolveBtn = page
+    .locator('button:has-text("Resolve Incident"), button:has-text("Resolve")')
+    .first();
   await resolveBtn.waitFor({ state: 'visible', timeout: 5000 });
   await resolveBtn.click();
   await page.waitForTimeout(500);
@@ -132,7 +140,9 @@ async function main() {
   const modalTextarea = page.locator('#resolution-note, textarea[name="resolution"]').first();
   if (await modalTextarea.isVisible({ timeout: 3000 }).catch(() => false)) {
     await modalTextarea.click();
-    await modalTextarea.fill('Resolved directly through automated browser UI verification with root cause remediation.');
+    await modalTextarea.fill(
+      'Resolved directly through automated browser UI verification with root cause remediation.'
+    );
     await page.waitForTimeout(300);
     const confirmBtn = page.locator('div[role="dialog"] button[type="submit"]').first();
     await confirmBtn.waitFor({ state: 'visible', timeout: 5000 });
@@ -150,7 +160,7 @@ async function main() {
   // Verify business state in REST API v2
   console.log('Querying REST API v2 for incident state...');
   const verifyApiRes = await fetch(`${apiBase}/incidents/${incidentId}`, {
-    headers: { 'Authorization': `Bearer ${adminToken}` }
+    headers: { Authorization: `Bearer ${adminToken}` },
   });
   const verifyApiJson = await verifyApiRes.json();
   const apiStatus = verifyApiJson?.data?.status;
@@ -160,15 +170,21 @@ async function main() {
   }
 
   // Verify database row state in PostgreSQL
-  console.log('Querying PostgreSQL database directly for business state and resolvedAt timestamp...');
+  console.log(
+    'Querying PostgreSQL database directly for business state and resolvedAt timestamp...'
+  );
   const dbIncident = await prisma.incident.findUnique({
-    where: { id: incidentId }
+    where: { id: incidentId },
   });
-  console.log(`Database row status: ${dbIncident?.status}, resolvedAt: ${dbIncident?.resolvedAt?.toISOString()}`);
+  console.log(
+    `Database row status: ${dbIncident?.status}, resolvedAt: ${dbIncident?.resolvedAt?.toISOString()}`
+  );
   if (dbIncident?.status !== 'RESOLVED' || !dbIncident?.resolvedAt) {
     throw new Error(`PostgreSQL database row was not updated to RESOLVED with valid resolvedAt!`);
   }
-  console.log('Workflow 2 Parity: PASSED (Exact UI -> API -> Database bidirectional transition verified).\n');
+  console.log(
+    'Workflow 2 Parity: PASSED (Exact UI -> API -> Database bidirectional transition verified).\n'
+  );
 
   // -------------------------------------------------------------------------
   // WORKFLOW 3: REST API Team Creation -> UI Navigation & Presentation Parity
@@ -178,10 +194,10 @@ async function main() {
   const teamRes = await fetch(`${apiBase}/teams`, {
     method: 'POST',
     headers: {
-      'Authorization': `Bearer ${adminToken}`,
-      'Content-Type': 'application/json'
+      Authorization: `Bearer ${adminToken}`,
+      'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ name: teamName, description: 'Created for UI parity check' })
+    body: JSON.stringify({ name: teamName, description: 'Created for UI parity check' }),
   });
   const teamJson = await teamRes.json();
   const createdTeamId = teamJson.data.id;
@@ -207,7 +223,7 @@ async function main() {
   console.log('--- WORKFLOW 4: Database & Timeline Parity Audit ---');
   // Query timeline from API
   const timelineRes = await fetch(`${apiBase}/incidents/${incidentId}/timeline`, {
-    headers: { 'Authorization': `Bearer ${adminToken}` }
+    headers: { Authorization: `Bearer ${adminToken}` },
   });
   const timelineJson = await timelineRes.json();
   const events = timelineJson.data;
@@ -215,12 +231,14 @@ async function main() {
 
   // Query database directly
   const dbEvents = await prisma.incidentEvent.findMany({
-    where: { incidentId }
+    where: { incidentId },
   });
   console.log(`Timeline events found in PostgreSQL: ${dbEvents.length}`);
 
   if (events.length === 0 || dbEvents.length === 0 || events.length !== dbEvents.length) {
-    throw new Error(`Timeline count mismatch! API returned ${events.length} events, PostgreSQL has ${dbEvents.length}`);
+    throw new Error(
+      `Timeline count mismatch! API returned ${events.length} events, PostgreSQL has ${dbEvents.length}`
+    );
   }
   const dbEventIds = new Set(dbEvents.map(e => e.id));
   for (const ev of events) {

@@ -10,12 +10,14 @@ interface ViewportConfig {
 }
 
 import dotenv from 'dotenv';
-dotenv.config({ override: true });
+dotenv.config({ path: process.env.DOTENV_CONFIG_PATH || undefined, override: false });
 
 function requireEnv(name: string): string {
   const value = process.env[name];
   if (!value || value.trim().length === 0) {
-    throw new Error(`[FATAL] Missing mandatory environment variable: ${name}. Configure it in .env or shell environment.`);
+    throw new Error(
+      `[FATAL] Missing mandatory environment variable: ${name}. Configure it in .env or shell environment.`
+    );
   }
   return value.trim();
 }
@@ -47,7 +49,8 @@ async function main() {
     executablePath: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
   });
 
-  const screenshotsTaken: { name: string; file: string; viewport: string; description: string }[] = [];
+  const screenshotsTaken: { name: string; file: string; viewport: string; description: string }[] =
+    [];
   const testResults: { test: string; status: 'PASS' | 'FAIL'; details?: string }[] = [];
 
   function recordScreenshot(viewportName: string, id: string, desc: string, filename: string) {
@@ -61,7 +64,9 @@ async function main() {
 
   try {
     for (const vp of VIEWPORTS) {
-      console.log(`\n--- Certifying Viewport: ${vp.name.toUpperCase()} (${vp.width}x${vp.height}) ---`);
+      console.log(
+        `\n--- Certifying Viewport: ${vp.name.toUpperCase()} (${vp.width}x${vp.height}) ---`
+      );
 
       const context = await browser.newContext({
         viewport: { width: vp.width, height: vp.height },
@@ -81,14 +86,21 @@ async function main() {
       await page.goto(`${origin}/login`, { waitUntil: 'networkidle' });
       const loginFile = `login_${vp.name}.png`;
       await page.screenshot({ path: path.join(evidenceDir, loginFile), fullPage: true });
-      recordScreenshot(vp.name, 'Login Screen', 'Authentication landing page with email/password fields', loginFile);
+      recordScreenshot(
+        vp.name,
+        'Login Screen',
+        'Authentication landing page with email/password fields',
+        loginFile
+      );
 
       // Perform Login
       await page.fill('input[type="email"], input[name="email"]', adminEmail);
       await page.fill('input[type="password"], input[name="password"]', adminPassword);
       await page.click('button[type="submit"]');
       await page.waitForURL(url => !url.pathname.startsWith('/login'), { timeout: 15000 });
-      console.log(`  [${vp.name}] Logged in successfully. Current path: ${new URL(page.url()).pathname}`);
+      console.log(
+        `  [${vp.name}] Logged in successfully. Current path: ${new URL(page.url()).pathname}`
+      );
 
       // 2. Primary Dashboard
       console.log(`  [${vp.name}] Capturing Dashboard...`);
@@ -103,7 +115,12 @@ async function main() {
       await page.waitForTimeout(1500);
       const incListFile = `incidents_list_${vp.name}.png`;
       await page.screenshot({ path: path.join(evidenceDir, incListFile), fullPage: true });
-      recordScreenshot(vp.name, 'Incidents List', 'Active incident list with urgency and severity indicators', incListFile);
+      recordScreenshot(
+        vp.name,
+        'Incidents List',
+        'Active incident list with urgency and severity indicators',
+        incListFile
+      );
 
       // 4. Incident Detail & Lifecycle
       const incId = fixtures.incidents.openId;
@@ -112,7 +129,12 @@ async function main() {
       await page.waitForTimeout(2000);
       const incDetailFile = `incident_detail_${vp.name}.png`;
       await page.screenshot({ path: path.join(evidenceDir, incDetailFile), fullPage: true });
-      recordScreenshot(vp.name, 'Incident Detail', 'Incident detail page showing timeline, alerts, and response controls', incDetailFile);
+      recordScreenshot(
+        vp.name,
+        'Incident Detail',
+        'Incident detail page showing timeline, alerts, and response controls',
+        incDetailFile
+      );
 
       // 5. Services List
       console.log(`  [${vp.name}] Capturing Services List...`);
@@ -120,7 +142,12 @@ async function main() {
       await page.waitForTimeout(1500);
       const svcListFile = `services_list_${vp.name}.png`;
       await page.screenshot({ path: path.join(evidenceDir, svcListFile), fullPage: true });
-      recordScreenshot(vp.name, 'Services List', 'Service directory with tier, health status, and ownership', svcListFile);
+      recordScreenshot(
+        vp.name,
+        'Services List',
+        'Service directory with tier, health status, and ownership',
+        svcListFile
+      );
 
       // 6. Schedules & Rotations
       console.log(`  [${vp.name}] Capturing Schedules...`);
@@ -128,7 +155,12 @@ async function main() {
       await page.waitForTimeout(1500);
       const schedFile = `schedules_${vp.name}.png`;
       await page.screenshot({ path: path.join(evidenceDir, schedFile), fullPage: true });
-      recordScreenshot(vp.name, 'On-Call Schedules', 'Rotation schedules, layers, and active on-call coverage calendar', schedFile);
+      recordScreenshot(
+        vp.name,
+        'On-Call Schedules',
+        'Rotation schedules, layers, and active on-call coverage calendar',
+        schedFile
+      );
 
       // 7. Escalation Policies
       console.log(`  [${vp.name}] Capturing Escalation Policies...`);
@@ -136,7 +168,12 @@ async function main() {
       await page.waitForTimeout(1500);
       const epFile = `escalation_policies_${vp.name}.png`;
       await page.screenshot({ path: path.join(evidenceDir, epFile), fullPage: true });
-      recordScreenshot(vp.name, 'Escalation Policies', 'Multi-tier escalation policy rules and notification targets', epFile);
+      recordScreenshot(
+        vp.name,
+        'Escalation Policies',
+        'Multi-tier escalation policy rules and notification targets',
+        epFile
+      );
 
       // 8. Teams Directory
       console.log(`  [${vp.name}] Capturing Teams Directory...`);
@@ -144,7 +181,12 @@ async function main() {
       await page.waitForTimeout(1500);
       const teamsFile = `teams_${vp.name}.png`;
       await page.screenshot({ path: path.join(evidenceDir, teamsFile), fullPage: true });
-      recordScreenshot(vp.name, 'Teams Directory', 'Operational teams, leads, and member rosters', teamsFile);
+      recordScreenshot(
+        vp.name,
+        'Teams Directory',
+        'Operational teams, leads, and member rosters',
+        teamsFile
+      );
 
       // 9. Runbooks Directory
       console.log(`  [${vp.name}] Capturing Runbooks Directory...`);
@@ -152,7 +194,12 @@ async function main() {
       await page.waitForTimeout(1500);
       const rbFile = `runbooks_${vp.name}.png`;
       await page.screenshot({ path: path.join(evidenceDir, rbFile), fullPage: true });
-      recordScreenshot(vp.name, 'Runbooks Directory', 'Automated and manual remediation runbook catalog', rbFile);
+      recordScreenshot(
+        vp.name,
+        'Runbooks Directory',
+        'Automated and manual remediation runbook catalog',
+        rbFile
+      );
 
       // 10. Status Pages
       console.log(`  [${vp.name}] Capturing Status Pages...`);
@@ -160,19 +207,31 @@ async function main() {
       await page.waitForTimeout(1500);
       const spFile = `status_pages_${vp.name}.png`;
       await page.screenshot({ path: path.join(evidenceDir, spFile), fullPage: true });
-      recordScreenshot(vp.name, 'Status Pages', 'Public and private customer communication status platforms', spFile);
+      recordScreenshot(
+        vp.name,
+        'Status Pages',
+        'Public and private customer communication status platforms',
+        spFile
+      );
 
       // 11. Modal Interaction & Keyboard Escape Dismissal (Desktop only to prevent redundant tests)
       if (vp.name === 'desktop') {
         console.log(`  [${vp.name}] Testing Modal opening and Escape key dismissal...`);
         await page.goto(`${origin}/incidents`, { waitUntil: 'networkidle' });
-        const createBtn = page.getByRole('button', { name: /Declare incident|Create incident|New incident/i }).first();
+        const createBtn = page
+          .getByRole('button', { name: /Declare incident|Create incident|New incident/i })
+          .first();
         if (await createBtn.isVisible()) {
           await createBtn.click();
           await page.waitForTimeout(800);
           const modalOpenFile = `modal_open_${vp.name}.png`;
           await page.screenshot({ path: path.join(evidenceDir, modalOpenFile) });
-          recordScreenshot(vp.name, 'Incident Declaration Modal', 'Open declaration modal with form fields', modalOpenFile);
+          recordScreenshot(
+            vp.name,
+            'Incident Declaration Modal',
+            'Open declaration modal with form fields',
+            modalOpenFile
+          );
 
           // Test keyboard Escape key dismissal
           console.log(`  [${vp.name}] Pressing Escape key to dismiss modal...`);
@@ -180,7 +239,12 @@ async function main() {
           await page.waitForTimeout(800);
           const modalDismissedFile = `modal_dismissed_${vp.name}.png`;
           await page.screenshot({ path: path.join(evidenceDir, modalDismissedFile) });
-          recordScreenshot(vp.name, 'Modal Escape Dismissal', 'Modal dismissed cleanly on keyboard Escape key', modalDismissedFile);
+          recordScreenshot(
+            vp.name,
+            'Modal Escape Dismissal',
+            'Modal dismissed cleanly on keyboard Escape key',
+            modalDismissedFile
+          );
           testResults.push({ test: 'Modal Escape Key Dismissal', status: 'PASS' });
         } else {
           console.log('  Create incident button not immediately found; trying teams modal...');
@@ -198,7 +262,9 @@ async function main() {
         // 12. Client/Server Negative Validation Test
         console.log(`  [${vp.name}] Testing Client/Server Form Validation (Negative Path)...`);
         await page.goto(`${origin}/incidents`, { waitUntil: 'networkidle' });
-        const openModalBtn = page.getByRole('button', { name: /Declare incident|Create incident|New incident/i }).first();
+        const openModalBtn = page
+          .getByRole('button', { name: /Declare incident|Create incident|New incident/i })
+          .first();
         if (await openModalBtn.isVisible()) {
           await openModalBtn.click();
           await page.waitForTimeout(500);
@@ -209,7 +275,12 @@ async function main() {
             await page.waitForTimeout(800);
             const valFile = `validation_error_${vp.name}.png`;
             await page.screenshot({ path: path.join(evidenceDir, valFile) });
-            recordScreenshot(vp.name, 'Form Validation Error', 'Required field validation highlights and error messages', valFile);
+            recordScreenshot(
+              vp.name,
+              'Form Validation Error',
+              'Required field validation highlights and error messages',
+              valFile
+            );
             testResults.push({ test: 'Client/Server Validation Negative Path', status: 'PASS' });
           }
         }
@@ -256,7 +327,9 @@ async function main() {
       md += `| **${sc.name}** | \`${sc.viewport}\` | [${sc.file}](./EVIDENCE/${sc.file}) | ${sc.description} |\n`;
     }
 
-    const reportFile = path.resolve(`reports/api-v2-certification/${commitSha}/UI-VERIFICATION-REPORT.md`);
+    const reportFile = path.resolve(
+      `reports/api-v2-certification/${commitSha}/UI-VERIFICATION-REPORT.md`
+    );
     fs.writeFileSync(reportFile, md, 'utf8');
     console.log(`Wrote UI Verification Report to ${reportFile}`);
   } finally {

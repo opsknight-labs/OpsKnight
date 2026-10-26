@@ -145,7 +145,11 @@ const DropdownMenuLabel = React.forwardRef<
 >(({ className, inset, ...props }, ref) => (
   <DropdownMenuPrimitive.Label
     ref={ref}
-    className={cn('px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground', inset && 'pl-8', className)}
+    className={cn(
+      'px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground',
+      inset && 'pl-8',
+      className
+    )}
     {...props}
   />
 ));
@@ -165,7 +169,13 @@ DropdownMenuSeparator.displayName = DropdownMenuPrimitive.Separator.displayName;
 
 const DropdownMenuShortcut = ({ className, ...props }: React.HTMLAttributes<HTMLSpanElement>) => {
   return (
-    <span className={cn('ml-auto rounded border border-border/60 bg-muted/60 px-1.5 py-0.5 font-mono text-[9px] tracking-normal text-muted-foreground', className)} {...props} />
+    <span
+      className={cn(
+        'ml-auto rounded border border-border/60 bg-muted/60 px-1.5 py-0.5 font-mono text-[9px] tracking-normal text-muted-foreground',
+        className
+      )}
+      {...props}
+    />
   );
 };
 DropdownMenuShortcut.displayName = 'DropdownMenuShortcut';

@@ -1,5 +1,5 @@
 import dotenv from 'dotenv';
-dotenv.config({ override: true });
+dotenv.config({ path: process.env.DOTENV_CONFIG_PATH || undefined, override: false });
 import { PrismaClient } from '@prisma/client';
 import { createHmac, randomBytes } from 'node:crypto';
 import fs from 'node:fs';
@@ -9,7 +9,9 @@ import { API_SCOPES } from '../../src/lib/authorization';
 function requireEnv(name: string): string {
   const value = process.env[name];
   if (!value || value.trim().length === 0) {
-    throw new Error(`[FATAL] Missing mandatory environment variable: ${name}. Configure it in .env or shell environment.`);
+    throw new Error(
+      `[FATAL] Missing mandatory environment variable: ${name}. Configure it in .env or shell environment.`
+    );
   }
   return value.trim();
 }
@@ -18,18 +20,17 @@ const DATABASE_URL = requireEnv('DATABASE_URL');
 const API_KEY_SECRET = requireEnv('API_KEY_SECRET');
 
 const prisma = new PrismaClient({
-  datasources: { db: { url: DATABASE_URL } }
+  datasources: { db: { url: DATABASE_URL } },
 });
 
 function hashToken(token: string): string {
-  return createHmac('sha256', API_KEY_SECRET)
-    .update(`opsknight:api-key:v2:${token}`)
-    .digest('hex');
+  return createHmac('sha256', API_KEY_SECRET).update(`opsknight:api-key:v2:${token}`).digest('hex');
 }
 
 async function main() {
-  const admin = await prisma.user.findFirst({ where: { email: 'cert-admin@opsknight.local' } }) ||
-    await prisma.user.findFirst({ where: { role: 'ADMIN', status: 'ACTIVE' } });
+  const admin =
+    (await prisma.user.findFirst({ where: { email: 'cert-admin@opsknight.local' } })) ||
+    (await prisma.user.findFirst({ where: { role: 'ADMIN', status: 'ACTIVE' } }));
   if (!admin) throw new Error('Admin user not found');
 
   const allScopes = Object.values(API_SCOPES);
@@ -47,8 +48,8 @@ async function main() {
         prefix,
         tokenHash,
         scopes: allScopes,
-        userId: admin.id
-      }
+        userId: admin.id,
+      },
     });
     pool.push(token);
   }
@@ -58,4 +59,6 @@ async function main() {
   console.log(`Successfully minted and saved ${pool.length} tokens to ${outPath}`);
 }
 
-main().catch(console.error).finally(() => prisma.$disconnect());
+main()
+  .catch(console.error)
+  .finally(() => prisma.$disconnect());

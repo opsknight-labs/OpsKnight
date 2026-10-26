@@ -1,5 +1,5 @@
 import dotenv from 'dotenv';
-dotenv.config({ override: true });
+dotenv.config({ path: process.env.DOTENV_CONFIG_PATH || undefined, override: false });
 import fs from 'node:fs';
 import { execSync } from 'node:child_process';
 import { PrismaClient } from '@prisma/client';
@@ -9,7 +9,9 @@ import { API_SCOPES } from '../../src/lib/authorization';
 function requireEnv(name: string): string {
   const value = process.env[name];
   if (!value || value.trim().length === 0) {
-    throw new Error(`[FATAL] Missing mandatory environment variable: ${name}. Configure it in .env or shell environment.`);
+    throw new Error(
+      `[FATAL] Missing mandatory environment variable: ${name}. Configure it in .env or shell environment.`
+    );
   }
   return value.trim();
 }
@@ -18,13 +20,11 @@ const DATABASE_URL = requireEnv('DATABASE_URL');
 const API_KEY_SECRET = requireEnv('API_KEY_SECRET');
 
 const prisma = new PrismaClient({
-  datasources: { db: { url: DATABASE_URL } }
+  datasources: { db: { url: DATABASE_URL } },
 });
 
 function hashToken(token: string): string {
-  return createHmac('sha256', API_KEY_SECRET)
-    .update(`opsknight:api-key:v2:${token}`)
-    .digest('hex');
+  return createHmac('sha256', API_KEY_SECRET).update(`opsknight:api-key:v2:${token}`).digest('hex');
 }
 
 async function mintDedicatedKey(name: string) {
@@ -40,8 +40,8 @@ async function mintDedicatedKey(name: string) {
       tokenHash,
       prefix,
       userId: admin!.id,
-      scopes: Object.values(API_SCOPES)
-    }
+      scopes: Object.values(API_SCOPES),
+    },
   });
 
   return { token, apiKey };
@@ -60,7 +60,10 @@ async function main() {
   // -------------------------------------------------------------------------
   console.log('--- TEST 1: Two-Replica Topology Active Health Verification ---');
   // Ensure 2 replicas running
-  execSync('docker compose --project-name opsknight-cert-v2 --env-file tests/certification/.env -f tests/certification/docker-compose.release-cert.yml up -d --scale web=2', { stdio: 'inherit' });
+  execSync(
+    'docker compose --project-name opsknight-cert-v2 --env-file tests/certification/.env -f tests/certification/docker-compose.release-cert.yml up -d --scale web=2',
+    { stdio: 'inherit' }
+  );
   execSync('docker exec opsknight-cert-v2-proxy-1 nginx -s reload');
   await new Promise(r => setTimeout(r, 2000));
 
@@ -72,16 +75,23 @@ async function main() {
   const servedBy = new Map<string, number>();
   for (let i = 0; i < 20; i++) {
     const res = await fetch(`${proxyBase}/teams`, {
-      headers: { 'Authorization': `Bearer ${fixtures.tokens.admin}` }
+      headers: { Authorization: `Bearer ${fixtures.tokens.admin}` },
     });
     const backend = res.headers.get('x-served-by') || 'unknown';
     servedBy.set(backend, (servedBy.get(backend) || 0) + 1);
   }
-  console.log('Two-Replica Traffic Distribution (X-Served-By):', Object.fromEntries(servedBy.entries()));
+  console.log(
+    'Two-Replica Traffic Distribution (X-Served-By):',
+    Object.fromEntries(servedBy.entries())
+  );
   if (servedBy.size < 2) {
-    throw new Error(`Traffic reached only ${servedBy.size} backend(s). Expected at least 2 distinct replicas.`);
+    throw new Error(
+      `Traffic reached only ${servedBy.size} backend(s). Expected at least 2 distinct replicas.`
+    );
   }
-  console.log('Multi-Replica Distribution Verified: Traffic successfully load-balanced across distinct pods.');
+  console.log(
+    'Multi-Replica Distribution Verified: Traffic successfully load-balanced across distinct pods.'
+  );
 
   // -------------------------------------------------------------------------
   // TEST 2: Cross-Replica Immediate Token Revocation
@@ -93,7 +103,7 @@ async function main() {
   // Warm across replicas with 10 requests
   for (let i = 0; i < 10; i++) {
     const res = await fetch(`${proxyBase}/incidents`, {
-      headers: { 'Authorization': `Bearer ${testKey.token}` }
+      headers: { Authorization: `Bearer ${testKey.token}` },
     });
     if (res.status !== 200) throw new Error(`Initial token warm failed: ${res.status}`);
   }
@@ -103,7 +113,7 @@ async function main() {
   console.log('Revoking token directly in shared database...');
   await prisma.apiKey.update({
     where: { id: testKey.apiKey.id },
-    data: { revokedAt: new Date() }
+    data: { revokedAt: new Date() },
   });
 
   // Immediately make 20 requests across replicas through reverse proxy
@@ -111,18 +121,24 @@ async function main() {
   const postRevocationResults = await Promise.all(
     Array.from({ length: 20 }).map(async () => {
       const res = await fetch(`${proxyBase}/incidents`, {
-        headers: { 'Authorization': `Bearer ${testKey.token}` }
+        headers: { Authorization: `Bearer ${testKey.token}` },
       });
       return res.status;
     })
   );
 
   const revoked401 = postRevocationResults.filter(s => s === 401).length;
-  console.log(`Post-revocation responses: 401=${revoked401} / 20 (${((revoked401/20)*100).toFixed(1)}%)`);
+  console.log(
+    `Post-revocation responses: 401=${revoked401} / 20 (${((revoked401 / 20) * 100).toFixed(1)}%)`
+  );
   if (revoked401 !== 20) {
-    throw new Error(`Stale token allowed after revocation! Received non-401s: ${postRevocationResults.filter(s => s !== 401)}`);
+    throw new Error(
+      `Stale token allowed after revocation! Received non-401s: ${postRevocationResults.filter(s => s !== 401)}`
+    );
   }
-  console.log('Immediate Cross-Replica Revocation: PASSED (Zero stale cache window across all nodes).');
+  console.log(
+    'Immediate Cross-Replica Revocation: PASSED (Zero stale cache window across all nodes).'
+  );
 
   // -------------------------------------------------------------------------
   // TEST 3: Cross-Replica Idempotency Key Consistency
@@ -134,18 +150,18 @@ async function main() {
     description: 'Testing distributed idempotency storage across replicas',
     serviceId: fixtures.services.serviceAId,
     urgency: 'HIGH',
-    priority: 'P2'
+    priority: 'P2',
   };
 
   // First POST creates the resource
   const firstPost = await fetch(`${proxyBase}/incidents`, {
     method: 'POST',
     headers: {
-      'Authorization': `Bearer ${fixtures.tokens.admin}`,
+      Authorization: `Bearer ${fixtures.tokens.admin}`,
       'Content-Type': 'application/json',
-      'Idempotency-Key': idempotencyKey
+      'Idempotency-Key': idempotencyKey,
     },
-    body: JSON.stringify(incidentPayload)
+    body: JSON.stringify(incidentPayload),
   });
   const firstJson = await firstPost.json();
   const createdIncidentId = firstJson.data.id;
@@ -158,11 +174,11 @@ async function main() {
       const res = await fetch(`${proxyBase}/incidents`, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${fixtures.tokens.admin}`,
+          Authorization: `Bearer ${fixtures.tokens.admin}`,
           'Content-Type': 'application/json',
-          'Idempotency-Key': idempotencyKey
+          'Idempotency-Key': idempotencyKey,
         },
-        body: JSON.stringify(incidentPayload)
+        body: JSON.stringify(incidentPayload),
       });
       const json = await res.json();
       return { status: res.status, id: json?.data?.id };
@@ -177,7 +193,7 @@ async function main() {
 
   // Verify in PostgreSQL that exactly ONE incident was created
   const incidentCount = await prisma.incident.count({
-    where: { title: incidentPayload.title }
+    where: { title: incidentPayload.title },
   });
   console.log(`PostgreSQL record count for title: ${incidentCount} (Expected: exactly 1)`);
   if (incidentCount !== 1) {
@@ -193,17 +209,17 @@ async function main() {
   const teamRes = await fetch(`${proxyBase}/teams`, {
     method: 'POST',
     headers: {
-      'Authorization': `Bearer ${fixtures.tokens.admin}`,
-      'Content-Type': 'application/json'
+      Authorization: `Bearer ${fixtures.tokens.admin}`,
+      'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ name: `Concurrent Team ${Date.now()}` })
+    body: JSON.stringify({ name: `Concurrent Team ${Date.now()}` }),
   });
   const teamJson = await teamRes.json();
   const testTeamId = teamJson.data.id;
-  
+
   // Fetch initial ETag from detail GET endpoint
   const getTeamRes = await fetch(`${proxyBase}/teams/${testTeamId}`, {
-    headers: { 'Authorization': `Bearer ${fixtures.tokens.admin}` }
+    headers: { Authorization: `Bearer ${fixtures.tokens.admin}` },
   });
   const initialEtag = getTeamRes.headers.get('etag');
   console.log(`Created test team ${testTeamId} with ETag: ${initialEtag}`);
@@ -213,58 +229,74 @@ async function main() {
   const racePatch1 = fetch(`${proxyBase}/teams/${testTeamId}`, {
     method: 'PATCH',
     headers: {
-      'Authorization': `Bearer ${fixtures.tokens.admin}`,
+      Authorization: `Bearer ${fixtures.tokens.admin}`,
       'Content-Type': 'application/json',
-      'If-Match': initialEtag!
+      'If-Match': initialEtag!,
     },
-    body: JSON.stringify({ description: 'Update from Client A' })
+    body: JSON.stringify({ description: 'Update from Client A' }),
   });
 
   const racePatch2 = fetch(`${proxyBase}/teams/${testTeamId}`, {
     method: 'PATCH',
     headers: {
-      'Authorization': `Bearer ${fixtures.tokens.admin}`,
+      Authorization: `Bearer ${fixtures.tokens.admin}`,
       'Content-Type': 'application/json',
-      'If-Match': initialEtag!
+      'If-Match': initialEtag!,
     },
-    body: JSON.stringify({ description: 'Update from Client B' })
+    body: JSON.stringify({ description: 'Update from Client B' }),
   });
 
   const [resA, resB] = await Promise.all([racePatch1, racePatch2]);
   const statuses = [resA.status, resB.status].sort();
   console.log(`Racing update outcomes: ${resA.status} and ${resB.status}`);
   if (statuses[0] !== 200 || statuses[1] !== 412) {
-    throw new Error(`ETag race assertion failed: expected [200, 412], received [${statuses.join(', ')}]`);
+    throw new Error(
+      `ETag race assertion failed: expected [200, 412], received [${statuses.join(', ')}]`
+    );
   }
-  console.log('ETag Precondition Protection: PASSED (Strictly exactly 1 write succeeded with 200, exactly 1 rejected with 412 Precondition Failed).');
+  console.log(
+    'ETag Precondition Protection: PASSED (Strictly exactly 1 write succeeded with 200, exactly 1 rejected with 412 Precondition Failed).'
+  );
 
   // -------------------------------------------------------------------------
   // TEST 5: Four-Replica Topology Scaling & Chaos Termination Failover
   // -------------------------------------------------------------------------
   console.log('\n--- TEST 5: Four-Replica Scaling & Node Termination Mid-Flight ---');
   console.log('Scaling web tier to 4 production replicas...');
-  execSync('docker compose --project-name opsknight-cert-v2 --env-file tests/certification/.env -f tests/certification/docker-compose.release-cert.yml up -d --scale web=4', { stdio: 'inherit' });
+  execSync(
+    'docker compose --project-name opsknight-cert-v2 --env-file tests/certification/.env -f tests/certification/docker-compose.release-cert.yml up -d --scale web=4',
+    { stdio: 'inherit' }
+  );
   execSync('docker exec opsknight-cert-v2-proxy-1 nginx -s reload');
   await new Promise(r => setTimeout(r, 4000));
 
   // Verify all 4 containers healthy
-  const psOutput = execSync('docker ps --filter "name=opsknight-cert-v2-web" --format "{{.Names}}: {{.Status}}"').toString();
+  const psOutput = execSync(
+    'docker ps --filter "name=opsknight-cert-v2-web" --format "{{.Names}}: {{.Status}}"'
+  ).toString();
   console.log('Active web containers:\n' + psOutput.trim());
 
   console.log('Verifying traffic distribution across all 4 distinct backends...');
   const servedBy4 = new Map<string, number>();
   for (let i = 0; i < 40; i++) {
     const res = await fetch(`${proxyBase}/teams`, {
-      headers: { 'Authorization': `Bearer ${fixtures.tokens.admin}` }
+      headers: { Authorization: `Bearer ${fixtures.tokens.admin}` },
     });
     const backend = res.headers.get('x-served-by') || 'unknown';
     servedBy4.set(backend, (servedBy4.get(backend) || 0) + 1);
   }
-  console.log('Four-Replica Traffic Distribution (X-Served-By):', Object.fromEntries(servedBy4.entries()));
+  console.log(
+    'Four-Replica Traffic Distribution (X-Served-By):',
+    Object.fromEntries(servedBy4.entries())
+  );
   if (servedBy4.size < 4) {
-    throw new Error(`Traffic reached only ${servedBy4.size} backend(s) in 4-replica topology. Expected all 4 distinct replicas.`);
+    throw new Error(
+      `Traffic reached only ${servedBy4.size} backend(s) in 4-replica topology. Expected all 4 distinct replicas.`
+    );
   }
-  console.log('Four-Replica Distribution Verified: Traffic successfully reached all 4 distinct replicas.');
+  console.log(
+    'Four-Replica Distribution Verified: Traffic successfully reached all 4 distinct replicas.'
+  );
 
   // Launch sustained 40-request burst across all 4 replicas while killing container #4
   console.log('Dispatching 40 in-flight requests while terminating replica web-4...');
@@ -280,7 +312,7 @@ async function main() {
       }
       try {
         const res = await fetch(`${proxyBase}/incidents`, {
-          headers: { 'Authorization': `Bearer ${fixtures.tokens.admin}` }
+          headers: { Authorization: `Bearer ${fixtures.tokens.admin}` },
         });
         return res.status;
       } catch (err: any) {
@@ -293,20 +325,32 @@ async function main() {
   const chaos200 = chaosStatuses.filter(s => s === 200).length;
   const chaosErrors = chaosStatuses.filter(s => s !== 200).length;
   console.log(`Chaos in-flight failover results:`);
-  console.log(`  Successful requests (HTTP 200): ${chaos200} / 40 (${((chaos200/40)*100).toFixed(1)}%)`);
+  console.log(
+    `  Successful requests (HTTP 200): ${chaos200} / 40 (${((chaos200 / 40) * 100).toFixed(1)}%)`
+  );
   console.log(`  Failed requests (5xx / network errors): ${chaosErrors} / 40`);
   if (chaos200 !== 40) {
-    throw new Error(`Failover dropped requests during replica termination! Non-200s: ${chaosStatuses.filter(s => s !== 200)}`);
+    throw new Error(
+      `Failover dropped requests during replica termination! Non-200s: ${chaosStatuses.filter(s => s !== 200)}`
+    );
   }
-  console.log('Node Termination & Reverse Proxy Failover: PASSED (100% Zero-Loss High Availability).');
+  console.log(
+    'Node Termination & Reverse Proxy Failover: PASSED (100% Zero-Loss High Availability).'
+  );
 
   // Recover replica web-4
   console.log('Recovering replica web-4 and restoring 4-replica topology...');
-  execSync('docker compose --project-name opsknight-cert-v2 --env-file tests/certification/.env -f tests/certification/docker-compose.release-cert.yml up -d --scale web=4', { stdio: 'inherit' });
+  execSync(
+    'docker compose --project-name opsknight-cert-v2 --env-file tests/certification/.env -f tests/certification/docker-compose.release-cert.yml up -d --scale web=4',
+    { stdio: 'inherit' }
+  );
   execSync('docker exec opsknight-cert-v2-proxy-1 nginx -s reload');
 
   // Scale back to 2 stable replicas
-  execSync('docker compose --project-name opsknight-cert-v2 --env-file tests/certification/.env -f tests/certification/docker-compose.release-cert.yml up -d --scale web=2', { stdio: 'inherit' });
+  execSync(
+    'docker compose --project-name opsknight-cert-v2 --env-file tests/certification/.env -f tests/certification/docker-compose.release-cert.yml up -d --scale web=2',
+    { stdio: 'inherit' }
+  );
   execSync('docker exec opsknight-cert-v2-proxy-1 nginx -s reload');
 
   console.log('\n======================================================================');

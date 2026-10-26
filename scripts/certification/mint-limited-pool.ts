@@ -1,5 +1,5 @@
 import dotenv from 'dotenv';
-dotenv.config({ override: true });
+dotenv.config({ path: process.env.DOTENV_CONFIG_PATH || undefined, override: false });
 import { PrismaClient } from '@prisma/client';
 import { createHmac, randomBytes } from 'node:crypto';
 import fs from 'node:fs';
@@ -8,7 +8,9 @@ import path from 'node:path';
 function requireEnv(name: string): string {
   const value = process.env[name];
   if (!value || value.trim().length === 0) {
-    throw new Error(`[FATAL] Missing mandatory environment variable: ${name}. Configure it in .env or shell environment.`);
+    throw new Error(
+      `[FATAL] Missing mandatory environment variable: ${name}. Configure it in .env or shell environment.`
+    );
   }
   return value.trim();
 }
@@ -17,13 +19,11 @@ const DATABASE_URL = requireEnv('DATABASE_URL');
 const API_KEY_SECRET = requireEnv('API_KEY_SECRET');
 
 const prisma = new PrismaClient({
-  datasources: { db: { url: DATABASE_URL } }
+  datasources: { db: { url: DATABASE_URL } },
 });
 
 function hashToken(token: string): string {
-  return createHmac('sha256', API_KEY_SECRET)
-    .update(`opsknight:api-key:v2:${token}`)
-    .digest('hex');
+  return createHmac('sha256', API_KEY_SECRET).update(`opsknight:api-key:v2:${token}`).digest('hex');
 }
 
 async function main() {
@@ -44,8 +44,8 @@ async function main() {
         prefix,
         tokenHash,
         scopes: ['incidents:read'],
-        userId: admin.id
-      }
+        userId: admin.id,
+      },
     });
     pool.push(token);
   }
@@ -55,4 +55,6 @@ async function main() {
   console.log(`Successfully minted and saved ${pool.length} limited tokens to ${outPath}`);
 }
 
-main().catch(console.error).finally(() => prisma.$disconnect());
+main()
+  .catch(console.error)
+  .finally(() => prisma.$disconnect());

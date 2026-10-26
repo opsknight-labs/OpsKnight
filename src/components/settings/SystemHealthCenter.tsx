@@ -1,6 +1,14 @@
 'use client';
 
-import { useState, useEffect, useTransition, useMemo, useCallback, useRef } from 'react';
+import {
+  useState,
+  useEffect,
+  useTransition,
+  useMemo,
+  useCallback,
+  useRef,
+  useSyncExternalStore,
+} from 'react';
 import Link from 'next/link';
 import DetailHeroBanner from '@/components/ui/DetailHeroBanner';
 import DetailTabs from '@/components/ui/DetailTabs';
@@ -152,7 +160,17 @@ const CATEGORY_META: Record<
   },
 };
 
+const emptySubscribe = () => () => {};
+function useIsClient(): boolean {
+  return useSyncExternalStore(
+    emptySubscribe,
+    () => true,
+    () => false
+  );
+}
+
 export default function SystemHealthCenter({ initialReport }: Props) {
+  const isClient = useIsClient();
   const [report, setReport] = useState<AdminHealthReport>(initialReport);
   const [isPending, startTransition] = useTransition();
   const [activeTab, setActiveTab] = useState<string>('all');
@@ -210,12 +228,16 @@ export default function SystemHealthCenter({ initialReport }: Props) {
     }
   }, []);
 
+  const handleAutoRefreshChange = useCallback((enabled: boolean) => {
+    setAutoRefresh(enabled);
+    if (!enabled) {
+      setCountdown(30);
+    }
+  }, []);
+
   // Live auto-refresh polling with 1-second countdown ticker
   useEffect(() => {
-    if (!autoRefresh) {
-      setCountdown(30);
-      return;
-    }
+    if (!autoRefresh) return;
     const interval = setInterval(() => {
       if (document.visibilityState !== 'visible' || !navigator.onLine) return;
       setCountdown(prev => {
@@ -367,8 +389,11 @@ export default function SystemHealthCenter({ initialReport }: Props) {
               integrations.
             </span>
             <span className="opacity-40">•</span>
-            <span>
-              Last verified at {lastRefreshedAt.toLocaleTimeString()}
+            <span suppressHydrationWarning>
+              Last verified at{' '}
+              {isClient
+                ? lastRefreshedAt.toLocaleTimeString()
+                : new Date(initialReport.generatedAt).toISOString().slice(11, 19)}
               {report.durationMs !== undefined ? ` in ${report.durationMs} ms` : ''}
             </span>
           </div>
@@ -423,7 +448,7 @@ export default function SystemHealthCenter({ initialReport }: Props) {
               )}
               <Switch
                 checked={autoRefresh}
-                onCheckedChange={setAutoRefresh}
+                onCheckedChange={handleAutoRefreshChange}
                 aria-label="Toggle live 30s refresh"
                 className="data-[state=checked]:bg-emerald-400"
               />

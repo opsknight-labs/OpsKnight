@@ -1,5 +1,5 @@
 import dotenv from 'dotenv';
-dotenv.config({ override: true });
+dotenv.config({ path: process.env.DOTENV_CONFIG_PATH || undefined, override: false });
 import { PrismaClient } from '@prisma/client';
 import { createHmac, randomBytes } from 'node:crypto';
 import fs from 'node:fs';
@@ -10,7 +10,9 @@ import { API_SCOPES } from '../../src/lib/authorization';
 function requireEnv(name: string): string {
   const value = process.env[name];
   if (!value || value.trim().length === 0) {
-    throw new Error(`[FATAL] Missing mandatory environment variable: ${name}. Configure it in .env or shell environment.`);
+    throw new Error(
+      `[FATAL] Missing mandatory environment variable: ${name}. Configure it in .env or shell environment.`
+    );
   }
   return value.trim();
 }
@@ -20,13 +22,11 @@ const API_KEY_SECRET = requireEnv('API_KEY_SECRET');
 const ADMIN_PASSWORD = requireEnv('ADMIN_PASSWORD');
 
 const prisma = new PrismaClient({
-  datasources: { db: { url: DATABASE_URL } }
+  datasources: { db: { url: DATABASE_URL } },
 });
 
 function hashToken(token: string): string {
-  return createHmac('sha256', API_KEY_SECRET)
-    .update(`opsknight:api-key:v2:${token}`)
-    .digest('hex');
+  return createHmac('sha256', API_KEY_SECRET).update(`opsknight:api-key:v2:${token}`).digest('hex');
 }
 
 function mintToken(prefixStr: string = 'ok_test_') {
@@ -35,7 +35,7 @@ function mintToken(prefixStr: string = 'ok_test_') {
   return {
     token,
     prefix: token.slice(0, 12),
-    tokenHash: hashToken(token)
+    tokenHash: hashToken(token),
   };
 }
 
@@ -69,8 +69,9 @@ async function main() {
 
   // 2. Identities & Credentials
   // 2a. Admin User
-  let adminUser = await prisma.user.findFirst({ where: { email: 'cert-admin@opsknight.local' } }) ||
-    await prisma.user.findFirst({ where: { role: 'ADMIN', status: 'ACTIVE' } });
+  let adminUser =
+    (await prisma.user.findFirst({ where: { email: 'cert-admin@opsknight.local' } })) ||
+    (await prisma.user.findFirst({ where: { role: 'ADMIN', status: 'ACTIVE' } }));
   if (!adminUser) {
     adminUser = await prisma.user.create({
       data: {
@@ -78,16 +79,16 @@ async function main() {
         email: 'cert-admin@opsknight.local',
         passwordHash: bcrypt.hashSync(ADMIN_PASSWORD, 10),
         role: 'ADMIN',
-        status: 'ACTIVE'
-      }
+        status: 'ACTIVE',
+      },
     });
   } else {
     adminUser = await prisma.user.update({
       where: { id: adminUser.id },
       data: {
         passwordHash: bcrypt.hashSync(ADMIN_PASSWORD, 10),
-        status: 'ACTIVE'
-      }
+        status: 'ACTIVE',
+      },
     });
   }
 
@@ -100,8 +101,8 @@ async function main() {
       prefix: adminMint.prefix,
       tokenHash: adminMint.tokenHash,
       scopes: allScopes,
-      userId: adminUser.id
-    }
+      userId: adminUser.id,
+    },
   });
 
   // 2b. Responder User
@@ -113,8 +114,8 @@ async function main() {
       email: 'responder@opsknight.local',
       passwordHash: 'not-a-password',
       role: 'RESPONDER',
-      status: 'ACTIVE'
-    }
+      status: 'ACTIVE',
+    },
   });
   const responderMint = mintToken('ok_resp_');
   await prisma.apiKey.create({
@@ -122,9 +123,19 @@ async function main() {
       name: 'Responder Token',
       prefix: responderMint.prefix,
       tokenHash: responderMint.tokenHash,
-      scopes: ['incidents:read', 'incidents:write', 'services:read', 'teams:read', 'schedules:read', 'runbooks:read', 'runbooks:execute', 'postmortems:read', 'postmortems:write'],
-      userId: responderUser.id
-    }
+      scopes: [
+        'incidents:read',
+        'incidents:write',
+        'services:read',
+        'teams:read',
+        'schedules:read',
+        'runbooks:read',
+        'runbooks:execute',
+        'postmortems:read',
+        'postmortems:write',
+      ],
+      userId: responderUser.id,
+    },
   });
 
   // 2c. Auditor User
@@ -136,8 +147,8 @@ async function main() {
       email: 'auditor@opsknight.local',
       passwordHash: 'not-a-password',
       role: 'AUDITOR',
-      status: 'ACTIVE'
-    }
+      status: 'ACTIVE',
+    },
   });
   const auditorMint = mintToken('ok_audit_');
   await prisma.apiKey.create({
@@ -145,9 +156,17 @@ async function main() {
       name: 'Auditor Token',
       prefix: auditorMint.prefix,
       tokenHash: auditorMint.tokenHash,
-      scopes: ['audit:read', 'audit:export', 'incidents:read', 'services:read', 'teams:read', 'reports:read', 'postmortems:read'],
-      userId: auditorUser.id
-    }
+      scopes: [
+        'audit:read',
+        'audit:export',
+        'incidents:read',
+        'services:read',
+        'teams:read',
+        'reports:read',
+        'postmortems:read',
+      ],
+      userId: auditorUser.id,
+    },
   });
 
   // 2d. Regular User
@@ -159,8 +178,8 @@ async function main() {
       email: 'user@opsknight.local',
       passwordHash: 'not-a-password',
       role: 'USER',
-      status: 'ACTIVE'
-    }
+      status: 'ACTIVE',
+    },
   });
   const regularMint = mintToken('ok_user_');
   await prisma.apiKey.create({
@@ -169,16 +188,16 @@ async function main() {
       prefix: regularMint.prefix,
       tokenHash: regularMint.tokenHash,
       scopes: ['incidents:read', 'services:read', 'reports:write'],
-      userId: regularUser.id
-    }
+      userId: regularUser.id,
+    },
   });
 
   // 2e. Team A & User A
   const teamA = await prisma.team.create({
     data: {
       name: `Team Alpha ${Date.now()}`,
-      description: 'Primary Core Team Alpha'
-    }
+      description: 'Primary Core Team Alpha',
+    },
   });
   const teamAUser = await prisma.user.create({
     data: {
@@ -186,15 +205,15 @@ async function main() {
       email: `team-a-eng-${Date.now()}@opsknight.local`,
       passwordHash: 'not-a-password',
       role: 'RESPONDER',
-      status: 'ACTIVE'
-    }
+      status: 'ACTIVE',
+    },
   });
   await prisma.teamMember.create({
     data: {
       teamId: teamA.id,
       userId: teamAUser.id,
-      role: 'MEMBER'
-    }
+      role: 'MEMBER',
+    },
   });
   const teamAMint = mintToken('ok_teamA_');
   await prisma.apiKey.create({
@@ -203,16 +222,16 @@ async function main() {
       prefix: teamAMint.prefix,
       tokenHash: teamAMint.tokenHash,
       scopes: ['incidents:read', 'incidents:write', 'services:read', 'teams:read'],
-      userId: teamAUser.id
-    }
+      userId: teamAUser.id,
+    },
   });
 
   // 2f. Team B & User B
   const teamB = await prisma.team.create({
     data: {
       name: `Team Beta ${Date.now()}`,
-      description: 'Secondary Team Beta'
-    }
+      description: 'Secondary Team Beta',
+    },
   });
   const teamBUser = await prisma.user.create({
     data: {
@@ -220,15 +239,15 @@ async function main() {
       email: `team-b-eng-${Date.now()}@opsknight.local`,
       passwordHash: 'not-a-password',
       role: 'RESPONDER',
-      status: 'ACTIVE'
-    }
+      status: 'ACTIVE',
+    },
   });
   await prisma.teamMember.create({
     data: {
       teamId: teamB.id,
       userId: teamBUser.id,
-      role: 'MEMBER'
-    }
+      role: 'MEMBER',
+    },
   });
   const teamBMint = mintToken('ok_teamB_');
   await prisma.apiKey.create({
@@ -237,8 +256,8 @@ async function main() {
       prefix: teamBMint.prefix,
       tokenHash: teamBMint.tokenHash,
       scopes: ['incidents:read', 'incidents:write', 'services:read', 'teams:read'],
-      userId: teamBUser.id
-    }
+      userId: teamBUser.id,
+    },
   });
 
   // 2g. Limited Scope Token (only incidents:read)
@@ -249,8 +268,8 @@ async function main() {
       prefix: limitedMint.prefix,
       tokenHash: limitedMint.tokenHash,
       scopes: ['incidents:read'],
-      userId: adminUser.id
-    }
+      userId: adminUser.id,
+    },
   });
 
   // 2h. Revoked Token
@@ -262,8 +281,8 @@ async function main() {
       tokenHash: revokedMint.tokenHash,
       scopes: allScopes,
       userId: adminUser.id,
-      revokedAt: new Date()
-    }
+      revokedAt: new Date(),
+    },
   });
 
   // 2i. Expired Token
@@ -275,8 +294,8 @@ async function main() {
       tokenHash: expiredMint.tokenHash,
       scopes: allScopes,
       userId: adminUser.id,
-      expiresAt: new Date(Date.now() - 3600000)
-    }
+      expiresAt: new Date(Date.now() - 3600000),
+    },
   });
 
   // 2j. Disabled User & Token
@@ -286,8 +305,8 @@ async function main() {
       email: `disabled-${Date.now()}@opsknight.local`,
       passwordHash: 'not-a-password',
       role: 'USER',
-      status: 'DISABLED'
-    }
+      status: 'DISABLED',
+    },
   });
   const disabledMint = mintToken('ok_dis_');
   await prisma.apiKey.create({
@@ -296,8 +315,8 @@ async function main() {
       prefix: disabledMint.prefix,
       tokenHash: disabledMint.tokenHash,
       scopes: allScopes,
-      userId: disabledUser.id
-    }
+      userId: disabledUser.id,
+    },
   });
 
   // 2k. Service Account
@@ -309,8 +328,8 @@ async function main() {
       role: 'ADMIN',
       status: 'ACTIVE',
       department: 'SERVICE_ACCOUNT',
-      jobTitle: 'Service Account'
-    }
+      jobTitle: 'Service Account',
+    },
   });
   const saMint = mintToken('ok_sa_live_');
   const saToken = await prisma.apiKey.create({
@@ -318,9 +337,15 @@ async function main() {
       name: 'SA Primary Token',
       prefix: saMint.prefix,
       tokenHash: saMint.tokenHash,
-      scopes: ['incidents:read', 'incidents:write', 'services:read', 'teams:read', 'automation:read'],
-      userId: saUser.id
-    }
+      scopes: [
+        'incidents:read',
+        'incidents:write',
+        'services:read',
+        'teams:read',
+        'automation:read',
+      ],
+      userId: saUser.id,
+    },
   });
 
   // 3. Escalation Policies & Services
@@ -334,11 +359,11 @@ async function main() {
             stepOrder: 1,
             delayMinutes: 5,
             targetUserId: teamAUser.id,
-            notificationChannels: ['EMAIL']
-          }
-        ]
-      }
-    }
+            notificationChannels: ['EMAIL'],
+          },
+        ],
+      },
+    },
   });
 
   const escalationPolicyB = await prisma.escalationPolicy.create({
@@ -351,11 +376,11 @@ async function main() {
             stepOrder: 1,
             delayMinutes: 10,
             targetUserId: teamBUser.id,
-            notificationChannels: ['EMAIL']
-          }
-        ]
-      }
-    }
+            notificationChannels: ['EMAIL'],
+          },
+        ],
+      },
+    },
   });
 
   const serviceA = await prisma.service.create({
@@ -364,8 +389,8 @@ async function main() {
       description: 'Processes credit card payments',
       teamId: teamA.id,
       escalationPolicyId: escalationPolicyA.id,
-      status: 'OPERATIONAL'
-    }
+      status: 'OPERATIONAL',
+    },
   });
 
   const serviceB = await prisma.service.create({
@@ -374,8 +399,8 @@ async function main() {
       description: 'Product catalog and stock service',
       teamId: teamB.id,
       escalationPolicyId: escalationPolicyB.id,
-      status: 'OPERATIONAL'
-    }
+      status: 'OPERATIONAL',
+    },
   });
 
   // 4. Schedules & Layers
@@ -391,14 +416,12 @@ async function main() {
             rotationLengthHours: 168,
             priority: 0,
             users: {
-              create: [
-                { userId: teamAUser.id, position: 0 }
-              ]
-            }
-          }
-        ]
-      }
-    }
+              create: [{ userId: teamAUser.id, position: 0 }],
+            },
+          },
+        ],
+      },
+    },
   });
 
   // 5. Custom Field Definitions
@@ -409,13 +432,13 @@ async function main() {
       type: 'SELECT',
       options: ['production', 'staging', 'development'],
       required: false,
-      order: 1
-    }
+      order: 1,
+    },
   });
 
   // 6. Incidents
   const tagAlpha = await prisma.tag.create({
-    data: { name: `p1-outage-${Date.now()}` }
+    data: { name: `p1-outage-${Date.now()}` },
   });
 
   const incidentOpen = await prisma.incident.create({
@@ -428,11 +451,9 @@ async function main() {
       urgency: 'HIGH',
       priority: 'P1',
       tags: {
-        create: [
-          { tagId: tagAlpha.id }
-        ]
-      }
-    }
+        create: [{ tagId: tagAlpha.id }],
+      },
+    },
   });
 
   const incidentAcked = await prisma.incident.create({
@@ -444,8 +465,8 @@ async function main() {
       urgency: 'HIGH',
       priority: 'P2',
       assigneeId: teamAUser.id,
-      acknowledgedAt: new Date()
-    }
+      acknowledgedAt: new Date(),
+    },
   });
 
   const incidentResolved = await prisma.incident.create({
@@ -458,8 +479,8 @@ async function main() {
       priority: 'P3',
       assigneeId: teamAUser.id,
       acknowledgedAt: new Date(Date.now() - 7200000),
-      resolvedAt: new Date(Date.now() - 3600000)
-    }
+      resolvedAt: new Date(Date.now() - 3600000),
+    },
   });
 
   // Paginated incidents for pagination tests
@@ -472,8 +493,8 @@ async function main() {
         status: i % 2 === 0 ? 'OPEN' : 'RESOLVED',
         urgency: 'LOW',
         priority: 'P4',
-        resolvedAt: i % 2 !== 0 ? new Date() : null
-      }
+        resolvedAt: i % 2 !== 0 ? new Date() : null,
+      },
     });
   }
 
@@ -486,9 +507,9 @@ async function main() {
       status: 'DRAFT',
       impact: {
         downtimeMinutes: 45,
-        affectedUsers: 12000
-      }
-    }
+        affectedUsers: 12000,
+      },
+    },
   });
 
   // 8. Status Page
@@ -501,10 +522,10 @@ async function main() {
       services: {
         create: [
           { serviceId: serviceA.id, displayName: 'Payment API' },
-          { serviceId: serviceB.id, displayName: 'Catalog Service' }
-        ]
-      }
-    }
+          { serviceId: serviceB.id, displayName: 'Catalog Service' },
+        ],
+      },
+    },
   });
 
   // 9. Runbook
@@ -527,25 +548,25 @@ async function main() {
                   name: 'Drain connections',
                   type: 'MANUAL',
                   riskClass: 'READ_ONLY',
-                  config: {}
-                }
-              ]
+                  config: {},
+                },
+              ],
             },
             checksum: 'bd9c3cee73c564bc13c7793cb5725efa06a3ba4552c990b4c09a9db096abfaa9',
-            createdById: adminUser.id
-          }
-        ]
-      }
-    }
+            createdById: adminUser.id,
+          },
+        ],
+      },
+    },
   });
 
   const initialRunbookVersion = await prisma.runbookVersion.findFirst({
-    where: { runbookId: runbook.id, version: 1 }
+    where: { runbookId: runbook.id, version: 1 },
   });
   if (initialRunbookVersion) {
     await prisma.runbook.update({
       where: { id: runbook.id },
-      data: { publishedVersionId: initialRunbookVersion.id }
+      data: { publishedVersionId: initialRunbookVersion.id },
     });
   }
 
@@ -563,11 +584,11 @@ async function main() {
             widgetType: 'INCIDENT_COUNT',
             metricKey: 'incidents.total',
             position: { x: 0, y: 0, w: 6, h: 4 },
-            config: {}
-          }
-        ]
-      }
-    }
+            config: {},
+          },
+        ],
+      },
+    },
   });
 
   const manifest = {
@@ -586,7 +607,7 @@ async function main() {
       revoked: revokedMint.token,
       expired: expiredMint.token,
       disabled: disabledMint.token,
-      coldStart: mintToken('ok_cold_').token
+      coldStart: mintToken('ok_cold_').token,
     },
     users: {
       adminId: adminUser.id,
@@ -596,47 +617,47 @@ async function main() {
       teamAUserId: teamAUser.id,
       teamBUserId: teamBUser.id,
       disabledUserId: disabledUser.id,
-      serviceAccountUserId: saUser.id
+      serviceAccountUserId: saUser.id,
     },
     teams: {
       teamAId: teamA.id,
-      teamBId: teamB.id
+      teamBId: teamB.id,
     },
     services: {
       serviceAId: serviceA.id,
-      serviceBId: serviceB.id
+      serviceBId: serviceB.id,
     },
     escalationPolicies: {
       policyAId: escalationPolicyA.id,
-      policyBId: escalationPolicyB.id
+      policyBId: escalationPolicyB.id,
     },
     schedules: {
-      scheduleAId: scheduleA.id
+      scheduleAId: scheduleA.id,
     },
     incidents: {
       openId: incidentOpen.id,
       ackedId: incidentAcked.id,
-      resolvedId: incidentResolved.id
+      resolvedId: incidentResolved.id,
     },
     postmortems: {
-      postmortemId: postmortem.id
+      postmortemId: postmortem.id,
     },
     statusPages: {
-      statusPageId: statusPage.id
+      statusPageId: statusPage.id,
     },
     runbooks: {
-      runbookId: runbook.id
+      runbookId: runbook.id,
     },
     dashboards: {
-      dashboardId: dashboard.id
+      dashboardId: dashboard.id,
     },
     customFields: {
-      envFieldId: cfEnv.id
+      envFieldId: cfEnv.id,
     },
     serviceAccounts: {
       serviceAccountId: saUser.id,
-      tokenId: saToken.id
-    }
+      tokenId: saToken.id,
+    },
   };
 
   const manifestPath = path.resolve('tests/certification/fixtures.json');

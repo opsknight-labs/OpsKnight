@@ -1,5 +1,5 @@
 import dotenv from 'dotenv';
-dotenv.config({ override: true });
+dotenv.config({ path: process.env.DOTENV_CONFIG_PATH || undefined, override: false });
 import fs from 'node:fs';
 import { PrismaClient } from '@prisma/client';
 import { createHmac, randomBytes } from 'node:crypto';
@@ -8,7 +8,9 @@ import { API_SCOPES } from '../../src/lib/authorization';
 function requireEnv(name: string): string {
   const value = process.env[name];
   if (!value || value.trim().length === 0) {
-    throw new Error(`[FATAL] Missing mandatory environment variable: ${name}. Configure it in .env or shell environment.`);
+    throw new Error(
+      `[FATAL] Missing mandatory environment variable: ${name}. Configure it in .env or shell environment.`
+    );
   }
   return value.trim();
 }
@@ -17,13 +19,11 @@ const DATABASE_URL = requireEnv('DATABASE_URL');
 const API_KEY_SECRET = requireEnv('API_KEY_SECRET');
 
 const prisma = new PrismaClient({
-  datasources: { db: { url: DATABASE_URL } }
+  datasources: { db: { url: DATABASE_URL } },
 });
 
 function hashToken(token: string): string {
-  return createHmac('sha256', API_KEY_SECRET)
-    .update(`opsknight:api-key:v2:${token}`)
-    .digest('hex');
+  return createHmac('sha256', API_KEY_SECRET).update(`opsknight:api-key:v2:${token}`).digest('hex');
 }
 
 async function createColdStartKey(name: string) {
@@ -39,8 +39,8 @@ async function createColdStartKey(name: string) {
       tokenHash,
       prefix,
       userId: admin!.id,
-      scopes: Object.values(API_SCOPES)
-    }
+      scopes: Object.values(API_SCOPES),
+    },
   });
 
   return { token, apiKey };
@@ -64,14 +64,16 @@ async function main() {
   console.log('  UNIDENTIFIED_QUEUE_WAIT_MS = 250ms\n');
 
   const burstCount = 250;
-  console.log(`Firing burst of ${burstCount} concurrent unauthenticated requests on unidentified lane...`);
+  console.log(
+    `Firing burst of ${burstCount} concurrent unauthenticated requests on unidentified lane...`
+  );
 
   const burstResults = await Promise.all(
     Array.from({ length: burstCount }).map(async (_, idx) => {
       const bogus = `ok_bad_token_${idx}_${Date.now()}`;
       try {
         const res = await fetch(`${directBase}/incidents`, {
-          headers: { 'Authorization': `Bearer ${bogus}` }
+          headers: { Authorization: `Bearer ${bogus}` },
         });
         const retryAfter = res.headers.get('retry-after');
         let body: any = null;
@@ -94,9 +96,13 @@ async function main() {
   console.log(`  Total requests dispatched: ${burstCount}`);
   console.log(`  HTTP 401 Unauthorized (admitted to DB): ${c401}`);
   console.log(`  HTTP 429 Rate Limit (admission refused at limit=16): ${c429} (${shedRate}%)`);
-  console.log(`  RFC 9457 Problem Details Verified: ${sample429?.body?.type === 'https://opsknight.com/errors/rate-limit-exceeded'}`);
+  console.log(
+    `  RFC 9457 Problem Details Verified: ${sample429?.body?.type === 'https://opsknight.com/errors/rate-limit-exceeded'}`
+  );
   console.log(`  Header Retry-After: ${sample429?.retryAfter || '1'}s`);
-  console.log(`  Configured concurrency ceiling in response metadata: limit=${sample429?.body?.meta?.limit || 16}\n`);
+  console.log(
+    `  Configured concurrency ceiling in response metadata: limit=${sample429?.body?.meta?.limit || 16}\n`
+  );
   if (c429 === 0) {
     throw new Error('Unidentified flood failed to trigger 429 admission shedding at limit=16!');
   }
@@ -116,15 +122,21 @@ async function main() {
       await Promise.all(
         Array.from({ length: 20 }).map(() =>
           fetch(`${directBase}/incidents`, {
-            headers: { 'Authorization': `Bearer ok_bogus_${randomBytes(8).toString('hex')}` }
-          }).then(() => { backgroundFloodRequests++; }).catch(() => {})
+            headers: { Authorization: `Bearer ok_bogus_${randomBytes(8).toString('hex')}` },
+          })
+            .then(() => {
+              backgroundFloodRequests++;
+            })
+            .catch(() => {})
         )
       );
     }
   })();
 
   // While flood is actively in-flight, send cold-start valid credential
-  console.log('Dispatching cold-start credential concurrently WHILE flood is actively saturating lane...');
+  console.log(
+    'Dispatching cold-start credential concurrently WHILE flood is actively saturating lane...'
+  );
   let coldStatus = 0;
   let coldJson: any = null;
   let coldAttempts = 0;
@@ -132,7 +144,7 @@ async function main() {
   for (let attempt = 0; attempt < 5; attempt++) {
     coldAttempts++;
     const res = await fetch(`${directBase}/incidents`, {
-      headers: { 'Authorization': `Bearer ${coldKey.token}` }
+      headers: { Authorization: `Bearer ${coldKey.token}` },
     });
     coldStatus = res.status;
     if (res.status === 200) {
@@ -140,7 +152,9 @@ async function main() {
       break;
     } else if (res.status === 429) {
       const waitSec = Number.parseInt(res.headers.get('retry-after') || '1', 10);
-      console.log(`  [Cold-Start] Shed under flood (HTTP 429), respecting Retry-After: ${waitSec}s...`);
+      console.log(
+        `  [Cold-Start] Shed under flood (HTTP 429), respecting Retry-After: ${waitSec}s...`
+      );
       await new Promise(r => setTimeout(r, waitSec * 1000));
     }
   }
@@ -148,17 +162,25 @@ async function main() {
   activeFloodRunning = false;
   await floodPromise;
   console.log(`Background flood sent ${backgroundFloodRequests} requests during cold-start test.`);
-  console.log(`Cold-start final status under active flood: HTTP ${coldStatus} (Attempts: ${coldAttempts})`);
+  console.log(
+    `Cold-start final status under active flood: HTTP ${coldStatus} (Attempts: ${coldAttempts})`
+  );
   if (coldStatus !== 200) {
-    throw new Error(`Cold start credential failed admission under flood! Final status: ${coldStatus}`);
+    throw new Error(
+      `Cold start credential failed admission under flood! Final status: ${coldStatus}`
+    );
   }
-  console.log(`Cold-start admission verification: PASSED (Items returned: ${coldJson?.data?.length ?? 0})`);
+  console.log(
+    `Cold-start admission verification: PASSED (Items returned: ${coldJson?.data?.length ?? 0})`
+  );
 
   // Verify memory hint is now active
   const warmSubsequent = await fetch(`${directBase}/incidents`, {
-    headers: { 'Authorization': `Bearer ${coldKey.token}` }
+    headers: { Authorization: `Bearer ${coldKey.token}` },
   });
-  console.log(`Subsequent warm request status: HTTP ${warmSubsequent.status} (Verified fast-path hint)\n`);
+  console.log(
+    `Subsequent warm request status: HTTP ${warmSubsequent.status} (Verified fast-path hint)\n`
+  );
 
   // -------------------------------------------------------------------------
   // SCENARIO 3: Same-IP / Shared NAT Over-Budget Concurrency Allowance
@@ -176,9 +198,9 @@ async function main() {
   for (let i = 0; i < 65; i++) {
     const res = await fetch(`${proxyBase}/incidents`, {
       headers: {
-        'Authorization': `Bearer ok_nat_bad_${i}_${randomBytes(4).toString('hex')}`,
-        'X-Forwarded-For': natIp
-      }
+        Authorization: `Bearer ok_nat_bad_${i}_${randomBytes(4).toString('hex')}`,
+        'X-Forwarded-For': natIp,
+      },
     });
     if (res.status === 401) nat401Count++;
     if (res.status === 429) nat429Count++;
@@ -189,15 +211,19 @@ async function main() {
   console.log(`Dispatching valid admin credential from the same over-budget NAT IP ${natIp}...`);
   const validNatRes = await fetch(`${proxyBase}/incidents`, {
     headers: {
-      'Authorization': `Bearer ${fixtures.tokens.admin}`,
-      'X-Forwarded-For': natIp
-    }
+      Authorization: `Bearer ${fixtures.tokens.admin}`,
+      'X-Forwarded-For': natIp,
+    },
   });
   console.log(`Valid credential behind exhausted NAT IP returned: HTTP ${validNatRes.status}`);
   if (validNatRes.status !== 200) {
-    throw new Error(`Legitimate client behind NAT was denied access after misbehaving client exhausted budget! Status: ${validNatRes.status}`);
+    throw new Error(
+      `Legitimate client behind NAT was denied access after misbehaving client exhausted budget! Status: ${validNatRes.status}`
+    );
   }
-  console.log('Same-IP / NAT Concurrency Allowance: PASSED (Valid credential verified successfully).\n');
+  console.log(
+    'Same-IP / NAT Concurrency Allowance: PASSED (Valid credential verified successfully).\n'
+  );
 
   // -------------------------------------------------------------------------
   // SCENARIO 4: Warm Valid Credential (Priority Lane) Under Hostile Flood
@@ -209,7 +235,7 @@ async function main() {
 
   // Pre-warm admin token
   await fetch(`${directBase}/incidents`, {
-    headers: { 'Authorization': `Bearer ${fixtures.tokens.admin}` }
+    headers: { Authorization: `Bearer ${fixtures.tokens.admin}` },
   });
 
   // Launch background hostile flood of 60 requests
@@ -219,7 +245,7 @@ async function main() {
       await Promise.all(
         Array.from({ length: 30 }).map(() =>
           fetch(`${directBase}/incidents`, {
-            headers: { 'Authorization': `Bearer ok_bad_${randomBytes(8).toString('hex')}` }
+            headers: { Authorization: `Bearer ok_bad_${randomBytes(8).toString('hex')}` },
           }).catch(() => {})
         )
       );
@@ -230,7 +256,7 @@ async function main() {
   const legitResults = await Promise.all(
     Array.from({ length: 30 }).map(async () => {
       const res = await fetch(`${directBase}/incidents`, {
-        headers: { 'Authorization': `Bearer ${fixtures.tokens.admin}` }
+        headers: { Authorization: `Bearer ${fixtures.tokens.admin}` },
       });
       return res.status;
     })
@@ -249,7 +275,9 @@ async function main() {
   if (legit200 !== 30) {
     throw new Error(`Priority lane dropped legitimate requests! 200s: ${legit200}/30`);
   }
-  console.log('Priority Lane Immunity: VERIFIED — 100% throughput preserved for legitimate users.\n');
+  console.log(
+    'Priority Lane Immunity: VERIFIED — 100% throughput preserved for legitimate users.\n'
+  );
 
   // Cleanup test key
   await prisma.apiKey.delete({ where: { id: coldKey.apiKey.id } });

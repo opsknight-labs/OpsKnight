@@ -1,6 +1,6 @@
 import { chromium } from '@playwright/test';
 import dotenv from 'dotenv';
-dotenv.config({ override: true });
+dotenv.config({ path: process.env.DOTENV_CONFIG_PATH || undefined, override: false });
 
 function requireEnv(name) {
   const val = process.env[name];
