@@ -83,7 +83,7 @@ export const OPERATIONAL_METRICS = [
     kind: 'histogram',
     labels: ['stage', 'outcome'],
     scope: 'counter',
-    estimatedMaxSeries: 588,
+    estimatedMaxSeries: 672,
     buckets: [1, 5, 10, 25, 50, 100, 250, 500, 1000, 5000],
   },
   {
