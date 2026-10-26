@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
-import dotenv from 'dotenv';
+import { resolveDatabaseUrl, getDatabaseDiagnostics } from './db-connection-resolver.mjs';
 
 function printHelp() {
     const lines = [
@@ -55,12 +55,14 @@ async function main() {
         return;
     }
 
-    if (!process.env.DATABASE_URL) {
-        dotenv.config();
-    }
+    const databaseUrl = resolveDatabaseUrl();
 
-    if (!process.env.DATABASE_URL) {
-        throw new Error('DATABASE_URL is required. Set it in the environment or .env.');
+    if (!databaseUrl) {
+        const diagnostics = getDatabaseDiagnostics();
+        throw new Error(
+            'DATABASE_URL is required. Set it in the environment, via DATABASE_URL_FILE, in /run/secrets/, or .env.\n\n' +
+            diagnostics
+        );
     }
 
     const name = typeof options.user === 'string' ? options.user.trim() : '';
@@ -78,7 +80,7 @@ async function main() {
         throw new Error(`Invalid role: ${roleInput}`);
     }
 
-    const prisma = new PrismaClient();
+    const prisma = new PrismaClient({ datasourceUrl: databaseUrl });
 
     try {
         const existing = await prisma.user.findUnique({ where: { email } });

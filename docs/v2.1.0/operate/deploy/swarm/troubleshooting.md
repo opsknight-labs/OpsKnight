@@ -70,12 +70,14 @@ Capture node/quorum, stack services/tasks, service inspect, recent task logs, im
 
 ## Bootstrap code generation fails in interactive shell
 
-**Check:** when issuing a bootstrap authorization code inside an interactive container shell (`docker exec -it ... sh`), `DATABASE_URL` is not automatically exported into the shell session because Swarm injects credentials as secret files (`DATABASE_URL_FILE`). Running `node scripts/create-bootstrap-code.mjs` directly will fail to connect to the database.
+**Check:** when issuing a bootstrap authorization code inside an interactive container shell (`docker exec -it ... sh`), `DATABASE_URL` is not automatically exported into the shell session because Swarm injects credentials as secret files (`DATABASE_URL_FILE`). Older images require a manual export. Updated images resolve the mounted secret automatically; check that `DATABASE_URL_FILE` points to a readable, non-empty PostgreSQL URL file.
 
-**Recovery:** If running inside an interactive shell (`docker exec -it ... sh`): Export the Swarm secret before running the script:
+**Recovery:** fix missing, empty, unreadable, or invalid files named by `DATABASE_URL_FILE` or `DIRECT_DATABASE_URL_FILE`. Updated scripts stop on an explicitly configured secret-file error rather than guessing another database. Readiness and online-index scripts prefer direct connections over pooled URLs. Automatic `.env` fallback is disabled in production; supply environment variables or mounted secrets.
+
+On older images, export the Swarm secret before running the script:
 
 ```sh
-export DATABASE_URL="$(cat "$DATABASE_URL_FILE" | tr -d '\r\n')"
+export DATABASE_URL="$(tr -d '\r\n' < "$DATABASE_URL_FILE")"
 node scripts/create-bootstrap-code.mjs
 ```
 

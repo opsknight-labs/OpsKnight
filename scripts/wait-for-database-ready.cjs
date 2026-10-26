@@ -75,7 +75,8 @@ async function main() {
     throw new Error('Database readiness timeout and poll intervals must be positive numbers.');
   }
 
-  const directUrl = process.env.DIRECT_DATABASE_URL || process.env.DATABASE_URL;
+  const { resolveDatabaseUrl } = require('./db-connection-resolver.cjs');
+  const directUrl = resolveDatabaseUrl({ preferDirect: true });
   if (!directUrl) throw new Error('DATABASE_URL or DIRECT_DATABASE_URL is required.');
 
   const prisma = new PrismaClient({ datasourceUrl: directUrl });
