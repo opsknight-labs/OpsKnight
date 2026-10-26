@@ -1,5 +1,5 @@
 import dotenv from 'dotenv';
-dotenv.config({ override: true });
+dotenv.config({ path: process.env.DOTENV_CONFIG_PATH || '.env', override: true });
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto, { randomBytes } from 'node:crypto';
@@ -9,14 +9,16 @@ import { API_CAPABILITY_CATALOG } from '../../src/lib/api-v2/capability-catalog'
 function requireEnv(name: string): string {
   const value = process.env[name];
   if (!value || value.trim().length === 0) {
-    throw new Error(`[FATAL] Missing mandatory environment variable: ${name}. Configure it in .env or shell environment.`);
+    throw new Error(
+      `[FATAL] Missing mandatory environment variable: ${name}. Configure it in .env or shell environment.`
+    );
   }
   return value.trim();
 }
 
 const DATABASE_URL = requireEnv('DATABASE_URL');
 const prisma = new PrismaClient({
-  datasources: { db: { url: DATABASE_URL } }
+  datasources: { db: { url: DATABASE_URL } },
 });
 
 interface WorkflowReconciliationEntry {
@@ -24,7 +26,11 @@ interface WorkflowReconciliationEntry {
   workflowTitle: string;
   inventoryReviewStatus: string;
   inventoryBlockers: string[];
-  classification: 'CERTIFIED_E2E' | 'CERTIFIED_EXTENDED_WORKFLOW' | 'CERTIFIED_ATOMIC_MATRIX' | 'SPECIALIZED_PROTOCOL_PROVISIONAL_SMOKE';
+  classification:
+    | 'CERTIFIED_E2E'
+    | 'CERTIFIED_EXTENDED_WORKFLOW'
+    | 'CERTIFIED_ATOMIC_MATRIX'
+    | 'SPECIALIZED_PROTOCOL_PROVISIONAL_SMOKE';
   operationsCovered: string[];
   evidenceSummary: string;
   verdict: 'PASS' | 'FAIL';
@@ -35,9 +41,16 @@ async function main() {
   console.log('   31-WORKFLOW INVENTORY COMPREHENSIVE RECONCILIATION & E2E SUITE     ');
   console.log('======================================================================\n');
 
-  const inv = JSON.parse(fs.readFileSync('plans/rest-api-enterprise/workflow-inventory.json', 'utf8'));
+  const inv = JSON.parse(
+    fs.readFileSync('plans/rest-api-enterprise/workflow-inventory.json', 'utf8')
+  );
   const fixtures = JSON.parse(fs.readFileSync('tests/certification/fixtures.json', 'utf8'));
-  const opMatrix = JSON.parse(fs.readFileSync('reports/api-v2-certification/fdabcf67b45ae772d9c4413dc4a915f5b1ea3cfc/OPERATION-MATRIX.json', 'utf8'));
+  const opMatrix = JSON.parse(
+    fs.readFileSync(
+      'reports/api-v2-certification/fdabcf67b45ae772d9c4413dc4a915f5b1ea3cfc/OPERATION-MATRIX.json',
+      'utf8'
+    )
+  );
   const apiBase = 'http://127.0.0.1:3900/api/v2';
   const adminToken = fixtures.tokens.admin;
 
@@ -46,13 +59,19 @@ async function main() {
   const results: WorkflowReconciliationEntry[] = [];
 
   // Helper request
-  async function req(method: string, endpoint: string, body?: any, token: string = adminToken, extraHeaders: Record<string, string> = {}) {
-    const headers: Record<string, string> = { 'Authorization': `Bearer ${token}`, ...extraHeaders };
+  async function req(
+    method: string,
+    endpoint: string,
+    body?: any,
+    token: string = adminToken,
+    extraHeaders: Record<string, string> = {}
+  ) {
+    const headers: Record<string, string> = { Authorization: `Bearer ${token}`, ...extraHeaders };
     if (body !== undefined) headers['Content-Type'] = 'application/json';
     const res = await fetch(`${apiBase}${endpoint}`, {
       method,
       headers,
-      body: body !== undefined ? JSON.stringify(body) : undefined
+      body: body !== undefined ? JSON.stringify(body) : undefined,
     });
     const json = await res.json().catch(() => null);
     return { status: res.status, headers: res.headers, json };
@@ -66,19 +85,25 @@ async function main() {
   // A. SLO Management Multi-Step Workflow
   console.log('  -> Executing SLO Management E2E Workflow...');
   const newService = await prisma.service.create({
-    data: { name: `SLO Test Service ${Date.now()}`, teamId: fixtures.teams.teamAId }
+    data: { name: `SLO Test Service ${Date.now()}`, teamId: fixtures.teams.teamAId },
   });
-  const sloRes1 = await req('POST', '/service-objectives', {
-    definition: {
-      name: `Cert Availability SLO ${Date.now()}`,
-      serviceId: newService.id,
-      metricType: 'AVAILABILITY',
-      target: 99.9,
-      comparator: 'GREATER_THAN_OR_EQUAL',
-      windowType: 'THIRTY_DAYS'
+  const sloRes1 = await req(
+    'POST',
+    '/service-objectives',
+    {
+      definition: {
+        name: `Cert Availability SLO ${Date.now()}`,
+        serviceId: newService.id,
+        metricType: 'AVAILABILITY',
+        target: 99.9,
+        comparator: 'GREATER_THAN_OR_EQUAL',
+        windowType: 'THIRTY_DAYS',
+      },
+      expectedActiveVersionId: null,
     },
-    expectedActiveVersionId: null
-  }, adminToken, { 'Idempotency-Key': `idemp-slo-${Date.now()}` });
+    adminToken,
+    { 'Idempotency-Key': `idemp-slo-${Date.now()}` }
+  );
 
   const sloData = sloRes1.json?.data;
   const sloLineageId = sloData?.lineageId || sloData?.id;
@@ -90,14 +115,26 @@ async function main() {
   let sloHistoryRes: any = { status: 0 };
 
   if (sloLineageId) {
-    sloEvalRes = await req('POST', `/service-objectives/${sloLineageId}/evaluate`, {
-      expectedVersionId: sloVersionId
-    }, adminToken, { 'Idempotency-Key': `idemp-slo-eval-${Date.now()}` });
+    sloEvalRes = await req(
+      'POST',
+      `/service-objectives/${sloLineageId}/evaluate`,
+      {
+        expectedVersionId: sloVersionId,
+      },
+      adminToken,
+      { 'Idempotency-Key': `idemp-slo-eval-${Date.now()}` }
+    );
     sloHistoryRes = await req('GET', `/service-objectives/${sloLineageId}/history`);
-    sloArchiveRes = await req('POST', `/service-objectives/${sloLineageId}/archive`, {}, adminToken, {
-      'If-Match': sloEtag || '"1"',
-      'Idempotency-Key': `idemp-slo-arch-${Date.now()}`
-    });
+    sloArchiveRes = await req(
+      'POST',
+      `/service-objectives/${sloLineageId}/archive`,
+      {},
+      adminToken,
+      {
+        'If-Match': sloEtag || '"1"',
+        'Idempotency-Key': `idemp-slo-arch-${Date.now()}`,
+      }
+    );
   }
 
   const sloPass =
@@ -106,17 +143,25 @@ async function main() {
     (sloEvalRes.status === 200 || sloEvalRes.status === 202) &&
     sloHistoryRes.status === 200 &&
     (sloArchiveRes.status === 200 || sloArchiveRes.status === 204);
-  console.log(`     SLO Lifecycle Result: ${sloPass ? 'PASS (Created 201, Evaluated 200/202, Archived 200/204, History 200)' : `FAIL (Create: ${sloRes1.status}, Lineage: ${sloLineageId}, Eval: ${sloEvalRes.status}, Hist: ${sloHistoryRes.status}, Arch: ${sloArchiveRes.status})`}`);
+  console.log(
+    `     SLO Lifecycle Result: ${sloPass ? 'PASS (Created 201, Evaluated 200/202, Archived 200/204, History 200)' : `FAIL (Create: ${sloRes1.status}, Lineage: ${sloLineageId}, Eval: ${sloEvalRes.status}, Hist: ${sloHistoryRes.status}, Arch: ${sloArchiveRes.status})`}`
+  );
 
   // B. Audit Export Stream & Checksum Integrity Workflow (Real Background Worker)
   console.log('  -> Executing Audit Export Stream & Integrity Workflow (Real Worker)...');
   const now = Date.now();
   const fromDate = new Date(now - 7 * 86400000).toISOString();
   const toDate = new Date(now - 86400000).toISOString();
-  const auditExpRes = await req('POST', '/audit-exports', {
-    from: fromDate,
-    to: toDate
-  }, adminToken, { 'Idempotency-Key': `idemp-audit-${Date.now()}` });
+  const auditExpRes = await req(
+    'POST',
+    '/audit-exports',
+    {
+      from: fromDate,
+      to: toDate,
+    },
+    adminToken,
+    { 'Idempotency-Key': `idemp-audit-${Date.now()}` }
+  );
 
   const auditExpId = auditExpRes.json?.data?.id;
   let auditPass = false;
@@ -136,7 +181,7 @@ async function main() {
 
     if (completedRecord) {
       const auditDlRes = await fetch(`${apiBase}/audit-exports/${auditExpId}/download`, {
-        headers: { 'Authorization': `Bearer ${adminToken}` }
+        headers: { Authorization: `Bearer ${adminToken}` },
       });
       const dlText = await auditDlRes.text();
       const dlSha = crypto.createHash('sha256').update(Buffer.from(dlText)).digest('hex');
@@ -154,71 +199,110 @@ async function main() {
         downloadedPayload?.schemaVersion === 1;
     }
   }
-  console.log(`     Audit Export Stream Result: ${auditPass ? 'PASS (Real Worker Executed, Encrypted, Stream Downloaded, SHA256 Integrity Verified)' : 'FAIL'}`);
+  console.log(
+    `     Audit Export Stream Result: ${auditPass ? 'PASS (Real Worker Executed, Encrypted, Stream Downloaded, SHA256 Integrity Verified)' : 'FAIL'}`
+  );
 
   // C. Incident Metadata & Custom Fields Workflow
   console.log('  -> Executing Incident Custom Fields & Tagging Workflow...');
-  const incMetaRes1 = await req('POST', `/incidents/${fixtures.incidents.openId}/tags`, { name: 'severity-critical' }, adminToken, {
-    'Idempotency-Key': `idemp-tag-${Date.now()}`
-  });
+  const incMetaRes1 = await req(
+    'POST',
+    `/incidents/${fixtures.incidents.openId}/tags`,
+    { name: 'severity-critical' },
+    adminToken,
+    {
+      'Idempotency-Key': `idemp-tag-${Date.now()}`,
+    }
+  );
   const incDiagRes = await req('GET', `/incidents/${fixtures.incidents.openId}/available-actions`);
   const incRelRes = await req('GET', `/incidents/${fixtures.incidents.openId}/related-incidents`);
   const incMetaPass =
     (incMetaRes1.status === 200 || incMetaRes1.status === 201) &&
     incDiagRes.status === 200 &&
     incRelRes.status === 200;
-  console.log(`     Incident Metadata & Diagnostics Result: ${incMetaPass ? 'PASS (Tag 200/201, Available Actions 200, Related Incidents 200)' : `FAIL (Tag: ${incMetaRes1.status}, Diag: ${incDiagRes.status}, Rel: ${incRelRes.status})`}`);
+  console.log(
+    `     Incident Metadata & Diagnostics Result: ${incMetaPass ? 'PASS (Tag 200/201, Available Actions 200, Related Incidents 200)' : `FAIL (Tag: ${incMetaRes1.status}, Diag: ${incDiagRes.status}, Rel: ${incRelRes.status})`}`
+  );
 
   // D. Runbook Service Bindings & Triggers
   console.log('  -> Executing Runbook Service Bindings & Execution Rules Workflow...');
   const runbookRecord = await prisma.runbook.findUnique({
     where: { id: fixtures.runbooks.runbookId },
-    select: { publishedVersionId: true }
+    select: { publishedVersionId: true },
   });
-  const resolvedPublishedVerId = runbookRecord?.publishedVersionId || fixtures.runbookVersions?.versionId;
-  const ruleRes = await req('POST', `/services/${fixtures.services.serviceAId}/runbook-rules`, {
-    configuration: {
-      runbookId: fixtures.runbooks.runbookId,
-      name: `Reconcile Bind Rule ${Date.now()}`,
-      mode: 'MANUAL',
-      versionStrategy: 'LATEST_PUBLISHED'
+  const resolvedPublishedVerId =
+    runbookRecord?.publishedVersionId || fixtures.runbookVersions?.versionId;
+  const ruleRes = await req(
+    'POST',
+    `/services/${fixtures.services.serviceAId}/runbook-rules`,
+    {
+      configuration: {
+        runbookId: fixtures.runbooks.runbookId,
+        name: `Reconcile Bind Rule ${Date.now()}`,
+        mode: 'MANUAL',
+        versionStrategy: 'LATEST_PUBLISHED',
+      },
+      expectedVersionId: resolvedPublishedVerId,
     },
-    expectedVersionId: resolvedPublishedVerId
-  }, adminToken, { 'Idempotency-Key': `idemp-rule-${Date.now()}` });
+    adminToken,
+    { 'Idempotency-Key': `idemp-rule-${Date.now()}` }
+  );
   const ruleId = ruleRes.json?.data?.id;
 
   let rulePass = false;
   if (ruleRes.status === 201 && ruleId) {
-    const pauseRes = await req('POST', `/services/${fixtures.services.serviceAId}/runbook-rules/${ruleId}/pause`, {}, adminToken, {
-      'If-Match': '"1"',
-      'Idempotency-Key': `idemp-pause-${Date.now()}`
-    });
+    const pauseRes = await req(
+      'POST',
+      `/services/${fixtures.services.serviceAId}/runbook-rules/${ruleId}/pause`,
+      {},
+      adminToken,
+      {
+        'If-Match': '"1"',
+        'Idempotency-Key': `idemp-pause-${Date.now()}`,
+      }
+    );
     const pauseEtag = pauseRes.headers.get('etag') || '"2"';
-    const resumeRes = await req('PATCH', `/services/${fixtures.services.serviceAId}/runbook-rules/${ruleId}`, {
-      configuration: { enabled: true },
-      expectedVersionId: resolvedPublishedVerId
-    }, adminToken, {
-      'If-Match': pauseEtag,
-      'Idempotency-Key': `idemp-resume-${Date.now()}`
-    });
+    const resumeRes = await req(
+      'PATCH',
+      `/services/${fixtures.services.serviceAId}/runbook-rules/${ruleId}`,
+      {
+        configuration: { enabled: true },
+        expectedVersionId: resolvedPublishedVerId,
+      },
+      adminToken,
+      {
+        'If-Match': pauseEtag,
+        'Idempotency-Key': `idemp-resume-${Date.now()}`,
+      }
+    );
     rulePass = pauseRes.status === 200 && resumeRes.status === 200;
   }
-  console.log(`     Runbook Bindings Lifecycle Result: ${rulePass ? 'PASS (Created 201 with RuleId, Paused 200, Resumed 200)' : `FAIL (Create: ${ruleRes.status}, ID: ${ruleId})`}`);
+  console.log(
+    `     Runbook Bindings Lifecycle Result: ${rulePass ? 'PASS (Created 201 with RuleId, Paused 200, Resumed 200)' : `FAIL (Create: ${ruleRes.status}, ID: ${ruleId})`}`
+  );
 
   // E. Identity Lifecycle & Session Revocation
   console.log('  -> Executing Identity Lifecycle & Session Revocation Workflow...');
-  const inviteRes = await req('POST', '/users/invitations', {
-    name: `Invited User ${Date.now()}`,
-    email: `invite_${Date.now()}@example.com`,
-    role: 'RESPONDER',
-    authenticationMode: 'PASSWORD',
-    delivery: 'MANUAL',
-    expectedPolicyVersion: 1,
-    expectedOidcConfigVersion: null
-  }, adminToken, { 'Idempotency-Key': `idemp-inv-${Date.now()}` });
+  const inviteRes = await req(
+    'POST',
+    '/users/invitations',
+    {
+      name: `Invited User ${Date.now()}`,
+      email: `invite_${Date.now()}@example.com`,
+      role: 'RESPONDER',
+      authenticationMode: 'PASSWORD',
+      delivery: 'MANUAL',
+      expectedPolicyVersion: 1,
+      expectedOidcConfigVersion: null,
+    },
+    adminToken,
+    { 'Idempotency-Key': `idemp-inv-${Date.now()}` }
+  );
   const userListRes = await req('GET', '/users');
   const identityPass = inviteRes.status === 201 && userListRes.status === 200;
-  console.log(`     Identity Lifecycle Result: ${identityPass ? 'PASS (Invitation Created 201, User List Verified 200)' : `STATUS: ${inviteRes.status}`}`);
+  console.log(
+    `     Identity Lifecycle Result: ${identityPass ? 'PASS (Invitation Created 201, User List Verified 200)' : `STATUS: ${inviteRes.status}`}`
+  );
 
   // F. Specialized Protocols Live Invariant Verification
   console.log('  -> Executing Specialized Protocols Verification...');
@@ -230,11 +314,15 @@ async function main() {
   const scimNoAuthUsers = await fetch('http://127.0.0.1:3900/api/scim/v2/Users');
   const scimPass =
     scimConfigRes.status === 200 &&
-    scimConfigJson?.schemas?.includes('urn:ietf:params:scim:schemas:core:2.0:ServiceProviderConfig') &&
+    scimConfigJson?.schemas?.includes(
+      'urn:ietf:params:scim:schemas:core:2.0:ServiceProviderConfig'
+    ) &&
     scimSchemasRes.status === 200 &&
     Array.isArray(scimSchemasJson?.Resources) &&
     scimNoAuthUsers.status === 401;
-  console.log(`     SCIM 2.0 Protocol Result: ${scimPass ? 'PASS (RFC 7644 Config & Schemas Validated 200, Unauth 401)' : 'FAIL'}`);
+  console.log(
+    `     SCIM 2.0 Protocol Result: ${scimPass ? 'PASS (RFC 7644 Config & Schemas Validated 200, Unauth 401)' : 'FAIL'}`
+  );
 
   // 2. Agent Execution Protocol
   const agentListRes = await req('GET', '/runbooks/agents');
@@ -244,18 +332,24 @@ async function main() {
     Array.isArray(agentListRes.json?.data) &&
     poolListRes.status === 200 &&
     Array.isArray(poolListRes.json?.data);
-  console.log(`     Agent Remote Protocol Result: ${agentProtocolPass ? 'PASS (Agents & Pools API Verified 200)' : 'FAIL'}`);
+  console.log(
+    `     Agent Remote Protocol Result: ${agentProtocolPass ? 'PASS (Agents & Pools API Verified 200)' : 'FAIL'}`
+  );
 
   // 3. Provider OAuth Consent Protocol
   const intListRes = await req('GET', '/integrations');
   const providerOAuthPass = intListRes.status === 200 && Array.isArray(intListRes.json?.data);
-  console.log(`     Provider OAuth Protocol Result: ${providerOAuthPass ? 'PASS (Integrations Endpoint Verified 200)' : 'FAIL'}`);
+  console.log(
+    `     Provider OAuth Protocol Result: ${providerOAuthPass ? 'PASS (Integrations Endpoint Verified 200)' : 'FAIL'}`
+  );
 
   // 4. Sensitive Maintenance Protocol
   const sensitiveMaintenancePass =
     fs.existsSync('scripts/auto-recover-migrations.ts') &&
     fs.existsSync('tests/lib/api-key-upgrade-compat.test.ts');
-  console.log(`     Sensitive Maintenance Result: ${sensitiveMaintenancePass ? 'PASS (Recovery & Upgrade Modules Verified)' : 'FAIL'}\n`);
+  console.log(
+    `     Sensitive Maintenance Result: ${sensitiveMaintenancePass ? 'PASS (Recovery & Upgrade Modules Verified)' : 'FAIL'}\n`
+  );
 
   // Fail suite immediately if any extended or specialized workflow check fails
   if (!sloPass) throw new Error('[FATAL] SLO Management workflow failed.');
@@ -266,7 +360,8 @@ async function main() {
   if (!scimPass) throw new Error('[FATAL] SCIM Protocol verification failed.');
   if (!agentProtocolPass) throw new Error('[FATAL] Agent Protocol verification failed.');
   if (!providerOAuthPass) throw new Error('[FATAL] Provider OAuth verification failed.');
-  if (!sensitiveMaintenancePass) throw new Error('[FATAL] Sensitive Maintenance verification failed.');
+  if (!sensitiveMaintenancePass)
+    throw new Error('[FATAL] Sensitive Maintenance verification failed.');
 
   // -------------------------------------------------------------------------
   // 2. RECONCILING ALL 31 WORKFLOWS
@@ -280,55 +375,80 @@ async function main() {
     // Map to 8 primary E2E workflows
     if (cid === 'incident-lifecycle') {
       classification = 'CERTIFIED_E2E';
-      summary = 'Covered in WORKFLOW-MATRIX Domain 1: Incident Lifecycle & Transitions (9 steps, 100% pass).';
+      summary =
+        'Covered in WORKFLOW-MATRIX Domain 1: Incident Lifecycle & Transitions (9 steps, 100% pass).';
     } else if (cid === 'team-membership') {
       classification = 'CERTIFIED_E2E';
-      summary = 'Covered in WORKFLOW-MATRIX Domain 2: Team Administration & Membership Lifecycle (7 steps, 100% pass).';
-    } else if (cid === 'schedule-layers' || cid === 'schedule-participants' || cid === 'escalation-validation') {
+      summary =
+        'Covered in WORKFLOW-MATRIX Domain 2: Team Administration & Membership Lifecycle (7 steps, 100% pass).';
+    } else if (
+      cid === 'schedule-layers' ||
+      cid === 'schedule-participants' ||
+      cid === 'escalation-validation'
+    ) {
       classification = 'CERTIFIED_E2E';
-      summary = 'Covered in WORKFLOW-MATRIX Domain 3: Policy Formulation, Rotations & Overrides (7 steps, 100% pass).';
+      summary =
+        'Covered in WORKFLOW-MATRIX Domain 3: Policy Formulation, Rotations & Overrides (7 steps, 100% pass).';
     } else if (cid === 'service-automation') {
       classification = 'CERTIFIED_E2E';
-      summary = 'Covered in WORKFLOW-MATRIX Domain 4: Service Automation Authoring & Simulation (4 steps, 100% pass).';
-    } else if (cid === 'runbook-lifecycle' || cid === 'runbook-authoring' || cid === 'runbook-control') {
+      summary =
+        'Covered in WORKFLOW-MATRIX Domain 4: Service Automation Authoring & Simulation (4 steps, 100% pass).';
+    } else if (
+      cid === 'runbook-lifecycle' ||
+      cid === 'runbook-authoring' ||
+      cid === 'runbook-control'
+    ) {
       classification = 'CERTIFIED_E2E';
-      summary = 'Covered in WORKFLOW-MATRIX Domain 5: Runbook Authoring, Versioning & Execution Preview (5 steps, 100% pass).';
+      summary =
+        'Covered in WORKFLOW-MATRIX Domain 5: Runbook Authoring, Versioning & Execution Preview (5 steps, 100% pass).';
     } else if (cid === 'status-management') {
       classification = 'CERTIFIED_E2E';
-      summary = 'Covered in WORKFLOW-MATRIX Domain 6: Public Status Configuration & Announcements (4 steps, 100% pass) + Real 201 creation certified.';
+      summary =
+        'Covered in WORKFLOW-MATRIX Domain 6: Public Status Configuration & Announcements (4 steps, 100% pass) + Real 201 creation certified.';
     } else if (cid === 'postmortem-workflows') {
       classification = 'CERTIFIED_E2E';
-      summary = 'Covered in WORKFLOW-MATRIX Domain 7: Postmortem Retrospective Lifecycle & Publication (4 steps, 100% pass).';
+      summary =
+        'Covered in WORKFLOW-MATRIX Domain 7: Postmortem Retrospective Lifecycle & Publication (4 steps, 100% pass).';
     } else if (cid === 'dashboards') {
       classification = 'CERTIFIED_E2E';
-      summary = 'Covered in WORKFLOW-MATRIX Domain 8: Dashboard Authoring, Widgets, Duplication & Lifecycle (5 steps, 100% pass).';
+      summary =
+        'Covered in WORKFLOW-MATRIX Domain 8: Dashboard Authoring, Widgets, Duplication & Lifecycle (5 steps, 100% pass).';
     } else if (cid === 'slo-management') {
       classification = 'CERTIFIED_EXTENDED_WORKFLOW';
-      summary = 'Certified in live multi-step extended workflow (Create, Evaluate, Update, Archive, History) + 11 atomic operations.';
+      summary =
+        'Certified in live multi-step extended workflow (Create, Evaluate, Update, Archive, History) + 11 atomic operations.';
     } else if (cid === 'audit-export') {
       classification = 'CERTIFIED_EXTENDED_WORKFLOW';
-      summary = 'Certified in live multi-step extended workflow (Create, Background Encryption, Stream Download, SHA256 Checksum Verification).';
+      summary =
+        'Certified in live multi-step extended workflow (Create, Background Encryption, Stream Download, SHA256 Checksum Verification).';
     } else if (cid === 'incident-metadata' || cid === 'incident-diagnostics') {
       classification = 'CERTIFIED_EXTENDED_WORKFLOW';
-      summary = 'Certified in live multi-step extended workflow (Tags, Available Actions, Related Incidents) + 18 atomic operations.';
+      summary =
+        'Certified in live multi-step extended workflow (Tags, Available Actions, Related Incidents) + 18 atomic operations.';
     } else if (cid === 'runbook-service-rules') {
       classification = 'CERTIFIED_EXTENDED_WORKFLOW';
-      summary = 'Certified in live multi-step extended workflow (Rule binding, Inspection, Pause, Resume) + 10 atomic operations.';
+      summary =
+        'Certified in live multi-step extended workflow (Rule binding, Inspection, Pause, Resume) + 10 atomic operations.';
     } else if (cid === 'identity-lifecycle') {
       classification = 'CERTIFIED_EXTENDED_WORKFLOW';
-      summary = 'Certified in live multi-step extended workflow (User Invite, Role assignment, Session inspection) + 14 atomic operations.';
+      summary =
+        'Certified in live multi-step extended workflow (User Invite, Role assignment, Session inspection) + 14 atomic operations.';
     } else if (cid === 'scim') {
       classification = 'SPECIALIZED_PROTOCOL_PROVISIONAL_SMOKE';
-      summary = 'SCIM 2.0 provisioning smoke verified live (200 Config/Schemas, 401 unauth); full protocol suites pass in tests/lib/scim.test.ts (13/13).';
+      summary =
+        'SCIM 2.0 provisioning smoke verified live (200 Config/Schemas, 401 unauth); full protocol suites pass in tests/lib/scim.test.ts (13/13).';
     } else if (cid === 'provider-oauth') {
       classification = 'SPECIALIZED_PROTOCOL_PROVISIONAL_SMOKE';
-      summary = 'Provider OAuth discovery endpoint verified live (200); authoritative flow logic validated in tests/unit/api-v2-enterprise-platform.test.ts (17/17).';
+      summary =
+        'Provider OAuth discovery endpoint verified live (200); authoritative flow logic validated in tests/unit/api-v2-enterprise-platform.test.ts (17/17).';
     } else if (cid === 'agent-protocol') {
       classification = 'SPECIALIZED_PROTOCOL_PROVISIONAL_SMOKE';
-      summary = 'Runbook remote agent discovery verified live (200); authoritative agent execution and HMAC validation pass in tests/unit/api-v2-sdk.test.ts (13/13).';
+      summary =
+        'Runbook remote agent discovery verified live (200); authoritative agent execution and HMAC validation pass in tests/unit/api-v2-sdk.test.ts (13/13).';
     } else if (cid === 'sensitive-maintenance') {
       classification = 'SPECIALIZED_PROTOCOL_PROVISIONAL_SMOKE';
-      summary = 'Sensitive CLI recovery & key upgrade verified (scripts/auto-recover-migrations.ts); cryptographic assertions pass in tests/lib/api-key-upgrade-compat.test.ts (8/8).';
+      summary =
+        'Sensitive CLI recovery & key upgrade verified (scripts/auto-recover-migrations.ts); cryptographic assertions pass in tests/lib/api-key-upgrade-compat.test.ts (8/8).';
     } else {
       classification = 'CERTIFIED_ATOMIC_MATRIX';
       summary = `Certified with 100% live HTTP 2xx, 5 auth failure vectors, and OpenAPI schema compliance in 314-operation matrix.`;
@@ -336,11 +456,16 @@ async function main() {
 
     // Collect linked operations from canonical capability catalog or matrix
     const cap = API_CAPABILITY_CATALOG.find(c => c.id === cid);
-    const ops = cap?.operationIds && cap.operationIds.length > 0
-      ? [...cap.operationIds]
-      : opMatrix.operations
-          .filter((o: any) => o.path.includes(cid.replace('-', '/')) || o.operationId.toLowerCase().includes(cid.replace('-', '')))
-          .map((o: any) => o.operationId);
+    const ops =
+      cap?.operationIds && cap.operationIds.length > 0
+        ? [...cap.operationIds]
+        : opMatrix.operations
+            .filter(
+              (o: any) =>
+                o.path.includes(cid.replace('-', '/')) ||
+                o.operationId.toLowerCase().includes(cid.replace('-', ''))
+            )
+            .map((o: any) => o.operationId);
 
     // Evidence-based strict verdict evaluation (no default PASS)
     let verdict: 'PASS' | 'FAIL' = 'FAIL';
@@ -364,10 +489,12 @@ async function main() {
     } else if (cid === 'sensitive-maintenance') {
       verdict = sensitiveMaintenancePass ? 'PASS' : 'FAIL';
     } else {
-      const allOpsPass = ops.length > 0 && ops.every((opId: string) => {
-        const found = opMatrix.operations.find((o: any) => o.operationId === opId);
-        return found && found.overallVerdict === 'PASS';
-      });
+      const allOpsPass =
+        ops.length > 0 &&
+        ops.every((opId: string) => {
+          const found = opMatrix.operations.find((o: any) => o.operationId === opId);
+          return found && found.overallVerdict === 'PASS';
+        });
       verdict = allOpsPass ? 'PASS' : 'FAIL';
     }
 
@@ -379,20 +506,24 @@ async function main() {
       classification,
       operationsCovered: ops,
       evidenceSummary: summary,
-      verdict
+      verdict,
     });
   }
 
   const failedWorkflows = results.filter(r => r.verdict === 'FAIL');
   if (failedWorkflows.length > 0) {
-    console.error(`[FATAL] ${failedWorkflows.length} workflows failed evidence-based reconciliation:`, failedWorkflows.map(f => f.capabilityId));
+    console.error(
+      `[FATAL] ${failedWorkflows.length} workflows failed evidence-based reconciliation:`,
+      failedWorkflows.map(f => f.capabilityId)
+    );
     process.exit(1);
   }
 
   // -------------------------------------------------------------------------
   // 3. GENERATE MARKDOWN RECONCILIATION REPORT
   // -------------------------------------------------------------------------
-  const reportPath = 'reports/api-v2-certification/fdabcf67b45ae772d9c4413dc4a915f5b1ea3cfc/WORKFLOW-RECONCILIATION.md';
+  const reportPath =
+    'reports/api-v2-certification/fdabcf67b45ae772d9c4413dc4a915f5b1ea3cfc/WORKFLOW-RECONCILIATION.md';
   let md = `# OpsKnight REST API v2 — 31-Workflow Enterprise Inventory Reconciliation
 
 **Release Candidate Commit**: \`fdabcf67b45ae772d9c4413dc4a915f5b1ea3cfc\`  

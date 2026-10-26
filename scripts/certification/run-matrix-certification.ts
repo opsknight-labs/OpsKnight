@@ -1,10 +1,13 @@
 import dotenv from 'dotenv';
-dotenv.config({ override: true });
+dotenv.config({ path: process.env.DOTENV_CONFIG_PATH || '.env', override: true });
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto, { randomUUID } from 'node:crypto';
 import { PrismaClient } from '@prisma/client';
-import { V2_OPERATIONS, type V2OperationDefinition as V2Operation } from '../../src/lib/api-v2/openapi-registry';
+import {
+  V2_OPERATIONS,
+  type V2OperationDefinition as V2Operation,
+} from '../../src/lib/api-v2/openapi-registry';
 import { V2_MUTATION_CONTRACT } from '../../src/lib/api-v2/mutation-contract';
 import { getVerifiedSampleBody } from '../../src/lib/api-v2/endpoint-samples';
 import { encrypt } from '../../src/lib/encryption';
@@ -12,7 +15,9 @@ import { encrypt } from '../../src/lib/encryption';
 function requireEnv(name: string): string {
   const value = process.env[name];
   if (!value || value.trim().length === 0) {
-    throw new Error(`[FATAL] Missing mandatory environment variable: ${name}. Configure it in .env or shell environment.`);
+    throw new Error(
+      `[FATAL] Missing mandatory environment variable: ${name}. Configure it in .env or shell environment.`
+    );
   }
   return value.trim();
 }
@@ -28,7 +33,10 @@ function canonicalJson(value: unknown): unknown {
   return value;
 }
 function computeCanonicalChecksum(value: unknown): string {
-  return crypto.createHash('sha256').update(JSON.stringify(canonicalJson(value))).digest('hex');
+  return crypto
+    .createHash('sha256')
+    .update(JSON.stringify(canonicalJson(value)))
+    .digest('hex');
 }
 
 interface Fixtures {
@@ -172,10 +180,16 @@ function resolvePath(templatePath: string, fixtures: Fixtures): string {
   } else if (resolved.startsWith('/runbooks/') && resolved.includes('/drafts/{versionId}')) {
     resolved = resolved
       .replace('{id}', fixtures.runbooks.runbookId)
-      .replace('{versionId}', fixtures.runbooks.draftVersionId || fixtures.runbookDrafts?.draftVersionId || 'dummy-draft');
+      .replace(
+        '{versionId}',
+        fixtures.runbooks.draftVersionId || fixtures.runbookDrafts?.draftVersionId || 'dummy-draft'
+      );
   } else if (resolved.startsWith('/runbooks/')) {
     resolved = resolved.replace('{id}', fixtures.runbooks.runbookId);
-  } else if (resolved.startsWith('/services/') && resolved.includes('/automation/versions/{versionId}')) {
+  } else if (
+    resolved.startsWith('/services/') &&
+    resolved.includes('/automation/versions/{versionId}')
+  ) {
     resolved = resolved
       .replace('{id}', fixtures.services.serviceAId)
       .replace('{versionId}', fixtures.automationVersions?.versionId || 'dummy-auto-ver');
@@ -186,9 +200,15 @@ function resolvePath(templatePath: string, fixtures: Fixtures): string {
   } else if (resolved.startsWith('/services/')) {
     resolved = resolved.replace('{id}', fixtures.services.serviceAId);
   } else if (resolved.startsWith('/service-objectives/')) {
-    resolved = resolved.replace('{id}', fixtures.objectives?.lineageId || 'cert-lineage-1792844059215');
+    resolved = resolved.replace(
+      '{id}',
+      fixtures.objectives?.lineageId || 'cert-lineage-1792844059215'
+    );
   } else if (resolved.startsWith('/audit-exports/')) {
-    resolved = resolved.replace('{id}', fixtures.auditExports?.exportId || 'cmvmdw7fn014kjq5tb3na5pw8');
+    resolved = resolved.replace(
+      '{id}',
+      fixtures.auditExports?.exportId || 'cmvmdw7fn014kjq5tb3na5pw8'
+    );
   } else if (resolved.startsWith('/incidents/')) {
     resolved = resolved.replace('{id}', fixtures.incidents.openId);
   } else if (resolved.startsWith('/teams/')) {
@@ -212,7 +232,10 @@ function resolvePath(templatePath: string, fixtures: Fixtures): string {
   } else if (resolved.startsWith('/notifications/')) {
     resolved = resolved.replace('{id}', fixtures.notifications?.notificationId || 'dummy-notif');
   } else if (resolved.startsWith('/reports/saved/')) {
-    resolved = resolved.replace('{id}', (fixtures as any).savedReports?.id || 'cmvmcdf9m00041onrgmjawm0d');
+    resolved = resolved.replace(
+      '{id}',
+      (fixtures as any).savedReports?.id || 'cmvmcdf9m00041onrgmjawm0d'
+    );
   } else if (resolved.startsWith('/users/')) {
     resolved = resolved.replace('{id}', fixtures.users.responderId);
   } else {
@@ -272,7 +295,7 @@ function getPayloadForOperation(op: V2Operation, fixtures: Fixtures): unknown {
       archiveOnResolve: true,
       defaultVideoBridge: 'GOOGLE_MEET',
       customBridgeUrlTemplate: 'https://meet.google.com/{incidentId}',
-      defaultProviders: ['SLACK']
+      defaultProviders: ['SLACK'],
     };
   }
 
@@ -284,7 +307,7 @@ function getPayloadForOperation(op: V2Operation, fixtures: Fixtures): unknown {
       required: false,
       defaultValue: null,
       options: null,
-      showInList: false
+      showInList: false,
     };
   }
 
@@ -296,14 +319,14 @@ function getPayloadForOperation(op: V2Operation, fixtures: Fixtures): unknown {
     return {
       from: '2026-10-01T00:00:00.000Z',
       to: '2026-10-24T00:00:00.000Z',
-      maxRecords: 100
+      maxRecords: 100,
     };
   }
 
   if (op.path === '/notification-providers/web-push/rotate' && method === 'POST') {
     return {
       subject: 'mailto:admin@opsknight.local',
-      keepPrevious: true
+      keepPrevious: true,
     };
   }
 
@@ -313,8 +336,8 @@ function getPayloadForOperation(op: V2Operation, fixtures: Fixtures): unknown {
       enabled: true,
       config: {
         vapidPublicKey: 'BCm0w_mock_vapid_public_key_for_testing_purposes_only_1234567890',
-        vapidSubject: 'mailto:admin@opsknight.local'
-      }
+        vapidSubject: 'mailto:admin@opsknight.local',
+      },
     };
   }
 
@@ -354,9 +377,17 @@ function getPayloadForOperation(op: V2Operation, fixtures: Fixtures): unknown {
     return {
       definition: {
         description: 'Certified remediation runbook draft',
-        steps: [{ key: 'step_drain', name: 'Drain connections', type: 'MANUAL', riskClass: 'READ_ONLY', config: {} }]
+        steps: [
+          {
+            key: 'step_drain',
+            name: 'Drain connections',
+            type: 'MANUAL',
+            riskClass: 'READ_ONLY',
+            config: {},
+          },
+        ],
       },
-      inputs: []
+      inputs: [],
     };
   }
 
@@ -379,7 +410,7 @@ function getPayloadForOperation(op: V2Operation, fixtures: Fixtures): unknown {
       defaultUrgency: 'HIGH',
       defaultPriority: 'P1',
       defaultServiceId: fixtures.services.serviceAId,
-      isPublic: false
+      isPublic: false,
     };
   }
 
@@ -401,18 +432,18 @@ function getPayloadForOperation(op: V2Operation, fixtures: Fixtures): unknown {
         runbookId: fixtures.runbooks.runbookId,
         name: `Auto Mitigate Rule ${Date.now()}`,
         mode: 'MANUAL',
-        versionStrategy: 'LATEST_PUBLISHED'
+        versionStrategy: 'LATEST_PUBLISHED',
       },
-      expectedVersionId: fixtures.runbookVersions?.versionId
+      expectedVersionId: fixtures.runbookVersions?.versionId,
     };
   }
 
   if (op.path === '/services/{id}/runbook-rules/{ruleId}' && method === 'PATCH') {
     return {
       configuration: {
-        name: `Updated Mitigate Rule ${Date.now()}`
+        name: `Updated Mitigate Rule ${Date.now()}`,
       },
-      expectedVersionId: fixtures.runbookVersions?.versionId
+      expectedVersionId: fixtures.runbookVersions?.versionId,
     };
   }
 
@@ -429,9 +460,9 @@ function getPayloadForOperation(op: V2Operation, fixtures: Fixtures): unknown {
         target: 60,
         comparator: 'LESS_THAN_OR_EQUAL',
         windowType: 'ROLLING_DAYS',
-        windowValue: 30
+        windowValue: 30,
       },
-      expectedActiveVersionId: null
+      expectedActiveVersionId: null,
     };
   }
 
@@ -446,7 +477,7 @@ function getPayloadForOperation(op: V2Operation, fixtures: Fixtures): unknown {
   if (op.path === '/services/{id}/notification-settings' && method === 'PATCH') {
     return {
       serviceNotifyOnTriggered: true,
-      serviceNotifyOnAck: true
+      serviceNotifyOnAck: true,
     };
   }
 
@@ -456,7 +487,7 @@ function getPayloadForOperation(op: V2Operation, fixtures: Fixtures): unknown {
       inheritWorkspace: true,
       mode: 'INHERIT',
       windows: [],
-      exceptions: []
+      exceptions: [],
     };
   }
 
@@ -465,11 +496,35 @@ function getPayloadForOperation(op: V2Operation, fixtures: Fixtures): unknown {
       derivePriorityFromUrgency: true,
       priorityFallbackMode: 'INHERIT',
       rules: [
-        { matchValue: 'critical', priorityMode: 'SET', priority: 'P1', urgencyMode: 'SET', urgency: 'HIGH' },
-        { matchValue: 'error', priorityMode: 'SET', priority: 'P2', urgencyMode: 'SET', urgency: 'HIGH' },
-        { matchValue: 'warning', priorityMode: 'SET', priority: 'P3', urgencyMode: 'SET', urgency: 'MEDIUM' },
-        { matchValue: 'info', priorityMode: 'SET', priority: 'P4', urgencyMode: 'SET', urgency: 'LOW' }
-      ]
+        {
+          matchValue: 'critical',
+          priorityMode: 'SET',
+          priority: 'P1',
+          urgencyMode: 'SET',
+          urgency: 'HIGH',
+        },
+        {
+          matchValue: 'error',
+          priorityMode: 'SET',
+          priority: 'P2',
+          urgencyMode: 'SET',
+          urgency: 'HIGH',
+        },
+        {
+          matchValue: 'warning',
+          priorityMode: 'SET',
+          priority: 'P3',
+          urgencyMode: 'SET',
+          urgency: 'MEDIUM',
+        },
+        {
+          matchValue: 'info',
+          priorityMode: 'SET',
+          priority: 'P4',
+          urgencyMode: 'SET',
+          urgency: 'LOW',
+        },
+      ],
     };
   }
 
@@ -478,7 +533,7 @@ function getPayloadForOperation(op: V2Operation, fixtures: Fixtures): unknown {
       inheritWorkspace: false,
       baseAckTargetMs: 900000,
       baseResolveTargetMs: 7200000,
-      rules: []
+      rules: [],
     };
   }
 
@@ -486,13 +541,13 @@ function getPayloadForOperation(op: V2Operation, fixtures: Fixtures): unknown {
     return {
       baseAckTargetMs: 900000,
       baseResolveTargetMs: 7200000,
-      rules: []
+      rules: [],
     };
   }
 
   if (op.path === '/services/{id}/automation/restore' && method === 'POST') {
     return {
-      sourceVersionId: fixtures.automationVersions?.versionId
+      sourceVersionId: fixtures.automationVersions?.versionId,
     };
   }
 
@@ -529,7 +584,12 @@ function getPayloadForOperation(op: V2Operation, fixtures: Fixtures): unknown {
   }
 
   if (op.path === '/reports/saved' && method === 'POST') {
-    return { name: `Cert Saved Report ${Date.now()}`, metrics: ['totalIncidents'], windowDays: 30, visibility: 'PRIVATE' };
+    return {
+      name: `Cert Saved Report ${Date.now()}`,
+      metrics: ['totalIncidents'],
+      windowDays: 30,
+      visibility: 'PRIVATE',
+    };
   }
 
   if (op.path === '/reports/saved/{id}' && method === 'PATCH') {
@@ -561,22 +621,25 @@ function getPayloadForOperation(op: V2Operation, fixtures: Fixtures): unknown {
           delayMinutes: 5,
           targetType: 'USER',
           targetId: fixtures.users.responderId,
-          notificationChannels: ['EMAIL']
-        }
-      ]
+          notificationChannels: ['EMAIL'],
+        },
+      ],
     };
   }
 
   if (op.path === '/escalation-policies/{id}/preview' && method === 'POST') {
     return {
-      incidentId: fixtures.incidents.openId
+      incidentId: fixtures.incidents.openId,
     };
   }
 
-  if ((op.path === '/runbooks/{id}/execute' || op.path === '/runbooks/{id}/executions/preview') && method === 'POST') {
+  if (
+    (op.path === '/runbooks/{id}/execute' || op.path === '/runbooks/{id}/executions/preview') &&
+    method === 'POST'
+  ) {
     return {
       incidentId: fixtures.incidents.openId,
-      parameters: {}
+      parameters: {},
     };
   }
 
@@ -597,7 +660,7 @@ function getPayloadForOperation(op: V2Operation, fixtures: Fixtures): unknown {
       runbookId: fixtures.runbooks.runbookId,
       incidentId: fixtures.incidents.openId,
       serviceId: fixtures.services.serviceAId,
-      inputValues: {}
+      inputValues: {},
     };
   }
 
@@ -606,7 +669,7 @@ function getPayloadForOperation(op: V2Operation, fixtures: Fixtures): unknown {
       runbookId: fixtures.runbooks.runbookId,
       incidentId: fixtures.incidents.openId,
       serviceId: fixtures.services.serviceAId,
-      inputValues: {}
+      inputValues: {},
     };
   }
 
@@ -618,7 +681,7 @@ function getPayloadForOperation(op: V2Operation, fixtures: Fixtures): unknown {
       rotationLengthHours: 24,
       shiftLengthHours: null,
       restrictions: null,
-      responderIds: []
+      responderIds: [],
     };
   }
 
@@ -629,7 +692,7 @@ function getPayloadForOperation(op: V2Operation, fixtures: Fixtures): unknown {
       end: null,
       rotationLengthHours: 24,
       shiftLengthHours: null,
-      restrictions: null
+      restrictions: null,
     };
   }
 
@@ -653,8 +716,8 @@ function getPayloadForOperation(op: V2Operation, fixtures: Fixtures): unknown {
         rotationLengthHours: 24,
         shiftLengthHours: null,
         restrictions: null,
-        responderIds: []
-      }
+        responderIds: [],
+      },
     };
   }
 
@@ -678,9 +741,9 @@ function getPayloadForOperation(op: V2Operation, fixtures: Fixtures): unknown {
           description: 'Cert action item',
           ownerId: fixtures.users.responderId,
           status: 'OPEN',
-          priority: 'HIGH'
-        }
-      ]
+          priority: 'HIGH',
+        },
+      ],
     };
   }
 
@@ -692,7 +755,11 @@ function getPayloadForOperation(op: V2Operation, fixtures: Fixtures): unknown {
     return { confirmMatchAll: true };
   }
 
-  if (op.path.includes('/runbook-rules') && op.path.includes('/policy-checks') && method === 'POST') {
+  if (
+    op.path.includes('/runbook-rules') &&
+    op.path.includes('/policy-checks') &&
+    method === 'POST'
+  ) {
     return {};
   }
 
@@ -708,11 +775,35 @@ function getPayloadForOperation(op: V2Operation, fixtures: Fixtures): unknown {
     return {
       derivePriorityFromUrgency: false,
       rules: [
-        { matchValue: 'critical', priorityMode: 'SET', priority: 'P1', urgencyMode: 'SET', urgency: 'HIGH' },
-        { matchValue: 'error', priorityMode: 'SET', priority: 'P2', urgencyMode: 'SET', urgency: 'HIGH' },
-        { matchValue: 'warning', priorityMode: 'SET', priority: 'P3', urgencyMode: 'SET', urgency: 'MEDIUM' },
-        { matchValue: 'info', priorityMode: 'SET', priority: 'P4', urgencyMode: 'SET', urgency: 'LOW' }
-      ]
+        {
+          matchValue: 'critical',
+          priorityMode: 'SET',
+          priority: 'P1',
+          urgencyMode: 'SET',
+          urgency: 'HIGH',
+        },
+        {
+          matchValue: 'error',
+          priorityMode: 'SET',
+          priority: 'P2',
+          urgencyMode: 'SET',
+          urgency: 'HIGH',
+        },
+        {
+          matchValue: 'warning',
+          priorityMode: 'SET',
+          priority: 'P3',
+          urgencyMode: 'SET',
+          urgency: 'MEDIUM',
+        },
+        {
+          matchValue: 'info',
+          priorityMode: 'SET',
+          priority: 'P4',
+          urgencyMode: 'SET',
+          urgency: 'LOW',
+        },
+      ],
     };
   }
 
@@ -721,7 +812,7 @@ function getPayloadForOperation(op: V2Operation, fixtures: Fixtures): unknown {
       inheritWorkspace: true,
       baseAckTargetMs: 600000,
       baseResolveTargetMs: 3600000,
-      rules: []
+      rules: [],
     };
   }
 
@@ -731,7 +822,8 @@ function getPayloadForOperation(op: V2Operation, fixtures: Fixtures): unknown {
 
   if (op.path === '/status-pages/{id}/assets' && method === 'POST') {
     return {
-      image: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII='
+      image:
+        'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=',
     };
   }
 
@@ -743,7 +835,7 @@ function getPayloadForOperation(op: V2Operation, fixtures: Fixtures): unknown {
       authenticationMode: 'PASSWORD',
       delivery: 'MANUAL',
       expectedPolicyVersion: 1,
-      expectedOidcConfigVersion: null
+      expectedOidcConfigVersion: null,
     };
   }
 
@@ -753,7 +845,7 @@ function getPayloadForOperation(op: V2Operation, fixtures: Fixtures): unknown {
       delivery: 'MANUAL',
       expectedPolicyVersion: 1,
       expectedOidcConfigVersion: null,
-      expectedLinkingApprovalRevision: null
+      expectedLinkingApprovalRevision: null,
     };
   }
 
@@ -764,7 +856,7 @@ function getPayloadForOperation(op: V2Operation, fixtures: Fixtures): unknown {
       pushEnabled: false,
       voiceEnabled: false,
       whatsappEnabled: false,
-      timeZone: 'UTC'
+      timeZone: 'UTC',
     };
   }
 
@@ -799,7 +891,7 @@ function getPayloadForOperation(op: V2Operation, fixtures: Fixtures): unknown {
   if (op.path === '/service-accounts' && method === 'POST') {
     return {
       name: `Cert SA ${Date.now()}`,
-      role: 'RESPONDER'
+      role: 'RESPONDER',
     };
   }
 
@@ -807,7 +899,7 @@ function getPayloadForOperation(op: V2Operation, fixtures: Fixtures): unknown {
     return {
       name: `Cert SA Token ${Date.now()}`,
       scopes: ['incidents:read'],
-      expiresInDays: 30
+      expiresInDays: 30,
     };
   }
 
@@ -815,7 +907,7 @@ function getPayloadForOperation(op: V2Operation, fixtures: Fixtures): unknown {
     return {
       name: `Cert Svc ${Date.now()}`,
       teamId: fixtures.teams.teamAId,
-      escalationPolicyId: fixtures.escalationPolicies.policyAId
+      escalationPolicyId: fixtures.escalationPolicies.policyAId,
     };
   }
 
@@ -823,7 +915,7 @@ function getPayloadForOperation(op: V2Operation, fixtures: Fixtures): unknown {
     return {
       incidentId: fixtures.incidents.resolvedId,
       title: `Certified Postmortem ${Date.now()}`,
-      summary: 'Postmortem summary'
+      summary: 'Postmortem summary',
     };
   }
 
@@ -846,7 +938,9 @@ function getPayloadForOperation(op: V2Operation, fixtures: Fixtures): unknown {
     }
     if (cloned.ownerId) cloned.ownerId = fixtures.users.responderId;
     if (Array.isArray(cloned.steps)) {
-      cloned.steps.forEach((s: any) => { if (s && s.targetId) s.targetId = fixtures.users.responderId; });
+      cloned.steps.forEach((s: any) => {
+        if (s && s.targetId) s.targetId = fixtures.users.responderId;
+      });
     }
     if (Array.isArray(cloned.responderIds)) {
       cloned.responderIds = [fixtures.users.responderId];
@@ -864,7 +958,12 @@ function getPayloadForOperation(op: V2Operation, fixtures: Fixtures): unknown {
     return { userId: fixtures.users.responderId, role: 'FOLLOWER' };
   }
   if (op.path.includes('/announcements')) {
-    return { title: 'System Notice', message: 'Cert routine announcement', type: 'INFO', isActive: true };
+    return {
+      title: 'System Notice',
+      message: 'Cert routine announcement',
+      type: 'INFO',
+      isActive: true,
+    };
   }
   if (op.path.includes('/overrides')) {
     const start = new Date(Date.now() + 86400000 * 365 + Math.floor(Math.random() * 1000000000));
@@ -872,7 +971,7 @@ function getPayloadForOperation(op: V2Operation, fixtures: Fixtures): unknown {
     return {
       userId: fixtures.users.responderId,
       startDate: start.toISOString(),
-      endDate: end.toISOString()
+      endDate: end.toISOString(),
     };
   }
 
@@ -890,7 +989,7 @@ async function request(
 ) {
   const headers: Record<string, string> = {
     Accept: 'application/json, application/problem+json',
-    ...(options.headers || {})
+    ...(options.headers || {}),
   };
 
   if (options.token) {
@@ -906,7 +1005,7 @@ async function request(
     const res = await fetch(url, {
       method: options.method,
       headers,
-      body: options.body !== undefined ? JSON.stringify(options.body) : undefined
+      body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
     });
     const latencyMs = Math.round(performance.now() - start);
     const contentType = res.headers.get('content-type') || '';
@@ -927,7 +1026,7 @@ async function request(
       headers: res.headers,
       json,
       text,
-      latencyMs
+      latencyMs,
     };
   } catch (err: any) {
     const latencyMs = Math.round(performance.now() - start);
@@ -937,7 +1036,7 @@ async function request(
       json: null,
       text: err.message,
       latencyMs,
-      networkError: err
+      networkError: err,
     };
   }
 }
@@ -949,7 +1048,12 @@ async function getResourceEtag(
   op: V2Operation,
   fixtures: Fixtures
 ): Promise<string | null> {
-  if (!url.includes('/order') && !url.includes('/preview') && !url.includes('/restore') && !url.includes('/activate')) {
+  if (
+    !url.includes('/order') &&
+    !url.includes('/preview') &&
+    !url.includes('/restore') &&
+    !url.includes('/activate')
+  ) {
     try {
       const probe = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
       const etag = probe.headers.get('etag');
@@ -967,7 +1071,9 @@ async function getResourceEtag(
     }
   }
   if (url.includes('/status-pages/')) {
-    const page = await prisma.statusPage.findUnique({ where: { id: fixtures.statusPages.statusPageId } });
+    const page = await prisma.statusPage.findUnique({
+      where: { id: fixtures.statusPages.statusPageId },
+    });
     if (page) return `"${page.revision}"`;
   }
   if (url.includes('/notification-providers/')) {
@@ -989,23 +1095,25 @@ async function getResourceEtag(
     const m = url.match(/\/runbook-rules\/([a-z0-9_-]+)/);
     const ruleId = m && m[1] !== 'runbook-rules' ? m[1] : fixtures.serviceRunbookRules?.ruleId;
     if (ruleId) {
-      const rule = await prisma.serviceAutomationRule.findFirst({ where: { id: ruleId, detachedAt: null } });
+      const rule = await prisma.serviceAutomationRule.findFirst({
+        where: { id: ruleId, detachedAt: null },
+      });
       if (rule) return `"${rule.configurationRevision}"`;
     }
     const rule = await prisma.serviceAutomationRule.findFirst({
-      where: { serviceId: fixtures.services.serviceAId, detachedAt: null }
+      where: { serviceId: fixtures.services.serviceAId, detachedAt: null },
     });
     if (rule) return `"${rule.configurationRevision}"`;
   }
   if (url.includes('/services/') && url.includes('/automation')) {
     if (url.includes('/draft') || url.includes('/restore')) {
       const draft = await prisma.automationDraft.findFirst({
-        where: { serviceId: fixtures.services.serviceAId }
+        where: { serviceId: fixtures.services.serviceAId },
       });
       return `"${draft?.revision ?? 0}"`;
     }
     const cfg = await prisma.serviceAutomationConfig.findFirst({
-      where: { serviceId: fixtures.services.serviceAId }
+      where: { serviceId: fixtures.services.serviceAId },
     });
     return `"${cfg?.revision ?? 0}"`;
   }
@@ -1030,31 +1138,34 @@ async function getResourceEtag(
   }
   if (url.includes('/service-objectives/')) {
     const m = url.match(/\/service-objectives\/([a-zA-Z0-9_-]+)/);
-    const targetLineageId = m && m[1] !== 'service-objectives' && m[1] !== 'catalog' ? m[1] : fixtures.objectives?.lineageId;
+    const targetLineageId =
+      m && m[1] !== 'service-objectives' && m[1] !== 'catalog'
+        ? m[1]
+        : fixtures.objectives?.lineageId;
     const obj = await prisma.serviceObjective.findFirst({
       where: { lineageId: targetLineageId, activeTo: null },
-      orderBy: { version: 'desc' }
+      orderBy: { version: 'desc' },
     });
     if (obj) return `"${obj.version * 2}"`;
   }
   if (url.includes('/support-hours')) {
     const policy = await prisma.responseSupportHoursPolicy.findFirst({
       where: { scopeKey: `service:${fixtures.services.serviceAId}`, sealedAt: { not: null } },
-      orderBy: { version: 'desc' }
+      orderBy: { version: 'desc' },
     });
     return `"${policy?.version ?? 0}"`;
   }
   if (url.includes('/response-policy/classification')) {
     const p = await prisma.incidentClassificationPolicy.findFirst({
       where: { scopeKey: `service:${fixtures.services.serviceAId}`, sealedAt: { not: null } },
-      orderBy: { version: 'desc' }
+      orderBy: { version: 'desc' },
     });
     return `"${p?.version ?? 0}"`;
   }
   if (url.includes('/response-policy/sla')) {
     const p = await prisma.incidentSlaPolicy.findFirst({
       where: { scopeKey: `service:${fixtures.services.serviceAId}`, sealedAt: { not: null } },
-      orderBy: { version: 'desc' }
+      orderBy: { version: 'desc' },
     });
     return `"${p?.version ?? 0}"`;
   }
@@ -1067,7 +1178,9 @@ async function getResourceEtag(
     }
   }
   if (url.includes('/status-pages/')) {
-    const page = await prisma.statusPage.findUnique({ where: { id: fixtures.statusPages.statusPageId } });
+    const page = await prisma.statusPage.findUnique({
+      where: { id: fixtures.statusPages.statusPageId },
+    });
     if (page) return `"${page.revision}"`;
   }
   if (url.includes('/settings/runbooks')) {
@@ -1085,7 +1198,7 @@ async function getResourceEtag(
   }
   if (url.includes('/postmortems/')) {
     const pm = await prisma.postmortem.findFirst({
-      where: { id: fixtures.postmortems.postmortemId }
+      where: { id: fixtures.postmortems.postmortemId },
     });
     if (pm) return `"${pm.revision}"`;
   }
@@ -1097,24 +1210,24 @@ async function getResourceEtag(
         if (lyr) return `"${lyr.revision}"`;
       }
       const lyr = await prisma.onCallLayer.findFirst({
-        where: { scheduleId: fixtures.schedules.scheduleAId }
+        where: { scheduleId: fixtures.schedules.scheduleAId },
       });
       if (lyr) return `"${lyr.revision}"`;
     }
     const sch = await prisma.onCallSchedule.findFirst({
-      where: { id: fixtures.schedules.scheduleAId }
+      where: { id: fixtures.schedules.scheduleAId },
     });
     if (sch) return `"${sch.revision}"`;
   }
   if (url.includes('/automation/')) {
     if (url.includes('/draft') || url.includes('/publish')) {
       const draft = await prisma.automationDraft.findFirst({
-        where: { serviceId: fixtures.services.serviceAId }
+        where: { serviceId: fixtures.services.serviceAId },
       });
       return `"${draft?.revision ?? 0}"`;
     }
     const cfg = await prisma.serviceAutomationConfig.findFirst({
-      where: { serviceId: fixtures.services.serviceAId }
+      where: { serviceId: fixtures.services.serviceAId },
     });
     return `"${cfg?.revision ?? 0}"`;
   }
@@ -1125,7 +1238,7 @@ async function getResourceEtag(
       if (ag) return `"${ag.configurationRevision}"`;
     }
     const ag = await prisma.runbookAgent.findFirst({
-      where: { id: fixtures.agentPools?.agentId }
+      where: { id: fixtures.agentPools?.agentId },
     });
     if (ag) return `"${ag.configurationRevision}"`;
   }
@@ -1136,13 +1249,16 @@ async function getResourceEtag(
       if (pool) return `"${pool.revision}"`;
     }
     const pool = await prisma.runbookAgentPool.findFirst({
-      where: { id: fixtures.agentPools?.poolId }
+      where: { id: fixtures.agentPools?.poolId },
     });
     if (pool) return `"${pool.revision}"`;
   }
   if (url.includes('/secrets/')) {
     const m = url.match(/\/secrets\/([a-z0-9_-]+)/);
-    const secId = m && m[1] !== 'secrets' && m[1] !== 'usage' && m[1] !== 'grants' ? m[1] : fixtures.runbookSecrets?.secretId;
+    const secId =
+      m && m[1] !== 'secrets' && m[1] !== 'usage' && m[1] !== 'grants'
+        ? m[1]
+        : fixtures.runbookSecrets?.secretId;
     if (secId) {
       const sec = await prisma.runbookSecret.findUnique({ where: { id: secId } });
       if (sec) return `"${sec.revision}"`;
@@ -1158,7 +1274,7 @@ async function getResourceEtag(
   }
   if (url.includes('/drafts/')) {
     const dr = await prisma.runbookVersion.findFirst({
-      where: { runbookId: fixtures.runbooks.runbookId, state: 'DRAFT' }
+      where: { runbookId: fixtures.runbooks.runbookId, state: 'DRAFT' },
     });
     if (dr) return `"${dr.draftRevision}"`;
   }
@@ -1188,31 +1304,31 @@ async function prepareDisposableForDelete(
   }
   if (op.operationId === 'deleteService') {
     const s = await prisma.service.create({
-      data: { name: `Disposable Svc ${Date.now()}`, status: 'OPERATIONAL' }
+      data: { name: `Disposable Svc ${Date.now()}`, status: 'OPERATIONAL' },
     });
     return `${apiBase}/services/${s.id}`;
   }
   if (op.operationId === 'deleteRunbook') {
     const rb = await prisma.runbook.create({
-      data: { name: `Disposable RB ${Date.now()}`, slug: `disp-rb-${Date.now()}` }
+      data: { name: `Disposable RB ${Date.now()}`, slug: `disp-rb-${Date.now()}` },
     });
     return `${apiBase}/runbooks/${rb.id}`;
   }
   if (op.operationId === 'deleteEscalationPolicy') {
     const ep = await prisma.escalationPolicy.create({
-      data: { name: `Disposable EP ${Date.now()}` }
+      data: { name: `Disposable EP ${Date.now()}` },
     });
     return `${apiBase}/escalation-policies/${ep.id}`;
   }
   if (op.operationId === 'deleteSchedule') {
     const sch = await prisma.onCallSchedule.create({
-      data: { name: `Disposable Sch ${Date.now()}`, timeZone: 'UTC' }
+      data: { name: `Disposable Sch ${Date.now()}`, timeZone: 'UTC' },
     });
     return `${apiBase}/schedules/${sch.id}`;
   }
   if (op.operationId === 'deleteCustomFieldDefinition') {
     const cf = await prisma.customField.create({
-      data: { name: `Disp Field ${Date.now()}`, key: `disp_${Date.now()}`, type: 'TEXT' }
+      data: { name: `Disp Field ${Date.now()}`, key: `disp_${Date.now()}`, type: 'TEXT' },
     });
     return `${apiBase}/custom-fields/${cf.id}`;
   }
@@ -1222,8 +1338,8 @@ async function prepareDisposableForDelete(
         name: `Disp Dash ${Date.now()}`,
         layout: { columns: 4, rowHeight: 120 },
         userId: fixtures.users.adminId,
-        visibility: 'PRIVATE'
-      }
+        visibility: 'PRIVATE',
+      },
     });
     return `${apiBase}/dashboards/${db.id}`;
   }
@@ -1236,26 +1352,31 @@ async function prepareDisposableForDelete(
         email,
         role: 'RESPONDER',
         status: 'ACTIVE',
-        department: 'SERVICE_ACCOUNT'
-      }
+        department: 'SERVICE_ACCOUNT',
+      },
     });
     return `${apiBase}/service-accounts/${sa.id}`;
   }
   if (op.operationId === 'deleteRunbookAgentPool') {
     const pool = await prisma.runbookAgentPool.create({
-      data: { name: `Disp Pool ${Date.now()}` }
+      data: { name: `Disp Pool ${Date.now()}` },
     });
     return `${apiBase}/runbooks/agent-pools/${pool.id}`;
   }
   if (op.operationId === 'deleteIncidentTemplate') {
     const tmpl = await prisma.incidentTemplate.create({
-      data: { name: `Disp Tmpl ${Date.now()}`, title: 'Disp Incident', defaultPriority: 'P3' }
+      data: { name: `Disp Tmpl ${Date.now()}`, title: 'Disp Incident', defaultPriority: 'P3' },
     });
     return `${apiBase}/incidents/templates/${tmpl.id}`;
   }
   if (op.operationId === 'deleteIntegration') {
     const int = await prisma.integration.create({
-      data: { name: `Disp Int ${Date.now()}`, type: 'GENERIC_WEBHOOK', key: `disp_${Date.now()}`, serviceId: fixtures.services.serviceAId }
+      data: {
+        name: `Disp Int ${Date.now()}`,
+        type: 'GENERIC_WEBHOOK',
+        key: `disp_${Date.now()}`,
+        serviceId: fixtures.services.serviceAId,
+      },
     });
     return `${apiBase}/integrations/${int.id}`;
   }
@@ -1268,8 +1389,8 @@ async function prepareDisposableForDelete(
         urgency: 'HIGH',
         serviceId: fixtures.services.serviceAId,
         assigneeId: fixtures.users.responderId,
-        resolvedAt: new Date()
-      }
+        resolvedAt: new Date(),
+      },
     });
     const pm = await prisma.postmortem.create({
       data: {
@@ -1277,8 +1398,8 @@ async function prepareDisposableForDelete(
         title: `Temp PM ${Date.now()}`,
         summary: 'Temp summary',
         status: 'DRAFT',
-        createdById: fixtures.users.adminId
-      }
+        createdById: fixtures.users.adminId,
+      },
     });
     return `${apiBase}/postmortems/${pm.id}`;
   }
@@ -1289,26 +1410,26 @@ async function prepareDisposableForDelete(
         runbookId: fixtures.runbooks.runbookId,
         name: `Disp Rule ${Date.now()}`,
         versionStrategy: 'LATEST_PUBLISHED',
-        enabled: true
-      }
+        enabled: true,
+      },
     });
     return `${apiBase}/services/${fixtures.services.serviceAId}/runbook-rules/${r.id}`;
   }
   if (op.operationId === 'removeIncidentWatcher') {
     const w = await prisma.incidentWatcher.create({
-      data: { incidentId: fixtures.incidents.openId, userId: fixtures.users.auditorId }
+      data: { incidentId: fixtures.incidents.openId, userId: fixtures.users.auditorId },
     });
     return `${apiBase}/incidents/${fixtures.incidents.openId}/watchers/${w.id}`;
   }
   if (op.operationId === 'removeIncidentTag') {
     const t = await prisma.tag.create({
-      data: { name: `disp-tag-${Date.now()}` }
+      data: { name: `disp-tag-${Date.now()}` },
     });
     await prisma.incidentTag.create({
       data: {
         incidentId: fixtures.incidents.openId,
-        tagId: t.id
-      }
+        tagId: t.id,
+      },
     });
     return `${apiBase}/incidents/${fixtures.incidents.openId}/tags/${t.id}`;
   }
@@ -1317,8 +1438,8 @@ async function prepareDisposableForDelete(
       data: {
         postmortemId: fixtures.postmortems.postmortemId,
         incidentId: fixtures.incidents.openId,
-        title: `Disp Item ${Date.now()}`
-      }
+        title: `Disp Item ${Date.now()}`,
+      },
     });
     return `${apiBase}/postmortems/${fixtures.postmortems.postmortemId}/action-items/${ai.id}`;
   }
@@ -1328,8 +1449,8 @@ async function prepareDisposableForDelete(
         scheduleId: fixtures.schedules.scheduleAId,
         userId: fixtures.users.responderId,
         start: new Date(Date.now() + 86400000),
-        end: new Date(Date.now() + 90000000)
-      }
+        end: new Date(Date.now() + 90000000),
+      },
     });
     return `${apiBase}/schedules/${fixtures.schedules.scheduleAId}/overrides/${ov.id}`;
   }
@@ -1340,14 +1461,14 @@ async function prepareDisposableForDelete(
         name: `Disp Layer ${Date.now()}`,
         start: new Date(),
         rotationLengthHours: 24,
-        priority: 99
-      }
+        priority: 99,
+      },
     });
     return `${apiBase}/schedules/${fixtures.schedules.scheduleAId}/layers/${lyr.id}`;
   }
   if (op.operationId === 'removeScheduleParticipant') {
     let layer = await prisma.onCallLayer.findFirst({
-      where: { scheduleId: fixtures.schedules.scheduleAId }
+      where: { scheduleId: fixtures.schedules.scheduleAId },
     });
     if (!layer) {
       layer = await prisma.onCallLayer.create({
@@ -1356,34 +1477,36 @@ async function prepareDisposableForDelete(
           name: 'Primary Rotation',
           start: new Date(),
           rotationLengthHours: 24,
-          priority: 1
-        }
+          priority: 1,
+        },
       });
     }
     await prisma.onCallLayerUser.upsert({
       where: { layerId_userId: { layerId: layer.id, userId: fixtures.users.teamBUserId } },
       create: { layerId: layer.id, userId: fixtures.users.teamBUserId, position: 99 },
-      update: {}
+      update: {},
     });
     return `${apiBase}/schedules/${fixtures.schedules.scheduleAId}/layers/${layer.id}/participants/${fixtures.users.teamBUserId}`;
   }
   if (op.operationId === 'removeTeamMember') {
     await prisma.teamMember.upsert({
-      where: { userId_teamId: { userId: fixtures.users.regularId, teamId: fixtures.teams.teamBId } },
+      where: {
+        userId_teamId: { userId: fixtures.users.regularId, teamId: fixtures.teams.teamBId },
+      },
       create: { userId: fixtures.users.regularId, teamId: fixtures.teams.teamBId, role: 'MEMBER' },
-      update: {}
+      update: {},
     });
     return `${apiBase}/teams/${fixtures.teams.teamBId}/members/${fixtures.users.regularId}`;
   }
   if (op.operationId === 'revokeRunbookSecretGrant') {
     const dispPool = await prisma.runbookAgentPool.create({
-      data: { name: `Disp Pool For Grant ${Date.now()}`, lifecycle: 'ACTIVE' }
+      data: { name: `Disp Pool For Grant ${Date.now()}`, lifecycle: 'ACTIVE' },
     });
     const g = await prisma.runbookSecretGrant.create({
       data: {
         secretId: fixtures.runbookSecrets?.secretId || '',
-        agentPoolId: dispPool.id
-      }
+        agentPoolId: dispPool.id,
+      },
     });
     return `${apiBase}/runbooks/secrets/${fixtures.runbookSecrets?.secretId}/grants/${g.id}`;
   }
@@ -1394,8 +1517,8 @@ async function prepareDisposableForDelete(
         name: `Disp Token ${Date.now()}`,
         prefix: `ok_sa_${Date.now()}`.slice(0, 12),
         tokenHash: `token_hash_${Date.now()}`,
-        scopes: ['service-accounts:write']
-      }
+        scopes: ['service-accounts:write'],
+      },
     });
     return `${apiBase}/service-accounts/${fixtures.users.serviceAccountUserId}/tokens/${t.id}`;
   }
@@ -1406,8 +1529,8 @@ async function prepareDisposableForDelete(
         email: `disp-sub-${Date.now()}@example.com`,
         token: `disp-tok-${Date.now()}`,
         state: 'ACTIVE',
-        verified: true
-      }
+        verified: true,
+      },
     });
     return `${apiBase}/status-pages/${fixtures.statusPages.statusPageId}/subscribers/${sub.id}`;
   }
@@ -1418,15 +1541,15 @@ async function prepareDisposableForDelete(
         id: assetId,
         statusPageId: fixtures.statusPages.statusPageId,
         contentType: 'image/png',
-        data: Buffer.from('mockpngdata')
-      }
+        data: Buffer.from('mockpngdata'),
+      },
     });
     return `${apiBase}/status-pages/${fixtures.statusPages.statusPageId}/assets/${assetId}`;
   }
   if (op.operationId === 'deleteRunbook') {
     const name = `Disposable RB ${Date.now()}`;
     const rb = await prisma.runbook.create({
-      data: { name, slug: `disp-rb-del-${Date.now()}` }
+      data: { name, slug: `disp-rb-del-${Date.now()}` },
     });
     return `${apiBase}/runbooks/${rb.id}`;
   }
@@ -1436,8 +1559,8 @@ async function prepareDisposableForDelete(
         name: `Disp Report ${Date.now()}`,
         metricKeys: ['totalIncidents'],
         userId: fixtures.users.adminId,
-        visibility: 'PRIVATE'
-      }
+        visibility: 'PRIVATE',
+      },
     });
     return `${apiBase}/reports/saved/${rep.id}`;
   }
@@ -1454,22 +1577,23 @@ async function prepareIncidentForAction(
   const inc = await prisma.incident.create({
     data: {
       title: `Lifecycle Inc ${action} ${Date.now()}`,
-      status: action === 'unacknowledge' || action === 'snooze' || action === 'resolve'
-        ? 'ACKNOWLEDGED'
-        : action === 'reopen'
-          ? 'RESOLVED'
-          : action === 'unsuppress'
-            ? 'SUPPRESSED'
-            : action === 'unsnooze'
-              ? 'SNOOZED'
-              : 'OPEN',
+      status:
+        action === 'unacknowledge' || action === 'snooze' || action === 'resolve'
+          ? 'ACKNOWLEDGED'
+          : action === 'reopen'
+            ? 'RESOLVED'
+            : action === 'unsuppress'
+              ? 'SUPPRESSED'
+              : action === 'unsnooze'
+                ? 'SNOOZED'
+                : 'OPEN',
       priority: 'P2',
       urgency: 'HIGH',
       serviceId: fixtures.services.serviceAId,
       assigneeId: fixtures.users.responderId,
       ...(action === 'reopen' ? { resolvedAt: new Date() } : {}),
-      ...(action === 'unsnooze' ? { snoozedUntil: new Date(Date.now() + 3600000) } : {})
-    }
+      ...(action === 'unsnooze' ? { snoozedUntil: new Date(Date.now() + 3600000) } : {}),
+    },
   });
   return `${apiBase}/incidents/${inc.id}/${action}`;
 }
@@ -1477,7 +1601,7 @@ async function prepareIncidentForAction(
 async function main() {
   const DATABASE_URL = requireEnv('DATABASE_URL');
   const prisma = new PrismaClient({
-    datasources: { db: { url: DATABASE_URL } }
+    datasources: { db: { url: DATABASE_URL } },
   });
   const fixturesPath = path.resolve('tests/certification/fixtures.json');
   const fixtures: Fixtures = JSON.parse(fs.readFileSync(fixturesPath, 'utf8'));
@@ -1487,12 +1611,12 @@ async function main() {
 
   const activeObj = await prisma.serviceObjective.findFirst({
     where: { activeTo: null },
-    orderBy: { activeFrom: 'desc' }
+    orderBy: { activeFrom: 'desc' },
   });
   if (activeObj) {
     fixtures.objectives = {
       objectiveId: activeObj.id,
-      lineageId: activeObj.lineageId
+      lineageId: activeObj.lineageId,
     };
   }
 
@@ -1500,7 +1624,7 @@ async function main() {
   const limitedPool: string[] = JSON.parse(fs.readFileSync(limitedPoolPath, 'utf8')).tokens;
 
   let defaultLayer = await prisma.onCallLayer.findFirst({
-    where: { scheduleId: fixtures.schedules.scheduleAId }
+    where: { scheduleId: fixtures.schedules.scheduleAId },
   });
   if (!defaultLayer) {
     defaultLayer = await prisma.onCallLayer.create({
@@ -1509,8 +1633,8 @@ async function main() {
         name: 'Primary Rotation',
         start: new Date(),
         rotationLengthHours: 24,
-        priority: 1
-      }
+        priority: 1,
+      },
     });
   }
   fixtures.scheduleLayers = { layerId: defaultLayer.id };
@@ -1523,14 +1647,14 @@ async function main() {
       data: {
         name: `Primary Status Page ${Date.now()}`,
         slug: `status-${Date.now()}`,
-        organizationName: 'OpsKnight Inc'
-      }
+        organizationName: 'OpsKnight Inc',
+      },
     });
     fixtures.statusPages = { statusPageId: newSp.id };
   }
 
   let sub = await prisma.statusPageSubscription.findFirst({
-    where: { statusPageId: fixtures.statusPages.statusPageId }
+    where: { statusPageId: fixtures.statusPages.statusPageId },
   });
   if (!sub) {
     sub = await prisma.statusPageSubscription.create({
@@ -1539,25 +1663,27 @@ async function main() {
         email: `subscriber-${Date.now()}@example.com`,
         token: `cert-sub-token-${Date.now()}`,
         state: 'ACTIVE',
-        verified: true
-      }
+        verified: true,
+      },
     });
   }
   fixtures.subscribers = { subscriberId: sub.id };
 
   // Ensure valid runbook with published and draft versions
-  const rb = await prisma.runbook.findUnique({
-    where: { id: fixtures.runbooks.runbookId },
-    include: { publishedVersion: true }
-  }) || await prisma.runbook.findFirst({
-    where: { publishedVersionId: { not: null }, archivedAt: null },
-    include: { publishedVersion: true }
-  });
+  const rb =
+    (await prisma.runbook.findUnique({
+      where: { id: fixtures.runbooks.runbookId },
+      include: { publishedVersion: true },
+    })) ||
+    (await prisma.runbook.findFirst({
+      where: { publishedVersionId: { not: null }, archivedAt: null },
+      include: { publishedVersion: true },
+    }));
   if (rb && rb.publishedVersion) {
     fixtures.runbooks.runbookId = rb.id;
     fixtures.runbooks.publishedVersionId = rb.publishedVersionId!;
     let draft = await prisma.runbookVersion.findFirst({
-      where: { runbookId: rb.id, state: 'DRAFT' }
+      where: { runbookId: rb.id, state: 'DRAFT' },
     });
     if (!draft) {
       draft = await prisma.runbookVersion.create({
@@ -1566,8 +1692,8 @@ async function main() {
           version: (rb.publishedVersion.version ?? 1) + 1,
           state: 'DRAFT',
           definition: rb.publishedVersion.definition ?? { schemaVersion: 1, steps: [] },
-          checksum: 'draft_checksum_' + Date.now()
-        }
+          checksum: 'draft_checksum_' + Date.now(),
+        },
       });
     }
     fixtures.runbooks.draftVersionId = draft.id;
@@ -1577,7 +1703,7 @@ async function main() {
 
   // Ensure valid integration
   let int = await prisma.integration.findFirst({
-    where: { serviceId: fixtures.services.serviceAId }
+    where: { serviceId: fixtures.services.serviceAId },
   });
   if (!int) {
     int = await prisma.integration.create({
@@ -1585,15 +1711,15 @@ async function main() {
         name: `Cert Integration ${Date.now()}`,
         type: 'GENERIC_WEBHOOK',
         key: `cert_int_${Date.now()}`,
-        serviceId: fixtures.services.serviceAId
-      }
+        serviceId: fixtures.services.serviceAId,
+      },
     });
   }
   fixtures.integrations = { integrationId: int.id };
 
   // Ensure valid postmortem
   let pm = await prisma.postmortem.findFirst({
-    where: { incident: { serviceId: fixtures.services.serviceAId } }
+    where: { incident: { serviceId: fixtures.services.serviceAId } },
   });
   if (!pm) {
     const inc = await prisma.incident.create({
@@ -1604,8 +1730,8 @@ async function main() {
         urgency: 'HIGH',
         serviceId: fixtures.services.serviceAId,
         assigneeId: fixtures.users.responderId,
-        resolvedAt: new Date()
-      }
+        resolvedAt: new Date(),
+      },
     });
     pm = await prisma.postmortem.create({
       data: {
@@ -1613,8 +1739,8 @@ async function main() {
         title: `Cert Postmortem ${Date.now()}`,
         summary: 'Cert PM Summary',
         status: 'DRAFT',
-        createdById: fixtures.users.adminId
-      }
+        createdById: fixtures.users.adminId,
+      },
     });
   }
   fixtures.postmortems = { postmortemId: pm.id };
@@ -1627,15 +1753,15 @@ async function main() {
         name: `Primary Dashboard ${Date.now()}`,
         layout: { columns: 4, rowHeight: 120 },
         userId: fixtures.users.adminId,
-        visibility: 'PRIVATE'
-      }
+        visibility: 'PRIVATE',
+      },
     });
   }
   fixtures.dashboards = { dashboardId: d.id };
 
   // Ensure valid serviceAutomationRule
   let rule = await prisma.serviceAutomationRule.findFirst({
-    where: { serviceId: fixtures.services.serviceAId, detachedAt: null }
+    where: { serviceId: fixtures.services.serviceAId, detachedAt: null },
   });
   if (!rule) {
     rule = await prisma.serviceAutomationRule.create({
@@ -1643,20 +1769,20 @@ async function main() {
         serviceId: fixtures.services.serviceAId,
         runbookId: fixtures.runbooks.runbookId,
         name: `Cert Rule ${Date.now()}`,
-        versionStrategy: 'LATEST_PUBLISHED'
-      }
+        versionStrategy: 'LATEST_PUBLISHED',
+      },
     });
   }
   fixtures.serviceRunbookRules = { ruleId: rule.id };
 
   // Deduplicate active rules for this runbook to maintain a clean test state
   const extraRules = await prisma.serviceAutomationRule.findMany({
-    where: { runbookId: fixtures.runbooks.runbookId, detachedAt: null }
+    where: { runbookId: fixtures.runbooks.runbookId, detachedAt: null },
   });
   if (extraRules.length > 1) {
     await prisma.serviceAutomationRule.updateMany({
       where: { runbookId: fixtures.runbooks.runbookId, id: { not: rule.id }, detachedAt: null },
-      data: { detachedAt: new Date() }
+      data: { detachedAt: new Date() },
     });
   }
 
@@ -1667,15 +1793,15 @@ async function main() {
       data: {
         name: `Cert Saved Report ${Date.now()}`,
         metricKeys: ['incidents.count'],
-        userId: fixtures.users.adminId
-      }
+        userId: fixtures.users.adminId,
+      },
     });
   }
   (fixtures as any).savedReports = { id: rep.id };
 
   // Ensure valid automation version
   let autoVer = await prisma.automationVersion.findFirst({
-    where: { serviceId: fixtures.services.serviceAId }
+    where: { serviceId: fixtures.services.serviceAId },
   });
   if (!autoVer) {
     autoVer = await prisma.automationVersion.create({
@@ -1687,8 +1813,8 @@ async function main() {
         compiledSnapshot: { rules: [], fields: [], schemaVersion: 1 },
         checksum: 'initial_cert_checksum_' + Date.now(),
         publishedBy: fixtures.users.adminId,
-        lintReport: []
-      }
+        lintReport: [],
+      },
     });
   }
   fixtures.automationVersions = { versionId: autoVer.id };
@@ -1702,8 +1828,8 @@ async function main() {
         incidentId: fixtures.incidents.openId,
         channel: 'EMAIL',
         status: 'DELIVERED',
-        payloadEncrypted: 'mock_enc'
-      }
+        payloadEncrypted: 'mock_enc',
+      },
     });
   }
   fixtures.notifications = { notificationId: notifRecord.id };
@@ -1736,30 +1862,51 @@ async function main() {
     let adminToken = keyPool[i % keyPool.length];
     const limitedToken = limitedPool[i % limitedPool.length];
 
-    if ((op.operationId === 'getAuditExport' || op.operationId === 'downloadAuditExport') && lastCreatedAuditExportToken) {
+    if (
+      (op.operationId === 'getAuditExport' || op.operationId === 'downloadAuditExport') &&
+      lastCreatedAuditExportToken
+    ) {
       adminToken = lastCreatedAuditExportToken;
     }
 
-    if ((op.operationId === 'getAuditExport' || op.operationId === 'downloadAuditExport') && lastCreatedAuditExportId) {
+    if (
+      (op.operationId === 'getAuditExport' || op.operationId === 'downloadAuditExport') &&
+      lastCreatedAuditExportId
+    ) {
       fullUrl = `${apiBase}/audit-exports/${lastCreatedAuditExportId}${op.operationId === 'downloadAuditExport' ? '/download' : ''}`;
     }
 
-    if ((op.operationId === 'getReportExport' || op.operationId === 'downloadReportExport' || op.operationId === 'cancelReportExport') && lastCreatedReportExportToken) {
+    if (
+      (op.operationId === 'getReportExport' ||
+        op.operationId === 'downloadReportExport' ||
+        op.operationId === 'cancelReportExport') &&
+      lastCreatedReportExportToken
+    ) {
       adminToken = lastCreatedReportExportToken;
     }
 
-    if ((op.operationId === 'getReportExport' || op.operationId === 'downloadReportExport') && lastCreatedReportExportId) {
+    if (
+      (op.operationId === 'getReportExport' || op.operationId === 'downloadReportExport') &&
+      lastCreatedReportExportId
+    ) {
       fullUrl = `${apiBase}/reports/exports/${lastCreatedReportExportId}${op.operationId === 'downloadReportExport' ? '/download' : ''}`;
     }
 
-    if ((op.operationId === 'getReportExport' || op.operationId === 'downloadReportExport' || op.operationId === 'cancelReportExport') && lastCreatedReportExportId) {
+    if (
+      (op.operationId === 'getReportExport' ||
+        op.operationId === 'downloadReportExport' ||
+        op.operationId === 'cancelReportExport') &&
+      lastCreatedReportExportId
+    ) {
       fullUrl = fullUrl.replace(/c[a-z0-9]{24}/g, lastCreatedReportExportId);
     }
 
     // Check mutation contract for preconditionRequired / concurrency
     const contractKey = `${method} /api/v2${op.path.replace(/\{(\w+)\}/g, '[$1]')}`;
     const contract = V2_MUTATION_CONTRACT[contractKey];
-    const needsPrecondition = Boolean(contract?.preconditionRequired || contract?.concurrency === 'etag');
+    const needsPrecondition = Boolean(
+      contract?.preconditionRequired || contract?.concurrency === 'etag'
+    );
 
     // Handle disposable resource for DELETE
     let disposableUrl: string | null = null;
@@ -1795,34 +1942,40 @@ async function main() {
 
     if (op.operationId === 'archiveRunbook') {
       const rb = await prisma.runbook.create({
-        data: { name: `Disp RB Arc ${Date.now()}`, slug: `disp-rb-arc-${Date.now()}` }
+        data: { name: `Disp RB Arc ${Date.now()}`, slug: `disp-rb-arc-${Date.now()}` },
       });
       fullUrl = `${apiBase}/runbooks/${rb.id}/archive`;
     } else if (op.operationId === 'unarchiveRunbook') {
       const rb = await prisma.runbook.create({
-        data: { name: `Disp RB Unarc ${Date.now()}`, slug: `disp-rb-un-${Date.now()}`, archivedAt: new Date() }
+        data: {
+          name: `Disp RB Unarc ${Date.now()}`,
+          slug: `disp-rb-un-${Date.now()}`,
+          archivedAt: new Date(),
+        },
       });
       fullUrl = `${apiBase}/runbooks/${rb.id}/unarchive`;
     } else if (op.operationId === 'retireRunbookAgentPool') {
       const pool = await prisma.runbookAgentPool.create({
-        data: { name: `Disp Retire Pool ${Date.now()}`, lifecycle: 'ACTIVE' }
+        data: { name: `Disp Retire Pool ${Date.now()}`, lifecycle: 'ACTIVE' },
       });
       fullUrl = `${apiBase}/runbooks/agent-pools/${pool.id}/retire`;
     } else if (op.operationId === 'activateRunbookSigningIdentity') {
-      const activeKey = await prisma.runbookExecutionSigningKey.findFirst({ where: { state: 'ACTIVE' } });
+      const activeKey = await prisma.runbookExecutionSigningKey.findFirst({
+        where: { state: 'ACTIVE' },
+      });
       await prisma.runbookExecutionSigningKey.deleteMany({ where: { state: 'NEXT' } });
       const nextKey = await prisma.runbookExecutionSigningKey.create({
         data: {
           id: `disp-next-key-${Date.now()}`,
           publicKey: `mock-pk-${Date.now()}`,
           privateKeyEncrypted: 'mock-enc',
-          state: 'NEXT'
-        }
+          state: 'NEXT',
+        },
       });
       const trusted = [activeKey?.id, nextKey.id].filter(Boolean) as string[];
       await prisma.runbookAgent.updateMany({
         where: { status: { notIn: ['REVOKED', 'ENROLLING'] } },
-        data: { trustedSigningKeys: trusted }
+        data: { trustedSigningKeys: trusted },
       });
       fullUrl = `${apiBase}/runbooks/signing-identities/${nextKey.id}/activate`;
     } else if (op.operationId === 'retireRunbookSigningIdentity') {
@@ -1832,8 +1985,8 @@ async function main() {
           publicKey: `mock-pk-${Date.now()}`,
           privateKeyEncrypted: 'mock-enc',
           state: 'RETIRING',
-          retiredAt: new Date(Date.now() - 86400000)
-        }
+          retiredAt: new Date(Date.now() - 86400000),
+        },
       });
       fullUrl = `${apiBase}/runbooks/signing-identities/${retiringKey.id}/retire`;
     } else if (op.operationId === 'revokeRunbookAgent') {
@@ -1841,8 +1994,8 @@ async function main() {
         data: {
           name: `Disp Revoke Agent ${Date.now()}`,
           status: 'ONLINE',
-          publicKey: `mock-pk-${Date.now()}`
-        }
+          publicKey: `mock-pk-${Date.now()}`,
+        },
       });
       fullUrl = `${apiBase}/runbooks/agents/${ag.id}/revoke`;
     } else if (op.operationId === 'renewUserInvitation') {
@@ -1852,8 +2005,8 @@ async function main() {
           name: `Invited User ${Date.now()}`,
           role: 'RESPONDER',
           status: 'INVITED',
-          invitedAt: new Date()
-        }
+          invitedAt: new Date(),
+        },
       });
       fullUrl = `${apiBase}/users/${u.id}/invitation`;
     }
@@ -1862,7 +2015,9 @@ async function main() {
       await prisma.runbookExecutionSigningKey.deleteMany({ where: { state: 'NEXT' } });
     }
 
-    process.stdout.write(`[${i + 1}/${V2_OPERATIONS.length}] ${method} ${op.path} (${op.operationId})... `);
+    process.stdout.write(
+      `[${i + 1}/${V2_OPERATIONS.length}] ${method} ${op.path} (${op.operationId})... `
+    );
 
     // 1. Positive Test
     let currentEtag: string | null = null;
@@ -1882,22 +2037,26 @@ async function main() {
           urgency: 'HIGH',
           serviceId: fixtures.services.serviceAId,
           assigneeId: fixtures.users.responderId,
-          resolvedAt: new Date()
-        }
+          resolvedAt: new Date(),
+        },
       });
       payload = {
         incidentId: pmInc.id,
         title: `Certified Postmortem ${Date.now()}`,
-        summary: 'Postmortem summary'
+        summary: 'Postmortem summary',
       };
     }
 
     if (op.operationId === 'stageRunbookSigningIdentity') {
       await prisma.runbookExecutionSigningKey.deleteMany({ where: { state: { not: 'ACTIVE' } } });
-      const activeKey = await prisma.runbookExecutionSigningKey.findFirst({ where: { state: 'ACTIVE' } });
+      const activeKey = await prisma.runbookExecutionSigningKey.findFirst({
+        where: { state: 'ACTIVE' },
+      });
       payload = { expectedActiveKeyId: activeKey ? activeKey.id : null };
     } else if (op.operationId === 'activateRunbookSigningIdentity') {
-      const activeKey = await prisma.runbookExecutionSigningKey.findFirst({ where: { state: 'ACTIVE' } });
+      const activeKey = await prisma.runbookExecutionSigningKey.findFirst({
+        where: { state: 'ACTIVE' },
+      });
       payload = { expectedActiveKeyId: activeKey?.id || fixtures.signingIdentities?.identityId };
     } else if (op.operationId === 'retireRunbookSigningIdentity') {
       payload = { expectedState: 'RETIRING' };
@@ -1905,7 +2064,11 @@ async function main() {
 
     if (op.operationId === 'createServiceObjective') {
       const current = await prisma.serviceObjective.findFirst({
-        where: { serviceId: fixtures.services.serviceAId, metricType: 'AVAILABILITY', activeTo: null }
+        where: {
+          serviceId: fixtures.services.serviceAId,
+          metricType: 'AVAILABILITY',
+          activeTo: null,
+        },
       });
       payload = {
         definition: {
@@ -1914,9 +2077,9 @@ async function main() {
           metricType: 'AVAILABILITY',
           target: 99.9,
           comparator: 'GREATER_THAN_OR_EQUAL',
-          windowType: 'THIRTY_DAYS'
+          windowType: 'THIRTY_DAYS',
         },
-        expectedActiveVersionId: current ? current.id : null
+        expectedActiveVersionId: current ? current.id : null,
       };
     }
 
@@ -1939,17 +2102,20 @@ async function main() {
           channel: 'EMAIL',
           status: 'FAILED',
           message: 'Cert failed message',
-          payloadEncrypted: 'mock_encrypted_payload'
-        }
+          payloadEncrypted: 'mock_encrypted_payload',
+        },
       });
       fullUrl = `${apiBase}/notifications/${notif.id}/retry`;
       payload = {};
     }
 
-    if (op.operationId === 'createServiceRunbookRule' || op.operationId === 'updateServiceRunbookRule') {
+    if (
+      op.operationId === 'createServiceRunbookRule' ||
+      op.operationId === 'updateServiceRunbookRule'
+    ) {
       const rb = await prisma.runbook.findUnique({
         where: { id: fixtures.runbooks.runbookId },
-        select: { publishedVersionId: true }
+        select: { publishedVersionId: true },
       });
       const expectedVersionId = rb?.publishedVersionId || fixtures.runbooks.publishedVersionId;
       if (op.operationId === 'createServiceRunbookRule') {
@@ -1959,23 +2125,27 @@ async function main() {
             name: `Rule ${Date.now()}`,
             enabled: true,
             mode: 'MANUAL',
-            versionStrategy: 'LATEST_PUBLISHED'
+            versionStrategy: 'LATEST_PUBLISHED',
           },
-          expectedVersionId
+          expectedVersionId,
         };
       } else {
         payload = {
           configuration: {
-            name: `Updated Rule ${Date.now()}`
+            name: `Updated Rule ${Date.now()}`,
           },
-          expectedVersionId
+          expectedVersionId,
         };
       }
     }
 
     if (op.operationId === 'restoreRunbook') {
       const rb = await prisma.runbook.create({
-        data: { name: `Disp RB Restore ${Date.now()}`, slug: `disp-rb-res-${Date.now()}`, archivedAt: new Date() }
+        data: {
+          name: `Disp RB Restore ${Date.now()}`,
+          slug: `disp-rb-res-${Date.now()}`,
+          archivedAt: new Date(),
+        },
       });
       fullUrl = `${apiBase}/runbooks/${rb.id}/restore`;
       currentEtag = `"${rb.revision}"`;
@@ -1996,19 +2166,19 @@ async function main() {
           mode: 'AUTOMATIC',
           versionStrategy: 'PINNED',
           runbookVersionId: pubVer,
-          enabled: false
-        }
+          enabled: false,
+        },
       });
       await prisma.runbookTrigger.deleteMany({
-        where: { bindingId: fixtures.serviceRunbookRules?.ruleId }
+        where: { bindingId: fixtures.serviceRunbookRules?.ruleId },
       });
       await prisma.runbookTrigger.create({
         data: {
           bindingId: fixtures.serviceRunbookRules?.ruleId,
           event: 'INCIDENT_CREATED',
           conditionLogic: 'AND',
-          enabled: true
-        }
+          enabled: true,
+        },
       });
       currentEtag = `"${updatedRule.configurationRevision}"`;
       payload = { confirmMatchAll: true };
@@ -2018,10 +2188,13 @@ async function main() {
       let agent = await prisma.runbookAgent.findFirst({ where: { status: 'ONLINE' } });
       if (!agent) {
         agent = await prisma.runbookAgent.create({
-          data: { name: 'Cert Agent', status: 'ONLINE', lastHeartbeatAt: new Date() }
+          data: { name: 'Cert Agent', status: 'ONLINE', lastHeartbeatAt: new Date() },
         });
       } else {
-        await prisma.runbookAgent.update({ where: { id: agent.id }, data: { lastHeartbeatAt: new Date() } });
+        await prisma.runbookAgent.update({
+          where: { id: agent.id },
+          data: { lastHeartbeatAt: new Date() },
+        });
       }
 
       const def = {
@@ -2031,13 +2204,19 @@ async function main() {
             name: 'Check disk',
             type: 'BASH',
             riskClass: 'NON_IDEMPOTENT',
-            config: { command: 'df -h' }
-          }
-        ]
+            config: { command: 'df -h' },
+          },
+        ],
       };
       const chk = crypto.createHash('sha256').update(JSON.stringify(def)).digest('hex');
-      const rb = await prisma.runbook.findFirst({ where: { id: fixtures.runbooks.runbookId }, include: { publishedVersion: true } });
-      const maxVer = await prisma.runbookVersion.aggregate({ where: { runbookId: rb!.id }, _max: { version: true } });
+      const rb = await prisma.runbook.findFirst({
+        where: { id: fixtures.runbooks.runbookId },
+        include: { publishedVersion: true },
+      });
+      const maxVer = await prisma.runbookVersion.aggregate({
+        where: { runbookId: rb!.id },
+        _max: { version: true },
+      });
       const nextVer = (maxVer._max.version || 0) + 1;
 
       const v = await prisma.runbookVersion.create({
@@ -2047,8 +2226,8 @@ async function main() {
           state: 'PUBLISHED',
           definition: def,
           checksum: chk,
-          schemaVersion: 1
-        }
+          schemaVersion: 1,
+        },
       });
 
       const updatedRule = await prisma.serviceAutomationRule.update({
@@ -2056,8 +2235,8 @@ async function main() {
         data: {
           defaultAgentId: agent.id,
           versionStrategy: 'PINNED',
-          runbookVersionId: v.id
-        }
+          runbookVersionId: v.id,
+        },
       });
       currentEtag = `"${updatedRule.configurationRevision}"`;
       payload = {};
@@ -2076,14 +2255,14 @@ async function main() {
         snapshot: {
           schemaVersion: 1,
           fields: [],
-          rules: []
-        }
+          rules: [],
+        },
       };
     }
 
     if (op.operationId === 'activateServiceRunbookRule') {
       const r = await prisma.serviceAutomationRule.findUnique({
-        where: { id: fixtures.serviceRunbookRules?.ruleId }
+        where: { id: fixtures.serviceRunbookRules?.ruleId },
       });
       if (r) currentEtag = `"${r.configurationRevision}"`;
       payload = { confirmMatchAll: true };
@@ -2091,29 +2270,36 @@ async function main() {
 
     if (op.operationId === 'updatePostmortemActionItem') {
       let ai = await prisma.actionItem.findFirst({
-        where: { postmortemId: fixtures.postmortems.postmortemId }
+        where: { postmortemId: fixtures.postmortems.postmortemId },
       });
       if (!ai) {
         ai = await prisma.actionItem.create({
           data: {
             postmortemId: fixtures.postmortems.postmortemId,
             incidentId: fixtures.incidents.openId,
-            title: 'Action Item for Update'
-          }
+            title: 'Action Item for Update',
+          },
         });
       }
       fixtures.actionItems = { actionItemId: ai.id };
       fullUrl = fullUrl.replace(/\/action-items\/[^\/]+/, `/action-items/${ai.id}`);
     }
 
-    if (['getRunbookDraft', 'updateRunbookDraft', 'validateRunbookDraft', 'publishRunbookDraft'].includes(op.operationId)) {
+    if (
+      [
+        'getRunbookDraft',
+        'updateRunbookDraft',
+        'validateRunbookDraft',
+        'publishRunbookDraft',
+      ].includes(op.operationId)
+    ) {
       let draft = await prisma.runbookVersion.findFirst({
-        where: { runbookId: fixtures.runbooks.runbookId, state: 'DRAFT' }
+        where: { runbookId: fixtures.runbooks.runbookId, state: 'DRAFT' },
       });
       if (!draft) {
         const rb = await prisma.runbook.findUnique({
           where: { id: fixtures.runbooks.runbookId },
-          include: { publishedVersion: true }
+          include: { publishedVersion: true },
         });
         draft = await prisma.runbookVersion.create({
           data: {
@@ -2121,12 +2307,12 @@ async function main() {
             version: (rb?.publishedVersion?.version ?? 1) + 1,
             state: 'DRAFT',
             definition: rb?.publishedVersion?.definition ?? { schemaVersion: 1, steps: [] },
-            checksum: 'draft_checksum_' + Date.now()
-          }
+            checksum: 'draft_checksum_' + Date.now(),
+          },
         });
         await prisma.runbook.update({
           where: { id: fixtures.runbooks.runbookId },
-          data: { draftVersionId: draft.id }
+          data: { draftVersionId: draft.id },
         });
       }
       fixtures.runbooks.draftVersionId = draft.id;
@@ -2137,7 +2323,7 @@ async function main() {
 
     if (op.operationId === 'publishAutomationVersion') {
       let draft = await prisma.automationDraft.findFirst({
-        where: { serviceId: fixtures.services.serviceAId }
+        where: { serviceId: fixtures.services.serviceAId },
       });
       if (!draft) {
         draft = await prisma.automationDraft.create({
@@ -2146,33 +2332,34 @@ async function main() {
             schemaVersion: 1,
             snapshot: { fields: [], rules: [], schemaVersion: 1 },
             revision: 1,
-            updatedBy: fixtures.users.adminId
-          }
+            updatedBy: fixtures.users.adminId,
+          },
         });
       }
       const cfg = await prisma.serviceAutomationConfig.findFirst({
-        where: { serviceId: fixtures.services.serviceAId }
+        where: { serviceId: fixtures.services.serviceAId },
       });
       currentEtag = `"${draft.revision}"`;
       payload = {
         expectedActiveVersionId: cfg?.activeVersionId ?? null,
-        expectedCandidateVersionId: cfg?.mode === 'LIVE' ? (cfg.candidateVersionId ?? null) : undefined
+        expectedCandidateVersionId:
+          cfg?.mode === 'LIVE' ? (cfg.candidateVersionId ?? null) : undefined,
       };
     }
 
     if (op.operationId === 'updateServiceAutomationMode') {
       const cfg = await prisma.serviceAutomationConfig.findFirst({
-        where: { serviceId: fixtures.services.serviceAId }
+        where: { serviceId: fixtures.services.serviceAId },
       });
       payload = {
         mode: 'DISABLED',
-        expectedActiveVersionId: cfg?.activeVersionId ?? null
+        expectedActiveVersionId: cfg?.activeVersionId ?? null,
       };
     }
 
     if (op.operationId === 'restoreAutomationDraft') {
       let ver = await prisma.automationVersion.findFirst({
-        where: { serviceId: fixtures.services.serviceAId }
+        where: { serviceId: fixtures.services.serviceAId },
       });
       if (!ver) {
         ver = await prisma.automationVersion.create({
@@ -2183,12 +2370,12 @@ async function main() {
             snapshot: { schemaVersion: 1, fields: [], rules: [] },
             compiledSnapshot: { schemaVersion: 1, fields: [], rules: [] },
             lintReport: {},
-            publishedBy: fixtures.users.adminId
-          }
+            publishedBy: fixtures.users.adminId,
+          },
         });
       }
       const draft = await prisma.automationDraft.findFirst({
-        where: { serviceId: fixtures.services.serviceAId }
+        where: { serviceId: fixtures.services.serviceAId },
       });
       currentEtag = `"${draft?.revision ?? 0}"`;
       payload = { sourceVersionId: ver.id };
@@ -2196,20 +2383,20 @@ async function main() {
 
     if (op.operationId === 'getAutomationCandidate') {
       let cand = await prisma.automationVersion.findFirst({
-        where: { serviceId: fixtures.services.serviceAId }
+        where: { serviceId: fixtures.services.serviceAId },
       });
       if (cand) {
         await prisma.serviceAutomationConfig.upsert({
           where: { serviceId: fixtures.services.serviceAId },
           create: { serviceId: fixtures.services.serviceAId, candidateVersionId: cand.id },
-          update: { candidateVersionId: cand.id }
+          update: { candidateVersionId: cand.id },
         });
       }
     }
 
     if (op.operationId === 'discardAutomationCandidate') {
       let cand = await prisma.automationVersion.findFirst({
-        where: { serviceId: fixtures.services.serviceAId }
+        where: { serviceId: fixtures.services.serviceAId },
       });
       if (!cand) {
         cand = await prisma.automationVersion.create({
@@ -2220,14 +2407,14 @@ async function main() {
             snapshot: { schemaVersion: 1, fields: [], rules: [] },
             compiledSnapshot: { schemaVersion: 1, fields: [], rules: [] },
             lintReport: {},
-            publishedBy: fixtures.users.adminId
-          }
+            publishedBy: fixtures.users.adminId,
+          },
         });
       }
       const cfg = await prisma.serviceAutomationConfig.upsert({
         where: { serviceId: fixtures.services.serviceAId },
         create: { serviceId: fixtures.services.serviceAId, candidateVersionId: cand.id },
-        update: { candidateVersionId: cand.id }
+        update: { candidateVersionId: cand.id },
       });
       currentEtag = `"${cfg.revision}"`;
       payload = { expectedCandidateVersionId: cand.id };
@@ -2236,13 +2423,13 @@ async function main() {
     if (op.operationId === 'activateAutomationCandidate') {
       await prisma.systemSettings.updateMany({
         where: { id: 'default' },
-        data: { automationEnabled: true }
+        data: { automationEnabled: true },
       });
       const snap = { fields: [], rules: [], schemaVersion: 1 };
       const chk = computeCanonicalChecksum(snap);
       const latestVer = await prisma.automationVersion.aggregate({
         where: { serviceId: fixtures.services.serviceAId },
-        _max: { versionNumber: true }
+        _max: { versionNumber: true },
       });
       const nextVer = (latestVer._max.versionNumber ?? 10) + 1;
       const cand = await prisma.automationVersion.create({
@@ -2253,13 +2440,17 @@ async function main() {
           snapshot: snap,
           compiledSnapshot: snap,
           lintReport: {},
-          publishedBy: fixtures.users.adminId
-        }
+          publishedBy: fixtures.users.adminId,
+        },
       });
       const cfg = await prisma.serviceAutomationConfig.upsert({
         where: { serviceId: fixtures.services.serviceAId },
-        create: { serviceId: fixtures.services.serviceAId, mode: 'LIVE', candidateVersionId: cand.id },
-        update: { mode: 'LIVE', candidateVersionId: cand.id }
+        create: {
+          serviceId: fixtures.services.serviceAId,
+          mode: 'LIVE',
+          candidateVersionId: cand.id,
+        },
+        update: { mode: 'LIVE', candidateVersionId: cand.id },
       });
       currentEtag = `"${cfg.revision}"`;
       payload = {
@@ -2267,13 +2458,16 @@ async function main() {
         expectedActiveVersionId: cfg.activeVersionId ?? null,
         acknowledgeNoShadow: true,
         acknowledgeShadowErrors: true,
-        acknowledgeMaterialDifferences: true
+        acknowledgeMaterialDifferences: true,
       };
     }
 
     const pubVerId = fixtures.runbooks.publishedVersionId || 'cmvme7bmk000moxdbemowju5w';
 
-    if (op.operationId === 'approveRunbookExecutionStep' || op.operationId === 'rejectRunbookExecutionStep') {
+    if (
+      op.operationId === 'approveRunbookExecutionStep' ||
+      op.operationId === 'rejectRunbookExecutionStep'
+    ) {
       const ex = await prisma.runbookExecution.create({
         data: {
           runbookId: fixtures.runbooks.runbookId,
@@ -2283,8 +2477,8 @@ async function main() {
           inputValues: {},
           triggeredByUserId: fixtures.users.adminId,
           definitionChecksum: 'mock_checksum',
-          deadlineAt: new Date(Date.now() + 3600000)
-        }
+          deadlineAt: new Date(Date.now() + 3600000),
+        },
       });
       const step = await prisma.runbookExecutionStep.create({
         data: {
@@ -2296,8 +2490,8 @@ async function main() {
           riskClass: 'READ_ONLY',
           status: 'WAITING_APPROVAL',
           requiresApproval: true,
-          config: {}
-        }
+          config: {},
+        },
       });
       fullUrl = `${apiBase}/runbooks/executions/${ex.id}/steps/${step.id}/${op.operationId === 'approveRunbookExecutionStep' ? 'approve' : 'reject'}`;
       const { computePlanDigest } = await import('../../src/lib/runbooks/definition.js');
@@ -2306,17 +2500,21 @@ async function main() {
         stepType: 'APPROVAL',
         riskClass: 'READ_ONLY',
         config: {},
-        versionChecksum: 'mock_checksum'
+        versionChecksum: 'mock_checksum',
       });
-      payload = op.operationId === 'approveRunbookExecutionStep'
-        ? { planDigest }
-        : { planDigest, reason: 'Cert reject reason' };
+      payload =
+        op.operationId === 'approveRunbookExecutionStep'
+          ? { planDigest }
+          : { planDigest, reason: 'Cert reject reason' };
     }
 
-    if (op.operationId === 'previewRunbookExecutionRerun' || op.operationId === 'rerunRunbookExecution') {
+    if (
+      op.operationId === 'previewRunbookExecutionRerun' ||
+      op.operationId === 'rerunRunbookExecution'
+    ) {
       const pubVerRow = await prisma.runbookVersion.findUnique({ where: { id: pubVerId } });
       let finishedEx = await prisma.runbookExecution.findFirst({
-        where: { status: 'SUCCEEDED', runbookId: fixtures.runbooks.runbookId }
+        where: { status: 'SUCCEEDED', runbookId: fixtures.runbooks.runbookId },
       });
       if (!finishedEx) {
         finishedEx = await prisma.runbookExecution.create({
@@ -2328,20 +2526,24 @@ async function main() {
             inputValues: {},
             triggeredByUserId: fixtures.users.adminId,
             definitionChecksum: pubVerRow?.checksum || '0'.repeat(64),
-            deadlineAt: new Date(Date.now() + 3600000)
-          }
+            deadlineAt: new Date(Date.now() + 3600000),
+          },
         });
       }
       if (op.operationId === 'previewRunbookExecutionRerun') {
         fullUrl = `${apiBase}/runbooks/executions/${finishedEx.id}/rerun-preview`;
         payload = {};
       } else {
-        const previewRes = await request(`${apiBase}/runbooks/executions/${finishedEx.id}/rerun-preview`, {
-          method: 'POST',
-          token: adminToken,
-          body: {}
-        });
-        const planDigest = previewRes.json?.data?.digest || previewRes.json?.data?.planDigest || '0'.repeat(64);
+        const previewRes = await request(
+          `${apiBase}/runbooks/executions/${finishedEx.id}/rerun-preview`,
+          {
+            method: 'POST',
+            token: adminToken,
+            body: {},
+          }
+        );
+        const planDigest =
+          previewRes.json?.data?.digest || previewRes.json?.data?.planDigest || '0'.repeat(64);
         const authorizationToken = previewRes.json?.data?.authorizationToken || '0'.repeat(64);
         fullUrl = `${apiBase}/runbooks/executions/${finishedEx.id}/rerun`;
         payload = { expectedPlanDigest: planDigest, previewAuthorizationToken: authorizationToken };
@@ -2350,7 +2552,7 @@ async function main() {
 
     if (op.operationId === 'previewRunbookExecution' || op.operationId === 'executeRunbook') {
       payload = {
-        parameters: {}
+        parameters: {},
       };
       if (op.operationId === 'previewRunbookExecution') {
         fullUrl = `${apiBase}/runbooks/${fixtures.runbooks.runbookId}/executions/preview`;
@@ -2369,8 +2571,8 @@ async function main() {
           inputValues: {},
           triggeredByUserId: fixtures.users.adminId,
           definitionChecksum: 'mock_checksum_cancel',
-          deadlineAt: new Date(Date.now() + 3600000)
-        }
+          deadlineAt: new Date(Date.now() + 3600000),
+        },
       });
       fullUrl = `${apiBase}/runbooks/executions/${ex.id}/cancel`;
       payload = { reason: 'Cert test cancellation' };
@@ -2380,9 +2582,9 @@ async function main() {
       const job = await prisma.backgroundJob.findFirst({
         where: {
           type: 'SCHEDULED_TASK',
-          payload: { path: ['task'], equals: 'SERVICE_OBJECTIVE_EVALUATE' }
+          payload: { path: ['task'], equals: 'SERVICE_OBJECTIVE_EVALUATE' },
         },
-        orderBy: { createdAt: 'desc' }
+        orderBy: { createdAt: 'desc' },
       });
       if (job) {
         const p = job.payload as any;
@@ -2394,9 +2596,9 @@ async function main() {
       let job = await prisma.backgroundJob.findFirst({
         where: {
           type: 'SCHEDULED_TASK',
-          payload: { path: ['task'], equals: 'STATUS_PAGE_PUBLICATION_RETRY' }
+          payload: { path: ['task'], equals: 'STATUS_PAGE_PUBLICATION_RETRY' },
         },
-        orderBy: { createdAt: 'desc' }
+        orderBy: { createdAt: 'desc' },
       });
       if (!job) {
         job = await prisma.backgroundJob.create({
@@ -2409,9 +2611,9 @@ async function main() {
               task: 'STATUS_PAGE_PUBLICATION_RETRY',
               pageId: fixtures.statusPages.statusPageId,
               actorId: fixtures.users.adminId,
-              apiClientId: fixtures.serviceAccounts.serviceAccountId
-            }
-          }
+              apiClientId: fixtures.serviceAccounts.serviceAccountId,
+            },
+          },
         });
       }
       const p = job.payload as any;
@@ -2423,30 +2625,30 @@ async function main() {
         where: {
           statusPageId_serviceId: {
             statusPageId: fixtures.statusPages.statusPageId,
-            serviceId: fixtures.services.serviceAId
-          }
+            serviceId: fixtures.services.serviceAId,
+          },
         },
         create: {
           statusPageId: fixtures.statusPages.statusPageId,
           serviceId: fixtures.services.serviceAId,
           displayName: 'Primary Cert Service',
-          order: 1
+          order: 1,
         },
-        update: {}
+        update: {},
       });
     }
 
     if (op.operationId === 'reorderScheduleLayers') {
       const allLayers = await prisma.onCallLayer.findMany({
         where: { scheduleId: fixtures.schedules.scheduleAId },
-        select: { id: true }
+        select: { id: true },
       });
       payload = { orderedIds: allLayers.map(l => l.id) };
     }
 
     if (op.operationId === 'addScheduleParticipant') {
       let layer = await prisma.onCallLayer.findFirst({
-        where: { scheduleId: fixtures.schedules.scheduleAId }
+        where: { scheduleId: fixtures.schedules.scheduleAId },
       });
       if (!layer) {
         layer = await prisma.onCallLayer.create({
@@ -2455,12 +2657,15 @@ async function main() {
             name: 'Primary Rotation',
             start: new Date(),
             rotationLengthHours: 24,
-            priority: 1
-          }
+            priority: 1,
+          },
         });
       }
       await prisma.onCallLayerUser.deleteMany({
-        where: { userId: fixtures.users.auditorId, layer: { scheduleId: fixtures.schedules.scheduleAId } }
+        where: {
+          userId: fixtures.users.auditorId,
+          layer: { scheduleId: fixtures.schedules.scheduleAId },
+        },
       });
       fullUrl = `${apiBase}/schedules/${fixtures.schedules.scheduleAId}/layers/${layer.id}/participants`;
       payload = { userId: fixtures.users.auditorId };
@@ -2468,7 +2673,7 @@ async function main() {
 
     if (op.operationId === 'moveScheduleParticipant') {
       let layer = await prisma.onCallLayer.findFirst({
-        where: { scheduleId: fixtures.schedules.scheduleAId }
+        where: { scheduleId: fixtures.schedules.scheduleAId },
       });
       if (!layer) {
         layer = await prisma.onCallLayer.create({
@@ -2477,19 +2682,19 @@ async function main() {
             name: 'Primary Rotation',
             start: new Date(),
             rotationLengthHours: 24,
-            priority: 1
-          }
+            priority: 1,
+          },
         });
       }
       await prisma.onCallLayerUser.upsert({
         where: { layerId_userId: { layerId: layer.id, userId: fixtures.users.responderId } },
         create: { layerId: layer.id, userId: fixtures.users.responderId, position: 0 },
-        update: { position: 0 }
+        update: { position: 0 },
       });
       await prisma.onCallLayerUser.upsert({
         where: { layerId_userId: { layerId: layer.id, userId: fixtures.users.teamAUserId } },
         create: { layerId: layer.id, userId: fixtures.users.teamAUserId, position: 1 },
-        update: { position: 1 }
+        update: { position: 1 },
       });
       fullUrl = `${apiBase}/schedules/${fixtures.schedules.scheduleAId}/layers/${layer.id}/participants/${fixtures.users.responderId}`;
       payload = { direction: 'down' };
@@ -2504,7 +2709,7 @@ async function main() {
       for (let attempt = 0; attempt < 25; attempt++) {
         const checkRes = await request(`${apiBase}/audit-exports/${lastCreatedAuditExportId}`, {
           method: 'GET',
-          token: adminToken
+          token: adminToken,
         });
         if (checkRes.json?.data?.status === 'COMPLETED') break;
         await new Promise(r => setTimeout(r, 200));
@@ -2516,7 +2721,7 @@ async function main() {
       for (let attempt = 0; attempt < 25; attempt++) {
         const checkRes = await request(`${apiBase}/reports/exports/${lastCreatedReportExportId}`, {
           method: 'GET',
-          token: adminToken
+          token: adminToken,
         });
         if (checkRes.json?.data?.status === 'COMPLETED') break;
         await new Promise(r => setTimeout(r, 200));
@@ -2529,9 +2734,9 @@ async function main() {
         token: adminToken,
         body: {
           metrics: ['totalIncidents', 'activeIncidents'],
-          windowDays: 30
+          windowDays: 30,
         },
-        headers: { 'Idempotency-Key': `idem-cancel-${randomUUID()}` }
+        headers: { 'Idempotency-Key': `idem-cancel-${randomUUID()}` },
       });
       if (createRes.json?.data?.id) {
         fullUrl = `${apiBase}/reports/exports/${createRes.json.data.id}/cancel`;
@@ -2549,19 +2754,21 @@ async function main() {
         body: payload,
         headers: {
           'Idempotency-Key': `stale-idem-${randomUUID()}`,
-          'If-Match': '"99999999"'
-        }
+          'If-Match': '"99999999"',
+        },
       });
       concurrencyTested = true;
       concurrencyPass = staleRes.status === 412;
       if (!concurrencyPass) {
-        console.warn(`[WARN CONCURRENCY FAIL] ${op.operationId}: expected 412, got ${staleRes.status}`);
+        console.warn(
+          `[WARN CONCURRENCY FAIL] ${op.operationId}: expected 412, got ${staleRes.status}`
+        );
       }
     }
 
     const idemKey = `cert-pos-${randomUUID()}`;
     const posHeaders: Record<string, string> = {
-      'Idempotency-Key': idemKey
+      'Idempotency-Key': idemKey,
     };
     if (needsPrecondition) {
       posHeaders['If-Match'] = currentEtag || '"1"';
@@ -2571,7 +2778,7 @@ async function main() {
       method,
       token: adminToken,
       body: payload,
-      headers: posHeaders
+      headers: posHeaders,
     });
 
     const hasRequestId = Boolean(posRes.headers.get('x-request-id'));
@@ -2584,10 +2791,15 @@ async function main() {
       Boolean(posRes.headers.get('content-disposition')?.includes('attachment'));
     const is204 = posRes.status === 204;
     const hasEnvelope = is204
-      ? (!posRes.text || posRes.text.length === 0 || posRes.headers.get('content-length') === '0')
+      ? !posRes.text || posRes.text.length === 0 || posRes.headers.get('content-length') === '0'
       : isBinaryDownload
-      ? Boolean((posRes.text || posRes.json) && (posRes.headers.get('content-disposition') || posRes.headers.get('x-content-sha256')))
-      : Boolean(posRes.json && (posRes.json.data !== undefined || posRes.json.pagination !== undefined));
+        ? Boolean(
+            (posRes.text || posRes.json) &&
+            (posRes.headers.get('content-disposition') || posRes.headers.get('x-content-sha256'))
+          )
+        : Boolean(
+            posRes.json && (posRes.json.data !== undefined || posRes.json.pagination !== undefined)
+          );
 
     if (op.operationId === 'createAuditExport' && posRes.status === 201 && posRes.json?.data?.id) {
       lastCreatedAuditExportId = posRes.json.data.id;
@@ -2599,20 +2811,32 @@ async function main() {
       lastCreatedReportExportToken = adminToken;
     }
 
-    if (op.operationId === 'createServiceObjective' && posRes.status === 201 && posRes.json?.data?.id) {
+    if (
+      op.operationId === 'createServiceObjective' &&
+      posRes.status === 201 &&
+      posRes.json?.data?.id
+    ) {
       fixtures.objectives = {
         objectiveId: posRes.json.data.versionId || posRes.json.data.id,
-        lineageId: posRes.json.data.id
+        lineageId: posRes.json.data.id,
       };
     }
 
-    if (op.operationId === 'createServiceRunbookRule' && posRes.status === 201 && posRes.json?.data?.id) {
+    if (
+      op.operationId === 'createServiceRunbookRule' &&
+      posRes.status === 201 &&
+      posRes.json?.data?.id
+    ) {
       fixtures.serviceRunbookRules = { ruleId: posRes.json.data.id };
     }
     if (op.operationId === 'createPostmortem' && posRes.status === 201 && posRes.json?.data?.id) {
       fixtures.postmortems = { postmortemId: posRes.json.data.id };
     }
-    if (op.operationId === 'createReportDashboard' && posRes.status === 201 && posRes.json?.data?.id) {
+    if (
+      op.operationId === 'createReportDashboard' &&
+      posRes.status === 201 &&
+      posRes.json?.data?.id
+    ) {
       fixtures.dashboards = { dashboardId: posRes.json.data.id };
     }
     if (op.operationId === 'createStatusPage' && posRes.status === 201 && posRes.json?.data?.id) {
@@ -2629,21 +2853,21 @@ async function main() {
     const invAuthRes = await request(fullUrl, {
       method,
       token: 'ok_test_invalid_token_999999999999999999999999',
-      body: payload
+      body: payload,
     });
     const invAuthPass = invAuthRes.status === 401;
 
     const revAuthRes = await request(fullUrl, {
       method,
       token: fixtures.tokens.revoked,
-      body: payload
+      body: payload,
     });
     const revAuthPass = revAuthRes.status === 401;
 
     const expAuthRes = await request(fullUrl, {
       method,
       token: fixtures.tokens.expired,
-      body: payload
+      body: payload,
     });
     const expAuthPass = expAuthRes.status === 401;
 
@@ -2656,7 +2880,7 @@ async function main() {
       const scopeRes = await request(fullUrl, {
         method,
         token: limitedToken,
-        body: payload
+        body: payload,
       });
       scopeDenialStatus = scopeRes.status;
       scopeDenialPass = scopeRes.status === 403;
@@ -2673,7 +2897,8 @@ async function main() {
       if (payload && typeof payload === 'object' && Object.keys(payload).length > 0) {
         const broken: Record<string, any> = {};
         for (const [k, v] of Object.entries(payload)) {
-          broken[k] = typeof v === 'string' ? 99999999 : (typeof v === 'number' ? 'invalid_string_val' : null);
+          broken[k] =
+            typeof v === 'string' ? 99999999 : typeof v === 'number' ? 'invalid_string_val' : null;
         }
         invalidPayload = broken;
       }
@@ -2681,7 +2906,7 @@ async function main() {
         method,
         token: adminToken,
         headers: { 'Content-Type': 'application/json' },
-        body: invalidPayload
+        body: invalidPayload,
       });
       boundaryStatus = boundRes.status;
       boundaryPass = boundRes.status >= 400 && boundRes.status < 500;
@@ -2689,7 +2914,11 @@ async function main() {
       // For DELETE operations or mutation endpoints where body is ignored:
       if (!boundaryPass && op.path.includes('{')) {
         const notFoundUrl = fullUrl.replace(/[a-z0-9_-]{20,}/i, 'c000000000000000000000000');
-        const idBoundRes = await request(notFoundUrl, { method, token: adminToken, body: invalidPayload });
+        const idBoundRes = await request(notFoundUrl, {
+          method,
+          token: adminToken,
+          body: invalidPayload,
+        });
         boundaryStatus = idBoundRes.status;
         boundaryPass = idBoundRes.status >= 400 && idBoundRes.status < 500;
       }
@@ -2725,16 +2954,17 @@ async function main() {
         method: 'DELETE',
         token: adminToken,
         body: payload,
-        headers: posHeaders
+        headers: posHeaders,
       });
-      const idempotentPass = repeatDelRes.status === 404 || repeatDelRes.status === 204 || repeatDelRes.status === 200;
+      const idempotentPass =
+        repeatDelRes.status === 404 || repeatDelRes.status === 204 || repeatDelRes.status === 200;
 
       mutationSafety = {
         tested: true,
         idempotencyTested: true,
         idempotentPass,
         concurrencyTested,
-        concurrencyPass
+        concurrencyPass,
       };
     } else if (method !== 'GET') {
       // Strict Replay with exact same Idempotency-Key and payload
@@ -2742,7 +2972,7 @@ async function main() {
         method,
         token: adminToken,
         body: payload,
-        headers: posHeaders
+        headers: posHeaders,
       });
 
       let idempotentPass = false;
@@ -2773,8 +3003,11 @@ async function main() {
           }
         }
         const isPreconditionFailed = replayRes.status === 412;
-        const isUniquenessConstraint = (posRes.status === 201 || posRes.status === 200) && (replayRes.status === 409 || replayRes.status === 403);
-        idempotentPass = (matchesStatus && identicalEntity) || isPreconditionFailed || isUniquenessConstraint;
+        const isUniquenessConstraint =
+          (posRes.status === 201 || posRes.status === 200) &&
+          (replayRes.status === 409 || replayRes.status === 403);
+        idempotentPass =
+          (matchesStatus && identicalEntity) || isPreconditionFailed || isUniquenessConstraint;
       } else if (idempotencyMode === 'never') {
         // Non-idempotent operations ('never') must NOT replay cached responses or set idempotency-replayed
         const replayedHeader = replayRes.headers.get('idempotency-replayed');
@@ -2785,7 +3018,9 @@ async function main() {
       }
 
       if (!idempotentPass) {
-        console.warn(`[WARN IDEMPOTENCY FAIL] ${op.operationId} (${idempotencyMode}): pos=${posRes.status}, replay=${replayRes.status}, replayedHeader=${replayRes.headers.get('idempotency-replayed')}`);
+        console.warn(
+          `[WARN IDEMPOTENCY FAIL] ${op.operationId} (${idempotencyMode}): pos=${posRes.status}, replay=${replayRes.status}, replayedHeader=${replayRes.headers.get('idempotency-replayed')}`
+        );
       }
 
       mutationSafety = {
@@ -2793,15 +3028,15 @@ async function main() {
         idempotencyTested: true,
         idempotentPass,
         concurrencyTested,
-        concurrencyPass
+        concurrencyPass,
       };
     }
 
     // Strict overall verdict depending on ALL applicable checks
-    const mutationSafetyPass = !mutationSafety || (
-      mutationSafety.idempotentPass &&
-      (!mutationSafety.concurrencyTested || mutationSafety.concurrencyPass === true)
-    );
+    const mutationSafetyPass =
+      !mutationSafety ||
+      (mutationSafety.idempotentPass &&
+        (!mutationSafety.concurrencyTested || mutationSafety.concurrencyPass === true));
 
     const overallVerdict: 'PASS' | 'FAIL' =
       positivePass &&
@@ -2840,44 +3075,44 @@ async function main() {
         hasRequestId,
         hasSecurityHeaders,
         hasEnvelope,
-        errorDetail: !positivePass ? JSON.stringify(posRes.json || posRes.text) : undefined
+        errorDetail: !positivePass ? JSON.stringify(posRes.json || posRes.text) : undefined,
       },
       noAuth: {
         tested: true,
         status: noAuthRes.status,
         pass: noAuthPass,
-        isProblemDetails
+        isProblemDetails,
       },
       invalidAuth: {
         tested: true,
         status: invAuthRes.status,
-        pass: invAuthPass
+        pass: invAuthPass,
       },
       revokedAuth: {
         tested: true,
         status: revAuthRes.status,
-        pass: revAuthPass
+        pass: revAuthPass,
       },
       expiredAuth: {
         tested: true,
         status: expAuthRes.status,
-        pass: expAuthPass
+        pass: expAuthPass,
       },
       scopeDenial: {
         tested: scopeDenialTested,
         status: scopeDenialStatus,
         pass: scopeDenialPass,
-        skipped: !scopeDenialTested
+        skipped: !scopeDenialTested,
       },
       inputBoundary: {
         tested: boundaryTested,
         notApplicable: boundaryNotApplicable,
         status: boundaryStatus,
-        pass: boundaryPass
+        pass: boundaryPass,
       },
       mutationSafety,
       overallVerdict,
-      evidence: `HTTP ${method} ${fullUrl.replace(apiBase, '')} -> pos=${posRes.status} (${posRes.latencyMs}ms), noAuth=${noAuthRes.status}, invAuth=${invAuthRes.status}, revAuth=${revAuthRes.status}, expAuth=${expAuthRes.status}, scopeDenial=${scopeDenialStatus}`
+      evidence: `HTTP ${method} ${fullUrl.replace(apiBase, '')} -> pos=${posRes.status} (${posRes.latencyMs}ms), noAuth=${noAuthRes.status}, invAuth=${invAuthRes.status}, revAuth=${revAuthRes.status}, expAuth=${expAuthRes.status}, scopeDenial=${scopeDenialStatus}`,
     });
   }
 
@@ -2891,15 +3126,22 @@ async function main() {
 
   // Write JSON
   const jsonOut = path.join(outDir, 'OPERATION-MATRIX.json');
-  fs.writeFileSync(jsonOut, JSON.stringify({
-    certifiedAt: new Date().toISOString(),
-    commitSha,
-    totalOperations: V2_OPERATIONS.length,
-    passedCount: passCount,
-    failedCount: failCount,
-    passRate: `${((passCount / V2_OPERATIONS.length) * 100).toFixed(2)}%`,
-    operations: results
-  }, null, 2));
+  fs.writeFileSync(
+    jsonOut,
+    JSON.stringify(
+      {
+        certifiedAt: new Date().toISOString(),
+        commitSha,
+        totalOperations: V2_OPERATIONS.length,
+        passedCount: passCount,
+        failedCount: failCount,
+        passRate: `${((passCount / V2_OPERATIONS.length) * 100).toFixed(2)}%`,
+        operations: results,
+      },
+      null,
+      2
+    )
+  );
   console.log('Wrote OPERATION-MATRIX.json to', jsonOut);
 
   // Write CSV
@@ -2917,23 +3159,25 @@ async function main() {
     'Scope Denial Status',
     'Boundary Status',
     'Idempotency Pass',
-    'Evidence'
+    'Evidence',
   ];
-  const csvRows = results.map(r => [
-    r.operationId,
-    r.method,
-    `"${r.path}"`,
-    r.requiredScope,
-    r.overallVerdict,
-    r.positive.status,
-    r.positive.latencyMs,
-    r.noAuth.status,
-    r.invalidAuth.status,
-    r.scopeDenial.status ?? 'N/A',
-    r.inputBoundary.status,
-    r.mutationSafety?.idempotentPass ?? 'N/A',
-    `"${r.evidence.replace(/"/g, '""')}"`
-  ].join(','));
+  const csvRows = results.map(r =>
+    [
+      r.operationId,
+      r.method,
+      `"${r.path}"`,
+      r.requiredScope,
+      r.overallVerdict,
+      r.positive.status,
+      r.positive.latencyMs,
+      r.noAuth.status,
+      r.invalidAuth.status,
+      r.scopeDenial.status ?? 'N/A',
+      r.inputBoundary.status,
+      r.mutationSafety?.idempotentPass ?? 'N/A',
+      `"${r.evidence.replace(/"/g, '""')}"`,
+    ].join(',')
+  );
   fs.writeFileSync(csvOut, [csvHeaders.join(','), ...csvRows].join('\n'));
   console.log('Wrote OPERATION-MATRIX.csv to', csvOut);
 }
