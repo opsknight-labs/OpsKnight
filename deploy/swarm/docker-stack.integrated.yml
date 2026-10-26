@@ -12,7 +12,7 @@ version: '3.8'
 
 services:
   opsknight-app:
-    image: ${OPSKNIGHT_IMAGE:-ghcr.io/opsknight-labs/opsknight:2.0.0}
+    image: ${OPSKNIGHT_IMAGE:-ghcr.io/opsknight-labs/opsknight:2.1.0}
     ports:
       - target: 3000
         published: ${APP_PORT:-3000}
@@ -23,7 +23,7 @@ services:
       OPSKNIGHT_PROCESS_ROLE: integrated
       OPSKNIGHT_RUNTIME_MODE: integrated
       DATABASE_POOL_SIZE_WEB: ${DATABASE_POOL_SIZE_WEB:-10}
-      OPSKNIGHT_SKIP_MIGRATIONS: "true"
+      OPSKNIGHT_SKIP_MIGRATIONS: 'true'
       NEXTAUTH_URL: ${NEXTAUTH_URL:-http://localhost:3000}
       NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-http://localhost:3000}
       TRUST_PROXY_HEADERS: ${TRUST_PROXY_HEADERS:-false}

@@ -28,7 +28,7 @@ spec:
       containers:
         - name: migrate
           # Pin this to the same immutable image digest as the runtime Deployments.
-          image: ghcr.io/opsknight-labs/opsknight:2.0.0
+          image: ghcr.io/opsknight-labs/opsknight:2.1.0
           imagePullPolicy: Always
           securityContext:
             allowPrivilegeEscalation: false
@@ -40,7 +40,7 @@ spec:
             runAsUser: 1001
           env:
             - name: OPSKNIGHT_MIGRATION_ONLY
-              value: "true"
+              value: 'true'
             - name: DATABASE_URL
               valueFrom:
                 secretKeyRef:
