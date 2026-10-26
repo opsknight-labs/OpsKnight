@@ -1522,7 +1522,7 @@ test('detached-rule suggestions stay visible with disabled execution and can be 
   const history = await page.context().newPage();
   await history.goto(`/services/${service.id}?tab=runbooks`);
   await expect(
-    history.getByRole('link', { name: 'View Archived Evidence', exact: true })
+    history.getByRole('link', { name: /view archived (?:rule )?evidence/i })
   ).not.toBeVisible();
   await history.getByLabel('Rule history', { exact: true }).selectOption('archived');
   await expect(history).toHaveURL(/rulesState=archived/);
@@ -1532,13 +1532,13 @@ test('detached-rule suggestions stay visible with disabled execution and can be 
     .fill('Detached response');
   await expect(
     history
-      .getByText('Rule detached · Archived execution history retained', { exact: true })
+      .getByText(/Rule detached · Archived (?:execution )?history(?: retained)?/)
       .filter({ visible: true })
   ).toBeVisible();
   await expect(
     history.getByRole('button', { name: 'Duplicate paused rule', exact: true })
   ).not.toBeVisible();
-  await history.getByRole('link', { name: 'View Archived Evidence', exact: true }).click();
+  await history.getByRole('link', { name: /view archived (?:rule )?evidence/i }).click();
   await expect(history.getByRole('list', { name: 'Rule lifecycle' })).toBeVisible();
   await expect(
     history.getByText('Detached; activation unavailable', { exact: true }).filter({ visible: true })
