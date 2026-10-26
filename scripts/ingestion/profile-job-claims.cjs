@@ -9,26 +9,7 @@ const {
   GENERAL_WORKER_EXCLUDED_JOB_TYPES,
 } = require('../../src/lib/jobs/queue');
 
-const fields = new Set([
-  'Node Type',
-  'Relation Name',
-  'Index Name',
-  'Actual Startup Time',
-  'Actual Total Time',
-  'Actual Rows',
-  'Actual Loops',
-  'Rows Removed by Filter',
-  'Rows Removed by Index Recheck',
-  'Shared Hit Blocks',
-  'Shared Read Blocks',
-]);
-function boundedPlan(node) {
-  return Object.fromEntries(
-    Object.entries(node).flatMap(([key, value]) =>
-      key === 'Plans' ? [[key, value.map(boundedPlan)]] : fields.has(key) ? [[key, value]] : []
-    )
-  );
-}
+const { boundedPlan } = require('./query-plan-summary.cjs');
 async function main() {
   assert.equal(new URL(process.env.DATABASE_URL).port, '55445');
   const [state] = await prisma.$queryRaw`

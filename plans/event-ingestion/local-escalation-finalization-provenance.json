@@ -1,0 +1,42 @@
+{
+  "sourceRevision": "f159a76d3b82203f9ec397e59049bd09c4b8b7e5",
+  "runs": [
+    {
+      "label": "a1",
+      "variant": "baseline",
+      "database": "ingestion_test_finalization_serial_a1_20261025",
+      "cpuMs": 1354.72,
+      "elapsedMs": 2786.1489579999998,
+      "queriesPerEvent": 4.007
+    },
+    {
+      "label": "b1",
+      "variant": "candidate",
+      "database": "ingestion_test_finalization_serial_b1_20261025",
+      "cpuMs": 356.37,
+      "elapsedMs": 994.5635000000002,
+      "queriesPerEvent": 1.003
+    },
+    {
+      "label": "b2",
+      "variant": "candidate",
+      "database": "ingestion_test_finalization_serial_b2_20261025",
+      "cpuMs": 409.586,
+      "elapsedMs": 1084.2740829999998,
+      "queriesPerEvent": 1.005
+    },
+    {
+      "label": "a2",
+      "variant": "baseline",
+      "database": "ingestion_test_finalization_serial_a2_20261025",
+      "cpuMs": 1309.824,
+      "elapsedMs": 3137.151917,
+      "queriesPerEvent": 4.009
+    }
+  ],
+  "repositorySourceSha256": {
+    "baseline": "edf2f3f783852f2fd4e3c9852b66a2dcb83297aa0662c5f4b6c1aaf72e98cd54",
+    "candidate": "b824d1efd5b19cd3ddb3680422dfecd125b0df9ce10562242d4ae42d0c19c036"
+  },
+  "scope": "Private host admission-only A-B-B-A, 1000 no-timeline fenced escalation finalizations, concurrency1/pool5, baseline explicitSerializabletransaction versus candidateatomicUPDATE. Host only; not native/fullstackcapacity."
+}

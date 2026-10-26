@@ -1,3 +1,4 @@
+import { finalizeEscalationExecution } from '@/lib/escalation/repository';
 import { dispatchIncidentEffects } from '@/lib/incident-effect-dispatch';
 import { readPublishedIncidentPolicies, readPublishedClassificationPolicies, readPublishedSlaPolicies } from '@/lib/incident-policies/published';
 import { resolveIncidentClassification } from '@/lib/incidents/classification';
@@ -242,6 +243,7 @@ describe('PostgreSQL ingestion durability', () => {
       expect(initial.map(job => job.id).sort()).toEqual([parentId, criticalId].sort());
       const parent = initial.find(job => job.id === parentId)!;
       expect(parent.status).toBe('PROCESSING_V2');
+      expect(Object.keys(parent).sort()).toEqual(['id', 'type', 'status', 'payload', 'attempts', 'maxAttempts', 'claimToken'].sort());
       expect(await dispatchIncidentEffects(parent.id, parent.attempts, parent.claimToken)).toBe(true);
       const next = await claimPendingJobs(10, 'SCHEDULED_TASK');
       expect(next).toHaveLength(1);
@@ -277,6 +279,45 @@ describe('PostgreSQL ingestion durability', () => {
     } finally {
       await prisma.service.update({ where: { id: serviceId }, data: { serviceNotificationChannels: previous.serviceNotificationChannels } });
     }
+  });
+
+  it('atomically fences single-row escalation finalization by generation, status and cursor', async () => {
+    const incident = await prisma.incident.create({ data: {
+      title: 'Single-row escalation finalization', serviceId, status: 'OPEN', escalationGeneration: 7,
+      currentEscalationStep: 2, escalationStatus: 'ESCALATING', nextEscalationAt: new Date(),
+    } });
+    const input = { incidentId: incident.id, expectedGeneration: 7, expectedStep: 2, status: null };
+    expect(await finalizeEscalationExecution({ ...input, expectedGeneration: 6 })).toBe(false);
+    expect(await finalizeEscalationExecution({ ...input, expectedStep: 1 })).toBe(false);
+    expect(await finalizeEscalationExecution(input)).toBe(true);
+    expect(await prisma.incident.findUniqueOrThrow({ where: { id: incident.id } })).toMatchObject({
+      escalationStatus: null, currentEscalationStep: null, nextEscalationAt: null, escalationGeneration: 7,
+    });
+    expect(await finalizeEscalationExecution({ ...input, expectedStep: 0 })).toBe(true);
+    await prisma.incident.update({ where: { id: incident.id }, data: { status: 'ACKNOWLEDGED' } });
+    expect(await finalizeEscalationExecution({ ...input, expectedStep: 0 })).toBe(false);
+    expect(await prisma.incidentEvent.count({ where: { incidentId: incident.id } })).toBe(0);
+  });
+
+  it('finalizes distinct incidents concurrently and permits only one matching cursor winner', async () => {
+    const ids = Array.from({ length: 32 }, () => randomUUID());
+    await prisma.incident.createMany({ data: ids.map(id => ({
+      id, title: 'Concurrent fenced finalization', serviceId, status: 'OPEN',
+      escalationGeneration: 9, currentEscalationStep: 2, escalationStatus: 'ESCALATING',
+      nextEscalationAt: new Date(),
+    })) });
+    const results = await Promise.all(ids.map(incidentId => finalizeEscalationExecution({
+      incidentId, expectedGeneration: 9, expectedStep: 2, status: null,
+    })));
+    expect(results.every(Boolean)).toBe(true);
+    await prisma.incident.update({ where: { id: ids[0] }, data: { currentEscalationStep: 2 } });
+    const contenders = await Promise.all(Array.from({ length: 8 }, () => finalizeEscalationExecution({
+      incidentId: ids[0], expectedGeneration: 9, expectedStep: 2, status: null,
+    })));
+    expect(contenders.filter(Boolean)).toHaveLength(1);
+    expect(await prisma.incident.count({ where: {
+      id: { in: ids }, currentEscalationStep: null, escalationStatus: null, nextEscalationAt: null,
+    } })).toBe(ids.length);
   });
 
   it('settles dispatch planning failures into the protected retry generation', async () => {

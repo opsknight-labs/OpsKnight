@@ -17,9 +17,12 @@ const evidence = {
 };
 async function main() {
   const url = new URL(process.env.DATABASE_URL);
-  assert.equal(url.pathname, '/ingestion_test_quota');
+  assert.ok(
+    url.pathname.startsWith('/ingestion_test_quota'),
+    'Use an owned isolated quota fixture'
+  );
   assert.equal(url.port, '55445');
-  assert.equal(process.env.OPSKNIGHT_INGESTION_MODE, 'postgres');
+  assert.equal(require('../../src/lib/ingestion/config').ingestionConfig().mode, 'postgres');
   await prisma.$queryRaw`SELECT calls FROM pg_stat_statements LIMIT 0`;
   const { policy } = await getIngestionPolicy();
   const value = {

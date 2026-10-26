@@ -514,7 +514,7 @@ export async function claimPendingJobs(
         "claimToken"=gen_random_uuid(),
         "attempts"=CASE WHEN "type" IN ('STATUS_PAGE_NOTIFICATION'::"JobType",'STATUS_PAGE_ANNOUNCEMENT_FANOUT'::"JobType",'STATUS_PAGE_ANNOUNCEMENT_FANOUT_V2'::"JobType") THEN "attempts" ELSE "attempts"+1 END
     WHERE "id" IN (SELECT "id" FROM cte)
-    RETURNING *;
+    RETURNING id, type, status, payload, attempts, "maxAttempts", "claimToken";
   `);
 }
 

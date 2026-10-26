@@ -1,0 +1,131 @@
+{
+  "variant": "candidate",
+  "passed": true,
+  "certifiedEnterprise": false,
+  "completed": 1000,
+  "concurrency": 1,
+  "elapsedMs": 1084.2740829999998,
+  "cpuMs": 409.586,
+  "queriesPerEvent": 1.005,
+  "databaseProfile": {
+    "diagnosticSettings": {
+      "walIoTimingEnabled": false,
+      "statementTracking": "top"
+    },
+    "scope": "Owned local test database; PostgreSQL execution statistics exclude client/pool/network time. Cluster WAL includes all databases on this owned test instance.",
+    "elapsedMs": 1085.514416,
+    "counters": {
+      "commits": 633,
+      "rollbacks": 0,
+      "deadlocks": 0,
+      "tempBytes": 6330254,
+      "inserts": 1623,
+      "updates": 1618,
+      "deletes": 0,
+      "clusterWalBytes": 3956413,
+      "clusterWalBuffersFull": 0,
+      "clusterWalWrites": 622,
+      "clusterWalSyncs": 622,
+      "clusterWalWriteTimeMs": 0,
+      "clusterWalSyncTimeMs": 0
+    },
+    "totalStatementWalBytes": 2408677,
+    "totalQueryCalls": 1005,
+    "totalDatabaseExecutionMs": 349.4072470000002,
+    "topQueriesByExecutionTime": [
+      {
+        "fingerprint": "d7d1054f5d447b3459d9acfea4f8d024881986be9d9533bbe52b1f32e2398a0b",
+        "operation": "UPDATE",
+        "model": "Incident",
+        "calls": 1000,
+        "executionMs": 329.0580790000002,
+        "meanExecutionMs": 0.32905807900000017,
+        "rows": 1000,
+        "blocksHit": 83680,
+        "blocksRead": 0,
+        "blocksDirtied": 15,
+        "tempBlocksWritten": 0,
+        "walBytes": 2408677
+      },
+      {
+        "fingerprint": "cd83c5cc8f9919117637966e311ed35695c28271b91e10e6b739e2a88484090d",
+        "operation": "SELECT",
+        "model": "other",
+        "calls": 1,
+        "executionMs": 19.980166,
+        "meanExecutionMs": 19.980166,
+        "rows": 20,
+        "blocksHit": 3,
+        "blocksRead": 0,
+        "blocksDirtied": 0,
+        "tempBlocksWritten": 773,
+        "walBytes": 0
+      },
+      {
+        "fingerprint": "ed4b15c16c1a8b52ddce51899002c26d5458e47c8adce4da350441da294c0e91",
+        "operation": "SELECT",
+        "model": "other",
+        "calls": 1,
+        "executionMs": 0.146792,
+        "meanExecutionMs": 0.146792,
+        "rows": 2,
+        "blocksHit": 6,
+        "blocksRead": 0,
+        "blocksDirtied": 0,
+        "tempBlocksWritten": 0,
+        "walBytes": 0
+      },
+      {
+        "fingerprint": "d4ea10543e22353c76b5817cd251cd4f374fe1ee3bda667aa49a2373fa447b06",
+        "operation": "SELECT",
+        "model": "other",
+        "calls": 2,
+        "executionMs": 0.11946000000000001,
+        "meanExecutionMs": 0.059730000000000005,
+        "rows": 2,
+        "blocksHit": 6,
+        "blocksRead": 0,
+        "blocksDirtied": 0,
+        "tempBlocksWritten": 0,
+        "walBytes": 0
+      },
+      {
+        "fingerprint": "043117c34b567ae81eeab4b26ac470c668d495119d2665dc7a033ab841f46cbf",
+        "operation": "OTHER",
+        "model": "other",
+        "calls": 1,
+        "executionMs": 0.10275000000000001,
+        "meanExecutionMs": 0.10275000000000001,
+        "rows": 0,
+        "blocksHit": 3,
+        "blocksRead": 0,
+        "blocksDirtied": 0,
+        "tempBlocksWritten": 0,
+        "walBytes": 0
+      }
+    ],
+    "activitySamples": 1,
+    "activitySampleErrors": 0,
+    "waits": [
+      {
+        "state": "active",
+        "type": "IO",
+        "event": "WALWrite",
+        "summedConnections": 1,
+        "maxConnections": 1,
+        "averageConnectionsPerSample": 1
+      },
+      {
+        "state": "active",
+        "type": "CPU",
+        "event": "running",
+        "summedConnections": 1,
+        "maxConnections": 1,
+        "averageConnectionsPerSample": 1
+      }
+    ],
+    "blockerSamples": [],
+    "blockerScope": "Sampled blocker statement categories and transaction age; a transaction can retain locks acquired by an earlier statement. Fixed SQL-side labels only, no query text, parameters, backend IDs or credentials retained."
+  },
+  "scope": "Host isolated1000no-timeline escalation finalizations, concurrency1/pool5; sameOPEN/generation/cursor fence and final state. No HTTP/providers/claiming/incident creation/effects or nativecapacity certificate."
+}
