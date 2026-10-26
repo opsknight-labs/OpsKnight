@@ -1,0 +1,1273 @@
+{
+  "runId": "ef309254-042b-47f9-a6df-45b42175d2d8",
+  "certifiedEnterprise": false,
+  "cleanupFailures": [],
+  "chaos": [],
+  "smtpCapture": {
+    "imageId": "sha256:0790692be935ea4420d085694f7985b1f692ca6a8771ab0e0bd8ba75ac180498",
+    "localOnly": true,
+    "remoteDeliveryCertified": false
+  },
+  "modeOverrideAbsentFromContainers": true,
+  "image": {
+    "nodeVersion": "v20.20.2",
+    "id": "sha256:a5fa9a85ea6c3eb8cbe6ef17a09dcefc5f6284e248e1a83400104586695ed6b0",
+    "revision": "67a28dda6b47dab1b16ff793d2490938880561f7",
+    "proxyImageId": "sha256:47928bf67eb62a1863cb08d9ecb52d3e704304ba614eaee17884204677702951"
+  },
+  "topology": {
+    "capacityStage": "full-stack",
+    "responderSaturation": false,
+    "httpRole": "web",
+    "fullStackProcesses": true,
+    "edgeBackpressure": false,
+    "automaticMode": true,
+    "webFallbackOnly": false,
+    "webUsesPgBouncer": false,
+    "supportingRoles": [
+      {
+        "role": "scheduler",
+        "replicas": 1,
+        "pool": 2,
+        "cpus": 1
+      },
+      {
+        "role": "general-worker",
+        "replicas": 1,
+        "pool": 5,
+        "cpus": 1
+      },
+      {
+        "role": "critical-worker",
+        "replicas": 1,
+        "pool": 5,
+        "cpus": 1
+      },
+      {
+        "role": "bulk-worker",
+        "replicas": 1,
+        "pool": 3,
+        "cpus": 1
+      },
+      {
+        "role": "runbook-worker",
+        "replicas": 1,
+        "pool": 5,
+        "cpus": 1
+      },
+      {
+        "role": "status-projector",
+        "replicas": 1,
+        "pool": 2,
+        "cpus": 1
+      }
+    ],
+    "externalEffectsCertified": false,
+    "webReplicas": 1,
+    "workerReplicas": 1,
+    "workerConcurrency": 4,
+    "leaseMs": 5000,
+    "controlRevision": 1,
+    "webPool": 10,
+    "workerPool": 5,
+    "webCpus": 1,
+    "workerCpus": 1,
+    "cpuProfiling": false,
+    "capacity": {
+      "mode": "split",
+      "pgbouncer": false,
+      "webConnections": 10,
+      "directWorkerConnections": 28,
+      "totalDemand": 53,
+      "connectionReserve": 15,
+      "maxConnections": 100,
+      "safe": true,
+      "headroom": 47,
+      "breakdown": {
+        "ingestionWorker": {
+          "replicas": 1,
+          "pool": 5,
+          "total": 5
+        },
+        "web": {
+          "replicas": 1,
+          "pool": 10,
+          "effective": 10
+        },
+        "pgbouncer": null,
+        "scheduler": {
+          "replicas": 1,
+          "pool": 2,
+          "total": 3,
+          "artifactMaintenanceConnections": 1
+        },
+        "generalWorker": {
+          "replicas": 1,
+          "pool": 5,
+          "total": 5
+        },
+        "criticalWorker": {
+          "replicas": 1,
+          "pool": 5,
+          "total": 5
+        },
+        "bulkWorker": {
+          "replicas": 1,
+          "pool": 3,
+          "total": 3
+        },
+        "runbookWorker": {
+          "replicas": 1,
+          "pool": 5,
+          "total": 5
+        },
+        "statusProjector": {
+          "replicas": 1,
+          "pool": 2,
+          "total": 2
+        }
+      }
+    }
+  },
+  "resourcesBeforePreflight": [
+    {
+      "name": "ingestion-cert-ef309254-web-0",
+      "running": true,
+      "oomKilled": false,
+      "exitCode": 0,
+      "limits": {
+        "cpuCores": 1,
+        "memoryBytes": 1073741824
+      },
+      "cgroup": {
+        "cpu": {
+          "usage_usec": 6354791,
+          "user_usec": 4818535,
+          "system_usec": 1536256,
+          "nice_usec": 0,
+          "nr_periods": 476,
+          "nr_throttled": 37,
+          "throttled_usec": 2419889,
+          "nr_bursts": 0,
+          "burst_usec": 0
+        },
+        "memoryCurrentBytes": 171622400,
+        "memoryPeakBytes": 220852224,
+        "memoryEvents": {
+          "low": 0,
+          "high": 0,
+          "max": 0,
+          "oom": 0,
+          "oom_kill": 0,
+          "oom_group_kill": 0,
+          "sock_throttled": 0
+        }
+      }
+    },
+    {
+      "name": "ingestion-cert-ef309254-worker-0",
+      "running": true,
+      "oomKilled": false,
+      "exitCode": 0,
+      "limits": {
+        "cpuCores": 1,
+        "memoryBytes": 805306368
+      },
+      "cgroup": {
+        "cpu": {
+          "usage_usec": 5725155,
+          "user_usec": 4473648,
+          "system_usec": 1251507,
+          "nice_usec": 0,
+          "nr_periods": 745,
+          "nr_throttled": 25,
+          "throttled_usec": 2020002,
+          "nr_bursts": 0,
+          "burst_usec": 0
+        },
+        "memoryCurrentBytes": 138579968,
+        "memoryPeakBytes": 198250496,
+        "memoryEvents": {
+          "low": 0,
+          "high": 0,
+          "max": 0,
+          "oom": 0,
+          "oom_kill": 0,
+          "oom_group_kill": 0,
+          "sock_throttled": 0
+        }
+      }
+    },
+    {
+      "name": "ingestion-cert-ef309254-scheduler",
+      "running": true,
+      "oomKilled": false,
+      "exitCode": 0,
+      "limits": {
+        "cpuCores": 1,
+        "memoryBytes": 805306368
+      },
+      "cgroup": {
+        "cpu": {
+          "usage_usec": 6338821,
+          "user_usec": 4968805,
+          "system_usec": 1370016,
+          "nice_usec": 0,
+          "nr_periods": 247,
+          "nr_throttled": 41,
+          "throttled_usec": 2974668,
+          "nr_bursts": 0,
+          "burst_usec": 0
+        },
+        "memoryCurrentBytes": 159731712,
+        "memoryPeakBytes": 192876544,
+        "memoryEvents": {
+          "low": 0,
+          "high": 0,
+          "max": 0,
+          "oom": 0,
+          "oom_kill": 0,
+          "oom_group_kill": 0,
+          "sock_throttled": 0
+        }
+      }
+    },
+    {
+      "name": "ingestion-cert-ef309254-general-worker",
+      "running": true,
+      "oomKilled": false,
+      "exitCode": 0,
+      "limits": {
+        "cpuCores": 1,
+        "memoryBytes": 805306368
+      },
+      "cgroup": {
+        "cpu": {
+          "usage_usec": 3585549,
+          "user_usec": 2805337,
+          "system_usec": 780212,
+          "nice_usec": 0,
+          "nr_periods": 113,
+          "nr_throttled": 25,
+          "throttled_usec": 1584094,
+          "nr_bursts": 0,
+          "burst_usec": 0
+        },
+        "memoryCurrentBytes": 138231808,
+        "memoryPeakBytes": 184844288,
+        "memoryEvents": {
+          "low": 0,
+          "high": 0,
+          "max": 0,
+          "oom": 0,
+          "oom_kill": 0,
+          "oom_group_kill": 0,
+          "sock_throttled": 0
+        }
+      }
+    },
+    {
+      "name": "ingestion-cert-ef309254-critical-worker",
+      "running": true,
+      "oomKilled": false,
+      "exitCode": 0,
+      "limits": {
+        "cpuCores": 1,
+        "memoryBytes": 805306368
+      },
+      "cgroup": {
+        "cpu": {
+          "usage_usec": 3482091,
+          "user_usec": 2742110,
+          "system_usec": 739981,
+          "nice_usec": 0,
+          "nr_periods": 92,
+          "nr_throttled": 23,
+          "throttled_usec": 1610679,
+          "nr_bursts": 0,
+          "burst_usec": 0
+        },
+        "memoryCurrentBytes": 135655424,
+        "memoryPeakBytes": 182259712,
+        "memoryEvents": {
+          "low": 0,
+          "high": 0,
+          "max": 0,
+          "oom": 0,
+          "oom_kill": 0,
+          "oom_group_kill": 0,
+          "sock_throttled": 0
+        }
+      }
+    },
+    {
+      "name": "ingestion-cert-ef309254-bulk-worker",
+      "running": true,
+      "oomKilled": false,
+      "exitCode": 0,
+      "limits": {
+        "cpuCores": 1,
+        "memoryBytes": 805306368
+      },
+      "cgroup": {
+        "cpu": {
+          "usage_usec": 3330502,
+          "user_usec": 2541064,
+          "system_usec": 789437,
+          "nice_usec": 0,
+          "nr_periods": 81,
+          "nr_throttled": 23,
+          "throttled_usec": 1138227,
+          "nr_bursts": 0,
+          "burst_usec": 0
+        },
+        "memoryCurrentBytes": 135426048,
+        "memoryPeakBytes": 182411264,
+        "memoryEvents": {
+          "low": 0,
+          "high": 0,
+          "max": 0,
+          "oom": 0,
+          "oom_kill": 0,
+          "oom_group_kill": 0,
+          "sock_throttled": 0
+        }
+      }
+    },
+    {
+      "name": "ingestion-cert-ef309254-runbook-worker",
+      "running": true,
+      "oomKilled": false,
+      "exitCode": 0,
+      "limits": {
+        "cpuCores": 1,
+        "memoryBytes": 805306368
+      },
+      "cgroup": {
+        "cpu": {
+          "usage_usec": 2902135,
+          "user_usec": 2291789,
+          "system_usec": 610345,
+          "nice_usec": 0,
+          "nr_periods": 52,
+          "nr_throttled": 23,
+          "throttled_usec": 1301461,
+          "nr_bursts": 0,
+          "burst_usec": 0
+        },
+        "memoryCurrentBytes": 146423808,
+        "memoryPeakBytes": 184049664,
+        "memoryEvents": {
+          "low": 0,
+          "high": 0,
+          "max": 0,
+          "oom": 0,
+          "oom_kill": 0,
+          "oom_group_kill": 0,
+          "sock_throttled": 0
+        }
+      }
+    },
+    {
+      "name": "ingestion-cert-ef309254-status-projector",
+      "running": true,
+      "oomKilled": false,
+      "exitCode": 0,
+      "limits": {
+        "cpuCores": 1,
+        "memoryBytes": 805306368
+      },
+      "cgroup": {
+        "cpu": {
+          "usage_usec": 2886315,
+          "user_usec": 2256246,
+          "system_usec": 630068,
+          "nice_usec": 0,
+          "nr_periods": 42,
+          "nr_throttled": 23,
+          "throttled_usec": 1247958,
+          "nr_bursts": 0,
+          "burst_usec": 0
+        },
+        "memoryCurrentBytes": 145756160,
+        "memoryPeakBytes": 184426496,
+        "memoryEvents": {
+          "low": 0,
+          "high": 0,
+          "max": 0,
+          "oom": 0,
+          "oom_kill": 0,
+          "oom_group_kill": 0,
+          "sock_throttled": 0
+        }
+      }
+    }
+  ],
+  "smtpDelivery": {
+    "receiptId": "f35cc5a1-49a3-40c8-bb7b-a5ad23145429",
+    "incidentId": "cmvoyf0ua00s0i5os4mfcy3qy",
+    "notificationId": "notification_4738135a31a9100b3b1ad3b8311f86e",
+    "smtpCaptured": true,
+    "durableDeliveryRecorded": true,
+    "captureObservedMs": 1198,
+    "startedDuringLoad": true,
+    "capturedDuringLoad": true,
+    "provider": "smtp",
+    "pinnedAutomationVerified": true,
+    "sourceSeverity": "warning",
+    "finalPriority": "P1",
+    "scope": "Real application workers and SMTP transport to owned local capture only; no Internet delivery or remote mailbox certification"
+  },
+  "resourcesAfterLoad": [
+    {
+      "name": "ingestion-cert-ef309254-web-0",
+      "running": true,
+      "oomKilled": false,
+      "exitCode": 0,
+      "limits": {
+        "cpuCores": 1,
+        "memoryBytes": 1073741824
+      },
+      "cgroup": {
+        "cpu": {
+          "usage_usec": 66406610,
+          "user_usec": 56799038,
+          "system_usec": 9607571,
+          "nice_usec": 0,
+          "nr_periods": 1149,
+          "nr_throttled": 595,
+          "throttled_usec": 35145632,
+          "nr_bursts": 0,
+          "burst_usec": 0
+        },
+        "memoryCurrentBytes": 248643584,
+        "memoryPeakBytes": 257097728,
+        "memoryEvents": {
+          "low": 0,
+          "high": 0,
+          "max": 0,
+          "oom": 0,
+          "oom_kill": 0,
+          "oom_group_kill": 0,
+          "sock_throttled": 0
+        }
+      }
+    },
+    {
+      "name": "ingestion-cert-ef309254-worker-0",
+      "running": true,
+      "oomKilled": false,
+      "exitCode": 0,
+      "limits": {
+        "cpuCores": 1,
+        "memoryBytes": 805306368
+      },
+      "cgroup": {
+        "cpu": {
+          "usage_usec": 74659361,
+          "user_usec": 58021238,
+          "system_usec": 16638123,
+          "nice_usec": 0,
+          "nr_periods": 1461,
+          "nr_throttled": 707,
+          "throttled_usec": 41542795,
+          "nr_bursts": 0,
+          "burst_usec": 0
+        },
+        "memoryCurrentBytes": 192036864,
+        "memoryPeakBytes": 198250496,
+        "memoryEvents": {
+          "low": 0,
+          "high": 0,
+          "max": 0,
+          "oom": 0,
+          "oom_kill": 0,
+          "oom_group_kill": 0,
+          "sock_throttled": 0
+        }
+      }
+    },
+    {
+      "name": "ingestion-cert-ef309254-scheduler",
+      "running": true,
+      "oomKilled": false,
+      "exitCode": 0,
+      "limits": {
+        "cpuCores": 1,
+        "memoryBytes": 805306368
+      },
+      "cgroup": {
+        "cpu": {
+          "usage_usec": 7901752,
+          "user_usec": 6167368,
+          "system_usec": 1734383,
+          "nice_usec": 0,
+          "nr_periods": 435,
+          "nr_throttled": 42,
+          "throttled_usec": 3331554,
+          "nr_bursts": 0,
+          "burst_usec": 0
+        },
+        "memoryCurrentBytes": 160272384,
+        "memoryPeakBytes": 192876544,
+        "memoryEvents": {
+          "low": 0,
+          "high": 0,
+          "max": 0,
+          "oom": 0,
+          "oom_kill": 0,
+          "oom_group_kill": 0,
+          "sock_throttled": 0
+        }
+      }
+    },
+    {
+      "name": "ingestion-cert-ef309254-general-worker",
+      "running": true,
+      "oomKilled": false,
+      "exitCode": 0,
+      "limits": {
+        "cpuCores": 1,
+        "memoryBytes": 805306368
+      },
+      "cgroup": {
+        "cpu": {
+          "usage_usec": 28372321,
+          "user_usec": 22112392,
+          "system_usec": 6259929,
+          "nice_usec": 0,
+          "nr_periods": 803,
+          "nr_throttled": 46,
+          "throttled_usec": 4687517,
+          "nr_bursts": 0,
+          "burst_usec": 0
+        },
+        "memoryCurrentBytes": 176377856,
+        "memoryPeakBytes": 184942592,
+        "memoryEvents": {
+          "low": 0,
+          "high": 0,
+          "max": 0,
+          "oom": 0,
+          "oom_kill": 0,
+          "oom_group_kill": 0,
+          "sock_throttled": 0
+        }
+      }
+    },
+    {
+      "name": "ingestion-cert-ef309254-critical-worker",
+      "running": true,
+      "oomKilled": false,
+      "exitCode": 0,
+      "limits": {
+        "cpuCores": 1,
+        "memoryBytes": 805306368
+      },
+      "cgroup": {
+        "cpu": {
+          "usage_usec": 42124937,
+          "user_usec": 31877263,
+          "system_usec": 10247673,
+          "nice_usec": 0,
+          "nr_periods": 786,
+          "nr_throttled": 116,
+          "throttled_usec": 6958563,
+          "nr_bursts": 0,
+          "burst_usec": 0
+        },
+        "memoryCurrentBytes": 160890880,
+        "memoryPeakBytes": 182259712,
+        "memoryEvents": {
+          "low": 0,
+          "high": 0,
+          "max": 0,
+          "oom": 0,
+          "oom_kill": 0,
+          "oom_group_kill": 0,
+          "sock_throttled": 0
+        }
+      }
+    },
+    {
+      "name": "ingestion-cert-ef309254-bulk-worker",
+      "running": true,
+      "oomKilled": false,
+      "exitCode": 0,
+      "limits": {
+        "cpuCores": 1,
+        "memoryBytes": 805306368
+      },
+      "cgroup": {
+        "cpu": {
+          "usage_usec": 5287689,
+          "user_usec": 4001576,
+          "system_usec": 1286112,
+          "nice_usec": 0,
+          "nr_periods": 263,
+          "nr_throttled": 23,
+          "throttled_usec": 1138227,
+          "nr_bursts": 0,
+          "burst_usec": 0
+        },
+        "memoryCurrentBytes": 139542528,
+        "memoryPeakBytes": 182411264,
+        "memoryEvents": {
+          "low": 0,
+          "high": 0,
+          "max": 0,
+          "oom": 0,
+          "oom_kill": 0,
+          "oom_group_kill": 0,
+          "sock_throttled": 0
+        }
+      }
+    },
+    {
+      "name": "ingestion-cert-ef309254-runbook-worker",
+      "running": true,
+      "oomKilled": false,
+      "exitCode": 0,
+      "limits": {
+        "cpuCores": 1,
+        "memoryBytes": 805306368
+      },
+      "cgroup": {
+        "cpu": {
+          "usage_usec": 20688942,
+          "user_usec": 15904243,
+          "system_usec": 4784699,
+          "nice_usec": 0,
+          "nr_periods": 750,
+          "nr_throttled": 36,
+          "throttled_usec": 3085333,
+          "nr_bursts": 0,
+          "burst_usec": 0
+        },
+        "memoryCurrentBytes": 155709440,
+        "memoryPeakBytes": 184049664,
+        "memoryEvents": {
+          "low": 0,
+          "high": 0,
+          "max": 0,
+          "oom": 0,
+          "oom_kill": 0,
+          "oom_group_kill": 0,
+          "sock_throttled": 0
+        }
+      }
+    },
+    {
+      "name": "ingestion-cert-ef309254-status-projector",
+      "running": true,
+      "oomKilled": false,
+      "exitCode": 0,
+      "limits": {
+        "cpuCores": 1,
+        "memoryBytes": 805306368
+      },
+      "cgroup": {
+        "cpu": {
+          "usage_usec": 4405521,
+          "user_usec": 3446051,
+          "system_usec": 959469,
+          "nice_usec": 0,
+          "nr_periods": 208,
+          "nr_throttled": 24,
+          "throttled_usec": 1600096,
+          "nr_bursts": 0,
+          "burst_usec": 0
+        },
+        "memoryCurrentBytes": 137863168,
+        "memoryPeakBytes": 184426496,
+        "memoryEvents": {
+          "low": 0,
+          "high": 0,
+          "max": 0,
+          "oom": 0,
+          "oom_kill": 0,
+          "oom_group_kill": 0,
+          "sock_throttled": 0
+        }
+      }
+    }
+  ],
+  "cpuDelta": {
+    "processes": [
+      {
+        "name": "ingestion-cert-ef309254-web-0",
+        "cpuSeconds": 60.051819
+      },
+      {
+        "name": "ingestion-cert-ef309254-worker-0",
+        "cpuSeconds": 68.934206
+      },
+      {
+        "name": "ingestion-cert-ef309254-scheduler",
+        "cpuSeconds": 1.562931
+      },
+      {
+        "name": "ingestion-cert-ef309254-general-worker",
+        "cpuSeconds": 24.786772
+      },
+      {
+        "name": "ingestion-cert-ef309254-critical-worker",
+        "cpuSeconds": 38.642846
+      },
+      {
+        "name": "ingestion-cert-ef309254-bulk-worker",
+        "cpuSeconds": 1.957187
+      },
+      {
+        "name": "ingestion-cert-ef309254-runbook-worker",
+        "cpuSeconds": 17.786807
+      },
+      {
+        "name": "ingestion-cert-ef309254-status-projector",
+        "cpuSeconds": 1.519206
+      }
+    ],
+    "totalCpuSeconds": 215.24177400000002,
+    "scope": "Per-process cgroup CPU deltas over resource snapshot interval; includes diagnostic overhead. Full-stack/admission interval also includes configured preflight and warmup."
+  },
+  "downstreamChecks": {
+    "notificationPassed": true
+  },
+  "httpEvidence": "plans/event-ingestion/local-docker-http-routing-incidents-short-100.json",
+  "httpExit": 1,
+  "httpPassed": false,
+  "admissionStageMetrics": {
+    "snapshots": [
+      {
+        "name": "ingestion-cert-ef309254-web-0",
+        "status": 200,
+        "stages": [
+          {
+            "stage": "transaction-acquire",
+            "outcome": "success",
+            "buckets": [
+              {
+                "upperBoundMs": 1,
+                "cumulativeCount": 1113
+              },
+              {
+                "upperBoundMs": 5,
+                "cumulativeCount": 3119
+              },
+              {
+                "upperBoundMs": 10,
+                "cumulativeCount": 3295
+              },
+              {
+                "upperBoundMs": 25,
+                "cumulativeCount": 3370
+              },
+              {
+                "upperBoundMs": 50,
+                "cumulativeCount": 3426
+              },
+              {
+                "upperBoundMs": 100,
+                "cumulativeCount": 3441
+              },
+              {
+                "upperBoundMs": 250,
+                "cumulativeCount": 3443
+              },
+              {
+                "upperBoundMs": 500,
+                "cumulativeCount": 3443
+              },
+              {
+                "upperBoundMs": 1000,
+                "cumulativeCount": 3443
+              },
+              {
+                "upperBoundMs": 5000,
+                "cumulativeCount": 3443
+              },
+              {
+                "upperBoundMs": null,
+                "cumulativeCount": 3443
+              }
+            ],
+            "sumMs": 10569.497049000303,
+            "count": 3443
+          },
+          {
+            "stage": "durability",
+            "outcome": "success",
+            "buckets": [
+              {
+                "upperBoundMs": 1,
+                "cumulativeCount": 2166
+              },
+              {
+                "upperBoundMs": 5,
+                "cumulativeCount": 3188
+              },
+              {
+                "upperBoundMs": 10,
+                "cumulativeCount": 3318
+              },
+              {
+                "upperBoundMs": 25,
+                "cumulativeCount": 3378
+              },
+              {
+                "upperBoundMs": 50,
+                "cumulativeCount": 3421
+              },
+              {
+                "upperBoundMs": 100,
+                "cumulativeCount": 3441
+              },
+              {
+                "upperBoundMs": 250,
+                "cumulativeCount": 3443
+              },
+              {
+                "upperBoundMs": 500,
+                "cumulativeCount": 3443
+              },
+              {
+                "upperBoundMs": 1000,
+                "cumulativeCount": 3443
+              },
+              {
+                "upperBoundMs": 5000,
+                "cumulativeCount": 3443
+              },
+              {
+                "upperBoundMs": null,
+                "cumulativeCount": 3443
+              }
+            ],
+            "sumMs": 8451.085475999615,
+            "count": 3443
+          },
+          {
+            "stage": "advisory",
+            "outcome": "success",
+            "buckets": [
+              {
+                "upperBoundMs": 1,
+                "cumulativeCount": 2266
+              },
+              {
+                "upperBoundMs": 5,
+                "cumulativeCount": 3229
+              },
+              {
+                "upperBoundMs": 10,
+                "cumulativeCount": 3330
+              },
+              {
+                "upperBoundMs": 25,
+                "cumulativeCount": 3379
+              },
+              {
+                "upperBoundMs": 50,
+                "cumulativeCount": 3420
+              },
+              {
+                "upperBoundMs": 100,
+                "cumulativeCount": 3440
+              },
+              {
+                "upperBoundMs": 250,
+                "cumulativeCount": 3443
+              },
+              {
+                "upperBoundMs": 500,
+                "cumulativeCount": 3443
+              },
+              {
+                "upperBoundMs": 1000,
+                "cumulativeCount": 3443
+              },
+              {
+                "upperBoundMs": 5000,
+                "cumulativeCount": 3443
+              },
+              {
+                "upperBoundMs": null,
+                "cumulativeCount": 3443
+              }
+            ],
+            "sumMs": 7918.544435999938,
+            "count": 3443
+          },
+          {
+            "stage": "idempotency",
+            "outcome": "success",
+            "buckets": [
+              {
+                "upperBoundMs": 1,
+                "cumulativeCount": 2080
+              },
+              {
+                "upperBoundMs": 5,
+                "cumulativeCount": 3206
+              },
+              {
+                "upperBoundMs": 10,
+                "cumulativeCount": 3327
+              },
+              {
+                "upperBoundMs": 25,
+                "cumulativeCount": 3372
+              },
+              {
+                "upperBoundMs": 50,
+                "cumulativeCount": 3422
+              },
+              {
+                "upperBoundMs": 100,
+                "cumulativeCount": 3442
+              },
+              {
+                "upperBoundMs": 250,
+                "cumulativeCount": 3443
+              },
+              {
+                "upperBoundMs": 500,
+                "cumulativeCount": 3443
+              },
+              {
+                "upperBoundMs": 1000,
+                "cumulativeCount": 3443
+              },
+              {
+                "upperBoundMs": 5000,
+                "cumulativeCount": 3443
+              },
+              {
+                "upperBoundMs": null,
+                "cumulativeCount": 3443
+              }
+            ],
+            "sumMs": 8600.282204000338,
+            "count": 3443
+          },
+          {
+            "stage": "policy",
+            "outcome": "success",
+            "buckets": [
+              {
+                "upperBoundMs": 1,
+                "cumulativeCount": 2474
+              },
+              {
+                "upperBoundMs": 5,
+                "cumulativeCount": 3242
+              },
+              {
+                "upperBoundMs": 10,
+                "cumulativeCount": 3351
+              },
+              {
+                "upperBoundMs": 25,
+                "cumulativeCount": 3398
+              },
+              {
+                "upperBoundMs": 50,
+                "cumulativeCount": 3428
+              },
+              {
+                "upperBoundMs": 100,
+                "cumulativeCount": 3442
+              },
+              {
+                "upperBoundMs": 250,
+                "cumulativeCount": 3443
+              },
+              {
+                "upperBoundMs": 500,
+                "cumulativeCount": 3443
+              },
+              {
+                "upperBoundMs": 1000,
+                "cumulativeCount": 3443
+              },
+              {
+                "upperBoundMs": 5000,
+                "cumulativeCount": 3443
+              },
+              {
+                "upperBoundMs": null,
+                "cumulativeCount": 3443
+              }
+            ],
+            "sumMs": 6658.378502000138,
+            "count": 3443
+          },
+          {
+            "stage": "preparation",
+            "outcome": "success",
+            "buckets": [
+              {
+                "upperBoundMs": 1,
+                "cumulativeCount": 6700
+              },
+              {
+                "upperBoundMs": 5,
+                "cumulativeCount": 6869
+              },
+              {
+                "upperBoundMs": 10,
+                "cumulativeCount": 6872
+              },
+              {
+                "upperBoundMs": 25,
+                "cumulativeCount": 6875
+              },
+              {
+                "upperBoundMs": 50,
+                "cumulativeCount": 6884
+              },
+              {
+                "upperBoundMs": 100,
+                "cumulativeCount": 6886
+              },
+              {
+                "upperBoundMs": 250,
+                "cumulativeCount": 6886
+              },
+              {
+                "upperBoundMs": 500,
+                "cumulativeCount": 6886
+              },
+              {
+                "upperBoundMs": 1000,
+                "cumulativeCount": 6886
+              },
+              {
+                "upperBoundMs": 5000,
+                "cumulativeCount": 6886
+              },
+              {
+                "upperBoundMs": null,
+                "cumulativeCount": 6886
+              }
+            ],
+            "sumMs": 1939.2983390003938,
+            "count": 6886
+          },
+          {
+            "stage": "reservation",
+            "outcome": "success",
+            "buckets": [
+              {
+                "upperBoundMs": 1,
+                "cumulativeCount": 1236
+              },
+              {
+                "upperBoundMs": 5,
+                "cumulativeCount": 2995
+              },
+              {
+                "upperBoundMs": 10,
+                "cumulativeCount": 3212
+              },
+              {
+                "upperBoundMs": 25,
+                "cumulativeCount": 3322
+              },
+              {
+                "upperBoundMs": 50,
+                "cumulativeCount": 3399
+              },
+              {
+                "upperBoundMs": 100,
+                "cumulativeCount": 3436
+              },
+              {
+                "upperBoundMs": 250,
+                "cumulativeCount": 3443
+              },
+              {
+                "upperBoundMs": 500,
+                "cumulativeCount": 3443
+              },
+              {
+                "upperBoundMs": 1000,
+                "cumulativeCount": 3443
+              },
+              {
+                "upperBoundMs": 5000,
+                "cumulativeCount": 3443
+              },
+              {
+                "upperBoundMs": null,
+                "cumulativeCount": 3443
+              }
+            ],
+            "sumMs": 14294.230877999667,
+            "count": 3443
+          },
+          {
+            "stage": "insert",
+            "outcome": "success",
+            "buckets": [
+              {
+                "upperBoundMs": 1,
+                "cumulativeCount": 0
+              },
+              {
+                "upperBoundMs": 5,
+                "cumulativeCount": 2734
+              },
+              {
+                "upperBoundMs": 10,
+                "cumulativeCount": 3141
+              },
+              {
+                "upperBoundMs": 25,
+                "cumulativeCount": 3317
+              },
+              {
+                "upperBoundMs": 50,
+                "cumulativeCount": 3400
+              },
+              {
+                "upperBoundMs": 100,
+                "cumulativeCount": 3442
+              },
+              {
+                "upperBoundMs": 250,
+                "cumulativeCount": 3443
+              },
+              {
+                "upperBoundMs": 500,
+                "cumulativeCount": 3443
+              },
+              {
+                "upperBoundMs": 1000,
+                "cumulativeCount": 3443
+              },
+              {
+                "upperBoundMs": 5000,
+                "cumulativeCount": 3443
+              },
+              {
+                "upperBoundMs": null,
+                "cumulativeCount": 3443
+              }
+            ],
+            "sumMs": 18272.43474100053,
+            "count": 3443
+          },
+          {
+            "stage": "transaction-operation",
+            "outcome": "success",
+            "buckets": [
+              {
+                "upperBoundMs": 1,
+                "cumulativeCount": 0
+              },
+              {
+                "upperBoundMs": 5,
+                "cumulativeCount": 188
+              },
+              {
+                "upperBoundMs": 10,
+                "cumulativeCount": 2001
+              },
+              {
+                "upperBoundMs": 25,
+                "cumulativeCount": 2903
+              },
+              {
+                "upperBoundMs": 50,
+                "cumulativeCount": 3149
+              },
+              {
+                "upperBoundMs": 100,
+                "cumulativeCount": 3346
+              },
+              {
+                "upperBoundMs": 250,
+                "cumulativeCount": 3432
+              },
+              {
+                "upperBoundMs": 500,
+                "cumulativeCount": 3442
+              },
+              {
+                "upperBoundMs": 1000,
+                "cumulativeCount": 3443
+              },
+              {
+                "upperBoundMs": 5000,
+                "cumulativeCount": 3443
+              },
+              {
+                "upperBoundMs": null,
+                "cumulativeCount": 3443
+              }
+            ],
+            "sumMs": 66518.31777800003,
+            "count": 3443
+          },
+          {
+            "stage": "transaction-finalize",
+            "outcome": "success",
+            "buckets": [
+              {
+                "upperBoundMs": 1,
+                "cumulativeCount": 1711
+              },
+              {
+                "upperBoundMs": 5,
+                "cumulativeCount": 3216
+              },
+              {
+                "upperBoundMs": 10,
+                "cumulativeCount": 3326
+              },
+              {
+                "upperBoundMs": 25,
+                "cumulativeCount": 3382
+              },
+              {
+                "upperBoundMs": 50,
+                "cumulativeCount": 3423
+              },
+              {
+                "upperBoundMs": 100,
+                "cumulativeCount": 3440
+              },
+              {
+                "upperBoundMs": 250,
+                "cumulativeCount": 3443
+              },
+              {
+                "upperBoundMs": 500,
+                "cumulativeCount": 3443
+              },
+              {
+                "upperBoundMs": 1000,
+                "cumulativeCount": 3443
+              },
+              {
+                "upperBoundMs": 5000,
+                "cumulativeCount": 3443
+              },
+              {
+                "upperBoundMs": null,
+                "cumulativeCount": 3443
+              }
+            ],
+            "sumMs": 8985.606351000417,
+            "count": 3443
+          }
+        ]
+      }
+    ],
+    "scope": "Authenticated process-lifetime histograms after load. Acquire includes pool checkout and BEGIN; finalize includes driver handoff and commit/rollback, not pure WAL time. Idle processes may have empty event histograms. Fixed labels and numeric buckets only.",
+    "passed": true
+  },
+  "error": "Docker topology failed the configured end-to-end thresholds\n\n1 !== 0\n",
+  "measuredAt": "2026-10-26T07:48:49.278Z"
+}
