@@ -1,0 +1,709 @@
+{
+  "runId": "3f25e039-a8d6-4664-a22f-19477c5604cb",
+  "certifiedEnterprise": false,
+  "cleanupFailures": [],
+  "chaos": [],
+  "modeOverrideAbsentFromContainers": true,
+  "image": {
+    "nodeVersion": "v20.20.2",
+    "id": "sha256:a4882bb124f73f40960e8a97b598d63cb70cfb412c6c168fa4955bc56e467c7f",
+    "revision": "fd4bd0ca5325c9eecd951e54d44245c02aece356",
+    "proxyImageId": "sha256:47928bf67eb62a1863cb08d9ecb52d3e704304ba614eaee17884204677702951"
+  },
+  "topology": {
+    "capacityStage": "admission-only",
+    "responderSaturation": false,
+    "httpRole": "http",
+    "fullStackProcesses": false,
+    "edgeBackpressure": false,
+    "automaticMode": true,
+    "webFallbackOnly": false,
+    "webUsesPgBouncer": false,
+    "supportingRoles": [],
+    "externalEffectsCertified": false,
+    "webReplicas": 1,
+    "workerReplicas": 0,
+    "workerConcurrency": 4,
+    "leaseMs": 5000,
+    "controlRevision": 1,
+    "webPool": 10,
+    "workerPool": 5,
+    "webCpus": 1,
+    "workerCpus": 1,
+    "cpuProfiling": false,
+    "capacity": {
+      "mode": "split",
+      "pgbouncer": false,
+      "webConnections": 10,
+      "directWorkerConnections": 23,
+      "totalDemand": 48,
+      "connectionReserve": 15,
+      "maxConnections": 100,
+      "safe": true,
+      "headroom": 52,
+      "breakdown": {
+        "ingestionWorker": {
+          "replicas": 0,
+          "pool": 5,
+          "total": 0
+        },
+        "web": {
+          "replicas": 1,
+          "pool": 10,
+          "effective": 10
+        },
+        "pgbouncer": null,
+        "scheduler": {
+          "replicas": 1,
+          "pool": 2,
+          "total": 3,
+          "artifactMaintenanceConnections": 1
+        },
+        "generalWorker": {
+          "replicas": 1,
+          "pool": 5,
+          "total": 5
+        },
+        "criticalWorker": {
+          "replicas": 1,
+          "pool": 5,
+          "total": 5
+        },
+        "bulkWorker": {
+          "replicas": 1,
+          "pool": 3,
+          "total": 3
+        },
+        "runbookWorker": {
+          "replicas": 1,
+          "pool": 5,
+          "total": 5
+        },
+        "statusProjector": {
+          "replicas": 1,
+          "pool": 2,
+          "total": 2
+        }
+      }
+    }
+  },
+  "resourcesBeforePreflight": [
+    {
+      "name": "ingestion-cert-3f25e039-web-0",
+      "running": true,
+      "oomKilled": false,
+      "exitCode": 0,
+      "limits": {
+        "cpuCores": 1,
+        "memoryBytes": 1073741824
+      },
+      "cgroup": {
+        "cpu": {
+          "usage_usec": 4572211,
+          "user_usec": 3386561,
+          "system_usec": 1185649,
+          "nice_usec": 0,
+          "nr_periods": 54,
+          "nr_throttled": 28,
+          "throttled_usec": 2087734,
+          "nr_bursts": 0,
+          "burst_usec": 0
+        },
+        "memoryCurrentBytes": 260321280,
+        "memoryPeakBytes": 297316352,
+        "memoryEvents": {
+          "low": 0,
+          "high": 0,
+          "max": 0,
+          "oom": 0,
+          "oom_kill": 0,
+          "oom_group_kill": 0,
+          "sock_throttled": 0
+        }
+      }
+    }
+  ],
+  "resourcesAfterLoad": [
+    {
+      "name": "ingestion-cert-3f25e039-web-0",
+      "running": true,
+      "oomKilled": false,
+      "exitCode": 0,
+      "limits": {
+        "cpuCores": 1,
+        "memoryBytes": 1073741824
+      },
+      "cgroup": {
+        "cpu": {
+          "usage_usec": 17584020,
+          "user_usec": 14601072,
+          "system_usec": 2982948,
+          "nice_usec": 0,
+          "nr_periods": 263,
+          "nr_throttled": 51,
+          "throttled_usec": 4422265,
+          "nr_bursts": 0,
+          "burst_usec": 0
+        },
+        "memoryCurrentBytes": 321339392,
+        "memoryPeakBytes": 321437696,
+        "memoryEvents": {
+          "low": 0,
+          "high": 0,
+          "max": 0,
+          "oom": 0,
+          "oom_kill": 0,
+          "oom_group_kill": 0,
+          "sock_throttled": 0
+        }
+      }
+    }
+  ],
+  "cpuDelta": {
+    "processes": [
+      {
+        "name": "ingestion-cert-3f25e039-web-0",
+        "cpuSeconds": 13.011809
+      }
+    ],
+    "totalCpuSeconds": 13.011809,
+    "scope": "Per-process cgroup CPU deltas over resource snapshot interval; includes diagnostic overhead. Full-stack/admission interval also includes configured preflight and warmup."
+  },
+  "downstreamChecks": {},
+  "httpEvidence": "plans/event-ingestion/local-docker-http-admission-settings-b1-50.json",
+  "httpExit": 0,
+  "httpPassed": true,
+  "admissionStageMetrics": {
+    "snapshots": [
+      {
+        "name": "ingestion-cert-3f25e039-web-0",
+        "status": 200,
+        "stages": [
+          {
+            "stage": "transaction-acquire",
+            "outcome": "success",
+            "buckets": [
+              {
+                "upperBoundMs": 1,
+                "cumulativeCount": 903
+              },
+              {
+                "upperBoundMs": 5,
+                "cumulativeCount": 942
+              },
+              {
+                "upperBoundMs": 10,
+                "cumulativeCount": 948
+              },
+              {
+                "upperBoundMs": 25,
+                "cumulativeCount": 949
+              },
+              {
+                "upperBoundMs": 50,
+                "cumulativeCount": 949
+              },
+              {
+                "upperBoundMs": 100,
+                "cumulativeCount": 950
+              },
+              {
+                "upperBoundMs": 250,
+                "cumulativeCount": 950
+              },
+              {
+                "upperBoundMs": 500,
+                "cumulativeCount": 950
+              },
+              {
+                "upperBoundMs": 1000,
+                "cumulativeCount": 950
+              },
+              {
+                "upperBoundMs": 5000,
+                "cumulativeCount": 950
+              },
+              {
+                "upperBoundMs": null,
+                "cumulativeCount": 950
+              }
+            ],
+            "sumMs": 624.9341740000336,
+            "count": 950
+          },
+          {
+            "stage": "durability",
+            "outcome": "success",
+            "buckets": [
+              {
+                "upperBoundMs": 1,
+                "cumulativeCount": 902
+              },
+              {
+                "upperBoundMs": 5,
+                "cumulativeCount": 945
+              },
+              {
+                "upperBoundMs": 10,
+                "cumulativeCount": 949
+              },
+              {
+                "upperBoundMs": 25,
+                "cumulativeCount": 949
+              },
+              {
+                "upperBoundMs": 50,
+                "cumulativeCount": 949
+              },
+              {
+                "upperBoundMs": 100,
+                "cumulativeCount": 950
+              },
+              {
+                "upperBoundMs": 250,
+                "cumulativeCount": 950
+              },
+              {
+                "upperBoundMs": 500,
+                "cumulativeCount": 950
+              },
+              {
+                "upperBoundMs": 1000,
+                "cumulativeCount": 950
+              },
+              {
+                "upperBoundMs": 5000,
+                "cumulativeCount": 950
+              },
+              {
+                "upperBoundMs": null,
+                "cumulativeCount": 950
+              }
+            ],
+            "sumMs": 472.1102889999902,
+            "count": 950
+          },
+          {
+            "stage": "advisory",
+            "outcome": "success",
+            "buckets": [
+              {
+                "upperBoundMs": 1,
+                "cumulativeCount": 902
+              },
+              {
+                "upperBoundMs": 5,
+                "cumulativeCount": 919
+              },
+              {
+                "upperBoundMs": 10,
+                "cumulativeCount": 931
+              },
+              {
+                "upperBoundMs": 25,
+                "cumulativeCount": 941
+              },
+              {
+                "upperBoundMs": 50,
+                "cumulativeCount": 945
+              },
+              {
+                "upperBoundMs": 100,
+                "cumulativeCount": 950
+              },
+              {
+                "upperBoundMs": 250,
+                "cumulativeCount": 950
+              },
+              {
+                "upperBoundMs": 500,
+                "cumulativeCount": 950
+              },
+              {
+                "upperBoundMs": 1000,
+                "cumulativeCount": 950
+              },
+              {
+                "upperBoundMs": 5000,
+                "cumulativeCount": 950
+              },
+              {
+                "upperBoundMs": null,
+                "cumulativeCount": 950
+              }
+            ],
+            "sumMs": 1016.6361680000136,
+            "count": 950
+          },
+          {
+            "stage": "idempotency",
+            "outcome": "success",
+            "buckets": [
+              {
+                "upperBoundMs": 1,
+                "cumulativeCount": 890
+              },
+              {
+                "upperBoundMs": 5,
+                "cumulativeCount": 943
+              },
+              {
+                "upperBoundMs": 10,
+                "cumulativeCount": 949
+              },
+              {
+                "upperBoundMs": 25,
+                "cumulativeCount": 949
+              },
+              {
+                "upperBoundMs": 50,
+                "cumulativeCount": 949
+              },
+              {
+                "upperBoundMs": 100,
+                "cumulativeCount": 950
+              },
+              {
+                "upperBoundMs": 250,
+                "cumulativeCount": 950
+              },
+              {
+                "upperBoundMs": 500,
+                "cumulativeCount": 950
+              },
+              {
+                "upperBoundMs": 1000,
+                "cumulativeCount": 950
+              },
+              {
+                "upperBoundMs": 5000,
+                "cumulativeCount": 950
+              },
+              {
+                "upperBoundMs": null,
+                "cumulativeCount": 950
+              }
+            ],
+            "sumMs": 699.7026320000095,
+            "count": 950
+          },
+          {
+            "stage": "policy",
+            "outcome": "success",
+            "buckets": [
+              {
+                "upperBoundMs": 1,
+                "cumulativeCount": 903
+              },
+              {
+                "upperBoundMs": 5,
+                "cumulativeCount": 945
+              },
+              {
+                "upperBoundMs": 10,
+                "cumulativeCount": 949
+              },
+              {
+                "upperBoundMs": 25,
+                "cumulativeCount": 950
+              },
+              {
+                "upperBoundMs": 50,
+                "cumulativeCount": 950
+              },
+              {
+                "upperBoundMs": 100,
+                "cumulativeCount": 950
+              },
+              {
+                "upperBoundMs": 250,
+                "cumulativeCount": 950
+              },
+              {
+                "upperBoundMs": 500,
+                "cumulativeCount": 950
+              },
+              {
+                "upperBoundMs": 1000,
+                "cumulativeCount": 950
+              },
+              {
+                "upperBoundMs": 5000,
+                "cumulativeCount": 950
+              },
+              {
+                "upperBoundMs": null,
+                "cumulativeCount": 950
+              }
+            ],
+            "sumMs": 497.70949199999177,
+            "count": 950
+          },
+          {
+            "stage": "preparation",
+            "outcome": "success",
+            "buckets": [
+              {
+                "upperBoundMs": 1,
+                "cumulativeCount": 1892
+              },
+              {
+                "upperBoundMs": 5,
+                "cumulativeCount": 1899
+              },
+              {
+                "upperBoundMs": 10,
+                "cumulativeCount": 1899
+              },
+              {
+                "upperBoundMs": 25,
+                "cumulativeCount": 1899
+              },
+              {
+                "upperBoundMs": 50,
+                "cumulativeCount": 1900
+              },
+              {
+                "upperBoundMs": 100,
+                "cumulativeCount": 1900
+              },
+              {
+                "upperBoundMs": 250,
+                "cumulativeCount": 1900
+              },
+              {
+                "upperBoundMs": 500,
+                "cumulativeCount": 1900
+              },
+              {
+                "upperBoundMs": 1000,
+                "cumulativeCount": 1900
+              },
+              {
+                "upperBoundMs": 5000,
+                "cumulativeCount": 1900
+              },
+              {
+                "upperBoundMs": null,
+                "cumulativeCount": 1900
+              }
+            ],
+            "sumMs": 295.4056370000135,
+            "count": 1900
+          },
+          {
+            "stage": "reservation",
+            "outcome": "success",
+            "buckets": [
+              {
+                "upperBoundMs": 1,
+                "cumulativeCount": 782
+              },
+              {
+                "upperBoundMs": 5,
+                "cumulativeCount": 933
+              },
+              {
+                "upperBoundMs": 10,
+                "cumulativeCount": 946
+              },
+              {
+                "upperBoundMs": 25,
+                "cumulativeCount": 949
+              },
+              {
+                "upperBoundMs": 50,
+                "cumulativeCount": 949
+              },
+              {
+                "upperBoundMs": 100,
+                "cumulativeCount": 950
+              },
+              {
+                "upperBoundMs": 250,
+                "cumulativeCount": 950
+              },
+              {
+                "upperBoundMs": 500,
+                "cumulativeCount": 950
+              },
+              {
+                "upperBoundMs": 1000,
+                "cumulativeCount": 950
+              },
+              {
+                "upperBoundMs": 5000,
+                "cumulativeCount": 950
+              },
+              {
+                "upperBoundMs": null,
+                "cumulativeCount": 950
+              }
+            ],
+            "sumMs": 873.0352089999687,
+            "count": 950
+          },
+          {
+            "stage": "insert",
+            "outcome": "success",
+            "buckets": [
+              {
+                "upperBoundMs": 1,
+                "cumulativeCount": 0
+              },
+              {
+                "upperBoundMs": 5,
+                "cumulativeCount": 898
+              },
+              {
+                "upperBoundMs": 10,
+                "cumulativeCount": 937
+              },
+              {
+                "upperBoundMs": 25,
+                "cumulativeCount": 943
+              },
+              {
+                "upperBoundMs": 50,
+                "cumulativeCount": 948
+              },
+              {
+                "upperBoundMs": 100,
+                "cumulativeCount": 950
+              },
+              {
+                "upperBoundMs": 250,
+                "cumulativeCount": 950
+              },
+              {
+                "upperBoundMs": 500,
+                "cumulativeCount": 950
+              },
+              {
+                "upperBoundMs": 1000,
+                "cumulativeCount": 950
+              },
+              {
+                "upperBoundMs": 5000,
+                "cumulativeCount": 950
+              },
+              {
+                "upperBoundMs": null,
+                "cumulativeCount": 950
+              }
+            ],
+            "sumMs": 2476.1784389999675,
+            "count": 950
+          },
+          {
+            "stage": "transaction-operation",
+            "outcome": "success",
+            "buckets": [
+              {
+                "upperBoundMs": 1,
+                "cumulativeCount": 0
+              },
+              {
+                "upperBoundMs": 5,
+                "cumulativeCount": 713
+              },
+              {
+                "upperBoundMs": 10,
+                "cumulativeCount": 864
+              },
+              {
+                "upperBoundMs": 25,
+                "cumulativeCount": 925
+              },
+              {
+                "upperBoundMs": 50,
+                "cumulativeCount": 935
+              },
+              {
+                "upperBoundMs": 100,
+                "cumulativeCount": 947
+              },
+              {
+                "upperBoundMs": 250,
+                "cumulativeCount": 950
+              },
+              {
+                "upperBoundMs": 500,
+                "cumulativeCount": 950
+              },
+              {
+                "upperBoundMs": 1000,
+                "cumulativeCount": 950
+              },
+              {
+                "upperBoundMs": 5000,
+                "cumulativeCount": 950
+              },
+              {
+                "upperBoundMs": null,
+                "cumulativeCount": 950
+              }
+            ],
+            "sumMs": 6432.239783999961,
+            "count": 950
+          },
+          {
+            "stage": "transaction-finalize",
+            "outcome": "success",
+            "buckets": [
+              {
+                "upperBoundMs": 1,
+                "cumulativeCount": 842
+              },
+              {
+                "upperBoundMs": 5,
+                "cumulativeCount": 939
+              },
+              {
+                "upperBoundMs": 10,
+                "cumulativeCount": 945
+              },
+              {
+                "upperBoundMs": 25,
+                "cumulativeCount": 949
+              },
+              {
+                "upperBoundMs": 50,
+                "cumulativeCount": 949
+              },
+              {
+                "upperBoundMs": 100,
+                "cumulativeCount": 949
+              },
+              {
+                "upperBoundMs": 250,
+                "cumulativeCount": 950
+              },
+              {
+                "upperBoundMs": 500,
+                "cumulativeCount": 950
+              },
+              {
+                "upperBoundMs": 1000,
+                "cumulativeCount": 950
+              },
+              {
+                "upperBoundMs": 5000,
+                "cumulativeCount": 950
+              },
+              {
+                "upperBoundMs": null,
+                "cumulativeCount": 950
+              }
+            ],
+            "sumMs": 947.7766740000161,
+            "count": 950
+          }
+        ]
+      }
+    ],
+    "scope": "Authenticated process-lifetime histograms after load. Acquire includes pool checkout and BEGIN; finalize includes driver handoff and commit/rollback, not pure WAL time. Idle processes may have empty event histograms. Fixed labels and numeric buckets only.",
+    "passed": true
+  },
+  "measuredAt": "2026-10-26T07:16:26.583Z"
+}

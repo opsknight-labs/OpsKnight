@@ -163,6 +163,70 @@ afterAll(async () => {
 });
 
 describe('PostgreSQL ingestion durability', () => {
+  it('arms a policy attached while new incident creation waits on its dedup lock', async () => {
+    const key = 'policy-attached-during-lock';
+    const block = await blockIncidentIdentity(key);
+    const pending = processEvent(envelope(key).event, serviceId, 'integration');
+    void pending.catch(() => undefined);
+    try {
+      await expect.poll(async () => {
+        const [row] = await prisma.$queryRaw<Array<{ waiting: number }>>`
+          SELECT count(*)::int AS waiting FROM pg_stat_activity
+          WHERE datid = (SELECT oid FROM pg_database WHERE datname = current_database())
+            AND wait_event_type = 'Lock' AND wait_event = 'advisory'
+        `;
+        return row.waiting;
+      }).toBeGreaterThan(0);
+      const policy = await prisma.escalationPolicy.create({ data: {
+        name: `Owned policy race ${randomUUID()}`,
+        steps: { create: { stepOrder: 0, delayMinutes: 5, targetType: 'USER', targetUserId: actorId, notificationChannels: [] } },
+      } });
+      await prisma.service.update({ where: { id: serviceId }, data: { escalationPolicyId: policy.id } });
+      block.release();
+      await block.done;
+      const result = await pending;
+      if (!('incident' in result) || !result.incident) throw new Error('Expected incident');
+      const incident = await prisma.incident.findUniqueOrThrow({ where: { id: result.incident.id } });
+      expect(incident.escalationStatus).toBe('ESCALATING');
+      expect(incident.currentEscalationStep).toBe(0);
+      expect(incident.nextEscalationAt?.getTime()).toBe(incident.createdAt.getTime() + 5 * 60000);
+      const jobs = await prisma.backgroundJob.findMany({ where: {
+        type: 'ESCALATION', payload: { path: ['incidentId'], equals: incident.id },
+      } });
+      expect(jobs).toHaveLength(1);
+      expect(jobs[0].scheduledAt).toEqual(incident.nextEscalationAt);
+    } finally {
+      block.release();
+      await block.done;
+      await pending.catch(() => undefined);
+    }
+  });
+
+  it('avoids redundant routing reads for a newly created incident without Automation or a policy', async () => {
+    const previous = await prisma.systemSettings.findUnique({ where: { id: 'default' }, select: { automationEnabled: true } });
+    await prisma.systemSettings.upsert({ where: { id: 'default' }, create: { automationEnabled: false }, update: { automationEnabled: false } });
+    let active = true, serviceReads = 0, decisionReads = 0;
+    prisma.$on('query', event => {
+      if (!active || !event.query.trimStart().startsWith('SELECT')) return;
+      if (event.query.includes('"Service"')) serviceReads++;
+      if (event.query.includes('"IncidentAutomationDecision"')) decisionReads++;
+    });
+    try {
+      const result = await processEvent(envelope('new-no-policy-routing').event, serviceId, 'integration');
+      expect(result.action).toBe('triggered');
+      await expect.poll(() => serviceReads).toBe(1);
+      expect(decisionReads).toBe(0);
+      if (!('incident' in result) || !result.incident) throw new Error('Expected incident');
+      const jobs = await prisma.backgroundJob.findMany({ where: { payload: { path: ['incidentId'], equals: result.incident.id } } });
+      expect(jobs.some(job => (job.payload as Prisma.JsonObject).effect === 'TRIGGER_ESCALATION_NOTIFICATIONS')).toBe(true);
+      expect(jobs.some(job => job.type === 'RUNBOOK')).toBe(true);
+      expect(jobs.some(job => job.type === 'ESCALATION')).toBe(false);
+    } finally {
+      active = false;
+      await prisma.systemSettings.update({ where: { id: 'default' }, data: { automationEnabled: previous?.automationEnabled ?? false } });
+    }
+  });
+
   it('compacts ordinary defaults while independently retaining critical and Runbook work', async () => {
     const result = await processEvent(envelope('compact-default').event, serviceId, 'integration');
     expect(result.action).toBe('triggered');
