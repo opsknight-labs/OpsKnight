@@ -16,7 +16,14 @@ const prisma = require('../../src/lib/prisma').default;
 const { consumeIngestionBatch } = require('../../src/lib/ingestion/worker');
 const k6 = process.env.INGESTION_K6 || path.join(os.homedir(), '.local/bin/k6');
 const directory = mkdtempSync(path.join(os.tmpdir(), 'ingestion-http-'));
-const summaryPath = path.join(directory, 'summary.json');
+const evidencePath =
+  process.env.INGESTION_HTTP_EVIDENCE || 'plans/event-ingestion/local-http-load.json';
+const summaryPath = evidencePath + '.k6-summary.json';
+const ledgerPath = evidencePath + '.acknowledgments.jsonl';
+const clientEvidence = () =>
+  require('./client-evidence.cjs').readClientEvidence(summaryPath, ledgerPath);
+let failure;
+let fixtureServiceId;
 const runId = randomUUID();
 // Ephemeral fixture key; never a deployment credential.
 process.env.ENCRYPTION_KEY ||= randomBytes(32).toString('hex');
@@ -58,6 +65,7 @@ async function main() {
     );
   }
   const service = await prisma.service.create({ data: { name: `HTTP load ${runId}` } });
+  fixtureServiceId = service.id;
   const integration = await prisma.integration.create({
     data: {
       serviceId: service.id,
@@ -191,11 +199,17 @@ async function main() {
     finishBacklogSampler = await require('./backlog-sampler.cjs')(prisma, service.id);
   const started = performance.now();
   stage = 'measured-load';
+  rmSync(summaryPath, { force: true });
+  writeFileSync(ledgerPath, '', { mode: 0o600 });
   load = spawn(
     k6,
     [
       'run',
       '--quiet',
+      '--log-format',
+      'raw',
+      '--console-output',
+      ledgerPath,
       '--summary-export',
       summaryPath,
       'tests/load/scenarios/durable-ingestion.js',
@@ -258,9 +272,11 @@ async function main() {
       runtime: process.version,
       scope:
         'Bounded native HTTP authentication, quota and durable append with HTTP-only replicas and no consumers. Pending receipts are intentionally retained under normal hard budgets. Not incident/effect processing or sustained capacity certification.',
+      fixtureServiceId: service.id,
       targetRps: Number(process.env.INGESTION_TARGET_RPS || 1000),
       duration: process.env.INGESTION_DURATION || '60s',
       accepted,
+      clientEvidence: clientEvidence(),
       acknowledged,
       pending,
       claimed,
@@ -384,6 +400,7 @@ async function main() {
     payloadPattern: process.env.INGESTION_PAYLOAD_PATTERN || 'random',
     duration: process.env.INGESTION_DURATION || '60s',
     loadExit,
+    clientEvidence: clientEvidence(),
     acknowledged,
     accepted,
     completed,
@@ -425,6 +442,7 @@ async function main() {
 }
 main()
   .catch(error => {
+    failure = error;
     console.error(error);
     if (!evidenceWritten) {
       writeFileSync(
@@ -435,6 +453,8 @@ main()
             candidate: JSON.parse(process.env.INGESTION_CANDIDATE_METADATA || '{}'),
             passed: false,
             certifiedEnterprise: false,
+            clientEvidence: clientEvidence(),
+            fixtureServiceId,
             failureStage: stage,
             errorType: error.name,
             scope: 'Failed before full load evidence was produced; local stderr has diagnostics',
@@ -461,6 +481,27 @@ main()
           child.once('exit', () => clearTimeout(timer));
         });
       }
+    }
+    if (failure && !evidenceWritten) {
+      writeFileSync(
+        evidencePath,
+        JSON.stringify(
+          {
+            measuredAt: new Date().toISOString(),
+            candidate: JSON.parse(process.env.INGESTION_CANDIDATE_METADATA || '{}'),
+            passed: false,
+            certifiedEnterprise: false,
+            fixtureServiceId,
+            failureStage: stage,
+            errorType: failure.name,
+            clientEvidence: clientEvidence(),
+            scope:
+              'Incomplete failed run; client artifacts retained after load shutdown, database reconciliation required.',
+          },
+          null,
+          2
+        ) + '\n'
+      );
     }
     await prisma.$disconnect();
     rmSync(directory, { recursive: true, force: true });

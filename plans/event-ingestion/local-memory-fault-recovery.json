@@ -1,0 +1,17 @@
+{
+  "measuredAt": "2026-10-26T12:22:04.397Z",
+  "acknowledged": 99,
+  "completed": 99,
+  "alerts": 99,
+  "incidents": 99,
+  "unfinished": 0,
+  "dueEffectsRemaining": 297,
+  "batches": 26,
+  "elapsedMs": 622.58825,
+  "passed": true,
+  "certifiedEnterprise": false,
+  "workerCrashTested": false,
+  "producerKilled": true,
+  "downstreamDrainProven": false,
+  "scope": "Normal host-library recovery of receipts admitted by the exact immutable Docker image. Same pinned source/Node20 and ownedPostgreSQL, concurrency4/pool5; distinct event identities and deliveries after controlled web SIGKILL. No HTTP load during drain, no providers/effect consumers or worker crash. Due effects intentionally remain durable; not native full-stack, downstream-delivery, HA or sustained-capacity certification."
+}

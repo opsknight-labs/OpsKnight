@@ -1,9 +1,14 @@
+/* eslint-disable @typescript-eslint/no-require-imports -- Executable CommonJS inspector client. */
+/* eslint-disable security/detect-non-literal-fs-filename -- Validated owned run paths and fixed cgroup diagnostic files. */
 // Diagnostic client copied into an owned certification container. Inspector is
 // enabled only on that container's loopback interface and never published.
 const fs = require('node:fs');
 const path = require('node:path');
 const assert = require('node:assert/strict');
-const [runId, output, stop] = process.argv.slice(2);
+const [runId, output, stop, mode = 'cpu'] = process.argv.slice(2);
+assert.ok(['cpu', 'memory', 'both'].includes(mode));
+const cpuEnabled = mode !== 'memory';
+const memoryEnabled = mode !== 'cpu';
 assert.match(runId || '', /^[0-9a-f-]{36}$/);
 for (const file of [output, stop]) {
   assert.equal(path.dirname(file), '/tmp');
@@ -53,15 +58,74 @@ async function main() {
     socket.addEventListener('error', reject, { once: true });
   });
   try {
-    await send('Profiler.enable');
-    await send('Profiler.setSamplingInterval', { interval: 1000 });
-    await send('Profiler.start');
-    fs.writeFileSync(`${output}.ready`, 'ready');
+    if (cpuEnabled) {
+      await send('Profiler.enable');
+      await send('Profiler.setSamplingInterval', { interval: 1000 });
+      await send('Profiler.start');
+    }
     const deadline = Date.now() + 180000;
-    while (!fs.existsSync(stop) && Date.now() < deadline)
-      await new Promise(resolve => setTimeout(resolve, 100));
-    const { profile } = await send('Profiler.stop');
-    fs.writeFileSync(output, JSON.stringify(profile));
+    const memoryPath = `${output}.memory.jsonl`;
+    const gcKey = `opsknight-memory-${runId}`;
+    if (memoryEnabled)
+      await send('Runtime.evaluate', {
+        expression: `(() => { try {
+        const { PerformanceObserver } = process.mainModule.require('node:perf_hooks');
+        const state = { count: 0, durationMs: 0 };
+        const observer = new PerformanceObserver(list => { for (const entry of list.getEntries()) {
+          state.count++; state.durationMs += entry.duration;
+        }});
+        observer.observe({ entryTypes: ['gc'] });
+        globalThis[Symbol.for('${gcKey}')] = { state, observer };
+        return true;
+      } catch { return false; } })()`,
+        returnByValue: true,
+      });
+    if (memoryEnabled) fs.writeFileSync(memoryPath, '', { mode: 0o600 });
+    fs.writeFileSync(`${output}.ready`, 'ready');
+    while (!fs.existsSync(stop) && Date.now() < deadline) {
+      if (memoryEnabled) {
+        const result = await send('Runtime.evaluate', {
+          expression: `JSON.stringify({observedAt:Date.now(),...process.memoryUsage(),gc:globalThis[Symbol.for('${gcKey}')]?.state ?? null})`,
+          returnByValue: true,
+        });
+        assert.equal(result.result.type, 'string');
+        const memory = JSON.parse(result.result.value);
+        fs.appendFileSync(
+          memoryPath,
+          JSON.stringify({
+            ...memory,
+            cgroup: (() => {
+              const read = file => fs.readFileSync('/sys/fs/cgroup/' + file, 'utf8').trim();
+              const counters = file =>
+                Object.fromEntries(
+                  read(file)
+                    .split('\n')
+                    .map(line => {
+                      const [key, value] = line.split(/\s+/);
+                      return [key, Number(value)];
+                    })
+                );
+              return {
+                currentBytes: Number(read('memory.current')),
+                peakBytes: Number(read('memory.peak')),
+                events: counters('memory.events'),
+                stat: counters('memory.stat'),
+              };
+            })(),
+          }) + '\n'
+        );
+      }
+      await new Promise(resolve => setTimeout(resolve, memoryEnabled ? 500 : 100));
+    }
+    if (memoryEnabled)
+      await send('Runtime.evaluate', {
+        expression: `(() => { const key=Symbol.for('${gcKey}'); globalThis[key]?.observer.disconnect(); delete globalThis[key]; })()`,
+      });
+    if (cpuEnabled) {
+      const { profile } = await send('Profiler.stop');
+      fs.writeFileSync(output, JSON.stringify(profile));
+    } else
+      fs.writeFileSync(output, JSON.stringify({ memoryOnly: true, certifiedEnterprise: false }));
   } finally {
     socket.close();
   }

@@ -1,0 +1,1153 @@
+{
+  "image": {
+    "nodeVersion": "v20.20.2",
+    "id": "sha256:9bb86c7b820e95ff7bdd8addbd7c4b6ac29d3fa85664bcbee4e6899b6316bb54",
+    "revision": "4b77121ab26ddfb64b5e3f46985ea4392fd6691a",
+    "proxyImageId": "sha256:47928bf67eb62a1863cb08d9ecb52d3e704304ba614eaee17884204677702951"
+  },
+  "scope": "Failed one-minute50/sec diagnostic; per-stage wall-time summaries overlap and include scheduler/driver/pool wait. Percentiles are histogram bucket upper bounds; not an exclusive CPU budget or capacity certificate.",
+  "snapshots": [
+    {
+      "name": "ingestion-cert-8f535347-web-0",
+      "status": 200,
+      "stages": [
+        {
+          "stage": "authentication",
+          "outcome": "success",
+          "buckets": [
+            {
+              "upperBoundMs": 1,
+              "cumulativeCount": 0
+            },
+            {
+              "upperBoundMs": 5,
+              "cumulativeCount": 163
+            },
+            {
+              "upperBoundMs": 10,
+              "cumulativeCount": 676
+            },
+            {
+              "upperBoundMs": 25,
+              "cumulativeCount": 1587
+            },
+            {
+              "upperBoundMs": 50,
+              "cumulativeCount": 2063
+            },
+            {
+              "upperBoundMs": 100,
+              "cumulativeCount": 2353
+            },
+            {
+              "upperBoundMs": 250,
+              "cumulativeCount": 2455
+            },
+            {
+              "upperBoundMs": 500,
+              "cumulativeCount": 2458
+            },
+            {
+              "upperBoundMs": 1000,
+              "cumulativeCount": 2458
+            },
+            {
+              "upperBoundMs": 5000,
+              "cumulativeCount": 2458
+            },
+            {
+              "upperBoundMs": null,
+              "cumulativeCount": 2458
+            }
+          ],
+          "sumMs": 72172.74003999904,
+          "count": 2458
+        },
+        {
+          "stage": "body-read",
+          "outcome": "success",
+          "buckets": [
+            {
+              "upperBoundMs": 1,
+              "cumulativeCount": 2207
+            },
+            {
+              "upperBoundMs": 5,
+              "cumulativeCount": 2404
+            },
+            {
+              "upperBoundMs": 10,
+              "cumulativeCount": 2431
+            },
+            {
+              "upperBoundMs": 25,
+              "cumulativeCount": 2450
+            },
+            {
+              "upperBoundMs": 50,
+              "cumulativeCount": 2456
+            },
+            {
+              "upperBoundMs": 100,
+              "cumulativeCount": 2458
+            },
+            {
+              "upperBoundMs": 250,
+              "cumulativeCount": 2458
+            },
+            {
+              "upperBoundMs": 500,
+              "cumulativeCount": 2458
+            },
+            {
+              "upperBoundMs": 1000,
+              "cumulativeCount": 2458
+            },
+            {
+              "upperBoundMs": 5000,
+              "cumulativeCount": 2458
+            },
+            {
+              "upperBoundMs": null,
+              "cumulativeCount": 2458
+            }
+          ],
+          "sumMs": 2106.440176998847,
+          "count": 2458
+        },
+        {
+          "stage": "body-parse",
+          "outcome": "success",
+          "buckets": [
+            {
+              "upperBoundMs": 1,
+              "cumulativeCount": 2434
+            },
+            {
+              "upperBoundMs": 5,
+              "cumulativeCount": 2450
+            },
+            {
+              "upperBoundMs": 10,
+              "cumulativeCount": 2455
+            },
+            {
+              "upperBoundMs": 25,
+              "cumulativeCount": 2456
+            },
+            {
+              "upperBoundMs": 50,
+              "cumulativeCount": 2456
+            },
+            {
+              "upperBoundMs": 100,
+              "cumulativeCount": 2458
+            },
+            {
+              "upperBoundMs": 250,
+              "cumulativeCount": 2458
+            },
+            {
+              "upperBoundMs": 500,
+              "cumulativeCount": 2458
+            },
+            {
+              "upperBoundMs": 1000,
+              "cumulativeCount": 2458
+            },
+            {
+              "upperBoundMs": 5000,
+              "cumulativeCount": 2458
+            },
+            {
+              "upperBoundMs": null,
+              "cumulativeCount": 2458
+            }
+          ],
+          "sumMs": 287.6042740001285,
+          "count": 2458
+        },
+        {
+          "stage": "validation",
+          "outcome": "success",
+          "buckets": [
+            {
+              "upperBoundMs": 1,
+              "cumulativeCount": 2444
+            },
+            {
+              "upperBoundMs": 5,
+              "cumulativeCount": 2456
+            },
+            {
+              "upperBoundMs": 10,
+              "cumulativeCount": 2457
+            },
+            {
+              "upperBoundMs": 25,
+              "cumulativeCount": 2457
+            },
+            {
+              "upperBoundMs": 50,
+              "cumulativeCount": 2458
+            },
+            {
+              "upperBoundMs": 100,
+              "cumulativeCount": 2458
+            },
+            {
+              "upperBoundMs": 250,
+              "cumulativeCount": 2458
+            },
+            {
+              "upperBoundMs": 500,
+              "cumulativeCount": 2458
+            },
+            {
+              "upperBoundMs": 1000,
+              "cumulativeCount": 2458
+            },
+            {
+              "upperBoundMs": 5000,
+              "cumulativeCount": 2458
+            },
+            {
+              "upperBoundMs": null,
+              "cumulativeCount": 2458
+            }
+          ],
+          "sumMs": 139.51991299939982,
+          "count": 2458
+        },
+        {
+          "stage": "quota",
+          "outcome": "success",
+          "buckets": [
+            {
+              "upperBoundMs": 1,
+              "cumulativeCount": 0
+            },
+            {
+              "upperBoundMs": 5,
+              "cumulativeCount": 0
+            },
+            {
+              "upperBoundMs": 10,
+              "cumulativeCount": 5
+            },
+            {
+              "upperBoundMs": 25,
+              "cumulativeCount": 131
+            },
+            {
+              "upperBoundMs": 50,
+              "cumulativeCount": 773
+            },
+            {
+              "upperBoundMs": 100,
+              "cumulativeCount": 1710
+            },
+            {
+              "upperBoundMs": 250,
+              "cumulativeCount": 2347
+            },
+            {
+              "upperBoundMs": 500,
+              "cumulativeCount": 2426
+            },
+            {
+              "upperBoundMs": 1000,
+              "cumulativeCount": 2458
+            },
+            {
+              "upperBoundMs": 5000,
+              "cumulativeCount": 2458
+            },
+            {
+              "upperBoundMs": null,
+              "cumulativeCount": 2458
+            }
+          ],
+          "sumMs": 237331.4865080001,
+          "count": 2458
+        },
+        {
+          "stage": "envelope",
+          "outcome": "success",
+          "buckets": [
+            {
+              "upperBoundMs": 1,
+              "cumulativeCount": 2300
+            },
+            {
+              "upperBoundMs": 5,
+              "cumulativeCount": 2424
+            },
+            {
+              "upperBoundMs": 10,
+              "cumulativeCount": 2443
+            },
+            {
+              "upperBoundMs": 25,
+              "cumulativeCount": 2457
+            },
+            {
+              "upperBoundMs": 50,
+              "cumulativeCount": 2458
+            },
+            {
+              "upperBoundMs": 100,
+              "cumulativeCount": 2458
+            },
+            {
+              "upperBoundMs": 250,
+              "cumulativeCount": 2458
+            },
+            {
+              "upperBoundMs": 500,
+              "cumulativeCount": 2458
+            },
+            {
+              "upperBoundMs": 1000,
+              "cumulativeCount": 2458
+            },
+            {
+              "upperBoundMs": 5000,
+              "cumulativeCount": 2458
+            },
+            {
+              "upperBoundMs": null,
+              "cumulativeCount": 2458
+            }
+          ],
+          "sumMs": 1167.597479000222,
+          "count": 2458
+        },
+        {
+          "stage": "hashing",
+          "outcome": "success",
+          "buckets": [
+            {
+              "upperBoundMs": 1,
+              "cumulativeCount": 2323
+            },
+            {
+              "upperBoundMs": 5,
+              "cumulativeCount": 2425
+            },
+            {
+              "upperBoundMs": 10,
+              "cumulativeCount": 2445
+            },
+            {
+              "upperBoundMs": 25,
+              "cumulativeCount": 2453
+            },
+            {
+              "upperBoundMs": 50,
+              "cumulativeCount": 2456
+            },
+            {
+              "upperBoundMs": 100,
+              "cumulativeCount": 2458
+            },
+            {
+              "upperBoundMs": 250,
+              "cumulativeCount": 2458
+            },
+            {
+              "upperBoundMs": 500,
+              "cumulativeCount": 2458
+            },
+            {
+              "upperBoundMs": 1000,
+              "cumulativeCount": 2458
+            },
+            {
+              "upperBoundMs": 5000,
+              "cumulativeCount": 2458
+            },
+            {
+              "upperBoundMs": null,
+              "cumulativeCount": 2458
+            }
+          ],
+          "sumMs": 1098.2951470001426,
+          "count": 2458
+        },
+        {
+          "stage": "byte-count",
+          "outcome": "success",
+          "buckets": [
+            {
+              "upperBoundMs": 1,
+              "cumulativeCount": 2401
+            },
+            {
+              "upperBoundMs": 5,
+              "cumulativeCount": 2445
+            },
+            {
+              "upperBoundMs": 10,
+              "cumulativeCount": 2452
+            },
+            {
+              "upperBoundMs": 25,
+              "cumulativeCount": 2457
+            },
+            {
+              "upperBoundMs": 50,
+              "cumulativeCount": 2458
+            },
+            {
+              "upperBoundMs": 100,
+              "cumulativeCount": 2458
+            },
+            {
+              "upperBoundMs": 250,
+              "cumulativeCount": 2458
+            },
+            {
+              "upperBoundMs": 500,
+              "cumulativeCount": 2458
+            },
+            {
+              "upperBoundMs": 1000,
+              "cumulativeCount": 2458
+            },
+            {
+              "upperBoundMs": 5000,
+              "cumulativeCount": 2458
+            },
+            {
+              "upperBoundMs": null,
+              "cumulativeCount": 2458
+            }
+          ],
+          "sumMs": 400.2393749999028,
+          "count": 2458
+        },
+        {
+          "stage": "append-wait",
+          "outcome": "success",
+          "buckets": [
+            {
+              "upperBoundMs": 1,
+              "cumulativeCount": 24
+            },
+            {
+              "upperBoundMs": 5,
+              "cumulativeCount": 150
+            },
+            {
+              "upperBoundMs": 10,
+              "cumulativeCount": 338
+            },
+            {
+              "upperBoundMs": 25,
+              "cumulativeCount": 768
+            },
+            {
+              "upperBoundMs": 50,
+              "cumulativeCount": 1288
+            },
+            {
+              "upperBoundMs": 100,
+              "cumulativeCount": 1872
+            },
+            {
+              "upperBoundMs": 250,
+              "cumulativeCount": 2302
+            },
+            {
+              "upperBoundMs": 500,
+              "cumulativeCount": 2437
+            },
+            {
+              "upperBoundMs": 1000,
+              "cumulativeCount": 2455
+            },
+            {
+              "upperBoundMs": 5000,
+              "cumulativeCount": 2458
+            },
+            {
+              "upperBoundMs": null,
+              "cumulativeCount": 2458
+            }
+          ],
+          "sumMs": 196673.4332739998,
+          "count": 2458
+        },
+        {
+          "stage": "transaction-acquire",
+          "outcome": "success",
+          "buckets": [
+            {
+              "upperBoundMs": 1,
+              "cumulativeCount": 0
+            },
+            {
+              "upperBoundMs": 5,
+              "cumulativeCount": 42
+            },
+            {
+              "upperBoundMs": 10,
+              "cumulativeCount": 164
+            },
+            {
+              "upperBoundMs": 25,
+              "cumulativeCount": 417
+            },
+            {
+              "upperBoundMs": 50,
+              "cumulativeCount": 504
+            },
+            {
+              "upperBoundMs": 100,
+              "cumulativeCount": 559
+            },
+            {
+              "upperBoundMs": 250,
+              "cumulativeCount": 577
+            },
+            {
+              "upperBoundMs": 500,
+              "cumulativeCount": 580
+            },
+            {
+              "upperBoundMs": 1000,
+              "cumulativeCount": 580
+            },
+            {
+              "upperBoundMs": 5000,
+              "cumulativeCount": 580
+            },
+            {
+              "upperBoundMs": null,
+              "cumulativeCount": 580
+            }
+          ],
+          "sumMs": 15148.417624000096,
+          "count": 580
+        },
+        {
+          "stage": "advisory",
+          "outcome": "success",
+          "buckets": [
+            {
+              "upperBoundMs": 1,
+              "cumulativeCount": 1
+            },
+            {
+              "upperBoundMs": 5,
+              "cumulativeCount": 89
+            },
+            {
+              "upperBoundMs": 10,
+              "cumulativeCount": 258
+            },
+            {
+              "upperBoundMs": 25,
+              "cumulativeCount": 438
+            },
+            {
+              "upperBoundMs": 50,
+              "cumulativeCount": 522
+            },
+            {
+              "upperBoundMs": 100,
+              "cumulativeCount": 561
+            },
+            {
+              "upperBoundMs": 250,
+              "cumulativeCount": 580
+            },
+            {
+              "upperBoundMs": 500,
+              "cumulativeCount": 580
+            },
+            {
+              "upperBoundMs": 1000,
+              "cumulativeCount": 580
+            },
+            {
+              "upperBoundMs": 5000,
+              "cumulativeCount": 580
+            },
+            {
+              "upperBoundMs": null,
+              "cumulativeCount": 580
+            }
+          ],
+          "sumMs": 12403.889459999686,
+          "count": 580
+        },
+        {
+          "stage": "idempotency",
+          "outcome": "success",
+          "buckets": [
+            {
+              "upperBoundMs": 1,
+              "cumulativeCount": 0
+            },
+            {
+              "upperBoundMs": 5,
+              "cumulativeCount": 74
+            },
+            {
+              "upperBoundMs": 10,
+              "cumulativeCount": 212
+            },
+            {
+              "upperBoundMs": 25,
+              "cumulativeCount": 438
+            },
+            {
+              "upperBoundMs": 50,
+              "cumulativeCount": 515
+            },
+            {
+              "upperBoundMs": 100,
+              "cumulativeCount": 567
+            },
+            {
+              "upperBoundMs": 250,
+              "cumulativeCount": 577
+            },
+            {
+              "upperBoundMs": 500,
+              "cumulativeCount": 580
+            },
+            {
+              "upperBoundMs": 1000,
+              "cumulativeCount": 580
+            },
+            {
+              "upperBoundMs": 5000,
+              "cumulativeCount": 580
+            },
+            {
+              "upperBoundMs": null,
+              "cumulativeCount": 580
+            }
+          ],
+          "sumMs": 13545.416086000128,
+          "count": 580
+        },
+        {
+          "stage": "policy",
+          "outcome": "success",
+          "buckets": [
+            {
+              "upperBoundMs": 1,
+              "cumulativeCount": 2
+            },
+            {
+              "upperBoundMs": 5,
+              "cumulativeCount": 90
+            },
+            {
+              "upperBoundMs": 10,
+              "cumulativeCount": 279
+            },
+            {
+              "upperBoundMs": 25,
+              "cumulativeCount": 448
+            },
+            {
+              "upperBoundMs": 50,
+              "cumulativeCount": 521
+            },
+            {
+              "upperBoundMs": 100,
+              "cumulativeCount": 562
+            },
+            {
+              "upperBoundMs": 250,
+              "cumulativeCount": 577
+            },
+            {
+              "upperBoundMs": 500,
+              "cumulativeCount": 580
+            },
+            {
+              "upperBoundMs": 1000,
+              "cumulativeCount": 580
+            },
+            {
+              "upperBoundMs": 5000,
+              "cumulativeCount": 580
+            },
+            {
+              "upperBoundMs": null,
+              "cumulativeCount": 580
+            }
+          ],
+          "sumMs": 12818.814047999767,
+          "count": 580
+        },
+        {
+          "stage": "preparation",
+          "outcome": "success",
+          "buckets": [
+            {
+              "upperBoundMs": 1,
+              "cumulativeCount": 800
+            },
+            {
+              "upperBoundMs": 5,
+              "cumulativeCount": 1078
+            },
+            {
+              "upperBoundMs": 10,
+              "cumulativeCount": 1126
+            },
+            {
+              "upperBoundMs": 25,
+              "cumulativeCount": 1146
+            },
+            {
+              "upperBoundMs": 50,
+              "cumulativeCount": 1156
+            },
+            {
+              "upperBoundMs": 100,
+              "cumulativeCount": 1160
+            },
+            {
+              "upperBoundMs": 250,
+              "cumulativeCount": 1160
+            },
+            {
+              "upperBoundMs": 500,
+              "cumulativeCount": 1160
+            },
+            {
+              "upperBoundMs": 1000,
+              "cumulativeCount": 1160
+            },
+            {
+              "upperBoundMs": 5000,
+              "cumulativeCount": 1160
+            },
+            {
+              "upperBoundMs": null,
+              "cumulativeCount": 1160
+            }
+          ],
+          "sumMs": 2120.456078000396,
+          "count": 1160
+        },
+        {
+          "stage": "reservation",
+          "outcome": "success",
+          "buckets": [
+            {
+              "upperBoundMs": 1,
+              "cumulativeCount": 0
+            },
+            {
+              "upperBoundMs": 5,
+              "cumulativeCount": 10
+            },
+            {
+              "upperBoundMs": 10,
+              "cumulativeCount": 63
+            },
+            {
+              "upperBoundMs": 25,
+              "cumulativeCount": 324
+            },
+            {
+              "upperBoundMs": 50,
+              "cumulativeCount": 456
+            },
+            {
+              "upperBoundMs": 100,
+              "cumulativeCount": 533
+            },
+            {
+              "upperBoundMs": 250,
+              "cumulativeCount": 571
+            },
+            {
+              "upperBoundMs": 500,
+              "cumulativeCount": 578
+            },
+            {
+              "upperBoundMs": 1000,
+              "cumulativeCount": 580
+            },
+            {
+              "upperBoundMs": 5000,
+              "cumulativeCount": 580
+            },
+            {
+              "upperBoundMs": null,
+              "cumulativeCount": 580
+            }
+          ],
+          "sumMs": 23806.346671999854,
+          "count": 580
+        },
+        {
+          "stage": "insert",
+          "outcome": "success",
+          "buckets": [
+            {
+              "upperBoundMs": 1,
+              "cumulativeCount": 0
+            },
+            {
+              "upperBoundMs": 5,
+              "cumulativeCount": 9
+            },
+            {
+              "upperBoundMs": 10,
+              "cumulativeCount": 77
+            },
+            {
+              "upperBoundMs": 25,
+              "cumulativeCount": 353
+            },
+            {
+              "upperBoundMs": 50,
+              "cumulativeCount": 488
+            },
+            {
+              "upperBoundMs": 100,
+              "cumulativeCount": 560
+            },
+            {
+              "upperBoundMs": 250,
+              "cumulativeCount": 577
+            },
+            {
+              "upperBoundMs": 500,
+              "cumulativeCount": 580
+            },
+            {
+              "upperBoundMs": 1000,
+              "cumulativeCount": 580
+            },
+            {
+              "upperBoundMs": 5000,
+              "cumulativeCount": 580
+            },
+            {
+              "upperBoundMs": null,
+              "cumulativeCount": 580
+            }
+          ],
+          "sumMs": 18242.26980199979,
+          "count": 580
+        },
+        {
+          "stage": "transaction-operation",
+          "outcome": "success",
+          "buckets": [
+            {
+              "upperBoundMs": 1,
+              "cumulativeCount": 0
+            },
+            {
+              "upperBoundMs": 5,
+              "cumulativeCount": 0
+            },
+            {
+              "upperBoundMs": 10,
+              "cumulativeCount": 0
+            },
+            {
+              "upperBoundMs": 25,
+              "cumulativeCount": 6
+            },
+            {
+              "upperBoundMs": 50,
+              "cumulativeCount": 99
+            },
+            {
+              "upperBoundMs": 100,
+              "cumulativeCount": 322
+            },
+            {
+              "upperBoundMs": 250,
+              "cumulativeCount": 509
+            },
+            {
+              "upperBoundMs": 500,
+              "cumulativeCount": 563
+            },
+            {
+              "upperBoundMs": 1000,
+              "cumulativeCount": 576
+            },
+            {
+              "upperBoundMs": 5000,
+              "cumulativeCount": 580
+            },
+            {
+              "upperBoundMs": null,
+              "cumulativeCount": 580
+            }
+          ],
+          "sumMs": 83159.09554399969,
+          "count": 580
+        },
+        {
+          "stage": "transaction-finalize",
+          "outcome": "success",
+          "buckets": [
+            {
+              "upperBoundMs": 1,
+              "cumulativeCount": 0
+            },
+            {
+              "upperBoundMs": 5,
+              "cumulativeCount": 9
+            },
+            {
+              "upperBoundMs": 10,
+              "cumulativeCount": 55
+            },
+            {
+              "upperBoundMs": 25,
+              "cumulativeCount": 331
+            },
+            {
+              "upperBoundMs": 50,
+              "cumulativeCount": 514
+            },
+            {
+              "upperBoundMs": 100,
+              "cumulativeCount": 556
+            },
+            {
+              "upperBoundMs": 250,
+              "cumulativeCount": 578
+            },
+            {
+              "upperBoundMs": 500,
+              "cumulativeCount": 580
+            },
+            {
+              "upperBoundMs": 1000,
+              "cumulativeCount": 580
+            },
+            {
+              "upperBoundMs": 5000,
+              "cumulativeCount": 580
+            },
+            {
+              "upperBoundMs": null,
+              "cumulativeCount": 580
+            }
+          ],
+          "sumMs": 17502.209552000146,
+          "count": 580
+        }
+      ],
+      "summary": [
+        {
+          "stage": "authentication",
+          "outcome": "success",
+          "count": 2458,
+          "meanMs": 29.36238406834786,
+          "percentileUpperBoundsMs": {
+            "p50": 25,
+            "p95": 100,
+            "p99": 250
+          }
+        },
+        {
+          "stage": "body-read",
+          "outcome": "success",
+          "count": 2458,
+          "meanMs": 0.856973220910841,
+          "percentileUpperBoundsMs": {
+            "p50": 1,
+            "p95": 5,
+            "p99": 25
+          }
+        },
+        {
+          "stage": "body-parse",
+          "outcome": "success",
+          "count": 2458,
+          "meanMs": 0.11700743449964544,
+          "percentileUpperBoundsMs": {
+            "p50": 1,
+            "p95": 1,
+            "p99": 1
+          }
+        },
+        {
+          "stage": "validation",
+          "outcome": "success",
+          "count": 2458,
+          "meanMs": 0.056761559397640285,
+          "percentileUpperBoundsMs": {
+            "p50": 1,
+            "p95": 1,
+            "p99": 1
+          }
+        },
+        {
+          "stage": "quota",
+          "outcome": "success",
+          "count": 2458,
+          "meanMs": 96.55471379495529,
+          "percentileUpperBoundsMs": {
+            "p50": 100,
+            "p95": 250,
+            "p99": 1000
+          }
+        },
+        {
+          "stage": "envelope",
+          "outcome": "success",
+          "count": 2458,
+          "meanMs": 0.4750193161107494,
+          "percentileUpperBoundsMs": {
+            "p50": 1,
+            "p95": 5,
+            "p99": 10
+          }
+        },
+        {
+          "stage": "hashing",
+          "outcome": "success",
+          "count": 2458,
+          "meanMs": 0.446824713995176,
+          "percentileUpperBoundsMs": {
+            "p50": 1,
+            "p95": 5,
+            "p99": 10
+          }
+        },
+        {
+          "stage": "byte-count",
+          "outcome": "success",
+          "count": 2458,
+          "meanMs": 0.16283131611061952,
+          "percentileUpperBoundsMs": {
+            "p50": 1,
+            "p95": 1,
+            "p99": 5
+          }
+        },
+        {
+          "stage": "append-wait",
+          "outcome": "success",
+          "count": 2458,
+          "meanMs": 80.01360182017893,
+          "percentileUpperBoundsMs": {
+            "p50": 50,
+            "p95": 500,
+            "p99": 500
+          }
+        },
+        {
+          "stage": "transaction-acquire",
+          "outcome": "success",
+          "count": 580,
+          "meanMs": 26.11796142068982,
+          "percentileUpperBoundsMs": {
+            "p50": 25,
+            "p95": 100,
+            "p99": 250
+          }
+        },
+        {
+          "stage": "advisory",
+          "outcome": "success",
+          "count": 580,
+          "meanMs": 21.386016310344285,
+          "percentileUpperBoundsMs": {
+            "p50": 25,
+            "p95": 100,
+            "p99": 250
+          }
+        },
+        {
+          "stage": "idempotency",
+          "outcome": "success",
+          "count": 580,
+          "meanMs": 23.354165665517463,
+          "percentileUpperBoundsMs": {
+            "p50": 25,
+            "p95": 100,
+            "p99": 250
+          }
+        },
+        {
+          "stage": "policy",
+          "outcome": "success",
+          "count": 580,
+          "meanMs": 22.10140353103408,
+          "percentileUpperBoundsMs": {
+            "p50": 25,
+            "p95": 100,
+            "p99": 250
+          }
+        },
+        {
+          "stage": "preparation",
+          "outcome": "success",
+          "count": 1160,
+          "meanMs": 1.827979377586548,
+          "percentileUpperBoundsMs": {
+            "p50": 1,
+            "p95": 10,
+            "p99": 50
+          }
+        },
+        {
+          "stage": "reservation",
+          "outcome": "success",
+          "count": 580,
+          "meanMs": 41.04542529655147,
+          "percentileUpperBoundsMs": {
+            "p50": 25,
+            "p95": 250,
+            "p99": 500
+          }
+        },
+        {
+          "stage": "insert",
+          "outcome": "success",
+          "count": 580,
+          "meanMs": 31.452189313792744,
+          "percentileUpperBoundsMs": {
+            "p50": 25,
+            "p95": 100,
+            "p99": 250
+          }
+        },
+        {
+          "stage": "transaction-operation",
+          "outcome": "success",
+          "count": 580,
+          "meanMs": 143.3777509379305,
+          "percentileUpperBoundsMs": {
+            "p50": 100,
+            "p95": 500,
+            "p99": 1000
+          }
+        },
+        {
+          "stage": "transaction-finalize",
+          "outcome": "success",
+          "count": 580,
+          "meanMs": 30.176223365517494,
+          "percentileUpperBoundsMs": {
+            "p50": 25,
+            "p95": 100,
+            "p99": 250
+          }
+        }
+      ]
+    }
+  ]
+}

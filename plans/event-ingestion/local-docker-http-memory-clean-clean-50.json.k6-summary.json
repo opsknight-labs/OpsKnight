@@ -1,0 +1,157 @@
+{
+    "metrics": {
+        "http_req_blocked": {
+            "p(95)": 0.008,
+            "avg": 0.011845588235294312,
+            "min": 0.004,
+            "med": 0.006,
+            "max": 1.161,
+            "p(90)": 0.007
+        },
+        "ingestion_durable_accepted": {
+            "count": 2457,
+            "rate": 40.8028526724075
+        },
+        "http_req_waiting": {
+            "avg": 482.7278673128352,
+            "min": 11.675,
+            "med": 377.58050000000003,
+            "max": 3492.373,
+            "p(90)": 977.8176000000001,
+            "p(95)": 1248.9581
+        },
+        "dropped_iterations": {
+            "count": 9,
+            "rate": 0.14946099880002747,
+            "thresholds": {
+                "count==0": true
+            }
+        },
+        "http_req_failed": {
+            "fails": 2457,
+            "passes": 535,
+            "value": 0.17881016042780748
+        },
+        "http_req_tls_handshaking": {
+            "min": 0,
+            "med": 0,
+            "max": 0,
+            "p(90)": 0,
+            "p(95)": 0,
+            "avg": 0
+        },
+        "checks": {
+            "passes": 2457,
+            "fails": 535,
+            "value": 0.8211898395721925
+        },
+        "http_req_receiving": {
+            "avg": 0.04886697860962585,
+            "min": 0.014,
+            "med": 0.046,
+            "max": 2.252,
+            "p(90)": 0.071,
+            "p(95)": 0.08444999999999987
+        },
+        "iterations": {
+            "count": 2992,
+            "rate": 49.68747871218691
+        },
+        "http_req_duration{expected_response:true}": {
+            "avg": 543.649807488807,
+            "min": 68.089,
+            "med": 419.544,
+            "max": 3492.488,
+            "p(90)": 1045.7278000000001,
+            "p(95)": 1324.8793999999998
+        },
+        "iteration_duration": {
+            "med": 378.05902100000003,
+            "max": 3492.99875,
+            "p(90)": 978.2680792,
+            "p(95)": 1249.7447583,
+            "avg": 483.3002520140378,
+            "min": 12.1775
+        },
+        "vus_max": {
+            "value": 59,
+            "min": 50,
+            "max": 59
+        },
+        "data_sent": {
+            "count": 31351046,
+            "rate": 520639.8498428451
+        },
+        "ingestion_rejected_http_503": {
+            "rate": 8.88462603977941,
+            "count": 535
+        },
+        "http_reqs": {
+            "count": 2992,
+            "rate": 49.68747871218691
+        },
+        "vus": {
+            "max": 54,
+            "value": 13,
+            "min": 7
+        },
+        "ingestion_acceptance_success": {
+            "passes": 2457,
+            "fails": 535,
+            "thresholds": {
+                "rate>=0.999": true
+            },
+            "value": 0.8211898395721925
+        },
+        "ingestion_capacity_rejected": {
+            "count": 535,
+            "rate": 8.88462603977941
+        },
+        "http_req_connecting": {
+            "p(90)": 0,
+            "p(95)": 0,
+            "avg": 0.004248663101604278,
+            "min": 0,
+            "med": 0,
+            "max": 0.528
+        },
+        "http_req_sending": {
+            "p(95)": 0.115,
+            "avg": 0.07754344919786083,
+            "min": 0.032,
+            "med": 0.071,
+            "max": 0.457,
+            "p(90)": 0.103
+        },
+        "data_received": {
+            "count": 3903698,
+            "rate": 64827.8446770744
+        },
+        "http_req_duration": {
+            "avg": 482.8542777406414,
+            "min": 11.798,
+            "med": 377.71000000000004,
+            "max": 3492.488,
+            "p(90)": 977.9115,
+            "p(95)": 1249.06435,
+            "thresholds": {
+                "p(95)<100": true
+            }
+        }
+    },
+    "root_group": {
+        "id": "d41d8cd98f00b204e9800998ecf8427e",
+        "groups": {},
+        "checks": {
+                "durably accepted with receipt": {
+                    "name": "durably accepted with receipt",
+                    "path": "::durably accepted with receipt",
+                    "id": "21bb1eb94175ca5b44cdd93eb9fa57fd",
+                    "passes": 2457,
+                    "fails": 535
+                }
+            },
+        "name": "",
+        "path": ""
+    }
+}

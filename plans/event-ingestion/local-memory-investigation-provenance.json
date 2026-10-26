@@ -1,0 +1,16 @@
+{
+  "baselineAppRevision": "67a28dda6b47dab1b16ff793d2490938880561f7",
+  "instrumentedAppRevision": "4b77121ab26ddfb64b5e3f46985ea4392fd6691a",
+  "finalControllerBaseRevision": "af2b97bdf9d9eeae3d85683575bd51e4713e3a74",
+  "finalControllerSourceSha256": {
+    "scripts/ingestion/certify-docker.cjs": "2e41daa5d27560c04efce9b71800cffd12dd3a71e59ed292da5b1c568b433f12",
+    "scripts/ingestion/certify-http.cjs": "02e47f6f75a08b9501f419bdc88b179b306feaca1c80f4c10002624a4a4a944f",
+    "scripts/ingestion/client-evidence.cjs": "acf6ced7a5df1ca519c7ddf66292f9d50b9ca2af048791ed3e2bc019a0c8643d",
+    "scripts/ingestion/container-cpu-profile.cjs": "7748fd39200a6001108ca10a0f2a73a456daa3d3bf0a7b8a05e9136ba7bafc1b",
+    "scripts/ingestion/reconcile-client-evidence.cjs": "4f38e8c8f1aabafe3ed770f0536de8dd2dc0d6ab094aa26d56351449072123fc",
+    "tests/load/scenarios/durable-ingestion.js": "17cd9abd4038cff1c6b40ffa815efaf7079608a81109f7650dfb793577679468"
+  },
+  "controllerEvolution": "A/B and one-minute runs use source hashes recorded in each assessment. Final controller adds failure fixture service identity and clears stale k6 summaries; fault test exercises failure path before final admission-only service metadata addition. No application source changed during the investigation. Final collector also marks readiness only after creating the incremental memory file.",
+  "database": "Fresh PostgreSQL16,339migrations,2CPU/1GiB,shared Docker12CPU/8GiB. Previous ingestion container and volume disappeared externally before these runs; old fixture data unavailable.",
+  "scope": "Negative short OOM reproduction and failed latency gates. Original OOM origin unresolved; no release or100/sec certificate."
+}
