@@ -1,3 +1,7 @@
+import {
+  clearRuntimeOperationalMetrics,
+  OperationalMetricSnapshot,
+} from '@/lib/metrics/operational/registry';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { batchQuotaDecision, type QuotaDecision } from '@/lib/ingestion/quota-batch';
 
@@ -5,6 +9,7 @@ const allowed: QuotaDecision = { allowed: true, remaining: 1, resetAt: 1, count:
 
 describe('bounded quota decision coalescing', () => {
   beforeEach(() => {
+    clearRuntimeOperationalMetrics();
     vi.useFakeTimers();
     delete globalThis.opsknightIngestionQuotaBatchV2;
   });
@@ -27,6 +32,12 @@ describe('bounded quota decision coalescing', () => {
     await vi.advanceTimersByTimeAsync(2);
     expect(decide).toHaveBeenCalledExactlyOnceWith(['same', 'same']);
     expect(completed).not.toHaveBeenCalled();
+    // Queue wait finishes at dispatch, independently of the unresolved DB call.
+    const metrics = new OperationalMetricSnapshot().render();
+    expect(metrics).toContain(
+      'opsknight_ingestion_admission_stage_duration_ms_count{stage="quota-wait",outcome="success"} 2'
+    );
+    expect(metrics).not.toContain('stage="quota-database"');
     const denied = { ...allowed, allowed: false, remaining: 0 };
     finish([allowed, denied]);
     await first;
@@ -102,5 +113,4 @@ describe('bounded quota decision coalescing', () => {
     await vi.advanceTimersByTimeAsync(2);
     await expect(recovered).resolves.toEqual(allowed);
   });
-
 });

@@ -777,11 +777,19 @@ async function main() {
       evidence.cpuProfilingScope =
         'Diagnostic inspector sampling of effects general/critical workers or the first incident worker. Includes profile-client and resource-snapshot overhead; never a capacity gate.';
     }
+    evidence.databaseResourcesBefore = await require('./database-resources.cjs')(
+      invoke,
+      databaseContainer
+    );
     evidence.resourcesBeforePreflight = await Promise.all(processNames.map(resources));
     evidence.stageEvidence = await require('./capacity-stages.cjs').measureStage(
       prisma,
       stageFixture,
       Number(process.env.INGESTION_STAGE_TIMEOUT_MS || 120000)
+    );
+    evidence.databaseResourcesAfter = await require('./database-resources.cjs')(
+      invoke,
+      databaseContainer
     );
     evidence.resourcesAfterLoad = await Promise.all(processNames.map(resources));
     evidence.cpuDelta = require('./capacity-stages.cjs').cpuUsageDelta(

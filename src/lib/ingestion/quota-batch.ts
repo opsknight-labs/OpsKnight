@@ -1,3 +1,4 @@
+import { observeOperationalHistogram } from '@/lib/metrics/operational/registry';
 import { IngestionUnavailableError } from './contract';
 
 export type QuotaDecision = {
@@ -9,11 +10,17 @@ export type QuotaDecision = {
 type Decide = (keys: readonly string[]) => Promise<QuotaDecision[]>;
 type Waiter = {
   key: string;
+  queuedAt?: number;
   decide: Decide;
   resolve: (decision: QuotaDecision) => void;
   reject: (error: unknown) => void;
 };
-type State = { pending: number; active: number; queued: Waiter[]; timer: ReturnType<typeof setTimeout> | null };
+type State = {
+  pending: number;
+  active: number;
+  queued: Waiter[];
+  timer: ReturnType<typeof setTimeout> | null;
+};
 declare global {
   var opsknightIngestionQuotaBatchV2: State | undefined;
 }
@@ -25,7 +32,10 @@ declare global {
  */
 export function batchQuotaDecision(key: string, decide: Decide): Promise<QuotaDecision> {
   const state: State = (globalThis.opsknightIngestionQuotaBatchV2 ??= {
-    pending: 0, active: 0, queued: [], timer: null,
+    pending: 0,
+    active: 0,
+    queued: [],
+    timer: null,
   });
   if (state.pending >= 1024)
     return Promise.reject(new IngestionUnavailableError('Shared ingestion quota busy'));
@@ -33,6 +43,14 @@ export function batchQuotaDecision(key: string, decide: Decide): Promise<QuotaDe
     while (state.active < 2 && state.queued.length) {
       const callers = state.queued.splice(0, 32);
       state.active++;
+      const dispatchedAt = performance.now();
+      for (const caller of callers)
+        if (caller.queuedAt !== undefined)
+          observeOperationalHistogram(
+            'opsknight_ingestion_admission_stage_duration_ms',
+            dispatchedAt - caller.queuedAt,
+            { stage: 'quota-wait', outcome: 'success' }
+          );
       void Promise.resolve()
         .then(() => callers[0].decide(callers.map(caller => caller.key)))
         .then(decisions => {
@@ -49,7 +67,7 @@ export function batchQuotaDecision(key: string, decide: Decide): Promise<QuotaDe
   };
   return new Promise((resolve, reject) => {
     state.pending++;
-    state.queued.push({ key, decide, resolve, reject });
+    state.queued.push({ key, queuedAt: performance.now(), decide, resolve, reject });
     if (state.active < 2 && !state.timer) {
       state.timer = setTimeout(() => {
         state.timer = null;

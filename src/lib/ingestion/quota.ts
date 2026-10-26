@@ -1,3 +1,4 @@
+import { measureAdmissionStage } from './admission-timing';
 import { Prisma } from '@prisma/client';
 import prisma from '@/lib/prisma';
 import { checkRateLimit } from '@/lib/rate-limit';
@@ -27,13 +28,16 @@ async function decideQuota(
   client: Prisma.TransactionClient
 ): Promise<QuotaDecision[]> {
   try {
-    const { policy, revision } = await getIngestionPolicy(client);
+    const { policy, revision } = await measureAdmissionStage('quota-policy', () =>
+      getIngestionPolicy(client)
+    );
     const counts = new Map<string, number>();
     for (const key of keys) counts.set(key, (counts.get(key) ?? 0) + 1);
     const requests = [...counts].map(([key, requested]) => {
       const events = key.endsWith(':events');
       return {
-        key, requested,
+        key,
+        requested,
         rate: events ? policy.quotas.eventsPerMinute : policy.quotas.integrationPerMinute,
         burst: events ? policy.quotas.eventsBurst : policy.quotas.integrationBurst,
       };
@@ -44,7 +48,9 @@ async function decideQuota(
     const requested = single
       ? Prisma.sql`${single.requested}`
       : Prisma.sql`(SELECT request.requested FROM quota_requests request WHERE request.key = EXCLUDED.key)`;
-    const requestCte = single ? Prisma.empty : Prisma.sql`
+    const requestCte = single
+      ? Prisma.empty
+      : Prisma.sql`
       WITH quota_requests AS MATERIALIZED (
         SELECT * FROM jsonb_to_recordset(${JSON.stringify(requests)}::jsonb)
           AS request(key text, requested int, rate int, burst int)
@@ -68,9 +74,18 @@ async function decideQuota(
       bucket."tokens" + GREATEST(0, EXTRACT(EPOCH FROM
         (EXCLUDED."updatedAt" - bucket."updatedAt"))) * LEAST(bucket."rate", ${effectiveRate}) / 60.0)`;
     const granted = Prisma.sql`LEAST(${requested}, GREATEST(0, floor(${available})))::int`;
-    const results = await client.$queryRaw<
-      Array<{ key: string; granted: number; tokens: number; rate: number; burst: number; updatedAt: number }>
-    >`
+    const results = await measureAdmissionStage(
+      'quota-database',
+      () => client.$queryRaw<
+        Array<{
+          key: string;
+          granted: number;
+          tokens: number;
+          rate: number;
+          burst: number;
+          updatedAt: number;
+        }>
+      >`
       ${requestCte}
       INSERT INTO "IngestionQuota" AS bucket
         ("key", "tokens", "rate", "burst", "updatedAt", "lastAllowed", "policyRevision", "lastGranted")
@@ -84,7 +99,8 @@ async function decideQuota(
         "updatedAt" = GREATEST(bucket."updatedAt", EXCLUDED."updatedAt")
       RETURNING "key", "lastGranted" AS granted, "tokens", "rate", "burst",
         (EXTRACT(EPOCH FROM "updatedAt") * 1000)::double precision AS "updatedAt"
-    `;
+    `
+    );
     const byKey = single ? undefined : new Map(results.map(result => [result.key, result]));
     const positions = single ? undefined : new Map<string, number>();
     return keys.map((key, ordinal) => {
