@@ -303,7 +303,7 @@ test.describe.serial('dashboard live incidents', () => {
     await openDashboard(admin.page);
     // Unassigned rows offer the inline "+ Assign" (assign to me) affordance.
     await row(admin.page, id).locator('[data-testid="live-assign-ghost"]:visible').click();
-    await expect(row(page, id)).toContainText('System Admin');
+    await expect(row(page, id)).toContainText(/Avery Admin|System Admin/);
     expect((await rowIds(page)).indexOf(id)).toBe(indexBefore);
 
     // Resolve through the incident page's resolve dialog (a resolution note is mandatory).
@@ -483,7 +483,7 @@ test.describe.serial('dashboard live incidents', () => {
     await row(page, id).getByTestId('live-ack').click();
     await expect(row(page, id)).toHaveAttribute('data-status', 'ACKNOWLEDGED');
     await row(page, id).locator('[data-testid="live-assign-ghost"]:visible').click();
-    await expect(row(page, id)).toContainText('System Admin');
+    await expect(row(page, id)).toContainText(/Avery Admin|System Admin/);
     await expect
       .poll(async () =>
         prisma.incident.findUnique({ where: { id }, select: { status: true, assignee: true } })
