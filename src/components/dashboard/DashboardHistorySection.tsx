@@ -27,6 +27,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { isComparablePriorPeriod } from '@/lib/dashboard/period-comparison';
 import {
   DashboardAnalyticsProvider,
   useActivateDashboardAnalytics,
@@ -131,7 +132,7 @@ function TimeDelta({
   range: string;
 }) {
   if (current === null || previous === null || previous <= 0) {
-    return <p className="text-[11px] text-muted-foreground">No prior-period sample</p>;
+    return <p className="text-[11px] text-muted-foreground">No comparable prior period</p>;
   }
   const diff = current - previous;
   if (Math.abs(diff) < 1) {
@@ -511,7 +512,11 @@ function InsightsContent() {
       </p>
     );
   }
-  const previous = data.previousPeriod?.available ? data.previousPeriod : null;
+  const priorAvailable = data.previousPeriod?.available ? data.previousPeriod : null;
+  const comparable =
+    priorAvailable !== null &&
+    isComparablePriorPeriod(data.totalIncidents, priorAvailable.totalIncidents);
+  const previous = comparable ? priorAvailable : null;
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
@@ -521,7 +526,11 @@ function InsightsContent() {
               <h3 className="dash-heading-sm">Incident flow</h3>
               <p className="text-[11px] text-muted-foreground">
                 {data.totalIncidents} created in the last {query.range} days
-                {previous ? ` · ${previous.totalIncidents} in the prior period` : ''}
+                {previous
+                  ? ` · ${previous.totalIncidents} in the prior period`
+                  : priorAvailable
+                    ? ' · prior period has too little data to compare'
+                    : ''}
               </p>
             </div>
             <span className="flex items-center gap-3 text-[11px] text-muted-foreground">
