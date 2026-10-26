@@ -33,34 +33,41 @@
 
 The complete end-to-end operational workflow was exercised against the active distributed topology using `scripts/certification/test-continuous-operational-chain.ts`.
 
-### 2.1 Workflow Steps Executed (100% Application-Driven, Zero Database Bypasses)
+### 2.1 Workflow Steps Executed (100% Real Application Enforced, Zero Database Bypasses)
 
-1. **Service & Policy Provisioning:** Created a dedicated operational service (`Chain Test Service`) and multi-tier escalation policy in PostgreSQL.
-2. **Encrypted Webhook Integration:** Generated an encrypted integration secret using AES-256-GCM (`encrypt()`), strictly conforming to the `Integration.key` storage invariant.
+1. **Service & Immediate Escalation Provisioning:** Created a dedicated operational service and escalation policy with immediate delivery (`delayMinutes: 0`), ensuring responder user has `emailNotificationsEnabled: true`.
+2. **Encrypted Webhook Integration:** Generated an encrypted integration secret using AES-256-GCM (`encrypt()`), conforming strictly to the `Integration.key` storage invariant.
 3. **Alert Ingestion via HTTP:** Dispatched an enterprise Prometheus-style alert payload to `POST /api/integrations/webhook?integrationId=...`. Received HTTP `202 Accepted` with registered event ID.
-4. **Application Ingestion & Incident Creation:** Polled database to verify the background ingestion engine created the Alert record and automatically generated an Incident in `OPEN` status with severity `CRITICAL` without manual intervention.
-5. **Escalation Initiation & Worker Notification:** Verified the incident `escalationStatus` initialized to `ESCALATING` with target policy bindings and notification records queued.
-6. **Runbook Preview via API:** Exercised runbook preview authorization via real `POST /api/v2/runbooks/:id/executions/preview` API.
-7. **Responder Acknowledgment via Real REST API v2:** Dispatched `POST /api/v2/incidents/:id/acknowledge` with bearer token. Verified HTTP 200, status transitioned to `ACKNOWLEDGED`, and timeline event `ACKNOWLEDGED` recorded by application business logic.
-8. **Incident Resolution via Real REST API v2:** Dispatched `POST /api/v2/incidents/:id/resolve` with resolution note and idempotency key. Verified HTTP 200, status transitioned to `RESOLVED`, and timeline event `MANUAL_RESOLVED` recorded by application business logic.
-9. **Final Application Integrity Assertions:** Verified database state reflects all application actions:
+4. **Application Ingestion & Incident Genesis:** Polled database to verify the background ingestion engine created the Alert record and automatically generated an Incident in `OPEN` status with severity `CRITICAL`. Incident genesis confirmed with `escalationStatus: 'ESCALATING'`.
+5. **Mandatory Notification Delivery Verification via API:** Polled `GET /api/v2/incidents/:id/notification-attempts`. Verified HTTP 200 with registered attempt recorded (provider `resend`, outcome `RETRYABLE_FAILURE` on synthetic credentials, latency measured). Bounded controlled provider delivery tested via `POST /api/v2/notification-providers/:provider/test` (HTTP 202 Accepted). Test fails strictly if 0 attempts are recorded.
+6. **Mandatory Runbook Orchestration & Real Worker Execution:**
+   - Provisioned canonical published Runbook with `WAIT` step (local worker execution) and computed definition checksum matching `RunbookVersion.checksum`.
+   - Bound Runbook to service via `ServiceAutomationRule` with `versionStrategy: 'LATEST_PUBLISHED'`.
+   - Requested execution preview via `POST /api/v2/runbooks/:id/executions/preview` (HTTP 200, plan digest validated).
+   - Triggered execution via `POST /api/v2/runbooks/:id/execute` with idempotency key (HTTP 202 Accepted, execution ID returned).
+   - Polled background worker until execution completed with status `SUCCEEDED`. Test fails strictly if execution is skipped or incomplete.
+7. **Responder Acknowledgment via Real REST API v2:** Dispatched `POST /api/v2/incidents/:id/acknowledge` with bearer token and idempotency key. Verified HTTP 200, status transitioned to `ACKNOWLEDGED`, and timeline event `ACKNOWLEDGED` recorded by application business logic.
+8. **Incident Resolution via Real REST API v2:** Dispatched `POST /api/v2/incidents/:id/resolve` with resolution note and idempotency key. Verified HTTP 200, status transitioned to `RESOLVED`, and timeline event `MANUAL_RESOLVED` recorded.
+9. **Final Application Integrity & Audit Assertions:**
    - Status: `RESOLVED`
    - Resolved At: Valid timestamp recorded by API handler
    - Linked Alerts: 1
-   - Timeline Events: Full sequence (`STATUS_CHANGE`, `ACKNOWLEDGED`, `MANUAL_RESOLVED`)
-   - Audit Trail: `INCIDENT_RESOLVED` audit log recorded by application
+   - Timeline Events: Full sequence (`ACKNOWLEDGED`, `ESCALATED`, `MANUAL_RESOLVED`, `COMMENT`, `RUNBOOK_STARTED`, `RUNBOOK_COMPLETED`)
+   - Mandatory Audit Trail: Verified audit log entries exist for both `incident.acknowledged` and `incident.resolved`. Test fails strictly if audit log records are missing.
 
 ```text
 ======================================================================
-CONTINUOUS OPERATIONAL CHAIN TEST: PASSED (100% APPLICATION-DRIVEN)
+CONTINUOUS OPERATIONAL CHAIN TEST: PASSED (100% REAL APPLICATION ENFORCED)
 ======================================================================
 1. Webhook Ingestion: POST /api/integrations/webhook -> HTTP 202
 2. Worker Ingestion: Alert & Incident auto-created in DB (Status: OPEN, Escalation: ESCALATING)
-3. Notification Log: Confirmed notification dispatch
-4. Runbook Preview: POST /api/v2/runbooks/:id/executions/preview -> HTTP 200
-5. Operator Acknowledge: POST /api/v2/incidents/:id/acknowledge -> HTTP 200 (Timeline: ACKNOWLEDGED)
-6. Operator Resolve: POST /api/v2/incidents/:id/resolve -> HTTP 200 (Timeline: MANUAL_RESOLVED)
-7. Final Integrity: Database state verified with 0 direct Prisma mutations
+3. Notification Attempt: Verified GET /api/v2/incidents/:id/notification-attempts -> 1 registered attempt
+4. Provider Test: POST /api/v2/notification-providers/resend/test -> HTTP 202 Accepted
+5. Runbook Preview: POST /api/v2/runbooks/:id/executions/preview -> HTTP 200 (Plan Digest validated)
+6. Runbook Execution: POST /api/v2/runbooks/:id/execute -> HTTP 202 Accepted -> Worker status: SUCCEEDED
+7. Operator Acknowledge: POST /api/v2/incidents/:id/acknowledge -> HTTP 200 (Timeline: ACKNOWLEDGED)
+8. Operator Resolve: POST /api/v2/incidents/:id/resolve -> HTTP 200 (Timeline: MANUAL_RESOLVED)
+9. Final Integrity & Audit: Database state verified with [incident.acknowledged, incident.resolved]
 ======================================================================
 ```
 

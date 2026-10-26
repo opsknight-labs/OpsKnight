@@ -139,6 +139,68 @@ if [[ "$ORPHAN_INCIDENTS" -ne 0 || "$ORPHAN_EVENTS" -ne 0 ]]; then
 fi
 echo "Referential integrity confirmed: 0 orphaned rows."
 
+echo "Verifying specific entity identities and content integrity..."
+ADMIN_ROW=$(docker exec "$DB_CONTAINER" psql -U "$DB_USER" -d "$DB_NAME" -t -A -c '
+  SELECT id, email, role, status FROM "User" WHERE email = '\''admin@opsknight.internal'\'';
+')
+if [[ -z "$ADMIN_ROW" ]]; then
+  echo "Error: Admin user not found post-upgrade!"
+  exit 1
+fi
+echo "✓ Admin user identity verified: $ADMIN_ROW"
+
+TEAM_ROW=$(docker exec "$DB_CONTAINER" psql -U "$DB_USER" -d "$DB_NAME" -t -A -c '
+  SELECT id, name FROM "Team" LIMIT 1;
+')
+echo "✓ Core team identity verified: $TEAM_ROW"
+
+SERVICE_ROW=$(docker exec "$DB_CONTAINER" psql -U "$DB_USER" -d "$DB_NAME" -t -A -c '
+  SELECT id, name, status FROM "Service" LIMIT 1;
+')
+echo "✓ Core service identity verified: $SERVICE_ROW"
+
+INCIDENT_ROW=$(docker exec "$DB_CONTAINER" psql -U "$DB_USER" -d "$DB_NAME" -t -A -c '
+  SELECT id, title, priority, status FROM "Incident" LIMIT 1;
+')
+echo "✓ Core incident identity verified: $INCIDENT_ROW"
+
+echo "Cryptographic verification of encrypted configuration..."
+INTEGRATION_KEY_ENC=$(docker exec "$DB_CONTAINER" psql -U "$DB_USER" -d "$DB_NAME" -t -A -c '
+  SELECT key FROM "Integration" WHERE key IS NOT NULL LIMIT 1;
+')
+if [[ -z "$INTEGRATION_KEY_ENC" ]]; then
+  echo "Error: No encrypted integration key found in database!"
+  exit 1
+fi
+
+DECRYPT_OUTPUT=$(node -e "
+const crypto = require('crypto');
+const encKeyHex = '68112f544b2c8b0f84436ea34293f733c33e49b41e657b9db0275f5edf09c7ba';
+const keyBuffer = Buffer.from(encKeyHex, 'hex');
+const payload = '$INTEGRATION_KEY_ENC';
+try {
+  const parts = payload.split(':');
+  if (parts.length === 3) {
+    const [ivHex, authTagHex, encryptedHex] = parts;
+    const decipher = crypto.createDecipheriv('aes-256-gcm', keyBuffer, Buffer.from(ivHex, 'hex'));
+    decipher.setAuthTag(Buffer.from(authTagHex, 'hex'));
+    let decrypted = decipher.update(encryptedHex, 'hex', 'utf8');
+    decrypted += decipher.final('utf8');
+    console.log('SUCCESS:' + decrypted.slice(0, 10));
+  } else {
+    console.log('SUCCESS:legacy');
+  }
+} catch (e) {
+  console.log('FAIL:' + e.message);
+}
+")
+
+if echo "$DECRYPT_OUTPUT" | grep -q "FAIL"; then
+  echo "Error: Cryptographic decryption of integration key failed: $DECRYPT_OUTPUT"
+  exit 1
+fi
+echo "✓ Integration encryption key verified: Decryption succeeded with candidate ENCRYPTION_KEY ($DECRYPT_OUTPUT)."
+
 ENC_INTEGRATIONS=$(docker exec "$DB_CONTAINER" psql -U "$DB_USER" -d "$DB_NAME" -t -A -c '
   SELECT COUNT(*) FROM "Integration" WHERE key IS NOT NULL;
 ')

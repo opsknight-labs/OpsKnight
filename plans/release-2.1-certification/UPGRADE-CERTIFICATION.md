@@ -61,6 +61,13 @@ Post-Upgrade Inventory:
   AuditLogs:   2 -> 2
 Foreign key referential integrity checks...
 Referential integrity confirmed: 0 orphaned rows.
+Verifying specific entity identities and content integrity...
+✓ Admin user identity verified: usr-admin-v20|admin@opsknight.internal|ADMIN|ACTIVE
+✓ Core team identity verified: team-v2-sre|Platform SRE
+✓ Core service identity verified: svc-v2-pay|Payment Gateway|OPERATIONAL
+✓ Core incident identity verified: inc-v2-101|Checkout Failure Rate High|CRITICAL|OPEN
+Cryptographic verification of encrypted configuration...
+✓ Integration encryption key verified: Decryption succeeded with candidate ENCRYPTION_KEY (SUCCESS:raw-secret).
 Encrypted configuration validated: 1 integrations preserved.
 Data preservation confirmed: 100% of pre-upgrade entities intact.
 5. Deploying OpsKnight v2.1.0 Application against upgraded database...

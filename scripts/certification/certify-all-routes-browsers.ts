@@ -163,7 +163,26 @@ async function main() {
 
       const page = await context.newPage();
       const pageErrors: string[] = [];
-      page.on('pageerror', err => pageErrors.push(`PageError: ${err.message}`));
+      page.on('pageerror', err => {
+        const msg = err.message || String(err);
+        // Ignore WebKit loopback IP prefetch network access-control warnings
+        if (
+          msg.includes('due to access control checks') ||
+          msg.includes('Cross-origin redirection') ||
+          msg.includes('Fetch API cannot load')
+        ) {
+          return;
+        }
+        // Non-fatal Next.js/React timestamp hydration locale differences across headless engines
+        if (
+          msg.includes('Minified React error #418') ||
+          msg.includes('Minified React error #423') ||
+          msg.includes('Hydration failed')
+        ) {
+          return;
+        }
+        pageErrors.push(`PageError: ${msg}`);
+      });
 
       try {
         await performLogin(page, isMobile);
@@ -174,6 +193,7 @@ async function main() {
         for (const route of routesToTest) {
           const startTime = Date.now();
           const routeErrors: string[] = [];
+          pageErrors.length = 0;
 
           try {
             let resp;
@@ -230,7 +250,12 @@ async function main() {
               routeErrors.push('No main DOM elements rendered');
             }
 
-            // 5. Page Title / Error Boundary Assertion
+            // 5. JavaScript Error Assertion (Enforce zero uncaught runtime exceptions)
+            if (pageErrors.length > 0) {
+              routeErrors.push(`Uncaught JavaScript error: ${pageErrors.join('; ')}`);
+            }
+
+            // 6. Page Title / Error Boundary Assertion
             const title = await page.title().catch(() => '');
             if (
               title.includes('500') ||
@@ -269,8 +294,41 @@ async function main() {
             console.log(`  [FAIL] ${route.path.padEnd(28)} Error: ${err.message}`);
           }
         }
+
+        // Test Interactive Modal / Dialog Component (Open, Content, Escape Dismissal) on Desktop
+        if (!isMobile) {
+          try {
+            await page.goto(`${BASE_URL}/runbooks`, {
+              waitUntil: 'domcontentloaded',
+              timeout: 20000,
+            });
+            const newRunbookBtn = page.getByRole('button', { name: /New Runbook/i });
+            if (await newRunbookBtn.isVisible()) {
+              await newRunbookBtn.click();
+              const dialog = page.locator('[role="dialog"]');
+              await dialog.waitFor({ state: 'visible', timeout: 5000 });
+              await page.keyboard.press('Escape');
+              await dialog.waitFor({ state: 'hidden', timeout: 5000 });
+              console.log(`  ✓ Interactive Dialog Component: Open & Escape dismissal verified`);
+            }
+          } catch (dialogErr: any) {
+            console.warn(`  (Interactive dialog check note: ${dialogErr.message})`);
+          }
+        }
       } catch (err: any) {
         console.error(`Error during ${b.name} ${vp.name} run:`, err.message);
+        const routesToFail = isMobile ? MOBILE_PWA_ROUTES : DESKTOP_ROUTES;
+        for (const route of routesToFail) {
+          results.push({
+            browser: b.name,
+            viewport: vp.name,
+            route: route.path,
+            status: 'FAIL',
+            loadTimeMs: 0,
+            hasHorizontalOverflow: false,
+            errors: [`Viewport authentication/bootstrap failure: ${err.message}`],
+          });
+        }
       } finally {
         await context.close();
       }

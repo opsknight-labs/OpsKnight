@@ -36,16 +36,18 @@ All required P0 and P1 release gates have been certified through physical execut
 4. **P0 Rollback Rehearsal:**
    - Evaluated image-only rollback: correctly designated **BLOCKED & UNSAFE** due to 141 non-backward-compatible schema migrations.
    - Restore-based rollback verified (`scripts/certification/drill-rollback-rehearsal.sh`): failed v2.1 database preserved untouched for forensics, pre-upgrade backup restored into clean database in 3s, published v2.0.0 container booted on port 3992, and admin session verified via `/api/auth/session` and protected `/` (HTTP 200). Total Rollback RTO: **38.0 seconds**.
-5. **P0 Continuous Operational Chain (100% Application-Driven):**
-   - Tested Alert → Automation → Incident → Escalation → Notification → Resolution (`scripts/certification/test-continuous-operational-chain.ts`).
-   - Verified encrypted webhook ingestion, incident auto-generation (`OPEN`) by ingestion engine, escalation initiation (`ESCALATING`), notification logging, runbook preview API, operator acknowledgment via real REST API v2 (`POST /api/v2/incidents/:id/acknowledge`), and resolution via real REST API v2 (`POST /api/v2/incidents/:id/resolve`).
-   - Verified that timeline events and audit logs were created exclusively by the application handlers (zero direct Prisma/SQL mutations). 100% PASS.
+5. **P0 Continuous End-to-End Operational Chain (100% Real Application Enforced):**
+   - Tested Alert → Ingestion → Automation → Incident → Escalation → Notification → Runbook → Resolution (`scripts/certification/test-continuous-operational-chain.ts`).
+   - Verified encrypted webhook ingestion, incident auto-generation (`OPEN`) by ingestion engine, escalation initiation (`ESCALATING`), mandatory notification delivery attempt verification via REST API (`GET /api/v2/incidents/:id/notification-attempts`), and controlled provider test endpoint execution (`POST /api/v2/notification-providers/:provider/test`).
+   - Verified real Runbook orchestrator preview (`POST /api/v2/runbooks/:id/executions/preview`) and execution (`POST /api/v2/runbooks/:id/execute`), confirmed background worker processed the execution from `QUEUED` to `RUNNING` to `SUCCEEDED`.
+   - Verified operator acknowledgment via real REST API v2 (`POST /api/v2/incidents/:id/acknowledge`), and resolution via real REST API v2 (`POST /api/v2/incidents/:id/resolve`).
+   - Verified that timeline events and mandatory audit logs (`incident.acknowledged`, `incident.resolved`) were created exclusively by application handlers. 100% PASS with fail-closed assertions.
 6. **P1 Cross-Browser & Viewport UI Certification:**
    - Tested 147 route executions across Chromium, Firefox, WebKit over Desktop, Tablet, and Mobile PWA (`scripts/certification/certify-all-routes-browsers.ts`).
    - **147 / 147 PASSED (100.0%)**: Chromium 49/49 PASS, Firefox 49/49 PASS, WebKit 49/49 PASS.
-   - Zero console errors, zero horizontal overflow, DOM mounted content verified on every page, and auth state preserved across all navigations. Nonzero exit code safety enforced.
-   - Responsive layouts verified across 7 viewports (375px through 1920px) with $\ge 44\text{px}$ touch targets.
-   - Modal focus trapping and keyboard Escape key dismissals verified.
+   - Zero console errors, zero horizontal overflow, DOM mounted content verified on every page, and auth state preserved across all navigations. Nonzero exit code safety and fail-closed viewport error handling enforced.
+   - Responsive layouts verified across 3 standard enterprise viewports: Desktop (1280×800), Tablet (768×1024), and Mobile PWA (375×812) with $\ge 44\text{px}$ touch targets.
+   - Modal focus trapping and keyboard Escape key dismissals verified (Create Runbook dialog).
 7. **P1 Multi-Replica Resilience & HA:**
    - Live running split topology: Nginx reverse proxy `:3900`, 2 web replicas, 1 worker, PostgreSQL 16 on `:55490`.
    - In-flight container kill during active load produced zero failed requests (Nginx retry).

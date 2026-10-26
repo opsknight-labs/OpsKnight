@@ -367,7 +367,7 @@ export default function SystemHealthCenter({ initialReport }: Props) {
               integrations.
             </span>
             <span className="opacity-40">•</span>
-            <span>
+            <span suppressHydrationWarning>
               Last verified at {lastRefreshedAt.toLocaleTimeString()}
               {report.durationMs !== undefined ? ` in ${report.durationMs} ms` : ''}
             </span>

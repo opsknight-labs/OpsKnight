@@ -71,14 +71,20 @@ Beyond raw schema restoration, a complete application-level disaster recovery dr
 
 ### 3.2 Recovery Metrics & RPO/RTO Measurements
 
-| Metric                                              | Measured Value   | Threshold / SLA | Status   |
-| --------------------------------------------------- | ---------------- | --------------- | -------- |
-| **PostgreSQL Schema & Data Restore Duration**       | `2.0 seconds`    | `< 120 seconds` | **PASS** |
-| **Application & Worker Boot Readiness Time**        | `19.0 seconds`   | `< 60 seconds`  | **PASS** |
-| **Total Application RTO (Recovery Time Objective)** | `35.0 seconds`   | `< 15 minutes`  | **PASS** |
-| **Measured RPO (Recovery Point Objective)**         | `0 seconds`      | `< 5 minutes`   | **PASS** |
-| **Entity Integrity Loss**                           | `0 records` (0%) | `0 records`     | **PASS** |
-| **Lifecycle API & Worker Execution**                | `100% HTTP/API`  | Real App Path   | **PASS** |
+| Metric                                              | Measured Value                                              | Threshold / SLA | Status   |
+| --------------------------------------------------- | ----------------------------------------------------------- | --------------- | -------- |
+| **PostgreSQL Schema & Data Restore Duration**       | `2.0 seconds`                                               | `< 120 seconds` | **PASS** |
+| **Application & Worker Boot Readiness Time**        | `19.0 seconds`                                              | `< 60 seconds`  | **PASS** |
+| **Total Application RTO (Recovery Time Objective)** | `35.0 seconds` (local cold-start; 2–5m production estimate) | `< 15 minutes`  | **PASS** |
+| **Controlled RPO (Recovery Point Objective)**       | Bounded by snapshot cadence (0s loss relative to snapshot)  | `< 5 minutes`   | **PASS** |
+| **Entity Integrity Loss**                           | `0 records` relative to snapshot point-in-time              | `0 records`     | **PASS** |
+| **Lifecycle API & Worker Execution**                | `100% HTTP/API` (Worker active, 0 fatal crashes)            | Real App Path   | **PASS** |
+
+> [!NOTE]
+> **RTO & RPO Scope Definition:**
+>
+> - **RTO (35s):** Measures container orchestration, PostgreSQL schema unpacking, and application readiness on the baseline dataset. Production recovery time will vary based on cloud snapshot volume attachment and database gigabyte scale.
+> - **RPO:** Point-in-time custom dumps restore 100% of data committed prior to the dump cutoff. Transactions committed strictly after the snapshot timestamp are lost in snapshot-only recovery unless continuous WAL archiving is configured.
 
 ---
 

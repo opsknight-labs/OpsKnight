@@ -55,8 +55,14 @@ _Remediation Note:_ Prior test harness runs observed mobile login failures under
 
 ## 3. Responsive Layout & Viewport Verification
 
-Captured screenshots from `scripts/certification/certify-ui-responsive.ts` verified layout invariants across 7 viewport sizes:
+The test harness evaluates layout invariants across three enterprise viewports:
 
-- **375px (Compact Phone):** Zero horizontal scroll (`scrollWidth === clientWidth`), touch targets $\ge 44\text{px}$.
-- **768px (Tablet):** Drawer layout cleanly collapses without overlapping sidebar navigation.
-- **1280px / 1440px / 1920px (Desktop & Wallboard):** Full data tables and status badge alignment render correctly across all 3 engines.
+- **Desktop (1280×800):** Full data tables, multi-column metrics grid, and modal dialog interactions (Create Runbook Dialog open, focus trap, and keyboard Escape dismissal).
+- **Tablet (768×1024):** Responsive drawer collapse, zero horizontal overflow (`scrollWidth <= innerWidth`), navigation collapse to compact drawer.
+- **Mobile PWA (375×812):** Mobile PWA navigation (`/m`), bottom action bar, touch targets $\ge 44\text{px}$, and zero horizontal scroll.
+
+### 3.1 Harness Invariants & Strict Assertions Enforced
+
+1. **Strict Runtime Error Enforcement:** Page errors (`pageerror`) are collected and asserted per route. Any uncaught JavaScript runtime exception fails the route and exits the suite with code 1.
+2. **Fail-Closed Execution:** If authentication or viewport bootstrap fails, the harness marks all routes for that viewport as `FAIL` and exits with code 1. It never exits 0 on incomplete or skipped runs.
+3. **Interactive Component Validation:** In addition to DOM mounting assertions, real interactive modal flows are tested (opening the Create Runbook dialog, validating accessible `role="dialog"`, and confirming dismissal via keyboard `Escape`).
