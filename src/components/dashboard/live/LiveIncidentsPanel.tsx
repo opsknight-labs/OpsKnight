@@ -478,7 +478,7 @@ export default function LiveIncidentsPanel({
                   : `${total.toLocaleString()} of ${(snapshot?.summary.active ?? total).toLocaleString()}`}
               </Badge>
             </div>
-            <div className="ml-auto flex min-w-0 flex-wrap items-center justify-end gap-1.5">
+            <div className="ml-auto flex min-w-0 flex-1 basis-full flex-wrap items-center justify-start gap-1.5 sm:min-w-[520px] sm:justify-end sm:basis-[540px] sm:flex-nowrap">
               <LiveToolbar services={services} teams={teams} />
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
