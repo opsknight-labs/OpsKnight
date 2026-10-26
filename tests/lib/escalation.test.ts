@@ -19,6 +19,7 @@ import prisma from '@/lib/prisma';
 vi.mock('@/lib/prisma', () => ({
   __esModule: true,
   default: {
+    $executeRaw: vi.fn().mockResolvedValue(1),
     incident: {
       findUnique: vi.fn(),
       findMany: vi.fn(),

@@ -1,0 +1,86 @@
+{
+  "variant": "candidate",
+  "passed": true,
+  "certifiedEnterprise": false,
+  "completed": 1000,
+  "concurrency": 1,
+  "elapsedMs": 994.5635000000002,
+  "cpuMs": 356.37,
+  "queriesPerEvent": 1.003,
+  "databaseProfile": {
+    "diagnosticSettings": {
+      "walIoTimingEnabled": false,
+      "statementTracking": "top"
+    },
+    "scope": "Owned local test database; PostgreSQL execution statistics exclude client/pool/network time. Cluster WAL includes all databases on this owned test instance.",
+    "elapsedMs": 996.216375,
+    "counters": {
+      "commits": 680,
+      "rollbacks": 0,
+      "deadlocks": 0,
+      "tempBytes": 6037236,
+      "inserts": 1672,
+      "updates": 1667,
+      "deletes": 0,
+      "clusterWalBytes": 4081139,
+      "clusterWalBuffersFull": 0,
+      "clusterWalWrites": 671,
+      "clusterWalSyncs": 670,
+      "clusterWalWriteTimeMs": 0,
+      "clusterWalSyncTimeMs": 0
+    },
+    "totalStatementWalBytes": 2408666,
+    "totalQueryCalls": 1003,
+    "totalDatabaseExecutionMs": 332.1441079999999,
+    "topQueriesByExecutionTime": [
+      {
+        "fingerprint": "d7d1054f5d447b3459d9acfea4f8d024881986be9d9533bbe52b1f32e2398a0b",
+        "operation": "UPDATE",
+        "model": "Incident",
+        "calls": 1000,
+        "executionMs": 312.4171089999999,
+        "meanExecutionMs": 0.3124171089999999,
+        "rows": 1000,
+        "blocksHit": 83677,
+        "blocksRead": 0,
+        "blocksDirtied": 15,
+        "tempBlocksWritten": 0,
+        "walBytes": 2408666
+      },
+      {
+        "fingerprint": "cd83c5cc8f9919117637966e311ed35695c28271b91e10e6b739e2a88484090d",
+        "operation": "SELECT",
+        "model": "other",
+        "calls": 1,
+        "executionMs": 19.619958,
+        "meanExecutionMs": 19.619958,
+        "rows": 20,
+        "blocksHit": 3,
+        "blocksRead": 0,
+        "blocksDirtied": 0,
+        "tempBlocksWritten": 737,
+        "walBytes": 0
+      },
+      {
+        "fingerprint": "d4ea10543e22353c76b5817cd251cd4f374fe1ee3bda667aa49a2373fa447b06",
+        "operation": "SELECT",
+        "model": "other",
+        "calls": 2,
+        "executionMs": 0.107041,
+        "meanExecutionMs": 0.0535205,
+        "rows": 2,
+        "blocksHit": 6,
+        "blocksRead": 0,
+        "blocksDirtied": 0,
+        "tempBlocksWritten": 0,
+        "walBytes": 0
+      }
+    ],
+    "activitySamples": 0,
+    "activitySampleErrors": 0,
+    "waits": [],
+    "blockerSamples": [],
+    "blockerScope": "Sampled blocker statement categories and transaction age; a transaction can retain locks acquired by an earlier statement. Fixed SQL-side labels only, no query text, parameters, backend IDs or credentials retained."
+  },
+  "scope": "Host isolated1000no-timeline escalation finalizations, concurrency1/pool5; sameOPEN/generation/cursor fence and final state. No HTTP/providers/claiming/incident creation/effects or nativecapacity certificate."
+}
