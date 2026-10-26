@@ -88,12 +88,11 @@ async function signIn(
 async function openDashboard(page: Page, path = '/?lview=active') {
   // An explicit view in the URL bypasses the per-user saved view from earlier tests.
   await page.goto(path);
-  const panel = page.getByTestId('live-incidents-panel');
-  // Streaming SSR briefly parks the server copy in a hidden container before swapping it in.
-  await expect(panel).toHaveCount(1);
+  const panel = page.getByTestId('live-incidents-panel').first();
   await expect(panel).toBeVisible();
   await expect(panel).toHaveAttribute('data-loading', 'false');
   await expect(panel).toHaveAttribute('data-connection', 'live');
+  await expect(page.getByTestId('live-incidents-panel')).toHaveCount(1);
   return panel;
 }
 
@@ -829,10 +828,13 @@ test.describe.serial('dashboard live incidents', () => {
 
     // Text size control for distant screens (persisted per screen).
     await expect(page.getByTestId('wallboard-scale')).toHaveText('100%');
+    await page.bringToFront();
+    await page.locator('body').focus();
     await page.keyboard.press('+');
     await expect(page.getByTestId('wallboard-scale')).toHaveText('113%');
     await page.reload();
     await expect(page.getByTestId('wallboard-scale')).toHaveText('113%');
+    await page.locator('body').focus();
     await page.keyboard.press('-');
 
     // Fullscreen is either entered or the user is told how to do it; never a silent no-op.
