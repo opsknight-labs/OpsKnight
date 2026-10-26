@@ -1,0 +1,83 @@
+{
+  "sourceRevision": "67a28dda6b47dab1b16ff793d2490938880561f7",
+  "imageId": "sha256:a5fa9a85ea6c3eb8cbe6ef17a09dcefc5f6284e248e1a83400104586695ed6b0",
+  "runId": "c6b39518-5283-42df-b02d-c5c964e45ba6",
+  "target": 50,
+  "duration": "1m",
+  "generalWorkerReplicas": 1,
+  "httpPassed": true,
+  "localSmtpPassed": true,
+  "shortPreflightPassed": true,
+  "queueBounded": true,
+  "queueBoundPolicy": {
+    "units": "background jobs",
+    "requiredJobsPerMainIncident": 3,
+    "maxCount": 300,
+    "maxOldestDueAgeMs": 2000,
+    "finalDueRequired": 0
+  },
+  "lastQueueSamples": [
+    {
+      "elapsedMs": 40069.528083,
+      "due": 65,
+      "oldestDueMs": 1037.021,
+      "failed": 0
+    },
+    {
+      "elapsedMs": 50044.619333,
+      "due": 56,
+      "oldestDueMs": 958.739,
+      "failed": 0
+    },
+    {
+      "elapsedMs": 60042.722166,
+      "due": 56,
+      "oldestDueMs": 1034.225,
+      "failed": 0
+    },
+    {
+      "elapsedMs": 60652.576958,
+      "due": 0,
+      "oldestDueMs": 0,
+      "failed": 0
+    }
+  ],
+  "finalDrain": {
+    "observedAt": "2026-10-26T07:46:10.239742+00:00",
+    "dueUnfinished": 0,
+    "jobs": [
+      {
+        "type": "ESCALATION",
+        "status": "COMPLETED",
+        "count": 1
+      },
+      {
+        "type": "SCHEDULED_TASK",
+        "status": "COMPLETED",
+        "count": 6004
+      },
+      {
+        "type": "COMPLIANCE_EVALUATION_SWEEP",
+        "status": "PENDING",
+        "count": 1
+      },
+      {
+        "type": "COMPLIANCE_EVALUATION_SWEEP",
+        "status": "COMPLETED",
+        "count": 1
+      },
+      {
+        "type": "COMPLIANCE_DRIFT_PROJECT",
+        "status": "COMPLETED",
+        "count": 6
+      },
+      {
+        "type": "RUNBOOK",
+        "status": "COMPLETED",
+        "count": 3002
+      }
+    ],
+    "deliveries": null
+  },
+  "scope": "Short fresh-incident default/unconfigured-provider smoke with one separate pinned-Automation SMTP fixture. All active job families inspected after owned topology cleanup. Not sustained, compact-budget, configured fanout, actual Runbook execution, HA, remote delivery or release certification. General workers1; web1/ingestion1/six support roles1CPU each, DB uncapped/shared Docker VM."
+}
