@@ -1,0 +1,222 @@
+{
+  "imageRevision": "699e02c21f606ee2ac2ebaa7e71211c926c06155",
+  "scope": "20-second50/sec diagnostic with inspector sampling, original1CPU web/ingestion limits. Sample time deltas include scheduling/waiting; they are not CPU-seconds or pure function execution costs. V8 profiles omit native Prisma engine thread CPU. Not capacity certification. Raw profiles retained privately; hashes identify them.",
+  "profiles": [
+    {
+      "role": "ingestion",
+      "sha256": "4d6592ee1cf59ccde5d3401cd8914d1beb15c6524e7a57b471016f1cc0d41eff",
+      "sampleCount": 16268,
+      "profileDurationMs": 29853.118,
+      "topSelfSamples": [
+        {
+          "function": "(idle)",
+          "bundleOrRuntime": "",
+          "sampledWallTimeMs": 16543.929
+        },
+        {
+          "function": "(garbage collector)",
+          "bundleOrRuntime": "",
+          "sampledWallTimeMs": 1862.715
+        },
+        {
+          "function": "custom_gc",
+          "bundleOrRuntime": "",
+          "sampledWallTimeMs": 1155.716
+        },
+        {
+          "function": "(program)",
+          "bundleOrRuntime": "",
+          "sampledWallTimeMs": 996.21
+        },
+        {
+          "function": "request",
+          "bundleOrRuntime": "library.js",
+          "sampledWallTimeMs": 994.238
+        },
+        {
+          "function": "parseEngineResponse",
+          "bundleOrRuntime": "library.js",
+          "sampledWallTimeMs": 859.293
+        },
+        {
+          "function": "",
+          "bundleOrRuntime": "library.js",
+          "sampledWallTimeMs": 853.631
+        },
+        {
+          "function": "Te",
+          "bundleOrRuntime": "library.js",
+          "sampledWallTimeMs": 327.155
+        },
+        {
+          "function": "ai",
+          "bundleOrRuntime": "2986.js",
+          "sampledWallTimeMs": 324.059
+        },
+        {
+          "function": "nestArgument",
+          "bundleOrRuntime": "library.js",
+          "sampledWallTimeMs": 285.04
+        },
+        {
+          "function": "t",
+          "bundleOrRuntime": "2986.js",
+          "sampledWallTimeMs": 229.339
+        },
+        {
+          "function": "dispatchBatches",
+          "bundleOrRuntime": "library.js",
+          "sampledWallTimeMs": 214.775
+        },
+        {
+          "function": "_propagate",
+          "bundleOrRuntime": "node:async_hooks",
+          "sampledWallTimeMs": 206.729
+        },
+        {
+          "function": "l",
+          "bundleOrRuntime": "library.js",
+          "sampledWallTimeMs": 202.4
+        },
+        {
+          "function": "El",
+          "bundleOrRuntime": "library.js",
+          "sampledWallTimeMs": 174.101
+        },
+        {
+          "function": "get",
+          "bundleOrRuntime": "library.js",
+          "sampledWallTimeMs": 162.487
+        },
+        {
+          "function": "lookupPublicResource",
+          "bundleOrRuntime": "async_hooks",
+          "sampledWallTimeMs": 151.551
+        },
+        {
+          "function": "",
+          "bundleOrRuntime": "2986.js",
+          "sampledWallTimeMs": 141.778
+        },
+        {
+          "function": "_parse",
+          "bundleOrRuntime": "34190.js",
+          "sampledWallTimeMs": 133.425
+        },
+        {
+          "function": "Bd",
+          "bundleOrRuntime": "library.js",
+          "sampledWallTimeMs": 129.334
+        }
+      ]
+    },
+    {
+      "role": "web",
+      "sha256": "05a462b59ba1dbfd97a560ed2295d839779489014a13fe0b9b2c1cdb54e378db",
+      "sampleCount": 15993,
+      "profileDurationMs": 29942.763,
+      "topSelfSamples": [
+        {
+          "function": "(idle)",
+          "bundleOrRuntime": "",
+          "sampledWallTimeMs": 10114.889
+        },
+        {
+          "function": "(garbage collector)",
+          "bundleOrRuntime": "",
+          "sampledWallTimeMs": 1595.736
+        },
+        {
+          "function": "(program)",
+          "bundleOrRuntime": "",
+          "sampledWallTimeMs": 827.392
+        },
+        {
+          "function": "_propagate",
+          "bundleOrRuntime": "node:async_hooks",
+          "sampledWallTimeMs": 428.626
+        },
+        {
+          "function": "request",
+          "bundleOrRuntime": "library.js",
+          "sampledWallTimeMs": 418.297
+        },
+        {
+          "function": "parse",
+          "bundleOrRuntime": "",
+          "sampledWallTimeMs": 408.84
+        },
+        {
+          "function": "_parse",
+          "bundleOrRuntime": "86848.js",
+          "sampledWallTimeMs": 356.251
+        },
+        {
+          "function": "",
+          "bundleOrRuntime": "library.js",
+          "sampledWallTimeMs": 321.128
+        },
+        {
+          "function": "makeTransferable",
+          "bundleOrRuntime": "js_transferable",
+          "sampledWallTimeMs": 294.859
+        },
+        {
+          "function": "p",
+          "bundleOrRuntime": "26267.js",
+          "sampledWallTimeMs": 268.582
+        },
+        {
+          "function": "debugPanic",
+          "bundleOrRuntime": "",
+          "sampledWallTimeMs": 267.146
+        },
+        {
+          "function": "parseEngineResponse",
+          "bundleOrRuntime": "library.js",
+          "sampledWallTimeMs": 254.499
+        },
+        {
+          "function": "v",
+          "bundleOrRuntime": "92970.js",
+          "sampledWallTimeMs": 245.426
+        },
+        {
+          "function": "runMicrotasks",
+          "bundleOrRuntime": "",
+          "sampledWallTimeMs": 229.541
+        },
+        {
+          "function": "handleRoute",
+          "bundleOrRuntime": "resolve-routes.js",
+          "sampledWallTimeMs": 221.786
+        },
+        {
+          "function": "b7",
+          "bundleOrRuntime": "middleware.js",
+          "sampledWallTimeMs": 199.625
+        },
+        {
+          "function": "",
+          "bundleOrRuntime": "36525.js",
+          "sampledWallTimeMs": 180.844
+        },
+        {
+          "function": "",
+          "bundleOrRuntime": "middleware.js",
+          "sampledWallTimeMs": 178.602
+        },
+        {
+          "function": "u",
+          "bundleOrRuntime": "36525.js",
+          "sampledWallTimeMs": 158.086
+        },
+        {
+          "function": "o",
+          "bundleOrRuntime": "26267.js",
+          "sampledWallTimeMs": 157.007
+        }
+      ]
+    }
+  ]
+}

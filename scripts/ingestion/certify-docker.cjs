@@ -299,10 +299,16 @@ async function main() {
     { role: 'bulk-worker', poolName: 'DATABASE_POOL_SIZE_BULK_WORKER', pool: 3 },
     { role: 'runbook-worker', poolName: 'DATABASE_POOL_SIZE_RUNBOOK_WORKER', pool: 5 },
     { role: 'status-projector', poolName: 'DATABASE_POOL_SIZE_STATUS_PROJECTOR', pool: 2 },
-  ].map(item => ({
-    ...item,
-    replicas: item.role === 'general-worker' ? generalWorkerReplicas : 1,
-  }));
+  ].map(item => {
+    const cpuVariable = `INGESTION_${item.role.toUpperCase().replaceAll('-', '_')}_CPUS`;
+    const cpus = Number(process.env[cpuVariable] ?? workerCpus);
+    assert.ok(Number.isFinite(cpus) && cpus >= 0.25 && cpus <= 4, `Invalid ${cpuVariable}`);
+    return {
+      ...item,
+      cpus,
+      replicas: item.role === 'general-worker' ? generalWorkerReplicas : 1,
+    };
+  });
   const supportingPools = Object.fromEntries(
     supportingRoles.map(item => [item.poolName, String(item.pool)])
   );
@@ -621,7 +627,7 @@ async function main() {
       '--label',
       `opsknight.ingestion-cert-run=${runId}`,
       '--cpus',
-      String(role === 'web' || role === 'http' ? webCpus : workerCpus),
+      String(role === 'web' || role === 'http' ? webCpus : (supportingRoles.find(item => item.role === role)?.cpus ?? workerCpus)),
       '--memory',
       role === 'web' || role === 'http' ? '1g' : '768m',
       '--health-interval',
@@ -841,7 +847,7 @@ location / { proxy_pass http://gateways; proxy_http_version 1.1; proxy_set_heade
     webFallbackOnly: workerReplicas === 0 && !admissionOnly,
     webUsesPgBouncer: usePgBouncer,
     supportingRoles: fullStack
-      ? supportingRoles.map(({ role, replicas, pool }) => ({ role, replicas, pool }))
+      ? supportingRoles.map(({ role, replicas, pool, cpus }) => ({ role, replicas, pool, cpus }))
       : [],
     externalEffectsCertified: false,
     webReplicas,
