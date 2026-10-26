@@ -809,3 +809,12 @@ New-incident tests run separately, one minute each, all-new event identities, we
 Main load is default/unconfigured-provider work; Runbook evaluation is consumed, but configured Runbook execution and representative external fanout are not certified. Resource limits exclude the uncapped shared database, proxy and capture from an aggregate compact budget. Local host/VM interference remains a limitation. Neither500-event/sec burst admission nor100-new-incidents/sec end-to-end target is achieved by these tests. No PR is opened.
 
 After these runs, all owned native test containers were cleaned up and kind was restored and verified Ready. Its first startup-time readiness query briefly returned Forbidden; a subsequent node query and readiness wait succeeded.
+
+
+### P0 admission follow-up: one control/Automation statement per fresh append group
+
+Fresh independent append groups now read admission control/policy and service Automation mode/version pins in one transaction-local SELECT. The existing control parser and Automation SQL/map conversion are shared with their standalone callers. Service IDs are deduplicated and bounded32; no cache survives retry, no quota or capacity reservation is moved outside its transaction, and execution-time Automation emergency checks are unchanged. Policy timing for this path now includes the combined Automation read rather than a separate automation stage.
+
+All87PostgreSQL durability tests pass. The added rollback-scoped regression proves one statement, exact policy equivalence, exclusion of another service, immediate mode changes and the workspace emergency switch.28focused ingestion/Automation suites pass174tests, TypeScript and zero-warning modified-source lint pass; independent read-only static bug/security substitutes find no introduced issue.
+
+Host admission-only A–B–B–A,1,000unique10KB receipts/concurrency16/pool5, same fresh339-migration databases: baselineCPU897.167/851.779ms, candidate835.141/850.438ms (~3.6% lower mean); baselineelapsed1,870.946/1,763.367ms, candidate1,727.171/1,776.633ms. Statement calls/receipt0.636/0.636→0.572/0.573 (~10% lower mean). All1,000receipts and capacity reservations reconcile per run. This is a modest host-library cost diagnostic, not a new HTTP throughput or incident-capacity certificate. Evidence: local-admission-settings-{a1,b1,b2,a2}.json and source-hash/archive provenance.

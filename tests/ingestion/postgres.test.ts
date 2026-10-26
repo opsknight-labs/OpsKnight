@@ -1,3 +1,5 @@
+import { readIngestionAdmissionSettings } from '@/lib/ingestion/admission-settings';
+import { getIngestionAutomationConfigs } from '@/lib/automation/settings';
 import { resolveSupportHours } from '@/lib/incidents/support-hours';
 import { finalizeEscalationExecution } from '@/lib/escalation/repository';
 import { dispatchIncidentEffects } from '@/lib/incident-effect-dispatch';
@@ -338,6 +340,39 @@ describe('PostgreSQL ingestion durability', () => {
     expect(retry.scheduledAt.getTime()).toBeGreaterThan(at.getTime());
     expect(await prisma.backgroundJob.count({ where: { id: { startsWith: `${parent.id}:` } } })).toBe(0);
     await prisma.backgroundJob.delete({ where: { id: parent.id } });
+  });
+
+  it('reads admission control and scoped Automation together without caching the emergency switch', async () => {
+    const rollback = new Error('Rollback owned admission settings fixture');
+    await expect(prisma.$transaction(async tx => {
+      await tx.systemSettings.upsert({ where: { id: 'default' },
+        create: { automationEnabled: true }, update: { automationEnabled: true },
+      });
+      await tx.serviceAutomationConfig.upsert({ where: { serviceId },
+        create: { serviceId, mode: 'SHADOW' }, update: { mode: 'SHADOW' },
+      });
+      const other = await tx.service.create({ data: { name: 'Outside admission settings scope' } });
+      await tx.serviceAutomationConfig.create({ data: { serviceId: other.id, mode: 'LIVE' } });
+      const policy = await getIngestionPolicy(tx);
+      const automation = await getIngestionAutomationConfigs(tx, [serviceId]);
+      const query = vi.spyOn(tx, '$queryRaw');
+      try {
+        const shared = await readIngestionAdmissionSettings(tx, [serviceId, serviceId]);
+        expect({ paused: shared.paused, revision: shared.revision, policy: shared.policy }).toEqual(policy);
+        expect(shared.automation).toEqual(automation);
+        expect([...shared.automation.keys()]).toEqual([serviceId]);
+        expect(query).toHaveBeenCalledTimes(1);
+        await tx.serviceAutomationConfig.update({ where: { serviceId }, data: { mode: 'LIVE' } });
+        query.mockClear();
+        expect((await readIngestionAdmissionSettings(tx, [serviceId])).automation.get(serviceId)?.mode).toBe('LIVE');
+        expect(query).toHaveBeenCalledTimes(1);
+        await tx.systemSettings.update({ where: { id: 'default' }, data: { automationEnabled: false } });
+        query.mockClear();
+        expect((await readIngestionAdmissionSettings(tx, [serviceId])).automation.size).toBe(0);
+        expect(query).toHaveBeenCalledTimes(1);
+      } finally { query.mockRestore(); }
+      throw rollback;
+    })).rejects.toBe(rollback);
   });
 
   it('shares one authoritative published policy snapshot without re-reading during resolution', async () => {
