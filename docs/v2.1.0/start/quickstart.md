@@ -18,11 +18,11 @@ verification:
 
 This tutorial starts the integrated OpsKnight runtime and PostgreSQL on one Docker host. Use it for an evaluation or small test environment. For production, start with [Choose a deployment](../operate/capacity/choose-deployment).
 
-![Incident list populated with realistic service and responder data](/docs/v2.0.0/assets/incidents-list.png)
+![Incident list populated with realistic service and responder data](/docs/v2.1.0/assets/incidents-list.png)
 
 ## Before you begin
 
-Install Git, Docker Engine, and Docker Compose v2. Ports `3000` and `5432` must be free unless you change `APP_PORT` and `POSTGRES_PORT`. Choose an explicit 2.0 image tag or immutable digest; do not rely on the Compose compatibility default or a moving `latest` tag.
+Install Git, Docker Engine, and Docker Compose v2. Ports `3000` and `5432` must be free unless you change `APP_PORT` and `POSTGRES_PORT`. Choose an explicit 2.1 image tag or immutable digest; do not rely on the Compose compatibility default or a moving `latest` tag.
 
 ## 1. Prepare the configuration
 
@@ -35,7 +35,7 @@ cp env.example .env
 Edit `.env` and set at least:
 
 ```dotenv
-OPSKNIGHT_IMAGE=ghcr.io/opsknight-labs/opsknight:2.0.0
+OPSKNIGHT_IMAGE=ghcr.io/opsknight-labs/opsknight:2.1.0
 POSTGRES_PASSWORD=<unique-database-password>
 NEXTAUTH_URL=http://localhost:3000
 NEXT_PUBLIC_APP_URL=http://localhost:3000
