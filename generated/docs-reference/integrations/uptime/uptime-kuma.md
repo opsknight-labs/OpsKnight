@@ -4,8 +4,7 @@ description: Connect Uptime Kuma alerts to OpsKnight incident ingestion.
 type: integration
 product_area: integrations
 audience: [administrator, operator]
-keywords:
-  ['Uptime Kuma webhook', 'connect Uptime Kuma', 'Uptime Kuma alerts', 'Uptime Kuma integration']
+keywords: ["Uptime Kuma webhook", "connect Uptime Kuma", "Uptime Kuma alerts", "Uptime Kuma integration"]
 verification:
   level: source
   verified_at: 2026-10-21
@@ -61,10 +60,9 @@ The exact payload schema is defined by `src/app/api/integrations/uptime-kuma/rou
 ## Event mapping and incident lifecycle
 
 The adapter emits the lifecycle actions found in its current source:
-
 - `trigger`
 - `resolve`
-  Correlation contract: **adapter EventPayload.dedup_key**. Recovery contract: **adapter emits resolve for its recovery state**.
+Correlation contract: **adapter EventPayload.dedup_key**. Recovery contract: **adapter emits resolve for its recovery state**.
 
 ## Recovery and deduplication
 

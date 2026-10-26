@@ -6,7 +6,7 @@ product_area: configuration
 audience: [developer, operator, administrator]
 verification:
   level: source
-  verified_at: 2026-10-26
+  verified_at: 2026-10-27
   evidence:
     - src/
     - deploy/
@@ -194,6 +194,7 @@ Sets the polling interval while the general queue is idle.
 - Runtime role: worker
 - Apply behavior: restart required
 - Sensitivity: non-secret
+
 
 ## Supported production inventory
 
@@ -1862,3 +1863,4 @@ Sets the polling interval while the general queue is idle.
 - Extraction confidence: incomplete
 - Static default: not displayed
 - Sources: `deploy/compose/docker-compose.pgbouncer.yml`, `deploy/compose/docker-compose.split.yml`, `env.example`, `scripts/wait-for-runtime-database.cjs`, `src/lib/prisma-datasource.ts`
+
