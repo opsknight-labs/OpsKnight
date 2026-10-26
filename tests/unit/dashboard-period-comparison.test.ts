@@ -1,3 +1,4 @@
+import { describe, expect, it } from 'vitest';
 import { isComparablePriorPeriod } from '@/lib/dashboard/period-comparison';
 
 describe('isComparablePriorPeriod', () => {

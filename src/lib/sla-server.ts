@@ -1803,6 +1803,68 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
       ? toHourKeyInTimeZone(date, userTimeZone)
       : toDateKeyInTimeZone(date, userTimeZone);
 
+  // Large windows only hydrate the newest rows, so bucket the volume and
+  // latency series in the database; otherwise the chart shows the newest
+  // ~100 incidents crammed into the last few buckets.
+  let dbTrendBuckets: Map<
+    string,
+    { count: number; resolveCount: number; ackSum: number; ackCount: number; resolveSum: number }
+  > | null = null;
+  if (useDbAggregation) {
+    const trendTz = Prisma.raw(`'${userTimeZone.replace(/'/g, "''")}'`);
+    const trendFormat = Prisma.raw(useHourlyTrend ? `'YYYY-MM-DD-HH24'` : `'YYYY-MM-DD'`);
+    const bucketAckElapsed = slaCapturedAckElapsedSql('Incident');
+    const bucketResolveElapsed = slaCapturedResolveElapsedSql('Incident');
+    const rows = await prisma
+      .$queryRaw<
+        Array<{
+          bucket: string;
+          total: bigint;
+          resolved: bigint;
+          ack_count: bigint;
+          ack_sum: number | null;
+          resolve_sum: number | null;
+        }>
+      >(
+        Prisma.sql`
+      SELECT
+        to_char(("createdAt" AT TIME ZONE 'UTC') AT TIME ZONE ${trendTz}, ${trendFormat}) AS bucket,
+        COUNT(*) AS total,
+        COUNT(*) FILTER (WHERE "status" = 'RESOLVED'::"IncidentStatus" AND "resolvedAt" IS NOT NULL) AS resolved,
+        COUNT(*) FILTER (WHERE "slaAckElapsedMs" IS NOT NULL OR ("acknowledgedAt" IS NOT NULL AND "acknowledgedAt" >= "createdAt")) AS ack_count,
+        SUM(${bucketAckElapsed})
+          FILTER (WHERE "slaAckElapsedMs" IS NOT NULL OR ("acknowledgedAt" IS NOT NULL AND "acknowledgedAt" >= "createdAt")) AS ack_sum,
+        SUM(${bucketResolveElapsed})
+          FILTER (WHERE "status" = 'RESOLVED'::"IncidentStatus" AND "resolvedAt" IS NOT NULL) AS resolve_sum
+      FROM "Incident"
+      WHERE "createdAt" >= ${finalStart}
+        AND "createdAt" <= ${finalEnd}
+        ${fullIncidentFilterSql}
+      GROUP BY 1
+    `
+      )
+      .catch(err => {
+        logger.warn('[SLA] Trend bucket query failed; falling back to bounded detail', {
+          error: err,
+        });
+        return null;
+      });
+    if (rows) {
+      dbTrendBuckets = new Map(
+        rows.map(row => [
+          row.bucket,
+          {
+            count: Number(row.total),
+            resolveCount: Number(row.resolved),
+            ackCount: Number(row.ack_count),
+            ackSum: Number(row.ack_sum ?? 0),
+            resolveSum: Number(row.resolve_sum ?? 0),
+          },
+        ])
+      );
+    }
+  }
+
   for (const incident of recentIncidents) {
     const key = getTrendKey(incident.createdAt);
     const trendEntry = trendIndex.get(key);
@@ -1857,6 +1919,17 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
           if (sla.resolve.status === 'MET') trendEntry.resolveSlaMet += 1;
         }
       }
+    }
+  }
+
+  if (dbTrendBuckets) {
+    for (const entry of trendSeries) {
+      const bucket = dbTrendBuckets.get(entry.key);
+      entry.count = bucket?.count ?? 0;
+      entry.resolveCount = bucket?.resolveCount ?? 0;
+      entry.ackCount = bucket?.ackCount ?? 0;
+      entry.ackSum = bucket?.ackSum ?? 0;
+      entry.resolveSum = bucket?.resolveSum ?? 0;
     }
   }
 

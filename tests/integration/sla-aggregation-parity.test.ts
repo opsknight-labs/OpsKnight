@@ -22,6 +22,45 @@ describeIfRealDB('SLA aggregation threshold parity', { timeout: 60_000 }, () => 
     await testPrisma.$disconnect();
   });
 
+  it('buckets the trend series across the whole window above the SQL threshold', async () => {
+    const service = await testPrisma.service.create({
+      data: { name: `Trend buckets ${crypto.randomUUID()}` },
+    });
+    const dayMs = 24 * 60 * 60_000;
+    const now = Date.now();
+    const perDay = 12;
+    const days = 60;
+    await testPrisma.incident.createMany({
+      data: Array.from({ length: perDay * days }, (_, index) => {
+        const createdAt = new Date(now - (Math.floor(index / perDay) + 0.5) * dayMs);
+        return {
+          id: `trend-bucket-${index}-${crypto.randomUUID()}`,
+          title: 'Trend bucket',
+          serviceId: service.id,
+          status: 'RESOLVED' as const,
+          priority: 'P3' as const,
+          createdAt,
+          resolvedAt: new Date(createdAt.getTime() + 10 * 60_000),
+        };
+      }),
+    });
+
+    const metrics = await calculateSLAMetrics({
+      serviceId: service.id,
+      startDate: new Date(now - 90 * dayMs),
+      endDate: new Date(now),
+      userTimeZone: 'UTC',
+    });
+
+    const buckets = metrics.trendSeries ?? [];
+    const total = buckets.reduce((sum, point) => sum + point.count, 0);
+    const resolved = buckets.reduce((sum, point) => sum + (point.resolveCount ?? 0), 0);
+    expect(total).toBe(perDay * days);
+    expect(resolved).toBe(perDay * days);
+    expect(buckets.filter(point => point.count > 0).length).toBeGreaterThanOrEqual(days - 1);
+    expect(Math.max(...buckets.map(point => point.count))).toBeLessThanOrEqual(perDay * 2);
+  });
+
   it('returns identical pause-aware MTTA below and above the SQL threshold', async () => {
     const service = await testPrisma.service.create({
       data: { name: `SLA parity ${crypto.randomUUID()}` },
