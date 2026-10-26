@@ -441,7 +441,7 @@ export default function LiveIncidentsPanel({
       data-connection={health}
       data-paused={paused ? 'true' : 'false'}
       data-loading={loading ? 'true' : 'false'}
-      className="flex h-full min-h-0 flex-col overflow-hidden rounded-xl border border-border bg-card shadow-[0_1px_2px_rgba(16,24,40,0.05)]"
+      className="flex h-full min-h-0 flex-col overflow-hidden rounded-xl border border-border bg-card shadow-[0_1px_2px_rgba(16,24,40,0.05)] [container-type:inline-size]"
     >
       <header
         className={
@@ -478,7 +478,7 @@ export default function LiveIncidentsPanel({
                   : `${total.toLocaleString()} of ${(snapshot?.summary.active ?? total).toLocaleString()}`}
               </Badge>
             </div>
-            <div className="ml-auto flex min-w-0 flex-wrap items-center justify-end gap-1.5">
+            <div className="ml-auto flex min-w-0 flex-1 basis-full flex-wrap items-center justify-start gap-1.5 sm:min-w-[520px] sm:justify-end sm:basis-[540px] sm:flex-nowrap">
               <LiveToolbar services={services} teams={teams} />
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
@@ -665,15 +665,27 @@ export default function LiveIncidentsPanel({
       <div
         aria-hidden
         className={cn(
-          'hidden shrink-0 border-b border-border bg-muted/40 py-1.5 pl-4 pr-3 font-semibold uppercase tracking-wider text-muted-foreground md:grid',
-          wallboard ? 'gap-x-4 text-[0.7em]' : 'gap-x-2.5 text-[10px]',
+          // Rows start after a 3px status rail plus 14px padding; mirror it so columns line up.
+          'hidden shrink-0 border-b border-border bg-muted/40 py-1.5 pl-[17px] pr-3 font-semibold uppercase tracking-wider text-muted-foreground',
+          wallboard
+            ? 'gap-x-3 text-[0.7em] md:grid md:gap-x-4'
+            : 'gap-x-3 text-[10px] [@container(min-width:40rem)]:grid',
           wallboard ? LIVE_ROW_GRID_TV : LIVE_ROW_GRID
         )}
       >
         <span>Prio / Urg</span>
         <span>Incident</span>
-        <span>Status</span>
-        <span>SLA</span>
+        {wallboard ? (
+          <span>Status</span>
+        ) : (
+          <span>
+            <span className="[@container(min-width:50rem)]:hidden">Status · SLA</span>
+            <span className="hidden [@container(min-width:50rem)]:inline">Status</span>
+          </span>
+        )}
+        <span className={wallboard ? undefined : 'hidden [@container(min-width:50rem)]:block'}>
+          SLA
+        </span>
         <span>Assignee</span>
         {!wallboard && <span className="text-right">Actions</span>}
       </div>
@@ -751,15 +763,16 @@ export default function LiveIncidentsPanel({
       </div>
 
       {!wallboard && (
-        <footer className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-t border-border bg-muted/20 px-3 py-2 sm:px-4">
+        <footer className="flex shrink-0 flex-wrap items-center justify-between gap-x-3 gap-y-2 border-t border-border bg-muted/20 px-3 py-2 sm:px-4">
           <div className="flex min-w-0 items-center gap-3">
             <span className="whitespace-nowrap text-[11px] text-muted-foreground">
               Showing {visible.length} of {total.toLocaleString()}
             </span>
             <span className="hidden sm:block">{statusLine}</span>
           </div>
-          <div className="flex items-center gap-2">
-            {canLoadOlder && (
+          <div className="flex w-full items-center justify-end gap-2 sm:w-auto">
+            {/* Reveal what is already loaded before offering to fetch more. */}
+            {canLoadOlder && hiddenLoaded === 0 && (
               <button
                 type="button"
                 onClick={loadOlder}
@@ -779,7 +792,7 @@ export default function LiveIncidentsPanel({
                 type="button"
                 onClick={() => setExpanded(value => !value)}
                 data-testid="live-show-more"
-                className="rounded-lg px-2.5 py-1 text-[11px] font-semibold text-foreground hover:bg-muted outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+                className="rounded-lg border border-border bg-card px-2.5 py-1 text-[11px] font-semibold text-foreground hover:bg-muted outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
               >
                 {expanded ? 'Show less' : `Show ${hiddenLoaded} more`}
               </button>

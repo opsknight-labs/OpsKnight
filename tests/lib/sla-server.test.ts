@@ -738,7 +738,7 @@ describe('calculateSLAMetrics composed PostgreSQL queries', () => {
       useOrScope: true,
     });
 
-    expect(prismaMock.$queryRaw).toHaveBeenCalledTimes(5);
+    expect(prismaMock.$queryRaw).toHaveBeenCalledTimes(6);
     const queries = prismaMock.$queryRaw.mock.calls.map(([query]) => query as CapturedSqlQuery);
 
     for (const query of queries) {
@@ -753,8 +753,9 @@ describe('calculateSLAMetrics composed PostgreSQL queries', () => {
     const heatmapQuery = queries.find(query => query.sql.includes('SELECT DATE("createdAt")'));
     const aggregateQuery = queries.find(query => query.sql.includes('total_incidents'));
     const eventQuery = queries.find(query => query.sql.includes('escalation_count'));
+    const trendBucketQuery = queries.find(query => query.sql.includes('to_char('));
 
-    for (const query of [heatmapQuery, aggregateQuery, eventQuery]) {
+    for (const query of [heatmapQuery, aggregateQuery, eventQuery, trendBucketQuery]) {
       expect(query).toBeDefined();
       if (!query) throw new Error('Expected composed SLA query was not executed');
       expect(query.sql).toContain('= ANY(?::text[])');

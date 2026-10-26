@@ -323,8 +323,8 @@ export function LiveToolbar({
     (query.assignment !== 'all' ? 1 : 0);
 
   return (
-    <div className="flex min-w-0 flex-wrap items-center gap-1.5">
-      <div className="relative w-full min-w-[10rem] sm:w-44 2xl:w-56">
+    <div className="flex min-w-0 flex-1 basis-full flex-wrap items-center justify-start gap-1.5 sm:basis-0 sm:flex-nowrap sm:justify-end">
+      <div className="relative w-full min-w-[8rem] sm:w-auto sm:max-w-[24rem] sm:flex-1">
         <Search
           className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground"
           aria-hidden
@@ -356,7 +356,7 @@ export function LiveToolbar({
         value={query.serviceId}
         options={serviceOptions}
         onChange={serviceId => setQuery({ serviceId })}
-        className="max-w-[11rem]"
+        className="max-w-[11rem] shrink-0"
         compactLabel
       />
       <Popover>

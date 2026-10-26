@@ -5,16 +5,19 @@ import Link from 'next/link';
 import { Check, Clock3, Loader2, PanelRight, Plus, Star, UserPlus, UserRound } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import PriorityBadge from '@/components/incident/PriorityBadge';
-import { Badge } from '@/components/ui/shadcn/badge';
 import {
   formatCountdown,
   formatIncidentAge,
   type LiveIncident,
 } from '@/lib/dashboard/live-incidents-shared';
 
-/** Shared column templates so the desktop header and rows always align. */
+/**
+ * Shared column templates so the header and rows always align. They respond to the panel's
+ * own width (the panel is an inline-size container), not the viewport, so the incident title
+ * keeps its room whether the panel sits beside the rail or spans the page.
+ */
 export const LIVE_ROW_GRID =
-  'md:grid-cols-[5.75rem_minmax(0,1fr)_6.25rem_6.75rem_minmax(0,8.25rem)_8.25rem]';
+  '[@container(min-width:40rem)]:grid-cols-[5.75rem_minmax(0,1fr)_7rem_minmax(0,7rem)_7.75rem] [@container(min-width:50rem)]:grid-cols-[5.75rem_minmax(0,1fr)_6.25rem_6.75rem_minmax(0,8.25rem)_8.25rem]';
 export const LIVE_ROW_GRID_TV = 'md:grid-cols-[6.5em_minmax(0,1fr)_7.5em_9.5em_minmax(0,10em)]';
 
 const HOUR = 3_600_000;
@@ -36,9 +39,7 @@ export function UrgencyBadge({
     <span
       className={cn(
         'inline-flex shrink-0 items-center justify-center rounded border font-mono font-bold tracking-wider uppercase tabular-nums transition-colors',
-        size === 'tv'
-          ? 'px-1.5 py-0.5 text-[0.7em]'
-          : 'px-1.5 py-0.5 text-[9px] leading-none',
+        size === 'tv' ? 'px-1.5 py-0.5 text-[0.7em]' : 'px-1.5 py-0.5 text-[9px] leading-none',
         isHigh
           ? 'border-rose-500/35 bg-rose-500/10 text-rose-700 dark:text-rose-400'
           : isMed
@@ -206,7 +207,8 @@ export const LiveIncidentRow = memo(function LiveIncidentRow({
       <span
         aria-hidden
         className={cn(
-          'h-1.5 w-1.5 shrink-0 rounded-full',
+          'shrink-0 rounded-full',
+          tv ? 'h-[0.45em] w-[0.45em]' : 'h-1.5 w-1.5',
           incident.status === 'OPEN' ? 'bg-rose-500' : 'bg-amber-500'
         )}
       />
@@ -220,7 +222,7 @@ export const LiveIncidentRow = memo(function LiveIncidentRow({
         aria-hidden
         className={cn(
           'flex shrink-0 items-center justify-center rounded-full bg-indigo-100 font-bold text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300',
-          tv ? 'h-[1.5em] w-[1.5em] text-[0.6em]' : 'h-5 w-5 text-[9px]'
+          tv ? 'h-[2.5em] w-[2.5em] text-[0.6em]' : 'h-5 w-5 text-[9px]'
         )}
       >
         {initialsOf(incident.assignee.name)}
@@ -237,9 +239,7 @@ export const LiveIncidentRow = memo(function LiveIncidentRow({
       aria-label={`Assign ${incident.title} to me`}
       className={cn(
         'inline-flex w-fit items-center gap-1 rounded-md border border-dashed border-slate-300 text-muted-foreground hover:border-primary/60 hover:text-primary disabled:opacity-50 outline-none focus-visible:ring-2 focus-visible:ring-primary/50 dark:border-slate-700',
-        compact
-          ? 'h-5 px-1.5 text-[10px] leading-none'
-          : 'px-2 py-0.5 text-[11px] font-medium'
+        compact ? 'h-5 px-1.5 text-[10px] leading-none' : 'px-2 py-0.5 text-[11px] font-medium'
       )}
     >
       {busy === 'assign' ? (
@@ -290,11 +290,17 @@ export const LiveIncidentRow = memo(function LiveIncidentRow({
             : compact
               ? 'gap-y-0 py-1 md:py-1'
               : 'gap-y-1 py-2.5 md:py-2',
-          'grid-cols-[auto_minmax(0,1fr)_auto]',
+          tv ? 'grid-cols-[auto_minmax(0,1fr)_auto]' : 'grid-cols-[minmax(0,1fr)_auto]',
           tv ? LIVE_ROW_GRID_TV : LIVE_ROW_GRID
         )}
       >
-        <span className="self-start md:self-center">
+        <span
+          className={cn(
+            tv
+              ? 'self-start md:self-center'
+              : 'col-start-1 row-start-1 self-center [@container(min-width:40rem)]:col-start-auto [@container(min-width:40rem)]:row-start-auto'
+          )}
+        >
           <div className="flex items-center gap-1.5">
             {incident.priority ? (
               <PriorityBadge
@@ -304,23 +310,35 @@ export const LiveIncidentRow = memo(function LiveIncidentRow({
                 className={tv ? '!h-auto !px-2.5 !py-1 !text-[0.8em]' : undefined}
               />
             ) : (
-              <Badge variant="neutral" size="xs" className="font-mono text-[10px]">
-                P—
-              </Badge>
+              <span
+                title="No priority set"
+                aria-label="No priority"
+                className="inline-flex h-5 min-w-[2.25rem] items-center justify-center rounded-md border border-dashed border-border px-1.5 font-mono text-[10px] text-muted-foreground"
+              >
+                —
+              </span>
             )}
             <UrgencyBadge urgency={incident.urgency} size={tv ? 'tv' : 'sm'} />
           </div>
         </span>
 
-        <span className="min-w-0">
+        <span
+          className={cn(
+            'min-w-0',
+            !tv &&
+              'col-span-2 row-start-2 [@container(min-width:40rem)]:col-span-1 [@container(min-width:40rem)]:row-start-auto'
+          )}
+        >
           <Link
             href={`/incidents/${incident.id}`}
             data-live-row-link={index}
             onFocus={() => onFocusRow(index)}
             title={incident.title}
             className={cn(
-              'block truncate rounded-sm font-semibold text-foreground outline-none',
-              tv ? 'text-[1.15em]' : 'text-sm leading-5',
+              'rounded-sm font-semibold text-foreground outline-none',
+              tv
+                ? 'block truncate text-[1.15em]'
+                : 'line-clamp-2 break-words text-sm leading-5 [@container(min-width:40rem)]:block [@container(min-width:40rem)]:truncate',
               'hover:text-primary focus-visible:ring-2 focus-visible:ring-primary/50'
             )}
           >
@@ -343,7 +361,10 @@ export const LiveIncidentRow = memo(function LiveIncidentRow({
               <time
                 dateTime={incident.createdAt}
                 title={new Date(incident.createdAt).toLocaleString()}
-                className="shrink-0 font-mono text-[11px] tabular-nums"
+                className={cn(
+                  'shrink-0 font-mono tabular-nums',
+                  tv ? 'text-[0.9em]' : 'text-[11px]'
+                )}
               >
                 {formatIncidentAge(incident.createdAt, now)}
               </time>
@@ -375,23 +396,44 @@ export const LiveIncidentRow = memo(function LiveIncidentRow({
             </span>
           )}
           {/* Phones: state and owner stack under the title. */}
-          <span className="mt-1.5 flex flex-wrap items-center gap-1.5 text-xs md:hidden">
+          <span
+            className={cn(
+              'mt-1.5 flex flex-wrap items-center gap-1.5 text-xs',
+              tv ? 'md:hidden' : '[@container(min-width:40rem)]:hidden'
+            )}
+          >
             {status}
             <SlaChip incident={incident} now={now} hideWhenNone />
             {owner}
           </span>
         </span>
 
-        <span className="hidden md:block">{status}</span>
-        <span className="hidden min-w-0 md:block">
+        <span
+          className={cn('hidden min-w-0', tv ? 'md:block' : '[@container(min-width:40rem)]:block')}
+        >
+          {status}
+          {!tv && (
+            <span className="mt-1 block [@container(min-width:50rem)]:hidden">
+              <SlaChip incident={incident} now={now} size="sm" hideWhenNone />
+            </span>
+          )}
+        </span>
+        <span
+          className={cn('hidden min-w-0', tv ? 'md:block' : '[@container(min-width:50rem)]:block')}
+        >
           <SlaChip incident={incident} now={now} size={tv ? 'tv' : 'sm'} />
         </span>
-        <span className={cn('hidden min-w-0 md:block', tv ? 'text-[0.95em]' : 'text-xs')}>
+        <span
+          className={cn(
+            'hidden min-w-0',
+            tv ? 'md:block text-[0.95em]' : '[@container(min-width:40rem)]:block text-xs'
+          )}
+        >
           {owner}
         </span>
 
         {!tv && (
-          <span className="flex items-center justify-end gap-1 self-start md:self-center">
+          <span className="col-start-2 row-start-1 flex items-center justify-end gap-1 [@container(min-width:40rem)]:col-start-auto [@container(min-width:40rem)]:row-start-auto [@container(min-width:40rem)]:self-center">
             {showAck && (
               <button
                 type="button"
