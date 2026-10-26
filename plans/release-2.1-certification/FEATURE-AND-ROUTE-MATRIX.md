@@ -1,6 +1,6 @@
 # OpsKnight 2.1 — Feature and Route Inventory Matrix
 
-**Candidate Commit SHA:** `abede9203d257fafeff8c4d19ef23dc269bc8274`  
+**Candidate Commit SHA:** `ed0c46289dd9b73d0c22f3f77e800a496b2f0be3`  
 **Certified Version:** OpsKnight 2.1.0  
 **Inspection Date:** 2026-10-26  
 **Auditor:** Release Engineering, SRE & QA Architecture

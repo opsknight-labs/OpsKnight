@@ -2,7 +2,7 @@
 
 **Certification Status:** PASS (P0 Release Gate Satisfied)  
 **Database Engine:** PostgreSQL 16.15 (Alpine Linux musl, 64-bit)  
-**Candidate Commit SHA:** `abede9203d257fafeff8c4d19ef23dc269bc8274`  
+**Candidate Commit SHA:** `ed0c46289dd9b73d0c22f3f77e800a496b2f0be3`  
 **Candidate Image Digest:** `sha256:52f31a93ad9b9e49e63cbd28e3c57bdcf82d29dd3ba4fc1e98c6346ed75c772a`  
 **Verification Date:** 2026-10-26  
 **Auditor:** Senior SRE & Release Engineering Architecture  

@@ -1,7 +1,7 @@
 # OpsKnight 2.1 — Rollback Rehearsal & Disaster Recovery Protocol
 
 **Document Status:** APPROVED  
-**Target Candidate:** OpsKnight 2.1.0 (`abede9203d257fafeff8c4d19ef23dc269bc8274`)  
+**Target Candidate:** OpsKnight 2.1.0 (`ed0c46289dd9b73d0c22f3f77e800a496b2f0be3`)  
 **Baseline Version:** Published OpsKnight 2.0.0 (`ghcr.io/opsknight-labs/opsknight:2.0.0`, Image Digest: `sha256:099023cbd024fac4c53435aaf2bff669f0e8bf04ba96564d3a3d62d6bdfe0d62`)  
 **Verification Date:** 2026-10-26  
 **Auditor:** Release Engineering & Site Reliability  

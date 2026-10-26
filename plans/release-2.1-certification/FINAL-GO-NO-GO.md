@@ -1,7 +1,7 @@
 # OpsKnight 2.1 — Final Release Decision & GO/NO-GO Verdict
 
 **Release Target:** OpsKnight 2.1.0  
-**Candidate Commit SHA:** `abede9203d257fafeff8c4d19ef23dc269bc8274`  
+**Candidate Commit SHA:** `ed0c46289dd9b73d0c22f3f77e800a496b2f0be3`  
 **Candidate Image Digest:** `sha256:52f31a93ad9b9e49e63cbd28e3c57bdcf82d29dd3ba4fc1e98c6346ed75c772a`  
 **Baseline Version & Digest:** `ghcr.io/opsknight-labs/opsknight:2.0.0@sha256:099023cbd024fac4c53435aaf2bff669f0e8bf04ba96564d3a3d62d6bdfe0d62`  
 **Audit Completed Date:** 2026-10-26  
@@ -12,7 +12,7 @@
 
 ## 1. Executive Verdict: CONDITIONAL GO
 
-The final release candidate for **OpsKnight 2.1.0** at commit `abede9203d257fafeff8c4d19ef23dc269bc8274` is recommended for **CONDITIONAL GO**.
+The final release candidate for **OpsKnight 2.1.0** at commit `ed0c46289dd9b73d0c22f3f77e800a496b2f0be3` is recommended for **CONDITIONAL GO**.
 
 All required P0 and P1 release gates have been certified through physical execution, live running containers, and multi-browser automation.
 
@@ -76,6 +76,6 @@ All required P0 and P1 release gates have been certified through physical execut
 
 Release authorization is conditional upon the following final release engineering actions:
 
-1. **Dashboard PR #915 Milestone:** Decide on PR #915 (live incident command center). If included, merge and verify smoke tests; if deferred, proceed with candidate `abede9203d257fafeff8c4d19ef23dc269bc8274`.
+1. **Dashboard PR #915 Incorporated:** PR #915 (live incident command center with realtime feed, Ops Pulse, and TV wallboard) has been merged into `main` (`ed0c46289`). Verified that the candidate baseline builds and runs with PR #915 included.
 2. **Version Bump:** Bump `version` in `package.json` and `appVersion` in `deploy/kubernetes/helm/opsknight/Chart.yaml` from `2.0.0` to `2.1.0`.
 3. **User PR Review:** Per global behavioral directives, PR #917 must be reviewed and merged manually by the user. Do not auto-merge.
