@@ -17,7 +17,7 @@ import {
  * keeps its room whether the panel sits beside the rail or spans the page.
  */
 export const LIVE_ROW_GRID =
-  '[@container(min-width:40rem)]:grid-cols-[5.75rem_minmax(0,1fr)_7rem_minmax(0,7rem)_5.75rem] [@container(min-width:50rem)]:grid-cols-[5.75rem_minmax(0,1fr)_6.25rem_6.75rem_minmax(0,8.25rem)_8.25rem]';
+  '[@container(min-width:40rem)]:grid-cols-[5.75rem_minmax(0,1fr)_7rem_minmax(0,7rem)_7.75rem] [@container(min-width:50rem)]:grid-cols-[5.75rem_minmax(0,1fr)_6.25rem_6.75rem_minmax(0,8.25rem)_8.25rem]';
 export const LIVE_ROW_GRID_TV = 'md:grid-cols-[6.5em_minmax(0,1fr)_7.5em_9.5em_minmax(0,10em)]';
 
 const HOUR = 3_600_000;
@@ -483,8 +483,6 @@ export const LiveIncidentRow = memo(function LiveIncidentRow({
               aria-pressed={isSelected}
               className={cn(
                 iconBtnClass,
-                // Clicking the row opens the inspector; the button only earns its space on wide panels.
-                'hidden [@container(min-width:50rem)]:inline-flex',
                 isSelected
                   ? 'border-primary bg-primary/10 text-primary'
                   : 'hover:border-primary/50 hover:text-primary'
