@@ -17,7 +17,9 @@ vi.mock('@/hooks/useRealtime', () => ({ useRealtime: () => mocks.realtime }));
 vi.mock('@/app/(app)/incidents/actions', () => ({ updateIncidentStatus: vi.fn() }));
 vi.mock('@/app/(app)/incidents/bulk-actions', () => ({}));
 
-import IncidentsListTable from '@/components/incident/IncidentsListTable';
+import IncidentsListTable, {
+  matchesRealtimeFilter,
+} from '@/components/incident/IncidentsListTable';
 
 const existing: IncidentListItem = {
   id: 'incident-1',
@@ -280,5 +282,23 @@ describe('IncidentsListTable realtime projection', () => {
 
     // Stale February incident is trimmed off because the list is bounded to 15 items
     expect(screen.queryByText('Stale February Incident')).toBeNull();
+  });
+
+  it('treats the ACTIVE pseudo-status as OPEN plus ACKNOWLEDGED', () => {
+    const raw = (status: string) => ({ ...existing, status }) as Record<string, unknown>;
+    expect(matchesRealtimeFilter(raw('OPEN'), { status: 'ACTIVE' })).toBe(true);
+    expect(matchesRealtimeFilter(raw('ACKNOWLEDGED'), { status: 'ACTIVE' })).toBe(true);
+    expect(matchesRealtimeFilter(raw('RESOLVED'), { status: 'ACTIVE' })).toBe(false);
+    expect(matchesRealtimeFilter(raw('SNOOZED'), { status: 'ACTIVE' })).toBe(false);
+    expect(matchesRealtimeFilter(raw('OPEN'), { status: 'ACKNOWLEDGED' })).toBe(false);
+  });
+
+  it('admits incidents created after page load when no explicit upper bound is set', () => {
+    const later = { ...existing, createdAt: new Date(Date.now() + 60_000) } as Record<
+      string,
+      unknown
+    >;
+    expect(matchesRealtimeFilter(later, { createdAfter: '2026-01-01T00:00:00Z' })).toBe(true);
+    expect(matchesRealtimeFilter(later, { createdBefore: new Date().toISOString() })).toBe(false);
   });
 });

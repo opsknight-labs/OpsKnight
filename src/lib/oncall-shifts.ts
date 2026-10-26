@@ -1,3 +1,4 @@
+import type { Prisma } from '@prisma/client';
 import prisma from '@/lib/prisma';
 import { buildScheduleBlocks, getFinalScheduleBlocks, type LayerRestrictions } from './oncall';
 
@@ -22,13 +23,18 @@ export interface DynamicOnCallShift {
   end: Date;
 }
 
+export type ActiveOnCallShiftsOptions = {
+  scheduleId?: string;
+  where?: Prisma.OnCallScheduleWhereInput;
+};
+
 /**
  * Resolves all active on-call shifts across all schedules for a given point in time.
  * Replaces legacy queries to the empty `OnCallShift` table with dynamic schedule rotation math.
  */
 export async function getActiveOnCallShifts(
   atTime: Date = new Date(),
-  scheduleId?: string
+  scheduleIdOrOptions?: string | ActiveOnCallShiftsOptions
 ): Promise<DynamicOnCallShift[]> {
   if (!prisma?.onCallSchedule?.findMany) {
     return [];
@@ -36,8 +42,21 @@ export async function getActiveOnCallShifts(
   const windowStart = new Date(atTime.getTime() - 24 * 60 * 60 * 1000);
   const windowEnd = new Date(atTime.getTime() + 48 * 60 * 60 * 1000);
 
+  const options: ActiveOnCallShiftsOptions | undefined =
+    typeof scheduleIdOrOptions === 'string'
+      ? { scheduleId: scheduleIdOrOptions }
+      : scheduleIdOrOptions;
+
+  const whereClause: Prisma.OnCallScheduleWhereInput | undefined = options?.where
+    ? options.scheduleId
+      ? { AND: [{ id: options.scheduleId }, options.where] }
+      : options.where
+    : options?.scheduleId
+      ? { id: options.scheduleId }
+      : undefined;
+
   const schedules = await prisma.onCallSchedule.findMany({
-    where: scheduleId ? { id: scheduleId } : undefined,
+    where: whereClause,
     include: {
       layers: {
         include: {

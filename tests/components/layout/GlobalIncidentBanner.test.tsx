@@ -23,6 +23,12 @@ const mockContextValue = {
   resumeAutoDismiss: vi.fn(),
 };
 
+let mockPathname = '/services';
+
+vi.mock('next/navigation', () => ({
+  usePathname: () => mockPathname,
+}));
+
 vi.mock('@/contexts/IncidentAlertContext', () => ({
   useIncidentAlert: () => mockContextValue,
   AUTO_DISMISS_TIMEOUT_MS: 12000,
@@ -31,6 +37,26 @@ vi.mock('@/contexts/IncidentAlertContext', () => ({
 describe('GlobalIncidentBanner', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockPathname = '/services';
+  });
+
+  it('renders null when on the dashboard home page (/)', () => {
+    mockPathname = '/';
+    mockContextValue.isBannerVisible = true;
+    mockContextValue.currentIncident = {
+      id: 'inc-p1-123',
+      title: 'Payment Gateway Down',
+      status: 'OPEN',
+      priority: 'P1',
+      urgency: 'HIGH',
+      createdAt: new Date(Date.now() - 600000).toISOString(),
+      service: { id: 'svc-payments', name: 'Payments API' },
+    };
+    mockContextValue.totalCount = 1;
+    mockContextValue.currentIndex = 0;
+
+    const { container } = render(<GlobalIncidentBanner />);
+    expect(container.firstChild).toBeNull();
   });
 
   it('renders null when isBannerVisible is false or currentIncident is null', () => {

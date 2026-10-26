@@ -333,9 +333,77 @@ jobs:
             test-results/
           if-no-files-found: ignore
 
+  dashboard-e2e:
+    name: Live Dashboard browser certification (L3)
+    needs: [build]
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: opsknight_dashboard
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres -d opsknight_dashboard"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/opsknight_dashboard?schema=public
+      DIRECT_URL: postgresql://postgres:postgres@127.0.0.1:5432/opsknight_dashboard?schema=public
+      NEXTAUTH_URL: http://127.0.0.1:3100
+      NEXT_PUBLIC_APP_URL: http://127.0.0.1:3100
+      NEXTAUTH_SECRET: opsknight-e2e-session-signing-secret-7c41d9e2b8
+      API_KEY_SECRET: opsknight-e2e-api-key-secret-independent-32chars
+      ENCRYPTION_KEY: 68112f544b2c8b0f84436ea34293f733c33e49b41e657b9db0275f5edf09c7ba
+      AUTH_TRUST_HOST: 'true'
+      HUSKY: '0'
+      PLAYWRIGHT_PRODUCTION_SERVER: 'true'
+      DASHBOARD_SEED_ALLOW_DB: opsknight_dashboard
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Node & dependencies
+        uses: ./.github/actions/setup-node
+        with:
+          node-version: 20
+          generate-prisma: 'true'
+
+      - name: Restore application build artifact
+        uses: ./.github/actions/restore-build
+        with:
+          artifact-name: next-build-artifact
+
+      - name: Prepare dashboard-test database
+        uses: ./.github/actions/setup-test-db
+        with:
+          run-smoke: 'false'
+          run-validation: 'false'
+
+      - name: Seed baseline dashboard scenario
+        run: npx ts-node --project tsconfig.script.json scripts/dev/seed-dashboard-live.ts --scenario=busy
+
+      - name: Run Dashboard Playwright certification matrix
+        run: bash scripts/ci/playwright-in-container.sh -c playwright.dashboard.config.ts
+
+      - name: Upload Dashboard Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dashboard-playwright-report
+          path: |
+            playwright-report/
+            test-results/
+          if-no-files-found: ignore
+
   test:
     runs-on: ubuntu-latest
-    needs: [fast-validation, build, db-integration, auth-e2e, mobile-e2e]
+    needs: [fast-validation, build, db-integration, auth-e2e, mobile-e2e, dashboard-e2e]
     if: always()
     steps:
       - name: Checkout
@@ -370,6 +438,7 @@ jobs:
           DB_STATUS: ${{ needs.db-integration.result }}
           AUTH_STATUS: ${{ needs.auth-e2e.result }}
           MOBILE_STATUS: ${{ needs.mobile-e2e.result }}
+          DASHBOARD_STATUS: ${{ needs.dashboard-e2e.result }}
         run: |
           node - <<'NODE'
           const fs = require('fs');
@@ -461,7 +530,8 @@ jobs:
                               process.env.BUILD_STATUS === 'success' &&
                               process.env.DB_STATUS === 'success' &&
                               process.env.AUTH_STATUS === 'success' &&
-                              process.env.MOBILE_STATUS === 'success';
+                              process.env.MOBILE_STATUS === 'success' &&
+                              process.env.DASHBOARD_STATUS === 'success';
 
             const suiteOk = hasTests && (totals.failures === 0 && totals.errors === 0);
             gateStatus = (prereqsOk && suiteOk) ? 'success' : 'failure';
@@ -475,6 +545,7 @@ jobs:
               `- **Database integration**: ${process.env.DB_STATUS === 'success' ? '✅ Passed' : '❌ Failed'}`,
               `- **Auth browser E2E**: ${process.env.AUTH_STATUS === 'success' ? '✅ Passed' : '❌ Failed'}`,
               `- **Mobile & PWA browser E2E**: ${process.env.MOBILE_STATUS === 'success' ? '✅ Passed' : '❌ Failed'}`,
+              `- **Live Dashboard browser certification**: ${process.env.DASHBOARD_STATUS === 'success' ? '✅ Passed' : '❌ Failed'}`,
             ];
 
             for (const shard of [1, 2]) {

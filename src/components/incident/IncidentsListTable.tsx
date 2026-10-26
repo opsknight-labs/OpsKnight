@@ -250,7 +250,7 @@ function sortIncidents(items: IncidentListItem[], sort: string = 'newest'): Inci
   });
 }
 
-function matchesRealtimeFilter(
+export function matchesRealtimeFilter(
   raw: Record<string, unknown>,
   filter: NonNullable<IncidentsListTableProps['realtimeFilter']>
 ): boolean {
@@ -274,11 +274,7 @@ function matchesRealtimeFilter(
     !['OPEN', 'ACKNOWLEDGED'].includes(status)
   )
     return false;
-  if (
-    filterName === 'critical_focus' &&
-    raw.urgency !== 'HIGH' &&
-    raw.priority !== 'P1'
-  )
+  if (filterName === 'critical_focus' && raw.urgency !== 'HIGH' && raw.priority !== 'P1')
     return false;
   if (filterName === 'muted' && !['SNOOZED', 'SUPPRESSED'].includes(status)) return false;
   const namedStatus =
@@ -294,7 +290,10 @@ function matchesRealtimeFilter(
               ? 'SUPPRESSED'
               : null;
   if (namedStatus && status !== namedStatus) return false;
-  if (filter.status && status !== filter.status) return false;
+  // ACTIVE is a dashboard pseudo-status (OPEN + ACKNOWLEDGED), never a stored value.
+  if (filter.status === 'ACTIVE') {
+    if (!['OPEN', 'ACKNOWLEDGED'].includes(status)) return false;
+  } else if (filter.status && status !== filter.status) return false;
   if (filter.serviceId && serviceId !== filter.serviceId) return false;
   if (
     filter.assignee !== undefined &&
@@ -364,13 +363,16 @@ export default function IncidentsListTable({
 
   // Local displayed list for instant optimistic real-time updates
   const [displayedIncidents, setDisplayedIncidents] = useState<IncidentListItem[]>(incidents);
-  const displayedIncidentIdsRef = useRef<Set<string>>(new Set(incidents.map(i => i.id)));
-  displayedIncidentIdsRef.current = new Set(displayedIncidents.map(incident => incident.id));
-
-  // Sync displayed incidents whenever props.incidents updates from the server
-  useEffect(() => {
+  const [prevIncidents, setPrevIncidents] = useState<IncidentListItem[]>(incidents);
+  if (prevIncidents !== incidents) {
+    setPrevIncidents(incidents);
     setDisplayedIncidents(incidents);
-  }, [incidents]);
+  }
+
+  const displayedIncidentIdsRef = useRef<Set<string>>(new Set(incidents.map(i => i.id)));
+  useEffect(() => {
+    displayedIncidentIdsRef.current = new Set(displayedIncidents.map(incident => incident.id));
+  }, [displayedIncidents]);
 
   const handleStatusChange = useCallback(
     async (incidentId: string, status: IncidentStatus) => {
@@ -409,7 +411,12 @@ export default function IncidentsListTable({
   const rowRefs = useRef<Map<number, HTMLDivElement>>(new Map());
   const lastGTimeRef = useRef<number>(0);
 
-  const mountedAtRef = useRef<number>(Date.now());
+  const mountedAtRef = useRef<number>(0);
+  useEffect(() => {
+    if (!mountedAtRef.current) {
+      mountedAtRef.current = Date.now();
+    }
+  }, []);
   const isPageOne = !pagination || pagination.currentPage === 1;
   const maxItems = pagination?.itemsPerPage ?? Math.max(incidents.length, 15);
   const activeSort = realtimeFilter.sort || 'newest';

@@ -56,23 +56,23 @@ const CompactTeamLoad = memo(function CompactTeamLoad({ assigneeLoad }: CompactT
           Number.isFinite(a.count) &&
           a.count > 0
       )
-      .slice(0, 5);
+      .slice(0, 10);
   }, [assigneeLoad]);
 
   if (activeAssignees.length === 0) {
     return (
       <div
-        className="p-3.5 rounded-sm bg-neutral-50 border border-border text-center"
+        className="flex h-full min-h-[140px] flex-col items-center justify-center rounded-lg border border-dashed border-border bg-muted/20 p-4 text-center"
         role="status"
         aria-label="No active assignments"
       >
-        <div className="text-sm text-muted-foreground font-medium">No active assignments</div>
+        <div className="text-xs font-medium text-muted-foreground">No active assignments</div>
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col gap-1.5" role="list" aria-label="Team incident load">
+    <div className="flex flex-col gap-2" role="list" aria-label="Team incident load">
       {activeAssignees.map(assignee => {
         const displayName = getDisplayName(assignee.name);
         const loadColor = getLoadColor(assignee.count);
@@ -82,16 +82,16 @@ const CompactTeamLoad = memo(function CompactTeamLoad({ assigneeLoad }: CompactT
         return (
           <div
             key={assignee.id}
-            className="flex flex-col gap-2 p-2.5 rounded-lg bg-white dark:bg-[#121216] border border-border hover:border-slate-300 dark:hover:border-zinc-700 shadow-2xs transition-all"
+            className="flex flex-col gap-2 rounded-lg border border-border bg-card p-2.5 shadow-2xs transition-all hover:border-slate-300 dark:bg-[#121216] dark:hover:border-zinc-700"
             role="listitem"
             aria-label={`${displayName}: ${assignee.count} incidents, ${loadLabel}`}
           >
             <div className="flex items-center justify-between">
               {/* Name */}
-              <div className="flex items-center gap-2 flex-1 min-w-0">
+              <div className="flex min-w-0 flex-1 items-center gap-2">
                 <UserAvatar userId={assignee.id} name={assignee.name} size="xs" />
                 <span
-                  className="text-xs font-semibold text-slate-800 dark:text-zinc-200 whitespace-nowrap overflow-hidden overflow-ellipsis"
+                  className="truncate text-xs font-semibold text-foreground"
                   title={displayName}
                 >
                   {displayName}
@@ -99,7 +99,7 @@ const CompactTeamLoad = memo(function CompactTeamLoad({ assigneeLoad }: CompactT
               </div>
               {/* Count badge */}
               <div
-                className="py-0.5 px-2 rounded-full text-white text-xs font-bold min-w-[20px] text-center tabular-nums shadow-2xs"
+                className="min-w-[20px] rounded-full px-2 py-0.5 text-center font-mono text-[11px] font-bold tabular-nums text-white shadow-2xs"
                 style={{ background: loadColor }}
                 aria-label={`${assignee.count} incidents`}
               >
@@ -107,7 +107,7 @@ const CompactTeamLoad = memo(function CompactTeamLoad({ assigneeLoad }: CompactT
               </div>
             </div>
             {/* Progress bar */}
-            <div className="h-1.5 w-full bg-slate-100 dark:bg-zinc-800 rounded-full overflow-hidden">
+            <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
               <div
                 className="h-full rounded-full transition-all duration-300"
                 style={{

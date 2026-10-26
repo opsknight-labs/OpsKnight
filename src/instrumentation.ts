@@ -15,6 +15,14 @@ let stopIntegratedRunbookWorkerService: (() => Promise<void>) | null = null;
 let shutdownPromise: Promise<void> | null = null;
 
 async function stopRuntimeServices(): Promise<void> {
+  // Release realtime streams first: refuse new ones, then close open ones spread over a few
+  // seconds so their browsers reconnect to surviving replicas without a synchronized storm.
+  try {
+    const { drainRealtimeStreams } = await import('./lib/realtime-stream-registry');
+    drainRealtimeStreams();
+  } catch (error) {
+    console.error('[Runtime] Realtime stream drain failed', error);
+  }
   const stops: Promise<void>[] = [];
   if (authenticationHeartbeat) clearInterval(authenticationHeartbeat);
   authenticationHeartbeat = null;

@@ -242,3 +242,49 @@ textarea:focus-visible {
 *:focus:not(:focus-visible) {
     outline: none;
 }
+
+/*
+ * Dashboard heading roles. The responsive h1-h3 rules in layouts/topbar.css
+ * are !important with long :not() chains, so these use !important plus an
+ * ID-weight :not() to keep dashboard type sizes deterministic.
+ */
+.dash-heading:not(#dash-specificity) {
+    font-size: 0.9375rem !important;
+    font-weight: 600 !important;
+    letter-spacing: -0.01em !important;
+    line-height: 1.25 !important;
+    color: var(--text-primary);
+}
+
+.dash-heading-sm:not(#dash-specificity) {
+    font-size: 0.875rem !important;
+    font-weight: 600 !important;
+    letter-spacing: -0.005em !important;
+    line-height: 1.25 !important;
+    color: var(--text-primary);
+}
+
+.dash-eyebrow:not(#dash-specificity) {
+    font-size: 0.6875rem !important;
+    font-weight: 600 !important;
+    letter-spacing: 0.06em !important;
+    line-height: 1.2 !important;
+    text-transform: uppercase !important;
+    color: var(--text-secondary, #64748b);
+}
+
+.dash-hero-title:not(#dash-specificity) {
+    font-size: clamp(1.5rem, 2.2vw, 1.75rem) !important;
+    font-weight: 700 !important;
+    letter-spacing: -0.03em !important;
+    line-height: 1 !important;
+    color: var(--foreground, #0f172a);
+}
+
+.dash-wallboard-title:not(#dash-specificity) {
+    font-size: clamp(20px, 1.9vw, 56px) !important;
+    font-weight: 800 !important;
+    letter-spacing: -0.03em !important;
+    line-height: 1.05 !important;
+    color: #fff;
+}

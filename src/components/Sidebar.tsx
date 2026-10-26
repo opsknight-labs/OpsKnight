@@ -77,7 +77,7 @@ export default function Sidebar({
   const pathname = usePathname();
   const { data: session } = useSession();
   const { isCollapsed, isMobile, isMobileOpen, closeMobile } = useSidebar();
-  const { metrics: realtimeMetrics } = useRealtime();
+  const { activeIncidentCount } = useRealtime();
 
   // Prefer client session data for reactive updates
   const currentName = session?.user?.name || userName;
@@ -86,7 +86,7 @@ export default function Sidebar({
   const currentGender = (session?.user as { gender?: string } | undefined)?.gender || userGender;
 
   const activeCount =
-    typeof realtimeMetrics?.active === 'number' ? realtimeMetrics.active : initialActiveCount;
+    typeof activeIncidentCount === 'number' ? activeIncidentCount : initialActiveCount;
   const stats = typeof activeCount === 'number' ? { count: activeCount } : null;
   const statusPages = initialStatusPages;
   const isStatusPageAdmin = initialIsStatusPageAdmin;

@@ -1,6 +1,14 @@
 import { render, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { DashboardAnalyticsProvider } from '@/components/dashboard/DashboardAnalyticsProvider';
+import {
+  DashboardAnalyticsProvider,
+  useActivateDashboardAnalytics,
+} from '@/components/dashboard/DashboardAnalyticsProvider';
+
+function Activate({ enabled = true }: { enabled?: boolean }) {
+  useActivateDashboardAnalytics(enabled);
+  return null;
+}
 
 const response = {
   data: {
@@ -35,9 +43,26 @@ describe('DashboardAnalyticsProvider', () => {
     vi.useRealTimers();
   });
 
+  it('requests nothing until the history section activates it', async () => {
+    const view = render(
+      <DashboardAnalyticsProvider query={{ range: '30' }}>
+        <Activate enabled={false} />
+      </DashboardAnalyticsProvider>
+    );
+    await vi.advanceTimersByTimeAsync(10 * 60_000);
+    expect(fetch).not.toHaveBeenCalled();
+    view.rerender(
+      <DashboardAnalyticsProvider query={{ range: '30' }}>
+        <Activate enabled />
+      </DashboardAnalyticsProvider>
+    );
+    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
+  });
+
   it('loads once and does not poll every 30 seconds', async () => {
     render(
       <DashboardAnalyticsProvider query={{ range: '30' }}>
+        <Activate />
         <div>dashboard</div>
       </DashboardAnalyticsProvider>
     );
@@ -60,6 +85,7 @@ describe('DashboardAnalyticsProvider', () => {
       } as unknown as Response);
     render(
       <DashboardAnalyticsProvider query={{ range: '30' }}>
+        <Activate />
         <div>dashboard</div>
       </DashboardAnalyticsProvider>
     );
@@ -72,6 +98,7 @@ describe('DashboardAnalyticsProvider', () => {
     vi.spyOn(Math, 'random').mockReturnValue(0);
     render(
       <DashboardAnalyticsProvider query={{ range: '30' }}>
+        <Activate />
         <div>dashboard</div>
       </DashboardAnalyticsProvider>
     );

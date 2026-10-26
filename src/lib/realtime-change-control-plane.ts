@@ -21,7 +21,6 @@ type ControlPlaneState = {
 };
 
 declare global {
-  // eslint-disable-next-line no-var
   var realtimeChangeControlPlaneGlobal: ControlPlaneState | undefined;
 }
 
@@ -152,6 +151,77 @@ export async function getRealtimeChangeGeneration(): Promise<string | null> {
   return state.initialRead;
 }
 
+/**
+ * Returns a generation that is at least `minimum`. Clients pass the generation they learned
+ * from SSE; when this replica's poller lags behind (or has no subscribers), the durable clock
+ * is read directly so a generation-keyed cache can never serve a pre-change projection.
+ */
+const FRESH_READ_MEMO_MS = 250;
+let freshRead: Promise<{ generation: bigint; changedAt: Date }> | null = null;
+let freshReadAt = 0;
+let freshReadResult: { generation: bigint; changedAt: Date } | null = null;
+
+/**
+ * Concurrent API requests on a replica without stream subscribers share one clock read, and a
+ * result younger than the memo window is reused when it already satisfies `minimum`.
+ */
+async function readClockShared(minimum: bigint | null) {
+  if (
+    freshReadResult &&
+    Date.now() - freshReadAt < FRESH_READ_MEMO_MS &&
+    (minimum === null || freshReadResult.generation >= minimum)
+  ) {
+    return freshReadResult;
+  }
+  if (!freshRead) {
+    freshRead = readClock()
+      .then(clock => {
+        freshReadResult = clock;
+        freshReadAt = Date.now();
+        return clock;
+      })
+      .finally(() => {
+        freshRead = null;
+      });
+  }
+  const clock = await freshRead;
+  // A read that began before `minimum` was published cannot satisfy it; read again.
+  if (minimum !== null && clock.generation < minimum) {
+    freshReadResult = null;
+    return readClock();
+  }
+  return clock;
+}
+
+export async function getRealtimeChangeGenerationAtLeast(
+  minimum: string | null
+): Promise<string | null> {
+  // Without local subscribers there is no poller to lean on: skip the separate baseline read
+  // and go straight to the shared fresh read.
+  const current =
+    state.listeners.size === 0
+      ? (state.lastObservedGeneration?.toString() ?? null)
+      : await getRealtimeChangeGeneration();
+  const needsFreshRead =
+    state.listeners.size === 0 ||
+    (minimum !== null && (current === null || BigInt(current) < BigInt(minimum)));
+  if (!needsFreshRead) return current;
+  try {
+    const clock = await readClockShared(minimum === null ? null : BigInt(minimum));
+    if (state.lastObservedGeneration === null || clock.generation > state.lastObservedGeneration) {
+      state.lastObservedGeneration = clock.generation;
+      state.lastChangedAt = clock.changedAt.getTime();
+    }
+    return clock.generation.toString();
+  } catch (error) {
+    addOperationalMetric('opsknight_realtime_clock_errors_total', 1);
+    logger.warn('realtime.change_clock_fresh_read_failed', {
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return current;
+  }
+}
+
 /** One database poller per process fans durable changes out to every local SSE subscriber. */
 export function subscribeToRealtimeChanges(
   stream: RealtimeStreamKind,
@@ -195,6 +265,9 @@ export function getRealtimeControlPlaneStatus() {
 }
 
 export function resetRealtimeControlPlaneForTests(): void {
+  freshRead = null;
+  freshReadAt = 0;
+  freshReadResult = null;
   if (state.timer) clearTimeout(state.timer);
   state.listeners.clear();
   state.timer = null;

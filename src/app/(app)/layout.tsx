@@ -24,7 +24,7 @@ import CreateIncidentModal from '@/components/incident/CreateIncidentModal';
 import BrandLockup from '@/components/layout/BrandLockup';
 import SidebarTrigger from '@/components/layout/SidebarTrigger';
 import AppHeader from '@/components/layout/AppHeader';
-import { RealtimeProvider } from '@/hooks/useRealtime';
+import { RouteAwareRealtimeProvider } from '@/hooks/useRealtime';
 import { IncidentAlertProvider } from '@/contexts/IncidentAlertContext';
 import GlobalIncidentBanner from '@/components/layout/GlobalIncidentBanner';
 import ContentScrollReset from '@/components/layout/ContentScrollReset';
@@ -112,7 +112,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           >
             <SidebarProvider>
               <IncidentCreationModalProvider>
-                <RealtimeProvider>
+                <RouteAwareRealtimeProvider>
                   <IncidentAlertProvider>
                     <GlobalKeyboardHandlerWrapper />
                     <SkipLinks />
@@ -176,7 +176,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
                     </div>
                     <CreateIncidentModal />
                   </IncidentAlertProvider>
-                </RealtimeProvider>
+                </RouteAwareRealtimeProvider>
               </IncidentCreationModalProvider>
             </SidebarProvider>
           </UserAvatarProvider>

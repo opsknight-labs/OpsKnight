@@ -7,18 +7,43 @@ import {
   getRequestStreamAuthentication,
   hasSameStreamAuthorizationScope,
   resolveStreamAuthorization,
+  resolveStreamAuthorizationCoalesced,
   type StreamAuthorization,
 } from '@/lib/realtime-stream-authorization';
 import {
   getRealtimeChangeGeneration,
   subscribeToRealtimeChanges,
 } from '@/lib/realtime-change-control-plane';
+import {
+  isRealtimeDraining,
+  recordRealtimeStreamClosed,
+  registerRealtimeStream,
+  type StreamCloseReason,
+} from '@/lib/realtime-stream-registry';
+
+const HEARTBEAT_MS = 15_000;
+// Spread authorization rechecks so thousands of streams opened together do not re-validate in
+// lockstep. The revocation bound stays below HEARTBEAT_MS + HEARTBEAT_JITTER_MS.
+const HEARTBEAT_JITTER_MS = 2_000;
+// A consumer that stops reading accumulates queued chunks in server memory. Past this depth the
+// stream is closed; the client reconnects and re-reads authoritative state.
+const MAX_QUEUED_CHUNKS = 64;
 
 /**
- * Server-Sent Events (SSE) endpoint for real-time updates
- * Streams incident updates, dashboard metrics, and service status changes
+ * Server-Sent Events (SSE) endpoint for real-time updates.
+ *
+ * `?mode=signal` subscribers (always-on displays) receive only compact `changed` generation
+ * signals and heartbeats; they read incident data from their own authorized API. The default
+ * mode additionally streams the legacy incident and metrics projections used across the console.
  */
 export async function GET(req: NextRequest) {
+  // A draining replica refuses new streams so load balancers and browsers move to a live one.
+  if (isRealtimeDraining()) {
+    return new Response('Server is shutting down', {
+      status: 503,
+      headers: { 'Retry-After': '5' },
+    });
+  }
   try {
     // Get current user for authorization
     const user = await getCurrentUser();
@@ -35,6 +60,7 @@ export async function GET(req: NextRequest) {
       return new Response('Unauthorized', { status: 401 });
     }
     let streamAuthorization: StreamAuthorization = initialAuthorization;
+    const signalOnly = req.nextUrl.searchParams.get('mode') === 'signal';
 
     let cleanup: () => void = () => {};
 
@@ -44,17 +70,21 @@ export async function GET(req: NextRequest) {
         const encoder = new TextEncoder();
         let isClosed = false;
 
-        let heartbeatInterval: NodeJS.Timeout | null = null;
+        let heartbeatTimer: NodeJS.Timeout | null = null;
+        let closeReason: StreamCloseReason = 'client';
+        let unregister: () => void = () => {};
         let unsubscribeChanges: () => void = () => {};
         let isPolling = false;
         let pendingGeneration: string | null | undefined;
 
         cleanup = () => {
+          if (!isClosed) recordRealtimeStreamClosed(closeReason);
           isClosed = true;
+          unregister();
           unsubscribeChanges();
-          if (heartbeatInterval) {
-            clearInterval(heartbeatInterval);
-            heartbeatInterval = null;
+          if (heartbeatTimer) {
+            clearTimeout(heartbeatTimer);
+            heartbeatTimer = null;
           }
           try {
             controller.close();
@@ -72,8 +102,17 @@ export async function GET(req: NextRequest) {
           if (!isClosed) {
             try {
               controller.enqueue(encoder.encode(`data: ${data}\n\n`));
+              if ((controller.desiredSize ?? 0) < -MAX_QUEUED_CHUNKS) {
+                logger.warn('realtime.slow_consumer_closed', {
+                  component: 'api-realtime-stream',
+                  userId: user.id,
+                });
+                closeReason = 'slow_consumer';
+                cleanup();
+              }
             } catch (error) {
               logger.error('Error sending SSE data', { component: 'api-realtime-stream', error });
+              closeReason = 'error';
               cleanup();
             }
           }
@@ -89,6 +128,17 @@ export async function GET(req: NextRequest) {
             return;
           }
           isPolling = true;
+          // Lightweight, level-triggered invalidation signal for projections that reconcile
+          // through their own authorized read path (e.g. the dashboard live feed).
+          if (generation !== null && /^\d+$/.test(generation)) {
+            send(
+              JSON.stringify({ type: 'changed', generation, timestamp: new Date().toISOString() })
+            );
+          }
+          if (signalOnly) {
+            isPolling = false;
+            return;
+          }
           try {
             const incidentResult = await getCachedRecentIncidents(
               user.id,
@@ -166,6 +216,10 @@ export async function GET(req: NextRequest) {
           cleanup();
           return;
         }
+        unregister = registerRealtimeStream(signalOnly ? 'signal' : 'full', reason => {
+          closeReason = reason;
+          cleanup();
+        });
 
         // Establish a durable generation baseline, load the initial projection,
         // then subscribe this connection to the process-wide change fanout.
@@ -179,12 +233,12 @@ export async function GET(req: NextRequest) {
         );
 
         // Heartbeats keep proxies and session presence alive. Authorization and session
-        // revocation are revalidated on every 15s heartbeat interval (bounded delay <= 15s).
-        heartbeatInterval = setInterval(async () => {
+        // revocation are revalidated on every heartbeat (bounded delay <= 17s).
+        const beat = async () => {
           if (isClosed) return;
           send(JSON.stringify({ type: 'heartbeat', timestamp: new Date().toISOString() }));
           try {
-            const nextAuthorization = await resolveStreamAuthorization(
+            const nextAuthorization = await resolveStreamAuthorizationCoalesced(
               user.id,
               expectedTokenVersion,
               sessionJti,
@@ -195,6 +249,7 @@ export async function GET(req: NextRequest) {
               !hasSameStreamAuthorizationScope(streamAuthorization, nextAuthorization)
             ) {
               send(JSON.stringify({ type: 'authorization_revoked' }));
+              closeReason = 'revoked';
               cleanup();
               return;
             }
@@ -206,10 +261,20 @@ export async function GET(req: NextRequest) {
             });
             // Fail closed: terminate stream on authorization recheck failure
             send(JSON.stringify({ type: 'authorization_revoked' }));
+            closeReason = 'revoked';
             cleanup();
             return;
           }
-        }, 15_000);
+          scheduleBeat();
+        };
+        const scheduleBeat = () => {
+          if (isClosed) return;
+          heartbeatTimer = setTimeout(
+            () => void beat(),
+            HEARTBEAT_MS + Math.floor(Math.random() * HEARTBEAT_JITTER_MS)
+          );
+        };
+        scheduleBeat();
 
         // Clean up on client disconnect
       },

@@ -5,6 +5,8 @@ import { cn } from '@/lib/utils';
 
 type LiveClockProps = {
   timeZone?: string;
+  /** `plain` renders quiet inline text for dense headers. */
+  variant?: 'badge' | 'plain';
 };
 
 /**
@@ -24,7 +26,7 @@ function isValidTimeZone(tz: string): boolean {
  * Displays a live-updating clock with timezone support
  * Redesigned to match dark-themed "hacker" aesthetic
  */
-const LiveClock = memo(function LiveClock({ timeZone = 'UTC' }: LiveClockProps) {
+const LiveClock = memo(function LiveClock({ timeZone = 'UTC', variant = 'badge' }: LiveClockProps) {
   const [time, setTime] = useState<string | null>(null);
   const [isMounted, setIsMounted] = useState(false);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
@@ -66,6 +68,19 @@ const LiveClock = memo(function LiveClock({ timeZone = 'UTC' }: LiveClockProps) 
       }
     };
   }, [formatTime]);
+
+  if (variant === 'plain') {
+    return (
+      <span
+        className="font-mono text-[13px] tabular-nums text-zinc-400"
+        role="timer"
+        aria-label={time ? `Current time: ${time}` : 'Loading clock'}
+      >
+        {time ?? '--:--:--'}
+        {timeZone === 'UTC' ? <span className="ml-1.5 text-zinc-600">UTC</span> : null}
+      </span>
+    );
+  }
 
   // Loading state matching mounted dimensions and typography
   if (!isMounted || time === null) {

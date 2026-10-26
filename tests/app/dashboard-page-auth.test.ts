@@ -18,53 +18,21 @@ vi.mock('@/lib/request-actor-context', () => ({
 vi.mock('@/lib/prisma', () => ({
   __esModule: true,
   default: {
-    service: {
-      findMany: vi.fn().mockResolvedValue([]),
-    },
-    user: {
-      findMany: vi.fn().mockResolvedValue([]),
-    },
+    service: { findMany: vi.fn().mockResolvedValue([]) },
+    team: { findMany: vi.fn().mockResolvedValue([]) },
   },
 }));
 
-vi.mock('@/lib/dashboard/dashboard-operational-snapshot', () => ({
-  getDashboardOperationalSnapshot: vi.fn().mockResolvedValue({
-    previewIncidents: [],
-    recentIncidents: [],
-    criticalFocus: [],
-    myQueue: [],
-    myQueueCount: 0,
-    slaBreachAlerts: [],
-    serviceLoads: [],
-    currentShifts: [],
-    totalInRange: 0,
-    resolvedInRange: 0,
-    effectiveStart: new Date(),
-    effectiveEnd: new Date(),
-    asOf: new Date().toISOString(),
-    activeCount: 0,
-    criticalCount: 0,
-    metrics: {
-      open: 0,
-      acknowledged: 0,
-      resolved: 0,
-      critical: 0,
-      mediumUrgency: 0,
-      lowUrgency: 0,
-      active: 0,
-      isClipped: false,
-      retentionDays: 30,
-      snoozed: 0,
-      suppressed: 0,
-      unassigned: 0,
-    },
-  }),
+vi.mock('@/lib/dashboard/live-incidents', () => ({
+  getLiveDashboardSnapshot: vi.fn().mockResolvedValue(null),
 }));
 
-vi.mock('@/lib/access-context', () => ({
-  resolveAccessContext: vi.fn().mockResolvedValue({
-    canCreateIncidents: true,
-  }),
+vi.mock('@/lib/realtime-change-control-plane', () => ({
+  getRealtimeChangeGeneration: vi.fn().mockResolvedValue('1'),
+}));
+
+vi.mock('@/lib/realtime-cache', () => ({
+  getCachedDashboardMetrics: vi.fn().mockResolvedValue(null),
 }));
 
 describe('Dashboard Page Auth Boundary', () => {

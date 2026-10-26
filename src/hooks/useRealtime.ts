@@ -4,12 +4,15 @@ import {
   createContext,
   createElement,
   Fragment,
+  useCallback,
   useContext,
   useEffect,
+  useMemo,
   useState,
   useRef,
   type ReactNode,
 } from 'react';
+import { usePathname } from 'next/navigation';
 import { logger } from '@/lib/logger';
 import {
   notifySessionExpired,
@@ -34,6 +37,7 @@ export type RealtimeEvent =
       timestamp: string;
     }
   | { type: 'heartbeat'; timestamp: string }
+  | { type: 'changed'; generation: string; timestamp: string }
   | { type: 'authorization_revoked' }
   | { type: 'error'; message: string; timestamp: string };
 
@@ -52,13 +56,28 @@ export type RealtimeMetrics = {
 
 export type RealtimeIncident = Record<string, unknown>;
 
-function useRealtimeConnection() {
+/**
+ * `full` keeps the legacy incident/metrics payloads used across the console. `signal` receives
+ * only compact change signals (generation + heartbeat); the subscriber reads authoritative data
+ * from its own authorized API. Always-on displays use `signal`.
+ */
+export type RealtimeMode = 'full' | 'signal';
+
+function useRealtimeConnection(mode: RealtimeMode) {
   const [isConnected, setIsConnected] = useState(false);
   const [metrics, setMetrics] = useState<RealtimeMetrics | null>(null);
   const [recentIncidents, setRecentIncidents] = useState<RealtimeIncident[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [reconnectTrigger, setReconnectTrigger] = useState(0);
   const [revision, setRevision] = useState(0);
+  // Bumps on every successful (re)connect so consumers can re-fetch canonical state.
+  const [connectionEpoch, setConnectionEpoch] = useState(0);
+  const [lastMessageAt, setLastMessageAt] = useState<number | null>(null);
+  const [isRevoked, setIsRevoked] = useState(false);
+  // Durable change generation and a counter that bumps on every `changed` signal. Kept apart
+  // from `revision` so route-refresh consumers are not triggered by every change.
+  const [changeGeneration, setChangeGeneration] = useState<string | null>(null);
+  const [changeCount, setChangeCount] = useState(0);
   const eventSourceRef = useRef<EventSource | null>(null);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const reconnectAttempts = useRef(0);
@@ -105,7 +124,8 @@ function useRealtimeConnection() {
 
   useEffect(() => {
     let mounted = true;
-    authorizationRevoked.current = false;
+    // A revoked session stays revoked across mode changes and reconnects; only a fresh page load
+    // after signing in again (a new provider instance) may open the stream again.
 
     const connect = () => {
       if (
@@ -118,7 +138,9 @@ function useRealtimeConnection() {
       }
 
       try {
-        const eventSource = new EventSource('/api/realtime/stream');
+        const eventSource = new EventSource(
+          mode === 'signal' ? '/api/realtime/stream?mode=signal' : '/api/realtime/stream'
+        );
         eventSourceRef.current = eventSource;
 
         eventSource.onopen = () => {
@@ -127,6 +149,8 @@ function useRealtimeConnection() {
           setError(null);
           reconnectAttempts.current = 0;
           lastEventAt.current = Date.now();
+          setLastMessageAt(lastEventAt.current);
+          setConnectionEpoch(value => value + 1);
         };
 
         eventSource.onmessage = event => {
@@ -135,6 +159,7 @@ function useRealtimeConnection() {
           try {
             const data: RealtimeEvent = JSON.parse(event.data);
             lastEventAt.current = Date.now();
+            setLastMessageAt(lastEventAt.current);
 
             switch (data.type) {
               case 'connected':
@@ -150,11 +175,16 @@ function useRealtimeConnection() {
                 break;
               case 'heartbeat':
                 break;
+              case 'changed':
+                setChangeGeneration(data.generation);
+                setChangeCount(value => value + 1);
+                break;
               case 'error':
                 setError(data.message);
                 break;
               case 'authorization_revoked':
                 authorizationRevoked.current = true;
+                setIsRevoked(true);
                 eventSource.close();
                 eventSourceRef.current = null;
                 setIsConnected(false);
@@ -178,6 +208,7 @@ function useRealtimeConnection() {
             if (!mounted || authorizationRevoked.current) return;
             if (isTerminalSessionError(result)) {
               authorizationRevoked.current = true;
+              setIsRevoked(true);
               setError('Real-time authorization was revoked. Sign in again to reconnect.');
               notifySessionExpired();
               return;
@@ -205,7 +236,7 @@ function useRealtimeConnection() {
       eventSourceRef.current = null;
       if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
     };
-  }, [reconnectTrigger]);
+  }, [reconnectTrigger, mode]);
 
   return {
     isConnected,
@@ -213,21 +244,66 @@ function useRealtimeConnection() {
     recentIncidents,
     error,
     revision,
+    connectionEpoch,
+    lastMessageAt,
+    isRevoked,
+    changeGeneration,
+    changeCount,
   };
 }
 
-type RealtimeContextValue = ReturnType<typeof useRealtimeConnection>;
-const RealtimeContext = createContext<RealtimeContextValue | null>(null);
+/**
+ * What a screen that reads its own authorized data can feed back to the console-wide consumers
+ * (global critical alerts, sidebar badge) while the stream runs in signal-only mode, so those
+ * features keep working without every stream also carrying the legacy incident/metrics payloads.
+ */
+export type RealtimeProjection = {
+  recentIncidents: RealtimeIncident[];
+  activeIncidentCount: number | null;
+};
 
-function RealtimeRootProvider({ children }: { children: ReactNode }) {
-  const value = useRealtimeConnection();
-  return createElement(RealtimeContext.Provider, { value }, children);
+type RealtimeContextValue = ReturnType<typeof useRealtimeConnection> & {
+  mode: RealtimeMode;
+  /** Active incidents visible to the viewer: from the stream in `full`, from the screen in `signal`. */
+  activeIncidentCount: number | null;
+};
+const RealtimeContext = createContext<RealtimeContextValue | null>(null);
+const RealtimePublishContext = createContext<
+  ((projection: RealtimeProjection | null) => void) | null
+>(null);
+
+function RealtimeRootProvider({ children, mode }: { children?: ReactNode; mode: RealtimeMode }) {
+  const connection = useRealtimeConnection(mode);
+  const [projection, setProjection] = useState<RealtimeProjection | null>(null);
+  const publish = useCallback((next: RealtimeProjection | null) => setProjection(next), []);
+  const value = useMemo<RealtimeContextValue>(() => {
+    const fromScreen = mode === 'signal' ? projection : null;
+    return {
+      ...connection,
+      mode,
+      recentIncidents: fromScreen?.recentIncidents ?? connection.recentIncidents,
+      activeIncidentCount:
+        fromScreen?.activeIncidentCount ??
+        (typeof connection.metrics?.active === 'number' ? connection.metrics.active : null),
+    };
+  }, [connection, mode, projection]);
+  return createElement(
+    RealtimePublishContext.Provider,
+    { value: publish },
+    createElement(RealtimeContext.Provider, { value }, children)
+  );
 }
 
-export function RealtimeProvider({ children }: { children: ReactNode }) {
+export function RealtimeProvider({
+  children,
+  mode = 'full',
+}: {
+  children?: ReactNode;
+  mode?: RealtimeMode;
+}) {
   const existing = useContext(RealtimeContext);
   if (existing) return createElement(Fragment, null, children);
-  return createElement(RealtimeRootProvider, null, children);
+  return createElement(RealtimeRootProvider, { mode }, children);
 }
 
 /** Consume the single realtime connection owned by the nearest provider. */
@@ -240,4 +316,20 @@ export function useRealtime(): RealtimeContextValue {
 /** Optionally consume the realtime connection if inside RealtimeProvider; returns null otherwise. */
 export function useOptionalRealtime(): RealtimeContextValue | null {
   return useContext(RealtimeContext);
+}
+
+/**
+ * Console shell provider: every route keeps the full legacy payloads except the dashboard, which
+ * reads its own authorized snapshot and therefore needs only change signals. Switching routes
+ * switches the stream mode on the same provider instance, so there is never more than one
+ * EventSource and the previous one is closed before the next opens.
+ */
+export function RouteAwareRealtimeProvider({ children }: { children: ReactNode }) {
+  const pathname = usePathname();
+  return createElement(RealtimeProvider, { mode: pathname === '/' ? 'signal' : 'full' }, children);
+}
+
+/** The publisher for console-wide realtime consumers; null outside a provider. */
+export function useRealtimePublisher() {
+  return useContext(RealtimePublishContext);
 }

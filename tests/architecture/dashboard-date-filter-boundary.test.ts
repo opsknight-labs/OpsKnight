@@ -11,10 +11,13 @@ describe('dashboard retained date-filter boundary', () => {
     expect(source).not.toContain('{ ...dateFilter }');
   });
 
-  it('passes only the nested Prisma filter into buildIncidentWhere', () => {
-    const source = readFileSync('src/lib/dashboard/dashboard-operational-snapshot.ts', 'utf8');
+  it('keeps reporting date windows out of the live dashboard projection', () => {
+    // Live state is "active now"; retention/reporting windows apply only to history analytics.
+    const live = readFileSync('src/lib/dashboard/live-incidents.ts', 'utf8');
+    const page = readFileSync('src/app/(app)/page.tsx', 'utf8');
 
-    expect(source).toContain('dateFilter: dateFilter.where');
-    expect(source).not.toContain('buildIncidentWhere(filterParams, { dateFilter })');
+    expect(live).not.toContain('buildRetainedDateFilter');
+    expect(live).not.toContain('@/lib/dashboard-utils');
+    expect(page).not.toContain('buildIncidentWhere');
   });
 });

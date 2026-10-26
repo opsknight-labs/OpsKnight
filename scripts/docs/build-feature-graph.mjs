@@ -43,6 +43,7 @@ const uiDocumentationRules = [
   [/^\/events\/test$/, ['guides/integrations/send-test-event.md', 'reference/api/events.md']],
   [/^\/help$/, ['README.md', 'guides/README.md']],
   [/^\/$/, ['guides/dashboard/use-command-center.md', 'guides/dashboard/README.md', 'start/what-is-opsknight.md']],
+  [/^\/wallboard$/, ['guides/dashboard/use-command-center.md', 'guides/dashboard/README.md']],
   [/^\/incidents\/templates(?:\/create)?$/, ['guides/incidents/incident-templates.md']],
   [/^\/incidents\/create$/, ['guides/incidents/create.md']],
   [/^\/incidents(?:\/\[id\])?$/, ['concepts/incidents.md', 'concepts/incident-response.md', 'guides/incidents/acknowledge.md']],

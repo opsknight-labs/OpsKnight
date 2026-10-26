@@ -11,13 +11,8 @@ verification:
   verified_at: 2026-10-02
   evidence:
     - src/app/(app)/page.tsx
-    - src/components/dashboard/DashboardCommandCenter.tsx
-    - src/components/dashboard/widgets/SLABreachAlertsWidget.tsx
-    - src/components/dashboard/OnCallWidget.tsx
-    - src/components/dashboard/QuickActionsPanel.tsx
     - src/components/dashboard/DashboardAnalyticsWidgets.tsx
     - src/components/incident/IncidentsListTable.tsx
-    - src/components/DashboardExport.tsx
 ---
 
 # Use the Command Center

@@ -8,7 +8,7 @@ audience: [responder, administrator]
 verification:
   level: source
   verified_at: 2026-10-02
-  evidence: [src/app/(app)/page.tsx, src/components/dashboard/DashboardCommandCenter.tsx]
+  evidence: [src/app/(app)/page.tsx]
 ---
 
 # Command Center

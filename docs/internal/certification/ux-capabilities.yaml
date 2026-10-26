@@ -4,9 +4,9 @@ capabilities:
     name: Command Center
     owner: analytics
     classification: public-workflow
-    sources: [src/app/(app)/page.tsx, src/components/dashboard/DashboardCommandCenter.tsx]
-    documentation: docs/v2.0.0/guides/dashboard/use-command-center.md
-    requiredPhrases: [Ops Pulse, My Queue, Critical Focus, Services at Risk, Quick Actions, Incident History Heatmap, Latest incidents, Performance, Team Load, SLA Alerts]
+    sources: [src/app/(app)/page.tsx, src/components/dashboard/live/LiveCommandStrip.tsx, src/components/dashboard/live/LiveIncidentsPanel.tsx, src/components/dashboard/live/ResponderRail.tsx, src/components/dashboard/DashboardHistorySection.tsx, src/components/dashboard/live/LiveWallboard.tsx]
+    documentation: docs/v2.1.0/guides/dashboard/use-command-center.md
+    requiredPhrases: [Live Incidents, Ops Pulse, Needs attention, Hotspots, On call now, SLA at risk, Trends & insights, team load, heatmap, Wallboard]
   - id: global-search-and-inbox
     name: Global search and notification inbox
     owner: platform
