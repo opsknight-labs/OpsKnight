@@ -1,6 +1,15 @@
 /* eslint-disable @typescript-eslint/no-require-imports -- Executable native-image diagnostic. */
 const assert = require('node:assert/strict');
 const stages = new Set([
+  'authentication',
+  'body-read',
+  'body-parse',
+  'validation',
+  'quota',
+  'envelope',
+  'hashing',
+  'byte-count',
+  'append-wait',
   'durability',
   'advisory',
   'idempotency',
@@ -50,7 +59,28 @@ function parseStages(body, event = false) {
 }
 const parseAdmissionStages = body => parseStages(body);
 const parseEventStages = body => parseStages(body, true);
-module.exports = { parseAdmissionStages, parseEventStages };
+// Bucket upper bounds are deliberately reported, not invented exact percentiles.
+// Async spans can overlap and retries can repeat stages: do not add their means.
+function summarizeStages(rows) {
+  return rows.map(row => {
+    const buckets = [...row.buckets].sort(
+      (a, b) => (a.upperBoundMs ?? Infinity) - (b.upperBoundMs ?? Infinity)
+    );
+    const bound = q => {
+      if (!row.count) return null;
+      const bucket = buckets.find(bucket => bucket.cumulativeCount >= row.count * q);
+      return bucket?.upperBoundMs ?? null;
+    };
+    return {
+      stage: row.stage,
+      outcome: row.outcome,
+      count: row.count,
+      meanMs: row.count && Number.isFinite(row.sumMs) ? row.sumMs / row.count : null,
+      percentileUpperBoundsMs: { p50: bound(0.5), p95: bound(0.95), p99: bound(0.99) },
+    };
+  });
+}
+module.exports = { parseAdmissionStages, parseEventStages, summarizeStages };
 
 if (require.main === module) {
   const event = process.argv[2] === 'event';
@@ -68,7 +98,9 @@ if (require.main === module) {
               row.stage === 'transaction-finalize' && row.outcome === 'success' && row.count > 0
           )
       );
-      process.stdout.write(JSON.stringify({ status: response.status, stages }));
+      process.stdout.write(
+        JSON.stringify({ status: response.status, stages, summary: summarizeStages(stages) })
+      );
     })
     .catch(() => {
       console.error('Admission metrics snapshot failed');

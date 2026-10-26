@@ -8,6 +8,15 @@ import {
 } from '@/lib/metrics/operational/registry';
 
 type AdmissionStage =
+  | 'authentication'
+  | 'body-read'
+  | 'body-parse'
+  | 'validation'
+  | 'quota'
+  | 'envelope'
+  | 'hashing'
+  | 'byte-count'
+  | 'append-wait'
   | 'durability'
   | 'advisory'
   | 'idempotency'
@@ -36,7 +45,10 @@ export async function measureAdmissionStage<T>(
   }
 }
 
-export function measureAdmissionPreparation<T>(operation: () => T): T {
+export function measureAdmissionComputation<T>(
+  stage: 'preparation' | 'body-parse' | 'validation' | 'envelope' | 'hashing' | 'byte-count',
+  operation: () => T
+): T {
   const startedAt = performance.now();
   let outcome = 'failure';
   try {
@@ -47,9 +59,16 @@ export function measureAdmissionPreparation<T>(operation: () => T): T {
     observeOperationalHistogram(
       'opsknight_ingestion_admission_stage_duration_ms',
       performance.now() - startedAt,
-      { stage: 'preparation', outcome }
+      { stage, outcome }
     );
   }
+}
+
+/** Synchronous work only; async spans include other requests and must never be
+ * described as request CPU. CPU/allocation cost comes from sampled profiles.
+ */
+export function measureAdmissionPreparation<T>(operation: () => T): T {
+  return measureAdmissionComputation('preparation', operation);
 }
 
 /** Finalize includes driver handoff and commit/rollback, not pure WAL time.
