@@ -1,0 +1,7 @@
+{
+  "imageRevision": "699e02c21f606ee2ac2ebaa7e71211c926c06155",
+  "controllerOverlay": "scripts/ingestion/certify-docker.cjs",
+  "controllerSha256": "ed964c5594da94ba90a4c676e903d5d843cfdf79a0a0dd4088ed625533637a60",
+  "applicationCpuLimitSum": 7.999,
+  "scope": "Explicit application CPU redistribution; PostgreSQL uncapped and shared. Not aggregate8CPU resource certification. Image source unchanged; harness overlay adds bounded per-support-role CPU limits and records them."
+}
