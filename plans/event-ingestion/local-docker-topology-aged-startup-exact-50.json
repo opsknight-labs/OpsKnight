@@ -1,0 +1,26 @@
+{
+  "runId": "b6ee5c84-e28d-4317-a019-1f7affa45284",
+  "certifiedEnterprise": false,
+  "cleanupFailures": [],
+  "chaos": [],
+  "smtpCapture": {
+    "imageId": "sha256:0790692be935ea4420d085694f7985b1f692ca6a8771ab0e0bd8ba75ac180498",
+    "localOnly": true,
+    "remoteDeliveryCertified": false
+  },
+  "startupFailure": {
+    "name": "ingestion-cert-b6ee5c84-scheduler",
+    "running": false,
+    "oomKilled": false,
+    "exitCode": 139,
+    "limits": {
+      "cpuCores": 1,
+      "memoryBytes": 805306368
+    },
+    "startedAt": "2026-10-26T17:19:36.245207966Z",
+    "finishedAt": "2026-10-26T17:20:11.977066343Z",
+    "privateRedactedLog": "/var/folders/88/2b5vhvzd707869_cbkz7g0s00000gn/T/ingestion-startup-b6ee5c84-e28d-4317-a019-1f7affa45284-ingestion-cert-b6ee5c84-scheduler.log"
+  },
+  "error": "Candidate ingestion-cert-b6ee5c84-scheduler exited before readiness",
+  "measuredAt": "2026-10-26T17:20:13.237Z"
+}

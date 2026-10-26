@@ -173,6 +173,14 @@ async function main() {
         consumeIngestionBatch: external ? async () => 0 : consumeIngestionBatch,
       })
     : undefined;
+  if (warmup && process.env.INGESTION_DOCKER_FULL_STACK === 'true') {
+    warmup.downstreamDrain = await require('./downstream-drain.cjs')(prisma);
+    assert.equal(
+      warmup.downstreamDrain.passed,
+      true,
+      'Warmup effects must drain before measurement'
+    );
+  }
   if (process.env.INGESTION_DB_PROFILE === 'true')
     finishDatabaseProfile = await require('./database-profile.cjs')(prisma);
   // Execute real ingestion processing independently of request completion.

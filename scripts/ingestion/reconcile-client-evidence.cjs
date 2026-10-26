@@ -16,17 +16,13 @@ const prisma = require('../../src/lib/prisma').default;
     'string',
     'Fixture service identity required for reconciliation'
   );
-  const ledger = fs
-    .readFileSync(report.clientEvidence.ledgerPath, 'utf8')
-    .split('\n')
-    .filter(Boolean)
-    .map(x => JSON.parse(x));
+  const records = require('./client-evidence.cjs').readClientRecords(
+    report.clientEvidence.ledgerPath
+  );
+  assert.equal(records.readable, true);
+  assert.equal(records.malformedRecords, 0);
+  const ledger = records.acknowledgments;
   assert.equal(report.clientEvidence.clientCountsMatch, true);
-  for (const row of ledger) {
-    assert.equal(row.kind, 'opsknight-ack');
-    assert.equal(typeof row.receiptId, 'string');
-    assert.equal(typeof row.deliveryId, 'string');
-  }
   const ids = [...new Set(ledger.map(x => x.receiptId))];
   let matched = 0,
     completed = 0,
@@ -49,6 +45,7 @@ const prisma = require('../../src/lib/prisma').default;
       report: process.argv[2],
       observedAt: new Date().toISOString(),
       acknowledgments: ledger.length,
+      rejectionObservations: records.rejections.length,
       uniqueAcknowledgedReceiptIds: ids.length,
       matchedReceipts: matched,
       completedReceipts: completed,
