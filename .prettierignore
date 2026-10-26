@@ -21,3 +21,4 @@ deploy/kubernetes/helm/**/templates/**/*.tpl
 generated/
 docs/internal/
 docs/*/integrations/catalog.yaml
+docs/*/reference/
