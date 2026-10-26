@@ -6,7 +6,7 @@ product_area: configuration
 audience: [developer, operator, administrator]
 verification:
   level: source
-  verified_at: 2026-10-26
+  verified_at: 2026-10-27
   evidence:
     - src/
     - deploy/
@@ -922,7 +922,7 @@ Sets the polling interval while the general queue is idle.
 - Apply behavior: restart required
 - Deprecated: no
 - Extraction confidence: derived
-- Static default: `ghcr.io/opsknight-labs/opsknight:2.1.0`, `opsknight-local:test`
+- Static default: `ghcr.io/opsknight-labs/opsknight:2.1.0`, `ghcr.io/opsknight-labs/opsknight:2.1.1`, `opsknight-local:test`
 - Sources: `deploy/compose/docker-compose.split.yml`, `deploy/compose/docker-compose.yml`, `deploy/swarm/docker-stack.integrated.yml`, `deploy/swarm/docker-stack.yml`, `env.example`, `scripts/soak-test-2h.sh`
 
 ## `OPSKNIGHT_MIGRATION_ONLY`
