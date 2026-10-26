@@ -7,7 +7,6 @@ import { Monitor } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import LiveClock from '@/components/dashboard/LiveClock';
 import {
-  HISTORY_RANGES,
   LIVE_SCOPES,
   type LiveIncidentQuery,
   type LiveScope,
@@ -16,7 +15,6 @@ import {
 } from '@/lib/dashboard/live-incidents-shared';
 import { enterFullscreen, isFullscreenSupported } from '@/lib/fullscreen';
 import { useLiveDashboard } from './LiveDashboardProvider';
-import { useOptionalHistoryQuery } from '@/components/dashboard/DashboardHistorySection';
 
 type Tone = 'rose' | 'amber' | 'emerald' | 'default';
 
@@ -72,7 +70,8 @@ function Metric({
         'hover:bg-muted/40 dark:hover:bg-[#141419] focus-visible:bg-muted/40 dark:focus-visible:bg-[#141419] focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary/50',
         active && 'bg-muted/60 dark:bg-[#181820]',
         variant === 'secondary' && 'bg-card/70 dark:bg-[#09090d]',
-        groupDivider && 'xl:relative xl:before:absolute xl:before:left-0 xl:before:inset-y-2 xl:before:w-px xl:before:bg-border/80 dark:xl:before:bg-zinc-700/80'
+        groupDivider &&
+          'xl:relative xl:before:absolute xl:before:left-0 xl:before:inset-y-2 xl:before:w-px xl:before:bg-border/80 dark:xl:before:bg-zinc-700/80'
       )}
     >
       <div className="flex items-center justify-between gap-1.5">
@@ -85,7 +84,10 @@ function Metric({
           {label}
         </span>
         {emphasis === 'critical' && value !== null && value > 0 && (
-          <span className="h-1.5 w-1.5 rounded-full bg-rose-500 motion-safe:animate-pulse" aria-hidden />
+          <span
+            className="h-1.5 w-1.5 rounded-full bg-rose-500 motion-safe:animate-pulse"
+            aria-hidden
+          />
         )}
         {emphasis === 'warning' && value !== null && value > 0 && (
           <span className="h-1.5 w-1.5 rounded-full bg-amber-500 dark:bg-amber-400" aria-hidden />
@@ -205,7 +207,6 @@ export default function LiveCommandStrip({
 }) {
   const router = useRouter();
   const { snapshot, query, setQuery } = useLiveDashboard();
-  const history = useOptionalHistoryQuery();
   const summary = snapshot?.summary ?? null;
   const trend = snapshot?.trend ?? null;
   const narrative = buildNarrative(snapshot);
@@ -250,7 +251,9 @@ export default function LiveCommandStrip({
               className="hidden sm:inline-flex items-center gap-1.5 rounded-md border border-border bg-muted/40 px-2 py-0.5 text-[11px] font-mono text-muted-foreground"
               title={`Real-time incident arrival rate: ${trend?.createdLastHour ?? 0} created last hour`}
             >
-              <span className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground/80">Pulse</span>
+              <span className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground/80">
+                Pulse
+              </span>
               {velocitySamples && velocitySamples.length > 0 && (
                 <div className="flex items-end gap-0.5 h-3" aria-hidden>
                   {velocitySamples.map((bar, idx) => (
@@ -350,34 +353,6 @@ export default function LiveCommandStrip({
               </button>
             ))}
           </div>
-          {history && (
-            <div
-              role="radiogroup"
-              aria-label="Reporting period"
-              data-testid="command-period"
-              className="inline-flex h-8 items-center rounded-md border border-border bg-muted/20 p-0.5 text-[12px] font-medium"
-            >
-              {HISTORY_RANGES.map(range => (
-                <button
-                  key={range}
-                  type="button"
-                  role="radio"
-                  aria-checked={history.query.range === range}
-                  data-testid={`period-${range}`}
-                  onClick={() => history.setQuery({ range })}
-                  title={`Analytics reporting period: ${range} days`}
-                  className={cn(
-                    'h-full whitespace-nowrap rounded px-2.5 outline-none transition-colors focus-visible:ring-2 focus-visible:ring-primary/50',
-                    history.query.range === range
-                      ? 'bg-card text-foreground font-semibold shadow-2xs dark:bg-zinc-800 dark:text-zinc-50'
-                      : 'text-muted-foreground hover:text-foreground'
-                  )}
-                >
-                  {range}d
-                </button>
-              ))}
-            </div>
-          )}
           <Link
             href="/wallboard"
             data-testid="command-wallboard"

@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useCallback } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { cn } from '@/lib/utils';
 import { Activity } from 'lucide-react';
 import {
@@ -82,6 +82,19 @@ export function IncidentHeatmapWidget({
     };
   }, [data, year]);
 
+  const scrollRef = useRef<HTMLDivElement>(null);
+  // On narrow screens the year scrolls horizontally; start at the most recent weeks.
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el || el.scrollWidth <= el.clientWidth) return;
+    const now = Date.now();
+    const current = weeks.findIndex(week => week[week.length - 1].date.getTime() >= now);
+    const anchor = current === -1 ? weeks.length : current + 1;
+    el.scrollLeft = Math.max(0, (anchor / weeks.length) * el.scrollWidth - el.clientWidth + 16);
+  }, [weeks]);
+  const today = new Date();
+  today.setHours(23, 59, 59, 999);
+
   const getColor = useCallback(
     (count: number) => {
       if (count === 0)
@@ -125,6 +138,8 @@ export function IncidentHeatmapWidget({
           </div>
         </div>
 
+        <div ref={scrollRef} className="-mx-1 overflow-x-auto px-1 pb-1 [scrollbar-width:thin]">
+          <div className="min-w-[40rem]">
         {/* Month labels */}
         <div
           className="grid mb-2 text-xs font-medium text-muted-foreground"
@@ -153,7 +168,8 @@ export function IncidentHeatmapWidget({
                   <div
                     className={cn(
                       'rounded-[1.5px] transition-all duration-150 hover:scale-125 hover:ring-1 hover:ring-zinc-400 dark:hover:ring-zinc-500 cursor-pointer',
-                      getColor(day.count)
+                      getColor(day.count),
+                      day.date > today && 'opacity-35'
                     )}
                     style={{
                       aspectRatio: '1 / 1',
@@ -174,6 +190,9 @@ export function IncidentHeatmapWidget({
               </Tooltip>
             ))
           )}
+        </div>
+
+          </div>
         </div>
 
         {/* Legend */}

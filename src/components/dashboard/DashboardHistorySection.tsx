@@ -132,7 +132,7 @@ function TimeDelta({
   range: string;
 }) {
   if (current === null || previous === null || previous <= 0) {
-    return <p className="text-[11px] text-muted-foreground">No comparable prior period</p>;
+    return <p className="text-[11px] text-muted-foreground">No prior baseline</p>;
   }
   const diff = current - previous;
   if (Math.abs(diff) < 1) {
@@ -234,11 +234,26 @@ function ComplianceBar({ value }: { value: number | null }) {
   );
 }
 
+/** Trend buckets are keyed `YYYY-MM-DD` (daily) or `YYYY-MM-DD-HH` (hourly) in the viewer's zone. */
+export function formatTrendBucket(key: string | undefined, fallback = ''): string {
+  const parts = key?.split('-') ?? [];
+  if (parts.length < 3 || parts.length > 4 || parts.some(part => !/^\d+$/.test(part))) {
+    return fallback;
+  }
+  if (parts.length === 4) return `${parts[3].padStart(2, '0')}:00`;
+  const [year, month, day] = parts.map(Number);
+  return new Date(Date.UTC(year, month - 1, day)).toLocaleDateString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    timeZone: 'UTC',
+  });
+}
+
 /** Created vs resolved area chart in plain SVG (no chart runtime on the dashboard). */
 function FlowChart({
   series,
 }: {
-  series: Array<{ label: string; count: number; resolveCount: number }>;
+  series: Array<{ key?: string; label: string; count: number; resolveCount: number }>;
 }) {
   if (series.length < 2) {
     return (
@@ -260,6 +275,8 @@ function FlowChart({
       })
       .join(' ');
   const area = (key: 'count' | 'resolveCount') => `${line(key)} L${width},${height} L0,${height} Z`;
+  const hourly = (series[0]?.key?.split('-').length ?? 0) === 4;
+  const slot = width / (series.length - 1);
   const totalCreated = series.reduce((sum, point) => sum + point.count, 0);
   const totalResolved = series.reduce((sum, point) => sum + point.resolveCount, 0);
   return (
@@ -333,6 +350,20 @@ function FlowChart({
           vectorEffect="non-scaling-stroke"
         />
 
+        {series.map((point, index) => (
+          <rect
+            key={point.key ?? index}
+            x={Math.max(0, x(index) - slot / 2)}
+            y={0}
+            width={slot}
+            height={height}
+            fill="transparent"
+            className="hover:fill-foreground/[0.04]"
+          >
+            <title>{`${formatTrendBucket(point.key, point.label)}: ${point.count} created · ${point.resolveCount} resolved`}</title>
+          </rect>
+        ))}
+
         {/* Pulse end markers */}
         {series.length > 0 && (
           <>
@@ -353,9 +384,12 @@ function FlowChart({
           </>
         )}
       </svg>
-      <figcaption className="mt-1 flex justify-between text-[10px] text-muted-foreground">
-        <span>{series[0]?.label}</span>
-        <span>{series.at(-1)?.label}</span>
+      <figcaption className="mt-1 flex justify-between gap-2 text-[10px] text-muted-foreground">
+        <span>{formatTrendBucket(series[0]?.key, series[0]?.label)}</span>
+        <span className="tabular-nums">
+          Peak {max} per {hourly ? 'hour' : 'day'}
+        </span>
+        <span>{formatTrendBucket(series.at(-1)?.key, series.at(-1)?.label)}</span>
       </figcaption>
     </figure>
   );

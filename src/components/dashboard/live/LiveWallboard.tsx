@@ -369,6 +369,7 @@ export default function LiveWallboard({ timeZone }: { timeZone: string }) {
             aria-label="Wallboard controls"
             className={cn(
               'flex flex-wrap items-center gap-2 transition-opacity duration-500',
+              'min-[1800px]:[zoom:1.15] min-[2200px]:[zoom:1.35] min-[2500px]:[zoom:1.5] min-[3400px]:[zoom:2]',
               idle && 'pointer-events-none opacity-0'
             )}
           >
@@ -495,7 +496,7 @@ export default function LiveWallboard({ timeZone }: { timeZone: string }) {
             />
           </div>
           {/* Rail cards use app sizing; scale them up for across-the-room legibility. */}
-          <aside className="hidden min-h-0 overflow-hidden xl:block min-[1800px]:[zoom:1.2] min-[2600px]:[zoom:1.7]">
+          <aside className="hidden min-h-0 overflow-hidden xl:block min-[1800px]:[zoom:1.2] min-[2200px]:[zoom:1.4] min-[2500px]:[zoom:1.6] min-[3400px]:[zoom:2.2]">
             <div className="mb-[1.2vw]">
               <OnCallCard />
             </div>
