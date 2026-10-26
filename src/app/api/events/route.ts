@@ -1,3 +1,7 @@
+import {
+  measureAdmissionStage,
+  measureAdmissionComputation,
+} from '@/lib/ingestion/admission-timing';
 import { reserveIngestionReplay } from '@/lib/ingestion/replay';
 import { withIngestionRequestSlot } from '@/lib/ingestion/request-gate';
 import type { IngestionRateLimitError } from '@/lib/ingestion/contract';
@@ -41,7 +45,9 @@ async function postEvent(req: NextRequest) {
 
     if (authHeader?.startsWith('Token token=')) {
       const key = authHeader.split('Token token=')[1];
-      const integration = await prisma.integration.findUnique({ where: { key } });
+      const integration = await measureAdmissionStage('authentication', () =>
+        prisma.integration.findUnique({ where: { key } })
+      );
       if (!integration) {
         return jsonError(
           new AppError({
@@ -74,7 +80,7 @@ async function postEvent(req: NextRequest) {
       integrationType = integration.type;
       serviceId = integration.serviceId;
     } else {
-      const apiKey = await authenticateApiKey(req);
+      const apiKey = await measureAdmissionStage('authentication', () => authenticateApiKey(req));
       if (!apiKey) {
         return jsonError(
           new AppError({ code: 'API_KEY_INVALID', userMessage: LEGACY_UNAUTHORIZED_MESSAGE })
@@ -86,8 +92,8 @@ async function postEvent(req: NextRequest) {
 
     let body: any; // eslint-disable-line @typescript-eslint/no-explicit-any
     try {
-      const rawBody = await readIntegrationBody(req);
-      body = JSON.parse(rawBody);
+      const rawBody = await measureAdmissionStage('body-read', () => readIntegrationBody(req));
+      body = measureAdmissionComputation('body-parse', () => JSON.parse(rawBody));
     } catch (error) {
       if (error instanceof IntegrationBodyTooLargeError) {
         return jsonError(
@@ -99,7 +105,7 @@ async function postEvent(req: NextRequest) {
       );
     }
 
-    const parsed = EventSchema.safeParse(body);
+    const parsed = measureAdmissionComputation('validation', () => EventSchema.safeParse(body));
     if (!parsed.success) {
       return jsonError(
         new AppError({ code: 'VALIDATION_FAILED', userMessage: LEGACY_INVALID_INPUT_MESSAGE }),
@@ -192,7 +198,9 @@ async function postEvent(req: NextRequest) {
         : integrationId
           ? `integration:${integrationId}:events`
           : 'anonymous:events';
-      const rate = await checkRateLimit(rateKey, RATE_LIMIT_MAX, RATE_LIMIT_WINDOW_MS);
+      const rate = await measureAdmissionStage('quota', () =>
+        checkRateLimit(rateKey, RATE_LIMIT_MAX, RATE_LIMIT_WINDOW_MS)
+      );
       if (!rate.allowed) {
         replayOnly = await reserveIngestionReplay(
           rateKey,

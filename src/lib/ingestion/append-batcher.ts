@@ -1,8 +1,10 @@
+import { observeOperationalHistogram } from '@/lib/metrics/operational/registry';
 import { IngestionUnavailableError } from './contract';
 
 type Caller<T, R> = {
   value: T;
   bytes: number;
+  queuedAt: number;
   resolve: (result: R) => void;
   reject: (error: unknown) => void;
 };
@@ -27,7 +29,7 @@ export class DurableAppendBatcher<T, R> {
     this.pending++;
     this.bytes += bytes;
     return new Promise((resolve, reject) => {
-      this.queue.push({ value, bytes, resolve, reject });
+      this.queue.push({ value, bytes, queuedAt: performance.now(), resolve, reject });
       if (!this.timer)
         this.timer = setTimeout(() => {
           this.timer = undefined;
@@ -47,6 +49,13 @@ export class DurableAppendBatcher<T, R> {
       }
       const callers = this.queue.splice(0, count);
       this.active++;
+      const dispatchedAt = performance.now();
+      for (const caller of callers)
+        observeOperationalHistogram(
+          'opsknight_ingestion_admission_stage_duration_ms',
+          dispatchedAt - caller.queuedAt,
+          { stage: 'append-wait', outcome: 'success' }
+        );
       // The promise boundary also contains a synchronous commit adapter failure.
       void Promise.resolve()
         .then(() => this.commit(callers.map(item => item.value)))

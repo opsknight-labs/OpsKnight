@@ -8,6 +8,7 @@ import prisma from '@/lib/prisma';
 import {
   measureAdmissionStage,
   measureAdmissionPreparation,
+  measureAdmissionComputation,
   runIngestionAdmissionTransaction,
 } from './admission-timing';
 import type { IntegrationEventEnvelope } from '@/lib/automation/runtime';
@@ -148,7 +149,10 @@ async function appendPostgresGroup(
   }
   if (fresh.length) {
     const { paused, policy, automation } = await measureAdmissionStage('policy', () =>
-      readIngestionAdmissionSettings(tx, fresh.map(entry => entry.envelope.serviceId))
+      readIngestionAdmissionSettings(
+        tx,
+        fresh.map(entry => entry.envelope.serviceId)
+      )
     );
     if (paused) {
       for (const entry of fresh)
@@ -172,21 +176,23 @@ async function appendPostgresGroup(
           };
         })
       );
-      const insertReceipts = measureAdmissionPreparation(() => prepareReceiptInsert(
-        prepared.map(item => ({
-          id: item.id,
-          receivedAt: new Date(item.entry.envelope.receivedAt),
-          serviceId: item.entry.envelope.serviceId,
-          integrationId: item.entry.envelope.integrationId,
-          partitionKey: item.entry.partition,
-          orderingKeys: item.entry.identities,
-          idempotencyKey: item.entry.idempotencyKey,
-          contentHash: item.entry.contentHash,
-          payloadBytes: item.payloadBytes,
-          critical: item.critical,
-          envelope: item.envelope,
-        }))
-      ));
+      const insertReceipts = measureAdmissionPreparation(() =>
+        prepareReceiptInsert(
+          prepared.map(item => ({
+            id: item.id,
+            receivedAt: new Date(item.entry.envelope.receivedAt),
+            serviceId: item.entry.envelope.serviceId,
+            integrationId: item.entry.envelope.integrationId,
+            partitionKey: item.entry.partition,
+            orderingKeys: item.entry.identities,
+            idempotencyKey: item.entry.idempotencyKey,
+            contentHash: item.entry.contentHash,
+            payloadBytes: item.payloadBytes,
+            critical: item.critical,
+            envelope: item.envelope,
+          }))
+        )
+      );
       const reservations = await measureAdmissionStage('reservation', () =>
         reserveIngestionBudgets(tx, policy, prepared)
       );
@@ -217,12 +223,12 @@ export async function acceptPostgresEvent(
 ): Promise<Acceptance> {
   const startedAt = performance.now();
   if (!context) {
-    const envelope = encodeEnvelope(input);
+    const envelope = measureAdmissionComputation('envelope', () => encodeEnvelope(input));
     const prepared = {
       envelope,
       partition: partitionKey(envelope),
       identities: orderingKeys(envelope),
-      contentHash: receiptContentHash(envelope),
+      contentHash: measureAdmissionComputation('hashing', () => receiptContentHash(envelope)),
       idempotencyKey: digest([input.serviceId, input.integrationId, deliveryKey ?? randomUUID()]),
     };
     await prepareIngestionOrdering();
@@ -230,7 +236,10 @@ export async function acceptPostgresEvent(
       entries =>
         runIngestionAdmissionTransaction(tx => appendPostgresGroup(tx, entries), entries.length)
     ));
-    const accepted = await batcher.enqueue(prepared, Buffer.byteLength(JSON.stringify(envelope)));
+    const accepted = await batcher.enqueue(
+      prepared,
+      measureAdmissionComputation('byte-count', () => Buffer.byteLength(JSON.stringify(envelope)))
+    );
     if ('error' in accepted) throw accepted.error;
     addOperationalMetric('opsknight_ingestion_acceptance_total', 1, {
       outcome: accepted.duplicate ? 'duplicate' : 'new',
