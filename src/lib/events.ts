@@ -471,7 +471,7 @@ export async function processEvent(
       );
       const engagement = resolveIncidentEngagement({
         urgency,
-        supportHours: await resolveSupportHours(tx, { serviceId, at: incidentCreatedAt }),
+        supportHours: await resolveSupportHours(tx, { serviceId, at: incidentCreatedAt }, publishedPolicies.support),
         now: incidentCreatedAt,
       });
       const newIncident = await tx.incident.create({

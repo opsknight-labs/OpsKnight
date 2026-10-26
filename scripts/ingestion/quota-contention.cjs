@@ -66,6 +66,7 @@ async function main() {
     const latencies = [];
     let next = 0;
     let allowed = 0;
+    const cpuStarted = process.cpuUsage();
     const started = performance.now();
     await Promise.all(
       Array.from({ length: concurrency }, async () => {
@@ -79,6 +80,7 @@ async function main() {
       })
     );
     const elapsedMs = performance.now() - started;
+    const cpu = process.cpuUsage(cpuStarted);
     latencies.sort((a, b) => a - b);
     const percentile = fraction => latencies.at(Math.ceil(latencies.length * fraction) - 1);
     const databaseProfile = await finish();
@@ -88,6 +90,8 @@ async function main() {
       decisions,
       allowed,
       elapsedMs,
+      cpuMs: (cpu.user + cpu.system) / 1000,
+      cpuMsPerDecision: (cpu.user + cpu.system) / 1000 / decisions,
       decisionsPerSecond: (decisions * 1000) / elapsedMs,
       requestLatencyMs: {
         p50: percentile(0.5),

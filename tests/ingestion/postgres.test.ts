@@ -1,6 +1,7 @@
+import { resolveSupportHours } from '@/lib/incidents/support-hours';
 import { finalizeEscalationExecution } from '@/lib/escalation/repository';
 import { dispatchIncidentEffects } from '@/lib/incident-effect-dispatch';
-import { readPublishedIncidentPolicies, readPublishedClassificationPolicies, readPublishedSlaPolicies } from '@/lib/incident-policies/published';
+import { readPublishedIncidentPolicies, readPublishedClassificationPolicies, readPublishedSlaPolicies, readPublishedSupportPolicies } from '@/lib/incident-policies/published';
 import { resolveIncidentClassification } from '@/lib/incidents/classification';
 import { resolveNewIncidentSlaContract } from '@/lib/incident-sla/contract';
 import { prepareReceiptInsert, type ReceiptInsert } from '@/lib/ingestion/receipt-insert';
@@ -340,15 +341,26 @@ describe('PostgreSQL ingestion durability', () => {
   });
 
   it('shares one authoritative published policy snapshot without re-reading during resolution', async () => {
+    const support = await prisma.responseSupportHoursPolicy.create({ data: {
+      scopeKey: `service:${serviceId}`, version: 1, timezone: 'UTC', mode: 'SCHEDULED',
+      windows: { create: { dayOfWeek: 1, startMinute: 540, endMinute: 1020 } },
+      exceptions: { create: { localDate: new Date('2026-10-27T00:00:00Z'), available: false } },
+    } });
+    await prisma.responseSupportHoursPolicy.update({ where: { id: support.id }, data: { sealedAt: new Date() } });
+    await prisma.responseSupportHoursPolicy.create({ data: {
+      scopeKey: `service:${serviceId}`, version: 2, timezone: 'UTC', mode: 'ALWAYS',
+    } });
     await prisma.$transaction(async tx => {
       const keys = ['integration:integration', `service:${serviceId}`, 'workspace'];
       const expectedClassification = await readPublishedClassificationPolicies(tx, keys);
       const expectedSla = await readPublishedSlaPolicies(tx, [`service:${serviceId}`, 'workspace']);
+      const expectedSupport = await readPublishedSupportPolicies(tx, [`service:${serviceId}`, 'workspace']);
       const query = vi.spyOn(tx, '$queryRaw');
       try {
         const snapshot = await readPublishedIncidentPolicies(tx, serviceId, 'integration');
         expect(snapshot.classification).toEqual(expectedClassification);
         expect(snapshot.sla).toEqual(expectedSla);
+        expect(snapshot.support).toEqual(expectedSupport);
         expect(query).toHaveBeenCalledTimes(1);
         const classification = await resolveIncidentClassification(tx, {
           serviceId, integrationId: 'integration', alertSeverity: 'critical',
@@ -357,6 +369,9 @@ describe('PostgreSQL ingestion durability', () => {
           serviceId, priority: classification.priority, now: new Date(),
         }, snapshot.sla);
         expect(contract.ackTargetMs).toBeGreaterThan(0);
+        expect(snapshot.support[0].version).toBe(1);
+        expect(snapshot.support[0].exceptions[0].localDate.toISOString()).toBe('2026-10-27T00:00:00.000Z');
+        expect(await resolveSupportHours(tx, { serviceId, at: new Date('2026-10-26T10:00:00Z') }, snapshot.support)).toMatchObject({ state: 'INSIDE', policyVersion: 1 });
         expect(query).toHaveBeenCalledTimes(1);
       } finally { query.mockRestore(); }
     });
@@ -2621,6 +2636,26 @@ describe('PostgreSQL ingestion durability', () => {
       delete process.env.OPSKNIGHT_INGESTION_MODE;
     }
   });
+  it('coalesces mixed quota keys without transferring credit or exceeding per-key bursts', async () => {
+    const current = await getIngestionPolicy();
+    await applyIngestionCommand({ action: 'configure', expectedRevision: current.revision,
+      policy: { ...current.policy, quotas: {
+        eventsPerMinute: 1, eventsBurst: 1, integrationPerMinute: 1, integrationBurst: 2,
+      } },
+    }, actorId);
+    const keys = Array.from({ length: 32 }, (_, index) =>
+      `mixed-quota-${randomUUID()}${index % 2 ? ':events' : ':integration'}`);
+    const requests = keys.flatMap(key => Array.from({ length: 3 }, () => key));
+    const decisions = await Promise.all(requests.map(key => checkIngestionQuota(key, 120, 60000)));
+    for (const key of keys) {
+      const allowed = decisions.filter((decision, index) => requests.at(index) === key && decision.allowed);
+      expect(allowed).toHaveLength(key.endsWith(':events') ? 1 : 2);
+      const row = await prisma.ingestionQuota.findUniqueOrThrow({ where: { key } });
+      expect(row.tokens).toBeGreaterThanOrEqual(0);
+      expect(row.tokens).toBeLessThan(1);
+    }
+  });
+
   it('fences stale quota policy readers and never refills a reduced quota at the previous rate', async () => {
     process.env.OPSKNIGHT_INGESTION_MODE = 'postgres';
     let release = () => {};
