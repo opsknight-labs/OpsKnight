@@ -11,7 +11,7 @@ import {
   runIngestionAdmissionTransaction,
 } from './admission-timing';
 import type { IntegrationEventEnvelope } from '@/lib/automation/runtime';
-import { getIngestionAutomationConfigs } from '@/lib/automation/settings';
+import { readIngestionAdmissionSettings } from './admission-settings';
 import { getIngestionPolicy } from './policy';
 import {
   addOperationalMetric,
@@ -151,16 +151,13 @@ async function appendPostgresGroup(
     }
   }
   if (fresh.length) {
-    const { paused, policy } = await measureAdmissionStage('policy', () => getIngestionPolicy(tx));
+    const { paused, policy, automation } = await measureAdmissionStage('policy', () =>
+      readIngestionAdmissionSettings(tx, fresh.map(entry => entry.envelope.serviceId))
+    );
     if (paused) {
       for (const entry of fresh)
         results.set(entry, { error: new IngestionUnavailableError('Ingestion admission paused') });
     } else {
-      const automation = await measureAdmissionStage('automation', () =>
-        getIngestionAutomationConfigs(tx, [
-          ...new Set(fresh.map(entry => entry.envelope.serviceId)),
-        ])
-      );
       const prepared = measureAdmissionPreparation(() =>
         fresh.map(entry => {
           const envelope = encodeEnvelope({
