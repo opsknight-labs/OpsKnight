@@ -1,12 +1,15 @@
 # Ingestion certification ledger
 
-Started: 2026-10-24. Updated: 2026-10-25. Candidate branch: `feat/enterprise-event-ingestion`.
+Started: 2026-10-24. Updated: 2026-10-26. Candidate branch: `feat/enterprise-event-ingestion`.
 
 Enterprise status: **NOT CERTIFIED. No PR is authorized by this ledger.** The current priority is [efficiency-first-recommendation.md](efficiency-first-recommendation.md): affordable end-to-end processing before higher offered load. The earlier [high-throughput-redesign.md](high-throughput-redesign.md) remains design context; its 600/1,000 RPS targets are unverified stress ambitions, not the compact deployment release gate. Historical entries below do not certify later revisions.
 
-Current implementation status: guarded execution-time collaboration planning removes unnecessary built-in provider children; the isolated native effects diagnostic reaches 70.332 incident units/sec. Grouped receipt preparation now precedes capacity locks, but native throughput benefit remains unproven. **100 brand-new incidents/sec end to end remains the active unmet target.** Recent 50/sec runs fail latency/downstream gates; a newer exact-image 5/sec preflight completes and drains all work but fails HTTP latency. The earlier passing 5/sec short run applies only to its recorded image/topology. Continuous cross-batch refill, broader configuration-aware effect planning, million-history verification and supported aggregate resource profiles remain incomplete. See the chronological evidence below; no higher full-stack capacity is established.
+Current implementation status: async-by-default durable admission, continuous bounded ingestion refill, compact ordinary dispatch, independent critical/Runbook lanes, cross-key quota coalescing and transaction-local classification/SLA/support policy reads are implemented. Latest exact-image one-minute full-stack default-provider gate: **50 brand-new incidents/sec passed**,3,001/3,001 complete, HTTP p9580ms, incident p95292ms, local SMTP capture730ms, final due jobs zero. **100/sec failed latency** despite eventual receipt/job drain. Raw admission is measured separately:25events/sec for20seconds passed;50/sec persisted every acknowledgment but failed HTTP p95. Normal host-library recovery reconciled both raw bursts with one deduplicated incident each. These short shared-VM results do not certify500-event/sec bursts,100-new-incidents/sec, aggregate compact resources, configured-provider fanout, actual Runbook execution, endurance or HA. Exact image and full evidence are recorded in the latest section below.
 
 Current independent gates, all pending under disclosed aggregate resource budgets:
+
+- Raw admission engineering target:500events/sec during bursts, acknowledgment p95 below100ms, with separately verified recovery.
+- New-incident engineering target:100new incidents/sec with stable downstream work and protected paging.
 
 - Compact OSS: 4 vCPU / 8 GB total, including PostgreSQL, web and workers; 300 **new incidents/minute** (5/sec) for 60 minutes, all intended lifecycle work complete and stable downstream backlog.
 - Stretch on the same budget: 600 new incidents/minute (10/sec) for 30 minutes.
@@ -15,7 +18,7 @@ Current independent gates, all pending under disclosed aggregate resource budget
 - Critical paging: p95 <1 second to durable notification handoff; controlled provider capture measured separately.
 - Reliability: no lost acknowledged events or duplicate effects attributable to retries; Automation, escalation, Runbooks, lifecycle ordering, configuration changes while queued, crashes and mixed-version upgrade checks retained.
 
-No current run establishes the aggregate compact resource budget. Do not infer compact-tier certification from the isolated ~33 incident units/sec effects result. Storage growth and bounded retention remain gates: 5 new incidents/sec sustained is 432,000 incidents/day before alerts, history and side effects.
+No current run establishes the aggregate compact resource budget. Do not infer compact-tier certification from isolated effects-only diagnostics. Storage growth and bounded retention remain gates: 5 new incidents/sec sustained is 432,000 incidents/day before alerts, history and side effects.
 
 ### Efficiency implementation: execution-time context
 
@@ -789,3 +792,20 @@ A single-serialization receipt candidate was measured and rejected. It computed 
 
 
 Validation of the retained P0 source:86real PostgreSQL durability tests pass, TypeScript passes, modified-source lint has zero warnings, and independent static bug/security substitutes report no introduced issue. The full unit run passed10,051tests with seven existing skips and one stale notification call-shape assertion failing. That assertion now explicitly requires critical dispatchImmediately:true; the corrected notification/handoff/quota recheck passes30tests across three files. The preceding focused hot-path/classification/lifecycle run passed64tests while the serializer candidate was present; its standalone test and production change were then reverted as documented. No blanket single-run full-unit-green or branded bot certificate is claimed. The unrelated generated SSO hashing artifact was restored after the full run.
+
+
+### Exact P0-efficiency image: 50 new incidents/sec short pass; 100/sec fails
+
+Production Dockerfile image sha256:a6ca2848d66bde44c3d3b173de636cba5878430abd21c32a5412b6be488cef7a embeds source revisionceffa4018e145cb85dad164333ef1a9d6cb88c83 and its immutable source URL. Compilation, TypeScript,207pages and helper compilation passed. Shared Docker VM memory stalls extended TypeScript checking; kind was temporarily stopped under existing authorization after it returned during the build. No benchmark ran concurrently with this image build. All measurements below use the immutable image ID and default async mode, with no ingestion-mode override.
+
+Raw admission uses one1CPU HTTP process/pool10, no consumers, normal hard budgets/quota enabled, one event identity and distinct deliveries, fresh339-migration databases,20-second bursts.25events/sec passes:500acknowledgments/500pending durable receipts, HTTP p9537.010ms.50/sec accepts and durably retains all1,001acknowledgments with zero claimed receipts, but HTTP p95194.884ms fails.100/200/500raw-event rates are not attempted after this first failed gate. Pending receipts are intentionally retained in the admission-only result, not counted as incident completions. Evidence: local-docker-{http,topology}-efficiency-admission-burst-{25,50}.json and local-efficiency-admission-burst-{25,50}.json.
+
+Normal recovery then drains those same receipts through the pinned source's host-library consumer (Node20/pool5/concurrency4), without additional HTTP load or effect consumers. Both reconcile:500/500 and1,001/1,001 completed receipts and matching alerts, one deduplicated incident each, zero unfinished receipts, elapsed6.191/12.503seconds. Three due durable side-effect jobs remain in each fixture by design. This verifies normal post-admission processing of every acknowledged receipt in these bursts; it does not prove worker-crash recovery at burst rates, downstream delivery, native worker topology, HA or500events/sec. Evidence: local-efficiency-admission-burst-recovery-{25,50}.json. Original admission-only verdicts are not rewritten by the later recovery step.
+
+New-incident tests run separately, one minute each, all-new event identities, web1/ingestion1 plus six supporting roles at1CPU each (web1GiB/workers768MiB), pool limits unchanged, PostgreSQL uncapped/shared12CPU/8GBDocker VM.25/sec passes:1,501/1,501 complete, HTTP p9536.502ms, incident p95155ms, SMTP1,497ms, zero final due jobs.50/sec passes:3,001/3,001 complete, HTTP p9579.955ms, incident p95292ms, SMTP730ms, zero final due jobs and bounded sampled downstream queues. This raises the passing short fixture frontier to50new incidents/sec; it is not an isolated source-only speedup or sustained capacity certificate.
+
+100/sec fails:5,749persisted incidents eventually complete, zero final due jobs, HTTP p95346.062ms and incident p9518,966.6ms. At load end1,558receipts remain, oldest16.129seconds. The separate pinned-Automation paging fixture captures SMTP in1,134ms; ordinary downstream sampled ages near the end remain below193ms. No200/sec incident run follows. This keeps admission/incident-processing efficiency as P0 rather than moving the bottleneck verdict back to ordinary effects. Evidence: local-docker-{http,topology}-efficiency-incidents-short-{25,50,100}.json and corresponding drain snapshots.
+
+Main load is default/unconfigured-provider work; Runbook evaluation is consumed, but configured Runbook execution and representative external fanout are not certified. Resource limits exclude the uncapped shared database, proxy and capture from an aggregate compact budget. Local host/VM interference remains a limitation. Neither500-event/sec burst admission nor100-new-incidents/sec end-to-end target is achieved by these tests. No PR is opened.
+
+After these runs, all owned native test containers were cleaned up and kind was restored and verified Ready. Its first startup-time readiness query briefly returned Forbidden; a subsequent node query and readiness wait succeeded.
