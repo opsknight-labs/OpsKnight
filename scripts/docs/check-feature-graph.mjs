@@ -3,6 +3,8 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 const root = resolve(import.meta.dirname, '../..');
+const versions = JSON.parse(readFileSync(resolve(root, 'docs/versions.json'), 'utf8'));
+const currentDocsVersion = versions.currentRelease || 'v2.0.0';
 const discovery = JSON.parse(readFileSync(resolve(root, 'generated/docs-discovery/current.json'), 'utf8'));
 const graph = discovery.featureGraph;
 if (!graph || graph.schemaVersion !== 1) throw new Error('Feature graph is missing or unsupported.');
@@ -39,7 +41,7 @@ for (const node of graph.nodes) {
     const documentation = Object.values(node.documentation ?? {}).flat();
     if (documentation.length === 0) throw new Error(`Supported feature has no documentation: ${node.id}`);
     for (const path of documentation) {
-      try { readFileSync(resolve(root, 'docs/v2.0.0', path)); }
+      try { readFileSync(resolve(root, `docs/${currentDocsVersion}`, path)); }
       catch { throw new Error(`Feature documentation does not exist: ${node.id} -> ${path}`); }
     }
   }

@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "purpose": "Reader-completeness audit. Mapping and source verification do not imply task usability.",
   "counts": {
-    "MAPPED": 119,
+    "MAPPED": 120,
     "READER_COMPLETE": 202,
     "SOURCE_VERIFIED": 0,
     "RUNTIME_VERIFIED": 0
   },
-  "taskPages": 200,
+  "taskPages": 201,
   "readerCompleteTaskPages": 200,
-  "sourceVerifiedTaskPages": 200,
+  "sourceVerifiedTaskPages": 201,
   "runtimeVerifiedTaskPages": 0,
   "pages": [
     {
@@ -2158,6 +2158,17 @@
       "runtimeVerified": false
     },
     {
+      "page": "operate/deploy/agent-operations.md",
+      "type": "deployment",
+      "userTask": null,
+      "status": "MAPPED",
+      "taskPage": true,
+      "screenshotCount": 0,
+      "screenshotAssessment": "UNASSESSED",
+      "sourceVerified": true,
+      "runtimeVerified": false
+    },
+    {
       "page": "operate/deploy/application-url-and-host-routing.md",
       "type": "deployment",
       "userTask": "Configure and migrate OpsKnight's public origin safely.",
@@ -3425,7 +3436,7 @@
     {
       "page": "troubleshooting/login/oidc-access.md",
       "type": "troubleshooting",
-      "userTask": "Diagnose, recover, and verify oidc access.",
+      "userTask": "Diagnose, recover, and verify OIDC sign-in and access without weakening identity controls.",
       "status": "READER_COMPLETE",
       "taskPage": true,
       "screenshotCount": 0,

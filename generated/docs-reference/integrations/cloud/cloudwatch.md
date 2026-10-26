@@ -4,10 +4,16 @@ description: Connect Amazon CloudWatch alerts to OpsKnight incident ingestion.
 type: integration
 product_area: integrations
 audience: [administrator, operator]
-keywords: ["Amazon CloudWatch webhook", "connect Amazon CloudWatch", "Amazon CloudWatch alerts", "Amazon CloudWatch integration"]
+keywords:
+  [
+    'Amazon CloudWatch webhook',
+    'connect Amazon CloudWatch',
+    'Amazon CloudWatch alerts',
+    'Amazon CloudWatch integration',
+  ]
 verification:
   level: source
-  verified_at: 2026-09-27
+  verified_at: 2026-10-21
   evidence:
     - src/lib/integrations/cloudwatch.ts
     - src/app/api/integrations/cloudwatch/route.ts
@@ -60,9 +66,10 @@ The exact payload schema is defined by `src/app/api/integrations/cloudwatch/rout
 ## Event mapping and incident lifecycle
 
 The adapter emits the lifecycle actions found in its current source:
+
 - `trigger`
 - `resolve`
-Correlation contract: **adapter EventPayload.dedup_key**. Recovery contract: **adapter emits resolve for its recovery state**.
+  Correlation contract: **adapter EventPayload.dedup_key**. Recovery contract: **adapter emits resolve for its recovery state**.
 
 ## Recovery and deduplication
 

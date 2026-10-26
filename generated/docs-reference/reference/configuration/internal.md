@@ -6,7 +6,7 @@ product_area: configuration
 audience: [developer, operator, administrator]
 verification:
   level: source
-  verified_at: 2026-10-03
+  verified_at: 2026-10-26
   evidence:
     - src/
     - scripts/
@@ -18,6 +18,62 @@ verification:
 These names were discovered in source, build, test, or documentation tooling
 but are not exposed by the supported deployment manifests or environment
 template. They are inventory, not a normal production configuration contract.
+
+## `ACK_STATUS`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `scripts/certification/drill-app-recovery.sh`
+
+## `ACTUAL_SHA`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `scripts/build-agent-artifacts.sh`
+
+## `ADMIN_ROW`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `scripts/certification/drill-upgrade-v20-to-v21.sh`
+
+## `AGENT_NONCE_RETENTION_MS`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: web or integrated runtime
+- Deployment support: runtime
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `src/lib/runbooks/nonce-cleanup.ts`
 
 ## `ALLOWED_VERSIONS`
 
@@ -33,6 +89,132 @@ template. They are inventory, not a normal production configuration contract.
 - Static default: none discovered
 - Sources: `scripts/sync-docs-to-website.sh`
 
+## `API_BASE_URL`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: derived
+- Static default: `http://127.0.0.1:3900/api/v2`
+- Sources: `scripts/certification/test-continuous-operational-chain.ts`
+
+## `API_CAPABILITY_CATALOG`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `scripts/certification/verify-discovery.ts`
+
+## `API_SCOPE_REGISTRY`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: web or integrated runtime
+- Deployment support: runtime
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `src/lib/api-v2/openapi-finalize.ts`
+
+## `API_V2_ALLOW_NON_EXPIRING_TOKENS`
+
+- Type: enum/string
+- Required: conditional or optional; inspect cited source
+- Allowed values: `false`
+- Secret: yes
+- Runtime roles: web or integrated runtime
+- Deployment support: runtime
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: derived
+- Static default: not displayed
+- Sources: `src/lib/api-v2/service-accounts.ts`
+
+## `API_V2_CURSOR_SECRET`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: yes
+- Runtime roles: web or integrated runtime
+- Deployment support: runtime
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: not displayed
+- Sources: `src/lib/api-v2/incident-diagnostics.ts`, `src/lib/api-v2/pagination.ts`
+
+## `API_V2_TOKEN_MAX_DAYS`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: yes
+- Runtime roles: web or integrated runtime
+- Deployment support: runtime
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: not displayed
+- Sources: `src/lib/api-v2/service-accounts.ts`
+
+## `APP_BASE_URL`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: derived
+- Static default: `http://127.0.0.1:3900`
+- Sources: `scripts/certification/certify-all-routes-browsers.ts`, `scripts/certification/test-continuous-operational-chain.ts`
+
+## `APP_CONTAINER`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `scripts/certification/drill-app-recovery.sh`, `scripts/certification/drill-rollback-rehearsal.sh`, `scripts/certification/drill-upgrade-v20-to-v21.sh`
+
+## `APP_START`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `scripts/certification/drill-app-recovery.sh`
+
 ## `APP_VERSION`
 
 - Type: string
@@ -46,6 +228,48 @@ template. They are inventory, not a normal production configuration contract.
 - Extraction confidence: incomplete
 - Static default: none discovered
 - Sources: `src/components/Sidebar.tsx`, `src/lib/admin-health.ts`, `src/lib/version.ts`
+
+## `ARCH`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `scripts/build-agent-artifacts.sh`
+
+## `ARTIFACT_PURGE_BATCH_SIZE`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: web or integrated runtime
+- Deployment support: runtime
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `src/lib/runbooks/artifact-cleanup.ts`
+
+## `AUTH_DIAGNOSTIC_DEADLINE_MS`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `scripts/prepare-authentication-diagnostics.cjs`
 
 ## `AUTH_OPTIONS_CACHE_TTL_MS`
 
@@ -103,6 +327,20 @@ template. They are inventory, not a normal production configuration contract.
 - Static default: none discovered
 - Sources: `src/lib/email.ts`
 
+## `BACKUP_DUMP`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `scripts/certification/drill-app-recovery.sh`
+
 ## `BASE_APP_VERSION`
 
 - Type: string
@@ -129,7 +367,21 @@ template. They are inventory, not a normal production configuration contract.
 - Deprecated: no
 - Extraction confidence: derived
 - Static default: `http://localhost:3000`
-- Sources: `scripts/test-integrations.cjs`, `scripts/test-integrations.ts`
+- Sources: `scripts/certification/certify-all-routes-browsers.ts`, `scripts/fault-recovery-drill.ts`, `scripts/swarm-capacity-tester.ts`, `scripts/test-integrations.cjs`, `scripts/test-integrations.ts`
+
+## `BASH_SOURCE`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `scripts/build-agent-artifacts.sh`
 
 ## `BOOTSTRAP_SECRET`
 
@@ -201,7 +453,63 @@ template. They are inventory, not a normal production configuration contract.
 - Static default: none discovered
 - Sources: `src/lib/auth.ts`
 
-## `CLAIM_TIMEOUT_MS`
+## `CAPTURED`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `scripts/backfill-automation-source-classification.cjs`
+
+## `CERT_ADMIN_EMAIL`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: derived
+- Static default: `cert-browser-admin@opsknight.internal`
+- Sources: `scripts/certification/certify-all-routes-browsers.ts`
+
+## `CERT_ADMIN_PASSWORD`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: yes
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: not displayed
+- Sources: `scripts/certification/certify-all-routes-browsers.ts`
+
+## `CIPHER_PAYLOAD`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `scripts/certification/drill-upgrade-v20-to-v21.sh`
+
+## `CIRCUIT_BREAKER_FAIL_THRESHOLD`
 
 - Type: string
 - Required: conditional or optional; inspect cited source
@@ -213,7 +521,7 @@ template. They are inventory, not a normal production configuration contract.
 - Deprecated: no
 - Extraction confidence: incomplete
 - Static default: none discovered
-- Sources: `src/lib/notification-control-plane.ts`
+- Sources: `src/lib/runbooks/presentation/summaries.ts`
 
 ## `CLEANUP_MUTEX_KEY`
 
@@ -369,6 +677,34 @@ template. They are inventory, not a normal production configuration contract.
 - Static default: none discovered
 - Sources: `src/middleware.ts`
 
+## `CREATE_RESP`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `scripts/certification/drill-app-recovery.sh`
+
+## `CSRF_TOKEN`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: yes
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: not displayed
+- Sources: `scripts/certification/drill-app-recovery.sh`, `scripts/certification/drill-rollback-rehearsal.sh`, `scripts/certification/drill-upgrade-v20-to-v21.sh`
+
 ## `CSRF_TOKEN_COOKIE_NAME`
 
 - Type: string
@@ -396,6 +732,34 @@ template. They are inventory, not a normal production configuration contract.
 - Extraction confidence: incomplete
 - Static default: none discovered
 - Sources: `src/app/api/settings/custom-fields/route.ts`
+
+## `DASHBOARD_FIXTURE_PASSWORD`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: yes
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: not displayed
+- Sources: `scripts/dev/seed-dashboard-live.ts`
+
+## `DASHBOARD_FIXTURE_PREFIX`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `scripts/dev/seed-dashboard-live.ts`
 
 ## `DATABASE_POOL_SIZE`
 
@@ -439,6 +803,90 @@ template. They are inventory, not a normal production configuration contract.
 - Static default: none discovered
 - Sources: `src/lib/prisma.ts`
 
+## `DB_CONTAINER`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `scripts/certification/drill-app-recovery.sh`, `scripts/certification/drill-rollback-rehearsal.sh`, `scripts/certification/drill-upgrade-v20-to-v21.sh`
+
+## `DB_NAME`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `scripts/certification/drill-app-recovery.sh`, `scripts/certification/drill-rollback-rehearsal.sh`, `scripts/certification/drill-upgrade-v20-to-v21.sh`
+
+## `DB_PASS`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `scripts/certification/drill-app-recovery.sh`, `scripts/certification/drill-rollback-rehearsal.sh`, `scripts/certification/drill-upgrade-v20-to-v21.sh`
+
+## `DB_PORT`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `scripts/certification/drill-app-recovery.sh`, `scripts/certification/drill-rollback-rehearsal.sh`, `scripts/certification/drill-upgrade-v20-to-v21.sh`
+
+## `DB_USER`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `scripts/certification/drill-app-recovery.sh`, `scripts/certification/drill-rollback-rehearsal.sh`, `scripts/certification/drill-upgrade-v20-to-v21.sh`
+
+## `DECRYPT_RESULT`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `scripts/certification/drill-upgrade-v20-to-v21.sh`
+
 ## `DEFAULT_LIMIT`
 
 - Type: string
@@ -452,6 +900,20 @@ template. They are inventory, not a normal production configuration contract.
 - Extraction confidence: incomplete
 - Static default: none discovered
 - Sources: `src/app/(public)/logs/LogsClient.tsx`
+
+## `DEFAULT_STEP_TIMEOUT_SECONDS`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: web or integrated runtime
+- Deployment support: runtime
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `src/components/runbooks/builder/StepEditor.tsx`
 
 ## `DEGRADED`
 
@@ -481,6 +943,34 @@ template. They are inventory, not a normal production configuration contract.
 - Static default: none discovered
 - Sources: `next.config.ts`
 
+## `DISPOSABLE_CERT_TARGET`
+
+- Type: enum/string
+- Required: conditional or optional; inspect cited source
+- Allowed values: `1`
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: derived
+- Static default: `0`
+- Sources: `scripts/certification/certify-all-routes-browsers.ts`, `scripts/certification/drill-app-recovery.sh`, `scripts/certification/drill-rollback-rehearsal.sh`, `scripts/certification/drill-upgrade-v20-to-v21.sh`, `scripts/certification/test-continuous-operational-chain.ts`
+
+## `DIST_DIR`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `scripts/build-agent-artifacts.sh`
+
 ## `DOC_TOPICS`
 
 - Type: string
@@ -494,6 +984,34 @@ template. They are inventory, not a normal production configuration contract.
 - Extraction confidence: incomplete
 - Static default: none discovered
 - Sources: `src/app/(app)/help/page.tsx`
+
+## `DOTENV_CONFIG_PATH`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `scripts/certification/browser-setup.mjs`, `scripts/certification/certify-all-routes-browsers.ts`, `scripts/certification/certify-authorization-isolation.ts`, `scripts/certification/certify-multi-replica.ts`, `scripts/certification/certify-ui-api-state-parity.ts`, `scripts/certification/certify-ui-responsive.ts`, `scripts/certification/mint-key-pool.ts`, `scripts/certification/mint-limited-pool.ts`, `scripts/certification/reconcile-all-workflows.ts`, `scripts/certification/run-matrix-certification.ts`, `scripts/certification/seed-extended-fixtures.ts`, `scripts/certification/seed-fixtures.ts`, `scripts/certification/test-auth-flood-admission.ts`, `scripts/certification/test-continuous-operational-chain.ts`, `scripts/certification/test-create-status-page-live.ts`
+
+## `DURATION`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `scripts/sustained-ceiling-validator.ts`
 
 ## `DURATION_SECONDS`
 
@@ -551,6 +1069,20 @@ template. They are inventory, not a normal production configuration contract.
 - Static default: none discovered
 - Sources: `src/app/api/health/route.ts`, `src/lib/admin-health.ts`, `src/lib/cron-scheduler.ts`
 
+## `ENC_INTEGRATIONS`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `scripts/certification/drill-upgrade-v20-to-v21.sh`
+
 ## `ENCRYPTION_TARGETS`
 
 - Type: string
@@ -577,7 +1109,35 @@ template. They are inventory, not a normal production configuration contract.
 - Deprecated: no
 - Extraction confidence: incomplete
 - Static default: none discovered
-- Sources: `scripts/soak-test-2h.sh`
+- Sources: `scripts/certification/drill-app-recovery.sh`, `scripts/soak-test-2h.sh`
+
+## `ERROR_TYPE_PREFIX`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: web or integrated runtime
+- Deployment support: runtime
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `src/lib/api-v2/response.ts`
+
+## `ESBUILD_CMD`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `scripts/build-agent-artifacts.sh`
 
 ## `ESCALATION_LOCK_TIMEOUT_MS`
 
@@ -621,6 +1181,20 @@ template. They are inventory, not a normal production configuration contract.
 - Static default: none discovered
 - Sources: `scripts/perf/dashboard-benchmark.ts`
 
+## `EXPECTED_SHA`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `scripts/build-agent-artifacts.sh`
+
 ## `FADE_MS`
 
 - Type: string
@@ -649,6 +1223,20 @@ template. They are inventory, not a normal production configuration contract.
 - Static default: none discovered
 - Sources: `src/app/(app)/help/page.tsx`
 
+## `FLEET_BASE_PATH`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: web or integrated runtime
+- Deployment support: runtime
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `src/components/runbooks/agents/fleet-routes.ts`
+
 ## `GIT_COMMIT_SHA`
 
 - Type: string
@@ -662,6 +1250,48 @@ template. They are inventory, not a normal production configuration contract.
 - Extraction confidence: incomplete
 - Static default: none discovered
 - Sources: `src/lib/version.ts`
+
+## `GITHUB_EVENT_NAME`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `scripts/ci/runbook-change-gates.cjs`
+
+## `GITHUB_EVENT_PATH`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `scripts/ci/runbook-change-gates.cjs`
+
+## `GITHUB_OUTPUT`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `scripts/ci/runbook-change-gates.cjs`
 
 ## `GITHUB_REF_NAME`
 
@@ -691,6 +1321,62 @@ template. They are inventory, not a normal production configuration contract.
 - Static default: none discovered
 - Sources: `src/lib/version.ts`
 
+## `HUMAN_INTERVENTION_PREFIX`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: web or integrated runtime
+- Deployment support: runtime
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `src/lib/runbooks/recovery.ts`
+
+## `IDEM_KEY`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `scripts/certification/drill-app-recovery.sh`
+
+## `IDEMPOTENCY_LABEL`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: web or integrated runtime
+- Deployment support: runtime
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `src/lib/api-v2/docs-render.ts`
+
+## `IFS`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: web or integrated runtime
+- Deployment support: runtime
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `src/lib/runbooks/agent-setup-commands.ts`
+
 ## `IMAGE_DIGEST`
 
 - Type: string
@@ -719,6 +1405,48 @@ template. They are inventory, not a normal production configuration contract.
 - Static default: none discovered
 - Sources: `scripts/perf/dashboard-seed.ts`
 
+## `INCIDENT_ID`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `scripts/certification/drill-app-recovery.sh`
+
+## `INCIDENT_NOT_OPEN`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: web or integrated runtime
+- Deployment support: runtime
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `src/lib/runbooks/orchestrator.ts`, `src/lib/runbooks/triggers.ts`
+
+## `INCIDENT_ROW`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `scripts/certification/drill-upgrade-v20-to-v21.sh`
+
 ## `INSTALL_LOCK_ID`
 
 - Type: string
@@ -733,6 +1461,20 @@ template. They are inventory, not a normal production configuration contract.
 - Static default: none discovered
 - Sources: `scripts/create-status-platform-online-indexes.cjs`
 
+## `INTEGRATION_KEY_ENC`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `scripts/certification/drill-upgrade-v20-to-v21.sh`
+
 ## `INTEGRATION_RATE_LIMIT`
 
 - Type: enum/string
@@ -745,7 +1487,7 @@ template. They are inventory, not a normal production configuration contract.
 - Deprecated: no
 - Extraction confidence: derived
 - Static default: none discovered
-- Sources: `src/lib/integrations/handler.ts`
+- Sources: `src/app/api/events/route.ts`, `src/lib/integrations/handler.ts`
 
 ## `INTEGRATION_VERIFY_SIGNATURES`
 
@@ -829,7 +1571,7 @@ template. They are inventory, not a normal production configuration contract.
 - Deprecated: no
 - Extraction confidence: incomplete
 - Static default: none discovered
-- Sources: `scripts/compliance/validate-sbom.mjs`, `scripts/test-integrations.ts`, `src/app/api/events/stream/route.ts`, `src/app/api/sla/stream/route.ts`, `src/app/api/widgets/stream/route.ts`, `src/lib/idempotency.ts`, `src/lib/logger.ts`, `src/lib/status-pages/publication-policy.ts`
+- Sources: `scripts/api-v2/generate-clients.ts`, `scripts/build-agent-release-manifest.mjs`, `scripts/certification/test-create-status-page-live.ts`, `scripts/certify-sso-upgrade.cjs`, `scripts/compliance/validate-sbom.mjs`, `scripts/test-integrations.ts`, `src/app/(app)/settings/system/scim-actions.ts`, `src/app/api/events/stream/route.ts`, `src/app/api/sla/stream/route.ts`, `src/app/api/widgets/stream/route.ts`, `src/components/settings/ApiExplorerPanel.tsx`, `src/lib/automation/diff.ts`, `src/lib/escalation/execution-health.ts`, `src/lib/escalation/job-query.ts`, `src/lib/idempotency.ts`, `src/lib/logger.ts`, `src/lib/runbooks/matcher.ts`, `src/lib/runbooks/pool-commands.ts`, `src/lib/runbooks/secret-usage.ts`, `src/lib/status-pages/publication-policy.ts`
 
 ## `KEY_PREFIX`
 
@@ -887,6 +1629,34 @@ template. They are inventory, not a normal production configuration contract.
 - Static default: `http://127.0.0.1:30080`
 - Sources: `scripts/multi-stage-load-test-25m.js`, `scripts/single-image-load-test-10m.js`
 
+## `KUBERNETES_SERVICE_HOST`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `scripts/check-authentication-cutover.cjs`
+
+## `KUBERNETES_SERVICE_PORT_HTTPS`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: derived
+- Static default: `443`
+- Sources: `scripts/check-authentication-cutover.cjs`
+
 ## `LATEST_RELEASE_TAG`
 
 - Type: string
@@ -901,6 +1671,48 @@ template. They are inventory, not a normal production configuration contract.
 - Static default: none discovered
 - Sources: `scripts/validate-release-tag.cjs`
 
+## `LEGACY_NOTIFICATION_CLAIM_MS`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: web or integrated runtime
+- Deployment support: runtime
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `src/lib/notification-claim-lease.ts`
+
+## `LIMITS`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: web or integrated runtime
+- Deployment support: runtime
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `src/components/automation/AutomationRules.tsx`, `src/components/automation/authoring/context-fields.tsx`
+
+## `LOCATION`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `scripts/certification/drill-app-recovery.sh`, `scripts/certification/drill-rollback-rehearsal.sh`, `scripts/certification/drill-upgrade-v20-to-v21.sh`
+
 ## `LOCK_ID`
 
 - Type: string
@@ -913,7 +1725,7 @@ template. They are inventory, not a normal production configuration contract.
 - Deprecated: no
 - Extraction confidence: incomplete
 - Static default: none discovered
-- Sources: `scripts/create-sla-scheduler-online-index.cjs`, `scripts/create-voice-attempt-online-indexes.cjs`
+- Sources: `scripts/backfill-automation-source-classification.cjs`, `scripts/create-sla-scheduler-online-index.cjs`, `scripts/create-voice-attempt-online-indexes.cjs`, `scripts/prepare-authentication-diagnostics.cjs`
 
 ## `LOCK_TIMEOUT_MS`
 
@@ -985,6 +1797,34 @@ template. They are inventory, not a normal production configuration contract.
 - Static default: none discovered
 - Sources: `src/lib/logger.ts`
 
+## `LOGIN_HEADERS`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `scripts/certification/drill-app-recovery.sh`, `scripts/certification/drill-rollback-rehearsal.sh`, `scripts/certification/drill-upgrade-v20-to-v21.sh`
+
+## `LOGIN_STATUS`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `scripts/certification/drill-app-recovery.sh`, `scripts/certification/drill-rollback-rehearsal.sh`, `scripts/certification/drill-upgrade-v20-to-v21.sh`
+
 ## `MARGIN_X`
 
 - Type: string
@@ -1012,6 +1852,34 @@ template. They are inventory, not a normal production configuration contract.
 - Extraction confidence: incomplete
 - Static default: none discovered
 - Sources: `src/lib/compliance/evidence/validate.ts`
+
+## `MAX_ARTIFACTS_PER_ATTEMPT`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: web or integrated runtime
+- Deployment support: runtime
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `src/lib/runbooks/agent-claims.ts`
+
+## `MAX_AUTOMATIC_POLICY_TARGETS`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: web or integrated runtime
+- Deployment support: runtime
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `src/lib/runbooks/binding-readiness.ts`, `src/lib/runbooks/policy-checks.ts`
 
 ## `MAX_BATCH_SIZE`
 
@@ -1068,6 +1936,20 @@ template. They are inventory, not a normal production configuration contract.
 - Extraction confidence: incomplete
 - Static default: none discovered
 - Sources: `src/lib/escalation/policy-validation.ts`
+
+## `MAX_ESCALATION_STEPS`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: web or integrated runtime
+- Deployment support: runtime
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `src/lib/automation/versioning.ts`, `src/lib/escalation/automation-snapshot.ts`
 
 ## `MAX_EVENT_MESSAGE_LENGTH`
 
@@ -1167,7 +2049,7 @@ template. They are inventory, not a normal production configuration contract.
 - Static default: none discovered
 - Sources: `src/lib/compliance/evidence/validate.ts`
 
-## `MAX_RECONNECT_ATTEMPTS`
+## `MAX_PAGE_LIMIT`
 
 - Type: string
 - Required: conditional or optional; inspect cited source
@@ -1179,7 +2061,7 @@ template. They are inventory, not a normal production configuration contract.
 - Deprecated: no
 - Extraction confidence: incomplete
 - Static default: none discovered
-- Sources: `src/components/dashboard/WidgetProvider.tsx`
+- Sources: `src/lib/api-v2/pagination.ts`
 
 ## `MAX_RESOLUTION_LENGTH`
 
@@ -1209,6 +2091,20 @@ template. They are inventory, not a normal production configuration contract.
 - Static default: none discovered
 - Sources: `src/lib/incidents/lifecycle.ts`
 
+## `MAX_RESPONDER_SNAPSHOT_BYTES`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: web or integrated runtime
+- Deployment support: runtime
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `src/lib/escalation/automation-snapshot.ts`
+
 ## `MAX_RESPONSE_BODY_BYTES`
 
 - Type: string
@@ -1222,6 +2118,34 @@ template. They are inventory, not a normal production configuration contract.
 - Extraction confidence: incomplete
 - Static default: none discovered
 - Sources: `src/lib/webhooks.ts`
+
+## `MAX_RETENTION_DAYS`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: web or integrated runtime
+- Deployment support: runtime
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `src/components/settings/AutomationSettings.tsx`
+
+## `MAX_RUNBOOK_STEPS`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: web or integrated runtime
+- Deployment support: runtime
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `src/lib/runbooks/schemas.ts`, `src/lib/runbooks/shared-definition.ts`
 
 ## `MAX_SELECTED_CONTROLS`
 
@@ -1335,6 +2259,20 @@ template. They are inventory, not a normal production configuration contract.
 - Static default: none discovered
 - Sources: `src/app/(app)/settings/integrations/microsoft-teams/page.tsx`, `src/app/api/microsoft-teams/package/route.ts`
 
+## `MIGRATION_DURATION`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `scripts/certification/drill-upgrade-v20-to-v21.sh`
+
 ## `MIGRATION_RECOVERY_MODE`
 
 - Type: enum/string
@@ -1377,6 +2315,20 @@ template. They are inventory, not a normal production configuration contract.
 - Static default: none discovered
 - Sources: `src/lib/incidents/lifecycle.ts`
 
+## `MIN_RETENTION_DAYS`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: web or integrated runtime
+- Deployment support: runtime
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `src/components/settings/AutomationSettings.tsx`
+
 ## `MOBILE_CACHE_PREFIX`
 
 - Type: string
@@ -1390,6 +2342,34 @@ template. They are inventory, not a normal production configuration contract.
 - Extraction confidence: incomplete
 - Static default: none discovered
 - Sources: `src/lib/mobile-cache-status.ts`, `src/lib/mobile-cache.principal-isolation.test.tsx`, `src/lib/mobile-cache.ts`
+
+## `NETWORK_NAME`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `scripts/certification/drill-app-recovery.sh`, `scripts/certification/drill-rollback-rehearsal.sh`, `scripts/certification/drill-upgrade-v20-to-v21.sh`
+
+## `NEW_TABLE_COUNT`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `scripts/certification/drill-upgrade-v20-to-v21.sh`
 
 ## `NEXT_PHASE`
 
@@ -1489,6 +2469,20 @@ template. They are inventory, not a normal production configuration contract.
 - Static default: none discovered
 - Sources: `src/lib/auth-cookies.ts`, `src/lib/request-host.ts`
 
+## `NODE_DIST`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `scripts/build-agent-artifacts.sh`
+
 ## `NODE_ENV`
 
 - Type: enum/string
@@ -1501,7 +2495,63 @@ template. They are inventory, not a normal production configuration contract.
 - Deprecated: no
 - Extraction confidence: derived
 - Static default: `development`
-- Sources: `next.config.ts`, `src/app/(app)/settings/system/page.tsx`, `src/app/api/health/route.ts`, `src/app/api/jira/webhook/route.ts`, `src/app/api/microsoft-teams/messages/route.ts`, `src/app/api/search/route.ts`, `src/app/api/slack/oauth/route.ts`, `src/app/providers.tsx`, `src/app/setup/page.tsx`, `src/components/DashboardRealtimeWrapper.tsx`, `src/components/DatabaseOffline.tsx`, `src/components/WebVitalsReporter.tsx`, `src/components/ui/ErrorBoundary.tsx`, `src/lib/admin-health.ts`, `src/lib/api-keys.ts`, `src/lib/app-url.ts`, `src/lib/auth-cookies.ts`, `src/lib/auth-public-origin.ts`, `src/lib/encryption.ts`, `src/lib/env-validation.ts`, `src/lib/incident-collaboration/meeting-store.ts`, `src/lib/logger.ts`, `src/lib/microsoft-teams/auth.ts`, `src/lib/monitoring/sentry.ts`, `src/lib/provider-admission.ts`, `src/lib/retention-policy.ts`, `src/lib/secret-manager.ts`, `src/middleware.ts`
+- Sources: `next.config.ts`, `scripts/seed-enterprise-runbooks.ts`, `scripts/seed-runbooks-dev.ts`, `src/app/(app)/settings/system/page.tsx`, `src/app/api/health/route.ts`, `src/app/api/jira/webhook/handler.ts`, `src/app/api/microsoft-teams/messages/route.ts`, `src/app/api/search/route.ts`, `src/app/api/slack/oauth/route.ts`, `src/app/providers.tsx`, `src/app/setup/page.tsx`, `src/components/ChunkLoadErrorHandler.tsx`, `src/components/DatabaseOffline.tsx`, `src/components/WebVitalsReporter.tsx`, `src/components/ui/ErrorBoundary.tsx`, `src/lib/admin-health.ts`, `src/lib/api-keys.ts`, `src/lib/api-v2/incident-diagnostics.ts`, `src/lib/api-v2/pagination.ts`, `src/lib/api-v2/service-accounts.ts`, `src/lib/app-url.ts`, `src/lib/auth-control/emergency.ts`, `src/lib/auth-control/oidc-revisions.ts`, `src/lib/auth-control/origin.ts`, `src/lib/auth-cookies.ts`, `src/lib/auth-public-origin.ts`, `src/lib/automation/runtime.ts`, `src/lib/client-ip.ts`, `src/lib/encryption.ts`, `src/lib/env-validation.ts`, `src/lib/incident-collaboration/meeting-store.ts`, `src/lib/logger.ts`, `src/lib/microsoft-teams/auth.ts`, `src/lib/monitoring/sentry.ts`, `src/lib/provider-admission.ts`, `src/lib/recovery-origin-pin.ts`, `src/lib/retention-policy.ts`, `src/lib/runbooks/agent-claims.ts`, `src/lib/runbooks/execution-signing.ts`, `src/lib/scim/protocol/origin.ts`, `src/lib/secret-manager.ts`, `src/middleware.ts`
+
+## `NODE_SHASUMS_URL`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `scripts/build-agent-artifacts.sh`
+
+## `NODE_TAR`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `scripts/build-agent-artifacts.sh`
+
+## `NODE_URL`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `scripts/build-agent-artifacts.sh`
+
+## `NODE_VERSION`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: derived
+- Static default: `v24.21.0`
+- Sources: `scripts/build-agent-artifacts.sh`
 
 ## `NON_GATING_DETAIL`
 
@@ -1544,6 +2594,20 @@ template. They are inventory, not a normal production configuration contract.
 - Extraction confidence: incomplete
 - Static default: none discovered
 - Sources: `src/lib/auth.ts`
+
+## `NONCE_PURGE_BATCH_SIZE`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: web or integrated runtime
+- Deployment support: runtime
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `src/lib/runbooks/nonce-cleanup.ts`
 
 ## `NOTIFICATION_AGING_FLOOR`
 
@@ -1615,6 +2679,104 @@ template. They are inventory, not a normal production configuration contract.
 - Static default: `5000`
 - Sources: `src/lib/oidc-config.ts`
 
+## `OPSKNIGHT_AGENT_IMAGE_DIGEST`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `scripts/build-agent-release-manifest.mjs`
+
+## `OPSKNIGHT_AGENT_RELEASE_TAG`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: web or integrated runtime
+- Deployment support: runtime
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `src/lib/runbooks/distribution.ts`
+
+## `OPSKNIGHT_ALLOW_INSECURE_AGENT_SECRETS`
+
+- Type: enum/string
+- Required: conditional or optional; inspect cited source
+- Allowed values: `true`
+- Secret: yes
+- Runtime roles: web or integrated runtime
+- Deployment support: runtime
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: derived
+- Static default: not displayed
+- Sources: `src/lib/runbooks/agent-claims.ts`
+
+## `OPSKNIGHT_BACKFILL_BATCH_SIZE`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `scripts/backfill-automation-source-classification.cjs`
+
+## `OPSKNIGHT_CERT_TARGET`
+
+- Type: enum/string
+- Required: conditional or optional; inspect cited source
+- Allowed values: `1`
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: derived
+- Static default: `0`
+- Sources: `scripts/certification/certify-all-routes-browsers.ts`, `scripts/certification/drill-app-recovery.sh`, `scripts/certification/drill-rollback-rehearsal.sh`, `scripts/certification/drill-upgrade-v20-to-v21.sh`, `scripts/certification/test-continuous-operational-chain.ts`
+
+## `OPSKNIGHT_DATABASE_READY_POLL_MS`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `scripts/wait-for-database-ready.cjs`
+
+## `OPSKNIGHT_DATABASE_READY_TIMEOUT_MS`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `scripts/wait-for-database-ready.cjs`
+
 ## `OPSKNIGHT_DEPLOYMENT_ID`
 
 - Type: string
@@ -1656,6 +2818,34 @@ template. They are inventory, not a normal production configuration contract.
 - Extraction confidence: incomplete
 - Static default: none discovered
 - Sources: `src/lib/runtime-role.ts`
+
+## `OPSKNIGHT_REVISION`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `scripts/build-agent-release-manifest.mjs`
+
+## `OPSKNIGHT_RUNTIME_DATABASE_READY_TIMEOUT_MS`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `scripts/wait-for-runtime-database.cjs`
 
 ## `OPSKNIGHT_SCHEDULER_PROFILES`
 
@@ -1727,6 +2917,20 @@ template. They are inventory, not a normal production configuration contract.
 - Static default: none discovered
 - Sources: `src/lib/db-utils.ts`
 
+## `OPSKNIGHT_VERSION`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: derived
+- Static default: `${PACKAGE_VERSION`
+- Sources: `scripts/build-agent-artifacts.sh`, `scripts/build-agent-release-manifest.mjs`
+
 ## `OPSKNIGHT_WORKER_ID`
 
 - Type: string
@@ -1740,6 +2944,62 @@ template. They are inventory, not a normal production configuration contract.
 - Extraction confidence: incomplete
 - Static default: none discovered
 - Sources: `src/lib/notification-control-plane.ts`, `src/lib/provider-admission.ts`
+
+## `ORPHAN_EVENTS`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `scripts/certification/drill-upgrade-v20-to-v21.sh`
+
+## `ORPHAN_INCIDENTS`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `scripts/certification/drill-upgrade-v20-to-v21.sh`
+
+## `PACKAGE_DIR`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `scripts/build-agent-artifacts.sh`
+
+## `PACKAGE_VERSION`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `scripts/build-agent-artifacts.sh`
 
 ## `PAGE_HEIGHT`
 
@@ -1853,6 +3113,20 @@ template. They are inventory, not a normal production configuration contract.
 - Static default: none discovered
 - Sources: `scripts/perf/dashboard-benchmark.ts`
 
+## `PHASES`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: web or integrated runtime
+- Deployment support: runtime
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `src/components/automation/AutomationRules.tsx`
+
 ## `PKCE_CODE_VERIFIER_COOKIE_NAME`
 
 - Type: string
@@ -1866,6 +3140,20 @@ template. They are inventory, not a normal production configuration contract.
 - Extraction confidence: incomplete
 - Static default: none discovered
 - Sources: `src/lib/auth.ts`
+
+## `POPULAR_TAG_LIMIT`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: web or integrated runtime
+- Deployment support: runtime
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `src/app/(app)/runbooks/page.tsx`
 
 ## `PORT`
 
@@ -1881,6 +3169,356 @@ template. They are inventory, not a normal production configuration contract.
 - Static default: none discovered
 - Sources: `src/middleware.ts`
 
+## `PORTABLE_RUNBOOK_FORMAT`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: web or integrated runtime
+- Deployment support: runtime
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `src/lib/runbooks/portable.ts`
+
+## `PORTABLE_RUNBOOK_FORMAT_VERSION`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: web or integrated runtime
+- Deployment support: runtime
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `src/lib/runbooks/portable.ts`
+
+## `POST_ACTIONS`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `scripts/certification/drill-upgrade-v20-to-v21.sh`
+
+## `POST_AUDIT_LOGS`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `scripts/certification/drill-upgrade-v20-to-v21.sh`
+
+## `POST_EVENTS`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `scripts/certification/drill-upgrade-v20-to-v21.sh`
+
+## `POST_INCIDENTS`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `scripts/certification/drill-upgrade-v20-to-v21.sh`
+
+## `POST_MIGRATIONS`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `scripts/certification/drill-upgrade-v20-to-v21.sh`
+
+## `POST_POSTMORTEMS`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `scripts/certification/drill-upgrade-v20-to-v21.sh`
+
+## `POST_SERVICES`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `scripts/certification/drill-upgrade-v20-to-v21.sh`
+
+## `POST_STATUS_PAGES`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `scripts/certification/drill-upgrade-v20-to-v21.sh`
+
+## `POST_TEAMS`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `scripts/certification/drill-upgrade-v20-to-v21.sh`
+
+## `POST_USERS`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `scripts/certification/drill-upgrade-v20-to-v21.sh`
+
+## `PRE_ACTIONS`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `scripts/certification/drill-upgrade-v20-to-v21.sh`
+
+## `PRE_AUDIT_LOGS`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `scripts/certification/drill-upgrade-v20-to-v21.sh`
+
+## `PRE_EVENTS`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `scripts/certification/drill-upgrade-v20-to-v21.sh`
+
+## `PRE_INCIDENTS`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `scripts/certification/drill-upgrade-v20-to-v21.sh`
+
+## `PRE_MIGRATIONS`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `scripts/certification/drill-upgrade-v20-to-v21.sh`
+
+## `PRE_POSTMORTEMS`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `scripts/certification/drill-upgrade-v20-to-v21.sh`
+
+## `PRE_SERVICES`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `scripts/certification/drill-upgrade-v20-to-v21.sh`
+
+## `PRE_STATUS_PAGES`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `scripts/certification/drill-upgrade-v20-to-v21.sh`
+
+## `PRE_TEAMS`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `scripts/certification/drill-upgrade-v20-to-v21.sh`
+
+## `PRE_UPGRADE_DUMP`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `scripts/certification/drill-rollback-rehearsal.sh`
+
+## `PRE_USERS`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `scripts/certification/drill-upgrade-v20-to-v21.sh`
+
+## `PREFIX`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: web or integrated runtime
+- Deployment support: runtime
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `src/lib/auth-control/emergency-password.ts`
+
+## `PREV_IMAGE`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `scripts/certification/drill-rollback-rehearsal.sh`
+
 ## `PRISMA_SLOW_QUERY_MS`
 
 - Type: string
@@ -1895,6 +3533,62 @@ template. They are inventory, not a normal production configuration contract.
 - Static default: `500`
 - Sources: `src/lib/prisma.ts`
 
+## `PRIVACY_CLEANUP_BATCH_SIZE`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: web or integrated runtime
+- Deployment support: runtime
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `src/lib/automation/privacy-cleanup.ts`
+
+## `PROTECTED_STATUS`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `scripts/certification/drill-app-recovery.sh`, `scripts/certification/drill-rollback-rehearsal.sh`, `scripts/certification/drill-upgrade-v20-to-v21.sh`
+
+## `RAW_VERSION`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `scripts/build-agent-artifacts.sh`
+
+## `REALTIME_CACHE_MAX_BYTES`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: web or integrated runtime
+- Deployment support: runtime
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `src/lib/realtime-cache.ts`
+
 ## `RECENT_DISPLAY_DAYS`
 
 - Type: string
@@ -1908,6 +3602,48 @@ template. They are inventory, not a normal production configuration contract.
 - Extraction confidence: incomplete
 - Static default: none discovered
 - Sources: `src/components/status-page/v3/IncidentsV3.tsx`
+
+## `RECOVERY_IMAGE`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `scripts/certification/drill-app-recovery.sh`
+
+## `RELEASE_TAG`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `scripts/build-agent-artifacts.sh`
+
+## `RELEASE_VERSION`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `scripts/build-agent-artifacts.sh`
 
 ## `RENDER_GIT_COMMIT`
 
@@ -1937,6 +3673,76 @@ template. They are inventory, not a normal production configuration contract.
 - Static default: none discovered
 - Sources: `src/lib/microsoft-teams/delivery.ts`
 
+## `RESOLUTION_RECOMMENDED_PREFIX`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: web or integrated runtime
+- Deployment support: runtime
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `src/lib/incidents/response-presentation.ts`, `src/lib/runbooks/recovery.ts`
+
+## `RESPONSE_CONTEXT_SCHEMA_VERSION`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: web or integrated runtime
+- Deployment support: runtime
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `src/lib/automation/response-context.ts`
+
+## `RESTORE_DURATION`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `scripts/certification/drill-app-recovery.sh`
+
+## `RESTORE_FINISH`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `scripts/certification/drill-app-recovery.sh`, `scripts/certification/drill-rollback-rehearsal.sh`
+
+## `RESTORE_START`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `scripts/certification/drill-app-recovery.sh`, `scripts/certification/drill-rollback-rehearsal.sh`
+
 ## `REVOKED_PLATFORM_PREFIX`
 
 - Type: string
@@ -1951,6 +3757,48 @@ template. They are inventory, not a normal production configuration contract.
 - Static default: none discovered
 - Sources: `src/lib/session-registry.ts`
 
+## `ROLLBACK_END`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `scripts/certification/drill-rollback-rehearsal.sh`
+
+## `ROLLBACK_RTO`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `scripts/certification/drill-rollback-rehearsal.sh`
+
+## `ROLLBACK_START`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `scripts/certification/drill-rollback-rehearsal.sh`
+
 ## `ROOT_DIR`
 
 - Type: string
@@ -1963,7 +3811,7 @@ template. They are inventory, not a normal production configuration contract.
 - Deprecated: no
 - Extraction confidence: incomplete
 - Static default: none discovered
-- Sources: `scripts/sync-docs-to-website.sh`
+- Sources: `scripts/build-agent-artifacts.sh`, `scripts/sync-docs-to-website.sh`
 
 ## `ROW_HEIGHT`
 
@@ -1978,6 +3826,20 @@ template. They are inventory, not a normal production configuration contract.
 - Extraction confidence: incomplete
 - Static default: none discovered
 - Sources: `src/lib/status-pages/reports/uptime-report-generator.ts`
+
+## `RUNBOOK_TAG_MAX_COUNT`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: web or integrated runtime
+- Deployment support: runtime
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `src/components/runbooks/RunbookLibrary.tsx`
 
 ## `SBOM_SOURCE_REF`
 
@@ -2021,6 +3883,160 @@ template. They are inventory, not a normal production configuration contract.
 - Static default: none discovered
 - Sources: `src/app/api/health/route.ts`
 
+## `SCIM_ALLOW_INSECURE_HTTP`
+
+- Type: enum/string
+- Required: conditional or optional; inspect cited source
+- Allowed values: `true`
+- Secret: no
+- Runtime roles: web or integrated runtime
+- Deployment support: runtime
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: derived
+- Static default: none discovered
+- Sources: `src/lib/scim/protocol/origin.ts`
+
+## `SCIM_ALLOW_PRIVATE_NETWORK`
+
+- Type: enum/string
+- Required: conditional or optional; inspect cited source
+- Allowed values: `true`
+- Secret: yes
+- Runtime roles: web or integrated runtime
+- Deployment support: runtime
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: derived
+- Static default: not displayed
+- Sources: `src/lib/scim/protocol/origin.ts`
+
+## `SCIM_BASELINE_COMMIT`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: derived
+- Static default: `326f21685`
+- Sources: `scripts/scim/certify-baseline.mjs`, `scripts/scim/certify-upgrade.mjs`
+
+## `SCIM_CERT_DB_CONTAINER`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: derived
+- Static default: `opsknight-scim-cert-db`
+- Sources: `scripts/scim/certify-snapshot-upgrade.mjs`, `scripts/scim/certify-upgrade.mjs`
+
+## `SCIM_CERT_DOCKER`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: derived
+- Static default: `/Applications/Docker.app/Contents/Resources/bin/docker`
+- Sources: `scripts/scim/certify-outage.mjs`, `scripts/scim/certify-snapshot-upgrade.mjs`, `scripts/scim/certify-upgrade.mjs`
+
+## `SCIM_CERT_REPLICA_URLS`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `scripts/scim/certify-outage.mjs`, `scripts/scim/certify-replicas.mjs`, `scripts/scim/certify-session-replicas.mjs`
+
+## `SCIM_CONNECTOR_REQUESTS_PER_MINUTE`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: web or integrated runtime
+- Deployment support: runtime
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `src/lib/scim/security/credentials.ts`
+
+## `SCIM_E2E_ADMIN_EMAIL`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `scripts/scim/seed-certification.ts`
+
+## `SCIM_E2E_ADMIN_PASSWORD`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: yes
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: not displayed
+- Sources: `scripts/scim/seed-certification.ts`
+
+## `SCIM_E2E_BASE_URL`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: derived
+- Static default: `http://localhost:3028`
+- Sources: `scripts/scim/certify-http-capacity.mjs`
+
+## `SCRIPT_DIR`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `scripts/build-agent-artifacts.sh`
+
 ## `SENTRY_DSN`
 
 - Type: string
@@ -2063,6 +4079,34 @@ template. They are inventory, not a normal production configuration contract.
 - Static default: none discovered
 - Sources: `src/lib/monitoring/sentry.ts`
 
+## `SERVICE_ACCOUNT_DOMAIN`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: web or integrated runtime
+- Deployment support: runtime
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `src/app/(app)/settings/api-keys/page.tsx`, `src/app/api/v2/service-accounts/route.ts`, `src/lib/api-v2/service-accounts.ts`, `src/lib/service-account-identity.ts`, `src/lib/service-account-inventory.ts`
+
+## `SERVICE_ROW`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `scripts/certification/drill-upgrade-v20-to-v21.sh`
+
 ## `SERVICE_WAR_ROOM_POLICY_PREFIX`
 
 - Type: string
@@ -2090,6 +4134,20 @@ template. They are inventory, not a normal production configuration contract.
 - Extraction confidence: derived
 - Static default: `120000`
 - Sources: `src/lib/session-registry.ts`
+
+## `SESSION_BODY`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `scripts/certification/drill-app-recovery.sh`, `scripts/certification/drill-rollback-rehearsal.sh`, `scripts/certification/drill-upgrade-v20-to-v21.sh`
 
 ## `SESSION_DEVICE_PREFIX`
 
@@ -2147,6 +4205,20 @@ template. They are inventory, not a normal production configuration contract.
 - Static default: not displayed
 - Sources: `src/lib/auth.ts`
 
+## `SHASUMS_FILE`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `scripts/build-agent-artifacts.sh`
+
 ## `SINGLE_COMPOSE_URL`
 
 - Type: string
@@ -2188,6 +4260,20 @@ template. They are inventory, not a normal production configuration contract.
 - Extraction confidence: incomplete
 - Static default: none discovered
 - Sources: `src/lib/cron-scheduler.ts`
+
+## `SKIP_BUILD_TYPECHECK`
+
+- Type: enum/string
+- Required: conditional or optional; inspect cited source
+- Allowed values: `true`
+- Secret: no
+- Runtime roles: build-time web bundle
+- Deployment support: build
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: derived
+- Static default: none discovered
+- Sources: `next.config.ts`
 
 ## `SKIP_ENV_VALIDATION`
 
@@ -2315,6 +4401,20 @@ template. They are inventory, not a normal production configuration contract.
 - Static default: `./artifacts/soak-test`
 - Sources: `scripts/soak-test-2h.sh`
 
+## `SOURCE_DUMP`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `scripts/certification/drill-upgrade-v20-to-v21.sh`
+
 ## `SOURCE_VERSION`
 
 - Type: string
@@ -2343,6 +4443,118 @@ template. They are inventory, not a normal production configuration contract.
 - Static default: none discovered
 - Sources: `scripts/sync-docs-to-website.sh`
 
+## `SSO_CERT_AUTH_LOAD`
+
+- Type: enum/string
+- Required: conditional or optional; inspect cited source
+- Allowed values: `1`
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: derived
+- Static default: none discovered
+- Sources: `scripts/certify-sso-upgrade.cjs`
+
+## `SSO_CERT_BASE_URL`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: derived
+- Static default: `https://localhost:3005`
+- Sources: `scripts/certify-authentication-http.cjs`
+
+## `SSO_CERT_EXPECTED_POLICY_VERSION`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `scripts/certify-authentication-http.cjs`
+
+## `SSO_CERT_EXPECTED_USER_ID`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `scripts/certify-authentication-http.cjs`
+
+## `SSO_CERT_SESSION_STATE`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `scripts/certify-authentication-http.cjs`
+
+## `SSO_UPGRADE_BASELINE`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: derived
+- Static default: `097f4916a38ddcc6d1512f71b72bde36abbeb171`
+- Sources: `scripts/certify-sso-upgrade.cjs`
+
+## `SSO_UPGRADE_ENCRYPTED_SECRET`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: yes
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: not displayed
+- Sources: `scripts/certify-sso-upgrade.cjs`
+
+## `SSO_UPGRADE_EXISTING_JWT`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `scripts/certify-sso-upgrade.cjs`
+
 ## `START_TIME`
 
 - Type: string
@@ -2355,7 +4567,7 @@ template. They are inventory, not a normal production configuration contract.
 - Deprecated: no
 - Extraction confidence: incomplete
 - Static default: none discovered
-- Sources: `scripts/soak-test-2h.sh`
+- Sources: `scripts/certification/drill-app-recovery.sh`, `scripts/soak-test-2h.sh`
 
 ## `STATE_COOKIE_NAME`
 
@@ -2567,6 +4779,20 @@ template. They are inventory, not a normal production configuration contract.
 - Static default: none discovered
 - Sources: `src/app/status-auth/callback/route.ts`
 
+## `STEP_CATALOG`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: web or integrated runtime
+- Deployment support: runtime
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `src/components/runbooks/builder/StepNavigator.tsx`
+
 ## `STORAGE_KEY_PREFIX`
 
 - Type: string
@@ -2623,6 +4849,76 @@ template. They are inventory, not a normal production configuration contract.
 - Static default: none discovered
 - Sources: `scripts/multi-stage-load-test-25m.js`, `scripts/single-image-load-test-10m.js`
 
+## `SUSTAINED_RATE`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `scripts/sustained-ceiling-validator.ts`
+
+## `SYNTHETIC_VERIFIED`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `scripts/certification/drill-app-recovery.sh`
+
+## `TARBALL_NAME`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `scripts/build-agent-artifacts.sh`
+
+## `TARGET_IMAGE`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `scripts/certification/drill-upgrade-v20-to-v21.sh`
+
+## `TEAM_ROW`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `scripts/certification/drill-upgrade-v20-to-v21.sh`
+
 ## `TEAMS_E2E_DESTINATION_ID`
 
 - Type: string
@@ -2665,6 +4961,34 @@ template. They are inventory, not a normal production configuration contract.
 - Static default: `1`
 - Sources: `scripts/ci/microsoft-teams-live-smoke.mjs`
 
+## `TEMP_NODE_DIR`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `scripts/build-agent-artifacts.sh`
+
+## `TEST_EMAIL`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `scripts/certification/certify-all-routes-browsers.ts`
+
 ## `TILE_W`
 
 - Type: string
@@ -2678,6 +5002,20 @@ template. They are inventory, not a normal production configuration contract.
 - Extraction confidence: incomplete
 - Static default: none discovered
 - Sources: `src/components/auth/LoginAnimation.tsx`
+
+## `TIMELINE_EVENT_COUNT`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `scripts/certification/drill-app-recovery.sh`
 
 ## `TIMESTAMP`
 
@@ -2693,6 +5031,20 @@ template. They are inventory, not a normal production configuration contract.
 - Static default: none discovered
 - Sources: `scripts/soak-test-2h.sh`
 
+## `TITLES`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `scripts/dev/seed-dashboard-live.ts`
+
 ## `TOTAL_DURATION_SEC`
 
 - Type: string
@@ -2707,6 +5059,34 @@ template. They are inventory, not a normal production configuration contract.
 - Static default: none discovered
 - Sources: `scripts/multi-stage-load-test-25m.js`, `scripts/single-image-load-test-10m.js`
 
+## `TOTAL_RTO`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `scripts/certification/drill-app-recovery.sh`
+
+## `TRIGGER_LABELS`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: web or integrated runtime
+- Deployment support: runtime
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `src/app/(app)/runbooks/executions/[id]/page.tsx`
+
 ## `TRUSTED_PWA_SESSION_DAYS`
 
 - Type: string
@@ -2720,6 +5100,62 @@ template. They are inventory, not a normal production configuration contract.
 - Extraction confidence: incomplete
 - Static default: none discovered
 - Sources: `src/lib/pwa-session-policy.ts`
+
+## `UPGRADE_FINISH`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `scripts/certification/drill-upgrade-v20-to-v21.sh`
+
+## `UPGRADE_START`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `scripts/certification/drill-upgrade-v20-to-v21.sh`
+
+## `URGENT_NOTIFICATION_CLAIM_MS`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: web or integrated runtime
+- Deployment support: runtime
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `src/lib/notification-claim-lease.ts`
+
+## `V2_OPERATIONS`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `scripts/certification/run-matrix-certification.ts`, `scripts/certification/verify-discovery.ts`
 
 ## `VAPID_PRIVATE_KEY`
 
@@ -2789,7 +5225,7 @@ template. They are inventory, not a normal production configuration contract.
 - Deprecated: no
 - Extraction confidence: derived
 - Static default: none discovered
-- Sources: `src/lib/provider-admission.ts`
+- Sources: `src/lib/provider-admission.ts`, `src/lib/runbooks/agent-claims.ts`
 
 ## `VITEST_USE_REAL_DB`
 
@@ -2833,6 +5269,20 @@ template. They are inventory, not a normal production configuration contract.
 - Static default: none discovered
 - Sources: `scripts/sync-docs-to-website.sh`
 
+## `WORKER_CONTAINER`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `scripts/certification/drill-app-recovery.sh`
+
 ## `WORKER_ID`
 
 - Type: string
@@ -2847,3 +5297,58 @@ template. They are inventory, not a normal production configuration contract.
 - Static default: none discovered
 - Sources: `src/lib/cron-scheduler.ts`, `src/lib/provider-admission.ts`
 
+## `WORKER_LOGS`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `scripts/certification/drill-app-recovery.sh`
+
+## `WORKER_RUNNING`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `scripts/certification/drill-app-recovery.sh`
+
+## `XDG_RUNTIME_DIR`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: web or integrated runtime
+- Deployment support: runtime
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: derived
+- Static default: `/run/user/\$(id -u)`
+- Sources: `src/lib/runbooks/agent-setup-commands.ts`
+
+## `XDG_STATE_HOME`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: web or integrated runtime
+- Deployment support: runtime
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: derived
+- Static default: `$HOME/.local/state`
+- Sources: `src/lib/runbooks/agent-setup-commands.ts`

@@ -10,6 +10,9 @@ const revisionBoundJson = new Set([
   'generated/docs-contracts/current.json',
 ]);
 
+const versions = JSON.parse(readFileSync(resolve(repositoryRoot, 'docs/versions.json'), 'utf8'));
+const currentDocsVersion = versions.currentRelease || 'v2.0.0';
+
 export const generatedPaths = [
   ...revisionBoundJson,
   'generated/docs-contracts/capacity.json',
@@ -20,10 +23,10 @@ export const generatedPaths = [
   'generated/docs-certification/surface-parity-report.md',
   'docs/internal/product-surface-contracts.yaml',
   'docs/internal/certification/v1.5-topic-inventory.yaml',
-  'docs/v2.0.0/integrations/catalog.yaml',
-  'docs/v2.0.0/reference/features.md',
-  'docs/v2.0.0/reference/configuration/README.md',
-  'docs/v2.0.0/reference/api/README.md',
+  `docs/${currentDocsVersion}/integrations/catalog.yaml`,
+  `docs/${currentDocsVersion}/reference/features.md`,
+  `docs/${currentDocsVersion}/reference/configuration/README.md`,
+  `docs/${currentDocsVersion}/reference/api/README.md`,
 ];
 
 function committed(path) {

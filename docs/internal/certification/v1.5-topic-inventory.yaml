@@ -1,6 +1,6 @@
 schemaVersion: 1
 purpose: Generated topic inventory only. It makes no claim that a topic was ported or reviewed.
-sourceDigest: a5d2b624f9b60a651fd2bfa710d30d0d6f5a659c62641f612b81479a212acbb5
+sourceDigest: fa8640572aa7ac59b76fed4b3d17f17e491af8a4f3f94949832362deba4a8f6e
 topics:
   - id: readme_1
     source: docs/v1.5/README.md
@@ -1197,15 +1197,15 @@ topics:
   - id: core_concepts_readme_15
     source: docs/v1.5/core-concepts/README.md
     level: 3
-    topic: "Pattern 1: Simple Team Setup"
+    topic: 'Pattern 1: Simple Team Setup'
   - id: core_concepts_readme_16
     source: docs/v1.5/core-concepts/README.md
     level: 3
-    topic: "Pattern 2: Primary/Secondary Coverage"
+    topic: 'Pattern 2: Primary/Secondary Coverage'
   - id: core_concepts_readme_17
     source: docs/v1.5/core-concepts/README.md
     level: 3
-    topic: "Pattern 3: Follow-the-Sun"
+    topic: 'Pattern 3: Follow-the-Sun'
   - id: core_concepts_readme_18
     source: docs/v1.5/core-concepts/README.md
     level: 2
@@ -1977,15 +1977,15 @@ topics:
   - id: core_concepts_services_8
     source: docs/v1.5/core-concepts/services.md
     level: 2
-    topic: "Tab 1: Incidents"
+    topic: 'Tab 1: Incidents'
   - id: core_concepts_services_9
     source: docs/v1.5/core-concepts/services.md
     level: 2
-    topic: "Tab 2: Escalation Policy"
+    topic: 'Tab 2: Escalation Policy'
   - id: core_concepts_services_10
     source: docs/v1.5/core-concepts/services.md
     level: 2
-    topic: "Tab 3: Ingest Integrations & Webhooks"
+    topic: 'Tab 3: Ingest Integrations & Webhooks'
   - id: core_concepts_services_11
     source: docs/v1.5/core-concepts/services.md
     level: 3
@@ -2009,7 +2009,7 @@ topics:
   - id: core_concepts_services_16
     source: docs/v1.5/core-concepts/services.md
     level: 2
-    topic: "Tab 4: Service Settings & ChatOps"
+    topic: 'Tab 4: Service Settings & ChatOps'
   - id: core_concepts_services_17
     source: docs/v1.5/core-concepts/services.md
     level: 3
@@ -2713,11 +2713,11 @@ topics:
   - id: deployment_docker_9
     source: docs/v1.5/deployment/docker.md
     level: 1
-    topic: "With bundled PostgreSQL:"
+    topic: 'With bundled PostgreSQL:'
   - id: deployment_docker_10
     source: docs/v1.5/deployment/docker.md
     level: 1
-    topic: "With external managed PostgreSQL + custom enterprise CA:"
+    topic: 'With external managed PostgreSQL + custom enterprise CA:'
   - id: deployment_docker_11
     source: docs/v1.5/deployment/docker.md
     level: 2
@@ -3497,11 +3497,11 @@ topics:
   - id: integrations_apm_monitoring_appdynamics_4
     source: docs/v1.5/integrations/apm-monitoring/appdynamics.md
     level: 3
-    topic: "Step 1: Create Integration in OpsKnight"
+    topic: 'Step 1: Create Integration in OpsKnight'
   - id: integrations_apm_monitoring_appdynamics_5
     source: docs/v1.5/integrations/apm-monitoring/appdynamics.md
     level: 3
-    topic: "Step 2: Configure AppDynamics"
+    topic: 'Step 2: Configure AppDynamics'
   - id: integrations_apm_monitoring_appdynamics_6
     source: docs/v1.5/integrations/apm-monitoring/appdynamics.md
     level: 2
@@ -3557,15 +3557,15 @@ topics:
   - id: integrations_apm_monitoring_datadog_4
     source: docs/v1.5/integrations/apm-monitoring/datadog.md
     level: 3
-    topic: "Step 1: Create Integration in OpsKnight"
+    topic: 'Step 1: Create Integration in OpsKnight'
   - id: integrations_apm_monitoring_datadog_5
     source: docs/v1.5/integrations/apm-monitoring/datadog.md
     level: 3
-    topic: "Step 2: Create Webhook in Datadog"
+    topic: 'Step 2: Create Webhook in Datadog'
   - id: integrations_apm_monitoring_datadog_6
     source: docs/v1.5/integrations/apm-monitoring/datadog.md
     level: 3
-    topic: "Step 3: Add Webhook to Monitors"
+    topic: 'Step 3: Add Webhook to Monitors'
   - id: integrations_apm_monitoring_datadog_7
     source: docs/v1.5/integrations/apm-monitoring/datadog.md
     level: 2
@@ -3681,11 +3681,11 @@ topics:
   - id: integrations_apm_monitoring_grafana_4
     source: docs/v1.5/integrations/apm-monitoring/grafana.md
     level: 3
-    topic: "Step 1: Create Integration in OpsKnight"
+    topic: 'Step 1: Create Integration in OpsKnight'
   - id: integrations_apm_monitoring_grafana_5
     source: docs/v1.5/integrations/apm-monitoring/grafana.md
     level: 3
-    topic: "Step 2: Configure Grafana Contact Point"
+    topic: 'Step 2: Configure Grafana Contact Point'
   - id: integrations_apm_monitoring_grafana_6
     source: docs/v1.5/integrations/apm-monitoring/grafana.md
     level: 4
@@ -3697,7 +3697,7 @@ topics:
   - id: integrations_apm_monitoring_grafana_8
     source: docs/v1.5/integrations/apm-monitoring/grafana.md
     level: 3
-    topic: "Step 3: Add to Notification Policy"
+    topic: 'Step 3: Add to Notification Policy'
   - id: integrations_apm_monitoring_grafana_9
     source: docs/v1.5/integrations/apm-monitoring/grafana.md
     level: 2
@@ -3781,11 +3781,11 @@ topics:
   - id: integrations_apm_monitoring_honeycomb_4
     source: docs/v1.5/integrations/apm-monitoring/honeycomb.md
     level: 3
-    topic: "Step 1: Create Integration in OpsKnight"
+    topic: 'Step 1: Create Integration in OpsKnight'
   - id: integrations_apm_monitoring_honeycomb_5
     source: docs/v1.5/integrations/apm-monitoring/honeycomb.md
     level: 3
-    topic: "Step 2: Configure Honeycomb"
+    topic: 'Step 2: Configure Honeycomb'
   - id: integrations_apm_monitoring_honeycomb_6
     source: docs/v1.5/integrations/apm-monitoring/honeycomb.md
     level: 2
@@ -3829,15 +3829,15 @@ topics:
   - id: integrations_apm_monitoring_new_relic_4
     source: docs/v1.5/integrations/apm-monitoring/new-relic.md
     level: 3
-    topic: "Step 1: Create Integration in OpsKnight"
+    topic: 'Step 1: Create Integration in OpsKnight'
   - id: integrations_apm_monitoring_new_relic_5
     source: docs/v1.5/integrations/apm-monitoring/new-relic.md
     level: 3
-    topic: "Step 2: Configure New Relic Webhook"
+    topic: 'Step 2: Configure New Relic Webhook'
   - id: integrations_apm_monitoring_new_relic_6
     source: docs/v1.5/integrations/apm-monitoring/new-relic.md
     level: 3
-    topic: "Step 3: Create Workflow"
+    topic: 'Step 3: Create Workflow'
   - id: integrations_apm_monitoring_new_relic_7
     source: docs/v1.5/integrations/apm-monitoring/new-relic.md
     level: 2
@@ -3921,15 +3921,15 @@ topics:
   - id: integrations_apm_monitoring_sentry_4
     source: docs/v1.5/integrations/apm-monitoring/sentry.md
     level: 3
-    topic: "Step 1: Create Integration in OpsKnight"
+    topic: 'Step 1: Create Integration in OpsKnight'
   - id: integrations_apm_monitoring_sentry_5
     source: docs/v1.5/integrations/apm-monitoring/sentry.md
     level: 3
-    topic: "Step 2: Configure Sentry Webhook"
+    topic: 'Step 2: Configure Sentry Webhook'
   - id: integrations_apm_monitoring_sentry_6
     source: docs/v1.5/integrations/apm-monitoring/sentry.md
     level: 3
-    topic: "Step 3: Create Alert Rule"
+    topic: 'Step 3: Create Alert Rule'
   - id: integrations_apm_monitoring_sentry_7
     source: docs/v1.5/integrations/apm-monitoring/sentry.md
     level: 2
@@ -4237,23 +4237,23 @@ topics:
   - id: integrations_cloud_aws_cloudwatch_4
     source: docs/v1.5/integrations/cloud/aws-cloudwatch.md
     level: 3
-    topic: "Step 1: Create Integration in OpsKnight"
+    topic: 'Step 1: Create Integration in OpsKnight'
   - id: integrations_cloud_aws_cloudwatch_5
     source: docs/v1.5/integrations/cloud/aws-cloudwatch.md
     level: 3
-    topic: "Step 2: Create SNS Topic"
+    topic: 'Step 2: Create SNS Topic'
   - id: integrations_cloud_aws_cloudwatch_6
     source: docs/v1.5/integrations/cloud/aws-cloudwatch.md
     level: 3
-    topic: "Step 3: Create HTTPS Subscription"
+    topic: 'Step 3: Create HTTPS Subscription'
   - id: integrations_cloud_aws_cloudwatch_7
     source: docs/v1.5/integrations/cloud/aws-cloudwatch.md
     level: 3
-    topic: "Step 4: Confirm Subscription"
+    topic: 'Step 4: Confirm Subscription'
   - id: integrations_cloud_aws_cloudwatch_8
     source: docs/v1.5/integrations/cloud/aws-cloudwatch.md
     level: 3
-    topic: "Step 5: Configure CloudWatch Alarms"
+    topic: 'Step 5: Configure CloudWatch Alarms'
   - id: integrations_cloud_aws_cloudwatch_9
     source: docs/v1.5/integrations/cloud/aws-cloudwatch.md
     level: 2
@@ -4345,11 +4345,11 @@ topics:
   - id: integrations_cloud_azure_monitor_4
     source: docs/v1.5/integrations/cloud/azure-monitor.md
     level: 3
-    topic: "Step 1: Create Integration in OpsKnight"
+    topic: 'Step 1: Create Integration in OpsKnight'
   - id: integrations_cloud_azure_monitor_5
     source: docs/v1.5/integrations/cloud/azure-monitor.md
     level: 3
-    topic: "Step 2: Configure Azure Monitor"
+    topic: 'Step 2: Configure Azure Monitor'
   - id: integrations_cloud_azure_monitor_6
     source: docs/v1.5/integrations/cloud/azure-monitor.md
     level: 2
@@ -4525,27 +4525,27 @@ topics:
   - id: integrations_communication_microsoft_teams_6
     source: docs/v1.5/integrations/communication/microsoft-teams.md
     level: 2
-    topic: "Step 1: Azure App Registration (Entra ID)"
+    topic: 'Step 1: Azure App Registration (Entra ID)'
   - id: integrations_communication_microsoft_teams_7
     source: docs/v1.5/integrations/communication/microsoft-teams.md
     level: 2
-    topic: "Step 2: Configure Azure Bot Service"
+    topic: 'Step 2: Configure Azure Bot Service'
   - id: integrations_communication_microsoft_teams_8
     source: docs/v1.5/integrations/communication/microsoft-teams.md
     level: 2
-    topic: "Step 3: Enter Azure Credentials in OpsKnight"
+    topic: 'Step 3: Enter Azure Credentials in OpsKnight'
   - id: integrations_communication_microsoft_teams_9
     source: docs/v1.5/integrations/communication/microsoft-teams.md
     level: 2
-    topic: "Step 4: Download App Package & Install in Teams"
+    topic: 'Step 4: Download App Package & Install in Teams'
   - id: integrations_communication_microsoft_teams_10
     source: docs/v1.5/integrations/communication/microsoft-teams.md
     level: 2
-    topic: "Step 5: Configure Notification Destination"
+    topic: 'Step 5: Configure Notification Destination'
   - id: integrations_communication_microsoft_teams_11
     source: docs/v1.5/integrations/communication/microsoft-teams.md
     level: 2
-    topic: "Step 6: PowerShell Policy for Online Meetings (Video Bridge)"
+    topic: 'Step 6: PowerShell Policy for Online Meetings (Video Bridge)'
   - id: integrations_communication_microsoft_teams_12
     source: docs/v1.5/integrations/communication/microsoft-teams.md
     level: 2
@@ -4649,11 +4649,11 @@ topics:
   - id: integrations_communication_slack_oauth_setup_10
     source: docs/v1.5/integrations/communication/slack-oauth-setup.md
     level: 1
-    topic: "Optional: legacy webhook URL (fallback if OAuth is not configured)"
+    topic: 'Optional: legacy webhook URL (fallback if OAuth is not configured)'
   - id: integrations_communication_slack_oauth_setup_11
     source: docs/v1.5/integrations/communication/slack-oauth-setup.md
     level: 1
-    topic: "Optional: legacy bot token (fallback if OAuth is not configured)"
+    topic: 'Optional: legacy bot token (fallback if OAuth is not configured)'
   - id: integrations_communication_slack_oauth_setup_12
     source: docs/v1.5/integrations/communication/slack-oauth-setup.md
     level: 3
@@ -4741,7 +4741,7 @@ topics:
   - id: integrations_communication_slack_11
     source: docs/v1.5/integrations/communication/slack.md
     level: 2
-    topic: "Step 1: Create Slack App"
+    topic: 'Step 1: Create Slack App'
   - id: integrations_communication_slack_12
     source: docs/v1.5/integrations/communication/slack.md
     level: 3
@@ -4753,7 +4753,7 @@ topics:
   - id: integrations_communication_slack_14
     source: docs/v1.5/integrations/communication/slack.md
     level: 2
-    topic: "Step 2: Configure OAuth Scopes"
+    topic: 'Step 2: Configure OAuth Scopes'
   - id: integrations_communication_slack_15
     source: docs/v1.5/integrations/communication/slack.md
     level: 3
@@ -4769,7 +4769,7 @@ topics:
   - id: integrations_communication_slack_18
     source: docs/v1.5/integrations/communication/slack.md
     level: 2
-    topic: "Step 3: Set Up Interactivity"
+    topic: 'Step 3: Set Up Interactivity'
   - id: integrations_communication_slack_19
     source: docs/v1.5/integrations/communication/slack.md
     level: 3
@@ -4781,7 +4781,7 @@ topics:
   - id: integrations_communication_slack_21
     source: docs/v1.5/integrations/communication/slack.md
     level: 2
-    topic: "Step 4: Install to Workspace"
+    topic: 'Step 4: Install to Workspace'
   - id: integrations_communication_slack_22
     source: docs/v1.5/integrations/communication/slack.md
     level: 3
@@ -4793,7 +4793,7 @@ topics:
   - id: integrations_communication_slack_24
     source: docs/v1.5/integrations/communication/slack.md
     level: 2
-    topic: "Step 5: Connect in OpsKnight"
+    topic: 'Step 5: Connect in OpsKnight'
   - id: integrations_communication_slack_25
     source: docs/v1.5/integrations/communication/slack.md
     level: 3
@@ -4805,7 +4805,7 @@ topics:
   - id: integrations_communication_slack_27
     source: docs/v1.5/integrations/communication/slack.md
     level: 2
-    topic: "Step 6: Configure Channels"
+    topic: 'Step 6: Configure Channels'
   - id: integrations_communication_slack_28
     source: docs/v1.5/integrations/communication/slack.md
     level: 3
@@ -5401,11 +5401,11 @@ topics:
   - id: integrations_metrics_alerting_prometheus_4
     source: docs/v1.5/integrations/metrics-alerting/prometheus.md
     level: 3
-    topic: "Step 1: Create Integration in OpsKnight"
+    topic: 'Step 1: Create Integration in OpsKnight'
   - id: integrations_metrics_alerting_prometheus_5
     source: docs/v1.5/integrations/metrics-alerting/prometheus.md
     level: 3
-    topic: "Step 2: Configure Alertmanager"
+    topic: 'Step 2: Configure Alertmanager'
   - id: integrations_metrics_alerting_prometheus_6
     source: docs/v1.5/integrations/metrics-alerting/prometheus.md
     level: 2
@@ -5585,11 +5585,11 @@ topics:
   - id: integrations_uptime_uptime_kuma_4
     source: docs/v1.5/integrations/uptime/uptime-kuma.md
     level: 3
-    topic: "Step 1: Create Integration in OpsKnight"
+    topic: 'Step 1: Create Integration in OpsKnight'
   - id: integrations_uptime_uptime_kuma_5
     source: docs/v1.5/integrations/uptime/uptime-kuma.md
     level: 3
-    topic: "Step 2: Configure Uptime Kuma"
+    topic: 'Step 2: Configure Uptime Kuma'
   - id: integrations_uptime_uptime_kuma_6
     source: docs/v1.5/integrations/uptime/uptime-kuma.md
     level: 2
@@ -6357,7 +6357,7 @@ topics:
   - id: troubleshooting_11
     source: docs/v1.5/troubleshooting.md
     level: 3
-    topic: "@prisma/client is not initialized in a custom build"
+    topic: '@prisma/client is not initialized in a custom build'
   - id: troubleshooting_12
     source: docs/v1.5/troubleshooting.md
     level: 3

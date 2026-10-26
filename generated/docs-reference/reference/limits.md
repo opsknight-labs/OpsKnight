@@ -6,7 +6,7 @@ product_area: configuration
 audience: [developer, operator, administrator]
 verification:
   level: source
-  verified_at: 2026-10-03
+  verified_at: 2026-10-26
   evidence:
     - generated/docs-discovery/current.json
     - src/
@@ -162,9 +162,93 @@ to prevent copied values from silently drifting.
 ## `REQUEST_TIMEOUT_MS`
 
 - Classification: `SECURITY_OR_PUBLIC_BOUND`
+- Value: `15000`
+- Source expression: `15_000`
+- Source: `src/components/dashboard/live/LiveDashboardProvider.tsx`
+
+## `REQUEST_TIMEOUT_MS`
+
+- Classification: `SECURITY_OR_PUBLIC_BOUND`
 - Value: `12000`
 - Source expression: `12_000`
 - Source: `src/components/mobile/PushNotificationToggle.tsx`
+
+## `MAX_RETENTION_DAYS`
+
+- Classification: `SECURITY_OR_PUBLIC_BOUND`
+- Value: `3650`
+- Source expression: `3650`
+- Source: `src/components/settings/AutomationSettings.tsx`
+
+## `MIN_RETENTION_DAYS`
+
+- Classification: `SECURITY_OR_PUBLIC_BOUND`
+- Value: `1`
+- Source expression: `1`
+- Source: `src/components/settings/AutomationSettings.tsx`
+
+## `MAX_TOKEN_LENGTH`
+
+- Classification: `SECURITY_OR_PUBLIC_BOUND`
+- Value: `256`
+- Source expression: `256`
+- Source: `src/lib/api-v2/auth.ts`
+
+## `DEFAULT_PAGE_LIMIT`
+
+- Classification: `OPERATOR_TUNABLE`
+- Value: `20`
+- Source expression: `20`
+- Source: `src/lib/api-v2/pagination.ts`
+
+## `MAX_PAGE_LIMIT`
+
+- Classification: `OPERATOR_TUNABLE`
+- Value: `100`
+- Source expression: `100`
+- Source: `src/lib/api-v2/pagination.ts`
+
+## `FAILED_AUTH_ADMISSION_LIMIT`
+
+- Classification: `SECURITY_OR_PUBLIC_BOUND`
+- Value: `60`
+- Source expression: `60`
+- Source: `src/lib/api-v2/rate-limit.ts`
+
+## `FAILED_AUTH_ADMISSION_WINDOW_MS`
+
+- Classification: `SECURITY_OR_PUBLIC_BOUND`
+- Value: `60000`
+- Source expression: `60_000`
+- Source: `src/lib/api-v2/rate-limit.ts`
+
+## `LEGACY_AUTH_ADMISSION_LIMIT`
+
+- Classification: `SECURITY_OR_PUBLIC_BOUND`
+- Value: `10`
+- Source expression: `10`
+- Source: `src/lib/api-v2/rate-limit.ts`
+
+## `LEGACY_AUTH_ADMISSION_WINDOW_MS`
+
+- Classification: `SECURITY_OR_PUBLIC_BOUND`
+- Value: `60000`
+- Source expression: `60_000`
+- Source: `src/lib/api-v2/rate-limit.ts`
+
+## `V2_MAX_BODY_BYTES`
+
+- Classification: `SECURITY_OR_PUBLIC_BOUND`
+- Value: `1048576`
+- Source expression: `1_048_576`
+- Source: `src/lib/api-v2/request-body.ts`
+
+## `V2_MAX_JSON_DEPTH`
+
+- Classification: `SECURITY_OR_PUBLIC_BOUND`
+- Value: `32`
+- Source expression: `32`
+- Source: `src/lib/api-v2/request-body.ts`
 
 ## `MAX_STORED_ALERT_PAYLOAD_BYTES`
 
@@ -214,6 +298,13 @@ to prevent copied values from silently drifting.
 - Value: `786432`
 - Source expression: `768 * 1024`
 - Source: `src/lib/notification-control-plane.ts`
+
+## `RETENTION_MS`
+
+- Classification: `SECURITY_OR_PUBLIC_BOUND`
+- Value: `7776000000`
+- Source expression: `90 * 24 * 60 * 60_000`
+- Source: `src/lib/notification-provider-feedback.ts`
 
 ## `TERMINAL_RETENTION_MS`
 
@@ -292,6 +383,20 @@ to prevent copied values from silently drifting.
 - Source expression: `30`
 - Source: `src/lib/pwa-session-policy.ts`
 
+## `DEFAULT_MAX_CACHE_BYTES`
+
+- Classification: `OPERATOR_TUNABLE`
+- Value: `100663296`
+- Source expression: `96 * 1024 * 1024`
+- Source: `src/lib/realtime-cache.ts`
+
+## `MAX_CACHE_SIZE`
+
+- Classification: `OPERATOR_TUNABLE`
+- Value: `5000`
+- Source expression: `5000`
+- Source: `src/lib/realtime-cache.ts`
+
 ## `CACHE_TTL_MS`
 
 - Classification: `SECURITY_OR_PUBLIC_BOUND`
@@ -305,6 +410,27 @@ to prevent copied values from silently drifting.
 - Value: `9141008`
 - Source expression: `9141008`
 - Source: `src/lib/retention/resource-lock.ts`
+
+## `MIB_ALLOWED_PER_ATTEMPT`
+
+- Classification: `PUBLIC_CONTRACT`
+- Value: `10`
+- Source expression: `maximum of 10 MiB allowed per attempt`
+- Source: `src/lib/runbooks/agent-claims.ts`
+
+## `MIB_ALLOWED_PER_EXECUTION`
+
+- Classification: `PUBLIC_CONTRACT`
+- Value: `25`
+- Source expression: `maximum of 25 MiB allowed per execution`
+- Source: `src/lib/runbooks/agent-claims.ts`
+
+## `AGENT_SIGNATURE_WINDOW_MS`
+
+- Classification: `SECURITY_OR_PUBLIC_BOUND`
+- Value: `300000`
+- Source expression: `5 * 60 * 1000`
+- Source: `src/lib/runbooks/agent-request-window.ts`
 
 ## `MAX_POSSIBLE_TOKEN_LIFETIME_MS`
 

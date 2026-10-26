@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { readFileSync, mkdirSync, writeFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { resolve } from 'node:path';
 import YAML from 'yaml';
@@ -128,7 +128,9 @@ for (const integration of platformIntegrations) {
   if (!integration.sources.length) throw new Error(`Platform integration ${integration.id} has no source evidence`);
 }
 const catalog = { schemaVersion: 2, generated: true, providers, integrations: [...providers, ...platformIntegrations] };
-const publicDocsRoot = resolve(repositoryRoot, 'docs/v2.0.0/integrations');
+const versions = JSON.parse(readFileSync(resolve(repositoryRoot, 'docs/versions.json'), 'utf8'));
+const currentDocsVersion = versions.currentRelease || 'v2.0.0';
+const publicDocsRoot = resolve(repositoryRoot, `docs/${currentDocsVersion}/integrations`);
 // Generated provider prose is a reviewer snapshot, never the published page.
 const docsRoot = resolve(repositoryRoot, 'generated/docs-reference/integrations');
 const verifiedAt = execFileSync(

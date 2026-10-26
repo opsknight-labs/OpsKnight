@@ -16,15 +16,17 @@ const areaPatterns = [
 
 const ownerFor = value => areaPatterns.find(([, pattern]) => pattern.test(value))?.[0] ?? 'platform';
 
-const catalog = YAML.parse(readFileSync(resolve(repositoryRoot, 'docs/v2.0.0/capabilities.yaml'), 'utf8'));
+const versions = JSON.parse(readFileSync(resolve(repositoryRoot, 'docs/versions.json'), 'utf8'));
+const currentDocsVersion = versions.currentRelease || 'v2.0.0';
+const catalog = YAML.parse(readFileSync(resolve(repositoryRoot, `docs/${currentDocsVersion}/capabilities.yaml`), 'utf8'));
 const documentationGroups = ['concepts', 'guides', 'reference', 'troubleshooting'];
 const normalizeSource = value => value.replace(/\/$/, '');
 const overlaps = (left, right) => left === right || left.startsWith(`${right}/`) || right.startsWith(`${left}/`);
-const documentationIndex = filesUnder('docs/v2.0.0', file => file.endsWith('.md')).flatMap(file => {
+const documentationIndex = filesUnder(`docs/${currentDocsVersion}`, file => file.endsWith('.md')).flatMap(file => {
   const header = readRepositoryFile(file).match(/^---\n([\s\S]*?)\n---/)?.[1];
   if (!header) return [];
   const metadata = YAML.parse(header);
-  return [{ path: file.replace('docs/v2.0.0/', ''), type: metadata.type, area: metadata.product_area }];
+  return [{ path: file.replace(`docs/${currentDocsVersion}/`, ''), type: metadata.type, area: metadata.product_area }];
 });
 
 // UI coverage is intentionally route-specific. A broad product-area fallback made
@@ -47,6 +49,22 @@ const uiDocumentationRules = [
   [/^\/incidents\/templates(?:\/create)?$/, ['guides/incidents/incident-templates.md']],
   [/^\/incidents\/create$/, ['guides/incidents/create.md']],
   [/^\/incidents(?:\/\[id\])?$/, ['concepts/incidents.md', 'concepts/incident-response.md', 'guides/incidents/acknowledge.md']],
+  [/^\/runbooks\/agents\/pools$/, ['guides/runbooks/agents-pools-secrets.md']],
+  [/^\/runbooks\/agents\/secrets$/, ['guides/runbooks/agents-pools-secrets.md']],
+  [/^\/runbooks\/agents\/security$/, ['guides/runbooks/agents-pools-secrets.md']],
+  [/^\/runbooks\/agents\/\[id\]\/setup$/, ['operate/deploy/agent-operations.md']],
+  [/^\/runbooks\/agents(?:\/.*)?$/, ['operate/deploy/agent-operations.md', 'guides/runbooks/agents-pools-secrets.md']],
+  [/^\/runbooks\/executions(?:\/\[id\])?$/, ['guides/runbooks/respond.md', 'concepts/runbooks.md']],
+  [/^\/runbooks\/health$/, ['concepts/runbooks.md', 'operate/deploy/runbook-qualification.md']],
+  [/^\/runbooks\/\[id\]\/compare$/, ['guides/runbooks/author.md']],
+  [/^\/runbooks\/\[id\]$/, ['guides/runbooks/author.md', 'concepts/runbooks.md']],
+  [/^\/runbooks$/, ['guides/runbooks/README.md', 'concepts/runbooks.md', 'reference/runbooks.md']],
+  [/^\/services\/\[id\]\/automations\/\[ruleId\]$/, ['guides/runbooks/author.md', 'concepts/runbooks.md']],
+  [/^\/m\/services\/\[id\]\/automation$/, ['guides/mobile/use-mobile-operations.md', 'concepts/mobile.md', 'concepts/runbooks.md']],
+  [/^\/settings\/system\/emergency$/, ['guides/identity/configure-emergency-access.md', 'troubleshooting/login/emergency-access.md']],
+  [/^\/login\/emergency$/, ['guides/identity/sso-lockout-recovery.md', 'troubleshooting/login/emergency-access.md']],
+  [/^\/recovery$/, ['guides/identity/sso-lockout-recovery.md', 'troubleshooting/login/emergency-access.md']],
+  [/^\/auth\/oidc-test-result$/, ['guides/identity/sso-lockout-recovery.md', 'concepts/authentication.md']],
   [/^\/policies(?:\/.*)?$/, ['concepts/escalation-policies.md', 'guides/escalation/configure-policy.md']],
   [/^\/postmortems(?:\/.*)?$/, ['guides/postmortems/create-review-publish.md', 'concepts/postmortems.md', 'concepts/postmortem-workflow.md', 'guides/incidents/action-items.md']],
   [/^\/schedules(?:\/.*)?$/, ['concepts/schedules.md', 'guides/on-call/build-schedule.md', 'guides/on-call/overrides.md']],
@@ -145,7 +163,7 @@ function documentationFor(kind, id, sources, owner) {
   if (kind === 'api') documentation.reference.push('reference/api/README.md');
   if (kind === 'integration') {
     const entry = `integrations/${id === 'webhook' ? 'webhooks' : id === 'pagerduty' ? 'webhooks' : 'monitoring'}/${id}.md`;
-    if (exists(`docs/v2.0.0/${entry}`)) documentation.reference.push(entry);
+    if (exists(`docs/${currentDocsVersion}/${entry}`)) documentation.reference.push(entry);
     documentation.reference.push('integrations/README.md');
   }
   if (kind === 'notification-provider') documentation.concepts.push('concepts/notifications.md');

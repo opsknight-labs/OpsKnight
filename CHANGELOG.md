@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.1.0] - 2026-10-26
+
+OpsKnight 2.1 is an enterprise release introducing Service Automation with Runbook integration, unattended-write authorization, verified automatic recovery resolution, PostgreSQL 16 disaster recovery tooling, and enterprise SSO and SCIM 2.0 lifecycle management.
+
 ### Added
 
 - **Service Automation ↔ Runbook integration:** LIVE automation decisions capture an immutable, checksum-verified response context of declared fields only. Runbook triggers accept `automation.<key>` conditions, bindings can map context fields to inputs and choose targets through an administrator-approved value → Agent/pool table, and alert-created incidents only reach bindings that opt in with **Run on monitoring incidents**. Unavailable context fails closed with a `RUNBOOK_SKIPPED` timeline event.
