@@ -2,7 +2,7 @@
 
 **Certification Status:** PASS (P0 Release Gate Satisfied)  
 **Baseline Version:** Published OpsKnight 2.0.0 (`ghcr.io/opsknight-labs/opsknight:2.0.0`, Image Digest: `sha256:099023cbd024fac4c53435aaf2bff669f0e8bf04ba96564d3a3d62d6bdfe0d62`)  
-**Target Candidate:** OpsKnight 2.1.0 Candidate (`opsknight:release-cert-final`, Commit: `ed0c46289dd9b73d0c22f3f77e800a496b2f0be3`, Image Digest: `sha256:52f31a93ad9b9e49e63cbd28e3c57bdcf82d29dd3ba4fc1e98c6346ed75c772a`)  
+**Target Candidate:** OpsKnight 2.1.0 Candidate (`opsknight:release-cert-final`, Commit: `3d2432a81fc276612540261f0fb173527b0d7343`, Image Digest: `sha256:52f31a93ad9b9e49e63cbd28e3c57bdcf82d29dd3ba4fc1e98c6346ed75c772a`)  
 **Verification Date:** 2026-10-26  
 **Auditor:** Senior Database SRE & Release Engineering  
 **Reproducible Script:** `scripts/certification/drill-upgrade-v20-to-v21.sh`

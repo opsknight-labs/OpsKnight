@@ -1,6 +1,6 @@
 # OpsKnight 2.1 — Release Security Audit & Authorization Certification
 
-**Candidate Commit SHA:** `ed0c46289dd9b73d0c22f3f77e800a496b2f0be3`  
+**Candidate Commit SHA:** `3d2432a81fc276612540261f0fb173527b0d7343`  
 **Security Clearance:** APPROVED FOR RELEASE  
 **Audit Date:** 2026-10-26  
 **Auditor:** Senior Security Architect & Application Security Reviewer

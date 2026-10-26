@@ -1,6 +1,6 @@
 # OpsKnight 2.1 — Resilience, High Availability & Chaos Drill Certification
 
-**Candidate Commit SHA:** `ed0c46289dd9b73d0c22f3f77e800a496b2f0be3`  
+**Candidate Commit SHA:** `3d2432a81fc276612540261f0fb173527b0d7343`  
 **Execution Environment:** Multi-Replica Distributed Stack (2x & 4x Web Pods, Nginx Proxy, PostgreSQL 16, Background Worker)  
 **Verification Date:** 2026-10-26  
 **Auditor:** Senior Site Reliability & Chaos Engineering

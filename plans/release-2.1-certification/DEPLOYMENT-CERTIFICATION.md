@@ -1,6 +1,6 @@
 # OpsKnight 2.1 — Deployment Topologies & Infrastructure Certification
 
-**Candidate Commit SHA:** `ed0c46289dd9b73d0c22f3f77e800a496b2f0be3`  
+**Candidate Commit SHA:** `3d2432a81fc276612540261f0fb173527b0d7343`  
 **Candidate Image Digest:** `sha256:52f31a93ad9b9e49e63cbd28e3c57bdcf82d29dd3ba4fc1e98c6346ed75c772a`  
 **Certification Status:** APPROVED  
 **Verification Date:** 2026-10-26  

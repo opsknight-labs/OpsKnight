@@ -1,7 +1,7 @@
 # OpsKnight 2.1 — Final Release Decision & GO/NO-GO Verdict
 
 **Release Target:** OpsKnight 2.1.0  
-**Candidate Commit SHA:** `ed0c46289dd9b73d0c22f3f77e800a496b2f0be3`  
+**Candidate Commit SHA:** `3d2432a81fc276612540261f0fb173527b0d7343`  
 **Candidate Image Digest:** `sha256:52f31a93ad9b9e49e63cbd28e3c57bdcf82d29dd3ba4fc1e98c6346ed75c772a`  
 **Baseline Version & Digest:** `ghcr.io/opsknight-labs/opsknight:2.0.0@sha256:099023cbd024fac4c53435aaf2bff669f0e8bf04ba96564d3a3d62d6bdfe0d62`  
 **Audit Completed Date:** 2026-10-26  
@@ -12,7 +12,7 @@
 
 ## 1. Executive Verdict: CONDITIONAL GO
 
-The final release candidate for **OpsKnight 2.1.0** at commit `ed0c46289dd9b73d0c22f3f77e800a496b2f0be3` is recommended for **CONDITIONAL GO**.
+The final release candidate for **OpsKnight 2.1.0** at commit `3d2432a81fc276612540261f0fb173527b0d7343` is recommended for **CONDITIONAL GO**.
 
 All required P0 and P1 release gates have been certified through physical execution, live running containers, and multi-browser automation.
 
