@@ -64,8 +64,10 @@ PRE_INCIDENTS=$(docker exec "$DB_CONTAINER" psql -U "$DB_USER" -d "$DB_NAME" -t 
 PRE_EVENTS=$(docker exec "$DB_CONTAINER" psql -U "$DB_USER" -d "$DB_NAME" -t -A -c 'SELECT COUNT(*) FROM "IncidentEvent";')
 PRE_POSTMORTEMS=$(docker exec "$DB_CONTAINER" psql -U "$DB_USER" -d "$DB_NAME" -t -A -c 'SELECT COUNT(*) FROM "Postmortem";')
 PRE_ACTIONS=$(docker exec "$DB_CONTAINER" psql -U "$DB_USER" -d "$DB_NAME" -t -A -c 'SELECT COUNT(*) FROM "ActionItem";')
+PRE_STATUS_PAGES=$(docker exec "$DB_CONTAINER" psql -U "$DB_USER" -d "$DB_NAME" -t -A -c 'SELECT COUNT(*) FROM "StatusPage";')
+PRE_AUDIT_LOGS=$(docker exec "$DB_CONTAINER" psql -U "$DB_USER" -d "$DB_NAME" -t -A -c 'SELECT COUNT(*) FROM "AuditLog";')
 
-echo "Pre-upgrade state verified: $PRE_MIGRATIONS migrations applied, $PRE_USERS users, $PRE_TEAMS teams, $PRE_INCIDENTS incidents."
+echo "Pre-upgrade state verified: $PRE_MIGRATIONS migrations applied, $PRE_USERS users, $PRE_TEAMS teams, $PRE_SERVICES services, $PRE_INCIDENTS incidents, $PRE_STATUS_PAGES status pages, $PRE_AUDIT_LOGS audit logs."
 
 echo "3. Executing v2.1.0 Migration Owner against baseline database..."
 UPGRADE_START=$(date +%s)
@@ -95,25 +97,52 @@ POST_INCIDENTS=$(docker exec "$DB_CONTAINER" psql -U "$DB_USER" -d "$DB_NAME" -t
 POST_EVENTS=$(docker exec "$DB_CONTAINER" psql -U "$DB_USER" -d "$DB_NAME" -t -A -c 'SELECT COUNT(*) FROM "IncidentEvent";')
 POST_POSTMORTEMS=$(docker exec "$DB_CONTAINER" psql -U "$DB_USER" -d "$DB_NAME" -t -A -c 'SELECT COUNT(*) FROM "Postmortem";')
 POST_ACTIONS=$(docker exec "$DB_CONTAINER" psql -U "$DB_USER" -d "$DB_NAME" -t -A -c 'SELECT COUNT(*) FROM "ActionItem";')
+POST_STATUS_PAGES=$(docker exec "$DB_CONTAINER" psql -U "$DB_USER" -d "$DB_NAME" -t -A -c 'SELECT COUNT(*) FROM "StatusPage";')
+POST_AUDIT_LOGS=$(docker exec "$DB_CONTAINER" psql -U "$DB_USER" -d "$DB_NAME" -t -A -c 'SELECT COUNT(*) FROM "AuditLog";')
 
 echo "Post-Upgrade Inventory:"
-echo "  Migrations: $PRE_MIGRATIONS -> $POST_MIGRATIONS (expected: 318)"
-echo "  Users:      $PRE_USERS -> $POST_USERS"
-echo "  Teams:      $PRE_TEAMS -> $POST_TEAMS"
-echo "  Services:   $PRE_SERVICES -> $POST_SERVICES"
-echo "  Incidents:  $PRE_INCIDENTS -> $POST_INCIDENTS"
-echo "  Events:     $PRE_EVENTS -> $POST_EVENTS"
-echo "  Postmortems:$PRE_POSTMORTEMS -> $POST_POSTMORTEMS"
-echo "  Actions:    $PRE_ACTIONS -> $POST_ACTIONS"
+echo "  Migrations:  $PRE_MIGRATIONS -> $POST_MIGRATIONS (expected: 318)"
+echo "  Users:       $PRE_USERS -> $POST_USERS"
+echo "  Teams:       $PRE_TEAMS -> $POST_TEAMS"
+echo "  Services:    $PRE_SERVICES -> $POST_SERVICES"
+echo "  Incidents:   $PRE_INCIDENTS -> $POST_INCIDENTS"
+echo "  Events:      $PRE_EVENTS -> $POST_EVENTS"
+echo "  Postmortems: $PRE_POSTMORTEMS -> $POST_POSTMORTEMS"
+echo "  Actions:     $PRE_ACTIONS -> $POST_ACTIONS"
+echo "  StatusPages: $PRE_STATUS_PAGES -> $POST_STATUS_PAGES"
+echo "  AuditLogs:   $PRE_AUDIT_LOGS -> $POST_AUDIT_LOGS"
 
 if [[ "$POST_MIGRATIONS" -ne 318 ]]; then
   echo "Error: Expected 318 applied migrations, got $POST_MIGRATIONS"
   exit 1
 fi
-if [[ "$POST_USERS" -ne "$PRE_USERS" || "$POST_TEAMS" -ne "$PRE_TEAMS" || "$POST_INCIDENTS" -ne "$PRE_INCIDENTS" ]]; then
-  echo "Error: Entity count mismatch between pre-upgrade and post-upgrade!"
+
+for table in USERS TEAMS SERVICES INCIDENTS EVENTS POSTMORTEMS ACTIONS STATUS_PAGES AUDIT_LOGS; do
+  pre_var="PRE_${table}"
+  post_var="POST_${table}"
+  if [[ "${!post_var}" -ne "${!pre_var}" ]]; then
+    echo "Error: Entity count mismatch for $table! Pre: ${!pre_var}, Post: ${!post_var}"
+    exit 1
+  fi
+done
+
+echo "Foreign key referential integrity checks..."
+ORPHAN_INCIDENTS=$(docker exec "$DB_CONTAINER" psql -U "$DB_USER" -d "$DB_NAME" -t -A -c '
+  SELECT COUNT(*) FROM "Incident" WHERE "serviceId" NOT IN (SELECT id FROM "Service");
+')
+ORPHAN_EVENTS=$(docker exec "$DB_CONTAINER" psql -U "$DB_USER" -d "$DB_NAME" -t -A -c '
+  SELECT COUNT(*) FROM "IncidentEvent" WHERE "incidentId" NOT IN (SELECT id FROM "Incident");
+')
+if [[ "$ORPHAN_INCIDENTS" -ne 0 || "$ORPHAN_EVENTS" -ne 0 ]]; then
+  echo "Error: Referential integrity violation! Orphan incidents: $ORPHAN_INCIDENTS, Orphan events: $ORPHAN_EVENTS"
   exit 1
 fi
+echo "Referential integrity confirmed: 0 orphaned rows."
+
+ENC_INTEGRATIONS=$(docker exec "$DB_CONTAINER" psql -U "$DB_USER" -d "$DB_NAME" -t -A -c '
+  SELECT COUNT(*) FROM "Integration" WHERE key IS NOT NULL;
+')
+echo "Encrypted configuration validated: $ENC_INTEGRATIONS integrations preserved."
 echo "Data preservation confirmed: 100% of pre-upgrade entities intact."
 
 echo "5. Deploying OpsKnight v2.1.0 Application against upgraded database..."
@@ -150,20 +179,51 @@ echo "OpsKnight v2.1.0 is healthy on http://127.0.0.1:$APP_PORT (HTTP 200)."
 
 echo "6. Testing authentication of pre-upgrade user on upgraded v2.1.0 instance..."
 CSRF_TOKEN=$(curl -s -c /tmp/upgrade_cookies.txt "http://127.0.0.1:$APP_PORT/api/auth/csrf" | grep -o '"csrfToken":"[^"]*' | cut -d'"' -f4)
-LOGIN_STATUS=$(curl -s -o /dev/null -w "%{http_code}" -b /tmp/upgrade_cookies.txt -c /tmp/upgrade_cookies.txt \
+LOGIN_HEADERS=$(curl -s -i -b /tmp/upgrade_cookies.txt -c /tmp/upgrade_cookies.txt \
   -X POST "http://127.0.0.1:$APP_PORT/api/auth/callback/credentials" \
   -H "Content-Type: application/x-www-form-urlencoded" \
   --data-urlencode "email=admin@opsknight.internal" \
   --data-urlencode "password=Password123!" \
   --data-urlencode "csrfToken=$CSRF_TOKEN")
-echo "Authentication callback HTTP status: $LOGIN_STATUS (expected 302 redirect on success)"
+LOGIN_STATUS=$(echo "$LOGIN_HEADERS" | grep -i "HTTP/" | head -n 1 | awk '{print $2}')
+LOCATION=$(echo "$LOGIN_HEADERS" | grep -i "^location:" | head -n 1 | tr -d '\r')
+
+if [[ "$LOGIN_STATUS" != "302" ]]; then
+  echo "Error: Authentication failed! Expected HTTP 302 redirect, got $LOGIN_STATUS"
+  exit 1
+fi
+
+if echo "$LOCATION" | grep -qi "error"; then
+  echo "Error: Authentication failed! Redirect location contains error: $LOCATION"
+  exit 1
+fi
+echo "Authentication verified: HTTP 302 redirect on credentials callback ($LOCATION)."
+
+# Validate session cookie by accessing /api/auth/session
+SESSION_BODY=$(curl -s -b /tmp/upgrade_cookies.txt "http://127.0.0.1:$APP_PORT/api/auth/session")
+if ! echo "$SESSION_BODY" | grep -q '"email":"admin@opsknight.internal"'; then
+  echo "Error: Authenticated session check failed! /api/auth/session did not return user session: $SESSION_BODY"
+  exit 1
+fi
+echo "Session verified: Authenticated session established for admin@opsknight.internal."
+
+# Validate protected page access (root / returns 200 for authenticated, 307 redirect for unauthenticated)
+PROTECTED_STATUS=$(curl -s -o /dev/null -w "%{http_code}" -b /tmp/upgrade_cookies.txt "http://127.0.0.1:$APP_PORT/")
+if [[ "$PROTECTED_STATUS" -ne 200 ]]; then
+  echo "Error: Authenticated session check failed! Accessing protected root dashboard returned HTTP $PROTECTED_STATUS (expected 200)"
+  exit 1
+fi
+echo "Protected page verified: Authenticated request to / returned HTTP 200 OK."
 
 echo "7. Exercising new v2.1.0 schema capability on upgraded database..."
-# Verify new v2.1.0 tables exist and are writable (e.g. ServiceAutomationRule or new columns)
 NEW_TABLE_COUNT=$(docker exec "$DB_CONTAINER" psql -U "$DB_USER" -d "$DB_NAME" -t -A -c "
   SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'public';
 ")
 echo "Total tables post-upgrade: $NEW_TABLE_COUNT (v2.0 baseline had 121 tables)"
+if [[ "$NEW_TABLE_COUNT" -lt 170 ]]; then
+  echo "Error: Expected at least 170 tables after v2.1.0 upgrade, got $NEW_TABLE_COUNT"
+  exit 1
+fi
 
 echo ""
 echo "======================================================================"

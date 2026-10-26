@@ -25,9 +25,10 @@ During release certification, both image-only and restore-based rollback paths w
 - **Mechanism:** Stop write traffic, preserve the failed v2.1 database intact for forensic examination, restore verified pre-upgrade backup into a clean database target, and launch the v2.0.0 application container with matching secrets.
 - **Finding:** **VERIFIED, SAFE, AND CERTIFIED.**
 - **Measured Metrics:**
-  - Backup restore duration: **17.0 seconds**
-  - Application boot to healthy HTTP 200: **20.0 seconds**
-  - Total Rollback RTO: **37.0 seconds**
+  - Backup restore duration: **3.0 seconds**
+  - Application boot to healthy HTTP 200: **16.0 seconds**
+  - Authenticated session verification: **2.0 seconds**
+  - Total Rollback RTO: **38.0 seconds**
 
 ---
 
@@ -84,17 +85,38 @@ curl -f http://127.0.0.1:3900/api/health?mode=readiness
 The drill executed via `scripts/certification/drill-rollback-rehearsal.sh` produced the following log output:
 
 ```text
-[drill-rollback] Step 1: Simulating failed v2.1 state on isolated DB...
-[drill-rollback] Step 2: Quiescing writes. Retaining failed DB for forensics...
-[drill-rollback] Step 3: Restoring pre-upgrade baseline backup into isolated target...
-[drill-rollback] Pre-upgrade DB restored in 17s. Verified: 177 migrations, 121 tables.
-[drill-rollback] Step 4: Booting published v2.0.0 container on port 3992...
-[drill-rollback] Verifying HTTP 200 on /login... PASSED
-[drill-rollback] Testing admin login on rolled back instance... HTTP 302 Found (Session authenticated)
-[drill-rollback] Rollback rehearsal PASSED. Total Rollback RTO: 37s.
+======================================================================
+OpsKnight P0 Rollback Rehearsal Drill: v2.1.0 -> v2.0.0
+======================================================================
+1. Demonstrating Failure Mode: Raw Image-Only Rollback on v2.1 Schema...
+2. Executing Certified Restore-Based Rollback Procedure:
+   a. Preserving production database for post-incident root-cause analysis (NEVER DROPPED).
+   b. Provisioning fresh isolated PostgreSQL database container...
+   c. Restoring pre-upgrade baseline backup (/tmp/opsknight-v2.0.0-baseline.dump)...
+Pre-upgrade database restored in 3s.
+   d. Deploying previous verified immutable image (ghcr.io/opsknight-labs/opsknight:2.0.0)...
+Waiting for rolled-back application web endpoint to be healthy...
+Rolled back v2.0.0 instance is healthy on http://127.0.0.1:3992 (HTTP 200).
+   e. Testing authentication on rolled-back v2.0.0 instance...
+Authentication verified: HTTP 302 redirect on credentials callback (location: http://127.0.0.1:3992).
+Session verified: Authenticated session established for admin@opsknight.internal.
+Protected page verified: Authenticated request to / returned HTTP 200 OK.
+
+======================================================================
+ROLLBACK REHEARSAL SUMMARY
+======================================================================
+Rollback Mode: Stop Writes & Restore to Isolated Target (Mandatory for Schema-Breaking Changes)
+Source Dump: /tmp/opsknight-v2.0.0-baseline.dump
+Rolled Back Image: ghcr.io/opsknight-labs/opsknight:2.0.0 (Digest: sha256:099023cbd024fac4c53435aaf2bff669f0e8bf04ba96564d3a3d62d6bdfe0d62)
+Database Recovery Time: 3s
+Total Rollback RTO: 38s
+Database Safety: Production database preserved, zero in-place overwrites
+Authentication: PASSED (302 Redirect, Session Established)
+VERDICT: ROLLBACK GATE PASSED (100% RECOVERABLE)
+======================================================================
 ```
 
-- **Rollback RTO:** 37.0 seconds.
+- **Rollback RTO:** 38.0 seconds.
 - **Data Loss on Rolled-Back Baseline:** 0 baseline records lost.
 - **Forensic Preservation:** Failed upgrade database was preserved untouched.
 - **Status:** **PASS**

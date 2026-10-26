@@ -103,13 +103,41 @@ echo "Rolled back v2.0.0 instance is healthy on http://127.0.0.1:$APP_PORT (HTTP
 
 echo "   e. Testing authentication on rolled-back v2.0.0 instance..."
 CSRF_TOKEN=$(curl -s -c /tmp/rollback_cookies.txt "http://127.0.0.1:$APP_PORT/api/auth/csrf" | grep -o '"csrfToken":"[^"]*' | cut -d'"' -f4)
-LOGIN_STATUS=$(curl -s -o /dev/null -w "%{http_code}" -b /tmp/rollback_cookies.txt -c /tmp/rollback_cookies.txt \
+LOGIN_HEADERS=$(curl -s -i -b /tmp/rollback_cookies.txt -c /tmp/rollback_cookies.txt \
   -X POST "http://127.0.0.1:$APP_PORT/api/auth/callback/credentials" \
   -H "Content-Type: application/x-www-form-urlencoded" \
   --data-urlencode "email=admin@opsknight.internal" \
   --data-urlencode "password=Password123!" \
   --data-urlencode "csrfToken=$CSRF_TOKEN")
-echo "Authentication callback HTTP status: $LOGIN_STATUS (expected 302 on success)"
+LOGIN_STATUS=$(echo "$LOGIN_HEADERS" | grep -i "HTTP/" | head -n 1 | awk '{print $2}')
+LOCATION=$(echo "$LOGIN_HEADERS" | grep -i "^location:" | head -n 1 | tr -d '\r')
+
+if [[ "$LOGIN_STATUS" != "302" ]]; then
+  echo "Error: Authentication failed! Expected HTTP 302 redirect, got $LOGIN_STATUS"
+  exit 1
+fi
+
+if echo "$LOCATION" | grep -qi "error"; then
+  echo "Error: Authentication failed! Redirect location contains error: $LOCATION"
+  exit 1
+fi
+echo "Authentication verified: HTTP 302 redirect on credentials callback ($LOCATION)."
+
+# Validate session cookie by accessing /api/auth/session
+SESSION_BODY=$(curl -s -b /tmp/rollback_cookies.txt "http://127.0.0.1:$APP_PORT/api/auth/session")
+if ! echo "$SESSION_BODY" | grep -q '"email":"admin@opsknight.internal"'; then
+  echo "Error: Authenticated session check failed! /api/auth/session did not return user session: $SESSION_BODY"
+  exit 1
+fi
+echo "Session verified: Authenticated session established for admin@opsknight.internal."
+
+# Validate protected page access (root / returns 200 for authenticated, 307 redirect for unauthenticated)
+PROTECTED_STATUS=$(curl -s -o /dev/null -w "%{http_code}" -b /tmp/rollback_cookies.txt "http://127.0.0.1:$APP_PORT/")
+if [[ "$PROTECTED_STATUS" -ne 200 ]]; then
+  echo "Error: Authenticated session check failed! Accessing protected root dashboard returned HTTP $PROTECTED_STATUS (expected 200)"
+  exit 1
+fi
+echo "Protected page verified: Authenticated request to / returned HTTP 200 OK."
 
 ROLLBACK_END=$(date +%s)
 ROLLBACK_RTO=$((ROLLBACK_END - ROLLBACK_START))

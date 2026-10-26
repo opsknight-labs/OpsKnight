@@ -52,24 +52,33 @@ Beyond raw schema restoration, a complete application-level disaster recovery dr
 
 ### 3.1 Drill Execution Steps
 
-1. Started a fresh, empty PostgreSQL 16 container (`opsknight-rec-drill-db`).
-2. Restored `/tmp/opsknight-v2.0.0-baseline.dump` via `pg_restore --clean --if-exists`.
-3. Verified table count (121) and migration count (177).
-4. Booted a fresh application container (`opsknight-rec-drill-app`) using matching secrets and encryption keys on port 3990.
-5. Performed HTTP readiness check against `/login`.
-6. Authenticated `admin@opsknight.internal` via bcrypt password; received HTTP 302 with session cookie.
-7. Dispatched synthetic incident mutation through database lifecycle (`OPEN` → `ACKNOWLEDGED` → `RESOLVED`).
-8. Verified worker and audit logging.
+1. Started a fresh, empty PostgreSQL 16 container (`opsknight-recovery-db`) on an isolated network (`opsknight-recovery-drill-net`).
+2. Restored `/tmp/opsknight-v2.0.0-baseline.dump` via `pg_restore --exit-on-error --no-owner --no-privileges` in 2 seconds.
+3. Verified table count (121) and migration count (177) alongside all baseline relation counts.
+4. Booted **both** application web role (`opsknight-recovery-app` on port 3990) and background queue worker role (`opsknight-recovery-worker`) using matching secrets and encryption keys.
+5. Performed HTTP readiness check against `/login` (HTTP 200).
+6. Authenticated `admin@opsknight.internal` via bcrypt credentials against `/api/auth/callback/credentials`:
+   - Received HTTP 302 redirect to valid application route (not `/login?error=...`).
+   - Verified active session on `/api/auth/session` returning valid user profile.
+   - Verified protected root dashboard `/` access returning HTTP 200 OK.
+7. Dispatched synthetic acceptance probe **strictly through real HTTP APIs**:
+   - `POST /api/incidents/create` with idempotency key created incident in `OPEN` status.
+   - `PATCH /api/incidents/:id/status` transitioned incident to `ACKNOWLEDGED`.
+8. Asserted database outcomes in PostgreSQL:
+   - Incident status updated to `ACKNOWLEDGED`.
+   - Application logic wrote `ACKNOWLEDGED` timeline event in `IncidentEvent`.
+9. Verified background worker container status: confirmed alive, running, and processing queues without crash loops.
 
 ### 3.2 Recovery Metrics & RPO/RTO Measurements
 
 | Metric                                              | Measured Value   | Threshold / SLA | Status   |
 | --------------------------------------------------- | ---------------- | --------------- | -------- |
-| **PostgreSQL Schema & Data Restore Duration**       | `3.0 seconds`    | `< 120 seconds` | **PASS** |
-| **Application Container Boot & Readiness Time**     | `20.0 seconds`   | `< 60 seconds`  | **PASS** |
-| **Total Application RTO (Recovery Time Objective)** | `23.0 seconds`   | `< 15 minutes`  | **PASS** |
+| **PostgreSQL Schema & Data Restore Duration**       | `2.0 seconds`    | `< 120 seconds` | **PASS** |
+| **Application & Worker Boot Readiness Time**        | `19.0 seconds`   | `< 60 seconds`  | **PASS** |
+| **Total Application RTO (Recovery Time Objective)** | `35.0 seconds`   | `< 15 minutes`  | **PASS** |
 | **Measured RPO (Recovery Point Objective)**         | `0 seconds`      | `< 5 minutes`   | **PASS** |
 | **Entity Integrity Loss**                           | `0 records` (0%) | `0 records`     | **PASS** |
+| **Lifecycle API & Worker Execution**                | `100% HTTP/API`  | Real App Path   | **PASS** |
 
 ---
 

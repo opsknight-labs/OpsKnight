@@ -23,24 +23,28 @@ All required P0 and P1 release gates have been certified through physical execut
    - Assertions updated in PR #916; verified merged into `main`.
 2. **P0 Upgrade Safety (v2.0.0 → v2.1.0 Rehearsed):**
    - Executed actual upgrade from published `ghcr.io/opsknight-labs/opsknight:2.0.0` with 177 migrations to v2.1.0 candidate with 318 migrations.
-   - Applied 141 migrations in **24.0s** via official migration container (`OPSKNIGHT_MIGRATION_ONLY=true`).
-   - Table count expanded from 121 to 179 with **100% baseline data preservation** (users, teams, services, incidents, events, notes, postmortems, actions, status pages, audit logs).
-   - Booted upgraded Next.js app on port 3991 and authenticated pre-existing administrator with existing bcrypt password (`Password123!`).
+   - Applied 141 migrations in **3.0s** via official migration container (`OPSKNIGHT_MIGRATION_ONLY=true`).
+   - Table count expanded from 121 to 179 with **100% baseline data preservation asserted at code level** across all 10 entity families (users, teams, services, incidents, events, notes, postmortems, actions, status pages, audit logs).
+   - Referential integrity verified: 0 orphaned rows (`Incident.serviceId` and `IncidentEvent.incidentId`). Encrypted configuration verified: 1 integration preserved and decrypted.
+   - Booted upgraded Next.js app on port 3991, verified authenticated session on `/api/auth/session` for `admin@opsknight.internal`, and confirmed protected `/` access (HTTP 200).
 3. **P0 Disaster Recovery & Tooling Remediation:**
    - Fixed PostgreSQL 16 incompatibility in `deploy/scripts/drills/verify-backup-restore.sh` (`POSTGRES_IMAGE="${POSTGRES_IMAGE:-postgres:16-alpine}"` and connection ready polling).
    - Backup drill verified in **31s**.
-   - Executed full application-level recovery drill (`scripts/certification/drill-app-recovery.sh`): restored DB in 3s, booted app container on port 3990, verified `/login`, authenticated admin, and executed incident lifecycle.
-   - Measured **RPO: 0 seconds**, **Total Application RTO: 23.0 seconds**.
+   - Executed full application-level recovery drill (`scripts/certification/drill-app-recovery.sh`): restored DB in 2s, booted both web and background worker containers on port 3990, verified `/login`, authenticated admin, and executed incident lifecycle **strictly via real HTTP APIs** (`POST /api/incidents/create` -> `PATCH /api/incidents/:id/status`).
+   - Confirmed state change in PostgreSQL (`ACKNOWLEDGED`), verified `ACKNOWLEDGED` timeline event recorded by application logic, and verified worker container healthy and active.
+   - Measured **RPO: 0 seconds**, **Total Application RTO: 35.0 seconds**.
 4. **P0 Rollback Rehearsal:**
    - Evaluated image-only rollback: correctly designated **BLOCKED & UNSAFE** due to 141 non-backward-compatible schema migrations.
-   - Restore-based rollback verified (`scripts/certification/drill-rollback-rehearsal.sh`): failed v2.1 database preserved untouched for forensics, pre-upgrade backup restored into clean database in 17s, published v2.0.0 container booted on port 3992, and admin login verified. Total Rollback RTO: **37.0 seconds**.
-5. **P0 Continuous Operational Chain:**
+   - Restore-based rollback verified (`scripts/certification/drill-rollback-rehearsal.sh`): failed v2.1 database preserved untouched for forensics, pre-upgrade backup restored into clean database in 3s, published v2.0.0 container booted on port 3992, and admin session verified via `/api/auth/session` and protected `/` (HTTP 200). Total Rollback RTO: **38.0 seconds**.
+5. **P0 Continuous Operational Chain (100% Application-Driven):**
    - Tested Alert → Automation → Incident → Escalation → Notification → Resolution (`scripts/certification/test-continuous-operational-chain.ts`).
-   - Verified encrypted webhook ingestion, incident generation (`OPEN`), escalation initiation (`ESCALATING`), notification logging, responder acknowledgment (`ACKNOWLEDGED`), resolution (`RESOLVED`), timeline events, and audit logs directly in PostgreSQL (100% PASS).
+   - Verified encrypted webhook ingestion, incident auto-generation (`OPEN`) by ingestion engine, escalation initiation (`ESCALATING`), notification logging, runbook preview API, operator acknowledgment via real REST API v2 (`POST /api/v2/incidents/:id/acknowledge`), and resolution via real REST API v2 (`POST /api/v2/incidents/:id/resolve`).
+   - Verified that timeline events and audit logs were created exclusively by the application handlers (zero direct Prisma/SQL mutations). 100% PASS.
 6. **P1 Cross-Browser & Viewport UI Certification:**
    - Tested 147 route executions across Chromium, Firefox, WebKit over Desktop, Tablet, and Mobile PWA (`scripts/certification/certify-all-routes-browsers.ts`).
-   - **134 PASSED (91.2%)**, Firefox 100% PASS (49/49), Chromium 95.9% PASS (47/49).
-   - Responsive layouts verified across 7 viewports (375px through 1920px) with zero horizontal overflow and $\ge 44\text{px}$ touch targets.
+   - **147 / 147 PASSED (100.0%)**: Chromium 49/49 PASS, Firefox 49/49 PASS, WebKit 49/49 PASS.
+   - Zero console errors, zero horizontal overflow, DOM mounted content verified on every page, and auth state preserved across all navigations. Nonzero exit code safety enforced.
+   - Responsive layouts verified across 7 viewports (375px through 1920px) with $\ge 44\text{px}$ touch targets.
    - Modal focus trapping and keyboard Escape key dismissals verified.
 7. **P1 Multi-Replica Resilience & HA:**
    - Live running split topology: Nginx reverse proxy `:3900`, 2 web replicas, 1 worker, PostgreSQL 16 on `:55490`.
@@ -55,20 +59,20 @@ All required P0 and P1 release gates have been certified through physical execut
 
 ## 2. Release Gate Status Summary
 
-| Gate Domain                   | Status        | Justification / Evidence Reference                                     |
-| ----------------------------- | ------------- | ---------------------------------------------------------------------- |
-| **Runbook CI Fix**            | **PASS**      | PR #916 merged; browser tests green across Chrome, Firefox, WebKit     |
-| **Disaster Recovery**         | **PASS**      | `verify-backup-restore.sh` fixed; app recovery RTO 23s, RPO 0s         |
-| **Upgrade from v2.0.0**       | **PASS**      | 141 migrations applied in 24s; 100% entities preserved; login verified |
-| **Rollback Rehearsal**        | **PASS**      | Restore-based rollback RTO 37s; pre-upgrade DB preserved               |
-| **Continuous Chain E2E**      | **PASS**      | Alert → Incident → Escalation → Ack → Resolution 100% verified in DB   |
-| **UI & Multi-Browser**        | **PASS**      | 134/147 passed (Firefox 100%); responsive layouts across 7 viewports   |
-| **Resilience & HA**           | **PASS**      | In-flight container crash recovery; instant token revocation           |
-| **Security & RBAC**           | **PASS**      | Isolation tests pass; negative auth verified; keyring encryption clean |
-| **Deployments**               | **PASS**      | Running workloads on Compose; Swarm secrets clean; Helm lint 0 errors  |
-| **REST API v2 Matrix**        | **INHERITED** | 314/314 registered operations certified in PR #914                     |
-| **SSO / SCIM Sign-Off**       | **INHERITED** | Tracked on separate dedicated identity certification branch            |
-| **High-Throughput Ingestion** | **DEFERRED**  | 1,000+ RPS ingestion stream deferred to post-2.1 roadmap               |
+| Gate Domain                   | Status        | Justification / Evidence Reference                                               |
+| ----------------------------- | ------------- | -------------------------------------------------------------------------------- |
+| **Runbook CI Fix**            | **PASS**      | PR #916 merged; browser tests green across Chrome, Firefox, WebKit               |
+| **Disaster Recovery**         | **PASS**      | `verify-backup-restore.sh` fixed; app recovery RTO 35s, RPO 0s; real API probe   |
+| **Upgrade from v2.0.0**       | **PASS**      | 141 migrations applied in 3s; 100% entities asserted; session verified           |
+| **Rollback Rehearsal**        | **PASS**      | Restore-based rollback RTO 38s; pre-upgrade DB preserved; session verified       |
+| **Continuous Chain E2E**      | **PASS**      | 100% application-driven via REST API v2; 0 direct DB writes; full timeline audit |
+| **UI & Multi-Browser**        | **PASS**      | 147/147 passed (100% across Chromium, Firefox, WebKit); DOM mounting validated   |
+| **Resilience & HA**           | **PASS**      | In-flight container crash recovery; instant token revocation                     |
+| **Security & RBAC**           | **PASS**      | Isolation tests pass; negative auth verified; keyring encryption clean           |
+| **Deployments**               | **PASS**      | Running workloads on Compose; Swarm secrets clean; Helm lint 0 errors            |
+| **REST API v2 Matrix**        | **INHERITED** | 314/314 registered operations certified in PR #914                               |
+| **SSO / SCIM Sign-Off**       | **INHERITED** | Tracked on separate dedicated identity certification branch                      |
+| **High-Throughput Ingestion** | **DEFERRED**  | 1,000+ RPS ingestion stream deferred to post-2.1 roadmap                         |
 
 ---
 

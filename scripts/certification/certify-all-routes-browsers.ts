@@ -8,17 +8,25 @@ import { chromium, firefox, webkit, type Browser, type Page } from '@playwright/
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 
-const DATABASE_URL =
-  process.env.DATABASE_URL ||
-  'postgresql://opsknight:91de63e34fe6e0747d0126df7ccff379bd6252dc8801c12f@127.0.0.1:55490/opsknight?sslmode=disable';
+// Safety Guard: Require explicit certification environment confirmation
+if (!process.env.OPSKNIGHT_CERT_TARGET && !process.env.DISPOSABLE_CERT_TARGET) {
+  throw new Error(
+    '[SAFETY GUARD] Refusing to run browser certification without OPSKNIGHT_CERT_TARGET=1 or DISPOSABLE_CERT_TARGET=1. Never execute against production environments.'
+  );
+}
+
+const DATABASE_URL = process.env.DATABASE_URL;
+if (!DATABASE_URL) {
+  throw new Error('[FATAL] DATABASE_URL environment variable is required.');
+}
+
 const BASE_URL = process.env.APP_BASE_URL || 'http://127.0.0.1:3900';
+const TEST_EMAIL = process.env.CERT_ADMIN_EMAIL || 'cert-browser-admin@opsknight.internal';
+const TEST_PASSWORD = process.env.CERT_ADMIN_PASSWORD || 'Browser-Pass-2026-Cert!';
 
 const prisma = new PrismaClient({
   datasources: { db: { url: DATABASE_URL } },
 });
-
-const TEST_EMAIL = 'cert-browser-admin@opsknight.internal';
-const TEST_PASSWORD = 'Browser-Pass-2026-Cert!';
 
 const VIEWPORTS = [
   { name: 'Desktop', width: 1280, height: 800 },
@@ -70,27 +78,25 @@ interface TestResult {
   errors: string[];
 }
 
-async function ensureUser() {
-  const passwordHash = await bcrypt.hash(TEST_PASSWORD, 10);
+async function ensureCertUser() {
   await prisma.rateLimit.deleteMany({
     where: { key: { contains: TEST_EMAIL } },
   });
-  await prisma.user.upsert({
-    where: { email: TEST_EMAIL },
-    update: {
-      passwordHash,
-      role: 'ADMIN',
-      status: 'ACTIVE',
-    },
-    create: {
-      id: `usr-browser-cert-${Date.now()}`,
-      email: TEST_EMAIL,
-      name: 'Browser QA Certifier',
-      passwordHash,
-      role: 'ADMIN',
-      status: 'ACTIVE',
-    },
-  });
+
+  const existingUser = await prisma.user.findUnique({ where: { email: TEST_EMAIL } });
+  if (!existingUser) {
+    const passwordHash = await bcrypt.hash(TEST_PASSWORD, 10);
+    await prisma.user.create({
+      data: {
+        id: `usr-browser-cert-${Date.now()}`,
+        email: TEST_EMAIL,
+        name: 'Browser QA Certifier',
+        passwordHash,
+        role: 'ADMIN',
+        status: 'ACTIVE',
+      },
+    });
+  }
 }
 
 async function checkHorizontalOverflow(page: Page): Promise<boolean> {
@@ -99,25 +105,40 @@ async function checkHorizontalOverflow(page: Page): Promise<boolean> {
   });
 }
 
-async function login(page: Page): Promise<void> {
-  await page.goto(`${BASE_URL}/login`, { waitUntil: 'domcontentloaded' });
-  const emailInput = page.locator('input[type="email"]');
-  await emailInput.waitFor({ state: 'visible', timeout: 15000 });
-  await emailInput.fill(TEST_EMAIL);
-  await page.locator('input[type="password"]').fill(TEST_PASSWORD);
-  await page.locator('form button[type="submit"]').click();
-  await page.waitForURL(url => !url.pathname.includes('/login'), { timeout: 25000 });
+async function performLogin(page: Page, isMobile: boolean): Promise<void> {
+  // Clear rate limit counter in disposable database before attempting login
+  await prisma.rateLimit.deleteMany({
+    where: { key: { contains: TEST_EMAIL } },
+  });
+
+  if (isMobile) {
+    await page.goto(`${BASE_URL}/m/login`, { waitUntil: 'domcontentloaded' });
+    const emailInput = page.locator('#login-email');
+    await emailInput.waitFor({ state: 'visible', timeout: 15000 });
+    await emailInput.fill(TEST_EMAIL);
+    await page.locator('#login-password').fill(TEST_PASSWORD);
+    await page.locator('button[type="submit"]').click();
+    await page.waitForURL(url => !url.pathname.includes('/login'), { timeout: 20000 });
+  } else {
+    await page.goto(`${BASE_URL}/login`, { waitUntil: 'domcontentloaded' });
+    const emailInput = page.locator('input[type="email"]');
+    await emailInput.waitFor({ state: 'visible', timeout: 15000 });
+    await emailInput.fill(TEST_EMAIL);
+    await page.locator('input[type="password"]').fill(TEST_PASSWORD);
+    await page.locator('form button[type="submit"]').click();
+    await page.waitForURL(url => !url.pathname.includes('/login'), { timeout: 20000 });
+  }
 }
 
 async function main() {
   console.log('======================================================================');
   console.log('OpsKnight P1 Full-Route Cross-Browser UI Certification');
   console.log('Browsers: Chromium, Firefox, WebKit');
-  console.log('Viewports: Desktop (1280x800), Tablet (768x1024), Mobile (375x812)');
+  console.log('Viewports: Desktop (1280x800), Tablet (768x1024), Mobile PWA (375x812)');
   console.log(`Base URL: ${BASE_URL}`);
   console.log('======================================================================\n');
 
-  await ensureUser();
+  await ensureCertUser();
 
   const results: TestResult[] = [];
   const browsers = [
@@ -132,12 +153,12 @@ async function main() {
 
     for (const vp of VIEWPORTS) {
       console.log(`\n--- Viewport: ${vp.name} (${vp.width}x${vp.height}) ---`);
+      const isMobile = vp.name === 'Mobile';
       const context = await browserInstance.newContext({
         viewport: { width: vp.width, height: vp.height },
-        userAgent:
-          vp.name === 'Mobile'
-            ? 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1'
-            : undefined,
+        userAgent: isMobile
+          ? 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1'
+          : undefined,
       });
 
       const page = await context.newPage();
@@ -145,30 +166,78 @@ async function main() {
       page.on('pageerror', err => pageErrors.push(`PageError: ${err.message}`));
 
       try {
-        await login(page);
+        await performLogin(page, isMobile);
         console.log(`✓ Authenticated as ${TEST_EMAIL}`);
 
-        const routesToTest = vp.name === 'Mobile' ? MOBILE_PWA_ROUTES : DESKTOP_ROUTES;
+        const routesToTest = isMobile ? MOBILE_PWA_ROUTES : DESKTOP_ROUTES;
 
         for (const route of routesToTest) {
           const startTime = Date.now();
           const routeErrors: string[] = [];
 
           try {
-            const resp = await page.goto(`${BASE_URL}${route.path}`, {
-              waitUntil: 'domcontentloaded',
-              timeout: 15000,
-            });
+            let resp;
+            try {
+              resp = await page.goto(`${BASE_URL}${route.path}`, {
+                waitUntil: 'domcontentloaded',
+                timeout: 20000,
+              });
+            } catch (navErr: any) {
+              if (
+                navErr.message.includes('NS_BINDING_ABORTED') ||
+                navErr.message.includes('ERR_ABORTED') ||
+                navErr.message.includes('interrupted by another navigation')
+              ) {
+                await page.waitForTimeout(500);
+                resp = await page.goto(`${BASE_URL}${route.path}`, {
+                  waitUntil: 'load',
+                  timeout: 20000,
+                });
+              } else {
+                throw navErr;
+              }
+            }
 
             const loadTime = Date.now() - startTime;
             const status = resp?.status() || 0;
-            const overflow = await checkHorizontalOverflow(page);
+            const currentUrl = page.url();
 
+            // 1. HTTP Status Check
             if (status >= 400) {
               routeErrors.push(`HTTP ${status}`);
             }
+
+            // 2. Unintended Redirect to Login (Auth session loss)
+            if (currentUrl.includes('/login')) {
+              routeErrors.push(`Unexpected redirect to login: ${currentUrl}`);
+            }
+
+            // 3. Horizontal Overflow Check
+            const overflow = await checkHorizontalOverflow(page);
             if (overflow && vp.name !== 'Desktop') {
               routeErrors.push('Horizontal overflow detected');
+            }
+
+            // 4. Critical DOM Render Assertion (Page has mounted content)
+            try {
+              await page.waitForSelector(
+                'main, h1, h2, [role="main"], nav, form, table, [data-testid], button, a',
+                {
+                  timeout: 8000,
+                }
+              );
+            } catch {
+              routeErrors.push('No main DOM elements rendered');
+            }
+
+            // 5. Page Title / Error Boundary Assertion
+            const title = await page.title().catch(() => '');
+            if (
+              title.includes('500') ||
+              title.includes('Internal Error') ||
+              title.includes('Application Error')
+            ) {
+              routeErrors.push(`Error title detected: "${title}"`);
             }
 
             const isPass = routeErrors.length === 0;
@@ -217,9 +286,19 @@ async function main() {
   const total = results.length;
   const passed = results.filter(r => r.status === 'PASS').length;
   const failed = results.filter(r => r.status === 'FAIL').length;
+
   console.log(`Total Route Executions: ${total}`);
   console.log(`Passed:                 ${passed} (${((passed / total) * 100).toFixed(1)}%)`);
   console.log(`Failed:                 ${failed}`);
+
+  // Breakdown by engine
+  for (const engine of ['Chromium', 'Firefox', 'WebKit']) {
+    const engineResults = results.filter(r => r.browser === engine);
+    const enginePassed = engineResults.filter(r => r.status === 'PASS').length;
+    console.log(
+      `  ${engine.padEnd(10)}: ${enginePassed} / ${engineResults.length} (${((enginePassed / engineResults.length) * 100).toFixed(1)}%)`
+    );
+  }
 
   if (failed > 0) {
     console.log('\nFailed Executions:');
@@ -229,11 +308,16 @@ async function main() {
   }
 
   console.log('======================================================================\n');
+
+  if (failed > 0) {
+    console.error(`[FAIL] Browser certification failed with ${failed} failing route execution(s).`);
+    process.exit(1);
+  }
 }
 
 main()
   .catch(err => {
-    console.error('Browser certification failed:', err);
+    console.error('Browser certification script error:', err);
     process.exit(1);
   })
   .finally(() => prisma.$disconnect());

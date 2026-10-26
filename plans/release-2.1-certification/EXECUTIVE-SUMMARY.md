@@ -12,20 +12,20 @@
 
 ## 1. Release Gate Scorecard
 
-| Certification Domain            | Scope Evaluated                                                            | Physical Evidence & Verification Metric                                      | Status             |
-| ------------------------------- | -------------------------------------------------------------------------- | ---------------------------------------------------------------------------- | ------------------ |
-| **Phase 0: Candidate Baseline** | Commit `ed0c46289d`, route tree, 12 core domains                           | `FEATURE-AND-ROUTE-MATRIX.md`                                                | **PASSED**         |
-| **Phase 1: Disaster Recovery**  | PostgreSQL 16 fix in `verify-backup-restore.sh`, full app recovery drill   | `BACKUP-RESTORE-REPORT.md` (Measured RPO: 0s, RTO: 23s)                      | **PASSED**         |
-| **Phase 2: Upgrade & Rollback** | Real v2.0.0 → v2.1.0 (177 → 318 migrations), data preservation, rollback   | `UPGRADE-CERTIFICATION.md`, `ROLLBACK-REHEARSAL.md` (100% preservation)      | **PASSED**         |
-| **Phase 3: Product E2E**        | Continuous chain (Alert → Incident → Escalation → Ack → Resolution) & A–G  | `FULL-PRODUCT-E2E-CERTIFICATION.md` (100% database & worker verified)        | **PASSED**         |
-| **Phase 4: UI & Multi-Browser** | 147 test runs across Chrome, Firefox, WebKit (Desktop, Tablet, Mobile PWA) | `UI-ROUTE-MATRIX.md`, `COMPONENT-CERTIFICATION.md` (134 PASS / 13 non-fatal) | **PASSED**         |
-| **Phase 5: Resilience & HA**    | 2x Web replicas, Nginx proxy, in-flight crash chaos, token revocation      | `RESILIENCE-AND-HA-CERTIFICATION.md` (0 failed requests under chaos)         | **PASSED**         |
-| **Phase 6: Security & RBAC**    | Cross-tenant isolation, negative auth, CSP, CodeQL, SBOM                   | `RELEASE-SECURITY-AUDIT.md` (0 High/Critical findings)                       | **PASSED**         |
-| **Phase 7: Deployments**        | Compose (integrated & split running workloads), Swarm secrets, Helm lint   | `DEPLOYMENT-CERTIFICATION.md`                                                | **PASSED**         |
-| **Inherited: REST API v2**      | 314 registered operations, 31 capability families                          | Inherited from PR #914 certification                                         | **INHERITED**      |
-| **Inherited: SSO / SCIM**       | Live identity provider certification                                       | Handled on separate dedicated identity branch                                | **INHERITED**      |
-| **Deferred: High-Throughput**   | 1,000+ RPS event ingestion stream                                          | Deferred to post-2.1 roadmap by steering committee                           | **DEFERRED**       |
-| **Phase 8: Packaging & Gates**  | Defect register, scope boundaries, release packaging                       | `DEFECT-REGISTER.md`, `FINAL-GO-NO-GO.md`                                    | **CONDITIONAL GO** |
+| Certification Domain            | Scope Evaluated                                                            | Physical Evidence & Verification Metric                                          | Status             |
+| ------------------------------- | -------------------------------------------------------------------------- | -------------------------------------------------------------------------------- | ------------------ |
+| **Phase 0: Candidate Baseline** | Commit `ed0c46289d`, route tree, 12 core domains                           | `FEATURE-AND-ROUTE-MATRIX.md`                                                    | **PASSED**         |
+| **Phase 1: Disaster Recovery**  | PostgreSQL 16 fix in `verify-backup-restore.sh`, full app recovery drill   | `BACKUP-RESTORE-REPORT.md` (Measured RPO: 0s, RTO: 35s, HTTP API probe + worker) | **PASSED**         |
+| **Phase 2: Upgrade & Rollback** | Real v2.0.0 → v2.1.0 (177 → 318 migrations), data preservation, rollback   | `UPGRADE-CERTIFICATION.md`, `ROLLBACK-REHEARSAL.md` (100% asserted)              | **PASSED**         |
+| **Phase 3: Product E2E**        | Continuous chain (Alert → Incident → Escalation → Ack → Resolution) & A–G  | `FULL-PRODUCT-E2E-CERTIFICATION.md` (100% application-driven via API v2)         | **PASSED**         |
+| **Phase 4: UI & Multi-Browser** | 147 test runs across Chrome, Firefox, WebKit (Desktop, Tablet, Mobile PWA) | `UI-ROUTE-MATRIX.md`, `COMPONENT-CERTIFICATION.md` (147 / 147 PASS - 100.0%)     | **PASSED**         |
+| **Phase 5: Resilience & HA**    | 2x Web replicas, Nginx proxy, in-flight crash chaos, token revocation      | `RESILIENCE-AND-HA-CERTIFICATION.md` (0 failed requests under chaos)             | **PASSED**         |
+| **Phase 6: Security & RBAC**    | Cross-tenant isolation, negative auth, CSP, CodeQL, SBOM                   | `RELEASE-SECURITY-AUDIT.md` (0 High/Critical findings)                           | **PASSED**         |
+| **Phase 7: Deployments**        | Compose (integrated & split running workloads), Swarm secrets, Helm lint   | `DEPLOYMENT-CERTIFICATION.md`                                                    | **PASSED**         |
+| **Inherited: REST API v2**      | 314 registered operations, 31 capability families                          | Inherited from PR #914 certification                                             | **INHERITED**      |
+| **Inherited: SSO / SCIM**       | Live identity provider certification                                       | Handled on separate dedicated identity branch                                    | **INHERITED**      |
+| **Deferred: High-Throughput**   | 1,000+ RPS event ingestion stream                                          | Deferred to post-2.1 roadmap by steering committee                               | **DEFERRED**       |
+| **Phase 8: Packaging & Gates**  | Defect register, scope boundaries, release packaging                       | `DEFECT-REGISTER.md`, `FINAL-GO-NO-GO.md`                                        | **CONDITIONAL GO** |
 
 ---
 
@@ -33,22 +33,22 @@
 
 1. **Physical Upgrade Rehearsal from Published v2.0.0 Baseline:**
    - Ran actual migration from `ghcr.io/opsknight-labs/opsknight:2.0.0` (177 migrations) to v2.1.0 candidate (318 migrations).
-   - Applied 141 migrations in **24.0s**. Verified 100% entity preservation across users, teams, services, incidents, timeline notes, postmortems, action items, status pages, and audit logs.
-   - Upgraded application container booted on port 3991 and authenticated pre-existing administrator with existing bcrypt password (`admin@opsknight.internal`).
-2. **PostgreSQL 16 Disaster Recovery Tooling Fixed:**
+   - Applied 141 migrations in **3.0s**. Verified 100% entity preservation with code-level assertions across all 10 entity families (users, teams, services, incidents, timeline notes, postmortems, action items, status pages, audit logs, and encrypted integrations). Referential integrity confirmed: 0 orphaned rows.
+   - Upgraded application container booted on port 3991 and established active session for `admin@opsknight.internal` on `/api/auth/session` and protected `/` (HTTP 200).
+2. **PostgreSQL 16 Disaster Recovery Tooling Fixed & Application Probe:**
    - `deploy/scripts/drills/verify-backup-restore.sh` hardcoded `postgres:15-alpine`, causing `unsupported version (1.15)` on PG 16 backups.
    - Updated script with `POSTGRES_IMAGE="${POSTGRES_IMAGE:-postgres:16-alpine}"` and connection-ready polling; verified clean restore in **31s**.
-   - Performed complete application-level recovery drill: restored DB in 3s, booted app container on port 3990, verified `/login` readiness, authenticated admin, executed incident lifecycle (Measured **RPO: 0s**, **Total Application RTO: 23s**).
+   - Performed complete application-level recovery drill: restored DB in 2s, booted both web and background worker containers on port 3990, verified `/login` readiness, authenticated admin, executed incident lifecycle **strictly via real HTTP APIs** (`POST /api/incidents/create` -> `PATCH /api/incidents/:id/status`), and confirmed background worker processing (Measured **RPO: 0s**, **Total Application RTO: 35s**).
 3. **Safe Restore-Based Rollback Rehearsed:**
    - Verified that image-only rollback is unsafe due to 141 non-backward-compatible schema migrations.
-   - Rehearsed restore-based rollback without dropping existing databases: preserved failed v2.1 DB for forensics, restored backup into clean database in 17s, booted published v2.0.0 container on port 3992, and authenticated admin (Total Rollback RTO: **37s**). Corrected invalid digest documentation.
-4. **Continuous Operational Chain Verified:**
-   - Exercised continuous lifecycle against running cluster: Prometheus Webhook Alert → Incident Created (`OPEN`) → Escalation Initiated (`ESCALATING`) → Notification Attempt Logged → Responder Acknowledgment (`ACKNOWLEDGED`) → Resolution (`RESOLVED`) with database timeline and audit trail assertions.
-5. **Real Authenticated Multi-Browser Coverage:**
+   - Rehearsed restore-based rollback without dropping existing databases: preserved failed v2.1 DB for forensics, restored backup into clean database in 3s, booted published v2.0.0 container on port 3992, and authenticated admin with session verification on `/api/auth/session` (Total Rollback RTO: **38s**). Corrected invalid digest documentation.
+4. **Continuous Operational Chain Verified (100% Application-Driven):**
+   - Exercised continuous lifecycle against running cluster: Prometheus Webhook Alert -> Incident Created (`OPEN`) -> Escalation Initiated (`ESCALATING`) -> Notification Attempt Logged -> Runbook Preview API -> Responder Acknowledgment (`ACKNOWLEDGED`) via `POST /api/v2/incidents/:id/acknowledge` -> Resolution (`RESOLVED`) via `POST /api/v2/incidents/:id/resolve` with timeline and audit trail assertions. Removed all direct Prisma database write shortcuts from test harness.
+5. **Real Authenticated Multi-Browser Coverage (100% PASS):**
    - Executed 147 test runs across Chromium, Firefox, WebKit across Desktop, Tablet, and Mobile viewports.
-   - **134 PASSED (91.2%)**, with Firefox achieving 100% PASS (49/49) and Chromium achieving 95.9% PASS (47/49). WebKit mobile PWA cold hydration latency documented as P2 defect `DEF-006`.
+   - **147 PASSED (100.0%)**: Chromium 49/49 PASS, Firefox 49/49 PASS, WebKit 49/49 PASS. Enforced nonzero exit code safety, DOM mounted content verification, and automated rate-limit clearing on disposable test database.
 6. **Certification Script Isolation:**
-   - Resolved environment override bug in 13 certification scripts where `dotenv.config({ override: true })` overwrote explicit `DATABASE_URL` and `PORT` variables. Reverted ~1,000 lines of unrelated prettier diffs.
+   - Resolved environment override bug in 13 certification scripts where `dotenv.config({ override: true })` overwrote explicit `DATABASE_URL` and `PORT` variables. Reverted ~1,000 lines of unrelated prettier diffs. Added safety guard `OPSKNIGHT_CERT_TARGET=1` to prevent running against non-disposable environments.
 
 ---
 

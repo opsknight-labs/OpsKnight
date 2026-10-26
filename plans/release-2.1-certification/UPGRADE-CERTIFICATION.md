@@ -34,24 +34,49 @@ The upgrade drill was executed against a fresh, isolated PostgreSQL 16 container
 ### 2.1 Execution Log & Timings
 
 ```text
-[drill-upgrade] Starting isolated PostgreSQL 16 container for upgrade drill...
-[drill-upgrade] Populating baseline v2.0.0 schema and realistic entities...
-[drill-upgrade] Baseline verified: 177 migrations, 121 tables, 4 users, 3 incidents.
-[drill-upgrade] Running OpsKnight 2.1 migration owner container (OPSKNIGHT_MIGRATION_ONLY=true)...
+======================================================================
+OpsKnight P0 Upgrade Certification Drill: v2.0.0 -> v2.1.0
+======================================================================
+1. Initializing isolated database with v2.0.0 schema and baseline data...
+2. Recording Pre-Upgrade Inventory...
+Pre-upgrade state verified: 177 migrations applied, 4 users, 2 teams, 3 services, 3 incidents, 1 status pages, 2 audit logs.
+3. Executing v2.1.0 Migration Owner against baseline database...
 141 migrations found in prisma/migrations
-Applying migration `20260408103000_init_v2`
-...
-Applying migration `20261021210000_scim_canonical_origin`
-[drill-upgrade] Migrations completed in 24 seconds.
-[drill-upgrade] Post-migration check: 318 migrations applied, 0 failed, 179 tables present.
-[drill-upgrade] Booting upgraded v2.1.0 application container on port 3991...
-[drill-upgrade] Verifying HTTP 200 on /login... PASSED
-[drill-upgrade] Testing admin authentication with pre-upgrade bcrypt password... HTTP 302 Found (Authenticated session cookie minted)
+All migrations have been successfully applied.
+✅ Migrations completed successfully
+✅ Database is ready.
+🏁 Migrations and online indexes completed successfully (OPSKNIGHT_MIGRATION_ONLY=true).
+Schema migrations completed in 3s.
+4. Validating Post-Upgrade Database Schema & Migration Preservation...
+Post-Upgrade Inventory:
+  Migrations:  177 -> 318 (expected: 318)
+  Users:       4 -> 4
+  Teams:       2 -> 2
+  Services:    3 -> 3
+  Incidents:   3 -> 3
+  Events:      6 -> 6
+  Postmortems: 1 -> 1
+  Actions:     2 -> 2
+  StatusPages: 1 -> 1
+  AuditLogs:   2 -> 2
+Foreign key referential integrity checks...
+Referential integrity confirmed: 0 orphaned rows.
+Encrypted configuration validated: 1 integrations preserved.
+Data preservation confirmed: 100% of pre-upgrade entities intact.
+5. Deploying OpsKnight v2.1.0 Application against upgraded database...
+Waiting for v2.1.0 application web endpoint to be healthy...
+OpsKnight v2.1.0 is healthy on http://127.0.0.1:3991 (HTTP 200).
+6. Testing authentication of pre-upgrade user on upgraded v2.1.0 instance...
+Authentication verified: HTTP 302 redirect on credentials callback (location: http://127.0.0.1:3991).
+Session verified: Authenticated session established for admin@opsknight.internal.
+Protected page verified: Authenticated request to / returned HTTP 200 OK.
+7. Exercising new v2.1.0 schema capability on upgraded database...
+Total tables post-upgrade: 179 (v2.0 baseline had 121 tables)
 ```
 
-- **Migration Duration:** **24.0 seconds** for 141 migrations.
-- **Application Startup Duration:** **18.5 seconds** to healthy HTTP 200 readiness.
-- **Drill Status:** **PASS**
+- **Migration Duration:** **3.0 seconds** for 141 migrations.
+- **Application Startup Duration:** **16.0 seconds** to healthy HTTP 200 readiness.
+- **Drill Status:** **PASS (100% Verified via automated assertions)**
 
 ---
 
