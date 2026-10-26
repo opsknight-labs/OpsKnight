@@ -1,7 +1,7 @@
 import { prepareReceiptInsert } from './receipt-insert';
 import { reserveIngestionBudget, reserveIngestionBudgets } from './budget';
 import { DurableAppendBatcher } from './append-batcher';
-import { acquireTextAdvisoryLocks } from '@/lib/db-locks';
+import { acquireDurableTextAdvisoryLocks } from '@/lib/db-locks';
 import { randomUUID } from 'node:crypto';
 import { Prisma } from '@prisma/client';
 import prisma from '@/lib/prisma';
@@ -107,12 +107,8 @@ async function appendPostgresGroup(
   tx: Prisma.TransactionClient,
   entries: PreparedAppend[]
 ): Promise<AppendResult[]> {
-  await measureAdmissionStage(
-    'durability',
-    () => tx.$executeRaw`SET LOCAL synchronous_commit = on`
-  );
   await measureAdmissionStage('advisory', () =>
-    acquireTextAdvisoryLocks(
+    acquireDurableTextAdvisoryLocks(
       tx,
       entries.flatMap(entry => [
         ...entry.identities.map(identity => `ingestion:${identity}`),
