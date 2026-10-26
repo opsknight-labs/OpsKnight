@@ -24,8 +24,15 @@ module.exports = async function startDatabaseProfile(prisma) {
         wal.wal_write::double precision AS "clusterWalWrites",
         wal.wal_sync::double precision AS "clusterWalSyncs",
         wal.wal_write_time::double precision AS "clusterWalWriteTimeMs",
-        wal.wal_sync_time::double precision AS "clusterWalSyncTimeMs"
-      FROM pg_stat_database CROSS JOIN pg_stat_wal wal WHERE datname = current_database()
+        wal.wal_sync_time::double precision AS "clusterWalSyncTimeMs",
+        bg.checkpoints_timed::double precision AS "clusterTimedCheckpoints",
+        bg.checkpoints_req::double precision AS "clusterRequestedCheckpoints",
+        bg.checkpoint_write_time::double precision AS "clusterCheckpointWriteTimeMs",
+        bg.checkpoint_sync_time::double precision AS "clusterCheckpointSyncTimeMs",
+        bg.buffers_checkpoint::double precision AS "clusterCheckpointBuffers",
+        bg.buffers_backend_fsync::double precision AS "clusterBackendFsyncs"
+      FROM pg_stat_database CROSS JOIN pg_stat_wal wal CROSS JOIN pg_stat_bgwriter bg
+      WHERE datname = current_database()
     `;
     return value;
   };
@@ -176,7 +183,7 @@ module.exports = async function startDatabaseProfile(prisma) {
     return {
       diagnosticSettings,
       scope:
-        'Owned local test database; PostgreSQL execution statistics exclude client/pool/network time. Cluster WAL includes all databases on this owned test instance.',
+        'Owned local test database; PostgreSQL execution statistics exclude client/pool/network time. Cluster WAL/checkpoint counters include all databases on the owned PostgreSQL16 test instance.',
       elapsedMs,
       counters: deltaCounters,
       totalStatementWalBytes: rows.reduce((sum, row) => sum + row.walBytes, 0),

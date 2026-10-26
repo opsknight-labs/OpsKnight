@@ -1,0 +1,553 @@
+{
+  "sourceRevision": "8a1754f88e7e6203f22053f945537803539bf3c5",
+  "controllerSourceRevision": "8a1754f88e7e6203f22053f945537803539bf3c5",
+  "candidateImage": "sha256:d119cd6de07a52ce5fdf44cefecebe74f2b03da0d89d1292226a4e3c7b76cebb",
+  "certifiedEnterprise": false,
+  "scope": "Repeated60second50/sec A-B-B-A engineering diagnostics on shared VM; fixed2CPU1GiB PG16/1CPU1GiBweb/1CPU768MiBworkers, same inspector memory sampling, fresh339-migration DB clones and explicit checkpoint before each topology. Preflight warms connections but no representative aged-data certification. No other owned benchmark or build overlaps load. No75/100 promotion.",
+  "runs": [
+    {
+      "label": "a1",
+      "database": "ingestion_test_http_qwait_a1_20261026",
+      "imageId": "sha256:9bb86c7b820e95ff7bdd8addbd7c4b6ac29d3fa85664bcbee4e6899b6316bb54",
+      "exitCode": 0,
+      "httpPassed": true,
+      "accepted": 3001,
+      "completed": 3001,
+      "httpP95": 19.923,
+      "incidentP95": 138,
+      "smtpPassed": true,
+      "cleanupFailures": [],
+      "error": null,
+      "quotaStages": [
+        {
+          "stage": "quota",
+          "outcome": "success",
+          "count": 3002,
+          "meanMs": 3.7042721499000826,
+          "percentileUpperBoundsMs": {
+            "p50": 5,
+            "p95": 5,
+            "p99": 10
+          }
+        },
+        {
+          "stage": "append-wait",
+          "outcome": "success",
+          "count": 3002,
+          "meanMs": 2.306364133577584,
+          "percentileUpperBoundsMs": {
+            "p50": 5,
+            "p95": 5,
+            "p99": 5
+          }
+        },
+        {
+          "stage": "transaction-acquire",
+          "outcome": "success",
+          "count": 2982,
+          "meanMs": 0.5181226663313736,
+          "percentileUpperBoundsMs": {
+            "p50": 1,
+            "p95": 1,
+            "p99": 5
+          }
+        },
+        {
+          "stage": "transaction-operation",
+          "outcome": "success",
+          "count": 2982,
+          "meanMs": 3.994979294768528,
+          "percentileUpperBoundsMs": {
+            "p50": 5,
+            "p95": 10,
+            "p99": 10
+          }
+        },
+        {
+          "stage": "transaction-finalize",
+          "outcome": "success",
+          "count": 2982,
+          "meanMs": 0.5966242746478837,
+          "percentileUpperBoundsMs": {
+            "p50": 1,
+            "p95": 1,
+            "p99": 5
+          }
+        }
+      ],
+      "memory": [
+        {
+          "role": "web",
+          "samples": 127,
+          "peakRss": 247984128,
+          "peakHeapUsed": 149260464,
+          "peakExternal": 6780338,
+          "cgroupPeakBytes": 325206016,
+          "lastGc": {
+            "count": 1760,
+            "durationMs": 1438.776626110077
+          },
+          "artifact": "plans/event-ingestion/local-qwait-repeat-a1-web-memory.jsonl.gz"
+        },
+        {
+          "role": "ingestion-worker",
+          "samples": 127,
+          "peakRss": 233791488,
+          "peakHeapUsed": 141135256,
+          "peakExternal": 3991049,
+          "cgroupPeakBytes": 205688832,
+          "lastGc": {
+            "count": 1735,
+            "durationMs": 1254.5333482325077
+          },
+          "artifact": "plans/event-ingestion/local-qwait-repeat-a1-ingestion-worker-memory.jsonl.gz"
+        }
+      ],
+      "databaseResourcesBefore": null,
+      "databaseResourcesAfter": null
+    },
+    {
+      "label": "b1",
+      "database": "ingestion_test_http_qwait_b1_20261026",
+      "imageId": "sha256:d119cd6de07a52ce5fdf44cefecebe74f2b03da0d89d1292226a4e3c7b76cebb",
+      "exitCode": 0,
+      "httpPassed": true,
+      "accepted": 3001,
+      "completed": 3001,
+      "httpP95": 21.963,
+      "incidentP95": 142,
+      "smtpPassed": true,
+      "cleanupFailures": [],
+      "error": null,
+      "quotaStages": [
+        {
+          "stage": "quota-wait",
+          "outcome": "success",
+          "count": 3002,
+          "meanMs": 2.4023961592272713,
+          "percentileUpperBoundsMs": {
+            "p50": 5,
+            "p95": 5,
+            "p99": 5
+          }
+        },
+        {
+          "stage": "quota-policy",
+          "outcome": "success",
+          "count": 2975,
+          "meanMs": 0.6414450272270371,
+          "percentileUpperBoundsMs": {
+            "p50": 1,
+            "p95": 1,
+            "p99": 5
+          }
+        },
+        {
+          "stage": "quota-database",
+          "outcome": "success",
+          "count": 2975,
+          "meanMs": 0.7901724077311018,
+          "percentileUpperBoundsMs": {
+            "p50": 1,
+            "p95": 5,
+            "p99": 5
+          }
+        },
+        {
+          "stage": "quota",
+          "outcome": "success",
+          "count": 3002,
+          "meanMs": 3.9395790789471565,
+          "percentileUpperBoundsMs": {
+            "p50": 5,
+            "p95": 5,
+            "p99": 10
+          }
+        },
+        {
+          "stage": "append-wait",
+          "outcome": "success",
+          "count": 3002,
+          "meanMs": 2.400211425716145,
+          "percentileUpperBoundsMs": {
+            "p50": 5,
+            "p95": 5,
+            "p99": 5
+          }
+        },
+        {
+          "stage": "transaction-acquire",
+          "outcome": "success",
+          "count": 2953,
+          "meanMs": 0.5334513169657525,
+          "percentileUpperBoundsMs": {
+            "p50": 1,
+            "p95": 1,
+            "p99": 5
+          }
+        },
+        {
+          "stage": "transaction-operation",
+          "outcome": "success",
+          "count": 2953,
+          "meanMs": 4.197720194378612,
+          "percentileUpperBoundsMs": {
+            "p50": 5,
+            "p95": 10,
+            "p99": 25
+          }
+        },
+        {
+          "stage": "transaction-finalize",
+          "outcome": "success",
+          "count": 2953,
+          "meanMs": 0.6260332113105891,
+          "percentileUpperBoundsMs": {
+            "p50": 1,
+            "p95": 1,
+            "p99": 5
+          }
+        }
+      ],
+      "memory": [
+        {
+          "role": "web",
+          "samples": 126,
+          "peakRss": 250048512,
+          "peakHeapUsed": 148956384,
+          "peakExternal": 6882518,
+          "cgroupPeakBytes": 219648000,
+          "lastGc": {
+            "count": 1770,
+            "durationMs": 1448.3490637540817
+          },
+          "artifact": "plans/event-ingestion/local-qwait-repeat-b1-web-memory.jsonl.gz"
+        },
+        {
+          "role": "ingestion-worker",
+          "samples": 127,
+          "peakRss": 231981056,
+          "peakHeapUsed": 139326880,
+          "peakExternal": 3989991,
+          "cgroupPeakBytes": 199041024,
+          "lastGc": {
+            "count": 1731,
+            "durationMs": 1494.9244599044323
+          },
+          "artifact": "plans/event-ingestion/local-qwait-repeat-b1-ingestion-worker-memory.jsonl.gz"
+        }
+      ],
+      "databaseResourcesBefore": null,
+      "databaseResourcesAfter": null
+    },
+    {
+      "label": "b2",
+      "database": "ingestion_test_http_qwait_b2_20261026",
+      "imageId": "sha256:d119cd6de07a52ce5fdf44cefecebe74f2b03da0d89d1292226a4e3c7b76cebb",
+      "exitCode": 0,
+      "httpPassed": true,
+      "accepted": 3001,
+      "completed": 3001,
+      "httpP95": 66.18,
+      "incidentP95": 191,
+      "smtpPassed": true,
+      "cleanupFailures": [],
+      "error": null,
+      "quotaStages": [
+        {
+          "stage": "quota-wait",
+          "outcome": "success",
+          "count": 3002,
+          "meanMs": 2.6740650766157774,
+          "percentileUpperBoundsMs": {
+            "p50": 5,
+            "p95": 5,
+            "p99": 25
+          }
+        },
+        {
+          "stage": "quota-policy",
+          "outcome": "success",
+          "count": 2919,
+          "meanMs": 0.949748632408411,
+          "percentileUpperBoundsMs": {
+            "p50": 1,
+            "p95": 5,
+            "p99": 10
+          }
+        },
+        {
+          "stage": "quota-database",
+          "outcome": "success",
+          "count": 2919,
+          "meanMs": 1.1359850565262275,
+          "percentileUpperBoundsMs": {
+            "p50": 1,
+            "p95": 5,
+            "p99": 10
+          }
+        },
+        {
+          "stage": "quota",
+          "outcome": "success",
+          "count": 3002,
+          "meanMs": 5.219043826782099,
+          "percentileUpperBoundsMs": {
+            "p50": 5,
+            "p95": 10,
+            "p99": 100
+          }
+        },
+        {
+          "stage": "append-wait",
+          "outcome": "success",
+          "count": 3002,
+          "meanMs": 3.6468617514990274,
+          "percentileUpperBoundsMs": {
+            "p50": 5,
+            "p95": 5,
+            "p99": 100
+          }
+        },
+        {
+          "stage": "transaction-acquire",
+          "outcome": "success",
+          "count": 2872,
+          "meanMs": 0.7363179916435273,
+          "percentileUpperBoundsMs": {
+            "p50": 1,
+            "p95": 5,
+            "p99": 5
+          }
+        },
+        {
+          "stage": "transaction-operation",
+          "outcome": "success",
+          "count": 2872,
+          "meanMs": 5.554277294916409,
+          "percentileUpperBoundsMs": {
+            "p50": 5,
+            "p95": 10,
+            "p99": 50
+          }
+        },
+        {
+          "stage": "transaction-finalize",
+          "outcome": "success",
+          "count": 2872,
+          "meanMs": 0.8983443868384716,
+          "percentileUpperBoundsMs": {
+            "p50": 1,
+            "p95": 5,
+            "p99": 10
+          }
+        }
+      ],
+      "memory": [
+        {
+          "role": "web",
+          "samples": 126,
+          "peakRss": 253263872,
+          "peakHeapUsed": 152851960,
+          "peakExternal": 6810995,
+          "cgroupPeakBytes": 219078656,
+          "lastGc": {
+            "count": 1760,
+            "durationMs": 1808.2145732045174
+          },
+          "artifact": "plans/event-ingestion/local-qwait-repeat-b2-web-memory.jsonl.gz"
+        },
+        {
+          "role": "ingestion-worker",
+          "samples": 126,
+          "peakRss": 233517056,
+          "peakHeapUsed": 139816160,
+          "peakExternal": 3989991,
+          "cgroupPeakBytes": 201703424,
+          "lastGc": {
+            "count": 1737,
+            "durationMs": 1538.3905830085278
+          },
+          "artifact": "plans/event-ingestion/local-qwait-repeat-b2-ingestion-worker-memory.jsonl.gz"
+        }
+      ],
+      "databaseResourcesBefore": null,
+      "databaseResourcesAfter": null
+    },
+    {
+      "label": "a2",
+      "database": "ingestion_test_http_qwait_a2_20261026",
+      "imageId": "sha256:9bb86c7b820e95ff7bdd8addbd7c4b6ac29d3fa85664bcbee4e6899b6316bb54",
+      "exitCode": 0,
+      "httpPassed": true,
+      "accepted": 3001,
+      "completed": 3001,
+      "httpP95": 34.902,
+      "incidentP95": 145,
+      "smtpPassed": true,
+      "cleanupFailures": [],
+      "error": null,
+      "quotaStages": [
+        {
+          "stage": "quota",
+          "outcome": "success",
+          "count": 3002,
+          "meanMs": 4.335881892405027,
+          "percentileUpperBoundsMs": {
+            "p50": 5,
+            "p95": 10,
+            "p99": 25
+          }
+        },
+        {
+          "stage": "append-wait",
+          "outcome": "success",
+          "count": 3002,
+          "meanMs": 2.3552526878749647,
+          "percentileUpperBoundsMs": {
+            "p50": 5,
+            "p95": 5,
+            "p99": 5
+          }
+        },
+        {
+          "stage": "transaction-acquire",
+          "outcome": "success",
+          "count": 2956,
+          "meanMs": 0.696853211434266,
+          "percentileUpperBoundsMs": {
+            "p50": 1,
+            "p95": 5,
+            "p99": 5
+          }
+        },
+        {
+          "stage": "transaction-operation",
+          "outcome": "success",
+          "count": 2956,
+          "meanMs": 4.827089649526365,
+          "percentileUpperBoundsMs": {
+            "p50": 5,
+            "p95": 10,
+            "p99": 25
+          }
+        },
+        {
+          "stage": "transaction-finalize",
+          "outcome": "success",
+          "count": 2956,
+          "meanMs": 0.7596679445199407,
+          "percentileUpperBoundsMs": {
+            "p50": 1,
+            "p95": 5,
+            "p99": 5
+          }
+        }
+      ],
+      "memory": [
+        {
+          "role": "web",
+          "samples": 126,
+          "peakRss": 248049664,
+          "peakHeapUsed": 148878056,
+          "peakExternal": 6820534,
+          "cgroupPeakBytes": 320049152,
+          "lastGc": {
+            "count": 1751,
+            "durationMs": 1667.0428362190723
+          },
+          "artifact": "plans/event-ingestion/local-qwait-repeat-a2-web-memory.jsonl.gz"
+        },
+        {
+          "role": "ingestion-worker",
+          "samples": 126,
+          "peakRss": 235323392,
+          "peakHeapUsed": 139644984,
+          "peakExternal": 3989991,
+          "cgroupPeakBytes": 200544256,
+          "lastGc": {
+            "count": 1731,
+            "durationMs": 1493.545202434063
+          },
+          "artifact": "plans/event-ingestion/local-qwait-repeat-a2-ingestion-worker-memory.jsonl.gz"
+        }
+      ],
+      "databaseResourcesBefore": {
+        "observedAt": "2026-10-26T15:35:08.746Z",
+        "cpu": {
+          "usage_usec": 247761385,
+          "user_usec": 185245764,
+          "system_usec": 62515620,
+          "nice_usec": 0,
+          "nr_periods": 15841,
+          "nr_throttled": 1,
+          "throttled_usec": 133324,
+          "nr_bursts": 0,
+          "burst_usec": 0
+        },
+        "memoryCurrentBytes": 1004609536,
+        "memoryPeakBytes": 1074245632,
+        "memoryEvents": {
+          "low": 0,
+          "high": 0,
+          "max": 6761,
+          "oom": 0,
+          "oom_kill": 0,
+          "oom_group_kill": 0,
+          "sock_throttled": 95
+        },
+        "vmMemoryKiB": {
+          "MemTotal": 8124256,
+          "MemAvailable": 3599456,
+          "SwapTotal": 1048572,
+          "SwapFree": 462992
+        },
+        "scope": "Owned PostgreSQL cgroup counters; /proc/meminfo is shared Docker VM memory, not PostgreSQL RSS. CPU deltas include all owned fixture DBs."
+      },
+      "databaseResourcesAfter": {
+        "observedAt": "2026-10-26T15:36:12.043Z",
+        "cpu": {
+          "usage_usec": 278373186,
+          "user_usec": 209987191,
+          "system_usec": 68385995,
+          "nice_usec": 0,
+          "nr_periods": 16469,
+          "nr_throttled": 1,
+          "throttled_usec": 133324,
+          "nr_bursts": 0,
+          "burst_usec": 0
+        },
+        "memoryCurrentBytes": 1060696064,
+        "memoryPeakBytes": 1074245632,
+        "memoryEvents": {
+          "low": 0,
+          "high": 0,
+          "max": 8388,
+          "oom": 0,
+          "oom_kill": 0,
+          "oom_group_kill": 0,
+          "sock_throttled": 95
+        },
+        "vmMemoryKiB": {
+          "MemTotal": 8124256,
+          "MemAvailable": 3287032,
+          "SwapTotal": 1048572,
+          "SwapFree": 458404
+        },
+        "scope": "Owned PostgreSQL cgroup counters; /proc/meminfo is shared Docker VM memory, not PostgreSQL RSS. CPU deltas include all owned fixture DBs."
+      }
+    }
+  ],
+  "complete": true,
+  "databaseResourceCoverage": {
+    "missingRuns": [
+      "a1",
+      "b1",
+      "b2"
+    ],
+    "completeRuns": [
+      "a2"
+    ],
+    "reason": "Initial controller capture was wired only to worker-only path. Full-stack before/after wiring corrected before a2; application image and resource limits unchanged."
+  }
+}

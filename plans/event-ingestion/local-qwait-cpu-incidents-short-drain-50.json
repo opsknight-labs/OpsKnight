@@ -1,0 +1,175 @@
+{
+  "sourceRevision": "8a1754f88e7e6203f22053f945537803539bf3c5",
+  "imageId": "sha256:d119cd6de07a52ce5fdf44cefecebe74f2b03da0d89d1292226a4e3c7b76cebb",
+  "runId": "0c4c4a05-0bb2-491f-98f2-2c2afe979b2e",
+  "target": 50,
+  "duration": "1m",
+  "generalWorkerReplicas": 1,
+  "httpPassed": true,
+  "postLoadDrain": {
+    "passed": true,
+    "samples": [
+      {
+        "elapsedMs": 12.514292000007117,
+        "due": 2,
+        "failed": 0,
+        "jobs": [
+          {
+            "type": "SCHEDULED_TASK",
+            "status": "PENDING_V2",
+            "count": 2,
+            "due": 2
+          },
+          {
+            "type": "COMPLIANCE_EVALUATION_SWEEP",
+            "status": "PENDING",
+            "count": 1,
+            "due": 0
+          }
+        ]
+      },
+      {
+        "elapsedMs": 264.1388330000045,
+        "due": 2,
+        "failed": 0,
+        "jobs": [
+          {
+            "type": "SCHEDULED_TASK",
+            "status": "PENDING_V2",
+            "count": 2,
+            "due": 2
+          },
+          {
+            "type": "COMPLIANCE_EVALUATION_SWEEP",
+            "status": "PENDING",
+            "count": 1,
+            "due": 0
+          }
+        ]
+      },
+      {
+        "elapsedMs": 516.1772920000076,
+        "due": 2,
+        "failed": 0,
+        "jobs": [
+          {
+            "type": "SCHEDULED_TASK",
+            "status": "PENDING_V2",
+            "count": 2,
+            "due": 2
+          },
+          {
+            "type": "COMPLIANCE_EVALUATION_SWEEP",
+            "status": "PENDING",
+            "count": 1,
+            "due": 0
+          }
+        ]
+      },
+      {
+        "elapsedMs": 768.9874169999966,
+        "due": 0,
+        "failed": 0,
+        "jobs": [
+          {
+            "type": "COMPLIANCE_EVALUATION_SWEEP",
+            "status": "PENDING",
+            "count": 1,
+            "due": 0
+          }
+        ]
+      },
+      {
+        "elapsedMs": 1021.9601669999829,
+        "due": 0,
+        "failed": 0,
+        "jobs": [
+          {
+            "type": "COMPLIANCE_EVALUATION_SWEEP",
+            "status": "PENDING",
+            "count": 1,
+            "due": 0
+          }
+        ]
+      }
+    ],
+    "timeoutMs": 10000,
+    "scope": "Two empty post-load due-job snapshots while consumers remain running. Includes all BackgroundJob families in owned fixture; not external delivery or long-term backlog proof."
+  },
+  "controllerBaseRevision": "8a1754f88e7e6203f22053f945537803539bf3c5",
+  "controllerOverlay": "Full-stack database-resource and bounded downstream-drain controller fixes; application image unchanged.",
+  "localSmtpPassed": true,
+  "shortPreflightPassed": true,
+  "queueBounded": true,
+  "queueBoundPolicy": {
+    "units": "background jobs",
+    "requiredJobsPerMainIncident": 3,
+    "maxCount": 300,
+    "maxOldestDueAgeMs": 2000,
+    "finalDueRequired": 0
+  },
+  "lastQueueSamples": [
+    {
+      "elapsedMs": 40048.62825,
+      "due": 54,
+      "oldestDueMs": 817.666,
+      "failed": 0
+    },
+    {
+      "elapsedMs": 50039.965208,
+      "due": 16,
+      "oldestDueMs": 191.07,
+      "failed": 0
+    },
+    {
+      "elapsedMs": 60041.843083,
+      "due": 12,
+      "oldestDueMs": 66.634,
+      "failed": 0
+    },
+    {
+      "elapsedMs": 60613.154,
+      "due": 2,
+      "oldestDueMs": 359.802,
+      "failed": 0
+    }
+  ],
+  "finalDrain": {
+    "observedAt": "2026-10-26T15:47:35.660858+00:00",
+    "dueUnfinished": 0,
+    "jobs": [
+      {
+        "type": "ESCALATION",
+        "status": "COMPLETED",
+        "count": 1
+      },
+      {
+        "type": "SCHEDULED_TASK",
+        "status": "COMPLETED",
+        "count": 6002
+      },
+      {
+        "type": "COMPLIANCE_EVALUATION_SWEEP",
+        "status": "PENDING",
+        "count": 1
+      },
+      {
+        "type": "COMPLIANCE_EVALUATION_SWEEP",
+        "status": "COMPLETED",
+        "count": 1
+      },
+      {
+        "type": "COMPLIANCE_DRIFT_PROJECT",
+        "status": "COMPLETED",
+        "count": 6
+      },
+      {
+        "type": "RUNBOOK",
+        "status": "COMPLETED",
+        "count": 3001
+      }
+    ],
+    "deliveries": null
+  },
+  "scope": "Short fresh-incident default/unconfigured-provider smoke with one separate pinned-Automation SMTP fixture. All active job families inspected after owned topology cleanup. Not sustained, compact-budget, configured fanout, actual Runbook execution, HA, remote delivery or release certification. General workers1; web1/ingestion1/six support roles1CPU each, DB uncapped/shared Docker VM."
+}
