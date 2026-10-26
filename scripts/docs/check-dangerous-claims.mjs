@@ -1,11 +1,16 @@
 #!/usr/bin/env node
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import YAML from 'yaml';
-import { filesUnder, readRepositoryFile } from './discovery-lib.mjs';
+import { filesUnder, readRepositoryFile, repositoryRoot } from './discovery-lib.mjs';
+
+const versions = JSON.parse(readFileSync(resolve(repositoryRoot, 'docs/versions.json'), 'utf8'));
+const currentDocsVersion = versions.currentRelease || 'v2.0.0';
 
 const risky = /\b(?:only|single|always|never|maximum|minimum|up to|exactly|supports?|does not support|default|per minute|per second|seconds?|minutes?|MB|KB)\b/i;
 const failures = [];
 let claims = 0;
-for (const file of filesUnder('docs/v2.0.0', path => path.endsWith('.md'))) {
+for (const file of filesUnder(`docs/${currentDocsVersion}`, path => path.endsWith('.md'))) {
   const body = readRepositoryFile(file);
   const header = body.match(/^---\n([\s\S]*?)\n---/)?.[1];
   const metadata = header ? YAML.parse(header) : null;

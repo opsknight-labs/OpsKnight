@@ -4,7 +4,10 @@ import { resolve } from 'node:path';
 import YAML from 'yaml';
 import { exists, repositoryRoot } from './discovery-lib.mjs';
 
-const inventoryFile = resolve(repositoryRoot, 'docs/v2.0.0/capabilities.yaml');
+const versions = JSON.parse(readFileSync(resolve(repositoryRoot, 'docs/versions.json'), 'utf8'));
+const currentDocsVersion = versions.currentRelease || 'v2.0.0';
+
+const inventoryFile = resolve(repositoryRoot, `docs/${currentDocsVersion}/capabilities.yaml`);
 const inventory = YAML.parse(readFileSync(inventoryFile, 'utf8'));
 const failures = [];
 const coverage = {};
@@ -19,7 +22,7 @@ for (const [id, capability] of Object.entries(inventory.capabilities ?? {})) {
   }
   for (const group of ['concepts', 'guides', 'reference']) {
     for (const path of capability[group] ?? []) {
-      if (!exists(`docs/v2.0.0/${path}`)) failures.push(`${id}.${group}: missing docs/v2.0.0/${path}`);
+      if (!exists(`docs/${currentDocsVersion}/${path}`)) failures.push(`${id}.${group}: missing docs/${currentDocsVersion}/${path}`);
     }
   }
   for (const group of ['tests', 'sources']) {

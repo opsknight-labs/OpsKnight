@@ -21,6 +21,13 @@ once; subsequent policy decisions come from PostgreSQL. Preserve your encryption
 keys, NextAuth secret, canonical URL, provider registration and database backup.
 Changing any of those while upgrading is a separate security operation.
 
+## Prerequisites
+
+- Complete database backup captured immediately prior to the upgrade cutover.
+- Verified persistent encryption keys (`ENCRYPTION_KEYS` and `API_KEY_SECRET`).
+- Canonical public HTTPS origin configured without protocol or trailing slash drift.
+- Administrator access to verify initial post-upgrade authentication and session state.
+
 ## Login behavior on import
 
 - Local login enabled with an enabled provider becomes **SSO Optional**. Existing
@@ -144,7 +151,6 @@ an upgraded copy of the actual deployment before production cutover.
 See [Local certification and failure rehearsal](./local-certification/) for exact
 released-version evidence, read/HTTP probes, the Kind cutover, database interruption
 and restored-database rollback results.
-
 
 ## Preserve existing hardware identities when adding passwords
 

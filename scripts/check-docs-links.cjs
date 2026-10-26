@@ -6,7 +6,13 @@
 const fs = require("fs");
 const path = require("path");
 
-const requestedRoot = process.argv[2] || "docs/v2.0.0";
+let defaultRoot = "docs/v2.0.0";
+try {
+  const versions = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "docs/versions.json"), "utf8"));
+  if (versions.currentRelease) defaultRoot = `docs/${versions.currentRelease}`;
+} catch {}
+
+const requestedRoot = process.argv[2] || defaultRoot;
 const ROOT = path.resolve(path.join(__dirname, ".."), requestedRoot);
 
 if (!fs.existsSync(ROOT) || !fs.statSync(ROOT).isDirectory()) {

@@ -7,7 +7,13 @@ audience: [administrator, operator]
 verification:
   level: source
   verified_at: 2026-10-11
-  evidence: [src/lib/runbooks/shared-definition.ts, src/lib/runbooks/builder.ts, agent/src/policy.ts, agent/policy.example.json]
+  evidence:
+    [
+      src/lib/runbooks/shared-definition.ts,
+      src/lib/runbooks/builder.ts,
+      agent/src/policy.ts,
+      agent/policy.example.json,
+    ]
 ---
 
 # Runbook action examples
@@ -15,6 +21,12 @@ verification:
 Follow [Author and publish](./author) to create and validate each workflow. Start
 with a manual service binding and [Preview execution](./respond) before executing
 against a target you are authorized to operate. Preview does not run commands.
+
+## Prerequisites
+
+1. Familiarize yourself with the workflow authoring guide in [Author and publish](./author).
+2. Ensure you have configured at least one target agent with appropriate local execution policies.
+3. Verify required credentials or service accounts are configured in **Runbooks → Agents → Secrets**.
 
 ## Kubernetes recovery with one shared target
 
@@ -54,8 +66,7 @@ read-only; restart actions require approval and the corresponding host permissio
 
 ## HTTP verification
 
-Add an HTTP GET step for `https://status.example.com/health` with expected status
-200. Leave the body empty. Headers use a JSON object with string values, for example
+Add an HTTP GET step for `https://status.example.com/health` with expected status 200. Leave the body empty. Headers use a JSON object with string values, for example
 `{"Accept":"application/json"}`. This action runs on the control plane and uses
 its outbound URL restrictions; it does not use Agent-local `networkHosts` policy.
 Redirects are rejected and response output is bounded. A different expected status

@@ -5,7 +5,11 @@ description: Watch live incidents, focus the feed, and read operational trends o
 type: how-to
 product_area: analytics
 audience: [responder, administrator]
-reader: { status: READER_COMPLETE, task: Use the Command Center to assess operational state and select the next incident-response action. }
+reader:
+  {
+    status: READER_COMPLETE,
+    task: Use the Command Center to assess operational state and select the next incident-response action.,
+  }
 verification:
   level: source
   verified_at: 2026-10-25
@@ -39,10 +43,19 @@ zones, top to bottom:
    on a desktop screen without scrolling the page.
 3. **Trends & insights**: historical analytics for a selectable period.
 
-## Read the Command Center
+## Configure the view
 
-- **Status** shows *Operational*, *Degraded* (active incidents, none critical),
-  or *Critical* (a critical incident, an SLA deadline within 10 minutes, or an
+1. Select the operational scope (**All**, **My teams**, or **Mine**) from the top controls.
+2. Filter the live incident feed by service, assignee, urgency, or keyword.
+3. Choose the metrics card or queue item to focus on active priority incidents.
+4. Select **Wallboard** when projecting to team TV displays.
+
+## How the Command Center works
+
+Read the Command Center indicators from left to right:
+
+- **Status** shows _Operational_, _Degraded_ (active incidents, none critical),
+  or _Critical_ (a critical incident, an SLA deadline within 10 minutes, or an
   SLA breached in the last hour).
 - The **summary line** describes the situation in words, for example
   "5 critical on API Gateway / 2 due within 10 min / 3 critical unowned".
@@ -53,13 +66,13 @@ zones, top to bottom:
 
 The metrics row counts the current active set in the chosen scope:
 
-| Metric | Meaning |
-| --- | --- |
-| Triggered | Active and not yet acknowledged. |
-| Critical | P1 or high urgency. |
-| Acknowledged | Being worked. |
-| Unassigned | No owner; the line below shows how many of them are critical. |
-| SLA at risk | Next SLA deadline within 30 minutes, or breached in the last hour. |
+| Metric         | Meaning                                                            |
+| -------------- | ------------------------------------------------------------------ |
+| Triggered      | Active and not yet acknowledged.                                   |
+| Critical       | P1 or high urgency.                                                |
+| Acknowledged   | Being worked.                                                      |
+| Unassigned     | No owner; the line below shows how many of them are critical.      |
+| SLA at risk    | Next SLA deadline within 30 minutes, or breached in the last hour. |
 | Resolved · 24h | Resolved in the last 24 hours, with MTTA and MTTR for that window. |
 
 Select a metric to focus the live feed on it; select it again to return to all
@@ -79,7 +92,7 @@ incidents leave the feed.
 2. Use **Sort** to switch between **Newest first** and **Needs attention first**
    (critical, then SLA risk, then unowned).
 3. Select **Live** to pause updates (press `p`). While paused, changes are
-   buffered and counted as *pending*; resume to apply them.
+   buffered and counted as _pending_; resume to apply them.
 4. Pin up to five incidents with the star. Pinned incidents stay in a strip at
    the top regardless of filters. Pins and row density are saved in this
    browser.

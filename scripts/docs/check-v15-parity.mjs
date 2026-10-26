@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { filesUnder, readRepositoryFile, repositoryRoot } from './discovery-lib.mjs';
 import { inspectIntegrations } from './inspect-integrations.mjs';
@@ -7,8 +7,11 @@ import { inspectConfig } from './inspect-config.mjs';
 import { inspectApi } from './inspect-api.mjs';
 import { inspectRoutes } from './inspect-routes.mjs';
 
+const versions = JSON.parse(readFileSync(resolve(repositoryRoot, 'docs/versions.json'), 'utf8'));
+const currentDocsVersion = versions.currentRelease || 'v2.0.0';
+
 const legacyFiles = filesUnder('docs/v1.5', file => file.endsWith('.md'));
-const currentDocFiles = filesUnder('docs/v2.0.0', file => file.endsWith('.md'));
+const currentDocFiles = filesUnder(`docs/${currentDocsVersion}`, file => file.endsWith('.md'));
 const generatedContractFiles = [
   ...filesUnder('generated/docs-reference', file => file.endsWith('.md')),
   ...filesUnder('generated/docs-contracts', file => file.endsWith('.json')),

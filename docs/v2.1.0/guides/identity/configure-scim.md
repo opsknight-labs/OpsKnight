@@ -46,6 +46,14 @@ its explicit role mapping; SCIM profile changes never change system roles or rol
 ownership. Dedicated emergency accounts and credentials are separate database
 principals and cannot be targeted through SCIM Users.
 
+## Prerequisites
+
+Before configuring SCIM provisioning:
+
+- Ensure OpsKnight is running with a canonical public HTTPS URL.
+- Verify you hold an active administrator session within the two-hour step-up window.
+- Ensure your identity provider (Microsoft Entra ID, Okta, or generic SCIM 2.0 client) supports bearer token authentication.
+
 ## Upgrade existing connections
 
 Run the database migrations before deploying application replicas that use the new

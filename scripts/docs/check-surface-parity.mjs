@@ -6,8 +6,10 @@ import { exists, filesUnder, repositoryRoot } from './discovery-lib.mjs';
 
 const contractPath = 'docs/internal/product-surface-contracts.yaml';
 const reportPath = 'generated/docs-certification/surface-parity-report.md';
+const versions = JSON.parse(readFileSync(resolve(repositoryRoot, 'docs/versions.json'), 'utf8'));
+const currentDocsVersion = versions.currentRelease || 'v2.0.0';
 const registry = YAML.parse(readFileSync(resolve(repositoryRoot, contractPath), 'utf8'));
-const docs = filesUnder('docs/v2.0.0', path => path.endsWith('.md'));
+const docs = filesUnder(`docs/${currentDocsVersion}`, path => path.endsWith('.md'));
 const failures = [];
 const actionPattern = /\b(click|select|choose|press|enable|disable|retry|rotate|revoke|reopen|escalate|assign|export|delete|test|create|configure)\b/i;
 const taskPages = docs.filter(path => {

@@ -6,7 +6,9 @@ import { filesUnder, repositoryRoot } from './discovery-lib.mjs';
 
 const order = ['MAPPED', 'READER_COMPLETE', 'SOURCE_VERIFIED', 'RUNTIME_VERIFIED'];
 const taskTypes = new Set(['how-to', 'tutorial', 'deployment', 'integration', 'troubleshooting']);
-const pages = filesUnder('docs/v2.0.0', file => file.endsWith('.md')).map(file => {
+const versions = JSON.parse(readFileSync(resolve(repositoryRoot, 'docs/versions.json'), 'utf8'));
+const currentDocsVersion = versions.currentRelease || 'v2.0.0';
+const pages = filesUnder(`docs/${currentDocsVersion}`, file => file.endsWith('.md')).map(file => {
   const source = readFileSync(resolve(repositoryRoot, file), 'utf8');
   const match = source.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n([\s\S]*)$/);
   const metadata = match ? YAML.parse(match[1]) : {};
@@ -15,7 +17,7 @@ const pages = filesUnder('docs/v2.0.0', file => file.endsWith('.md')).map(file =
   const sourceVerified = ['source', 'test', 'runtime'].includes(metadata.verification?.level) &&
     (metadata.verification?.evidence?.length ?? 0) > 0;
   return {
-    page: file.replace('docs/v2.0.0/', ''),
+    page: file.replace(`docs/${currentDocsVersion}/`, ''),
     type: metadata.type ?? null,
     userTask: metadata.reader?.task ?? null,
     status,

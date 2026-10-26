@@ -67,15 +67,16 @@ const walk = directory => readdirSync(directory, { withFileTypes: true }).flatMa
 });
 const relative = path => path.slice(root.length + 1);
 const discovery = JSON.parse(readFileSync(join(root, 'generated/docs-discovery/current.json'), 'utf8'));
-const catalog = YAML.parse(readFileSync(join(root, 'docs/v2.0.0/capabilities.yaml'), 'utf8'));
+const documentationVersions = JSON.parse(readFileSync(join(root, 'docs/versions.json'), 'utf8'));
+const currentDocsVersion = documentationVersions.currentRelease || 'v2.0.0';
+const catalog = YAML.parse(readFileSync(join(root, `docs/${currentDocsVersion}/capabilities.yaml`), 'utf8'));
 const v15Parity = JSON.parse(readFileSync(join(root, 'generated/docs-certification/v15-active-parity.json'), 'utf8'));
 const readerAudit = JSON.parse(readFileSync(join(root, 'generated/docs-certification/page-audit.json'), 'utf8'));
 const integrationContracts = JSON.parse(readFileSync(join(root, 'generated/docs-contracts/integrations.json'), 'utf8'));
-const documentationVersions = JSON.parse(readFileSync(join(root, 'docs/versions.json'), 'utf8'));
 const capabilities = Object.values(catalog.capabilities);
 const evidence = walk(join(root, 'generated/docs-evidence/current')).filter(path => extname(path) === '.png');
 const journeys = walk(join(root, 'tests/docs/journeys')).filter(path => path.endsWith('.spec.ts'));
-const pages = walk(join(root, 'docs/v2.0.0')).filter(path => path.endsWith('.md'));
+const pages = walk(join(root, `docs/${currentDocsVersion}`)).filter(path => path.endsWith('.md'));
 const runtimeImage = fullRuntime ? process.env.DOCS_OPSKNIGHT_IMAGE : undefined;
 const runtimeInspection = runtimeImage ? JSON.parse(execFileSync(
   'docker', ['image', 'inspect', runtimeImage], { cwd: root, encoding: 'utf8' }
@@ -115,7 +116,7 @@ const report = {
   productSourceRevision: runtimeSourceRevision || documentationRevision,
   runtimeSourceRevision: runtimeSourceRevision || null,
   runtimeImageDigest: runtimeInspection?.RepoDigests?.find(value => value.includes('@sha256:')) || runtimeInspection?.Id || null,
-  releaseState: documentationVersions.releasedVersions.includes('v2.0.0') ? 'released' : 'upcoming',
+  releaseState: documentationVersions.releasedVersions.includes(currentDocsVersion) ? 'released' : 'upcoming',
   apiProof: {
     smokeProbeScope: 'Every discovered PUBLIC_API route is requested and must not return a server error.',
     deepContractGroups: ['authentication-and-error-envelope', 'incidents-crud-and-idempotency', 'events-validation'],
@@ -192,7 +193,7 @@ const report = {
   },
   artifacts: {
     discovery: 'generated/docs-discovery/current.json',
-    capabilityCatalog: 'docs/v2.0.0/capabilities.yaml',
+    capabilityCatalog: `docs/${currentDocsVersion}/capabilities.yaml`,
     readerAudit: 'generated/docs-certification/page-audit.json',
     evidence: evidence.map(relative),
     ...(runtimeInspection ? {

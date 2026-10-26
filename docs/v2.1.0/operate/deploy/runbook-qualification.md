@@ -7,7 +7,13 @@ audience: [administrator, operator, developer]
 verification:
   level: source
   verified_at: 2026-10-16
-  evidence: [tests/integration/runbook-enterprise-readiness-database.test.ts, tests/integration/runbook-physical-targets.test.ts, tests/integration/runbook-authenticated-http-capacity.test.ts, .github/workflows/runbook-validation.yml]
+  evidence:
+    [
+      tests/integration/runbook-enterprise-readiness-database.test.ts,
+      tests/integration/runbook-physical-targets.test.ts,
+      tests/integration/runbook-authenticated-http-capacity.test.ts,
+      .github/workflows/runbook-validation.yml,
+    ]
 ---
 
 # Runbook enterprise qualification
@@ -19,17 +25,25 @@ image digests, topology, policy, test interval, raw results and limitations for 
 receipt. The audit coverage tracker is
 `plans/runbook-engine/enterprise-readiness.json` in the repository.
 
+## Prerequisites
+
+- Complete isolated staging environment with PostgreSQL 15+ database.
+- Physical Docker or Kind cluster for outbound agent verification.
+- Valid API keys and agent enrollment tokens for test agents.
+
 ## Correctness and authorization
 
-Run the PostgreSQL safety suites on a disposable database. The enterprise
-regressions cover overlapping advancement/reconciliation, a running write at its
-execution deadline, results produced before/after the deadline, expired leases,
-normalized artifact upload retries and counts across more than twenty rules.
-Authorization regressions deny service-authorized responders every rule mutation
-and separately test service authority. Adversarial output tests include unrelated
-container environment credentials, structured secret payloads, quoted values,
-connection strings, private keys, malformed gzip, invalid UTF-8 and decompression
-bombs. Download tests exercise capability and incident boundaries.
+1. Provision an isolated disposable database for safety and concurrency testing.
+2. Execute the database integration suite to verify leases, timeouts, and state machines.
+3. Validate adversarial input sanitization and secret masking across execution logs.
+   regressions cover overlapping advancement/reconciliation, a running write at its
+   execution deadline, results produced before/after the deadline, expired leases,
+   normalized artifact upload retries and counts across more than twenty rules.
+   Authorization regressions deny service-authorized responders every rule mutation
+   and separately test service authority. Adversarial output tests include unrelated
+   container environment credentials, structured secret payloads, quoted values,
+   connection strings, private keys, malformed gzip, invalid UTF-8 and decompression
+   bombs. Download tests exercise capability and incident boundaries.
 
 The existing Runbook CI also covers immutable versions, suggestions, duplicate
 events, exact-plan preview/approval, cancellation, grants, signing rotation,

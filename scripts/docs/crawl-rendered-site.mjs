@@ -1,12 +1,17 @@
 #!/usr/bin/env node
 import { chromium } from '@playwright/test';
-import { readdirSync, writeFileSync } from 'node:fs';
+import { readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { join, relative, resolve, sep } from 'node:path';
 import { execFileSync } from 'node:child_process';
 
 const root = resolve(import.meta.dirname, '../..');
 const websiteRoot = resolve(process.env.DOCS_WEBSITE_DIR || join(root, '../opsknight-website-docs-v2'));
-const version = process.env.DOCS_SITE_VERSION || 'v2.0.0';
+let defaultVersion = 'v2.0.0';
+try {
+  const versions = JSON.parse(readFileSync(join(root, 'docs/versions.json'), 'utf8'));
+  if (versions.currentRelease) defaultVersion = versions.currentRelease;
+} catch {}
+const version = process.env.DOCS_SITE_VERSION || defaultVersion;
 const baseURL = process.env.DOCS_SITE_BASE_URL || 'http://127.0.0.1:15000';
 const contentRoot = join(websiteRoot, 'content/docs', version);
 const sourceRevision = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim();

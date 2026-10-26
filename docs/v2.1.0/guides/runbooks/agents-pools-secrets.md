@@ -22,12 +22,19 @@ Open **Runbooks → Agents**. Its Agents, Pools, and Secrets tabs separate
 execution infrastructure from credentials. Agent/pool management requires
 `runbook.agent.manage`; secret administration requires `runbook.secret.manage`.
 
+## Prerequisites
+
+- OpsKnight instance reachable over HTTPS from the intended agent host or network.
+- Administrative account with `runbook.agent.manage` and `runbook.secret.manage` permissions.
+- Host, Kubernetes cluster, or container engine ready to execute the OpsKnight Agent.
+
 ## Enroll an Agent
 
-Choose **Add Agent**, enter its name and optional hostname hint, and create enrollment.
-Copy the one-time token immediately: it expires after 15 minutes and cannot be
-displayed again. Follow the UI setup instructions and pin the trusted execution
-public key. The hostname hint is initial metadata, not a hostname restriction; enrollment records the Agent-reported hostname. Review the local policy before installation.
+1. Navigate to **Runbooks → Agents** and select **Add Agent**.
+2. Enter the agent name and optional hostname hint, then select **Create enrollment**.
+3. Copy the one-time enrollment token immediately (it expires after 15 minutes and cannot be displayed again).
+4. Run the setup instructions on the target host or cluster to deploy the Agent.
+5. Follow the UI setup instructions and pin the trusted execution public key.
 
 The setup commands deploy only the Agent and connect to an existing OpsKnight installation. Set **OpsKnight URL from Agent** to an address reachable from its host or cluster; use HTTPS for secret-backed steps. Helm uses the separate `opsknight-agent` chart. The Compose policy path applies only to Compose; review the policy for each other deployment method separately.
 

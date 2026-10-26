@@ -25,9 +25,9 @@ Apply migrations, keep all replicas on the same PostgreSQL database and preserve
 
 ## Select the policy
 
-- **Password Only** permits ordinary password authentication and password operations. OIDC sessions and sign-in are rejected even if a connection is stored.
-- **SSO Optional** permits passwords and OIDC. Existing-account linking requires an explicit expiring approval; email alone never establishes ownership.
-- **SSO Required** permits ordinary OIDC authentication and rejects ordinary passwords, password creation/change, reset issuance/completion and password invitation activation. **Users → Invite with SSO only** creates a bound first-link approval without a password token. Required selects this invitation type automatically.
+1. **Password Only**: Permits ordinary password authentication and password operations. OIDC sessions and sign-in are rejected even if a connection is stored.
+2. **SSO Optional**: Permits passwords and OIDC. Existing-account linking requires an explicit expiring approval; email alone never establishes ownership.
+3. **SSO Required**: Permits ordinary OIDC authentication and rejects ordinary passwords, password creation/change, reset issuance/completion and password invitation activation. **Users → Invite with SSO only** creates a bound first-link approval without a password token. Required selects this invitation type automatically.
 
 Administrators must have signed in within the last two hours to change authentication settings (emergency recovery sessions keep a stricter five-minute step-up). Stage the connection, run a real administrator login test, and activate Optional first. Required activation additionally needs two active, independently held hardware-key emergency identities with successful drills for their current credential versions in the last 90 days. Discovery validation alone cannot satisfy administrator readiness. Drills and administrator proofs are bound to the verified public origin; changing it requires new verification. The tested administrator must remain active and ADMIN, and the proof expires after seven days. See [Test and enforce SSO](test-and-enforce-sso/).
 

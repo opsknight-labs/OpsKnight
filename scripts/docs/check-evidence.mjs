@@ -7,9 +7,11 @@ import YAML from 'yaml';
 import { exists, filesUnder, readRepositoryFile, repositoryRoot } from './discovery-lib.mjs';
 import { isImmutableContainerReference } from './immutable-container-reference.mjs';
 
-const inventory = YAML.parse(readFileSync(resolve(repositoryRoot, 'docs/v2.0.0/capabilities.yaml'), 'utf8'));
+const versions = JSON.parse(readFileSync(resolve(repositoryRoot, 'docs/versions.json'), 'utf8'));
+const currentDocsVersion = versions.currentRelease || 'v2.0.0';
+const inventory = YAML.parse(readFileSync(resolve(repositoryRoot, `docs/${currentDocsVersion}/capabilities.yaml`), 'utf8'));
 const failures = [];
-const assetManifest = YAML.parse(readRepositoryFile('docs/v2.0.0/assets/manifest.yaml'));
+const assetManifest = YAML.parse(readRepositoryFile(`docs/${currentDocsVersion}/assets/manifest.yaml`));
 const acceptedSquashMerges = new Map(
   (assetManifest.acceptedSquashMerges ?? []).map(record => [record.sourceRevision, record.mergedRevision])
 );
@@ -40,7 +42,7 @@ for (const revisionField of ['approvedSourceRevision', 'runtimeSourceRevision'])
   if (!revisionIsAccepted(assetManifest[revisionField])) failures.push(`reader assets: ${revisionField} is not in the accepted HEAD lineage`);
 }
 for (const [asset, record] of Object.entries(assetManifest.assets ?? {})) {
-  const publicFile = `docs/v2.0.0/assets/${asset}`;
+  const publicFile = `docs/${currentDocsVersion}/assets/${asset}`;
   const evidenceFile = `${assetManifest.source}/${record.evidence}`;
   if (!exists(publicFile)) failures.push(`reader asset ${asset}: missing ${publicFile}`);
   if (!exists(evidenceFile)) failures.push(`reader asset ${asset}: missing current evidence route ${evidenceFile}`);
@@ -50,7 +52,7 @@ for (const [asset, record] of Object.entries(assetManifest.assets ?? {})) {
   }
 }
 for (const [asset, record] of Object.entries(assetManifest.manualAssets ?? {})) {
-  const publicFile = `docs/v2.0.0/assets/${asset}`;
+  const publicFile = `docs/${currentDocsVersion}/assets/${asset}`;
   if (!exists(publicFile)) failures.push(`manual reader asset ${asset}: missing ${publicFile}`);
   if (!record.provenance) failures.push(`manual reader asset ${asset}: missing provenance`);
   if (!record.classification) failures.push(`manual reader asset ${asset}: missing classification`);
@@ -63,8 +65,8 @@ const registeredAssets = new Set([
   ...Object.keys(assetManifest.assets ?? {}),
   ...Object.keys(assetManifest.manualAssets ?? {}),
 ]);
-for (const file of filesUnder('docs/v2.0.0/assets', path => /\.(?:png|jpe?g|webp|gif|svg)$/i.test(path))) {
-  const asset = file.replace('docs/v2.0.0/assets/', '');
+for (const file of filesUnder(`docs/${currentDocsVersion}/assets`, path => /\.(?:png|jpe?g|webp|gif|svg)$/i.test(path))) {
+  const asset = file.replace(`docs/${currentDocsVersion}/assets/`, '');
   if (!registeredAssets.has(asset)) failures.push(`reader asset ${asset}: not registered in assets/manifest.yaml`);
 }
 for (const [id, capability] of Object.entries(inventory.capabilities ?? {})) {

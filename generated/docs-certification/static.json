@@ -1,9 +1,9 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-10-26T13:33:04.593Z",
-  "sourceRevision": "144d8c1f4732421c79d7bef6c57c57247a2d823a",
-  "documentationRevision": "144d8c1f4732421c79d7bef6c57c57247a2d823a",
-  "productSourceRevision": "144d8c1f4732421c79d7bef6c57c57247a2d823a",
+  "generatedAt": "2026-10-26T13:54:48.449Z",
+  "sourceRevision": "bd8ebfa020ebc51baafcd9aa336fb0258098c43d",
+  "documentationRevision": "bd8ebfa020ebc51baafcd9aa336fb0258098c43d",
+  "productSourceRevision": "bd8ebfa020ebc51baafcd9aa336fb0258098c43d",
   "runtimeSourceRevision": null,
   "runtimeImageDigest": null,
   "releaseState": "released",
@@ -34,9 +34,9 @@
     "renderedSiteCrawl": "release-gated"
   },
   "counts": {
-    "documentationPages": 322,
-    "capabilitiesDiscovered": 22,
-    "capabilitiesDocumented": 22,
+    "documentationPages": 342,
+    "capabilitiesDiscovered": 23,
+    "capabilitiesDocumented": 23,
     "uiRoutes": 119,
     "apiRoutes": 475,
     "configurationItems": 519,
@@ -64,14 +64,14 @@
     "legacyActiveContracts": 204,
     "legacyActiveContractsMapped": 204,
     "legacyActiveKnowledgeGaps": 0,
-    "taskDocumentationPages": 201,
+    "taskDocumentationPages": 216,
     "readerCompleteTaskPages": 200,
-    "sourceVerifiedTaskPages": 201,
+    "sourceVerifiedTaskPages": 216,
     "runtimeVerifiedTaskPages": 0
   },
   "artifacts": {
     "discovery": "generated/docs-discovery/current.json",
-    "capabilityCatalog": "docs/v2.0.0/capabilities.yaml",
+    "capabilityCatalog": "docs/v2.1.0/capabilities.yaml",
     "readerAudit": "generated/docs-certification/page-audit.json",
     "evidence": [
       "generated/docs-evidence/current/administration/api-keys.png",
