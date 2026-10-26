@@ -41,7 +41,7 @@ import {
 } from '@/lib/ingestion/worker';
 import { hasHealthyDedicatedIngestionWorker } from '@/lib/ingestion/fallback';
 import { getIngestionWorkerHealth } from '@/lib/ingestion/worker-health';
-import { acquireTextAdvisoryLocks } from '@/lib/db-locks';
+import { acquireDurableTextAdvisoryLocks } from '@/lib/db-locks';
 import { lockEventDedupKeys } from '@/lib/incidents/event-identity';
 import { applyIngestionCommand, ingestionSnapshot } from '@/lib/ingestion/operations';
 import { compileAutomation } from '@/lib/automation/compiler';
@@ -1270,6 +1270,18 @@ describe('PostgreSQL ingestion durability', () => {
     }
   });
 
+  it('enforces transaction-local synchronous admission even for an empty lock group', async () => {
+    for (const identities of [[], [`durable-lock-${randomUUID()}`]]) {
+      await prisma.$transaction(async tx => {
+        await tx.$executeRaw`SET LOCAL synchronous_commit = off`;
+        await acquireDurableTextAdvisoryLocks(tx, identities);
+        const [row] = await tx.$queryRaw<Array<{ value: string }>>`
+          SELECT current_setting('synchronous_commit') AS value`;
+        expect(row.value).toBe('on');
+      });
+    }
+  });
+
   it('holds every batched identity against legacy writers until transaction completion', async () => {
     const identities = ['é', 'z', '😀', 'a', 'z'].map(key => `${randomUUID()}:${key}`);
     let release!: () => void;
@@ -1281,7 +1293,7 @@ describe('PostgreSQL ingestion durability', () => {
       release = resolve;
     });
     const transaction = prisma.$transaction(async tx => {
-      await acquireTextAdvisoryLocks(tx, identities);
+      await acquireDurableTextAdvisoryLocks(tx, identities);
       acquired();
       await hold;
     });

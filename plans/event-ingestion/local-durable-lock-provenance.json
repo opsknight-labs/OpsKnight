@@ -1,0 +1,138 @@
+{
+  "baselineRevision": "a84ae82344ec0f1a9ab355b6acc47626c1ede2f9",
+  "archiveSha256": "9aaf472d646bb068ece55ce59e9eece9848315ff0a141a91115f51b9f28f121a",
+  "candidateFiles": {
+    "src/lib/ingestion/postgres.ts": "9e0c1d5d2d58a08611f9bd92acd2092ffbe40a96f6ce5d0ef6e7873e4c018469",
+    "src/lib/db-locks.ts": "689eb5b71898809eaf067ef02ca2aa758ac6b3d181f539a23b3d0d24c0439b2e"
+  },
+  "runs": [
+    {
+      "label": "a1",
+      "database": "ingestion_test_http_durable_lock_a1_20261026",
+      "preflight": {
+        "database": "ingestion_test_http_durable_lock_a1_20261026",
+        "migrations": 339,
+        "synchronousCommit": "on",
+        "walIoTiming": "off",
+        "clockMidpointOffsetMs": 0,
+        "clockRoundTripMs": 2,
+        "policy": {
+          "paused": false,
+          "revision": 1,
+          "policy": {
+            "concurrency": 4,
+            "leaseMs": 5000,
+            "pollMs": 100,
+            "maxPending": 1000000,
+            "maxPendingBytes": 10737418240,
+            "payloadRetentionHours": 24,
+            "receiptRetentionDays": 90,
+            "criticalReservePercent": 10,
+            "quotas": {
+              "eventsPerMinute": 10000000,
+              "eventsBurst": 10000000,
+              "integrationPerMinute": 10000000,
+              "integrationBurst": 10000000
+            }
+          }
+        }
+      }
+    },
+    {
+      "label": "b1",
+      "database": "ingestion_test_http_durable_lock_b1_20261026",
+      "preflight": {
+        "database": "ingestion_test_http_durable_lock_b1_20261026",
+        "migrations": 339,
+        "synchronousCommit": "on",
+        "walIoTiming": "off",
+        "clockMidpointOffsetMs": 0.5,
+        "clockRoundTripMs": 3,
+        "policy": {
+          "paused": false,
+          "revision": 1,
+          "policy": {
+            "concurrency": 4,
+            "leaseMs": 5000,
+            "pollMs": 100,
+            "maxPending": 1000000,
+            "maxPendingBytes": 10737418240,
+            "payloadRetentionHours": 24,
+            "receiptRetentionDays": 90,
+            "criticalReservePercent": 10,
+            "quotas": {
+              "eventsPerMinute": 10000000,
+              "eventsBurst": 10000000,
+              "integrationPerMinute": 10000000,
+              "integrationBurst": 10000000
+            }
+          }
+        }
+      }
+    },
+    {
+      "label": "b2",
+      "database": "ingestion_test_http_durable_lock_b2_20261026",
+      "preflight": {
+        "database": "ingestion_test_http_durable_lock_b2_20261026",
+        "migrations": 339,
+        "synchronousCommit": "on",
+        "walIoTiming": "off",
+        "clockMidpointOffsetMs": -0.5,
+        "clockRoundTripMs": 3,
+        "policy": {
+          "paused": false,
+          "revision": 1,
+          "policy": {
+            "concurrency": 4,
+            "leaseMs": 5000,
+            "pollMs": 100,
+            "maxPending": 1000000,
+            "maxPendingBytes": 10737418240,
+            "payloadRetentionHours": 24,
+            "receiptRetentionDays": 90,
+            "criticalReservePercent": 10,
+            "quotas": {
+              "eventsPerMinute": 10000000,
+              "eventsBurst": 10000000,
+              "integrationPerMinute": 10000000,
+              "integrationBurst": 10000000
+            }
+          }
+        }
+      }
+    },
+    {
+      "label": "a2",
+      "database": "ingestion_test_http_durable_lock_a2_20261026",
+      "preflight": {
+        "database": "ingestion_test_http_durable_lock_a2_20261026",
+        "migrations": 339,
+        "synchronousCommit": "on",
+        "walIoTiming": "off",
+        "clockMidpointOffsetMs": 0,
+        "clockRoundTripMs": 2,
+        "policy": {
+          "paused": false,
+          "revision": 1,
+          "policy": {
+            "concurrency": 4,
+            "leaseMs": 5000,
+            "pollMs": 100,
+            "maxPending": 1000000,
+            "maxPendingBytes": 10737418240,
+            "payloadRetentionHours": 24,
+            "receiptRetentionDays": 90,
+            "criticalReservePercent": 10,
+            "quotas": {
+              "eventsPerMinute": 10000000,
+              "eventsBurst": 10000000,
+              "integrationPerMinute": 10000000,
+              "integrationBurst": 10000000
+            }
+          }
+        }
+      }
+    }
+  ]
+}
