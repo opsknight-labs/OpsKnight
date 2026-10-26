@@ -20,6 +20,18 @@ if (!DATABASE_URL) {
   throw new Error('[FATAL] DATABASE_URL environment variable is required.');
 }
 
+const parsedDbUrl = new URL(DATABASE_URL);
+if (
+  parsedDbUrl.hostname !== '127.0.0.1' &&
+  parsedDbUrl.hostname !== 'localhost' &&
+  !parsedDbUrl.pathname.includes('cert') &&
+  !parsedDbUrl.pathname.includes('test')
+) {
+  throw new Error(
+    `[SAFETY GUARD] DATABASE_URL (${parsedDbUrl.hostname}) does not target an isolated local/disposable database.`
+  );
+}
+
 const BASE_URL = process.env.APP_BASE_URL || 'http://127.0.0.1:3900';
 const TEST_EMAIL = process.env.CERT_ADMIN_EMAIL || 'cert-browser-admin@opsknight.internal';
 const TEST_PASSWORD = process.env.CERT_ADMIN_PASSWORD || 'Browser-Pass-2026-Cert!';
@@ -165,7 +177,7 @@ async function main() {
       const pageErrors: string[] = [];
       page.on('pageerror', err => {
         const msg = err.message || String(err);
-        // Ignore WebKit loopback IP prefetch network access-control warnings
+        // Narrow filter 1: Ignore WebKit loopback IP prefetch network access-control warnings
         if (
           msg.includes('due to access control checks') ||
           msg.includes('Cross-origin redirection') ||
@@ -173,12 +185,19 @@ async function main() {
         ) {
           return;
         }
-        // Non-fatal Next.js/React timestamp hydration locale differences across headless engines
+        // Narrow filter 2 (Narrowly Justified): Headless Firefox SpiderMonkey Intl locale difference
+        // In headless Firefox, SpiderMonkey formats timestamps with narrow no-break space (U+202F)
+        // causing a benign SSR text-node mismatch with Node V8 (args[]=text).
+        // This is fixed in application source for future image builds, and harmless on existing builds.
+        // All real functional JS exceptions remain strictly enforced.
         if (
-          msg.includes('Minified React error #418') ||
-          msg.includes('Minified React error #423') ||
-          msg.includes('Hydration failed')
+          b.name === 'Firefox' &&
+          msg.includes('Minified React error #418') &&
+          msg.includes('args[]=text')
         ) {
+          console.warn(
+            `    [Harmless Exception Justified] Firefox headless SpiderMonkey text-node Intl locale format on ${page.url()}`
+          );
           return;
         }
         pageErrors.push(`PageError: ${msg}`);
@@ -297,22 +316,41 @@ async function main() {
 
         // Test Interactive Modal / Dialog Component (Open, Content, Escape Dismissal) on Desktop
         if (!isMobile) {
+          const dialogStartTime = Date.now();
           try {
             await page.goto(`${BASE_URL}/runbooks`, {
               waitUntil: 'domcontentloaded',
               timeout: 20000,
             });
             const newRunbookBtn = page.getByRole('button', { name: /New Runbook/i });
-            if (await newRunbookBtn.isVisible()) {
-              await newRunbookBtn.click();
-              const dialog = page.locator('[role="dialog"]');
-              await dialog.waitFor({ state: 'visible', timeout: 5000 });
-              await page.keyboard.press('Escape');
-              await dialog.waitFor({ state: 'hidden', timeout: 5000 });
-              console.log(`  ✓ Interactive Dialog Component: Open & Escape dismissal verified`);
-            }
+            await newRunbookBtn.waitFor({ state: 'visible', timeout: 8000 });
+            await newRunbookBtn.click();
+            const dialog = page.locator('[role="dialog"]');
+            await dialog.waitFor({ state: 'visible', timeout: 5000 });
+            await page.keyboard.press('Escape');
+            await dialog.waitFor({ state: 'hidden', timeout: 5000 });
+            console.log(`  ✓ Interactive Dialog Component: Open & Escape dismissal verified`);
+            results.push({
+              browser: b.name,
+              viewport: vp.name,
+              route: '/runbooks#dialog-modal',
+              status: 'PASS',
+              loadTimeMs: Date.now() - dialogStartTime,
+              hasHorizontalOverflow: false,
+              errors: [],
+            });
           } catch (dialogErr: any) {
-            console.warn(`  (Interactive dialog check note: ${dialogErr.message})`);
+            const errMsg = `Interactive Runbook dialog failure: ${dialogErr.message}`;
+            console.error(`  ✗ ${errMsg}`);
+            results.push({
+              browser: b.name,
+              viewport: vp.name,
+              route: '/runbooks#dialog-modal',
+              status: 'FAIL',
+              loadTimeMs: Date.now() - dialogStartTime,
+              hasHorizontalOverflow: false,
+              errors: [errMsg],
+            });
           }
         }
       } catch (err: any) {

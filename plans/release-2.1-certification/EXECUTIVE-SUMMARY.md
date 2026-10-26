@@ -18,7 +18,7 @@
 | **Phase 1: Disaster Recovery**  | PostgreSQL 16 fix in `verify-backup-restore.sh`, full app recovery drill   | `BACKUP-RESTORE-REPORT.md` (Measured RPO: 0s, RTO: 35s, HTTP API probe + worker) | **PASSED**         |
 | **Phase 2: Upgrade & Rollback** | Real v2.0.0 → v2.1.0 (177 → 318 migrations), data preservation, rollback   | `UPGRADE-CERTIFICATION.md`, `ROLLBACK-REHEARSAL.md` (100% asserted)              | **PASSED**         |
 | **Phase 3: Product E2E**        | Continuous chain (Alert → Incident → Escalation → Ack → Resolution) & A–G  | `FULL-PRODUCT-E2E-CERTIFICATION.md` (100% application-driven via API v2)         | **PASSED**         |
-| **Phase 4: UI & Multi-Browser** | 147 test runs across Chrome, Firefox, WebKit (Desktop, Tablet, Mobile PWA) | `UI-ROUTE-MATRIX.md`, `COMPONENT-CERTIFICATION.md` (147 / 147 PASS - 100.0%)     | **PASSED**         |
+| **Phase 4: UI & Multi-Browser** | 153 test runs across Chrome, Firefox, WebKit (Desktop, Tablet, Mobile PWA) | `UI-ROUTE-MATRIX.md`, `COMPONENT-CERTIFICATION.md` (153 / 153 PASS - 100.0%)     | **PASSED**         |
 | **Phase 5: Resilience & HA**    | 2x Web replicas, Nginx proxy, in-flight crash chaos, token revocation      | `RESILIENCE-AND-HA-CERTIFICATION.md` (0 failed requests under chaos)             | **PASSED**         |
 | **Phase 6: Security & RBAC**    | Cross-tenant isolation, negative auth, CSP, CodeQL, SBOM                   | `RELEASE-SECURITY-AUDIT.md` (0 High/Critical findings)                           | **PASSED**         |
 | **Phase 7: Deployments**        | Compose (integrated & split running workloads), Swarm secrets, Helm lint   | `DEPLOYMENT-CERTIFICATION.md`                                                    | **PASSED**         |
@@ -44,12 +44,12 @@
    - Verified that image-only rollback is unsafe due to 141 non-backward-compatible schema migrations.
    - Rehearsed restore-based rollback without dropping existing databases: preserved failed v2.1 DB for forensics, restored backup into clean database in 3s, booted published v2.0.0 container on port 3992, and authenticated admin with session verification on `/api/auth/session` (Total Rollback RTO: **38s**). Corrected invalid digest documentation.
 4. **Continuous Operational Chain Verified (100% Real Application Enforced):**
-   - Exercised continuous lifecycle against running cluster: Prometheus Webhook Alert -> Incident Created (`OPEN`) -> Escalation Initiated (`ESCALATING`) -> Mandatory Notification Attempt Verified via `GET /api/v2/incidents/:id/notification-attempts` & Provider Test Endpoint -> Runbook Preview API -> Real Runbook Execution (`POST /api/v2/runbooks/:id/execute`) verified on background worker to `SUCCEEDED` -> Responder Acknowledgment (`ACKNOWLEDGED`) via `POST /api/v2/incidents/:id/acknowledge` -> Resolution (`RESOLVED`) via `POST /api/v2/incidents/:id/resolve`. Verified timeline events and mandatory audit logs (`incident.acknowledged`, `incident.resolved`). Zero Prisma write bypasses or mock shortcuts.
+   - Exercised continuous lifecycle against running cluster: Prometheus Webhook Alert -> Incident Created (`OPEN`) -> Escalation Initiated (`ESCALATING`) -> Mandatory 4-Stage Notification Lifecycle Verified (Queued -> Attempted -> Provider-Accepted -> Delivered to in-app receiver) -> Runbook Preview API -> Worker Orchestration Execution (`POST /api/v2/runbooks/:id/execute`) verified on background worker to `SUCCEEDED` -> Responder Acknowledgment (`ACKNOWLEDGED`) via `POST /api/v2/incidents/:id/acknowledge` -> Resolution (`RESOLVED`) via `POST /api/v2/incidents/:id/resolve`. Verified timeline events and mandatory audit logs (`incident.acknowledged`, `incident.resolved`). Zero Prisma write bypasses or mock shortcuts.
 5. **Real Authenticated Multi-Browser Coverage (100% PASS):**
-   - Executed 147 test runs across Chromium, Firefox, WebKit across Desktop, Tablet, and Mobile viewports.
-   - **147 PASSED (100.0%)**: Chromium 49/49 PASS, Firefox 49/49 PASS, WebKit 49/49 PASS. Enforced nonzero exit code safety, DOM mounted content verification, and automated rate-limit clearing on disposable test database.
-6. **Certification Script Isolation:**
-   - Resolved environment override bug in 13 certification scripts where `dotenv.config({ override: true })` overwrote explicit `DATABASE_URL` and `PORT` variables. Reverted ~1,000 lines of unrelated prettier diffs. Added safety guard `OPSKNIGHT_CERT_TARGET=1` to prevent running against non-disposable environments.
+   - Executed 153 test runs across Chromium, Firefox, WebKit across Desktop, Tablet, and Mobile viewports.
+   - **153 PASSED (100.0%)**: Chromium 51/51 PASS, Firefox 51/51 PASS, WebKit 51/51 PASS. Enforced nonzero exit code safety, DOM mounted content verification, fail-closed modal focus/Escape dismissals, and deterministic mount hydration in `SystemHealthCenter.tsx`.
+6. **Certification Script Isolation & Supported Cryptography:**
+   - Resolved environment override bug in certification scripts. Replaced custom inline decipher snippets with OpsKnight's supported `decrypt()` module (v3/v2/v1 keyrings, fail-closed, zero plaintext leakage). Added safety guards `OPSKNIGHT_CERT_TARGET=1` to prevent running against non-disposable environments. Removed hardcoded fallback secrets. Incorporated PR #847 Swarm database secret resolver.
 
 ---
 

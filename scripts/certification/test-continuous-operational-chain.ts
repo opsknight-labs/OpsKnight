@@ -20,7 +20,26 @@ function requireEnv(name: string): string {
   return value.trim();
 }
 
+// Safety Guard: Disposable Database & Environment Protection
+if (process.env.OPSKNIGHT_CERT_TARGET !== '1' && process.env.DISPOSABLE_CERT_TARGET !== '1') {
+  throw new Error(
+    '[SAFETY GUARD] Refusing to run continuous operational chain test without OPSKNIGHT_CERT_TARGET=1 or DISPOSABLE_CERT_TARGET=1. Never execute against production environments.'
+  );
+}
+
 const DATABASE_URL = requireEnv('DATABASE_URL');
+const parsedDbUrl = new URL(DATABASE_URL);
+if (
+  parsedDbUrl.hostname !== '127.0.0.1' &&
+  parsedDbUrl.hostname !== 'localhost' &&
+  !parsedDbUrl.pathname.includes('cert') &&
+  !parsedDbUrl.pathname.includes('test')
+) {
+  throw new Error(
+    `[SAFETY GUARD] DATABASE_URL (${parsedDbUrl.hostname}) does not target an isolated local/disposable database.`
+  );
+}
+
 const API_BASE_URL = process.env.API_BASE_URL || 'http://127.0.0.1:3900/api/v2';
 const APP_BASE_URL = API_BASE_URL.replace('/api/v2', '');
 
@@ -29,9 +48,7 @@ const prisma = new PrismaClient({
 });
 
 async function mintAdminApiKey(adminUserId: string): Promise<string> {
-  const apiKeySecret =
-    process.env.API_KEY_SECRET ||
-    '02e58c8699dfd55c71c9ab5ed99da2ba106dff2517bb9f63ddd2775d63342191';
+  const apiKeySecret = requireEnv('API_KEY_SECRET');
   const rawToken = `ok_cert_${randomBytes(24).toString('base64url')}`;
   const prefix = rawToken.slice(0, 15);
   const tokenHash = createHmac('sha256', apiKeySecret)
@@ -190,8 +207,31 @@ async function main() {
     `✓ Incident Genesis confirmed: Status '${incident.status}', Escalation '${incident.escalationStatus}'`
   );
 
-  // 5. Step 3: Notification Delivery Queue & Attempt Verification (MANDATORY)
-  console.log('\n--- Step 3: Inspect Mandatory Notification Delivery via API ---');
+  // 5. Step 3: Notification Delivery Lifecycle Certification (MANDATORY)
+  console.log('\n--- Step 3: Notification Delivery Lifecycle Certification ---');
+  console.log(
+    'Stages Certified: 1. Queued -> 2. Attempted -> 3. Provider-Accepted -> 4. Delivered (Controlled Receiver)'
+  );
+
+  // Stage 1: Queued State (Durable Notification Intent)
+  let queuedNotification = null;
+  for (let poll = 0; poll < 15; poll++) {
+    queuedNotification = await prisma.notification.findFirst({
+      where: { incidentId: incident.id },
+    });
+    if (queuedNotification) break;
+    await new Promise(r => setTimeout(r, 1000));
+  }
+  if (!queuedNotification) {
+    throw new Error(
+      `[MANDATORY ASSERTION FAILED] Notification record was not queued for incident ${incident.id}`
+    );
+  }
+  console.log(
+    `✓ Stage 1 (Queued): Notification intent persisted in database (ID: ${queuedNotification.id}, Status: ${queuedNotification.status})`
+  );
+
+  // Stage 2: Attempted State (Worker Dispatch Attempt via REST API)
   let registeredAttempts: any[] = [];
   for (let poll = 0; poll < 15; poll++) {
     const attemptsRes = await fetch(
@@ -214,17 +254,18 @@ async function main() {
 
   if (registeredAttempts.length === 0) {
     throw new Error(
-      `[MANDATORY ASSERTION FAILED] Zero notification attempts recorded for incident ${incidentId}. Notification delivery chain did not execute.`
+      `[MANDATORY ASSERTION FAILED] Zero notification attempts recorded for incident ${incidentId}. Worker dispatch did not execute.`
     );
   }
 
-  console.log(`✓ Mandatory notification delivery attempt verified via API (HTTP 200):`);
-  console.log(`  Attempts count: ${registeredAttempts.length}`);
-  console.log(`  Provider:       ${registeredAttempts[0].provider || 'resend'}`);
-  console.log(`  Outcome:        ${registeredAttempts[0].outcome}`);
-  console.log(`  Latency:        ${registeredAttempts[0].latencyMs ?? 0}ms`);
+  const primaryAttempt = registeredAttempts[0];
+  console.log(`✓ Stage 2 (Attempted): Worker dispatch attempt recorded via REST API:`);
+  console.log(`  Attempt ID:     ${primaryAttempt.id}`);
+  console.log(`  Provider:       ${primaryAttempt.provider || 'resend'}`);
+  console.log(`  Outcome:        ${primaryAttempt.outcome}`);
+  console.log(`  Latency:        ${primaryAttempt.latencyMs ?? 0}ms`);
 
-  // Controlled notification provider delivery test endpoint verification
+  // Stage 3: Provider-Accepted State (Controlled Provider Test Endpoint)
   const provider = await prisma.notificationProvider.findFirst({ where: { enabled: true } });
   if (provider) {
     const testRes = await fetch(
@@ -245,12 +286,38 @@ async function main() {
       throw new Error(`Controlled provider delivery test failed (HTTP ${testRes.status}): ${err}`);
     }
     console.log(
-      `✓ Controlled provider test endpoint verified (HTTP 202 Accepted for provider '${provider.provider}')`
+      `✓ Stage 3 (Provider-Accepted): Controlled provider test endpoint verified (HTTP 202 Accepted for '${provider.provider}')`
     );
   }
 
-  // 6. Step 4: Provision & Execute Real Runbook via V2 API (MANDATORY)
-  console.log('\n--- Step 4: Runbook Orchestration & Execution via Real V2 API ---');
+  // Stage 4: Delivered State (Controlled Local Receiver & Terminal State)
+  let controlledInApp = null;
+  for (let poll = 0; poll < 10; poll++) {
+    controlledInApp = await prisma.inAppNotification.findFirst({
+      where: { entityId: incident.id, userId: responder.id },
+    });
+    if (controlledInApp) break;
+    await new Promise(r => setTimeout(r, 1000));
+  }
+  if (!controlledInApp) {
+    throw new Error(
+      `[MANDATORY ASSERTION FAILED] Controlled in-app notification receiver did not receive delivery for incident ${incident.id}`
+    );
+  }
+  console.log(`✓ Stage 4 (Delivered): Controlled in-app receiver confirmed delivery:`);
+  console.log(`  InApp ID:       ${controlledInApp.id}`);
+  console.log(`  Recipient:      ${responder.email} (${responder.id})`);
+  console.log(`  Title:          ${controlledInApp.title}`);
+  console.log(`  Terminal State: Notification delivered to user inbox`);
+
+  // 6. Step 4: Runbook Orchestration & Execution Lifecycle Certification (MANDATORY)
+  console.log('\n--- Step 4: Runbook Orchestration & Execution Lifecycle Certification ---');
+  console.log(
+    'Scope: Worker Orchestration (Definition Checksum -> Preview Digest -> Execution API -> Worker Queue -> Polling -> SUCCEEDED)'
+  );
+  console.log(
+    'Note: Remote daemon execution is certified under retained physical evidence from PR #916 / PR #914.'
+  );
   const runbookDef = {
     description: 'Automated remediation step executed by worker',
     steps: [
@@ -380,7 +447,9 @@ async function main() {
       `[MANDATORY ASSERTION FAILED] Runbook execution ${executionId} timed out or did not reach SUCCEEDED`
     );
   }
-  console.log(`✓ Real Agent / Background Worker execution verified: Status 'SUCCEEDED'`);
+  console.log(
+    `✓ Worker Orchestration & Execution Lifecycle verified: Status 'SUCCEEDED' (Definition checksum matched, plan digest verified, worker processed queue)`
+  );
 
   // 7. Step 5: Acknowledge Incident via REAL Application API
   console.log('\n--- Step 5: Acknowledge Incident via Real REST API ---');

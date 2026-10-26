@@ -1,17 +1,30 @@
-# OpsKnight 2.1 — Shared Component & Interaction Certification
+# OpsKnight 2.1 — UI Route Accessibility, Shell Invariants & Interaction Certification
 
 **Certification Date:** 2026-10-26  
 **Methodology:** Automated Browser Interaction (Playwright + Chrome DevTools Protocol) across Chromium, Firefox, WebKit  
-**Auditor:** QA Architecture & Design System Auditor  
+**Auditor:** QA Architecture & Enterprise UX Auditor  
 **Reproducible Scripts:**
 
-- Interaction & Accessibility: `scripts/certification/certify-all-routes-browsers.ts`
+- Route Accessibility, Shell Invariants & Dialog Dismissal: `scripts/certification/certify-all-routes-browsers.ts`
 - State Parity: `scripts/certification/certify-ui-api-state-parity.ts`
 - Responsive Layouts: `scripts/certification/certify-ui-responsive.ts`
 
+> [!IMPORTANT]
+> **Scope & Methodology Clarification**:
+> The automated cross-browser test suite (`scripts/certification/certify-all-routes-browsers.ts`) verifies end-to-end **route accessibility, application shell invariants, responsive viewport stability, and critical modal interactions**. Specifically, across every shipped route on Chromium, Firefox, and WebKit, it asserts:
+>
+> 1. Clean HTTP status codes (no 4xx/5xx).
+> 2. Zero uncaught JavaScript runtime exceptions and zero React hydration errors.
+> 3. Zero horizontal layout overflow across Desktop (1280×800), Tablet (768×1024), and Mobile PWA (375×812).
+> 4. Persistent authenticated session (no uncommanded redirects to `/login`).
+> 5. DOM mounting of critical semantic elements (`main`, `nav`, `form`, etc.).
+> 6. Dialog modal keyboard focus and Escape key dismissal (tested on Desktop and Tablet viewports).
+>
+> Granular component-level state permutations and isolated unit behavior remain certified under dedicated Vitest unit test suites.
+
 ---
 
-## 1. UI Component Primitives Inventory
+## 1. UI Shell & Interaction Primitives Invariants
 
 | Primitive Family              | Components Tested                         | Interactive Behaviors Verified                   | Accessibility (WCAG AA)                 | Status   |
 | ----------------------------- | ----------------------------------------- | ------------------------------------------------ | --------------------------------------- | -------- |

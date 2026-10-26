@@ -153,6 +153,7 @@ const CATEGORY_META: Record<
 };
 
 export default function SystemHealthCenter({ initialReport }: Props) {
+  const [mounted, setMounted] = useState(false);
   const [report, setReport] = useState<AdminHealthReport>(initialReport);
   const [isPending, startTransition] = useTransition();
   const [activeTab, setActiveTab] = useState<string>('all');
@@ -166,6 +167,10 @@ export default function SystemHealthCenter({ initialReport }: Props) {
     () => new Date(initialReport.generatedAt)
   );
   const refreshInFlight = useRef(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const handleRefresh = useCallback(() => {
     if (refreshInFlight.current) return;
@@ -368,7 +373,10 @@ export default function SystemHealthCenter({ initialReport }: Props) {
             </span>
             <span className="opacity-40">•</span>
             <span suppressHydrationWarning>
-              Last verified at {lastRefreshedAt.toLocaleTimeString()}
+              Last verified at{' '}
+              {mounted
+                ? lastRefreshedAt.toLocaleTimeString()
+                : new Date(initialReport.generatedAt).toISOString().slice(11, 19)}
               {report.durationMs !== undefined ? ` in ${report.durationMs} ms` : ''}
             </span>
           </div>

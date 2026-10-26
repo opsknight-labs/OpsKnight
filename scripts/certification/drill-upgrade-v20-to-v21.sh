@@ -1,6 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Safety Guard: Disposable Database & Drill Isolation Protection
+if [[ "${OPSKNIGHT_CERT_TARGET:-0}" != "1" && "${DISPOSABLE_CERT_TARGET:-0}" != "1" ]]; then
+  echo "[FATAL] Safety guard: OPSKNIGHT_CERT_TARGET=1 or DISPOSABLE_CERT_TARGET=1 must be set. Never run drills against production."
+  exit 1
+fi
+
 echo "======================================================================"
 echo "OpsKnight P0 Upgrade Certification Drill: v2.0.0 -> v2.1.0"
 echo "======================================================================"
@@ -164,7 +170,7 @@ INCIDENT_ROW=$(docker exec "$DB_CONTAINER" psql -U "$DB_USER" -d "$DB_NAME" -t -
 ')
 echo "✓ Core incident identity verified: $INCIDENT_ROW"
 
-echo "Cryptographic verification of encrypted configuration..."
+echo "Cryptographic verification of encrypted configuration (Supported Decryption Engine)..."
 INTEGRATION_KEY_ENC=$(docker exec "$DB_CONTAINER" psql -U "$DB_USER" -d "$DB_NAME" -t -A -c '
   SELECT key FROM "Integration" WHERE key IS NOT NULL LIMIT 1;
 ')
@@ -173,33 +179,26 @@ if [[ -z "$INTEGRATION_KEY_ENC" ]]; then
   exit 1
 fi
 
-DECRYPT_OUTPUT=$(node -e "
-const crypto = require('crypto');
-const encKeyHex = '68112f544b2c8b0f84436ea34293f733c33e49b41e657b9db0275f5edf09c7ba';
-const keyBuffer = Buffer.from(encKeyHex, 'hex');
-const payload = '$INTEGRATION_KEY_ENC';
-try {
-  const parts = payload.split(':');
-  if (parts.length === 3) {
-    const [ivHex, authTagHex, encryptedHex] = parts;
-    const decipher = crypto.createDecipheriv('aes-256-gcm', keyBuffer, Buffer.from(ivHex, 'hex'));
-    decipher.setAuthTag(Buffer.from(authTagHex, 'hex'));
-    let decrypted = decipher.update(encryptedHex, 'hex', 'utf8');
-    decrypted += decipher.final('utf8');
-    console.log('SUCCESS:' + decrypted.slice(0, 10));
-  } else {
-    console.log('SUCCESS:legacy');
-  }
-} catch (e) {
-  console.log('FAIL:' + e.message);
+DECRYPT_RESULT=$(CIPHER_PAYLOAD="$INTEGRATION_KEY_ENC" ENCRYPTION_KEY="68112f544b2c8b0f84436ea34293f733c33e49b41e657b9db0275f5edf09c7ba" npx tsx -e "
+import { decrypt } from './src/lib/encryption';
+async function run() {
+  const cipher = process.env.CIPHER_PAYLOAD;
+  if (!cipher) throw new Error('Missing CIPHER_PAYLOAD');
+  const plain = await decrypt(cipher);
+  if (!plain || plain.length === 0) throw new Error('Decryption returned empty plaintext');
+  console.log('SUCCESS');
 }
-")
+run().catch(err => {
+  console.error('FAIL: ' + err.message);
+  process.exit(1);
+});
+" 2>&1)
 
-if echo "$DECRYPT_OUTPUT" | grep -q "FAIL"; then
-  echo "Error: Cryptographic decryption of integration key failed: $DECRYPT_OUTPUT"
+if ! echo "$DECRYPT_RESULT" | grep -q "SUCCESS"; then
+  echo "Error: Supported cryptographic decryption of integration key failed: $DECRYPT_RESULT"
   exit 1
 fi
-echo "✓ Integration encryption key verified: Decryption succeeded with candidate ENCRYPTION_KEY ($DECRYPT_OUTPUT)."
+echo "✓ Integration encryption key verified: Decryption succeeded using supported OpsKnight encryption module (v3/v2/v1 compatible; zero plaintext leakage)."
 
 ENC_INTEGRATIONS=$(docker exec "$DB_CONTAINER" psql -U "$DB_USER" -d "$DB_NAME" -t -A -c '
   SELECT COUNT(*) FROM "Integration" WHERE key IS NOT NULL;

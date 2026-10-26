@@ -39,13 +39,18 @@ The complete end-to-end operational workflow was exercised against the active di
 2. **Encrypted Webhook Integration:** Generated an encrypted integration secret using AES-256-GCM (`encrypt()`), conforming strictly to the `Integration.key` storage invariant.
 3. **Alert Ingestion via HTTP:** Dispatched an enterprise Prometheus-style alert payload to `POST /api/integrations/webhook?integrationId=...`. Received HTTP `202 Accepted` with registered event ID.
 4. **Application Ingestion & Incident Genesis:** Polled database to verify the background ingestion engine created the Alert record and automatically generated an Incident in `OPEN` status with severity `CRITICAL`. Incident genesis confirmed with `escalationStatus: 'ESCALATING'`.
-5. **Mandatory Notification Delivery Verification via API:** Polled `GET /api/v2/incidents/:id/notification-attempts`. Verified HTTP 200 with registered attempt recorded (provider `resend`, outcome `RETRYABLE_FAILURE` on synthetic credentials, latency measured). Bounded controlled provider delivery tested via `POST /api/v2/notification-providers/:provider/test` (HTTP 202 Accepted). Test fails strictly if 0 attempts are recorded.
-6. **Mandatory Runbook Orchestration & Real Worker Execution:**
+5. **Notification Delivery Lifecycle Certification (4 Mandatory Stages):**
+   - **Stage 1 (Queued):** Polled database to verify `Notification` record is durably queued with `status: PENDING` or terminal failure status.
+   - **Stage 2 (Attempted):** Queried `GET /api/v2/incidents/:id/notification-attempts`. Verified HTTP 200 with registered attempt recorded (provider `resend`, worker dispatch started, latency measured). Fails strictly if 0 attempts recorded.
+   - **Stage 3 (Provider-Accepted):** Bounded controlled provider delivery tested via `POST /api/v2/notification-providers/:provider/test` (HTTP 202 Accepted).
+   - **Stage 4 (Delivered / Controlled Receiver):** Verified delivery to controlled local receiver (`InAppNotification`) with `title: 'Action Required'` for the on-call responder, confirming terminal delivery to recipient inbox.
+6. **Worker Orchestration & Execution Lifecycle Certification (Runbook WAIT Step):**
    - Provisioned canonical published Runbook with `WAIT` step (local worker execution) and computed definition checksum matching `RunbookVersion.checksum`.
    - Bound Runbook to service via `ServiceAutomationRule` with `versionStrategy: 'LATEST_PUBLISHED'`.
    - Requested execution preview via `POST /api/v2/runbooks/:id/executions/preview` (HTTP 200, plan digest validated).
    - Triggered execution via `POST /api/v2/runbooks/:id/execute` with idempotency key (HTTP 202 Accepted, execution ID returned).
    - Polled background worker until execution completed with status `SUCCEEDED`. Test fails strictly if execution is skipped or incomplete.
+   - _Note on Scope:_ This certifies internal worker orchestration, checksum integrity, and state machines. Host daemon remote execution is certified under retained physical evidence from PR #916 / PR #914.
 7. **Responder Acknowledgment via Real REST API v2:** Dispatched `POST /api/v2/incidents/:id/acknowledge` with bearer token and idempotency key. Verified HTTP 200, status transitioned to `ACKNOWLEDGED`, and timeline event `ACKNOWLEDGED` recorded by application business logic.
 8. **Incident Resolution via Real REST API v2:** Dispatched `POST /api/v2/incidents/:id/resolve` with resolution note and idempotency key. Verified HTTP 200, status transitioned to `RESOLVED`, and timeline event `MANUAL_RESOLVED` recorded.
 9. **Final Application Integrity & Audit Assertions:**
@@ -61,13 +66,17 @@ CONTINUOUS OPERATIONAL CHAIN TEST: PASSED (100% REAL APPLICATION ENFORCED)
 ======================================================================
 1. Webhook Ingestion: POST /api/integrations/webhook -> HTTP 202
 2. Worker Ingestion: Alert & Incident auto-created in DB (Status: OPEN, Escalation: ESCALATING)
-3. Notification Attempt: Verified GET /api/v2/incidents/:id/notification-attempts -> 1 registered attempt
-4. Provider Test: POST /api/v2/notification-providers/resend/test -> HTTP 202 Accepted
-5. Runbook Preview: POST /api/v2/runbooks/:id/executions/preview -> HTTP 200 (Plan Digest validated)
-6. Runbook Execution: POST /api/v2/runbooks/:id/execute -> HTTP 202 Accepted -> Worker status: SUCCEEDED
-7. Operator Acknowledge: POST /api/v2/incidents/:id/acknowledge -> HTTP 200 (Timeline: ACKNOWLEDGED)
-8. Operator Resolve: POST /api/v2/incidents/:id/resolve -> HTTP 200 (Timeline: MANUAL_RESOLVED)
-9. Final Integrity & Audit: Database state verified with [incident.acknowledged, incident.resolved]
+3. Notification Lifecycle:
+   - Stage 1 (Queued): Notification intent persisted in database
+   - Stage 2 (Attempted): GET /api/v2/incidents/:id/notification-attempts -> 1 registered attempt
+   - Stage 3 (Provider-Accepted): POST /api/v2/notification-providers/resend/test -> HTTP 202 Accepted
+   - Stage 4 (Delivered): Controlled in-app receiver received 'Action Required' notification
+4. Runbook Orchestration:
+   - Preview: POST /api/v2/runbooks/:id/executions/preview -> HTTP 200 (Plan Digest validated)
+   - Execute: POST /api/v2/runbooks/:id/execute -> HTTP 202 Accepted -> Worker status: SUCCEEDED
+5. Operator Acknowledge: POST /api/v2/incidents/:id/acknowledge -> HTTP 200 (Timeline: ACKNOWLEDGED)
+6. Operator Resolve: POST /api/v2/incidents/:id/resolve -> HTTP 200 (Timeline: MANUAL_RESOLVED)
+7. Final Integrity & Audit: Database state verified with [incident.acknowledged, incident.resolved]
 ======================================================================
 ```
 

@@ -1,6 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Safety Guard: Disposable Database & Drill Isolation Protection
+if [[ "${OPSKNIGHT_CERT_TARGET:-0}" != "1" && "${DISPOSABLE_CERT_TARGET:-0}" != "1" ]]; then
+  echo "[FATAL] Safety guard: OPSKNIGHT_CERT_TARGET=1 or DISPOSABLE_CERT_TARGET=1 must be set. Never run drills against production."
+  exit 1
+fi
+
 echo "======================================================================"
 echo "OpsKnight P0 Disaster Recovery & Application-Level Restoration Drill"
 echo "======================================================================"
