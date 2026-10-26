@@ -1,0 +1,25 @@
+{
+  "passed": true,
+  "certifiedEnterprise": false,
+  "observedAt": "2026-10-26T16:00:32.359Z",
+  "sourceRevision": "8a1754f88e7e6203f22053f945537803539bf3c5",
+  "acknowledgedReceipts": 99,
+  "completedReceipts": 99,
+  "dueBefore": 297,
+  "dueAfter": 0,
+  "failedJobs": 0,
+  "elapsedMs": 1885.0130409999997,
+  "jobs": [
+    {
+      "_count": 99,
+      "type": "RUNBOOK",
+      "status": "COMPLETED"
+    },
+    {
+      "_count": 198,
+      "type": "SCHEDULED_TASK",
+      "status": "COMPLETED"
+    }
+  ],
+  "scope": "Post-producer-SIGKILL host-library recovery using production job worker leases/fences in all-lanes mode with no live ingress and default unconfigured providers. Runbook evaluation only, no configured Runbook action or external provider delivery. Not native lane-isolation, HA or load certification."
+}

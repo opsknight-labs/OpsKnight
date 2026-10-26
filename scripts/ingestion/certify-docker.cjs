@@ -911,6 +911,10 @@ location / { proxy_pass http://gateways; proxy_http_version 1.1; proxy_set_heade
     sourceProvenance:
       'Immutable image ID and producer-supplied OCI revision label; no signed build attestation',
   };
+  evidence.databaseResourcesBefore = await require('./database-resources.cjs')(
+    invoke,
+    databaseContainer
+  );
   evidence.resourcesBeforePreflight = await Promise.all(processNames.map(resources));
   if (cpuProfiling || memoryProfiling)
     for (const name of [webNames[0], workers[0]].filter(Boolean)) await startProfile(name);
@@ -984,6 +988,11 @@ location / { proxy_pass http://gateways; proxy_http_version 1.1; proxy_set_heade
     child.once('error', reject);
     child.once('exit', resolve);
   });
+  if (fullStack) evidence.downstreamDrain = await require('./downstream-drain.cjs')(prisma);
+  evidence.databaseResourcesAfter = await require('./database-resources.cjs')(
+    invoke,
+    databaseContainer
+  );
   evidence.resourcesAfterLoad = await Promise.all(processNames.map(resources));
   evidence.cpuDelta = chaosRequested
     ? {
@@ -1085,6 +1094,17 @@ location / { proxy_pass http://gateways; proxy_http_version 1.1; proxy_set_heade
   }
   if (chaosRequested)
     assert.ok(chaosPassed, 'Requested worker termination did not complete during active load');
+  if (fullStack) {
+    assert.ok(
+      evidence.databaseResourcesBefore?.cpu && evidence.databaseResourcesAfter?.cpu,
+      'Full-stack database resource evidence is required'
+    );
+    assert.equal(
+      evidence.downstreamDrain?.passed,
+      true,
+      'Due downstream jobs must drain before consumers stop'
+    );
+  }
   assert.equal(evidence.httpPassed, true, 'Fresh candidate-specific HTTP evidence is required');
 }
 main()

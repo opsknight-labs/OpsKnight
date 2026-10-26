@@ -1,0 +1,88 @@
+{
+  "candidateRetained": false,
+  "productionWindowMs": 2,
+  "certifiedEnterprise": false,
+  "reason": "Initial20ms sweep benefit did not produce a consistently low-latency fixed-arrival A-B-B-A; baseline coalesced under scheduling pressure too. No native candidate default selected. Raw passed means receipt integrity only.",
+  "sweep": [
+    {
+      "label": "2a",
+      "windowMs": 2,
+      "p95Ms": 17.569666999999754,
+      "receiptIntegrityPassed": true,
+      "hostLatencyUnder100Ms": true
+    },
+    {
+      "label": "0",
+      "windowMs": 0,
+      "p95Ms": 11.859750000000076,
+      "receiptIntegrityPassed": true,
+      "hostLatencyUnder100Ms": true
+    },
+    {
+      "label": "1",
+      "windowMs": 1,
+      "p95Ms": 9.7153330000001,
+      "receiptIntegrityPassed": true,
+      "hostLatencyUnder100Ms": true
+    },
+    {
+      "label": "5",
+      "windowMs": 5,
+      "p95Ms": 15.251000000000204,
+      "receiptIntegrityPassed": true,
+      "hostLatencyUnder100Ms": true
+    },
+    {
+      "label": "20",
+      "windowMs": 20,
+      "p95Ms": 30.6852919999983,
+      "receiptIntegrityPassed": true,
+      "hostLatencyUnder100Ms": true
+    },
+    {
+      "label": "2b",
+      "windowMs": 2,
+      "p95Ms": 10.38025000000016,
+      "receiptIntegrityPassed": true,
+      "hostLatencyUnder100Ms": true
+    }
+  ],
+  "repeat": [
+    {
+      "label": "a1",
+      "windowMs": 2,
+      "cpuMs": 2427.168,
+      "p95Ms": 1148.723167,
+      "queriesPerEvent": 6.742,
+      "receiptIntegrityPassed": true,
+      "hostLatencyUnder100Ms": false
+    },
+    {
+      "label": "b1",
+      "windowMs": 20,
+      "cpuMs": 2065.211,
+      "p95Ms": 71.98487499999919,
+      "queriesPerEvent": 4.474,
+      "receiptIntegrityPassed": true,
+      "hostLatencyUnder100Ms": true
+    },
+    {
+      "label": "b2",
+      "windowMs": 20,
+      "cpuMs": 2353.617,
+      "p95Ms": 315.5002079999995,
+      "queriesPerEvent": 3.88,
+      "receiptIntegrityPassed": true,
+      "hostLatencyUnder100Ms": false
+    },
+    {
+      "label": "a2",
+      "windowMs": 2,
+      "cpuMs": 2352.888,
+      "p95Ms": 812.3814999999995,
+      "queriesPerEvent": 3.574,
+      "receiptIntegrityPassed": true,
+      "hostLatencyUnder100Ms": false
+    }
+  ]
+}

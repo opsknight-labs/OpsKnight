@@ -1,0 +1,24 @@
+{
+  "applicationSourceRevision": "8a1754f88e7e6203f22053f945537803539bf3c5",
+  "applicationImageId": "sha256:d119cd6de07a52ce5fdf44cefecebe74f2b03da0d89d1292226a4e3c7b76cebb",
+  "controllerBaseRevision": "8a1754f88e7e6203f22053f945537803539bf3c5",
+  "fullStackResourceFixUsedBy": [
+    "repeat-a2",
+    "qwait-drain",
+    "qwait-cpu"
+  ],
+  "postLoadDrainUsedBy": [
+    "qwait-drain",
+    "qwait-cpu"
+  ],
+  "futureCheckpointCountersUsedInRecordedRuns": false,
+  "finalControllerSha256": {
+    "scripts/ingestion/certify-docker.cjs": "c6b835a690568807407b89f50fbad706253160d11f4162706fe5023b7f584e99",
+    "scripts/ingestion/downstream-drain.cjs": "d8274dda1713b17cbe3af901276494321a966a614c3f704d467f0a9756abb114",
+    "scripts/ingestion/database-resources.cjs": "57d7ff51aa8f22defb751b9759c2aa0e6afca2da603ffbe63a8284740e9421d6",
+    "scripts/ingestion/database-profile.cjs": "75f05403f2e1870f3171f0601e276929d0f49c7dc7cc6b0fbbf249ece577f48e"
+  },
+  "productionAppendWindowChanged": false,
+  "scope": "Controller overlays are external to unchanged application image; before/after records retain missing data and distinct checkpoint preconditions. No75/100run or release certificate.",
+  "finalGuard": "Full-stack success also requires nonempty database before/after CPU evidence; these final evidence assertions do not change application image."
+}
