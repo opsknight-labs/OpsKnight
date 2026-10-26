@@ -629,7 +629,7 @@ test.describe.serial('dashboard live incidents', () => {
   test('responsive layout: stacked cards on phones, dense rows on desktop', async ({}, testInfo) => {
     const { page } = alpha;
     await openDashboard(page);
-    const header = page.getByText(/^Prio(\s*\/\s*Urg)?$/);
+    const header = page.getByText('Prio / Urg');
     const firstRow = page.getByTestId('live-incident-row').first();
     await expect(firstRow).toBeVisible();
     if (testInfo.project.name.startsWith('mobile')) {
