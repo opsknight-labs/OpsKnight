@@ -33,6 +33,18 @@ type Support = Pick<
   | 'exceptions'
 >;
 
+type StoredSupport = Omit<Support, 'exceptions'> & {
+  exceptions: Array<Omit<Support['exceptions'][number], 'localDate'> & { localDate: string }>;
+};
+function decodeSupportPolicies(rows: StoredSupport[]): Support[] {
+  return rows.map(policy => ({
+    ...policy,
+    exceptions: policy.exceptions.map(exception => ({
+      ...exception, localDate: new Date(exception.localDate),
+    })),
+  }));
+}
+
 const classificationSql = Prisma.sql`
   SELECT to_jsonb(policy) || jsonb_build_object('rules', (
     SELECT COALESCE(jsonb_agg(to_jsonb(rule)), '[]'::jsonb)
@@ -91,20 +103,10 @@ export function readPublishedSlaPolicies(tx: Prisma.TransactionClient, keys: str
   return read<Sla>(tx, keys, slaSql);
 }
 export async function readPublishedSupportPolicies(tx: Prisma.TransactionClient, keys: string[]) {
-  type StoredSupport = Omit<Support, 'exceptions'> & {
-    exceptions: Array<Omit<Support['exceptions'][number], 'localDate'> & { localDate: string }>;
-  };
-  const rows = await read<StoredSupport>(tx, keys, supportSql);
-  return rows.map(policy => ({
-    ...policy,
-    exceptions: policy.exceptions.map(exception => ({
-      ...exception,
-      localDate: new Date(exception.localDate),
-    })),
-  }));
+  return decodeSupportPolicies(await read<StoredSupport>(tx, keys, supportSql));
 }
 
-/** Classification and SLA selected at one authoritative statement snapshot.
+/** Classification, SLA and support hours share one authoritative statement snapshot.
  * Scope order is explicit; sealed versions/rules are immutable. No cache or
  * preparation-time mutable policy pointer is trusted across transactions.
  */
@@ -112,14 +114,14 @@ export async function readPublishedIncidentPolicies(
   tx: Prisma.TransactionClient,
   serviceId: string,
   integrationId?: string | null
-): Promise<{ classification: Classification[]; sla: Sla[] }> {
+): Promise<{ classification: Classification[]; sla: Sla[]; support: Support[] }> {
   const classificationKeys = [
     ...(integrationId ? [`integration:${integrationId}`] : []),
     `service:${serviceId}`,
     'workspace',
   ];
   const slaKeys = [`service:${serviceId}`, 'workspace'];
-  const [row] = await tx.$queryRaw<Array<{ classification: Classification[]; sla: Sla[] }>>`
+  const [row] = await tx.$queryRaw<Array<{ classification: Classification[]; sla: Sla[]; support: StoredSupport[] }>>`
     WITH classification_snapshots AS (
       WITH scopes AS (SELECT key, position FROM unnest(${classificationKeys}::text[])
         WITH ORDINALITY AS requested(key, position))
@@ -128,10 +130,15 @@ export async function readPublishedIncidentPolicies(
       WITH scopes AS (SELECT key, position FROM unnest(${slaKeys}::text[])
         WITH ORDINALITY AS requested(key, position))
       ${slaSql}
+    ), support_snapshots AS (
+      WITH scopes AS (SELECT key, position FROM unnest(${slaKeys}::text[])
+        WITH ORDINALITY AS requested(key, position))
+      ${supportSql}
     )
     SELECT (SELECT COALESCE(jsonb_agg(snapshot ORDER BY array_position(${classificationKeys}::text[], snapshot->>'scopeKey')), '[]'::jsonb) FROM classification_snapshots) AS classification,
-      (SELECT COALESCE(jsonb_agg(snapshot ORDER BY array_position(${slaKeys}::text[], snapshot->>'scopeKey')), '[]'::jsonb) FROM sla_snapshots) AS sla
+      (SELECT COALESCE(jsonb_agg(snapshot ORDER BY array_position(${slaKeys}::text[], snapshot->>'scopeKey')), '[]'::jsonb) FROM sla_snapshots) AS sla,
+      (SELECT COALESCE(jsonb_agg(snapshot ORDER BY array_position(${slaKeys}::text[], snapshot->>'scopeKey')), '[]'::jsonb) FROM support_snapshots) AS support
   `;
   if (!row) throw new Error('Incident policy snapshot unavailable');
-  return row;
+  return { ...row, support: decodeSupportPolicies(row.support) };
 }

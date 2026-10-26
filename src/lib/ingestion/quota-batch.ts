@@ -6,51 +6,55 @@ export type QuotaDecision = {
   resetAt: number;
   count: number;
 };
+type Decide = (keys: readonly string[]) => Promise<QuotaDecision[]>;
 type Waiter = {
+  key: string;
+  decide: Decide;
   resolve: (decision: QuotaDecision) => void;
   reject: (error: unknown) => void;
 };
-type State = { pending: number; groups: Map<string, Waiter[]> };
+type State = { pending: number; active: number; queued: Waiter[]; timer: ReturnType<typeof setTimeout> | null };
 declare global {
-  var opsknightIngestionQuotaBatch: State | undefined;
+  var opsknightIngestionQuotaBatchV2: State | undefined;
 }
 
-/** Coalesce concurrent decisions, never cache quota credit or mutable policy.
- * Only outstanding callers are retained, bounded across route bundles. Every
- * caller waits for the shared atomic database decision; shutdown grants nothing.
+/** Coalesce outstanding requests across keys, never cache quota credit or policy.
+ * Each batch charges at most32 callers; at most two database decisions run at
+ * once. Every caller awaits its atomic database result. Failed batches grant
+ * nothing and release their local capacity, including synchronous failures.
  */
-export function batchQuotaDecision(
-  key: string,
-  decide: (count: number) => Promise<QuotaDecision[]>
-): Promise<QuotaDecision> {
-  const state: State = (globalThis.opsknightIngestionQuotaBatch ??= { pending: 0, groups: new Map() });
+export function batchQuotaDecision(key: string, decide: Decide): Promise<QuotaDecision> {
+  const state: State = (globalThis.opsknightIngestionQuotaBatchV2 ??= {
+    pending: 0, active: 0, queued: [], timer: null,
+  });
   if (state.pending >= 1024)
     return Promise.reject(new IngestionUnavailableError('Shared ingestion quota busy'));
+  const flush = () => {
+    while (state.active < 2 && state.queued.length) {
+      const callers = state.queued.splice(0, 32);
+      state.active++;
+      void Promise.resolve()
+        .then(() => callers[0].decide(callers.map(caller => caller.key)))
+        .then(decisions => {
+          if (decisions.length !== callers.length) throw new Error('Missing quota decisions');
+          callers.forEach((caller, index) => caller.resolve(decisions.at(index)!));
+        })
+        .catch(error => callers.forEach(caller => caller.reject(error)))
+        .finally(() => {
+          state.pending -= callers.length;
+          state.active--;
+          flush();
+        });
+    }
+  };
   return new Promise((resolve, reject) => {
-    let group = state.groups.get(key);
-    if (!group) {
-      group = [];
-      state.groups.set(key, group);
-      const current = group;
-      setTimeout(() => {
-        state.groups.delete(key);
-        // Bound each statement's charge; groups may be larger when operators
-        // raise the independent HTTP admission limit above its default of 32.
-        for (let offset = 0; offset < current.length; offset += 32) {
-          const callers = current.slice(offset, offset + 32);
-          void decide(callers.length)
-            .then(decisions => {
-              if (decisions.length !== callers.length) throw new Error('Missing quota decisions');
-              callers.forEach((caller, index) => caller.resolve(decisions.at(index)!));
-            })
-            .catch(error => callers.forEach(caller => caller.reject(error)))
-            .finally(() => {
-              state.pending -= callers.length;
-            });
-        }
+    state.pending++;
+    state.queued.push({ key, decide, resolve, reject });
+    if (state.active < 2 && !state.timer) {
+      state.timer = setTimeout(() => {
+        state.timer = null;
+        flush();
       }, 2);
     }
-    state.pending++;
-    group.push({ resolve, reject });
   });
 }

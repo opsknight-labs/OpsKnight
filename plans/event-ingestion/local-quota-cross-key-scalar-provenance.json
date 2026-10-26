@@ -1,0 +1,100 @@
+{
+  "baselineRevision": "be3ed4f09536ac97d55812d9af74a41c07bf5ab4",
+  "runs": [
+    {
+      "label": "a1",
+      "variant": "baseline",
+      "database": "ingestion_test_quota_scalar_a1_20261026",
+      "scenarios": [
+        {
+          "keys": 1,
+          "decisionsPerSecond": 1448.1870791123936,
+          "p95Ms": 72.58804199999986,
+          "cpuMsPerDecision": 0.1265695,
+          "queryCalls": 131
+        },
+        {
+          "keys": 100,
+          "decisionsPerSecond": 301.2333150867528,
+          "p95Ms": 230.68054200000006,
+          "cpuMsPerDecision": 1.5378405,
+          "queryCalls": 4016
+        }
+      ]
+    },
+    {
+      "label": "b1",
+      "variant": "candidate",
+      "database": "ingestion_test_quota_scalar_b1_20261026",
+      "scenarios": [
+        {
+          "keys": 1,
+          "decisionsPerSecond": 3083.0310357173,
+          "p95Ms": 24.12395800000013,
+          "cpuMsPerDecision": 0.112868,
+          "queryCalls": 129
+        },
+        {
+          "keys": 100,
+          "decisionsPerSecond": 1414.1240474125448,
+          "p95Ms": 51.862584000000425,
+          "cpuMsPerDecision": 0.10856199999999999,
+          "queryCalls": 131
+        }
+      ]
+    },
+    {
+      "label": "b2",
+      "variant": "candidate",
+      "database": "ingestion_test_quota_scalar_b2_20261026",
+      "scenarios": [
+        {
+          "keys": 1,
+          "decisionsPerSecond": 3764.158529418547,
+          "p95Ms": 14.891292000000021,
+          "cpuMsPerDecision": 0.1101825,
+          "queryCalls": 129
+        },
+        {
+          "keys": 100,
+          "decisionsPerSecond": 2755.8187821795646,
+          "p95Ms": 20.48466600000029,
+          "cpuMsPerDecision": 0.091254,
+          "queryCalls": 129
+        }
+      ]
+    },
+    {
+      "label": "a2",
+      "variant": "baseline",
+      "database": "ingestion_test_quota_scalar_a2_20261026",
+      "scenarios": [
+        {
+          "keys": 1,
+          "decisionsPerSecond": 2335.8315538433258,
+          "p95Ms": 36.04783300000008,
+          "cpuMsPerDecision": 0.11270350000000001,
+          "queryCalls": 129
+        },
+        {
+          "keys": 100,
+          "decisionsPerSecond": 154.87008086440915,
+          "p95Ms": 551.9730410000002,
+          "cpuMsPerDecision": 1.6361415,
+          "queryCalls": 4028
+        }
+      ]
+    }
+  ],
+  "sourceHashes": {
+    "baseline": {
+      "quota.ts": "1413108e8b3e2832d1ef5cd2d5d6718fec033f77e571763b794bbfb8d4e1e783",
+      "quota-batch.ts": "12c5fac7524a2d3549bf1ccb8feee48d8aaef7da27fc9b60101008d419cb6dea"
+    },
+    "candidate": {
+      "quota.ts": "146436ec37861326ad9054954bddfd2253988963c8b22523ed1359fe77df5916",
+      "quota-batch.ts": "7cfc6ab3c72b7978d6d9abe8b23051b8fa214797b594798bbf87d2eb21c66fd0"
+    }
+  },
+  "scope": "Sequential host-library A-B-B-A,2000decisions/concurrency32/pool5; identical fresh339-migration databases and default async mode. Owned PostgreSQL16 shared workstation, not HTTP/incident/native capacity certification."
+}

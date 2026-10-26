@@ -1,0 +1,55 @@
+{
+  "sourceRevision": "be3ed4f09536ac97d55812d9af74a41c07bf5ab4",
+  "runs": [
+    {
+      "label": "a1",
+      "variant": "baseline",
+      "database": "ingestion_test_support_snapshot_a1_20261026",
+      "cpuMs": 5314.822,
+      "elapsedMs": 11568.995958000003,
+      "queriesPerEvent": 19.81,
+      "operationP95Ms": 265.0355419999978
+    },
+    {
+      "label": "b1",
+      "variant": "candidate",
+      "database": "ingestion_test_support_snapshot_b1_20261026",
+      "cpuMs": 5499.823,
+      "elapsedMs": 14811.127207999998,
+      "queriesPerEvent": 18.44333333333333,
+      "operationP95Ms": 373.6720000000023
+    },
+    {
+      "label": "b2",
+      "variant": "candidate",
+      "database": "ingestion_test_support_snapshot_b2_20261026",
+      "cpuMs": 5617.677,
+      "elapsedMs": 11535.608959000001,
+      "queriesPerEvent": 18.83,
+      "operationP95Ms": 257.83229199999914
+    },
+    {
+      "label": "a2",
+      "variant": "baseline",
+      "database": "ingestion_test_support_snapshot_a2_20261026",
+      "cpuMs": 5532.881,
+      "elapsedMs": 10513.110749999998,
+      "queriesPerEvent": 19.403333333333332,
+      "operationP95Ms": 393.56558399999994
+    }
+  ],
+  "sourceSha256": {
+    "baseline": {
+      "src/lib/events.ts": "4379bd1e6322916e2ad92121b43a3874fbb393e4886973b16536614c8cc7d9fb",
+      "src/lib/incident-policies/published.ts": "93326914767176588a8b39eae4571045fec5d6064fd88a35c0e62ea9b17951a0",
+      "src/lib/incidents/support-hours.ts": "4e88d062734e3172c02f4421f34908e32290ac6e61ade630702a828355f1604b"
+    },
+    "candidate": {
+      "src/lib/events.ts": "f1f8853d9b36134b73a0ed5b00cbd96bb3637e8389e8ca1309c11e13a5c84f0d",
+      "src/lib/incident-policies/published.ts": "10433f1af747cee180fb48a81f40cb765b69d0c10a00a01bde9ef4d9fd9b8600",
+      "src/lib/incidents/support-hours.ts": "db2bb7d90312b86b22985770948b1e1c6d8468780df86422e5315ee985a4de6f"
+    }
+  },
+  "scope": "Private host admission-only A-B-B-A, 300new incidents/concurrency4/pool5 after30warmups. Candidate adds support-hours to authoritative classification/SLA snapshot; baseline already has event preparation and compact dispatch. Host only, no native or fullstack proof.",
+  "baselineArchiveSha256": "0aaf18cf5207624e7dd1b0505c5b4e5f11a666768349cadacee9fa7b29df880d"
+}

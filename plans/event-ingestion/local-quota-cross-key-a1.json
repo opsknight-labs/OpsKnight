@@ -1,0 +1,306 @@
+{
+  "certifiedEnterprise": false,
+  "scope": "Single Node library process and isolated local Docker PostgreSQL; excludes HTTP, incident processing, Automation and provider delivery",
+  "coalescing": true,
+  "scenarios": [
+    {
+      "keys": 1,
+      "concurrency": 32,
+      "decisions": 2000,
+      "allowed": 2000,
+      "elapsedMs": 544.3297499999999,
+      "cpuMs": 207.898,
+      "cpuMsPerDecision": 0.103949,
+      "decisionsPerSecond": 3674.2434158706196,
+      "requestLatencyMs": {
+        "p50": 7.394624999999905,
+        "p95": 18.119874999999865,
+        "p99": 33.128625000000056,
+        "max": 37.602583000000095
+      },
+      "databaseProfile": {
+        "diagnosticSettings": {
+          "walIoTimingEnabled": false,
+          "statementTracking": "top"
+        },
+        "scope": "Owned local test database; PostgreSQL execution statistics exclude client/pool/network time. Cluster WAL includes all databases on this owned test instance.",
+        "elapsedMs": 546.6305419999999,
+        "counters": {
+          "commits": 0,
+          "rollbacks": 0,
+          "deadlocks": 0,
+          "tempBytes": 0,
+          "inserts": 0,
+          "updates": 0,
+          "deletes": 0,
+          "clusterWalBytes": 0,
+          "clusterWalBuffersFull": 0,
+          "clusterWalWrites": 0,
+          "clusterWalSyncs": 0,
+          "clusterWalWriteTimeMs": 0,
+          "clusterWalSyncTimeMs": 0
+        },
+        "totalStatementWalBytes": 20266,
+        "totalQueryCalls": 129,
+        "totalDatabaseExecutionMs": 99.29328899999999,
+        "topQueriesByExecutionTime": [
+          {
+            "fingerprint": "cd83c5cc8f9919117637966e311ed35695c28271b91e10e6b739e2a88484090d",
+            "operation": "SELECT",
+            "model": "other",
+            "calls": 1,
+            "executionMs": 81.76875,
+            "meanExecutionMs": 81.76875,
+            "rows": 19,
+            "blocksHit": 4,
+            "blocksRead": 0,
+            "blocksDirtied": 0,
+            "tempBlocksWritten": 663,
+            "walBytes": 0
+          },
+          {
+            "fingerprint": "0a8ae0887efbc19b70e6bc5b3d2d423eb4d6bde010693667eae4611051a1c2f8",
+            "operation": "INSERT",
+            "model": "IngestionQuota",
+            "calls": 63,
+            "executionMs": 12.852877,
+            "meanExecutionMs": 0.20401392063492063,
+            "rows": 63,
+            "blocksHit": 443,
+            "blocksRead": 0,
+            "blocksDirtied": 0,
+            "tempBlocksWritten": 0,
+            "walBytes": 20266
+          },
+          {
+            "fingerprint": "9789d52f0d240347a1c53486c835e3626e112732b17d94edcfb71b8980d6c5c8",
+            "operation": "SELECT",
+            "model": "SystemConfig",
+            "calls": 63,
+            "executionMs": 4.479494999999999,
+            "meanExecutionMs": 0.07110309523809523,
+            "rows": 63,
+            "blocksHit": 126,
+            "blocksRead": 0,
+            "blocksDirtied": 0,
+            "tempBlocksWritten": 0,
+            "walBytes": 0
+          },
+          {
+            "fingerprint": "d4ea10543e22353c76b5817cd251cd4f374fe1ee3bda667aa49a2373fa447b06",
+            "operation": "SELECT",
+            "model": "other",
+            "calls": 2,
+            "executionMs": 0.192167,
+            "meanExecutionMs": 0.0960835,
+            "rows": 2,
+            "blocksHit": 8,
+            "blocksRead": 0,
+            "blocksDirtied": 0,
+            "tempBlocksWritten": 0,
+            "walBytes": 0
+          }
+        ],
+        "activitySamples": 0,
+        "activitySampleErrors": 0,
+        "waits": [],
+        "blockerSamples": [],
+        "blockerScope": "Sampled blocker statement categories and transaction age; a transaction can retain locks acquired by an earlier statement. Fixed SQL-side labels only, no query text, parameters, backend IDs or credentials retained."
+      }
+    },
+    {
+      "keys": 100,
+      "concurrency": 32,
+      "decisions": 2000,
+      "allowed": 2000,
+      "elapsedMs": 5550.1967079999995,
+      "cpuMs": 2816.895,
+      "cpuMsPerDecision": 1.4084475,
+      "decisionsPerSecond": 360.3475886029804,
+      "requestLatencyMs": {
+        "p50": 45.372959000000264,
+        "p95": 289.0740829999995,
+        "p99": 942.3785829999997,
+        "max": 1193.8985420000008
+      },
+      "databaseProfile": {
+        "diagnosticSettings": {
+          "walIoTimingEnabled": false,
+          "statementTracking": "top"
+        },
+        "scope": "Owned local test database; PostgreSQL execution statistics exclude client/pool/network time. Cluster WAL includes all databases on this owned test instance.",
+        "elapsedMs": 5553.462541000001,
+        "counters": {
+          "commits": 3570,
+          "rollbacks": 0,
+          "deadlocks": 0,
+          "tempBytes": 5425318,
+          "inserts": 48,
+          "updates": 1710,
+          "deletes": 0,
+          "clusterWalBytes": 697955,
+          "clusterWalBuffersFull": 0,
+          "clusterWalWrites": 1346,
+          "clusterWalSyncs": 1346,
+          "clusterWalWriteTimeMs": 0,
+          "clusterWalSyncTimeMs": 0
+        },
+        "totalStatementWalBytes": 717330,
+        "totalQueryCalls": 4013,
+        "totalDatabaseExecutionMs": 1137.722139999999,
+        "topQueriesByExecutionTime": [
+          {
+            "fingerprint": "0a8ae0887efbc19b70e6bc5b3d2d423eb4d6bde010693667eae4611051a1c2f8",
+            "operation": "INSERT",
+            "model": "IngestionQuota",
+            "calls": 2000,
+            "executionMs": 902.9573739999988,
+            "meanExecutionMs": 0.45147868699999943,
+            "rows": 2000,
+            "blocksHit": 20640,
+            "blocksRead": 0,
+            "blocksDirtied": 12,
+            "tempBlocksWritten": 0,
+            "walBytes": 717330
+          },
+          {
+            "fingerprint": "9789d52f0d240347a1c53486c835e3626e112732b17d94edcfb71b8980d6c5c8",
+            "operation": "SELECT",
+            "model": "SystemConfig",
+            "calls": 2000,
+            "executionMs": 174.05697500000008,
+            "meanExecutionMs": 0.08702848750000004,
+            "rows": 2000,
+            "blocksHit": 4000,
+            "blocksRead": 0,
+            "blocksDirtied": 0,
+            "tempBlocksWritten": 0,
+            "walBytes": 0
+          },
+          {
+            "fingerprint": "cd83c5cc8f9919117637966e311ed35695c28271b91e10e6b739e2a88484090d",
+            "operation": "SELECT",
+            "model": "other",
+            "calls": 1,
+            "executionMs": 33.95220800000001,
+            "meanExecutionMs": 33.95220800000001,
+            "rows": 21,
+            "blocksHit": 4,
+            "blocksRead": 0,
+            "blocksDirtied": 0,
+            "tempBlocksWritten": 663,
+            "walBytes": 0
+          },
+          {
+            "fingerprint": "ed4b15c16c1a8b52ddce51899002c26d5458e47c8adce4da350441da294c0e91",
+            "operation": "SELECT",
+            "model": "other",
+            "calls": 5,
+            "executionMs": 22.65496,
+            "meanExecutionMs": 4.5309919999999995,
+            "rows": 10,
+            "blocksHit": 29,
+            "blocksRead": 0,
+            "blocksDirtied": 0,
+            "tempBlocksWritten": 0,
+            "walBytes": 0
+          },
+          {
+            "fingerprint": "043117c34b567ae81eeab4b26ac470c668d495119d2665dc7a033ab841f46cbf",
+            "operation": "OTHER",
+            "model": "other",
+            "calls": 5,
+            "executionMs": 3.539665,
+            "meanExecutionMs": 0.7079329999999999,
+            "rows": 0,
+            "blocksHit": 20,
+            "blocksRead": 0,
+            "blocksDirtied": 0,
+            "tempBlocksWritten": 0,
+            "walBytes": 0
+          },
+          {
+            "fingerprint": "d4ea10543e22353c76b5817cd251cd4f374fe1ee3bda667aa49a2373fa447b06",
+            "operation": "SELECT",
+            "model": "other",
+            "calls": 2,
+            "executionMs": 0.5609580000000001,
+            "meanExecutionMs": 0.28047900000000003,
+            "rows": 2,
+            "blocksHit": 8,
+            "blocksRead": 0,
+            "blocksDirtied": 0,
+            "tempBlocksWritten": 0,
+            "walBytes": 0
+          }
+        ],
+        "activitySamples": 5,
+        "activitySampleErrors": 0,
+        "waits": [
+          {
+            "state": "idle",
+            "type": "Client",
+            "event": "ClientRead",
+            "summedConnections": 12,
+            "maxConnections": 4,
+            "averageConnectionsPerSample": 2.4
+          },
+          {
+            "state": "active",
+            "type": "Client",
+            "event": "ClientRead",
+            "summedConnections": 1,
+            "maxConnections": 1,
+            "averageConnectionsPerSample": 0.2
+          },
+          {
+            "state": "active",
+            "type": "IO",
+            "event": "WALSync",
+            "summedConnections": 2,
+            "maxConnections": 1,
+            "averageConnectionsPerSample": 0.4
+          },
+          {
+            "state": "active",
+            "type": "CPU",
+            "event": "running",
+            "summedConnections": 3,
+            "maxConnections": 2,
+            "averageConnectionsPerSample": 0.6
+          },
+          {
+            "state": "idle",
+            "type": "LWLock",
+            "event": "WALWrite",
+            "summedConnections": 1,
+            "maxConnections": 1,
+            "averageConnectionsPerSample": 0.2
+          },
+          {
+            "state": "idle",
+            "type": "CPU",
+            "event": "running",
+            "summedConnections": 1,
+            "maxConnections": 1,
+            "averageConnectionsPerSample": 0.2
+          }
+        ],
+        "blockerSamples": [],
+        "blockerScope": "Sampled blocker statement categories and transaction age; a transaction can retain locks acquired by an earlier statement. Fixed SQL-side labels only, no query text, parameters, backend IDs or credentials retained."
+      }
+    }
+  ],
+  "measuredAt": "2026-10-26T05:48:30.388Z",
+  "sourceRevision": "",
+  "sourceDirty": false,
+  "archiveSourceProvenance": {
+    "baselineRevision": "be3ed4f09536ac97d55812d9af74a41c07bf5ab4",
+    "variant": "baseline",
+    "sourceHashes": {
+      "quota.ts": "1413108e8b3e2832d1ef5cd2d5d6718fec033f77e571763b794bbfb8d4e1e783",
+      "quota-batch.ts": "12c5fac7524a2d3549bf1ccb8feee48d8aaef7da27fc9b60101008d419cb6dea"
+    },
+    "note": "Private source archives have no git metadata; emitted empty sourceRevision/sourceDirty fields are not source attestations. These exact file hashes and baseline revision identify the diagnostic."
+  }
+}

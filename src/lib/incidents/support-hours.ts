@@ -136,10 +136,11 @@ function findNext(policy: Policy, at: Date): Date | null {
 
 export async function resolveSupportHours(
   tx: Prisma.TransactionClient,
-  input: { serviceId: string; at: Date }
+  input: { serviceId: string; at: Date },
+  published?: Policy[]
 ): Promise<SupportHoursDecision> {
   const keys = [`service:${input.serviceId}`, 'workspace'];
-  const policies = await readPublishedSupportPolicies(tx, keys);
+  const policies = published ?? await readPublishedSupportPolicies(tx, keys);
   const service = policies.find(policy => policy.scopeKey === keys[0]);
   const workspace = policies.find(policy => policy.scopeKey === 'workspace');
   const serviceMode = service?.mode ?? (service?.inheritWorkspace ? 'INHERIT' : 'SCHEDULED');
