@@ -1,6 +1,13 @@
 const { PrismaClient } = require('@prisma/client');
+const { resolveDatabaseUrl } = require('./db-connection-resolver.cjs');
 
-const databaseUrl = new URL(process.env.DATABASE_URL);
+const rawDatabaseUrl = resolveDatabaseUrl({ preferDirect: true });
+if (!rawDatabaseUrl) {
+  console.error('DATABASE_URL or DIRECT_DATABASE_URL is required to install online indexes.');
+  process.exit(1);
+}
+
+const databaseUrl = new URL(rawDatabaseUrl);
 // Session-level advisory locks require every statement to use the same backend.
 // A dedicated one-connection Prisma pool provides that guarantee during startup.
 databaseUrl.searchParams.set('connection_limit', '1');
@@ -29,9 +36,7 @@ async function assertRequiredIndexes() {
     SELECT c.relname AS name, i.indisvalid AS valid
     FROM pg_index i
     JOIN pg_class c ON c.oid = i.indexrelid
-    WHERE c.relname = ANY(ARRAY[${requiredIndexNames
-      .map(name => `'${name}'`)
-      .join(',')}])
+    WHERE c.relname = ANY(ARRAY[${requiredIndexNames.map(name => `'${name}'`).join(',')}])
   `);
   const valid = new Set(rows.filter(row => row.valid).map(row => row.name));
   const missing = requiredIndexNames.filter(name => !valid.has(name));

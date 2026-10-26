@@ -138,10 +138,10 @@ opsknight_opsknight-web` (Split) to locate a running task and execute the
 matching command on that node. Never copy a database secret to the host merely
 to issue the code.
 
-If running inside an interactive shell (`docker exec -it ... sh`): Export the Swarm secret before running the script:
+Updated images resolve `DATABASE_URL_FILE` automatically when running `node scripts/create-bootstrap-code.mjs` or `node scripts/OpsKnight.mjs` inside an interactive container shell. On older images, export the Swarm secret before running the script:
 
 ```sh
-export DATABASE_URL="$(cat "$DATABASE_URL_FILE" | tr -d '\r\n')"
+export DATABASE_URL="$(tr -d '\r\n' < "$DATABASE_URL_FILE")"
 node scripts/create-bootstrap-code.mjs
 ```
 

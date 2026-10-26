@@ -90,7 +90,9 @@ async function getDatabaseMigrations(prisma) {
 async function checkMigrationHealth() {
   console.log('Checking migration health...\n');
 
-  const prisma = new PrismaClient();
+  const { resolveDatabaseUrl } = require('./db-connection-resolver.cjs');
+  const dbUrl = resolveDatabaseUrl();
+  const prisma = new PrismaClient(dbUrl ? { datasourceUrl: dbUrl } : undefined);
   const warnings = [];
   const errors = [];
 
