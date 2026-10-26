@@ -78,8 +78,10 @@ export default function () {
     }
   );
   let receipt = false;
+  let receiptId;
   try {
     const body = response.json();
+    receiptId = body.data?.result?.receiptId;
     receipt =
       typeof body.data.result.receiptId === 'string' && body.data.result.action === 'accepted';
   } catch {
@@ -87,7 +89,10 @@ export default function () {
   }
   const valid = response.status === 202 && receipt;
   success.add(valid);
-  if (valid) accepted.add(1);
+  if (valid) {
+    console.log(JSON.stringify({ kind: 'opsknight-ack', receiptId, deliveryId: id }));
+    accepted.add(1);
+  }
   if (response.status === 429) rejectedQuota.add(1);
   if (response.status === 503) rejectedCapacity.add(1);
   if (!valid) (rejectedStatuses.get(response.status) || rejectedOther).add(1);

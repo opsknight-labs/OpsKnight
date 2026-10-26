@@ -43,6 +43,7 @@ let loadActive = false;
 let cancelled = false;
 const profiles = [];
 const cpuProfiling = process.env.INGESTION_CPU_PROFILE === 'true';
+const memoryProfiling = process.env.INGESTION_MEMORY_PROFILE === 'true';
 const workerOnlyStage = ['incident-only', 'effects-only'].includes(capacityStage);
 const admissionOnly = capacityStage === 'admission-only';
 for (const signal of ['SIGINT', 'SIGTERM'])
@@ -203,12 +204,35 @@ async function startProfile(name) {
     runId,
     output,
     stop,
+    memoryProfiling ? (cpuProfiling ? 'both' : 'memory') : 'cpu',
   ]);
   await waitFile(name, `${output}.ready`);
   profiles.push({ name, output, stop, collected: false });
 }
 async function collectProfiles() {
   for (const profile of profiles.filter(item => !item.collected)) {
+    const destination =
+      process.env.INGESTION_CPU_PROFILE_DIRECTORY ||
+      path.join(os.tmpdir(), 'opsknight-ingestion-profiles', runId);
+    mkdirSync(destination, { recursive: true });
+    const output = path.join(destination, `${profile.name}.cpuprofile`);
+    // Copy incremental samples before asking a potentially OOM-killed target
+    // to execute anything. docker cp also works for stopped containers.
+    const memoryOutput = output + '.memory.jsonl';
+    if (memoryProfiling) {
+      await invoke(['cp', `${profile.name}:${profile.output}.memory.jsonl`, memoryOutput]);
+      (evidence.memoryProfiles ||= []).push({
+        container: profile.name,
+        file: memoryOutput,
+        scope:
+          '500ms diagnostic Node/cgroup samples, copied before shutdown; inspector overhead, not certification',
+      });
+    }
+    const container = await inspect(profile.name);
+    if (!container.State.Running) {
+      profile.collected = true;
+      continue;
+    }
     await invoke([
       'exec',
       profile.name,
@@ -218,18 +242,16 @@ async function collectProfiles() {
       profile.stop,
     ]);
     await waitFile(profile.name, profile.output);
-    const destination =
-      process.env.INGESTION_CPU_PROFILE_DIRECTORY ||
-      path.join(os.tmpdir(), 'opsknight-ingestion-profiles', runId);
-    mkdirSync(destination, { recursive: true });
-    const output = path.join(destination, `${profile.name}.cpuprofile`);
     await invoke(['cp', `${profile.name}:${profile.output}`, output]);
+    if (memoryProfiling)
+      await invoke(['cp', `${profile.name}:${profile.output}.memory.jsonl`, memoryOutput]);
     profile.collected = true;
-    (evidence.cpuProfiles ||= []).push({
-      container: profile.name,
-      file: output,
-      scope: 'Diagnostic sampling includes preflight/warmup/load; not capacity certification',
-    });
+    if (cpuProfiling)
+      (evidence.cpuProfiles ||= []).push({
+        container: profile.name,
+        file: output,
+        scope: 'Diagnostic sampling includes preflight/warmup/load; not capacity certification',
+      });
   }
 }
 async function waitHealthy(name) {
@@ -301,6 +323,7 @@ async function main() {
     { role: 'status-projector', poolName: 'DATABASE_POOL_SIZE_STATUS_PROJECTOR', pool: 2 },
   ].map(item => {
     const cpuVariable = `INGESTION_${item.role.toUpperCase().replaceAll('-', '_')}_CPUS`;
+    // eslint-disable-next-line security/detect-object-injection -- cpuVariable comes only from fixed supporting role names.
     const cpus = Number(process.env[cpuVariable] ?? workerCpus);
     assert.ok(Number.isFinite(cpus) && cpus >= 0.25 && cpus <= 4, `Invalid ${cpuVariable}`);
     return {
@@ -352,10 +375,7 @@ async function main() {
     );
   }
   if (workerOnlyStage) {
-    assert.ok(
-      !usePgBouncer,
-      'Worker-stage profiles use direct database connections'
-    );
+    assert.ok(!usePgBouncer, 'Worker-stage profiles use direct database connections');
     assert.notEqual(process.env.INGESTION_HTTP_PROVIDER_CHECKS, 'true');
     assert.notEqual(process.env.INGESTION_HTTP_LIFECYCLE_CHECKS, 'true');
     assert.notEqual(process.env.INGESTION_HTTP_QUOTA_REPLAY_CHECKS, 'true');
@@ -627,7 +647,11 @@ async function main() {
       '--label',
       `opsknight.ingestion-cert-run=${runId}`,
       '--cpus',
-      String(role === 'web' || role === 'http' ? webCpus : (supportingRoles.find(item => item.role === role)?.cpus ?? workerCpus)),
+      String(
+        role === 'web' || role === 'http'
+          ? webCpus
+          : (supportingRoles.find(item => item.role === role)?.cpus ?? workerCpus)
+      ),
       '--memory',
       role === 'web' || role === 'http' ? '1g' : '768m',
       '--health-interval',
@@ -880,7 +904,7 @@ location / { proxy_pass http://gateways; proxy_http_version 1.1; proxy_set_heade
       'Immutable image ID and producer-supplied OCI revision label; no signed build attestation',
   };
   evidence.resourcesBeforePreflight = await Promise.all(processNames.map(resources));
-  if (cpuProfiling)
+  if (cpuProfiling || memoryProfiling)
     for (const name of [webNames[0], workers[0]].filter(Boolean)) await startProfile(name);
   child = spawn(process.execPath, ['scripts/ingestion/certify-http.cjs'], {
     stdio: ['inherit', 'inherit', 'inherit', 'ipc'],

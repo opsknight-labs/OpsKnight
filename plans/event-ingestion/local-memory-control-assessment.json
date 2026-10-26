@@ -1,0 +1,27 @@
+{
+  "passed": false,
+  "certifiedEnterprise": false,
+  "scope": "One-minute old-image control50/sec gate, shared VM,1GiB web,768MiB per worker,2CPU/1GiB fresh PG16. Inspector sampler disabled. No endurance/HA certificate.",
+  "runs": [
+    {
+      "label": "control",
+      "database": "ingestion_test_http_memory_control_20261026",
+      "imageId": "sha256:a5fa9a85ea6c3eb8cbe6ef17a09dcefc5f6284e248e1a83400104586695ed6b0",
+      "exitCode": 1,
+      "httpPassed": false,
+      "accepted": 3000,
+      "completed": 3000,
+      "httpP95": 260.2954499999997,
+      "error": "Docker topology failed the configured end-to-end thresholds\n\n1 !== 0\n",
+      "cleanupFailures": [],
+      "memory": []
+    }
+  ],
+  "controllerSourceSha256": {
+    "scripts/ingestion/certify-docker.cjs": "2e41daa5d27560c04efce9b71800cffd12dd3a71e59ed292da5b1c568b433f12",
+    "scripts/ingestion/certify-http.cjs": "97f166aed58b8744fe55549dc2a003933d7d2b6126343520e1016f8755b03831",
+    "scripts/ingestion/container-cpu-profile.cjs": "6180a953a7524b2dcb9fc659abc108465b6422a47d4cc73b6a1b00f458757903",
+    "scripts/ingestion/client-evidence.cjs": "acf6ced7a5df1ca519c7ddf66292f9d50b9ca2af048791ed3e2bc019a0c8643d",
+    "tests/load/scenarios/durable-ingestion.js": "17cd9abd4038cff1c6b40ffa815efaf7079608a81109f7650dfb793577679468"
+  }
+}
