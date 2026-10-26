@@ -1,0 +1,61 @@
+{
+  "runs": [
+    {
+      "label": "a1",
+      "imageId": "sha256:a6ca2848d66bde44c3d3b173de636cba5878430abd21c32a5412b6be488cef7a",
+      "sourceRevision": "ceffa4018e145cb85dad164333ef1a9d6cb88c83",
+      "httpPassed": false,
+      "exitCode": 1,
+      "acknowledged": 713,
+      "persisted": 713,
+      "httpP95Ms": 2423.5689999999995,
+      "cpuSeconds": 18.294369,
+      "cpuMsPerAcknowledgment": 25.658301542776996,
+      "queryCalls": 6438,
+      "cleanupFailures": []
+    },
+    {
+      "label": "b1",
+      "imageId": "sha256:a4882bb124f73f40960e8a97b598d63cb70cfb412c6c168fa4955bc56e467c7f",
+      "sourceRevision": "fd4bd0ca5325c9eecd951e54d44245c02aece356",
+      "httpPassed": true,
+      "exitCode": 0,
+      "acknowledged": 1001,
+      "persisted": 1001,
+      "httpP95Ms": 92.125,
+      "cpuSeconds": 13.011809,
+      "cpuMsPerAcknowledgment": 12.99881018981019,
+      "queryCalls": 11577,
+      "cleanupFailures": []
+    },
+    {
+      "label": "b2",
+      "imageId": "sha256:a4882bb124f73f40960e8a97b598d63cb70cfb412c6c168fa4955bc56e467c7f",
+      "sourceRevision": "fd4bd0ca5325c9eecd951e54d44245c02aece356",
+      "httpPassed": false,
+      "exitCode": 1,
+      "acknowledged": 1000,
+      "persisted": 1000,
+      "httpP95Ms": 172.79479999999978,
+      "cpuSeconds": 13.560571,
+      "cpuMsPerAcknowledgment": 13.560571,
+      "queryCalls": 11382,
+      "cleanupFailures": []
+    },
+    {
+      "label": "a2",
+      "imageId": "sha256:a6ca2848d66bde44c3d3b173de636cba5878430abd21c32a5412b6be488cef7a",
+      "sourceRevision": "ceffa4018e145cb85dad164333ef1a9d6cb88c83",
+      "httpPassed": false,
+      "exitCode": 1,
+      "acknowledged": 1000,
+      "persisted": 1000,
+      "httpP95Ms": 131.015,
+      "cpuSeconds": 13.89731,
+      "cpuMsPerAcknowledgment": 13.89731,
+      "queryCalls": 12179,
+      "cleanupFailures": []
+    }
+  ],
+  "scope": "Sequential immutable-image A-B-B-A raw admission-only50events/sec20seconds, same1CPU HTTP process/pool10, same ownedPostgreSQL on sharedVM, fresh339migration DB per run. Hot identity/unique deliveries; consumers off, receipts retained. CPU includes matching preflight/diagnostics; no incident, provider, recovery, HA or sustained certificate. Failed latency verdicts retained; continuation compares the same offered rate rather than increasing RPS."
+}

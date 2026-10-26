@@ -159,7 +159,13 @@ export async function processEvent(
 
   const transactionStarted = performance.now();
   const execute = async (tx: Prisma.TransactionClient) => {
-    // 1. Validate serviceId exists (prevents orphaned incidents)
+    // ReadCommitted removes broad Serializable predicate conflicts. A
+    // transaction-scoped advisory lock preserves the find-then-create
+    // deduplication boundary for events targeting the same service/key.
+    await lockEventDedupKeys(tx, serviceId, candidateDedupKeys);
+
+    // Validate service and configuration after waiting on the identity lock.
+    // This snapshot belongs to the event now being applied, not its queue wait.
     const service = await tx.service.findUnique({
       where: { id: serviceId },
       select: {
@@ -179,11 +185,6 @@ export async function processEvent(
       });
       throw new Error(`Service not found: ${serviceId}. Integration may be misconfigured.`);
     }
-
-    // ReadCommitted removes broad Serializable predicate conflicts. A
-    // transaction-scoped advisory lock preserves the find-then-create
-    // deduplication boundary for events targeting the same service/key.
-    await lockEventDedupKeys(tx, serviceId, candidateDedupKeys);
 
     // 2. Find existing open incident with this dedup_key BEFORE creating alert
     // This prevents alert orphaning when resolve/acknowledge has no matching incident
@@ -560,6 +561,14 @@ export async function processEvent(
         // Escalation state and its first due job commit with the incident, so
         // an OPEN incident with a policy is never left with nothing scheduled.
         let inMemoryRouting = automation ? buildResponderRoutingFromAutomation(automation) : null;
+        // This incident was created by this transaction and has no Automation
+        // decision. Reuse the service's authoritative no-policy snapshot rather
+        // than re-reading that new row's routing and the same service. The
+        // independently durable critical effect still resolves delivery-time
+        // routing, including a policy configured after incident creation.
+        if (!automation && !service.escalationPolicyId) {
+          inMemoryRouting = { type: 'DEFAULT_FANOUT', policy: null };
+        }
         if (!inMemoryRouting && service.escalationPolicyId) {
           try {
             const snapshot = await captureResponderSnapshot(tx, service.escalationPolicyId);

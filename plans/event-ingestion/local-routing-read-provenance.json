@@ -1,0 +1,50 @@
+{
+  "sourceRevision": "fd4bd0ca5325c9eecd951e54d44245c02aece356",
+  "runs": [
+    {
+      "label": "a1",
+      "variant": "baseline",
+      "database": "ingestion_test_routing_read_a1_20261026",
+      "cpuMs": 3738.155,
+      "elapsedMs": 3889.0873749999996,
+      "queriesPerEvent": 18.196666666666665,
+      "operationP95Ms": 94.40079199999991
+    },
+    {
+      "label": "b1",
+      "variant": "candidate",
+      "database": "ingestion_test_routing_read_b1_20261026",
+      "cpuMs": 2366.326,
+      "elapsedMs": 1596.7158749999999,
+      "queriesPerEvent": 16.606666666666666,
+      "operationP95Ms": 21.033040999999685
+    },
+    {
+      "label": "b2",
+      "variant": "candidate",
+      "database": "ingestion_test_routing_read_b2_20261026",
+      "cpuMs": 2500.316,
+      "elapsedMs": 1775.182542,
+      "queriesPerEvent": 16.183333333333334,
+      "operationP95Ms": 27.015124999999898
+    },
+    {
+      "label": "a2",
+      "variant": "baseline",
+      "database": "ingestion_test_routing_read_a2_20261026",
+      "cpuMs": 3789.147,
+      "elapsedMs": 2793.250333,
+      "queriesPerEvent": 18.606666666666666,
+      "operationP95Ms": 53.81654199999957
+    }
+  ],
+  "sourceSha256": {
+    "baseline": {
+      "src/lib/events.ts": "f1f8853d9b36134b73a0ed5b00cbd96bb3637e8389e8ca1309c11e13a5c84f0d"
+    },
+    "candidate": {
+      "src/lib/events.ts": "95dc22e822f11b1a9dee459e46da108188050e96db1f38b7d0ea8025398a9939"
+    }
+  },
+  "scope": "Host incident-creation A-B-B-A, 300 new incidents/concurrency4/pool5 after30 warmups. Candidate reads service after dedup lock and avoids redundant default routing reads for new incidents without Automation or escalation policy. Effects unconsumed. No native or fullstack capacity proof."
+}
