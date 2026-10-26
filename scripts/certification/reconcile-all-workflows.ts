@@ -1,5 +1,5 @@
 import dotenv from 'dotenv';
-dotenv.config({ path: process.env.DOTENV_CONFIG_PATH || '.env', override: true });
+dotenv.config({ path: process.env.DOTENV_CONFIG_PATH || undefined, override: false });
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto, { randomBytes } from 'node:crypto';

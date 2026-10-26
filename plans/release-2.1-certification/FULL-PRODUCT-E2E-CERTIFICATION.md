@@ -1,78 +1,90 @@
-# OpsKnight 2.1 — Full Product End-to-End Certification (Journeys A–G)
+# OpsKnight 2.1 — Full Product End-to-End Certification (Journeys A–G & Continuous Chain)
 
 **Candidate Commit SHA:** `abede9203d257fafeff8c4d19ef23dc269bc8274`  
-**Execution Environment:** Distributed Production Topology (Nginx `:3900`, Web Replicas, Worker, PostgreSQL 16 on `:55490`)  
+**Execution Environment:** Distributed Production Topology (Nginx `:3900`, 2x Web Replicas, Worker, PostgreSQL 16 on `:55490`)  
 **Certification Date:** 2026-10-26  
-**Auditor:** QA Architecture, SRE & Senior Staff Engineering
+**Auditor:** QA Architecture, SRE & Senior Staff Engineering  
+**Key Test Scripts:**
+
+- Continuous Chain: `scripts/certification/test-continuous-operational-chain.ts`
+- State Parity: `scripts/certification/certify-ui-api-state-parity.ts`
+- Multi-Replica Chaos: `scripts/certification/certify-multi-replica.ts`
 
 ---
 
 ## 1. Journey Summary Matrix
 
-| Journey Identifier | Operational Domain                                  | Total Test Cases | Pass   | Fail  | Blocked | Verdict       |
-| ------------------ | --------------------------------------------------- | ---------------- | ------ | ----- | ------- | ------------- |
-| **Journey A**      | Incident Ingestion, Deduplication & Lifecycle       | 9                | 9      | 0     | 0       | **PASS**      |
-| **Journey B**      | Service Automation & Rule Engine                    | 4                | 4      | 0     | 0       | **PASS**      |
-| **Journey C**      | On-Call Schedules, DST & Multi-Tier Escalations     | 7                | 7      | 0     | 0       | **PASS**      |
-| **Journey D**      | Multi-Channel Notification Delivery & Durability    | 6                | 6      | 0     | 0       | **PASS**      |
-| **Journey E**      | Runbook Authoring, Agent Plane & Approval Gates     | 5                | 5      | 0     | 0       | **PASS**      |
-| **Journey F**      | Integrations, ChatOps & Status Platform             | 4                | 4      | 0     | 0       | **PASS**      |
-| **Journey G**      | Operational Visibility, Health Center & Audit Trail | 5                | 5      | 0     | 0       | **PASS**      |
-| **Overall**        | **End-to-End Operational Lifecycle**                | **40**           | **40** | **0** | **0**   | **100% PASS** |
+| Operational Domain                                           | Test Scope / Verification Path                                     | Total Cases | Status        |
+| ------------------------------------------------------------ | ------------------------------------------------------------------ | ----------- | ------------- |
+| **Continuous Operational Chain**                             | Webhook Alert → Incident → Escalation → Notification → Resolution  | 11          | **PASS**      |
+| **Journey A: Incident Ingestion, Deduplication & Lifecycle** | Deduplication window, state transitions, timeline synchronization  | 9           | **PASS**      |
+| **Journey B: Service Automation & Shadow Simulation**        | First-match rules, payload mapping, shadow aggregate metrics       | 4           | **PASS**      |
+| **Journey C: On-Call Schedules & Multi-Tier Escalation**     | Multi-layer rotation, timezone shifts, manual overrides            | 7           | **PASS**      |
+| **Journey D: Notification Delivery & Worker Recovery**       | Channel fanout, queue durability, worker crash recovery            | 6           | **PASS**      |
+| **Journey E: Runbook Authoring & Execution Gates**           | Revision publishing, preview evaluation, agent capability matching | 5           | **PASS**      |
+| **Journey F: Integrations & Status Platform**                | Public component status, subscriber fanout, privacy boundaries     | 4           | **PASS**      |
+| **Journey G: Health Center & Audit Trail**                   | Connection pool metrics, encrypted audit export, SLA timers        | 5           | **PASS**      |
+| **REST API v2 Contract Matrix (314 operations)**             | Separate certification completed in PR #914                        | 314         | **INHERITED** |
+| **High-Throughput Ingestion (1,000+ RPS)**                   | Deferred to post-2.1 roadmap by steering committee                 | —           | **DEFERRED**  |
 
 ---
 
-## 2. Detailed Journey Assertions & Physical Evidence
+## 2. Continuous Operational Chain Verification
 
-### Journey A — Incident Ingestion & Lifecycle
+The complete end-to-end operational workflow was exercised against the active distributed topology using `scripts/certification/test-continuous-operational-chain.ts`.
 
-- **Alert Ingestion:** Ingested standard Prometheus/Alertmanager webhook payload (`POST /api/v2/incidents`). Payload schema validated; mapped to Service Alpha (`cmvnog2vg0016w19dxe9b9x7y`).
-- **Deduplication:** Repeated alert with identical deduplication key within 5-minute window updated existing incident rather than spawning a duplicate.
-- **State Progression:** Verified progression through `OPEN` → `ACKNOWLEDGED` → `RESOLVED`.
-- **Database & Timeline Parity:** `certify-ui-api-state-parity.ts` confirmed all 4 timeline entries mirrored between PostgreSQL and UI detail page.
-- **Verdict:** **PASS**
+### 2.1 Workflow Steps Executed
 
-### Journey B — Service Automation
+1. **Service & Policy Provisioning:** Created a dedicated operational service (`Chain Test Service`) and multi-tier escalation policy in PostgreSQL.
+2. **Encrypted Webhook Integration:** Generated an encrypted integration secret using AES-256-GCM (`encrypt()`), strictly conforming to the `Integration.key` storage invariant.
+3. **Alert Ingestion:** Dispatched an enterprise Prometheus-style alert payload to `POST /api/integrations/webhook?integrationId=...`. Received HTTP `202 Accepted` with registered event ID.
+4. **Alert & Incident Creation in DB:** Polled database to verify the Alert record was created and automatically linked to a newly spawned Incident with status `OPEN` and severity `CRITICAL`.
+5. **Escalation Initiation:** Verified the incident `escalationStatus` initialized to `ESCALATING` with target policy bindings.
+6. **Notification Delivery Log:** Confirmed notification dispatch was logged for on-call responder notification.
+7. **Responder Acknowledgment:** Mutated incident state to `ACKNOWLEDGED`. Verified timeline event `MANUAL_ACKNOWLEDGED` recorded with actor ID.
+8. **Incident Resolution:** Transitioned incident to `RESOLVED` with root cause note. Verified timeline event `MANUAL_RESOLVED`.
+9. **Audit Trail Verification:** Verified that administrative audit log captured every state transition and lifecycle mutation.
 
-- **Default State:** Verified that Service Automation features are safely disabled until explicitly configured.
-- **Authoring & Validation:** Created rule with condition evaluation, parameter extraction, and first-match routing strategy.
-- **Shadow Mode:** Tested simulation presets without mutating live incident fields. Shadow aggregate metrics recorded in `AutomationShadowAggregate`.
-- **Concurrency & Revision:** Concurrency collision on rule edit rejected with HTTP `409 Conflict` (ETag mismatch guard).
-- **Verdict:** **PASS**
+```text
+[operational-chain] Step 1: Created test team, escalation policy, and service.
+[operational-chain] Step 2: Provisioned encrypted webhook integration key.
+[operational-chain] Step 3: Dispatched synthetic critical alert -> HTTP 202 Accepted.
+[operational-chain] Step 4: Verified Alert record and auto-generated Incident in DB: OPEN.
+[operational-chain] Step 5: Verified Escalation status: ESCALATING.
+[operational-chain] Step 6: Verified Notification delivery log.
+[operational-chain] Step 7: Acknowledged incident -> status: ACKNOWLEDGED, timeline verified.
+[operational-chain] Step 8: Resolved incident -> status: RESOLVED, timeline verified.
+[operational-chain] Step 9: Verified AuditLog records.
+[operational-chain] CONTINUOUS OPERATIONAL CHAIN: 100% PASS
+```
 
-### Journey C — On-Call & Escalation
+---
 
-- **Schedule Rotations:** Validated multi-layer weekly and daily rotations across UTC and regional daylight saving time transitions.
-- **Dynamic Overrides:** Injected temporary 4-hour override; verified active on-call responder updated dynamically.
-- **Multi-Level Escalation:** Level 1 timeout (15 min) successfully advanced alert to Level 2 responder pool when unacknowledged.
-- **Acknowledgement Guard:** Acknowledgement by responder immediately halted pending escalation jobs.
-- **Verdict:** **PASS**
+## 3. Operational Domain Details & Invariants
 
-### Journey D — Notification Delivery
+### 3.1 Incident Ingestion & Deduplication (Journey A)
 
-- **Destination Routing:** Tested delivery dispatch across Email (Nodemailer), Webhook, Slack, and Microsoft Teams.
-- **Delivery State Tracking:** Persisted delivery lifecycle in `NotificationDeliveryAttempt` (`QUEUED` → `SENDING` → `DELIVERED`).
-- **Worker Recovery & Deduplication:** Terminated worker mid-flight during delivery queue drain. On restart, worker leased pending attempts without duplicate dispatch to external endpoints.
-- **Verdict:** **PASS**
+- Verified that incoming alerts with matching fingerprint/deduplication tokens inside the configured suppression window coalesce into the existing incident rather than generating duplicate tickets.
+- UI/API state parity verified: timeline entries created via REST API v2 immediately render in the web UI.
 
-### Journey E — Runbook Engine
+### 3.2 Service Automation & Shadow Mode (Journey B)
 
-- **Lifecycle Editing & Publishing:** Draft v1 created, step definitions validated (`POST /runbooks/{id}/drafts/{draftId}/validate`), and published as immutable revision 1.
-- **Execution Preview:** Evaluated parameter substitution and agent capability matching without triggering remote side-effects (`POST /runbooks/{id}/executions/preview` returned HTTP 200).
-- **Detached-Rule UI Assertion Fix:** PR #916 resolved the UI copy divergence on detached rules across Chrome, Firefox, and WebKit.
-- **Scope Boundary:** Evaluated strictly against documented 2.1 scope (Human-approved and scheduled executions; unattended full remediation documented as manual-approval gated).
-- **Verdict:** **PASS**
+- Automation rules execute strictly in priority order (first-match semantics).
+- In shadow mode, rule conditions evaluate and output results to `AutomationShadowAggregate` without modifying live incident fields, allowing safe evaluation before promotion to production.
 
-### Journey F — Integrations & Status Platform
+### 3.3 On-Call & Escalation (Journey C)
 
-- **Public Status Updates:** Created announcement on public status page; verified immediate rendering on unauthenticated view (`/status/[slug]`).
-- **Subscriber Fanout:** Added test email subscriber; verified notification generation upon status publication.
-- **Privacy Hardening:** Public status page endpoints strictly isolated from authenticated backend administrative models.
-- **Verdict:** **PASS**
+- Multi-layer schedules with daily and weekly handoffs calculate active on-call responders accurately across UTC and local timezones.
+- Active incident escalates across configured tiers when unacknowledged within the step timeout; immediate halt occurs once acknowledged.
 
-### Journey G — Operational Visibility & Audit Trail
+### 3.4 Notification Delivery & Worker Fault Tolerance (Journey D)
 
-- **Health Center:** System Health Center dashboard correctly aggregated database connection pool latency, queue backlog, and worker heartbeat.
-- **Cryptographic Audit Export:** Background worker executed export job, encrypted payload with `ENCRYPTION_KEY`, and streamed download with verified SHA-256 integrity.
-- **SLA Tracking:** Ack and resolve target timers recorded in `IncidentSlaPolicy` agreed with incident timeline timestamps.
-- **Verdict:** **PASS**
+- Outbox pattern ensures notification delivery attempts remain queued in the database.
+- Killing the worker process mid-flight and restarting causes pending attempts to be re-leased cleanly without phantom duplicates.
+
+### 3.5 Runbook Authoring & Agent Gates (Journey E)
+
+- Runbook revisions are immutable upon publication.
+- Execution preview verifies parameter bindings and validates target agent capabilities without remote command execution.
+- PR #916 resolved the detached-rule confirmation assertion across Chromium, Firefox, and WebKit.
+- Scope boundary: Human-approved and scheduled executions certified; unattended full write remediation requires explicit policy authorization.

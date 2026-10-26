@@ -22,19 +22,29 @@ cleanup() {
 }
 trap cleanup EXIT
 
+POSTGRES_IMAGE="${POSTGRES_IMAGE:-postgres:16-alpine}"
+
 docker run -d --name "$container_name" \
   -e POSTGRES_DB="$database_name" \
   -e POSTGRES_USER="$database_user" \
   -e POSTGRES_PASSWORD="$database_password" \
-  postgres:15-alpine >/dev/null
+  "$POSTGRES_IMAGE" >/dev/null
 
+ready=0
 for _ in $(seq 1 60); do
-  if docker exec "$container_name" pg_isready -U "$database_user" -d "$database_name" >/dev/null 2>&1; then
-    break
+  if docker logs "$container_name" 2>&1 | grep -q "database system is ready to accept connections"; then
+    if docker exec "$container_name" pg_isready -U "$database_user" -d "$database_name" >/dev/null 2>&1; then
+      ready=1
+      break
+    fi
   fi
   sleep 1
 done
-docker exec "$container_name" pg_isready -U "$database_user" -d "$database_name" >/dev/null
+
+if [[ "$ready" -ne 1 ]]; then
+  echo "PostgreSQL container failed to become ready within 60 seconds."
+  exit 1
+fi
 
 docker cp "$backup_file" "$container_name:/tmp/opsknight-backup"
 case "$backup_file" in

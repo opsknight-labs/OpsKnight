@@ -1,5 +1,5 @@
 import dotenv from 'dotenv';
-dotenv.config({ path: process.env.DOTENV_CONFIG_PATH || '.env', override: true });
+dotenv.config({ path: process.env.DOTENV_CONFIG_PATH || undefined, override: false });
 import { PrismaClient } from '@prisma/client';
 import { createHmac, randomBytes } from 'node:crypto';
 import fs from 'node:fs';

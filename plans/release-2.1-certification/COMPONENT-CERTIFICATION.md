@@ -1,8 +1,13 @@
 # OpsKnight 2.1 — Shared Component & Interaction Certification
 
 **Certification Date:** 2026-10-26  
-**Methodology:** Automated Browser Interaction (Playwright + Chrome DevTools Protocol) + Vitest DOM Harness  
-**Auditor:** QA Architecture & Design System Auditor
+**Methodology:** Automated Browser Interaction (Playwright + Chrome DevTools Protocol) across Chromium, Firefox, WebKit  
+**Auditor:** QA Architecture & Design System Auditor  
+**Reproducible Scripts:**
+
+- Interaction & Accessibility: `scripts/certification/certify-all-routes-browsers.ts`
+- State Parity: `scripts/certification/certify-ui-api-state-parity.ts`
+- Responsive Layouts: `scripts/certification/certify-ui-responsive.ts`
 
 ---
 
@@ -25,7 +30,7 @@
 
 ### 2.1 Modal & Sheet Focus Trapping & Escape Dismissal
 
-- Verified on Incident Creation Modal, Team Member Invite Drawer, and Rule Deletion Confirmations:
+- Verified across Incident Creation Modal, Team Member Invite Drawer, and Rule Deletion Confirmations:
   - Opening modal moves focus immediately to first interactive element (`autofocus`).
   - Pressing `Tab` cycles exclusively within modal DOM bounds.
   - Pressing `Escape` closes modal immediately and returns focus to the initiating button.

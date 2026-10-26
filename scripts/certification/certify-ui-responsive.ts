@@ -10,7 +10,7 @@ interface ViewportConfig {
 }
 
 import dotenv from 'dotenv';
-dotenv.config({ path: process.env.DOTENV_CONFIG_PATH || '.env', override: true });
+dotenv.config({ path: process.env.DOTENV_CONFIG_PATH || undefined, override: false });
 
 function requireEnv(name: string): string {
   const value = process.env[name];
