@@ -20,6 +20,12 @@ verification:
 You need `runbook.manage` to create or edit drafts and `runbook.publish` to publish.
 For Agent steps, arrange an appropriate execution Agent and policy before deployment.
 
+## Prerequisites
+
+- Active account with `runbook.manage` permission to create or edit drafts.
+- `runbook.publish` permission if you plan to release drafts to responders.
+- For agent-executed workflows, ensure target agents and pools are enrolled and healthy.
+
 ## Create a draft
 
 1. Open **Runbooks → Library → New Runbook**.

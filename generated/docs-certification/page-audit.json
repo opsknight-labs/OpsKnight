@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "purpose": "Reader-completeness audit. Mapping and source verification do not imply task usability.",
   "counts": {
-    "MAPPED": 119,
+    "MAPPED": 140,
     "READER_COMPLETE": 202,
     "SOURCE_VERIFIED": 0,
     "RUNTIME_VERIFIED": 0
   },
-  "taskPages": 200,
+  "taskPages": 216,
   "readerCompleteTaskPages": 200,
-  "sourceVerifiedTaskPages": 200,
+  "sourceVerifiedTaskPages": 216,
   "runtimeVerifiedTaskPages": 0,
   "pages": [
     {
@@ -179,6 +179,17 @@
     },
     {
       "page": "concepts/privacy.md",
+      "type": "concept",
+      "userTask": null,
+      "status": "MAPPED",
+      "taskPage": false,
+      "screenshotCount": 0,
+      "screenshotAssessment": "UNASSESSED",
+      "sourceVerified": true,
+      "runtimeVerified": false
+    },
+    {
+      "page": "concepts/runbooks.md",
       "type": "concept",
       "userTask": null,
       "status": "MAPPED",
@@ -585,6 +596,28 @@
       "runtimeVerified": false
     },
     {
+      "page": "guides/identity/authentication-modes.md",
+      "type": "how-to",
+      "userTask": null,
+      "status": "MAPPED",
+      "taskPage": true,
+      "screenshotCount": 1,
+      "screenshotAssessment": "UNASSESSED",
+      "sourceVerified": true,
+      "runtimeVerified": false
+    },
+    {
+      "page": "guides/identity/configure-emergency-access.md",
+      "type": "how-to",
+      "userTask": null,
+      "status": "MAPPED",
+      "taskPage": true,
+      "screenshotCount": 1,
+      "screenshotAssessment": "UNASSESSED",
+      "sourceVerified": true,
+      "runtimeVerified": false
+    },
+    {
       "page": "guides/identity/configure-oidc.md",
       "type": "tutorial",
       "userTask": "Configure, pilot, verify, and safely enforce OIDC single sign-on.",
@@ -600,6 +633,72 @@
       "type": "tutorial",
       "userTask": "Configure and verify SCIM user and group provisioning end to end.",
       "status": "READER_COMPLETE",
+      "taskPage": true,
+      "screenshotCount": 0,
+      "screenshotAssessment": "UNASSESSED",
+      "sourceVerified": true,
+      "runtimeVerified": false
+    },
+    {
+      "page": "guides/identity/local-certification.md",
+      "type": "how-to",
+      "userTask": null,
+      "status": "MAPPED",
+      "taskPage": true,
+      "screenshotCount": 5,
+      "screenshotAssessment": "UNASSESSED",
+      "sourceVerified": true,
+      "runtimeVerified": false
+    },
+    {
+      "page": "guides/identity/migrate-admin-to-sso.md",
+      "type": "how-to",
+      "userTask": null,
+      "status": "MAPPED",
+      "taskPage": true,
+      "screenshotCount": 0,
+      "screenshotAssessment": "UNASSESSED",
+      "sourceVerified": true,
+      "runtimeVerified": false
+    },
+    {
+      "page": "guides/identity/rotate-oidc-credentials.md",
+      "type": "how-to",
+      "userTask": null,
+      "status": "MAPPED",
+      "taskPage": true,
+      "screenshotCount": 0,
+      "screenshotAssessment": "UNASSESSED",
+      "sourceVerified": true,
+      "runtimeVerified": false
+    },
+    {
+      "page": "guides/identity/sso-lockout-recovery.md",
+      "type": "how-to",
+      "userTask": null,
+      "status": "MAPPED",
+      "taskPage": true,
+      "screenshotCount": 0,
+      "screenshotAssessment": "UNASSESSED",
+      "sourceVerified": true,
+      "runtimeVerified": false
+    },
+    {
+      "page": "guides/identity/test-and-enforce-sso.md",
+      "type": "how-to",
+      "userTask": null,
+      "status": "MAPPED",
+      "taskPage": true,
+      "screenshotCount": 0,
+      "screenshotAssessment": "UNASSESSED",
+      "sourceVerified": true,
+      "runtimeVerified": false
+    },
+    {
+      "page": "guides/identity/upgrade-existing-sso.md",
+      "type": "how-to",
+      "userTask": null,
+      "status": "MAPPED",
       "taskPage": true,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
@@ -1227,6 +1326,61 @@
       "type": "troubleshooting",
       "userTask": "Restore a reports or dashboard workflow.",
       "status": "READER_COMPLETE",
+      "taskPage": true,
+      "screenshotCount": 0,
+      "screenshotAssessment": "UNASSESSED",
+      "sourceVerified": true,
+      "runtimeVerified": false
+    },
+    {
+      "page": "guides/runbooks/README.md",
+      "type": "concept",
+      "userTask": null,
+      "status": "MAPPED",
+      "taskPage": false,
+      "screenshotCount": 0,
+      "screenshotAssessment": "UNASSESSED",
+      "sourceVerified": true,
+      "runtimeVerified": false
+    },
+    {
+      "page": "guides/runbooks/agents-pools-secrets.md",
+      "type": "how-to",
+      "userTask": null,
+      "status": "MAPPED",
+      "taskPage": true,
+      "screenshotCount": 0,
+      "screenshotAssessment": "UNASSESSED",
+      "sourceVerified": true,
+      "runtimeVerified": false
+    },
+    {
+      "page": "guides/runbooks/author.md",
+      "type": "how-to",
+      "userTask": null,
+      "status": "MAPPED",
+      "taskPage": true,
+      "screenshotCount": 0,
+      "screenshotAssessment": "UNASSESSED",
+      "sourceVerified": true,
+      "runtimeVerified": false
+    },
+    {
+      "page": "guides/runbooks/examples.md",
+      "type": "how-to",
+      "userTask": null,
+      "status": "MAPPED",
+      "taskPage": true,
+      "screenshotCount": 0,
+      "screenshotAssessment": "UNASSESSED",
+      "sourceVerified": true,
+      "runtimeVerified": false
+    },
+    {
+      "page": "guides/runbooks/respond.md",
+      "type": "how-to",
+      "userTask": null,
+      "status": "MAPPED",
       "taskPage": true,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
@@ -2158,6 +2312,17 @@
       "runtimeVerified": false
     },
     {
+      "page": "operate/deploy/agent-operations.md",
+      "type": "deployment",
+      "userTask": null,
+      "status": "MAPPED",
+      "taskPage": true,
+      "screenshotCount": 0,
+      "screenshotAssessment": "UNASSESSED",
+      "sourceVerified": true,
+      "runtimeVerified": false
+    },
+    {
       "page": "operate/deploy/application-url-and-host-routing.md",
       "type": "deployment",
       "userTask": "Configure and migrate OpsKnight's public origin safely.",
@@ -2697,6 +2862,17 @@
       "runtimeVerified": false
     },
     {
+      "page": "operate/deploy/runbook-qualification.md",
+      "type": "how-to",
+      "userTask": null,
+      "status": "MAPPED",
+      "taskPage": true,
+      "screenshotCount": 0,
+      "screenshotAssessment": "UNASSESSED",
+      "sourceVerified": true,
+      "runtimeVerified": false
+    },
+    {
       "page": "operate/deploy/split-runtime.md",
       "type": "concept",
       "userTask": null,
@@ -3005,6 +3181,28 @@
       "runtimeVerified": false
     },
     {
+      "page": "reference/api/v2-certification.md",
+      "type": "reference",
+      "userTask": null,
+      "status": "MAPPED",
+      "taskPage": false,
+      "screenshotCount": 0,
+      "screenshotAssessment": "UNASSESSED",
+      "sourceVerified": true,
+      "runtimeVerified": false
+    },
+    {
+      "page": "reference/api/v2.md",
+      "type": "reference",
+      "userTask": null,
+      "status": "MAPPED",
+      "taskPage": false,
+      "screenshotCount": 0,
+      "screenshotAssessment": "UNASSESSED",
+      "sourceVerified": true,
+      "runtimeVerified": false
+    },
+    {
       "page": "reference/cli.md",
       "type": "reference",
       "userTask": null,
@@ -3138,6 +3336,17 @@
     },
     {
       "page": "reference/permissions.md",
+      "type": "reference",
+      "userTask": null,
+      "status": "MAPPED",
+      "taskPage": false,
+      "screenshotCount": 0,
+      "screenshotAssessment": "UNASSESSED",
+      "sourceVerified": true,
+      "runtimeVerified": false
+    },
+    {
+      "page": "reference/runbooks.md",
       "type": "reference",
       "userTask": null,
       "status": "MAPPED",
@@ -3423,6 +3632,17 @@
       "runtimeVerified": false
     },
     {
+      "page": "troubleshooting/login/emergency-access.md",
+      "type": "troubleshooting",
+      "userTask": null,
+      "status": "MAPPED",
+      "taskPage": true,
+      "screenshotCount": 0,
+      "screenshotAssessment": "UNASSESSED",
+      "sourceVerified": true,
+      "runtimeVerified": false
+    },
+    {
       "page": "troubleshooting/login/oidc-access.md",
       "type": "troubleshooting",
       "userTask": "Diagnose, recover, and verify oidc access.",
@@ -3449,6 +3669,17 @@
       "type": "troubleshooting",
       "userTask": "Diagnose, recover, and verify not delivered.",
       "status": "READER_COMPLETE",
+      "taskPage": true,
+      "screenshotCount": 0,
+      "screenshotAssessment": "UNASSESSED",
+      "sourceVerified": true,
+      "runtimeVerified": false
+    },
+    {
+      "page": "troubleshooting/runbooks/README.md",
+      "type": "troubleshooting",
+      "userTask": null,
+      "status": "MAPPED",
       "taskPage": true,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",

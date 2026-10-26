@@ -22,6 +22,12 @@ Publish a [Runbook](./author) first. You need service modification access and
 `runbook.manage` to configure bindings, `runbook.execute` to start/cancel, and
 `runbook.approve` to approve steps. Incident access is checked separately.
 
+## Prerequisites
+
+- At least one published Runbook workflow available in the library.
+- Appropriate team or service modification permissions (`runbook.manage`).
+- Responders executing steps need `runbook.execute` and `runbook.approve` permissions.
+
 ## Attach to a service
 
 1. Open the service's **Runbooks** tab and choose **Attach** for the workflow.

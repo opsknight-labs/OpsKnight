@@ -6,7 +6,7 @@ product_area: api
 audience: [developer, operator, administrator]
 verification:
   level: source
-  verified_at: 2026-10-03
+  verified_at: 2026-10-26
   evidence:
     - src/app/api/
 ---
@@ -59,8 +59,12 @@ public route has a full success/authorization/validation/concurrency matrix.
 - `GET /api/admin/war-rooms` — `src/app/api/admin/war-rooms/route.ts`
 - `GET /api/analytics/export` — `src/app/api/analytics/export/route.ts`
 - `GET, POST /api/auth/[...nextauth]` — `src/app/api/auth/[...nextauth]/route.ts`
+- `GET /api/auth/control/diagnostics` — `src/app/api/auth/control/diagnostics/route.ts`
+- `GET, POST /api/auth/control` — `src/app/api/auth/control/route.ts`
+- `POST /api/auth/emergency` — `src/app/api/auth/emergency/route.ts`
 - `POST /api/auth/forgot-password` — `src/app/api/auth/forgot-password/route.ts`
 - `GET /api/auth/oidc/logout-url` — `src/app/api/auth/oidc/logout-url/route.ts`
+- `GET /api/auth/oidc/test/callback` — `src/app/api/auth/oidc/test/callback/route.ts`
 - `POST /api/auth/reset-password` — `src/app/api/auth/reset-password/route.ts`
 - `GET /api/avatar` — `src/app/api/avatar/route.ts`
 - `GET /api/compliance/control-center` — `src/app/api/compliance/control-center/route.ts`
@@ -100,6 +104,9 @@ public route has a full success/authorization/validation/concurrency matrix.
 - `GET /api/compliance/retention-holds/[id]` — `src/app/api/compliance/retention-holds/[id]/route.ts`
 - `GET, POST /api/compliance/retention-holds` — `src/app/api/compliance/retention-holds/route.ts`
 - `GET /api/dashboard/analytics` — `src/app/api/dashboard/analytics/route.ts`
+- `GET /api/dashboard/live/incidents/[id]` — `src/app/api/dashboard/live/incidents/[id]/route.ts`
+- `GET /api/dashboard/live/page` — `src/app/api/dashboard/live/page/route.ts`
+- `GET /api/dashboard/live` — `src/app/api/dashboard/live/route.ts`
 - `GET /api/dashboard/metrics` — `src/app/api/dashboard/metrics/route.ts`
 - `GET, PUT, DELETE /api/dashboards/[id]` — `src/app/api/dashboards/[id]/route.ts`
 - `GET, POST /api/dashboards` — `src/app/api/dashboards/route.ts`
@@ -140,11 +147,27 @@ public route has a full success/authorization/validation/concurrency matrix.
 - `GET /api/public-logs` — `src/app/api/public-logs/route.ts`
 - `GET /api/realtime/stream` — `src/app/api/realtime/stream/route.ts`
 - `GET /api/reports/metrics` — `src/app/api/reports/metrics/route.ts`
+- `POST /api/runbook-agent/v1/artifacts` — `src/app/api/runbook-agent/v1/artifacts/route.ts`
+- `POST /api/runbook-agent/v1/claim` — `src/app/api/runbook-agent/v1/claim/route.ts`
+- `POST /api/runbook-agent/v1/enroll` — `src/app/api/runbook-agent/v1/enroll/route.ts`
+- `POST /api/runbook-agent/v1/heartbeat` — `src/app/api/runbook-agent/v1/heartbeat/route.ts`
+- `POST /api/runbook-agent/v1/jobs/[id]/heartbeat` — `src/app/api/runbook-agent/v1/jobs/[id]/heartbeat/route.ts`
+- `POST /api/runbook-agent/v1/jobs/[id]/release` — `src/app/api/runbook-agent/v1/jobs/[id]/release/route.ts`
+- `POST /api/runbook-agent/v1/jobs/[id]/result` — `src/app/api/runbook-agent/v1/jobs/[id]/result/route.ts`
+- `POST /api/runbook-agent/v1/jobs/[id]/start` — `src/app/api/runbook-agent/v1/jobs/[id]/start/route.ts`
+- `POST /api/runbook-agent/v1/policy-checks` — `src/app/api/runbook-agent/v1/policy-checks/route.ts`
+- `GET /api/runbook-agent/v1/time` — `src/app/api/runbook-agent/v1/time/route.ts`
+- `GET /api/runbook-artifacts/[id]` — `src/app/api/runbook-artifacts/[id]/route.ts`
+- `GET /api/runbooks/[id]/export` — `src/app/api/runbooks/[id]/export/route.ts`
+- `GET /api/runbooks/options` — `src/app/api/runbooks/options/route.ts`
+- `GET /api/runbooks/versions/[id]/configuration` — `src/app/api/runbooks/versions/[id]/configuration/route.ts`
+- `GET, POST, OPTIONS /api/sample` — `src/app/api/sample/route.ts`
 - `GET /api/schedules/[id]/calendar.ics` — `src/app/api/schedules/[id]/calendar.ics/route.ts`
 - `GET /api/schedules/[id]/oncall` — `src/app/api/schedules/[id]/oncall/route.ts`
 - `GET /api/schedules/[id]` — `src/app/api/schedules/[id]/route.ts`
 - `GET /api/schedules` — `src/app/api/schedules/route.ts`
 - `GET /api/search` — `src/app/api/search/route.ts`
+- `GET, POST /api/services/[id]/automation` — `src/app/api/services/[id]/automation/route.ts`
 - `GET /api/services/[id]` — `src/app/api/services/[id]/route.ts`
 - `GET /api/services` — `src/app/api/services/route.ts`
 - `GET, POST /api/settings/app-url` — `src/app/api/settings/app-url/route.ts`
@@ -219,6 +242,230 @@ public route has a full success/authorization/validation/concurrency matrix.
 - `GET /api/v1/service-objectives/[id]/versions` — `src/app/api/v1/service-objectives/[id]/versions/route.ts`
 - `GET, POST /api/v1/service-objectives` — `src/app/api/v1/service-objectives/route.ts`
 - `GET, PUT /api/v1/services/[id]/response-policy` — `src/app/api/v1/services/[id]/response-policy/route.ts`
+- `GET /api/v2/audit-exports/[id]/download` — `src/app/api/v2/audit-exports/[id]/download/route.ts`
+- `GET /api/v2/audit-exports/[id]` — `src/app/api/v2/audit-exports/[id]/route.ts`
+- `POST /api/v2/audit-exports` — `src/app/api/v2/audit-exports/route.ts`
+- `GET /api/v2/audit-logs` — `src/app/api/v2/audit-logs/route.ts`
+- `GET, PATCH, DELETE /api/v2/custom-fields/[id]` — `src/app/api/v2/custom-fields/[id]/route.ts`
+- `GET, POST /api/v2/custom-fields` — `src/app/api/v2/custom-fields/route.ts`
+- `GET /api/v2/dashboards/[id]/data` — `src/app/api/v2/dashboards/[id]/data/route.ts`
+- `POST /api/v2/dashboards/[id]/duplicate` — `src/app/api/v2/dashboards/[id]/duplicate/route.ts`
+- `GET /api/v2/dashboards/[id]/export` — `src/app/api/v2/dashboards/[id]/export/route.ts`
+- `GET, PATCH, DELETE /api/v2/dashboards/[id]` — `src/app/api/v2/dashboards/[id]/route.ts`
+- `GET, PUT /api/v2/dashboards/[id]/widgets` — `src/app/api/v2/dashboards/[id]/widgets/route.ts`
+- `GET, POST /api/v2/dashboards` — `src/app/api/v2/dashboards/route.ts`
+- `GET /api/v2/escalation-policies/[id]/dependencies` — `src/app/api/v2/escalation-policies/[id]/dependencies/route.ts`
+- `POST /api/v2/escalation-policies/[id]/preview` — `src/app/api/v2/escalation-policies/[id]/preview/route.ts`
+- `GET, PATCH, DELETE /api/v2/escalation-policies/[id]` — `src/app/api/v2/escalation-policies/[id]/route.ts`
+- `GET /api/v2/escalation-policies/[id]/validation` — `src/app/api/v2/escalation-policies/[id]/validation/route.ts`
+- `GET, POST /api/v2/escalation-policies` — `src/app/api/v2/escalation-policies/route.ts`
+- `POST /api/v2/incidents/[id]/acknowledge` — `src/app/api/v2/incidents/[id]/acknowledge/route.ts`
+- `GET /api/v2/incidents/[id]/alerts` — `src/app/api/v2/incidents/[id]/alerts/route.ts`
+- `POST /api/v2/incidents/[id]/assign` — `src/app/api/v2/incidents/[id]/assign/route.ts`
+- `GET /api/v2/incidents/[id]/available-actions` — `src/app/api/v2/incidents/[id]/available-actions/route.ts`
+- `GET, PUT /api/v2/incidents/[id]/custom-fields/[fieldId]` — `src/app/api/v2/incidents/[id]/custom-fields/[fieldId]/route.ts`
+- `GET /api/v2/incidents/[id]/custom-fields` — `src/app/api/v2/incidents/[id]/custom-fields/route.ts`
+- `GET, POST /api/v2/incidents/[id]/notes` — `src/app/api/v2/incidents/[id]/notes/route.ts`
+- `GET /api/v2/incidents/[id]/notification-attempts` — `src/app/api/v2/incidents/[id]/notification-attempts/route.ts`
+- `GET /api/v2/incidents/[id]/related-incidents` — `src/app/api/v2/incidents/[id]/related-incidents/route.ts`
+- `POST /api/v2/incidents/[id]/reopen` — `src/app/api/v2/incidents/[id]/reopen/route.ts`
+- `POST /api/v2/incidents/[id]/resolve` — `src/app/api/v2/incidents/[id]/resolve/route.ts`
+- `GET /api/v2/incidents/[id]/response-activity` — `src/app/api/v2/incidents/[id]/response-activity/route.ts`
+- `GET, PATCH /api/v2/incidents/[id]` — `src/app/api/v2/incidents/[id]/route.ts`
+- `GET /api/v2/incidents/[id]/routing-decision` — `src/app/api/v2/incidents/[id]/routing-decision/route.ts`
+- `GET /api/v2/incidents/[id]/runbook-executions` — `src/app/api/v2/incidents/[id]/runbook-executions/route.ts`
+- `POST /api/v2/incidents/[id]/snooze` — `src/app/api/v2/incidents/[id]/snooze/route.ts`
+- `POST /api/v2/incidents/[id]/suppress` — `src/app/api/v2/incidents/[id]/suppress/route.ts`
+- `DELETE /api/v2/incidents/[id]/tags/[tagId]` — `src/app/api/v2/incidents/[id]/tags/[tagId]/route.ts`
+- `GET, POST /api/v2/incidents/[id]/tags` — `src/app/api/v2/incidents/[id]/tags/route.ts`
+- `GET /api/v2/incidents/[id]/timeline` — `src/app/api/v2/incidents/[id]/timeline/route.ts`
+- `POST /api/v2/incidents/[id]/unacknowledge` — `src/app/api/v2/incidents/[id]/unacknowledge/route.ts`
+- `POST /api/v2/incidents/[id]/unsnooze` — `src/app/api/v2/incidents/[id]/unsnooze/route.ts`
+- `POST /api/v2/incidents/[id]/unsuppress` — `src/app/api/v2/incidents/[id]/unsuppress/route.ts`
+- `GET /api/v2/incidents/[id]/war-rooms` — `src/app/api/v2/incidents/[id]/war-rooms/route.ts`
+- `DELETE /api/v2/incidents/[id]/watchers/[watcherId]` — `src/app/api/v2/incidents/[id]/watchers/[watcherId]/route.ts`
+- `GET, POST /api/v2/incidents/[id]/watchers` — `src/app/api/v2/incidents/[id]/watchers/route.ts`
+- `GET, POST /api/v2/incidents` — `src/app/api/v2/incidents/route.ts`
+- `GET, PATCH, DELETE /api/v2/incidents/templates/[templateId]` — `src/app/api/v2/incidents/templates/[templateId]/route.ts`
+- `GET, POST /api/v2/incidents/templates` — `src/app/api/v2/incidents/templates/route.ts`
+- `GET, POST /api/v2/integrations/[id]/credentials` — `src/app/api/v2/integrations/[id]/credentials/route.ts`
+- `GET /api/v2/integrations/[id]/diagnostics` — `src/app/api/v2/integrations/[id]/diagnostics/route.ts`
+- `GET, PATCH, DELETE /api/v2/integrations/[id]` — `src/app/api/v2/integrations/[id]/route.ts`
+- `POST /api/v2/integrations/[id]/test` — `src/app/api/v2/integrations/[id]/test/route.ts`
+- `GET /api/v2/integrations/[id]/usage` — `src/app/api/v2/integrations/[id]/usage/route.ts`
+- `POST /api/v2/integrations/[id]/validate` — `src/app/api/v2/integrations/[id]/validate/route.ts`
+- `GET /api/v2/integrations` — `src/app/api/v2/integrations/route.ts`
+- `GET /api/v2/integrations/types` — `src/app/api/v2/integrations/types/route.ts`
+- `GET /api/v2/notification-providers/[provider]/diagnostics` — `src/app/api/v2/notification-providers/[provider]/diagnostics/route.ts`
+- `GET, PUT /api/v2/notification-providers/[provider]` — `src/app/api/v2/notification-providers/[provider]/route.ts`
+- `POST /api/v2/notification-providers/[provider]/test` — `src/app/api/v2/notification-providers/[provider]/test/route.ts`
+- `GET /api/v2/notification-providers` — `src/app/api/v2/notification-providers/route.ts`
+- `POST /api/v2/notification-providers/web-push/rotate` — `src/app/api/v2/notification-providers/web-push/rotate/route.ts`
+- `GET /api/v2/notifications/[id]/attempts` — `src/app/api/v2/notifications/[id]/attempts/route.ts`
+- `GET /api/v2/notifications/[id]/feedback` — `src/app/api/v2/notifications/[id]/feedback/route.ts`
+- `POST /api/v2/notifications/[id]/retry` — `src/app/api/v2/notifications/[id]/retry/route.ts`
+- `GET /api/v2/notifications` — `src/app/api/v2/notifications/route.ts`
+- `GET /api/v2/openapi.json` — `src/app/api/v2/openapi.json/route.ts`
+- `GET /api/v2/operational-events` — `src/app/api/v2/operational-events/route.ts`
+- `PATCH, DELETE /api/v2/postmortems/[id]/action-items/[itemId]` — `src/app/api/v2/postmortems/[id]/action-items/[itemId]/route.ts`
+- `GET, PUT /api/v2/postmortems/[id]/action-items` — `src/app/api/v2/postmortems/[id]/action-items/route.ts`
+- `GET, PUT /api/v2/postmortems/[id]/contributors` — `src/app/api/v2/postmortems/[id]/contributors/route.ts`
+- `POST /api/v2/postmortems/[id]/publish` — `src/app/api/v2/postmortems/[id]/publish/route.ts`
+- `GET, PATCH, DELETE /api/v2/postmortems/[id]` — `src/app/api/v2/postmortems/[id]/route.ts`
+- `GET /api/v2/postmortems/[id]/versions` — `src/app/api/v2/postmortems/[id]/versions/route.ts`
+- `GET, POST /api/v2/postmortems` — `src/app/api/v2/postmortems/route.ts`
+- `GET /api/v2/reports/catalog` — `src/app/api/v2/reports/catalog/route.ts`
+- `POST /api/v2/reports/exports/[id]/cancel` — `src/app/api/v2/reports/exports/[id]/cancel/route.ts`
+- `GET /api/v2/reports/exports/[id]/download` — `src/app/api/v2/reports/exports/[id]/download/route.ts`
+- `GET /api/v2/reports/exports/[id]` — `src/app/api/v2/reports/exports/[id]/route.ts`
+- `POST /api/v2/reports/exports` — `src/app/api/v2/reports/exports/route.ts`
+- `GET /api/v2/reports/metrics` — `src/app/api/v2/reports/metrics/route.ts`
+- `POST /api/v2/reports/query` — `src/app/api/v2/reports/query/route.ts`
+- `GET, PATCH, DELETE /api/v2/reports/saved/[id]` — `src/app/api/v2/reports/saved/[id]/route.ts`
+- `GET, POST /api/v2/reports/saved` — `src/app/api/v2/reports/saved/route.ts`
+- `POST /api/v2/runbooks/[id]/archive` — `src/app/api/v2/runbooks/[id]/archive/route.ts`
+- `GET /api/v2/runbooks/[id]/delete-check` — `src/app/api/v2/runbooks/[id]/delete-check/route.ts`
+- `POST /api/v2/runbooks/[id]/drafts/[versionId]/publish` — `src/app/api/v2/runbooks/[id]/drafts/[versionId]/publish/route.ts`
+- `GET, PATCH /api/v2/runbooks/[id]/drafts/[versionId]` — `src/app/api/v2/runbooks/[id]/drafts/[versionId]/route.ts`
+- `POST /api/v2/runbooks/[id]/drafts/[versionId]/validate` — `src/app/api/v2/runbooks/[id]/drafts/[versionId]/validate/route.ts`
+- `POST /api/v2/runbooks/[id]/drafts` — `src/app/api/v2/runbooks/[id]/drafts/route.ts`
+- `POST /api/v2/runbooks/[id]/duplicate` — `src/app/api/v2/runbooks/[id]/duplicate/route.ts`
+- `POST /api/v2/runbooks/[id]/execute` — `src/app/api/v2/runbooks/[id]/execute/route.ts`
+- `POST /api/v2/runbooks/[id]/executions/preview` — `src/app/api/v2/runbooks/[id]/executions/preview/route.ts`
+- `GET /api/v2/runbooks/[id]/metadata` — `src/app/api/v2/runbooks/[id]/metadata/route.ts`
+- `POST /api/v2/runbooks/[id]/restore` — `src/app/api/v2/runbooks/[id]/restore/route.ts`
+- `GET, PATCH, DELETE /api/v2/runbooks/[id]` — `src/app/api/v2/runbooks/[id]/route.ts`
+- `GET /api/v2/runbooks/[id]/versions/[versionId]/diff` — `src/app/api/v2/runbooks/[id]/versions/[versionId]/diff/route.ts`
+- `GET /api/v2/runbooks/[id]/versions` — `src/app/api/v2/runbooks/[id]/versions/route.ts`
+- `GET /api/v2/runbooks/agent-enrollments/[id]` — `src/app/api/v2/runbooks/agent-enrollments/[id]/route.ts`
+- `POST /api/v2/runbooks/agent-enrollments` — `src/app/api/v2/runbooks/agent-enrollments/route.ts`
+- `GET /api/v2/runbooks/agent-pools/[id]/deletion-check` — `src/app/api/v2/runbooks/agent-pools/[id]/deletion-check/route.ts`
+- `PUT, DELETE /api/v2/runbooks/agent-pools/[id]/members/[agentId]` — `src/app/api/v2/runbooks/agent-pools/[id]/members/[agentId]/route.ts`
+- `GET /api/v2/runbooks/agent-pools/[id]/members` — `src/app/api/v2/runbooks/agent-pools/[id]/members/route.ts`
+- `POST /api/v2/runbooks/agent-pools/[id]/retire` — `src/app/api/v2/runbooks/agent-pools/[id]/retire/route.ts`
+- `GET, PATCH, DELETE /api/v2/runbooks/agent-pools/[id]` — `src/app/api/v2/runbooks/agent-pools/[id]/route.ts`
+- `GET, POST /api/v2/runbooks/agent-pools` — `src/app/api/v2/runbooks/agent-pools/route.ts`
+- `GET, PATCH /api/v2/runbooks/agents/[id]/configuration` — `src/app/api/v2/runbooks/agents/[id]/configuration/route.ts`
+- `GET /api/v2/runbooks/agents/[id]/policy-status` — `src/app/api/v2/runbooks/agents/[id]/policy-status/route.ts`
+- `POST /api/v2/runbooks/agents/[id]/revoke` — `src/app/api/v2/runbooks/agents/[id]/revoke/route.ts`
+- `GET /api/v2/runbooks/agents/[id]` — `src/app/api/v2/runbooks/agents/[id]/route.ts`
+- `GET /api/v2/runbooks/agents` — `src/app/api/v2/runbooks/agents/route.ts`
+- `POST /api/v2/runbooks/executions/[id]/cancel` — `src/app/api/v2/runbooks/executions/[id]/cancel/route.ts`
+- `GET /api/v2/runbooks/executions/[id]/events` — `src/app/api/v2/runbooks/executions/[id]/events/route.ts`
+- `GET /api/v2/runbooks/executions/[id]/evidence` — `src/app/api/v2/runbooks/executions/[id]/evidence/route.ts`
+- `POST /api/v2/runbooks/executions/[id]/rerun-preview` — `src/app/api/v2/runbooks/executions/[id]/rerun-preview/route.ts`
+- `POST /api/v2/runbooks/executions/[id]/rerun` — `src/app/api/v2/runbooks/executions/[id]/rerun/route.ts`
+- `GET /api/v2/runbooks/executions/[id]` — `src/app/api/v2/runbooks/executions/[id]/route.ts`
+- `POST /api/v2/runbooks/executions/[id]/steps/[stepId]/approve` — `src/app/api/v2/runbooks/executions/[id]/steps/[stepId]/approve/route.ts`
+- `POST /api/v2/runbooks/executions/[id]/steps/[stepId]/reject` — `src/app/api/v2/runbooks/executions/[id]/steps/[stepId]/reject/route.ts`
+- `GET /api/v2/runbooks/executions/[id]/steps` — `src/app/api/v2/runbooks/executions/[id]/steps/route.ts`
+- `GET /api/v2/runbooks/executions` — `src/app/api/v2/runbooks/executions/route.ts`
+- `GET, POST /api/v2/runbooks` — `src/app/api/v2/runbooks/route.ts`
+- `DELETE /api/v2/runbooks/secrets/[id]/grants/[grantId]` — `src/app/api/v2/runbooks/secrets/[id]/grants/[grantId]/route.ts`
+- `GET, POST /api/v2/runbooks/secrets/[id]/grants` — `src/app/api/v2/runbooks/secrets/[id]/grants/route.ts`
+- `POST /api/v2/runbooks/secrets/[id]/rotate` — `src/app/api/v2/runbooks/secrets/[id]/rotate/route.ts`
+- `GET /api/v2/runbooks/secrets/[id]` — `src/app/api/v2/runbooks/secrets/[id]/route.ts`
+- `GET /api/v2/runbooks/secrets/[id]/usage` — `src/app/api/v2/runbooks/secrets/[id]/usage/route.ts`
+- `GET, POST /api/v2/runbooks/secrets` — `src/app/api/v2/runbooks/secrets/route.ts`
+- `POST /api/v2/runbooks/signing-identities/[id]/activate` — `src/app/api/v2/runbooks/signing-identities/[id]/activate/route.ts`
+- `POST /api/v2/runbooks/signing-identities/[id]/retire` — `src/app/api/v2/runbooks/signing-identities/[id]/retire/route.ts`
+- `GET, POST /api/v2/runbooks/signing-identities` — `src/app/api/v2/runbooks/signing-identities/route.ts`
+- `GET /api/v2/schedules/[id]/changes` — `src/app/api/v2/schedules/[id]/changes/route.ts`
+- `POST /api/v2/schedules/[id]/coverage/preview` — `src/app/api/v2/schedules/[id]/coverage/preview/route.ts`
+- `GET /api/v2/schedules/[id]/coverage` — `src/app/api/v2/schedules/[id]/coverage/route.ts`
+- `GET /api/v2/schedules/[id]/dependencies` — `src/app/api/v2/schedules/[id]/dependencies/route.ts`
+- `PATCH, DELETE /api/v2/schedules/[id]/layers/[layerId]/participants/[userId]` — `src/app/api/v2/schedules/[id]/layers/[layerId]/participants/[userId]/route.ts`
+- `POST /api/v2/schedules/[id]/layers/[layerId]/participants` — `src/app/api/v2/schedules/[id]/layers/[layerId]/participants/route.ts`
+- `GET, PATCH, DELETE /api/v2/schedules/[id]/layers/[layerId]` — `src/app/api/v2/schedules/[id]/layers/[layerId]/route.ts`
+- `PUT /api/v2/schedules/[id]/layers/order` — `src/app/api/v2/schedules/[id]/layers/order/route.ts`
+- `GET, POST /api/v2/schedules/[id]/layers` — `src/app/api/v2/schedules/[id]/layers/route.ts`
+- `GET /api/v2/schedules/[id]/on-call` — `src/app/api/v2/schedules/[id]/on-call/route.ts`
+- `DELETE /api/v2/schedules/[id]/overrides/[overrideId]` — `src/app/api/v2/schedules/[id]/overrides/[overrideId]/route.ts`
+- `GET, POST /api/v2/schedules/[id]/overrides` — `src/app/api/v2/schedules/[id]/overrides/route.ts`
+- `GET, PATCH, DELETE /api/v2/schedules/[id]` — `src/app/api/v2/schedules/[id]/route.ts`
+- `GET, POST /api/v2/schedules` — `src/app/api/v2/schedules/route.ts`
+- `GET, DELETE /api/v2/service-accounts/[id]` — `src/app/api/v2/service-accounts/[id]/route.ts`
+- `DELETE /api/v2/service-accounts/[id]/tokens/[tokenId]` — `src/app/api/v2/service-accounts/[id]/tokens/[tokenId]/route.ts`
+- `POST /api/v2/service-accounts/[id]/tokens` — `src/app/api/v2/service-accounts/[id]/tokens/route.ts`
+- `GET, POST /api/v2/service-accounts` — `src/app/api/v2/service-accounts/route.ts`
+- `POST /api/v2/service-objectives/[id]/archive` — `src/app/api/v2/service-objectives/[id]/archive/route.ts`
+- `POST /api/v2/service-objectives/[id]/evaluate` — `src/app/api/v2/service-objectives/[id]/evaluate/route.ts`
+- `GET /api/v2/service-objectives/[id]/evaluations/[evaluationId]` — `src/app/api/v2/service-objectives/[id]/evaluations/[evaluationId]/route.ts`
+- `GET /api/v2/service-objectives/[id]/history` — `src/app/api/v2/service-objectives/[id]/history/route.ts`
+- `GET, PATCH /api/v2/service-objectives/[id]` — `src/app/api/v2/service-objectives/[id]/route.ts`
+- `GET /api/v2/service-objectives/[id]/snapshots` — `src/app/api/v2/service-objectives/[id]/snapshots/route.ts`
+- `GET /api/v2/service-objectives/[id]/versions` — `src/app/api/v2/service-objectives/[id]/versions/route.ts`
+- `GET /api/v2/service-objectives/catalog` — `src/app/api/v2/service-objectives/catalog/route.ts`
+- `GET, POST /api/v2/service-objectives` — `src/app/api/v2/service-objectives/route.ts`
+- `GET, DELETE /api/v2/services/[id]/automation/candidate` — `src/app/api/v2/services/[id]/automation/candidate/route.ts`
+- `POST /api/v2/services/[id]/automation/candidates/activate` — `src/app/api/v2/services/[id]/automation/candidates/activate/route.ts`
+- `GET /api/v2/services/[id]/automation/decisions` — `src/app/api/v2/services/[id]/automation/decisions/route.ts`
+- `GET, PUT /api/v2/services/[id]/automation/draft` — `src/app/api/v2/services/[id]/automation/draft/route.ts`
+- `PATCH /api/v2/services/[id]/automation/mode` — `src/app/api/v2/services/[id]/automation/mode/route.ts`
+- `GET /api/v2/services/[id]/automation/observations` — `src/app/api/v2/services/[id]/automation/observations/route.ts`
+- `POST /api/v2/services/[id]/automation/publish` — `src/app/api/v2/services/[id]/automation/publish/route.ts`
+- `POST /api/v2/services/[id]/automation/restore` — `src/app/api/v2/services/[id]/automation/restore/route.ts`
+- `GET /api/v2/services/[id]/automation` — `src/app/api/v2/services/[id]/automation/route.ts`
+- `POST /api/v2/services/[id]/automation/simulate` — `src/app/api/v2/services/[id]/automation/simulate/route.ts`
+- `POST /api/v2/services/[id]/automation/validate` — `src/app/api/v2/services/[id]/automation/validate/route.ts`
+- `GET /api/v2/services/[id]/automation/versions/[versionId]` — `src/app/api/v2/services/[id]/automation/versions/[versionId]/route.ts`
+- `GET /api/v2/services/[id]/automation/versions` — `src/app/api/v2/services/[id]/automation/versions/route.ts`
+- `GET /api/v2/services/[id]/change-events` — `src/app/api/v2/services/[id]/change-events/route.ts`
+- `GET /api/v2/services/[id]/health-summary` — `src/app/api/v2/services/[id]/health-summary/route.ts`
+- `POST /api/v2/services/[id]/integrations` — `src/app/api/v2/services/[id]/integrations/route.ts`
+- `GET, PATCH /api/v2/services/[id]/notification-settings` — `src/app/api/v2/services/[id]/notification-settings/route.ts`
+- `GET, PUT /api/v2/services/[id]/response-policy/classification` — `src/app/api/v2/services/[id]/response-policy/classification/route.ts`
+- `GET, PUT /api/v2/services/[id]/response-policy/sla` — `src/app/api/v2/services/[id]/response-policy/sla/route.ts`
+- `GET, PATCH, DELETE /api/v2/services/[id]` — `src/app/api/v2/services/[id]/route.ts`
+- `POST /api/v2/services/[id]/runbook-rules/[ruleId]/activate` — `src/app/api/v2/services/[id]/runbook-rules/[ruleId]/activate/route.ts`
+- `POST /api/v2/services/[id]/runbook-rules/[ruleId]/duplicate` — `src/app/api/v2/services/[id]/runbook-rules/[ruleId]/duplicate/route.ts`
+- `POST /api/v2/services/[id]/runbook-rules/[ruleId]/pause` — `src/app/api/v2/services/[id]/runbook-rules/[ruleId]/pause/route.ts`
+- `GET, POST /api/v2/services/[id]/runbook-rules/[ruleId]/policy-checks` — `src/app/api/v2/services/[id]/runbook-rules/[ruleId]/policy-checks/route.ts`
+- `GET, PATCH, DELETE /api/v2/services/[id]/runbook-rules/[ruleId]` — `src/app/api/v2/services/[id]/runbook-rules/[ruleId]/route.ts`
+- `PUT /api/v2/services/[id]/runbook-rules/[ruleId]/triggers` — `src/app/api/v2/services/[id]/runbook-rules/[ruleId]/triggers/route.ts`
+- `POST /api/v2/services/[id]/runbook-rules/[ruleId]/validate` — `src/app/api/v2/services/[id]/runbook-rules/[ruleId]/validate/route.ts`
+- `GET, POST /api/v2/services/[id]/runbook-rules` — `src/app/api/v2/services/[id]/runbook-rules/route.ts`
+- `GET, PUT /api/v2/services/[id]/support-hours` — `src/app/api/v2/services/[id]/support-hours/route.ts`
+- `GET, POST /api/v2/services` — `src/app/api/v2/services/route.ts`
+- `GET, PATCH /api/v2/settings/automation` — `src/app/api/v2/settings/automation/route.ts`
+- `GET, PUT /api/v2/settings/chatops` — `src/app/api/v2/settings/chatops/route.ts`
+- `GET, PUT /api/v2/settings/incident-sla` — `src/app/api/v2/settings/incident-sla/route.ts`
+- `GET, PATCH /api/v2/settings/runbooks` — `src/app/api/v2/settings/runbooks/route.ts`
+- `GET, POST /api/v2/status-pages/[id]/announcements` — `src/app/api/v2/status-pages/[id]/announcements/route.ts`
+- `GET, PATCH /api/v2/status-pages/[id]/appearance` — `src/app/api/v2/status-pages/[id]/appearance/route.ts`
+- `DELETE /api/v2/status-pages/[id]/assets/[assetId]` — `src/app/api/v2/status-pages/[id]/assets/[assetId]/route.ts`
+- `GET, POST /api/v2/status-pages/[id]/assets` — `src/app/api/v2/status-pages/[id]/assets/route.ts`
+- `GET, PATCH /api/v2/status-pages/[id]/content` — `src/app/api/v2/status-pages/[id]/content/route.ts`
+- `GET /api/v2/status-pages/[id]/preview` — `src/app/api/v2/status-pages/[id]/preview/route.ts`
+- `GET, PATCH /api/v2/status-pages/[id]/privacy` — `src/app/api/v2/status-pages/[id]/privacy/route.ts`
+- `GET /api/v2/status-pages/[id]/publication/jobs/[jobId]` — `src/app/api/v2/status-pages/[id]/publication/jobs/[jobId]/route.ts`
+- `POST /api/v2/status-pages/[id]/publication/retry` — `src/app/api/v2/status-pages/[id]/publication/retry/route.ts`
+- `GET /api/v2/status-pages/[id]/publication` — `src/app/api/v2/status-pages/[id]/publication/route.ts`
+- `GET, PATCH /api/v2/status-pages/[id]` — `src/app/api/v2/status-pages/[id]/route.ts`
+- `PATCH /api/v2/status-pages/[id]/services/[serviceId]` — `src/app/api/v2/status-pages/[id]/services/[serviceId]/route.ts`
+- `GET, PUT /api/v2/status-pages/[id]/services` — `src/app/api/v2/status-pages/[id]/services/route.ts`
+- `GET, PATCH /api/v2/status-pages/[id]/settings` — `src/app/api/v2/status-pages/[id]/settings/route.ts`
+- `GET /api/v2/status-pages/[id]/subscriber-stats` — `src/app/api/v2/status-pages/[id]/subscriber-stats/route.ts`
+- `GET, DELETE /api/v2/status-pages/[id]/subscribers/[subscriberId]` — `src/app/api/v2/status-pages/[id]/subscribers/[subscriberId]/route.ts`
+- `GET /api/v2/status-pages/[id]/subscribers` — `src/app/api/v2/status-pages/[id]/subscribers/route.ts`
+- `GET /api/v2/status-pages/[id]/subscription-settings` — `src/app/api/v2/status-pages/[id]/subscription-settings/route.ts`
+- `GET, POST /api/v2/status-pages` — `src/app/api/v2/status-pages/route.ts`
+- `GET /api/v2/teams/[id]/activity` — `src/app/api/v2/teams/[id]/activity/route.ts`
+- `GET, PUT /api/v2/teams/[id]/lead` — `src/app/api/v2/teams/[id]/lead/route.ts`
+- `PUT, DELETE /api/v2/teams/[id]/members/[userId]` — `src/app/api/v2/teams/[id]/members/[userId]/route.ts`
+- `GET /api/v2/teams/[id]/members` — `src/app/api/v2/teams/[id]/members/route.ts`
+- `GET, PATCH, DELETE /api/v2/teams/[id]` — `src/app/api/v2/teams/[id]/route.ts`
+- `PUT /api/v2/teams/[id]/services/[serviceId]` — `src/app/api/v2/teams/[id]/services/[serviceId]/route.ts`
+- `GET /api/v2/teams/[id]/services` — `src/app/api/v2/teams/[id]/services/route.ts`
+- `GET, POST /api/v2/teams` — `src/app/api/v2/teams/route.ts`
+- `GET, PATCH /api/v2/users/[id]/administration` — `src/app/api/v2/users/[id]/administration/route.ts`
+- `GET /api/v2/users/[id]/dependencies` — `src/app/api/v2/users/[id]/dependencies/route.ts`
+- `GET, POST /api/v2/users/[id]/invitation` — `src/app/api/v2/users/[id]/invitation/route.ts`
+- `GET /api/v2/users/[id]` — `src/app/api/v2/users/[id]/route.ts`
+- `GET /api/v2/users/invitation-policy` — `src/app/api/v2/users/invitation-policy/route.ts`
+- `POST /api/v2/users/invitations` — `src/app/api/v2/users/invitations/route.ts`
+- `GET, PATCH /api/v2/users/me/notification-preferences` — `src/app/api/v2/users/me/notification-preferences/route.ts`
+- `GET /api/v2/users` — `src/app/api/v2/users/route.ts`
 - `GET /api/widgets/data` — `src/app/api/widgets/data/route.ts`
 - `GET /api/widgets/stream` — `src/app/api/widgets/stream/route.ts`
 
@@ -265,14 +512,15 @@ public route has a full success/authorization/validation/concurrency matrix.
 ## Identity protocol endpoints
 
 - `GET, PUT, PATCH, DELETE /api/scim/v2/Groups/[id]` — `src/app/api/scim/v2/Groups/[id]/route.ts`
-- `GET, POST /api/scim/v2/Groups` — `src/app/api/scim/v2/Groups/route.ts`
+- `GET, POST, PUT, PATCH, DELETE /api/scim/v2/Groups` — `src/app/api/scim/v2/Groups/route.ts`
 - `GET /api/scim/v2/ResourceTypes/[id]` — `src/app/api/scim/v2/ResourceTypes/[id]/route.ts`
 - `GET /api/scim/v2/ResourceTypes` — `src/app/api/scim/v2/ResourceTypes/route.ts`
 - `GET /api/scim/v2/Schemas/[id]` — `src/app/api/scim/v2/Schemas/[id]/route.ts`
 - `GET /api/scim/v2/Schemas` — `src/app/api/scim/v2/Schemas/route.ts`
 - `GET /api/scim/v2/ServiceProviderConfig` — `src/app/api/scim/v2/ServiceProviderConfig/route.ts`
 - `GET, PUT, PATCH, DELETE /api/scim/v2/Users/[id]` — `src/app/api/scim/v2/Users/[id]/route.ts`
-- `GET, POST, PATCH /api/scim/v2/Users` — `src/app/api/scim/v2/Users/route.ts`
+- `GET, POST, PUT, PATCH, DELETE /api/scim/v2/Users` — `src/app/api/scim/v2/Users/route.ts`
+- `GET, POST, PUT, PATCH, DELETE, HEAD, OPTIONS /api/scim/v2/[...catchall]` — `src/app/api/scim/v2/[...catchall]/route.ts`
 
 ## Provider callback and webhook endpoints
 

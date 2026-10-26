@@ -6,7 +6,7 @@ product_area: platform
 audience: [developer, operator, administrator]
 verification:
   level: source
-  verified_at: 2026-10-03
+  verified_at: 2026-10-26
   evidence:
     - generated/docs-discovery/current.json
     - generated/docs-contracts/current.json
@@ -19,37 +19,37 @@ source. Public documentation is generated from public, administrator, and
 operator contracts; internal nodes remain classified without becoming public
 API promises.
 
-- Total classified nodes: 1168
+- Total classified nodes: 1983
 - Unclassified nodes: 0
-- Evidence-backed generated claims: 1625
+- Evidence-backed generated claims: 2795
 - Unsupported generated claims: 0
-- Supported product nodes: 585
-- Documented supported nodes: 585
+- Supported product nodes: 851
+- Documented supported nodes: 851
 - Undocumented supported nodes: 0
 - Unresolved semantic contracts: 0
 
-- `api`: 227
-- `api-scope`: 7
-- `authorization-action`: 9
-- `configuration`: 310
+- `api`: 475
+- `api-scope`: 73
+- `authorization-action`: 82
+- `configuration`: 519
 - `deployment-topology`: 4
-- `enum`: 73
+- `enum`: 93
 - `integration`: 28
-- `limit`: 230
-- `model`: 120
+- `limit`: 337
+- `model`: 178
 - `notification-provider`: 9
-- `permission`: 37
+- `permission`: 52
 - `runtime-role`: 8
-- `ui`: 101
-- `worker-lane`: 5
+- `ui`: 119
+- `worker-lane`: 6
 
 ## Classification totals
 
-- `ADMIN_FEATURE`: 83
-- `INTERNAL_IMPLEMENTATION`: 583
-- `OPERATOR_FEATURE`: 291
-- `PUBLIC_API`: 54
-- `PUBLIC_FEATURE`: 157
+- `ADMIN_FEATURE`: 172
+- `INTERNAL_IMPLEMENTATION`: 1132
+- `OPERATOR_FEATURE`: 370
+- `PUBLIC_API`: 121
+- `PUBLIC_FEATURE`: 188
 
 The complete node-level contract, including provenance and extracted API
 semantics, is stored in `generated/docs-contracts/current.json`.

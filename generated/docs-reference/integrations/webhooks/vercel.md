@@ -4,10 +4,10 @@ description: Connect Vercel alerts to OpsKnight incident ingestion.
 type: integration
 product_area: integrations
 audience: [administrator, operator]
-keywords: ["Vercel webhook", "connect Vercel", "Vercel alerts", "Vercel integration"]
+keywords: ['Vercel webhook', 'connect Vercel', 'Vercel alerts', 'Vercel integration']
 verification:
   level: source
-  verified_at: 2026-09-27
+  verified_at: 2026-10-21
   evidence:
     - src/lib/integrations/vercel.ts
     - src/app/api/integrations/vercel/route.ts
@@ -60,10 +60,11 @@ The exact payload schema is defined by `src/app/api/integrations/vercel/route.ts
 ## Event mapping and incident lifecycle
 
 The adapter emits the lifecycle actions found in its current source:
+
 - `trigger`
 - `acknowledge`
 - `resolve`
-Correlation contract: **adapter EventPayload.dedup_key**. Recovery contract: **adapter emits resolve for its recovery state**.
+  Correlation contract: **adapter EventPayload.dedup_key**. Recovery contract: **adapter emits resolve for its recovery state**.
 
 ## Recovery and deduplication
 

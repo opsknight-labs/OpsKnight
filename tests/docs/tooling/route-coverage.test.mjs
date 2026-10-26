@@ -1,8 +1,11 @@
+/* eslint-disable security/detect-non-literal-fs-filename */
 import assert from 'node:assert/strict';
 import { existsSync, readFileSync } from 'node:fs';
 import { test } from 'node:test';
 
 const contract = JSON.parse(readFileSync('generated/docs-contracts/routes.json', 'utf8'));
+const versions = JSON.parse(readFileSync('docs/versions.json', 'utf8'));
+const currentDocsVersion = versions.currentRelease || 'v2.0.0';
 const publicClasses = new Set(['PUBLIC_FEATURE', 'ADMIN_FEATURE', 'OPERATOR_FEATURE']);
 
 test('every UI route is explicitly classified and public surfaces have documentation', () => {
@@ -13,7 +16,7 @@ test('every UI route is explicitly classified and public surfaces have documenta
     if (publicClasses.has(route.classification)) {
       assert.equal(route.documentationMapping, 'explicit-route-rule', `${route.route}: documentation is not route-specific`);
       assert.ok(pages.length > 0, `${route.route}: no documentation mapping`);
-      for (const page of pages) assert.ok(existsSync(`docs/v2.0.0/${page}`), `${route.route}: missing ${page}`);
+      for (const page of pages) assert.ok(existsSync(`docs/${currentDocsVersion}/${page}`), `${route.route}: missing ${page}`);
       if (route.taskDocumentationRequired) {
         assert.ok(
           (route.documentation?.guides ?? []).length > 0,

@@ -17,7 +17,7 @@ verification:
 
 For emergency-identity custodians and deployment operators during an IdP or provider-configuration failure.
 
-## Before starting
+## Before you begin
 
 Use the recorded public HTTPS origin and emergency account identifier. Ensure PostgreSQL is available, migrations are applied and the original encryption key remains present. Emergency Access is independent of the IdP but depends on PostgreSQL. Maintain an external database restore procedure; no application recovery credential can authenticate through a database outage.
 
@@ -104,7 +104,6 @@ requires a fresh independent emergency session, an explicit deployment-managed
 policy version. It preserves SSO Required and commits the settings change, policy
 version and mandatory audit/alert together. Missing settings never grant authority
 or trigger an automatic policy downgrade.
-
 
 ## Generated emergency password is lost or exposed
 

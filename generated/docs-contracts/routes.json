@@ -8,9 +8,7 @@
       "classification": "PUBLIC_FEATURE",
       "documentation": {
         "concepts": [],
-        "guides": [
-          "guides/incidents/action-items.md"
-        ],
+        "guides": ["guides/incidents/action-items.md"],
         "reference": [],
         "troubleshooting": []
       },
@@ -23,15 +21,9 @@
       "kind": "ui",
       "classification": "PUBLIC_FEATURE",
       "documentation": {
-        "concepts": [
-          "concepts/analytics.md"
-        ],
-        "guides": [
-          "guides/analytics/use-analytics.md"
-        ],
-        "reference": [
-          "reference/metrics.md"
-        ],
+        "concepts": ["concepts/analytics.md"],
+        "guides": ["guides/analytics/use-analytics.md"],
+        "reference": ["reference/metrics.md"],
         "troubleshooting": []
       },
       "documentationMapping": "explicit-route-rule",
@@ -44,9 +36,7 @@
       "classification": "ADMIN_FEATURE",
       "documentation": {
         "concepts": [],
-        "guides": [
-          "guides/administration/audit-logs.md"
-        ],
+        "guides": ["guides/administration/audit-logs.md"],
         "reference": [],
         "troubleshooting": []
       },
@@ -60,12 +50,8 @@
       "classification": "PUBLIC_FEATURE",
       "documentation": {
         "concepts": [],
-        "guides": [
-          "guides/administration/review-event-logs.md"
-        ],
-        "reference": [
-          "reference/api/events.md"
-        ],
+        "guides": ["guides/administration/review-event-logs.md"],
+        "reference": ["reference/api/events.md"],
         "troubleshooting": []
       },
       "documentationMapping": "explicit-route-rule",
@@ -78,12 +64,8 @@
       "classification": "PUBLIC_FEATURE",
       "documentation": {
         "concepts": [],
-        "guides": [
-          "guides/integrations/send-test-event.md"
-        ],
-        "reference": [
-          "reference/api/events.md"
-        ],
+        "guides": ["guides/integrations/send-test-event.md"],
+        "reference": ["reference/api/events.md"],
         "troubleshooting": []
       },
       "documentationMapping": "explicit-route-rule",
@@ -95,10 +77,7 @@
       "kind": "ui",
       "classification": "PUBLIC_FEATURE",
       "documentation": {
-        "concepts": [
-          "README.md",
-          "guides/README.md"
-        ],
+        "concepts": ["README.md", "guides/README.md"],
         "guides": [],
         "reference": [],
         "troubleshooting": []
@@ -112,13 +91,8 @@
       "kind": "ui",
       "classification": "PUBLIC_FEATURE",
       "documentation": {
-        "concepts": [
-          "concepts/incidents.md",
-          "concepts/incident-response.md"
-        ],
-        "guides": [
-          "guides/incidents/acknowledge.md"
-        ],
+        "concepts": ["concepts/incidents.md", "concepts/incident-response.md"],
+        "guides": ["guides/incidents/acknowledge.md"],
         "reference": [],
         "troubleshooting": []
       },
@@ -132,9 +106,7 @@
       "classification": "PUBLIC_FEATURE",
       "documentation": {
         "concepts": [],
-        "guides": [
-          "guides/incidents/create.md"
-        ],
+        "guides": ["guides/incidents/create.md"],
         "reference": [],
         "troubleshooting": []
       },
@@ -147,13 +119,8 @@
       "kind": "ui",
       "classification": "PUBLIC_FEATURE",
       "documentation": {
-        "concepts": [
-          "concepts/incidents.md",
-          "concepts/incident-response.md"
-        ],
-        "guides": [
-          "guides/incidents/acknowledge.md"
-        ],
+        "concepts": ["concepts/incidents.md", "concepts/incident-response.md"],
+        "guides": ["guides/incidents/acknowledge.md"],
         "reference": [],
         "troubleshooting": []
       },
@@ -167,9 +134,7 @@
       "classification": "PUBLIC_FEATURE",
       "documentation": {
         "concepts": [],
-        "guides": [
-          "guides/incidents/incident-templates.md"
-        ],
+        "guides": ["guides/incidents/incident-templates.md"],
         "reference": [],
         "troubleshooting": []
       },
@@ -183,9 +148,7 @@
       "classification": "PUBLIC_FEATURE",
       "documentation": {
         "concepts": [],
-        "guides": [
-          "guides/incidents/incident-templates.md"
-        ],
+        "guides": ["guides/incidents/incident-templates.md"],
         "reference": [],
         "troubleshooting": []
       },
@@ -198,13 +161,8 @@
       "kind": "ui",
       "classification": "PUBLIC_FEATURE",
       "documentation": {
-        "concepts": [
-          "guides/dashboard/README.md",
-          "start/what-is-opsknight.md"
-        ],
-        "guides": [
-          "guides/dashboard/use-command-center.md"
-        ],
+        "concepts": ["guides/dashboard/README.md", "start/what-is-opsknight.md"],
+        "guides": ["guides/dashboard/use-command-center.md"],
         "reference": [],
         "troubleshooting": []
       },
@@ -217,12 +175,8 @@
       "kind": "ui",
       "classification": "PUBLIC_FEATURE",
       "documentation": {
-        "concepts": [
-          "concepts/escalation-policies.md"
-        ],
-        "guides": [
-          "guides/escalation/configure-policy.md"
-        ],
+        "concepts": ["concepts/escalation-policies.md"],
+        "guides": ["guides/escalation/configure-policy.md"],
         "reference": [],
         "troubleshooting": []
       },
@@ -235,12 +189,8 @@
       "kind": "ui",
       "classification": "PUBLIC_FEATURE",
       "documentation": {
-        "concepts": [
-          "concepts/escalation-policies.md"
-        ],
-        "guides": [
-          "guides/escalation/configure-policy.md"
-        ],
+        "concepts": ["concepts/escalation-policies.md"],
+        "guides": ["guides/escalation/configure-policy.md"],
         "reference": [],
         "troubleshooting": []
       },
@@ -253,12 +203,8 @@
       "kind": "ui",
       "classification": "PUBLIC_FEATURE",
       "documentation": {
-        "concepts": [
-          "concepts/escalation-policies.md"
-        ],
-        "guides": [
-          "guides/escalation/configure-policy.md"
-        ],
+        "concepts": ["concepts/escalation-policies.md"],
+        "guides": ["guides/escalation/configure-policy.md"],
         "reference": [],
         "troubleshooting": []
       },
@@ -271,10 +217,7 @@
       "kind": "ui",
       "classification": "PUBLIC_FEATURE",
       "documentation": {
-        "concepts": [
-          "concepts/postmortems.md",
-          "concepts/postmortem-workflow.md"
-        ],
+        "concepts": ["concepts/postmortems.md", "concepts/postmortem-workflow.md"],
         "guides": [
           "guides/postmortems/create-review-publish.md",
           "guides/incidents/action-items.md"
@@ -291,10 +234,7 @@
       "kind": "ui",
       "classification": "PUBLIC_FEATURE",
       "documentation": {
-        "concepts": [
-          "concepts/postmortems.md",
-          "concepts/postmortem-workflow.md"
-        ],
+        "concepts": ["concepts/postmortems.md", "concepts/postmortem-workflow.md"],
         "guides": [
           "guides/postmortems/create-review-publish.md",
           "guides/incidents/action-items.md"
@@ -311,10 +251,7 @@
       "kind": "ui",
       "classification": "PUBLIC_FEATURE",
       "documentation": {
-        "concepts": [
-          "concepts/postmortems.md",
-          "concepts/postmortem-workflow.md"
-        ],
+        "concepts": ["concepts/postmortems.md", "concepts/postmortem-workflow.md"],
         "guides": [
           "guides/postmortems/create-review-publish.md",
           "guides/incidents/action-items.md"
@@ -332,10 +269,7 @@
       "classification": "PUBLIC_FEATURE",
       "documentation": {
         "concepts": [],
-        "guides": [
-          "guides/reports/manage-dashboard.md",
-          "guides/reports/read-dashboard.md"
-        ],
+        "guides": ["guides/reports/manage-dashboard.md", "guides/reports/read-dashboard.md"],
         "reference": [],
         "troubleshooting": []
       },
@@ -349,9 +283,7 @@
       "classification": "PUBLIC_FEATURE",
       "documentation": {
         "concepts": [],
-        "guides": [
-          "guides/reports/create-dashboard.md"
-        ],
+        "guides": ["guides/reports/create-dashboard.md"],
         "reference": [],
         "troubleshooting": []
       },
@@ -365,10 +297,7 @@
       "classification": "PUBLIC_FEATURE",
       "documentation": {
         "concepts": [],
-        "guides": [
-          "guides/reports/create-dashboard.md",
-          "guides/reports/read-dashboard.md"
-        ],
+        "guides": ["guides/reports/create-dashboard.md", "guides/reports/read-dashboard.md"],
         "reference": [],
         "troubleshooting": []
       },
@@ -381,13 +310,8 @@
       "kind": "ui",
       "classification": "PUBLIC_FEATURE",
       "documentation": {
-        "concepts": [
-          "guides/reports/README.md",
-          "concepts/analytics.md"
-        ],
-        "guides": [
-          "guides/reports/create-dashboard.md"
-        ],
+        "concepts": ["guides/reports/README.md", "concepts/analytics.md"],
+        "guides": ["guides/reports/create-dashboard.md"],
         "reference": [],
         "troubleshooting": []
       },
@@ -395,18 +319,167 @@
       "taskDocumentationRequired": true
     },
     {
+      "route": "/runbooks/[id]/compare",
+      "file": "src/app/(app)/runbooks/[id]/compare/page.tsx",
+      "kind": "ui",
+      "classification": "PUBLIC_FEATURE",
+      "documentation": {
+        "concepts": [],
+        "guides": ["guides/runbooks/author.md"],
+        "reference": [],
+        "troubleshooting": []
+      },
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": false
+    },
+    {
+      "route": "/runbooks/[id]",
+      "file": "src/app/(app)/runbooks/[id]/page.tsx",
+      "kind": "ui",
+      "classification": "PUBLIC_FEATURE",
+      "documentation": {
+        "concepts": ["concepts/runbooks.md"],
+        "guides": ["guides/runbooks/author.md"],
+        "reference": [],
+        "troubleshooting": []
+      },
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": false
+    },
+    {
+      "route": "/runbooks/agents/[id]/setup",
+      "file": "src/app/(app)/runbooks/agents/[id]/setup/page.tsx",
+      "kind": "ui",
+      "classification": "PUBLIC_FEATURE",
+      "documentation": {
+        "concepts": [],
+        "guides": ["operate/deploy/agent-operations.md"],
+        "reference": [],
+        "troubleshooting": []
+      },
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": false
+    },
+    {
+      "route": "/runbooks/agents",
+      "file": "src/app/(app)/runbooks/agents/page.tsx",
+      "kind": "ui",
+      "classification": "PUBLIC_FEATURE",
+      "documentation": {
+        "concepts": [],
+        "guides": ["operate/deploy/agent-operations.md", "guides/runbooks/agents-pools-secrets.md"],
+        "reference": [],
+        "troubleshooting": []
+      },
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": false
+    },
+    {
+      "route": "/runbooks/agents/pools",
+      "file": "src/app/(app)/runbooks/agents/pools/page.tsx",
+      "kind": "ui",
+      "classification": "PUBLIC_FEATURE",
+      "documentation": {
+        "concepts": [],
+        "guides": ["guides/runbooks/agents-pools-secrets.md"],
+        "reference": [],
+        "troubleshooting": []
+      },
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": false
+    },
+    {
+      "route": "/runbooks/agents/secrets",
+      "file": "src/app/(app)/runbooks/agents/secrets/page.tsx",
+      "kind": "ui",
+      "classification": "PUBLIC_FEATURE",
+      "documentation": {
+        "concepts": [],
+        "guides": ["guides/runbooks/agents-pools-secrets.md"],
+        "reference": [],
+        "troubleshooting": []
+      },
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": false
+    },
+    {
+      "route": "/runbooks/agents/security",
+      "file": "src/app/(app)/runbooks/agents/security/page.tsx",
+      "kind": "ui",
+      "classification": "PUBLIC_FEATURE",
+      "documentation": {
+        "concepts": [],
+        "guides": ["guides/runbooks/agents-pools-secrets.md"],
+        "reference": [],
+        "troubleshooting": []
+      },
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": false
+    },
+    {
+      "route": "/runbooks/executions/[id]",
+      "file": "src/app/(app)/runbooks/executions/[id]/page.tsx",
+      "kind": "ui",
+      "classification": "PUBLIC_FEATURE",
+      "documentation": {
+        "concepts": ["concepts/runbooks.md"],
+        "guides": ["guides/runbooks/respond.md"],
+        "reference": [],
+        "troubleshooting": []
+      },
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": false
+    },
+    {
+      "route": "/runbooks/executions",
+      "file": "src/app/(app)/runbooks/executions/page.tsx",
+      "kind": "ui",
+      "classification": "PUBLIC_FEATURE",
+      "documentation": {
+        "concepts": ["concepts/runbooks.md"],
+        "guides": ["guides/runbooks/respond.md"],
+        "reference": [],
+        "troubleshooting": []
+      },
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": false
+    },
+    {
+      "route": "/runbooks/health",
+      "file": "src/app/(app)/runbooks/health/page.tsx",
+      "kind": "ui",
+      "classification": "PUBLIC_FEATURE",
+      "documentation": {
+        "concepts": ["concepts/runbooks.md"],
+        "guides": ["operate/deploy/runbook-qualification.md"],
+        "reference": [],
+        "troubleshooting": []
+      },
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": false
+    },
+    {
+      "route": "/runbooks",
+      "file": "src/app/(app)/runbooks/page.tsx",
+      "kind": "ui",
+      "classification": "PUBLIC_FEATURE",
+      "documentation": {
+        "concepts": ["guides/runbooks/README.md", "concepts/runbooks.md"],
+        "guides": [],
+        "reference": ["reference/runbooks.md"],
+        "troubleshooting": []
+      },
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": false
+    },
+    {
       "route": "/schedules/[id]",
       "file": "src/app/(app)/schedules/[id]/page.tsx",
       "kind": "ui",
       "classification": "PUBLIC_FEATURE",
       "documentation": {
-        "concepts": [
-          "concepts/schedules.md"
-        ],
-        "guides": [
-          "guides/on-call/build-schedule.md",
-          "guides/on-call/overrides.md"
-        ],
+        "concepts": ["concepts/schedules.md"],
+        "guides": ["guides/on-call/build-schedule.md", "guides/on-call/overrides.md"],
         "reference": [],
         "troubleshooting": []
       },
@@ -419,13 +492,22 @@
       "kind": "ui",
       "classification": "PUBLIC_FEATURE",
       "documentation": {
-        "concepts": [
-          "concepts/schedules.md"
-        ],
-        "guides": [
-          "guides/on-call/build-schedule.md",
-          "guides/on-call/overrides.md"
-        ],
+        "concepts": ["concepts/schedules.md"],
+        "guides": ["guides/on-call/build-schedule.md", "guides/on-call/overrides.md"],
+        "reference": [],
+        "troubleshooting": []
+      },
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": false
+    },
+    {
+      "route": "/services/[id]/automations/[ruleId]",
+      "file": "src/app/(app)/services/[id]/automations/[ruleId]/page.tsx",
+      "kind": "ui",
+      "classification": "PUBLIC_FEATURE",
+      "documentation": {
+        "concepts": ["concepts/runbooks.md"],
+        "guides": ["guides/runbooks/author.md"],
         "reference": [],
         "troubleshooting": []
       },
@@ -438,13 +520,8 @@
       "kind": "ui",
       "classification": "PUBLIC_FEATURE",
       "documentation": {
-        "concepts": [
-          "concepts/services.md",
-          "integrations/README.md"
-        ],
-        "guides": [
-          "guides/services/manage-service.md"
-        ],
+        "concepts": ["concepts/services.md", "integrations/README.md"],
+        "guides": ["guides/services/manage-service.md"],
         "reference": [],
         "troubleshooting": []
       },
@@ -457,12 +534,8 @@
       "kind": "ui",
       "classification": "PUBLIC_FEATURE",
       "documentation": {
-        "concepts": [
-          "concepts/services.md"
-        ],
-        "guides": [
-          "guides/notifications/configure-routing.md"
-        ],
+        "concepts": ["concepts/services.md"],
+        "guides": ["guides/notifications/configure-routing.md"],
         "reference": [],
         "troubleshooting": []
       },
@@ -475,13 +548,8 @@
       "kind": "ui",
       "classification": "PUBLIC_FEATURE",
       "documentation": {
-        "concepts": [
-          "concepts/services.md",
-          "concepts/teams.md"
-        ],
-        "guides": [
-          "guides/services/manage-service.md"
-        ],
+        "concepts": ["concepts/services.md", "concepts/teams.md"],
+        "guides": ["guides/services/manage-service.md"],
         "reference": [],
         "troubleshooting": []
       },
@@ -494,13 +562,8 @@
       "kind": "ui",
       "classification": "PUBLIC_FEATURE",
       "documentation": {
-        "concepts": [
-          "concepts/services.md",
-          "concepts/teams.md"
-        ],
-        "guides": [
-          "guides/services/manage-service.md"
-        ],
+        "concepts": ["concepts/services.md", "concepts/teams.md"],
+        "guides": ["guides/services/manage-service.md"],
         "reference": [],
         "troubleshooting": []
       },
@@ -513,12 +576,8 @@
       "kind": "ui",
       "classification": "PUBLIC_FEATURE",
       "documentation": {
-        "concepts": [
-          "concepts/services.md"
-        ],
-        "guides": [
-          "integrations/webhooks/webhook.md"
-        ],
+        "concepts": ["concepts/services.md"],
+        "guides": ["integrations/webhooks/webhook.md"],
         "reference": [],
         "troubleshooting": []
       },
@@ -531,12 +590,8 @@
       "kind": "ui",
       "classification": "PUBLIC_FEATURE",
       "documentation": {
-        "concepts": [
-          "concepts/services.md"
-        ],
-        "guides": [
-          "integrations/webhooks/webhook.md"
-        ],
+        "concepts": ["concepts/services.md"],
+        "guides": ["integrations/webhooks/webhook.md"],
         "reference": [],
         "troubleshooting": []
       },
@@ -549,13 +604,8 @@
       "kind": "ui",
       "classification": "PUBLIC_FEATURE",
       "documentation": {
-        "concepts": [
-          "concepts/services.md",
-          "concepts/teams.md"
-        ],
-        "guides": [
-          "guides/services/manage-service.md"
-        ],
+        "concepts": ["concepts/services.md", "concepts/teams.md"],
+        "guides": ["guides/services/manage-service.md"],
         "reference": [],
         "troubleshooting": []
       },
@@ -569,9 +619,7 @@
       "classification": "ADMIN_FEATURE",
       "documentation": {
         "concepts": [],
-        "guides": [
-          "guides/administration/api-keys.md"
-        ],
+        "guides": ["guides/administration/api-keys.md"],
         "reference": [],
         "troubleshooting": []
       },
@@ -585,9 +633,7 @@
       "classification": "ADMIN_FEATURE",
       "documentation": {
         "concepts": [],
-        "guides": [
-          "integrations/communication/slack/user-identity-linking.md"
-        ],
+        "guides": ["integrations/communication/slack/user-identity-linking.md"],
         "reference": [],
         "troubleshooting": []
       },
@@ -601,9 +647,7 @@
       "classification": "ADMIN_FEATURE",
       "documentation": {
         "concepts": [],
-        "guides": [
-          "guides/administration/custom-fields.md"
-        ],
+        "guides": ["guides/administration/custom-fields.md"],
         "reference": [],
         "troubleshooting": []
       },
@@ -616,9 +660,7 @@
       "kind": "ui",
       "classification": "ADMIN_FEATURE",
       "documentation": {
-        "concepts": [
-          "concepts/incident-sla.md"
-        ],
+        "concepts": ["concepts/incident-sla.md"],
         "guides": [
           "guides/incidents/configure-incident-sla.md",
           "guides/incidents/migrate-sla-scheduler.md"
@@ -635,9 +677,7 @@
       "kind": "ui",
       "classification": "ADMIN_FEATURE",
       "documentation": {
-        "concepts": [
-          "concepts/chatops.md"
-        ],
+        "concepts": ["concepts/chatops.md"],
         "guides": [
           "guides/chatops/configure-global-policy.md",
           "guides/chatops/create-war-room.md"
@@ -654,12 +694,8 @@
       "kind": "ui",
       "classification": "ADMIN_FEATURE",
       "documentation": {
-        "concepts": [
-          "integrations/issue-tracking/jira/README.md"
-        ],
-        "guides": [
-          "integrations/issue-tracking/jira/connect.md"
-        ],
+        "concepts": ["integrations/issue-tracking/jira/README.md"],
+        "guides": ["integrations/issue-tracking/jira/connect.md"],
         "reference": [],
         "troubleshooting": []
       },
@@ -672,12 +708,8 @@
       "kind": "ui",
       "classification": "ADMIN_FEATURE",
       "documentation": {
-        "concepts": [
-          "integrations/communication/microsoft-teams/README.md"
-        ],
-        "guides": [
-          "integrations/communication/microsoft-teams/connect.md"
-        ],
+        "concepts": ["integrations/communication/microsoft-teams/README.md"],
+        "guides": ["integrations/communication/microsoft-teams/connect.md"],
         "reference": [],
         "troubleshooting": []
       },
@@ -690,9 +722,7 @@
       "kind": "ui",
       "classification": "ADMIN_FEATURE",
       "documentation": {
-        "concepts": [
-          "integrations/README.md"
-        ],
+        "concepts": ["integrations/README.md"],
         "guides": [],
         "reference": [],
         "troubleshooting": []
@@ -706,12 +736,8 @@
       "kind": "ui",
       "classification": "ADMIN_FEATURE",
       "documentation": {
-        "concepts": [
-          "integrations/communication/slack/README.md"
-        ],
-        "guides": [
-          "integrations/communication/slack/connect-with-oauth.md"
-        ],
+        "concepts": ["integrations/communication/slack/README.md"],
+        "guides": ["integrations/communication/slack/connect-with-oauth.md"],
         "reference": [],
         "troubleshooting": []
       },
@@ -725,9 +751,7 @@
       "classification": "ADMIN_FEATURE",
       "documentation": {
         "concepts": [],
-        "guides": [
-          "guides/notifications/inspect-delivery.md"
-        ],
+        "guides": ["guides/notifications/inspect-delivery.md"],
         "reference": [],
         "troubleshooting": []
       },
@@ -740,12 +764,8 @@
       "kind": "ui",
       "classification": "ADMIN_FEATURE",
       "documentation": {
-        "concepts": [
-          "concepts/notifications.md"
-        ],
-        "guides": [
-          "guides/notifications/inspect-delivery.md"
-        ],
+        "concepts": ["concepts/notifications.md"],
+        "guides": ["guides/notifications/inspect-delivery.md"],
         "reference": [],
         "troubleshooting": []
       },
@@ -758,13 +778,8 @@
       "kind": "ui",
       "classification": "ADMIN_FEATURE",
       "documentation": {
-        "concepts": [
-          "guides/notifications/README.md",
-          "concepts/notifications.md"
-        ],
-        "guides": [
-          "guides/notifications/configure-provider.md"
-        ],
+        "concepts": ["guides/notifications/README.md", "concepts/notifications.md"],
+        "guides": ["guides/notifications/configure-provider.md"],
         "reference": [],
         "troubleshooting": []
       },
@@ -778,12 +793,8 @@
       "classification": "ADMIN_FEATURE",
       "documentation": {
         "concepts": [],
-        "guides": [
-          "guides/administration/settings-overview.md"
-        ],
-        "reference": [
-          "reference/configuration/README.md"
-        ],
+        "guides": ["guides/administration/settings-overview.md"],
+        "reference": ["reference/configuration/README.md"],
         "troubleshooting": []
       },
       "documentationMapping": "explicit-route-rule",
@@ -795,19 +806,14 @@
       "kind": "ui",
       "classification": "ADMIN_FEATURE",
       "documentation": {
-        "concepts": [
-          "guides/privacy/README.md",
-          "concepts/privacy.md"
-        ],
+        "concepts": ["guides/privacy/README.md", "concepts/privacy.md"],
         "guides": [
           "guides/privacy/manage-request.md",
           "guides/privacy/export-data.md",
           "guides/privacy/process-erasure.md"
         ],
         "reference": [],
-        "troubleshooting": [
-          "guides/privacy/retention-and-troubleshooting.md"
-        ]
+        "troubleshooting": ["guides/privacy/retention-and-troubleshooting.md"]
       },
       "documentationMapping": "explicit-route-rule",
       "taskDocumentationRequired": true
@@ -818,9 +824,7 @@
       "kind": "ui",
       "classification": "ADMIN_FEATURE",
       "documentation": {
-        "concepts": [
-          "concepts/authentication.md"
-        ],
+        "concepts": ["concepts/authentication.md"],
         "guides": [
           "guides/profile/manage-profile-and-preferences.md",
           "guides/notifications/user-preferences.md"
@@ -837,13 +841,8 @@
       "kind": "ui",
       "classification": "ADMIN_FEATURE",
       "documentation": {
-        "concepts": [
-          "concepts/compliance.md"
-        ],
-        "guides": [
-          "guides/compliance/evaluate-and-export.md",
-          "operate/security/hardening.md"
-        ],
+        "concepts": ["concepts/compliance.md"],
+        "guides": ["guides/compliance/evaluate-and-export.md", "operate/security/hardening.md"],
         "reference": [],
         "troubleshooting": []
       },
@@ -856,13 +855,8 @@
       "kind": "ui",
       "classification": "ADMIN_FEATURE",
       "documentation": {
-        "concepts": [
-          "concepts/authentication.md"
-        ],
-        "guides": [
-          "guides/administration/manage-sessions.md",
-          "operate/security/hardening.md"
-        ],
+        "concepts": ["concepts/authentication.md"],
+        "guides": ["guides/administration/manage-sessions.md", "operate/security/hardening.md"],
         "reference": [],
         "troubleshooting": []
       },
@@ -875,9 +869,7 @@
       "kind": "ui",
       "classification": "HIDDEN",
       "documentation": {
-        "concepts": [
-          "concepts/analytics.md"
-        ],
+        "concepts": ["concepts/analytics.md"],
         "guides": [],
         "reference": [],
         "troubleshooting": []
@@ -891,12 +883,8 @@
       "kind": "ui",
       "classification": "ADMIN_FEATURE",
       "documentation": {
-        "concepts": [
-          "concepts/status-pages.md"
-        ],
-        "guides": [
-          "guides/status-pages/publish-update.md"
-        ],
+        "concepts": ["concepts/status-pages.md"],
+        "guides": ["guides/status-pages/publish-update.md"],
         "reference": [],
         "troubleshooting": []
       },
@@ -927,9 +915,7 @@
       "kind": "ui",
       "classification": "ADMIN_FEATURE",
       "documentation": {
-        "concepts": [
-          "concepts/status-pages.md"
-        ],
+        "concepts": ["concepts/status-pages.md"],
         "guides": [
           "guides/status-pages/create-and-configure.md",
           "guides/status-pages/subscribers-and-api-access.md",
@@ -942,18 +928,28 @@
       "taskDocumentationRequired": true
     },
     {
+      "route": "/settings/system/emergency",
+      "file": "src/app/(app)/settings/system/emergency/page.tsx",
+      "kind": "ui",
+      "classification": "OPERATOR_FEATURE",
+      "documentation": {
+        "concepts": [],
+        "guides": ["guides/identity/configure-emergency-access.md"],
+        "reference": [],
+        "troubleshooting": ["troubleshooting/login/emergency-access.md"]
+      },
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": true
+    },
+    {
       "route": "/settings/system/health",
       "file": "src/app/(app)/settings/system/health/page.tsx",
       "kind": "ui",
       "classification": "OPERATOR_FEATURE",
       "documentation": {
         "concepts": [],
-        "guides": [
-          "operate/reliability/health-center.md"
-        ],
-        "reference": [
-          "reference/health.md"
-        ],
+        "guides": ["operate/reliability/health-center.md"],
+        "reference": ["reference/health.md"],
         "troubleshooting": []
       },
       "documentationMapping": "explicit-route-rule",
@@ -966,12 +962,8 @@
       "classification": "OPERATOR_FEATURE",
       "documentation": {
         "concepts": [],
-        "guides": [
-          "operate/reliability/health-and-metrics.md"
-        ],
-        "reference": [
-          "reference/configuration/README.md"
-        ],
+        "guides": ["operate/reliability/health-and-metrics.md"],
+        "reference": ["reference/configuration/README.md"],
         "troubleshooting": []
       },
       "documentationMapping": "explicit-route-rule",
@@ -984,10 +976,7 @@
       "classification": "OPERATOR_FEATURE",
       "documentation": {
         "concepts": [],
-        "guides": [
-          "operate/reliability/scaling.md",
-          "operate/capacity/scaling-signals.md"
-        ],
+        "guides": ["operate/reliability/scaling.md", "operate/capacity/scaling-signals.md"],
         "reference": [],
         "troubleshooting": []
       },
@@ -1002,9 +991,7 @@
       "documentation": {
         "concepts": [],
         "guides": [],
-        "reference": [
-          "reference/keyboard-shortcuts.md"
-        ],
+        "reference": ["reference/keyboard-shortcuts.md"],
         "troubleshooting": []
       },
       "documentationMapping": "explicit-route-rule",
@@ -1017,9 +1004,7 @@
       "classification": "OPERATOR_FEATURE",
       "documentation": {
         "concepts": [],
-        "guides": [
-          "operate/reliability/system-logs.md"
-        ],
+        "guides": ["operate/reliability/system-logs.md"],
         "reference": [],
         "troubleshooting": []
       },
@@ -1032,13 +1017,8 @@
       "kind": "ui",
       "classification": "ADMIN_FEATURE",
       "documentation": {
-        "concepts": [
-          "concepts/teams.md",
-          "concepts/services.md"
-        ],
-        "guides": [
-          "guides/teams/manage-team.md"
-        ],
+        "concepts": ["concepts/teams.md", "concepts/services.md"],
+        "guides": ["guides/teams/manage-team.md"],
         "reference": [],
         "troubleshooting": []
       },
@@ -1051,13 +1031,8 @@
       "kind": "ui",
       "classification": "ADMIN_FEATURE",
       "documentation": {
-        "concepts": [
-          "concepts/teams.md",
-          "concepts/services.md"
-        ],
-        "guides": [
-          "guides/teams/manage-team.md"
-        ],
+        "concepts": ["concepts/teams.md", "concepts/services.md"],
+        "guides": ["guides/teams/manage-team.md"],
         "reference": [],
         "troubleshooting": []
       },
@@ -1070,12 +1045,8 @@
       "kind": "ui",
       "classification": "ADMIN_FEATURE",
       "documentation": {
-        "concepts": [
-          "concepts/permissions.md"
-        ],
-        "guides": [
-          "guides/administration/manage-users.md"
-        ],
+        "concepts": ["concepts/permissions.md"],
+        "guides": ["guides/administration/manage-users.md"],
         "reference": [],
         "troubleshooting": []
       },
@@ -1088,12 +1059,22 @@
       "kind": "ui",
       "classification": "ADMIN_FEATURE",
       "documentation": {
-        "concepts": [
-          "concepts/permissions.md"
-        ],
-        "guides": [
-          "guides/administration/manage-users.md"
-        ],
+        "concepts": ["concepts/permissions.md"],
+        "guides": ["guides/administration/manage-users.md"],
+        "reference": [],
+        "troubleshooting": []
+      },
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": false
+    },
+    {
+      "route": "/wallboard",
+      "file": "src/app/(kiosk)/wallboard/page.tsx",
+      "kind": "ui",
+      "classification": "PUBLIC_FEATURE",
+      "documentation": {
+        "concepts": ["guides/dashboard/README.md"],
+        "guides": ["guides/dashboard/use-command-center.md"],
         "reference": [],
         "troubleshooting": []
       },
@@ -1106,13 +1087,8 @@
       "kind": "ui",
       "classification": "PUBLIC_FEATURE",
       "documentation": {
-        "concepts": [
-          "concepts/mobile.md",
-          "concepts/analytics.md"
-        ],
-        "guides": [
-          "guides/mobile/offline-and-updates.md"
-        ],
+        "concepts": ["concepts/mobile.md", "concepts/analytics.md"],
+        "guides": ["guides/mobile/offline-and-updates.md"],
         "reference": [],
         "troubleshooting": []
       },
@@ -1125,9 +1101,7 @@
       "kind": "ui",
       "classification": "PUBLIC_FEATURE",
       "documentation": {
-        "concepts": [
-          "concepts/mobile.md"
-        ],
+        "concepts": ["concepts/mobile.md"],
         "guides": [
           "guides/mobile/install-and-notifications.md",
           "guides/mobile/offline-and-updates.md"
@@ -1144,13 +1118,8 @@
       "kind": "ui",
       "classification": "PUBLIC_FEATURE",
       "documentation": {
-        "concepts": [
-          "concepts/incidents.md"
-        ],
-        "guides": [
-          "guides/mobile/respond-to-incidents.md",
-          "guides/mobile/offline-and-updates.md"
-        ],
+        "concepts": ["concepts/incidents.md"],
+        "guides": ["guides/mobile/respond-to-incidents.md", "guides/mobile/offline-and-updates.md"],
         "reference": [],
         "troubleshooting": []
       },
@@ -1181,13 +1150,8 @@
       "kind": "ui",
       "classification": "PUBLIC_FEATURE",
       "documentation": {
-        "concepts": [
-          "concepts/incidents.md"
-        ],
-        "guides": [
-          "guides/mobile/respond-to-incidents.md",
-          "guides/mobile/offline-and-updates.md"
-        ],
+        "concepts": ["concepts/incidents.md"],
+        "guides": ["guides/mobile/respond-to-incidents.md", "guides/mobile/offline-and-updates.md"],
         "reference": [],
         "troubleshooting": []
       },
@@ -1200,9 +1164,7 @@
       "kind": "ui",
       "classification": "PUBLIC_FEATURE",
       "documentation": {
-        "concepts": [
-          "concepts/mobile.md"
-        ],
+        "concepts": ["concepts/mobile.md"],
         "guides": [
           "guides/mobile/install-and-notifications.md",
           "guides/mobile/offline-and-updates.md"
@@ -1219,12 +1181,8 @@
       "kind": "ui",
       "classification": "PUBLIC_FEATURE",
       "documentation": {
-        "concepts": [
-          "concepts/notifications.md"
-        ],
-        "guides": [
-          "guides/mobile/install-and-notifications.md"
-        ],
+        "concepts": ["concepts/notifications.md"],
+        "guides": ["guides/mobile/install-and-notifications.md"],
         "reference": [],
         "troubleshooting": []
       },
@@ -1237,9 +1195,7 @@
       "kind": "ui",
       "classification": "PUBLIC_FEATURE",
       "documentation": {
-        "concepts": [
-          "concepts/mobile.md"
-        ],
+        "concepts": ["concepts/mobile.md"],
         "guides": [
           "guides/mobile/respond-to-incidents.md",
           "guides/mobile/install-and-notifications.md"
@@ -1256,12 +1212,8 @@
       "kind": "ui",
       "classification": "PUBLIC_FEATURE",
       "documentation": {
-        "concepts": [
-          "concepts/escalation-policies.md"
-        ],
-        "guides": [
-          "guides/mobile/use-mobile-operations.md"
-        ],
+        "concepts": ["concepts/escalation-policies.md"],
+        "guides": ["guides/mobile/use-mobile-operations.md"],
         "reference": [],
         "troubleshooting": []
       },
@@ -1274,12 +1226,8 @@
       "kind": "ui",
       "classification": "PUBLIC_FEATURE",
       "documentation": {
-        "concepts": [
-          "concepts/escalation-policies.md"
-        ],
-        "guides": [
-          "guides/mobile/use-mobile-operations.md"
-        ],
+        "concepts": ["concepts/escalation-policies.md"],
+        "guides": ["guides/mobile/use-mobile-operations.md"],
         "reference": [],
         "troubleshooting": []
       },
@@ -1292,12 +1240,8 @@
       "kind": "ui",
       "classification": "PUBLIC_FEATURE",
       "documentation": {
-        "concepts": [
-          "concepts/postmortems.md"
-        ],
-        "guides": [
-          "guides/mobile/use-mobile-operations.md"
-        ],
+        "concepts": ["concepts/postmortems.md"],
+        "guides": ["guides/mobile/use-mobile-operations.md"],
         "reference": [],
         "troubleshooting": []
       },
@@ -1310,12 +1254,8 @@
       "kind": "ui",
       "classification": "PUBLIC_FEATURE",
       "documentation": {
-        "concepts": [
-          "concepts/postmortems.md"
-        ],
-        "guides": [
-          "guides/mobile/use-mobile-operations.md"
-        ],
+        "concepts": ["concepts/postmortems.md"],
+        "guides": ["guides/mobile/use-mobile-operations.md"],
         "reference": [],
         "troubleshooting": []
       },
@@ -1328,12 +1268,8 @@
       "kind": "ui",
       "classification": "PUBLIC_FEATURE",
       "documentation": {
-        "concepts": [
-          "concepts/schedules.md"
-        ],
-        "guides": [
-          "guides/mobile/use-mobile-operations.md"
-        ],
+        "concepts": ["concepts/schedules.md"],
+        "guides": ["guides/mobile/use-mobile-operations.md"],
         "reference": [],
         "troubleshooting": []
       },
@@ -1346,12 +1282,22 @@
       "kind": "ui",
       "classification": "PUBLIC_FEATURE",
       "documentation": {
-        "concepts": [
-          "concepts/schedules.md"
-        ],
-        "guides": [
-          "guides/mobile/use-mobile-operations.md"
-        ],
+        "concepts": ["concepts/schedules.md"],
+        "guides": ["guides/mobile/use-mobile-operations.md"],
+        "reference": [],
+        "troubleshooting": []
+      },
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": true
+    },
+    {
+      "route": "/m/services/[id]/automation",
+      "file": "src/app/(mobile)/m/services/[id]/automation/page.tsx",
+      "kind": "ui",
+      "classification": "PUBLIC_FEATURE",
+      "documentation": {
+        "concepts": ["concepts/mobile.md", "concepts/runbooks.md"],
+        "guides": ["guides/mobile/use-mobile-operations.md"],
         "reference": [],
         "troubleshooting": []
       },
@@ -1364,12 +1310,8 @@
       "kind": "ui",
       "classification": "PUBLIC_FEATURE",
       "documentation": {
-        "concepts": [
-          "concepts/services.md"
-        ],
-        "guides": [
-          "guides/mobile/use-mobile-operations.md"
-        ],
+        "concepts": ["concepts/services.md"],
+        "guides": ["guides/mobile/use-mobile-operations.md"],
         "reference": [],
         "troubleshooting": []
       },
@@ -1382,12 +1324,8 @@
       "kind": "ui",
       "classification": "PUBLIC_FEATURE",
       "documentation": {
-        "concepts": [
-          "concepts/services.md"
-        ],
-        "guides": [
-          "guides/mobile/use-mobile-operations.md"
-        ],
+        "concepts": ["concepts/services.md"],
+        "guides": ["guides/mobile/use-mobile-operations.md"],
         "reference": [],
         "troubleshooting": []
       },
@@ -1400,12 +1338,8 @@
       "kind": "ui",
       "classification": "PUBLIC_FEATURE",
       "documentation": {
-        "concepts": [
-          "concepts/status-pages.md"
-        ],
-        "guides": [
-          "guides/mobile/use-mobile-operations.md"
-        ],
+        "concepts": ["concepts/status-pages.md"],
+        "guides": ["guides/mobile/use-mobile-operations.md"],
         "reference": [],
         "troubleshooting": []
       },
@@ -1418,12 +1352,8 @@
       "kind": "ui",
       "classification": "PUBLIC_FEATURE",
       "documentation": {
-        "concepts": [
-          "concepts/teams.md"
-        ],
-        "guides": [
-          "guides/mobile/use-mobile-operations.md"
-        ],
+        "concepts": ["concepts/teams.md"],
+        "guides": ["guides/mobile/use-mobile-operations.md"],
         "reference": [],
         "troubleshooting": []
       },
@@ -1436,12 +1366,8 @@
       "kind": "ui",
       "classification": "PUBLIC_FEATURE",
       "documentation": {
-        "concepts": [
-          "concepts/teams.md"
-        ],
-        "guides": [
-          "guides/mobile/use-mobile-operations.md"
-        ],
+        "concepts": ["concepts/teams.md"],
+        "guides": ["guides/mobile/use-mobile-operations.md"],
         "reference": [],
         "troubleshooting": []
       },
@@ -1489,9 +1415,7 @@
       "classification": "PUBLIC_FEATURE",
       "documentation": {
         "concepts": [],
-        "guides": [
-          "operate/reliability/system-logs.md"
-        ],
+        "guides": ["operate/reliability/system-logs.md"],
         "reference": [],
         "troubleshooting": []
       },
@@ -1504,10 +1428,7 @@
       "kind": "ui",
       "classification": "PUBLIC_FEATURE",
       "documentation": {
-        "concepts": [
-          "concepts/mobile.md",
-          "concepts/authentication.md"
-        ],
+        "concepts": ["concepts/mobile.md", "concepts/authentication.md"],
         "guides": [],
         "reference": [],
         "troubleshooting": []
@@ -1521,10 +1442,7 @@
       "kind": "ui",
       "classification": "PUBLIC_FEATURE",
       "documentation": {
-        "concepts": [
-          "concepts/mobile.md",
-          "concepts/authentication.md"
-        ],
+        "concepts": ["concepts/mobile.md", "concepts/authentication.md"],
         "guides": [],
         "reference": [],
         "troubleshooting": []
@@ -1538,12 +1456,8 @@
       "kind": "ui",
       "classification": "PUBLIC_FEATURE",
       "documentation": {
-        "concepts": [
-          "concepts/status-pages.md"
-        ],
-        "guides": [
-          "guides/status-pages/publish-update.md"
-        ],
+        "concepts": ["concepts/status-pages.md"],
+        "guides": ["guides/status-pages/publish-update.md"],
         "reference": [],
         "troubleshooting": []
       },
@@ -1556,12 +1470,8 @@
       "kind": "ui",
       "classification": "PUBLIC_FEATURE",
       "documentation": {
-        "concepts": [
-          "concepts/status-pages.md"
-        ],
-        "guides": [
-          "guides/status-pages/publish-update.md"
-        ],
+        "concepts": ["concepts/status-pages.md"],
+        "guides": ["guides/status-pages/publish-update.md"],
         "reference": [],
         "troubleshooting": []
       },
@@ -1574,12 +1484,8 @@
       "kind": "ui",
       "classification": "PUBLIC_FEATURE",
       "documentation": {
-        "concepts": [
-          "concepts/status-pages.md"
-        ],
-        "guides": [
-          "guides/status-pages/publish-update.md"
-        ],
+        "concepts": ["concepts/status-pages.md"],
+        "guides": ["guides/status-pages/publish-update.md"],
         "reference": [],
         "troubleshooting": []
       },
@@ -1592,12 +1498,8 @@
       "kind": "ui",
       "classification": "PUBLIC_FEATURE",
       "documentation": {
-        "concepts": [
-          "concepts/status-pages.md"
-        ],
-        "guides": [
-          "guides/status-pages/publish-update.md"
-        ],
+        "concepts": ["concepts/status-pages.md"],
+        "guides": ["guides/status-pages/publish-update.md"],
         "reference": [],
         "troubleshooting": []
       },
@@ -1610,12 +1512,8 @@
       "kind": "ui",
       "classification": "PUBLIC_FEATURE",
       "documentation": {
-        "concepts": [
-          "concepts/status-pages.md"
-        ],
-        "guides": [
-          "guides/status-pages/publish-update.md"
-        ],
+        "concepts": ["concepts/status-pages.md"],
+        "guides": ["guides/status-pages/publish-update.md"],
         "reference": [],
         "troubleshooting": []
       },
@@ -1628,12 +1526,8 @@
       "kind": "ui",
       "classification": "PUBLIC_FEATURE",
       "documentation": {
-        "concepts": [
-          "concepts/status-pages.md"
-        ],
-        "guides": [
-          "guides/status-pages/publish-update.md"
-        ],
+        "concepts": ["concepts/status-pages.md"],
+        "guides": ["guides/status-pages/publish-update.md"],
         "reference": [],
         "troubleshooting": []
       },
@@ -1646,12 +1540,8 @@
       "kind": "ui",
       "classification": "PUBLIC_FEATURE",
       "documentation": {
-        "concepts": [
-          "concepts/status-pages.md"
-        ],
-        "guides": [
-          "guides/status-pages/publish-update.md"
-        ],
+        "concepts": ["concepts/status-pages.md"],
+        "guides": ["guides/status-pages/publish-update.md"],
         "reference": [],
         "troubleshooting": []
       },
@@ -1664,12 +1554,22 @@
       "kind": "ui",
       "classification": "PUBLIC_FEATURE",
       "documentation": {
-        "concepts": [
-          "concepts/status-pages.md"
-        ],
-        "guides": [
-          "guides/status-pages/publish-update.md"
-        ],
+        "concepts": ["concepts/status-pages.md"],
+        "guides": ["guides/status-pages/publish-update.md"],
+        "reference": [],
+        "troubleshooting": []
+      },
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": false
+    },
+    {
+      "route": "/auth/oidc-test-result",
+      "file": "src/app/auth/oidc-test-result/page.tsx",
+      "kind": "ui",
+      "classification": "PUBLIC_FEATURE",
+      "documentation": {
+        "concepts": ["concepts/authentication.md"],
+        "guides": ["guides/identity/sso-lockout-recovery.md"],
         "reference": [],
         "troubleshooting": []
       },
@@ -1682,9 +1582,7 @@
       "kind": "ui",
       "classification": "PUBLIC_FEATURE",
       "documentation": {
-        "concepts": [
-          "concepts/authentication.md"
-        ],
+        "concepts": ["concepts/authentication.md"],
         "guides": [],
         "reference": [],
         "troubleshooting": []
@@ -1698,9 +1596,7 @@
       "kind": "ui",
       "classification": "PUBLIC_FEATURE",
       "documentation": {
-        "concepts": [
-          "concepts/mobile.md"
-        ],
+        "concepts": ["concepts/mobile.md"],
         "guides": [],
         "reference": [],
         "troubleshooting": []
@@ -1715,9 +1611,7 @@
       "classification": "INTERNAL",
       "documentation": {
         "concepts": [],
-        "guides": [
-          "develop/local-development.md"
-        ],
+        "guides": ["develop/local-development.md"],
         "reference": [],
         "troubleshooting": []
       },
@@ -1730,12 +1624,24 @@
       "kind": "ui",
       "classification": "PUBLIC_FEATURE",
       "documentation": {
-        "concepts": [
-          "concepts/authentication.md"
-        ],
+        "concepts": ["concepts/authentication.md"],
         "guides": [],
         "reference": [],
         "troubleshooting": []
+      },
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": false
+    },
+    {
+      "route": "/login/emergency",
+      "file": "src/app/login/emergency/page.tsx",
+      "kind": "ui",
+      "classification": "PUBLIC_FEATURE",
+      "documentation": {
+        "concepts": [],
+        "guides": ["guides/identity/sso-lockout-recovery.md"],
+        "reference": [],
+        "troubleshooting": ["troubleshooting/login/emergency-access.md"]
       },
       "documentationMapping": "explicit-route-rule",
       "taskDocumentationRequired": false
@@ -1746,12 +1652,24 @@
       "kind": "ui",
       "classification": "PUBLIC_FEATURE",
       "documentation": {
-        "concepts": [
-          "concepts/authentication.md"
-        ],
+        "concepts": ["concepts/authentication.md"],
         "guides": [],
         "reference": [],
         "troubleshooting": []
+      },
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": false
+    },
+    {
+      "route": "/recovery",
+      "file": "src/app/recovery/page.tsx",
+      "kind": "ui",
+      "classification": "PUBLIC_FEATURE",
+      "documentation": {
+        "concepts": [],
+        "guides": ["guides/identity/sso-lockout-recovery.md"],
+        "reference": [],
+        "troubleshooting": ["troubleshooting/login/emergency-access.md"]
       },
       "documentationMapping": "explicit-route-rule",
       "taskDocumentationRequired": false
@@ -1762,9 +1680,7 @@
       "kind": "ui",
       "classification": "PUBLIC_FEATURE",
       "documentation": {
-        "concepts": [
-          "concepts/authentication.md"
-        ],
+        "concepts": ["concepts/authentication.md"],
         "guides": [],
         "reference": [],
         "troubleshooting": []
@@ -1778,9 +1694,7 @@
       "kind": "ui",
       "classification": "PUBLIC_FEATURE",
       "documentation": {
-        "concepts": [
-          "concepts/authentication.md"
-        ],
+        "concepts": ["concepts/authentication.md"],
         "guides": [],
         "reference": [],
         "troubleshooting": []
@@ -1794,12 +1708,8 @@
       "kind": "ui",
       "classification": "PUBLIC_FEATURE",
       "documentation": {
-        "concepts": [
-          "start/production-install.md"
-        ],
-        "guides": [
-          "start/quickstart.md"
-        ],
+        "concepts": ["start/production-install.md"],
+        "guides": ["start/quickstart.md"],
         "reference": [],
         "troubleshooting": []
       },

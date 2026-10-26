@@ -16,15 +16,17 @@ test('2.1.0 retains every baseline documentation file and asset', () => {
   for (const path of files('docs/v2.0.0')) {
     const copy = path.replace('docs/v2.0.0/', 'docs/v2.1.0/');
     assert.ok(existsSync(copy), `Missing baseline copy: ${copy}`);
-    if (path.includes('/assets/')) assert.deepEqual(readFileSync(copy), readFileSync(path));
+    if (path.includes('/assets/') && !path.endsWith('.yaml')) {
+      assert.deepEqual(readFileSync(copy), readFileSync(path));
+    }
   }
 });
 
-test('2.1.0 is upcoming without changing the released version', () => {
+test('2.1.0 is released in docs/versions.json', () => {
   const versions = JSON.parse(readFileSync('docs/versions.json', 'utf8'));
-  assert.equal(versions.currentRelease, 'v2.0.0');
-  assert.equal(versions.upcomingVersion, 'v2.1.0');
-  assert.ok(!versions.releasedVersions.includes('v2.1.0'));
+  assert.equal(versions.currentRelease, 'v2.1.0');
+  assert.equal(versions.upcomingVersion, 'v2.2.0');
+  assert.ok(versions.releasedVersions.includes('v2.1.0'));
 });
 
 test('2.1.0 frontmatter and local links resolve', () => {

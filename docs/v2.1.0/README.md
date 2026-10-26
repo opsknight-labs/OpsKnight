@@ -1,6 +1,6 @@
 ---
 title: OpsKnight 2.1.0 documentation
-description: Upcoming OpsKnight 2.1.0 documentation, including Runbook authoring and incident remediation.
+description: Documentation for the released OpsKnight 2.1.0 product, including Runbook authoring and incident remediation.
 type: concept
 product_area: documentation
 audience:
@@ -8,19 +8,15 @@ audience:
   - administrator
 verification:
   level: source
-  verified_at: 2026-09-29
+  verified_at: 2026-10-26
   evidence: [docs/versions.json, scripts/sync-docs-to-website.sh]
 ---
 
 # OpsKnight 2.1.0 documentation
 
-This is the documentation for the upcoming **OpsKnight 2.1.0** product.
-The baseline pages and assets are copied from `v2.0.0`, with Runbooks guidance
-added for this version. Existing deployment examples retain their verified
-2.0.0 image references; this documentation does not claim a 2.1.0 image is released.
-`docs/versions.json` registers `v2.1.0` as upcoming, while `v2.0.0` remains the
-current release. Normal release-gated documentation sync skips upcoming versions.
-For a documentation preview, explicitly use `DOCS_SYNC_INCLUDE_UPCOMING=true`.
+This is the documentation for the released **OpsKnight 2.1.0** product.
+`v2.1.0` is the current release and is listed in `releasedVersions` in
+`docs/versions.json`, so the release-gated documentation sync publishes it.
 
 The baseline documentation is grounded in product evidence. Historical
 documentation can help locate a topic, but it is never authoritative.

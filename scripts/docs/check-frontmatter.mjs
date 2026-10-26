@@ -1,10 +1,18 @@
 #!/usr/bin/env node
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import YAML from 'yaml';
 import Ajv2020 from 'ajv/dist/2020.js';
 import addFormats from 'ajv-formats';
-import { exists, filesUnder, readRepositoryFile } from './discovery-lib.mjs';
+import { exists, filesUnder, readRepositoryFile, repositoryRoot } from './discovery-lib.mjs';
 
-const docsRoot = process.argv[2] || 'docs/v2.0.0';
+let defaultRoot = 'docs/v2.0.0';
+try {
+  const versions = JSON.parse(readFileSync(resolve(repositoryRoot, 'docs/versions.json'), 'utf8'));
+  if (versions.currentRelease) defaultRoot = `docs/${versions.currentRelease}`;
+} catch {}
+
+const docsRoot = process.argv[2] || defaultRoot;
 const schema = JSON.parse(readRepositoryFile(`${docsRoot}/metadata.schema.json`));
 const ajv = new Ajv2020({ allErrors: true, strict: true });
 addFormats(ajv);

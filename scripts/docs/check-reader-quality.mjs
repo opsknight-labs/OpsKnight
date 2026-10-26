@@ -5,11 +5,13 @@ import YAML from 'yaml';
 import { filesUnder, repositoryRoot } from './discovery-lib.mjs';
 
 const failures = [];
+const versions = JSON.parse(readFileSync(resolve(repositoryRoot, 'docs/versions.json'), 'utf8'));
+const currentDocsVersion = versions.currentRelease || 'v2.0.0';
 const readerOrder = ['MAPPED', 'READER_COMPLETE', 'SOURCE_VERIFIED', 'RUNTIME_VERIFIED'];
 const taskTypes = new Set(['how-to', 'tutorial', 'deployment', 'integration', 'troubleshooting']);
 const atLeast = (status, minimum) => readerOrder.indexOf(status) >= readerOrder.indexOf(minimum);
 const hasHeading = (body, patterns) => patterns.some(pattern => new RegExp(`^##\\s+(?:${pattern})`, 'im').test(body));
-const pages = filesUnder('docs/v2.0.0', file => file.endsWith('.md')).map(file => {
+const pages = filesUnder(`docs/${currentDocsVersion}`, file => file.endsWith('.md')).map(file => {
   const source = readFileSync(resolve(repositoryRoot, file), 'utf8');
   const match = source.match(/^---\n([\s\S]*?)\n---\n([\s\S]*)$/);
   if (!match) return { file, metadata: {}, body: source };

@@ -263,4 +263,11 @@ writeFileSync(resolve(root, 'configuration/internal.md'), internalConfigurationB
 writeFileSync(resolve(root, 'api/README.md'), apiBody);
 writeFileSync(resolve(root, 'limits.md'), limitsBody);
 writeFileSync(resolve(root, 'features.md'), featureBody);
+
+try {
+  execFileSync('npx', ['prettier', '--write', resolve(root, 'configuration/README.md'), resolve(root, 'features.md'), resolve(root, 'api/README.md')], { stdio: 'ignore' });
+} catch {
+  // Prettier formatting is best-effort when available
+}
+
 console.log(`Generated ${routes.length} API routes, ${variables.length} configuration entries, and ${permissions.capabilities.length} capabilities.`);

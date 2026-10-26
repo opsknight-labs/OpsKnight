@@ -113,13 +113,14 @@ jobs:
           npm run build --prefix ./opsknight-website
           python3 -m http.server 15000 --directory ./opsknight-website/out > /tmp/opsknight-docs-site.log 2>&1 &
           echo $! > /tmp/opsknight-docs-site.pid
+          CURRENT_VERSION=$(node -p 'require("./docs/versions.json").currentRelease || "v2.0.0"')
           for attempt in {1..30}; do
-            curl --fail --silent http://127.0.0.1:15000/docs/v2.0.0/ >/dev/null && exit 0
+            curl --fail --silent "http://127.0.0.1:15000/docs/${CURRENT_VERSION}/" >/dev/null && exit 0
             sleep 1
           done
           cat /tmp/opsknight-docs-site.log
           exit 1
-      - name: Enforce final 2.0.0 release evidence
+      - name: Enforce final release evidence
         env:
           DOCS_IMAGE_PULL_POLICY: never
           DOCS_EXPECTED_PRODUCT_REVISION: ${{ github.sha }}

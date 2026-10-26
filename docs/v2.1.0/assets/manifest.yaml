@@ -96,6 +96,38 @@ assets:
     evidence: analytics/dashboard-edit.png
     sha256: 521544573961736cc259f0ac0dfdaed1d60b491d945c406e5986bc2a38c0b574
 manualAssets:
+  authentication-invitation-email-desktop-dark.png:
+    sha256: d0bb5d0eb88ac58fce462a4c773857e27021ac790d2f9373517c5ccacbaa11d8
+    provenance: Enterprise SSO capture added for OpsKnight 2.1 identity verification.
+    classification: manual-product-example
+  authentication-provider-workspace-desktop.png:
+    sha256: e667c42173115e767f8145cb7d286a166eca61b926e9941a72d3a9085d526539
+    provenance: Enterprise SSO capture added for OpsKnight 2.1 identity verification.
+    classification: manual-product-example
+  authentication-provider-workspace-mobile.png:
+    sha256: 76db064f5c686eb859e9e8a01680b168a4a1053c2032dab2e643e517a9e9a2b3
+    provenance: Enterprise SSO capture added for OpsKnight 2.1 identity verification.
+    classification: manual-product-example
+  authentication-security-email-mobile.png:
+    sha256: abc4024b56ff8fc9778ab1104e562741bfc4d5b7be2e1af3a4b374f61ab2cab9
+    provenance: Enterprise SSO capture added for OpsKnight 2.1 identity verification.
+    classification: manual-product-example
+  enterprise-authentication-desktop.png:
+    sha256: 29d6c0417685e6c407248936b1f85043c1900682fd74a018ce96af00b50d634a
+    provenance: Enterprise SSO capture added for OpsKnight 2.1 identity verification.
+    classification: manual-product-example
+  enterprise-authentication-mobile.png:
+    sha256: b5595fd5dc8f940dc471dc578902a199e33ca10317f04f29fe00bb50a6ee964d
+    provenance: Enterprise SSO capture added for OpsKnight 2.1 identity verification.
+    classification: manual-product-example
+  enterprise-emergency-access.png:
+    sha256: 9d251461c220099e88fb485435023ddb134c6e420252334f1e90a88f1437efc7
+    provenance: Enterprise SSO capture added for OpsKnight 2.1 identity verification.
+    classification: manual-product-example
+  enterprise-staging-validation-failure.png:
+    sha256: fc44a226bff213f83533e336ff8a0de9f829d924c7bf0bed0b69071fc471a6e3
+    provenance: Enterprise SSO capture added for OpsKnight 2.1 identity verification.
+    classification: manual-product-example
   teams-incident-card.png:
     sha256: 184bcc4b1fd76b0f99df89d8f0275dca5e8909592f811fc558426da0a6a0a6e2
     provenance: User-supplied Microsoft Teams incident-card capture added in commit ed8195f334eeeed14cccce1674322d986023bc38.

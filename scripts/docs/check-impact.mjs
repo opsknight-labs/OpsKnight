@@ -15,7 +15,9 @@ const changed = execFileSync('git', ['diff', '--name-only', `${base}...HEAD`], {
   cwd: repositoryRoot,
   encoding: 'utf8',
 }).trim().split('\n').filter(Boolean);
-const inventory = YAML.parse(readFileSync(resolve(repositoryRoot, 'docs/v2.0.0/capabilities.yaml'), 'utf8'));
+const versions = JSON.parse(readFileSync(resolve(repositoryRoot, 'docs/versions.json'), 'utf8'));
+const currentDocsVersion = versions.currentRelease || 'v2.0.0';
+const inventory = YAML.parse(readFileSync(resolve(repositoryRoot, `docs/${currentDocsVersion}/capabilities.yaml`), 'utf8'));
 const currentGraph = JSON.parse(readFileSync(resolve(repositoryRoot, 'generated/docs-contracts/current.json'), 'utf8'));
 let baseGraph = { contracts: [] };
 try {
@@ -38,7 +40,7 @@ for (const [id, capability] of Object.entries(inventory.capabilities ?? {})) {
   if (productChanges.length === 0) continue;
   const mappedDocs = ['concepts', 'guides', 'reference']
     .flatMap(group => capability[group] ?? [])
-    .map(path => `docs/v2.0.0/${path}`);
+    .map(path => `docs/${currentDocsVersion}/${path}`);
   const documentationChanges = changed.filter(file =>
     mappedDocs.includes(file)
   );

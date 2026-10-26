@@ -4,10 +4,11 @@ description: Connect AppDynamics alerts to OpsKnight incident ingestion.
 type: integration
 product_area: integrations
 audience: [administrator, operator]
-keywords: ["AppDynamics webhook", "connect AppDynamics", "AppDynamics alerts", "AppDynamics integration"]
+keywords:
+  ['AppDynamics webhook', 'connect AppDynamics', 'AppDynamics alerts', 'AppDynamics integration']
 verification:
   level: source
-  verified_at: 2026-09-27
+  verified_at: 2026-10-21
   evidence:
     - src/lib/integrations/appdynamics.ts
     - src/app/api/integrations/appdynamics/route.ts
@@ -60,10 +61,11 @@ The exact payload schema is defined by `src/app/api/integrations/appdynamics/rou
 ## Event mapping and incident lifecycle
 
 The adapter emits the lifecycle actions found in its current source:
+
 - `trigger`
 - `acknowledge`
 - `resolve`
-Correlation contract: **adapter EventPayload.dedup_key**. Recovery contract: **adapter emits resolve for its recovery state**.
+  Correlation contract: **adapter EventPayload.dedup_key**. Recovery contract: **adapter emits resolve for its recovery state**.
 
 ## Recovery and deduplication
 

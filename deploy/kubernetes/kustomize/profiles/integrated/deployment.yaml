@@ -37,7 +37,7 @@ spec:
             readOnlyRootFilesystem: true
             runAsNonRoot: true
             runAsUser: 1001
-          image: ghcr.io/opsknight-labs/opsknight:2.0.0
+          image: ghcr.io/opsknight-labs/opsknight:2.1.0
           imagePullPolicy: Always
           ports:
             - containerPort: 3000
@@ -49,7 +49,7 @@ spec:
                 name: opsknight-secrets
           env:
             - name: OPSKNIGHT_SKIP_MIGRATIONS
-              value: "true"
+              value: 'true'
             - name: DATABASE_URL
               valueFrom:
                 secretKeyRef:
@@ -101,4 +101,4 @@ spec:
           lifecycle:
             preStop:
               exec:
-                command: ["/bin/sleep", "3"]
+                command: ['/bin/sleep', '3']

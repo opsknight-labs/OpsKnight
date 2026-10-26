@@ -4,10 +4,10 @@ description: Connect New Relic alerts to OpsKnight incident ingestion.
 type: integration
 product_area: integrations
 audience: [administrator, operator]
-keywords: ["New Relic webhook", "connect New Relic", "New Relic alerts", "New Relic integration"]
+keywords: ['New Relic webhook', 'connect New Relic', 'New Relic alerts', 'New Relic integration']
 verification:
   level: source
-  verified_at: 2026-09-27
+  verified_at: 2026-10-21
   evidence:
     - src/lib/integrations/newrelic.ts
     - src/app/api/integrations/newrelic/route.ts
@@ -60,10 +60,11 @@ The exact payload schema is defined by `src/app/api/integrations/newrelic/route.
 ## Event mapping and incident lifecycle
 
 The adapter emits the lifecycle actions found in its current source:
+
 - `trigger`
 - `acknowledge`
 - `resolve`
-Correlation contract: **adapter EventPayload.dedup_key**. Recovery contract: **adapter emits resolve for its recovery state**.
+  Correlation contract: **adapter EventPayload.dedup_key**. Recovery contract: **adapter emits resolve for its recovery state**.
 
 ## Recovery and deduplication
 

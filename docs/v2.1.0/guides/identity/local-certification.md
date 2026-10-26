@@ -23,6 +23,12 @@ boundaries; real provider tenants, physically independent keys and custody remai
 separate acceptance requirements. Read [Upgrade existing SSO](./upgrade-existing-sso/)
 for the maintenance window, controller suspension and rollback boundaries.
 
+## Prerequisites
+
+- Access to a local or staging PostgreSQL instance capable of creating disposable test databases.
+- Node.js runtime (v20+ or matching production container baseline).
+- Disposable database name `enterprise_sso_upgrade_test` with matching permissions.
+
 ## Released-version migration and concurrent callbacks
 
 The upgrade harness now defaults to the exact **v2.0.0** commit
@@ -521,7 +527,6 @@ bin directory with `--postgres-bin /path/to/postgresql/bin`. The harness creates
 removes its own cluster, database, HTTPS origin and application processes. This adds
 no application dependency or authentication environment switch.
 
-
 ### Online diagnostic deployment
 
 Use `npm run prisma:migrate:safe`, the Docker entrypoint, or the Helm migration Job.
@@ -565,7 +570,6 @@ filters; they do not freeze mutable records. Use First page for current activity
 The audit view is immutable recorded emergency security-event evidence, not a complete
 ordinary-provider sign-in history.
 
-
 ### Authentication security email presentation
 
 SSO, emergency-access and authentication-policy alerts use the incident email design
@@ -593,7 +597,6 @@ Local synthetic mobile/light and desktop/dark previews:
 
 Local Chromium rendering checks layout and dark-mode styling. Actual Outlook, Gmail
 and other mail-client rendering still depends on each client's HTML/CSS support.
-
 
 Self-session revocation returns an explicit backend disposition. The authentication
 workspace skips protected summary and diagnostics refreshes, redirects to login, and

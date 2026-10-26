@@ -6,48 +6,13 @@ product_area: configuration
 audience: [developer, operator, administrator]
 verification:
   level: source
-  verified_at: 2026-10-12
+  verified_at: 2026-10-26
   evidence:
     - src/
     - deploy/
 ---
 
 # Configuration reference
-
-## Authentication policy migration
-
-In 2.1 the singleton PostgreSQL AuthenticationPolicy is authoritative for login
-mode. `AUTH_LOCAL_LOGIN_ENABLED` defaults to enabled and the legacy emergency
-exception defaults to disabled. On the first policy read after schema migration,
-an advisory-locked transaction imports those effective controls once, records the
-snapshot and import marker, and emits `auth.policy.migrated`. The warning must be
-reviewed before enforcing or downgrading an installation. Replicas must have
-consistent legacy controls during that first import.
-
-An empty installation with no users starts in Password Only so the first
-administrator can complete setup, even if deprecated environment controls request
-Required. The import snapshot records this bootstrap decision. Existing
-installations retain their effective policy during import.
-
-After import, changing `AUTH_LOCAL_LOGIN_ENABLED`, `AUTH_BREAK_GLASS_ENABLED`, or
-`AUTH_BREAK_GLASS_EMAIL` and restarting does not change the policy. Use
-**Settings → System → SSO / Authentication → Sessions & Policies** for supported
-mode changes. SSO Required activation needs a verified staged administrator login
-and two independently held hardware-key emergency identities with current drills. An already-disabled local-login installation
-is preserved as Required, including its explicitly configured legacy exception;
-this is not a statement that its recovery is certified.
-
-Do not delete policy/import records or use environment edits as lockout recovery.
-A missing imported policy or database outage fails authentication closed. Restore
-PostgreSQL using external database administration. Application rollback to older
-code needs a coordinated rollback of application, database and deployment settings.
-Older versions do not understand the database policy, independent emergency
-principals or the new SECURITY notification enum. Do not run older and newer web
-replicas together. Preserve a tested pre-upgrade database backup and explicitly
-review older login environment controls; restoring a backup can restore revoked
-security state and requires credential/session rotation. See
-[authentication modes](../../guides/identity/authentication-modes/) for the import
-contract, defaults, session effects and operator verification.
 
 This operator reference contains settings exposed by deployment manifests or
 the supported environment template. Required and default values are conservative
@@ -258,7 +223,77 @@ Sets the polling interval while the general queue is idle.
 - Deprecated: no
 - Extraction confidence: incomplete
 - Static default: not displayed
-- Sources: `deploy/compose/docker-compose.split.yml`, `deploy/compose/docker-compose.yml`, `deploy/kubernetes/helm/opsknight/templates/deployment.yaml`, `deploy/kubernetes/helm/opsknight/templates/migration-job.yaml`, `deploy/kubernetes/helm/opsknight/templates/split-deployments.yaml`, `env.example`, `src/lib/api-keys.ts`, `src/lib/env-validation.ts`
+- Sources: `deploy/compose/docker-compose.split.yml`, `deploy/compose/docker-compose.yml`, `deploy/kubernetes/helm/opsknight/templates/deployment.yaml`, `deploy/kubernetes/helm/opsknight/templates/migration-job.yaml`, `deploy/kubernetes/helm/opsknight/templates/split-deployments.yaml`, `env.example`, `scripts/scim/certify-session-replicas.mjs`, `src/app/(app)/settings/system/page.tsx`, `src/lib/api-keys.ts`, `src/lib/automation/observation-privacy.ts`, `src/lib/env-validation.ts`
+
+## `API_V2_LEGACY_SCRYPT_CONCURRENCY`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: web or integrated runtime
+- Deployment support: manifest
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `env.example`
+
+## `API_V2_LEGACY_UNIDENTIFIED_LIMIT`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: web or integrated runtime
+- Deployment support: manifest
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `env.example`
+
+## `API_V2_OVER_BUDGET_IP_CONCURRENCY`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: web or integrated runtime
+- Deployment support: manifest
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `env.example`
+
+## `API_V2_PRIORITY_AUTH_CONCURRENCY`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: web or integrated runtime
+- Deployment support: manifest
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `env.example`
+
+## `API_V2_UNIDENTIFIED_AUTH_CONCURRENCY`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: web or integrated runtime
+- Deployment support: manifest
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `env.example`
 
 ## `APP_HOST_ALIASES`
 
@@ -280,13 +315,13 @@ Sets the polling interval while the general queue is idle.
 - Required: conditional or optional; inspect cited source
 - Allowed values: not statically complete
 - Secret: no
-- Runtime roles: web or integrated runtime
+- Runtime roles: operator command or startup script
 - Deployment support: manifest
 - Apply behavior: restart required
 - Deprecated: no
 - Extraction confidence: derived
 - Static default: `3000`
-- Sources: `deploy/compose/docker-compose.split.yml`, `deploy/compose/docker-compose.yml`, `deploy/swarm/docker-stack.integrated.yml`, `deploy/swarm/docker-stack.yml`, `env.example`
+- Sources: `deploy/compose/docker-compose.split.yml`, `deploy/compose/docker-compose.yml`, `deploy/swarm/docker-stack.integrated.yml`, `deploy/swarm/docker-stack.yml`, `env.example`, `scripts/certification/drill-app-recovery.sh`, `scripts/certification/drill-rollback-rehearsal.sh`, `scripts/certification/drill-upgrade-v20-to-v21.sh`
 
 ## `AUTH_BREAK_GLASS_EMAIL`
 
@@ -296,39 +331,53 @@ Sets the polling interval while the general queue is idle.
 - Secret: no
 - Runtime roles: web or integrated runtime
 - Deployment support: manifest
-- Apply behavior: imported once into PostgreSQL; later edits and restarts do not override policy
-- Deprecated: legacy primary policy control; retained only for one-time migration
+- Apply behavior: restart required
+- Deprecated: no
 - Extraction confidence: incomplete
 - Static default: none discovered
-- Sources: `env.example`, `src/lib/local-auth-policy.ts`, `src/lib/authentication-policy.ts`
+- Sources: `env.example`, `src/lib/local-auth-policy.ts`
 
 ## `AUTH_BREAK_GLASS_ENABLED`
 
 - Type: string
 - Required: conditional or optional; inspect cited source
-- Allowed values: `true` or `false`; legacy parsing trims whitespace and compares case-insensitively
+- Allowed values: not statically complete
 - Secret: no
 - Runtime roles: web or integrated runtime
 - Deployment support: manifest
-- Apply behavior: imported once into PostgreSQL; later edits and restarts do not override policy
-- Deprecated: legacy primary policy control; retained only for one-time migration
+- Apply behavior: restart required
+- Deprecated: no
 - Extraction confidence: incomplete
-- Static default: `false` (one-time legacy import)
-- Sources: `env.example`, `src/lib/local-auth-policy.ts`, `src/lib/authentication-policy.ts`
+- Static default: none discovered
+- Sources: `env.example`, `src/lib/local-auth-policy.ts`
 
 ## `AUTH_LOCAL_LOGIN_ENABLED`
 
 - Type: string
 - Required: conditional or optional; inspect cited source
-- Allowed values: `true` or `false`; legacy parsing trims whitespace and compares case-insensitively
+- Allowed values: not statically complete
 - Secret: no
 - Runtime roles: web or integrated runtime
 - Deployment support: manifest
-- Apply behavior: imported once into PostgreSQL; later edits and restarts do not override policy
-- Deprecated: legacy primary policy control; retained only for one-time migration
+- Apply behavior: restart required
+- Deprecated: no
 - Extraction confidence: incomplete
-- Static default: `true` (one-time legacy import)
-- Sources: `env.example`, `src/lib/local-auth-policy.ts`, `src/lib/authentication-policy.ts`
+- Static default: none discovered
+- Sources: `env.example`, `src/lib/local-auth-policy.ts`
+
+## `AUTH_RECOVERY_ORIGIN`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: web or integrated runtime
+- Deployment support: manifest
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `deploy/compose/docker-compose.split.yml`, `deploy/compose/docker-compose.yml`, `src/lib/auth-control/dashboard.ts`, `src/lib/auth-control/origin.ts`, `src/lib/auth-control/recovery.ts`, `src/lib/recovery-origin-pin.ts`
 
 ## `AUTH_SSO_REAUTH_AFTER_SECONDS`
 
@@ -386,6 +435,34 @@ Sets the polling interval while the general queue is idle.
 - Static default: none discovered
 - Sources: `env.example`, `src/lib/local-auth-policy.ts`
 
+## `CUTOVER_DEPLOYMENTS_JSON`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: manifest
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `deploy/kubernetes/helm/opsknight/templates/authentication-cutover.yaml`, `scripts/check-authentication-cutover.cjs`
+
+## `CUTOVER_POD_SELECTOR`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: manifest
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `deploy/kubernetes/helm/opsknight/templates/authentication-cutover.yaml`, `scripts/check-authentication-cutover.cjs`
+
 ## `DATABASE_POOL_SIZE_BULK_WORKER`
 
 - Type: string
@@ -427,6 +504,20 @@ Sets the polling interval while the general queue is idle.
 - Extraction confidence: derived
 - Static default: `5`
 - Sources: `deploy/compose/docker-compose.split.yml`, `deploy/kubernetes/kustomize/profiles/split/runtime-deployments.yaml`, `deploy/swarm/docker-stack.yml`, `src/lib/prisma.ts`
+
+## `DATABASE_POOL_SIZE_RUNBOOK_WORKER`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: web or integrated runtime
+- Deployment support: manifest
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: derived
+- Static default: `3`
+- Sources: `deploy/compose/docker-compose.split.yml`, `deploy/kubernetes/kustomize/profiles/split/runtime-deployments.yaml`, `deploy/swarm/docker-stack.yml`, `env.example`, `src/lib/prisma.ts`
 
 ## `DATABASE_POOL_SIZE_SCHEDULER`
 
@@ -482,7 +573,7 @@ Sets the polling interval while the general queue is idle.
 - Deprecated: no
 - Extraction confidence: incomplete
 - Static default: not displayed
-- Sources: `deploy/compose/docker-compose.split.yml`, `deploy/compose/docker-compose.yml`, `deploy/kubernetes/helm/opsknight/templates/deployment.yaml`, `deploy/kubernetes/helm/opsknight/templates/migration-job.yaml`, `deploy/kubernetes/helm/opsknight/templates/split-deployments.yaml`, `env.example`, `src/app/(app)/settings/system/page.tsx`, `src/lib/admin-health.ts`, `src/lib/encryption.ts`, `src/lib/env-validation.ts`
+- Sources: `deploy/compose/docker-compose.split.yml`, `deploy/compose/docker-compose.yml`, `deploy/kubernetes/helm/opsknight/templates/deployment.yaml`, `deploy/kubernetes/helm/opsknight/templates/migration-job.yaml`, `deploy/kubernetes/helm/opsknight/templates/split-deployments.yaml`, `env.example`, `src/app/(app)/settings/system/page.tsx`, `src/lib/admin-health.ts`, `src/lib/encryption.ts`, `src/lib/env-validation.ts`, `src/lib/runbooks/execution-signing.ts`
 
 ## `EXTERNAL_DB_HOST`
 
@@ -582,6 +673,118 @@ Sets the polling interval while the general queue is idle.
 - Static default: `true`
 - Sources: `deploy/compose/docker-compose.split.yml`, `deploy/compose/docker-compose.yml`, `deploy/swarm/docker-stack.integrated.yml`, `deploy/swarm/docker-stack.yml`
 
+## `OPSKNIGHT_AGENT_ENROLLMENT_SECRET`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: yes
+- Runtime roles: web or integrated runtime
+- Deployment support: manifest
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: not displayed
+- Sources: `deploy/swarm/docker-stack.agent.yml`
+
+## `OPSKNIGHT_AGENT_ENROLLMENT_TOKEN`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: yes
+- Runtime roles: web or integrated runtime
+- Deployment support: manifest
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: not displayed
+- Sources: `deploy/compose/docker-compose.agent.yml`, `env.example`
+
+## `OPSKNIGHT_AGENT_ENROLLMENT_TOKEN_FILE`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: yes
+- Runtime roles: web or integrated runtime
+- Deployment support: manifest
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: not displayed
+- Sources: `deploy/kubernetes/helm/opsknight-agent/templates/agent.yaml`, `deploy/kubernetes/helm/opsknight/templates/agent.yaml`, `deploy/kubernetes/kustomize/components/agent/deployment.yaml`
+
+## `OPSKNIGHT_AGENT_ENROLLMENT_TOKEN_PATH`
+
+- Type: string
+- Required: yes
+- Allowed values: not statically complete
+- Secret: yes
+- Runtime roles: web or integrated runtime
+- Deployment support: manifest
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: derived
+- Static default: not displayed
+- Sources: `deploy/compose/docker-compose.agent.enrollment-file.yml`
+
+## `OPSKNIGHT_AGENT_IMAGE`
+
+- Type: string
+- Required: yes
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: web or integrated runtime
+- Deployment support: manifest
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: derived
+- Static default: none discovered
+- Sources: `deploy/compose/docker-compose.agent.yml`, `deploy/swarm/docker-stack.agent.yml`, `env.example`
+
+## `OPSKNIGHT_AGENT_NODE_ID`
+
+- Type: string
+- Required: yes
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: web or integrated runtime
+- Deployment support: manifest
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: derived
+- Static default: none discovered
+- Sources: `deploy/swarm/docker-stack.agent.yml`
+
+## `OPSKNIGHT_AGENT_POLICY_PATH`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: web or integrated runtime
+- Deployment support: manifest
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: derived
+- Static default: `../../agent/policy.container.json`
+- Sources: `deploy/compose/docker-compose.agent.yml`, `env.example`
+
+## `OPSKNIGHT_AGENT_URL`
+
+- Type: string
+- Required: yes
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: web or integrated runtime
+- Deployment support: manifest
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: derived
+- Static default: none discovered
+- Sources: `deploy/compose/docker-compose.agent.yml`, `deploy/swarm/docker-stack.agent.yml`, `env.example`
+
 ## `OPSKNIGHT_API_KEY_SECRET_SECRET`
 
 - Type: string
@@ -680,6 +883,34 @@ Sets the polling interval while the general queue is idle.
 - Static default: not displayed
 - Sources: `deploy/swarm/docker-stack.integrated.yml`, `deploy/swarm/docker-stack.yml`
 
+## `OPSKNIGHT_EXECUTION_PUBLIC_KEY`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: web or integrated runtime
+- Deployment support: manifest
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `deploy/compose/docker-compose.agent.yml`, `deploy/kubernetes/helm/opsknight-agent/templates/agent.yaml`, `deploy/kubernetes/helm/opsknight/templates/agent.yaml`, `deploy/kubernetes/kustomize/components/agent/deployment.yaml`, `deploy/swarm/docker-stack.agent.yml`, `env.example`
+
+## `OPSKNIGHT_EXECUTION_PUBLIC_KEYS`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: web or integrated runtime
+- Deployment support: manifest
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `deploy/compose/docker-compose.agent.yml`, `deploy/kubernetes/helm/opsknight-agent/templates/agent.yaml`, `deploy/kubernetes/helm/opsknight/templates/agent.yaml`, `deploy/kubernetes/kustomize/components/agent/deployment.yaml`, `deploy/swarm/docker-stack.agent.yml`, `env.example`
+
 ## `OPSKNIGHT_IMAGE`
 
 - Type: string
@@ -691,8 +922,22 @@ Sets the polling interval while the general queue is idle.
 - Apply behavior: restart required
 - Deprecated: no
 - Extraction confidence: derived
-- Static default: `ghcr.io/opsknight-labs/opsknight:2.0.0`, `opsknight-local:test`
+- Static default: `ghcr.io/opsknight-labs/opsknight:2.1.0`, `opsknight-local:test`
 - Sources: `deploy/compose/docker-compose.split.yml`, `deploy/compose/docker-compose.yml`, `deploy/swarm/docker-stack.integrated.yml`, `deploy/swarm/docker-stack.yml`, `env.example`, `scripts/soak-test-2h.sh`
+
+## `OPSKNIGHT_MIGRATION_ONLY`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: web or integrated runtime
+- Deployment support: manifest
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `deploy/kubernetes/kustomize/migration-job.yaml`
 
 ## `OPSKNIGHT_NEXTAUTH_SECRET_SECRET`
 
@@ -752,17 +997,17 @@ Sets the polling interval while the general queue is idle.
 
 ## `OPSKNIGHT_PROCESS_ROLE`
 
-- Type: string
+- Type: enum/string
 - Required: conditional or optional; inspect cited source
-- Allowed values: not statically complete
+- Allowed values: `scheduler`, `web`
 - Secret: no
-- Runtime roles: web or integrated runtime
+- Runtime roles: worker
 - Deployment support: manifest
 - Apply behavior: restart required
 - Deprecated: no
-- Extraction confidence: incomplete
-- Static default: none discovered
-- Sources: `deploy/kubernetes/helm/opsknight/templates/split-deployments.yaml`, `deploy/kubernetes/kustomize/profiles/split/runtime-deployments.yaml`, `env.example`, `src/lib/runtime-role.ts`
+- Extraction confidence: derived
+- Static default: `integrated`
+- Sources: `deploy/kubernetes/helm/opsknight/templates/split-deployments.yaml`, `deploy/kubernetes/kustomize/profiles/split/runtime-deployments.yaml`, `env.example`, `scripts/wait-for-runtime-database.cjs`, `src/lib/cron-scheduler.ts`, `src/lib/job-worker.ts`, `src/lib/runtime-role.ts`
 
 ## `OPSKNIGHT_PULL_POLICY`
 
@@ -776,7 +1021,21 @@ Sets the polling interval while the general queue is idle.
 - Deprecated: no
 - Extraction confidence: derived
 - Static default: `always`, `never`
-- Sources: `deploy/compose/docker-compose.split.yml`, `deploy/compose/docker-compose.yml`, `scripts/soak-test-2h.sh`
+- Sources: `deploy/compose/docker-compose.agent.yml`, `deploy/compose/docker-compose.split.yml`, `deploy/compose/docker-compose.yml`, `scripts/soak-test-2h.sh`
+
+## `OPSKNIGHT_RUNBOOK_EXPECTED_WORKERS`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: worker
+- Deployment support: manifest
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `env.example`, `src/lib/runbooks/worker-heartbeats.ts`
 
 ## `OPSKNIGHT_SCHEDULER_PROFILE`
 
@@ -804,7 +1063,21 @@ Sets the polling interval while the general queue is idle.
 - Deprecated: no
 - Extraction confidence: incomplete
 - Static default: none discovered
-- Sources: `deploy/kubernetes/helm/opsknight/templates/deployment.yaml`, `deploy/kubernetes/helm/opsknight/templates/split-deployments.yaml`
+- Sources: `deploy/kubernetes/helm/opsknight/templates/deployment.yaml`, `deploy/kubernetes/helm/opsknight/templates/split-deployments.yaml`, `deploy/kubernetes/kustomize/profiles/integrated/deployment.yaml`, `deploy/kubernetes/kustomize/profiles/split/runtime-deployments.yaml`
+
+## `OPSKNIGHT_URL`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: web or integrated runtime
+- Deployment support: manifest
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `deploy/kubernetes/helm/opsknight-agent/templates/agent.yaml`, `deploy/kubernetes/helm/opsknight/templates/agent.yaml`, `deploy/kubernetes/kustomize/components/agent/deployment.yaml`
 
 ## `OPSKNIGHT_WEB_DATABASE_URL_SECRET`
 
@@ -862,6 +1135,20 @@ Sets the polling interval while the general queue is idle.
 - Static default: `100`
 - Sources: `deploy/compose/docker-compose.split.yml`
 
+## `OPSKNIGHT_WORKER_BATCH_SIZE_RUNBOOK`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: web or integrated runtime
+- Deployment support: manifest
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: derived
+- Static default: `50`
+- Sources: `deploy/compose/docker-compose.split.yml`, `deploy/swarm/docker-stack.yml`
+
 ## `OPSKNIGHT_WORKER_BUSY_POLL_MS_BULK`
 
 - Type: string
@@ -903,6 +1190,20 @@ Sets the polling interval while the general queue is idle.
 - Extraction confidence: derived
 - Static default: `100`
 - Sources: `deploy/compose/docker-compose.split.yml`
+
+## `OPSKNIGHT_WORKER_BUSY_POLL_MS_RUNBOOK`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: web or integrated runtime
+- Deployment support: manifest
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: derived
+- Static default: `100`
+- Sources: `deploy/compose/docker-compose.split.yml`, `deploy/swarm/docker-stack.yml`
 
 ## `OPSKNIGHT_WORKER_CONCURRENCY_BULK`
 
@@ -946,6 +1247,20 @@ Sets the polling interval while the general queue is idle.
 - Static default: `15`
 - Sources: `deploy/compose/docker-compose.split.yml`
 
+## `OPSKNIGHT_WORKER_CONCURRENCY_RUNBOOK`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: web or integrated runtime
+- Deployment support: manifest
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: derived
+- Static default: `10`
+- Sources: `deploy/compose/docker-compose.split.yml`, `deploy/swarm/docker-stack.yml`
+
 ## `OPSKNIGHT_WORKER_IDLE_POLL_MS_BULK`
 
 - Type: string
@@ -987,6 +1302,20 @@ Sets the polling interval while the general queue is idle.
 - Extraction confidence: derived
 - Static default: `1000`
 - Sources: `deploy/compose/docker-compose.split.yml`
+
+## `OPSKNIGHT_WORKER_IDLE_POLL_MS_RUNBOOK`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: web or integrated runtime
+- Deployment support: manifest
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: derived
+- Static default: `1000`
+- Sources: `deploy/compose/docker-compose.split.yml`, `deploy/swarm/docker-stack.yml`
 
 ## `PGBOUNCER_DB_HOST`
 
@@ -1212,6 +1541,20 @@ Sets the polling interval while the general queue is idle.
 - Static default: none discovered
 - Sources: `deploy/kubernetes/helm/opsknight/templates/postgres-statefulset.yaml`, `deploy/kubernetes/kustomize/base/postgres-statefulset.yaml`
 
+## `PODMAN_SOCKET`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: web or integrated runtime
+- Deployment support: manifest
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: derived
+- Static default: `unix:///run/podman/podman.sock`
+- Sources: `deploy/compose/docker-compose.agent.yml`
+
 ## `POSTGRES_DB`
 
 - Type: string
@@ -1296,19 +1639,19 @@ Sets the polling interval while the general queue is idle.
 - Static default: `true`
 - Sources: `deploy/compose/docker-compose.split.yml`, `deploy/compose/docker-compose.yml`, `deploy/swarm/docker-stack.integrated.yml`, `deploy/swarm/docker-stack.yml`, `env.example`, `src/middleware.ts`
 
-## `RUNTIME_DATABASE_URL`
+## `RUNBOOK_ARTIFACT_RETENTION_DAYS`
 
 - Type: string
 - Required: conditional or optional; inspect cited source
 - Allowed values: not statically complete
-- Secret: yes
+- Secret: no
 - Runtime roles: web or integrated runtime
 - Deployment support: manifest
 - Apply behavior: restart required
 - Deprecated: no
-- Extraction confidence: incomplete
-- Static default: not displayed
-- Sources: `deploy/kubernetes/helm/opsknight/templates/migration-job.yaml`
+- Extraction confidence: derived
+- Static default: `30`
+- Sources: `deploy/compose/docker-compose.split.yml`, `deploy/compose/docker-compose.yml`, `deploy/swarm/docker-stack.yml`, `env.example`, `src/app/(app)/runbooks/agents/security/page.tsx`, `src/lib/runbooks/artifact-cleanup.ts`
 
 ## `SETUP_SECRET`
 
@@ -1336,7 +1679,7 @@ Sets the polling interval while the general queue is idle.
 - Deprecated: no
 - Extraction confidence: derived
 - Static default: `opsknight`
-- Sources: `deploy/swarm/docker-stack.db.yml`, `deploy/swarm/docker-stack.external-db.integrated.yml`, `deploy/swarm/docker-stack.external-db.yml`, `deploy/swarm/docker-stack.integrated.yml`, `deploy/swarm/docker-stack.pgbouncer.yml`, `deploy/swarm/docker-stack.yml`
+- Sources: `deploy/swarm/docker-stack.agent.yml`, `deploy/swarm/docker-stack.db.yml`, `deploy/swarm/docker-stack.external-db.integrated.yml`, `deploy/swarm/docker-stack.external-db.yml`, `deploy/swarm/docker-stack.integrated.yml`, `deploy/swarm/docker-stack.pgbouncer.yml`, `deploy/swarm/docker-stack.yml`, `src/lib/runbooks/agent-setup-commands.ts`
 
 ## `SWARM_REPLICAS_BULK_WORKER`
 
@@ -1394,6 +1737,20 @@ Sets the polling interval while the general queue is idle.
 - Static default: `2`
 - Sources: `deploy/swarm/docker-stack.pgbouncer.yml`
 
+## `SWARM_REPLICAS_RUNBOOK_WORKER`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: web or integrated runtime
+- Deployment support: manifest
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: derived
+- Static default: `2`
+- Sources: `deploy/swarm/docker-stack.yml`
+
 ## `SWARM_REPLICAS_SCHEDULER`
 
 - Type: string
@@ -1450,6 +1807,34 @@ Sets the polling interval while the general queue is idle.
 - Static default: none discovered
 - Sources: `deploy/swarm/docker-stack.integrated.yml`
 
+## `TRUSTED_PROXIES`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: web or integrated runtime
+- Deployment support: manifest
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `env.example`, `src/lib/client-ip.ts`
+
+## `TRUSTED_PROXY_HEADER`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: web or integrated runtime
+- Deployment support: manifest
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `env.example`, `src/lib/client-ip.ts`
+
 ## `TRUSTED_PROXY_HOPS`
 
 - Type: string
@@ -1476,31 +1861,4 @@ Sets the polling interval while the general queue is idle.
 - Deprecated: no
 - Extraction confidence: incomplete
 - Static default: not displayed
-- Sources: `deploy/compose/docker-compose.pgbouncer.yml`, `deploy/compose/docker-compose.split.yml`, `env.example`, `src/lib/prisma-datasource.ts`
-
-## AUTH_RECOVERY_ORIGIN
-
-Optional deployment-managed exact HTTPS origin for independent recovery. Default:
-unset, using the conflict-free canonical authentication origin. The value must have
-no path other than `/`, credentials, query or fragment. Plain HTTP is accepted only
-for local development on localhost/127.0.0.1. Set the same value on all web replicas
-and enroll/drill keys on that origin before relying on it during an outage.
-
-Compose exposes `AUTH_RECOVERY_ORIGIN`; Helm exposes `config.authRecoveryOrigin`.
-The pin opens only recovery endpoints and required assets in host routing. Request
-Origin and WebAuthn RP/UV checks remain enforced. It never trusts arbitrary incoming
-Host/X-Forwarded-Host values or enables normal incident access. Database App URL
-repair requires fresh independent-key authorization and agreement between the pin,
-NEXTAUTH_URL and NEXT_PUBLIC_APP_URL. See
-[recovery procedure](../../guides/identity/sso-lockout-recovery/).
-
-## Existing SSO upgrade and rollout
-
-2.1 uses a stopped-runtime cutover with downtime. Integrated and split application
-Deployments use `Recreate`; a mandatory pre-upgrade Helm gate verifies desired
-replicas zero and complete application-pod shutdown before migration. This is not a
-rolling-upgrade compatibility certificate. HPA-managed web replicas require explicit
-reactivation after the new template is applied. See [Upgrade existing SSO](../../guides/identity/upgrade-existing-sso.md)
-for the stop/drain sequence, HPA handling, historical configuration, acceptance
-checks and database-aware rollback. Do not resume older binaries on a migrated
-database or use automatic Helm rollback as database rollback.
+- Sources: `deploy/compose/docker-compose.pgbouncer.yml`, `deploy/compose/docker-compose.split.yml`, `env.example`, `scripts/wait-for-runtime-database.cjs`, `src/lib/prisma-datasource.ts`

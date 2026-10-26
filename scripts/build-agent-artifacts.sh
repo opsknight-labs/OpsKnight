@@ -10,7 +10,7 @@ ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 DIST_DIR="${ROOT_DIR}/dist/agent"
 
 # Resolve dynamic version from package.json or git tag
-PACKAGE_VERSION="$(node -p 'require("./package.json").version' 2>/dev/null || echo '2.0.0')"
+PACKAGE_VERSION="$(node -p 'require("./package.json").version' 2>/dev/null || echo '2.1.0')"
 RAW_VERSION="${OPSKNIGHT_VERSION:-${PACKAGE_VERSION}}"
 RELEASE_VERSION="${RAW_VERSION#v}"
 RELEASE_TAG="v${RELEASE_VERSION}"
@@ -108,7 +108,7 @@ rm -f "${SHASUMS_FILE}"
 
 # Also copy install.sh and preflight.sh to dist directory for release distribution
 cp "${ROOT_DIR}/deploy/agent/install.sh" "${DIST_DIR}/"
-sed -i.bak "s/RELEASE_TAG=\"\${OPSKNIGHT_VERSION:-2.0.0}\"/RELEASE_TAG=\"\${OPSKNIGHT_VERSION:-${RELEASE_TAG}}\"/" "${DIST_DIR}/install.sh" && rm -f "${DIST_DIR}/install.sh.bak"
+sed -i.bak -E "s/RELEASE_TAG=\"\\\$\{OPSKNIGHT_VERSION:-[^}]+\}\"/RELEASE_TAG=\"\${OPSKNIGHT_VERSION:-${RELEASE_TAG}}\"/" "${DIST_DIR}/install.sh" && rm -f "${DIST_DIR}/install.sh.bak"
 cp "${ROOT_DIR}/deploy/agent/preflight.sh" "${DIST_DIR}/"
 
 echo "=== Generating SHA256SUMS ==="
