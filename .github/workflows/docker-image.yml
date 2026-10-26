@@ -242,7 +242,7 @@ jobs:
         (needs.release-quality.result == 'success' && needs.integration-certification.result == 'success'))
     runs-on: ubuntu-22.04
     outputs:
-      release_image_digest: ${{ steps.release_build.outputs.digest }}
+      release_image_digest: ${{ steps.resolve_release_digest.outputs.digest || steps.release_build.outputs.digest }}
     services:
       postgres:
         image: postgres:16
@@ -745,6 +745,15 @@ jobs:
           provenance: mode=max
           sbom: true
 
+      - name: Resolve release candidate index digest
+        if: startsWith(github.ref, 'refs/tags/v')
+        id: resolve_release_digest
+        run: |
+          RC_TAG="${IMAGE_NAME_RELEASE}:rc-${GITHUB_SHA}"
+          INDEX_DIGEST="$(docker buildx imagetools inspect "$RC_TAG" | awk '/^Digest:/ {print $2; exit}')"
+          echo "Resolved release candidate index digest: $INDEX_DIGEST"
+          echo "digest=$INDEX_DIGEST" >> "$GITHUB_OUTPUT"
+
       - name: Build + push PgBouncer (test channel - main)
         if: github.ref == 'refs/heads/main'
         uses: docker/build-push-action@v7
@@ -810,7 +819,7 @@ jobs:
             const raw = execFileSync(
               'docker',
               ['buildx', 'imagetools', 'inspect', ref, '--format', format],
-              { encoding: 'utf8' }
+              { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 }
             ).trim();
             if (!raw || raw === 'null' || raw === '{}' || raw === '[]') {
               throw new Error(`${name} is missing from the release image index`);

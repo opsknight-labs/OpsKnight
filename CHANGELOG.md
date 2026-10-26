@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.1.1] - 2026-10-27
+
+OpsKnight 2.1.1 is a release packaging and reliability patch addressing release workflow buffer limits, API contract discovery synchronization, and Helm deployment clarifications.
+
+### Fixed
+
+- **Release packaging and SBOM verification:** Resolved `ENOBUFS` failure during multi-architecture release image validation by configuring buffered inspection for large multi-platform SPDX SBOMs and ensuring the root OCI index digest is promoted across release tags.
+- **Public API route contract reconciliation:** Synchronized documentation runtime test expectations with the complete set of 48 discovered public API routes (including SCIM 2.0 and notification webhook endpoints).
+- **Documentation and integration drift:** Normalized YAML and JSON generation across the 2.1.0 integration catalog, route contracts, and generated reference documents.
+
+### Changed
+
+- **Helm packaging & deployment metadata:** Updated OpsKnight and OpsKnight Agent Helm charts to 2.1.1, clarifying local repository installation practices and database migration prerequisites.
+
 ## [2.1.0] - 2026-10-26
 
 OpsKnight 2.1 is an enterprise release introducing Service Automation with Runbook integration, unattended-write authorization, verified automatic recovery resolution, PostgreSQL 16 disaster recovery tooling, and enterprise SSO and SCIM 2.0 lifecycle management.

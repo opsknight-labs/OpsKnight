@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "sourceRevision": "968f57f34f8f4a0549a612a669d6cfc2cef156e7",
+  "sourceRevision": "f9f772a1fb43798bf45400c8e2ec7a0a823fa43f",
   "contracts": [
     {
       "id": "api:/api/events",
@@ -29408,7 +29408,11 @@
         "required": true,
         "secret": false,
         "scopes": ["deployment", "operation"],
-        "defaults": ["ghcr.io/opsknight-labs/opsknight:2.1.0", "opsknight-local:test"],
+        "defaults": [
+          "ghcr.io/opsknight-labs/opsknight:2.1.0",
+          "ghcr.io/opsknight-labs/opsknight:2.1.1",
+          "opsknight-local:test"
+        ],
         "allowedValues": [],
         "semanticClassification": "PRODUCT_DEPLOYMENT",
         "type": "string",

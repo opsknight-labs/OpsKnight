@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-10-26T18:50:52+05:30",
-  "sourceRevision": "968f57f34f8f4a0549a612a669d6cfc2cef156e7",
+  "generatedAt": "2026-10-26T21:36:42+05:30",
+  "sourceRevision": "f9f772a1fb43798bf45400c8e2ec7a0a823fa43f",
   "uiRoutes": [
     {
       "route": "/action-items",
@@ -60976,7 +60976,11 @@
       "required": true,
       "secret": false,
       "scopes": ["deployment", "operation"],
-      "defaults": ["ghcr.io/opsknight-labs/opsknight:2.1.0", "opsknight-local:test"],
+      "defaults": [
+        "ghcr.io/opsknight-labs/opsknight:2.1.0",
+        "ghcr.io/opsknight-labs/opsknight:2.1.1",
+        "opsknight-local:test"
+      ],
       "allowedValues": [],
       "semanticClassification": "PRODUCT_DEPLOYMENT",
       "type": "string",
@@ -206637,7 +206641,11 @@
           "required": true,
           "secret": false,
           "scopes": ["deployment", "operation"],
-          "defaults": ["ghcr.io/opsknight-labs/opsknight:2.1.0", "opsknight-local:test"],
+          "defaults": [
+            "ghcr.io/opsknight-labs/opsknight:2.1.0",
+            "ghcr.io/opsknight-labs/opsknight:2.1.1",
+            "opsknight-local:test"
+          ],
           "allowedValues": [],
           "semanticClassification": "PRODUCT_DEPLOYMENT",
           "type": "string",
