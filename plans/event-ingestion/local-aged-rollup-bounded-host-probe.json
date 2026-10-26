@@ -1,0 +1,35 @@
+{
+  "passed": true,
+  "certifiedEnterprise": false,
+  "incidentCount": 100000,
+  "alertCount": 100000,
+  "resolvedCount": 100000,
+  "afterHoursCount": 100000,
+  "before": {
+    "rss": 195657728,
+    "heapTotal": 75825152,
+    "heapUsed": 51823128,
+    "external": 5107038,
+    "arrayBuffers": 2448364
+  },
+  "peak": {
+    "rss": 209453056,
+    "heapTotal": 81903616,
+    "heapUsed": 53267776,
+    "external": 5107078,
+    "arrayBuffers": 2448364
+  },
+  "after": {
+    "rss": 142802944,
+    "heapTotal": 76922880,
+    "heapUsed": 37367008,
+    "external": 5003539,
+    "arrayBuffers": 2346007
+  },
+  "sourceSha256": {
+    "src/lib/metric-rollup.ts": "20ce28c3f6682c6b28398dd28d249ae8d4b88fa7077a86c2afe21c7e4cd754b0",
+    "src/lib/business-hours.ts": "135f43306ba5658a9027950792cadb48e1691d455ac360a90372c9118199aa60",
+    "src/lib/date-time-format.ts": "8d5621d2cdd560b8807d900589588059494a98a2f4ab8c2f5335cb719ff194df"
+  },
+  "scope": "Host Node20 with512MiB old-space heap cap,100k synthetic resolved incidents, full Serializable production rollup function and unchanged metrics. RSS includes native memory; not a Docker768MiB or throughput certificate."
+}

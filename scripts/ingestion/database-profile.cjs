@@ -47,15 +47,21 @@ module.exports = async function startDatabaseProfile(prisma) {
   let samples = 0;
   let errors = 0;
   const waits = new Map();
+  const backgroundWaits = new Map();
   const blockers = new Map();
   const timer = setInterval(() => {
     if (inFlight) return;
     inFlight = Promise.all([
       prisma.$queryRaw`
       SELECT state, COALESCE(wait_event_type, 'CPU') AS type,
-        COALESCE(wait_event, 'running') AS event, COUNT(*)::int AS count
+        COALESCE(wait_event, 'running') AS event, COUNT(*)::int AS count, 'database' AS scope
       FROM pg_stat_activity WHERE datid = (SELECT oid FROM pg_database WHERE datname = current_database())
         AND pid <> pg_backend_pid() GROUP BY state, wait_event_type, wait_event
+      UNION ALL
+      SELECT backend_type AS state, COALESCE(wait_event_type, 'CPU') AS type,
+        COALESCE(wait_event, 'running') AS event, COUNT(*)::int AS count, 'cluster-background' AS scope
+      FROM pg_stat_activity WHERE backend_type IN ('checkpointer', 'background writer', 'walwriter')
+      GROUP BY backend_type, wait_event_type, wait_event
     `,
       prisma.$queryRaw`
       /* ingestion_blocker_sample: return fixed categories, never SQL or parameters */
@@ -93,7 +99,8 @@ module.exports = async function startDatabaseProfile(prisma) {
         samples++;
         for (const row of rows) {
           const key = `${row.state}/${row.type}/${row.event}`;
-          const value = waits.get(key) || {
+          const target = row.scope === 'cluster-background' ? backgroundWaits : waits;
+          const value = target.get(key) || {
             state: row.state,
             type: row.type,
             event: row.event,
@@ -102,7 +109,7 @@ module.exports = async function startDatabaseProfile(prisma) {
           };
           value.summedConnections += row.count;
           value.maxConnections = Math.max(value.maxConnections, row.count);
-          waits.set(key, value);
+          target.set(key, value);
         }
         for (const row of locks) {
           const key = `${row.waitingOperation}/${row.waitType}/${row.waitEvent}/${row.holderOperation}/${row.holderState}`;
@@ -196,6 +203,16 @@ module.exports = async function startDatabaseProfile(prisma) {
         ...row,
         averageConnectionsPerSample: samples ? row.summedConnections / samples : 0,
       })),
+      backgroundWaits: [...backgroundWaits.values()].map(row => ({
+        backendType: row.state,
+        type: row.type,
+        event: row.event,
+        summedProcesses: row.summedConnections,
+        maxProcesses: row.maxConnections,
+        averageProcessesPerSample: samples ? row.summedConnections / samples : 0,
+      })),
+      backgroundWaitScope:
+        'Owned cluster checkpointer/background-writer/walwriter samples, separate from database client waits. In-progress checkpoints can appear before completed checkpoint counters advance.',
       blockerSamples: [...blockers.values()],
       blockerScope:
         'Sampled blocker statement categories and transaction age; a transaction can retain locks acquired by an earlier statement. Fixed SQL-side labels only, no query text, parameters, backend IDs or credentials retained.',

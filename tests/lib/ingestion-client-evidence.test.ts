@@ -61,3 +61,37 @@ describe('client evidence survives failed runs', () => {
     expect(result).not.toHaveProperty('reconciled');
   });
 });
+
+it('keeps rejected response observations out of acknowledgment reconciliation', () => {
+  const f = fixture();
+  writeFileSync(
+    f.summary,
+    JSON.stringify({ metrics: { ingestion_durable_accepted: { count: 1 } } })
+  );
+  writeFileSync(
+    f.ledger,
+    [
+      {
+        kind: 'opsknight-ack',
+        receiptId: 'receipt',
+        deliveryId: 'accepted',
+        status: 202,
+        durationMs: 125,
+        observedAt: 1000,
+      },
+      {
+        kind: 'opsknight-rejection',
+        deliveryId: 'rejected',
+        status: 503,
+        durationMs: 2,
+        observedAt: 1010,
+      },
+    ]
+      .map(row => JSON.stringify(row))
+      .join('\n')
+  );
+  const result = readClientEvidence(f.summary, f.ledger);
+  expect(result.clientCountsMatch).toBe(true);
+  expect(result.ledger.recordedAcknowledgments).toBe(1);
+  expect(result.ledger.recordedRejections).toBe(1);
+});

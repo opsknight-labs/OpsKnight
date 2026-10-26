@@ -1,0 +1,22 @@
+{
+  "applicationRevision": "8a1754f88e7e6203f22053f945537803539bf3c5",
+  "configuredImageId": "sha256:d119cd6de07a52ce5fdf44cefecebe74f2b03da0d89d1292226a4e3c7b76cebb",
+  "startupFailure": {
+    "name": "ingestion-cert-b6ee5c84-scheduler",
+    "running": false,
+    "oomKilled": false,
+    "exitCode": 139,
+    "limits": {
+      "cpuCores": 1,
+      "memoryBytes": 805306368
+    },
+    "startedAt": "2026-10-26T17:19:36.245207966Z",
+    "finishedAt": "2026-10-26T17:20:11.977066343Z",
+    "privateRedactedLog": "/var/folders/88/2b5vhvzd707869_cbkz7g0s00000gn/T/ingestion-startup-b6ee5c84-e28d-4317-a019-1f7affa45284-ingestion-cert-b6ee5c84-scheduler.log"
+  },
+  "fatalHeapMessageObserved": true,
+  "historicalIncidentRows": 100000,
+  "historicalCompletedJobs": 500000,
+  "liveLoadStarted": false,
+  "scope": "Exact1web/1ingestion startup reproduction at1CPU768MiB scheduler limit, with100kresolved history. JS heap failure exit139, not cgroupOOM. Separate from earlier unexplained webOOM. Checkpoint comparison blocked before load."
+}

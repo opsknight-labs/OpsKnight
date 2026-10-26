@@ -1,0 +1,11 @@
+{
+  "actual": {
+    "incidents": 100000,
+    "alerts": 100000,
+    "events": 100000,
+    "jobs": 500000
+  },
+  "serviceId": "cmvphlcw60000nprh646xfqj5",
+  "database": "ingestion_test_http_checkpoint_aged_template_20261026",
+  "scope": "Synthetic 24\u201336h-old resolved history, narrow fixture payloads. Cardinality/index test only, no production churn/bloat, configured-provider or retention certificate."
+}

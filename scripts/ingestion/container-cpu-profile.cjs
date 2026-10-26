@@ -69,10 +69,14 @@ async function main() {
     if (memoryEnabled)
       await send('Runtime.evaluate', {
         expression: `(() => { try {
-        const { PerformanceObserver } = process.mainModule.require('node:perf_hooks');
-        const state = { count: 0, durationMs: 0 };
+        const { PerformanceObserver, constants } = process.mainModule.require('node:perf_hooks');
+        const state = { count: 0, durationMs: 0, maxDurationMs: 0, majorCount: 0, majorDurationMs: 0 };
         const observer = new PerformanceObserver(list => { for (const entry of list.getEntries()) {
           state.count++; state.durationMs += entry.duration;
+          state.maxDurationMs = Math.max(state.maxDurationMs, entry.duration);
+          if (entry.detail?.kind === constants.NODE_PERFORMANCE_GC_MAJOR) {
+            state.majorCount++; state.majorDurationMs += entry.duration;
+          }
         }});
         observer.observe({ entryTypes: ['gc'] });
         globalThis[Symbol.for('${gcKey}')] = { state, observer };
@@ -109,6 +113,7 @@ async function main() {
                 currentBytes: Number(read('memory.current')),
                 peakBytes: Number(read('memory.peak')),
                 events: counters('memory.events'),
+                cpu: counters('cpu.stat'),
                 stat: counters('memory.stat'),
               };
             })(),

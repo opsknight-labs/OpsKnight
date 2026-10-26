@@ -1,3 +1,5 @@
+import { createDateTimeFormatterCache } from './date-time-format';
+
 /**
  * Shared "business hours" classification for the SLA pipeline.
  *
@@ -20,6 +22,22 @@ export const DEFAULT_BUSINESS_HOURS_TIMEZONE = 'UTC';
 export const DEFAULT_BUSINESS_HOURS_START = 8; // inclusive
 export const DEFAULT_BUSINESS_HOURS_END = 18; // exclusive
 
+const WEEKDAYS = new Map<string, number>([
+  ['Sun', 0],
+  ['Mon', 1],
+  ['Tue', 2],
+  ['Wed', 3],
+  ['Thu', 4],
+  ['Fri', 5],
+  ['Sat', 6],
+]);
+
+const getBusinessHoursFormatter = createDateTimeFormatterCache('en-US', {
+  weekday: 'short',
+  hour: 'numeric',
+  hourCycle: 'h23',
+});
+
 /**
  * Returns true when `date` falls outside business hours
  * (Mon-Fri, startHour-endHour) when projected into `timeZone`.
@@ -37,19 +55,9 @@ export function isIncidentAfterHours(
 ): boolean {
   let formatter: Intl.DateTimeFormat;
   try {
-    formatter = new Intl.DateTimeFormat('en-US', {
-      timeZone: timeZone || DEFAULT_BUSINESS_HOURS_TIMEZONE,
-      weekday: 'short',
-      hour: 'numeric',
-      hourCycle: 'h23',
-    });
+    formatter = getBusinessHoursFormatter(timeZone || DEFAULT_BUSINESS_HOURS_TIMEZONE);
   } catch {
-    formatter = new Intl.DateTimeFormat('en-US', {
-      timeZone: DEFAULT_BUSINESS_HOURS_TIMEZONE,
-      weekday: 'short',
-      hour: 'numeric',
-      hourCycle: 'h23',
-    });
+    formatter = getBusinessHoursFormatter(DEFAULT_BUSINESS_HOURS_TIMEZONE);
   }
   const parts = formatter.formatToParts(date);
   const weekday = parts.find(p => p.type === 'weekday')?.value || '';
@@ -59,16 +67,7 @@ export function isIncidentAfterHours(
   // toward "in-hours" avoids inflating after-hours counts on bad data.
   const hour = hourStr !== undefined ? parseInt(hourStr, 10) : 12;
 
-  const dayMap: Record<string, number> = {
-    Sun: 0,
-    Mon: 1,
-    Tue: 2,
-    Wed: 3,
-    Thu: 4,
-    Fri: 5,
-    Sat: 6,
-  };
-  const dayNum = dayMap[weekday] ?? 1;
+  const dayNum = WEEKDAYS.get(weekday) ?? 1;
   const allowedDays = businessDays && businessDays.length > 0 ? businessDays : [1, 2, 3, 4, 5];
   const isBusinessDay = allowedDays.includes(dayNum);
 

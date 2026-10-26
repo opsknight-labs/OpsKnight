@@ -254,11 +254,54 @@ async function collectProfiles() {
       });
   }
 }
+async function captureStartupFailure(name, container) {
+  evidence.startupFailure = {
+    ...(await resources(name)),
+    startedAt: container.State.StartedAt,
+    finishedAt: container.State.FinishedAt,
+  };
+  try {
+    let logs = await new Promise((resolve, reject) => {
+      const child = spawn(docker, ['logs', '--tail', '200', name], {
+        stdio: ['ignore', 'pipe', 'pipe'],
+      });
+      let text = '';
+      const append = data => {
+        text = (text + data.toString()).slice(-100000);
+      };
+      child.stdout.on('data', append);
+      child.stderr.on('data', append);
+      child.once('error', reject);
+      child.once('close', () => resolve(text));
+    });
+    for (const item of container.Config.Env || []) {
+      const separator = item.indexOf('=');
+      const key = item.slice(0, separator),
+        value = item.slice(separator + 1);
+      if (/SECRET|TOKEN|PASSWORD|ENCRYPTION_KEY|DATABASE_URL/.test(key) && value.length >= 8)
+        logs = logs.split(value).join('[REDACTED]');
+      if (key.endsWith('DATABASE_URL')) {
+        const password = new URL(value).password;
+        if (password) logs = logs.split(decodeURIComponent(password)).join('[REDACTED]');
+      }
+    }
+    logs = logs.replace(/postgres(?:ql)?:\/\/[^\s@]+@/g, 'postgresql://[REDACTED]@');
+    const file = path.join(os.tmpdir(), `ingestion-startup-${runId}-${name}.log`);
+    writeFileSync(file, logs, { mode: 0o600 });
+    evidence.startupFailure.privateRedactedLog = file;
+  } catch {
+    evidence.startupFailure.logCaptureUnavailable = true;
+  }
+}
+
 async function waitHealthy(name) {
   for (let attempt = 0; attempt < 120; attempt++) {
     if (cancelled) throw new Error('Certification cancelled');
     const container = await inspect(name);
-    if (!container.State.Running) throw new Error(`Candidate ${name} exited before readiness`);
+    if (!container.State.Running) {
+      await captureStartupFailure(name, container);
+      throw new Error(`Candidate ${name} exited before readiness`);
+    }
     if (container.State.Health?.Status === 'healthy') return;
     await sleep(1000);
   }
@@ -932,9 +975,15 @@ location / { proxy_pass http://gateways; proxy_http_version 1.1; proxy_set_heade
   });
   const chaosRequested = process.env.INGESTION_DOCKER_KILL_WORKER === 'true';
   child.on('message', message => {
-    if (message?.type === 'ingestion-load-stopped') loadActive = false;
+    if (message?.type === 'ingestion-load-stopped') {
+      loadActive = false;
+      (evidence.loadWindow ||= {}).stoppedAt = new Date().toISOString();
+    }
     if (message?.type !== 'ingestion-load-started') return;
     loadActive = true;
+    (evidence.loadWindow ||= {}).startedAt = new Date().toISOString();
+    evidence.loadWindow.scope =
+      'Controller-observed client spawn/stop IPC timestamps; not exact first/last HTTP response times';
     if (exerciseNotification && !notificationTask) {
       notificationTask = new Promise(resolve => {
         notificationTimer = setTimeout(async () => {

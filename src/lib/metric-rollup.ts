@@ -24,6 +24,55 @@ import { capturedOrEffectiveElapsedMs, effectiveElapsedMs } from './metrics/doma
  * - Monthly rollups: Generated from daily rollups
  */
 
+const ROLLUP_PAGE_SIZE = 1000;
+const ROLLUP_INCIDENT_SELECT = {
+  id: true,
+  status: true,
+  urgency: true,
+  priority: true,
+  createdAt: true,
+  acknowledgedAt: true,
+  resolvedAt: true,
+  resolutionKind: true,
+  updatedAt: true,
+  slaPausedMs: true,
+  slaPauseStartedAt: true,
+  slaAckElapsedMs: true,
+  slaFirstAcknowledgedAt: true,
+  slaResolveElapsedMs: true,
+  slaAckTargetMs: true,
+  slaResolveTargetMs: true,
+  slaTargetSource: true,
+  slaTargetCapturedAt: true,
+  slaPauses: { select: { startedAt: true, endedAt: true } },
+  serviceId: true,
+  service: {
+    select: {
+      targetAckMinutes: true,
+      targetResolveMinutes: true,
+    },
+  },
+} satisfies Prisma.IncidentSelect;
+
+async function* readRollupIncidentPages(
+  tx: Prisma.TransactionClient,
+  where: Prisma.IncidentWhereInput
+) {
+  let afterId: string | undefined;
+  while (true) {
+    const page = await tx.incident.findMany({
+      where: afterId ? { AND: [where, { id: { gt: afterId } }] } : where,
+      orderBy: { id: 'asc' },
+      take: ROLLUP_PAGE_SIZE,
+      select: ROLLUP_INCIDENT_SELECT,
+    });
+    if (!page.length) return;
+    yield page;
+    afterId = page[page.length - 1].id;
+    if (page.length < ROLLUP_PAGE_SIZE) return;
+  }
+}
+
 export interface RollupData {
   date: Date;
   granularity: 'daily' | 'weekly' | 'monthly';
@@ -148,41 +197,9 @@ export async function generateDailyRollup(
     await prisma.$transaction(
       async tx => {
         await acquireAdvisoryLock(tx, LOCK_KEYS.ROLLUP_WRITE);
-        // Fetch all incidents for the day
-        const incidents = await tx.incident.findMany({
-          where: whereClause,
-          select: {
-            id: true,
-            status: true,
-            urgency: true,
-            priority: true,
-            createdAt: true,
-            acknowledgedAt: true,
-            resolvedAt: true,
-            resolutionKind: true,
-            updatedAt: true,
-            slaPausedMs: true,
-            slaPauseStartedAt: true,
-            slaAckElapsedMs: true,
-            slaFirstAcknowledgedAt: true,
-            slaResolveElapsedMs: true,
-            slaAckTargetMs: true,
-            slaResolveTargetMs: true,
-            slaTargetSource: true,
-            slaTargetCapturedAt: true,
-            slaPauses: { select: { startedAt: true, endedAt: true } },
-            serviceId: true,
-            service: {
-              select: {
-                targetAckMinutes: true,
-                targetResolveMinutes: true,
-              },
-            },
-          },
-        });
-
+        // Stream a fixed Serializable snapshot instead of retaining the whole day.
         // Calculate metrics
-        const totalIncidents = incidents.length;
+        let totalIncidents = 0;
         let openIncidents = 0;
         let acknowledgedIncidents = 0;
         let resolvedIncidents = 0;
@@ -207,6 +224,12 @@ export async function generateDailyRollup(
         let resolveSlaMet = 0;
         let resolveSlaBreached = 0;
         let afterHoursCount = 0;
+        let escalationEventCount = 0,
+          escalatedIncidentCount = 0;
+        let reopenEventCount = 0,
+          reopenedIncidentCount = 0;
+        let autoResolveEventCount = 0,
+          autoResolvedIncidentCount = 0;
 
         // Per-priority sums for the IncidentMetricRollupByPriority side
         // table. Accumulated alongside the aggregate sums so a single
@@ -275,215 +298,202 @@ export async function generateDailyRollup(
           }
         };
 
-        for (const incident of incidents) {
-          // Status counts
-          switch (incident.status) {
-            case 'OPEN':
-              openIncidents++;
-              break;
-            case 'ACKNOWLEDGED':
-              acknowledgedIncidents++;
-              break;
-            case 'RESOLVED':
-              resolvedIncidents++;
-              break;
-          }
-
-          // Urgency counts
-          switch (incident.urgency) {
-            case 'HIGH':
-              highUrgencyIncidents++;
-              break;
-            case 'MEDIUM':
-              mediumUrgencyIncidents++;
-              break;
-            case 'LOW':
-              lowUrgencyIncidents++;
-              break;
-          }
-
-          // Priority bucket (normalized to canonical "P1".."P5" or null
-          // for unprioritized incidents).
-          const priorityBucket = priorityKeyOf(incident.priority);
-          if (priorityBucket === 'P1') p1Incidents++;
-          else if (priorityBucket === 'P2') p2Incidents++;
-          else if (priorityBucket === 'P3') p3Incidents++;
-          else if (priorityBucket === 'P4') p4Incidents++;
-          else if (priorityBucket === 'P5') p5Incidents++;
-          const priorityRecord = getPrioritySums(priorityBucket);
-          if (priorityRecord) {
-            priorityRecord.incidents++;
-          }
-
-          const resolvedTime =
-            incident.resolvedAt ?? (incident.status === 'RESOLVED' ? incident.updatedAt : null);
-          const target = resolveFrozenSlaTarget({
-            ackTargetMs: incident.slaAckTargetMs,
-            resolveTargetMs: incident.slaResolveTargetMs,
-            source: incident.slaTargetSource,
-            capturedAt: incident.slaTargetCapturedAt,
-          });
-          const elapsedAt = (evaluationAt: Date) =>
-            effectiveElapsedMs({
-              startedAt: incident.createdAt,
-              evaluationAt,
-              pauses: incident.slaPauses,
-            });
-          const ackElapsedAt = (evaluationAt: Date) =>
-            capturedOrEffectiveElapsedMs({
-              capturedElapsedMs: incident.slaAckElapsedMs,
-              startedAt: incident.createdAt,
-              evaluationAt,
-              pauses: incident.slaPauses,
-            });
-          const resolveElapsedAt = (evaluationAt: Date) =>
-            capturedOrEffectiveElapsedMs({
-              capturedElapsedMs: incident.slaResolveElapsedMs,
-              startedAt: incident.createdAt,
-              evaluationAt,
-              pauses: incident.slaPauses,
-            });
-
-          // MTTA calculation
-          if (incident.acknowledgedAt || incident.slaAckElapsedMs !== null) {
-            const mtta = ackElapsedAt(incident.acknowledgedAt ?? incident.createdAt);
-            if (mtta >= 0) {
-              mttaSum += BigInt(mtta);
-              mttaCount++;
-
-              const ackMet = target ? mtta <= target.ackTargetMs : null;
-              if (ackMet === true) ackSlaMet++;
-              else if (ackMet === false) ackSlaBreached++;
-
-              if (priorityRecord) {
-                priorityRecord.mttaSum += BigInt(mtta);
-                priorityRecord.mttaCount++;
-                if (ackMet === true) priorityRecord.ackSlaMet++;
-                else if (ackMet === false) priorityRecord.ackSlaBreached++;
-              }
+        for await (const incidents of readRollupIncidentPages(tx, whereClause)) {
+          totalIncidents += incidents.length;
+          for (const incident of incidents) {
+            // Status counts
+            switch (incident.status) {
+              case 'OPEN':
+                openIncidents++;
+                break;
+              case 'ACKNOWLEDGED':
+                acknowledgedIncidents++;
+                break;
+              case 'RESOLVED':
+                resolvedIncidents++;
+                break;
             }
-          } else if (target && incident.status === 'RESOLVED' && resolvedTime) {
-            const recoveryElapsed = resolveElapsedAt(resolvedTime);
-            const timelySourceRecovery =
-              incident.resolutionKind === 'SOURCE_RECOVERY' &&
-              recoveryElapsed <= target.ackTargetMs;
-            if (timelySourceRecovery) {
-              ackSlaNotRequired++;
-              autoResolvedBeforeAck++;
-              if (priorityRecord) {
-                priorityRecord.ackSlaNotRequired++;
-                priorityRecord.autoResolvedBeforeAck++;
+
+            // Urgency counts
+            switch (incident.urgency) {
+              case 'HIGH':
+                highUrgencyIncidents++;
+                break;
+              case 'MEDIUM':
+                mediumUrgencyIncidents++;
+                break;
+              case 'LOW':
+                lowUrgencyIncidents++;
+                break;
+            }
+
+            // Priority bucket (normalized to canonical "P1".."P5" or null
+            // for unprioritized incidents).
+            const priorityBucket = priorityKeyOf(incident.priority);
+            if (priorityBucket === 'P1') p1Incidents++;
+            else if (priorityBucket === 'P2') p2Incidents++;
+            else if (priorityBucket === 'P3') p3Incidents++;
+            else if (priorityBucket === 'P4') p4Incidents++;
+            else if (priorityBucket === 'P5') p5Incidents++;
+            const priorityRecord = getPrioritySums(priorityBucket);
+            if (priorityRecord) {
+              priorityRecord.incidents++;
+            }
+
+            const resolvedTime =
+              incident.resolvedAt ?? (incident.status === 'RESOLVED' ? incident.updatedAt : null);
+            const target = resolveFrozenSlaTarget({
+              ackTargetMs: incident.slaAckTargetMs,
+              resolveTargetMs: incident.slaResolveTargetMs,
+              source: incident.slaTargetSource,
+              capturedAt: incident.slaTargetCapturedAt,
+            });
+            const elapsedAt = (evaluationAt: Date) =>
+              effectiveElapsedMs({
+                startedAt: incident.createdAt,
+                evaluationAt,
+                pauses: incident.slaPauses,
+              });
+            const ackElapsedAt = (evaluationAt: Date) =>
+              capturedOrEffectiveElapsedMs({
+                capturedElapsedMs: incident.slaAckElapsedMs,
+                startedAt: incident.createdAt,
+                evaluationAt,
+                pauses: incident.slaPauses,
+              });
+            const resolveElapsedAt = (evaluationAt: Date) =>
+              capturedOrEffectiveElapsedMs({
+                capturedElapsedMs: incident.slaResolveElapsedMs,
+                startedAt: incident.createdAt,
+                evaluationAt,
+                pauses: incident.slaPauses,
+              });
+
+            // MTTA calculation
+            if (incident.acknowledgedAt || incident.slaAckElapsedMs !== null) {
+              const mtta = ackElapsedAt(incident.acknowledgedAt ?? incident.createdAt);
+              if (mtta >= 0) {
+                mttaSum += BigInt(mtta);
+                mttaCount++;
+
+                const ackMet = target ? mtta <= target.ackTargetMs : null;
+                if (ackMet === true) ackSlaMet++;
+                else if (ackMet === false) ackSlaBreached++;
+
+                if (priorityRecord) {
+                  priorityRecord.mttaSum += BigInt(mtta);
+                  priorityRecord.mttaCount++;
+                  if (ackMet === true) priorityRecord.ackSlaMet++;
+                  else if (ackMet === false) priorityRecord.ackSlaBreached++;
+                }
               }
-            } else {
-              ackSlaBreached++;
-              if (incident.resolutionKind === 'SOURCE_RECOVERY') {
-                sourceRecoveryAfterAckDeadline++;
-                if (priorityRecord) priorityRecord.sourceRecoveryAfterAckDeadline++;
+            } else if (target && incident.status === 'RESOLVED' && resolvedTime) {
+              const recoveryElapsed = resolveElapsedAt(resolvedTime);
+              const timelySourceRecovery =
+                incident.resolutionKind === 'SOURCE_RECOVERY' &&
+                recoveryElapsed <= target.ackTargetMs;
+              if (timelySourceRecovery) {
+                ackSlaNotRequired++;
+                autoResolvedBeforeAck++;
+                if (priorityRecord) {
+                  priorityRecord.ackSlaNotRequired++;
+                  priorityRecord.autoResolvedBeforeAck++;
+                }
               } else {
-                manualResolvedWithoutAck++;
-                if (priorityRecord) priorityRecord.manualResolvedWithoutAck++;
+                ackSlaBreached++;
+                if (incident.resolutionKind === 'SOURCE_RECOVERY') {
+                  sourceRecoveryAfterAckDeadline++;
+                  if (priorityRecord) priorityRecord.sourceRecoveryAfterAckDeadline++;
+                } else {
+                  manualResolvedWithoutAck++;
+                  if (priorityRecord) priorityRecord.manualResolvedWithoutAck++;
+                }
+                if (priorityRecord) priorityRecord.ackSlaBreached++;
               }
-              if (priorityRecord) priorityRecord.ackSlaBreached++;
+            } else if (target && incident.status !== 'RESOLVED') {
+              const snapshotTime = Math.min(Date.now(), nextDayStart.getTime());
+              const elapsed = elapsedAt(new Date(snapshotTime));
+              if (elapsed > target.ackTargetMs) {
+                ackSlaBreached++;
+                if (priorityRecord) priorityRecord.ackSlaBreached++;
+              }
             }
-          } else if (target && incident.status !== 'RESOLVED') {
-            const snapshotTime = Math.min(Date.now(), nextDayStart.getTime());
-            const elapsed = elapsedAt(new Date(snapshotTime));
-            if (elapsed > target.ackTargetMs) {
-              ackSlaBreached++;
-              if (priorityRecord) priorityRecord.ackSlaBreached++;
+
+            // MTTR calculation
+            if (incident.status === 'RESOLVED' && resolvedTime) {
+              const mttr = resolveElapsedAt(resolvedTime);
+              if (mttr >= 0) {
+                mttrSum += BigInt(mttr);
+                mttrCount++;
+
+                const resolveMet = target ? mttr <= target.resolveTargetMs : null;
+                if (resolveMet === true) resolveSlaMet++;
+                else if (resolveMet === false) resolveSlaBreached++;
+
+                if (priorityRecord) {
+                  priorityRecord.mttrSum += BigInt(mttr);
+                  priorityRecord.mttrCount++;
+                  if (resolveMet === true) priorityRecord.resolveSlaMet++;
+                  else if (resolveMet === false) priorityRecord.resolveSlaBreached++;
+                }
+              }
+            } else if (target && incident.status !== 'RESOLVED') {
+              const snapshotTime = Math.min(Date.now(), nextDayStart.getTime());
+              const elapsed = elapsedAt(new Date(snapshotTime));
+              if (elapsed > target.resolveTargetMs) {
+                resolveSlaBreached++;
+                if (priorityRecord) priorityRecord.resolveSlaBreached++;
+              }
+            }
+
+            // After-hours classification.
+            //
+            // Uses the tenant-configured `businessHoursTimeZone` (defaults
+            // to UTC) so this matches the live aggregate path
+            // (`calculateDbAggregateMetrics`) and the in-memory classifier
+            // in `sla-server.ts`. All three paths must agree on the same
+            // incident's classification or rollup/live numbers diverge.
+            if (
+              isIncidentAfterHours(
+                incident.createdAt,
+                businessHoursTimeZone,
+                DEFAULT_BUSINESS_HOURS_START,
+                DEFAULT_BUSINESS_HOURS_END
+              )
+            ) {
+              afterHoursCount++;
             }
           }
 
-          // MTTR calculation
-          if (incident.status === 'RESOLVED' && resolvedTime) {
-            const mttr = resolveElapsedAt(resolvedTime);
-            if (mttr >= 0) {
-              mttrSum += BigInt(mttr);
-              mttrCount++;
-
-              const resolveMet = target ? mttr <= target.resolveTargetMs : null;
-              if (resolveMet === true) resolveSlaMet++;
-              else if (resolveMet === false) resolveSlaBreached++;
-
-              if (priorityRecord) {
-                priorityRecord.mttrSum += BigInt(mttr);
-                priorityRecord.mttrCount++;
-                if (resolveMet === true) priorityRecord.resolveSlaMet++;
-                else if (resolveMet === false) priorityRecord.resolveSlaBreached++;
-              }
-            }
-          } else if (target && incident.status !== 'RESOLVED') {
-            const snapshotTime = Math.min(Date.now(), nextDayStart.getTime());
-            const elapsed = elapsedAt(new Date(snapshotTime));
-            if (elapsed > target.resolveTargetMs) {
-              resolveSlaBreached++;
-              if (priorityRecord) priorityRecord.resolveSlaBreached++;
-            }
-          }
-
-          // After-hours classification.
-          //
-          // Uses the tenant-configured `businessHoursTimeZone` (defaults
-          // to UTC) so this matches the live aggregate path
-          // (`calculateDbAggregateMetrics`) and the in-memory classifier
-          // in `sla-server.ts`. All three paths must agree on the same
-          // incident's classification or rollup/live numbers diverge.
-          if (
-            isIncidentAfterHours(
-              incident.createdAt,
-              businessHoursTimeZone,
-              DEFAULT_BUSINESS_HOURS_START,
-              DEFAULT_BUSINESS_HOURS_END
+          // The typed/legacy classifier and lifetime event semantics stay the
+          // same. Group in PostgreSQL so event storms do not create unbounded
+          // JS arrays; each incident belongs to exactly one keyset page.
+          const incidentIds = incidents.map(incident => incident.id);
+          const [escalations, reopens, autoResolves] = await Promise.all(
+            (['ESCALATED', 'REOPENED', 'AUTO_RESOLVED'] as const).map(kind =>
+              tx.incidentEvent.groupBy({
+                by: ['incidentId'],
+                where: { incidentId: { in: incidentIds }, ...incidentEventWhereFor(kind) },
+                _count: { _all: true },
+              })
             )
-          ) {
-            afterHoursCount++;
-          }
+          );
+          escalationEventCount += escalations.reduce((sum, row) => sum + row._count._all, 0);
+          escalatedIncidentCount += escalations.length;
+          reopenEventCount += reopens.reduce((sum, row) => sum + row._count._all, 0);
+          reopenedIncidentCount += reopens.length;
+          autoResolveEventCount += autoResolves.reduce((sum, row) => sum + row._count._all, 0);
+          autoResolvedIncidentCount += autoResolves.length;
         }
-
-        // Fetch event counts (use tx for transaction consistency)
-        // Event counts use the shared typed-first / ILIKE-fallback
-        // classifier so the rollup numbers match the live aggregate's
-        // classification for the same day.
-        const incidentIds = incidents.map(i => i.id);
-        const [escalationEvents, reopenEvents, autoResolveEvents, alertCount] = incidentIds.length
-          ? await Promise.all([
-              tx.incidentEvent.findMany({
-                where: {
-                  incidentId: { in: incidentIds },
-                  ...incidentEventWhereFor('ESCALATED'),
-                },
-                select: { incidentId: true },
-              }),
-              tx.incidentEvent.findMany({
-                where: {
-                  incidentId: { in: incidentIds },
-                  ...incidentEventWhereFor('REOPENED'),
-                },
-                select: { incidentId: true },
-              }),
-              tx.incidentEvent.findMany({
-                where: {
-                  incidentId: { in: incidentIds },
-                  ...incidentEventWhereFor('AUTO_RESOLVED'),
-                },
-                select: { incidentId: true },
-              }),
-              tx.alert.count({
-                where: {
-                  createdAt: { gte: dayStart, lt: nextDayStart },
-                  ...(serviceId ? { serviceId } : {}),
-                },
-              }),
-            ])
-          : [[], [], [], 0];
-        const escalationEventCount = escalationEvents.length;
-        const escalatedIncidentCount = new Set(escalationEvents.map(event => event.incidentId))
-          .size;
-        const reopenEventCount = reopenEvents.length;
-        const reopenedIncidentCount = new Set(reopenEvents.map(event => event.incidentId)).size;
-        const autoResolveEventCount = autoResolveEvents.length;
-        const autoResolvedIncidentCount = new Set(autoResolveEvents.map(event => event.incidentId))
-          .size;
+        // Preserve the established alert scope independently of paging.
+        const alertCount = totalIncidents
+          ? await tx.alert.count({
+              where: {
+                createdAt: { gte: dayStart, lt: nextDayStart },
+                ...(serviceId ? { serviceId } : {}),
+              },
+            })
+          : 0;
         // Compatibility aliases retain their historic event-throughput meaning.
         const escalationCount = escalationEventCount;
         const reopenCount = reopenEventCount;

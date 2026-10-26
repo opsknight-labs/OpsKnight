@@ -1,6 +1,6 @@
 # Ingestion certification ledger
 
-Started: 2026-10-24. Updated: 2026-10-26. Candidate branch: `feat/enterprise-event-ingestion`.
+Started: 2026-10-24. Updated: 2026-10-27. Candidate branch: `feat/enterprise-event-ingestion`.
 
 Enterprise status: **NOT CERTIFIED. No PR is authorized by this ledger.** The current priority is [efficiency-first-recommendation.md](efficiency-first-recommendation.md): affordable end-to-end processing before higher offered load. The earlier [high-throughput-redesign.md](high-throughput-redesign.md) remains design context; its 600/1,000 RPS targets are unverified stress ambitions, not the compact deployment release gate. Historical entries below do not certify later revisions.
 
@@ -913,3 +913,14 @@ The four repeated runs used manual checkpoints while later probes did not; check
 The prior SIGKILL fixture's297durable intents are now consumed by the production job worker in host-library all-lanes mode, no live ingress:99receipts/alerts/incidents remain complete; due297→0,0failed jobs, all99RUNBOOK evaluation jobs complete. Evidence local-memory-fault-downstream-recovery.json. This closes the previously unconsumed default-fixture intents, but not configured Runbook execution, native dedicated-lane recovery under load, external delivery orHA.
 
 Quality:90realPG regressions pass for the application instrumentation;24focused quota/timing/resource/drain tests, final TypeScript and zero-warning modified-source lint pass. Production coalescing/connection/quota/memory/safety defaults are unchanged. Only diagnostic attribution and benchmark correctness are retained. Kind restored Ready; noPR.100/sec and a consistent isolated50/sec gate remain unproven.
+
+
+### Aged-data scheduler heap failure: bounded rollup candidate
+
+The planned checkpoint/normal A–B–B–A was stopped before its first load: scheduler readiness failed on100,000resolved incidents with100,000alerts/timeline rows and500,000completed jobs (~464MB synthetic database). Exact1web/1ingestion repetition on baseline8a1754f88 image d119cd6d reproduces exit139, DockerOOMKilled=false, and "FATAL ERROR: Reached heap limit Allocation failed - JavaScript heap out of memory". Scheduler limit stays1CPU/768MiB. Statement evidence shows one unbounded100,000-row Incident read from daily rollup generation. This is a distinct, reproducible scheduler failure; it does not establish the original webOOM cause or checkpoint latency cause. One intervening diagnostic accidentally used default2web/4ingestion counts and is excluded from capacity evidence.
+
+Rollup generation now reads1,000-row keyset pages in the same Serializable transaction and advisory lock. Per-page PostgreSQL event grouping preserves typed-first/legacy matching, lifetime event counts, distinct incident counts and compatibility aliases without collecting an entire day's events/IDs. SLA/priority/after-hours calculations and alert scope remain unchanged. Full pause history per incident remains available to exact calculations; arbitrary per-incident history is not claimed constant-size. Shared bounded immutable Intl formatter definitions replace per-incident construction and existing unbounded formatter maps; timezone/on-call definitions retain their original options, dates and mutable policies are not cached.
+
+RealPG11SLA/parity/page-boundary tests pass, including2,505incidents across pages and later-day/typed/legacy event counts.90ingestion PG regressions,106focused unit tests, TypeScript and zero-warning modified-source lint pass. Host100k full rollup under512MiB old-space cap completes with sampled51MiB heap/~200MiBRSS and expected100kresolved/alerts/after-hours totals. This is functional host proof, not Docker-memory or throughput certification. Independent read-only bug/security substitutes find no actionable introduced issues; branded tools are unavailable.
+
+Diagnostics also add bounded synthetic-history seeding, warmup-effect drain, client response timestamps/durations with rejections excluded from acknowledgments, controller load-window markers, majorGC/per-sample CPU counters and separate cluster checkpointer/writer activity. All cases must be prepared before timed comparison to avoid measuring fresh database-creation checkpoint I/O as ingestion. Application image validation, aged50/sec and75/sec remain pending. No append-window, durability, quota, connection or memory-limit defaults are loosened.

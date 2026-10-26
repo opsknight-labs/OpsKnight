@@ -1,5 +1,7 @@
+import { createDateTimeFormatterCache } from './date-time-format';
 import {
   getTimeZoneOffsetMs,
+  getZonedDateTimeFormatter,
   resolveLocalDateTimeInTimeZone,
   type LocalDateTimeParts,
 } from './timezone';
@@ -68,41 +70,12 @@ export type OnCallBlock = {
   isAdditiveOverride?: boolean;
 };
 
-const weekdayHourFormatterCache = new Map<string, Intl.DateTimeFormat>();
-const localDateTimeFormatterCache = new Map<string, Intl.DateTimeFormat>();
-
-function getWeekdayHourFormatter(timeZone: string): Intl.DateTimeFormat {
-  let formatter = weekdayHourFormatterCache.get(timeZone);
-  if (!formatter) {
-    formatter = new Intl.DateTimeFormat('en-US', {
-      timeZone,
-      weekday: 'short',
-      hour: 'numeric',
-      hour12: false,
-      hourCycle: 'h23',
-    });
-    weekdayHourFormatterCache.set(timeZone, formatter);
-  }
-  return formatter;
-}
-
-function getLocalDateTimeFormatter(timeZone: string): Intl.DateTimeFormat {
-  let formatter = localDateTimeFormatterCache.get(timeZone);
-  if (!formatter) {
-    formatter = new Intl.DateTimeFormat('en-US', {
-      timeZone,
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
-      hourCycle: 'h23',
-    });
-    localDateTimeFormatterCache.set(timeZone, formatter);
-  }
-  return formatter;
-}
+const getWeekdayHourFormatter = createDateTimeFormatterCache('en-US', {
+  weekday: 'short',
+  hour: 'numeric',
+  hour12: false,
+  hourCycle: 'h23',
+});
 
 function getDayHourInTimeZone(date: Date, timeZone: string): { day: number; hour: number } {
   const parts = getWeekdayHourFormatter(timeZone).formatToParts(date);
@@ -131,7 +104,7 @@ function getDayHourInTimeZone(date: Date, timeZone: string): { day: number; hour
 }
 
 function getLocalDateTimeParts(date: Date, timeZone: string): Required<LocalDateTimeParts> {
-  const parts = getLocalDateTimeFormatter(timeZone).formatToParts(date);
+  const parts = getZonedDateTimeFormatter(timeZone).formatToParts(date);
   const get = (type: string) => Number(parts.find(part => part.type === type)?.value ?? '0');
   return {
     year: get('year'),

@@ -90,8 +90,27 @@ export default function () {
   const valid = response.status === 202 && receipt;
   success.add(valid);
   if (valid) {
-    console.log(JSON.stringify({ kind: 'opsknight-ack', receiptId, deliveryId: id }));
+    console.log(
+      JSON.stringify({
+        kind: 'opsknight-ack',
+        receiptId,
+        deliveryId: id,
+        status: response.status,
+        observedAt: Date.now(),
+        durationMs: Number.isFinite(response.timings.duration) ? response.timings.duration : null,
+      })
+    );
     accepted.add(1);
+  } else {
+    console.log(
+      JSON.stringify({
+        kind: 'opsknight-rejection',
+        deliveryId: id,
+        status: response.status,
+        observedAt: Date.now(),
+        durationMs: Number.isFinite(response.timings.duration) ? response.timings.duration : null,
+      })
+    );
   }
   if (response.status === 429) rejectedQuota.add(1);
   if (response.status === 503) rejectedCapacity.add(1);
