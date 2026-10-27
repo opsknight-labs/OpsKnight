@@ -28,6 +28,18 @@ For a future reviewed exclusion, record the operation-specific reason, reviewer 
 7. Run security/dependency remediation, baseline comparisons for unrelated CI failures, migration/rollback drills and fault injection. Measure 0/10/25/50/100 MCP concurrency while ingestion, paging, delivery and runbooks operate. Record latency, SQL time/count, locks, connection waits and critical backlog; pool separation and query counts alone are insufficient.
 8. Package admin policy/retention controls, client guides, support matrix and exact-source/image evidence. Keep the PR draft until all required CI, interoperability, recovery and production gates pass.
 
+## Approval safety gate (blocks enabling further operations)
+
+Do not enable another approval-gated operation until `tests/integration/mcp-approval-crash-safety.test.ts` passes for the exact final SHA and the new operation has family-specific positive and negative tests. The invariants it demonstrates against PostgreSQL:
+
+- A fault-injection sweep fails the commit at every phase boundary (before/inside each transaction and after the domain effect committed), retries, and requires exactly one effect and a `COMMITTED` approval. It runs for a revision-bound `required` operation and for a create operation, and it asserts that the "effect committed, outcome not recorded" window was actually visited. Mutation check: replacing the approval-derived REST idempotency key with a random one produced a duplicate effect and failed the sweep.
+- A prepare interrupted at every boundary and retried produces one approval.
+- Eight concurrent commits apply one effect and write one commit audit; a sibling grant of the same user cannot commit; racing reviewers (approve/approve, approve/reject) produce exactly one decision and one audit row.
+- A claimed approval cannot be resumed after its one-hour execution window; an expired approval never executes on any retry; tampered digest, contract digest or envelope fail closed; stale revisions, demoted or re-versioned reviewers, revoked grants/tokens and writes-disabled policy all prevent the effect.
+- A definitive-rejection `FAILED` mark is never written over a durable REST receipt, so a committed effect cannot be reported as failed.
+
+Exactly-once relies on the REST command's durable idempotency receipt committing in the same transaction as its effect, which is why only operations whose mutation contract is `required` or `supported` can be approval-gated. This is a local PostgreSQL result, not CI or production certification: process kills, PostgreSQL failover and multi-replica execution are still unproven. This branch remains incomplete.
+
 ## Generic approval checkpoint
 
 Phase D now has its reusable engine: `McpOperationApproval` (additive migration), the `APPROVAL_REQUIRED` review status (R2 only), `operation_prepare` / `operation_get_approval` / `operation_commit_approved`, and a native review page. The engine is exercised by `tests/integration/mcp-operation-approval.test.ts` for same-reviewer rejection, reviewer demotion or token-version change, requester grant revocation, writes disabled, digest/envelope tampering, expiry, stale revision, wrong grant, concurrent commit and crash recovery. Three operations are enabled (`setTeamLead`, `updateServiceSupportHours`, `createStatusPageAnnouncement`). The remaining R2 writes must each be enabled only with family-specific tests. R2 reads, R3 destructive operations (which additionally need recent re-authentication and postcondition verification), reviewed exclusions, Tasks, subscriptions and Apps are not part of this checkpoint.

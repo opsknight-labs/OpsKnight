@@ -480,15 +480,22 @@ export function commitApprovedMcpOperation(context: ExecutionContext, raw: unkno
           error.code === 'MCP_DOMAIN_REJECTED' &&
           [400, 403, 404, 412, 422].includes(error.status)
         )
-          await markApprovalFailed(approval.id, error.status);
+          await markApprovalFailed(approval.id, context.grantId, error.status);
         throw error;
       }
     })
   );
 }
 
-async function markApprovalFailed(id: string, status: number) {
+async function markApprovalFailed(id: string, grantId: string, status: number) {
   await runSerializableTransaction(async tx => {
+    // A durable REST receipt proves the effect committed; never record failure over it.
+    const receipt = await tx.backgroundJob.count({
+      where: {
+        id: { startsWith: 'idem:', endsWith: `:mcp:${grantId}:${mcpApprovalCommitKey(id)}` },
+      },
+    });
+    if (receipt) return;
     await tx.mcpOperationApproval.updateMany({
       where: { id, status: 'EXECUTING' },
       data: {
