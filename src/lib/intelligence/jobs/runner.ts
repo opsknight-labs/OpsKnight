@@ -229,6 +229,23 @@ const lane: {
 
 const IDLE_POLL_MS = 5_000;
 const BUSY_POLL_MS = 250;
+/** While disabled the lane only re-reads one settings row, so it polls slowly. */
+const DISABLED_POLL_MS = 30_000;
+
+/**
+ * Roles that host the lane. It shares the general worker's place in the topology; a dedicated
+ * `intelligence-worker` role is a separate, optional deployment decision.
+ */
+const LANE_ROLES: ReadonlySet<string> = new Set(['integrated', 'worker', 'general-worker']);
+
+export function shouldRunIntelligenceLane(role: string): boolean {
+  return LANE_ROLES.has(role);
+}
+
+function nextDelayMs(result: CycleResult): number {
+  if (result.status === 'worked') return BUSY_POLL_MS;
+  return result.status === 'disabled' ? DISABLED_POLL_MS : IDLE_POLL_MS;
+}
 
 function jittered(ms: number): number {
   return ms + Math.floor(Math.random() * Math.max(1, ms / 4));
@@ -242,7 +259,7 @@ function schedule(delayMs: number) {
       .then(result => {
         lane.lastCycleAt = new Date();
         lane.lastResult = result;
-        schedule(jittered(result.status === 'worked' ? BUSY_POLL_MS : IDLE_POLL_MS));
+        schedule(jittered(nextDelayMs(result)));
       })
       .finally(() => {
         lane.active = null;

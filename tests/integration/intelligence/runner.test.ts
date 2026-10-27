@@ -6,7 +6,11 @@ import { DISCOVERY_SAFETY_LAG_MS } from '@/lib/intelligence/jobs/discovery';
 import {
   DEFAULT_HANDLERS,
   createLaneState,
+  getIntelligenceLaneStatus,
   runIntelligenceCycle,
+  shouldRunIntelligenceLane,
+  startIntelligenceLane,
+  stopIntelligenceLane,
   type WorkHandler,
 } from '@/lib/intelligence/jobs/runner';
 import { INTELLIGENCE_SETTINGS_DEFAULTS } from '@/lib/intelligence/contract';
@@ -21,8 +25,16 @@ beforeEach(async () => {
 });
 
 async function enable(overrides: Partial<IntelligenceSettingsView> = {}) {
+  // Generous budgets keep these tests independent of CI load; the timeout test overrides them.
   await db.intelligenceSettings.create({
-    data: { id: 'default', ...INTELLIGENCE_SETTINGS_DEFAULTS, enabled: true, ...overrides },
+    data: {
+      id: 'default',
+      ...INTELLIGENCE_SETTINGS_DEFAULTS,
+      maxJobMs: 60_000,
+      maxDbMs: 30_000,
+      enabled: true,
+      ...overrides,
+    },
   });
 }
 
@@ -34,6 +46,26 @@ describe('backpressure hysteresis', () => {
     expect(evaluatePause({ paused: false }, 16_000, 15_000)).toEqual({ paused: true, changed: true });
     expect(evaluatePause({ paused: true }, 10_000, 15_000)).toEqual({ paused: true, changed: false });
     expect(evaluatePause({ paused: true }, 7_000, 15_000)).toEqual({ paused: false, changed: true });
+  });
+});
+
+describe('lane lifecycle', () => {
+  it('runs only on roles that host workers, never on web or scheduler-only roles', () => {
+    for (const role of ['integrated', 'worker', 'general-worker']) {
+      expect(shouldRunIntelligenceLane(role)).toBe(true);
+    }
+    for (const role of ['web', 'scheduler', 'critical-worker', 'bulk-worker', 'status-projector', 'runbook-worker']) {
+      expect(shouldRunIntelligenceLane(role)).toBe(false);
+    }
+  });
+
+  it('starts idempotently and stops cleanly', async () => {
+    startIntelligenceLane();
+    startIntelligenceLane();
+    expect(getIntelligenceLaneStatus().running).toBe(true);
+    await stopIntelligenceLane();
+    expect(getIntelligenceLaneStatus().running).toBe(false);
+    await stopIntelligenceLane(); // stopping twice is harmless
   });
 });
 
