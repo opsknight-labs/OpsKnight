@@ -2,6 +2,8 @@
 
 Started: 2026-10-24. Updated: 2026-10-27. Candidate branch: `feat/enterprise-event-ingestion`.
 
+> **Evidence note:** The raw benchmark artifacts (`local-*.json`, `*.jsonl`, `*.gz`) referenced below are intentionally not part of this change. They are preserved at commit `aa2c8e3a7` on the `feat/enterprise-event-ingestion` branch; file references below point to that history, and the harness in `scripts/ingestion/` regenerates them.
+
 Enterprise status: **NOT CERTIFIED. No PR is authorized by this ledger.** The current priority is [efficiency-first-recommendation.md](efficiency-first-recommendation.md): affordable end-to-end processing before higher offered load. The earlier [high-throughput-redesign.md](high-throughput-redesign.md) remains design context; its 600/1,000 RPS targets are unverified stress ambitions, not the compact deployment release gate. Historical entries below do not certify later revisions.
 
 Current implementation status: async-by-default durable ingestion and independent downstream lanes are implemented. Latest exact image `1acfee8c4` passes the one-minute aged-data **75new incidents/sec** gate:4,501/4,501complete, HTTPp9533.559ms, incidentp95104ms, SMTP495ms and due jobs zero. **100/sec remains failed**:5,991acknowledged/persisted/completed,10local-overload rejections, HTTPp95138.323ms, incidentp95659ms,56due jobs at the10second drain deadline. Overload counters confirm local saturation; capacity rejection counters are absent. Fourteen requests acquired permits through the bounded25mswait. This is not sustained100/sec,500raw-event burst, compact4CPU, external-delivery, Runbook execution, endurance or HA certification. No releasePR.
@@ -26,14 +28,11 @@ The first work reduction candidate consolidates collaboration policy reads aroun
 
 Configuration-aware outbox omission remains **unimplemented**. Execution-time configuration semantics must be preserved through a durable planning/recovery boundary before omission is safe. A creation-time negative snapshot alone is insufficient. No throughput improvement is credited to these source changes until a controlled native comparison and full downstream gate pass.
 
-
 The controlled host-process A–B–B–A comparison is retained in `local-efficiency-context-{a1,b1,b2,a2}.json`, with exact source hashes and preflight in `local-efficiency-context-provenance.json`. Every run completes the same 1,500 parent and 600 provider-child jobs for 300 default incidents; 300 Runbook jobs are intentionally held outside this diagnostic. Mean statements/incident decreased from 72.795 to 63.845 (~12.3%); process CPU for 300 incidents decreased from 10,206.8 ms to 9,117.6 ms (~10.7%). Elapsed time was 5,332.6 / 4,850.0 ms for baseline and 4,775.7 / 4,697.5 ms for candidate. Shared-host variance and two repetitions limit timing conclusions. The measured candidate is the exact four-file policy/select overlay in the provenance, before the subsequent error-path rethrow; it is not exact-final-revision certification. This is unchanged work with cheaper reads, not no-op elimination, a native image result, or sustainable end-to-end capacity. The ~33/sec native effects baseline and failed 50 RPS downstream gate remain the latest native capacity evidence.
-
 
 Validation for the context/recovery change: full unit suite 954 files / 10,019 tests passed, seven existing tests skipped; final affected-suite rerun 118 tests passed; real PostgreSQL durability suite 74 tests passed (22.56 seconds). Counts overlap and must not be added together. TypeScript passed and modified-source ESLint passed with zero warnings. Independent Bugbot and security review substitutes found no actionable introduced finding; the later parent rethrow received an additional bug-review recheck. These are source/fixture checks, not release certification. The full suite's unrelated generated SSO evidence was restored. Existing kind and other projects were left running; no new image, higher-RPS load, or compact-budget soak was run.
 
 Follow-up status subscriber optimization: TRIGGER_STATUS_PAGE now passes its captured status/generation into the subscriber handler, which checks them against the same fresh incident read used for planning. This removes the parent's duplicate read while retaining execution-time destination lookup, public-visibility filtering and downstream delivery fencing. The handler selects only the fields used for presentation, delivery identity and fencing. Legacy callers can omit the optional fence. Forty focused tests, type checking, zero-warning modified-file lint and an independent static Bugbot substitute review pass. No new throughput result is credited to this follow-up.
-
 
 ### Exact-image short preflight: 5 new incidents/sec
 
@@ -44,7 +43,6 @@ Ten-second samples showed no growing initial-effect backlog. One personal effect
 One local SMTP notification was durably recorded and captured during load in 1,055 ms, with pinned Automation verified. A single capture is not p95 handoff telemetry and does not establish the <1 second paging gate. Main load has default routing/unconfigured providers, so it is not representative configured fanout. Default async mode was used without an ingestion-mode override. Cleanup failures: none. Kind was restored and Ready.
 
 Resource scope: one web, one ingestion worker and six support roles, each capped at 1 vCPU (web 1 GiB, workers 768 MiB), plus proxy and local SMTP capture. PostgreSQL remains uncapped in the shared 12-vCPU/8-GB Docker VM; unrelated projects remained running. This is **not** the compact aggregate 4-vCPU/8-GB profile, not 50 RPS certification, not an HA/endurance result. No one-hour test was started. Establish compact limits and paging measurements before promoting this short preflight to the endurance gate.
-
 
 ### Execution-time planner: disabled collaboration
 
@@ -57,7 +55,6 @@ This is the first conservative planner optimization, not full configuration-awar
 Controlled host-process results are retained in `local-planner-dispatch-{a1,b1,b2,a2}.json` and provenance. Mean statements/incident: 62.768 → 30.305 (~51.7% reduction); process CPU for 300 incidents: 8,603.3 → 5,561.4 ms (~35.4% reduction). Elapsed time: baseline 4,409.9 / 4,363.6 ms; candidate 3,309.8 / 3,125.6 ms. All 1,500 parent jobs complete; baseline generated/completed 600 no-op provider children, candidate generates zero. Three hundred Runbook jobs are intentionally held outside this diagnostic. These uncapped host results are not native-image throughput or capacity certification.
 
 Planner retry guard follow-up: omission is enabled only for a fresh claimed parent (`claimAttempt === 1`). Retried/reclaimed/legacy parents retain the original provider unique-key handoff, since an older producer may still hold an uncommitted delivery invisible to a negative lookup. A real PostgreSQL fixture holds such an insert while retry executes, then verifies delivery handoff after commit. Full 75 PostgreSQL tests and 143 focused queue/worker/planner tests passed; type checking and zero-warning lint pass. Static bug review caught an obsolete expected-row count after conservative fallback was added; corrected. The original planner image at `978667d78` is not credited with this guard or crash certification. Native capacity measurements must identify the guarded revision separately.
-
 
 ### Guarded native results and failed 50/sec gate
 
@@ -318,7 +315,6 @@ The following full-stack 100 RPS / 30-second SIGKILL run **failed acceptance and
 
 Final harness TypeScript and explicit CommonJS lint completed successfully; focused gate/deployment regressions pass 47 tests. Independent review substitutes found no additional concrete fixture defect. Network buffering/time limits, sustainable admission capacity and the remaining enterprise gates are still open.
 
-
 ## Automatic asynchronous default and bounded fallback (source follow-up)
 
 The current source defaults to PostgreSQL ingestion with no mode environment variable. Integrated consumers retain existing behavior; web replicas run a one-receipt fallback on their existing Prisma pool when no healthy dedicated ingestion worker is observed. Five-second topology checks use database-clock heartbeat freshness (30 seconds) and an indexed predicate. Dedicated workers retain configured concurrency. Monitoring uses the same centralized resolver; independent Bugbot review caught and corrected stale raw-environment checks that otherwise disabled queue evidence with an unset variable.
@@ -337,7 +333,6 @@ The hot-key follow-up coalesces concurrent requests into atomic decisions for up
 
 The updated populated-image startup harness also passed the published v2.0.0 baseline, preserving old client access and processing three default-async lifecycle receipts through web fallback. Evidence: upgrade-auto-async-f81dfc25.json. This remains source/startup evidence rather than native mixed-version certification.
 
-
 ## Native automatic mode, controlled quota comparison and failed full-stack follow-up
 
 Image f30351a7a (`sha256:2f648951d471af8a2db224d27184e05712c76cf6dc1be1c315c5b8b26d3f243d`, committed archive SHA-256 7563d42b3c012dc713450b6aa1e49ecd9a337149829a9fddd0f71f2661c9813f) passed the native fallback-only 10 RPS / 15-second run: all 151 requests acknowledged and completed, zero ambiguous submissions/backlog/dropped arrivals, HTTP p95 22.614 ms and completion p95 116.5 ms. Actual container environment inspection confirmed the mode variable was absent. No dedicated ingestion worker existed; two web replicas consumed using their existing pools. All 31 provider formats, 11 lifecycle checks and four exhausted-quota replay provider checks passed. This image predates quota coalescing. The first attempt failed before startup because the fresh fixture database lacked pg_stat_statements; its topology artifact is retained. The corrected run and cleanup passed. These are functional/low-load checks, not 1,000 RPS evidence.
@@ -348,11 +343,9 @@ Image b9ab00858 (`sha256:e9de0d749485b4da0bbe493c8da4aa2a1a76777ebefd6880e6bd234
 
 The earlier 8cfe6058f browser CI failed in all three browsers on a test trying to click a native option. The regression now selects the named Rule history value and checks current archived-evidence labels. The unchanged disabled-execution, dismissed-state and lifecycle-evidence checks passed in Chromium, Firefox and WebKit against native image f30351a7a (three tests, 28.8 seconds after fixture setup). An initial local run used stale production output with a different selector component; another native attempt lacked required online indexes. Neither is credited as validation; the actual image entrypoint installed the fixture indexes before the successful repeat. This focused browser result does not establish the entire current CI matrix is green.
 
-
 The same immutable b9ab00858 image then ran a healthy full-stack 1,000 RPS / ten-second diagnostic on a fresh owned database with CPU sampling. It **failed**: 1,055 acknowledgments/accepted/completed events, 8,826 explicit capacity rejections, 119 dropped arrivals, zero ambiguous submissions and final backlog, HTTP p95 624.977 ms and completion p95 1,463.3 ms. Observed acceptance was about 93.2/s, not 1,000/s. CPU sampling adds diagnostic overhead and covers warmup/load; one web replica sampled 32.52% idle, 7.66% V8 garbage collection and 6.24% custom_gc frames, while one ingestion worker sampled 73.00% idle. These samples do not isolate a single causal bottleneck. All owned containers cleaned up; the temporarily stopped kind control plane was restored afterward. Evidence: local-docker-http-auto-coalesced-ceiling-1000.json and its topology report.
 
 The final source also reuses the immutable ingestion configuration schema instead of constructing validators per call. Environment values, validation bounds and default resolution are still evaluated per call. A source-only 10,000-call diagnostic measured 514.367 ms before versus 39.269 ms after; this saves about 0.0475 ms per call in that single diagnostic and is not an ingestion throughput claim. Native b9ab00858 predates this schema-construction-only optimization; fresh native capacity evidence for that final source remains pending. All 62 final PostgreSQL/contract tests pass, including mode changes after module initialization. Final TypeScript and modified-source lint completed with exit zero; independent review substitutes found no concrete regression. The 54-test focused quota/deployment/metrics suite and focused three-browser archive regression passed. Documentation frontmatter and evidence checks passed. Enterprise certification and sustainable 1,000 RPS remain false. No PR is authorized.
-
 
 ## Consumer fault isolation and shared worker telemetry (source validation)
 
@@ -364,7 +357,6 @@ Active-event and processing-capacity gauges expose bounded worker occupancy. The
 
 The native harness can additionally check authenticated ingestion-worker metrics using a private ephemeral scrape token and retain only numeric summaries. Fresh native image, authenticated scrape and performance validation for this source remain pending. Existing failed capacity evidence remains applicable; no sustainable 1,000 RPS, replicated-database HA, native graceful-stop or complete-plan certification is claimed.
 
-
 ## Native continuous consumer, SMTP/crash and authenticated worker telemetry
 
 Committed image ccb3905d9 (`sha256:0f7bb7bd1b1cca2337957502683ff8195cd8f015191a12543061acebd74f739b`, archive SHA-256 de16f38983f3e135bd7e75e77d0f27ea13b9c55d20a529313deb2b0f2d080994) built successfully and passed the unchanged full-stack 100 RPS / 30-second thresholds on a fresh owned database. All 3,000 measured requests were acknowledged, accepted and completed; zero capacity rejections, dropped arrivals, ambiguous submissions or final backlog. HTTP p95 was 37.07055 ms and completion p95 127 ms. Every application container was inspected and had no ingestion-mode variable. Pool limits remain web ten and ingestion-worker five per process, with four worker replicas/concurrency four and the normal scheduler/delivery/runbook/projector processes. This is a short local run, not sustainable enterprise capacity or replicated HA evidence; shared storage/history and previous profiling differences prevent a causal cross-run attribution solely to consumer changes.
@@ -373,16 +365,13 @@ All 31 provider formats, lifecycle/Automation checks, four exhausted-quota repla
 
 The preceding e472ec5 revision also completed CI run 40067864121 successfully, including the three-browser matrix. Manifest-specific jobs were skipped by change detection. That CI result predates the continuous-consumer source changes; their current CI result remains separate. Native process SIGTERM coordination, 1,000 RPS, database failover and full-plan certification remain open.
 
-
 The same immutable image then ran the unchanged healthy full-stack 1,000 RPS / 30-second gate on another fresh owned database, without CPU sampling, SMTP or requested worker termination. It **failed**: 4,670 requests acknowledged/accepted/completed, 25,167 explicit HTTP failures and 164 dropped arrivals, zero ambiguous submissions and final backlog. Observed acceptance was 151.58/s, HTTP p95 444.0268 ms and completion p95 4,712.55 ms. All four worker metric scrapes passed after drain, no database deadlocks were recorded, and owned cleanup succeeded. Claim SQL (3,977 calls, 13.15 seconds total database execution), completion SQL (4,670 calls, 11.31 seconds), receipt inserts (9.84 seconds) and Incident inserts (9.33 seconds) remain significant; execution statistics exclude client/network/pool time. Sampled idle-in-transaction connections averaged about 25.8, with WAL-write waits also present. These diagnostics identify remaining work rather than establishing a single causal bottleneck. Sustainable 1,000 RPS remains unachieved. Evidence: local-docker-http-auto-refill-ceiling-1000.json and local-docker-topology-auto-refill-ceiling-1000.json.
-
 
 ## Bounded durable group commits (source validation)
 
 Revision 13152fa2c groups independent scalar admissions into bounded durable transactions with one policy read, one service-mapped Automation configuration read, grouped budget reservation and a multi-row receipt insert. A two-millisecond window, 32 events/four MiB per commit, two concurrent commit groups, 256 outstanding callers and 32 MiB of retained serialized envelope content bound the queue; object overhead is additional. The queue is never an acknowledgement. Shared provider batch atomicity remains unchanged. No database pool limit was raised and no mutable policy/credit cache was introduced.
 
 All 70 PostgreSQL/contract tests passed, including new independent-conflict isolation, exact partial capacity and injected insertion-failure rollback tests. Four focused suites passed 14 queue/quota/request-gate/worker-health tests. Three additional real-database suites passed 20 Automation-settings, deduplication and outbox tests. TypeScript and explicit modified-source lint completed with exit zero/zero warnings. Read-only bug/security review substitutes found no new concrete issue. An intermediate cleanup accidentally removed the shared-provider ordering-key variable; its database regressions caught the error, the variable was restored and the full 70-test suite passed afterward. An additional first test invocation used default fixture credentials and failed authentication; only the corrected isolated-Docker run is credited. Native image and throughput validation for this source are pending; sustainable 1,000 RPS remains uncertified.
-
 
 The group-commit image 13152fa2c (`sha256:0858e4daee76c822e80212da3fffdd562262709de3f17156306c1cb9055ba709`, archive SHA-256 0e67a5adb9aa92b242e89b9b983f5720a08236be57b109d8182e7153d7265f2f) **failed** the full-stack 1,000 RPS / 30-second gate: 6,526 accepted/completed, 23,407 explicit capacity rejections, 67 dropped arrivals, zero ambiguous submissions and final backlog. Observed acceptance was 212.86/s, HTTP p95 325.7 ms and completion p95 57,288.75 ms. At admission end only 890 had completed and 5,636 remained pending: the faster admission exposed a slow consumer rather than meeting end-to-end capacity. Claim SQL consumed 239 seconds cumulative database execution in the final profile; every accepted event ultimately reconciled. All worker scrapes and cleanup passed. Evidence: local-docker-http-group-commit-1000.json and its topology report.
 
@@ -394,7 +383,6 @@ Controlled rollback-only diagnostics retain intermediate failures: splitting the
 
 All 70 database/contract tests passed on the rewritten query, including concurrent leases, per-key aliases, dead letters, unidentified service blocking, severity protection and crash recovery. Twenty additional real-database Automation/dedup/outbox tests and 12 focused datasource/queue/health tests passed. TypeScript and explicit modified-source lint completed with exit zero/zero warnings. The broader test reset had deleted migration-owned budget reference rows; the shared reset helper now restores all 64, with typed fixture inputs replacing its pre-existing any warnings. Bugbot substitute caught a PgBouncer startup-parameter regression from default JIT disabling; the fix applies that default only to direct connections and preserves compatible startup options for explicit pooler configuration and pgbouncer=true URLs. Both primary and maintenance clients use that shared handling; explicit operator options remain unchanged. Repeat review found no remaining concrete issue; security substitute found none. A fresh native image and real pooled connectivity/throughput evidence are still pending.
 
-
 The native indexed-claim image 741e24a6f (`sha256:5c974c1be343f2778c86fbee5387cd2ab267046a2cd32ad8b8ba3b1bad64d6b3`, archive SHA-256 c116fb685e14586dc06b70aae441c5dfb9160ce1c0963951d6080beca6bb375f) passed real PgBouncer startup/routing: PostgreSQL client addresses confirmed web replicas used the pooler and ingestion workers connected directly. Native prepared-statement tracking was used (compatibility override false). Thus the default jit startup regression was corrected in running containers, not solely unit tests.
 
 Its four-worker full-stack 1,000 RPS / 30-second run **failed**: 5,053 accepted/completed, 24,876 explicit capacity rejections, 72 dropped arrivals, zero ambiguous submissions and final backlog; observed acceptance 163.97/s, HTTP p95 405.2968 ms and completion p95 8,812 ms. At admission end 3,760 were completed and 1,293 pending. Claim SQL averaged 7.27 ms / 32.97 seconds cumulative database execution; completion/budget release averaged 10.08 ms / 50.91 seconds cumulative. Cross-run changes include pooled web connections, fresh retained history and shared VM/storage effects; no isolated end-to-end causal speedup is claimed.
@@ -405,7 +393,6 @@ An eight-worker repeat on another fresh database also **failed**: 1,157 accepted
 
 Revision 7cc6bf600 reduces grouped reservation row locks to min(eight, remaining callers) and balances allocation across already-held eligible shards before using preferred-shard distance. Previously a 32-event group with one preferred shard concentrated every reservation on one row, so completion releases contended on that row. The real PostgreSQL regression failed before the fix (one allocated shard) and passes after it (eight shards with exactly four events/400 bytes each). All 71 database/contract tests pass, with TypeScript and explicit modified-source lint completed exit zero/zero warnings. Read-only Bugbot substitute found no new actionable issue. A fresh native measurement remains pending; 1,000 RPS has not been achieved.
 
-
 The spread-budget image 7cc6bf600 failed its direct-web full-stack 1,000 RPS / 30-second run: 1,503 accepted/completed, 27,135 explicit capacity rejections and 1,363 dropped arrivals. Observed acceptance was 47.97/s, HTTP p95 600.249 ms and completion p95 6,035.9 ms. All accepted events reconciled with zero ambiguity/final backlog, all worker scrapes passed and owned cleanup succeeded. The source-level distribution regression is valid; this run does not establish an end-to-end throughput improvement. Evidence: local-docker-http-spread-budget-1000.json and its topology report.
 
 ## Published policy read consolidation
@@ -414,11 +401,9 @@ Revision 716cebae7 replaces repeated policy/version/child reads with shared para
 
 The full unit repeat passed 947 files / 9,972 tests with four skipped. The 71 ingestion database/contract tests and 13 additional policy/API database tests passed. Initial full-unit failures exposed five stale Automation fixture projections; these fixtures were corrected and both the focused 64-test suite and complete repeat passed. The first policy/API attempt used a database name rejected by the existing safety guard; only the corrected isolated _test run is credited. TypeScript and explicit modified-source lint passed with zero lint warnings. Independent read-only bug/security substitutes found no concrete regression; these are not branded bot certification. Production image build passed. Image ID: sha256:515256b1195c297a495070b28457845b860ff26a1b8f348f65fa285e49e816d2; committed build archive SHA-256: b8d623ebce80e8c6f2bacc6c521f9f3f28d15bffda865f16cb2bd8612c7e29e4. Native capacity measurement is pending.
 
-
 The policy-snapshot image failed the full-stack 1,000 RPS / 30-second gate: 2,044 accepted/completed, 27,503 explicit capacity rejections and 453 dropped arrivals. Observed acceptance was 66.10/s, HTTP p95 721.333 ms and completion p95 5,074.85 ms. Every accepted event reconciled with zero ambiguity/final backlog. At admission end 1,700 were complete and 344 pending. Worker scrapes and owned cleanup passed. Completion/budget release consumed 29.91 cumulative database seconds (14.63 ms mean), claim queries 13.87 seconds; WAL timing measured 5,096 syncs / 21.70 cumulative seconds over the 33.89-second profile, no full WAL buffers or deadlocks. These cumulative timings and sampled waits identify costs but do not isolate one causal bottleneck. Evidence: local-docker-http-policy-snapshot-1000.json and its topology report.
 
 A separate ten-second minimal pgbench diagnostic processed and reconciled 38,634 durable transactions (3,856.32/s) with fsync, full_page_writes and synchronous_commit on. It used 16 clients, four threads, a compressible repeated-character JSONB insert and one random counter update across 64 rows over the container Unix socket. Debug logging was emitted during that run. This excludes application indexes, random payloads, network/Prisma/HTTP, incident creation and Automation, so it is neither application capacity certification nor proof of a production storage ceiling. Evidence: local-postgres-minimal-durable-transactions.json.
-
 
 ## Linked Alert inserts and browser import repair
 
@@ -428,9 +413,7 @@ CI run 40076098320 for 716cebae7 failed only the browser job; the remaining exec
 
 A separate profiled ten-second offered-load diagnostic on 716cebae7 accepted/completed 575 events (52.63/s), with zero final backlog and successful cleanup. It reused prior retained history and added CPU sampling, so is not a capacity comparison. Sampled worker idle time was 75.64%, web idle time 43.44%; no single JavaScript function dominated. Raw profiles remain local temporary diagnostics; bounded frame summaries are in local-policy-cpu-profile-summary.json.
 
-
 The 5196ae7af build correctly failed its new server-only guard on a second client path: incident-sla/state.ts → useIncidentSlaState → IncidentsListTable. Revision 3099971e6 switches that pure projector to the same captured-contract validator and adds an unavailable-Prisma projector regression. All 95 focused clock/metrics tests pass, with TypeScript and zero-warning modified-source lint passing after explicit narrowing in the test. Native build and browser confirmation remain pending; 5196ae7af must not be described as a successful production build.
-
 
 ## Latest native image and phase-one frontier follow-up
 
@@ -446,18 +429,15 @@ The complete candidate unit suite passed 948 files / 9,974 tests with four skipp
 
 The production dependency audit reports one high and two moderate advisories (Zod, Nodemailer and the transitive NextAuth relationship). They are unresolved; the audit is not a clean security certification. Independent bug/security follow-up reviews could not run because workspace credits were exhausted. No PR or 1,000 RPS/HA certification is authorized.
 
-
 The frontier image for 43c33b3fc built successfully with one page worker (immutable image ID sha256:4e030bf806982d5355843c80576709943cfa3bc124ac3e19be151f2e0c36c76f; committed archive SHA-256 101278cdb1c121449832c03e2051e2352ead64ce07217a86ee24e22bd12c4063). The first 250 RPS / 30-second full-stack diagnostic FAILED: 1,852 accepted/completed (59.84/s), 5,380 explicit rejections and 269 dropped arrivals. HTTP p95 was 1,680.52 ms; completion p95 1,586.35 ms against the proposed 1,000 ms gate. All accepted receipts reconciled with zero ambiguity/final backlog, async mode was verified without its override, worker metrics passed and owned cleanup succeeded. Claims averaged 0.683 ms across 2,270 calls, while completion/budget release averaged 13.579 ms across 1,852 calls. Web processes each consumed about 32 CPU seconds and accumulated about 12.8 seconds of cgroup throttling during the warm-up/load/verification window. These observations do not establish one exclusive bottleneck. A same-image two-CPU web trial is pending; connection limits and worker concurrency remain unchanged. Evidence: local-docker-http-identity-frontier-250.json and matching topology report.
 
 After the measured run and owned cleanup, Docker events at 2026-10-24 13:23:07–08 UTC record an external SIGKILL/removal of the ingestion PostgreSQL container, removal of the SCIM database container and destruction of the stopped kind control-plane container. This agent did not issue those operations. Both PostgreSQL volumes survived and were recovered under their original names/localhost ports with PostgreSQL 16.15 and original durability/preload settings; all 1,952 warm-up/measured receipts remained. The kind container cannot be restarted after deletion; original cluster recovery remains unresolved. No subsequent test is credited until its own result completes. See local-environment-recovery.json.
-
 
 The same-image trial with two CPU cores per web replica also FAILED at 250 offered RPS: 1,799 accepted/completed (58.32/s), HTTP p95 1,797.31 ms and completion p95 2,229.30 ms; zero ambiguity/final backlog. Increasing the web CPU allowance alone did not establish improvement. The original one-core topology then FAILED 500 RPS: 674 persisted/completed (20.77/s), 652 successful acknowledgments, 22 ambiguous submissions, HTTP p95 9,999.98 ms and completion p95 5,779.05 ms. At 1,000 offered RPS it FAILED again: 813 persisted/completed (24.96/s), 758 successful acknowledgments, 55 ambiguous submissions, HTTP p95 7,655.43 ms and completion p95 4,070.80 ms. All persisted events drained; both high-load runs nevertheless fail the unambiguous-admission and latency gates. These are short shared-machine diagnostics, not a sustainable capacity envelope. Topology cleanup succeeded. Async mode was verified with the override absent. See local-docker-{http,topology}-identity-frontier-{cpu-250,500,1000}.json.
 
 The frontier source therefore has no new passing capacity certification. Historical 100 RPS evidence applies only to its recorded earlier image. Faster claims do not establish 1,000 completed incidents/sec; admission execution, transaction duration, budget release, downstream CPU usage and timeout ambiguity still require work. The web-CPU trial must not be treated as a sufficient fix. PostgreSQL track_wal_io_timing was restored to off and verified after these runs. User authorized creating a fresh kind cluster after testing; its outcome is recorded separately from restoration of the deleted original cluster.
 
 Fresh kind-opsknight-cluster creation succeeded after explicit user authorization. Its single control-plane node reports Ready. This is a fresh cluster, not restoration of deleted workloads. Both recovered PostgreSQL containers remain running; no owned ingestion load containers remain.
-
 
 ## Completion-path isolation and singleton optimization
 
@@ -477,11 +457,9 @@ Native authenticated retry preflight passed Events API, Webhook, PagerDuty and P
 
 All 17 focused database regressions and 71 core ingestion database/contract tests passed again on a fresh database after the final atomic migration. TypeScript and explicit modified-source ESLint passed with zero lint warnings. The final migration deploys all 336 migrations. Migration scanning reports zero errors/53 warnings, including the new runtime-derived-metadata deletion warning; unresolved dependency advisories and unavailable fresh independent reviews remain release gaps. Full-workload admission/transaction/pool/lock-holder profiling and a passing 50 RPS repeat remain next, before the requested increasing-load sequence and downstream/fault/pooler validation.
 
-
 The follow-up categorized-blocker diagnostic on another fresh database also FAILED the 50 RPS gate: 2,946 persisted/completed (48.62/s), 28 explicit rejections, 26 dropped arrivals, HTTP p95 778.71 ms and completion p95 753.75 ms. No ambiguous submissions/final backlog; cleanup passed. Completion/budget SQL averaged 3.252 ms. At one-second sampling, completion waited on a budget-category transaction idle at age 101.186 ms and on a receipt-append-category transaction idle at age 1,208.17 ms. Quota waiters also blocked behind active quota transactions, observed holder age up to 262.815 ms. No observer errors occurred. The fixed categories describe a blocker's last/current statement; locks may have been acquired earlier. Sparse samples do not establish an exclusive dominant cause or identify every affected row. They do show that further SQL micro-optimization alone cannot be assumed to remove application-held idle transaction intervals. Additional observer work prevents treating this diagnostic as an isolated throughput comparison. Evidence: local-docker-http-completion-lock-profile-50.json and matching topology report.
 
 The reusable database profiler now returns only categorized operations, states, waits, pair counts and maximum blocker transaction age. Raw SQL, parameter values, credentials, provider payloads and backend IDs are never retained in blocker evidence. The singleton optimization and the original controlled evidence are committed as 61b69f8e2. The next investigation is the admission/driver interval while retaining budget locks and separate quota transaction contention. A passing reproducible full-stack baseline is still absent; all higher-load and downstream certification gates remain blocked.
-
 
 ## Admission retry hardening: source verification, capacity pending
 
@@ -495,13 +473,11 @@ Final source checks passed: 949 unit files / 9,976 tests, seven skipped; 74 inge
 
 Fresh immutable image and the five-minute 50 RPS gate remain pending. No higher-load gate, final mixed-workload certification, fresh independent review, dependency remediation or downstream/HA certification is credited. Release remains NO-GO; phases two through six are incomplete. No PR is opened.
 
-
 The committed f781eeea5 archive built successfully, including production compilation, TypeScript, static pages and helper scripts. Immutable image ID: sha256:531cfe51e9cb49659a6779418695b86675cda9a6f8eaad29ae6157993b1c395f. Source archive SHA-256: b29f3b34677b0e4aba218df979acac1a9b12f0a64fd16388a4ed0a666985cb1d. Existing build warnings remain recorded in the build log; this is not a signed provenance certification.
 
 The fresh-database 50 RPS / five-minute diagnostic gate PASSED on that image: all 15,000 arrivals acknowledged, persisted and completed; zero dropped arrivals, ambiguity and final backlog. HTTP p95 52.76 ms; received-to-completion p95 105 ms, p99 183 ms. Including harness overhead/drain, completed throughput was 49.91/s; k6 measured 49.9999 requests/s. Four-provider authenticated quota-exhausted replay checks and real worker/admission metric scrapes passed; owned cleanup had no failures. The mode override was absent. This is a many-independent-key, critical-trigger, random-10-KB diagnostic with downstream roles running, not the final representative mixed-lifecycle/Automation workload or external-effects certification. There was no competing Docker build or preexisting k6 process at launch; unrelated idle API certification services remained on the shared VM.
 
 Process-lifetime admission mean durations were acquire 0.752 ms, operation 7.857 ms, finalize 1.036 ms; preparation 0.257 ms, reservation 1.100 ms, insertion 3.169 ms. These overlapping stage timings include preflight/warmup. Completion/budget SQL averaged 0.648 ms; claim SQL 0.276 ms; quota SQL 0.175 ms. One sampled quota-to-quota lock pair had maximum holder age 39.353 ms; no sampled completion blocker occurred. Sparse sampling cannot prove absence of contention. No controlled old-source A/B was run under the recovered clock/environment, so the large improvement over earlier failures is not attributed solely to this patch. WAL timing remains off; zero time counters are not zero WAL cost. The planned 100 RPS / five-minute gate is next; higher sustained capacity remains uncertified. Evidence: local-docker-http-admission-retry-50.json and local-docker-topology-admission-retry-50.json.
-
 
 ## Downstream bottleneck after the passing receipt baseline
 
@@ -513,11 +489,9 @@ At 100 RPS, typed-lane BackgroundJob claims averaged 22.817 ms across 2,568 call
 
 The new additive migration indexes only unfinished jobs with attempts below maxAttempts, ordered by scheduledAt/createdAt/id. The claim query retains all type/lane, scheduled-time, lease, predecessor and SKIP LOCKED predicates. Both generations remain supported. Twenty-four database regressions and 44 focused unit tests pass, with TypeScript and zero-warning modified-source lint. These overlap earlier counts. All 337 migrations deployed on the isolated integration database. A fresh image and lower-load repeats are pending for this follow-up; no claim of downstream recovery or 100 RPS pass is made. The earlier full unit suite applies to f781eeea5; this follow-up has the focused checks just listed. Release remains NO-GO.
 
-
 The live-job image for 2e22aaa61 built successfully (immutable ID sha256:547acca58f62db765a0a24e4e6afebfc8ecc331807546ccb03b69bba7a34f467; committed archive SHA-256 e069138a12ec05544d118684009cd0ae26fe7febbfc9ce1745bddd9ec3102d75). The broader Automation database suite passed 41 tests with one infrastructure-restart case skipped.
 
 Its sequential fresh-database 50 RPS / five-minute repeat FAILED the strict gate solely because k6 recorded one dropped arrival. All 15,000 sent requests were acknowledged, persisted and completed; HTTP p95 37.232 ms, received-to-completion p95 90 ms; zero ambiguity or final receipt backlog. That generator failure is preserved, not waived or credited as a pass. Owned cleanup and real worker/admission telemetry passed. Native measured-service outbox evidence still contained 32,961 due side-effect jobs, 75 PROCESSING and 41,964 completed (75,000 total), with oldest due age 132.3 seconds. The index improved the SQL access path but did not establish downstream execution capacity. Typed-lane claims averaged 5.719 ms across 3,391 calls versus 22.817 ms in the earlier 100 RPS trial; differing offered load prevents treating that as an isolated index throughput comparison. No higher offered-load gate followed. The next work is profiling handler/worker execution and downstream recovery, while retaining generator failures and keeping application/receipt capacity distinct from delivered effects. Evidence: local-docker-http-live-claim-50.json and matching topology report. The temporarily stopped fresh kind cluster is being restarted after owned load cleanup. Release remains NO-GO.
-
 
 ## Downstream execution isolation and bounded replica experiment
 
@@ -527,9 +501,7 @@ In the native single-general-worker 50 RPS run, the general container used 271.9
 
 Fixed k6 counters now retain rejected HTTP statuses without bodies, identities or high-cardinality labels; existing thresholds are unchanged. Five non-503 failures in the earlier 100 RPS report remain unclassified and are not silently assigned a cause. The test-runner changes passed 61 focused deployment/worker unit tests, TypeScript, zero-warning modified-source lint and k6 inspect. A new full-stack 50 RPS experiment is pending.
 
-
 The newly added profiler initially failed the final zero-warning lint gate on four dynamic require warnings after the preliminary check report; its requires were changed to fixed repository-relative imports. The corrected final lint, TypeScript and 61-test focused repeat passed. Its reused-fixture guard correctly rejected the already populated 30-incident diagnostic database without writing evidence or adding incidents. This correction does not change the fixed 2e22aaa61 runtime image used for the replica experiment.
-
 
 ### Fenced completion and two-general-worker experiment
 
@@ -541,11 +513,9 @@ The new real-database single-command regression failed before and passes after t
 
 The attached high-throughput redesign is retained verbatim in high-throughput-redesign.md. Its four-stage capacity breakdown and protection of initial engagement are next. Initial engagement is currently a general SCHEDULED_TASK in the PERSONAL_NOTIFICATION ordering lane. Routing changes must retain predecessor ordering, Automation suppression and captured generations. New image measurements, representative downstream delivery and higher throughput remain pending. Release remains NO-GO; no PR or merge.
 
-
 ### In-load backlog observation for redesign Phase 0
 
 The HTTP harness now offers INGESTION_BACKLOG_SAMPLES=true: two bounded aggregate queries every ten seconds, from immediately before offered load until immediately after it stops, before receipt drain. It records receipt counts/oldest pending age and initial event-effect counts/oldest due age by fixed lane. Child/provider jobs and external delivery remain excluded; this is additional diagnostic overhead, not a downstream certification gate. Sampling errors/truncation fail the diagnostic instead of silently disappearing, and cleanup awaits in-flight samples. Three lifecycle/error/overlap tests passed, a real isolated PostgreSQL empty-fixture SQL check returned two successful snapshots, TypeScript passed and explicit non-ignored lint reported zero warnings. The first real SQL attempt found no retained service; it failed its fixture precondition, then an owned temporary service was created/deleted for the successful check. The four separate native capacity modes in high-throughput-redesign.md remain incomplete.
-
 
 ### Fenced-completion image: failed 50 RPS repeat and late-commit reconciliation fix
 
@@ -562,7 +532,6 @@ Two substitute static reviews found no remaining actionable issues after fixing 
 Initial-paging trace correction: policy-based escalation already initializes durable state and its first ESCALATION job in the incident transaction, consumed by the critical lane. General EVENT_SIDE_EFFECT / PERSONAL_NOTIFICATION also executes escalation and handles fallback user-notification planning. Saturation verification must exercise both paths; a general backlog does not prove every policy page is blocked. Independent admission-only/incident-only/effects-only native baselines, the full redesign phases and enterprise downstream/HA checks remain open. PostgreSQL's queue-lock guidance and Prisma's short-transaction guidance support preserving these boundaries, not a capacity guarantee: [PostgreSQL SELECT](https://www.postgresql.org/docs/16/sql-select.html) and [Prisma transactions](https://www.prisma.io/docs/orm/v7/prisma-client/queries/transactions).
 
 Final harness verification: three focused suites / 12 tests passed, TypeScript passed, explicit non-ignored lint zero errors and zero warnings. The final explicit-datasource, one-connection held-transaction check passed with seven barrier polls. A full native repeat using this final barrier is still pending; the failed benchmark remains failed.
-
 
 ### Phase 0 stage isolation: source verification before new image
 
@@ -626,7 +595,6 @@ The optional native certification fixture `INGESTION_DOCKER_RESPONDER_CHECKS=tru
 
 The first fixture SQL preflight rejected an unconditional suppression rule, as intended by the Automation compiler. After correcting it to match the fixture source, the preflight persisted 10,000 provider deliveries and all 20,000 jobs, with every pressure job held. This proves fixture creation only, not delivery or saturation. Bounded evidence is in `local-responder-preflight.json`. Native tests of the new routing and fenced war-room SQL have not yet run. No RPS increase or certified capacity is claimed; release remains NO-GO with no PR or merge.
 
-
 Final source gates for responder isolation: the full unit run passed 953 files / 10,010 tests, with seven skipped. All 74 real PostgreSQL tests passed. The fixture-rule correction and static review resolution are included in the source; these results do not certify native SMTP delivery.
 
 A rollback-only A–B–B–A probe captured actual production critical and ordinary/general claim SQL against 30,000 synthetic active rows. With the new indexes transactionally removed, critical claims took 42.08 / 45.42 ms; with them present, 1.80 / 2.46 ms, selecting the responder index and examining 50 candidates instead of evaluating about 10,000 predecessors. General claims took 22.71 / 13.36 ms without and 16.12 / 10.76 ms with the new indexes. The general index removed 10,000 personal rows from consideration but still scanned/filtered 10,000 older bulk rows; overlapping timing ranges do not establish a general-lane throughput gain. All claims rolled back and zero jobs remained PROCESSING. Repeated rollback storage churn and warm caches limit comparison. This is neither a million-history test nor application capacity certification. Exact bounded plans, probe source, source hashes and limitations are retained in `local-responder-claim-plans.json`.
@@ -646,14 +614,11 @@ The CPU profiling controller also now targets general/critical workers in effect
 
 Controller-fix verification: type checking and explicit non-ignored lint passed with zero errors/warnings; three focused suites / 53 tests passed. The earlier full application unit result still applies to the application source. The SMTP mutation and new profiler targeting require their own real native repeats.
 
-
 The SMTP saturation repeat using host controller `27f710ee5` and the same dca60b9a3 application image PASSED. Policy SMTP capture took 399 ms; fallback capture took 250 ms, with matching durable provider delivery IDs and a completed fallback personal intent. At fallback observation, 9,940 general and 10,000 bulk pressure jobs remained. The queued LIVE/NO_ESCALATION decision survived the change to DISABLED and produced no personal job, notification intent or captured mail. All 901 load receipts completed with zero ambiguity; incident completion p95 was 104 ms. Cleanup succeeded. Evidence: `local-docker-http-responder-smtp-repeat-10.json`, `local-docker-topology-responder-smtp-repeat-10.json`. These are local functional checks under deliberate backlog, not Internet delivery, pressure-backlog drain or a sustained capacity pass.
 
 The first requested worker-only inspector run failed its earlier cgroup-only mode guard before fixture publication or container startup. Its failed evidence is preserved as `local-docker-topology-responder-effects-cpu-1000.json`. The guard now permits the explicit inspector diagnostic while still prohibiting PgBouncer for isolated worker stages. A real profiling repeat is required before any CPU attribution is claimed.
 
-
 The explicit worker CPU repeat completed all 8,000 effects with zero pending/failed jobs in 31.356 seconds. It ran with inspector overhead and is not substituted for the unprofiled 30.353-second baseline. General and critical JavaScript samples show substantial Prisma runtime request/response parsing and garbage collection; this supports further controlled query/payload reduction, not an exclusive root cause. Inspector samples omit native Prisma engine thread work, and idle samples are not equivalent to cgroup CPU utilization. Raw profiles remain local with their hashes and bounded summaries in `local-responder-cpu-summary.json`; native reconciliation is retained in `local-docker-topology-responder-effects-cpu-repeat-1000.json`. Kind was restored after the cycle and verified Ready. Its first immediate RBAC read was transiently denied; the repeat passed without configuration changes. Other projects were left untouched.
-
 
 ### Temporary native-runtime diagnostic: failed downstream gate
 
@@ -661,11 +626,9 @@ A diagnostic Debian/glibc runtime containing guarded application revision `ee8f6
 
 This private runtime experiment copied the guarded application's build onto Node 20 Debian with Prisma 5.22 regenerated for glibc. It is not the production Dockerfile, does not contain the later prepared-receipt insert change, and has not validated every copied native dependency. A single comparison on shared hardware does not identify allocator/native-engine causation or establish deployable capacity. General/critical workers approached their 1-vCPU limits while their queues grew; the next short diagnostic changes worker CPU headroom with connection pools fixed. No 100/sec run or release certification is credited.
 
-
 The follow-up changed only worker CPU caps from one to two, retaining the diagnostic runtime, role counts and connection pools. It was stopped early after request timeouts, as required by the short-test gate. All 433 persisted incidents reconciled and due jobs subsequently drained, but HTTP p95 was 8,012 ms, incident p95 7,203.6 ms, and ten submissions had ambiguous acknowledgments. The receipt-completion statement averaged 106.45 ms over 433 calls. Sampled completion blockers included budget holders idle in transaction up to 6,158 ms and receipt-append holders idle in transaction up to 8,188 ms; sampling records transaction ages, not independently attributed time per operation. SMTP capture did not pass. Evidence: `local-docker-{http,topology}-planner-debian-cpu2-diagnostic-short-50.json` and its matching drain snapshot. This failed intervention does not establish a CPU-only cause or justify a production runtime switch.
 
 The next production-image candidate is exact source revision `f159a76d3b82203f9ec397e59049bd09c4b8b7e5`, which prepares grouped receipt JSON before budget locks. Earlier native measurements above exclude this change. Its correctness and host diagnostics do not establish native lock-duration or full-stack throughput improvement.
-
 
 ### Prepared-receipt production image: 5/sec short gate failed HTTP latency
 
@@ -675,21 +638,17 @@ A one-minute fresh-database 5/sec preflight completed all 300 main incidents, ze
 
 Evidence: `local-docker-{http,topology}-prepared-receipt-short-5.json` and `local-prepared-receipt-short-drain-5.json`. Topology is web2/ingestion4/six support roles at 1-vCPU caps, PostgreSQL uncapped on the shared VM. This differs from the older passing 5/sec topology (web1/ingestion1) and is not compact-budget or sustained certification. An unchanged guarded-image control on the same topology is required before attributing the latency to this source change.
 
-
 An unchanged guarded-image control on the same web2/ingestion4 topology completes 300/300 incidents at 5/sec, HTTP p95 77.29 ms, incident p95 142.05 ms, SMTP capture 491 ms and zero due jobs after cleanup. Its controller still fails the conservative sampled queue-count bound (21 due in one sample; maximum sampled age below one second). This is not a sustained-capacity pass. Evidence: `local-docker-{http,topology}-prepared-receipt-control-short-5.json` and matching drain snapshot. The single pair is worse for the prepared-insert candidate's HTTP latency, so a repeat is required before attributing regression or accepting the source optimization.
-
 
 The prepared-image repeat completes 301/301 incidents, zero ambiguous submissions, HTTP p95 118.07 ms, incident p95 144 ms, SMTP capture 967 ms, and zero due jobs after cleanup. Final sampled queue ages remain below one second and final counts below the controller cutoff, but HTTP still fails. Evidence: `local-docker-{http,topology}-prepared-receipt-repeat-short-5.json` and matching drain snapshot. Candidate/control/candidate is a single short shared-host sequence, not an A–B–B–A native certification. Candidate HTTP latency is worse in both observations; no native performance gain is credited and further attribution is required. No 50/sec or 100/sec candidate run was started.
 
 Private-controller limitation: the sampled count bound is two times incident RPS, while the sampled quantity is background jobs, with multiple jobs per incident. Brief count-only failures at sub-second queue ages are retained as reported, not rewritten into passes; future gates must predeclare fanout-aware queue bounds and growth/age checks. This does not explain or excuse the prepared candidate's independent HTTP threshold failures.
-
 
 ### Admission-stage isolation with fewer ingestion processes
 
 The same prepared-receipt image, web1/ingestion1 plus six support roles at 1-vCPU caps, completes and drains 301 main incidents in one minute at 5/sec. HTTP p95 37.515 ms, incident p95 142 ms, SMTP fixture capture 293 ms, zero ambiguous submissions. Process-lifetime admission histograms (including preflight) show mean transaction acquire 0.650 ms, operation 6.880 ms, finalize/driver handoff 0.794 ms, reservation 0.934 ms, and insert 2.468 ms. This topology/ordering change does not isolate causal attribution or establish higher throughput. See `local-docker-{http,topology}-prepared-stage-short-5.json` and matching drain snapshot. The original private controller's job/incident count cutoff still reports failure; its raw result is retained. No compact aggregate resource or sustained certificate is claimed.
 
 A subsequent one-minute 25/sec diagnostic prospectively declares a fanout-aware count bound: six required background jobs per main incident × offered incident RPS × two seconds. Maximum due age remains 2,000 ms and final due count must be zero; HTTP/incident/SMTP checks are unchanged. Historical verdicts are not rewritten. This bound accommodates normal bursts without interpreting an incident/sec quantity as jobs/sec.
-
 
 ### Review follow-up: single-receipt path was measured and rejected
 
@@ -705,7 +664,6 @@ The prospective fanout-aware 25/sec one-minute gate **passed**: 1,501 accepted/c
 
 At the same web1/ingestion1 topology, 50/sec fails HTTP p95 764.17 ms and incident p95 3,267 ms. All 2,813 persisted incidents and due jobs drain; completion SQL averages 1.15 ms with no sampled blockers, while web/ingestion approach CPU limits. Web2/ingestion2 then completes 2,971 incidents but fails HTTP p95 855.69 ms and incident p95 1,918 ms; sampled downstream age grows to 18.95 seconds and 3,620 due jobs remain after cleanup. Their owned fixture databases are retained. Evidence `local-docker-{http,topology}-prepared-stage-50-short-50.json`, `local-docker-{http,topology}-prepared-balanced-50-short-50.json`, and matching drain snapshots. **No 75/sec or 100/sec run is justified or claimed.**
 
-
 ### Deep-audit phase 1 candidate: authoritative policy snapshot and event preparation
 
 New-incident creation shares classification and SLA published versions from one transaction-local SQL statement. Fixed bound scopes preserve integration/service/workspace precedence and only sealed immutable versions/rules are used. Existing resolvers accept the transaction-local snapshot and avoid re-reading. Each retry reads a new snapshot; no process cache or pre-lock incident-state decision is introduced. Event-only title/description normalization moves before transaction entry. Deduplication, flapping, mutable lifecycle, Automation/emergency-switch checks, escalation/outbox state, immutable SLA capture and receipt completion remain authoritative inside the transaction. This is a bounded first change, not the complete prepare/revalidate architecture.
@@ -715,7 +673,6 @@ All 78 PostgreSQL durability tests pass, plus 23 focused classification/SLA/rout
 Host new-incident A–B–B–A (30 warmups, then300 all-new10KB incidents, concurrency4/pool5) shows query calls/incident 20.830/20.423 baseline versus19.420/19.003 candidate. CPU 2,881.8/2,945.1 ms baseline versus3,059.2/2,836.0 candidate; operation p95 27.12/29.69 ms baseline versus35.14/27.36 candidate. No repeatable CPU or latency improvement is established. Due side-effect jobs are intentionally unconsumed in this diagnostic. Exact producer source hashes and raw profiles are retained in `local-incident-prepare-{a1,b1,b2,a2}.json` and provenance. No production-image improvement, 50/sec pass or phase-completion claim is credited.
 
 The latest supplied deep audit expands the remaining phases: compact ordered durable dispatch; asynchronous ordinary-notification handoff with critical responder latency retained; conditional typed queue/index redesign and representative Incident-index/WAL audit; admission/quota/large-batch profiling without weakened atomic visibility; and60-minute100/sec full-stack certification (360,000 new incidents) with separate configured-provider/Runbook and durability/failover proofs. The eight-vCPU/16GB aggregate profile and four-vCPU/8GB stretch remain unproven on the shared local VM.
-
 
 ### Phase 1 native A–B–B–A follow-up
 
@@ -732,7 +689,6 @@ Parents use PENDING_V2/PROCESSING_V2 so older ordinary claimers cannot take them
 All83PostgreSQL tests pass, including atomic rollback after child insertion, claim fencing, repeat-after-commit, same-instant legacy ordering, independent critical progress, protected retry state and configuration enabled while queued/disabled after child commit. Eight focused suites/103tests pass. Full unit suite:956files,10,040tests pass, seven existing skips. TypeScript and zero-warning modified-source lint pass. Five stale expectations were updated to assert the compact contract; the first failing full run was stopped and retained privately. The unrelated generated SSO artifact was restored. Independent static bug/security substitutes reviewed the change; review caught an unawaited dispatch promise and an upgrade-generation risk, both addressed. The initial old-handler silent-completion claim was corrected: old code throws unknown effects, but could strand work through retry exhaustion.
 
 Host A–B–B–A uses300default incidents, identical339-migration schemas/pool5/concurrency15. Baseline1,500operational jobs complete versus600candidate;300Runbook evaluations remain intentionally held in each run. Default initial jobs6→3. Statements/unit30.303/30.670→22.813/22.850 (~25% lower mean); CPU5,959.8/8,384.8→4,389.5/3,939.3ms. Baseline elapsed3,590/10,842ms; candidate3,107/2,782ms, substantial shared-host drift. No native throughput gain or configured-provider/endurance certificate is credited until the exact image is measured. Evidence:`local-compact-dispatch-{a1,b1,b2,a2}.json` and provenance.
-
 
 ### Compact-image native effects follow-up and failed full-stack gate
 
@@ -756,13 +712,11 @@ Validation for the phase-three/finalization/claim changes:85 real PostgreSQL dur
 
 An additional read-only independent static security substitute reviewed committed699e02c21 against b842f6ba7 and found no actionable introduced issue in atomic finalization, handoff, claim projection or diagnostic target/redaction guards. No tests, database operations or branded review service were used by that review.
 
-
 ### Phase-three image: initial short gate failed under competing host tests
 
 Image sha256:24521017af0edfb8843affbd413797031cd68565774b6dbf141a5b15cfae4d83 embeds revision699e02c21f606ee2ac2ebaa7e71211c926c06155. Normal production Dockerfile compilation, TypeScript,207 pages and helper compilation passed. The one-minute5/sec run completed301/301 incidents, zero final due jobs, but HTTP p95 671.432ms, incident p951,468ms and separate SMTP capture4,102ms failed. The controller correctly stopped before10/sec. Evidence: local-docker-{http,topology}-handoff-gate-short-5.json and local-handoff-gate-short-drain-5.json.
 
 Sampled receipt completion averaged1.637ms, receipt insertion4.993ms; no sampled blockers or deadlocks. Admission process-lifetime mean operation68.85ms, acquire10.03ms and finalize18.64ms include client/driver scheduling. WAL timing was disabled, so WAL sync cost is not established. A separate checkout's parallel full-unit Vitest run was observed on the host, overlapping this gate; host load average reached27.66 on12 cores. This run is retained as failed, but cannot establish a source regression or isolated capacity. That unrelated run was left untouched. A subsequent control/repeat is required. An initial control preparation stopped before load because its overlong fixture database name was truncated by PostgreSQL; a shorter fresh name corrects the diagnostic.
-
 
 ### Quieter short-gate repeat: 25/sec reproduced; 50/sec still fails
 
@@ -774,9 +728,7 @@ A separate CPU-allocation diagnostic at the same50/sec gives web/ingestion2CPU e
 
 A20-second50/sec inspector diagnostic completes829 incidents and fails latency/admission gates, as retained in local-docker-{http,topology}-handoff-cpu-diagnostic-50.json. V8 self samples include garbage collection, Prisma engine-response parsing and request serialization; idle/scheduling samples are substantial. They do not isolate a dominant application function, SQL execution, or native Prisma-engine CPU. The parameter-free summary and raw-profile hashes are in local-handoff-cpu-profile-summary.json; raw profiles remain private. No capacity credit is assigned to this instrumented run.
 
-
 Two-process comparison at50/sec, same image and7.999 application CPU-limit sum: web2/ingestion2 at1CPU each, unchanged support-role allocation, explicit pools. It completes2,988 persisted incidents and drains final due jobs, but HTTP p95641.905ms, incident p952,098.3ms and SMTP3,331ms fail; sampled due-job age reaches2,801.564ms. Separate processes improve this diagnostic relative to single-process quotas, but do not certify50/sec,75/sec or100/sec. No higher load is attempted. Cgroup snapshots independently match all declared per-role quotas and the7.999 sum. Evidence: local-docker-{http,topology}-handoff-dual-gate-short-50.json and corresponding drain; derived drain narratives carry explicit scope corrections where inherited private-controller text described the original topology. Measurement values and verdicts are preserved.
-
 
 ### P0 hot-path efficiency: separate proposed event and incident targets
 
@@ -790,9 +742,7 @@ The new-incident path reads support-hours policies in the same authoritative tra
 
 A single-serialization receipt candidate was measured and rejected. It computed capacity bytes from one serialized envelope and safely embedded that canonical JSON inside a bound JSON parameter; correctness tests passed. Host1,000durable10KB admissions/concurrency16/pool5 A–B–B–A CPU1,295.725/1,214.568ms baseline versus1,501.200/1,066.062candidate; mean CPU was slightly worse and timing drift was large. Production receipt preparation and its existing snapshot/cardinality/unique-race rollback implementation are restored. Evidence: local-receipt-json-{a1,b1,b2,a2}.json and provenance. No optimization or capacity benefit is credited to this rejected candidate.
 
-
 Validation of the retained P0 source:86real PostgreSQL durability tests pass, TypeScript passes, modified-source lint has zero warnings, and independent static bug/security substitutes report no introduced issue. The full unit run passed10,051tests with seven existing skips and one stale notification call-shape assertion failing. That assertion now explicitly requires critical dispatchImmediately:true; the corrected notification/handoff/quota recheck passes30tests across three files. The preceding focused hot-path/classification/lifecycle run passed64tests while the serializer candidate was present; its standalone test and production change were then reverted as documented. No blanket single-run full-unit-green or branded bot certificate is claimed. The unrelated generated SSO hashing artifact was restored after the full run.
-
 
 ### Exact P0-efficiency image: 50 new incidents/sec short pass; 100/sec fails
 
@@ -810,7 +760,6 @@ Main load is default/unconfigured-provider work; Runbook evaluation is consumed,
 
 After these runs, all owned native test containers were cleaned up and kind was restored and verified Ready. Its first startup-time readiness query briefly returned Forbidden; a subsequent node query and readiness wait succeeded.
 
-
 ### P0 admission follow-up: one control/Automation statement per fresh append group
 
 Fresh independent append groups now read admission control/policy and service Automation mode/version pins in one transaction-local SELECT. The existing control parser and Automation SQL/map conversion are shared with their standalone callers. Service IDs are deduplicated and bounded32; no cache survives retry, no quota or capacity reservation is moved outside its transaction, and execution-time Automation emergency checks are unchanged. Policy timing for this path now includes the combined Automation read rather than a separate automation stage.
@@ -818,7 +767,6 @@ Fresh independent append groups now read admission control/policy and service Au
 All87PostgreSQL durability tests pass. The added rollback-scoped regression proves one statement, exact policy equivalence, exclusion of another service, immediate mode changes and the workspace emergency switch.28focused ingestion/Automation suites pass174tests, TypeScript and zero-warning modified-source lint pass; independent read-only static bug/security substitutes find no introduced issue.
 
 Host admission-only A–B–B–A,1,000unique10KB receipts/concurrency16/pool5, same fresh339-migration databases: baselineCPU897.167/851.779ms, candidate835.141/850.438ms (~3.6% lower mean); baselineelapsed1,870.946/1,763.367ms, candidate1,727.171/1,776.633ms. Statement calls/receipt0.636/0.636→0.572/0.573 (~10% lower mean). All1,000receipts and capacity reservations reconcile per run. This is a modest host-library cost diagnostic, not a new HTTP throughput or incident-capacity certificate. Evidence: local-admission-settings-{a1,b1,b2,a2}.json and source-hash/archive provenance.
-
 
 ### Admission-settings native comparison and new-incident routing follow-up
 
@@ -830,16 +778,13 @@ New-incident creation now reads service configuration after acquiring the identi
 
 Host-only A–B–B–A against fd4bd0ca5,30 warmups then300 new10KB incidents/concurrency4/pool5: baselineCPU3738.155/3789.147ms, candidate2366.326/2500.316ms (~35.3% lower mean); calls/incident18.197/18.607→16.607/16.183 (~10.9% lower mean). Transaction-operation p9594.401/53.817ms→21.033/27.015ms. Exact source hashes and raw reports are retained as local-routing-read-{a1,b1,b2,a2,provenance}.json. Host scheduling and database background variation limit precision; effects were unconsumed. This is not an HTTP, downstream, endurance or100-incidents/sec capacity certificate. Next gate remains exact-image50 then100 incidents/sec with downstream drain checks.
 
-
 ### Exact-image routing optimization short gates
 
 Production image67a28dda6b47dab1b16ff793d2490938880561f7 (sha256:a5fa9a85ea6c3eb8cbe6ef17a09dcefc5f6284e248e1a83400104586695ed6b0) builds successfully, including TypeScript,207 pages and worker helpers. Same one-web/one-ingestion/six-support-role topology as the preceding short baseline,1CPU per process; shared database remains uncapped.
 
 50new incidents/sec for1minute passes:3001/3001complete, HTTP p9568.662ms, incident p95168ms, separate SMTP capture480ms. Downstream sampled due-job age remains below1038ms and final due jobs0.100/sec fails:5760/5760 acknowledged incidents eventually complete, no ambiguous submissions, HTTP p95326.577ms, incident p959603ms. At admission end871receipts remain (oldest9124.737ms), versus1558/16129ms previously; final due jobs0. SMTP1198ms. Both main processes are CPU-saturated; downstream remains bounded. No tier promotion to100/sec, no endurance/HA/configured-provider or compact-budget claim. Evidence: local-docker-{http,topology}-routing-incidents-short-{50,100}.json and local-routing-incidents-short-drain-{50,100}.json.
 
-
 A separate one-minute two-web/two-ingestion resource-sensitivity check on the same exact image also fails100/sec.5976/5976 acknowledged incidents complete, no ambiguous submissions, incident p95853ms, but HTTP p95312.389ms. At admission end46receipts remain, oldest953.888ms. Ordinary due-job age grows to6186.769ms;355 SCHEDULED_TASK jobs remain due when the harness stops the topology, including28 fenced PROCESSING jobs recoverable by lease expiry. These are retained in the owned fixture database, not claimed drained. The paging fixture captures SMTP but its pinned priority assertion fails: the persisted LIVE decision and AutomationTrace both record EVALUATION_TIMEOUT (59.624ms trace). The emergency/default routing fallback is recorded; this run cannot certify pinned Automation behavior under saturation. No timeout guard is relaxed. This is a failed sensitivity diagnostic, not a capacity promotion or efficiency comparison. Evidence: local-docker-{http,topology}-routing-two-replicas-short-100.json and local-routing-two-replicas-short-drain-100.json. Next work must profile admission CPU/latency, critical scheduled-task throughput and Automation evaluation timeout under contention before retrying100/sec.
-
 
 ### Admission durability/identity lock round-trip reduction
 
@@ -847,20 +792,17 @@ Independent append groups now combine transaction-local synchronous_commit=on an
 
 90 real PostgreSQL tests pass, including an off→on local setting check (empty/nonempty locks) and blocking legacy-writer tests for every canonical identity.12 focused lock/append/quota tests, TypeScript and zero-warning modified-source lint pass. Host admission-only A–B–B–A against a84ae8234,1000unique10KB receipts/concurrency16/pool5: baselineCPU868.686/888.207ms vs candidate861.854/836.982ms (~3.3% lower mean); elapsed1922.413/1983.014ms vs1808.969/1729.979ms (~9.4% lower mean). All1000 receipts reconcile per run. Reported pg_stat_statements calls/receipt remain0.572 because utility SET statements are excluded by top tracking; the removed client round trip is not represented in that counter. Source hashes and raw reports: local-durable-lock-{a1,b1,b2,a2,provenance}.json. Host-only diagnostic, no new image-capacity or100/sec claim. Shared workstation/kind remains active during this comparison.
 
-
 ### Optimization program: Phase1 request-stage instrumentation
 
 Following the supplied enterprise optimization plan, further optimization is gated by a total-path bottleneck budget rather than isolated SQL changes. Added fixed low-cardinality stages for /api/events authentication, bounded body read, JSON parse, schema validation and quota wait; default independent append envelope encoding, content hashing and byte counting; and per-caller append queue wait ending at dispatch. Existing authoritative SQL stages and acquire/operation/finalize/backoff remain. These are wall durations, not per-request CPU: async spans include scheduler, pool and network delays. No payload, credential, service, incident or request identity is recorded. Existing inspector CPU sampling and PostgreSQL wait/query capture remain separate diagnostic tools. Native snapshot now reports histogram-derived p50/p95/p99 upper bounds (null means unbounded/unknown), not invented exact percentiles. Overlapping/retried stages must not be summed as an exclusive latency budget.
 
 90PostgreSQL regressions and16 focused timing/parser/batching/metric tests pass, TypeScript and zero-warning modified-source/CJS lint pass. Host admission-only A–B–B–A baseline b95c4400b,1000unique10KB receipts/concurrency16/pool5: baselineCPU799.603/847.072ms, candidate826.711/821.585ms (~0.10% higher mean); elapsed1710.458/1853.500ms vs1751.193/1642.632ms. All receipts reconcile. This check covers added library metrics, not HTTP-handler instrumentation; it does not establish a speedup or certify production overhead. Raw reports/source hashes: local-instrumentation-{a1,b1,b2,a2,provenance}.json. Complete CPU/allocation and stage attribution at100/sec remains pending exact-image diagnostic measurement. Phase1 is therefore implemented in part, not fully delivered; phases2–6 remain open beyond earlier scoped optimizations.
 
-
 ### Instrumented exact-image gate: incomplete OOM run, no capacity result
 
 Image4b77121ab26ddfb64b5e3f46985ea4392fd6691a, sha256:9bb86c7b820e95ff7bdd8addbd7c4b6ac29d3fa85664bcbee4e6899b6316bb54, builds successfully with TypeScript,207pages and worker helpers. The first unprofiled50/sec one-minute attempt fails before complete HTTP evidence: the owned web process exits137 with Docker OOMKilled=true (configured1GiB). Other owned roles remain running at final resource snapshot; shared Docker control operations and database access also stalled, and unrelated API containers restarted during the window. Evidence does not distinguish a container-limit OOM from shared-VM pressure or establish a source regression. No75/sec, no100/sec profile and no15/60-minute test follows.
 
 The HTTP harness reports failureStage/errorType only; the topology records "Stage process exited or exhausted memory", cleanupFailures=[] and no complete stage snapshot. The temporary outer driver then raises KeyError on absent downstreamChecks; this is a reporting-driver failure after harness evidence/cleanup, not a passing gate. Raw failed HTTP/topology evidence is retained as local-docker-{http,topology}-instrumented-incidents-short-50.json. An after-cleanup query finds382COMPLETED receipts,382incidents and382alerts, no unfinished receipts; no complete client acknowledgment ledger exists, so these counts do not prove acknowledgment reconciliation or certified losslessness. No new throughput tier is claimed. Source instrumentation remains validated by90PG/16focused tests and the separate host overhead comparison. Next native profiling requires a stable resource window and first investigating OOM origin; latest successful image capacity remains67a28dda6 at50/sec, not this revision.
-
 
 ### P0 memory investigation and failure-safe client evidence
 
@@ -880,7 +822,6 @@ Controlled admission-only10/sec10-second web SIGKILL test requests kill after th
 
 Validation:8focused client-evidence/parser tests, TypeScript and zero-warning modified CJS/JS/TS lint pass; collector smoke records real Node/cgroup data and the native runs verify GC availability. Existing90PG application regression result is historical, not rerun against these controller-only changes. Application source and safety/memory limits remain unchanged. Original OOM and the failed full-minute50/sec gate remain release blockers. No PR is opened.
 
-
 ### Fixed-resource follow-up: quota queue/statement attribution
 
 Added bounded stages quota-wait (per caller, enqueue→dispatch), quota-policy (per group authoritative settings read) and quota-database (per group atomic charge statement, includes driver/pool/commit wait). Queued callers still await the same database decision; no credit/policy cache, batch-size,2mswindow,32caller/group,2activegroup,1024pending or failure/backpressure limit changes. Async spans overlap and cannot be summed as CPU cost. Legacy in-process hot-reload waiters without timestamps are skipped rather than changing their decisions. Native stage parsing accepts the new fixed labels.
@@ -888,7 +829,6 @@ Added bounded stages quota-wait (per caller, enqueue→dispatch), quota-policy (
 Controller now captures owned PostgreSQL cgroup CPU/throttling, current/peak memory and OOM counters plus shared-VM MemAvailable/swap before and after load. These are cumulative counter snapshots, not per-query CPU or exclusive PostgreSQL RSS; /proc/meminfo is explicitly scoped to the Docker VM. Current PostgreSQL1GiB cgroup shows reclaim/max events without OOM; this does not by itself prove an application memory shortage. No application tuning is retained before repeated fixed-resource attribution.
 
 90real PostgreSQL regressions pass on a fresh cloned owned database,21focused queue/parser/timing/registry/resource tests pass, TypeScript and zero-warning modified-source/CJS lint pass. The queue test proves wait observations finish while its shared DB decision is still unresolved. Fresh native-image repeatability and overhead remain pending; this instrumentation does not promote capacity.
-
 
 ### Repeated fixed-resource50/sec diagnostics and stronger downstream gate
 
@@ -914,7 +854,6 @@ The prior SIGKILL fixture's297durable intents are now consumed by the production
 
 Quality:90realPG regressions pass for the application instrumentation;24focused quota/timing/resource/drain tests, final TypeScript and zero-warning modified-source lint pass. Production coalescing/connection/quota/memory/safety defaults are unchanged. Only diagnostic attribution and benchmark correctness are retained. Kind restored Ready; noPR.100/sec and a consistent isolated50/sec gate remain unproven.
 
-
 ### Aged-data scheduler heap failure: bounded rollup candidate
 
 The planned checkpoint/normal A–B–B–A was stopped before its first load: scheduler readiness failed on100,000resolved incidents with100,000alerts/timeline rows and500,000completed jobs (~464MB synthetic database). Exact1web/1ingestion repetition on baseline8a1754f88 image d119cd6d reproduces exit139, DockerOOMKilled=false, and "FATAL ERROR: Reached heap limit Allocation failed - JavaScript heap out of memory". Scheduler limit stays1CPU/768MiB. Statement evidence shows one unbounded100,000-row Incident read from daily rollup generation. This is a distinct, reproducible scheduler failure; it does not establish the original webOOM cause or checkpoint latency cause. One intervening diagnostic accidentally used default2web/4ingestion counts and is excluded from capacity evidence.
@@ -924,7 +863,6 @@ Rollup generation now reads1,000-row keyset pages in the same Serializable trans
 RealPG11SLA/parity/page-boundary tests pass, including2,505incidents across pages and later-day/typed/legacy event counts.90ingestion PG regressions,106focused unit tests, TypeScript and zero-warning modified-source lint pass. Host100k full rollup under512MiB old-space cap completes with sampled51MiB heap/~200MiBRSS and expected100kresolved/alerts/after-hours totals. This is functional host proof, not Docker-memory or throughput certification. Independent read-only bug/security substitutes find no actionable introduced issues; branded tools are unavailable.
 
 Diagnostics also add bounded synthetic-history seeding, warmup-effect drain, client response timestamps/durations with rejections excluded from acknowledgments, controller load-window markers, majorGC/per-sample CPU counters and separate cluster checkpointer/writer activity. All cases must be prepared before timed comparison to avoid measuring fresh database-creation checkpoint I/O as ingestion. Application image validation, aged50/sec and75/sec remain pending. No append-window, durability, quota, connection or memory-limit defaults are loosened.
-
 
 ### Native aged rollup validation and flapping query-plan correction
 
@@ -936,7 +874,6 @@ Actual flapping lookup plans on the post-load aged fixture expose a history-depe
 
 Validation:99realPostgreSQL ingestion tests, including caller-transaction visibility, cross-service shared-key history, time-window exclusion and the20row cap;5real database incident alert-write/deduplication regressions; TypeScript and modified-source ESLint zero warnings. An initial broader regression attempt exceeded the default10second whole-database reset hook, and its overlapping resets were stopped; the5relevant lifecycle tests pass with a120second setup-only timeout. Application and benchmark deadlines remain unchanged. The query candidate still requires a new immutable-image gate.75/100incidents per second and500event bursts remain unproven; no releasePR.
 
-
 ### Aged50/sec pass;75/sec exposes two more point-lookup plan regressions
 
 Exact78be717b7image87304037 passes60seconds at50newincidents/sec on a pristine historical clone:3,001acknowledged/accepted/completed, zero pending, HTTPp9539.437ms and incidentp95153ms (max385ms). All due BackgroundJobs drain, localSMTP400ms and pinnedAutomation checks pass; no cgroupOOM. The flapping query averages0.01888ms with~3cached-page touches. This is short shared-host evidence, not sustained/isolated capacity certification, and an overnight interval plus changing shared-host conditions prevent assigning the whole throughput change to this one SQL edit. The user requested separate databases rather than pausing MCP; every case uses its own owned fixture while Docker resources remain shared.
@@ -947,7 +884,6 @@ Post-load EXPLAIN identifies two additional sparse-service/OPEN-state estimate p
 
 Validation:101PostgreSQL ingestion tests,5real lifecycle/deduplication regressions,59escalation unit tests, TypeScript and modified-source ESLint clean. Independent read-only bug/security substitute reviewers report no actionable introduced findings; branded tools remain unavailable and this is not security certification. Both50and75client ledgers reconcile all acknowledgments with completed receipts. The point-lookup candidate requires its own immutable-image50→75gate; no releasePR.
 
-
 ### Point-lookup image reaches75/sec; equal-budget process distribution next
 
 Exact image69b774973 (`sha256:789a67601e9e911e85ba2ca7592d8b14a1cadf658bc93de16fb10d1b55529fc2`) builds and passes fresh aged-data50and75/sec one-minute gates.50/sec:3,001/3,001, HTTPp9520.395ms, incidentp95138ms.75/sec:4,501/4,501, HTTPp9559.964ms, incidentp95144ms, max280ms. Due jobs drain, SMTP and pinnedAutomation checks pass.100/sec on the same1web/1ingestion topology fails with5,927/5,927acknowledgments eventually complete,74rejects, HTTPp95229.896ms and incidentp95662ms; paging-fixture admission also rejectsHTTP503. Both processes consume~61CPUseconds in the snapshot interval. All three client ledgers reconcile. Startup manually showed temporary scheduler unhealthiness/pool timeouts on aged rollups before readiness recovered within the controller deadline; no warning-free startup claim. Kubernetes startup probes retain their existing300second allowance. Memory sampling has a180second diagnostic ceiling; cgroup peaks/end counters cover the run, but inspector samples may not span all measured load after slow startup.
@@ -955,7 +891,6 @@ Exact image69b774973 (`sha256:789a67601e9e911e85ba2ca7592d8b14a1cadf658bc93de16f
 Next diagnostic uses two web/two ingestion processes with the same aggregate applicationCPU8cores, memory6,400MiB, ingestion concurrency4 and HTTPinflight32. Eachweb:1CPU/512MiB/pool5/requestcap16; eachingestion:1CPU/384MiB/pool3/concurrency2. Supporting roles retain768MiBeach; scheduler/general/critical1CPUeach, Runbook0.5CPU, bulk/projector0.25CPUeach. Main application pool maxima sum38versus37 (maintenance/controller/reserve connections remain separately budgeted). PostgreSQL stays2CPU/1GiB; proxy/SMTP limits unchanged. This is process distribution under equal aggregate application caps, not compact4CPU certification or a raised database budget. Fixture control revision is advanced with concurrency2perworker; no durability, quota, ordering, lifecycle orAutomation guards are removed.
 
 Controller-only options now validate memory, pool and request bounds and feed the same pool values into runtime budget validation and container configuration. Defaults are unchanged. Syntax, ESLint and formatting pass;11capacity/evidence regressions pass. Application image remains69b774973; controller provenance must be retained because its resource options postdate the image. Balanced75→100gates remain pending; noPR.
-
 
 ### Generic prepared rollup plan reproduced and scoped correction
 
@@ -971,7 +906,6 @@ All 1,239 client acknowledgments reconcile. The existing production read-only re
 
 Validation: 101 real PostgreSQL ingestion tests on Node 20, 11 real KPI/parity tests, one forced-generic single-connection scope test, seven rollup/cleanup unit tests, TypeScript, modified-source ESLint and CLI syntax checks pass. Independent read-only bug/security substitute reviewers report no actionable introduced findings; branded reviewers are unavailable. Next: rebuild the corrected application and rerun the same disclosed equal-budget 75→100/sec gates on pristine aged fixtures. No release PR or sustained capacity claim.
 
-
 ### Bounded pre-authentication request wait candidate
 
 Image2dc115418 passes the equal-budget balanced75/sec gate:4,501acknowledgments/completions, HTTPp9527.602ms, incidentp9594ms, due jobs zero, localSMTP395ms and pinnedAutomation verified. Controller finalization is recorded. The balanced100/sec gate completes5,985/5,985acknowledgments with incidentp95283.8ms and queue drain, but failsHTTPp95170.715ms with16rejections. A CPU redistribution under the same8applicationCPU/6,400MiB cap improvesHTTPp9580.226ms/incidentp95179ms but leaves personal-notification backlog at the10second drain deadline. A second distribution (web1.25CPUeach, ingestion0.875each, scheduler0.5,general0.75,critical1.5,Runbook0.5,bulk/projector0.25each) drains due jobs in6.12seconds and completes5,978acknowledgments withHTTPp9572.684ms/incidentp95251ms, but22HTTP503responses fail acceptance. These remain failed100/sec full-stack gates; no certificate from latency alone.
@@ -982,13 +916,11 @@ Candidate request admission adds a FIFO wait of at most25ms before authenticatio
 
 Validation:28focused request-gate,telemetry,quota-batch and metric-registry tests pass; TypeScript, modified-source ESLint and diff whitespace checks pass. Independent static bug/security substitute reviewers report no actionable findings; branded tools remain unavailable. Production image and75→100/sec gates for this candidate are pending. No releasePR.
 
-
 ### Bounded request wait native evidence:75passes,100still blocked
 
 Exact1acfee8c4production image builds. Fresh aged75/sec gate passes all4,501acknowledged events, HTTPp9533.559ms and incidentp95104ms; localSMTP495ms, pinnedAutomation and final queue drain pass.100/sec fails:5,991acknowledged/persisted/completed,10HTTP503local-overload rejections, HTTPp95138.323ms and incidentp95659ms. No ambiguous persisted submissions. All acknowledgments reconcile in both owned databases. The100/sec run has56duejobs at the10second drain deadline; the run remains failed even though no jobs are FAILED. LocalSMTP1183ms and pinnedAutomation pass.
 
 Native request-wait histograms record14successful queued permits, mean7.10/10.02ms perweb;10expiredwaiters match exactly the fixed local-overload counter. No capacity-rejection counters are emitted. Failure observations can exceed25ms if the event loop delays timer processing (mean42.3ms); expired callers still never start authentication/body/transaction work. This is a logical admission deadline, not a hard event-loop latency guarantee. The queue is bounded, but this experiment does not demonstrate an isolated causal throughput gain because shared-host scheduling varies. Do not extend its window or lower gate thresholds to label100/secpassing. Further work must reduce per-event web/critical-worker cost and establish repeatability. The latestvalid shortfullstack capacity is75/sec. NoPR.
-
 
 ###75/sec release validation: broad regressions and security findings
 
@@ -1000,7 +932,6 @@ Production audit identified Nodemailer address-parser advisories; patched10.1.1�
 
 New storm profile sends exactly1,000or5,000unique events through100bounded clients, retrying only transient statuses up to12attempts with stable payload/delivery IDs and boundedRetry-After/jitter. It requires100%eventual acknowledgments and complete receipt reconciliation, without borrowing steady-stateHTTPp95criteria. Client smoke against an owned fake server passes1,000events withtenforced503responses andstable-IDretries. Native storm modes requirefullstackconsumers and explicit allowedcounts; admission-only combinations are rejected before runtime resources. Review found that mixed-mode metadata bug and it was corrected. Memory/profileduration can now be explicitly bounded1s–2h(default3minunchanged) for longer diagnosis. Native sustained75,1k/5kstorms, workerfailure and liveRunbook-agent gates remain pending on the exact finalimage. Broadtests alone do not satisfy releasecertification.
 
-
 ### Release image short-gate reproduction (2026-10-27)
 
 Exact application revision `80fa5cbca5b11a2cb981c2fa2803a6ab5a66f505`, image `sha256:60219cfa88bcc6cff33bbd0694a831cc40e10e0de7d9c957e27de6c5bc7202fb`. The fresh one-minute 75/sec gate failed: 3,013 acknowledged, 3,027 persisted and completed (14 ambiguous persisted submissions), HTTP p95 2,704.9185ms and incident p95 9,501ms. The separate critical SMTP/pinned Automation fixture passed during load; downstream due jobs drained. No sustained or storm release gates were run after this failed prerequisite. Historical one-minute 75/sec evidence remains specific to its original run and is not reproduced by this image/environment.
@@ -1008,7 +939,6 @@ Exact application revision `80fa5cbca5b11a2cb981c2fa2803a6ab5a66f505`, image `sh
 Observed PostgreSQL WAL synchronization averaged 1.96ms per sync versus 0.33ms in the historical passing75/sec run. This is an association, not a causal storage diagnosis. Database memory was near its 1 GiB limit; there were no database cgroup OOM kills. Shared host workloads remain a limitation despite separate databases. Full acknowledgment-ledger reconciliation is retained as a separate read-only check.
 
 A controlled aged-database old/current A–B–B–A comparison at 25/sec is in progress under the same release limits. Baseline is the exact historical 25/sec image at `f159a76d3b82203f9ec397e59049bd09c4b8b7e5`, already an earlier asynchronous implementation. Its first scheduler startup exited 139 with a JavaScript heap-limit failure (Docker `OOMKilled=false`) before offered load. The first candidate run completed all 1,476 acknowledged incidents but failed HTTP/incident latency. This establishes no controlled throughput multiplier. See `controlled-old-current-comparison.json` and per-run evidence.
-
 
 ### Current short-test capacity search (2026-10-27)
 

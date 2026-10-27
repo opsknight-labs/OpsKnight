@@ -1,8 +1,0 @@
-{
-  "runId": "a6994f9e-fe37-43e6-a508-556e593f4d25",
-  "certifiedEnterprise": false,
-  "cleanupFailures": [],
-  "chaos": [],
-  "error": "\nInvalid `prisma.$queryRaw()` invocation:\n\n\nRaw query failed. Code: `42P01`. Message: `relation \"pg_stat_statements\" does not exist`",
-  "measuredAt": "2026-10-24T05:23:17.969Z"
-}

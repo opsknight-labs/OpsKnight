@@ -1,8 +1,0 @@
-{
-  "runId": "b786072b-2870-4a06-b910-893333c91b9d",
-  "certifiedEnterprise": false,
-  "cleanupFailures": [],
-  "chaos": [],
-  "error": "Candidate ingestion-cert-b786072b-worker-0 did not become ready",
-  "measuredAt": "2026-10-25T05:21:42.229Z"
-}
