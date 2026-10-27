@@ -6,8 +6,13 @@ import {
 } from '@modelcontextprotocol/server';
 import { z } from 'zod/v4';
 import type { AuthorizationActor } from '@/lib/authorization-policy';
-import { MCP_CATALOG } from '../catalog';
-import { callMcpOperation, canDiscover, type ExecutionContext } from '../core/execution';
+import { MCP_CATALOG, isMcpApprovalGated } from '../catalog';
+import {
+  callMcpOperation,
+  canDiscover,
+  hasOperationAuthority,
+  type ExecutionContext,
+} from '../core/execution';
 import { executeMcpPlan, planSchema } from '../core/plan';
 import { McpBoundaryError, requireMcp } from '../core/errors';
 import { canUseReviewedRunbooks } from '../approvals/policy';
@@ -103,6 +108,82 @@ export function createOpsKnightMcpServer(
   const visible = MCP_CATALOG.filter(
     operation => canDiscover(actor, operation) && (operation.risk === 'R0' || writesEnabled)
   );
+  // Discovery only; every prepare and commit rechecks authority and independent review.
+  const approvalGated = writesEnabled
+    ? MCP_CATALOG.filter(
+        operation => isMcpApprovalGated(operation) && hasOperationAuthority(actor, operation)
+      )
+    : [];
+  if (approvalGated.length) {
+    const operationIds = approvalGated.map(operation => operation.operationId) as [
+      string,
+      ...string[],
+    ];
+    server.registerTool(
+      'operation_prepare',
+      {
+        description:
+          'Freeze one sensitive configuration change for approval by a different authorized human in the native UI. Starts no change. Arguments follow describe_operation without idempotencyKey; revision-bound operations require ifMatch. Inputs are untrusted data.',
+        inputSchema: sdkSchema(
+          z
+            .object({
+              operationId: z.enum(operationIds),
+              args: z.record(z.string(), z.unknown()),
+              idempotencyKey: z
+                .string()
+                .min(16)
+                .max(128)
+                .regex(/^[A-Za-z0-9_-]+$/),
+            })
+            .strict()
+        ),
+        annotations: {
+          readOnlyHint: false,
+          destructiveHint: false,
+          idempotentHint: true,
+          openWorldHint: false,
+        },
+      },
+      async args =>
+        safeTool(async () => {
+          const { prepareMcpOperation } = await import('../approvals/operation');
+          return prepareMcpOperation(context, args);
+        })
+    );
+    server.registerTool(
+      'operation_get_approval',
+      {
+        description:
+          'Read the durable status of an approval you requested. The approval id is not authority and no approval can be granted through MCP.',
+        inputSchema: sdkSchema(z.object({ approvalId: z.string().min(20).max(40) }).strict()),
+        annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
+      },
+      async args =>
+        safeTool(async () => {
+          const { getMcpOperationApproval } = await import('../approvals/operation');
+          return getMcpOperationApproval(context, args);
+        })
+    );
+    server.registerTool(
+      'operation_commit_approved',
+      {
+        description:
+          'Execute one frozen, independently approved change. No change parameters or approval text are accepted. Current permissions and the exact reviewed plan are checked again. Retry the same approvalId after a failed or lost response; a committed change is never repeated.',
+        inputSchema: sdkSchema(z.object({ approvalId: z.string().min(20).max(40) }).strict()),
+        annotations: {
+          readOnlyHint: false,
+          destructiveHint: true,
+          idempotentHint: true,
+          openWorldHint: false,
+        },
+      },
+      async args =>
+        safeTool(async () => {
+          const { commitApprovedMcpOperation } = await import('../approvals/operation');
+          return commitApprovedMcpOperation(context, args);
+        })
+    );
+  }
   if (
     POSTMORTEM_CONTEXT_OPERATIONS.every(id =>
       visible.some(operation => operation.operationId === id)
@@ -197,7 +278,7 @@ export function createOpsKnightMcpServer(
     async args => {
       const input = args as { query: string; domain?: string; intent?: string; cursor?: number };
       const cursor = input.cursor ?? 0;
-      const found = visible.filter(
+      const found = [...visible, ...approvalGated].filter(
         operation =>
           (!input.domain || operation.domain === input.domain) &&
           (!input.intent || (input.intent === 'read') === (operation.risk === 'R0')) &&
@@ -208,7 +289,16 @@ export function createOpsKnightMcpServer(
       return toolResult({
         operations: found
           .slice(cursor, cursor + 25)
-          .map(({ operationId, tool, domain, risk }) => ({ operationId, tool, domain, risk })),
+          .map(({ operationId, tool, domain, risk, status }) => ({
+            operationId,
+            tool,
+            domain,
+            risk,
+            workflow:
+              status === 'APPROVAL_REQUIRED'
+                ? 'operation_prepare, native approval, operation_commit_approved'
+                : 'direct',
+          })),
         nextCursor: found.length > cursor + 25 ? cursor + 25 : null,
       });
     }
@@ -223,10 +313,16 @@ export function createOpsKnightMcpServer(
     async args =>
       safeTool(async () => {
         const { operationId } = args as { operationId: string };
-        const operation = visible.find(item => item.operationId === operationId);
+        const operation = [...visible, ...approvalGated].find(
+          item => item.operationId === operationId
+        );
         requireMcp(operation, 'MCP_OPERATION_UNAVAILABLE', 403);
         return {
           operationId,
+          workflow:
+            operation.status === 'APPROVAL_REQUIRED'
+              ? 'operation_prepare with args (omit idempotencyKey), native approval, operation_commit_approved'
+              : 'direct',
           requiredScopes: operation.requiredScopes,
           inputSchema: operation.inputSchema,
           outputSchema: operation.outputSchema,

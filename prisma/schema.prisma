@@ -4840,6 +4840,32 @@ model McpToken {
   @@index([refreshExpiresAt])
 }
 
+model McpOperationApproval {
+  id String @id @default(cuid())
+  operationId String
+  riskClass String
+  operationDigest String
+  contractDigest String
+  actorId String
+  requesterGrantId String
+  requesterCredentialId String
+  // Encrypted frozen arguments; cleared when the approval reaches a terminal state.
+  envelope String?
+  summary Json
+  status String @default("PENDING")
+  expiresAt DateTime
+  reviewedById String?
+  reviewerTokenVersion Int?
+  reviewedAt DateTime?
+  rejectedAt DateTime?
+  executingAt DateTime?
+  committedAt DateTime?
+  outcome Json?
+  createdAt DateTime @default(now())
+  @@index([requesterGrantId, createdAt])
+  @@index([status, expiresAt])
+}
+
 model McpConsentRequest {
   id String @id @default(cuid())
   userId String

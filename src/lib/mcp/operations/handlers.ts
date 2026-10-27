@@ -215,3 +215,16 @@ export const MCP_HANDLERS = new Map<string, () => Promise<Handler>>([
   ['getTeam', async () => (await import('@/app/api/v2/teams/[id]/route')).GET],
   ['listTeams', async () => (await import('@/app/api/v2/teams/route')).GET],
 ]);
+
+// Reachable only from the frozen approval commit; never from generic dispatch.
+export const MCP_APPROVAL_HANDLERS = new Map<string, () => Promise<Handler>>([
+  ['setTeamLead', async () => (await import('@/app/api/v2/teams/[id]/lead/route')).PUT],
+  [
+    'updateServiceSupportHours',
+    async () => (await import('@/app/api/v2/services/[id]/support-hours/route')).PUT,
+  ],
+  [
+    'createStatusPageAnnouncement',
+    async () => (await import('@/app/api/v2/status-pages/[id]/announcements/route')).POST,
+  ],
+]);

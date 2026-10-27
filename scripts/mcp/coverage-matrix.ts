@@ -1,8 +1,13 @@
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
-import { MCP_CATALOG, isMcpExecutable, mcpContractHash } from '../../src/lib/mcp/catalog';
-import { MCP_HANDLERS } from '../../src/lib/mcp/operations/handlers';
+import {
+  MCP_CATALOG,
+  isMcpApprovalGated,
+  isMcpExecutable,
+  mcpContractHash,
+} from '../../src/lib/mcp/catalog';
+import { MCP_APPROVAL_HANDLERS, MCP_HANDLERS } from '../../src/lib/mcp/operations/handlers';
 import { authorize } from '../../src/lib/authorization-policy';
 import { APP_ROLES } from '../../src/lib/authorization';
 import { declaredRouteActions } from './route-policy';
@@ -47,6 +52,15 @@ for (const operation of MCP_CATALOG) {
     failures.push(`Review contract drift: ${operation.operationId}`);
   if (isMcpExecutable(operation) !== MCP_HANDLERS.has(operation.operationId))
     failures.push(`Handler disposition mismatch: ${operation.operationId}`);
+  if (isMcpApprovalGated(operation) !== MCP_APPROVAL_HANDLERS.has(operation.operationId))
+    failures.push(`Approval handler disposition mismatch: ${operation.operationId}`);
+  if (isMcpApprovalGated(operation) && isMcpExecutable(operation))
+    failures.push(`Approval-gated operation is generically executable: ${operation.operationId}`);
+  if (
+    isMcpApprovalGated(operation) &&
+    !['required', 'supported'].includes(operation.mutation?.idempotency ?? '')
+  )
+    failures.push(`Approval-gated operation is not replay-safe: ${operation.operationId}`);
   if (!operation.reason || !operation.resourceFilter)
     failures.push(`Missing policy: ${operation.operationId}`);
   if (['R2', 'R3', 'R4'].includes(operation.risk) && isMcpExecutable(operation))

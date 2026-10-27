@@ -1,9 +1,10 @@
-import { isMcpExecutable, type MCP_CATALOG } from './index';
+import { isMcpApprovalGated, isMcpExecutable, type MCP_CATALOG } from './index';
 
 type Operation = (typeof MCP_CATALOG)[number];
 type Disposition =
   | 'CURATED_TOOL'
   | 'DISCOVERABLE'
+  | 'APPROVAL_REQUIRED'
   | 'MCP_EQUIVALENT'
   | 'PENDING_IMPLEMENTATION'
   | 'PENDING_EXCLUSION_REVIEW';
@@ -28,15 +29,18 @@ export function buildMcpParityReport(operations: readonly Operation[]) {
   const entries = operations.map(operation => {
     const executableCandidate = isMcpExecutable(operation);
     const equivalent = equivalents.get(operation.operationId) ?? null;
+    const approvalGated = isMcpApprovalGated(operation);
     const disposition: Disposition = executableCandidate
       ? operation.tool
         ? 'CURATED_TOOL'
         : 'DISCOVERABLE'
-      : equivalent
-        ? 'MCP_EQUIVALENT'
-        : operation.status === 'DENIED_WITH_REASON'
-          ? 'PENDING_EXCLUSION_REVIEW'
-          : 'PENDING_IMPLEMENTATION';
+      : approvalGated
+        ? 'APPROVAL_REQUIRED'
+        : equivalent
+          ? 'MCP_EQUIVALENT'
+          : operation.status === 'DENIED_WITH_REASON'
+            ? 'PENDING_EXCLUSION_REVIEW'
+            : 'PENDING_IMPLEMENTATION';
     return {
       operationId: operation.operationId,
       domain: operation.domain,
@@ -75,6 +79,7 @@ export function buildMcpParityReport(operations: readonly Operation[]) {
         classified: matching.length,
         executableCandidates: matching.filter(entry => entry.executableCandidate).length,
         equivalentMappings: matching.filter(entry => entry.disposition === 'MCP_EQUIVALENT').length,
+        approvalGated: matching.filter(entry => entry.disposition === 'APPROVAL_REQUIRED').length,
         gaps: matching.filter(entry => entry.blocker !== null).length,
         operationIds: matching.map(entry => entry.operationId).sort(),
       };
@@ -90,6 +95,8 @@ export function buildMcpParityReport(operations: readonly Operation[]) {
     reviewedExclusions: 0,
     genericExecutableCandidates: entries.filter(entry => entry.executableCandidate).length,
     equivalentMappings: entries.filter(entry => entry.disposition === 'MCP_EQUIVALENT').length,
+    approvalGatedOperations: entries.filter(entry => entry.disposition === 'APPROVAL_REQUIRED')
+      .length,
     pendingOperations: gaps.map(entry => entry.operationId),
     byDomain: groups('domain'),
     byRisk: groups('risk'),

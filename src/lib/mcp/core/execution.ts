@@ -1,6 +1,7 @@
 import Ajv2020 from 'ajv/dist/2020';
 import addFormats from 'ajv-formats';
 import { NextRequest } from 'next/server';
+import type { Prisma } from '@prisma/client';
 import prisma from '@/lib/prisma';
 import { withMcpDatabase } from '@/lib/database-workload';
 import {
@@ -10,8 +11,13 @@ import {
 } from '@/lib/authorization-policy';
 import { withInternalV2Invocation } from '@/lib/api-v2/internal-context';
 import { enforceV2ResourceAuthorization } from '@/lib/api-v2/rbac';
-import { MCP_OPERATION_MAP, isMcpExecutable, type MCP_CATALOG } from '../catalog';
-import { MCP_HANDLERS } from '../operations/handlers';
+import {
+  MCP_OPERATION_MAP,
+  isMcpApprovalGated,
+  isMcpExecutable,
+  type MCP_CATALOG,
+} from '../catalog';
+import { MCP_APPROVAL_HANDLERS, MCP_HANDLERS } from '../operations/handlers';
 import { resolveMcpGrant } from '../auth/principal';
 import { CostBudget } from './budget';
 import { requireMcp } from './errors';
@@ -22,9 +28,13 @@ const validator = new Ajv2020({ strict: false, allErrors: false, validateFormats
 addFormats(validator);
 // Static schemas only; no authorization or business data is cached here.
 const validators = new Map<string, ReturnType<typeof validator.compile>>();
-export function validateOperationArgs(operationId: string, args: unknown) {
+export function validateOperationArgs(operationId: string, args: unknown, approvalGated = false) {
   const operation = MCP_OPERATION_MAP.get(operationId);
-  requireMcp(operation && isMcpExecutable(operation), 'MCP_OPERATION_UNAVAILABLE', 403);
+  requireMcp(
+    operation && (approvalGated ? isMcpApprovalGated(operation) : isMcpExecutable(operation)),
+    'MCP_OPERATION_UNAVAILABLE',
+    403
+  );
   let validate = validators.get(operationId);
   if (!validate) {
     validate = validator.compile(operation.inputSchema);
@@ -40,14 +50,26 @@ export function validateOperationArgs(operationId: string, args: unknown) {
   };
 }
 
-export function canDiscover(actor: AuthorizationActor, operation: (typeof MCP_CATALOG)[number]) {
+export function hasOperationAuthority(
+  actor: AuthorizationActor,
+  operation: (typeof MCP_CATALOG)[number]
+) {
   return (
-    isMcpExecutable(operation) &&
     operation.requiredScopes.every(scope => actor.apiKey?.scopes.includes(scope)) &&
     operation.authorizationActions.length > 0 &&
     operation.authorizationActions.every(action => authorize({ actor, action }).allowed)
   );
 }
+
+export function canDiscover(actor: AuthorizationActor, operation: (typeof MCP_CATALOG)[number]) {
+  return isMcpExecutable(operation) && hasOperationAuthority(actor, operation);
+}
+
+/** Runs inside the domain mutation transaction, before any effect. */
+export type ApprovedCommitGuard = (
+  tx: Prisma.TransactionClient,
+  auth: Awaited<ReturnType<typeof resolveMcpGrant>>
+) => Promise<void>;
 
 export interface ExecutionContext {
   grantId: string;
@@ -63,15 +85,32 @@ export function callMcpOperation(context: ExecutionContext, operationId: string,
   );
 }
 
+/** Only the approval workflow may call this, after it has frozen and verified the arguments. */
+export function callApprovedMcpOperation(
+  context: ExecutionContext,
+  operationId: string,
+  rawArgs: unknown,
+  guard: ApprovedCommitGuard
+) {
+  return context.budget.track(
+    withMcpDatabase(() => executeMcpOperation(context, operationId, rawArgs, guard))
+  );
+}
+
 async function executeMcpOperation(
   context: ExecutionContext,
   operationId: string,
-  rawArgs: unknown
+  rawArgs: unknown,
+  guard?: ApprovedCommitGuard
 ) {
   context.budget.consumeOperation();
   const operation = MCP_OPERATION_MAP.get(operationId);
-  requireMcp(operation && isMcpExecutable(operation), 'MCP_OPERATION_UNAVAILABLE', 403);
-  const args = validateOperationArgs(operationId, rawArgs);
+  requireMcp(
+    operation && (guard ? isMcpApprovalGated(operation) : isMcpExecutable(operation)),
+    'MCP_OPERATION_UNAVAILABLE',
+    403
+  );
+  const args = validateOperationArgs(operationId, rawArgs, Boolean(guard));
   const policy = await prisma.mcpPolicy.findUnique({ where: { id: 'default' } });
   requireMcp(
     policy?.enabled && (operation.risk === 'R0' || policy.writesEnabled),
@@ -82,8 +121,8 @@ async function executeMcpOperation(
   const auth = await resolveMcpGrant(context.grantId, context.credentialId);
   auth.apiKey.scopes = auth.apiKey.scopes.filter(scope => context.tokenScopes.includes(scope));
   auth.actor.apiKey = { id: auth.apiKey.id, scopes: auth.apiKey.scopes };
-  requireMcp(canDiscover(auth.actor, operation), 'MCP_OPERATION_FORBIDDEN', 403);
-  const loadHandler = MCP_HANDLERS.get(operationId);
+  requireMcp(hasOperationAuthority(auth.actor, operation), 'MCP_OPERATION_FORBIDDEN', 403);
+  const loadHandler = (guard ? MCP_APPROVAL_HANDLERS : MCP_HANDLERS).get(operationId);
   requireMcp(loadHandler, 'MCP_OPERATION_UNAVAILABLE', 403);
   const path = args.path ?? {};
   const url = new URL(
@@ -132,6 +171,7 @@ async function executeMcpOperation(
         operation.authorizationActions,
         auth.actor
       );
+      await guard?.(tx, auth);
       if (operation.domain === 'incidents') {
         if (operationId === 'createIncident') {
           const body = args.body as { serviceId: string };

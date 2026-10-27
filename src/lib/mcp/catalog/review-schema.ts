@@ -3,7 +3,13 @@ import { z } from 'zod';
 // A typo in a review must fail closed rather than silently changing exposure.
 export const operationReviewSchema = z
   .object({
-    status: z.enum(['CURATED', 'DISCOVERABLE', 'UNSUPPORTED_WITH_REASON', 'DENIED_WITH_REASON']),
+    status: z.enum([
+      'CURATED',
+      'DISCOVERABLE',
+      'APPROVAL_REQUIRED',
+      'UNSUPPORTED_WITH_REASON',
+      'DENIED_WITH_REASON',
+    ]),
     risk: z.enum(['R0', 'R1', 'R2', 'R3', 'R4']),
     reason: z.string().trim().min(1),
     tool: z.string().trim().min(1).nullable(),
@@ -20,6 +26,12 @@ export const operationReviewSchema = z
       ctx.addIssue({
         code: 'custom',
         message: 'Sensitive operations require a separate reviewed workflow.',
+      });
+    // Approval-gated operations are never callable generically or through a named tool.
+    if (review.status === 'APPROVAL_REQUIRED' && review.risk !== 'R2')
+      ctx.addIssue({
+        code: 'custom',
+        message: 'Only sensitive configuration (R2) has an independent approval workflow.',
       });
     if ((review.status === 'CURATED') !== (review.tool !== null))
       ctx.addIssue({ code: 'custom', message: 'Only curated operations declare a named tool.' });

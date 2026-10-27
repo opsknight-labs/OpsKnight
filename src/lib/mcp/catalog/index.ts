@@ -179,3 +179,13 @@ export function isMcpExecutable(operation: (typeof MCP_CATALOG)[number]) {
     reviewedContracts.has(operation)
   );
 }
+
+/** Callable only through the frozen prepare, native review and commit workflow. */
+export function isMcpApprovalGated(operation: (typeof MCP_CATALOG)[number]) {
+  return (
+    operation.status === 'APPROVAL_REQUIRED' &&
+    operation.risk === 'R2' &&
+    operation.method !== 'get' &&
+    reviewedContracts.has(operation)
+  );
+}

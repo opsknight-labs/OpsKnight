@@ -28,7 +28,11 @@ For a future reviewed exclusion, record the operation-specific reason, reviewer 
 7. Run security/dependency remediation, baseline comparisons for unrelated CI failures, migration/rollback drills and fault injection. Measure 0/10/25/50/100 MCP concurrency while ingestion, paging, delivery and runbooks operate. Record latency, SQL time/count, locks, connection waits and critical backlog; pool separation and query counts alone are insufficient.
 8. Package admin policy/retention controls, client guides, support matrix and exact-source/image evidence. Keep the PR draft until all required CI, interoperability, recovery and production gates pass.
 
-## This checkpoint
+## Generic approval checkpoint
+
+Phase D now has its reusable engine: `McpOperationApproval` (additive migration), the `APPROVAL_REQUIRED` review status (R2 only), `operation_prepare` / `operation_get_approval` / `operation_commit_approved`, and a native review page. The engine is exercised by `tests/integration/mcp-operation-approval.test.ts` for same-reviewer rejection, reviewer demotion or token-version change, requester grant revocation, writes disabled, digest/envelope tampering, expiry, stale revision, wrong grant, concurrent commit and crash recovery. Three operations are enabled (`setTeamLead`, `updateServiceSupportHours`, `createStatusPageAnnouncement`). The remaining R2 writes must each be enabled only with family-specific tests. R2 reads, R3 destructive operations (which additionally need recent re-authentication and postcondition verification), reviewed exclusions, Tasks, subscriptions and Apps are not part of this checkpoint.
+
+## Previous checkpoint
 
 The postmortem read workflow adds contributor and paginated history adapters, a bounded four-source context tool and a scoped resource template. It preserves private-parent authorization, fresh revocation, redaction, native quotas and the request budget. It does not implement postmortem writes or imply Tasks/Apps/subscription support. No schema migration or new dependency is required for this checkpoint.
 

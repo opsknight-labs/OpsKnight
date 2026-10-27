@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { MCP_CATALOG } from '@/lib/mcp/catalog';
+import { MCP_CATALOG, isMcpApprovalGated, isMcpExecutable } from '@/lib/mcp/catalog';
+import { MCP_APPROVAL_HANDLERS, MCP_HANDLERS } from '@/lib/mcp/operations/handlers';
 import { buildMcpParityReport } from '@/lib/mcp/catalog/parity';
 import { operationReviewSchema } from '@/lib/mcp/catalog/review-schema';
 
@@ -62,5 +63,39 @@ describe('honest MCP workflow inventory', () => {
     expect(
       operationReviewSchema.safeParse({ ...base, status: 'DENIED_WITH_REASON', risk: 'R4' }).success
     ).toBe(true);
+  });
+  it('only approval-gates replay-safe sensitive writes and never exposes them generically', () => {
+    const gated = MCP_CATALOG.filter(isMcpApprovalGated);
+    expect(gated.map(op => op.operationId).sort()).toEqual(
+      [...MCP_APPROVAL_HANDLERS.keys()].sort()
+    );
+    for (const operation of gated) {
+      expect(operation.risk).toBe('R2');
+      expect(operation.method).not.toBe('get');
+      expect(operation.tool).toBeNull();
+      expect(isMcpExecutable(operation)).toBe(false);
+      expect(MCP_HANDLERS.has(operation.operationId)).toBe(false);
+      expect(['required', 'supported']).toContain(operation.mutation?.idempotency);
+    }
+    const report = buildMcpParityReport(MCP_CATALOG);
+    expect(report.approvalGatedOperations).toBe(gated.length);
+    expect(report.pendingOperations).not.toContain(gated[0]?.operationId);
+  });
+  it('limits the approval status to sensitive configuration', () => {
+    const review = MCP_CATALOG.find(op => op.operationId === 'setTeamLead')!;
+    const base = {
+      status: 'APPROVAL_REQUIRED',
+      risk: 'R2',
+      reason: review.reason,
+      tool: null,
+      routeSha256: review.routeSha256,
+      contractSha256: review.contractSha256,
+      resourceFilter: review.resourceFilter,
+      evidence: review.evidence,
+      actions: review.actions,
+    };
+    expect(operationReviewSchema.safeParse(base).success).toBe(true);
+    for (const change of [{ risk: 'R3' }, { risk: 'R4' }, { risk: 'R0' }, { tool: 'named_tool' }])
+      expect(operationReviewSchema.safeParse({ ...base, ...change }).success).toBe(false);
   });
 });
