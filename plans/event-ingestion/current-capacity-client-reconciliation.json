@@ -1,0 +1,86 @@
+[
+  {
+    "report": "plans/event-ingestion/local-docker-http-capacity-10.json",
+    "observedAt": "2026-10-27T17:22:27.202Z",
+    "acknowledgments": 600,
+    "rejectionObservations": 0,
+    "uniqueAcknowledgedReceiptIds": 600,
+    "matchedReceipts": 600,
+    "completedReceipts": 600,
+    "wrongService": 0,
+    "passed": true,
+    "scope": "Read-only per-receipt reconciliation of retained client acknowledgment ledger in its owned fixture database; not external delivery proof."
+  },
+  {
+    "report": "plans/event-ingestion/local-docker-http-capacity-25.json",
+    "observedAt": "2026-10-27T17:22:27.915Z",
+    "acknowledgments": 1501,
+    "rejectionObservations": 0,
+    "uniqueAcknowledgedReceiptIds": 1501,
+    "matchedReceipts": 1501,
+    "completedReceipts": 1501,
+    "wrongService": 0,
+    "passed": true,
+    "scope": "Read-only per-receipt reconciliation of retained client acknowledgment ledger in its owned fixture database; not external delivery proof."
+  },
+  {
+    "report": "plans/event-ingestion/local-docker-http-capacity-50.json",
+    "observedAt": "2026-10-27T17:22:29.789Z",
+    "acknowledgments": 3001,
+    "rejectionObservations": 0,
+    "uniqueAcknowledgedReceiptIds": 3001,
+    "matchedReceipts": 3001,
+    "completedReceipts": 3001,
+    "wrongService": 0,
+    "passed": true,
+    "scope": "Read-only per-receipt reconciliation of retained client acknowledgment ledger in its owned fixture database; not external delivery proof."
+  },
+  {
+    "report": "plans/event-ingestion/local-docker-http-capacity-60.json",
+    "observedAt": "2026-10-27T17:22:30.567Z",
+    "acknowledgments": 3601,
+    "rejectionObservations": 0,
+    "uniqueAcknowledgedReceiptIds": 3601,
+    "matchedReceipts": 3601,
+    "completedReceipts": 3601,
+    "wrongService": 0,
+    "passed": true,
+    "scope": "Read-only per-receipt reconciliation of retained client acknowledgment ledger in its owned fixture database; not external delivery proof."
+  },
+  {
+    "report": "plans/event-ingestion/local-docker-http-capacity-64.json",
+    "observedAt": "2026-10-27T17:22:30.937Z",
+    "acknowledgments": 3775,
+    "rejectionObservations": 66,
+    "uniqueAcknowledgedReceiptIds": 3775,
+    "matchedReceipts": 3775,
+    "completedReceipts": 3775,
+    "wrongService": 0,
+    "passed": true,
+    "scope": "Read-only per-receipt reconciliation of retained client acknowledgment ledger in its owned fixture database; not external delivery proof."
+  },
+  {
+    "report": "plans/event-ingestion/local-docker-http-capacity-60-repeat.json",
+    "observedAt": "2026-10-27T17:22:31.287Z",
+    "acknowledgments": 3564,
+    "rejectionObservations": 33,
+    "uniqueAcknowledgedReceiptIds": 3564,
+    "matchedReceipts": 3564,
+    "completedReceipts": 3564,
+    "wrongService": 0,
+    "passed": true,
+    "scope": "Read-only per-receipt reconciliation of retained client acknowledgment ledger in its owned fixture database; not external delivery proof."
+  },
+  {
+    "report": "plans/event-ingestion/local-docker-http-capacity-50-repeat.json",
+    "observedAt": "2026-10-27T17:22:31.618Z",
+    "acknowledgments": 3000,
+    "rejectionObservations": 0,
+    "uniqueAcknowledgedReceiptIds": 3000,
+    "matchedReceipts": 3000,
+    "completedReceipts": 3000,
+    "wrongService": 0,
+    "passed": true,
+    "scope": "Read-only per-receipt reconciliation of retained client acknowledgment ledger in its owned fixture database; not external delivery proof."
+  }
+]

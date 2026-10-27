@@ -1,0 +1,146 @@
+{
+  "applicationRevision": "80fa5cbca5b11a2cb981c2fa2803a6ab5a66f505",
+  "image": "sha256:60219cfa88bcc6cff33bbd0694a831cc40e10e0de7d9c957e27de6c5bc7202fb",
+  "highestSinglePassingRps": 60,
+  "highestRepeatedPassingRps": 50,
+  "durationSecondsPerRun": 60,
+  "measurementScope": "60-second short gate; intrusive live backlog/inspector samplers disabled; full receipt/job reconciliation and SMTP fixture retained",
+  "sustainedCapacityCertified": false,
+  "releaseReady": false,
+  "runs": [
+    {
+      "targetRps": 10,
+      "repeat": false,
+      "exitCode": 0,
+      "acknowledged": 600,
+      "accepted": 600,
+      "completed": 600,
+      "httpP95Ms": 34.183,
+      "incidentLatency": {
+        "maxMs": 239,
+        "p50Ms": 64,
+        "p95Ms": 113.04999999999997,
+        "p99Ms": 133.04
+      },
+      "ambiguousSubmissions": 0,
+      "smtpPassed": true,
+      "downstreamDrainPassed": true,
+      "topologyEvidence": "local-docker-topology-capacity-10.json"
+    },
+    {
+      "targetRps": 25,
+      "repeat": false,
+      "exitCode": 0,
+      "acknowledged": 1501,
+      "accepted": 1501,
+      "completed": 1501,
+      "httpP95Ms": 61.977,
+      "incidentLatency": {
+        "maxMs": 324,
+        "p50Ms": 64,
+        "p95Ms": 142,
+        "p99Ms": 214
+      },
+      "ambiguousSubmissions": 0,
+      "smtpPassed": true,
+      "downstreamDrainPassed": true,
+      "topologyEvidence": "local-docker-topology-capacity-25.json"
+    },
+    {
+      "targetRps": 50,
+      "repeat": false,
+      "exitCode": 0,
+      "acknowledged": 3001,
+      "accepted": 3001,
+      "completed": 3001,
+      "httpP95Ms": 81.317,
+      "incidentLatency": {
+        "maxMs": 642,
+        "p50Ms": 52,
+        "p95Ms": 160,
+        "p99Ms": 388
+      },
+      "ambiguousSubmissions": 0,
+      "smtpPassed": true,
+      "downstreamDrainPassed": true,
+      "topologyEvidence": "local-docker-topology-capacity-50.json"
+    },
+    {
+      "targetRps": 60,
+      "repeat": false,
+      "exitCode": 0,
+      "acknowledged": 3601,
+      "accepted": 3601,
+      "completed": 3601,
+      "httpP95Ms": 34.787,
+      "incidentLatency": {
+        "maxMs": 45422,
+        "p50Ms": 41,
+        "p95Ms": 106,
+        "p99Ms": 140
+      },
+      "ambiguousSubmissions": 0,
+      "smtpPassed": true,
+      "downstreamDrainPassed": true,
+      "topologyEvidence": "local-docker-topology-capacity-60.json"
+    },
+    {
+      "targetRps": 64,
+      "repeat": false,
+      "exitCode": 1,
+      "acknowledged": 3775,
+      "accepted": 3775,
+      "completed": 3775,
+      "httpP95Ms": 416.36,
+      "incidentLatency": {
+        "maxMs": 3206,
+        "p50Ms": 408,
+        "p95Ms": 2746.2999999999997,
+        "p99Ms": 3033.52
+      },
+      "ambiguousSubmissions": 0,
+      "smtpPassed": true,
+      "downstreamDrainPassed": true,
+      "topologyEvidence": "local-docker-topology-capacity-64.json"
+    },
+    {
+      "targetRps": 60,
+      "repeat": true,
+      "exitCode": 1,
+      "acknowledged": 3564,
+      "accepted": 3564,
+      "completed": 3564,
+      "httpP95Ms": 280.22339999999906,
+      "incidentLatency": {
+        "maxMs": 1517,
+        "p50Ms": 62,
+        "p95Ms": 599,
+        "p99Ms": 1231.37
+      },
+      "ambiguousSubmissions": 0,
+      "smtpPassed": true,
+      "downstreamDrainPassed": true,
+      "topologyEvidence": "local-docker-topology-capacity-60-repeat.json"
+    },
+    {
+      "targetRps": 50,
+      "repeat": true,
+      "exitCode": 0,
+      "acknowledged": 3000,
+      "accepted": 3000,
+      "completed": 3000,
+      "httpP95Ms": 67.093,
+      "incidentLatency": {
+        "maxMs": 397,
+        "p50Ms": 56,
+        "p95Ms": 134,
+        "p99Ms": 200.00999999999996
+      },
+      "ambiguousSubmissions": 0,
+      "smtpPassed": true,
+      "downstreamDrainPassed": true,
+      "topologyEvidence": "local-docker-topology-capacity-50-repeat.json"
+    }
+  ],
+  "perReceiptClientReconciliationPassed": true
+}

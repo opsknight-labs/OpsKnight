@@ -35,11 +35,22 @@
     "scope": "Fake server client-behavior only"
   },
   "nativeReleaseGates": {
-    "sustained75": "pending",
+    "sustained75": "not run: preceding short gate failed",
     "storm1000": "pending",
     "storm5000": "pending",
     "workerCrash": "pending",
-    "liveAgentExecution": "pending"
+    "liveAgentExecution": "pending",
+    "short75": {
+      "passed": false,
+      "acknowledged": 3013,
+      "persistedAndCompleted": 3027,
+      "ambiguousPersistedSubmissions": 14,
+      "httpP95Ms": 2704.9185,
+      "incidentP95Ms": 9501,
+      "smtpCaptured": true,
+      "downstreamDrainPassed": true,
+      "evidence": "local-docker-topology-release-short-75.json"
+    }
   },
   "releaseReady": false,
   "pullRequestCreated": false,
@@ -47,5 +58,13 @@
     "filesPassed": 5,
     "testsPassed": 101,
     "log": "/private/tmp/ingestion-release-final-ingestion.log"
+  },
+  "shortCapacitySearch": {
+    "highestRepeatedPassingRps": 50,
+    "highestSinglePassingRps": 60,
+    "durationSecondsPerRun": 60,
+    "sustainedCertified": false,
+    "evidence": "current-capacity-short-validation.json",
+    "samplers": "Live backlog and inspector sampling disabled; final downstream/receipt reconciliation retained"
   }
 }
