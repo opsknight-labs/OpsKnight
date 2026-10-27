@@ -1,7 +1,13 @@
 import { createHash } from 'node:crypto';
 import type { EventPayload } from '@/lib/events';
-import type { Prisma } from '@prisma/client';
+import { Prisma, type Incident } from '@prisma/client';
 import { acquireTextAdvisoryLocks } from '@/lib/db-locks';
+
+// Generated, trusted column names retain Prisma's scalar projection even if a
+// newer migration has added columns before this image is replaced or rolled back.
+const incidentScalarColumns = Prisma.join(
+  Object.values(Prisma.IncidentScalarFieldEnum).map(column => Prisma.raw(`"${column}"`))
+);
 
 function truncateDedupKey(key: unknown): string {
   const str = typeof key === 'string' ? key : String(key || '');
@@ -39,6 +45,29 @@ export function normalizeDedupKeys(
     primary: truncateDedupKey(`${integrationId}:${stableRaw}`),
     legacy: supplied ? truncateDedupKey(supplied) : undefined,
   };
+}
+
+/** Call after locking the canonical and legacy identities. Keep service/state
+ * filtering before the limit, while avoiding a service-wide scan when a newly
+ * active service has not yet appeared in PostgreSQL's statistics.
+ */
+export async function findOpenEventIncident(
+  tx: Prisma.TransactionClient,
+  serviceId: string,
+  dedupKeys: readonly string[]
+): Promise<Incident | null> {
+  if (!dedupKeys.length) return null;
+  const [incident] = await tx.$queryRaw<Incident[]>`
+    SELECT candidate.* FROM (
+      SELECT ${incidentScalarColumns} FROM "Incident"
+      WHERE "dedupKey" IN (${Prisma.join([...dedupKeys])})
+      OFFSET 0
+    ) candidate
+    WHERE candidate."serviceId" = ${serviceId}
+      AND candidate.status IN ('OPEN', 'ACKNOWLEDGED', 'SNOOZED', 'SUPPRESSED')
+    LIMIT 1
+  `;
+  return incident ?? null;
 }
 
 /** Canonical and legacy identities share deterministic transaction-scoped locks. */

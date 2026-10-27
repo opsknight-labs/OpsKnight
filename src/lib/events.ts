@@ -12,7 +12,11 @@ import { lockProcessingReceipt, completeProcessingReceipt } from './ingestion/po
 import { logger } from './logger';
 import { sanitizeIntegrationEnvelope } from './integrations/payload-security';
 import { EVENT_TRANSACTION_MAX_ATTEMPTS } from './config';
-import { normalizeDedupKeys, lockEventDedupKeys } from './incidents/event-identity';
+import {
+  normalizeDedupKeys,
+  lockEventDedupKeys,
+  findOpenEventIncident,
+} from './incidents/event-identity';
 import { runReadCommittedTransaction } from './db-utils';
 import { observeTransactionTiming } from './metrics/operational/transaction-timing';
 import {
@@ -188,13 +192,7 @@ export async function processEvent(
 
     // 2. Find existing open incident with this dedup_key BEFORE creating alert
     // This prevents alert orphaning when resolve/acknowledge has no matching incident
-    const existingIncident = await tx.incident.findFirst({
-      where: {
-        dedupKey: { in: candidateDedupKeys },
-        serviceId,
-        status: { in: ['OPEN', 'ACKNOWLEDGED', 'SNOOZED', 'SUPPRESSED'] },
-      },
-    });
+    const existingIncident = await findOpenEventIncident(tx, serviceId, candidateDedupKeys);
 
     // Rolling-upgrade compatibility: move an open incident created with an
     // older, unscoped key to the integration-scoped key on first contact.
@@ -472,7 +470,11 @@ export async function processEvent(
       );
       const engagement = resolveIncidentEngagement({
         urgency,
-        supportHours: await resolveSupportHours(tx, { serviceId, at: incidentCreatedAt }, publishedPolicies.support),
+        supportHours: await resolveSupportHours(
+          tx,
+          { serviceId, at: incidentCreatedAt },
+          publishedPolicies.support
+        ),
         now: incidentCreatedAt,
       });
       const newIncident = await tx.incident.create({
