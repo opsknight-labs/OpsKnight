@@ -226,6 +226,42 @@ const extraSchemas: Json = {
       }, required: ['sourceKeys', 'matches'] },
     }, required: ['incidentId', 'evidence', 'related', 'truncated'],
   },
+  IncidentIntelligence: {
+    type: 'object', properties: {
+      incidentId: { type: 'string' },
+      advisory: { type: 'boolean', enum: [true] },
+      calibrated: { type: 'boolean', enum: [false], description: 'Scores are ranking signals, not probabilities.' },
+      similarIncidents: { type: 'array', maxItems: 5, items: { type: 'object', properties: {
+        incidentId: { type: 'string' }, title: { type: 'string' }, status: { type: 'string' },
+        serviceName: { type: 'string' }, createdAt: { type: 'string', format: 'date-time' },
+        resolvedAt: { type: ['string', 'null'], format: 'date-time' },
+        matchPercent: { type: 'integer' }, reasons: { type: 'array', items: { type: 'string' } },
+      }, required: ['incidentId', 'title', 'status', 'serviceName', 'createdAt', 'resolvedAt', 'matchPercent', 'reasons'] } },
+      relatedIncidents: { type: 'array', maxItems: 10, items: { type: 'object', properties: {
+        incidentId: { type: 'string' }, title: { type: 'string' }, status: { type: 'string' },
+        serviceName: { type: 'string' }, createdAt: { type: 'string', format: 'date-time' },
+        decision: { type: 'string', enum: ['SUGGESTED', 'ACCEPTED'] },
+        origin: { type: 'string', enum: ['RULE', 'LEARNED', 'HUMAN'] },
+        ruleId: { type: ['string', 'null'] },
+      }, required: ['incidentId', 'title', 'status', 'serviceName', 'createdAt', 'decision', 'origin', 'ruleId'] } },
+      possibleChanges: { type: 'array', maxItems: 5, items: { type: 'object', properties: {
+        changeId: { type: 'string' }, kind: { type: 'string' }, summary: { type: 'string' },
+        source: { type: 'string' }, version: { type: ['string', 'null'] }, url: { type: ['string', 'null'] },
+        serviceName: { type: ['string', 'null'] }, occurredAt: { type: 'string', format: 'date-time' },
+        leadMinutes: { type: 'integer' },
+        relation: { type: 'string', enum: ['SAME_SERVICE', 'UPSTREAM', 'GLOBAL'] },
+        confidencePercent: { type: 'integer' },
+      }, required: ['changeId', 'kind', 'summary', 'source', 'version', 'url', 'serviceName', 'occurredAt', 'leadMinutes', 'relation', 'confidencePercent'] } },
+      upstreamIncidents: { type: 'array', maxItems: 5, items: { type: 'object', properties: {
+        incidentId: { type: 'string' }, title: { type: 'string' }, status: { type: 'string' },
+        serviceName: { type: 'string' }, leadMinutes: { type: 'integer' }, confidencePercent: { type: 'integer' },
+      }, required: ['incidentId', 'title', 'status', 'serviceName', 'leadMinutes', 'confidencePercent'] } },
+      runbooks: { type: 'array', maxItems: 5, items: { type: 'object', properties: {
+        runbookId: { type: 'string' }, name: { type: 'string' },
+        succeededRuns: { type: 'integer' }, completedRuns: { type: 'integer' }, attachedToService: { type: 'boolean' },
+      }, required: ['runbookId', 'name', 'succeededRuns', 'completedRuns', 'attachedToService'] } },
+    }, required: ['incidentId', 'advisory', 'calibrated', 'similarIncidents', 'relatedIncidents', 'possibleChanges', 'upstreamIncidents', 'runbooks'],
+  },
   IncidentAvailableActions: {
     type: 'object', properties: {
       incidentId: { type: 'string' }, incidentStatus: { type: 'string' },

@@ -2070,6 +2070,14 @@
     "requiredHeaders": [],
     "bodyRequired": false
   },
+  "getIncidentIntelligence": {
+    "method": "GET",
+    "path": "/incidents/{id}/intelligence",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
   "listOperationalEvents": {
     "method": "GET",
     "path": "/operational-events",

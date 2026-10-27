@@ -161,6 +161,7 @@ export type EscalationPolicyPreview = { "policyId": string; "policyRevision": nu
 export type ServiceChangeEvent = { "id": string; "action": string; "entityId": string | null; "createdAt": string; "source": "AUDIT_LOG" } & Record<string, unknown>;
 export type OperationalEvent = { "id": string; "incidentId": string; "type": string | null; "createdAt": string; "incident": { "status": string; "serviceId": string } & Record<string, unknown> } & Record<string, unknown>;
 export type RelatedIncidents = { "incidentId": string; "evidence": "ALERT_DEDUP_KEY"; "related": Array<{ "incident": { "id": string; "title": string; "status": string; "serviceId": string; "createdAt": string } & Record<string, unknown>; "matchedAt": string; "correlationHashes": Array<string> } & Record<string, unknown>>; "truncated": { "sourceKeys": boolean; "matches": boolean } & Record<string, unknown> } & Record<string, unknown>;
+export type IncidentIntelligence = { "incidentId": string; "advisory": true; "calibrated": false; "similarIncidents": Array<{ "incidentId": string; "title": string; "status": string; "serviceName": string; "createdAt": string; "resolvedAt": string | null; "matchPercent": number; "reasons": Array<string> } & Record<string, unknown>>; "relatedIncidents": Array<{ "incidentId": string; "title": string; "status": string; "serviceName": string; "createdAt": string; "decision": "SUGGESTED" | "ACCEPTED"; "origin": "RULE" | "LEARNED" | "HUMAN"; "ruleId": string | null } & Record<string, unknown>>; "possibleChanges": Array<{ "changeId": string; "kind": string; "summary": string; "source": string; "version": string | null; "url": string | null; "serviceName": string | null; "occurredAt": string; "leadMinutes": number; "relation": "SAME_SERVICE" | "UPSTREAM" | "GLOBAL"; "confidencePercent": number } & Record<string, unknown>>; "upstreamIncidents": Array<{ "incidentId": string; "title": string; "status": string; "serviceName": string; "leadMinutes": number; "confidencePercent": number } & Record<string, unknown>>; "runbooks": Array<{ "runbookId": string; "name": string; "succeededRuns": number; "completedRuns": number; "attachedToService": boolean } & Record<string, unknown>> } & Record<string, unknown>;
 export type IncidentAvailableActions = { "incidentId": string; "incidentStatus": string; "observedAt": string; "advisory": boolean; "actions": Array<{ "operationId": string; "method": string; "path": string; "allowed": boolean; "stateEligible": boolean } & Record<string, unknown>>; "runbookExecution": { "requiresRunbookSelection": boolean; "previewPath": string; "allowedToAttemptPreview": boolean } & Record<string, unknown> } & Record<string, unknown>;
 export type IncidentAlertSummary = { "id": string; "incidentId": string | null; "serviceId": string; "status": string; "correlationHash": string | null; "createdAt": string } & Record<string, unknown>;
 export type IncidentWarRoom = { "id": string; "incidentId": string; "provider": string; "generation": number; "state": string; "health": string; "providerChannelName": string | null; "providerChannelUrl": string | null; "createdAt": string; "readyAt": string | null; "closedAt": string | null; "archivedAt": string | null; "participantCount": number };
@@ -420,6 +421,7 @@ export interface OperationRequests {
   listIncidentNotificationAttempts: { "params": { "id": string }; "query"?: { "limit"?: number; "cursor"?: string } };
   getIncidentAvailableActions: { "params": { "id": string } };
   listRelatedIncidents: { "params": { "id": string } };
+  getIncidentIntelligence: { "params": { "id": string } };
   listOperationalEvents: { "query"?: { "limit"?: number; "cursor"?: string } };
   listServiceChangeEvents: { "params": { "id": string }; "query"?: { "limit"?: number; "cursor"?: string } };
   previewEscalationPolicy: { "params": { "id": string }; "body": { "incidentId": string; "at"?: string } };
@@ -736,6 +738,7 @@ export interface OperationResponses {
   listIncidentNotificationAttempts: { "data": Array<IncidentNotificationAttempt>; "pagination"?: Pagination; "requestId": string; "timestamp": string } & Record<string, unknown>;
   getIncidentAvailableActions: { "data": IncidentAvailableActions; "requestId": string; "timestamp": string } & Record<string, unknown>;
   listRelatedIncidents: { "data": RelatedIncidents; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  getIncidentIntelligence: { "data": IncidentIntelligence; "requestId": string; "timestamp": string } & Record<string, unknown>;
   listOperationalEvents: { "data": Array<OperationalEvent>; "pagination"?: Pagination; "requestId": string; "timestamp": string } & Record<string, unknown>;
   listServiceChangeEvents: { "data": Array<ServiceChangeEvent>; "pagination"?: Pagination; "requestId": string; "timestamp": string } & Record<string, unknown>;
   previewEscalationPolicy: { "data": EscalationPolicyPreview; "requestId": string; "timestamp": string } & Record<string, unknown>;
@@ -2891,6 +2894,14 @@ export const OPERATIONS = {
   "listRelatedIncidents": {
     "method": "GET",
     "path": "/incidents/{id}/related-incidents",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "getIncidentIntelligence": {
+    "method": "GET",
+    "path": "/incidents/{id}/intelligence",
     "kind": "item",
     "idempotency": null,
     "requiredHeaders": [],

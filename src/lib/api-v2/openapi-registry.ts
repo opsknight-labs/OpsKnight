@@ -1326,6 +1326,7 @@ export const V2_OPERATIONS: readonly V2OperationDefinition[] = [
   op('get', '/incidents/{id}/notification-attempts', 'listIncidentNotificationAttempts', 'incidents:read', 'list', 'IncidentNotificationAttempt'),
   op('get', '/incidents/{id}/available-actions', 'getIncidentAvailableActions', 'incidents:read', 'item', 'IncidentAvailableActions'),
   op('get', '/incidents/{id}/related-incidents', 'listRelatedIncidents', 'incidents:read', 'item', 'RelatedIncidents'),
+  op('get', '/incidents/{id}/intelligence', 'getIncidentIntelligence', 'incidents:read', 'item', 'IncidentIntelligence'),
   op('get', '/operational-events', 'listOperationalEvents', 'incidents:read', 'list', 'OperationalEvent'),
   op('get', '/services/{id}/change-events', 'listServiceChangeEvents', 'services:read', 'list', 'ServiceChangeEvent'),
   op('post', '/escalation-policies/{id}/preview', 'previewEscalationPolicy', 'escalation-policies:read', 'item', 'EscalationPolicyPreview'),

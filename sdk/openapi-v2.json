@@ -9893,6 +9893,280 @@
           "truncated"
         ]
       },
+      "IncidentIntelligence": {
+        "type": "object",
+        "properties": {
+          "incidentId": {
+            "type": "string"
+          },
+          "advisory": {
+            "type": "boolean",
+            "enum": [
+              true
+            ]
+          },
+          "calibrated": {
+            "type": "boolean",
+            "enum": [
+              false
+            ],
+            "description": "Scores are ranking signals, not probabilities."
+          },
+          "similarIncidents": {
+            "type": "array",
+            "maxItems": 5,
+            "items": {
+              "type": "object",
+              "properties": {
+                "incidentId": {
+                  "type": "string"
+                },
+                "title": {
+                  "type": "string"
+                },
+                "status": {
+                  "type": "string"
+                },
+                "serviceName": {
+                  "type": "string"
+                },
+                "createdAt": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "resolvedAt": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "format": "date-time"
+                },
+                "matchPercent": {
+                  "type": "integer"
+                },
+                "reasons": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              },
+              "required": [
+                "incidentId",
+                "title",
+                "status",
+                "serviceName",
+                "createdAt",
+                "resolvedAt",
+                "matchPercent",
+                "reasons"
+              ]
+            }
+          },
+          "relatedIncidents": {
+            "type": "array",
+            "maxItems": 10,
+            "items": {
+              "type": "object",
+              "properties": {
+                "incidentId": {
+                  "type": "string"
+                },
+                "title": {
+                  "type": "string"
+                },
+                "status": {
+                  "type": "string"
+                },
+                "serviceName": {
+                  "type": "string"
+                },
+                "createdAt": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "decision": {
+                  "type": "string",
+                  "enum": [
+                    "SUGGESTED",
+                    "ACCEPTED"
+                  ]
+                },
+                "origin": {
+                  "type": "string",
+                  "enum": [
+                    "RULE",
+                    "LEARNED",
+                    "HUMAN"
+                  ]
+                },
+                "ruleId": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                }
+              },
+              "required": [
+                "incidentId",
+                "title",
+                "status",
+                "serviceName",
+                "createdAt",
+                "decision",
+                "origin",
+                "ruleId"
+              ]
+            }
+          },
+          "possibleChanges": {
+            "type": "array",
+            "maxItems": 5,
+            "items": {
+              "type": "object",
+              "properties": {
+                "changeId": {
+                  "type": "string"
+                },
+                "kind": {
+                  "type": "string"
+                },
+                "summary": {
+                  "type": "string"
+                },
+                "source": {
+                  "type": "string"
+                },
+                "version": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "url": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "serviceName": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "occurredAt": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "leadMinutes": {
+                  "type": "integer"
+                },
+                "relation": {
+                  "type": "string",
+                  "enum": [
+                    "SAME_SERVICE",
+                    "UPSTREAM",
+                    "GLOBAL"
+                  ]
+                },
+                "confidencePercent": {
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "changeId",
+                "kind",
+                "summary",
+                "source",
+                "version",
+                "url",
+                "serviceName",
+                "occurredAt",
+                "leadMinutes",
+                "relation",
+                "confidencePercent"
+              ]
+            }
+          },
+          "upstreamIncidents": {
+            "type": "array",
+            "maxItems": 5,
+            "items": {
+              "type": "object",
+              "properties": {
+                "incidentId": {
+                  "type": "string"
+                },
+                "title": {
+                  "type": "string"
+                },
+                "status": {
+                  "type": "string"
+                },
+                "serviceName": {
+                  "type": "string"
+                },
+                "leadMinutes": {
+                  "type": "integer"
+                },
+                "confidencePercent": {
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "incidentId",
+                "title",
+                "status",
+                "serviceName",
+                "leadMinutes",
+                "confidencePercent"
+              ]
+            }
+          },
+          "runbooks": {
+            "type": "array",
+            "maxItems": 5,
+            "items": {
+              "type": "object",
+              "properties": {
+                "runbookId": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "succeededRuns": {
+                  "type": "integer"
+                },
+                "completedRuns": {
+                  "type": "integer"
+                },
+                "attachedToService": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "runbookId",
+                "name",
+                "succeededRuns",
+                "completedRuns",
+                "attachedToService"
+              ]
+            }
+          }
+        },
+        "required": [
+          "incidentId",
+          "advisory",
+          "calibrated",
+          "similarIncidents",
+          "relatedIncidents",
+          "possibleChanges",
+          "upstreamIncidents",
+          "runbooks"
+        ]
+      },
       "IncidentAvailableActions": {
         "type": "object",
         "properties": {
@@ -44716,6 +44990,98 @@
           }
         },
         "operationId": "listRelatedIncidents",
+        "x-required-scope": "incidents:read"
+      }
+    },
+    "/incidents/{id}/intelligence": {
+      "get": {
+        "tags": [
+          "Incidents"
+        ],
+        "summary": "Read similar incidents, related incidents, possible causes and runbook suggestions",
+        "description": "Requires incidents:read; possible changes additionally require services:read and runbook suggestions require runbooks:read, otherwise those lists are empty. Returns advisory suggestions only; scores are uncalibrated ranking signals and possible causes are hypotheses to verify. Every referenced incident, change and runbook is filtered by the credential's own read access. Empty while intelligence is off for the incident's service or in shadow mode.\n\nRequires API scope `incidents:read` (Incidents read).",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/IncidentIntelligence"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "requestId",
+                    "timestamp"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-RateLimit-Limit": {
+                "description": "Requests allowed per window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Remaining": {
+                "description": "Requests left in the window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Reset": {
+                "description": "Unix time at which the window resets.",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "401": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "404": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "413": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemError"
+          }
+        },
+        "operationId": "getIncidentIntelligence",
         "x-required-scope": "incidents:read"
       }
     },

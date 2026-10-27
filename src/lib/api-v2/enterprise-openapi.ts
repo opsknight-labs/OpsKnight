@@ -2020,6 +2020,11 @@ const operations: Operation[] = [
     description: 'Scans at most 100 source alerts and 500 matching alerts, returning at most 50 unique incidents. Returns keyed correlation hashes and truncation flags; no raw deduplication keys or alert payloads.',
   },
   {
+    method: 'get', path: '/incidents/{id}/intelligence',
+    summary: 'Read similar incidents, related incidents, possible causes and runbook suggestions',
+    description: 'Requires incidents:read; possible changes additionally require services:read and runbook suggestions require runbooks:read, otherwise those lists are empty. Returns advisory suggestions only; scores are uncalibrated ranking signals and possible causes are hypotheses to verify. Every referenced incident, change and runbook is filtered by the credential\'s own read access. Empty while intelligence is off for the incident\'s service or in shadow mode.',
+  },
+  {
     method: 'get', path: '/operational-events',
     summary: 'List incident operational events visible to this credential',
     description: 'Cursor-paginated incident state events. Untrusted event messages and private incident details are omitted.',

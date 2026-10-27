@@ -203,6 +203,12 @@
     "AUDITOR": "allow:global",
     "USER": "allow:resource"
   },
+  "GET /incidents/{id}/intelligence [incidents:read]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "allow:global",
+    "AUDITOR": "allow:global",
+    "USER": "allow:resource"
+  },
   "GET /incidents/{id}/notes [incidents:read]": {
     "ADMIN": "allow:global",
     "RESPONDER": "allow:global",

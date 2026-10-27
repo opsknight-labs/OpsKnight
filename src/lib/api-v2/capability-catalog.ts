@@ -151,7 +151,7 @@ const decisions: readonly ApiCapability[] = [
     status: 'partial',
     explanation:
       'A bounded, redacted activity snapshot joins incident alerts, events, routing, notification delivery and Runbook recovery. Incident-scoped pagination, advisory action discovery, evidence-based related-incident search, service health, escalation preview, operational events and service audit changes support investigation. Deployment-change ingestion is not yet represented by structured records.',
-    operationIds: ['getIncidentResponseActivity', 'listIncidentAlerts', 'listIncidentRunbookExecutions', 'listIncidentNotificationAttempts', 'getIncidentAvailableActions', 'listRelatedIncidents', 'listRunbookExecutions', 'listNotificationAttempts', 'getNotificationFeedback', 'listOperationalEvents', 'listServiceChangeEvents', 'previewEscalationPolicy', 'getServiceHealthSummary'],
+    operationIds: ['getIncidentResponseActivity', 'listIncidentAlerts', 'listIncidentRunbookExecutions', 'listIncidentNotificationAttempts', 'getIncidentAvailableActions', 'listRelatedIncidents', 'getIncidentIntelligence', 'listRunbookExecutions', 'listNotificationAttempts', 'getNotificationFeedback', 'listOperationalEvents', 'listServiceChangeEvents', 'previewEscalationPolicy', 'getServiceHealthSummary'],
   },
   {
     id: 'incident-collaboration',
