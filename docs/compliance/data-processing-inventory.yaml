@@ -87,3 +87,12 @@ domains:
     retention: { current: incident-lifetime-for-decisions-and-ui-configured-retention-for-diagnostics, target: approved-minimization-with-routing-integrity-and-retention-holds }
     exportable: manual-review-no-verified-subject-relation
     deletion: { current: manual-review-preserve-immutable-routing-evidence, target: approved-subject-attribution-and-minimization }
+
+  - domain: intelligence
+    data: [masked-incident-titles, content-tokens, credential-filtered-labels, numeric-match-evidence, feedback-notes, feedback-and-policy-authorship, work-item-errors]
+    purpose: [similar-incident-suggestions, correlation-and-noise-analysis, suggestion-feedback, policy-history]
+    storage: [postgresql]
+    recipients: [authorized-workspace-users-limited-to-incidents-they-can-read]
+    retention: { current: ui-configured-per-entity-with-incident-cascade-and-sweep-while-disabled, target: retention-holds-honoured-and-free-text-minimization }
+    exportable: partial
+    deletion: { current: authorship-cleared-on-user-erasure-and-rows-deleted-with-incident, target: free-text-feedback-manual-review }

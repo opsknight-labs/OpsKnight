@@ -177,4 +177,24 @@ describe('intelligence data model contracts', () => {
     expect(migration).toMatch(/CREATE EXTENSION IF NOT EXISTS pg_trgm;\s*EXCEPTION WHEN OTHERS/);
     expect(migration).not.toMatch(/CREATE EXTENSION[^;]*\bvector\b/i);
   });
+
+  it('registers every intelligence table in the privacy registry and processing inventory', () => {
+    const schema = read(join(root, 'prisma/schema.prisma'));
+    const tables = [
+      ...schema.matchAll(
+        /^model ((?:Intelligence|Correlation|IncidentFingerprint|IncidentRelationship)\w*) \{/gm
+      ),
+    ].map(match => match[1]);
+    expect(tables.length).toBeGreaterThan(10);
+
+    const registry = read(join(root, 'src/lib/privacy/registry.ts'));
+    const inventory = read(join(root, 'docs/compliance/data-processing-inventory.yaml'));
+    expect(inventory).toContain('domain: intelligence');
+    // Settings and the keyset cursor hold no personal data and are intentionally not listed.
+    const exempt = new Set(['IntelligenceSettings', 'IntelligencePolicy', 'IntelligenceCursor']);
+    const unregistered = tables.filter(
+      table => !exempt.has(table) && !registry.includes(`'${table}'`)
+    );
+    expect(unregistered).toEqual([]);
+  });
 });

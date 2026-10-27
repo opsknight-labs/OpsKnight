@@ -3,8 +3,9 @@ import { logger } from '@/lib/logger';
 import { getIntelligenceSettings, type IntelligenceSettingsView } from '../settings/service';
 import { evaluatePause, getCriticalBacklogLagMs, type PauseState } from './backpressure';
 import { withDbBudget } from './db-budget';
-import { discoverNewIncidents, reconcileFingerprints } from './discovery';
+import { reconcileFingerprints, discoverNewIncidents } from './discovery';
 import { indexIncident } from './indexer';
+import { purgeExpiredIntelligenceData, RETENTION_INTERVAL_MS } from './retention';
 import { analyzeIncident } from '../similarity/analyzer';
 import {
   claimWorkItems,
@@ -44,10 +45,11 @@ export const DEFAULT_HANDLERS: WorkHandlers = {
 export interface LaneState {
   pause: PauseState;
   lastReconcileAt: number;
+  lastRetentionAt: number;
 }
 
 export function createLaneState(): LaneState {
-  return { pause: { paused: false }, lastReconcileAt: 0 };
+  return { pause: { paused: false }, lastReconcileAt: 0, lastRetentionAt: 0 };
 }
 
 export interface CycleResult {
@@ -153,6 +155,25 @@ export async function runIntelligenceCycle(
   const now = dependencies.now ?? Date.now;
   try {
     const settings = await getIntelligenceSettings();
+
+    // Retention is honoured even while intelligence is switched off; an unconfigured install
+    // (revision 0) has nothing to purge, so it pays no cost.
+    if (settings.revision > 0 && now() - state.lastRetentionAt >= RETENTION_INTERVAL_MS) {
+      state.lastRetentionAt = now();
+      try {
+        const purged = await purgeExpiredIntelligenceData(settings, {
+          batchSize: Math.max(settings.batchSize * 10, 100),
+          now: new Date(now()),
+        });
+        // A large backlog is drained across sweeps; ask for the next one soon instead of waiting.
+        if (purged.more) state.lastRetentionAt = now() - RETENTION_INTERVAL_MS + 60_000;
+      } catch (error) {
+        logger.warn('[Intelligence] Retention sweep failed; will retry', {
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
+
     if (!settings.enabled) return { ...EMPTY_RESULT, status: 'disabled' };
 
     const criticalLagMs = await (dependencies.getCriticalLagMs ?? (() => getCriticalBacklogLagMs()))();

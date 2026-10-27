@@ -277,4 +277,50 @@ export const personalDataRegistry = [
       'Discovery counts updater IDs where modeled; it never reads secrets or queries providers.',
     ],
   },
+  {
+    domain: 'intelligence',
+    models: [
+      'IncidentFingerprint',
+      'CorrelationGroup',
+      'CorrelationMember',
+      'CorrelationDecisionEvent',
+      'IncidentRelationship',
+      'IncidentRelationshipEvent',
+      'IntelligenceFinding',
+      'IntelligenceFeedback',
+      'IntelligencePolicyVersion',
+      'IntelligenceEvaluationRun',
+      'IntelligenceWorkItem',
+      'IntelligencePattern',
+    ],
+    fields: [
+      'IncidentFingerprint.template',
+      'IncidentFingerprint.tokens',
+      'IncidentFingerprint.labels',
+      'IntelligenceFinding.evidence',
+      'IntelligenceFeedback.note',
+      'IntelligenceFeedback.actorId',
+      'IntelligencePolicyVersion.createdById',
+      'IntelligencePolicyVersion.reason',
+      'IntelligenceWorkItem.lastError',
+    ],
+    purpose: [
+      'Similar-incident suggestions',
+      'Correlation and noise analysis',
+      'Responder feedback on suggestions',
+      'Policy change history',
+    ],
+    classifications: ['INTERNAL', 'PERSONAL'],
+    locations: ['DATABASE', 'FREE_TEXT'],
+    retention: {
+      current:
+        'UI-configured per entity (defaults: fingerprints 730 days, correlation 365, findings 365, feedback 730); incident-linked rows also cascade with the incident; a bounded sweep runs even while intelligence is disabled.',
+      target:
+        'Retention holds honoured for derived data; field-level minimization of free-text feedback.',
+    },
+    discoverable: 'PARTIAL',
+    notes: [
+      'Derived data only; incidents and alerts remain the source of truth and are never modified. Fingerprint templates are masked copies of incident titles and can still contain customer identifiers typed by operators. Label values drop credential-shaped fields, and finding evidence stores numeric scores only, never text from another incident. Feedback and policy authorship use foreign keys that clear to null when a user is erased; free-text feedback notes need manual review.',
+    ],
+  },
 ] as const satisfies readonly PersonalDataDomain[];
