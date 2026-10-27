@@ -7,7 +7,8 @@ audience: [administrator, operator]
 reader:
   status: READER_COMPLETE
   task: Configure, pilot, verify, and safely enforce OIDC single sign-on.
-keywords: [OIDC login, configure SSO, OpenID Connect, Entra, Google Workspace, Okta, Auth0]
+keywords:
+  [OIDC login, OIDC setup, configure SSO, OpenID Connect, Entra, Google Workspace, Okta, Auth0]
 verification:
   level: source
   verified_at: 2026-10-12
