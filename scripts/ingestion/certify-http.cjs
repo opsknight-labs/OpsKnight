@@ -7,6 +7,10 @@ const capacityStage = require('./capacity-stages.cjs').capacityStage(
 );
 assert.ok(['full-stack', 'admission-only'].includes(capacityStage));
 const admissionOnly = capacityStage === 'admission-only';
+if (process.env.INGESTION_BURST_EVENTS) {
+  assert.equal(capacityStage, 'full-stack', 'Storm recovery requires full-stack consumers');
+  assert.ok(['1000', '5000'].includes(process.env.INGESTION_BURST_EVENTS));
+}
 const { spawn, spawnSync } = require('node:child_process');
 const { randomUUID, randomBytes } = require('node:crypto');
 const { readFileSync, writeFileSync, mkdtempSync, rmSync } = require('node:fs');
@@ -220,7 +224,9 @@ async function main() {
       ledgerPath,
       '--summary-export',
       summaryPath,
-      'tests/load/scenarios/durable-ingestion.js',
+      process.env.INGESTION_BURST_EVENTS
+        ? 'tests/load/scenarios/durable-ingestion-burst.js'
+        : 'tests/load/scenarios/durable-ingestion.js',
     ],
     {
       stdio: 'inherit',
@@ -402,11 +408,21 @@ async function main() {
     completionLatencyLimitMs,
     completionLatencyPassed,
     admissionThresholdsPassed: loadExit === 0,
-    targetRps: Number(process.env.INGESTION_TARGET_RPS || 1000),
+    targetRps: process.env.INGESTION_BURST_EVENTS
+      ? null
+      : Number(process.env.INGESTION_TARGET_RPS || 1000),
+    burstEvents: process.env.INGESTION_BURST_EVENTS
+      ? Number(process.env.INGESTION_BURST_EVENTS)
+      : null,
+    retryProfile: process.env.INGESTION_BURST_EVENTS
+      ? '100 concurrent clients,1000or5000unique events,max12attempts with stable delivery IDs and bounded jitter/Retry-After; no steady-state HTTP latency claim'
+      : null,
     workload: process.env.INGESTION_WORKLOAD || 'many-key',
     payloadBytes: Number(process.env.INGESTION_PAYLOAD_BYTES || 10000),
     payloadPattern: process.env.INGESTION_PAYLOAD_PATTERN || 'random',
-    duration: process.env.INGESTION_DURATION || '60s',
+    duration: process.env.INGESTION_BURST_EVENTS
+      ? 'up to5m'
+      : process.env.INGESTION_DURATION || '60s',
     loadExit,
     clientEvidence: clientEvidence(),
     acknowledged,
