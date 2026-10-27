@@ -1,18 +1,14 @@
 import { randomBytes } from 'node:crypto';
 import { createTestStatusPage, createTestTeam, createTestUser, testPrisma as db } from './test-db';
 import { digestMcpSecret, mcpResource } from '@/lib/mcp/auth/config';
-import { MCP_OPERATION_MAP } from '@/lib/mcp/catalog';
+import { MCP_CATALOG, isMcpApprovalGated } from '@/lib/mcp/catalog';
 import { CostBudget } from '@/lib/mcp/core/budget';
 import type { ExecutionContext } from '@/lib/mcp/core/execution';
 import { decideMcpOperationReview, prepareMcpOperation } from '@/lib/mcp/approvals/operation';
 
-export const OPERATIONS = [
-  'setTeamLead',
-  'updateServiceSupportHours',
-  'createStatusPageAnnouncement',
-];
+// Every approval-gated operation's scopes, so a batch never depends on a hand-kept list.
 export const scopes = [
-  ...new Set(OPERATIONS.flatMap(id => MCP_OPERATION_MAP.get(id)?.requiredScopes ?? [])),
+  ...new Set(MCP_CATALOG.filter(isMcpApprovalGated).flatMap(operation => operation.requiredScopes)),
 ];
 
 export async function connect(userId: string, tokenVersion: number) {

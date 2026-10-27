@@ -1177,13 +1177,13 @@
     "actions": ["runbook_rule.read"]
   },
   "createServiceRunbookRule": {
-    "status": "UNSUPPORTED_WITH_REASON",
+    "status": "APPROVAL_REQUIRED",
     "risk": "R2",
-    "reason": "Not exposed until shared command, independent approval and parity certification are complete.",
+    "reason": "Frozen prepare, independent native review and atomic commit through the existing REST command; never generic.",
     "tool": null,
     "routeSha256": "c2cab6b2ee112da5e746996037540e2a3d131d540b00338423ffdb569adbb667",
     "resourceFilter": "existing REST route authorization and scoped projection",
-    "evidence": "pending final-SHA parity certification",
+    "evidence": "tests/integration/mcp-approval-runbook-rules.test.ts",
     "contractSha256": "9478993710c1447659c66b85d85a3af57501b3e87752b4244b0ae452c7d3d7ef",
     "actions": ["runbook_rule.manage"]
   },
@@ -1199,13 +1199,13 @@
     "actions": ["runbook_rule.read"]
   },
   "updateServiceRunbookRule": {
-    "status": "UNSUPPORTED_WITH_REASON",
+    "status": "APPROVAL_REQUIRED",
     "risk": "R2",
-    "reason": "Not exposed until shared command, independent approval and parity certification are complete.",
+    "reason": "Frozen prepare, independent native review and atomic commit through the existing REST command; never generic.",
     "tool": null,
     "routeSha256": "6b419e9a23c5e7331b0ff758d4250d7d6739277fab2c6c7bf44c980887258a04",
     "resourceFilter": "existing REST route authorization and scoped projection",
-    "evidence": "pending final-SHA parity certification",
+    "evidence": "tests/integration/mcp-approval-runbook-rules.test.ts",
     "contractSha256": "e5f922f43211937488310119463506c59eeef9ede3dcfea94173c4a530fa5274",
     "actions": ["runbook_rule.manage"]
   },
@@ -1254,24 +1254,24 @@
     "actions": ["runbook_rule.activate"]
   },
   "activateServiceRunbookRule": {
-    "status": "UNSUPPORTED_WITH_REASON",
+    "status": "APPROVAL_REQUIRED",
     "risk": "R2",
-    "reason": "Not exposed until shared command, independent approval and parity certification are complete.",
+    "reason": "Frozen prepare, independent native review and atomic commit through the existing REST command; never generic.",
     "tool": null,
     "routeSha256": "803c867e064961cbe1f48a011207ad7cec137b23d13d4f69ca61d25f324210d5",
     "resourceFilter": "existing REST route authorization and scoped projection",
-    "evidence": "pending final-SHA parity certification",
+    "evidence": "tests/integration/mcp-approval-runbook-rules.test.ts",
     "contractSha256": "fdf2d8921dff60c6de56dae20f01fdb0c67a4f9d479902849084312fca5101a5",
     "actions": ["runbook_rule.activate"]
   },
   "pauseServiceRunbookRule": {
-    "status": "UNSUPPORTED_WITH_REASON",
+    "status": "APPROVAL_REQUIRED",
     "risk": "R2",
-    "reason": "Not exposed until shared command, independent approval and parity certification are complete.",
+    "reason": "Frozen prepare, independent native review and atomic commit through the existing REST command; never generic.",
     "tool": null,
     "routeSha256": "d299f177f0ce160129ee36acc97dc7bbf6b1ceb406cf70e535e80f0b072269e2",
     "resourceFilter": "existing REST route authorization and scoped projection",
-    "evidence": "pending final-SHA parity certification",
+    "evidence": "tests/integration/mcp-approval-runbook-rules.test.ts",
     "contractSha256": "4108f5224e50391bc5d1fd3400c6aed2c2a34cd763159923976941d69d21e6f8",
     "actions": ["runbook_rule.manage"]
   },
@@ -1408,13 +1408,13 @@
     "actions": ["automation.read"]
   },
   "restoreAutomationDraft": {
-    "status": "UNSUPPORTED_WITH_REASON",
+    "status": "APPROVAL_REQUIRED",
     "risk": "R2",
-    "reason": "Not exposed until shared command, independent approval and parity certification are complete.",
+    "reason": "Frozen prepare, independent native review and atomic commit through the existing REST command; never generic.",
     "tool": null,
     "routeSha256": "f8c880c5809e586b79e2f3c6a8d2ee111ee09b1d479c370b79a7e067eb467df9",
     "resourceFilter": "existing REST route authorization and scoped projection",
-    "evidence": "pending final-SHA parity certification",
+    "evidence": "tests/integration/mcp-approval-automation.test.ts",
     "contractSha256": "0e5bd61560479db253334ac2be1eb98bbcfc4ca23e2d5b72a3ac00c68ba47627",
     "actions": ["automation.write"]
   },
@@ -1474,24 +1474,24 @@
     "actions": ["automation.read"]
   },
   "updateServiceAutomationMode": {
-    "status": "UNSUPPORTED_WITH_REASON",
+    "status": "APPROVAL_REQUIRED",
     "risk": "R2",
-    "reason": "Not exposed until shared command, independent approval and parity certification are complete.",
+    "reason": "Frozen prepare, independent native review and atomic commit through the existing REST command; never generic.",
     "tool": null,
     "routeSha256": "ee88c1a66297feb49660242a6a98d36b2a08f1b328bf27afb279e7f8110799e5",
     "resourceFilter": "existing REST route authorization and scoped projection",
-    "evidence": "pending final-SHA parity certification",
+    "evidence": "tests/integration/mcp-approval-automation.test.ts",
     "contractSha256": "49d532472b6d8be51d65355dede0a401205aee0bf74ca3c83a585357e4474f33",
     "actions": ["automation.publish"]
   },
   "publishAutomationVersion": {
-    "status": "UNSUPPORTED_WITH_REASON",
+    "status": "APPROVAL_REQUIRED",
     "risk": "R2",
-    "reason": "Not exposed until shared command, independent approval and parity certification are complete.",
+    "reason": "Frozen prepare, independent native review and atomic commit through the existing REST command; never generic.",
     "tool": null,
     "routeSha256": "7aeb85d33c2694771638d00711b6abdfc9b94348d9ca664f941fad2a14e49da6",
     "resourceFilter": "existing REST route authorization and scoped projection",
-    "evidence": "pending final-SHA parity certification",
+    "evidence": "tests/integration/mcp-approval-automation.test.ts",
     "contractSha256": "eb490b05ff9d5c372442a6b499e71433bd2b47b506eae317383ebf3c030b8242",
     "actions": ["automation.publish"]
   },
@@ -1507,13 +1507,13 @@
     "actions": ["automation.read"]
   },
   "saveAutomationDraft": {
-    "status": "UNSUPPORTED_WITH_REASON",
+    "status": "APPROVAL_REQUIRED",
     "risk": "R2",
-    "reason": "Not exposed until shared command, independent approval and parity certification are complete.",
+    "reason": "Frozen prepare, independent native review and atomic commit through the existing REST command; never generic.",
     "tool": null,
     "routeSha256": "db81758cb7cf6adc919094bffbafd9acf3244dbf5d055eb29ab518c9a9e34033",
     "resourceFilter": "existing REST route authorization and scoped projection",
-    "evidence": "pending final-SHA parity certification",
+    "evidence": "tests/integration/mcp-approval-automation.test.ts",
     "contractSha256": "2d561b62c6fd46ba8730ac6b8248a515fb71e58d2c911e15779236ef4aac2982",
     "actions": ["automation.write"]
   },

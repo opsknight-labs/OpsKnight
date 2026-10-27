@@ -244,4 +244,38 @@ export const MCP_APPROVAL_HANDLERS = new Map<string, () => Promise<Handler>>([
     async () =>
       (await import('@/app/api/v2/services/[id]/response-policy/classification/route')).PUT,
   ],
+  [
+    'saveAutomationDraft',
+    async () => (await import('@/app/api/v2/services/[id]/automation/draft/route')).PUT,
+  ],
+  [
+    'publishAutomationVersion',
+    async () => (await import('@/app/api/v2/services/[id]/automation/publish/route')).POST,
+  ],
+  [
+    'restoreAutomationDraft',
+    async () => (await import('@/app/api/v2/services/[id]/automation/restore/route')).POST,
+  ],
+  [
+    'updateServiceAutomationMode',
+    async () => (await import('@/app/api/v2/services/[id]/automation/mode/route')).PATCH,
+  ],
+  [
+    'createServiceRunbookRule',
+    async () => (await import('@/app/api/v2/services/[id]/runbook-rules/route')).POST,
+  ],
+  [
+    'updateServiceRunbookRule',
+    async () => (await import('@/app/api/v2/services/[id]/runbook-rules/[ruleId]/route')).PATCH,
+  ],
+  [
+    'pauseServiceRunbookRule',
+    async () =>
+      (await import('@/app/api/v2/services/[id]/runbook-rules/[ruleId]/pause/route')).POST,
+  ],
+  [
+    'activateServiceRunbookRule',
+    async () =>
+      (await import('@/app/api/v2/services/[id]/runbook-rules/[ruleId]/activate/route')).POST,
+  ],
 ]);
