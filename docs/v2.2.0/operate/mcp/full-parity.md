@@ -28,6 +28,18 @@ For a future reviewed exclusion, record the operation-specific reason, reviewer 
 7. Run security/dependency remediation, baseline comparisons for unrelated CI failures, migration/rollback drills and fault injection. Measure 0/10/25/50/100 MCP concurrency while ingestion, paging, delivery and runbooks operate. Record latency, SQL time/count, locks, connection waits and critical backlog; pool separation and query counts alone are insufficient.
 8. Package admin policy/retention controls, client guides, support matrix and exact-source/image evidence. Keep the PR draft until all required CI, interoperability, recovery and production gates pass.
 
+## Approval batch process (every batch, no exceptions)
+
+1. Pick a small family from `byNextStep` in the coverage artifact. Only `ELIGIBLE_FOR_APPROVAL_BATCH_WITH_FAMILY_TESTS` operations qualify: R2, non-GET, mutation idempotency `required` or `supported`, JSON body. `natural` idempotency, one-time-secret and R3 operations are out of scope until their own designs exist.
+2. Read the REST route first: authorization action, `If-Match` source (what revision it fences), `replayAuthGuard`, and the library command it calls. Do not wrap logic; reuse the route handler.
+3. In `review.json` set `status: APPROVAL_REQUIRED` and `evidence` to the batch test; add the handler to `MCP_APPROVAL_HANDLERS` (never `MCP_HANDLERS`).
+4. Write `tests/integration/mcp-approval-<family>.test.ts` using `describeApprovalScenarios`: per operation a setup, the frozen input, a comparable `effect`, and an `invalidate` that makes the frozen revision stale (omit only when the route has no revision precondition, and then add a specific rejection test).
+5. Register the test in `package.json` (`test:mcp:db`), `.github/workflows/mcp-certification.yml` and `scripts/mcp/local-check.cjs`.
+6. Run, locally: `tsc`, eslint, `test:mcp`, `test:mcp:db`, `mcp:coverage` (no failures), then push and require the CI `contract-security` job green on that exact SHA. `release-gates` stays red by design until reviewed live evidence exists.
+7. Update the counts and the enabled list in `reference/mcp/catalog.md`.
+
+CI notes from certifying this branch: the browser step is sensitive to slow shared runners (`playwright install --with-deps` can hang; re-run the job on the same SHA rather than pushing). The dependency audit is judged against `scripts/mcp/audit-baseline.json`; every entry needs an owner, justification and expiry.
+
 ## Approval safety gate (blocks enabling further operations)
 
 Do not enable another approval-gated operation until `tests/integration/mcp-approval-crash-safety.test.ts` passes for the exact final SHA and the new operation has family-specific positive and negative tests. The invariants it demonstrates against PostgreSQL:
