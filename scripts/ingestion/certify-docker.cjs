@@ -5,6 +5,11 @@ const assert = require('node:assert/strict');
 const capacityStage = require('./capacity-stages.cjs').capacityStage(
   process.env.INGESTION_CAPACITY_STAGE
 );
+if (process.env.INGESTION_BURST_EVENTS) {
+  assert.equal(capacityStage, 'full-stack');
+  assert.equal(process.env.INGESTION_DOCKER_FULL_STACK, 'true');
+  assert.ok(['1000', '5000'].includes(process.env.INGESTION_BURST_EVENTS));
+}
 const { spawn } = require('node:child_process');
 const { randomUUID, randomBytes } = require('node:crypto');
 const {
@@ -228,6 +233,7 @@ async function startProfile(name) {
     output,
     stop,
     memoryProfiling ? (cpuProfiling ? 'both' : 'memory') : 'cpu',
+    process.env.INGESTION_PROFILE_DURATION_MS || '180000',
   ]);
   await waitFile(name, `${output}.ready`);
   profiles.push({ name, output, stop, collected: false });

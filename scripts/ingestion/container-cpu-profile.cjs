@@ -5,7 +5,9 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const assert = require('node:assert/strict');
-const [runId, output, stop, mode = 'cpu'] = process.argv.slice(2);
+const [runId, output, stop, mode = 'cpu', duration = '180000'] = process.argv.slice(2);
+const durationMs = Number(duration);
+assert.ok(Number.isInteger(durationMs) && durationMs >= 1000 && durationMs <= 7200000);
 assert.ok(['cpu', 'memory', 'both'].includes(mode));
 const cpuEnabled = mode !== 'memory';
 const memoryEnabled = mode !== 'cpu';
@@ -63,7 +65,7 @@ async function main() {
       await send('Profiler.setSamplingInterval', { interval: 1000 });
       await send('Profiler.start');
     }
-    const deadline = Date.now() + 180000;
+    const deadline = Date.now() + durationMs;
     const memoryPath = `${output}.memory.jsonl`;
     const gcKey = `opsknight-memory-${runId}`;
     if (memoryEnabled)
