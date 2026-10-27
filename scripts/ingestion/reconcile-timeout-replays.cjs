@@ -4,6 +4,7 @@ require('./isolated-runtime.cjs');
 const assert = require('node:assert/strict');
 const { readFileSync, writeFileSync } = require('node:fs');
 const prisma = require('../../src/lib/prisma').default;
+const { readClientRecords } = require('./client-evidence.cjs');
 const { replayPostgresEvents } = require('../../src/lib/ingestion/postgres');
 const {
   decodeEnvelope,
@@ -21,6 +22,10 @@ async function main() {
       '/ingestion_test_http_job_completion50',
       ['job-completion-50-quiescent-ledger', 'job-completion-50'],
     ],
+    [
+      '/ingestion_test_http_checkpoint_balanced_f1_20261027',
+      ['balanced-aged-75', 'balanced-aged-75'],
+    ],
   ]);
   const fixture = fixtures.get(url.pathname);
   assert.ok(fixture, 'Replay diagnostic requires a fixed owned timeout fixture');
@@ -28,6 +33,16 @@ async function main() {
   const source = `plans/event-ingestion/local-docker-http-${sourceName}.json`;
   const prior = JSON.parse(readFileSync(source, 'utf8'));
   assert.ok(prior.ambiguousSubmissions > 0);
+  const records = prior.clientEvidence?.ledgerPath
+    ? readClientRecords(prior.clientEvidence.ledgerPath)
+    : null;
+  if (records) {
+    assert.equal(records.readable, true);
+    assert.equal(records.malformedRecords, 0);
+  }
+  const acknowledged = new Set(records?.acknowledgments.map(row => row.receiptId));
+  const rejected = new Set(records?.rejections.map(row => row.deliveryId));
+  let identifiedAmbiguousReceipts = 0;
   const rows = await prisma.ingestionReceipt.findMany({
     where: { serviceId: prior.fixtureServiceId },
     select: { id: true, idempotencyKey: true, envelope: true, status: true },
@@ -44,6 +59,8 @@ async function main() {
       const input = decodeEnvelope(row.envelope);
       const deliveryKey = `${input.integrationId}:${input.event.dedup_key}:0`;
       assert.equal(digest([input.serviceId, input.integrationId, deliveryKey]), row.idempotencyKey);
+      if (!acknowledged.has(row.id) && rejected.has(input.event.dedup_key))
+        identifiedAmbiguousReceipts++;
       return { input, deliveryKey };
     });
     const result = await replayPostgresEvents(
@@ -59,6 +76,8 @@ async function main() {
     await prisma.ingestionReceipt.count({ where: { serviceId: prior.fixtureServiceId } }),
     before
   );
+  if (records?.rejections.length)
+    assert.equal(identifiedAmbiguousReceipts, prior.ambiguousSubmissions);
   const evidence = {
     measuredAt: new Date().toISOString(),
     passed: true,
@@ -67,9 +86,10 @@ async function main() {
     recordedAmbiguousResponses: prior.ambiguousSubmissions,
     persistedReceiptsReplayed: rows.length,
     originalReceiptIdsRecovered: true,
+    identifiedAmbiguousReceipts: records?.rejections.length ? identifiedAmbiguousReceipts : null,
     additionalReceipts: 0,
     scope:
-      'Read-only production replay resolver against ALL persisted receipts from the historical timeout run, including its ambiguous subset. Original delivery identities reconstructed from owned k6 fixtures and checked against stored hashes. HTTP authentication is covered separately by native provider-replay checks. Does not identify individual timed-out requests or prove network-timeout prevention.',
+      'Read-only production replay resolver against ALL persisted receipts, including the ambiguous subset. Original delivery identities reconstructed from owned k6 fixtures and checked against stored hashes. When a rejection ledger exists, persisted non-acknowledged deliveries are identified and counted separately. Not HTTP authentication, delivery or network-timeout prevention certification.',
   };
   writeFileSync(
     `plans/event-ingestion/local-timeout-replays-${evidenceName}.json`,

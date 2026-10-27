@@ -85,7 +85,14 @@ it(
         ],
       });
       active = true;
+      const [planBefore] = await prisma.$queryRaw<Array<{ mode: string }>>`
+        SELECT current_setting('plan_cache_mode') AS mode
+      `;
       await generateDailyRollup(at, service.id);
+      const [planAfter] = await prisma.$queryRaw<Array<{ mode: string }>>`
+        SELECT current_setting('plan_cache_mode') AS mode
+      `;
+      expect(planAfter.mode).toBe(planBefore.mode);
       active = false;
       const row = await prisma.incidentMetricRollup.findFirstOrThrow({
         where: { serviceId: service.id },
