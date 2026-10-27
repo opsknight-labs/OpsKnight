@@ -14,6 +14,20 @@ The canonical REST operation registry, finalized OpenAPI document and mutation c
 
 Mutation transactions use the existing idempotency journal and require a current grant, client, principal, token, policy and resource decision before replay or commit. Grant/client/user rows are locked through commit; incident writes lock their target and recheck resource visibility. Current membership changes invalidate a previously projected actor. Requests require an explicit idempotency key for R1 operations; multiple operations never constitute one atomic transaction.
 
+## Independently reviewed runbook execution
+
+`runbook_prepare_execution` and `runbook_execute_approved` add one controlled sensitive workflow alongside the 69 generic operation candidates. Direct `call_operation(executeRunbook)` remains unavailable. Both tools require writes enabled and all four scopes: `runbooks:execute`, `runbooks:read`, `incidents:read`, `services:read`, intersected with current native permissions. There is no MCP approval tool and no approval text or caller-supplied action parameters in the commit input.
+
+Preparation calls the existing native resolver and `previewRunbookExecution`, creating an ordinary five-minute `RunbookPreviewAuthorization` capability extended with independent-review provenance. It starts no execution or advance job. Its raw preview token and canonical request are AES-256-GCM encrypted using the existing keyring; MCP receives only the preview handle, digest, expiry and native review URL. The existing runbook plan digest binds the actual inputs, resolved version/checksum, target and response context. The native review summary uses the existing `resolvedApprovalPlan` masking policy; submitted input values remain withheld.
+
+A different active user with native runbook-read and approval capabilities, plus current resource visibility, reviews through `/settings/integrations/mcp/approvals/:id`. Next Server Actions supply the authenticated session identity; form data cannot choose an approver. Decisions compare the frozen digest and expiry under a row lock, persist the approver's session version, and emit one transactional audit event. A rejected or already-reviewed proposal cannot receive another decision. This initial policy always requires two distinct users.
+
+Execution locks current MCP security state and revalidates requester scope/resource access. The existing native execution command checks the frozen plan again, requires the stored approval and server-only grant provenance, and rechecks the reviewer's current capabilities, session version and resource visibility. Current tokens must belong to the same grant and remain unrotated/unexpired; legitimate token refresh can continue a pending approval using its new valid credential, while the originating credential is retained only as provenance. Ordinary UI/REST execution cannot consume an independently reviewed preview without that internal provenance.
+
+The canonical execution, preview consumption, advance job, audit and durable idempotency result commit together. Pre-commit failure rolls all of them back; a lost response can be retried with the identical key and handle. A second key cannot consume the same preview again. Serializable retries handle competing decisions/commits. Request envelopes are cleared on rejection or successful execution; unused encrypted envelopes follow the existing native preview retention window (30 days after expiry). The receipt identifies the durable native execution and its UI URL; it does not advertise the MCP Tasks extension or waive native per-step approval, Agent policy, signing or runbook recovery controls.
+
+Other sensitive workflows remain blocked. This implementation does not provide a general approval engine for provider changes, secret administration or every R2 operation, and does not establish production crash/HA certification.
+
 ## Identity and consent
 
 The self-hosted authorization-code flow uses `@node-oauth/oauth2-server` 5.3.1, PKCE S256 and exact preregistered redirect URIs. Consent requests are owned by the signed-in user, expire after five minutes and are consumed by a compare-and-set inside a serializable transaction. Native Server Actions provide the browser mutation boundary. Authorization responses carry the issuer identifier.
@@ -53,7 +67,7 @@ The query-profile suite enforces small-fixture statement ceilings (4 discovery, 
 ## Required implementation still outstanding
 
 - Vetted external issuer configuration and CIMD support with DNS-pinned SSRF defenses; scoped machine-identity issuance.
-- Independent prepare/approve/commit for sensitive operations using existing runbook controls, plus authority/revision/replay/crash tests.
+- Independent prepare/approve/commit for the remaining sensitive domains. Runbook execution now reuses native preview/approval controls with local authority, concurrent-decision/commit and pre-commit rollback tests; production recovery certification remains outstanding.
 - Durable Tasks extension, task ownership/poll/cancel/recovery and explicit unsupported-client behavior; no task capability is currently advertised.
 - Remaining appropriate domain commands, full UI/REST/MCP mutation parity and semantic capability review; classification is not execution coverage.
 - Optional MCP Apps and stdio bridge, real supported-client consent/read/write/task verification.

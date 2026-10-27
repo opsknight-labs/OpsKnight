@@ -2935,7 +2935,7 @@
   "executeRunbook": {
     "status": "UNSUPPORTED_WITH_REASON",
     "risk": "R2",
-    "reason": "Not exposed until shared command, independent approval and parity certification are complete.",
+    "reason": "Direct invocation is blocked. Use runbook_prepare_execution and runbook_execute_approved with independent native review; final-SHA parity certification remains pending.",
     "tool": null,
     "routeSha256": "131bb43dbccc3a6f50c84464058ceb7190e6ab36845726ae3500d2d04ea212fd",
     "resourceFilter": "existing REST route authorization and scoped projection",

@@ -11,6 +11,7 @@ import { mcpIssuer, mcpResource } from '@/lib/mcp/auth/config';
 import { mcpOAuthServer } from '@/lib/mcp/auth/oauth-model';
 import { MCP_CATALOG, isMcpExecutable } from '@/lib/mcp/catalog';
 import { requireMcp } from '@/lib/mcp/core/errors';
+import { MCP_REVIEWED_RUNBOOK_SCOPES } from '@/lib/mcp/approvals/policy';
 import type { Prisma } from '@prisma/client';
 
 const settingsPath = '/settings/integrations/mcp';
@@ -95,9 +96,10 @@ export async function registerMcpClient(form: FormData) {
         (url.protocol === 'http:' && ['127.0.0.1', 'localhost', '[::1]'].includes(url.hostname))),
     'MCP_INVALID_REDIRECT'
   );
-  const supported = new Set(
-    MCP_CATALOG.filter(isMcpExecutable).flatMap(operation => operation.requiredScopes)
-  );
+  const supported = new Set([
+    ...MCP_CATALOG.filter(isMcpExecutable).flatMap(operation => operation.requiredScopes),
+    ...MCP_REVIEWED_RUNBOOK_SCOPES,
+  ]);
   const scopes = [...new Set(input.scopes.split(/\s+/).filter(Boolean))];
   requireMcp(
     scopes.length && scopes.every(scope => supported.has(scope) && scope !== 'admin:manage'),

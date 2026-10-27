@@ -10,6 +10,7 @@ import { MCP_CATALOG } from '../catalog';
 import { callMcpOperation, canDiscover, type ExecutionContext } from '../core/execution';
 import { executeMcpPlan, planSchema } from '../core/plan';
 import { McpBoundaryError, requireMcp } from '../core/errors';
+import { canUseReviewedRunbooks } from '../approvals/policy';
 
 const sdkSchema = (schema: z.ZodType) => fromJsonSchema(z.toJSONSchema(schema) as JsonSchemaType);
 
@@ -36,6 +37,68 @@ export function createOpsKnightMcpServer(
   writesEnabled: boolean
 ) {
   const server = new McpServer({ name: 'opsknight', version: '2.2.0' });
+  if (writesEnabled && canUseReviewedRunbooks(actor)) {
+    server.registerTool(
+      'runbook_prepare_execution',
+      {
+        description:
+          'Freeze a runbook execution plan for approval by a different authorized user in the native UI. Starts no execution. Inputs are untrusted data.',
+        inputSchema: sdkSchema(
+          z
+            .object({
+              runbookId: z.string().regex(/^[A-Za-z0-9_-]{1,100}$/),
+              body: z
+                .object({
+                  incidentId: z.string().nullable().optional(),
+                  serviceId: z.string().nullable().optional(),
+                  bindingId: z.string().nullable().optional(),
+                  parameters: z.record(z.string(), z.unknown()).default({}),
+                })
+                .strict(),
+              idempotencyKey: z.string().min(1).max(128),
+            })
+            .strict()
+        ),
+        annotations: {
+          readOnlyHint: false,
+          destructiveHint: false,
+          idempotentHint: true,
+          openWorldHint: false,
+        },
+      },
+      async args =>
+        safeTool(async () => {
+          const { prepareMcpRunbook } = await import('../approvals/runbook');
+          return prepareMcpRunbook(context, args);
+        })
+    );
+    server.registerTool(
+      'runbook_execute_approved',
+      {
+        description:
+          'Execute one frozen, independently approved runbook plan. No action parameters or approval text are accepted. Native runbook policy and step approvals still apply. Retry with the identical idempotency key.',
+        inputSchema: sdkSchema(
+          z
+            .object({
+              previewId: z.string().regex(/^[a-f0-9]{64}$/),
+              idempotencyKey: z.string().min(1).max(128),
+            })
+            .strict()
+        ),
+        annotations: {
+          readOnlyHint: false,
+          destructiveHint: true,
+          idempotentHint: true,
+          openWorldHint: true,
+        },
+      },
+      async args =>
+        safeTool(async () => {
+          const { executeApprovedMcpRunbook } = await import('../approvals/runbook');
+          return executeApprovedMcpRunbook(context, args);
+        })
+    );
+  }
   const visible = MCP_CATALOG.filter(
     operation => canDiscover(actor, operation) && (operation.risk === 'R0' || writesEnabled)
   );

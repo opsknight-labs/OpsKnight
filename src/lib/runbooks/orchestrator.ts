@@ -68,6 +68,7 @@ import {
   RunbookExecutionNotFoundError,
 } from './errors';
 import { lockRunbookForShare } from './locking';
+import { assertIndependentPreviewReview } from './preview-review';
 
 const jobPayloadSchema = z.discriminatedUnion('kind', [
   z
@@ -127,6 +128,8 @@ function executionSteps(definition: ReturnType<typeof parseRunbookDefinition>) {
 /** Server-supplied provenance; never part of the executable request or preview digest. */
 export interface RunbookExecutionAuditContext {
   apiClientId: string;
+  /** Server-only provenance. Never accepted from executable request bodies. */
+  independentPreview?: { grantId: string; credentialId: string };
 }
 
 export interface RunbookExecutionRequest {
@@ -922,6 +925,8 @@ async function prepareRunbookExecution(
         'PREVIEW_AUTHORIZATION_INVALID: Preview authorization is invalid, expired, already used or belongs to another responder or incident. Preview again.'
       );
     }
+    if (authorization)
+      await assertIndependentPreviewReview(tx, authorization, auditContext?.independentPreview);
     // Actor-less (automatic) write steps wait for approval unless an admin authorized
     // unattended writes for exactly this pinned version. NON_IDEMPOTENT always waits.
     const automaticExecution = mode === 'AUTOMATIC' || !input.triggeredByUserId;

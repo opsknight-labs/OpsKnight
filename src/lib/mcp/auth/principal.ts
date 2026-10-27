@@ -1,4 +1,5 @@
 import prisma from '@/lib/prisma';
+import type { Prisma } from '@prisma/client';
 import { authorizationActorFromUser } from '@/lib/authorization-actors';
 import { incrementSharedCounter } from '@/lib/rate-limit';
 import type { V2AuthContext } from '@/lib/api-v2/auth';
@@ -23,12 +24,13 @@ interface GrantAuthoritySnapshot {
 
 export async function resolveMcpGrant(
   grantId: string,
-  credentialId?: string
+  credentialId?: string,
+  db: Prisma.TransactionClient = prisma
 ): Promise<V2AuthContext> {
   const now = new Date();
   // One current-statement snapshot avoids four ORM round trips per domain step.
   // No values are interpolated into SQL syntax and no authority is cached.
-  const [grant] = await prisma.$queryRaw<GrantAuthoritySnapshot[]>`
+  const [grant] = await db.$queryRaw<GrantAuthoritySnapshot[]>`
     SELECT g.id AS "grantId", g."userId", g."userTokenVersion",
       g.scopes AS "grantScopes", c.scopes AS "clientScopes", g.resource,
       g."revokedAt", c."revokedAt" AS "clientRevokedAt", g."expiresAt",

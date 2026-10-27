@@ -4249,9 +4249,21 @@ model RunbookPreviewAuthorization {
   expiresAt    DateTime
   consumedAt   DateTime?
   executionId  String?   @unique
+  // Remote requests reuse this preview capability, but need a distinct native reviewer.
+  independentReview Boolean @default(false)
+  requesterGrantId String?
+  requesterCredentialId String?
+  requestEnvelope String?
+  reviewSummary Json?
+  reviewedById String?
+  reviewerTokenVersion Int?
+  reviewedAt DateTime?
+  reviewedPlanDigest String?
+  rejectedAt DateTime?
 
   @@index([expiresAt])
   @@index([actorId, createdAt])
+  @@index([requesterGrantId, createdAt])
 }
 
 enum AutomationMode {

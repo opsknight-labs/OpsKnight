@@ -3,6 +3,7 @@ on:
   pull_request:
     paths:
       - 'src/lib/mcp/**'
+      - 'src/lib/runbooks/**'
       - 'src/lib/api-v2/**'
       - 'src/lib/idempotency.ts'
       - 'src/lib/rate-limit.ts'
@@ -74,7 +75,7 @@ jobs:
           MCP_QUERY_PROFILE_OUTPUT: ${{ runner.temp }}/mcp-evidence/query-profile.json
         run: |
           mkdir -p "$RUNNER_TEMP/mcp-evidence"
-          npx vitest run -c vitest.int.config.ts --no-file-parallelism --maxWorkers=1 tests/integration/mcp-security-database.test.ts tests/integration/mcp-database-isolation.test.ts tests/integration/mcp-query-profile.test.ts
+          npx vitest run -c vitest.int.config.ts --no-file-parallelism --maxWorkers=1 tests/integration/mcp-security-database.test.ts tests/integration/mcp-database-isolation.test.ts tests/integration/mcp-query-profile.test.ts tests/integration/mcp-runbook-approval.test.ts
       - name: Source-labelled canonical coverage
         run: |
           mkdir -p "$RUNNER_TEMP/mcp-evidence"
@@ -83,6 +84,8 @@ jobs:
       - run: npm run api:clients:check
       - run: npm run --silent api:coverage > "$RUNNER_TEMP/mcp-evidence/rest-coverage-${GITHUB_SHA}.json"
       - run: npm run build
+        env:
+          NODE_OPTIONS: --max-old-space-size=6144
       - name: Fresh local browser database
         run: |
           node <<'JS'

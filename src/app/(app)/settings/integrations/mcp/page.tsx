@@ -94,7 +94,7 @@ export default async function McpSettings({
                 name="writesEnabled"
                 defaultChecked={policy?.writesEnabled ?? false}
               />
-              Allow reviewed routine mutations
+              Allow reviewed routine mutations and approved runbook executions
             </label>
             <div className="grid sm:grid-cols-3 gap-4">
               <label>

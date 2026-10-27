@@ -15,6 +15,7 @@ import { MCP_HANDLERS } from '../operations/handlers';
 import { resolveMcpGrant } from '../auth/principal';
 import { CostBudget } from './budget';
 import { requireMcp } from './errors';
+import { lockMcpMutationAuthority } from './mutation-authority';
 import { projectMcpData } from './projection';
 
 const validator = new Ajv2020({ strict: false, allErrors: false, validateFormats: true });
@@ -124,43 +125,12 @@ async function executeMcpOperation(
     () => handler(request, { params: Promise.resolve(path) }),
     async tx => {
       context.budget.check();
-      // Lock security state through commit so revoke and commit have a definite order.
-      await tx.$queryRaw`SELECT id FROM "McpGrant" WHERE id = ${context.grantId} FOR SHARE`;
-      await tx.$queryRaw`SELECT id FROM "McpClient" WHERE id = (SELECT "clientId" FROM "McpGrant" WHERE id = ${context.grantId}) FOR SHARE`;
-      await tx.$queryRaw`SELECT id FROM "User" WHERE id = ${auth.actor.id} FOR SHARE`;
-      const grant = await tx.mcpGrant.findUnique({
-        where: { id: context.grantId },
-        include: { client: true },
-      });
-      const user = await tx.user.findUnique({
-        where: { id: auth.actor.id },
-        select: {
-          role: true,
-          status: true,
-          tokenVersion: true,
-          teamMemberships: { select: { teamId: true } },
-        },
-      });
-      requireMcp(
-        grant && !grant.revokedAt && !grant.client.revokedAt && grant.expiresAt > new Date(),
-        'MCP_INVALID_GRANT',
-        401
-      );
-      requireMcp(
-        user?.status === 'ACTIVE' &&
-          user.role === auth.actor.role &&
-          user.tokenVersion === grant.userTokenVersion &&
-          JSON.stringify(user.teamMemberships.map(member => member.teamId).sort()) ===
-            JSON.stringify([...auth.actor.teamIds].sort()),
-        'MCP_AUTHORITY_CHANGED',
-        403
-      );
-      requireMcp(
-        operation.requiredScopes.every(
-          scope => grant.scopes.includes(scope) && grant.client.scopes.includes(scope)
-        ),
-        'MCP_OPERATION_FORBIDDEN',
-        403
+      await lockMcpMutationAuthority(
+        tx,
+        context,
+        operation.requiredScopes,
+        operation.authorizationActions,
+        auth.actor
       );
       if (operation.domain === 'incidents') {
         if (operationId === 'createIncident') {
@@ -205,25 +175,6 @@ async function executeMcpOperation(
           });
         }
       }
-      if (context.credentialId) {
-        await tx.$queryRaw`SELECT id FROM "McpToken" WHERE id = ${context.credentialId} FOR SHARE`;
-        const token = await tx.mcpToken.findUnique({ where: { id: context.credentialId } });
-        requireMcp(
-          token &&
-            token.grantId === grant.id &&
-            !token.rotatedAt &&
-            token.accessExpiresAt > new Date() &&
-            operation.requiredScopes.every(scope => token.scopes.includes(scope)),
-          'MCP_INVALID_TOKEN',
-          401
-        );
-      }
-      const currentPolicy = await tx.mcpPolicy.findUnique({ where: { id: 'default' } });
-      requireMcp(
-        currentPolicy?.enabled && currentPolicy.writesEnabled,
-        'MCP_OPERATION_DISABLED',
-        403
-      );
     }
   );
   // Do not pass REST problem details or stack traces through to an agent.

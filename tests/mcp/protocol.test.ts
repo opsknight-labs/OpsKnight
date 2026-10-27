@@ -12,7 +12,7 @@ const handlers: McpHttpHandler[] = [];
 afterEach(async () => {
   await Promise.all(handlers.splice(0).map(handler => handler.close()));
 });
-function handler(scopes = ['incidents:read']) {
+function handler(scopes = ['incidents:read'], writesEnabled = false) {
   const result = createMcpHandler(
     () =>
       createOpsKnightMcpServer(
@@ -24,7 +24,7 @@ function handler(scopes = ['incidents:read']) {
           teamIds: [],
           apiKey: { id: 'grant', scopes },
         },
-        false
+        writesEnabled
       ),
     { legacy: 'reject', responseMode: 'auto', maxSubscriptions: 0 }
   );
@@ -63,6 +63,21 @@ function request(
 }
 
 describe('official SDK modern protocol adapter', () => {
+  it('exposes prepare/execute only with all workflow scopes and never offers an approval tool', async () => {
+    const scopes = ['runbooks:execute', 'runbooks:read', 'incidents:read', 'services:read'];
+    for (const [allowedScopes, writes, enabled] of [
+      [scopes, true, true],
+      [scopes, false, false],
+      [['runbooks:execute'], true, false],
+    ] as [string[], boolean, boolean][]) {
+      const response = await handler(allowedScopes, writes).fetch(request('tools/list'));
+      const names = (await response.json()).result.tools.map((tool: { name: string }) => tool.name);
+      expect(names.includes('runbook_prepare_execution')).toBe(enabled);
+      expect(names.includes('runbook_execute_approved')).toBe(enabled);
+      expect(names).not.toContain('runbook_approve');
+      expect(names).not.toContain('approve_runbook_preview');
+    }
+  });
   it('retains admission for actual domain work after the transport aborts', async () => {
     const controller = new AbortController();
     const budget = new CostBudget(8, 262144, controller.signal);

@@ -166,6 +166,7 @@ async function main() {
     'tests/integration/mcp-security-database.test.ts',
     'tests/integration/mcp-database-isolation.test.ts',
     'tests/integration/mcp-query-profile.test.ts',
+    'tests/integration/mcp-runbook-approval.test.ts',
   ]);
   await node(
     'coverage',
@@ -173,7 +174,9 @@ async function main() {
     ['-r', 'tsconfig-paths/register', 'scripts/mcp/coverage-matrix.ts'],
     { ...env, TS_NODE_PROJECT: 'tsconfig.script.json' }
   );
-  await node('build', 'node_modules/next/dist/bin/next', ['build', '--webpack']);
+  await node('build', 'node_modules/next/dist/bin/next', ['build', '--webpack'], {
+    ...env, NODE_OPTIONS: env.NODE_OPTIONS || '--max-old-space-size=6144',
+  });
   await run('browser-database', 'docker', [
     'exec',
     container,

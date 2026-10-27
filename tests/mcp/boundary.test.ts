@@ -31,6 +31,7 @@ describe('MCP boundary', () => {
     ).toThrow();
     expect(() => validateOperationArgs('getIncident', { url: 'http://metadata/' })).toThrow();
     expect(() => validateOperationArgs('issueServiceAccountToken', {})).toThrow();
+    expect(() => validateOperationArgs('executeRunbook', {})).toThrow();
     expect(() => validateOperationArgs('__proto__', {})).toThrow();
   });
   it('compiles every exposed schema with only local bounded references', () => {

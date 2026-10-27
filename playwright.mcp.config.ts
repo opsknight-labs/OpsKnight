@@ -4,7 +4,7 @@ import { join } from 'node:path';
 
 export default defineConfig({
   testDir: './tests/e2e',
-  testMatch: 'mcp.spec.ts',
+  testMatch: 'mcp*.spec.ts',
   fullyParallel: false,
   workers: 1,
   timeout: 90000,
