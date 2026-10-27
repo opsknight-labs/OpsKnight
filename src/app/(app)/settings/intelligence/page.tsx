@@ -5,6 +5,7 @@ import {
   ReplayForm,
   RollbackForm,
 } from '@/components/settings/IntelligenceSettingsForms';
+import CorrelationRulesEditor from '@/components/settings/CorrelationRulesEditor';
 import { Badge } from '@/components/ui/shadcn/badge';
 import { logger } from '@/lib/logger';
 import { assertCapability } from '@/lib/rbac';
@@ -167,6 +168,18 @@ export default async function IntelligenceSettingsPage() {
             </ul>
           </div>
         )}
+      </SettingsSection>
+
+      <SettingsSection
+        title="Correlation rules"
+        description="Group related incidents of the same service. Rules only suggest links for responders to confirm."
+      >
+        <CorrelationRulesEditor
+          initialRules={policy?.definition.correlation.rules ?? []}
+          headVersion={headVersion}
+          canManage={canManage}
+          maxLookbackDays={settings.lookbackDays}
+        />
       </SettingsSection>
 
       {deadLetters && deadLetters.length > 0 && (

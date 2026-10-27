@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { CAPABILITIES, hasCapability, type AppRole } from '@/lib/authorization';
 import { INTELLIGENCE_SETTINGS_DEFAULTS, DEFAULT_POLICY_DEFINITION } from '@/lib/intelligence/contract';
-import { createTestUser, resetDatabase, testPrisma as db } from '../../helpers/test-db';
+import { indexIncident } from '@/lib/intelligence/jobs/indexer';
+import { createTestIncident, createTestService, createTestUser, resetDatabase, testPrisma as db } from '../../helpers/test-db';
 
 // Only the session is replaced; the actions, domain services and database are real.
 const session = vi.hoisted(() => ({ user: null as { id: string; role: string } | null }));
@@ -20,6 +21,8 @@ vi.mock('@/lib/rbac', async () => {
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }));
 
 import {
+  previewCorrelationRules,
+  publishCorrelationRules,
   publishGlobalPolicy,
   replayIntelligenceDeadLetter,
   rollbackGlobalPolicy,
@@ -185,5 +188,69 @@ describe('dead letters', () => {
     expect((await replayIntelligenceDeadLetter(initial, form({ id: dead.id }))).ok).toBe(true);
     expect((await db.intelligenceWorkItem.findUniqueOrThrow({ where: { id: dead.id } })).attempts).toBe(0);
     expect((await replayIntelligenceDeadLetter(initial, form({ id: dead.id }))).ok).toBe(false);
+  });
+});
+
+describe('correlation rules', () => {
+  const rule = { id: 'same-problem', kind: 'CONTENT_TEMPLATE', enabled: true, keys: [], windowSeconds: 300, maxWindowSeconds: 900, minScore: 0.8 };
+  const previewState = { message: '', ok: false };
+
+  it('is limited to managers', async () => {
+    await signIn('RESPONDER');
+    expect((await previewCorrelationRules(previewState, form({ rulesJson: JSON.stringify([rule]), days: 7 }))).ok).toBe(false);
+    expect((await publishCorrelationRules(initial, form({ rulesJson: JSON.stringify([rule]), expectedHeadVersion: 0 }))).ok).toBe(false);
+    expect(await db.intelligencePolicyVersion.count()).toBe(0);
+    expect(await db.intelligenceEvaluationRun.count()).toBe(0);
+  });
+
+  it('previews on real history without changing anything', async () => {
+    const admin = await signIn('ADMIN');
+    const service = await createTestService('Checkout');
+    for (const n of [1, 2, 3]) {
+      const incident = await createTestIncident(`Database errors on db-${n}`, service.id, { urgency: 'LOW', createdAt: new Date(Date.now() - 3_600_000 + n * 1000) });
+      await indexIncident(incident.id, db);
+    }
+    const result = await previewCorrelationRules(previewState, form({ rulesJson: JSON.stringify([rule]), days: 7 }));
+    expect(result.ok).toBe(true);
+    expect(result.preview).toMatchObject({ incidentsEvaluated: 3, groups: 1, groupedIncidents: 3, suggestedLinks: 2, criticalExcluded: 0 });
+    expect(await db.intelligenceEvaluationRun.count({ where: { createdById: admin.id, status: 'COMPLETED' } })).toBe(1);
+    expect(await db.correlationGroup.count()).toBe(0);
+    expect(await db.intelligencePolicyVersion.count()).toBe(0);
+  });
+
+  it('rejects unreadable, duplicate and invalid rules and bad day counts with clear messages', async () => {
+    await signIn('ADMIN');
+    const run = (rulesJson: string, days = 7) => previewCorrelationRules(previewState, form({ rulesJson, days }));
+    expect((await run('not json')).message).toMatch(/could not be read/);
+    expect((await run(JSON.stringify([rule, rule]))).message).toMatch(/unique id/);
+    expect((await run(JSON.stringify([{ ...rule, windowSeconds: 10 }]))).ok).toBe(false);
+    expect((await run(JSON.stringify([{ ...rule, windowSeconds: 600, maxWindowSeconds: 300 }]))).ok).toBe(false);
+    expect((await run(JSON.stringify([rule]), 0)).message).toMatch(/between 1 and 90/);
+    expect((await run(JSON.stringify([rule]), 500)).message).toMatch(/between 1 and 90/);
+    expect(await db.intelligenceEvaluationRun.count()).toBe(0);
+  });
+
+  it('publishes rules as a new version while keeping the current mode and similarity settings', async () => {
+    await signIn('ADMIN');
+    await publishGlobalPolicy(initial, form({ mode: 'SUGGEST', similarityEnabled: true, minScore: 0.5, expectedHeadVersion: 0 }));
+    const result = await publishCorrelationRules(initial, form({ rulesJson: JSON.stringify([rule]), expectedHeadVersion: 1, reason: 'group db errors' }));
+    expect(result).toEqual({ message: 'Rules published as policy version 2.', ok: true });
+    const v2 = await db.intelligencePolicyVersion.findFirstOrThrow({ where: { version: 2 } });
+    expect(v2).toMatchObject({ mode: 'SUGGEST', reason: 'group db errors' });
+    const definition = v2.definition as { similarity: { minScore: number }; correlation: { rules: Array<{ id: string }>; criticalBypass: boolean } };
+    expect(definition.similarity.minScore).toBe(0.5);
+    expect(definition.correlation.rules.map(r => r.id)).toEqual(['same-problem']);
+    expect(definition.correlation.criticalBypass).toBe(true);
+  });
+
+  it('detects a stale head and removes all rules when asked', async () => {
+    await signIn('ADMIN');
+    await publishCorrelationRules(initial, form({ rulesJson: JSON.stringify([rule]), expectedHeadVersion: 0 }));
+    const stale = await publishCorrelationRules(initial, form({ rulesJson: '[]', expectedHeadVersion: 0 }));
+    expect(stale.ok).toBe(false);
+    expect(stale.message).toMatch(/changed since you opened the page/);
+    expect((await publishCorrelationRules(initial, form({ rulesJson: '[]', expectedHeadVersion: 1 }))).ok).toBe(true);
+    const latest = await db.intelligencePolicyVersion.findFirstOrThrow({ where: { version: 2 } });
+    expect((latest.definition as { correlation: { rules: unknown[] } }).correlation.rules).toEqual([]);
   });
 });

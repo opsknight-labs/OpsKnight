@@ -5,13 +5,19 @@ import { AppError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { assertCapability } from '@/lib/rbac';
 import { CAPABILITIES } from '@/lib/authorization';
+import { z } from 'zod/v4';
 import {
   INTELLIGENCE_MODES,
+  MAX_CORRELATION_RULES_PER_POLICY,
+  correlationRuleSchema,
+  type CorrelationRule,
   type IntelligenceModeValue,
   type PolicyDefinition,
 } from '@/lib/intelligence/contract';
+import { replayPolicyRules } from '@/lib/intelligence/evaluation/replay';
 import { replayDeadLetter } from '@/lib/intelligence/jobs/work-queue';
 import {
+  getIntelligenceSettings,
   publishPolicyVersion,
   resolveEffectivePolicy,
   rollbackPolicy,
@@ -151,6 +157,103 @@ export async function replayIntelligenceDeadLetter(
     return replayed
       ? { message: 'Work item queued for another attempt.', ok: true }
       : { message: 'That item is no longer a dead letter.', ok: false };
+  } catch (error) {
+    return failure(error);
+  }
+}
+
+const rulesSchema = z.array(correlationRuleSchema).max(MAX_CORRELATION_RULES_PER_POLICY);
+
+function parseRules(form: FormData): { rules: CorrelationRule[] } | { error: string } {
+  let raw: unknown;
+  try {
+    raw = JSON.parse(text(form, 'rulesJson') || '[]');
+  } catch {
+    return { error: 'The rules could not be read. Reload the page and try again.' };
+  }
+  const parsed = rulesSchema.safeParse(raw);
+  if (parsed.success) {
+    const ids = parsed.data.map(rule => rule.id);
+    if (new Set(ids).size !== ids.length) return { error: 'Each rule needs a unique id.' };
+    return { rules: parsed.data };
+  }
+  const issue = parsed.error.issues[0];
+  return { error: `Check the rules: ${issue.path.map(String).join('.') || 'input'} — ${issue.message}` };
+}
+
+export type RulePreviewState = {
+  message: string;
+  ok: boolean;
+  preview?: {
+    days: number;
+    incidentsEvaluated: number;
+    criticalExcluded: number;
+    groups: number;
+    groupedIncidents: number;
+    suggestedLinks: number;
+    truncated: boolean;
+    perRule: Array<{ ruleId: string; groups: number; groupedIncidents: number }>;
+  };
+};
+
+/** Replays the edited rules over recent history so the effect is known before anything is published. */
+export async function previewCorrelationRules(
+  _state: RulePreviewState,
+  form: FormData
+): Promise<RulePreviewState> {
+  try {
+    const actor = await assertCapability(CAPABILITIES.INTELLIGENCE_MANAGE);
+    const parsed = parseRules(form);
+    if ('error' in parsed) return { message: parsed.error, ok: false };
+    const days = Number(text(form, 'days'));
+    if (!Number.isInteger(days) || days < 1 || days > 90) return { message: 'Choose between 1 and 90 days.', ok: false };
+    const settings = await getIntelligenceSettings();
+    const result = await replayPolicyRules(settings, { rules: parsed.rules, days, createdById: actor.id });
+    return {
+      ok: true,
+      message: 'Preview complete. Nothing has been changed.',
+      preview: {
+        days: result.days,
+        incidentsEvaluated: result.incidentsEvaluated,
+        criticalExcluded: result.criticalExcluded,
+        groups: result.groups,
+        groupedIncidents: result.groupedIncidents,
+        suggestedLinks: result.suggestedLinks,
+        truncated: result.truncated,
+        perRule: result.perRule,
+      },
+    };
+  } catch (error) {
+    return failure(error);
+  }
+}
+
+/** Publishes the edited rules as a new policy version, keeping the current mode and similarity settings. */
+export async function publishCorrelationRules(
+  _state: IntelligenceActionState,
+  form: FormData
+): Promise<IntelligenceActionState> {
+  try {
+    const actor = await assertCapability(CAPABILITIES.INTELLIGENCE_MANAGE);
+    const parsed = parseRules(form);
+    if ('error' in parsed) return { message: parsed.error, ok: false };
+    const current = await resolveEffectivePolicy(null);
+    const definition: PolicyDefinition = {
+      ...current.definition,
+      correlation: { ...current.definition.correlation, rules: parsed.rules },
+    };
+    const result = await publishPolicyVersion(
+      {},
+      {
+        mode: current.mode,
+        definition,
+        reason: text(form, 'reason') || 'Updated correlation rules',
+        expectedHeadVersion: integer(form, 'expectedHeadVersion'),
+      },
+      { actorId: actor.id, source: 'UI' }
+    );
+    revalidatePath(SETTINGS_PATH);
+    return { message: `Rules published as policy version ${result.version}.`, ok: true };
   } catch (error) {
     return failure(error);
   }

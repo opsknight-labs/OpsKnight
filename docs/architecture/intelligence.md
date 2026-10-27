@@ -130,7 +130,18 @@ or probabilistic, and every match is explained by the rule that made it.
 - **Modes.** `SHADOW` records only; `SUGGEST` also proposes links. Correlation work is chained only
   when the effective policy has enabled rules, so installs without rules pay nothing.
 
-Replay-based policy preview, the rules builder UI and automatic grouping are not implemented yet.
+### Rules builder and replay preview
+
+Administrators author rules in **Settings → Intelligence → Correlation rules**. Before publishing,
+**Preview** replays the edited rules over recent history (bounded by the configured lookback, 90 days,
+and a hard 5,000-incident cap) and reports how many incidents would group, how many links would be
+proposed, and how many critical incidents are excluded. The replay uses the live engine's own signature
+and window functions and writes only an evaluation record; an integration test checks that its
+prediction equals what the engine then does. Overlapping rules that propose the same member-to-anchor
+pair count as one link, because that is how the pair is stored. Publishing creates a new immutable
+policy version and keeps the current mode and similarity settings.
+
+Automatic grouping remains unimplemented and unavailable.
 
 ## Not yet implemented
 
