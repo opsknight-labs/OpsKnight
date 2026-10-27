@@ -162,6 +162,16 @@ export async function GET(request: NextRequest) {
     }
   }
 
+  if (mode === 'readiness') {
+    // Advisory subsystem: reported as healthy, degraded or disabled, never unhealthy.
+    try {
+      const { getIntelligenceHealthCheck } = await import('@/lib/intelligence/metrics');
+      checks.intelligence = getIntelligenceHealthCheck();
+    } catch {
+      checks.intelligence = { status: 'degraded', error: 'Intelligence status unavailable' };
+    }
+  }
+
   try {
     const memUsage = process.memoryUsage();
     const heapStats = typeof v8.getHeapStatistics === 'function' ? v8.getHeapStatistics() : null;

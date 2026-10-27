@@ -29,6 +29,46 @@ const FORBIDDEN_LABELS = new Set([
 
 export const OPERATIONAL_METRICS = [
   {
+    name: 'opsknight_intelligence_queue_ready',
+    help: 'Intelligence work items ready to run',
+    kind: 'gauge',
+    labels: [],
+    scope: 'cluster_snapshot',
+    estimatedMaxSeries: 1,
+  },
+  {
+    name: 'opsknight_intelligence_queue_oldest_ready_age_seconds',
+    help: 'Age of the oldest ready Intelligence work item',
+    kind: 'gauge',
+    labels: [],
+    scope: 'cluster_snapshot',
+    estimatedMaxSeries: 1,
+  },
+  {
+    name: 'opsknight_intelligence_dead_letters',
+    help: 'Intelligence work items that exhausted their retries',
+    kind: 'gauge',
+    labels: [],
+    scope: 'cluster_snapshot',
+    estimatedMaxSeries: 1,
+  },
+  {
+    name: 'opsknight_intelligence_lane_paused',
+    help: '1 while the Intelligence lane is paused to protect paging, else 0',
+    kind: 'gauge',
+    labels: [],
+    scope: 'instance',
+    estimatedMaxSeries: 1,
+  },
+  {
+    name: 'opsknight_intelligence_lane_last_cycle_age_seconds',
+    help: 'Seconds since the Intelligence lane last completed a cycle on this instance',
+    kind: 'gauge',
+    labels: [],
+    scope: 'instance',
+    estimatedMaxSeries: 1,
+  },
+  {
     name: 'opsknight_ingestion_enabled',
     help: 'Durable PostgreSQL ingestion enabled on this gateway',
     kind: 'gauge',
