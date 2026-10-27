@@ -131,6 +131,15 @@ function calculateRuntimeCapacity(customEnv) {
     1
   );
   const webPool = parseStrictPositiveInt('DATABASE_POOL_SIZE_WEB', env.DATABASE_POOL_SIZE_WEB, 10);
+  if (env.MCP_DATABASE_POOL_SIZE !== undefined && !/^\d+$/.test(String(env.MCP_DATABASE_POOL_SIZE).trim())) {
+    throw new Error('MCP_DATABASE_POOL_SIZE must be an integer between 1 and 4');
+  }
+  const mcpPool = parseStrictPositiveInt('MCP_DATABASE_POOL_SIZE', env.MCP_DATABASE_POOL_SIZE, 2);
+  if (mcpPool > 4) throw new Error('MCP_DATABASE_POOL_SIZE must be an integer between 1 and 4');
+  // Lazy MCP pools still need reserved capacity: disabled endpoints can receive
+  // requests, and web PgBouncer does not bound these direct connections.
+  const mcpReplicas = mode === 'integrated' ? integratedReplicas : webReplicas;
+  const mcpConnections = mcpReplicas * mcpPool;
 
   const pgbouncerReplicas = parseStrictPositiveInt(
     'PGBOUNCER_REPLICAS',
@@ -283,7 +292,8 @@ function calculateRuntimeCapacity(customEnv) {
         runbookReplicas * runbookPool +
         projectorReplicas * projectorPool;
 
-  const totalDemand = webConnections + directWorkerConnections + connectionReserve;
+  const totalDemand =
+    webConnections + directWorkerConnections + mcpConnections + connectionReserve;
   const safe = totalDemand <= maxConnections;
   const headroom = maxConnections - totalDemand;
 
@@ -292,12 +302,14 @@ function calculateRuntimeCapacity(customEnv) {
     pgbouncer,
     webConnections,
     directWorkerConnections,
+    mcpConnections,
     totalDemand,
     connectionReserve,
     maxConnections,
     safe,
     headroom,
     breakdown: {
+      mcp: { replicas: mcpReplicas, pool: mcpPool, total: mcpConnections },
       ingestionWorker: {
         replicas: ingestionReplicas,
         pool: ingestionPool,
@@ -393,6 +405,7 @@ function main() {
     console.log(`Headroom / Safety Margin:   ${analysis.headroom} connections`);
     console.log(`\nBreakdown:`);
     console.log(`- Web Tier: ${JSON.stringify(analysis.breakdown.web)}`);
+    console.log(`- MCP Direct Pool: ${JSON.stringify(analysis.breakdown.mcp)}`);
     if (analysis.breakdown.pgbouncer) {
       console.log(`- PgBouncer: ${JSON.stringify(analysis.breakdown.pgbouncer)}`);
     }

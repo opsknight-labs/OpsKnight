@@ -1,0 +1,26 @@
+# MCP development quickstart
+
+This feature is in development and disabled by default. It is not yet certified for production, external clients or multi-replica deployments. See [architecture and outstanding work](../../operate/mcp/architecture.md).
+
+For a repeatable local check, install the locked dependencies on Node 20 (`npm ci --legacy-peer-deps`), start Docker, then run `npm run check:mcp:local`. The command creates its own PostgreSQL 16 container bound to loopback, installs all migrations into fresh test/browser databases, generates disposable secrets, runs typecheck, MCP unit/database/coverage checks, builds the production app and tests native consent/read/revoke in Chromium, Firefox and WebKit. It prints a private temporary evidence directory outside git and removes its own server/container on exit. Linux hosts need Playwright's system dependencies installed first. This local check does not satisfy final-SHA release certification.
+
+For manual development:
+
+1. Install the locked dependencies on Node 20 using `npm ci --legacy-peer-deps`; generate Prisma and deploy migrations using the existing safe migration process. Back up a populated database first.
+2. Configure `MCP_PUBLIC_ORIGIN` to the canonical HTTPS origin (HTTP is accepted only on loopback for development). Set `MCP_TOKEN_HASH_SECRET` to a separate random secret of at least 32 bytes. Share that infrastructure secret consistently across replicas. Changing it invalidates existing MCP credentials; do not reuse the SSO signing key.
+3. Sign in as an active administrator. Open **Settings → Integrations → MCP**, configure budgets, and register the exact client redirect URI and allowed scopes. Start with `incidents:read services:read schedules:read`; leave writes disabled until parity certification.
+4. Enable MCP for development. Discover the resource at `/.well-known/oauth-protected-resource/mcp` and its authorization server at `/.well-known/oauth-authorization-server/oauth/mcp`.
+5. Use Authorization Code with PKCE S256, a fresh state value and `resource=<canonical origin>/mcp`. Sign in and explicitly accept the displayed scopes. The client must validate `state` and `iss` on return. Exchange the code at `/oauth/mcp/token`, including the same resource, redirect URI and code verifier. Refresh rotates the credential; reuse revokes the grant.
+6. POST modern MCP requests to `/mcp`. Supply the protocol-version, method and applicable name headers, plus required per-request protocol version, client info and capabilities metadata. Use the official SDK to encode the complete envelope. There is no initialize handshake, session ID or GET event stream.
+
+An HTTPS ingress must preserve the configured public `Host` header, including any nonstandard port. MCP compares that header with its pinned origin; `X-Forwarded-Host` does not establish authority. Next.js may use an internal listener address in `request.url`, which is accepted only when the raw Host matches the configured public host. Browser Origin must match the complete configured origin.
+
+MCP reserves its own database pool: two connections per web process by default. `MCP_DATABASE_POOL_SIZE` accepts one to four; deployment capacity preflight includes these connections for every web replica. The pool uses `MCP_DATABASE_URL`, then `DIRECT_DATABASE_URL`, then `DATABASE_URL`, targeting the same database through a direct PostgreSQL endpoint. `WEB_DATABASE_URL` remains available to the ordinary web tier. MCP through PgBouncer is not yet certified and URLs marked `pgbouncer=true` are rejected. MCP query/lock/idle-transaction deadlines are fixed at five/one/five seconds; URL options cannot relax them. A pool/SQL timeout can fail a call, so retry mutations only with the same idempotency key and identical input.
+
+Tokens belong in a host's secure credential store. Do not place them in tool arguments, logs, resource URIs or example configuration committed to git. REST API keys and upstream SSO/OIDC tokens are not valid MCP credentials.
+
+Use `search_capabilities`, then `describe_operation`, then `call_operation`. Operation arguments contain named `path`, `query` and `body` objects derived from the current OpenAPI contract. Routine writes also require a stable caller-chosen `idempotencyKey`; retry with the identical operation, arguments and key. A mutation can have committed even if a result deadline or network response failed.
+
+The admin can revoke a client and all its grants immediately, or uncheck Enable MCP to stop the MCP surface. Users can revoke their own grants. Existing credentials and one-time codes are never displayed in settings.
+
+No ChatGPT, Claude, Cursor or VS Code compatibility is claimed yet. CIMD, external issuers, machine grants, stdio, sensitive approvals, Tasks and Apps are pending. Do not substitute REST tokens or disable resource validation to work around a host compatibility failure.

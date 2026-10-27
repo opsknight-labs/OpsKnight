@@ -29,6 +29,23 @@ const FORBIDDEN_LABELS = new Set([
 
 export const OPERATIONAL_METRICS = [
   {
+    name: 'opsknight_mcp_requests_total',
+    help: 'MCP requests by bounded outcome, without actor or client identifiers',
+    kind: 'counter',
+    labels: ['outcome'],
+    scope: 'counter',
+    estimatedMaxSeries: 8,
+  },
+  {
+    name: 'opsknight_mcp_request_duration_seconds',
+    help: 'MCP top-level request duration including admission and domain work',
+    kind: 'histogram',
+    labels: [],
+    scope: 'counter',
+    estimatedMaxSeries: 16,
+    buckets: [0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10],
+  },
+  {
     name: 'opsknight_ingestion_enabled',
     help: 'Durable PostgreSQL ingestion enabled on this gateway',
     kind: 'gauge',

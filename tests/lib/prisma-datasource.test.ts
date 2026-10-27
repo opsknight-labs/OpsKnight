@@ -1,7 +1,56 @@
 import { describe, expect, it } from 'vitest';
-import { configurePrismaDatasource, selectPrismaDatasourceUrl } from '@/lib/prisma-datasource';
+import {
+  configurePrismaDatasource,
+  configureMcpPrismaDatasource,
+  selectMcpPrismaDatasourceUrl,
+  selectPrismaDatasourceUrl,
+} from '@/lib/prisma-datasource';
 
 describe('Prisma datasource pool safety', () => {
+  it('prefers a dedicated MCP role or the direct route over the shared web pooler', () => {
+    const env = {
+      MCP_DATABASE_URL: 'postgresql://mcp-role/db',
+      DIRECT_DATABASE_URL: 'postgresql://direct/db',
+      DATABASE_URL: 'postgresql://legacy/db',
+    };
+    expect(selectMcpPrismaDatasourceUrl(env)).toBe(env.MCP_DATABASE_URL);
+    expect(selectMcpPrismaDatasourceUrl({ ...env, MCP_DATABASE_URL: undefined })).toBe(
+      env.DIRECT_DATABASE_URL
+    );
+    expect(
+      selectMcpPrismaDatasourceUrl({
+        ...env,
+        MCP_DATABASE_URL: undefined,
+        DIRECT_DATABASE_URL: undefined,
+      })
+    ).toBe(env.DATABASE_URL);
+  });
+  it('cannot inherit relaxed MCP pool, query or lock budgets from a shared URL', () => {
+    const url = new URL(
+      configureMcpPrismaDatasource(
+        'postgresql://db/app?connection_limit=100&pool_timeout=60&options=-c%20statement_timeout%3D0&sslmode=require'
+      )
+    );
+    expect(url.searchParams.get('connection_limit')).toBe('2');
+    expect(url.searchParams.get('pool_timeout')).toBe('1');
+    expect(url.searchParams.get('connect_timeout')).toBe('3');
+    expect(url.searchParams.get('options')).toContain('statement_timeout=5000');
+    expect(url.searchParams.get('options')).toContain('lock_timeout=1000');
+    expect(url.searchParams.get('sslmode')).toBe('require');
+    expect(
+      new URL(configureMcpPrismaDatasource('postgresql://db/app', '4')).searchParams.get(
+        'connection_limit'
+      )
+    ).toBe('4');
+  });
+  it('fails closed on unsupported MCP pool configuration', () => {
+    for (const size of ['0', '5', '100', '-1', '1.5', 'NaN', '']) {
+      expect(() => configureMcpPrismaDatasource('postgresql://db/app', size)).toThrow();
+    }
+    expect(() => configureMcpPrismaDatasource(undefined)).toThrow();
+    expect(() => configureMcpPrismaDatasource('https://db/app')).toThrow();
+    expect(() => configureMcpPrismaDatasource('postgresql://db/app?pgbouncer=true')).toThrow();
+  });
   it('uses the optional pooled endpoint only for web processes', () => {
     const env = {
       DATABASE_URL: 'postgresql://direct/app',

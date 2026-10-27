@@ -4764,3 +4764,79 @@ model ScimEvent {
 
   @@index([connectorId, createdAt, id])
 }
+
+// MCP grants are resource-bound. Secrets are persisted only as keyed digests.
+model McpPolicy {
+  id String @id @default("default")
+  enabled Boolean @default(false)
+  writesEnabled Boolean @default(false)
+  maxInFlight Int @default(4)
+  maxOperations Int @default(8)
+  requestsPerMinute Int @default(60)
+  updatedAt DateTime @updatedAt
+}
+
+model McpClient {
+  id String @id @default(cuid())
+  name String
+  redirectUris String[]
+  scopes String[]
+  revokedAt DateTime?
+  createdAt DateTime @default(now())
+  grants McpGrant[]
+}
+
+model McpGrant {
+  id String @id @default(cuid())
+  clientId String
+  userId String
+  userTokenVersion Int
+  scopes String[]
+  resource String
+  revokedAt DateTime?
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  client McpClient @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  codes McpAuthorizationCode[]
+  tokens McpToken[]
+  @@index([userId, createdAt, id])
+  @@index([expiresAt])
+}
+
+model McpAuthorizationCode {
+  hash String @id
+  grantId String
+  redirectUri String
+  challenge String
+  expiresAt DateTime
+  consumedAt DateTime?
+  grant McpGrant @relation(fields: [grantId], references: [id], onDelete: Cascade)
+  @@index([expiresAt])
+}
+
+model McpToken {
+  id String @id @default(cuid())
+  accessHash String @unique
+  refreshHash String @unique
+  grantId String
+  scopes String[]
+  accessExpiresAt DateTime
+  refreshExpiresAt DateTime
+  rotatedAt DateTime?
+  createdAt DateTime @default(now())
+  grant McpGrant @relation(fields: [grantId], references: [id], onDelete: Cascade)
+  @@index([refreshExpiresAt])
+}
+
+model McpConsentRequest {
+  id String @id @default(cuid())
+  userId String
+  clientId String
+  redirectUri String
+  scopes String[]
+  challenge String
+  state String
+  expiresAt DateTime
+  consumedAt DateTime?
+  @@index([expiresAt])
+}

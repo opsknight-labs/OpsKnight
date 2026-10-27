@@ -1,0 +1,15 @@
+# MCP catalog and limits
+
+The executable candidate catalog is derived from REST v2 operation IDs and schemas, not a separate OpenAPI document. Run `npm run --silent mcp:coverage` to generate a source-labelled JSON artifact outside the repository. CI fails when a live operation is missing, stale, re-scoped, re-shaped or lacks an explicit disposition/handler mapping. Review metadata lives in `src/lib/mcp/catalog/review.json`.
+
+The baseline has 314 classified operations and 69 candidate adapters. These counts do not claim workflow parity or GA support. The JSON artifact identifies each included/excluded operation, risk, reason, resource filter, input/output contract and mutation controls. R3 credential, private audit/export and infrastructure operations are denied. Other operations without the required independent-approval/parity boundary remain explicitly unsupported.
+
+Curated tools cover incident search/detail/context/timeline/create/acknowledge/assign/note/resolve; on-call lookup and schedules; service health and escalation explanation; effective automation, simulation and decision trace; runbook discovery/preview/execution lookup; saved reports and status pages. Tools require explicit grant scopes and current role authority. Listing a tool never authorizes access to a resource.
+
+Discovery tools are `search_capabilities`, `describe_operation`, `call_operation` and `execute_plan`. Plans accept literal, allowlisted, read-only steps with IDs and dependencies, perform at most two independent reads concurrently, and return step-level completion/failure/skipped outcomes. Plans accept neither code nor dynamic result-to-input expressions.
+
+Resource templates are `opsknight://incidents/{id}`, `opsknight://services/{id}`, `opsknight://schedules/{id}`, `opsknight://runbooks/{id}` and `opsknight://reports/{id}`. There is no unfiltered resource enumeration. Prompts are `investigate_incident`, `summarize_shift`, `explain_escalation`, `prepare_postmortem`, `review_automation_rule` and `preview_remediation`.
+
+Default workload policy: four in-flight admitted MCP requests per process, eight operations per request and 60 weighted operations per minute per grant. Fixed safety bounds are 64 KiB request body, depth 24, 256 KiB result budget, 25-item default page, 50-item maximum page and ten-second cooperative request deadline. These are limits, not measured service capacity. Catalog/resource responses are private with zero TTL. Metrics expose bounded outcome labels and total request duration without user, credential or resource identifiers.
+
+Errors distinguish authentication failure (401), policy/resource denial (403/404), quota (429), workload shedding/disabled service (503), deadline/cancellation (408), invalid arguments and oversized inputs/results. Domain error payloads and stacks are not forwarded to the model. Partial-plan successes may be retained even when a later step fails. Routine writes are independently atomic and idempotent; composed workflows are not transactions.

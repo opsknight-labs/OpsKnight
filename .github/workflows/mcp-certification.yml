@@ -1,0 +1,127 @@
+name: Enterprise MCP certification
+on:
+  pull_request:
+    paths:
+      - 'src/lib/mcp/**'
+      - 'src/lib/api-v2/**'
+      - 'src/lib/idempotency.ts'
+      - 'src/lib/rate-limit.ts'
+      - 'src/lib/prisma*.ts'
+      - 'src/lib/database-workload.ts'
+      - 'src/lib/runtime-capacity.ts'
+      - 'deploy/scripts/validate-runtime-capacity.cjs'
+      - 'src/lib/authorization*'
+      - 'src/app/mcp/**'
+      - 'src/app/oauth/mcp/**'
+      - 'src/app/.well-known/**'
+      - 'src/app/(app)/settings/integrations/mcp/**'
+      - 'prisma/**'
+      - 'tests/**/mcp*'
+      - 'tests/mcp/**'
+      - 'scripts/mcp/**'
+      - 'package*.json'
+      - '.github/workflows/mcp-certification.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: mcp-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  contract-security:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_PASSWORD: isolated-mcp-ci
+          POSTGRES_DB: opsknight_mcp_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres -d opsknight_mcp_test"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgresql://postgres:isolated-mcp-ci@localhost:5432/opsknight_mcp_test
+      NEXTAUTH_SECRET: isolated-mcp-ci-nextauth-secret-32-bytes
+      NEXTAUTH_URL: http://localhost:3042
+      NEXT_PUBLIC_APP_URL: http://localhost:3042
+      MCP_PUBLIC_ORIGIN: http://localhost:3042
+      MCP_TOKEN_HASH_SECRET: isolated-mcp-ci-hash-secret-at-least-32-bytes
+      OPSKNIGHT_PROCESS_ROLE: web
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v4
+        with: { node-version: 20, cache: npm }
+      - run: npm ci --legacy-peer-deps
+      - name: Generate disposable fixture keys
+        run: |
+          node <<'JS'
+          const {randomBytes}=require('node:crypto');
+          const {appendFileSync}=require('node:fs');
+          for (const name of ['NEXTAUTH_SECRET','ENCRYPTION_KEY','API_KEY_SECRET','MCP_TOKEN_HASH_SECRET']) {
+            const value=randomBytes(32).toString('hex');
+            console.log(`::add-mask::${value}`);
+            appendFileSync(process.env.GITHUB_ENV,`${name}=${value}\n`);
+          }
+          JS
+      - run: npx prisma generate && npx prisma migrate deploy
+      - run: npx tsc --noEmit
+      - run: npm run test:mcp
+      - run: npx vitest run --no-file-parallelism --maxWorkers=1 tests/lib/prisma-datasource.test.ts tests/lib/deployment-config-unit.test.ts
+      - run: npx vitest run -c vitest.int.config.ts --no-file-parallelism --maxWorkers=1 tests/integration/mcp-security-database.test.ts tests/integration/mcp-database-isolation.test.ts
+      - name: Source-labelled canonical coverage
+        run: |
+          mkdir -p "$RUNNER_TEMP/mcp-evidence"
+          npm run --silent mcp:coverage > "$RUNNER_TEMP/mcp-evidence/coverage-${GITHUB_SHA}.json"
+          git rev-parse HEAD > "$RUNNER_TEMP/mcp-evidence/source-sha.txt"
+      - run: npm run api:clients:check
+      - run: npm run --silent api:coverage > "$RUNNER_TEMP/mcp-evidence/rest-coverage-${GITHUB_SHA}.json"
+      - run: npm run build
+      - name: Fresh local browser database
+        run: |
+          node <<'JS'
+          const {PrismaClient}=require('@prisma/client');const p=new PrismaClient();
+          p.$executeRawUnsafe('CREATE DATABASE opsknight_mcp_browser_test').finally(()=>p.$disconnect());
+          JS
+          export DATABASE_URL=postgresql://postgres:isolated-mcp-ci@localhost:5432/opsknight_mcp_browser_test
+          npx prisma migrate deploy
+          node scripts/mcp/seed-local.cjs
+          node scripts/prepare-authentication-diagnostics.cjs
+      - name: Native Chromium, Firefox and WebKit workflows
+        env:
+          DATABASE_URL: postgresql://postgres:isolated-mcp-ci@localhost:5432/opsknight_mcp_browser_test
+          HOSTNAME: localhost
+          PORT: '3042'
+          MCP_E2E_OUTPUT: ${{ runner.temp }}/mcp-evidence/browser
+        run: |
+          npx playwright install --with-deps chromium firefox webkit
+          cp -R public .next/standalone/public
+          cp -R .next/static .next/standalone/.next/static
+          node .next/standalone/server.js > "$RUNNER_TEMP/mcp-evidence/server.log" 2>&1 &
+          appPid=$!
+          trap 'kill "$appPid"' EXIT
+          node <<'JS'
+          (async()=>{
+            for(let attempt=0;attempt<60;attempt++){
+              try{if((await fetch('http://localhost:3042/api/health',{signal:AbortSignal.timeout(1000)})).ok)return;}catch{}
+              await new Promise(resolve=>setTimeout(resolve,500));
+            }
+            throw new Error('Local production server did not become healthy');
+          })().catch(()=>{process.exitCode=1;});
+          JS
+          npm run test:mcp:browser
+      - name: Production dependency audit
+        run: npm audit --omit=dev --audit-level=high --json > "$RUNNER_TEMP/mcp-evidence/dependency-audit.json"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: mcp-evidence-${{ github.sha }}
+          path: ${{ runner.temp }}/mcp-evidence
+  release-gates:
+    needs: contract-security
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Block GA until every required live gate has reviewed evidence
+        run: node scripts/mcp/certify.cjs
