@@ -227,4 +227,21 @@ export const MCP_APPROVAL_HANDLERS = new Map<string, () => Promise<Handler>>([
     'createStatusPageAnnouncement',
     async () => (await import('@/app/api/v2/status-pages/[id]/announcements/route')).POST,
   ],
+  [
+    'setTeamMember',
+    async () => (await import('@/app/api/v2/teams/[id]/members/[userId]/route')).PUT,
+  ],
+  [
+    'assignTeamService',
+    async () => (await import('@/app/api/v2/teams/[id]/services/[serviceId]/route')).PUT,
+  ],
+  [
+    'updateServiceSlaPolicy',
+    async () => (await import('@/app/api/v2/services/[id]/response-policy/sla/route')).PUT,
+  ],
+  [
+    'updateServiceClassificationPolicy',
+    async () =>
+      (await import('@/app/api/v2/services/[id]/response-policy/classification/route')).PUT,
+  ],
 ]);

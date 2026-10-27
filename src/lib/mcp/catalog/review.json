@@ -220,13 +220,13 @@
     "actions": ["team.membership.read"]
   },
   "assignTeamService": {
-    "status": "UNSUPPORTED_WITH_REASON",
+    "status": "APPROVAL_REQUIRED",
     "risk": "R2",
-    "reason": "Not exposed until shared command, independent approval and parity certification are complete.",
+    "reason": "Frozen prepare, independent native review and atomic commit through the existing REST command; never generic.",
     "tool": null,
     "routeSha256": "161ba1525614f386ae910d45be0fc7ef1eace9ab077f91a3a1a44e191ce556be",
     "resourceFilter": "existing REST route authorization and scoped projection",
-    "evidence": "pending final-SHA parity certification",
+    "evidence": "tests/integration/mcp-approval-teams-policies.test.ts",
     "contractSha256": "3eb148076e729f2cc596bbd7bfefb4e86c89ce2e83000240c013f25faed8e767",
     "actions": ["team.membership.manage"]
   },
@@ -242,13 +242,13 @@
     "actions": ["team.membership.read"]
   },
   "setTeamMember": {
-    "status": "UNSUPPORTED_WITH_REASON",
+    "status": "APPROVAL_REQUIRED",
     "risk": "R2",
-    "reason": "Not exposed until shared command, independent approval and parity certification are complete.",
+    "reason": "Frozen prepare, independent native review and atomic commit through the existing REST command; never generic.",
     "tool": null,
     "routeSha256": "37a87eed505e711c0fa822b3e62c421ae165cbddc26bf057fa4932de049613e3",
     "resourceFilter": "existing REST route authorization and scoped projection",
-    "evidence": "pending final-SHA parity certification",
+    "evidence": "tests/integration/mcp-approval-teams-policies.test.ts",
     "contractSha256": "7350befb8b2b2b5bcb9df397cbf074a5da1444e2748729aa77cbef40e62c1a56",
     "actions": ["team.membership.manage"]
   },
@@ -3219,13 +3219,13 @@
     "actions": ["response_policy.read"]
   },
   "updateServiceClassificationPolicy": {
-    "status": "UNSUPPORTED_WITH_REASON",
+    "status": "APPROVAL_REQUIRED",
     "risk": "R2",
-    "reason": "Not exposed until shared command, independent approval and parity certification are complete.",
+    "reason": "Frozen prepare, independent native review and atomic commit through the existing REST command; never generic.",
     "tool": null,
     "routeSha256": "6e9dc7d84b319b25902120919e2d4b56f7106721b5361487b0e50a7dd9e32062",
     "resourceFilter": "existing REST route authorization and scoped projection",
-    "evidence": "pending final-SHA parity certification",
+    "evidence": "tests/integration/mcp-approval-teams-policies.test.ts",
     "contractSha256": "c5e7d385ee93666c70db90286ae694bf2f7e3aae4da509c645878193ae609689",
     "actions": ["response_policy.manage"]
   },
@@ -3241,13 +3241,13 @@
     "actions": ["response_policy.read"]
   },
   "updateServiceSlaPolicy": {
-    "status": "UNSUPPORTED_WITH_REASON",
+    "status": "APPROVAL_REQUIRED",
     "risk": "R2",
-    "reason": "Not exposed until shared command, independent approval and parity certification are complete.",
+    "reason": "Frozen prepare, independent native review and atomic commit through the existing REST command; never generic.",
     "tool": null,
     "routeSha256": "b7e5e4a72347b455f33b2de1fa569208fafb4ca1d1296ee352e85379ba055e8f",
     "resourceFilter": "existing REST route authorization and scoped projection",
-    "evidence": "pending final-SHA parity certification",
+    "evidence": "tests/integration/mcp-approval-teams-policies.test.ts",
     "contractSha256": "42d084fa6e5590a4dfa9face11b70d88750f4c593cfb9f2f1393a14c0a62b899",
     "actions": ["response_policy.manage"]
   },

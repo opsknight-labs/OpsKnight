@@ -6,6 +6,7 @@ type Disposition =
   | 'DISCOVERABLE'
   | 'APPROVAL_REQUIRED'
   | 'MCP_EQUIVALENT'
+  | 'EXCLUDED_WITH_REASON'
   | 'PENDING_IMPLEMENTATION'
   | 'PENDING_EXCLUSION_REVIEW';
 
@@ -25,6 +26,17 @@ const equivalents = new Map([
   ],
 ]);
 
+// A triage of what each open operation needs; it never enables or certifies anything.
+function nextStep(operation: Operation) {
+  const idempotency = operation.mutation?.idempotency;
+  if (operation.method === 'get')
+    return operation.risk === 'R3' ? 'REVIEW_PRIVATE_READ_PROJECTION' : 'REVIEW_READ_PROJECTION';
+  if (operation.risk === 'R3') return 'NEEDS_REAUTH_IMPACT_PREVIEW_AND_POSTCONDITION';
+  if (idempotency === 'never') return 'EXCLUDE_ONE_TIME_SECRET_OR_PROVIDE_ROTATION_WORKFLOW';
+  if (idempotency === 'natural') return 'NEEDS_DURABLE_RECEIPT_BEFORE_APPROVAL_GATING';
+  return 'ELIGIBLE_FOR_APPROVAL_BATCH_WITH_FAMILY_TESTS';
+}
+
 export function buildMcpParityReport(operations: readonly Operation[]) {
   const entries = operations.map(operation => {
     const executableCandidate = isMcpExecutable(operation);
@@ -38,9 +50,11 @@ export function buildMcpParityReport(operations: readonly Operation[]) {
         ? 'APPROVAL_REQUIRED'
         : equivalent
           ? 'MCP_EQUIVALENT'
-          : operation.status === 'DENIED_WITH_REASON'
-            ? 'PENDING_EXCLUSION_REVIEW'
-            : 'PENDING_IMPLEMENTATION';
+          : operation.exclusion
+            ? 'EXCLUDED_WITH_REASON'
+            : operation.status === 'DENIED_WITH_REASON'
+              ? 'PENDING_EXCLUSION_REVIEW'
+              : 'PENDING_IMPLEMENTATION';
     return {
       operationId: operation.operationId,
       domain: operation.domain,
@@ -51,6 +65,8 @@ export function buildMcpParityReport(operations: readonly Operation[]) {
       equivalent,
       reason: operation.reason,
       evidence: operation.evidence,
+      nextStep: nextStep(operation),
+      exclusion: operation.exclusion ?? null,
       // Existing deny reasons are safety boundaries, not independent parity sign-off.
       parityReview: 'pending' as const,
       blocker:
@@ -92,7 +108,8 @@ export function buildMcpParityReport(operations: readonly Operation[]) {
     // Neither complete classification nor local handler tests are release certification.
     certified: false,
     independentParityReview: 'pending',
-    reviewedExclusions: 0,
+    reviewedExclusions: entries.filter(entry => entry.disposition === 'EXCLUDED_WITH_REASON')
+      .length,
     genericExecutableCandidates: entries.filter(entry => entry.executableCandidate).length,
     equivalentMappings: entries.filter(entry => entry.disposition === 'MCP_EQUIVALENT').length,
     approvalGatedOperations: entries.filter(entry => entry.disposition === 'APPROVAL_REQUIRED')
@@ -102,6 +119,15 @@ export function buildMcpParityReport(operations: readonly Operation[]) {
     byRisk: groups('risk'),
     byMethod: groups('method'),
     byDisposition: groups('disposition'),
+    byNextStep: [...new Set(entries.filter(entry => entry.blocker).map(entry => entry.nextStep))]
+      .sort()
+      .map(step => ({
+        key: step,
+        operationIds: entries
+          .filter(entry => entry.blocker && entry.nextStep === step)
+          .map(entry => entry.operationId)
+          .sort(),
+      })),
     operations: entries,
   };
 }

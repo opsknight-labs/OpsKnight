@@ -444,7 +444,11 @@ describe('independently approved sensitive MCP operations', () => {
         })
       );
       expect(response.status).toBe(200);
-      return ((await response.json()).result.tools as { name: string }[]).map(tool => tool.name);
+      const { result } = await response.json();
+      // Permission-dependent lists must never be client-cacheable beyond this principal.
+      expect(result).toMatchObject({ ttlMs: 0, cacheScope: 'private' });
+      expect(response.headers.get('cache-control')).toBe('private, no-store');
+      return (result.tools as { name: string }[]).map(tool => tool.name);
     };
     expect(await list(f.bearer)).toEqual(
       expect.arrayContaining([

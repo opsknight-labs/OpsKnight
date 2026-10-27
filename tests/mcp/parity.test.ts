@@ -98,4 +98,61 @@ describe('honest MCP workflow inventory', () => {
     for (const change of [{ risk: 'R3' }, { risk: 'R4' }, { risk: 'R0' }, { tool: 'named_tool' }])
       expect(operationReviewSchema.safeParse({ ...base, ...change }).success).toBe(false);
   });
+  it('counts an exclusion only when a named person reviewed that operation', () => {
+    const target = MCP_CATALOG.find(op => op.operationId === 'deletePostmortem')!;
+    const reviewed = {
+      reviewer: 'Jane Reviewer',
+      reviewedAt: '2026-10-28',
+      rationale: 'Irreversible deletion of retained evidence has no safe MCP equivalent.',
+      safeEquivalent: 'Archive through the native UI after review.',
+    };
+    const report = buildMcpParityReport(
+      MCP_CATALOG.map(op => (op === target ? { ...op, exclusion: reviewed } : op))
+    );
+    const entry = report.operations.find(op => op.operationId === target.operationId)!;
+    expect(entry.disposition).toBe('EXCLUDED_WITH_REASON');
+    expect(entry.blocker).toBeNull();
+    expect(report.reviewedExclusions).toBe(1);
+    expect(report.pendingOperations).not.toContain(target.operationId);
+    const base = {
+      status: 'DENIED_WITH_REASON',
+      risk: 'R3',
+      reason: target.reason,
+      tool: null,
+      routeSha256: target.routeSha256,
+      contractSha256: target.contractSha256,
+      resourceFilter: target.resourceFilter,
+      evidence: target.evidence,
+      actions: target.actions,
+    };
+    expect(operationReviewSchema.safeParse({ ...base, exclusion: reviewed }).success).toBe(true);
+    for (const exclusion of [
+      { ...reviewed, reviewer: ' ' },
+      { ...reviewed, reviewedAt: 'yesterday' },
+      { ...reviewed, rationale: 'too short' },
+      { ...reviewed, approvedBy: 'ai' },
+    ])
+      expect(operationReviewSchema.safeParse({ ...base, exclusion }).success).toBe(false);
+    for (const change of [
+      { status: 'APPROVAL_REQUIRED', risk: 'R2' },
+      { status: 'DISCOVERABLE', risk: 'R0' },
+    ])
+      expect(
+        operationReviewSchema.safeParse({ ...base, ...change, exclusion: reviewed }).success
+      ).toBe(false);
+  });
+  it('triages every open operation without enabling any of them', () => {
+    const report = buildMcpParityReport(MCP_CATALOG);
+    const triaged = report.byNextStep.flatMap(group => group.operationIds).sort();
+    expect(triaged).toEqual([...report.pendingOperations].sort());
+    const eligible = report.byNextStep.find(
+      group => group.key === 'ELIGIBLE_FOR_APPROVAL_BATCH_WITH_FAMILY_TESTS'
+    )!;
+    for (const id of eligible.operationIds) {
+      const op = MCP_CATALOG.find(item => item.operationId === id)!;
+      expect(op.risk).toBe('R2');
+      expect(['required', 'supported']).toContain(op.mutation?.idempotency);
+      expect(isMcpApprovalGated(op)).toBe(false);
+    }
+  });
 });

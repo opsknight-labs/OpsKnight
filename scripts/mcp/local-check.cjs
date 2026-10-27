@@ -170,6 +170,7 @@ async function main() {
     'tests/integration/mcp-postmortem-context.test.ts',
     'tests/integration/mcp-operation-approval.test.ts',
     'tests/integration/mcp-approval-crash-safety.test.ts',
+    'tests/integration/mcp-approval-teams-policies.test.ts',
     'tests/integration/mcp-client-metadata.test.ts',
   ]);
   await node(

@@ -18,6 +18,16 @@ export const operationReviewSchema = z
     resourceFilter: z.string().trim().min(1),
     evidence: z.string().trim().min(1),
     actions: z.array(z.string().trim().min(1)).min(1),
+    // Present only after a named person reviewed this specific exclusion; never inferred.
+    exclusion: z
+      .object({
+        reviewer: z.string().trim().min(3).max(100),
+        reviewedAt: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+        rationale: z.string().trim().min(20).max(500),
+        safeEquivalent: z.string().trim().min(1).max(300).nullable(),
+      })
+      .strict()
+      .optional(),
   })
   .strict()
   .superRefine((review, ctx) => {
@@ -26,6 +36,11 @@ export const operationReviewSchema = z
       ctx.addIssue({
         code: 'custom',
         message: 'Sensitive operations require a separate reviewed workflow.',
+      });
+    if (review.exclusion && (exposed || review.status === 'APPROVAL_REQUIRED'))
+      ctx.addIssue({
+        code: 'custom',
+        message: 'Only excluded operations carry an exclusion review.',
       });
     // Approval-gated operations are never callable generically or through a named tool.
     if (review.status === 'APPROVAL_REQUIRED' && review.risk !== 'R2')
