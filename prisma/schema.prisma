@@ -4785,6 +4785,10 @@ model McpPolicy {
   maxInFlight Int @default(4)
   maxOperations Int @default(8)
   requestsPerMinute Int @default(60)
+  // Client ID Metadata Documents: off until an administrator lists exact trusted hosts and a scope ceiling.
+  cimdEnabled Boolean @default(false)
+  cimdAllowedHosts String[] @default([])
+  cimdScopes String[] @default([])
   updatedAt DateTime @updatedAt
 }
 
@@ -4794,6 +4798,9 @@ model McpClient {
   redirectUris String[]
   scopes String[]
   revokedAt DateTime?
+  // Set only for clients identified by an HTTPS metadata document URL (their id).
+  metadataUrl String?
+  metadataFetchedAt DateTime?
   createdAt DateTime @default(now())
   grants McpGrant[]
 }

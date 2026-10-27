@@ -76,8 +76,9 @@ export default async function McpSettings({
           credential store.
         </p>
         <p>
-          Client interoperability, sensitive approvals, durable Tasks and MCP Apps are awaiting
-          certification. No external host compatibility is claimed.
+          Client interoperability, durable Tasks and MCP Apps are awaiting certification, and only
+          the listed sensitive operations have an independent approval workflow. No external host
+          compatibility is claimed.
         </p>
       </section>
       {permissions.isAdmin && (
@@ -96,6 +97,41 @@ export default async function McpSettings({
               />
               Allow reviewed routine mutations and approved runbook executions
             </label>
+            <fieldset className="space-y-3 rounded border p-3">
+              <legend className="px-1 font-medium">Client ID metadata documents</legend>
+              <label className="flex gap-2">
+                <input
+                  type="checkbox"
+                  name="cimdEnabled"
+                  defaultChecked={policy?.cimdEnabled ?? false}
+                />
+                Allow clients identified by an HTTPS metadata document URL
+              </label>
+              <label className="block">
+                Trusted hosts (one exact DNS name per line)
+                <textarea
+                  className={inputClass}
+                  name="cimdAllowedHosts"
+                  rows={3}
+                  maxLength={4096}
+                  defaultValue={(policy?.cimdAllowedHosts ?? []).join('\n')}
+                />
+              </label>
+              <label className="block">
+                Maximum scopes for these clients (space separated)
+                <input
+                  className={inputClass}
+                  name="cimdScopes"
+                  maxLength={2048}
+                  defaultValue={(policy?.cimdScopes ?? []).join(' ')}
+                />
+              </label>
+              <p className="text-sm text-muted-foreground">
+                Documents are fetched only from listed hosts over HTTPS to public addresses, without
+                redirects, and cannot request more than these scopes. Users still consent to each
+                grant; removing a host revokes its clients immediately.
+              </p>
+            </fieldset>
             <div className="grid sm:grid-cols-3 gap-4">
               <label>
                 Concurrent requests per process

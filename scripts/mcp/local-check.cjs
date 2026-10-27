@@ -169,6 +169,7 @@ async function main() {
     'tests/integration/mcp-runbook-approval.test.ts',
     'tests/integration/mcp-postmortem-context.test.ts',
     'tests/integration/mcp-operation-approval.test.ts',
+    'tests/integration/mcp-client-metadata.test.ts',
   ]);
   await node(
     'coverage',

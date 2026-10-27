@@ -3,6 +3,7 @@ import { randomBytes } from 'node:crypto';
 import type { Prisma } from '@prisma/client';
 import { digestMcpSecret, mcpResource } from './config';
 import { requireMcp } from '../core/errors';
+import { isCimdHostAllowed } from './cimd';
 
 type Database = Prisma.TransactionClient;
 type Model = OAuth2Server.AuthorizationCodeModel & OAuth2Server.RefreshTokenModel;
@@ -11,6 +12,11 @@ export function createMcpOAuthModel(db: Database, onReuse: (grantId: string) => 
   const getClient = async (id: string) => {
     const client = await db.mcpClient.findUnique({ where: { id } });
     if (!client || client.revokedAt) return false;
+    if (client.metadataUrl) {
+      // Disabling the feature or removing a host takes effect at the next token request.
+      const policy = await db.mcpPolicy.findUnique({ where: { id: 'default' } });
+      if (!policy || !isCimdHostAllowed(policy, new URL(client.metadataUrl).hostname)) return false;
+    }
     return {
       id,
       redirectUris: client.redirectUris,

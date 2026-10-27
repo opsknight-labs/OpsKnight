@@ -9,12 +9,31 @@ import prisma from '@/lib/prisma';
 import { getCurrentUser, getUserPermissions } from '@/lib/rbac';
 import { mcpIssuer, mcpResource } from '@/lib/mcp/auth/config';
 import { mcpOAuthServer } from '@/lib/mcp/auth/oauth-model';
-import { MCP_CATALOG, isMcpExecutable } from '@/lib/mcp/catalog';
+import { MCP_CATALOG, isMcpApprovalGated, isMcpExecutable } from '@/lib/mcp/catalog';
+import { isIP } from 'node:net';
 import { requireMcp } from '@/lib/mcp/core/errors';
 import { MCP_REVIEWED_RUNBOOK_SCOPES } from '@/lib/mcp/approvals/policy';
 import type { Prisma } from '@prisma/client';
 
 const settingsPath = '/settings/integrations/mcp';
+// Only scopes a reviewed direct or approval-gated workflow can use may be granted.
+function supportedScopes() {
+  return new Set([
+    ...MCP_CATALOG.filter(
+      operation => isMcpExecutable(operation) || isMcpApprovalGated(operation)
+    ).flatMap(operation => operation.requiredScopes),
+    ...MCP_REVIEWED_RUNBOOK_SCOPES,
+  ]);
+}
+function parseScopes(value: string) {
+  const supported = supportedScopes();
+  const scopes = [...new Set(value.split(/\s+/).filter(Boolean))];
+  requireMcp(
+    scopes.every(scope => supported.has(scope) && scope !== 'admin:manage'),
+    'MCP_INVALID_SCOPE'
+  );
+  return scopes;
+}
 async function admin() {
   const permissions = await getUserPermissions();
   requireMcp(permissions.capabilities.includes('admin.manage'), 'MCP_ADMIN_REQUIRED', 403);
@@ -47,6 +66,9 @@ export async function updateMcpPolicy(form: FormData) {
       maxInFlight: z.coerce.number().int().min(1).max(16),
       maxOperations: z.coerce.number().int().min(1).max(16),
       requestsPerMinute: z.coerce.number().int().min(1).max(600),
+      cimdEnabled: z.boolean(),
+      cimdAllowedHosts: z.string().max(4096),
+      cimdScopes: z.string().max(2048),
     })
     .strict()
     .parse({
@@ -55,17 +77,58 @@ export async function updateMcpPolicy(form: FormData) {
       maxInFlight: form.get('maxInFlight'),
       maxOperations: form.get('maxOperations'),
       requestsPerMinute: form.get('requestsPerMinute'),
+      cimdEnabled: form.get('cimdEnabled') === 'on',
+      cimdAllowedHosts: String(form.get('cimdAllowedHosts') ?? ''),
+      cimdScopes: String(form.get('cimdScopes') ?? ''),
     });
+  const cimdAllowedHosts = [
+    ...new Set(
+      input.cimdAllowedHosts
+        .split(/\s+/)
+        .map(host => host.trim().toLowerCase())
+        .filter(Boolean)
+    ),
+  ];
+  // Exact DNS names only; no IP literals, wildcards, ports or paths.
+  requireMcp(
+    cimdAllowedHosts.length <= 20 &&
+      cimdAllowedHosts.every(host => {
+        const labels = host.split('.');
+        return (
+          labels.length >= 2 &&
+          host.length <= 253 &&
+          !isIP(host) &&
+          labels.every(label => /^[a-z0-9-]{1,63}$/.test(label) && !/^-|-$/.test(label)) &&
+          /^[a-z]{2,63}$/.test(labels[labels.length - 1])
+        );
+      }),
+    'MCP_INVALID_CIMD_HOST'
+  );
+  const cimdScopes = parseScopes(input.cimdScopes);
+  requireMcp(
+    !input.cimdEnabled || (cimdAllowedHosts.length > 0 && cimdScopes.length > 0),
+    'MCP_CIMD_REQUIRES_HOSTS_AND_SCOPES'
+  );
+  const policy = {
+    enabled: input.enabled,
+    writesEnabled: input.writesEnabled,
+    maxInFlight: input.maxInFlight,
+    maxOperations: input.maxOperations,
+    requestsPerMinute: input.requestsPerMinute,
+    cimdEnabled: input.cimdEnabled,
+    cimdAllowedHosts,
+    cimdScopes,
+  };
   await prisma.$transaction(async tx => {
     await assertCurrentAdmin(tx, actor);
-    await tx.mcpPolicy.upsert({ where: { id: 'default' }, create: input, update: input });
+    await tx.mcpPolicy.upsert({ where: { id: 'default' }, create: policy, update: policy });
     await logAudit(
       {
         source: 'UI',
         action: 'mcp.policy.updated',
         entityType: 'SYSTEM_CONFIG',
         actorId: actor.id,
-        details: input,
+        details: policy,
       },
       tx
     );
@@ -96,15 +159,8 @@ export async function registerMcpClient(form: FormData) {
         (url.protocol === 'http:' && ['127.0.0.1', 'localhost', '[::1]'].includes(url.hostname))),
     'MCP_INVALID_REDIRECT'
   );
-  const supported = new Set([
-    ...MCP_CATALOG.filter(isMcpExecutable).flatMap(operation => operation.requiredScopes),
-    ...MCP_REVIEWED_RUNBOOK_SCOPES,
-  ]);
-  const scopes = [...new Set(input.scopes.split(/\s+/).filter(Boolean))];
-  requireMcp(
-    scopes.length && scopes.every(scope => supported.has(scope) && scope !== 'admin:manage'),
-    'MCP_INVALID_SCOPE'
-  );
+  const scopes = parseScopes(input.scopes);
+  requireMcp(scopes.length, 'MCP_INVALID_SCOPE');
   await prisma.$transaction(async tx => {
     await assertCurrentAdmin(tx, actor);
     const client = await tx.mcpClient.create({

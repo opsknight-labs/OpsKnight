@@ -11,6 +11,7 @@ import {
   mcpHttpError,
 } from '@/lib/mcp/auth/http';
 import { requireMcp } from '@/lib/mcp/core/errors';
+import { isCimdClientId, resolveCimdClient } from '@/lib/mcp/auth/cimd';
 import { AppError } from '@/lib/errors';
 
 export function GET(request: Request) {
@@ -31,7 +32,18 @@ async function handleGet(request: Request) {
     );
     const query = authorizationQuerySchema.parse(uniqueQuery(new URL(request.url).searchParams));
     requireMcp(query.resource === mcpResource(), 'invalid_target');
-    const client = await prisma.mcpClient.findUnique({ where: { id: query.client_id } });
+    let client;
+    if (isCimdClientId(query.client_id)) {
+      // Bounded outbound fetch: one attempt per request and a separate per-user budget.
+      requireMcp(
+        (await checkRateLimit(`mcp:cimd:${user.id}`, 6, 60000)).allowed,
+        'MCP_RATE_LIMITED',
+        429
+      );
+      client = await resolveCimdClient(prisma, policy, query.client_id, query.redirect_uri);
+    } else {
+      client = await prisma.mcpClient.findUnique({ where: { id: query.client_id } });
+    }
     requireMcp(
       client && !client.revokedAt && client.redirectUris.includes(query.redirect_uri),
       'invalid_client'
