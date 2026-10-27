@@ -120,7 +120,7 @@ jobs:
           JS
           npm run test:mcp:browser
       - name: Production dependency audit
-        run: npm audit --omit=dev --audit-level=high --json > "$RUNNER_TEMP/mcp-evidence/dependency-audit.json"
+        run: node scripts/mcp/audit-gate.cjs scripts/mcp/audit-baseline.json "$RUNNER_TEMP/mcp-evidence/dependency-audit.json"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
