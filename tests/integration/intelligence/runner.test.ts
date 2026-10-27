@@ -74,7 +74,11 @@ describe('intelligence cycle', () => {
     expect(result).toMatchObject({ status: 'worked', discovered: 1, claimed: 1, completed: 1, failed: 0 });
     const fingerprint = await db.incidentFingerprint.findUniqueOrThrow({ where: { incidentId: created.id } });
     expect(fingerprint.template).toBe('latency high on api-<num>');
+    // Indexing chains exactly one analysis; with no policy it completes as a no-op next cycle.
+    expect((await db.intelligenceWorkItem.findMany()).map(i => i.kind)).toEqual(['ANALYZE_INCIDENT']);
+    expect(await runIntelligenceCycle(state, deps)).toMatchObject({ claimed: 1, completed: 1, failed: 0 });
     expect(await db.intelligenceWorkItem.count()).toBe(0);
+    expect(await db.intelligenceFinding.count()).toBe(0);
   });
 
   it('isolates a failing item from the rest of the batch and retries it with backoff', async () => {

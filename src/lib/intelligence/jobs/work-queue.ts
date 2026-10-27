@@ -16,12 +16,14 @@ type Client = Prisma.TransactionClient | typeof prisma;
 
 export const WORK_KINDS = {
   INDEX_INCIDENT: 'INDEX_INCIDENT',
+  ANALYZE_INCIDENT: 'ANALYZE_INCIDENT',
 } as const;
 export type WorkKind = (typeof WORK_KINDS)[keyof typeof WORK_KINDS];
 
-/** Lower number = served first. Incident analysis always outranks derived/optional work. */
+/** Lower number = served first. Indexing precedes analysis; both outrank derived/optional work. */
 export const WORK_PRIORITY: Record<WorkKind, number> = {
   INDEX_INCIDENT: 10,
+  ANALYZE_INCIDENT: 20,
 };
 
 export const MAX_WORK_ATTEMPTS = 8;

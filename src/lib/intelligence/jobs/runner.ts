@@ -5,9 +5,11 @@ import { evaluatePause, getCriticalBacklogLagMs, type PauseState } from './backp
 import { withDbBudget } from './db-budget';
 import { discoverNewIncidents, reconcileFingerprints } from './discovery';
 import { indexIncident } from './indexer';
+import { analyzeIncident } from '../similarity/analyzer';
 import {
   claimWorkItems,
   completeWorkItem,
+  enqueueWorkItems,
   failWorkItem,
   WORK_KINDS,
   type ClaimedWorkItem,
@@ -28,7 +30,14 @@ export type WorkHandlers = Partial<Record<WorkKind, WorkHandler>>;
 
 export const DEFAULT_HANDLERS: WorkHandlers = {
   [WORK_KINDS.INDEX_INCIDENT]: async (item, { settings }) => {
-    await withDbBudget(settings, tx => indexIncident(item.subjectKey, tx));
+    const outcome = await withDbBudget(settings, tx => indexIncident(item.subjectKey, tx));
+    // Analysis always follows a fresh fingerprint; coalescing keeps this to one item per incident.
+    if (outcome === 'indexed') {
+      await enqueueWorkItems([{ kind: WORK_KINDS.ANALYZE_INCIDENT, subjectKey: item.subjectKey }]);
+    }
+  },
+  [WORK_KINDS.ANALYZE_INCIDENT]: async (item, { settings }) => {
+    await analyzeIncident(item, settings);
   },
 };
 
