@@ -44,7 +44,7 @@ describe('IntelligenceSettingsForm', () => {
 });
 
 describe('IntelligencePolicyForm', () => {
-  const props = { headVersion: 2, mode: 'SHADOW' as const, similarityEnabled: true, minScore: 0.35, canManage: true };
+  const props = { headVersion: 2, mode: 'SHADOW' as const, similarityEnabled: true, responseEnabled: true, minScore: 0.35, canManage: true };
 
   it('keeps AUTO unselectable until it is certified', () => {
     render(<IntelligencePolicyForm {...props} autoAvailable={false} />);

@@ -1,0 +1,102 @@
+'use server';
+
+import { revalidatePath } from 'next/cache';
+import { AppError } from '@/lib/errors';
+import { logger } from '@/lib/logger';
+import { assertCapability } from '@/lib/rbac';
+import { CAPABILITIES } from '@/lib/authorization';
+import { invalidateGatewayCache } from '@/lib/intelligence/ai/gateway';
+import { deleteAiProvider, saveAiProvider, updateAiSettings } from '@/lib/intelligence/ai/settings';
+
+export type AiActionState = { message: string; ok: boolean };
+
+const PATH = '/settings/intelligence/ai';
+
+function failure(error: unknown): AiActionState {
+  if (error instanceof AppError) {
+    const detail = error.fields?.[0];
+    const message =
+      error.code === 'PRECONDITION_FAILED'
+        ? 'These settings changed since you opened the page. Refresh and try again.'
+        : detail
+          ? `${error.userMessage} (${detail.field}: ${detail.message})`
+          : error.userMessage;
+    return { message, ok: false };
+  }
+  logger.error('[Intelligence] AI settings action failed', { error: error instanceof Error ? error.message : String(error) });
+  return { message: 'Unable to save. Refresh and try again.', ok: false };
+}
+
+const text = (form: FormData, name: string) => {
+  const value = form.get(name);
+  return typeof value === 'string' ? value : '';
+};
+const integer = (form: FormData, name: string) => Number(text(form, name));
+const checked = (form: FormData, name: string) => form.get(name) === 'on';
+
+export async function saveAiSettingsAction(_state: AiActionState, form: FormData): Promise<AiActionState> {
+  try {
+    const actor = await assertCapability(CAPABILITIES.INTELLIGENCE_MANAGE);
+    await updateAiSettings(
+      {
+        enabled: checked(form, 'enabled'),
+        squireEnabled: checked(form, 'squireEnabled'),
+        squireName: text(form, 'squireName'),
+        allowExternalFallback: checked(form, 'allowExternalFallback'),
+        requestsPerMinutePerUser: integer(form, 'requestsPerMinutePerUser'),
+        dailyTokenBudget: integer(form, 'dailyTokenBudget'),
+        maxOutputTokens: integer(form, 'maxOutputTokens'),
+        requestTimeoutMs: integer(form, 'requestTimeoutMs'),
+        expectedRevision: integer(form, 'expectedRevision'),
+      },
+      { actorId: actor.id, source: 'UI' }
+    );
+    invalidateGatewayCache();
+    revalidatePath(PATH);
+    // The assistant lives in the app shell on every page.
+    revalidatePath('/', 'layout');
+    return { message: 'AI settings saved.', ok: true };
+  } catch (error) {
+    return failure(error);
+  }
+}
+
+export async function saveAiProviderAction(_state: AiActionState, form: FormData): Promise<AiActionState> {
+  try {
+    const actor = await assertCapability(CAPABILITIES.INTELLIGENCE_MANAGE);
+    const id = text(form, 'id');
+    await saveAiProvider(
+      id || null,
+      {
+        name: text(form, 'name'),
+        kind: text(form, 'kind'),
+        model: text(form, 'model'),
+        baseUrl: text(form, 'baseUrl') || null,
+        apiKey: text(form, 'apiKey') || null,
+        enabled: checked(form, 'enabled'),
+        isExternal: checked(form, 'isExternal'),
+        maxDataClass: text(form, 'maxDataClass'),
+        allowPrivateNetwork: checked(form, 'allowPrivateNetwork'),
+        priority: integer(form, 'priority'),
+      },
+      { actorId: actor.id, source: 'UI' }
+    );
+    invalidateGatewayCache();
+    revalidatePath(PATH);
+    return { message: id ? 'Provider updated.' : 'Provider added.', ok: true };
+  } catch (error) {
+    return failure(error);
+  }
+}
+
+export async function deleteAiProviderAction(_state: AiActionState, form: FormData): Promise<AiActionState> {
+  try {
+    const actor = await assertCapability(CAPABILITIES.INTELLIGENCE_MANAGE);
+    const result = await deleteAiProvider(text(form, 'id'), { actorId: actor.id, source: 'UI' });
+    invalidateGatewayCache();
+    revalidatePath(PATH);
+    return result === 'deleted' ? { message: 'Provider removed.', ok: true } : { message: 'That provider no longer exists.', ok: false };
+  } catch (error) {
+    return failure(error);
+  }
+}

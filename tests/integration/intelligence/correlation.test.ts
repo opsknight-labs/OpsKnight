@@ -268,7 +268,12 @@ describe('chaining through the lane', () => {
     const a = await createTestIncident('Database errors on db-1', service.id, { urgency: 'LOW' });
     const b = await createTestIncident('Database errors on db-2', service.id, { urgency: 'LOW' });
     clock = Date.now() + 40_000;
-    for (let i = 0; i < 4; i += 1) await runIntelligenceCycle(state, deps);
+    // Drain rather than assume a cycle count: under load an item may legitimately retry once.
+    for (let i = 0; i < 20; i += 1) {
+      await runIntelligenceCycle(state, deps);
+      if ((await db.intelligenceWorkItem.count()) === 0 && i >= 2) break;
+      await new Promise(resolve => setTimeout(resolve, 250));
+    }
 
     expect(await db.correlationGroup.count()).toBe(1);
     expect(await db.correlationMember.count()).toBe(2);

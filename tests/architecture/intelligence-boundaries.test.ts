@@ -63,6 +63,22 @@ describe('intelligence architecture boundaries', () => {
     expect(offenders.map(file => relative(root, file))).toEqual([]);
   });
 
+  it('keeps Squire strictly read-only: no database writes and no write tools', () => {
+    const squireDir = join(intelligenceDir, 'squire');
+    const writes = /\.(?:create|createMany|update|updateMany|upsert|delete|deleteMany)\(|\$executeRaw|\$transaction/;
+    const offenders = sourceFiles(squireDir).filter(file => writes.test(read(file)));
+    expect(offenders.map(file => relative(root, file))).toEqual([]);
+    expect(sourceFiles(squireDir).filter(file => /PROPOSE_WRITE/.test(read(file))).map(file => relative(root, file))).toEqual([]);
+  });
+
+  it('routes every AI provider through the guarded fetch', () => {
+    const gateway = read(join(intelligenceDir, 'ai/gateway.ts'));
+    expect(gateway).toMatch(/const common = \{[^}]*fetch: fetchImpl[^}]*\}/);
+    const creators = [...gateway.matchAll(/create(?:OpenAICompatible|OpenAI|Anthropic|GoogleGenerativeAI)\(\{([^)]*)\}\)/g)];
+    expect(creators.length).toBe(4);
+    for (const creator of creators) expect(creator[1]).toContain('...common');
+  });
+
   it('keeps the shared contract dependency-free so client components can import it', () => {
     const contract = read(join(intelligenceDir, 'contract/index.ts'));
     expect(contract).not.toMatch(

@@ -329,4 +329,24 @@ export const personalDataRegistry = [
       'Derived data only; incidents and alerts remain the source of truth and are never modified. Fingerprint templates are masked copies of incident titles and can still contain customer identifiers typed by operators. Label values drop credential-shaped fields, and finding evidence stores numeric scores only, never text from another incident. Feedback and policy authorship use foreign keys that clear to null when a user is erased; free-text feedback notes need manual review.',
     ],
   },
+  {
+    domain: 'ai-assistant',
+    models: ['AiProvider', 'AiUsageDay'],
+    fields: ['AiProvider.apiKeyEncrypted'],
+    purpose: [
+      'Answering responders\' questions about incidents they can already read',
+      'Token budget accounting',
+    ],
+    classifications: ['INTERNAL', 'PERSONAL', 'SECRET'],
+    locations: ['DATABASE', 'EXTERNAL_PROVIDER'],
+    retention: {
+      current:
+        'Disabled by default. Conversations are held only in the browser and are not stored by OpsKnight; interaction audit entries record metadata (user, capability, provider, model, token counts) and never prompts or answers. Daily usage totals are aggregate counters.',
+      target: 'Audit entries follow the audit retention policy.',
+    },
+    discoverable: 'PARTIAL',
+    notes: [
+      'When an administrator enables AI, the user\'s question, recent conversation turns and the results of read-only lookups (incident titles, change summaries, runbook names) are sent to the configured provider after credential-shaped text is redacted. Each provider has a data-class ceiling, external providers are only used where the administrator allowed them, and a self-hosted provider never falls back to an external one unless explicitly permitted. Whether the provider retains data is governed by the administrator\'s agreement with it. Provider API keys are encrypted at rest and never returned to the browser.',
+    ],
+  },
 ] as const satisfies readonly PersonalDataDomain[];

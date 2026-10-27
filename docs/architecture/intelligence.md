@@ -182,8 +182,63 @@ minutes or are never acknowledged (at least five incidents in 30 days). It never
 to every change (service scope), upstream incident (incident scope) and runbook (runbook scope) at
 display time, and anything they cannot read is dropped silently. SHADOW mode records but shows nothing.
 
+## Assistant (Squire) and the AI gateway
+
+Everything is configured in Settings → Intelligence → Assistant and AI; there are no environment
+variables. Both switches (AI, and showing the assistant) are off by default, and the assistant button is
+not even shipped to the browser while it is off.
+
+**Assistant.** A small "Ask <name>" button opens a chat panel. The name is configurable (default
+Squire). On an incident page it knows which incident is open. It works with **no AI at all**: a
+deterministic router answers "what is on fire", similar incidents, likely causes and runbooks from the
+intelligence data. With AI enabled it answers free-form questions using a language model and three
+read-only tools (search incidents, get an incident, get its intelligence). Tools run under the asking
+user's own permissions through the same visibility rules as the rest of the application, so the model
+can never read more than the user can. **It has no write tools and cannot change anything**; an
+architecture test enforces that the assistant code performs no database writes. Conversations live in
+the browser only; OpsKnight stores nothing, and audit entries hold metadata (user, provider, model,
+token counts), never prompts or answers.
+
+**Prompt-injection posture.** The browser can send only user and assistant turns (never a system turn),
+bounded in number and size. The system prompt tells the model that tool output and incident text are
+data, never instructions. That prompt is defence in depth only: authority never rests on it, because
+tools are read-only and permission-checked. Model output is rendered as plain text; only same-app
+`/incidents/…` and `/runbooks/…` paths become links.
+
+**Gateway.** Providers (OpenAI, Anthropic, Google, and any OpenAI-compatible endpoint such as Ollama,
+vLLM, LiteLLM or OmniRoute) are added in the UI. API keys are encrypted at rest, registered in the
+encryption registry, and never returned to the browser. The runtime is the AI SDK 6 line (the product
+is pinned to Node 20, which AI SDK 7 does not support); everything depends on a small provider-neutral
+port, so moving to a newer SDK later is a one-adapter change.
+
+- **Egress is guarded.** Public endpoints must be HTTPS and resolve to public addresses, validated at
+  save time and again at every request, with redirects disabled. A private-network endpoint (for
+  example Ollama) needs explicit administrator consent, and only that exact origin is ever contacted.
+  An architecture test requires every provider constructor to use the guarded fetch.
+- **Data ceilings and fallback.** Each provider declares the most sensitive data class it may receive.
+  Fallback is ordered by priority but can never widen where data goes: a self-hosted primary does not
+  fall back to an external provider unless an administrator allows it, and a provider whose ceiling is
+  below the request's data class is never used. There are no hedged or parallel requests.
+- **Resilience.** Per-provider circuit breakers (open after three consecutive failures, one probe after
+  30 seconds), bounded timeouts, and fallback only before the first token of a streamed answer so two
+  answers are never spliced. When AI is unavailable, over budget or rate limited, the assistant answers
+  in basic mode instead of failing.
+- **Cost controls.** Per-user requests per minute, a global daily token budget (UTC day), a cap on
+  answer length and on model/tool round trips. Credential-shaped text is redacted from everything sent
+  to a model, including tool results.
+
+## Observability
+
+`/api/health?mode=readiness` includes an `intelligence` check that is `healthy`, `degraded` (paused to
+protect paging, or no recent cycle) or `disabled`, and is never `unhealthy`, so an optional advisory
+lane can never take a replica out of rotation. Five gauges are added to the metrics scrape: ready
+queue depth, oldest ready age, dead letters, lane paused, and seconds since the last cycle.
+
 ## Not yet implemented
 
-Automatic grouping, any delay before paging, AI assistant features, the AI gateway and adaptive
-learning are future stages. Each will be introduced behind its own certification gate and will not
-change paging behaviour until that gate has passed.
+Automatic grouping, any delay before paging, write actions from the assistant, a dedicated
+intelligence database pool and worker role, REST v2 endpoints and API scopes for intelligence data,
+embedding-based search, and adaptive learning (anomaly baselines, recurring-problem detection and
+approved policy suggestions) are future stages. MCP exposure is being delivered by the native MCP
+work, not here. Each will be introduced behind its own certification gate and will not change paging
+behaviour until that gate has passed.

@@ -5207,3 +5207,69 @@ model ChangeEvent {
   @@index([serviceId, occurredAt(sort: Desc)], map: "idx_change_event_service_recent")
   @@index([occurredAt], map: "idx_change_event_retention")
 }
+
+// ---------------------------------------------------------------------------
+// OpsKnight Intelligence: AI gateway and the Squire assistant (all UI-configured)
+// ---------------------------------------------------------------------------
+
+enum AiProviderKind {
+  OPENAI
+  ANTHROPIC
+  GOOGLE
+  OPENAI_COMPATIBLE
+}
+
+enum AiDataClass {
+  PUBLIC
+  INTERNAL
+  PERSONAL
+  SENSITIVE
+}
+
+// Singleton. Disabled by default; nothing leaves the process until an administrator enables it.
+model AiSettings {
+  id                      String   @id @default("default")
+  enabled                 Boolean  @default(false)
+  squireEnabled           Boolean  @default(false)
+  squireName              String   @default("Squire")
+  allowExternalFallback   Boolean  @default(false)
+  requestsPerMinutePerUser Int     @default(20)
+  dailyTokenBudget        Int      @default(500000)
+  maxOutputTokens         Int      @default(1024)
+  requestTimeoutMs        Int      @default(30000)
+  revision                Int      @default(1)
+  updatedBy               String?
+  updatedAt               DateTime @updatedAt
+}
+
+// One model endpoint. The API key is encrypted at rest and never returned to the browser.
+model AiProvider {
+  id                  String         @id @default(cuid())
+  name                String         @unique
+  kind                AiProviderKind
+  model               String
+  baseUrl             String?
+  apiKeyEncrypted     String?
+  enabled             Boolean        @default(true)
+  // True when requests leave the operator's own infrastructure.
+  isExternal          Boolean        @default(true)
+  // Highest data classification this endpoint may receive.
+  maxDataClass        AiDataClass    @default(INTERNAL)
+  // Explicit administrator consent to reach a private-network address (for example Ollama).
+  allowPrivateNetwork Boolean        @default(false)
+  // Lower runs first; later enabled providers are fallbacks.
+  priority            Int            @default(100)
+  createdAt           DateTime       @default(now())
+  updatedAt           DateTime       @updatedAt
+
+  @@index([enabled, priority])
+}
+
+// Token accounting per UTC day, used for the daily budget. Aggregate only: no user or content.
+model AiUsageDay {
+  day          String   @id
+  requests     Int      @default(0)
+  inputTokens  Int      @default(0)
+  outputTokens Int      @default(0)
+  updatedAt    DateTime @updatedAt
+}

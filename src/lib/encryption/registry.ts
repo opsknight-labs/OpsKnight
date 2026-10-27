@@ -61,6 +61,15 @@ export const ENCRYPTION_TARGETS: EncryptionTargetDefinition[] = [
     description: 'Atlassian Jira API token for sync and issue linking',
   },
   {
+    id: 'ai.provider-api-key',
+    model: 'AiProvider',
+    field: 'apiKeyEncrypted',
+    storageType: 'SCALAR',
+    plaintextLegacyAllowed: false,
+    label: 'AI Provider API Key',
+    description: 'API key for a language-model provider configured in Intelligence settings',
+  },
+  {
     id: 'jira.webhook-secret',
     model: 'JiraConfig',
     field: 'webhookSecretEncrypted',

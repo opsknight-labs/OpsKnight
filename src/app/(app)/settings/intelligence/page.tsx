@@ -81,6 +81,10 @@ export default async function IntelligenceSettingsPage() {
           <Link href="/settings/intelligence/response" className="underline">
             Dependencies, changes and alert quality
           </Link>
+          {' · '}
+          <Link href="/settings/intelligence/ai" className="underline">
+            Assistant and AI
+          </Link>
         </p>
       </header>
 

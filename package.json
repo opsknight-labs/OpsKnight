@@ -128,6 +128,10 @@
     "certify:ingestion:docker": "node scripts/ingestion/certify-docker.cjs"
   },
   "dependencies": {
+    "@ai-sdk/anthropic": "^3.0.135",
+    "@ai-sdk/google": "^3.0.139",
+    "@ai-sdk/openai": "^3.0.132",
+    "@ai-sdk/openai-compatible": "^2.0.87",
     "@aws-sdk/client-ses": "^3.1149.0",
     "@dicebear/collection": "^9.4.2",
     "@dicebear/core": "^9.4.3",
@@ -157,6 +161,7 @@
     "@simplewebauthn/server": "13.3.2",
     "@types/web-push": "^3.6.4",
     "@vvo/tzdb": "^6.201.1",
+    "ai": "^6.0.316",
     "bcrypt": "^6.0.0",
     "bcryptjs": "^2.4.3",
     "boring-avatars": "^2.0.4",

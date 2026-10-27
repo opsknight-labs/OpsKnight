@@ -96,3 +96,12 @@ domains:
     retention: { current: ui-configured-per-entity-with-incident-cascade-and-sweep-while-disabled, target: retention-holds-honoured-and-free-text-minimization }
     exportable: partial
     deletion: { current: authorship-cleared-on-user-erasure-and-rows-deleted-with-incident, target: free-text-feedback-manual-review }
+
+  - domain: ai-assistant
+    data: [user-questions, recent-conversation-turns, incident-titles-and-lookup-results, provider-api-keys, token-usage-counters]
+    purpose: [answering-questions-about-incidents-the-user-can-read, token-budget-accounting]
+    storage: [postgresql, administrator-configured-language-model-provider]
+    recipients: [administrator-configured-language-model-provider]
+    retention: { current: conversations-not-stored-audit-metadata-only-and-daily-counters, target: audit-retention-policy }
+    exportable: partial
+    deletion: { current: audit-entries-follow-audit-retention, target: audit-retention-policy }

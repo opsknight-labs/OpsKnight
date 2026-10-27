@@ -48,6 +48,11 @@ export interface AiToolDefinition {
   inputSchema: Record<string, unknown>;
   /** Read tools run automatically. Write tools only ever return a proposal for user confirmation. */
   kind: 'READ' | 'PROPOSE_WRITE';
+  /**
+   * Runs a READ tool under the caller's own permissions. Absent for PROPOSE_WRITE tools, whose call is
+   * handed back to the caller instead of being executed. Output is untrusted data to the model.
+   */
+  execute?: (input: unknown) => Promise<unknown>;
 }
 
 export interface AiToolCall {
@@ -60,6 +65,8 @@ export interface AiGenerateRequest {
   messages: AiMessage[];
   tools?: AiToolDefinition[];
   maxOutputTokens?: number;
+  /** Upper bound on model/tool round trips within one request. */
+  maxSteps?: number;
 }
 
 export interface AiUsage {
