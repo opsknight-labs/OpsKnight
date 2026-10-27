@@ -1,4 +1,4 @@
-import { processIntegrationEvent } from '@/lib/events';
+import { processIntegrationBatch } from '@/lib/events';
 import { transformDatadogToEvent, DatadogEvent } from '@/lib/integrations/datadog';
 import { createIntegrationHandler } from '@/lib/integrations/handler';
 
@@ -22,10 +22,23 @@ export const POST = createIntegrationHandler<DatadogEvent>(
     const events = transformDatadogToEvent(payload);
 
     // Process all events
-    const results = await Promise.all(
-      events.map(event => processIntegrationEvent({ event, serviceId: integration.serviceId, integrationId: integration.id, integrationType: 'DATADOG', providerPayload: payload, receivedAt: new Date() }))
+    const results = await processIntegrationBatch(
+      {
+        serviceId: integration.serviceId,
+        integrationId: integration.id,
+        integrationType: 'DATADOG',
+        providerPayload: payload,
+        receivedAt: new Date(),
+      },
+      events
     );
 
-    return { action: results[0]?.action || 'acknowledge', incident: results[0]?.incident };
+    return {
+      ...results[0],
+      action: results[0]?.action || 'acknowledge',
+      ...(results.some(result => 'receiptId' in result)
+        ? { receipts: results.flatMap(result => ('receiptId' in result ? [result.receiptId] : [])) }
+        : {}),
+    };
   }
 );

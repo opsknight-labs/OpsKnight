@@ -13,6 +13,16 @@ const read = (file: string) => fs.readFileSync(path.join(root, file), 'utf8');
 const require = createRequire(import.meta.url);
 
 describe('deployment configuration invariants', () => {
+  it('enables maintenance on the scheduler in the PostgreSQL ingestion overlay', () => {
+    const overlay = YAML.parse(read('deploy/compose/docker-compose.ingestion.yml'));
+    expect(
+      overlay.services['opsknight-scheduler'].environment.OPSKNIGHT_INGESTION_MODE
+    ).toBeUndefined();
+    expect(overlay.services['opsknight-scheduler'].environment).toEqual(
+      overlay.services['opsknight-web'].environment
+    );
+  });
+
   it('keeps packaged deployment versions aligned with the application version', () => {
     const pkg = JSON.parse(read('package.json')) as { version: string };
     const chart = read('deploy/kubernetes/helm/opsknight/Chart.yaml');
@@ -185,6 +195,32 @@ describe('deployment configuration invariants', () => {
     expect(validation).toContain('opsknight-helm-migration-upgrade-job.yaml');
   });
 
+  it('requires valid live job lane indexes before starting migration-skipping replicas', async () => {
+    const readiness = require('../../scripts/wait-for-database-ready.cjs') as {
+      REQUIRED_INDEXES: string[];
+      readinessProblem: (
+        prisma: { $queryRawUnsafe: ReturnType<typeof vi.fn> },
+        expectedMigrations: string[]
+      ) => Promise<string | null>;
+    };
+    for (const name of [
+      'BackgroundJob_claim_live_order_idx',
+      'BackgroundJob_responder_live_order_idx',
+      'BackgroundJob_general_live_order_idx',
+    ]) {
+      expect(readiness.REQUIRED_INDEXES).toContain(name);
+      for (const missing of [true, false]) {
+        const indexes = readiness.REQUIRED_INDEXES.filter(index => !missing || index !== name).map(
+          index => ({ name: index, valid: index !== name })
+        );
+        const query = vi.fn().mockResolvedValueOnce([]).mockResolvedValueOnce(indexes);
+        await expect(readiness.readinessProblem({ $queryRawUnsafe: query }, [])).resolves.toContain(
+          name
+        );
+      }
+    }
+  });
+
   it('allows LEGACY runtimes to become ready without the optional SLA scheduler index', async () => {
     const readiness = require('../../scripts/wait-for-database-ready.cjs') as {
       REQUIRED_INDEXES: string[];
@@ -232,6 +268,25 @@ describe('deployment configuration invariants', () => {
     await expect(
       readiness.readinessProblem({ $queryRawUnsafe: query }, ['20260101000000_initial'])
     ).resolves.toContain('3 incident(s) await automation source classification');
+  });
+
+  it('blocks a new runtime when the concurrent ingestion claim index is missing or invalid', async () => {
+    const readiness = require('../../scripts/wait-for-database-ready.cjs') as {
+      REQUIRED_INDEXES: string[];
+      readinessProblem: (
+        prisma: { $queryRawUnsafe: ReturnType<typeof vi.fn> },
+        expected: string[]
+      ) => Promise<string | null>;
+    };
+    for (const present of [false, true]) {
+      const indexes = readiness.REQUIRED_INDEXES.filter(
+        name => present || name !== 'IngestionReceipt_claim_sequence_idx'
+      ).map(name => ({ name, valid: name !== 'IngestionReceipt_claim_sequence_idx' }));
+      const query = vi.fn().mockResolvedValueOnce([]).mockResolvedValueOnce(indexes);
+      await expect(readiness.readinessProblem({ $queryRawUnsafe: query }, [])).resolves.toContain(
+        'IngestionReceipt_claim_sequence_idx'
+      );
+    }
   });
 
   it('blocks migration-skipping replicas until diagnostic indexes and historical projections are complete', async () => {
@@ -846,6 +901,72 @@ describe('deployment configuration invariants', () => {
     expect(webPatch).toContain('runAsUser: 1001');
     expect(webPatch).toContain('readOnlyRootFilesystem: true');
     expect(webPatch).toContain("path: '/api/health?mode=readiness'");
+  });
+
+  it('loads ingestion overlay capacity settings before applying deployment defaults', () => {
+    const directory = fs.mkdtempSync(path.join(root, 'node_modules/.tmp-ingestion-capacity-'));
+    const envFile = path.join(directory, '.env');
+    fs.writeFileSync(
+      envFile,
+      'INGESTION_WORKER_REPLICAS=1\nDATABASE_POOL_SIZE_INGESTION_WORKER=60\n'
+    );
+    try {
+      const result = spawnSync(
+        process.execPath,
+        [
+          'deploy/scripts/validate-runtime-capacity.cjs',
+          '--compose',
+          'deploy/compose/docker-compose.ingestion.yml',
+        ],
+        {
+          cwd: root,
+          env: {
+            ...process.env,
+            DOTENV_CONFIG_PATH: envFile,
+            INGESTION_WORKER_REPLICAS: undefined,
+            DATABASE_POOL_SIZE_INGESTION_WORKER: undefined,
+            OPSKNIGHT_RUNTIME_MODE: 'split',
+            DATABASE_MAX_CONNECTIONS: '80',
+          },
+          encoding: 'utf8',
+        }
+      );
+      expect(result.status).toBe(1);
+      expect(result.stdout).toContain('"pool":60');
+      expect(result.stderr).toContain('FATAL CAPACITY MISMATCH');
+    } finally {
+      fs.rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
+  it('budgets dedicated ingestion pools independently of PgBouncer and reserves failover headroom', () => {
+    const result = calculateRuntimeCapacity({
+      OPSKNIGHT_RUNTIME_MODE: 'split',
+      PGBOUNCER_ENABLED: 'true',
+      INGESTION_WORKER_REPLICAS: '4',
+      DATABASE_POOL_SIZE_INGESTION_WORKER: '5',
+      DATABASE_CONNECTION_RESERVE: '10',
+      DATABASE_MAX_CONNECTIONS: '60',
+    });
+    expect(result.breakdown.ingestionWorker.total).toBe(20);
+    expect(result.directWorkerConnections).toBe(43);
+    expect(result.totalDemand).toBe(68);
+    expect(result.safe).toBe(false);
+    expect(result.headroom).toBe(-8);
+    expect(
+      calculateRuntimeCapacity({
+        INGESTION_WORKER_REPLICAS: '2',
+        DATABASE_URL: 'postgresql://localhost/test?connection_limit=7',
+      }).breakdown.ingestionWorker.total
+    ).toBe(14);
+    expect(
+      calculateRuntimeCapacity({
+        OPSKNIGHT_RUNTIME_MODE: 'integrated',
+        INGESTION_WORKER_REPLICAS: '2',
+      }).totalDemand
+    ).toBe(31);
+    expect(() => calculateRuntimeCapacity({ INGESTION_WORKER_REPLICAS: '-1' })).toThrow();
+    expect(() => calculateRuntimeCapacity({ DATABASE_CONNECTION_RESERVE: 'oops' })).toThrow();
   });
 
   it('validates runtime database connection capacity budgets across topologies', () => {

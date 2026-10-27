@@ -55,6 +55,7 @@ jobs:
           tar -xzf "$tool_dir/$archive" -C "$tool_dir" --strip-components=1 prometheus-3.15.0.linux-amd64/promtool
           "$tool_dir/promtool" check rules monitoring/prometheus/opsknight-alerts.yaml
           "$tool_dir/promtool" test rules monitoring/prometheus/runbook-maintenance.test.yml
+          "$tool_dir/promtool" test rules monitoring/prometheus/ingestion.test.yml
 
   runbook-ui:
     needs: changes

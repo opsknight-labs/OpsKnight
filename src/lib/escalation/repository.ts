@@ -658,6 +658,22 @@ export async function finalizeEscalationExecution(input: {
   status: EscalationStatus | null;
   timelineMessage?: string;
 }): Promise<boolean> {
+  // Single-row finalization is atomic; preserve the complete fence without
+  // driver BEGIN/COMMIT round trips. Timeline writes keep their transaction.
+  if (!input.timelineMessage) {
+    // Compare the enum's text label so sparse/stale OPEN statistics cannot
+    // choose the status index and scan every open incident for this unique ID.
+    // The primary-key lookup and every atomic lifecycle/generation guard remain.
+    const count = await prisma.$executeRaw`
+      UPDATE "Incident" SET "escalationStatus"=${input.status}, "nextEscalationAt"=NULL,
+        "currentEscalationStep"=NULL, "escalationProcessingAt"=NULL, "updatedAt"=${new Date()}
+      WHERE id=${input.incidentId} AND status::text='OPEN'
+        AND "escalationGeneration"=${input.expectedGeneration}
+        AND ("currentEscalationStep"=${input.expectedStep}
+          OR (${input.expectedStep}=0 AND "currentEscalationStep" IS NULL))
+    `;
+    return count === 1;
+  }
   return runSerializableTransaction(async tx => {
     const stepMatch =
       input.expectedStep === 0

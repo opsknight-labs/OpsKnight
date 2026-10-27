@@ -791,6 +791,102 @@ model Integration {
   previousSignatureSecretExpiresAt DateTime?
 }
 
+// No cascading foreign keys: deleting a service must never discard accepted work.
+model IngestionReceipt {
+  id                  String                  @id
+  sequence            BigInt                  @unique @default(autoincrement())
+  serviceId           String
+  integrationId       String
+  partitionKey        String
+  orderingKeys        String[]                @default([])
+  orderingWaitCount   Int                     @default(0)
+  orderingLinks       IngestionOrderingLink[] @relation("IngestionOrderingReceipt")
+  idempotencyKey      String                  @unique
+  contentHash         String
+  budgetShard         Int
+  payloadBytes        Int
+  critical            Boolean                 @default(false)
+  envelope            Json
+  batchId             String?
+  batch               IngestionBatch?         @relation(fields: [batchId], references: [id], onDelete: Restrict)
+  status              String                  @default("PENDING")
+  attempts            Int                     @default(0)
+  availableAt         DateTime                @default(now())
+  leaseToken          String?
+  leaseExpiresAt      DateTime?
+  result              Json?
+  failureCode         String?
+  acceptedAt          DateTime                @default(now())
+  receivedAt          DateTime?
+  processingStartedAt DateTime?
+  completedAt         DateTime?
+
+  @@index([batchId])
+  // Partial active-sequence claim index is maintained by the SQL migration.
+  @@index([partitionKey, sequence])
+  @@index([status, availableAt, sequence])
+  @@index([serviceId, acceptedAt])
+}
+
+// Only unfinished queue identities and memberships are retained here.
+// SQL triggers maintain this frontier with receipt writes, including older images.
+model IngestionOrderingHead {
+  identity     String  @id
+  headId       String?
+  headSequence BigInt?
+  headCritical Boolean @default(false)
+  headPrimary  Boolean @default(false)
+  headReady    Boolean @default(false)
+  headActive   Boolean @default(false)
+  tailId       String?
+  tailSequence BigInt?
+
+  @@index([headId])
+}
+
+model IngestionOrderingLink {
+  identity      String
+  receiptId     String
+  sequence      BigInt
+  predecessorId String?
+  receipt       IngestionReceipt @relation("IngestionOrderingReceipt", fields: [receiptId], references: [id], onDelete: Cascade)
+
+  @@id([identity, receiptId])
+  @@unique([identity, sequence])
+  @@unique([identity, predecessorId])
+  @@index([receiptId])
+}
+
+// Shared immutable webhook context. No service cascade can delete accepted work.
+model IngestionBatch {
+  id            String             @id
+  serviceId     String
+  integrationId String
+  payload       Json
+  createdAt     DateTime           @default(now())
+  receipts      IngestionReceipt[]
+}
+
+model IngestionBudget {
+  shard   Int @id
+  pending Int @default(0)
+  bytes   BigInt @default(0)
+}
+
+// Shared token buckets use database time and survive web replica restarts.
+model IngestionQuota {
+  key            String   @id
+  tokens         Float
+  rate           Int
+  burst          Int
+  updatedAt      DateTime @db.Timestamptz(3)
+  lastAllowed    Boolean
+  lastGranted    Int      @default(0)
+  policyRevision BigInt   @default(0)
+
+  @@index([updatedAt])
+}
+
 model InboundDelivery {
   id             String                @id @default(cuid())
   integrationId  String

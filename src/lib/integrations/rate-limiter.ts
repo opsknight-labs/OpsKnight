@@ -40,7 +40,7 @@ const DEFAULT_CONFIG: RateLimitConfig = {
 /**
  * Check if a request should be rate limited
  */
-import { checkRateLimit as checkGlobalRateLimit } from '@/lib/rate-limit';
+import { checkIngestionQuota as checkGlobalRateLimit } from '@/lib/ingestion/quota';
 
 export async function checkRateLimit(
   integrationId: string,
@@ -107,7 +107,7 @@ export function getRateLimitStatus(
 /**
  * Reset rate limit for an integration (for testing or admin override)
  */
-export function resetRateLimit(integrationId: string): void {
+export function resetRateLimit(_integrationId: string): void {
   // No-op in distributed mode
 }
 

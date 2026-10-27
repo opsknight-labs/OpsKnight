@@ -10,7 +10,7 @@ import {
 } from './explanation';
 import { enqueueAutomationNotification } from './jobs';
 import { getAutomationSettings, getIngestionAutomationConfig } from './settings';
-import { Prisma } from '@prisma/client';
+import { Prisma, type AutomationMode } from '@prisma/client';
 import type { EventPayload } from '@/lib/events';
 import { logger } from '@/lib/logger';
 import {
@@ -42,6 +42,12 @@ export type IntegrationEventEnvelope = {
   event: EventPayload;
   providerPayload: unknown;
   receivedAt: Date;
+  /** Captured at durable admission; immutable versions remain replayable. */
+  automationSnapshot?: {
+    mode: AutomationMode;
+    activeVersionId: string | null;
+    candidateVersionId: string | null;
+  } | null;
 };
 export type RuntimeEvaluation = {
   mode: 'SHADOW' | 'LIVE';
@@ -91,7 +97,18 @@ export async function prepareAutomation(
   classification: { priority: string | null; urgency: string },
   defaultPolicy?: { id: string; name: string } | null
 ): Promise<RuntimeEvaluation | null> {
-  const config = await getIngestionAutomationConfig(tx, envelope.serviceId);
+  // Acceptance already fixed this event to disabled Automation. A later enable
+  // cannot activate it, so there is no emergency-switch read to perform.
+  if (envelope.automationSnapshot === null || envelope.automationSnapshot?.mode === 'DISABLED')
+    return null;
+  // Keep the global emergency switch live even for accepted backlog. Rule
+  // publication after acceptance must not silently change a queued decision.
+  const config =
+    envelope.automationSnapshot === undefined
+      ? await getIngestionAutomationConfig(tx, envelope.serviceId)
+      : (await getAutomationSettings(tx)).automationEnabled
+        ? envelope.automationSnapshot
+        : null;
   if (!config || config.mode === 'DISABLED') return null;
   const evaluationAt = envelope.receivedAt;
   const runtime: RuntimeEvaluation = {

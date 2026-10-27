@@ -1,3 +1,5 @@
+import { isDedicatedHttpRole } from './runtime-role';
+
 const DEFAULT_POOL_SIZE = 10;
 
 export function selectPrismaDatasourceUrl(
@@ -7,7 +9,7 @@ export function selectPrismaDatasourceUrl(
     WEB_DATABASE_URL: process.env.WEB_DATABASE_URL,
   }
 ): string | undefined {
-  return role === 'web' ? env.WEB_DATABASE_URL ?? env.DATABASE_URL : env.DATABASE_URL;
+  return isDedicatedHttpRole(role) ? (env.WEB_DATABASE_URL ?? env.DATABASE_URL) : env.DATABASE_URL;
 }
 
 function poolSize(value: string | undefined): number {
@@ -18,7 +20,8 @@ function poolSize(value: string | undefined): number {
 
 export function configurePrismaDatasource(
   rawUrl: string | undefined,
-  configuredPoolSize: string | undefined
+  configuredPoolSize: string | undefined,
+  transactionPooler = false
 ): string | undefined {
   if (!rawUrl) return undefined;
   try {
@@ -36,7 +39,13 @@ export function configurePrismaDatasource(
       url.searchParams.set('statement_cache_size', '100');
     }
     if (!url.searchParams.has('options')) {
-      url.searchParams.set('options', '-c statement_timeout=30000');
+      // OLTP workers use short indexed statements; compiling each claim can
+      // cost more than execution. Preserve explicit operator options verbatim.
+      const pooled = transactionPooler || url.searchParams.get('pgbouncer') === 'true';
+      url.searchParams.set(
+        'options',
+        pooled ? '-c statement_timeout=30000' : '-c statement_timeout=30000 -c jit=off'
+      );
     }
     return url.toString();
   } catch {

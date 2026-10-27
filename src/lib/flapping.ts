@@ -27,21 +27,31 @@ export async function checkAlertFlapping(
   dedupKey: string,
   serviceId: string,
   config: FlappingConfig = DEFAULT_CONFIG,
-  db: Pick<Prisma.TransactionClient, 'alert'> = prisma
+  db: Pick<Prisma.TransactionClient, '$queryRaw'> = prisma
 ): Promise<{ isFlapping: boolean; transitionCount: number }> {
   try {
     const windowStart = new Date(Date.now() - config.windowSeconds * 1000);
 
-    const recentAlerts = await db.alert.findMany({
-      where: {
-        dedupKey,
-        serviceId,
-        createdAt: { gte: windowStart },
-      },
-      select: { status: true, createdAt: true },
-      orderBy: { createdAt: 'desc' },
-      take: 20,
-    });
+    // A newly active service can be absent from PostgreSQL's statistics. With
+    // both predicates in one scan, that underestimate chooses the service/date
+    // index and repeatedly scans all of its recent alerts for each new key.
+    // OFFSET 0 is a streaming planner boundary, not a materialized history or
+    // an inner limit: seek the indexed key/date range first, then filter the
+    // service before taking its twenty rows. Other services never consume that
+    // limit, and the caller's transaction/identity lock remains authoritative.
+    const recentAlerts = await db.$queryRaw<Array<{ status: string; createdAt: Date }>>`
+      SELECT recent.status, recent."createdAt"
+      FROM (
+        SELECT status, "createdAt", "serviceId"
+        FROM "Alert"
+        WHERE "dedupKey" = ${dedupKey} AND "createdAt" >= ${windowStart}
+        ORDER BY "createdAt" DESC
+        OFFSET 0
+      ) recent
+      WHERE recent."serviceId" = ${serviceId}
+      ORDER BY recent."createdAt" DESC
+      LIMIT 20
+    `;
 
     if (recentAlerts.length < config.stateChangeThreshold) {
       return { isFlapping: false, transitionCount: recentAlerts.length };

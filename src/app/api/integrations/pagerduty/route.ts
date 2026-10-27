@@ -1,3 +1,7 @@
+import { reserveIngestionReplay } from '@/lib/ingestion/replay';
+import { withIngestionRequestSlot } from '@/lib/ingestion/request-gate';
+import { withIngestionDelivery, ingestionDeliveryKey } from '@/lib/ingestion/admission';
+import { ingestionErrorResponse } from '@/lib/ingestion/http';
 import { NextRequest } from 'next/server';
 import prisma from '@/lib/prisma';
 import { processIntegrationEvent } from '@/lib/events';
@@ -12,7 +16,7 @@ import {
 import { integrationKeyFingerprint } from '@/lib/integrations/credentials';
 import { decryptStoredSecret } from '@/lib/encryption';
 
-export async function POST(req: NextRequest) {
+async function postEvent(req: NextRequest) {
   const startTime = performance.now();
   let integrationId: string | null = null;
 
@@ -69,7 +73,10 @@ export async function POST(req: NextRequest) {
             type: 'PAGERDUTY',
             OR: [
               { keyFingerprint: integrationKeyFingerprint(providedKey || '') },
-              { previousKeyFingerprint: integrationKeyFingerprint(providedKey || ''), previousKeyExpiresAt: { gt: new Date() } },
+              {
+                previousKeyFingerprint: integrationKeyFingerprint(providedKey || ''),
+                previousKeyExpiresAt: { gt: new Date() },
+              },
               // Legacy rows keep plaintext keys until they are rotated.
               { key: providedKey || '' },
               { previousKey: providedKey || '', previousKeyExpiresAt: { gt: new Date() } },
@@ -85,9 +92,20 @@ export async function POST(req: NextRequest) {
     }
 
     const currentKey = await decryptStoredSecret(integration.key);
-    const priorKey = integration.previousKey ? await decryptStoredSecret(integration.previousKey) : null;
-    if (paramId && (!providedKey || !(safeCompare(currentKey, providedKey) ||
-      (priorKey && integration.previousKeyExpiresAt && integration.previousKeyExpiresAt.getTime() > Date.now() && safeCompare(priorKey, providedKey))))) {
+    const priorKey = integration.previousKey
+      ? await decryptStoredSecret(integration.previousKey)
+      : null;
+    if (
+      paramId &&
+      (!providedKey ||
+        !(
+          safeCompare(currentKey, providedKey) ||
+          (priorKey &&
+            integration.previousKeyExpiresAt &&
+            integration.previousKeyExpiresAt.getTime() > Date.now() &&
+            safeCompare(priorKey, providedKey))
+        ))
+    ) {
       return new Response(JSON.stringify({ status: 'error', message: 'Invalid integration key' }), {
         status: 401,
         headers: { 'Content-Type': 'application/json' },
@@ -98,7 +116,15 @@ export async function POST(req: NextRequest) {
 
     // Rate limit
     const rateResult = await checkRateLimit(integration.id);
-    if (!rateResult.allowed) {
+    const replayOnly = !rateResult.allowed
+      ? await reserveIngestionReplay(
+          `integration:${integration.id}`,
+          ingestionDeliveryKey(req.headers, 'PAGERDUTY'),
+          rateResult,
+          'pagerduty'
+        )
+      : undefined;
+    if (!rateResult.allowed && !replayOnly) {
       const headers = createRateLimitHeaders(rateResult);
       recordWebhookReceived(
         'PAGERDUTY',
@@ -114,14 +140,27 @@ export async function POST(req: NextRequest) {
     }
 
     const event = transformPagerDutyToEvent(payload);
-    await processIntegrationEvent({ event, serviceId: integration.serviceId, integrationId: integration.id, integrationType: 'PAGERDUTY', providerPayload: payload, receivedAt: new Date() });
+    const result = await withIngestionDelivery(
+      ingestionDeliveryKey(req.headers, 'PAGERDUTY'),
+      () =>
+        processIntegrationEvent({
+          event,
+          serviceId: integration.serviceId,
+          integrationId: integration.id,
+          integrationType: 'PAGERDUTY',
+          providerPayload: payload,
+          receivedAt: new Date(),
+        }),
+      replayOnly
+    );
 
     recordWebhookReceived('PAGERDUTY', integration.id, true, performance.now() - startTime);
 
     return new Response(
       JSON.stringify({
         status: 'success',
-        message: 'Event processed',
+        message: result.action === 'accepted' ? 'Event accepted' : 'Event processed',
+        ...('receiptId' in result ? { receiptId: result.receiptId } : {}),
         dedup_key: event.dedup_key,
       }),
       {
@@ -130,6 +169,8 @@ export async function POST(req: NextRequest) {
       }
     );
   } catch (error) {
+    const ingestionError = ingestionErrorResponse(error);
+    if (ingestionError) return ingestionError;
     if (error instanceof IntegrationBodyTooLargeError) {
       return new Response(JSON.stringify({ status: 'error', message: error.message }), {
         status: 413,
@@ -152,4 +193,8 @@ export async function POST(req: NextRequest) {
       { status: 500, headers: { 'Content-Type': 'application/json' } }
     );
   }
+}
+
+export async function POST(req: NextRequest) {
+  return withIngestionRequestSlot(() => postEvent(req));
 }

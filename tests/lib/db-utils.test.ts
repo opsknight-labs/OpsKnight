@@ -5,11 +5,76 @@ const transaction = vi.hoisted(() => vi.fn());
 
 vi.mock('@/lib/prisma', () => ({ default: { $transaction: transaction } }));
 
-import { isRetryableTransactionError, runSerializableTransaction } from '@/lib/db-utils';
+import {
+  isRetryableTransactionError,
+  runSerializableTransaction,
+  runReadCommittedTransaction,
+} from '@/lib/db-utils';
+import { markTransactionRetry, isExplicitTransactionRetry } from '@/lib/transaction-retry';
 
 describe('transaction retry helpers', () => {
   beforeEach(() => {
     transaction.mockReset();
+  });
+
+  it('rolls back an explicit contention failure before backoff and retries the whole callback', async () => {
+    const failure = markTransactionRetry(new Error('Capacity contended'));
+    let rolledBack = false;
+    const operation = vi.fn().mockRejectedValueOnce(failure).mockResolvedValueOnce('committed');
+    transaction.mockImplementation(async (callback: (tx: object) => Promise<string>) => {
+      try {
+        return await callback({});
+      } catch (error) {
+        rolledBack = true;
+        throw error;
+      }
+    });
+    const phases: string[] = [];
+    await expect(
+      runReadCommittedTransaction(operation, 2, timing => {
+        phases.push(`${timing.phase}:${timing.outcome}`);
+        expect(timing.durationMs).toBeGreaterThanOrEqual(0);
+        if (timing.phase === 'backoff') {
+          expect(rolledBack).toBe(true);
+          expect(timing.retryReason).toBe('explicit');
+        }
+      })
+    ).resolves.toBe('committed');
+    expect(operation).toHaveBeenCalledTimes(2);
+    expect(phases).toEqual([
+      'acquire:success',
+      'operation:failure',
+      'finalize:failure',
+      'backoff:success',
+      'acquire:success',
+      'operation:success',
+      'finalize:success',
+    ]);
+    expect(isExplicitTransactionRetry(new Error('Capacity contended'))).toBe(false);
+    expect(isExplicitTransactionRetry({ retryTransaction: true })).toBe(false);
+  });
+
+  it('does not change committed success when the timing observer fails', async () => {
+    transaction.mockImplementation(async (callback: (tx: object) => Promise<string>) =>
+      callback({})
+    );
+    await expect(
+      runReadCommittedTransaction(
+        async () => 'committed',
+        1,
+        () => {
+          throw new Error('Observer unavailable');
+        }
+      )
+    ).resolves.toBe('committed');
+    expect(transaction).toHaveBeenCalledTimes(1);
+  });
+
+  it('bounds explicit contention retries and preserves the final error', async () => {
+    const failure = markTransactionRetry(new Error('Capacity contended'));
+    transaction.mockRejectedValue(failure);
+    await expect(runReadCommittedTransaction(async () => 'unused', 2)).rejects.toBe(failure);
+    expect(transaction).toHaveBeenCalledTimes(2);
   });
 
   it('retries the typed Prisma nested-write engine deadlock without using server prose', async () => {

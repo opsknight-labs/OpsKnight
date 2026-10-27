@@ -1,0 +1,45 @@
+module.exports = run => [
+  {
+    type: 'UPTIMEROBOT',
+    route: 'uptimerobot',
+    count: 1,
+    signed: true,
+    encoding: 'form',
+    format: 'form-urlencoded',
+    expectedSummary: 'Form monitor',
+    payload: { monitorID: run, monitorFriendlyName: 'Form monitor', alertType: '1' },
+  },
+  {
+    type: 'MANAGEENGINE',
+    route: 'manageengine',
+    count: 1,
+    signed: true,
+    encoding: 'form',
+    format: 'form-urlencoded',
+    expectedSummary: 'Form alarm',
+    payload: {
+      alarmid: run,
+      message: 'Form alarm',
+      severity: 'critical',
+      status: 'triggered',
+      entity: 'Form device',
+    },
+  },
+  {
+    type: 'GOOGLE_CLOUD_MONITORING',
+    route: 'google-cloud-monitoring',
+    count: 1,
+    signed: true,
+    encoding: 'pubsub',
+    format: 'PubSub-base64',
+    expectedSummary: 'PubSub incident',
+    payload: {
+      incident: {
+        incident_id: run,
+        summary: 'PubSub incident',
+        state: 'open',
+        severity: 'critical',
+      },
+    },
+  },
+];

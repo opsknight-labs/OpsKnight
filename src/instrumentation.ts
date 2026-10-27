@@ -12,6 +12,7 @@ let authenticationHeartbeat: ReturnType<typeof setInterval> | null = null;
 let stopScheduler: (() => Promise<void>) | null = null;
 let stopJobWorkerService: (() => Promise<void>) | null = null;
 let stopIntegratedRunbookWorkerService: (() => Promise<void>) | null = null;
+let stopIngestionWorkerService: (() => Promise<void>) | null = null;
 let shutdownPromise: Promise<void> | null = null;
 
 async function stopRuntimeServices(): Promise<void> {
@@ -24,6 +25,8 @@ async function stopRuntimeServices(): Promise<void> {
     console.error('[Runtime] Realtime stream drain failed', error);
   }
   const stops: Promise<void>[] = [];
+  if (stopIngestionWorkerService) stops.push(stopIngestionWorkerService());
+  stopIngestionWorkerService = null;
   if (authenticationHeartbeat) clearInterval(authenticationHeartbeat);
   authenticationHeartbeat = null;
 
@@ -75,11 +78,28 @@ export async function register() {
     const { validateProductionEnv } = await import('./lib/env-validation');
     validateProductionEnv();
 
-    const { getOpsKnightProcessRole, getRuntimeResponsibilities } =
-      await import('./lib/runtime-role');
+    const {
+      getOpsKnightProcessRole,
+      getRuntimeResponsibilities,
+      shouldRunIngestionConsumer,
+      isDedicatedHttpRole,
+    } = await import('./lib/runtime-role');
     const role = getOpsKnightProcessRole();
     const responsibilities = getRuntimeResponsibilities(role);
-    if (role === 'web' || role === 'integrated') {
+    const { ingestionConfig } = await import('./lib/ingestion/config');
+    const ingestion = ingestionConfig(); // Reject invalid rollout configuration at startup.
+    if (ingestion.mode === 'postgres') {
+      const { verifyPostgresIngestionDurability } = await import('./lib/ingestion/postgres');
+      await verifyPostgresIngestionDurability();
+    }
+    if (role === 'ingestion-worker' && ingestion.mode !== 'postgres')
+      throw new Error('The ingestion-worker role requires OPSKNIGHT_INGESTION_MODE=postgres');
+    if (shouldRunIngestionConsumer(role, ingestion.mode)) {
+      const { startIngestionWorker, stopIngestionWorker } = await import('./lib/ingestion/worker');
+      startIngestionWorker();
+      stopIngestionWorkerService = stopIngestionWorker;
+    }
+    if (isDedicatedHttpRole(role) || role === 'integrated') {
       const { observeAuthenticationReplica } = await import('./lib/auth-control/replicas');
       await observeAuthenticationReplica();
       authenticationHeartbeat = setInterval(() => {

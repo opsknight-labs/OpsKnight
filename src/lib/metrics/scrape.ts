@@ -1,4 +1,6 @@
+import { resolveIngestionMode } from '@/lib/ingestion/mode';
 import prisma from '@/lib/prisma';
+import { collectIngestionQueueMetrics } from '@/lib/ingestion/metrics';
 import { collectProviderFeedbackMetrics } from '@/lib/provider-feedback-metrics';
 import { getAuthOptions } from '@/lib/auth';
 import { getServerSession } from 'next-auth';
@@ -9,6 +11,7 @@ import { OperationalMetricSnapshot } from '@/lib/metrics/operational/registry';
 import { getRunbookWorkerEvidence } from '@/lib/runbooks/worker-heartbeats';
 
 type MetricsSnapshot = {
+  ingestion: Awaited<ReturnType<typeof collectIngestionQueueMetrics>> | null;
   automationJobs: {
     observations: number;
     oldestAge: number;
@@ -117,6 +120,7 @@ async function collectMetricsCached(): Promise<MetricsSnapshot> {
       providerFeedback,
       runbookWorkers,
       automationJobs,
+      ingestion,
     ] = await Promise.allSettled([
       collectWithTimeout('jobs', DB_COLLECTOR_TIMEOUT_MS, () =>
         prisma.backgroundJob.groupBy({ by: ['status'], _count: { id: true } })
@@ -277,6 +281,9 @@ async function collectMetricsCached(): Promise<MetricsSnapshot> {
         FROM "BackgroundJob" WHERE type = 'SCHEDULED_TASK' AND status IN ('PENDING', 'PROCESSING')
       `
       ),
+      resolveIngestionMode(process.env.OPSKNIGHT_INGESTION_MODE) === 'postgres'
+        ? collectWithTimeout('ingestion', DB_COLLECTOR_TIMEOUT_MS, collectIngestionQueueMetrics)
+        : Promise.resolve([]),
       collectWithTimeout('incident-collaboration-metrics', DB_COLLECTOR_TIMEOUT_MS, async () => {
         const { collectIncidentCollaborationMetricsFromDB } =
           await import('@/lib/incident-collaboration/meeting-metrics');
@@ -285,6 +292,7 @@ async function collectMetricsCached(): Promise<MetricsSnapshot> {
       }),
     ]);
     const value: MetricsSnapshot = {
+      ingestion: ingestion.status === 'fulfilled' ? ingestion.value : null,
       jobStats:
         jobs.status === 'fulfilled'
           ? jobs.value.map(row => ({ status: row.status, count: row._count.id }))
@@ -359,6 +367,7 @@ async function collectMetricsCached(): Promise<MetricsSnapshot> {
           : null,
     };
     const degraded =
+      value.ingestion === null ||
       value.automationJobs === null ||
       value.providerFeedback === null ||
       value.automationJobs === null ||
@@ -418,6 +427,27 @@ async function getMetrics(req: Request) {
   const snapshot = await collectMetricsCached();
 
   const metrics = new OperationalMetricSnapshot();
+  metrics.set(
+    'opsknight_ingestion_enabled',
+    Number(resolveIngestionMode(process.env.OPSKNIGHT_INGESTION_MODE) === 'postgres')
+  );
+  metrics.set(
+    'opsknight_ingestion_metrics_collection_success',
+    Number(snapshot.ingestion !== null)
+  );
+  if (snapshot.ingestion) {
+    for (const status of ['PENDING', 'PROCESSING', 'DEAD'])
+      metrics.set(
+        'opsknight_ingestion_unfinished',
+        snapshot.ingestion.find(row => row.status === status)?.count ?? 0,
+        { status }
+      );
+    metrics.set(
+      'opsknight_ingestion_oldest_unfinished_age_seconds',
+      Math.max(0, ...snapshot.ingestion.map(row => row.oldestAgeSeconds))
+    );
+  }
+
   if (snapshot.automationJobs) {
     metrics.set(
       'opsknight_automation_observation_queue_depth',
@@ -564,6 +594,7 @@ async function getMetrics(req: Request) {
   }
 
   const collectionErrors =
+    Number(snapshot.ingestion === null) +
     Number(snapshot.automationJobs === null) +
     Number(snapshot.incidentCount === null) +
     Number(snapshot.activeUsers === null) +

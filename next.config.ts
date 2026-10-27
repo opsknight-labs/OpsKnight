@@ -113,13 +113,21 @@ const withPWA = withPWAInit({
 const nextConfig: NextConfig = {
   distDir: process.env.BUILD_DIR || '.next',
   output: 'standalone',
+  // Instrumentation and handlers share a native Prisma client. Bundling a
+  // second SQL-tag implementation breaks nested Prisma.sql fragment identity.
+  serverExternalPackages: ['@prisma/client', '.prisma/client'],
   outputFileTracingRoot: path.join(__dirname),
   // Instrumentation reads authentication policy before any request. Ensure the
   // generated Prisma client and native engine exist in the standalone artifact.
   outputFileTracingIncludes: { '/*': ['./node_modules/.prisma/client/**/*'] },
   experimental: {
+    // The existing low-memory build profile also bounds page-data workers.
+    ...(process.env.OPSKNIGHT_BUILD_LOW_MEMORY === 'true' ? { cpus: 1 } : {}),
+    // Keep production compilation bounded on shared build hosts. The PWA
+    // wrapper installs a custom webpack config, disabling the default worker.
+    webpackBuildWorker: true,
+    webpackMemoryOptimizations: true,
     optimizePackageImports: [
-      '@prisma/client',
       'react-icons',
       'lucide-react',
       'date-fns',
@@ -207,7 +215,13 @@ const nextConfig: NextConfig = {
     // Dedicated typecheck step runs in CI/cert; skip inside container bundle to avoid OOM
     ignoreBuildErrors: Boolean(process.env.SKIP_BUILD_TYPECHECK === 'true'),
   },
-  webpack: (config, { isServer }) => {
+  webpack: (config, { isServer, dev }) => {
+    if (!dev && process.env.OPSKNIGHT_BUILD_LOW_MEMORY === 'true') {
+      // Cold container builds gain little from filesystem caching. Bound the
+      // compilation working set on small build hosts without skipping checks.
+      config.cache = false;
+      config.parallelism = 1;
+    }
     if (isServer) {
       // eslint-disable-next-line @typescript-eslint/no-require-imports
       const webpack = require('webpack');

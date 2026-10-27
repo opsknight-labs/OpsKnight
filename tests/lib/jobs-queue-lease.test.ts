@@ -4,6 +4,7 @@ const mocks = vi.hoisted(() => ({
   processEventSideEffect: vi.fn(),
   updateMany: vi.fn(),
   queryRaw: vi.fn(),
+  executeRaw: vi.fn().mockResolvedValue(1),
   update: vi.fn(),
   findUnique: vi.fn(),
   externalFindUnique: vi.fn(),
@@ -14,6 +15,7 @@ vi.mock('@/lib/prisma', () => ({
   __esModule: true,
   default: {
     $queryRaw: mocks.queryRaw,
+    $executeRaw: mocks.executeRaw,
     backgroundJob: {
       updateMany: mocks.updateMany,
       update: mocks.update,
@@ -35,7 +37,13 @@ vi.mock('@/lib/logger', () => ({
   logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn(), debug: vi.fn() },
 }));
 
-import { processJob, processPendingJobsByType } from '@/lib/jobs/queue';
+import {
+  claimPendingJobs,
+  processJob,
+  processPendingGeneralJobs,
+  processPendingJobs,
+  processPendingJobsByType,
+} from '@/lib/jobs/queue';
 
 describe('background job processing lease', () => {
   beforeEach(() => {
@@ -73,7 +81,12 @@ describe('background job processing lease', () => {
 
     await vi.advanceTimersByTimeAsync(60_000);
     expect(mocks.updateMany).toHaveBeenCalledWith({
-      where: { id: 'job-1', status: 'PROCESSING', attempts: 1, claimToken: '00000000-0000-4000-8000-000000000001' },
+      where: {
+        id: 'job-1',
+        status: 'PROCESSING',
+        attempts: 1,
+        claimToken: '00000000-0000-4000-8000-000000000001',
+      },
       data: { startedAt: expect.any(Date) },
     });
 
@@ -179,4 +192,87 @@ describe('queued batch lease heartbeat', () => {
       vi.useRealTimers();
     }
   });
+});
+
+describe('claimed job slot refilling', () => {
+  afterEach(() => vi.useRealTimers());
+
+  it('rejects conflicting lane selection and invalid critical job types before claims', async () => {
+    vi.clearAllMocks();
+    await expect(
+      claimPendingJobs(5, undefined, [], {
+        criticalEffectsOnly: true,
+        excludeCriticalEffects: true,
+      })
+    ).rejects.toThrow('selected and excluded');
+    await expect(claimPendingJobs(5, 'RUNBOOK', [], { criticalEffectsOnly: true })).rejects.toThrow(
+      'scheduled-task queue'
+    );
+    await expect(
+      processPendingJobsByType('RUNBOOK', 5, 2, { criticalEffectsOnly: true })
+    ).rejects.toThrow('scheduled-task queue');
+    expect(mocks.queryRaw).not.toHaveBeenCalled();
+  });
+
+  it('continues independent jobs while one slot is slow and another handler rejects', async () => {
+    vi.useFakeTimers();
+    vi.resetAllMocks();
+    mocks.executeRaw.mockResolvedValue(1);
+    mocks.updateMany.mockResolvedValue({ count: 1 });
+    mocks.update.mockResolvedValue({});
+    mocks.findUnique.mockRejectedValue(new Error('Retry persistence temporarily unavailable'));
+    const jobs = ['slow', 'failed', 'next', 'last'].map(id => ({
+      id,
+      type: 'NOTIFICATION',
+      status: 'PROCESSING',
+      attempts: 1,
+      maxAttempts: 5,
+      payload: {},
+    }));
+    mocks.queryRaw.mockResolvedValue(jobs);
+    const started: string[] = [];
+    let releaseSlow!: () => void;
+    let active = 0;
+    let peak = 0;
+    // Legacy notification retirement is a real queue handler with a single
+    // database operation, allowing deterministic control without lazy-module mocks.
+    mocks.update.mockImplementation(async ({ where }) => {
+      started.push(where.id);
+      peak = Math.max(peak, ++active);
+      try {
+        if (where.id === 'slow') await new Promise<void>(resolve => (releaseSlow = resolve));
+        if (where.id === 'failed') throw new Error('Provider temporarily unavailable');
+      } finally {
+        active--;
+      }
+    });
+    const batch = processPendingJobsByType('NOTIFICATION', jobs.length, 2);
+    try {
+      await vi.waitFor(() => expect(started).toContain('last'), { timeout: 500, interval: 5 });
+      expect(started).toHaveLength(4);
+      expect(started).toEqual(expect.arrayContaining(['slow', 'failed', 'next', 'last']));
+      expect(active).toBe(1);
+      expect(peak).toBe(2);
+      releaseSlow();
+      await expect(batch).resolves.toEqual({ processed: 3, failed: 1, total: 4 });
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      releaseSlow?.();
+      await batch;
+    }
+  });
+
+  it.each([0, -1, 1.5, NaN, Infinity])(
+    'rejects invalid concurrency %s before claiming jobs',
+    async concurrency => {
+      vi.clearAllMocks();
+      for (const processing of [
+        () => processPendingJobs(5, concurrency),
+        () => processPendingGeneralJobs(5, concurrency),
+        () => processPendingJobsByType('SCHEDULED_TASK', 5, concurrency),
+      ])
+        await expect(processing()).rejects.toThrow('positive safe integer');
+      expect(mocks.queryRaw).not.toHaveBeenCalled();
+    }
+  );
 });

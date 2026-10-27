@@ -29,7 +29,7 @@ describe('subject data discovery', () => {
       notifications: 86,
       auditEvents: 41,
     });
-    expect(result.limitations).toHaveLength(5);
+    expect(result.limitations).toHaveLength(6);
     expect(result).not.toHaveProperty('records');
     expect(prisma.auditLog.count).toHaveBeenCalledWith({
       where: {

@@ -1,3 +1,5 @@
+import { validateCapturedIncidentSlaContract } from '@/lib/incident-sla/captured-contract';
+
 export type SlaTargetSource = 'incident' | 'definition' | 'priority' | 'service' | 'global';
 export type SlaTarget = { ackTargetMs: number; resolveTargetMs: number; source: SlaTargetSource };
 export type IncidentSlaTargetSnapshot = {
@@ -113,4 +115,3 @@ export function resolveLegacySlaTarget(input: {
     source: 'global',
   };
 }
-import { validateCapturedIncidentSlaContract } from '@/lib/incident-sla/contract';

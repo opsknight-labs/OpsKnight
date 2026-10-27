@@ -283,3 +283,49 @@ describe('Status Page Rebuild Serving & Maintenance Suppression', () => {
     });
   });
 });
+
+
+describe('subscriber outbox generation boundary', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it.each([
+    { status: 'RESOLVED', escalationGeneration: 2 },
+    { status: 'OPEN', escalationGeneration: 3 },
+  ])('skips stale work before reading destinations: %j', async current => {
+    vi.mocked(prisma.incident.findUnique).mockResolvedValue({
+      id: 'inc-fenced', visibility: 'PUBLIC', ...current,
+    } as Awaited<ReturnType<typeof prisma.incident.findUnique>>);
+    const result = await notifyStatusPageSubscribers('inc-fenced', 'triggered', 'event-1', {
+      status: 'OPEN', escalationGeneration: 2,
+    });
+    expect(result).toMatchObject({ success: true, skipped: true, sent: 0 });
+    expect(prisma.incident.findUnique).toHaveBeenCalledTimes(1);
+    expect(prisma.statusPage.findMany).not.toHaveBeenCalled();
+  });
+
+  it('reads current destinations when the generation matches', async () => {
+    vi.mocked(prisma.incident.findUnique).mockResolvedValue({
+      id: 'inc-fenced', serviceId: 'service-a', visibility: 'PUBLIC',
+      status: 'OPEN', escalationGeneration: 2,
+    } as Awaited<ReturnType<typeof prisma.incident.findUnique>>);
+    vi.mocked(prisma.statusPage.findMany).mockResolvedValue([]);
+    const result = await notifyStatusPageSubscribers('inc-fenced', 'triggered', 'event-1', {
+      status: 'OPEN', escalationGeneration: 2,
+    });
+    expect(result.success).toBe(true);
+    expect(prisma.incident.findUnique).toHaveBeenCalledTimes(1);
+    expect(prisma.statusPage.findMany).toHaveBeenCalledWith({ where: {
+      enabled: true, showIncidents: true,
+      services: { some: { serviceId: 'service-a', showOnPage: true } },
+    } });
+  });
+
+  it('reports a database failure as retryable failure, not a successful no-op', async () => {
+    vi.mocked(prisma.incident.findUnique).mockRejectedValueOnce(new Error('database unavailable'));
+    const result = await notifyStatusPageSubscribers('inc-fenced', 'triggered', 'event-1', {
+      status: 'OPEN', escalationGeneration: 2,
+    });
+    expect(result).toMatchObject({ success: false, failed: 1 });
+    expect(prisma.statusPage.findMany).not.toHaveBeenCalled();
+  });
+});

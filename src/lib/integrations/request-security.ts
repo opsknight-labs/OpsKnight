@@ -1,3 +1,5 @@
+import { ingestionDeliveries } from '@/lib/ingestion/delivery-context';
+import { ingestionBodyReadTimeoutMs } from '@/lib/ingestion/request-gate';
 import { createHash, randomUUID } from 'crypto';
 import { InboundDeliveryStatus } from '@prisma/client';
 import type { NextRequest } from 'next/server';
@@ -28,19 +30,37 @@ export async function readIntegrationBody(
   const decoder = new TextDecoder();
   let total = 0;
   let text = '';
+  const timeoutMs = ingestionBodyReadTimeoutMs();
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  let abort: (() => void) | undefined;
+  const deadline = timeoutMs
+    ? new Promise<never>((_resolve, reject) => {
+        abort = () => reject(new Error('Integration request body interrupted'));
+        timer = setTimeout(abort, timeoutMs);
+        request.signal?.addEventListener('abort', abort, { once: true });
+        if (request.signal?.aborted) abort();
+      })
+    : undefined;
   try {
     while (true) {
-      const { done, value } = await reader.read();
+      const next = reader.read();
+      const { done, value } = await (deadline ? Promise.race([next, deadline]) : next);
       if (done) break;
       total += value.byteLength;
       if (total > maxBytes) {
-        await reader.cancel();
         throw new IntegrationBodyTooLargeError();
       }
       text += decoder.decode(value, { stream: true });
     }
     return text + decoder.decode();
+  } catch (error) {
+    // A custom/remote stream's cancel hook need not settle promptly. Releasing
+    // admission capacity must not wait for it; the body can no longer be read.
+    void reader.cancel().catch(() => undefined);
+    throw error;
   } finally {
+    if (timer) clearTimeout(timer);
+    if (abort) request.signal?.removeEventListener('abort', abort);
     reader.releaseLock();
   }
 }
@@ -62,6 +82,8 @@ export async function claimInboundDelivery(
   provider: string,
   deliveryId?: string | null
 ): Promise<InboundDeliveryClaim | null> {
+  if (ingestionDeliveries.getStore()?.replayOnly) return null;
+
   const hash = deliveryHash(integrationId, deliveryId);
   // Payload hashes are intentionally not a substitute for provider delivery
   // IDs: identical state notifications may be legitimate future events.

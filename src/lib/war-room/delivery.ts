@@ -42,52 +42,46 @@ export async function ensureWarRoomDelivery(input: { provider: string; idempoten
   }
 }
 
-export async function claimWarRoomDelivery(input: { provider: string; idempotencyKey: string }): Promise<{ id: string; token: string } | null> {
+export async function claimWarRoomDelivery(input: {
+  provider: string;
+  idempotencyKey: string;
+}): Promise<{ id: string; token: string } | null> {
   const existing = await prisma.warRoomProviderEventDelivery.findUnique({
-    where: { provider_idempotencyKey: { provider: input.provider as never, idempotencyKey: input.idempotencyKey } },
-    select: { id: true, status: true, leaseExpiresAt: true },
-  });
-  if (!existing) return null;
-  if (existing.status === 'COMPLETED') return null;
-  if (existing.status === 'FAILED') return null;
-  const token = crypto.randomUUID();
-  const now = new Date();
-  const changed = await prisma.warRoomProviderEventDelivery.updateMany({
     where: {
-      id: existing.id,
-      status: { in: ['PENDING', 'PROCESSING'] },
-      OR: [{ leaseExpiresAt: null }, { leaseExpiresAt: { lte: now } }],
+      provider_idempotencyKey: {
+        provider: input.provider as never,
+        idempotencyKey: input.idempotencyKey,
+      },
     },
-    data: { status: 'PROCESSING', leaseToken: token, leaseExpiresAt: new Date(now.getTime() + DELIVERY_LEASE_MS), attempts: { increment: 1 } },
+    select: { id: true },
   });
-  if (changed.count !== 1) {
-    throw new WarRoomRetryableError('War-room delivery is leased by another worker.', 1000, true);
-  }
-  return { id: existing.id, token };
+  return existing ? claimWarRoomDeliveryById(existing.id) : null;
 }
 
-export async function claimWarRoomDeliveryById(deliveryId: string): Promise<{ id: string; token: string } | null> {
+/** The common successful claim is one conditional write. PostgreSQL evaluates
+ * lease eligibility and assigns its expiry using the same database clock.
+ */
+export async function claimWarRoomDeliveryById(
+  deliveryId: string
+): Promise<{ id: string; token: string } | null> {
+  const token = crypto.randomUUID();
+  const changed = await prisma.$executeRaw`
+    UPDATE "WarRoomProviderEventDelivery"
+    SET status = 'PROCESSING', "leaseToken" = ${token},
+      "leaseExpiresAt" = clock_timestamp() + (${DELIVERY_LEASE_MS} * INTERVAL '1 millisecond'),
+      attempts = attempts + 1, "updatedAt" = clock_timestamp()
+    WHERE id = ${deliveryId} AND status IN ('PENDING', 'PROCESSING')
+      AND ("leaseExpiresAt" IS NULL OR "leaseExpiresAt" <= clock_timestamp())
+  `;
+  if (changed === 1) return { id: deliveryId, token };
+  // A miss distinguishes terminal/missing deliveries from an active lease.
+  // Contention does not consume the background job's retry budget.
   const existing = await prisma.warRoomProviderEventDelivery.findUnique({
     where: { id: deliveryId },
-    select: { id: true, status: true, leaseExpiresAt: true },
+    select: { status: true },
   });
-  if (!existing) return null;
-  if (existing.status === 'COMPLETED') return null;
-  if (existing.status === 'FAILED') return null;
-  const token = crypto.randomUUID();
-  const now = new Date();
-  const changed = await prisma.warRoomProviderEventDelivery.updateMany({
-    where: {
-      id: existing.id,
-      status: { in: ['PENDING', 'PROCESSING'] },
-      OR: [{ leaseExpiresAt: null }, { leaseExpiresAt: { lte: now } }],
-    },
-    data: { status: 'PROCESSING', leaseToken: token, leaseExpiresAt: new Date(now.getTime() + DELIVERY_LEASE_MS), attempts: { increment: 1 } },
-  });
-  if (changed.count !== 1) {
-    throw new WarRoomRetryableError('War-room delivery is leased by another worker.', 1000, true);
-  }
-  return { id: existing.id, token };
+  if (!existing || existing.status === 'COMPLETED' || existing.status === 'FAILED') return null;
+  throw new WarRoomRetryableError('War-room delivery is leased by another worker.', 1000, true);
 }
 
 export async function validateDeliveryLease(deliveryId: string, leaseToken: string): Promise<boolean> {
@@ -102,17 +96,27 @@ export async function validateDeliveryLease(deliveryId: string, leaseToken: stri
   return true;
 }
 
-export async function completeWarRoomDelivery(deliveryId: string, leaseToken: string): Promise<void> {
-  const valid = await validateDeliveryLease(deliveryId, leaseToken);
-  if (!valid) return;
-  await prisma.warRoomProviderEventDelivery.updateMany({
-    where: { id: deliveryId, leaseToken },
-    data: { status: 'COMPLETED', completedAt: new Date(), leaseToken: null, leaseExpiresAt: null },
-  });
-  await prisma.warRoomProviderEventStage.updateMany({
-    where: { deliveryId, status: 'PENDING' },
-    data: { status: 'SKIPPED', lastError: 'Delivery completed without stage completion.' },
-  });
+/** Completion and pending-stage settlement share one statement and lease fence.
+ * A stale token or expired lease cannot alter either record family.
+ */
+export async function completeWarRoomDelivery(
+  deliveryId: string,
+  leaseToken: string
+): Promise<void> {
+  await prisma.$executeRaw`
+    WITH completed AS (
+      UPDATE "WarRoomProviderEventDelivery"
+      SET status = 'COMPLETED', "completedAt" = clock_timestamp(), "leaseToken" = NULL,
+        "leaseExpiresAt" = NULL, "updatedAt" = clock_timestamp()
+      WHERE id = ${deliveryId} AND "leaseToken" = ${leaseToken} AND status = 'PROCESSING'
+        AND ("leaseExpiresAt" IS NULL OR "leaseExpiresAt" > clock_timestamp())
+      RETURNING id
+    )
+    UPDATE "WarRoomProviderEventStage" AS stage
+    SET status = 'SKIPPED', "lastError" = 'Delivery completed without stage completion.',
+      "updatedAt" = clock_timestamp()
+    FROM completed WHERE stage."deliveryId" = completed.id AND stage.status = 'PENDING'
+  `;
 }
 
 export async function failWarRoomDelivery(deliveryId: string, leaseToken: string, error: string, code?: string): Promise<void> {

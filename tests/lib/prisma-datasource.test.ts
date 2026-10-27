@@ -8,6 +8,7 @@ describe('Prisma datasource pool safety', () => {
       WEB_DATABASE_URL: 'postgresql://pool/app',
     };
     expect(selectPrismaDatasourceUrl('web', env)).toBe('postgresql://pool/app');
+    expect(selectPrismaDatasourceUrl('http', env)).toBe('postgresql://pool/app');
     expect(selectPrismaDatasourceUrl('critical-worker', env)).toBe('postgresql://direct/app');
     expect(selectPrismaDatasourceUrl('web', { DATABASE_URL: env.DATABASE_URL })).toBe(
       'postgresql://direct/app'
@@ -16,9 +17,17 @@ describe('Prisma datasource pool safety', () => {
   it('uses the safe default of ten connections', () => {
     const url = new URL(configurePrismaDatasource('postgresql://db/app', undefined)!);
     expect(url.searchParams.get('connection_limit')).toBe('10');
-    expect(url.searchParams.get('options')).toBe('-c statement_timeout=30000');
+    expect(url.searchParams.get('options')).toBe('-c statement_timeout=30000 -c jit=off');
   });
 
+  it('preserves PgBouncer startup compatibility in both supported pooler modes', () => {
+    const explicit = new URL(configurePrismaDatasource('postgresql://pool/app', '5', true)!);
+    const compatibility = new URL(
+      configurePrismaDatasource('postgresql://pool/app?pgbouncer=true', '5')!
+    );
+    expect(explicit.searchParams.get('options')).toBe('-c statement_timeout=30000');
+    expect(compatibility.searchParams.get('options')).toBe('-c statement_timeout=30000');
+  });
   it('uses a valid configured pool size', () => {
     const url = new URL(configurePrismaDatasource('postgresql://db/app', '5')!);
     expect(url.searchParams.get('connection_limit')).toBe('5');

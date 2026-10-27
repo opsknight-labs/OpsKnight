@@ -2,6 +2,7 @@ import { Prisma } from '@prisma/client';
 import prisma from './prisma';
 import { logger } from './logger';
 import { postgresSqlState } from './postgres-error';
+import { isExplicitTransactionRetry } from './transaction-retry';
 
 export const TRANSACTION_MAX_ATTEMPTS = Number(process.env.OPSKNIGHT_TX_MAX_ATTEMPTS ?? 5);
 export const TRANSACTION_MAX_ATTEMPTS_HIGH_LOAD = Number(
@@ -16,6 +17,7 @@ const RETRY_DELAYS = [20, 50, 100, 200, 400];
 
 export function isRetryableTransactionError(error: unknown): boolean {
   if (!error) return false;
+  if (isExplicitTransactionRetry(error)) return true;
   const state = postgresSqlState(error);
   if (state) return state === '40001' || state === '40P01';
   if (error instanceof Prisma.PrismaClientUnknownRequestError) return false;
@@ -112,30 +114,77 @@ export async function runSerializableTransaction<T>(
   throw new Error(`Transaction failed after ${maxAttempts} retries.`);
 }
 
-/**
- * Run a transaction with ReadCommitted isolation level.
- * Better for high-throughput operations where eventual consistency is acceptable.
- *
- * USE FOR: Event ingestion, alert processing, notification creation, logging
- * Benefits: ~10x less contention than Serializable, rarely deadlocks
+export type TransactionTiming = {
+  phase: 'acquire' | 'operation' | 'finalize' | 'backoff';
+  durationMs: number;
+  outcome: 'success' | 'failure';
+  retryReason?: 'explicit' | 'database';
+};
+
+/** ReadCommitted operations retain their constraints and keyed-lock invariants.
+ * Explicit contention rolls back before backoff. Optional timings include driver/pool work;
+ * they are not pure SQL or WAL measurements and cannot affect commit success.
  */
 export async function runReadCommittedTransaction<T>(
   operation: (tx: Prisma.TransactionClient) => Promise<T>,
-  maxAttempts: number = TRANSACTION_MAX_ATTEMPTS_HIGH_LOAD
+  maxAttempts: number = TRANSACTION_MAX_ATTEMPTS_HIGH_LOAD,
+  observer?: (timing: TransactionTiming) => void
 ): Promise<T> {
-  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+  const observe = (timing: TransactionTiming) => {
     try {
-      return await prisma.$transaction(tx => operation(tx), {
-        isolationLevel: 'ReadCommitted',
-        timeout: TRANSACTION_TIMEOUT_MS,
-        maxWait: TRANSACTION_MAX_WAIT_MS,
+      observer?.(timing);
+    } catch {
+      logger.warn('db.transaction.observation_failed');
+    }
+  };
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+    const startedAt = performance.now();
+    let operationEndedAt: number | undefined;
+    try {
+      const result = await prisma.$transaction(
+        async tx => {
+          const acquiredAt = performance.now();
+          observe({ phase: 'acquire', durationMs: acquiredAt - startedAt, outcome: 'success' });
+          let outcome: 'success' | 'failure' = 'failure';
+          try {
+            const result = await operation(tx);
+            outcome = 'success';
+            return result;
+          } finally {
+            operationEndedAt = performance.now();
+            observe({ phase: 'operation', durationMs: operationEndedAt - acquiredAt, outcome });
+          }
+        },
+        {
+          isolationLevel: 'ReadCommitted',
+          timeout: TRANSACTION_TIMEOUT_MS,
+          maxWait: TRANSACTION_MAX_WAIT_MS,
+        }
+      );
+      observe({
+        phase: 'finalize',
+        durationMs: performance.now() - operationEndedAt!,
+        outcome: 'success',
       });
+      return result;
     } catch (error) {
+      observe({
+        phase: operationEndedAt === undefined ? 'acquire' : 'finalize',
+        durationMs: performance.now() - (operationEndedAt ?? startedAt),
+        outcome: 'failure',
+      });
       if (attempt < maxAttempts - 1 && isRetryableTransactionError(error)) {
         logger.warn('db.transaction.retry', { isolation: 'ReadCommitted', attempt: attempt + 1 });
         // Shorter delays for ReadCommitted since contention is lower
         const delay = RETRY_DELAYS[Math.min(attempt, 2)] + Math.random() * 10;
+        const backoffStartedAt = performance.now();
         await sleep(delay);
+        observe({
+          phase: 'backoff',
+          durationMs: performance.now() - backoffStartedAt,
+          outcome: 'success',
+          retryReason: isExplicitTransactionRetry(error) ? 'explicit' : 'database',
+        });
         continue;
       }
       throw error;

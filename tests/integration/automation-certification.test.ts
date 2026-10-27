@@ -485,15 +485,15 @@ describe('service automation transaction certification', () => {
     expect(await db.incidentAutomationDecision.count()).toBe(1);
     expect(await db.automationTrace.count()).toBe(1);
     expect(await db.backgroundJob.count({ where: { type: 'ESCALATION' } })).toBe(0);
+    // Ordinary effects are compacted into one durable dispatch intent per incident.
     const jobs = await db.backgroundJob.findMany();
-    expect(
-      jobs.filter(
-        j => (j.payload as { effect?: string }).effect === 'TRIGGER_ESCALATION_NOTIFICATIONS'
-      )
-    ).toHaveLength(0);
-    expect(
-      jobs.filter(j => (j.payload as { effect?: string }).effect === 'TRIGGER_SERVICE_NOTIFICATION')
-    ).toHaveLength(1);
+    const dispatches = jobs.filter(
+      j => (j.payload as { effect?: string }).effect === 'DISPATCH_ORDINARY'
+    );
+    expect(dispatches).toHaveLength(1);
+    const planned = (dispatches[0].payload as { dispatch: { effects: string[] } }).dispatch.effects;
+    expect(planned).not.toContain('TRIGGER_ESCALATION_NOTIFICATIONS');
+    expect(planned.filter(effect => effect === 'TRIGGER_SERVICE_NOTIFICATION')).toHaveLength(1);
     const incident = await db.incident.findFirstOrThrow();
     expect(incident.priority).toBe('P1');
     expect(incident.slaPriorityAtCapture).toBe('P1');

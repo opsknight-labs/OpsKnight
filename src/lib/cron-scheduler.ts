@@ -1,3 +1,4 @@
+import { startIngestionMaintenance, stopIngestionMaintenance } from './ingestion/maintenance';
 import {
   startRunbookArtifactCleanup,
   stopRunbookArtifactCleanup,
@@ -851,6 +852,10 @@ export function startCronScheduler(options: CronSchedulerOptions = {}) {
     return;
   }
 
+  // Payload minimization remains required when operators use external cron.
+  // Runtime responsibilities restrict this initializer to scheduler owners.
+  startIngestionMaintenance();
+
   const enableInternalCron = process.env.ENABLE_INTERNAL_CRON !== 'false';
   if (!enableInternalCron) {
     logger.info('[Cron] Scheduler disabled via ENABLE_INTERNAL_CRON=false');
@@ -874,6 +879,7 @@ export function startCronScheduler(options: CronSchedulerOptions = {}) {
 export async function stopCronScheduler() {
   initialized = false;
   await stopRunbookWatchdog();
+  await stopIngestionMaintenance();
   await stopRunbookArtifactCleanup();
   if (timer) {
     clearTimeout(timer);

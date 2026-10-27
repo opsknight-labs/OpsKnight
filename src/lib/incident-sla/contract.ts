@@ -1,33 +1,8 @@
+import { readPublishedSlaPolicies } from '@/lib/incident-policies/published';
 import type { Prisma } from '@prisma/client';
 
-export type CapturedIncidentSlaContract = {
-  slaAckTargetMs: number | null | undefined;
-  slaResolveTargetMs: number | null | undefined;
-  slaTargetSource: string | null | undefined;
-  slaTargetCapturedAt: Date | null | undefined;
-};
-
-/** Shared provenance gate for the projector, analytics, and rollups. */
-export function validateCapturedIncidentSlaContract(
-  input: CapturedIncidentSlaContract
-): string | null {
-  if (!Number.isSafeInteger(input.slaAckTargetMs) || (input.slaAckTargetMs ?? 0) <= 0) {
-    return 'Missing or invalid captured ACK target';
-  }
-  if (!Number.isSafeInteger(input.slaResolveTargetMs) || (input.slaResolveTargetMs ?? 0) <= 0) {
-    return 'Missing or invalid captured resolution target';
-  }
-  if (typeof input.slaTargetSource !== 'string' || !input.slaTargetSource.trim()) {
-    return 'Missing or invalid captured target source';
-  }
-  if (
-    !(input.slaTargetCapturedAt instanceof Date) ||
-    !Number.isFinite(input.slaTargetCapturedAt.getTime())
-  ) {
-    return 'Missing or invalid target capture date';
-  }
-  return null;
-}
+export { validateCapturedIncidentSlaContract } from './captured-contract';
+export type { CapturedIncidentSlaContract } from './captured-contract';
 
 export type NewIncidentSlaContract = {
   ackTargetMs: number;
@@ -49,17 +24,12 @@ export type NewIncidentSlaContract = {
  */
 export async function resolveNewIncidentSlaContract(
   tx: Prisma.TransactionClient,
-  input: { serviceId: string; priority?: string | null; now: Date }
+  input: { serviceId: string; priority?: string | null; now: Date },
+  publishedPolicies?: Awaited<ReturnType<typeof readPublishedSlaPolicies>>
 ): Promise<NewIncidentSlaContract> {
-  const policies = await tx.incidentSlaPolicy.findMany({
-    where: {
-      scopeKey: { in: [`service:${input.serviceId}`, 'workspace'] },
-      sealedAt: { not: null },
-    },
-    orderBy: { version: 'desc' },
-    distinct: ['scopeKey'],
-    include: { rules: true },
-  });
+  const policies =
+    publishedPolicies ??
+    (await readPublishedSlaPolicies(tx, [`service:${input.serviceId}`, 'workspace']));
   const service = policies.find(policy => policy.scopeKey === `service:${input.serviceId}`);
   const workspace = policies.find(policy => policy.scopeKey === 'workspace');
   const match = input.priority

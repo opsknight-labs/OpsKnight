@@ -6,16 +6,26 @@ import {
   type IntegrationEventEnvelope,
 } from './automation/runtime';
 import { Prisma, IncidentUrgency } from '@prisma/client';
+import type { ProcessingLease } from './ingestion/contract';
+import { ingestionConfig } from './ingestion/config';
+import { lockProcessingReceipt, completeProcessingReceipt } from './ingestion/postgres';
 import { logger } from './logger';
+import { sanitizeIntegrationEnvelope } from './integrations/payload-security';
 import { EVENT_TRANSACTION_MAX_ATTEMPTS } from './config';
-import { createHash } from 'crypto';
+import {
+  normalizeDedupKeys,
+  lockEventDedupKeys,
+  findOpenEventIncident,
+} from './incidents/event-identity';
 import { runReadCommittedTransaction } from './db-utils';
+import { observeTransactionTiming } from './metrics/operational/transaction-timing';
 import {
   enqueueEventSideEffects,
   enqueueLifecycleSideEffects,
   enqueueIncidentCreatedRunbookEvaluation,
 } from './event-outbox';
 import { applyIncidentLifecycleCommand } from './incidents/lifecycle';
+import { readPublishedIncidentPolicies } from './incident-policies/published';
 import { resolveNewIncidentSlaContract } from './incident-sla/contract';
 import { resolveIncidentClassification } from './incidents/classification';
 import { deriveNewIncidentSlaTransition } from './incident-sla/next-transition';
@@ -41,7 +51,6 @@ export type EventPayload = {
   };
 };
 
-const MAX_DEDUP_KEY_LENGTH = 512;
 const MAX_STORED_ALERT_PAYLOAD_BYTES = 64 * 1024;
 
 const URGENCY_RANK: Record<IncidentUrgency, number> = {
@@ -78,38 +87,6 @@ function truncateString(str: string, maxLength: number): string {
   return chars.slice(0, maxLength - 3).join('') + '...';
 }
 
-function truncateDedupKey(key: unknown): string {
-  const str = typeof key === 'string' ? key : String(key || '');
-  if (str.length <= MAX_DEDUP_KEY_LENGTH) return str;
-  const hash = createHash('sha256').update(str).digest('hex').slice(0, 32);
-  const prefixLength = MAX_DEDUP_KEY_LENGTH - 33; // 32 hex chars + 1 underscore
-  return `${str.slice(0, prefixLength)}_${hash}`;
-}
-
-function normalizeDedupKeys(
-  key: unknown,
-  integrationId: string,
-  eventData: EventPayload['payload']
-): { primary: string; legacy?: string } {
-  const supplied = typeof key === 'string' ? key.trim() : String(key ?? '').trim();
-  const stableRaw =
-    supplied ||
-    `unkeyed-${createHash('sha256')
-      .update(
-        JSON.stringify({
-          source: eventData.source,
-          summary: eventData.summary,
-          details: eventData.custom_details ?? null,
-        })
-      )
-      .digest('hex')}`;
-
-  return {
-    primary: truncateDedupKey(`${integrationId}:${stableRaw}`),
-    legacy: supplied ? truncateDedupKey(supplied) : undefined,
-  };
-}
-
 function boundedAlertPayload(eventData: EventPayload['payload']): Prisma.InputJsonValue {
   const serialized = JSON.stringify(eventData);
   if (Buffer.byteLength(serialized, 'utf8') <= MAX_STORED_ALERT_PAYLOAD_BYTES) {
@@ -129,22 +106,6 @@ function boundedAlertPayload(eventData: EventPayload['payload']): Prisma.InputJs
   };
 }
 
-async function lockEventDedupKeys(
-  tx: Prisma.TransactionClient,
-  serviceId: string,
-  candidateDedupKeys: string[]
-): Promise<void> {
-  // Serialize only requests that can address the same logical incident. Include
-  // legacy keys during rolling upgrades and use deterministic lock ordering.
-  const lockKeys = Array.from(
-    new Set(candidateDedupKeys.map(key => JSON.stringify([serviceId, key])))
-  ).sort();
-
-  for (const lockKey of lockKeys) {
-    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${lockKey}, 0))`;
-  }
-}
-
 async function reloadIncident(tx: Prisma.TransactionClient, incidentId: string) {
   const incident = await tx.incident.findUnique({ where: { id: incidentId } });
   if (!incident) {
@@ -157,18 +118,22 @@ export async function processEvent(
   payload: EventPayload,
   serviceId: string,
   integrationId: string,
-  envelopeInput?: IntegrationEventEnvelope
+  envelopeInput?: IntegrationEventEnvelope,
+  processingLease?: ProcessingLease
 ) {
-  const envelope: IntegrationEventEnvelope = envelopeInput ?? {
-    serviceId,
-    integrationId,
-    integrationType: 'EVENTS_API',
+  const dedupKeys = normalizeDedupKeys(payload.dedup_key, integrationId, payload.payload);
+  const envelope = sanitizeIntegrationEnvelope({
+    ...(envelopeInput ?? {
+      serviceId,
+      integrationId,
+      integrationType: 'EVENTS_API',
+      providerPayload: payload,
+      receivedAt: new Date(),
+    }),
     event: payload,
-    providerPayload: payload,
-    receivedAt: new Date(),
-  };
-  const { event_action, dedup_key: rawDedupKey, payload: eventData } = payload;
-  const dedupKeys = normalizeDedupKeys(rawDedupKey, integrationId, eventData);
+  });
+  payload = envelope.event;
+  const { event_action, payload: eventData } = payload;
   const dedup_key = dedupKeys.primary;
   const candidateDedupKeys = dedupKeys.legacy
     ? [dedupKeys.primary, dedupKeys.legacy]
@@ -186,10 +151,25 @@ export async function processEvent(
   }
 
   const normalizedSource = truncateString(normalizeText(eventData.source.trim()), 500);
+  // Event-only preparation has no dependency on the locked incident or policy.
+  const sanitizedTitle = truncateString(normalizeText(eventData.summary.trim()), 500);
+  const rawDescription =
+    event_action === 'trigger' && eventData.custom_details
+      ? JSON.stringify(eventData.custom_details, null, 2)
+      : null;
+  const truncatedDescription = rawDescription
+    ? truncateString(rawDescription, MAX_DESCRIPTION_LENGTH)
+    : null;
 
   const transactionStarted = performance.now();
-  const result = await runReadCommittedTransaction(async tx => {
-    // 1. Validate serviceId exists (prevents orphaned incidents)
+  const execute = async (tx: Prisma.TransactionClient) => {
+    // ReadCommitted removes broad Serializable predicate conflicts. A
+    // transaction-scoped advisory lock preserves the find-then-create
+    // deduplication boundary for events targeting the same service/key.
+    await lockEventDedupKeys(tx, serviceId, candidateDedupKeys);
+
+    // Validate service and configuration after waiting on the identity lock.
+    // This snapshot belongs to the event now being applied, not its queue wait.
     const service = await tx.service.findUnique({
       where: { id: serviceId },
       select: {
@@ -210,20 +190,9 @@ export async function processEvent(
       throw new Error(`Service not found: ${serviceId}. Integration may be misconfigured.`);
     }
 
-    // ReadCommitted removes broad Serializable predicate conflicts. A
-    // transaction-scoped advisory lock preserves the find-then-create
-    // deduplication boundary for events targeting the same service/key.
-    await lockEventDedupKeys(tx, serviceId, candidateDedupKeys);
-
     // 2. Find existing open incident with this dedup_key BEFORE creating alert
     // This prevents alert orphaning when resolve/acknowledge has no matching incident
-    const existingIncident = await tx.incident.findFirst({
-      where: {
-        dedupKey: { in: candidateDedupKeys },
-        serviceId,
-        status: { in: ['OPEN', 'ACKNOWLEDGED', 'SNOOZED', 'SUPPRESSED'] },
-      },
-    });
+    const existingIncident = await findOpenEventIncident(tx, serviceId, candidateDedupKeys);
 
     // Rolling-upgrade compatibility: move an open incident created with an
     // older, unscoped key to the integration-scoped key on first contact.
@@ -263,17 +232,25 @@ export async function processEvent(
       };
     }
 
-    // 4. Log the raw alert
-    const alert = await tx.alert.create({
-      data: {
-        dedupKey: dedup_key,
-        status: event_action === 'resolve' ? 'RESOLVED' : 'TRIGGERED',
-        payload: boundedAlertPayload(eventData),
-        serviceId,
-      },
+    // Persist the final link on insertion instead of rewriting every alert.
+    // New incidents are created first so the foreign key remains immediate;
+    // alert, incident, Automation and receipt still share this transaction.
+    const alertData = () => ({
+      dedupKey: dedup_key,
+      status: event_action === 'resolve' ? 'RESOLVED' : 'TRIGGERED',
+      payload: boundedAlertPayload(eventData),
+      serviceId,
+      createdAt: processingLease ? envelope.receivedAt : undefined,
     });
+    const persistAlert = (incidentId?: string) =>
+      tx.alert.create({
+        data: { ...alertData(), incidentId },
+        select: { id: true },
+      });
+    if (existingIncident) await persistAlert(existingIncident.id);
 
     if (event_action === 'resolve' && !existingIncident) {
+      const alert = await persistAlert();
       logger.info('event.resolve_buffered_for_out_of_order', {
         dedupKey: dedup_key,
         serviceId,
@@ -291,11 +268,6 @@ export async function processEvent(
       if (existingIncident) {
         // Deduplication: append the alert and monotonically raise urgency when a
         // stronger signal arrives. Alert retries must never lower an incident.
-        await tx.alert.update({
-          where: { id: alert.id },
-          data: { incidentId: existingIncident.id },
-        });
-
         const incomingClassification = await resolveIncidentClassification(tx, {
           serviceId,
           integrationId,
@@ -350,41 +322,44 @@ export async function processEvent(
           serviceId,
           status: 'RESOLVED',
           incidentId: null,
-          createdAt: { gte: new Date(Date.now() - 5 * 60 * 1000) },
+          createdAt: processingLease
+            ? {
+                gte: new Date(envelope.receivedAt.getTime() - 5 * 60 * 1000),
+                lte: envelope.receivedAt,
+              }
+            : { gte: new Date(Date.now() - 5 * 60 * 1000) },
         },
         orderBy: { createdAt: 'desc' },
       });
 
       // Create New Incident with proper severity → urgency mapping
-      const classification = await resolveIncidentClassification(tx, {
-        serviceId,
-        integrationId,
-        alertSeverity: eventData.severity,
-      });
+      const publishedPolicies = await readPublishedIncidentPolicies(tx, serviceId, integrationId);
+      const classification = await resolveIncidentClassification(
+        tx,
+        {
+          serviceId,
+          integrationId,
+          alertSeverity: eventData.severity,
+        },
+        publishedPolicies.classification
+      );
       const urgency = classification.urgency;
       const automation = await prepareAutomation(tx, envelope, classification, service.policy);
       const finalPriority = automation?.finalPriority ?? classification.priority;
 
-      // Keep canonical text in persistence. React/email/API boundaries are
-      // responsible for context-appropriate output escaping.
-      const sanitizedTitle = truncateString(normalizeText(eventData.summary.trim()), 500);
-
       // Creation is not a lifecycle transition. A buffered upstream resolve may
       // legitimately create the incident directly in its terminal state.
       if (recentResolveAlert) {
-        const rawDescription = eventData.custom_details
-          ? JSON.stringify(eventData.custom_details, null, 2)
-          : null;
-        const truncatedDescription = rawDescription
-          ? truncateString(rawDescription, MAX_DESCRIPTION_LENGTH)
-          : null;
-
         const resolutionAt = new Date();
-        const resolvedSla = await resolveNewIncidentSlaContract(tx, {
-          serviceId,
-          priority: finalPriority,
-          now: resolutionAt,
-        });
+        const resolvedSla = await resolveNewIncidentSlaContract(
+          tx,
+          {
+            serviceId,
+            priority: finalPriority,
+            now: resolutionAt,
+          },
+          publishedPolicies.sla
+        );
         const resolvedIncident = await tx.incident.create({
           data: {
             title: sanitizedTitle,
@@ -423,6 +398,12 @@ export async function processEvent(
             nextSlaTransitionAt: null,
             nextSlaTransitionKind: null,
             escalationStatus: 'COMPLETED',
+            alerts: { create: alertData() },
+            events: {
+              create: {
+                message: `Incident created in resolved state: resolve event was received prior to trigger event from ${normalizedSource}`,
+              },
+            },
           },
         });
 
@@ -440,15 +421,8 @@ export async function processEvent(
           source: 'MONITORING',
         });
         await tx.alert.updateMany({
-          where: { id: { in: [alert.id, recentResolveAlert.id] } },
+          where: { id: recentResolveAlert.id },
           data: { incidentId: resolvedIncident.id },
-        });
-
-        await tx.incidentEvent.create({
-          data: {
-            incidentId: resolvedIncident.id,
-            message: `Incident created in resolved state: resolve event was received prior to trigger event from ${normalizedSource}`,
-          },
         });
 
         // This terminal creation bypasses applyIncidentLifecycleCommand, so it
@@ -482,25 +456,25 @@ export async function processEvent(
         };
       }
 
-      // Truncate description to prevent DB insert failures on very long payloads
-      const rawDescription = eventData.custom_details
-        ? JSON.stringify(eventData.custom_details, null, 2)
-        : null;
-      const truncatedDescription = rawDescription
-        ? truncateString(rawDescription, MAX_DESCRIPTION_LENGTH)
-        : null;
-
       // Initial OPEN/SUPPRESSED state is creation policy, not a transition of an
       // existing incident, so it intentionally remains in the ingestion path.
       const incidentCreatedAt = new Date();
-      const newSla = await resolveNewIncidentSlaContract(tx, {
-        serviceId,
-        priority: finalPriority,
-        now: incidentCreatedAt,
-      });
+      const newSla = await resolveNewIncidentSlaContract(
+        tx,
+        {
+          serviceId,
+          priority: finalPriority,
+          now: incidentCreatedAt,
+        },
+        publishedPolicies.sla
+      );
       const engagement = resolveIncidentEngagement({
         urgency,
-        supportHours: await resolveSupportHours(tx, { serviceId, at: incidentCreatedAt }),
+        supportHours: await resolveSupportHours(
+          tx,
+          { serviceId, at: incidentCreatedAt },
+          publishedPolicies.support
+        ),
         now: incidentCreatedAt,
       });
       const newIncident = await tx.incident.create({
@@ -540,6 +514,14 @@ export async function processEvent(
             return { nextSlaTransitionAt: next?.at, nextSlaTransitionKind: next?.kind };
           })(),
           createdAt: incidentCreatedAt,
+          alerts: { create: alertData() },
+          events: {
+            create: {
+              message: isFlapping
+                ? `Incident created in SUPPRESSED state: rapid alert oscillations detected from ${normalizedSource}. Notifications muted until signal stabilises.`
+                : `Incident triggered via API from ${normalizedSource}`,
+            },
+          },
           ...(isFlapping
             ? {
                 escalationStatus: 'COMPLETED',
@@ -568,36 +550,27 @@ export async function processEvent(
         }
       );
 
-      // Persist automation context/traces concurrently with alert attachment
-      await Promise.all([
-        persistAutomation(
-          tx,
-          newIncident.id,
-          envelope,
-          automation,
-          !isFlapping,
-          service.escalationPolicyId
-        ),
-        tx.alert.update({
-          where: { id: alert.id },
-          data: { incidentId: newIncident.id },
-        }),
-      ]);
-
-      // Log timeline event
-      await tx.incidentEvent.create({
-        data: {
-          incidentId: newIncident.id,
-          message: isFlapping
-            ? `Incident created in SUPPRESSED state: rapid alert oscillations detected from ${normalizedSource}. Notifications muted until signal stabilises.`
-            : `Incident triggered via API from ${normalizedSource}`,
-        },
-      });
+      await persistAutomation(
+        tx,
+        newIncident.id,
+        envelope,
+        automation,
+        !isFlapping,
+        service.escalationPolicyId
+      );
 
       if (!isFlapping) {
         // Escalation state and its first due job commit with the incident, so
         // an OPEN incident with a policy is never left with nothing scheduled.
         let inMemoryRouting = automation ? buildResponderRoutingFromAutomation(automation) : null;
+        // This incident was created by this transaction and has no Automation
+        // decision. Reuse the service's authoritative no-policy snapshot rather
+        // than re-reading that new row's routing and the same service. The
+        // independently durable critical effect still resolves delivery-time
+        // routing, including a policy configured after incident creation.
+        if (!automation && !service.escalationPolicyId) {
+          inMemoryRouting = { type: 'DEFAULT_FANOUT', policy: null };
+        }
         if (!inMemoryRouting && service.escalationPolicyId) {
           try {
             const snapshot = await captureResponderSnapshot(tx, service.escalationPolicyId);
@@ -640,8 +613,16 @@ export async function processEvent(
           'triggered',
           newIncident.id,
           engagement.earliestDeliveryAt,
-          { escalationGeneration: newIncident.escalationGeneration ?? 0, status: newIncident.status },
-          automation ? { mode: automation.mode, routeType: automation.result?.outcome.type ?? 'SERVICE_DEFAULT' } : null
+          {
+            escalationGeneration: newIncident.escalationGeneration ?? 0,
+            status: newIncident.status,
+          },
+          automation
+            ? {
+                mode: automation.mode,
+                routeType: automation.result?.outcome.type ?? 'SERVICE_DEFAULT',
+              }
+            : null
         );
       }
       // Same transaction as persistAutomation, so evaluation always sees the committed decision.
@@ -667,11 +648,6 @@ export async function processEvent(
     if (event_action === 'resolve') {
       // Alert linkage, lifecycle mutation, timeline event, and outbox enqueue stay
       // in this same ReadCommitted transaction under the dedup advisory lock.
-      await tx.alert.update({
-        where: { id: alert.id },
-        data: { incidentId: existingIncident!.id },
-      });
-
       const transition = await applyIncidentLifecycleCommand(tx, {
         incidentId: existingIncident!.id,
         command: 'RESOLVE',
@@ -697,11 +673,6 @@ export async function processEvent(
     if (event_action === 'acknowledge') {
       // Repeated acknowledge signals still attach their raw alert, but the
       // lifecycle engine makes the state transition/event/effects idempotent.
-      await tx.alert.update({
-        where: { id: alert.id },
-        data: { incidentId: existingIncident!.id },
-      });
-
       const transition = await applyIncidentLifecycleCommand(tx, {
         incidentId: existingIncident!.id,
         command: 'ACKNOWLEDGE',
@@ -725,13 +696,24 @@ export async function processEvent(
     }
 
     // Unknown event_action
+    if (!existingIncident) await persistAlert();
     logger.warn('event.unknown_action', {
       eventAction: event_action,
       dedupKey: dedup_key,
       source: normalizedSource,
     });
     return { action: 'ignored', reason: `Unknown event action: ${event_action}` };
-  }, EVENT_TRANSACTION_MAX_ATTEMPTS);
+  };
+  const result = await runReadCommittedTransaction(
+    async tx => {
+      if (processingLease) await lockProcessingReceipt(tx, processingLease);
+      const outcome = await execute(tx);
+      if (processingLease) await completeProcessingReceipt(tx, processingLease, outcome);
+      return outcome;
+    },
+    EVENT_TRANSACTION_MAX_ATTEMPTS,
+    timing => observeTransactionTiming('event', timing)
+  );
   observeOperationalHistogram(
     'opsknight_event_transaction_duration_ms',
     performance.now() - transactionStarted,
@@ -764,5 +746,24 @@ export async function processEvent(
 export { escalationNotificationRoute } from './event-side-effects';
 
 export async function processIntegrationEvent(envelope: IntegrationEventEnvelope) {
+  envelope = sanitizeIntegrationEnvelope(envelope);
+  if (ingestionConfig().mode === 'postgres') {
+    const { acceptIntegrationEvent } = await import('./ingestion/admission');
+    return acceptIntegrationEvent(envelope);
+  }
   return processEvent(envelope.event, envelope.serviceId, envelope.integrationId, envelope);
+}
+
+/** Providers with multiple normalized children share the same admission policy. */
+export async function processIntegrationBatch(
+  input: Omit<IntegrationEventEnvelope, 'event'>,
+  events: EventPayload[]
+) {
+  if (ingestionConfig().mode === 'postgres') {
+    const { acceptIntegrationBatch } = await import('./ingestion/admission');
+    return acceptIntegrationBatch(input, events);
+  }
+  const results = [];
+  for (const event of events) results.push(await processIntegrationEvent({ ...input, event }));
+  return results;
 }

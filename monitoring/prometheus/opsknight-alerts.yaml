@@ -135,3 +135,28 @@ groups:
           severity: warning
         annotations:
           summary: OpsKnight HTTP p95 latency exceeds two seconds
+
+  - name: opsknight.ingestion
+    rules:
+      - alert: OpsKnightIngestionDeadLetter
+        expr: max(opsknight_ingestion_unfinished{status="DEAD"}) > 0
+        labels:
+          severity: critical
+        annotations:
+          summary: Accepted ingestion work requires operator recovery
+          description: A dead letter blocks later events for its incident identity. Diagnose and replay it, or explicitly archive it with a reason after reviewing lifecycle impact. Do not skip it automatically.
+      - alert: OpsKnightIngestionBacklogStale
+        expr: max(opsknight_ingestion_oldest_unfinished_age_seconds) > 120
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: Accepted events have waited more than two minutes
+          description: Check ingestion workers, database capacity and blocked identities. Incident SLA clocks start at activation; ingestion delay needs separate response.
+      - alert: OpsKnightIngestionEvidenceUnavailable
+        expr: (opsknight_ingestion_enabled == 1) and (opsknight_ingestion_metrics_collection_success == 0)
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: Durable ingestion queue evidence is unavailable

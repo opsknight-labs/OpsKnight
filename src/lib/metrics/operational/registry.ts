@@ -29,6 +29,154 @@ const FORBIDDEN_LABELS = new Set([
 
 export const OPERATIONAL_METRICS = [
   {
+    name: 'opsknight_ingestion_enabled',
+    help: 'Durable PostgreSQL ingestion enabled on this gateway',
+    kind: 'gauge',
+    labels: [],
+    scope: 'instance',
+    estimatedMaxSeries: 1,
+  },
+  {
+    name: 'opsknight_ingestion_metrics_collection_success',
+    help: 'Persistent ingestion queue evidence is available',
+    kind: 'gauge',
+    labels: [],
+    scope: 'cluster_snapshot',
+    estimatedMaxSeries: 1,
+  },
+  {
+    name: 'opsknight_ingestion_unfinished',
+    help: 'Committed unfinished ingestion receipts by bounded status',
+    kind: 'gauge',
+    labels: ['status'],
+    scope: 'cluster_snapshot',
+    estimatedMaxSeries: 3,
+  },
+  {
+    name: 'opsknight_ingestion_oldest_unfinished_age_seconds',
+    help: 'Database-clock age of the oldest unfinished ingestion receipt',
+    kind: 'gauge',
+    labels: [],
+    scope: 'cluster_snapshot',
+    estimatedMaxSeries: 1,
+  },
+  {
+    name: 'opsknight_ingestion_acceptance_total',
+    help: 'Durably committed ingestion admissions, separated from duplicate delivery retries',
+    kind: 'counter',
+    labels: ['outcome'],
+    scope: 'counter',
+    estimatedMaxSeries: 2,
+  },
+  {
+    name: 'opsknight_ingestion_acceptance_duration_ms',
+    help: 'Durable append duration including admission checks',
+    kind: 'histogram',
+    labels: [],
+    scope: 'counter',
+    estimatedMaxSeries: 12,
+    buckets: [1, 5, 10, 25, 50, 100, 250, 500, 1000, 5000],
+  },
+  {
+    name: 'opsknight_ingestion_admission_stage_duration_ms',
+    help: 'Admission stage duration; acquire includes pool/BEGIN and finalize includes driver handoff plus commit or rollback',
+    kind: 'histogram',
+    labels: ['stage', 'outcome'],
+    scope: 'counter',
+    estimatedMaxSeries: 672,
+    buckets: [1, 5, 10, 25, 50, 100, 250, 500, 1000, 5000],
+  },
+  {
+    name: 'opsknight_ingestion_processing_total',
+    help: 'Ingestion worker attempts by completed, retry, or dead outcome',
+    kind: 'counter',
+    labels: ['outcome'],
+    scope: 'counter',
+    estimatedMaxSeries: 3,
+  },
+  {
+    name: 'opsknight_ingestion_active_events',
+    help: 'Events currently owned by the local continuous ingestion consumer',
+    kind: 'gauge',
+    labels: [],
+    scope: 'instance',
+    estimatedMaxSeries: 1,
+  },
+  {
+    name: 'opsknight_ingestion_processing_capacity',
+    help: 'Current local ingestion concurrency limit; zero while on standby or stopping',
+    kind: 'gauge',
+    labels: [],
+    scope: 'instance',
+    estimatedMaxSeries: 1,
+  },
+  {
+    name: 'opsknight_ingestion_completion_latency_ms',
+    help: 'Time from original acceptance to committed incident processing',
+    kind: 'histogram',
+    labels: [],
+    scope: 'counter',
+    estimatedMaxSeries: 12,
+    buckets: [100, 250, 500, 1000, 2000, 5000, 10000, 30000, 60000, 300000],
+  },
+  {
+    name: 'opsknight_ingestion_request_overload_total',
+    help: 'Requests rejected before work when the local asynchronous ingestion concurrency is full',
+    kind: 'counter',
+    labels: [],
+    scope: 'counter',
+    estimatedMaxSeries: 1,
+  },
+  {
+    name: 'opsknight_ingestion_capacity_reservation_retries_total',
+    help: 'Additional reservation attempts after eligible budget shards were temporarily locked',
+    kind: 'counter',
+    labels: [],
+    scope: 'counter',
+    estimatedMaxSeries: 1,
+  },
+  {
+    name: 'opsknight_ingestion_capacity_contention_total',
+    help: 'Reservation attempts rolled back after skipping locked shards despite committed headroom; retries may succeed',
+    kind: 'counter',
+    labels: [],
+    scope: 'counter',
+    estimatedMaxSeries: 1,
+  },
+  {
+    name: 'opsknight_ingestion_capacity_rejections_total',
+    help: 'Reservation failures from exhausted committed capacity or persistent shard contention',
+    kind: 'counter',
+    labels: ['reason'],
+    scope: 'counter',
+    estimatedMaxSeries: 2,
+  },
+  {
+    name: 'opsknight_ingestion_retention_rows_total',
+    help: 'Rows minimized or removed by isolated ingestion maintenance',
+    kind: 'counter',
+    labels: ['kind'],
+    scope: 'counter',
+    estimatedMaxSeries: 5,
+  },
+  {
+    name: 'opsknight_ingestion_retention_batches_total',
+    help: 'Bounded ingestion maintenance batches by cleanup class and outcome',
+    kind: 'counter',
+    labels: ['kind', 'outcome'],
+    scope: 'counter',
+    estimatedMaxSeries: 10,
+  },
+  {
+    name: 'opsknight_ingestion_retention_tick_duration_ms',
+    help: 'Elapsed time for a scheduler ingestion maintenance tick',
+    kind: 'histogram',
+    labels: [],
+    scope: 'counter',
+    estimatedMaxSeries: 10,
+    buckets: [1, 10, 50, 100, 250, 1000, 2500, 5000],
+  },
+  {
     name: 'opsknight_automation_decision_bytes',
     help: 'UTF-8 bytes in committed immutable Automation decision explanations',
     kind: 'histogram',
@@ -180,6 +328,15 @@ export const OPERATIONAL_METRICS = [
     scope: 'counter',
     estimatedMaxSeries: 16,
     buckets: [0.1, 0.5, 1, 3, 8, 15, 30, 60, 120, 250, 500],
+  },
+  {
+    name: 'opsknight_event_stage_duration_ms',
+    help: 'Incident transaction driver intervals; acquire includes pool/BEGIN, finalize includes commit/rollback handoff, not pure WAL time',
+    kind: 'histogram',
+    labels: ['stage', 'outcome'],
+    scope: 'counter',
+    estimatedMaxSeries: 104,
+    buckets: [1, 5, 10, 25, 50, 100, 250, 500, 1000, 5000],
   },
   {
     name: 'opsknight_event_transaction_duration_ms',
@@ -1463,9 +1620,22 @@ export const OPERATIONAL_METRICS = [
 
 type RegisteredMetricName = (typeof OPERATIONAL_METRICS)[number]['name'];
 type RuntimeRow = { labels: Record<string, string>; value: number };
-const runtimeValues = new Map<RegisteredMetricName, Map<string, RuntimeRow>>();
 type HistogramRow = RuntimeRow & { count: number; buckets: number[] };
-const runtimeHistograms = new Map<RegisteredMetricName, Map<string, HistogramRow>>();
+type RuntimeMetricStore = {
+  values: Map<RegisteredMetricName, Map<string, RuntimeRow>>;
+  histograms: Map<RegisteredMetricName, Map<string, HistogramRow>>;
+};
+declare global {
+  var opsknightRuntimeOperationalMetrics: RuntimeMetricStore | undefined;
+}
+// Instrumentation, workers and HTTP scrapes can load separate emitted modules.
+// Keep one process-local store so telemetry does not depend on chunk placement.
+const runtimeStore: RuntimeMetricStore = (globalThis.opsknightRuntimeOperationalMetrics ??= {
+  values: new Map(),
+  histograms: new Map(),
+});
+const runtimeValues = runtimeStore.values;
+const runtimeHistograms = runtimeStore.histograms;
 
 function runtimeKey(labels: Record<string, string>) {
   return Object.entries(labels)

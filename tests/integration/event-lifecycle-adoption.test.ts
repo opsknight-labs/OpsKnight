@@ -8,6 +8,7 @@ const describeIfRealDB =
 type SideEffectPayload = {
   effect?: string;
   incidentId?: string;
+  dispatch?: { version: number; effects: string[] };
 };
 
 describeIfRealDB('Event lifecycle engine adoption', { timeout: 30000 }, () => {
@@ -67,13 +68,15 @@ describeIfRealDB('Event lifecycle engine adoption', { timeout: 30000 }, () => {
     const jobs = await testPrisma.backgroundJob.findMany({
       where: { type: 'SCHEDULED_TASK' },
     });
-    const acknowledgeJobs = jobs.filter(
-      job =>
-        (job.payload as SideEffectPayload).effect?.startsWith('LIFECYCLE_') &&
-        (job.payload as SideEffectPayload).incidentId === incident!.id
-    );
+    const acknowledgeJobs = jobs.flatMap(job => {
+      const payload = job.payload as SideEffectPayload;
+      if (payload.incidentId !== incident!.id) return [];
+      const effects =
+        payload.effect === 'DISPATCH_ORDINARY' ? payload.dispatch!.effects : [payload.effect];
+      return effects.filter(effect => effect?.startsWith('LIFECYCLE_'));
+    });
     expect(acknowledgeJobs).toHaveLength(5);
-    expect(acknowledgeJobs.map(job => (job.payload as SideEffectPayload).effect).sort()).toEqual(
+    expect(acknowledgeJobs.sort()).toEqual(
       [
         'LIFECYCLE_USER_NOTIFICATION',
         'LIFECYCLE_SERVICE_NOTIFICATION',

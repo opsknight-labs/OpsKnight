@@ -13,7 +13,7 @@
  */
 
 import prisma from '@/lib/prisma';
-import type { Prisma } from '@prisma/client';
+import type { ChatOpsConfig, Prisma, Service } from '@prisma/client';
 import type {
   WarRoomProviderName,
   WarRoomProviderSet,
@@ -301,6 +301,28 @@ export async function getGlobalWarRoomPolicy(
       : Promise.resolve(null),
   ]);
 
+  return decodeGlobalWarRoomPolicy(chatOpsConfig, defaultProvidersRow, defaultMeetingRow);
+}
+
+type GlobalPolicyConfig = Pick<
+  ChatOpsConfig,
+  | 'enabled'
+  | 'defaultVideoBridge'
+  | 'autoCreateOnUrgency'
+  | 'autoCreateOnPriority'
+  | 'archiveOnResolve'
+>;
+type PolicyRow = { value: Prisma.JsonValue } | null;
+export type CollaborationServiceSnapshot = Pick<
+  Service,
+  'id' | 'autoCreateWarRoom' | 'microsoftTeamsWarRoomAutoCreate' | 'warRoomVideoBridge'
+>;
+
+function decodeGlobalWarRoomPolicy(
+  chatOpsConfig: GlobalPolicyConfig | null,
+  defaultProvidersRow: PolicyRow,
+  defaultMeetingRow: PolicyRow
+): GlobalWarRoomPolicy {
   let defaultProviders: WarRoomProviderSet = ['SLACK', 'MICROSOFT_TEAMS'];
 
   if (defaultProvidersRow?.value && Array.isArray(defaultProvidersRow.value)) {
@@ -425,6 +447,13 @@ export async function getServiceWarRoomPolicy(
       : Promise.resolve(null),
   ]);
 
+  return decodeServiceWarRoomPolicy(service, configRow);
+}
+
+function decodeServiceWarRoomPolicy(
+  service: Omit<CollaborationServiceSnapshot, 'id'> | null,
+  configRow: PolicyRow
+): ServiceWarRoomPolicy {
   // Default for services is DISABLED - enabling war rooms is on user discretion
   let serviceProviders: WarRoomProviderSet | null = [];
   let meetingProvider: IncidentMeetingProvider | null = null;
@@ -553,4 +582,47 @@ export async function setServiceWarRoomPolicy(
       })
       .catch(() => null);
   }
+}
+
+/**
+ * Read execution-time policy once for a service snapshot already loaded by the
+ * caller. No process cache: an integration enabled while an event is queued must
+ * be visible when that event executes. Database failures propagate so durable
+ * work retries instead of interpreting an unknown configuration as disabled.
+ * Pass the transaction that loaded service when snapshot consistency is needed.
+ */
+export async function getIncidentCollaborationPolicies(
+  service: CollaborationServiceSnapshot,
+  tx?: Prisma.TransactionClient,
+  chatOpsSnapshot?: GlobalPolicyConfig | null
+): Promise<{ globalPolicy: GlobalWarRoomPolicy; servicePolicy: ServiceWarRoomPolicy }> {
+  const client = tx ?? prisma;
+  const serviceKey = `${SERVICE_WAR_ROOM_POLICY_PREFIX}${service.id}`;
+  const [chatOpsConfig, rows] = await Promise.all([
+    chatOpsSnapshot !== undefined
+      ? Promise.resolve(chatOpsSnapshot)
+      : client.chatOpsConfig.findUnique({
+          where: { id: 'default' },
+          select: {
+            enabled: true,
+            defaultVideoBridge: true,
+            autoCreateOnUrgency: true,
+            autoCreateOnPriority: true,
+            archiveOnResolve: true,
+          },
+        }),
+    client.systemConfig.findMany({
+      where: { key: { in: [GLOBAL_WAR_ROOM_POLICY_KEY, GLOBAL_MEETING_POLICY_KEY, serviceKey] } },
+      select: { key: true, value: true },
+    }),
+  ]);
+  const byKey = new Map(rows.map(row => [row.key, row]));
+  return {
+    globalPolicy: decodeGlobalWarRoomPolicy(
+      chatOpsConfig,
+      byKey.get(GLOBAL_WAR_ROOM_POLICY_KEY) ?? null,
+      byKey.get(GLOBAL_MEETING_POLICY_KEY) ?? null
+    ),
+    servicePolicy: decodeServiceWarRoomPolicy(service, byKey.get(serviceKey) ?? null),
+  };
 }
