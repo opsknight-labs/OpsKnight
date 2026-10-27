@@ -4,7 +4,7 @@ description: Plan a secure production Kubernetes installation and choose Helm or
 type: concept
 product_area: deployment
 audience: [operator, administrator]
-keywords: [Kubernetes, Helm, Kustomize, production]
+keywords: [Kubernetes, Kubernetes install, Helm, Kustomize, production]
 verification:
   level: source
   verified_at: 2026-09-29
