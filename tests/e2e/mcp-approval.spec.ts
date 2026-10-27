@@ -120,10 +120,15 @@ test('remote request requires a different native reviewer and commits one recove
     await expect(
       reviewPage.getByRole('heading', { name: 'Review requested runbook execution', exact: true })
     ).toBeVisible();
-    await expect(reviewPage.getByText(proposal.planDigest, { exact: true })).toBeVisible();
+    // Streaming can briefly keep a hidden copy of the page; assert on the rendered main region.
+    await expect(
+      reviewPage.locator('#main-content').getByText(proposal.planDigest, { exact: true })
+    ).toBeVisible();
     await reviewPage.setViewportSize({ width: 390, height: 844 });
     await reviewPage.getByRole('button', { name: 'Approve frozen plan', exact: true }).click();
-    await expect(reviewPage.getByText('Approved', { exact: true })).toBeVisible();
+    await expect(
+      reviewPage.locator('#main-content').getByText('Approved', { exact: true })
+    ).toBeVisible();
   } finally {
     await reviewer.close();
   }
