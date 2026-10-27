@@ -12,7 +12,7 @@ version: '3.8'
 
 services:
   opsknight-app:
-    image: ${OPSKNIGHT_IMAGE:-ghcr.io/opsknight-labs/opsknight:2.1.1}
+    image: ${OPSKNIGHT_IMAGE:-ghcr.io/opsknight-labs/opsknight:2.1.2}
     ports:
       - target: 3000
         published: ${APP_PORT:-3000}

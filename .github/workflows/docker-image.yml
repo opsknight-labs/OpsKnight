@@ -982,14 +982,24 @@ jobs:
           set -euo pipefail
           source_ref="${IMAGE_NAME_RELEASE}@${RELEASE_IMAGE_DIGEST}"
           test -n "$RELEASE_IMAGE_DIGEST"
+          declare -A seen_tags=()
+          tag_args=()
+          verified_tags=()
           while IFS= read -r tag; do
             [ -n "$tag" ] || continue
-            docker buildx imagetools create -t "$tag" "$source_ref"
-            promoted_digest="$(docker buildx imagetools inspect "$tag" | awk '/^Digest:/ {print $2; exit}')"
-            test "$promoted_digest" = "$RELEASE_IMAGE_DIGEST"
+            if [ -z "${seen_tags[$tag]:-}" ]; then
+              seen_tags["$tag"]=1
+              tag_args+=("-t" "$tag")
+              verified_tags+=("$tag")
+            fi
           done <<EOF
           $PROMOTED_TAGS
           EOF
+          docker buildx imagetools create "${tag_args[@]}" "$source_ref"
+          for tag in "${verified_tags[@]}"; do
+            promoted_digest="$(docker buildx imagetools inspect "$tag" | awk '/^Digest:/ {print $2; exit}')"
+            test "$promoted_digest" = "$RELEASE_IMAGE_DIGEST"
+          done
 
   native-agent-release-artifacts:
     needs: [validate-release-tag, agent-image]

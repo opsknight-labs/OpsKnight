@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.1.2] - 2026-10-27
+
+OpsKnight 2.1.2 hardens the multi-tag OCI image promotion pipeline in the release workflow and completes patch alignment across deployment definitions.
+
+### Fixed
+
+- **Multi-tag OCI release promotion:** Batched and deduplicated `docker buildx imagetools create` tag promotion invocations to prevent BuildKit container daemon aborts when creating multiple release aliases (`latest`, `2`, `2.1`, `2.1.2`).
+- **Release pipeline resilience:** Hardened release verification steps to inspect and confirm all promoted tags against the certified release digest.
+
+### Changed
+
+- **Deployment configurations:** Synchronized application and agent deployment manifests (Compose, Swarm, Kubernetes Kustomize, and Helm charts) to 2.1.2.
+
 ## [2.1.1] - 2026-10-27
 
 OpsKnight 2.1.1 is a release packaging and reliability patch addressing release workflow buffer limits, API contract discovery synchronization, and Helm deployment clarifications.

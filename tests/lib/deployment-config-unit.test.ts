@@ -588,7 +588,7 @@ describe('deployment configuration invariants', () => {
     expect(workflow).toContain("['buildx', 'imagetools', 'inspect', ref, '--format', format]");
     expect(workflow).toContain("inspectJson('SBOM', '{{ json .SBOM }}')");
     expect(workflow).toContain("inspectJson('Provenance', '{{ json .Provenance }}')");
-    expect(workflow).toContain('docker buildx imagetools create -t "$tag" "$source_ref"');
+    expect(workflow).toContain('docker buildx imagetools create "${tag_args[@]}" "$source_ref"');
     expect(workflow).toContain('test "$promoted_digest" = "$RELEASE_IMAGE_DIGEST"');
     expect(workflow).toContain(
       'summary.releaseImageIndexDigest = process.env.RELEASE_IMAGE_DIGEST'
