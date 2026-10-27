@@ -1,8 +1,33 @@
 import { describe, expect, it } from 'vitest';
 import { createRequire } from 'node:module';
-const { parseAdmissionStages, parseEventStages, summarizeStages } = createRequire(import.meta.url)(
-  '../../scripts/ingestion/admission-stage-snapshot.cjs'
-);
+const { parseAdmissionStages, parseEventStages, summarizeStages, parseAdmissionCounters } =
+  createRequire(import.meta.url)('../../scripts/ingestion/admission-stage-snapshot.cjs');
+
+it('captures only fixed overload/capacity counters without identity labels', () => {
+  expect(
+    parseAdmissionCounters(
+      [
+        'unrelated_metric{serviceId="private"} 99',
+        'opsknight_ingestion_request_overload_total 2',
+        'opsknight_ingestion_capacity_rejections_total{reason="contended"} 3',
+      ].join('\n')
+    )
+  ).toEqual([
+    { name: 'opsknight_ingestion_request_overload_total', labels: {}, value: 2 },
+    {
+      name: 'opsknight_ingestion_capacity_rejections_total',
+      labels: { reason: 'contended' },
+      value: 3,
+    },
+  ]);
+  expect(() =>
+    parseAdmissionCounters('opsknight_ingestion_request_overload_total{serviceId="private"} 1')
+  ).toThrow();
+  expect(() =>
+    parseAdmissionCounters('opsknight_ingestion_capacity_rejections_total{reason="private"} 1')
+  ).toThrow();
+  expect(() => parseAdmissionCounters('opsknight_ingestion_request_overload_total NaN')).toThrow();
+});
 
 describe('bounded native admission telemetry', () => {
   it('keeps only declared stages and numeric histogram values', () => {
@@ -58,6 +83,7 @@ it('keeps event driver stages separate and rejects identity labels', () => {
 
 it('accepts fixed request and queue stages without request identities', () => {
   for (const stage of [
+    'request-wait',
     'authentication',
     'body-read',
     'body-parse',

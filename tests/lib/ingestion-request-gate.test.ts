@@ -13,22 +13,30 @@ function deferred() {
   return { promise, resolve, reject };
 }
 
+async function rejectAfterWait(operation: () => Promise<Response>) {
+  const response = withIngestionRequestSlot(operation);
+  await vi.advanceTimersByTimeAsync(26);
+  return response;
+}
+
 describe('asynchronous ingestion request backpressure', () => {
   beforeEach(() => {
+    vi.useFakeTimers();
     fixture.mode = 'postgres';
     fixture.maxInFlightRequests = 2;
     globalThis.opsknightIngestionRequestGate = undefined;
   });
   afterEach(() => {
+    vi.useRealTimers();
     globalThis.opsknightIngestionRequestGate = undefined;
   });
-  it('rejects excess work immediately without running authentication, body reads or database operations', async () => {
+  it('expires queued work without running authentication, body reads or database operations', async () => {
     const a = deferred(),
       b = deferred();
     const first = withIngestionRequestSlot(() => a.promise);
     const second = withIngestionRequestSlot(() => b.promise);
     const excess = vi.fn();
-    const response = await withIngestionRequestSlot(excess);
+    const response = await rejectAfterWait(excess);
     expect(response.status).toBe(503);
     expect(response.headers.get('Retry-After')).toBe('5');
     expect(excess).not.toHaveBeenCalled();
@@ -47,7 +55,7 @@ describe('asynchronous ingestion request backpressure', () => {
     const active = withIngestionRequestSlot(() => pending.promise);
     const failed = expect(active).rejects.toThrow('failed transaction');
     await Promise.resolve();
-    expect((await withIngestionRequestSlot(async () => new Response())).status).toBe(503);
+    expect((await rejectAfterWait(async () => new Response())).status).toBe(503);
     pending.reject(new Error('failed transaction'));
     await failed;
     expect((await withIngestionRequestSlot(async () => new Response())).status).toBe(200);
@@ -60,10 +68,14 @@ describe('asynchronous ingestion request backpressure', () => {
     vi.resetModules();
     const other = await import('@/lib/ingestion/request-gate');
     fixture.maxInFlightRequests = 1;
-    expect((await other.withIngestionRequestSlot(async () => new Response())).status).toBe(503);
+    const queued = other.withIngestionRequestSlot(async () => new Response());
+    await vi.advanceTimersByTimeAsync(26);
+    expect((await queued).status).toBe(503);
     a.resolve(new Response());
     await first;
-    expect((await other.withIngestionRequestSlot(async () => new Response())).status).toBe(503);
+    const stillQueued = other.withIngestionRequestSlot(async () => new Response());
+    await vi.advanceTimersByTimeAsync(26);
+    expect((await stillQueued).status).toBe(503);
     b.resolve(new Response());
     await second;
     expect((await other.withIngestionRequestSlot(async () => new Response())).status).toBe(200);
@@ -73,6 +85,106 @@ describe('asynchronous ingestion request backpressure', () => {
     globalThis.opsknightIngestionRequestGate = { active: 100 };
     expect((await withIngestionRequestSlot(async () => new Response('legacy'))).status).toBe(200);
     expect(globalThis.opsknightIngestionRequestGate.active).toBe(100);
+  });
+
+  it('hands released permits to FIFO waiters and bounds the unparsed waiting queue', async () => {
+    const a = deferred(),
+      b = deferred(),
+      c = deferred(),
+      d = deferred();
+    const order: string[] = [];
+    const activeA = withIngestionRequestSlot(() => a.promise);
+    const activeB = withIngestionRequestSlot(() => b.promise);
+    const queuedC = withIngestionRequestSlot(() => {
+      order.push('c');
+      return c.promise;
+    });
+    const queuedD = withIngestionRequestSlot(() => {
+      order.push('d');
+      return d.promise;
+    });
+    const excess = vi.fn();
+    expect((await withIngestionRequestSlot(excess)).status).toBe(503);
+    expect(excess).not.toHaveBeenCalled();
+    expect(globalThis.opsknightIngestionRequestGate?.waiting).toHaveLength(2);
+    expect(order).toEqual([]);
+    a.resolve(new Response());
+    await activeA;
+    expect(order).toEqual(['c']);
+    expect(globalThis.opsknightIngestionRequestGate?.active).toBe(2);
+    b.resolve(new Response());
+    await activeB;
+    expect(order).toEqual(['c', 'd']);
+    expect(globalThis.opsknightIngestionRequestGate?.active).toBe(2);
+    c.resolve(new Response());
+    d.resolve(new Response());
+    await Promise.all([queuedC, queuedD]);
+    expect(globalThis.opsknightIngestionRequestGate?.active).toBe(0);
+    expect(globalThis.opsknightIngestionRequestGate?.waiting).toHaveLength(0);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('transfers a failed active operation slot without timing out the active transaction', async () => {
+    fixture.maxInFlightRequests = 1;
+    const a = deferred();
+    const first = withIngestionRequestSlot(() => a.promise);
+    const failed = expect(first).rejects.toThrow('failed');
+    const operation = vi.fn(async () => new Response(null, { status: 202 }));
+    const queued = withIngestionRequestSlot(operation);
+    await vi.advanceTimersByTimeAsync(10);
+    expect(operation).not.toHaveBeenCalled();
+    a.reject(new Error('failed'));
+    await failed;
+    expect((await queued).status).toBe(202);
+    expect(operation).toHaveBeenCalledTimes(1);
+    expect(globalThis.opsknightIngestionRequestGate?.active).toBe(0);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('expires a waiter even when the timer callback is delayed by a busy event loop', async () => {
+    fixture.maxInFlightRequests = 1;
+    let time = 0;
+    const clock = vi.spyOn(performance, 'now').mockImplementation(() => time);
+    try {
+      const a = deferred();
+      const active = withIngestionRequestSlot(() => a.promise);
+      const operation = vi.fn(async () => new Response());
+      const queued = withIngestionRequestSlot(operation);
+      time = 26;
+      a.resolve(new Response());
+      await active;
+      expect((await queued).status).toBe(503);
+      expect(operation).not.toHaveBeenCalled();
+      expect(globalThis.opsknightIngestionRequestGate?.active).toBe(0);
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      clock.mockRestore();
+    }
+  });
+
+  it('removes expired queue entries before applying the waiting bound to a new caller', async () => {
+    fixture.maxInFlightRequests = 1;
+    let time = 0;
+    const clock = vi.spyOn(performance, 'now').mockImplementation(() => time);
+    try {
+      const a = deferred();
+      const active = withIngestionRequestSlot(() => a.promise);
+      const expiredOperation = vi.fn(async () => new Response());
+      const expired = withIngestionRequestSlot(expiredOperation);
+      time = 26;
+      const operation = vi.fn(async () => new Response(null, { status: 202 }));
+      const next = withIngestionRequestSlot(operation);
+      expect((await expired).status).toBe(503);
+      expect(expiredOperation).not.toHaveBeenCalled();
+      expect(globalThis.opsknightIngestionRequestGate?.waiting).toHaveLength(1);
+      a.resolve(new Response());
+      await active;
+      expect((await next).status).toBe(202);
+      expect(globalThis.opsknightIngestionRequestGate?.active).toBe(0);
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      clock.mockRestore();
+    }
   });
 });
 
@@ -102,7 +214,7 @@ describe('bounded pre-admission body reads', () => {
     );
     const pending = POST(request);
     await Promise.resolve();
-    expect((await withIngestionRequestSlot(async () => new Response())).status).toBe(503);
+    expect((await rejectAfterWait(async () => new Response())).status).toBe(503);
     await vi.advanceTimersByTimeAsync(5001);
     expect((await pending).status).toBe(500);
     expect(cancel).toHaveBeenCalledTimes(1);
