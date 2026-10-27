@@ -712,6 +712,9 @@ model Service {
   microsoftTeamsDestinations      MicrosoftTeamsDestination[]
   intelligencePolicy              IntelligencePolicy?
   incidentFingerprints            IncidentFingerprint[]
+  upstreamDependencies            ServiceDependency[]             @relation("DependencyDownstream")
+  downstreamDependencies          ServiceDependency[]             @relation("DependencyUpstream")
+  changeEvents                    ChangeEvent[]
 
   @@index([teamId])
   @@index([escalationPolicyId])
@@ -5143,4 +5146,64 @@ model IntelligenceCursor {
   watermarkAt DateTime
   lastId      String
   updatedAt   DateTime @updatedAt
+}
+
+// ---------------------------------------------------------------------------
+// OpsKnight Intelligence: response intelligence (dependencies and change events)
+// ---------------------------------------------------------------------------
+
+enum DependencyOrigin {
+  DECLARED
+  OBSERVED
+}
+
+enum DependencyStatus {
+  ACTIVE
+  SUGGESTED
+  REJECTED
+}
+
+enum ChangeKind {
+  DEPLOY
+  CONFIG
+  FEATURE_FLAG
+  INFRA
+}
+
+// "downstream depends on upstream". Observed edges are only ever suggestions until an operator approves.
+model ServiceDependency {
+  id                  String           @id @default(cuid())
+  upstreamServiceId   String
+  upstream            Service          @relation("DependencyUpstream", fields: [upstreamServiceId], references: [id], onDelete: Cascade)
+  downstreamServiceId String
+  downstream          Service          @relation("DependencyDownstream", fields: [downstreamServiceId], references: [id], onDelete: Cascade)
+  origin              DependencyOrigin
+  status              DependencyStatus @default(ACTIVE)
+  confidence          Float            @default(1)
+  evidence            Json
+  createdAt           DateTime         @default(now())
+  updatedAt           DateTime         @updatedAt
+
+  @@unique([upstreamServiceId, downstreamServiceId])
+  @@index([downstreamServiceId, status])
+  @@index([upstreamServiceId, status])
+}
+
+// Something that changed in production. summary and metadata are bounded, operator-supplied text.
+model ChangeEvent {
+  id         String     @id @default(cuid())
+  serviceId  String?
+  service    Service?   @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  source     String
+  kind       ChangeKind
+  summary    String
+  version    String?
+  url        String?
+  dedupKey   String?
+  occurredAt DateTime
+  createdAt  DateTime   @default(now())
+
+  @@unique([source, dedupKey], map: "uq_change_event_source_dedup")
+  @@index([serviceId, occurredAt(sort: Desc)], map: "idx_change_event_service_recent")
+  @@index([occurredAt], map: "idx_change_event_retention")
 }

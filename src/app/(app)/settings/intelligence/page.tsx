@@ -1,4 +1,5 @@
 import { SettingsSection } from '@/components/settings/layout/SettingsSection';
+import Link from 'next/link';
 import {
   IntelligencePolicyForm,
   IntelligenceSettingsForm,
@@ -76,7 +77,10 @@ export default async function IntelligenceSettingsPage() {
         <p className="text-sm text-muted-foreground">
           Learns from your incident history to surface similar past incidents. It runs entirely off
           the paging path: it never delays escalation or notifications, and turning it off restores
-          exactly the previous behaviour.
+          exactly the previous behaviour.{' '}
+          <Link href="/settings/intelligence/response" className="underline">
+            Dependencies, changes and alert quality
+          </Link>
         </p>
       </header>
 
@@ -137,6 +141,7 @@ export default async function IntelligenceSettingsPage() {
           headVersion={headVersion}
           mode={policy?.mode ?? 'OFF'}
           similarityEnabled={policy?.definition.similarity.enabled ?? true}
+          responseEnabled={policy?.definition.response.enabled ?? true}
           minScore={policy?.definition.similarity.minScore ?? 0.35}
           canManage={canManage}
           autoAvailable={AUTO_MODE_AVAILABLE}

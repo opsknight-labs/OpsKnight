@@ -101,6 +101,7 @@ export async function publishGlobalPolicy(
         enabled: form.get('similarityEnabled') === 'on',
         minScore: Number(text(form, 'minScore')),
       },
+      response: { enabled: form.get('responseEnabled') === 'on' },
     };
     const result = await publishPolicyVersion(
       {},

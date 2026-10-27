@@ -143,9 +143,47 @@ policy version and keeps the current mode and similarity settings.
 
 Automatic grouping remains unimplemented and unavailable.
 
+## Probable cause and runbook recommendations
+
+After a fresh fingerprint, one coalesced `ANALYZE_RESPONSE` item per incident computes three kinds of
+finding, written together in one bounded transaction. It is queued only when the effective policy is
+not OFF and its `response.enabled` flag is on (default on; older policy versions without the field
+read as on). Everything is recommendation only; nothing is executed, muted or paged.
+
+- **Change correlation.** Changes recorded in the six hours before onset, on the same service, on an
+  upstream service, or not tied to a service. Score = time proximity (exponential, 60 minute decay)
+  × relation weight (same service 1, upstream 0.75^depth, global 0.4) × change kind weight, capped at
+  0.9: a change that merely preceded an incident is a lead to verify, not a cause. The card says so.
+- **Upstream incidents.** Incidents that opened shortly before on services this one depends on,
+  scored the same way.
+- **Runbook ranking.** Runbooks bound to the service plus any run against it in the last 180 days,
+  ranked by the lower bound of the Wilson interval over succeeded / (succeeded + failed + timed out).
+  A runbook that worked once out of once ranks below one that worked 9 of 10. Cancelled and unknown
+  runs say nothing about efficacy and are excluded. Only published, non-archived runbooks appear, and
+  the card links to the existing runbook page; it never runs one.
+
+**Dependencies.** "Service A depends on service B" edges are managed in Settings → Intelligence →
+Dependencies, changes and alert quality. Only ACTIVE edges influence analysis. An hourly, bounded
+job proposes edges when incidents on one service repeatedly open within ten minutes after another
+(at least five times in 30 days); these are created as SUGGESTED only, are ignored until a person
+approves them, and a rejection is permanent. Graph walks are breadth-first with a visited set and a
+depth cap of three, so cycles and wide graphs cannot loop or grow without bound.
+
+**Change events.** `POST /api/integrations/changes?integrationId=…` authenticates exactly like the
+generic webhook integration and scopes the change to that integration's service (any `serviceId` in
+the body is ignored). It never creates an alert or incident and never calls the paging path. Changes
+are idempotent per `(source, dedupKey)`, rejected when more than five minutes in the future or older
+than 30 days, and kept for the finding retention period.
+
+**Alert quality.** A flag-only leaderboard of services whose incidents mostly resolve within five
+minutes or are never acknowledged (at least five incidents in 30 days). It never suppresses anything.
+
+**Visibility.** Findings store numeric and enum evidence only. The viewer's own read rules are applied
+to every change (service scope), upstream incident (incident scope) and runbook (runbook scope) at
+display time, and anything they cannot read is dropped silently. SHADOW mode records but shows nothing.
+
 ## Not yet implemented
 
-Correlation of related alerts, automatic grouping, any delay before paging, change correlation,
-probable cause, runbook ranking, AI assistant features and adaptive learning are future stages.
-Each will be introduced behind its own certification gate and will not change paging behaviour
-until that gate has passed.
+Automatic grouping, any delay before paging, AI assistant features, the AI gateway and adaptive
+learning are future stages. Each will be introduced behind its own certification gate and will not
+change paging behaviour until that gate has passed.

@@ -121,6 +121,7 @@ export function IntelligencePolicyForm({
   headVersion,
   mode,
   similarityEnabled,
+  responseEnabled,
   minScore,
   canManage,
   autoAvailable,
@@ -128,6 +129,7 @@ export function IntelligencePolicyForm({
   headVersion: number;
   mode: IntelligenceModeValue;
   similarityEnabled: boolean;
+  responseEnabled: boolean;
   minScore: number;
   canManage: boolean;
   autoAvailable: boolean;
@@ -158,6 +160,15 @@ export function IntelligencePolicyForm({
         <input id={`${id}-sim`} name="similarityEnabled" type="checkbox" defaultChecked={similarityEnabled} disabled={disabled} className="mt-1 h-4 w-4" />
         <label htmlFor={`${id}-sim`} className="text-sm font-medium">
           Find similar past incidents
+        </label>
+      </div>
+      <div className="flex items-start gap-3">
+        <input id={`${id}-resp`} name="responseEnabled" type="checkbox" defaultChecked={responseEnabled} disabled={disabled} className="mt-1 h-4 w-4" />
+        <label htmlFor={`${id}-resp`} className="text-sm font-medium">
+          Suggest probable causes and runbooks
+          <span className="block text-xs font-normal text-muted-foreground">
+            Uses recent changes, service dependencies and past runbook results. Recommendations only; nothing is run.
+          </span>
         </label>
       </div>
       <div className="space-y-1">

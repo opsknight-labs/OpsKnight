@@ -389,7 +389,7 @@ export async function listPolicyVersions(
   return { headVersion: policy.headVersion, versions };
 }
 
-function parseOrThrow<T>(
+export function parseOrThrow<T>(
   schema: { safeParse: (value: unknown) => { success: true; data: T } | { success: false; error: { issues: Array<{ path: PropertyKey[]; code: string; message: string }> } } },
   input: unknown
 ): T {

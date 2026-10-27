@@ -147,6 +147,13 @@ export const policyDefinitionSchema = z
       })
       .strict()
       .default({ rules: [], criticalBypass: true }),
+    /** Probable-cause and runbook-ranking findings. Recommendations only; nothing here ever acts. */
+    response: z
+      .object({
+        enabled: z.boolean().default(true),
+      })
+      .strict()
+      .default({ enabled: true }),
   })
   .strict()
   .superRefine((definition, ctx) => {
@@ -186,3 +193,18 @@ export const rollbackPolicyInputSchema = z
   })
   .strict();
 export type RollbackPolicyInput = z.infer<typeof rollbackPolicyInputSchema>;
+
+/** Response-intelligence bounds. Hard caps keep every analysis O(small) regardless of data volume. */
+export const RESPONSE_LIMITS = {
+  /** How far before incident onset a change or upstream incident may sit to be considered. */
+  causeLookbackMinutes: 360,
+  /** Proximity decay constant: a change this many minutes before onset scores ~37% of an instant one. */
+  proximityTauMinutes: 60,
+  maxUpstreamDepth: 3,
+  maxCauseCandidates: 25,
+  maxCauseFindings: 5,
+  maxRunbookFindings: 5,
+  runbookHistoryDays: 180,
+  /** Confidence never reaches certainty: a temporal correlation is a hypothesis to verify. */
+  maxCauseConfidence: 0.9,
+} as const;

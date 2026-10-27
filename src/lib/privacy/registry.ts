@@ -292,6 +292,8 @@ export const personalDataRegistry = [
       'IntelligenceEvaluationRun',
       'IntelligenceWorkItem',
       'IntelligencePattern',
+      'ServiceDependency',
+      'ChangeEvent',
     ],
     fields: [
       'IncidentFingerprint.template',
@@ -303,18 +305,22 @@ export const personalDataRegistry = [
       'IntelligencePolicyVersion.createdById',
       'IntelligencePolicyVersion.reason',
       'IntelligenceWorkItem.lastError',
+      'ChangeEvent.summary',
+      'ChangeEvent.version',
+      'ChangeEvent.url',
     ],
     purpose: [
       'Similar-incident suggestions',
       'Correlation and noise analysis',
       'Responder feedback on suggestions',
       'Policy change history',
+      'Probable-cause and runbook recommendations from service dependencies and change events',
     ],
     classifications: ['INTERNAL', 'PERSONAL'],
     locations: ['DATABASE', 'FREE_TEXT'],
     retention: {
       current:
-        'UI-configured per entity (defaults: fingerprints 730 days, correlation 365, findings 365, feedback 730); incident-linked rows also cascade with the incident; a bounded sweep runs even while intelligence is disabled.',
+        'UI-configured per entity (defaults: fingerprints 730 days, correlation 365, findings and change events 365, feedback 730); incident-linked rows also cascade with the incident; a bounded sweep runs even while intelligence is disabled.',
       target:
         'Retention holds honoured for derived data; field-level minimization of free-text feedback.',
     },

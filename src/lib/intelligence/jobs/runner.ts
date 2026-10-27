@@ -8,6 +8,8 @@ import { indexIncident } from './indexer';
 import { purgeExpiredIntelligenceData, RETENTION_INTERVAL_MS } from './retention';
 import { analyzeIncident } from '../similarity/analyzer';
 import { correlateIncident, shouldCorrelate } from '../correlation/handler';
+import { OBSERVE_INTERVAL_MS, suggestObservedDependencies } from '../dependencies/observer';
+import { analyzeResponse, shouldAnalyzeResponse } from '../response/handler';
 import {
   claimWorkItems,
   completeWorkItem,
@@ -43,11 +45,17 @@ export const DEFAULT_HANDLERS: WorkHandlers = {
       if (await shouldCorrelate(item.subjectKey)) {
         next.push({ kind: WORK_KINDS.CORRELATE_INCIDENT, subjectKey: item.subjectKey });
       }
+      if (await shouldAnalyzeResponse(item.subjectKey)) {
+        next.push({ kind: WORK_KINDS.ANALYZE_RESPONSE, subjectKey: item.subjectKey });
+      }
       await enqueueWorkItems(next);
     }
   },
   [WORK_KINDS.CORRELATE_INCIDENT]: async (item, { settings }) => {
     await correlateIncident(item, settings);
+  },
+  [WORK_KINDS.ANALYZE_RESPONSE]: async (item, { settings }) => {
+    await analyzeResponse(item, settings);
   },
   [WORK_KINDS.ANALYZE_INCIDENT]: async (item, { settings }) => {
     await analyzeIncident(item, settings);
@@ -58,10 +66,11 @@ export interface LaneState {
   pause: PauseState;
   lastReconcileAt: number;
   lastRetentionAt: number;
+  lastObserveAt: number;
 }
 
 export function createLaneState(): LaneState {
-  return { pause: { paused: false }, lastReconcileAt: 0, lastRetentionAt: 0 };
+  return { pause: { paused: false }, lastReconcileAt: 0, lastRetentionAt: 0, lastObserveAt: 0 };
 }
 
 export interface CycleResult {
@@ -200,6 +209,18 @@ export async function runIntelligenceCycle(
       );
     }
     if (pause.paused) return { ...EMPTY_RESULT, status: 'paused', criticalLagMs };
+
+    // Hourly and bounded; a failure only skips this round.
+    if (now() - state.lastObserveAt >= OBSERVE_INTERVAL_MS) {
+      state.lastObserveAt = now();
+      try {
+        await suggestObservedDependencies(settings, new Date(now()));
+      } catch (error) {
+        logger.warn('[Intelligence] Dependency observation failed; will retry', {
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
 
     let discovered = 0;
     try {

@@ -13,8 +13,8 @@ import {
   stopIntelligenceLane,
   type WorkHandler,
 } from '@/lib/intelligence/jobs/runner';
-import { INTELLIGENCE_SETTINGS_DEFAULTS } from '@/lib/intelligence/contract';
-import type { IntelligenceSettingsView } from '@/lib/intelligence/settings/service';
+import { DEFAULT_POLICY_DEFINITION, INTELLIGENCE_SETTINGS_DEFAULTS } from '@/lib/intelligence/contract';
+import { publishPolicyVersion, type IntelligenceSettingsView } from '@/lib/intelligence/settings/service';
 import { createTestIncident, createTestService, resetDatabase, testPrisma as db } from '../../helpers/test-db';
 
 beforeEach(async () => {
@@ -111,6 +111,36 @@ describe('intelligence cycle', () => {
     expect(await runIntelligenceCycle(state, deps)).toMatchObject({ claimed: 1, completed: 1, failed: 0 });
     expect(await db.intelligenceWorkItem.count()).toBe(0);
     expect(await db.intelligenceFinding.count()).toBe(0);
+  });
+
+  it('chains response analysis only when the policy allows it, and produces findings end to end', async () => {
+    await enable();
+    const admin = await db.user.create({ data: { email: 'chain@example.com', name: 'A', passwordHash: 'x', role: 'ADMIN', status: 'ACTIVE' } });
+    await publishPolicyVersion(
+      {},
+      { mode: 'SHADOW', definition: DEFAULT_POLICY_DEFINITION, expectedHeadVersion: 0 },
+      { actorId: admin.id, source: 'UI' }
+    );
+    const service = await createTestService('Checkout');
+    const state = createLaneState();
+    let clock = Date.now();
+    const deps = { getCriticalLagMs: noLag, now: () => clock };
+
+    await runIntelligenceCycle(state, deps);
+    const created = await createTestIncident('Latency high on api-3', service.id);
+    await db.changeEvent.create({
+      data: { serviceId: service.id, source: 'ci', kind: 'DEPLOY', summary: 'v1', occurredAt: new Date(created.createdAt.getTime() - 120_000) },
+    });
+    clock = Date.now() + DISCOVERY_SAFETY_LAG_MS + 5000;
+    await runIntelligenceCycle(state, deps); // index
+    expect((await db.intelligenceWorkItem.findMany({ orderBy: { kind: 'asc' } })).map(i => i.kind)).toEqual([
+      'ANALYZE_INCIDENT',
+      'ANALYZE_RESPONSE',
+    ]);
+    expect(await runIntelligenceCycle(state, deps)).toMatchObject({ claimed: 2, completed: 2, failed: 0 });
+    const finding = await db.intelligenceFinding.findFirstOrThrow({ where: { incidentId: created.id, kind: 'CHANGE_CORRELATION' } });
+    expect(finding.status).toBe('ACTIVE');
+    expect(await db.intelligenceWorkItem.count()).toBe(0);
   });
 
   it('isolates a failing item from the rest of the batch and retries it with backoff', async () => {

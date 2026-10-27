@@ -182,7 +182,7 @@ describe('intelligence data model contracts', () => {
     const schema = read(join(root, 'prisma/schema.prisma'));
     const tables = [
       ...schema.matchAll(
-        /^model ((?:Intelligence|Correlation|IncidentFingerprint|IncidentRelationship)\w*) \{/gm
+        /^model ((?:Intelligence|Correlation|IncidentFingerprint|IncidentRelationship|ServiceDependency|ChangeEvent)\w*) \{/gm
       ),
     ].map(match => match[1]);
     expect(tables.length).toBeGreaterThan(10);

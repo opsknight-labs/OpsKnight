@@ -89,8 +89,8 @@ domains:
     deletion: { current: manual-review-preserve-immutable-routing-evidence, target: approved-subject-attribution-and-minimization }
 
   - domain: intelligence
-    data: [masked-incident-titles, content-tokens, credential-filtered-labels, numeric-match-evidence, feedback-notes, feedback-and-policy-authorship, work-item-errors]
-    purpose: [similar-incident-suggestions, correlation-and-noise-analysis, suggestion-feedback, policy-history]
+    data: [masked-incident-titles, content-tokens, credential-filtered-labels, numeric-match-evidence, feedback-notes, feedback-and-policy-authorship, work-item-errors, service-dependency-graph, operator-supplied-change-summaries]
+    purpose: [similar-incident-suggestions, correlation-and-noise-analysis, suggestion-feedback, policy-history, probable-cause-and-runbook-recommendations]
     storage: [postgresql]
     recipients: [authorized-workspace-users-limited-to-incidents-they-can-read]
     retention: { current: ui-configured-per-entity-with-incident-cascade-and-sweep-while-disabled, target: retention-holds-honoured-and-free-text-minimization }

@@ -3,6 +3,7 @@ import { Suspense } from 'react';
 import IncidentAutomationCard from '@/components/automation/IncidentAutomationCard';
 import IncidentIntelligenceCard from '@/components/incident/IncidentIntelligenceCard';
 import IncidentRelatedCard from '@/components/incident/IncidentRelatedCard';
+import IncidentResponseCard from '@/components/incident/IncidentResponseCard';
 import EscalationExecutionHealth from '@/components/incident/detail/EscalationExecutionHealth';
 import { getEscalationExecutionHealth } from '@/lib/escalation/execution-health';
 import { visibleIncidentSource } from '@/lib/automation/presentation/source-visibility';
@@ -632,6 +633,9 @@ export default async function IncidentDetailScreen({
           </Suspense>
           <Suspense fallback={null}>
             <IncidentRelatedCard incidentId={incident.id} />
+          </Suspense>
+          <Suspense fallback={null}>
+            <IncidentResponseCard incidentId={incident.id} />
           </Suspense>
 
           <IncidentDetailTabs
