@@ -1,9 +1,12 @@
 import { EventEmitter } from 'node:events';
-import { createServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
-import { request as httpRequest } from 'node:http';
+import {
+  createServer,
+  request as httpRequest,
+  type ClientRequest,
+  type IncomingMessage,
+} from 'node:http';
 import { Readable } from 'node:stream';
-import type { ClientRequest, IncomingMessage } from 'node:http';
 import type { RequestOptions } from 'node:https';
 import { describe, expect, it } from 'vitest';
 import {
@@ -211,21 +214,19 @@ describe('pinned lookup on a real socket', () => {
     try {
       for (const autoSelectFamily of [true, false]) {
         const body = await new Promise<string>((resolve, reject) => {
-          const request = httpRequest(
-            {
-              host: 'never-resolved.invalid',
-              port,
-              path: '/',
-              agent: false,
-              autoSelectFamily,
-              lookup: createPinnedLookup('127.0.0.1'),
-            },
-            response => {
-              let text = '';
-              response.on('data', chunk => (text += chunk));
-              response.on('end', () => resolve(text));
-            }
-          );
+          const options: RequestOptions & { autoSelectFamily: boolean } = {
+            host: 'never-resolved.invalid',
+            port,
+            path: '/',
+            agent: false,
+            autoSelectFamily,
+            lookup: createPinnedLookup('127.0.0.1'),
+          };
+          const request = httpRequest(options, response => {
+            let text = '';
+            response.on('data', chunk => (text += chunk));
+            response.on('end', () => resolve(text));
+          });
           request.on('error', reject);
           request.end();
         });
