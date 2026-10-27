@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-require-imports -- Executable native-image diagnostic. */
 const assert = require('node:assert/strict');
 const stages = new Set([
+  'request-wait',
   'authentication',
   'body-read',
   'body-parse',
@@ -62,6 +63,43 @@ function parseStages(body, event = false) {
 }
 const parseAdmissionStages = body => parseStages(body);
 const parseEventStages = body => parseStages(body, true);
+
+function parseAdmissionCounters(body) {
+  const rows = [];
+  for (const line of body.split('\n')) {
+    const separator = line.lastIndexOf(' ');
+    if (separator < 0) continue;
+    const series = line.slice(0, separator);
+    const brace = series.indexOf('{');
+    const name = brace < 0 ? series : series.slice(0, brace);
+    if (
+      ![
+        'opsknight_ingestion_request_overload_total',
+        'opsknight_ingestion_capacity_contention_total',
+        'opsknight_ingestion_capacity_rejections_total',
+        'opsknight_ingestion_capacity_reservation_retries_total',
+      ].includes(name)
+    )
+      continue;
+    assert.ok(brace < 0 || series.endsWith('}'));
+    const match = [
+      line,
+      name,
+      brace < 0 ? '' : series.slice(brace + 1, -1),
+      line.slice(separator + 1),
+    ];
+    const labels = Object.fromEntries(
+      [...(match[2] ?? '').matchAll(/(\w+)="([^"]*)"/g)].map(pair => [pair[1], pair[2]])
+    );
+    const reasons = match[1] === 'opsknight_ingestion_capacity_rejections_total';
+    assert.deepEqual(Object.keys(labels).sort(), reasons ? ['reason'] : []);
+    if (reasons) assert.ok(['full', 'contended'].includes(labels.reason));
+    const value = Number(match[3]);
+    assert.ok(Number.isFinite(value) && value >= 0);
+    rows.push({ name: match[1], labels, value });
+  }
+  return rows;
+}
 // Bucket upper bounds are deliberately reported, not invented exact percentiles.
 // Async spans can overlap and retries can repeat stages: do not add their means.
 function summarizeStages(rows) {
@@ -83,7 +121,12 @@ function summarizeStages(rows) {
     };
   });
 }
-module.exports = { parseAdmissionStages, parseEventStages, summarizeStages };
+module.exports = {
+  parseAdmissionStages,
+  parseEventStages,
+  summarizeStages,
+  parseAdmissionCounters,
+};
 
 if (require.main === module) {
   const event = process.argv[2] === 'event';
@@ -93,7 +136,8 @@ if (require.main === module) {
   })
     .then(async response => {
       assert.equal(response.status, 200);
-      const stages = parseStages(await response.text(), event);
+      const body = await response.text();
+      const stages = parseStages(body, event);
       assert.ok(
         event ||
           stages.some(
@@ -102,7 +146,12 @@ if (require.main === module) {
           )
       );
       process.stdout.write(
-        JSON.stringify({ status: response.status, stages, summary: summarizeStages(stages) })
+        JSON.stringify({
+          status: response.status,
+          stages,
+          summary: summarizeStages(stages),
+          counters: event ? [] : parseAdmissionCounters(body),
+        })
       );
     })
     .catch(() => {

@@ -8,6 +8,7 @@ import {
 } from '@/lib/metrics/operational/registry';
 
 type AdmissionStage =
+  | 'request-wait'
   | 'authentication'
   | 'body-read'
   | 'body-parse'
