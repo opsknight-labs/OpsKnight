@@ -63,6 +63,31 @@ function request(
 }
 
 describe('official SDK modern protocol adapter', () => {
+  it('discovers postmortem context and resources only with the postmortem scope', async () => {
+    for (const [scopes, enabled] of [
+      [['incidents:read', 'postmortems:read'], true],
+      [['incidents:read'], false],
+    ] as [string[], boolean][]) {
+      const server = handler(scopes);
+      const tools = (await (await server.fetch(request('tools/list'))).json()).result.tools;
+      expect(tools.some((tool: { name: string }) => tool.name === 'postmortem_get_context')).toBe(
+        enabled
+      );
+      const templates = (await (await server.fetch(request('resources/templates/list'))).json())
+        .result.resourceTemplates;
+      expect(
+        templates.some(
+          (template: { uriTemplate: string }) =>
+            template.uriTemplate === 'opsknight://postmortems/{id}'
+        )
+      ).toBe(enabled);
+      expect(
+        tools.some((tool: { name: string }) =>
+          /postmortem.*(?:publish|delete|update)/.test(tool.name)
+        )
+      ).toBe(false);
+    }
+  });
   it('exposes prepare/execute only with all workflow scopes and never offers an approval tool', async () => {
     const scopes = ['runbooks:execute', 'runbooks:read', 'incidents:read', 'services:read'];
     for (const [allowedScopes, writes, enabled] of [

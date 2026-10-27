@@ -156,6 +156,14 @@ export const MCP_HANDLERS = new Map<string, () => Promise<Handler>>([
   ],
   ['getPostmortem', async () => (await import('@/app/api/v2/postmortems/[id]/route')).GET],
   [
+    'listPostmortemVersions',
+    async () => (await import('@/app/api/v2/postmortems/[id]/versions/route')).GET,
+  ],
+  [
+    'listPostmortemContributors',
+    async () => (await import('@/app/api/v2/postmortems/[id]/contributors/route')).GET,
+  ],
+  [
     'listPostmortemActionItems',
     async () => (await import('@/app/api/v2/postmortems/[id]/action-items/route')).GET,
   ],

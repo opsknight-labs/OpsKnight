@@ -2559,14 +2559,14 @@
     "actions": ["postmortem.read"]
   },
   "listPostmortemVersions": {
-    "status": "UNSUPPORTED_WITH_REASON",
-    "risk": "R2",
-    "reason": "Not exposed until shared command, independent approval and parity certification are complete.",
+    "status": "DISCOVERABLE",
+    "risk": "R0",
+    "reason": "Bounded native postmortem read with current POSTMORTEM_READ, scoped parent lookup and recursive output redaction.",
     "tool": null,
     "routeSha256": "76d1180244dd498ad58ae350c6691a07dd575abe4e3dcdbaf29b0f74768c78da",
-    "resourceFilter": "existing REST route authorization and scoped projection",
-    "evidence": "pending final-SHA parity certification",
-    "contractSha256": "e43c280ffefa3a28533c78ffb1155dadb83395446207195d14fdc54de9e5bb0a",
+    "resourceFilter": "postmortemReadWhere on parent ID or incident ID before reading its collection",
+    "evidence": "tests/integration/mcp-postmortem-context.test.ts; pending final-SHA certification",
+    "contractSha256": "16072222206d902c5c9ffdabe7ec72dad65d22399241bb4ba969ea0ce2189697",
     "actions": ["postmortem.read"]
   },
   "listPostmortemActionItems": {
@@ -2625,14 +2625,14 @@
     "actions": ["postmortem.manage"]
   },
   "listPostmortemContributors": {
-    "status": "UNSUPPORTED_WITH_REASON",
-    "risk": "R2",
-    "reason": "Not exposed until shared command, independent approval and parity certification are complete.",
+    "status": "DISCOVERABLE",
+    "risk": "R0",
+    "reason": "Bounded native postmortem read with current POSTMORTEM_READ, scoped parent lookup and recursive output redaction.",
     "tool": null,
     "routeSha256": "1b5bf714246b78742b53b20953499b7a4807947a018119dd71dd33c2ba2d213b",
-    "resourceFilter": "existing REST route authorization and scoped projection",
-    "evidence": "pending final-SHA parity certification",
-    "contractSha256": "768492ba2e49ae168ab52bfc787324c52061be37c363c3bd795ed8d7598e2c9f",
+    "resourceFilter": "postmortemReadWhere on parent ID or incident ID before reading its collection",
+    "evidence": "tests/integration/mcp-postmortem-context.test.ts; pending final-SHA certification",
+    "contractSha256": "6a7204340fd143356961e4e8599c400372e009f0657317978ae2a985da4528da",
     "actions": ["postmortem.read"]
   },
   "replacePostmortemContributors": {

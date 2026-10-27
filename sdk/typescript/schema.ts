@@ -425,7 +425,7 @@ export interface OperationRequests {
   previewEscalationPolicy: { "params": { "id": string }; "body": { "incidentId": string; "at"?: string } };
   getServiceHealthSummary: { "params": { "id": string } };
   getPostmortem: { "params": { "id": string } };
-  listPostmortemVersions: { "params": { "id": string } };
+  listPostmortemVersions: { "params": { "id": string }; "query"?: { "limit"?: number; "beforeRevision"?: number } };
   listPostmortemActionItems: { "params": { "id": string } };
   replacePostmortemActionItems: { "params": { "id": string }; "headers": { "Idempotency-Key": string; "If-Match": string }; "body": { "items": Array<{ "id"?: string; "title": string; "description"?: string; "ownerId"?: string | null; "dueDate"?: string | null; "status"?: "OPEN" | "IN_PROGRESS" | "COMPLETED" | "BLOCKED"; "priority"?: "HIGH" | "MEDIUM" | "LOW" }> } };
   updatePostmortemActionItem: { "params": { "id": string; "itemId": string }; "headers": { "Idempotency-Key": string; "If-Match": string }; "body": { "title"?: string; "description"?: string; "ownerId"?: string | null; "dueDate"?: string | null; "status"?: "OPEN" | "IN_PROGRESS" | "COMPLETED" | "BLOCKED"; "priority"?: "HIGH" | "MEDIUM" | "LOW" } };

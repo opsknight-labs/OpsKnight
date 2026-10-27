@@ -62,7 +62,9 @@ async function handlePost(request: Request) {
       ? Math.max(1, steps.length)
       : body.params?.name === 'incident_get_context'
         ? 3
-        : 1;
+        : body.method === 'tools/call' && body.params?.name === 'postmortem_get_context'
+          ? 4
+          : 1;
     requireMcp(cost <= 8, 'MCP_OPERATION_BUDGET_EXCEEDED');
     const identity = await authenticateMcp(request, cost);
     release = acquireMcpSlot(identity.policy.maxInFlight);

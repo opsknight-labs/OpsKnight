@@ -11,6 +11,7 @@ import { callMcpOperation, canDiscover, type ExecutionContext } from '../core/ex
 import { executeMcpPlan, planSchema } from '../core/plan';
 import { McpBoundaryError, requireMcp } from '../core/errors';
 import { canUseReviewedRunbooks } from '../approvals/policy';
+import { POSTMORTEM_CONTEXT_OPERATIONS } from '../core/postmortem';
 
 const sdkSchema = (schema: z.ZodType) => fromJsonSchema(z.toJSONSchema(schema) as JsonSchemaType);
 
@@ -102,6 +103,33 @@ export function createOpsKnightMcpServer(
   const visible = MCP_CATALOG.filter(
     operation => canDiscover(actor, operation) && (operation.risk === 'R0' || writesEnabled)
   );
+  if (
+    POSTMORTEM_CONTEXT_OPERATIONS.every(id =>
+      visible.some(operation => operation.operationId === id)
+    )
+  ) {
+    server.registerTool(
+      'postmortem_get_context',
+      {
+        description:
+          'Read a postmortem, action items, contributors and one history snapshot with source revisions. Stored assertions do not confirm root cause. No edits or publication.',
+        inputSchema: sdkSchema(
+          z.object({ id: z.string().regex(/^[A-Za-z0-9_-]{1,100}$/) }).strict()
+        ),
+        annotations: {
+          readOnlyHint: true,
+          destructiveHint: false,
+          idempotentHint: true,
+          openWorldHint: false,
+        },
+      },
+      async args =>
+        safeTool(async () => {
+          const { getMcpPostmortemContext } = await import('../core/postmortem');
+          return getMcpPostmortemContext(context, args);
+        })
+    );
+  }
   for (const operation of visible.filter(operation => operation.tool)) {
     server.registerTool(
       operation.tool!,
@@ -160,7 +188,7 @@ export function createOpsKnightMcpServer(
             query: z.string().max(200),
             domain: z.string().max(80).optional(),
             intent: z.enum(['read', 'write']).optional(),
-            cursor: z.number().int().min(0).max(314).default(0),
+            cursor: z.number().int().min(0).max(MCP_CATALOG.length).default(0),
           })
           .strict()
       ),
@@ -264,6 +292,7 @@ export function createOpsKnightMcpServer(
     ['schedules', 'getSchedule'],
     ['runbooks', 'getRunbook'],
     ['reports', 'getSavedReport'],
+    ['postmortems', 'getPostmortem'],
   ]);
   for (const [domain, operationId] of resourceOperations) {
     if (!visible.some(operation => operation.operationId === operationId)) continue;
@@ -298,7 +327,7 @@ export function createOpsKnightMcpServer(
     ],
     [
       'prepare_postmortem',
-      'Read incident evidence; draft impact, timeline and hypotheses. Mark root cause unconfirmed unless supported.',
+      'Use postmortem_get_context for an existing postmortem and incident_get_context for incident evidence. Compare revisions and timestamps; label authored assertions, observations and hypotheses separately. Draft impact, timeline and follow-up proposals without saving or publishing. Root cause remains unconfirmed until independently supported.',
     ],
     [
       'review_automation_rule',

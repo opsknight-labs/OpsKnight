@@ -4,6 +4,7 @@ import { V2_MUTATION_CONTRACT } from '@/lib/api-v2/mutation-contract';
 import reviewJson from './review.json';
 import { requireMcp } from '../core/errors';
 import { createHash } from 'node:crypto';
+import { operationReviewSchema, type OperationReview } from './review-schema';
 import {
   AUTHORIZATION_ACTIONS,
   apiScopeForAction,
@@ -11,21 +12,16 @@ import {
 } from '@/lib/authorization-policy';
 
 export type JsonObject = { [key: string]: unknown };
-export interface OperationReview {
-  status: string;
-  risk: string;
-  reason: string;
-  tool: string | null;
-  routeSha256: string;
-  contractSha256: string;
-  resourceFilter: string;
-  evidence: string;
-  actions: readonly string[];
-}
 const canonicalActions = new Map<string, AuthorizationAction>(
   Object.values(AUTHORIZATION_ACTIONS).map(action => [action, action])
 );
-const reviews = new Map<string, OperationReview>(Object.entries(reviewJson));
+const reviews = new Map<string, OperationReview>(
+  Object.entries(reviewJson).map(([id, review]) => [id, operationReviewSchema.parse(review)])
+);
+requireMcp(
+  new Set(V2_OPERATIONS.map(operation => operation.operationId)).size === V2_OPERATIONS.length,
+  'MCP_DUPLICATE_OPERATION'
+);
 const spec = getOpenApiV2Spec() as unknown as {
   paths: Record<string, Record<string, JsonObject>>;
   components: { schemas: Record<string, JsonObject> };

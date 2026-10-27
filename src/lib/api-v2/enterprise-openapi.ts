@@ -1237,6 +1237,7 @@ const draftInput = object(
 );
 
 interface Operation {
+  query?: Record<string, Schema>;
   method: 'get' | 'post' | 'patch' | 'put' | 'delete';
   path: string;
   summary: string;
@@ -1291,6 +1292,10 @@ const operations: Operation[] = [
   {
     method: 'get', path: '/postmortems/{id}/versions',
     summary: 'List retained postmortem revisions',
+    query: {
+      limit: { type: 'integer', minimum: 1, maximum: 50, default: 25 },
+      beforeRevision: { type: 'integer', minimum: 1 },
+    },
     description: 'Cursor over at most 50 descending revisions. Snapshots capture parent-row state on every insert and update, including UI and worker writes. Existing records begin with the state present when this feature was deployed; earlier revisions cannot be reconstructed. Incident visibility applies.',
   },
   {
@@ -2297,6 +2302,9 @@ export function enterpriseOpenApiPaths() {
       parameters: [
         ...parameters,
         ...queryParameters,
+        ...Object.entries(operation.query ?? {}).map(([name, schema]) => ({
+          name, in: 'query', required: false, schema,
+        })),
         ...(operation.path === '/runbooks/executions'
           ? [{ name: 'incidentId', in: 'query', required: true, schema: { ...id, maxLength: 100 } }]
           : []),

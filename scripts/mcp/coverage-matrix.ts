@@ -6,6 +6,7 @@ import { MCP_HANDLERS } from '../../src/lib/mcp/operations/handlers';
 import { authorize } from '../../src/lib/authorization-policy';
 import { APP_ROLES } from '../../src/lib/authorization';
 import { declaredRouteActions } from './route-policy';
+import { buildMcpParityReport } from '../../src/lib/mcp/catalog/parity';
 
 const failures: string[] = [];
 const matrix = [];
@@ -48,9 +49,10 @@ for (const operation of MCP_CATALOG) {
     failures.push(`Handler disposition mismatch: ${operation.operationId}`);
   if (!operation.reason || !operation.resourceFilter)
     failures.push(`Missing policy: ${operation.operationId}`);
-  if (operation.risk === 'R3' && isMcpExecutable(operation))
-    failures.push(`R3 exposure: ${operation.operationId}`);
+  if (['R2', 'R3', 'R4'].includes(operation.risk) && isMcpExecutable(operation))
+    failures.push(`Sensitive generic exposure: ${operation.operationId}`);
 }
+const parity = buildMcpParityReport(MCP_CATALOG);
 const artifact = {
   schemaVersion: 1,
   sourceRevision: execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim(),
@@ -60,8 +62,13 @@ const artifact = {
   classified: MCP_CATALOG.length,
   executableCandidates: MCP_CATALOG.filter(isMcpExecutable).length,
   certified: false,
+  parity,
   failures,
   operations: matrix,
 };
 process.stdout.write(JSON.stringify(artifact, null, 2) + '\n');
-if (failures.length) process.exitCode = 1;
+if (
+  failures.length ||
+  (process.argv.includes('--require-full-parity') && !parity.implementationComplete)
+)
+  process.exitCode = 1;

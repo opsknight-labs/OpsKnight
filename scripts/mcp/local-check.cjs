@@ -167,6 +167,7 @@ async function main() {
     'tests/integration/mcp-database-isolation.test.ts',
     'tests/integration/mcp-query-profile.test.ts',
     'tests/integration/mcp-runbook-approval.test.ts',
+    'tests/integration/mcp-postmortem-context.test.ts',
   ]);
   await node(
     'coverage',
