@@ -6,7 +6,7 @@ product_area: configuration
 audience: [developer, operator, administrator]
 verification:
   level: source
-  verified_at: 2026-10-26
+  verified_at: 2026-10-27
   evidence:
     - src/
     - scripts/
@@ -5352,3 +5352,4 @@ template. They are inventory, not a normal production configuration contract.
 - Extraction confidence: derived
 - Static default: `$HOME/.local/state`
 - Sources: `src/lib/runbooks/agent-setup-commands.ts`
+

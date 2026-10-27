@@ -4,13 +4,7 @@ description: Connect PagerDuty Events API alerts to OpsKnight incident ingestion
 type: integration
 product_area: integrations
 audience: [administrator, operator]
-keywords:
-  [
-    'PagerDuty Events API webhook',
-    'connect PagerDuty Events API',
-    'PagerDuty Events API alerts',
-    'PagerDuty Events API integration',
-  ]
+keywords: ["PagerDuty Events API webhook", "connect PagerDuty Events API", "PagerDuty Events API alerts", "PagerDuty Events API integration"]
 verification:
   level: source
   verified_at: 2026-10-21
@@ -66,11 +60,10 @@ The exact payload schema is defined by `src/app/api/integrations/pagerduty/route
 ## Event mapping and incident lifecycle
 
 The adapter emits the lifecycle actions found in its current source:
-
 - `trigger`
 - `acknowledge`
 - `resolve`
-  Correlation contract: **adapter EventPayload.dedup_key**. Recovery contract: **adapter emits resolve for its recovery state**.
+Correlation contract: **adapter EventPayload.dedup_key**. Recovery contract: **adapter emits resolve for its recovery state**.
 
 ## Recovery and deduplication
 

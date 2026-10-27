@@ -88,7 +88,9 @@ test.describe.serial('public API smoke matrix and focused contracts', () => {
     expect(typeof body.data.incident.slaPausedMs).toBe('number');
   });
 
-  test('validates the documented events schema without creating an incident', async ({ request }) => {
+  test('validates the documented events schema without creating an incident', async ({
+    request,
+  }) => {
     const response = await request.post('/api/events', {
       headers: { Authorization: `Bearer ${DOCS_API_KEY}` },
       data: {
@@ -109,11 +111,13 @@ test.describe.serial('public API smoke matrix and focused contracts', () => {
     });
   });
 
-  test('smoke-probes every supported public API surface without a server failure', async ({ request }) => {
+  test('smoke-probes every supported public API surface without a server failure', async ({
+    request,
+  }) => {
     const contracts = discovery.featureGraph.nodes.filter(
       node => node.kind === 'api' && node.classification === 'PUBLIC_API'
     );
-    expect(contracts).toHaveLength(47);
+    expect(contracts).toHaveLength(48);
     const results: Array<{ route: string; method: string; status: number }> = [];
     for (const contract of contracts) {
       const route = contract.id
@@ -132,6 +136,6 @@ test.describe.serial('public API smoke matrix and focused contracts', () => {
       expect(response.status(), `${method} ${route}`).toBeLessThan(600);
       expect(response.status(), `${method} ${route}`).toBeGreaterThanOrEqual(200);
     }
-    expect(results).toHaveLength(47);
+    expect(results).toHaveLength(48);
   });
 });

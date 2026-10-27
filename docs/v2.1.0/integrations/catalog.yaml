@@ -25,8 +25,8 @@ providers:
         windowSeconds: 60
       integrationId: query parameter
       integrationKey:
-        - 'Authorization: Bearer'
-        - 'Authorization: Token token='
+        - "Authorization: Bearer"
+        - "Authorization: Token token="
         - x-integration-key
         - x-api-key
         - integrationKey query parameter
@@ -131,8 +131,8 @@ providers:
         windowSeconds: 60
       integrationId: query parameter
       integrationKey:
-        - 'Authorization: Bearer'
-        - 'Authorization: Token token='
+        - "Authorization: Bearer"
+        - "Authorization: Token token="
         - x-integration-key
         - x-api-key
         - integrationKey query parameter
@@ -185,8 +185,8 @@ providers:
         windowSeconds: 60
       integrationId: query parameter
       integrationKey:
-        - 'Authorization: Bearer'
-        - 'Authorization: Token token='
+        - "Authorization: Bearer"
+        - "Authorization: Token token="
         - x-integration-key
         - x-api-key
         - integrationKey query parameter
@@ -290,8 +290,8 @@ providers:
         windowSeconds: 60
       integrationId: query parameter
       integrationKey:
-        - 'Authorization: Bearer'
-        - 'Authorization: Token token='
+        - "Authorization: Bearer"
+        - "Authorization: Token token="
         - x-integration-key
         - x-api-key
         - integrationKey query parameter
@@ -345,8 +345,8 @@ providers:
         windowSeconds: 60
       integrationId: query parameter
       integrationKey:
-        - 'Authorization: Bearer'
-        - 'Authorization: Token token='
+        - "Authorization: Bearer"
+        - "Authorization: Token token="
         - x-integration-key
         - x-api-key
         - integrationKey query parameter
@@ -400,8 +400,8 @@ providers:
         windowSeconds: 60
       integrationId: query parameter
       integrationKey:
-        - 'Authorization: Bearer'
-        - 'Authorization: Token token='
+        - "Authorization: Bearer"
+        - "Authorization: Token token="
         - x-integration-key
         - x-api-key
         - integrationKey query parameter
@@ -509,8 +509,8 @@ providers:
         windowSeconds: 60
       integrationId: query parameter
       integrationKey:
-        - 'Authorization: Bearer'
-        - 'Authorization: Token token='
+        - "Authorization: Bearer"
+        - "Authorization: Token token="
         - x-integration-key
         - x-api-key
         - integrationKey query parameter
@@ -564,8 +564,8 @@ providers:
         windowSeconds: 60
       integrationId: query parameter
       integrationKey:
-        - 'Authorization: Bearer'
-        - 'Authorization: Token token='
+        - "Authorization: Bearer"
+        - "Authorization: Token token="
         - x-integration-key
         - x-api-key
         - integrationKey query parameter
@@ -674,8 +674,8 @@ providers:
         windowSeconds: 60
       integrationId: query parameter
       integrationKey:
-        - 'Authorization: Bearer'
-        - 'Authorization: Token token='
+        - "Authorization: Bearer"
+        - "Authorization: Token token="
         - x-integration-key
         - x-api-key
         - integrationKey query parameter
@@ -729,8 +729,8 @@ providers:
         windowSeconds: 60
       integrationId: query parameter
       integrationKey:
-        - 'Authorization: Bearer'
-        - 'Authorization: Token token='
+        - "Authorization: Bearer"
+        - "Authorization: Token token="
         - x-integration-key
         - x-api-key
         - integrationKey query parameter
@@ -784,8 +784,8 @@ providers:
         windowSeconds: 60
       integrationId: query parameter
       integrationKey:
-        - 'Authorization: Bearer'
-        - 'Authorization: Token token='
+        - "Authorization: Bearer"
+        - "Authorization: Token token="
         - x-integration-key
         - x-api-key
         - integrationKey query parameter
@@ -839,8 +839,8 @@ providers:
         windowSeconds: 60
       integrationId: query parameter
       integrationKey:
-        - 'Authorization: Bearer'
-        - 'Authorization: Token token='
+        - "Authorization: Bearer"
+        - "Authorization: Token token="
         - x-integration-key
         - x-api-key
         - integrationKey query parameter
@@ -946,7 +946,7 @@ providers:
         windowSeconds: 60
       integrationId: query parameter
       integrationKey:
-        - 'Authorization: Bearer'
+        - "Authorization: Bearer"
         - x-routing-key
         - key query parameter
         - token query parameter
@@ -1003,8 +1003,8 @@ providers:
         windowSeconds: 60
       integrationId: query parameter
       integrationKey:
-        - 'Authorization: Bearer'
-        - 'Authorization: Token token='
+        - "Authorization: Bearer"
+        - "Authorization: Token token="
         - x-integration-key
         - x-api-key
         - integrationKey query parameter
@@ -1163,8 +1163,8 @@ providers:
         windowSeconds: 60
       integrationId: query parameter
       integrationKey:
-        - 'Authorization: Bearer'
-        - 'Authorization: Token token='
+        - "Authorization: Bearer"
+        - "Authorization: Token token="
         - x-integration-key
         - x-api-key
         - integrationKey query parameter
@@ -1218,8 +1218,8 @@ providers:
         windowSeconds: 60
       integrationId: query parameter
       integrationKey:
-        - 'Authorization: Bearer'
-        - 'Authorization: Token token='
+        - "Authorization: Bearer"
+        - "Authorization: Token token="
         - x-integration-key
         - x-api-key
         - integrationKey query parameter
@@ -1272,8 +1272,8 @@ providers:
         windowSeconds: 60
       integrationId: query parameter
       integrationKey:
-        - 'Authorization: Bearer'
-        - 'Authorization: Token token='
+        - "Authorization: Bearer"
+        - "Authorization: Token token="
         - x-integration-key
         - x-api-key
         - integrationKey query parameter
@@ -1327,8 +1327,8 @@ providers:
         windowSeconds: 60
       integrationId: query parameter
       integrationKey:
-        - 'Authorization: Bearer'
-        - 'Authorization: Token token='
+        - "Authorization: Bearer"
+        - "Authorization: Token token="
         - x-integration-key
         - x-api-key
         - integrationKey query parameter
@@ -1382,8 +1382,8 @@ providers:
         windowSeconds: 60
       integrationId: query parameter
       integrationKey:
-        - 'Authorization: Bearer'
-        - 'Authorization: Token token='
+        - "Authorization: Bearer"
+        - "Authorization: Token token="
         - x-integration-key
         - x-api-key
         - integrationKey query parameter
@@ -1437,8 +1437,8 @@ providers:
         windowSeconds: 60
       integrationId: query parameter
       integrationKey:
-        - 'Authorization: Bearer'
-        - 'Authorization: Token token='
+        - "Authorization: Bearer"
+        - "Authorization: Token token="
         - x-integration-key
         - x-api-key
         - integrationKey query parameter
@@ -1492,8 +1492,8 @@ providers:
         windowSeconds: 60
       integrationId: query parameter
       integrationKey:
-        - 'Authorization: Bearer'
-        - 'Authorization: Token token='
+        - "Authorization: Bearer"
+        - "Authorization: Token token="
         - x-integration-key
         - x-api-key
         - integrationKey query parameter

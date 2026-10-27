@@ -16,3 +16,9 @@ prisma/migrations
 # Ignore Helm templates
 deploy/kubernetes/helm/**/templates/**/*.yaml
 deploy/kubernetes/helm/**/templates/**/*.tpl
+
+# Generated documentation artifacts
+generated/
+docs/internal/
+docs/*/integrations/catalog.yaml
+docs/*/reference/
