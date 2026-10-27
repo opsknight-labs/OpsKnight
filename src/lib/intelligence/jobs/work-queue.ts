@@ -17,6 +17,7 @@ type Client = Prisma.TransactionClient | typeof prisma;
 export const WORK_KINDS = {
   INDEX_INCIDENT: 'INDEX_INCIDENT',
   ANALYZE_INCIDENT: 'ANALYZE_INCIDENT',
+  CORRELATE_INCIDENT: 'CORRELATE_INCIDENT',
 } as const;
 export type WorkKind = (typeof WORK_KINDS)[keyof typeof WORK_KINDS];
 
@@ -24,6 +25,7 @@ export type WorkKind = (typeof WORK_KINDS)[keyof typeof WORK_KINDS];
 export const WORK_PRIORITY: Record<WorkKind, number> = {
   INDEX_INCIDENT: 10,
   ANALYZE_INCIDENT: 20,
+  CORRELATE_INCIDENT: 25,
 };
 
 export const MAX_WORK_ATTEMPTS = 8;

@@ -7,6 +7,7 @@ import { reconcileFingerprints, discoverNewIncidents } from './discovery';
 import { indexIncident } from './indexer';
 import { purgeExpiredIntelligenceData, RETENTION_INTERVAL_MS } from './retention';
 import { analyzeIncident } from '../similarity/analyzer';
+import { correlateIncident, shouldCorrelate } from '../correlation/handler';
 import {
   claimWorkItems,
   completeWorkItem,
@@ -33,9 +34,20 @@ export const DEFAULT_HANDLERS: WorkHandlers = {
   [WORK_KINDS.INDEX_INCIDENT]: async (item, { settings }) => {
     const outcome = await withDbBudget(settings, tx => indexIncident(item.subjectKey, tx));
     // Analysis always follows a fresh fingerprint; coalescing keeps this to one item per incident.
+    // Correlation is chained only when the effective policy has rules, so installs without rules
+    // pay no extra write per incident.
     if (outcome === 'indexed') {
-      await enqueueWorkItems([{ kind: WORK_KINDS.ANALYZE_INCIDENT, subjectKey: item.subjectKey }]);
+      const next: Array<{ kind: WorkKind; subjectKey: string }> = [
+        { kind: WORK_KINDS.ANALYZE_INCIDENT, subjectKey: item.subjectKey },
+      ];
+      if (await shouldCorrelate(item.subjectKey)) {
+        next.push({ kind: WORK_KINDS.CORRELATE_INCIDENT, subjectKey: item.subjectKey });
+      }
+      await enqueueWorkItems(next);
     }
+  },
+  [WORK_KINDS.CORRELATE_INCIDENT]: async (item, { settings }) => {
+    await correlateIncident(item, settings);
   },
   [WORK_KINDS.ANALYZE_INCIDENT]: async (item, { settings }) => {
     await analyzeIncident(item, settings);

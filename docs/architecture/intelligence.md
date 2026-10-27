@@ -111,6 +111,27 @@ The database name must end in `_bench` or `_test` (the script truncates incident
 from a shared or loaded host are indicative only; the confidence intervals on tail latency are wide
 when the baseline is noisy. Formal certification should run on dedicated hardware.
 
+## Correlation (shadow and suggest)
+
+Operators author deterministic rules in a policy (`CONTENT_TEMPLATE`, `EXACT_FIELD`, `LABEL_SET`).
+Incidents that produce the same signature inside the same window correlate. Nothing is learned
+or probabilistic, and every match is explained by the rule that made it.
+
+- **Reversible, non-destructive.** Correlation never merges incidents, resolves anything, or moves
+  alerts. It writes only to its own tables: a group, a member per incident, and (in `SUGGEST`) a
+  `RELATED` link from each member to the group's anchor. Reversal is a new decision event.
+- **Scope-aware identity.** A group is unique on `(policy, policy version, rule, service scope,
+  signature, window start)` and is created with `INSERT … ON CONFLICT DO NOTHING`, so any number of
+  concurrent workers produce exactly one group; the anchor is elected by compare-and-set. A new
+  policy version is a new identity space and never silently joins old groups.
+- **Windows.** A window is derived from the incident's own time (replays are deterministic), slides
+  while incidents keep arriving, and never passes its hard ceiling. Groups are scoped to one service.
+- **Critical alerts are never grouped.** Highest-urgency incidents are skipped entirely.
+- **Modes.** `SHADOW` records only; `SUGGEST` also proposes links. Correlation work is chained only
+  when the effective policy has enabled rules, so installs without rules pay nothing.
+
+Replay-based policy preview, the rules builder UI and automatic grouping are not implemented yet.
+
 ## Not yet implemented
 
 Correlation of related alerts, automatic grouping, any delay before paging, change correlation,
