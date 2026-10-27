@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { afterEach, describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import SidebarSearch from '@/components/SidebarSearch';
 
@@ -142,5 +142,31 @@ describe('SidebarSearch component', () => {
     });
 
     global.fetch = originalFetch;
+  });
+
+  describe('assistant entry', () => {
+    afterEach(() => {
+      delete document.documentElement.dataset.squireName;
+    });
+
+    it('is absent while the assistant is switched off', async () => {
+      render(<SidebarSearch />);
+      fireEvent.change(screen.getByPlaceholderText('Search...'), { target: { value: 'ask' } });
+      await waitFor(() => expect(screen.getByPlaceholderText('Search...')).toHaveValue('ask'));
+      expect(screen.queryByText(/^Ask /)).toBeNull();
+    });
+
+    it('appears with the configured name and opens the assistant when chosen', async () => {
+      render(<SidebarSearch />);
+      document.documentElement.dataset.squireName = 'Pip';
+      window.dispatchEvent(new Event('squire:ready'));
+      const opened = vi.fn();
+      window.addEventListener('squire:open', opened);
+      fireEvent.change(screen.getByPlaceholderText('Search...'), { target: { value: 'pip' } });
+      const entry = await screen.findByText('Ask Pip');
+      fireEvent.click(entry);
+      expect(opened).toHaveBeenCalledTimes(1);
+      window.removeEventListener('squire:open', opened);
+    });
   });
 });

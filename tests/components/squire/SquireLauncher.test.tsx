@@ -115,6 +115,13 @@ describe('SquireLauncher', () => {
     expect(JSON.parse(fetchMock.mock.calls[0][1].body)).not.toHaveProperty('incidentId');
   });
 
+  it('announces itself for the global search while mounted and withdraws on unmount', () => {
+    const { unmount } = render(<SquireLauncher name="Pip" />);
+    expect(document.documentElement.dataset.squireName).toBe('Pip');
+    unmount();
+    expect(document.documentElement.dataset.squireName).toBeUndefined();
+  });
+
   it('disables sending an empty message', () => {
     render(<SquireLauncher name="Pip" />);
     fireEvent.click(screen.getByRole('button', { name: /Ask Pip/ }));

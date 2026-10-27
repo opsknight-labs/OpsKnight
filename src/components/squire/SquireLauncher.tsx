@@ -54,6 +54,15 @@ export default function SquireLauncher({ name }: { name: string }) {
   }, []);
 
   useEffect(() => {
+    document.documentElement.dataset.squireName = name;
+    window.dispatchEvent(new Event('squire:ready'));
+    return () => {
+      delete document.documentElement.dataset.squireName;
+      window.dispatchEvent(new Event('squire:ready'));
+    };
+  }, [name]);
+
+  useEffect(() => {
     const onOpen = () => setOpen(true);
     window.addEventListener('squire:open', onOpen);
     return () => window.removeEventListener('squire:open', onOpen);

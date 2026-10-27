@@ -142,9 +142,9 @@ const OFF_DEFAULT: Omit<PolicySnapshot, 'scopeKey'> = {
 async function readHeadVersion(client: Client, scopeKey: string): Promise<PolicySnapshot | null> {
   const policy = await client.intelligencePolicy.findUnique({
     where: { scopeKey },
-    select: { id: true, headVersion: true },
+    select: { id: true, headVersion: true, overrideActive: true },
   });
-  if (!policy || policy.headVersion === 0) return null;
+  if (!policy || policy.headVersion === 0 || !policy.overrideActive) return null;
   const version = await client.intelligencePolicyVersion.findUnique({
     where: { policyId_version: { policyId: policy.id, version: policy.headVersion } },
     select: { version: true, mode: true, definition: true },
@@ -243,7 +243,8 @@ async function appendVersion(
   const version = policy.headVersion + 1;
   const advanced = await tx.intelligencePolicy.updateMany({
     where: { id: policy.id, headVersion: policy.headVersion },
-    data: { headVersion: version },
+    // Publishing or restoring always (re)activates a service override.
+    data: { headVersion: version, overrideActive: true },
   });
   if (advanced.count !== 1) throw new AppError({ code: 'PRECONDITION_FAILED' });
   await tx.intelligencePolicyVersion.create({
@@ -357,6 +358,115 @@ export async function rollbackPolicy(
     return { version, scopeKey, restoredFrom: parsed.targetVersion };
   };
   return externalTx ? run(externalTx) : prisma.$transaction(run);
+}
+
+/** Caller must authorize INTELLIGENCE_MANAGE. The service falls back to the global policy; history is kept. */
+export async function clearServiceOverride(
+  serviceId: string,
+  actor: IntelligenceActor
+): Promise<'cleared' | 'none'> {
+  const scopeKey = servicePolicyScopeKey(serviceId);
+  return prisma.$transaction(async tx => {
+    await lockPolicyScope(tx, scopeKey);
+    const previous = await readHeadVersion(tx, scopeKey);
+    if (!previous) return 'none';
+    await tx.intelligencePolicy.update({ where: { scopeKey }, data: { overrideActive: false } });
+    await logAudit(
+      {
+        action: 'intelligence.policy.override_cleared',
+        entityType: 'SYSTEM_CONFIG',
+        entityId: `intelligence:${scopeKey}`,
+        actorId: actor.actorId,
+        ...auditSource(actor),
+        oldValue: summarize(previous.version, previous.mode, previous.definition),
+      },
+      tx
+    );
+    return 'cleared';
+  });
+}
+
+export interface ServicePolicyOverviewRow {
+  serviceId: string;
+  serviceName: string;
+  source: 'service' | 'global' | 'default';
+  mode: IntelligenceModeValue;
+  effectiveMode: IntelligenceModeValue;
+  version: number;
+  similarityEnabled: boolean;
+  responseEnabled: boolean;
+  ruleCount: number;
+  /** Head of the service's own policy history (0 if it never had one), for optimistic locking. */
+  headVersion: number;
+}
+
+/**
+ * Effective policy for a bounded page of services in a fixed number of queries (not one per service).
+ * `serviceWhere` carries the caller's own visibility rule.
+ */
+export async function listServicePolicyOverview(
+  options: { search?: string; limit?: number; serviceWhere?: Prisma.ServiceWhereInput } = {},
+  client: Client = prisma
+): Promise<ServicePolicyOverviewRow[]> {
+  const limit = Math.min(Math.max(options.limit ?? 50, 1), 100);
+  const search = options.search?.trim();
+  const services = await client.service.findMany({
+    where: {
+      AND: [
+        options.serviceWhere ?? {},
+        search ? { name: { contains: search, mode: 'insensitive' as const } } : {},
+      ],
+    },
+    orderBy: { name: 'asc' },
+    take: limit,
+    select: { id: true, name: true },
+  });
+  if (services.length === 0) return [];
+  const [settings, globalPolicy, policies] = await Promise.all([
+    getIntelligenceSettings(client),
+    readHeadVersion(client, GLOBAL_POLICY_SCOPE_KEY),
+    client.intelligencePolicy.findMany({
+      where: { serviceId: { in: services.map(service => service.id) } },
+      select: { id: true, serviceId: true, headVersion: true, overrideActive: true },
+    }),
+  ]);
+  const active = policies.filter(policy => policy.overrideActive && policy.headVersion > 0);
+  const headByService = new Map(policies.map(policy => [policy.serviceId, policy.headVersion]));
+  const versions = active.length
+    ? await client.intelligencePolicyVersion.findMany({
+        where: { OR: active.map(policy => ({ policyId: policy.id, version: policy.headVersion })) },
+        select: { policyId: true, version: true, mode: true, definition: true },
+      })
+    : [];
+  const overrideByService = new Map<string, { mode: IntelligenceModeValue; version: number; definition: PolicyDefinition }>();
+  for (const policy of active) {
+    const head = versions.find(version => version.policyId === policy.id && version.version === policy.headVersion);
+    if (!head || !policy.serviceId) continue;
+    const definition = policyDefinitionSchema.safeParse(head.definition);
+    overrideByService.set(policy.serviceId, {
+      mode: definition.success ? head.mode : 'OFF',
+      version: head.version,
+      definition: definition.success ? definition.data : DEFAULT_POLICY_DEFINITION,
+    });
+  }
+  return services.map(service => {
+    const override = overrideByService.get(service.id);
+    const chosen = override ?? (globalPolicy ? { mode: globalPolicy.mode, version: globalPolicy.version, definition: globalPolicy.definition } : null);
+    const mode = chosen?.mode ?? 'OFF';
+    const definition = chosen?.definition ?? DEFAULT_POLICY_DEFINITION;
+    return {
+      serviceId: service.id,
+      serviceName: service.name,
+      source: override ? 'service' : globalPolicy ? 'global' : 'default',
+      mode,
+      effectiveMode: settings.enabled ? mode : 'OFF',
+      version: chosen?.version ?? 0,
+      similarityEnabled: definition.similarity.enabled,
+      responseEnabled: definition.response.enabled,
+      ruleCount: definition.correlation.rules.length,
+      headVersion: headByService.get(service.id) ?? 0,
+    };
+  });
 }
 
 export async function listPolicyVersions(

@@ -4899,6 +4899,9 @@ model IntelligencePolicy {
   serviceId   String?                     @unique
   service     Service?                    @relation(fields: [serviceId], references: [id], onDelete: Cascade)
   headVersion Int                         @default(0)
+  // False when an administrator chose "use the global policy" for a service. History is kept; a new
+  // publish or rollback re-activates the override.
+  overrideActive Boolean                  @default(true)
   createdAt   DateTime                    @default(now())
   updatedAt   DateTime                    @updatedAt
   versions    IntelligencePolicyVersion[]

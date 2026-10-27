@@ -82,6 +82,10 @@ export default async function IntelligenceSettingsPage() {
             Dependencies, changes and alert quality
           </Link>
           {' · '}
+          <Link href="/settings/intelligence/services" className="underline">
+            Per-service policies
+          </Link>
+          {' · '}
           <Link href="/settings/intelligence/ai" className="underline">
             Assistant and AI
           </Link>
