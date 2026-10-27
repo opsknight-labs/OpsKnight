@@ -1,10 +1,14 @@
 import { EventEmitter } from 'node:events';
+import { createServer } from 'node:http';
+import type { AddressInfo } from 'node:net';
+import { request as httpRequest } from 'node:http';
 import { Readable } from 'node:stream';
 import type { ClientRequest, IncomingMessage } from 'node:http';
 import type { RequestOptions } from 'node:https';
 import { describe, expect, it } from 'vitest';
 import {
   CIMD_MAX_BYTES,
+  createPinnedLookup,
   fetchPinnedMetadata,
   isBlockedMcpAddress,
   type CimdTransportDependencies,
@@ -196,5 +200,39 @@ describe('pinned metadata transport', () => {
     await expect(
       fetchPinnedMetadata(new URL('https://127.0.0.1/m.json'), dependencies)
     ).rejects.toThrow();
+  });
+});
+
+describe('pinned lookup on a real socket', () => {
+  it('connects to the pinned address whatever the hostname resolves to, with and without autoSelectFamily', async () => {
+    const server = createServer((_request, response) => response.end('pinned'));
+    await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
+    const { port } = server.address() as AddressInfo;
+    try {
+      for (const autoSelectFamily of [true, false]) {
+        const body = await new Promise<string>((resolve, reject) => {
+          const request = httpRequest(
+            {
+              host: 'never-resolved.invalid',
+              port,
+              path: '/',
+              agent: false,
+              autoSelectFamily,
+              lookup: createPinnedLookup('127.0.0.1'),
+            },
+            response => {
+              let text = '';
+              response.on('data', chunk => (text += chunk));
+              response.on('end', () => resolve(text));
+            }
+          );
+          request.on('error', reject);
+          request.end();
+        });
+        expect(body).toBe('pinned');
+      }
+    } finally {
+      await new Promise(resolve => server.close(resolve));
+    }
   });
 });

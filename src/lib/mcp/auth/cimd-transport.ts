@@ -1,5 +1,6 @@
 import 'server-only';
-import { BlockList, isIP } from 'node:net';
+import { BlockList, isIP, type LookupFunction } from 'node:net';
+import type { LookupAddress } from 'node:dns';
 import { lookup as dnsLookup } from 'node:dns/promises';
 import { request as httpsRequest, type RequestOptions } from 'node:https';
 import { McpBoundaryError, requireMcp } from '../core/errors';
@@ -62,6 +63,17 @@ const defaults: CimdTransportDependencies = {
   request: (options, onResponse) => httpsRequest(options, onResponse),
 };
 
+/** Always answers with the validated address, in the shape net.connect expects for `all`. */
+export function createPinnedLookup(address: string): LookupFunction {
+  const family = isIP(address);
+  return (_host, options, callback) => {
+    if (options.all)
+      (callback as (error: null, addresses: LookupAddress[]) => void)(null, [{ address, family }]);
+    else
+      (callback as (error: null, address: string, family: number) => void)(null, address, family);
+  };
+}
+
 export const CIMD_MAX_BYTES = 5120;
 const TIMEOUT_MS = 3000;
 
@@ -94,7 +106,6 @@ export async function fetchPinnedMetadata(
     403
   );
   const pinned = addresses[0].address;
-  const family = isIP(pinned);
   return new Promise<CimdResponse>((resolve, reject) => {
     let settled = false;
     const finish = (action: () => void) => {
@@ -121,12 +132,7 @@ export async function fetchPinnedMetadata(
           host: url.host,
           'user-agent': 'OpsKnight-MCP-ClientMetadata/1',
         },
-        lookup: (_host, _options, callback) =>
-          (callback as (error: null, address: string, family: number) => void)(
-            null,
-            pinned,
-            family
-          ),
+        lookup: createPinnedLookup(pinned),
       },
       response => {
         if (response.statusCode !== 200) {
