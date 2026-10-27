@@ -5,6 +5,7 @@ import { AppError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { getCurrentAuthorizationActor } from '@/lib/rbac';
 import { revokeFeedback, submitFeedback } from '@/lib/intelligence/feedback/service';
+import { decideRelationship } from '@/lib/intelligence/correlation/commands';
 
 export type SimilarFeedbackState = { ok: boolean; message: string; verdict: 'HELPFUL' | 'NOT_HELPFUL' | null };
 
@@ -53,5 +54,41 @@ export async function rateSimilarIncident(
       error: error instanceof Error ? error.message : String(error),
     });
     return { ok: false, message: 'Unable to save feedback. Try again.', verdict: previous };
+  }
+}
+
+export type RelatedDecisionState = { ok: boolean; message: string; decision: 'SUGGESTED' | 'ACCEPTED' | 'REJECTED' | 'REVERTED' };
+
+/** Accepts, rejects or undoes one suggested related-incident link on behalf of the signed-in user. */
+export async function decideRelatedIncident(
+  incidentId: string,
+  previous: RelatedDecisionState,
+  form: FormData
+): Promise<RelatedDecisionState> {
+  const decision = String(form.get('decision') ?? '');
+  try {
+    const actor = await getCurrentAuthorizationActor();
+    const result = await decideRelationship(actor, {
+      relationshipId: String(form.get('relationshipId') ?? ''),
+      decision,
+    });
+    revalidatePath(`/incidents/${incidentId}`);
+    return {
+      ok: true,
+      message: result.decision === 'ACCEPTED' ? 'Marked as related.' : result.decision === 'REJECTED' ? 'Marked as not related.' : 'Link removed.',
+      decision: result.decision,
+    };
+  } catch (error) {
+    if (error instanceof AppError) {
+      return {
+        ok: false,
+        message: error.code === 'RESOURCE_NOT_FOUND' ? 'That link is no longer available.' : error.userMessage,
+        decision: previous.decision,
+      };
+    }
+    logger.error('[Intelligence] Related-incident decision failed', {
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return { ok: false, message: 'Unable to save. Try again.', decision: previous.decision };
   }
 }

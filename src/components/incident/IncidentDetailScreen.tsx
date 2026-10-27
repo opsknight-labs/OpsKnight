@@ -2,6 +2,7 @@ import prisma from '@/lib/prisma';
 import { Suspense } from 'react';
 import IncidentAutomationCard from '@/components/automation/IncidentAutomationCard';
 import IncidentIntelligenceCard from '@/components/incident/IncidentIntelligenceCard';
+import IncidentRelatedCard from '@/components/incident/IncidentRelatedCard';
 import EscalationExecutionHealth from '@/components/incident/detail/EscalationExecutionHealth';
 import { getEscalationExecutionHealth } from '@/lib/escalation/execution-health';
 import { visibleIncidentSource } from '@/lib/automation/presentation/source-visibility';
@@ -628,6 +629,9 @@ export default async function IncidentDetailScreen({
 
           <Suspense fallback={null}>
             <IncidentIntelligenceCard incidentId={incident.id} />
+          </Suspense>
+          <Suspense fallback={null}>
+            <IncidentRelatedCard incidentId={incident.id} />
           </Suspense>
 
           <IncidentDetailTabs
