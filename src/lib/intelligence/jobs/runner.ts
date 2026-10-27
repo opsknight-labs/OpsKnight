@@ -225,11 +225,21 @@ export async function runIntelligenceCycle(
   }
 }
 
+export interface LaneTotals {
+  cycles: number;
+  claimed: number;
+  completed: number;
+  requeued: number;
+  failed: number;
+}
+
 export interface LaneStatus {
   running: boolean;
   lastCycleAt: Date | null;
   lastResult: CycleResult | null;
   paused: boolean;
+  /** Cumulative since process start; lets operators and benchmarks see real throughput. */
+  totals: LaneTotals;
 }
 
 const lane: {
@@ -239,6 +249,7 @@ const lane: {
   state: LaneState;
   lastCycleAt: Date | null;
   lastResult: CycleResult | null;
+  totals: LaneTotals;
 } = {
   timer: null,
   active: null,
@@ -246,6 +257,7 @@ const lane: {
   state: createLaneState(),
   lastCycleAt: null,
   lastResult: null,
+  totals: { cycles: 0, claimed: 0, completed: 0, requeued: 0, failed: 0 },
 };
 
 const IDLE_POLL_MS = 5_000;
@@ -280,6 +292,11 @@ function schedule(delayMs: number) {
       .then(result => {
         lane.lastCycleAt = new Date();
         lane.lastResult = result;
+        lane.totals.cycles += 1;
+        lane.totals.claimed += result.claimed;
+        lane.totals.completed += result.completed;
+        lane.totals.requeued += result.requeued;
+        lane.totals.failed += result.failed;
         schedule(jittered(nextDelayMs(result)));
       })
       .finally(() => {
@@ -288,11 +305,11 @@ function schedule(delayMs: number) {
   }, delayMs);
 }
 
-/** Idempotent: starting an already-running lane is a no-op. */
-export function startIntelligenceLane(): void {
+/** Idempotent: starting an already-running lane is a no-op. `initialDelayMs` exists for benchmarks. */
+export function startIntelligenceLane(options: { initialDelayMs?: number } = {}): void {
   if (lane.running) return;
   lane.running = true;
-  schedule(jittered(IDLE_POLL_MS));
+  schedule(jittered(options.initialDelayMs ?? IDLE_POLL_MS));
 }
 
 /** Stops scheduling and waits for the in-flight cycle so shutdown never abandons claimed work. */
@@ -309,5 +326,6 @@ export function getIntelligenceLaneStatus(): LaneStatus {
     lastCycleAt: lane.lastCycleAt,
     lastResult: lane.lastResult,
     paused: lane.state.pause.paused,
+    totals: { ...lane.totals },
   };
 }
