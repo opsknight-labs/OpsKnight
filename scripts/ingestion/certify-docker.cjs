@@ -58,6 +58,29 @@ for (const signal of ['SIGINT', 'SIGTERM'])
     }
   });
 const evidence = { runId, certifiedEnterprise: false, cleanupFailures: [], chaos: [] };
+// A pending promise alone does not keep Node alive. In particular, fixture
+// setup can await native database work after the last child-process handle
+// closes. Retain a handle until cleanup and the final report finish.
+const controllerKeepAlive = setInterval(() => {}, 1000);
+let finalReportWritten = false;
+process.once('exit', () => {
+  if (finalReportWritten) return;
+  process.exitCode = 1;
+  evidence.error ||= 'Controller exited before evidence finalization';
+  evidence.controllerFinalized = false;
+  evidence.unfinishedResources = {
+    containers: [...containers],
+    network: createdNetwork ? network : null,
+    databaseAttached: attached,
+  };
+  evidence.measuredAt = new Date().toISOString();
+  try {
+    writeFileSync(evidencePath, JSON.stringify(evidence, null, 2) + '\n');
+  } catch {
+    // The nonzero exit remains authoritative if the destination is unavailable.
+  }
+  console.error('Controller exited before evidence finalization');
+});
 function invoke(args) {
   if (
     cancelled &&
@@ -1223,6 +1246,9 @@ main()
     await prisma.$disconnect();
     rmSync(directory, { recursive: true, force: true });
     evidence.measuredAt = new Date().toISOString();
+    evidence.controllerFinalized = true;
     writeFileSync(evidencePath, JSON.stringify(evidence, null, 2) + '\n');
+    finalReportWritten = true;
+    clearInterval(controllerKeepAlive);
     if (evidence.cleanupFailures.length) process.exitCode = 1;
   });

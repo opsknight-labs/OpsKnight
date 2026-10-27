@@ -1,0 +1,12 @@
+{
+  "measuredAt": "2026-10-27T11:26:00.305Z",
+  "passed": true,
+  "certified": false,
+  "source": "plans/event-ingestion/local-docker-http-balanced-aged-75.json",
+  "recordedAmbiguousResponses": 39,
+  "persistedReceiptsReplayed": 1278,
+  "originalReceiptIdsRecovered": true,
+  "identifiedAmbiguousReceipts": 39,
+  "additionalReceipts": 0,
+  "scope": "Read-only production replay resolver against ALL persisted receipts, including the ambiguous subset. Original delivery identities reconstructed from owned k6 fixtures and checked against stored hashes. When a rejection ledger exists, persisted non-acknowledged deliveries are identified and counted separately. Not HTTP authentication, delivery or network-timeout prevention certification."
+}

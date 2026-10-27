@@ -197,6 +197,12 @@ export async function generateDailyRollup(
     await prisma.$transaction(
       async tx => {
         await acquireAdvisoryLock(tx, LOCK_KEYS.ROLLUP_WRITE);
+        // Date-window cardinality varies from empty days to large backfills.
+        // A generic prepared plan can sort the entire day's history for every
+        // keyset page instead of seeking the ID cursor. Replan only this
+        // transaction using its actual bounds; SET LOCAL cannot leak through
+        // the pool into ingestion or later transactions.
+        await tx.$executeRaw`SET LOCAL plan_cache_mode = force_custom_plan`;
         // Stream a fixed Serializable snapshot instead of retaining the whole day.
         // Calculate metrics
         let totalIncidents = 0;

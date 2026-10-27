@@ -1,0 +1,12 @@
+{
+  "controllerRevision": "93a68facd50646120cb39d56dc7578766c7c156d",
+  "observedExitCode": 0,
+  "finalReportWritten": false,
+  "fixtureReceipts": 0,
+  "fixtureUsers": 0,
+  "retainedContainer": "ingestion-cert-21646b23-smtp",
+  "retainedNetwork": "ingestion-cert-21646b23-network",
+  "ownedResourcesCleaned": true,
+  "validCapacityRun": false,
+  "diagnostic": "Referenced keepalive allowed the subsequent fixture setup to complete. Controller lifetime/final-report guard added; precise native-handle cause not independently proven."
+}
