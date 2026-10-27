@@ -1,0 +1,47 @@
+{
+  "status": "planned-not-measured",
+  "purpose": "Separate historical achieved milestones from equivalent-resource code comparisons",
+  "baseline": {
+    "revision": "f159a76d3b82203f9ec397e59049bd09c4b8b7e5",
+    "image": "sha256:84724613803dfe02366474810f89b91fc00f2a50c31b6f1d3d41103f9abe6524",
+    "selection": "Exact immutable image from the original passing 25 new incidents/sec benchmark; already contains earlier async architecture, not pre-feature synchronous main"
+  },
+  "candidate": {
+    "revision": "80fa5cbca5b11a2cb981c2fa2803a6ab5a66f505",
+    "imageTag": "opsknight-ingestion-cert:release-validation"
+  },
+  "protocol": {
+    "sequence": "A-B-B-A at 25/sec initially; advance each image independently only after all functional gates pass",
+    "durationSeconds": 60,
+    "warmupEvents": 100,
+    "newIdentities": true,
+    "resources": "Same release profile: application aggregate 8 CPU / 6400 MiB; PostgreSQL 2 CPU / 1024 MiB; same per-role limits and pool ceilings",
+    "database": "Independent clones from one quiescent aged template; record migration versions and whether any candidate migrations are shared with old code",
+    "preRunCheckpoint": false,
+    "dependencies": "Image-native pinned dependencies; no rebuild or competing local benchmark during timed measurement",
+    "features": "Same critical SMTP and pinned Automation fixture; require downstream drain, no acknowledged receipt loss and stable overload accounting",
+    "metrics": [
+      "acknowledgment p50/p95/p99",
+      "completed new incidents/sec",
+      "incident creation p95",
+      "accepted/rejected/ambiguous requests",
+      "receipt reconciliation",
+      "downstream due count and oldest age",
+      "SMTP latency",
+      "per-role CPU and memory/OOM",
+      "database calls, WAL and lock waits"
+    ],
+    "caveats": [
+      "Shared Docker VM and unrelated services remain; separate databases do not isolate host resources",
+      "Aged synthetic history is not production bloat",
+      "A common new schema measures old/new code on that schema, not a native historical installation",
+      "Configured provider fanout must be reported explicitly; unconfigured load does not certify all external providers"
+    ]
+  },
+  "historicalMilestones": {
+    "earlierPassingRps": 25,
+    "latestPassingRps": 75,
+    "controlledSpeedupClaim": null
+  },
+  "releaseReady": false
+}
