@@ -69,6 +69,8 @@ export const CAPABILITIES = {
 
   // Intelligence (AIOps)
   INTELLIGENCE_READ: 'intelligence.read',
+  /** End-user suggestions on incidents; every result is still filtered by incident visibility. */
+  INTELLIGENCE_SUGGESTIONS_READ: 'intelligence.suggestions.read',
   INTELLIGENCE_FEEDBACK: 'intelligence.feedback',
   INTELLIGENCE_MANAGE: 'intelligence.manage',
 } as const;
@@ -234,6 +236,7 @@ const RESPONDER_CAPABILITIES = new Set<Capability>([
   CAPABILITIES.RUNBOOK_APPROVE,
   // Intelligence: responders may view findings and give feedback; policy changes stay admin-only.
   CAPABILITIES.INTELLIGENCE_READ,
+  CAPABILITIES.INTELLIGENCE_SUGGESTIONS_READ,
   CAPABILITIES.INTELLIGENCE_FEEDBACK,
 ]);
 const AUDITOR_CAPABILITIES = new Set<Capability>([
@@ -265,9 +268,12 @@ const AUDITOR_CAPABILITIES = new Set<Capability>([
   CAPABILITIES.RUNBOOK_READ_ALL,
   // Auditors may inspect intelligence decisions and explanations but never change them.
   CAPABILITIES.INTELLIGENCE_READ,
+  CAPABILITIES.INTELLIGENCE_SUGGESTIONS_READ,
 ]);
 const USER_CAPABILITIES = new Set<Capability>([
   CAPABILITIES.USER_NOTIFICATION_PREFERENCES,
+  // Scoped users may see suggestions, but only for incidents they can already read.
+  CAPABILITIES.INTELLIGENCE_SUGGESTIONS_READ,
   CAPABILITIES.TEAM_ADMINISTER_SCOPED,
   CAPABILITIES.INCIDENT_READ_SCOPED,
   CAPABILITIES.SERVICE_READ_SCOPED,
