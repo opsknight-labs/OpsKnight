@@ -15,7 +15,7 @@ STACK_NAME="${SWARM_STACK_NAME:-opsknight}"
 MIGRATION_RUN_ID="${MIGRATION_RUN_ID:-$(date +%s)_$$}"
 SERVICE_NAME="${MIGRATION_SERVICE_NAME:-${STACK_NAME}_migration_${MIGRATION_RUN_ID}}"
 NETWORK_NAME="${SWARM_NETWORK_NAME:-${STACK_NAME}_network}"
-OPSKNIGHT_IMAGE="${OPSKNIGHT_IMAGE:-ghcr.io/opsknight-labs/opsknight:2.1.1}"
+OPSKNIGHT_IMAGE="${OPSKNIGHT_IMAGE:-ghcr.io/opsknight-labs/opsknight:2.1.2}"
 TIMEOUT_SEC="${MIGRATION_TIMEOUT_SEC:-300}"
 
 # Ensure ephemeral migration task cleanup on exit

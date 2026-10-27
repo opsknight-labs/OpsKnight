@@ -36,12 +36,12 @@ WORKER_DRAIN_TIMEOUT_SEC="${WORKER_DRAIN_TIMEOUT_SEC:-30}"
 if [ "${SWARM_RUNTIME_MODE}" = "split" ]; then
   if [ -z "${OPSKNIGHT_IMAGE:-}" ]; then
     echo "❌ [FATAL] SWARM_RUNTIME_MODE=split requires an explicit OPSKNIGHT_IMAGE tag or immutable digest." >&2
-    echo "   Supply 2.1.1 or, preferably, the verified release digest:" >&2
+    echo "   Supply 2.1.2 or, preferably, the verified release digest:" >&2
     echo "     export OPSKNIGHT_IMAGE=\"ghcr.io/opsknight-labs/opsknight@sha256:<digest>\"" >&2
     exit 1
   fi
 else
-  OPSKNIGHT_IMAGE="${OPSKNIGHT_IMAGE:-ghcr.io/opsknight-labs/opsknight:2.1.1}"
+  OPSKNIGHT_IMAGE="${OPSKNIGHT_IMAGE:-ghcr.io/opsknight-labs/opsknight:2.1.2}"
 fi
 
 if [ "${ENVIRONMENT}" = "production" ] && [ "${ALLOW_INSECURE_SECRETS}" != "true" ]; then

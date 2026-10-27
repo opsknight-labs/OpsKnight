@@ -2,5 +2,5 @@ apiVersion: v2
 name: opsknight-agent
 description: Standalone OpsKnight runbook Agent (connects to an existing installation)
 type: application
-version: 2.1.1
-appVersion: '2.1.1'
+version: 2.1.2
+appVersion: '2.1.2'

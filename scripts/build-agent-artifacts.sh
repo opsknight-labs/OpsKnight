@@ -10,7 +10,7 @@ ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 DIST_DIR="${ROOT_DIR}/dist/agent"
 
 # Resolve dynamic version from package.json or git tag
-PACKAGE_VERSION="$(node -p 'require("./package.json").version' 2>/dev/null || echo '2.1.1')"
+PACKAGE_VERSION="$(node -p 'require("./package.json").version' 2>/dev/null || echo '2.1.2')"
 RAW_VERSION="${OPSKNIGHT_VERSION:-${PACKAGE_VERSION}}"
 RELEASE_VERSION="${RAW_VERSION#v}"
 RELEASE_TAG="v${RELEASE_VERSION}"
