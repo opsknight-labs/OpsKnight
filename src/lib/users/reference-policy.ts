@@ -63,6 +63,9 @@ export const USER_REFERENCE_POLICY = {
   createdRetentionHolds: { deactivate: 'KEEP', delete: 'SET_NULL' },
   releasedRetentionHolds: { deactivate: 'KEEP', delete: 'SET_NULL' },
   initiatedEncryptionRuns: { deactivate: 'KEEP', delete: 'SET_NULL' },
+  intelligenceFeedback: { deactivate: 'KEEP', delete: 'SET_NULL' },
+  intelligencePolicyVersions: { deactivate: 'KEEP', delete: 'SET_NULL' },
+  intelligenceEvaluationRuns: { deactivate: 'KEEP', delete: 'SET_NULL' },
 } as const;
 
 export type UserReferenceName = keyof typeof USER_REFERENCE_POLICY;

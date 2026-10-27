@@ -66,6 +66,11 @@ export const CAPABILITIES = {
   RUNBOOK_PUBLISH: 'runbook.publish',
   RUNBOOK_AGENT_MANAGE: 'runbook.agent.manage',
   RUNBOOK_SECRET_MANAGE: 'runbook.secret.manage',
+
+  // Intelligence (AIOps)
+  INTELLIGENCE_READ: 'intelligence.read',
+  INTELLIGENCE_FEEDBACK: 'intelligence.feedback',
+  INTELLIGENCE_MANAGE: 'intelligence.manage',
 } as const;
 
 export type Capability = (typeof CAPABILITIES)[keyof typeof CAPABILITIES];
@@ -227,6 +232,9 @@ const RESPONDER_CAPABILITIES = new Set<Capability>([
   CAPABILITIES.RUNBOOK_READ_ALL,
   CAPABILITIES.RUNBOOK_EXECUTE,
   CAPABILITIES.RUNBOOK_APPROVE,
+  // Intelligence: responders may view findings and give feedback; policy changes stay admin-only.
+  CAPABILITIES.INTELLIGENCE_READ,
+  CAPABILITIES.INTELLIGENCE_FEEDBACK,
 ]);
 const AUDITOR_CAPABILITIES = new Set<Capability>([
   CAPABILITIES.USER_NOTIFICATION_PREFERENCES,
@@ -255,6 +263,8 @@ const AUDITOR_CAPABILITIES = new Set<Capability>([
   CAPABILITIES.COMPLIANCE_EXPORT,
   // Auditors may view runbook definitions and execution history.
   CAPABILITIES.RUNBOOK_READ_ALL,
+  // Auditors may inspect intelligence decisions and explanations but never change them.
+  CAPABILITIES.INTELLIGENCE_READ,
 ]);
 const USER_CAPABILITIES = new Set<Capability>([
   CAPABILITIES.USER_NOTIFICATION_PREFERENCES,

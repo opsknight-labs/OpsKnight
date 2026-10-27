@@ -540,6 +540,9 @@ model User {
   runbookUnattendedWritesAuthorized ServiceAutomationRule[]  @relation("ServiceRunbookBindingUnattendedWritesAuthorizedBy")
   runbookTriggersCreated      RunbookTrigger[]             @relation("RunbookTriggerCreatedBy")
   runbookExecutionsTriggered  RunbookExecution[]           @relation("RunbookExecutionTriggeredBy")
+  intelligenceFeedback        IntelligenceFeedback[]
+  intelligencePolicyVersions  IntelligencePolicyVersion[]
+  intelligenceEvaluationRuns  IntelligenceEvaluationRun[]
   runbookStepsApproved        RunbookExecutionStep[]       @relation("RunbookStepApprovedBy")
   runbookAgentsCreated        RunbookAgent[]               @relation("RunbookAgentCreatedBy")
   runbookAgentsRevoked        RunbookAgent[]               @relation("RunbookAgentRevokedBy")
@@ -707,6 +710,8 @@ model Service {
   subscriptionServices            StatusPageSubscriptionService[]
   slackDestinations               SlackDestination[]
   microsoftTeamsDestinations      MicrosoftTeamsDestination[]
+  intelligencePolicy              IntelligencePolicy?
+  incidentFingerprints            IncidentFingerprint[]
 
   @@index([teamId])
   @@index([escalationPolicyId])
@@ -1426,6 +1431,12 @@ model Incident {
   watchers                            IncidentWatcher[]
   tags                                IncidentTag[]
   actionItemRecords                   ActionItem[]
+  intelligenceFingerprint             IncidentFingerprint?
+  correlationMemberships              CorrelationMember[]
+  correlationAnchoredGroups           CorrelationGroup[]
+  relationshipsAsSource               IncidentRelationship[]       @relation("IncidentRelationshipSource")
+  relationshipsAsTarget               IncidentRelationship[]       @relation("IncidentRelationshipTarget")
+  intelligenceFindings                IntelligenceFinding[]
   externalIssueLinks                  ExternalIssueLink[]
   pinnedMessages                      SlackPinnedMessage[]
   microsoftTeamsMessages              MicrosoftTeamsIncidentMessage[]
@@ -4763,4 +4774,373 @@ model ScimEvent {
   createdAt   DateTime      @default(now())
 
   @@index([connectorId, createdAt, id])
+}
+
+// ---------------------------------------------------------------------------
+// OpsKnight Intelligence (AIOps)
+//
+// Derived, rebuildable data kept off the paging-critical path. Nothing here is
+// the source of truth for incidents or alerts, and no row ever rewrites
+// incident/alert history. Every incident-linked table cascades so retention
+// cleanup of incidents never blocks on intelligence data.
+// ---------------------------------------------------------------------------
+
+enum IntelligenceMode {
+  OFF
+  SHADOW
+  SUGGEST
+  AUTO
+}
+
+enum CorrelationGroupStatus {
+  OPEN
+  CLOSED
+}
+
+enum CorrelationDecision {
+  SHADOW
+  SUGGESTED
+  ACCEPTED
+  REJECTED
+  REVERTED
+}
+
+enum CorrelationMemberRole {
+  ANCHOR
+  MEMBER
+}
+
+enum IntelligenceActorType {
+  SYSTEM
+  USER
+}
+
+enum IncidentRelationshipType {
+  RELATED
+  DUPLICATE_OF
+  CAUSED_BY
+}
+
+enum IntelligenceOrigin {
+  RULE
+  LEARNED
+  HUMAN
+}
+
+enum IntelligenceFindingKind {
+  SIMILAR_INCIDENT
+  RELATED_INCIDENT
+  RUNBOOK_RECOMMENDATION
+  PROBABLE_CAUSE
+  CHANGE_CORRELATION
+  NOISE
+}
+
+enum IntelligenceFindingStatus {
+  ACTIVE
+  SUPERSEDED
+  DISMISSED
+}
+
+enum IntelligenceFeedbackSubject {
+  FINDING
+  CORRELATION_MEMBER
+  INCIDENT_RELATIONSHIP
+}
+
+enum IntelligenceFeedbackVerdict {
+  HELPFUL
+  NOT_HELPFUL
+  CORRECT
+  INCORRECT
+}
+
+enum IntelligenceEvaluationKind {
+  SHADOW
+  REPLAY
+  CERTIFICATION
+}
+
+enum IntelligenceEvaluationStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  FAILED
+}
+
+// Singleton. Every operational knob is edited from the UI and audited; revision is an optimistic lock.
+model IntelligenceSettings {
+  id                          String   @id @default("default")
+  enabled                     Boolean  @default(false)
+  maxConcurrency              Int      @default(2)
+  batchSize                   Int      @default(20)
+  maxJobMs                    Int      @default(5000)
+  maxDbMs                     Int      @default(2000)
+  candidateCap                Int      @default(50)
+  lookbackDays                Int      @default(30)
+  backpressureEscalationLagMs Int      @default(15000)
+  fingerprintRetentionDays    Int      @default(730)
+  correlationRetentionDays    Int      @default(365)
+  findingRetentionDays        Int      @default(365)
+  feedbackRetentionDays       Int      @default(730)
+  revision                    Int      @default(1)
+  updatedBy                   String?
+  createdAt                   DateTime @default(now())
+  updatedAt                   DateTime @updatedAt
+}
+
+// One policy per scope: scopeKey is "global" or "service:<serviceId>". Behaviour lives in immutable versions.
+model IntelligencePolicy {
+  id          String                      @id @default(cuid())
+  scopeKey    String                      @unique
+  serviceId   String?                     @unique
+  service     Service?                    @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  headVersion Int                         @default(0)
+  createdAt   DateTime                    @default(now())
+  updatedAt   DateTime                    @updatedAt
+  versions    IntelligencePolicyVersion[]
+  groups      CorrelationGroup[]
+}
+
+// Append-only. Rollback publishes a new version cloned from an older one; history is never rewritten.
+model IntelligencePolicyVersion {
+  id                 String             @id @default(cuid())
+  policyId           String
+  policy             IntelligencePolicy @relation(fields: [policyId], references: [id], onDelete: Cascade)
+  version            Int
+  mode               IntelligenceMode   @default(OFF)
+  definition         Json
+  reason             String?
+  createdFromVersion Int?
+  createdById        String?
+  createdBy          User?              @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt          DateTime           @default(now())
+
+  @@unique([policyId, version])
+  @@index([createdById])
+}
+
+// Scope-aware, window-bucketed identity. Creation is INSERT .. ON CONFLICT DO NOTHING, never read-then-write.
+model CorrelationGroup {
+  id               String                 @id @default(cuid())
+  policyId         String
+  policy           IntelligencePolicy     @relation(fields: [policyId], references: [id], onDelete: Cascade)
+  policyVersion    Int
+  ruleId           String
+  scopeKind        String
+  scopeHash        String
+  signatureHash    String
+  windowStart      DateTime
+  windowEnd        DateTime
+  maxWindowEnd     DateTime
+  status           CorrelationGroupStatus @default(OPEN)
+  anchorIncidentId String?
+  anchorIncident   Incident?              @relation(fields: [anchorIncidentId], references: [id], onDelete: SetNull)
+  createdAt        DateTime               @default(now())
+  updatedAt        DateTime               @updatedAt
+  members          CorrelationMember[]
+
+  @@unique([policyId, policyVersion, ruleId, scopeHash, signatureHash, windowStart], map: "uq_correlation_group_identity")
+  @@index([status, windowEnd], map: "idx_correlation_group_open_window")
+  @@index([anchorIncidentId])
+  @@index([createdAt], map: "idx_correlation_group_retention")
+}
+
+// Incident-level membership (not per alert). Alert counts are derived from Alert.incidentId.
+model CorrelationMember {
+  id            String                     @id @default(cuid())
+  groupId       String
+  group         CorrelationGroup           @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  incidentId    String
+  incident      Incident                   @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+  role          CorrelationMemberRole      @default(MEMBER)
+  decision      CorrelationDecision        @default(SHADOW)
+  score         Float                      @default(0)
+  evidence      Json
+  policyVersion Int
+  engineVersion String
+  createdAt     DateTime                   @default(now())
+  updatedAt     DateTime                   @updatedAt
+  events        CorrelationDecisionEvent[]
+
+  @@unique([groupId, incidentId])
+  @@index([incidentId])
+  @@index([groupId, decision])
+}
+
+// Append-only audit of every decision change; reversal is a new row, never a delete or rewrite.
+model CorrelationDecisionEvent {
+  id           String                @id @default(cuid())
+  memberId     String
+  member       CorrelationMember     @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  fromDecision CorrelationDecision?
+  toDecision   CorrelationDecision
+  actorType    IntelligenceActorType @default(SYSTEM)
+  actorId      String?
+  reasonCode   String
+  note         String?
+  createdAt    DateTime              @default(now())
+
+  @@index([memberId, createdAt])
+}
+
+model IncidentRelationship {
+  id               String                     @id @default(cuid())
+  sourceIncidentId String
+  source           Incident                   @relation("IncidentRelationshipSource", fields: [sourceIncidentId], references: [id], onDelete: Cascade)
+  targetIncidentId String
+  target           Incident                   @relation("IncidentRelationshipTarget", fields: [targetIncidentId], references: [id], onDelete: Cascade)
+  type             IncidentRelationshipType
+  origin           IntelligenceOrigin
+  decision         CorrelationDecision        @default(SUGGESTED)
+  score            Float                      @default(0)
+  evidence         Json
+  engineVersion    String
+  createdAt        DateTime                   @default(now())
+  updatedAt        DateTime                   @updatedAt
+  events           IncidentRelationshipEvent[]
+
+  @@unique([sourceIncidentId, targetIncidentId, type])
+  @@index([targetIncidentId])
+}
+
+model IncidentRelationshipEvent {
+  id             String                @id @default(cuid())
+  relationshipId String
+  relationship   IncidentRelationship  @relation(fields: [relationshipId], references: [id], onDelete: Cascade)
+  fromDecision   CorrelationDecision?
+  toDecision     CorrelationDecision
+  actorType      IntelligenceActorType @default(SYSTEM)
+  actorId        String?
+  reasonCode     String
+  note           String?
+  createdAt      DateTime              @default(now())
+
+  @@index([relationshipId, createdAt])
+}
+
+// Written once at creation and once at resolution (two writes per incident). The full-text and
+// trigram indexes are expression indexes created in SQL so no generated column is needed.
+model IncidentFingerprint {
+  incidentId        String    @id
+  incident          Incident  @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+  serviceId         String
+  service           Service   @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  template          String
+  tokens            String[]
+  labels            Json
+  resolutionSummary String?
+  engineVersion     String
+  incidentCreatedAt DateTime
+  resolvedAt        DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  @@index([serviceId, incidentCreatedAt(sort: Desc)], map: "idx_incident_fingerprint_service_recent")
+  @@index([incidentCreatedAt], map: "idx_incident_fingerprint_retention")
+}
+
+// Aggregate counters only; never raw alert payloads. scopeKey is a service id or "global".
+model IntelligencePattern {
+  id         String   @id @default(cuid())
+  scopeKey   String
+  kind       String
+  key        String
+  successes  Int      @default(0)
+  failures   Int      @default(0)
+  support    Int      @default(0)
+  lastSeenAt DateTime @default(now())
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([scopeKey, kind, key])
+  @@index([lastSeenAt])
+}
+
+// Evidence-backed conclusions. generation fences stale results; superseded rows are kept for audit.
+model IntelligenceFinding {
+  id            String                    @id @default(cuid())
+  incidentId    String
+  incident      Incident                  @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+  kind          IntelligenceFindingKind
+  status        IntelligenceFindingStatus @default(ACTIVE)
+  rank          Int                       @default(0)
+  confidence    Float                     @default(0)
+  subjectRef    String?
+  evidence      Json
+  generation    Int
+  engineVersion String
+  policyVersion Int?
+  createdAt     DateTime                  @default(now())
+  supersededAt  DateTime?
+
+  @@index([incidentId, status, kind, rank], map: "idx_intelligence_finding_lookup")
+  @@index([createdAt], map: "idx_intelligence_finding_retention")
+}
+
+model IntelligenceFeedback {
+  id          String                      @id @default(cuid())
+  subjectType IntelligenceFeedbackSubject
+  subjectId   String
+  verdict     IntelligenceFeedbackVerdict
+  reasonCode  String?
+  note        String?
+  serviceId   String?
+  actorId     String?
+  actor       User?                       @relation(fields: [actorId], references: [id], onDelete: SetNull)
+  createdAt   DateTime                    @default(now())
+
+  @@index([subjectType, subjectId])
+  @@index([serviceId, createdAt])
+  @@index([actorId])
+  @@index([createdAt], map: "idx_intelligence_feedback_retention")
+}
+
+model IntelligenceEvaluationRun {
+  id          String                       @id @default(cuid())
+  kind        IntelligenceEvaluationKind
+  status      IntelligenceEvaluationStatus @default(PENDING)
+  policyId    String?
+  policyVersion Int?
+  windowStart DateTime
+  windowEnd   DateTime
+  metrics     Json?
+  error       String?
+  createdById String?
+  createdBy   User?                        @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  startedAt   DateTime?
+  completedAt DateTime?
+  createdAt   DateTime                     @default(now())
+
+  @@index([kind, createdAt])
+  @@index([createdById])
+}
+
+// Coalesced dirty markers: an alert storm yields one unit of work per (kind, subject), never one per alert.
+model IntelligenceWorkItem {
+  id          String    @id @default(cuid())
+  kind        String
+  subjectKey  String
+  priority    Int       @default(100)
+  generation  Int       @default(1)
+  attempts    Int       @default(0)
+  scheduledAt DateTime  @default(now())
+  claimToken  String?
+  claimedAt   DateTime?
+  leaseUntil  DateTime?
+  lastError   String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@unique([kind, subjectKey], map: "uq_intelligence_work_item_subject")
+  @@index([priority, scheduledAt], map: "idx_intelligence_work_item_ready")
+  @@index([leaseUntil])
+}
+
+// Keyset watermark for discovering new incidents without any write on the ingestion path.
+model IntelligenceCursor {
+  name        String   @id
+  watermarkAt DateTime
+  lastId      String
+  updatedAt   DateTime @updatedAt
 }
