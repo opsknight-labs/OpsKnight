@@ -4,9 +4,14 @@ import { CAPABILITIES, hasCapability } from '@/lib/authorization';
 import { incidentReadWhere } from '@/lib/authorization-filters';
 import type { AuthorizationActor } from '@/lib/authorization-policy';
 import { resolveEffectivePolicy } from '../settings/service';
+import { getMyFeedback } from '../feedback/service';
 import type { SimilarityComponents } from './scoring';
 
 export interface SimilarIncidentView {
+  /** The finding this row represents; the target of the viewer's feedback. */
+  findingId: string;
+  /** The viewer's own live verdict on this suggestion, if any. */
+  myVerdict: 'HELPFUL' | 'NOT_HELPFUL' | null;
   incidentId: string;
   title: string;
   status: string;
@@ -80,7 +85,7 @@ export async function getSimilarIncidentsForActor(
     where: { incidentId, kind: 'SIMILAR_INCIDENT', status: 'ACTIVE', subjectRef: { not: null } },
     orderBy: { rank: 'asc' },
     take: MAX_VISIBLE * 3,
-    select: { subjectRef: true, confidence: true, evidence: true },
+    select: { id: true, subjectRef: true, confidence: true, evidence: true },
   });
   if (findings.length === 0) return null;
 
@@ -98,13 +103,22 @@ export async function getSimilarIncidentsForActor(
     },
   });
   const byId = new Map(visible.map(incident => [incident.id, incident]));
+  const mine = await getMyFeedback(
+    actor,
+    'FINDING',
+    findings.map(f => f.id),
+    client
+  );
 
   const views: SimilarIncidentView[] = [];
   for (const finding of findings) {
     const target = byId.get(finding.subjectRef as string);
     if (!target) continue; // not visible to this viewer: dropped silently, never counted or hinted
     const evidence = finding.evidence as { components?: unknown } | null;
+    const verdict = mine.get(finding.id);
     views.push({
+      findingId: finding.id,
+      myVerdict: verdict === 'HELPFUL' || verdict === 'NOT_HELPFUL' ? verdict : null,
       incidentId: target.id,
       title: target.title,
       status: target.status,

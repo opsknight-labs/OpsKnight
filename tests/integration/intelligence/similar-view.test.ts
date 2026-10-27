@@ -60,6 +60,15 @@ describe('similar incidents as seen by a viewer', () => {
 
     const result = await getSimilarIncidentsForActor(target.id, await actorFor(admin.id));
     expect(result).toHaveLength(1);
+    expect(result![0].findingId).toEqual(expect.any(String));
+    expect(result![0].myVerdict).toBeNull();
+    const mine = await db.intelligenceFeedback.create({
+      data: { subjectType: 'FINDING', subjectId: result![0].findingId, verdict: 'HELPFUL', actorId: admin.id },
+    });
+    expect(mine.id).toBeTruthy();
+    expect((await getSimilarIncidentsForActor(target.id, await actorFor(admin.id)))![0].myVerdict).toBe('HELPFUL');
+    const other = await createTestUser({ role: 'ADMIN' });
+    expect((await getSimilarIncidentsForActor(target.id, await actorFor(other.id)))![0].myVerdict).toBeNull();
     expect(result![0]).toMatchObject({
       incidentId: precedent.id,
       title: 'Database connection errors on db-primary-7',

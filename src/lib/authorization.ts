@@ -274,6 +274,8 @@ const USER_CAPABILITIES = new Set<Capability>([
   CAPABILITIES.USER_NOTIFICATION_PREFERENCES,
   // Scoped users may see suggestions, but only for incidents they can already read.
   CAPABILITIES.INTELLIGENCE_SUGGESTIONS_READ,
+  // And may rate them; feedback is visibility-checked, rate-limited and one live verdict per person.
+  CAPABILITIES.INTELLIGENCE_FEEDBACK,
   CAPABILITIES.TEAM_ADMINISTER_SCOPED,
   CAPABILITIES.INCIDENT_READ_SCOPED,
   CAPABILITIES.SERVICE_READ_SCOPED,

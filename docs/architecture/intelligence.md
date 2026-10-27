@@ -88,7 +88,7 @@ past decisions always reference the exact version that made them.
 | :--- | :--- | :--- |
 | `intelligence.suggestions.read` | every role | See suggestions on incidents (visibility-filtered) |
 | `intelligence.read` | admin, responder, auditor | View the Settings → Intelligence page |
-| `intelligence.feedback` | admin, responder | Reserved for suggestion feedback |
+| `intelligence.feedback` | every role except auditor | Rate suggestions (visibility-checked, rate-limited, one live verdict per person) |
 | `intelligence.manage` | admin | Change settings and policies |
 
 ## Measuring the cost to ingestion

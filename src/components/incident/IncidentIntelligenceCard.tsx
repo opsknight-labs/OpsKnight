@@ -2,7 +2,9 @@ import Link from 'next/link';
 import { History } from 'lucide-react';
 import { logger } from '@/lib/logger';
 import { getCurrentAuthorizationActor } from '@/lib/rbac';
+import { CAPABILITIES, hasCapability } from '@/lib/authorization';
 import { getSimilarIncidentsForActor } from '@/lib/intelligence/similarity/view';
+import SimilarIncidentFeedback from '@/components/incident/SimilarIncidentFeedback';
 
 const formatDate = (date: Date) => date.toISOString().slice(0, 10);
 
@@ -13,8 +15,10 @@ const formatDate = (date: Date) => date.toISOString().slice(0, 10);
  */
 export default async function IncidentIntelligenceCard({ incidentId }: { incidentId: string }) {
   let similar;
+  let canRate = false;
   try {
     const actor = await getCurrentAuthorizationActor();
+    canRate = hasCapability(actor.role, CAPABILITIES.INTELLIGENCE_FEEDBACK);
     similar = await getSimilarIncidentsForActor(incidentId, actor);
   } catch (error) {
     logger.warn('[Intelligence] Similar incidents unavailable', {
@@ -54,12 +58,21 @@ export default async function IncidentIntelligenceCard({ incidentId }: { inciden
                 ))}
               </ul>
             </div>
-            <span
-              className="text-xs tabular-nums text-muted-foreground"
-              title="A ranking signal for ordering suggestions, not a probability"
-            >
-              Match {item.matchPercent}%
-            </span>
+            <div className="flex flex-col items-end gap-1">
+              <span
+                className="text-xs tabular-nums text-muted-foreground"
+                title="A ranking signal for ordering suggestions, not a probability"
+              >
+                Match {item.matchPercent}%
+              </span>
+              {canRate && (
+                <SimilarIncidentFeedback
+                  incidentId={incidentId}
+                  findingId={item.findingId}
+                  initialVerdict={item.myVerdict}
+                />
+              )}
+            </div>
           </li>
         ))}
       </ul>
