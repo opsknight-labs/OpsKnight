@@ -343,6 +343,16 @@ async function main() {
   const admissionMetricsChecks = process.env.INGESTION_DOCKER_ADMISSION_METRICS_CHECKS === 'true';
   const webCpus = Number(process.env.INGESTION_WEB_CPUS || 1);
   const workerCpus = Number(process.env.INGESTION_WORKER_CPUS || 1);
+  const webMemoryMiB = Number(process.env.INGESTION_WEB_MEMORY_MIB ?? 1024);
+  const ingestionMemoryMiB = Number(process.env.INGESTION_WORKER_MEMORY_MIB ?? 768);
+  const webRequestLimit = Number(process.env.INGESTION_WEB_MAX_INFLIGHT_REQUESTS ?? 32);
+  const webPoolSize = Number(process.env.INGESTION_WEB_POOL_SIZE ?? 10);
+  const ingestionPoolSize = Number(process.env.INGESTION_WORKER_POOL_SIZE ?? 5);
+  for (const memory of [webMemoryMiB, ingestionMemoryMiB])
+    assert.ok(Number.isInteger(memory) && memory >= 256 && memory <= 4096);
+  assert.ok(Number.isInteger(webRequestLimit) && webRequestLimit >= 1 && webRequestLimit <= 1024);
+  for (const pool of [webPoolSize, ingestionPoolSize])
+    assert.ok(Number.isInteger(pool) && pool >= 2 && pool <= 50);
   for (const cpus of [webCpus, workerCpus])
     assert.ok(Number.isFinite(cpus) && cpus >= 0.25 && cpus <= 4);
   assert.ok(
@@ -436,10 +446,10 @@ async function main() {
     ...supportingPools,
     OPSKNIGHT_RUNTIME_MODE: 'split',
     WEB_REPLICAS: String(webReplicas || 2),
-    DATABASE_POOL_SIZE_WEB: '10',
+    DATABASE_POOL_SIZE_WEB: String(webPoolSize),
     INGESTION_WORKER_REPLICAS: String(workerReplicas),
     GENERAL_WORKER_REPLICAS: String(generalWorkerReplicas),
-    DATABASE_POOL_SIZE_INGESTION_WORKER: '5',
+    DATABASE_POOL_SIZE_INGESTION_WORKER: String(ingestionPoolSize),
     DATABASE_CONNECTION_RESERVE: '15',
     DATABASE_MAX_CONNECTIONS: String(limits.maximum),
   });
@@ -485,10 +495,11 @@ async function main() {
     OPSKNIGHT_RUNTIME_MODE: 'split',
     ...(automaticMode ? {} : { OPSKNIGHT_INGESTION_MODE: 'postgres' }),
     OPSKNIGHT_INGESTION_CONCURRENCY: '4',
+    OPSKNIGHT_INGESTION_MAX_INFLIGHT_REQUESTS: String(webRequestLimit),
     OPSKNIGHT_INGESTION_EVENTS_PER_MINUTE: '10000000',
     OPSKNIGHT_INGESTION_INTEGRATION_PER_MINUTE: '10000000',
-    DATABASE_POOL_SIZE_WEB: '10',
-    DATABASE_POOL_SIZE_INGESTION_WORKER: '5',
+    DATABASE_POOL_SIZE_WEB: String(webPoolSize),
+    DATABASE_POOL_SIZE_INGESTION_WORKER: String(ingestionPoolSize),
     NEXTAUTH_SECRET: randomBytes(32).toString('base64url'),
     API_KEY_SECRET: randomBytes(32).toString('base64url'),
     ...(workerMetricsChecks || admissionMetricsChecks || capacityStage === 'incident-only'
@@ -696,7 +707,11 @@ async function main() {
           : (supportingRoles.find(item => item.role === role)?.cpus ?? workerCpus)
       ),
       '--memory',
-      role === 'web' || role === 'http' ? '1g' : '768m',
+      role === 'web' || role === 'http'
+        ? `${webMemoryMiB}m`
+        : role === 'ingestion-worker'
+          ? `${ingestionMemoryMiB}m`
+          : '768m',
       '--health-interval',
       '5s',
       '--health-timeout',
