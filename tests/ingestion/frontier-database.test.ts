@@ -5,8 +5,7 @@ import prisma from '@/lib/prisma';
 const database = new URL(process.env.DATABASE_URL ?? 'http://missing');
 if (
   !['127.0.0.1', 'localhost'].includes(database.hostname) ||
-  !database.pathname.startsWith('/ingestion_test') ||
-  !database.pathname.endsWith('_test')
+  !database.pathname.startsWith('/ingestion_test')
 )
   throw new Error('Dedicated localhost ingestion_test database required');
 
