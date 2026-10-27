@@ -4,6 +4,8 @@ This feature is in development and disabled by default. It is not yet certified 
 
 For a repeatable local check, install the locked dependencies on Node 20 (`npm ci --legacy-peer-deps`), start Docker, then run `npm run check:mcp:local`. The command creates its own PostgreSQL 16 container bound to loopback, installs all migrations into fresh test/browser databases, generates disposable secrets, runs typecheck, MCP unit/database/coverage checks, builds the production app and tests native consent/read/revoke in Chromium, Firefox and WebKit. It prints a private temporary evidence directory outside git and removes its own server/container on exit. Linux hosts need Playwright's system dependencies installed first. This local check does not satisfy final-SHA release certification.
 
+The local evidence directory also contains `query-profile.json`: aggregate statement counts for discovery, single reads, joined incident context, a three-step plan and four concurrent searches against the owned small fixture. For an existing disposable local test database, set `MCP_QUERY_PROFILE_OUTPUT` to an absolute JSON path outside the repository and run `npm run test:mcp:db`. The query-profile test resets test data and accepts only a loopback PostgreSQL database whose name ends in `_test`; use a dedicated database. The profile does not record SQL text, parameters, credentials or business content, and does not certify production contention or capacity.
+
 For manual development:
 
 1. Install the locked dependencies on Node 20 using `npm ci --legacy-peer-deps`; generate Prisma and deploy migrations using the existing safe migration process. Back up a populated database first.

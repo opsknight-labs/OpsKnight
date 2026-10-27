@@ -69,7 +69,12 @@ jobs:
       - run: npx tsc --noEmit
       - run: npm run test:mcp
       - run: npx vitest run --no-file-parallelism --maxWorkers=1 tests/lib/prisma-datasource.test.ts tests/lib/deployment-config-unit.test.ts
-      - run: npx vitest run -c vitest.int.config.ts --no-file-parallelism --maxWorkers=1 tests/integration/mcp-security-database.test.ts tests/integration/mcp-database-isolation.test.ts
+      - name: PostgreSQL authority, isolation and investigation query budgets
+        env:
+          MCP_QUERY_PROFILE_OUTPUT: ${{ runner.temp }}/mcp-evidence/query-profile.json
+        run: |
+          mkdir -p "$RUNNER_TEMP/mcp-evidence"
+          npx vitest run -c vitest.int.config.ts --no-file-parallelism --maxWorkers=1 tests/integration/mcp-security-database.test.ts tests/integration/mcp-database-isolation.test.ts tests/integration/mcp-query-profile.test.ts
       - name: Source-labelled canonical coverage
         run: |
           mkdir -p "$RUNNER_TEMP/mcp-evidence"

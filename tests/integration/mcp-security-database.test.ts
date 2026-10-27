@@ -125,8 +125,48 @@ async function context(f: Awaited<ReturnType<typeof fixture>>): Promise<Executio
 }
 
 describe('MCP PostgreSQL security and replay boundaries', () => {
+  it('reloads the current role, memberships and scope intersection in each authority snapshot', async () => {
+    const f = await fixture();
+    const team = await db.team.create({ data: { name: `MCP authority ${f.user.id}` } });
+    const before = await resolveMcpGrant(f.grant.id);
+    expect(before.actor.role).toBe('ADMIN');
+    expect(before.actor.teamIds).toEqual([]);
+    await db.teamMember.create({ data: { userId: f.user.id, teamId: team.id } });
+    await db.user.update({ where: { id: f.user.id }, data: { role: 'USER' } });
+    await db.mcpClient.update({ where: { id: f.client.id }, data: { scopes: ['incidents:read'] } });
+    const after = await resolveMcpGrant(f.grant.id);
+    expect(after.actor.role).toBe('USER');
+    expect(after.actor.teamIds).toEqual([team.id]);
+    expect(after.apiKey.scopes).toEqual(['incidents:read']);
+    await db.teamMember.deleteMany({ where: { userId: f.user.id } });
+    expect((await resolveMcpGrant(f.grant.id)).actor.teamIds).toEqual([]);
+    await db.user.update({ where: { id: f.user.id }, data: { tokenVersion: { increment: 1 } } });
+    await expect(resolveMcpGrant(f.grant.id)).rejects.toThrow('MCP_INACTIVE_PRINCIPAL');
+  });
+  it('binds parameterized authority snapshots to the exact grant and live credential', async () => {
+    const f = await fixture();
+    const ctx = await context(f);
+    const other = await fixture();
+    await expect(resolveMcpGrant(other.grant.id, ctx.credentialId)).rejects.toThrow(
+      'MCP_INVALID_GRANT'
+    );
+    await expect(resolveMcpGrant("' OR 1=1 --")).rejects.toThrow('MCP_INVALID_GRANT');
+    await db.mcpToken.update({
+      where: { id: ctx.credentialId },
+      data: { accessExpiresAt: new Date(0) },
+    });
+    await expect(resolveMcpGrant(f.grant.id, ctx.credentialId)).rejects.toThrow(
+      'MCP_INVALID_GRANT'
+    );
+    await db.mcpGrant.update({ where: { id: f.grant.id }, data: { expiresAt: new Date(0) } });
+    await expect(resolveMcpGrant(f.grant.id)).rejects.toThrow('MCP_INVALID_GRANT');
+  });
   it('does not let malformed requests from one known peer exhaust another peer’s token admission', async () => {
     const f = await fixture();
+    const globalBefore = await db.rateLimit.aggregate({
+      where: { key: { startsWith: 'mcp:oauth:token:global:' } },
+      _sum: { count: true },
+    });
     const previous = process.env.TRUST_PROXY_HEADERS;
     process.env.TRUST_PROXY_HEADERS = 'true';
     try {
@@ -145,13 +185,11 @@ describe('MCP PostgreSQL security and replay boundaries', () => {
         '198.51.100.11'
       );
       expect(valid.status).toBe(200);
-      expect(
-        (
-          await db.rateLimit.findFirstOrThrow({
-            where: { key: { startsWith: 'mcp:oauth:token:global:' } },
-          })
-        ).count
-      ).toBeLessThanOrEqual(61);
+      const globalAfter = await db.rateLimit.aggregate({
+        where: { key: { startsWith: 'mcp:oauth:token:global:' } },
+        _sum: { count: true },
+      });
+      expect(globalAfter._sum.count! - (globalBefore._sum.count ?? 0)).toBeLessThanOrEqual(61);
     } finally {
       if (previous === undefined) delete process.env.TRUST_PROXY_HEADERS;
       else process.env.TRUST_PROXY_HEADERS = previous;

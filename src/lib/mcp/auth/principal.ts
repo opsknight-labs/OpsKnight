@@ -5,53 +5,68 @@ import type { V2AuthContext } from '@/lib/api-v2/auth';
 import { digestMcpSecret, mcpResource } from './config';
 import { requireMcp } from '../core/errors';
 
+interface GrantAuthoritySnapshot {
+  grantId: string;
+  userId: string;
+  userTokenVersion: number;
+  grantScopes: string[];
+  clientScopes: string[];
+  resource: string;
+  revokedAt: Date | null;
+  clientRevokedAt: Date | null;
+  expiresAt: Date;
+  role: string | null;
+  status: string | null;
+  tokenVersion: number | null;
+  teamIds: string[];
+}
+
 export async function resolveMcpGrant(
   grantId: string,
   credentialId?: string
 ): Promise<V2AuthContext> {
-  const grant = await prisma.mcpGrant.findUnique({
-    where: {
-      id: grantId,
-      ...(credentialId
-        ? {
-            tokens: {
-              some: { id: credentialId, rotatedAt: null, accessExpiresAt: { gt: new Date() } },
-            },
-          }
-        : {}),
-    },
-    include: { client: true },
-  });
+  const now = new Date();
+  // One current-statement snapshot avoids four ORM round trips per domain step.
+  // No values are interpolated into SQL syntax and no authority is cached.
+  const [grant] = await prisma.$queryRaw<GrantAuthoritySnapshot[]>`
+    SELECT g.id AS "grantId", g."userId", g."userTokenVersion",
+      g.scopes AS "grantScopes", c.scopes AS "clientScopes", g.resource,
+      g."revokedAt", c."revokedAt" AS "clientRevokedAt", g."expiresAt",
+      u.role::text AS role, u.status::text AS status, u."tokenVersion",
+      ARRAY(SELECT tm."teamId" FROM "TeamMember" tm WHERE tm."userId" = u.id) AS "teamIds"
+    FROM "McpGrant" g JOIN "McpClient" c ON c.id = g."clientId"
+    LEFT JOIN "User" u ON u.id = g."userId"
+    WHERE g.id = ${grantId}
+      AND (${credentialId ?? null}::text IS NULL OR EXISTS (
+        SELECT 1 FROM "McpToken" t WHERE t.id = ${credentialId ?? null}
+          AND t."grantId" = g.id AND t."rotatedAt" IS NULL AND t."accessExpiresAt" > ${now}
+      ))
+  `;
   requireMcp(
     grant &&
       !grant.revokedAt &&
-      !grant.client.revokedAt &&
-      grant.expiresAt > new Date() &&
+      !grant.clientRevokedAt &&
+      grant.expiresAt > now &&
       grant.resource === mcpResource(),
     'MCP_INVALID_GRANT',
     401
   );
-  const user = await prisma.user.findUnique({
-    where: { id: grant.userId },
-    select: {
-      id: true,
-      role: true,
-      status: true,
-      tokenVersion: true,
-      teamMemberships: { select: { teamId: true } },
-    },
-  });
   requireMcp(
-    user && user.status === 'ACTIVE' && user.tokenVersion === grant.userTokenVersion,
+    grant.status === 'ACTIVE' && grant.tokenVersion === grant.userTokenVersion,
     'MCP_INACTIVE_PRINCIPAL',
     401
   );
-  const base = authorizationActorFromUser(user);
+  const base = authorizationActorFromUser({
+    id: grant.userId,
+    role: grant.role ?? '',
+    status: grant.status ?? '',
+    teamMemberships: grant.teamIds.map(teamId => ({ teamId })),
+  });
   requireMcp(base, 'MCP_INACTIVE_PRINCIPAL', 401);
-  const scopes = grant.scopes.filter(scope => grant.client.scopes.includes(scope));
+  const scopes = grant.grantScopes.filter(scope => grant.clientScopes.includes(scope));
   // Never inherit REST's admin:manage wildcard from an MCP consent grant.
   requireMcp(!scopes.includes('admin:manage'), 'MCP_INVALID_SCOPE', 403);
-  const id = `mcp:${grant.id}`;
+  const id = `mcp:${grant.grantId}`;
   return {
     actor: { ...base, apiKey: { id, scopes } },
     apiKey: {
@@ -59,7 +74,7 @@ export async function resolveMcpGrant(
       name: 'MCP',
       prefix: 'mcp',
       tokenHash: '',
-      userId: user.id,
+      userId: grant.userId,
       scopes,
       isServiceAccount: false,
     },

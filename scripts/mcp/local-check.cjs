@@ -91,6 +91,7 @@ async function main() {
     MCP_PUBLIC_ORIGIN: origin,
     MCP_E2E_BASE_URL: origin,
     MCP_E2E_OUTPUT: path.join(output, 'browser'),
+    MCP_QUERY_PROFILE_OUTPUT: path.join(output, 'query-profile.json'),
     OPSKNIGHT_PROCESS_ROLE: 'web',
     HOSTNAME: 'localhost',
     PORT: String(port),
@@ -164,6 +165,7 @@ async function main() {
     '--maxWorkers=1',
     'tests/integration/mcp-security-database.test.ts',
     'tests/integration/mcp-database-isolation.test.ts',
+    'tests/integration/mcp-query-profile.test.ts',
   ]);
   await node(
     'coverage',
