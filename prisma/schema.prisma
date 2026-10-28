@@ -4249,9 +4249,21 @@ model RunbookPreviewAuthorization {
   expiresAt    DateTime
   consumedAt   DateTime?
   executionId  String?   @unique
+  // Remote requests reuse this preview capability, but need a distinct native reviewer.
+  independentReview Boolean @default(false)
+  requesterGrantId String?
+  requesterCredentialId String?
+  requestEnvelope String?
+  reviewSummary Json?
+  reviewedById String?
+  reviewerTokenVersion Int?
+  reviewedAt DateTime?
+  reviewedPlanDigest String?
+  rejectedAt DateTime?
 
   @@index([expiresAt])
   @@index([actorId, createdAt])
+  @@index([requesterGrantId, createdAt])
 }
 
 enum AutomationMode {
@@ -4763,4 +4775,135 @@ model ScimEvent {
   createdAt   DateTime      @default(now())
 
   @@index([connectorId, createdAt, id])
+}
+
+// MCP grants are resource-bound. Secrets are persisted only as keyed digests.
+model McpPolicy {
+  id String @id @default("default")
+  enabled Boolean @default(false)
+  writesEnabled Boolean @default(false)
+  maxInFlight Int @default(4)
+  maxOperations Int @default(8)
+  requestsPerMinute Int @default(60)
+  // Client ID Metadata Documents: off until an administrator lists exact trusted hosts and a scope ceiling.
+  // Reviewed configuration reads (SENSITIVE_READ) are off until an administrator enables them.
+  sensitiveReadsEnabled Boolean @default(false)
+  cimdEnabled Boolean @default(false)
+  cimdAllowedHosts String[] @default([])
+  cimdScopes String[] @default([])
+  updatedAt DateTime @updatedAt
+}
+
+model McpClient {
+  id String @id @default(cuid())
+  name String
+  redirectUris String[]
+  scopes String[]
+  revokedAt DateTime?
+  // Set only for clients identified by an HTTPS metadata document URL (their id).
+  metadataUrl String?
+  metadataFetchedAt DateTime?
+  createdAt DateTime @default(now())
+  grants McpGrant[]
+}
+
+model McpGrant {
+  id String @id @default(cuid())
+  clientId String
+  userId String
+  userTokenVersion Int
+  scopes String[]
+  resource String
+  revokedAt DateTime?
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  client McpClient @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  codes McpAuthorizationCode[]
+  tokens McpToken[]
+  @@index([userId, createdAt, id])
+  @@index([expiresAt])
+}
+
+model McpAuthorizationCode {
+  hash String @id
+  grantId String
+  redirectUri String
+  challenge String
+  expiresAt DateTime
+  consumedAt DateTime?
+  grant McpGrant @relation(fields: [grantId], references: [id], onDelete: Cascade)
+  @@index([expiresAt])
+}
+
+model McpToken {
+  id String @id @default(cuid())
+  accessHash String @unique
+  refreshHash String @unique
+  grantId String
+  scopes String[]
+  accessExpiresAt DateTime
+  refreshExpiresAt DateTime
+  rotatedAt DateTime?
+  createdAt DateTime @default(now())
+  grant McpGrant @relation(fields: [grantId], references: [id], onDelete: Cascade)
+  @@index([refreshExpiresAt])
+}
+
+model McpOperationApproval {
+  id String @id @default(cuid())
+  operationId String
+  riskClass String
+  operationDigest String
+  contractDigest String
+  actorId String
+  requesterGrantId String
+  requesterCredentialId String
+  // Encrypted frozen arguments; cleared when the approval reaches a terminal state.
+  envelope String?
+  summary Json
+  status String @default("PENDING")
+  expiresAt DateTime
+  reviewedById String?
+  reviewerTokenVersion Int?
+  reviewedAt DateTime?
+  rejectedAt DateTime?
+  executingAt DateTime?
+  committedAt DateTime?
+  outcome Json?
+  // R3 only: when the reviewer last authenticated, and the digest of the reviewed target state.
+  reviewerAuthenticatedAt DateTime?
+  previewDigest String?
+  createdAt DateTime @default(now())
+  @@index([requesterGrantId, createdAt])
+  @@index([status, expiresAt])
+}
+
+model McpTask {
+  // Unpredictable server-generated id; never a bearer capability on its own.
+  id String @id
+  grantId String
+  credentialId String
+  actorId String
+  toolName String
+  // The durable domain work this task observes; status is always derived from it.
+  kind String
+  resourceId String
+  cancelRequestedAt DateTime?
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+  @@index([grantId, createdAt])
+  @@index([expiresAt])
+}
+
+model McpConsentRequest {
+  id String @id @default(cuid())
+  userId String
+  clientId String
+  redirectUri String
+  scopes String[]
+  challenge String
+  state String
+  expiresAt DateTime
+  consumedAt DateTime?
+  @@index([expiresAt])
 }

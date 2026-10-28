@@ -115,6 +115,14 @@ export const V2_OPERATIONS: readonly V2OperationDefinition[] = [
   ),
   op('get', '/teams/{id}/members', 'listTeamMembers', 'teams:read', 'list', 'TeamMembership'),
   op(
+    'get',
+    '/teams/{id}/members/{userId}',
+    'getTeamMember',
+    'teams:read',
+    'item',
+    'TeamMembershipItem'
+  ),
+  op(
     'put',
     '/teams/{id}/members/{userId}',
     'setTeamMember',
@@ -685,6 +693,7 @@ export const V2_OPERATIONS: readonly V2OperationDefinition[] = [
   op('post', '/status-pages/{id}/assets', 'uploadStatusPageAsset', 'status-pages:write', 'item', 'StatusPageAssetUpload'),
   op('get', '/status-pages/{id}/assets', 'listStatusPageAssets', 'status-pages:read', 'item', 'StatusPageAssetCollection'),
   op('delete', '/status-pages/{id}/assets/{assetId}', 'deleteStatusPageAsset', 'status-pages:write', 'none', ''),
+  op('get', '/status-pages/{id}/assets/{assetId}', 'getStatusPageAsset', 'status-pages:read', 'item', 'StatusPageAsset'),
   op(
     'patch',
     '/status-pages/{id}/settings',
@@ -1033,6 +1042,14 @@ export const V2_OPERATIONS: readonly V2OperationDefinition[] = [
     'list',
     'IncidentWatcher'
   ),
+  op(
+    'get',
+    '/incidents/{id}/watchers/{watcherId}',
+    'getIncidentWatcher',
+    'incidents:read',
+    'item',
+    'IncidentWatcher'
+  ),
   op('get', '/incidents/{id}/tags', 'listIncidentTags', 'incidents:read', 'list', 'IncidentTag'),
   op('get', '/incidents/{id}/custom-fields', 'listIncidentCustomFields', 'incidents:read', 'list', 'IncidentCustomField'),
   op('get', '/incidents/templates', 'listIncidentTemplates', 'incidents:read', 'list', 'IncidentTemplate'),
@@ -1084,6 +1101,14 @@ export const V2_OPERATIONS: readonly V2OperationDefinition[] = [
     'schedules:write',
     'item',
     'ScheduleParticipantMutation'
+  ),
+  op(
+    'get',
+    '/schedules/{id}/layers/{layerId}/participants/{userId}',
+    'getScheduleParticipant',
+    'schedules:read',
+    'item',
+    'ScheduleParticipant'
   ),
   op(
     'patch',
@@ -1333,6 +1358,7 @@ export const V2_OPERATIONS: readonly V2OperationDefinition[] = [
   op('get', '/postmortems/{id}', 'getPostmortem', 'postmortems:read', 'item', 'Postmortem'),
   op('get', '/postmortems/{id}/versions', 'listPostmortemVersions', 'postmortems:read', 'item', 'PostmortemVersionCollection'),
   op('get', '/postmortems/{id}/action-items', 'listPostmortemActionItems', 'postmortems:read', 'item', 'PostmortemActionItemCollection'),
+  op('get', '/postmortems/{id}/action-items/{itemId}', 'getPostmortemActionItem', 'postmortems:read', 'item', 'PostmortemActionItem'),
   op('put', '/postmortems/{id}/action-items', 'replacePostmortemActionItems', 'postmortems:write', 'item', 'PostmortemActionItemCollection'),
   op('patch', '/postmortems/{id}/action-items/{itemId}', 'updatePostmortemActionItem', 'postmortems:write', 'item', 'PostmortemActionItemChange'),
   op('delete', '/postmortems/{id}/action-items/{itemId}', 'deletePostmortemActionItem', 'postmortems:write', 'item', 'PostmortemActionItemDeletion'),
@@ -1397,6 +1423,14 @@ export const V2_OPERATIONS: readonly V2OperationDefinition[] = [
     'listScheduleOverrides',
     'schedules:read',
     'list',
+    'ScheduleOverride'
+  ),
+  op(
+    'get',
+    '/schedules/{id}/overrides/{overrideId}',
+    'getScheduleOverride',
+    'schedules:read',
+    'item',
     'ScheduleOverride'
   ),
   op(

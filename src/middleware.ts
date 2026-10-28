@@ -26,6 +26,10 @@ import {
 import { parse as parseDomain } from 'tldts';
 
 const PUBLIC_PATH_PREFIXES = [
+  '/mcp',
+  '/oauth/mcp',
+  '/.well-known/oauth-protected-resource',
+  '/.well-known/oauth-authorization-server',
   '/login',
   '/recovery',
   '/auth/oidc-test-result',

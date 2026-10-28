@@ -2,6 +2,7 @@ import { AppError } from '@/lib/errors';
 import { checkRateLimit, incrementSharedCounter } from '@/lib/rate-limit';
 import { rateLimitMemoryCache, verifiedCredentialHints } from './cache';
 import { recordRateLimitDecision } from './observability';
+import { internalV2Admission } from './internal-context';
 
 export type V2OperationClass = 'READ' | 'WRITE' | 'SEARCH_EXPORT';
 
@@ -81,6 +82,9 @@ export async function enforceV2RateLimit(
   apiKeyId: string,
   operationClass: V2OperationClass = 'READ'
 ): Promise<Record<string, string>> {
+  // The top-level MCP quota covers ordinary reads. Mutations and expensive
+  // projections retain their independent, shared REST protection.
+  if (internalV2Admission(apiKeyId) && operationClass === 'READ') return {};
   const result = await checkV2RateLimit(apiKeyId, operationClass);
   recordRateLimitDecision(operationClass, result.allowed);
   const headers = rateLimitHeaders(result);

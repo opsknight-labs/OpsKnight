@@ -810,6 +810,10 @@ export const ENTERPRISE_SCHEMAS: Record<string, Schema> = {
       'steps',
     ]
   ),
+  ScheduleParticipant: object(
+    { scheduleId: id, layerId: id, userId: id, position: integer, revision: { type: 'integer', minimum: 1 } },
+    ['scheduleId', 'layerId', 'userId', 'position', 'revision']
+  ),
   ScheduleParticipantMutation: object(
     {
       scheduleId: id,
@@ -1237,6 +1241,7 @@ const draftInput = object(
 );
 
 interface Operation {
+  query?: Record<string, Schema>;
   method: 'get' | 'post' | 'patch' | 'put' | 'delete';
   path: string;
   summary: string;
@@ -1291,6 +1296,10 @@ const operations: Operation[] = [
   {
     method: 'get', path: '/postmortems/{id}/versions',
     summary: 'List retained postmortem revisions',
+    query: {
+      limit: { type: 'integer', minimum: 1, maximum: 50, default: 25 },
+      beforeRevision: { type: 'integer', minimum: 1 },
+    },
     description: 'Cursor over at most 50 descending revisions. Snapshots capture parent-row state on every insert and update, including UI and worker writes. Existing records begin with the state present when this feature was deployed; earlier revisions cannot be reconstructed. Incident visibility applies.',
   },
   {
@@ -1311,6 +1320,11 @@ const operations: Operation[] = [
       status: { type: 'string', enum: ['OPEN', 'IN_PROGRESS', 'COMPLETED', 'BLOCKED'] },
       priority: { type: 'string', enum: ['HIGH', 'MEDIUM', 'LOW'] },
     }, ['title']), 100) }, ['items']),
+  },
+  {
+    method: 'get', path: '/postmortems/{id}/action-items/{itemId}',
+    summary: 'Read one corrective action and the postmortem revision',
+    description: 'Same visibility as listing corrective actions; {id} accepts the postmortem or incident ID. The ETag is the parent postmortem revision used by If-Match on action-item changes.',
   },
   {
     method: 'patch', path: '/postmortems/{id}/action-items/{itemId}',
@@ -1450,6 +1464,8 @@ const operations: Operation[] = [
   },
   { method: 'get', path: '/status-pages/{id}/assets',
     summary: 'List uploaded status-page branding assets without image bytes' },
+  { method: 'get', path: '/status-pages/{id}/assets/{assetId}',
+    summary: 'Read one status-page branding asset without image bytes' },
   { method: 'delete', path: '/status-pages/{id}/assets/{assetId}',
     summary: 'Delete an unused status-page branding asset',
     description: 'Requires Idempotency-Key. Rejects assets referenced by draft branding or the published snapshot. Successful deletion is audited and replay-safe.' },
@@ -1937,6 +1953,11 @@ const operations: Operation[] = [
     ),
   },
   {
+    method: 'get',
+    path: '/incidents/{id}/watchers/{watcherId}',
+    summary: 'Read one incident watcher',
+  },
+  {
     method: 'delete',
     path: '/incidents/{id}/watchers/{watcherId}',
     summary: 'Remove a watcher from this incident',
@@ -2100,6 +2121,11 @@ const operations: Operation[] = [
     summary: 'Read a rotation layer and its current revision',
   },
   {
+    method: 'get',
+    path: '/schedules/{id}/overrides/{overrideId}',
+    summary: 'Read one schedule override',
+  },
+  {
     method: 'patch',
     path: '/schedules/{id}/layers/{layerId}',
     summary: 'Replace rotation-layer settings using an exact revision',
@@ -2116,6 +2142,11 @@ const operations: Operation[] = [
     summary: 'Add an active rotation participant',
     status: 201,
     body: object({ userId: { ...id, maxLength: 100 } }, ['userId']),
+  },
+  {
+    method: 'get',
+    path: '/schedules/{id}/layers/{layerId}/participants/{userId}',
+    summary: 'Read one rotation participant and the layer revision',
   },
   {
     method: 'patch',
@@ -2297,6 +2328,9 @@ export function enterpriseOpenApiPaths() {
       parameters: [
         ...parameters,
         ...queryParameters,
+        ...Object.entries(operation.query ?? {}).map(([name, schema]) => ({
+          name, in: 'query', required: false, schema,
+        })),
         ...(operation.path === '/runbooks/executions'
           ? [{ name: 'incidentId', in: 'query', required: true, schema: { ...id, maxLength: 100 } }]
           : []),

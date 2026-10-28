@@ -3,7 +3,7 @@ import { POST as createIntegration } from '@/app/api/v2/services/[id]/integratio
 import { POST as rotateCredentials, GET as getCredentialState } from '@/app/api/v2/integrations/[id]/credentials/route';
 import { POST as testIntegration } from '@/app/api/v2/integrations/[id]/test/route';
 import { GET as diagnostics } from '@/app/api/v2/integrations/[id]/diagnostics/route';
-import { DELETE as deleteIntegration, GET as getIntegration } from '@/app/api/v2/integrations/[id]/route';
+import { DELETE as deleteIntegration, GET as getIntegration, PATCH as patchIntegration } from '@/app/api/v2/integrations/[id]/route';
 import { decryptStoredSecret } from '@/lib/encryption';
 import { isIntegrationAuthorized } from '@/lib/integrations/auth';
 import { NextRequest } from 'next/server';
@@ -98,4 +98,19 @@ it('rejects broad admin scope inheritance and prevents removal while inbound wor
   const result = await invokeV2(deleteIntegration, credential.token, 'DELETE', `/integrations/${integration.id}`, { id: integration.id }, undefined, { 'If-Match': detail.headers.get('etag')!, 'Idempotency-Key': 'busy-delete' });
   expect(result.status).toBe(409);
   expect(await db.integration.findUnique({ where: { id: integration.id } })).not.toBeNull();
+});
+
+it('updates without If-Match (no precondition) and still enforces one when supplied', async () => {
+  const credential = await createV2Credential(['integrations:read', 'integrations:write'], 'ADMIN');
+  const service = await createTestService('Unconditional integration update');
+  const integration = await db.integration.create({
+    data: { name: 'Before', type: 'WEBHOOK', key: 'k-' + crypto.randomUUID(), serviceId: service.id },
+  });
+  const route = patchIntegration as unknown as NextRouteHandler;
+  const unconditional = await invokeV2(route, credential.token, 'PATCH', `/integrations/${integration.id}`, { id: integration.id }, { name: 'After' });
+  expect(unconditional.status, JSON.stringify(await unconditional.clone().json())).toBe(200);
+  expect((await db.integration.findUniqueOrThrow({ where: { id: integration.id } })).name).toBe('After');
+  const stale = await invokeV2(route, credential.token, 'PATCH', `/integrations/${integration.id}`, { id: integration.id }, { name: 'Stale' }, { 'If-Match': '"1"' });
+  expect(stale.status).toBe(412);
+  expect((await db.integration.findUniqueOrThrow({ where: { id: integration.id } })).name).toBe('After');
 });

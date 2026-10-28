@@ -10,6 +10,7 @@ import { observeOperationalHistogram } from '@/lib/metrics/operational/registry'
 import { recordAuthFailure } from './observability';
 import { isServiceAccountIdentity } from '@/lib/service-account-identity';
 import { authCache } from './cache';
+import { internalV2Auth } from './internal-context';
 import {
   acquireLegacyScryptSlot,
   acquireOverBudgetIpSlot,
@@ -81,6 +82,8 @@ const INVALID_TOKEN_MESSAGE =
   'The provided API key or service account token is invalid, expired, or revoked.';
 
 export async function authenticateV2Request(req: NextRequest): Promise<V2AuthContext> {
+  const internal = internalV2Auth(req);
+  if (internal) return internal;
   const token = extractToken(req);
   if (!token) {
     recordAuthFailure('missing_credentials');

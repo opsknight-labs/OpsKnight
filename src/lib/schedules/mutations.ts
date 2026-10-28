@@ -287,7 +287,9 @@ export async function createScheduleOverrideMutation(
   afterCreate?: (
     tx: Prisma.TransactionClient,
     created: Awaited<ReturnType<Prisma.TransactionClient['onCallOverride']['create']>>
-  ) => Promise<void>
+  ) => Promise<void>,
+  /** Runs first inside every attempt of the transaction, before anything is read or written. */
+  beforeWrite?: (tx: Prisma.TransactionClient) => Promise<void>
 ) {
   if (input.end <= input.start) {
     throw new AppError({
@@ -313,6 +315,7 @@ export async function createScheduleOverrideMutation(
 
   try {
     return await runSerializableTransaction(async tx => {
+      if (beforeWrite) await beforeWrite(tx);
       const schedule = await tx.onCallSchedule.findUnique({
         where: { id: input.scheduleId },
         select: { id: true },

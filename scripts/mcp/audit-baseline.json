@@ -1,0 +1,11 @@
+{
+  "advisories": [
+    {
+      "id": "GHSA-mrhx-c7xc-m3w5",
+      "package": "zod",
+      "justification": "Present on the base branch (zod 3.25.76 is used by about 360 files). Only the vendored v4 array parser is affected; MCP code uses it solely to generate JSON Schema and never parses untrusted arrays with it. Fixing it requires a repository-wide zod 4 migration, tracked separately from the MCP work.",
+      "owner": "OpsKnight maintainers",
+      "expires": "2026-12-31"
+    }
+  ]
+}

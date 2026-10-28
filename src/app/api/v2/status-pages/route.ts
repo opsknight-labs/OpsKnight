@@ -18,6 +18,7 @@ import { createStatusPage, StatusPageAdminError } from '@/lib/status-pages/admin
 import { AppError } from '@/lib/errors';
 import type { Prisma } from '@prisma/client';
 import { withV2Observability } from '@/lib/api-v2/observability';
+import { internalV2MutationGuard } from '@/lib/api-v2/internal-context';
 
 export const GET = withV2Observability(async function GET(req: NextRequest) {
   try {
@@ -117,7 +118,11 @@ export const POST = withV2Observability(async function POST(req: NextRequest) {
           apiKeyId: apiKey.id,
           details: { name: created.name, slug: created.slug },
           tx,
-        })
+        }),
+      // MCP approval recheck inside the change's own transaction; a no-op for REST callers.
+      async tx => {
+        await internalV2MutationGuard()?.(tx);
+      }
     );
 
     return apiV2Created(page, { headers: rlHeaders });

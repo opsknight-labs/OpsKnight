@@ -1,4 +1,5 @@
 import prisma from '@/lib/prisma';
+import { internalV2MutationGuard } from '@/lib/api-v2/internal-context';
 import {
   defineV2Route,
   logV2Audit,
@@ -216,6 +217,8 @@ export const DELETE = defineV2Route<{ id: string }>({
     }
 
     await prisma.$transaction(async tx => {
+      // MCP approval recheck inside the deletion's own transaction; a no-op for REST callers.
+      await internalV2MutationGuard()?.(tx);
       const deleted = await tx.postmortem.deleteMany({
         where: { id: existing.id, ...ifMatchWhere(expectedRevision) },
       });

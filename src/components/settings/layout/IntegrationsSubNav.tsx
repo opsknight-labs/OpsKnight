@@ -8,6 +8,7 @@ import { SlackLogo, JiraLogo, MicrosoftTeamsLogo } from '@/components/common/Bra
 import { MessageSquare } from 'lucide-react';
 
 const INTEGRATION_LINKS = [
+  { id: 'mcp', label: 'MCP', href: '/settings/integrations/mcp', icon: MessageSquare },
   { id: 'slack', label: 'Slack', href: '/settings/integrations/slack', icon: SlackLogo },
   {
     id: 'microsoft-teams',

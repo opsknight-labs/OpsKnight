@@ -1,0 +1,146 @@
+name: Enterprise MCP PR validation
+on:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: mcp-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  detect-changes:
+    name: Detect MCP-related changes
+    runs-on: ubuntu-latest
+    outputs:
+      mcp: ${{ steps.detect.outputs.mcp }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 2
+      - id: detect
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          if [ "$EVENT_NAME" != "pull_request" ]; then
+            echo "mcp=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # Fail closed: an unavailable base or failed diff means "validate", never "skip".
+          if ! git cat-file -e "$BASE_SHA^{commit}" 2>/dev/null &&
+            ! git fetch --no-tags --depth=1 origin "$BASE_SHA"; then
+            echo "mcp=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if ! changed="$(git diff --name-only "$BASE_SHA" HEAD)"; then
+            echo "mcp=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if printf '%s\n' "$changed" | grep -Eq '^(src/lib/mcp/|src/lib/runbooks/|src/lib/api-v2/|src/lib/idempotency\.ts$|src/lib/rate-limit\.ts$|src/lib/prisma[^/]*\.ts$|src/lib/database-workload\.ts$|src/lib/runtime-capacity\.ts$|deploy/scripts/validate-runtime-capacity\.cjs$|src/lib/authorization[^/]*$|src/app/mcp/|src/app/oauth/mcp/|src/app/\.well-known/|src/app/\(app\)/settings/integrations/mcp/|prisma/|tests/.*mcp|tests/architecture/|scripts/mcp/|package(-lock)?\.json$|env\.example$|docs/v2\.2\.0/(operate|guides|reference)/mcp/|\.github/workflows/mcp-(certification|release-certification)\.yml$)'; then
+            echo "mcp=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "mcp=false" >> "$GITHUB_OUTPUT"
+          fi
+  contract-security:
+    name: MCP PR validation
+    needs: detect-changes
+    if: needs.detect-changes.outputs.mcp == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_PASSWORD: isolated-mcp-ci
+          POSTGRES_DB: opsknight_mcp_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres -d opsknight_mcp_test"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgresql://postgres:isolated-mcp-ci@localhost:5432/opsknight_mcp_test
+      NEXTAUTH_SECRET: isolated-mcp-ci-nextauth-secret-32-bytes
+      NEXTAUTH_URL: http://localhost:3042
+      NEXT_PUBLIC_APP_URL: http://localhost:3042
+      MCP_PUBLIC_ORIGIN: http://localhost:3042
+      MCP_TOKEN_HASH_SECRET: isolated-mcp-ci-hash-secret-at-least-32-bytes
+      OPSKNIGHT_PROCESS_ROLE: web
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v4
+        with: { node-version: 20, cache: npm }
+      - run: npm ci --legacy-peer-deps
+      - name: Generate disposable fixture keys
+        run: |
+          node <<'JS'
+          const {randomBytes}=require('node:crypto');
+          const {appendFileSync}=require('node:fs');
+          for (const name of ['NEXTAUTH_SECRET','ENCRYPTION_KEY','API_KEY_SECRET','MCP_TOKEN_HASH_SECRET']) {
+            const value=randomBytes(32).toString('hex');
+            console.log(`::add-mask::${value}`);
+            appendFileSync(process.env.GITHUB_ENV,`${name}=${value}\n`);
+          }
+          JS
+      - run: npx prisma generate && npx prisma migrate deploy
+      - run: npx tsc --noEmit
+      - run: npm run test:mcp
+      - run: npx vitest run --no-file-parallelism --maxWorkers=1 tests/lib/prisma-datasource.test.ts tests/lib/deployment-config-unit.test.ts
+      - name: PostgreSQL authority, isolation and investigation query budgets
+        env:
+          MCP_QUERY_PROFILE_OUTPUT: ${{ runner.temp }}/mcp-evidence/query-profile.json
+        run: |
+          mkdir -p "$RUNNER_TEMP/mcp-evidence"
+          npx vitest run -c vitest.int.config.ts --no-file-parallelism --maxWorkers=1 tests/integration/mcp-security-database.test.ts tests/integration/mcp-database-isolation.test.ts tests/integration/mcp-query-profile.test.ts tests/integration/mcp-runbook-approval.test.ts tests/integration/mcp-postmortem-context.test.ts tests/integration/mcp-operation-approval.test.ts tests/integration/mcp-approval-crash-safety.test.ts tests/integration/mcp-approval-teams-policies.test.ts tests/integration/mcp-approval-automation.test.ts tests/integration/mcp-approval-runbook-rules.test.ts tests/integration/mcp-approval-incidents.test.ts tests/integration/mcp-approval-settings.test.ts tests/integration/mcp-approval-reporting.test.ts tests/integration/mcp-approval-postmortems.test.ts tests/integration/mcp-approval-runbooks.test.ts tests/integration/mcp-approval-schedules.test.ts tests/integration/mcp-approval-services.test.ts tests/integration/mcp-approval-status-pages.test.ts tests/integration/mcp-protocol-features.test.ts tests/integration/mcp-tasks.test.ts tests/integration/mcp-client-metadata.test.ts tests/integration/mcp-approval-destructive.test.ts tests/integration/mcp-approval-destructive-safety.test.ts tests/integration/mcp-approval-natural.test.ts tests/integration/mcp-approval-destructive-items.test.ts tests/integration/mcp-item-previews.test.ts tests/integration/mcp-sensitive-reads.test.ts tests/integration/mcp-sensitive-reads-config.test.ts tests/integration/mcp-sensitive-reads-post.test.ts tests/integration/mcp-fault-injection.test.ts tests/integration/mcp-fault-child.test.ts tests/integration/mcp-load-worker.test.ts
+      - name: Source-labelled canonical coverage
+        run: |
+          mkdir -p "$RUNNER_TEMP/mcp-evidence"
+          npm run --silent mcp:coverage > "$RUNNER_TEMP/mcp-evidence/coverage-${GITHUB_SHA}.json"
+          git rev-parse HEAD > "$RUNNER_TEMP/mcp-evidence/source-sha.txt"
+      - run: npm run api:clients:check
+      - run: npm run --silent api:coverage > "$RUNNER_TEMP/mcp-evidence/rest-coverage-${GITHUB_SHA}.json"
+      - run: npm run build
+        env:
+          NODE_OPTIONS: --max-old-space-size=6144
+      - name: Fresh local browser database
+        run: |
+          node <<'JS'
+          const {PrismaClient}=require('@prisma/client');const p=new PrismaClient();
+          p.$executeRawUnsafe('CREATE DATABASE opsknight_mcp_browser_test').finally(()=>p.$disconnect());
+          JS
+          export DATABASE_URL=postgresql://postgres:isolated-mcp-ci@localhost:5432/opsknight_mcp_browser_test
+          npx prisma migrate deploy
+          node scripts/mcp/seed-local.cjs
+          node scripts/prepare-authentication-diagnostics.cjs
+      - name: Native Chromium, Firefox and WebKit workflows
+        env:
+          DATABASE_URL: postgresql://postgres:isolated-mcp-ci@localhost:5432/opsknight_mcp_browser_test
+          HOSTNAME: localhost
+          PORT: '3042'
+          # Production build on a loopback origin for local browser certification only.
+          MCP_ALLOW_LOOPBACK_HTTP_ORIGIN: 'true'
+          MCP_E2E_OUTPUT: ${{ runner.temp }}/mcp-evidence/browser
+        run: |
+          npx playwright install --with-deps chromium firefox webkit
+          cp -R public .next/standalone/public
+          cp -R .next/static .next/standalone/.next/static
+          node .next/standalone/server.js > "$RUNNER_TEMP/mcp-evidence/server.log" 2>&1 &
+          appPid=$!
+          trap 'kill "$appPid"' EXIT
+          node <<'JS'
+          (async()=>{
+            for(let attempt=0;attempt<60;attempt++){
+              try{if((await fetch('http://localhost:3042/api/health',{signal:AbortSignal.timeout(1000)})).ok)return;}catch{}
+              await new Promise(resolve=>setTimeout(resolve,500));
+            }
+            throw new Error('Local production server did not become healthy');
+          })().catch(()=>{process.exitCode=1;});
+          JS
+          npm run test:mcp:browser
+      - name: Production dependency audit
+        run: node scripts/mcp/audit-gate.cjs scripts/mcp/audit-baseline.json "$RUNNER_TEMP/mcp-evidence/dependency-audit.json"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: mcp-evidence-${{ github.sha }}
+          path: ${{ runner.temp }}/mcp-evidence

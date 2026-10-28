@@ -1,0 +1,138 @@
+import 'server-only';
+import { z } from 'zod';
+import { isIP } from 'node:net';
+import type { McpClient, McpPolicy, PrismaClient } from '@prisma/client';
+import { McpBoundaryError, requireMcp } from '../core/errors';
+import { CIMD_MAX_BYTES, fetchPinnedMetadata, type CimdResponse } from './cimd-transport';
+
+const LOOPBACK = new Set(['localhost', '127.0.0.1', '[::1]']);
+
+/** Client IDs that are URLs select the metadata-document path; anything else is a registered id. */
+export function isCimdClientId(clientId: string) {
+  return /^https?:\/\//i.test(clientId);
+}
+
+/** Strict canonical form: HTTPS, DNS name, default port, a path, no credentials/query/fragment. */
+export function parseCimdClientId(raw: string) {
+  let url: URL;
+  try {
+    url = new URL(raw);
+  } catch {
+    throw new McpBoundaryError('invalid_client');
+  }
+  const canonical =
+    url.protocol === 'https:' &&
+    url.href === raw &&
+    !url.username &&
+    !url.password &&
+    !url.port &&
+    !url.search &&
+    !url.hash &&
+    url.pathname.length > 1 &&
+    !url.pathname.split('/').some(segment => segment === '.' || segment === '..') &&
+    url.hostname.includes('.') &&
+    !isIP(url.hostname.replace(/^\[|\]$/g, '')) &&
+    url.hostname === url.hostname.toLowerCase() &&
+    raw.length <= 256;
+  requireMcp(canonical, 'invalid_client');
+  return url;
+}
+function redirectUri(value: string) {
+  try {
+    const url = new URL(value);
+    return (
+      !url.username &&
+      !url.password &&
+      !url.hash &&
+      (url.protocol === 'https:' || (url.protocol === 'http:' && LOOPBACK.has(url.hostname)))
+    );
+  } catch {
+    return false;
+  }
+}
+
+const metadataSchema = z
+  .object({
+    client_id: z.string(),
+    client_name: z.string().max(200).optional(),
+    redirect_uris: z.array(z.string().max(2048).refine(redirectUri)).min(1).max(5),
+    token_endpoint_auth_method: z.literal('none').optional(),
+    grant_types: z
+      .array(z.enum(['authorization_code', 'refresh_token']))
+      .max(2)
+      .optional(),
+    response_types: z.array(z.literal('code')).max(1).optional(),
+  })
+  .passthrough()
+  .superRefine((document, ctx) => {
+    // A public client never presents a secret; refuse documents that imply otherwise.
+    if (['client_secret', 'client_secret_expires_at', 'jwks', 'jwks_uri'].some(k => k in document))
+      ctx.addIssue({ code: 'custom', message: 'Secret-bearing client metadata is unsupported.' });
+  });
+
+type Policy = Pick<McpPolicy, 'cimdEnabled' | 'cimdAllowedHosts' | 'cimdScopes'>;
+type Database = Pick<PrismaClient, 'mcpClient'>;
+
+export function isCimdHostAllowed(policy: Policy, host: string) {
+  return policy.cimdEnabled && policy.cimdAllowedHosts.includes(host.toLowerCase());
+}
+
+export function parseCimdDocument(clientId: string, response: CimdResponse) {
+  requireMcp(
+    response.status === 200 && /^application\/json\s*(;|$)/i.test(response.contentType),
+    'invalid_client'
+  );
+  requireMcp(Buffer.byteLength(response.body) <= CIMD_MAX_BYTES, 'invalid_client');
+  let json: unknown;
+  try {
+    json = JSON.parse(response.body);
+  } catch {
+    json = null;
+  }
+  const parsed = metadataSchema.safeParse(json);
+  requireMcp(parsed.success && parsed.data.client_id === clientId, 'invalid_client');
+  return parsed.data;
+}
+
+/**
+ * Resolves a metadata-document client for one authorization request. The document is fetched
+ * on demand, never trusted beyond redirect URIs and a display name, and the scope ceiling is the
+ * administrator's policy — the document cannot request more than the policy allows.
+ */
+export async function resolveCimdClient(
+  db: Database,
+  policy: Policy,
+  clientId: string,
+  requestedRedirectUri: string,
+  fetchDocument: (url: URL) => Promise<CimdResponse> = fetchPinnedMetadata
+): Promise<McpClient> {
+  const url = parseCimdClientId(clientId);
+  requireMcp(
+    isCimdHostAllowed(policy, url.hostname) && policy.cimdScopes.length > 0,
+    'invalid_client'
+  );
+  const existing = await db.mcpClient.findUnique({ where: { id: clientId } });
+  requireMcp(
+    !existing || (existing.metadataUrl === clientId && !existing.revokedAt),
+    'invalid_client'
+  );
+  const document = parseCimdDocument(clientId, await fetchDocument(url));
+  requireMcp(document.redirect_uris.includes(requestedRedirectUri), 'invalid_client');
+  const name =
+    (document.client_name ?? '')
+      .replace(/[\u0000-\u001f\u007f]/g, ' ')
+      .trim()
+      .slice(0, 100) || url.hostname;
+  const data = {
+    name,
+    redirectUris: document.redirect_uris,
+    scopes: [...policy.cimdScopes],
+    metadataUrl: clientId,
+    metadataFetchedAt: new Date(),
+  };
+  return db.mcpClient.upsert({
+    where: { id: clientId },
+    create: { id: clientId, ...data },
+    update: data,
+  });
+}

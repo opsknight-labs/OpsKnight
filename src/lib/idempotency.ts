@@ -4,6 +4,7 @@ import { createHash } from 'node:crypto';
 import type { Prisma } from '@prisma/client';
 
 import { AppError } from '@/lib/errors';
+import { internalV2MutationGuard } from '@/lib/api-v2/internal-context';
 
 const MAX_IDEMPOTENCY_KEY_LENGTH = 200;
 const MAX_PRINCIPAL_ID_LENGTH = 200;
@@ -167,6 +168,8 @@ export async function readIdempotentOperationResult<T>(
     onReplay?: (tx: Prisma.TransactionClient) => Promise<void>;
   }
 ): Promise<IdempotentExecution<T> | null> {
+  const internalGuard = internalV2MutationGuard();
+  if (internalGuard) await internalGuard(tx, 'replay');
   const context = normalizeContext(input.context);
   const fingerprint = fingerprintIdempotencyPayload(input.payload);
   const id = recordId(input.scope, context);
@@ -229,6 +232,8 @@ export async function executeIdempotentOperation<T>(
   }
 ): Promise<IdempotentExecution<T>> {
   if (!input.context) {
+    const internalGuard = internalV2MutationGuard();
+    if (internalGuard) await internalGuard(tx);
     return { value: await input.execute(), replayed: false };
   }
 
@@ -237,6 +242,8 @@ export async function executeIdempotentOperation<T>(
   const id = recordId(input.scope, context);
   const replay = await readIdempotentOperationResult<T>(tx, { ...input, context });
   if (replay) return replay;
+  const mutationGuard = internalV2MutationGuard();
+  if (mutationGuard) await mutationGuard(tx, 'mutation');
 
   const value = await input.execute();
   const now = new Date();

@@ -1,4 +1,5 @@
 import { NextRequest } from 'next/server';
+import { internalV2MutationGuard } from '@/lib/api-v2/internal-context';
 import { z } from 'zod';
 import prisma from '@/lib/prisma';
 import {
@@ -108,8 +109,10 @@ export const PATCH = withV2Observability(async function PATCH(
 
     const updated = await withIfMatch(expected, async () => {
       const updated = await prisma.$transaction(async tx => {
+        // MCP approval recheck inside the change's own transaction; a no-op for REST callers.
+        await internalV2MutationGuard()?.(tx);
         const current = await tx.integration.findUnique({ where: { id }, select: { revision: true, type: true, snsTopicArn: true } });
-        if (!current || (expected !== undefined && current.revision !== expected)) {
+        if (!current || (expected !== null && current.revision !== expected)) {
           throw new AppError({ code: 'PRECONDITION_FAILED', userMessage: 'Integration changed. Fetch the latest resource and retry.' });
         }
         const snsTopicArn = validated.snsTopicArn ?? current.snsTopicArn;

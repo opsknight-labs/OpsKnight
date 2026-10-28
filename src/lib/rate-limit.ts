@@ -66,17 +66,22 @@ export async function checkRateLimit(
 export async function incrementSharedCounter(
   key: string,
   windowMs: number,
-  clock: 'application' | 'database' = 'application'
+  clock: 'application' | 'database' = 'application',
+  // Weighted admission (for example a bounded multi-step MCP plan) charges one atomic increment.
+  weight = 1
 ): Promise<{ count: number; resetAt: number }> {
   if (!Number.isSafeInteger(windowMs) || windowMs < 1) throw new Error('Invalid rate-limit window');
+  if (!Number.isSafeInteger(weight) || weight < 1 || weight > 100) {
+    throw new RangeError('Shared counter weight must be between 1 and 100');
+  }
   if (clock === 'database') {
     const [result] = await prisma.$queryRaw<Array<{ count: number; resetAt: number }>>`
       WITH clock AS (
         SELECT floor(EXTRACT(EPOCH FROM statement_timestamp()) * 1000 / ${windowMs})::bigint AS window
       ) INSERT INTO "RateLimit" ("key", "count", "expiresAt")
-        SELECT ${key} || ':' || clock.window::text, 1,
+        SELECT ${key} || ':' || clock.window::text, ${weight}::int,
           to_timestamp((clock.window + 1) * ${windowMs} / 1000.0) FROM clock
-      ON CONFLICT ("key") DO UPDATE SET "count" = "RateLimit"."count" + 1
+      ON CONFLICT ("key") DO UPDATE SET "count" = "RateLimit"."count" + ${weight}::int
       RETURNING "count", (EXTRACT(EPOCH FROM "expiresAt") * 1000)::double precision AS "resetAt"
     `;
     if (!result) throw new Error('Missing shared counter result');
@@ -87,8 +92,8 @@ export async function incrementSharedCounter(
   const resetAt = (windowStart + 1) * windowMs;
   const result = await prisma.rateLimit.upsert({
     where: { key: `${key}:${windowStart}` },
-    create: { key: `${key}:${windowStart}`, count: 1, expiresAt: new Date(resetAt) },
-    update: { count: { increment: 1 } },
+    create: { key: `${key}:${windowStart}`, count: weight, expiresAt: new Date(resetAt) },
+    update: { count: { increment: weight } },
   });
   return { count: typeof result?.count === 'number' ? result.count : 1, resetAt };
 }

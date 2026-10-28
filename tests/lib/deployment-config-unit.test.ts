@@ -950,9 +950,12 @@ describe('deployment configuration invariants', () => {
     });
     expect(result.breakdown.ingestionWorker.total).toBe(20);
     expect(result.directWorkerConnections).toBe(43);
-    expect(result.totalDemand).toBe(68);
+    // The isolated MCP pool is real database demand and is budgeted next to ingestion.
+    expect(result.mcpConnections).toBe(2);
+    expect(result.totalDemand).toBe(result.webConnections + 43 + result.mcpConnections + 10);
+    expect(result.totalDemand).toBe(70);
     expect(result.safe).toBe(false);
-    expect(result.headroom).toBe(-8);
+    expect(result.headroom).toBe(-10);
     expect(
       calculateRuntimeCapacity({
         INGESTION_WORKER_REPLICAS: '2',
@@ -964,7 +967,7 @@ describe('deployment configuration invariants', () => {
         OPSKNIGHT_RUNTIME_MODE: 'integrated',
         INGESTION_WORKER_REPLICAS: '2',
       }).totalDemand
-    ).toBe(31);
+    ).toBe(33); // previous total plus the two isolated MCP connections
     expect(() => calculateRuntimeCapacity({ INGESTION_WORKER_REPLICAS: '-1' })).toThrow();
     expect(() => calculateRuntimeCapacity({ DATABASE_CONNECTION_RESERVE: 'oops' })).toThrow();
   });
@@ -973,14 +976,15 @@ describe('deployment configuration invariants', () => {
     // Default split capacity within budget
     const defaultSplit = calculateRuntimeCapacity({ OPSKNIGHT_RUNTIME_MODE: 'split' });
     expect(defaultSplit.safe).toBe(true);
-    expect(defaultSplit.totalDemand).toBe(33);
-    expect(defaultSplit.headroom).toBe(47);
+    expect(defaultSplit.totalDemand).toBe(35);
+    expect(defaultSplit.headroom).toBe(45);
+    expect(defaultSplit.mcpConnections).toBe(2);
 
     // Integrated mode accounts for webReplicas * webPool
     const singleIntegrated = calculateRuntimeCapacity({ OPSKNIGHT_RUNTIME_MODE: 'integrated' });
     expect(singleIntegrated.safe).toBe(true);
-    expect(singleIntegrated.totalDemand).toBe(11);
-    expect(singleIntegrated.headroom).toBe(69);
+    expect(singleIntegrated.totalDemand).toBe(13);
+    expect(singleIntegrated.headroom).toBe(67);
 
     const multiIntegrated = calculateRuntimeCapacity({
       OPSKNIGHT_RUNTIME_MODE: 'integrated',
@@ -988,8 +992,9 @@ describe('deployment configuration invariants', () => {
       DATABASE_POOL_SIZE_WEB: '10',
     });
     expect(multiIntegrated.safe).toBe(true);
-    expect(multiIntegrated.totalDemand).toBe(33);
-    expect(multiIntegrated.headroom).toBe(47);
+    expect(multiIntegrated.totalDemand).toBe(39);
+    expect(multiIntegrated.headroom).toBe(41);
+    expect(multiIntegrated.mcpConnections).toBe(6);
 
     // Overflow budget triggers failure
     const overflow = calculateRuntimeCapacity({
@@ -997,7 +1002,7 @@ describe('deployment configuration invariants', () => {
       DATABASE_MAX_CONNECTIONS: '25',
     });
     expect(overflow.safe).toBe(false);
-    expect(overflow.headroom).toBe(-8);
+    expect(overflow.headroom).toBe(-10);
 
     // PgBouncer bounds web connection demand
     const pgbouncerBounded = calculateRuntimeCapacity({
@@ -1010,7 +1015,10 @@ describe('deployment configuration invariants', () => {
     });
     expect(pgbouncerBounded.safe).toBe(true);
     expect(pgbouncerBounded.webConnections).toBe(15);
-    expect(pgbouncerBounded.totalDemand).toBe(38);
+    expect(pgbouncerBounded.totalDemand).toBe(62);
+    expect(pgbouncerBounded.mcpConnections).toBe(24);
+    expect(() => calculateRuntimeCapacity({ MCP_DATABASE_POOL_SIZE: '5' })).toThrow();
+    expect(() => calculateRuntimeCapacity({ MCP_DATABASE_POOL_SIZE: '' })).toThrow();
 
     // Fail-closed input handling: reject malformed numbers, booleans, negative counts
     expect(() => calculateRuntimeCapacity({ WEB_REPLICAS: '100foo' })).toThrow(
@@ -1068,8 +1076,8 @@ describe('deployment configuration invariants', () => {
       SWARM_REPLICAS_STATUS_PROJECTOR: '2',
     });
     expect(swarmHa.safe).toBe(true);
-    expect(swarmHa.totalDemand).toBe(66);
-    expect(swarmHa.headroom).toBe(14);
+    expect(swarmHa.totalDemand).toBe(70);
+    expect(swarmHa.headroom).toBe(10);
 
     // HA Swarm capacity preflight with PgBouncer (2 replicas each)
     const swarmHaPgBouncer = calculateRuntimeCapacity({
@@ -1085,8 +1093,8 @@ describe('deployment configuration invariants', () => {
       SWARM_REPLICAS_STATUS_PROJECTOR: '2',
     });
     expect(swarmHaPgBouncer.safe).toBe(true);
-    expect(swarmHaPgBouncer.totalDemand).toBe(76);
-    expect(swarmHaPgBouncer.headroom).toBe(4);
+    expect(swarmHaPgBouncer.totalDemand).toBe(80);
+    expect(swarmHaPgBouncer.headroom).toBe(0);
 
     // Swarm deploy.sh enforces fail-closed split image contract
     const deployScript = read('deploy/swarm/scripts/deploy.sh');
