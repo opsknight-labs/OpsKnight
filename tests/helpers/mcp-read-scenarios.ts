@@ -112,8 +112,9 @@ export async function principal(role: Role, scopes: string[]) {
 async function restStatus(operationId: string, args: ReadArgs, token: string) {
   const operation = MCP_OPERATION_MAP.get(operationId)!;
   const handler = await MCP_HANDLERS.get(operationId)!();
+  const values = new Map(Object.entries(args.path ?? {}));
   const path = operation.path.replace(/\{(\w+)\}/g, (_, key: string) =>
-    encodeURIComponent(args.path?.[key] ?? '')
+    encodeURIComponent(values.get(key) ?? '')
   );
   const url = new URL(`http://localhost/api/v2${path}`);
   for (const [key, value] of Object.entries(args.query ?? {}))

@@ -425,6 +425,7 @@ export function createOpsKnightMcpServer(
     ['postmortems', 'getPostmortem'],
   ]);
   const canList = (source: CompletionSource) =>
+    // eslint-disable-next-line security/detect-object-injection -- source is a closed CompletionSource union
     visible.some(operation => operation.operationId === COMPLETION_SOURCES[source]);
   const completeIds = (source: CompletionSource) => (value: string | undefined) =>
     canList(source) ? completeAuthorizedIds(context, source, value ?? '') : [];

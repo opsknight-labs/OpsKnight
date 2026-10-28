@@ -32,6 +32,7 @@ export function parseSubscriptionUri(uri: string) {
   const match = URI.exec(uri);
   requireMcp(match, 'MCP_INVALID_RESOURCE_ID');
   const domain = match[1] as Domain;
+  // eslint-disable-next-line security/detect-object-injection -- domain matched the closed URI pattern
   return { domain, id: match[2], readOperation: TABLES[domain].read };
 }
 
@@ -115,8 +116,10 @@ export async function pollChanges() {
         byDomain.set(domain, [...(byDomain.get(domain) ?? []), id]);
       }
       for (const [domain, ids] of byDomain) {
+        // eslint-disable-next-line security/detect-object-injection -- domain is a closed Domain key
+        const table = TABLES[domain].table;
         const rows = await prisma.$queryRaw<{ id: string; updatedAt: Date }[]>`
-          SELECT id, "updatedAt" FROM ${TABLES[domain].table} WHERE id = ANY(${ids}::text[])`;
+          SELECT id, "updatedAt" FROM ${table} WHERE id = ANY(${ids}::text[])`;
         for (const row of rows) {
           const uri = `opsknight://${domain}/${row.id}`;
           const at = row.updatedAt.getTime();

@@ -26,6 +26,7 @@ export async function completeAuthorizedIds(
 ): Promise<string[]> {
   if (prefix.length > 128 || !/^[A-Za-z0-9_-]*$/.test(prefix)) return [];
   try {
+    // eslint-disable-next-line security/detect-object-injection -- source is a closed CompletionSource union
     const result = await callMcpOperation(context, COMPLETION_SOURCES[source], {
       query: { limit: 25 },
     });

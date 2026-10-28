@@ -174,8 +174,9 @@ function isDestructive(operation: Operation) {
 function previewArgs(operation: Operation, frozen: Frozen) {
   const preview = MCP_OPERATION_MAP.get(operation.impactPreview!)!;
   const names = [...preview.path.matchAll(/\{(\w+)\}/g)].map(match => match[1]);
+  const frozenPath = new Map(Object.entries(frozen.path ?? {}));
   return {
-    path: Object.fromEntries(names.map(name => [name, frozen.path?.[name] ?? ''])),
+    path: Object.fromEntries(names.map(name => [name, frozenPath.get(name) ?? ''])),
   };
 }
 
@@ -198,8 +199,9 @@ async function readPreview(context: ExecutionContext, operation: Operation, froz
 function previewDigestOf(data: unknown) {
   const object = (data && typeof data === 'object' ? data : {}) as Record<string, unknown>;
   const versioned = ['updatedAt', 'revision', 'version'].filter(key => key in object);
+  const fields = new Map(Object.entries(object));
   const basis = versioned.length
-    ? Object.fromEntries(['id', ...versioned].map(key => [key, object[key]]))
+    ? Object.fromEntries(['id', ...versioned].map(key => [key, fields.get(key)]))
     : data;
   return createHash('sha256').update(canonicalJson(basis)).digest('hex');
 }

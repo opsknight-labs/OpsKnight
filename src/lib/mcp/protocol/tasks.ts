@@ -25,6 +25,7 @@ export function clientSupportsTasks(params: unknown) {
   const meta = (params as { _meta?: Record<string, unknown> } | undefined)?._meta;
   const capabilities = meta?.['io.modelcontextprotocol/clientCapabilities'] as
     { extensions?: Record<string, unknown> } | undefined;
+  // eslint-disable-next-line security/detect-object-injection -- constant extension identifier
   const extension = capabilities?.extensions?.[TASKS_EXTENSION];
   return Boolean(extension && typeof extension === 'object');
 }

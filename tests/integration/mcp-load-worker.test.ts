@@ -70,7 +70,9 @@ it.skipIf(!child)(
       );
     const samples: number[] = [];
     const outcomes = new Map<string, number>();
+    // eslint-disable-next-line security/detect-non-literal-fs-filename -- orchestrator-owned temporary file
     writeFileSync(process.env.MCP_LOAD_READY_FILE!, 'ready');
+    // eslint-disable-next-line security/detect-non-literal-fs-filename -- orchestrator-owned temporary file
     const stop = () => existsSync(process.env.MCP_LOAD_STOP_FILE!);
     await Promise.all(
       grants.map(async (grant, worker) => {
@@ -101,6 +103,7 @@ it.skipIf(!child)(
     const sorted = [...samples].sort((a, b) => a - b);
     const at = (p: number) =>
       sorted[Math.min(sorted.length - 1, Math.ceil(sorted.length * p) - 1)] ?? 0;
+    // eslint-disable-next-line security/detect-non-literal-fs-filename -- orchestrator-owned temporary file
     writeFileSync(
       process.env.MCP_LOAD_RESULT_FILE!,
       JSON.stringify({

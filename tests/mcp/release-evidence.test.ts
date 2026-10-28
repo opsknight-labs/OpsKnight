@@ -120,11 +120,14 @@ describe('MCP release evidence gate', () => {
     temporaryDirectories.push(root, external);
     const inside = join(root, 'inside.json');
     const outside = join(external, 'outside.json');
+    // eslint-disable-next-line security/detect-non-literal-fs-filename -- test-owned mkdtemp path
     writeFileSync(inside, JSON.stringify(goodEvidence()));
+    // eslint-disable-next-line security/detect-non-literal-fs-filename -- test-owned mkdtemp path
     writeFileSync(outside, JSON.stringify(goodEvidence()));
     expect(loadEvidenceFile(outside, root)).toMatchObject({ schemaVersion: 1 });
     expect(() => loadEvidenceFile(inside, root)).toThrow('outside the repository');
     const link = join(external, 'inside-link.json');
+    // eslint-disable-next-line security/detect-non-literal-fs-filename -- test-owned mkdtemp path
     symlinkSync(inside, link);
     expect(() => loadEvidenceFile(link, root)).toThrow('outside the repository');
   });
@@ -134,6 +137,7 @@ describe('MCP release evidence gate', () => {
     const external = mkdtempSync(join(tmpdir(), 'mcp-certify-evidence-'));
     temporaryDirectories.push(root, external);
     const oversized = join(external, 'oversized.json');
+    // eslint-disable-next-line security/detect-non-literal-fs-filename -- test-owned mkdtemp path
     writeFileSync(oversized, ' '.repeat(1024 * 1024 + 1));
     expect(() => loadEvidenceFile(oversized, root)).toThrow('1 MiB limit');
   });
