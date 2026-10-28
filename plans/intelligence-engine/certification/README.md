@@ -29,6 +29,20 @@ See `docs/architecture/intelligence.md`.
 | Spans never carry prompts, answers or error messages | `ai-gateway` tracing test |
 | Authorization matrix and OpenAPI/SDK are in sync | `api-v2-authorization-matrix`, `api-v2-docs-sync`, `api:clients:check` |
 
+## CI evidence on the pull request
+
+Recorded against PR #928 head `c7d656098` (base `3013d966d`). Re-check on the final commit before merge.
+
+| Check | Result | Assessment |
+|---|---|---|
+| Changed-source ESLint gate | Failed: one `security/detect-object-injection` warning in `tests/components/SimilarIncidentFeedback.test.tsx` | **Ours, fixed.** Earlier lint runs covered only recently edited files; the whole branch diff is now linted |
+| Database integration, shard 1/2 | Failed: one test, `service-policies` ordering | **Ours, fixed.** The test compared against JavaScript locale order while the product sorts in the database, whose collation differs between CI and a local container. The test now compares with the database's own order. Shard 2/2 passed |
+| Service automation validation (browser matrix) | Failed: 75 failed / 21 passed, ten Automation routing and ingestion-policy specs across six browsers | **Pre-existing on `main`.** The same workflow on `main` commit `e86677e31` (no intelligence code) failed with the identical 75 / 21 and the same ten specs. Not caused by this PR; not fixed by it |
+| Runbook authoring and browser matrix | Failed once in the `pull_request` run: one Firefox-only wizard test timed out waiting for a database row | **Not shown to be ours.** The `push` run for the same commit passed, `main` passes, and this PR does not touch Runbook UI. Treated as a flake pending a green re-run on the final commit |
+| Build, auth/mobile/live-dashboard browser E2E, security suite (CodeQL, SCA, secret scan, ESLint security), idle-fleet capacity, ingestion durability | Passed | |
+
+Pre-existing failures are not "fixed" or "waived" by this ledger; they remain open work on `main`.
+
 ## Gates that are NOT passed
 
 | Gate | State |

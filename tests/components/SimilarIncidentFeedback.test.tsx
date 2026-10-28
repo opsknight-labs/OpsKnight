@@ -14,7 +14,10 @@ function setup(initial: 'HELPFUL' | 'NOT_HELPFUL' | null = null) {
   });
   return render(<SimilarIncidentFeedback incidentId="inc-1" findingId="f-1" initialVerdict={initial} />);
 }
-const submitted = (call = 0) => Object.fromEntries((rate.mock.calls[call][2] as FormData).entries());
+const submitted = (call = 0) => {
+  const [, , form] = rate.mock.calls.slice(call, call + 1)[0] ?? [];
+  return Object.fromEntries((form as FormData).entries());
+};
 
 describe('SimilarIncidentFeedback', () => {
   it('renders both buttons unpressed when there is no verdict', () => {

@@ -102,7 +102,9 @@ describe('service policy overrides', () => {
     expect(byName.get(quiet.name)).toMatchObject({ source: 'service', mode: 'SHADOW', responseEnabled: false, headVersion: 1, version: 1 });
     expect(byName.get(loud.name)).toMatchObject({ source: 'global', mode: 'SUGGEST', responseEnabled: true, headVersion: 0 });
     expect(rows).toHaveLength(14);
-    expect(rows.map(row => row.serviceName)).toEqual([...rows.map(row => row.serviceName)].sort((a, b) => a.localeCompare(b)));
+    // Ordering is the database's (collation differs between environments), so compare with its own order.
+    const dbOrder = await db.service.findMany({ orderBy: { name: 'asc' }, select: { name: true } });
+    expect(rows.map(row => row.serviceName)).toEqual(dbOrder.map(row => row.name));
 
     expect(await listServicePolicyOverview({ search: 'bulk 1' })).toHaveLength(3);
     expect(await listServicePolicyOverview({ search: 'nothing-matches' })).toEqual([]);
