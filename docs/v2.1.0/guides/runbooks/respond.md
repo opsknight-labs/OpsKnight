@@ -26,16 +26,22 @@ Publish a [Runbook](./author) first. You need service modification access and
 
 - At least one published Runbook workflow available in the library.
 - Appropriate team or service modification permissions (`runbook.manage`).
-- Responders executing steps need `runbook.execute` and `runbook.approve` permissions.
+- Responders executing steps need `runbook.execute` and `runbook.approve`
+  permissions.
 
 ## Attach to a service
 
 1. Open the service's **Runbooks** tab and choose **Attach** for the workflow.
-2. Select Manual, Suggested, or Automatic mode. Begin with Manual.
-3. Select latest-published or pinned version strategy. Automatic mode requires
-   a pinned version; review the chosen version before enabling it.
+2. Select the binding mode:
+   - **Manual** — responder starts from an incident. Begin here.
+   - **Suggested** — trigger produces a suggestion; responder decides.
+   - **Automatic** — trigger starts the workflow (requires pinned version).
+3. Select the version strategy:
+   - **Latest-published** — follows future publications.
+   - **Pinned** — retains the chosen version. Required for Automatic mode.
 4. Select the execution target and supply typed input values.
-5. Attach and verify the binding summary: mode, version, target, inputs, and trigger.
+5. Attach and verify the binding summary: mode, version, target, inputs, and
+   trigger.
 
 Choose a specific Agent for machine-specific writes. Multi-member `LOCAL_HOSTS`
 write targets are disabled in the UI and rejected by the backend. Use
@@ -43,94 +49,159 @@ write targets are disabled in the UI and rejected by the backend. Use
 
 ## Configure an incident-created trigger
 
-Open **Configure** on the attached workflow. Set the binding to Suggested or
-Automatic if it should react to incident creation. In the trigger section,
-select **Incident created**, choose **Match all** or **Match any**, and enter
-conditions such as **Incident urgency Equals HIGH**. Save the trigger and check the success message and saved summary. Binding and
-trigger saves use configuration revisions: if another administrator changes
-the rule while your form is open, reload the current configuration, reconcile
-your edits and save again. Do not repeatedly submit an outdated form.
+Open **Configure** on the attached workflow:
 
-Changes affect future matching events; they do not retroactively regenerate
-old suggestions. Trigger evaluation rechecks the rule and trigger revisions
-under its transaction locks before persisting a suggestion, so an event already
-being evaluated cannot create a suggestion from superseded conditions.
-In Suggested mode, check a newly created matching incident
-for a suggestion. An existing suggestion keeps its frozen version, resolved
-inputs, and target even if its service binding is later edited.
+1. Set the binding to **Suggested** or **Automatic**.
+2. In the trigger section, select **Incident created**.
+3. Choose **Match all** (AND) or **Match any** (OR).
+4. Enter conditions such as **Incident urgency Equals HIGH**.
+5. Save the trigger and check the success message and saved summary.
+
+Binding and trigger saves use configuration revisions — if another
+administrator changes the rule while your form is open, reload and reconcile
+before saving. Changes affect future matching events; they do not retroactively
+regenerate old suggestions.
+
+For complete trigger configuration details, including all operators and
+automatic activation, see [Service bindings and triggers](./service-bindings).
 
 ## Service rule checks
 
-In **Service → Runbooks**, create independent rules from published workflows. Manual mode never arms incident triggers. Suggested/Automatic rules require an active incident-created trigger to be armed; changing a trigger affects future incidents only. Dynamic label selectors remain explicit targets. Configured mode counts and historical execution counts do not certify operational success. Inventory outages preserve loaded rules and explain which dependencies are unavailable.
+In **Service → Runbooks**, create independent rules from published workflows.
+Each rule type offers different verification:
 
-Use **Rule evidence** for configuration, target, immutable version, execution history, Agent policy evidence and audit links. The checks have separate meanings:
+| Check                      | What it does                                                              | Executes actions?       |
+| -------------------------- | ------------------------------------------------------------------------- | ----------------------- |
+| **Validate configuration** | Checks prospective configuration even while paused                        | No                      |
+| **Check Agent policy**     | Sends signed request to 1–100 matching Agents; evaluates local allowlists | No                      |
+| **Preview read-only test** | Runs the complete workflow after confirmation                             | Only read-only steps    |
+| **Run now → Preview plan** | Uses single-use preview and explicit write confirmation                   | After explicit approval |
 
-- **Validate configuration · No execution** checks the prospective configuration even while paused, without enabling it.
-- **Check Agent policy · No execution** sends a signed request to 1–100 matching online Agents in durable batches of 25 and evaluates their local allowlists without running commands. Evidence is valid only for the same version, resolved configuration, current target and policy hash, for five minutes. It does not prove platform permissions or reachability.
-- **Preview read-only test** runs the complete workflow only after preview confirmation, and rejects any workflow containing writes. Publish a separate diagnostic workflow when a recovery workflow also writes.
-- **Run now · Preview plan** uses a single-use preview and explicit write confirmation. Permissions, approvals and Agent policy remain enforced at execution.
+Key behaviors:
 
-New/duplicate rules default to paused. Pause stops future trigger dispatch; use execution cancellation separately for work already running. Selecting Automatic asks you to confirm the exact published version and pins it.
+- New/duplicate rules default to **paused**.
+- Pause stops future trigger dispatch; use execution cancellation separately
+  for running work.
+- Selecting Automatic asks you to confirm the exact published version and pins
+  it.
 
-## Start and approve
+## Preview and approve
+
+### Preview execution
 
 Open the incident's **Runbooks** tab and select **Preview execution** on a
-suggestion or available workflow. Review the immutable version/checksum,
-resolved target, redacted inputs, ordered actions, risk and approval gates.
-Preview creates no execution or queued work. It reports current Agent capability
-and secret-grant checks; local policy, confidential transport, network access and
-platform permissions remain dispatch checks.
+suggestion or available workflow:
+
+1. Review the immutable version/checksum, resolved target, redacted inputs,
+   ordered actions, risk, and approval gates.
+2. Preview reports current Agent capability and secret-grant checks.
+3. Preview creates no execution or queued work.
+
+Preview issues a **five-minute, single-use authorization** bound to your
+account, incident, service binding, and suggestion. It cannot be reused by
+another responder or incident. The preview marks expiry and disables Execute
+until you preview again.
+
+Preview issuance and consumption are recorded in the audit trail without
+storing the bearer token. Temporary authorization records are purged 30 days
+after expiry; audit events retain the responder, scope, digest, and execution
+link.
+
+### Start execution
 
 For writes, confirm that you reviewed the target and authorize the plan, then
-select **Execute this plan**. Execution resolves the plan again in its transaction
-and rejects a changed version, target, inputs, action plan or incident context
-(title, description, status, urgency, priority, tags and service context). Each
-preview issues a five-minute, single-use authorization bound to your account,
-incident, service binding and suggestion. Another responder or incident cannot
-reuse it. The preview marks expiry and disables Execute until you preview again.
-Preview issuance and consumption are recorded in the audit trail,
-without storing the bearer token. Temporary authorization records are purged
-in bounded reconciliation batches 30 days after expiry; audit events retain
-the responder, scope, digest and execution link. Conditions continue to evaluate live incident
-context after execution starts. Preview again after
-a stale-plan or readiness error. A successful preview is not a dry run or a
-successful action. To test real actions, use an explicitly authorized test service
-and Agent; preview itself does not provide an execution sandbox.
+select **Execute this plan**:
 
-Read the ordered execution timeline. When a step waits for approval,
-inspect its action, resolved parameters, risk, target Agent/pool, version
-checksum, and timeout. Choose **Approve exact plan** and confirm only if that
-specific action and target are appropriate.
+- Execution resolves the plan again in its transaction.
+- It rejects a changed version, target, inputs, action plan, or incident
+  context (title, description, status, urgency, priority, tags, service
+  context).
+- Conditions continue to evaluate live incident context after execution
+  starts.
 
-Approval does not override Agent policy or platform permissions. A changed
-plan is not authorized by a prior approval. Watch subsequent step progress and
-verification output; use artifact download links when available.
+A successful preview is not a dry run or a successful action. To test real
+actions, use an explicitly authorized test service and Agent.
+
+### Approve exact plan
+
+When a step waits for approval:
+
+1. Inspect its action, resolved parameters, risk, target Agent/pool, version
+   checksum, and timeout.
+2. Choose **Approve exact plan** and confirm.
+3. Approval does **not** override Agent policy or platform permissions.
+4. A changed plan is not authorized by a prior approval.
+
+Watch subsequent step progress and verification output; use artifact download
+links when available.
 
 ## Execute through the v2 API
 
-`POST /api/v2/runbooks/{id}/execute` uses saved rule inputs when an explicit
-binding is selected or a service/incident resolves to a binding. Omit
-`parameters` or send `{}` for these executions. A non-empty `parameters` object
-returns HTTP 400 with `RUNBOOK_DEFINITION_INVALID`; values are never silently
-ignored or substituted for the reviewed rule configuration. To change a bound
-execution, edit the rule, validate it and preview the updated plan.
+`POST /api/v2/runbooks/{id}/execute` uses saved rule inputs when a binding is
+selected or resolved:
 
-An unbound execution accepts `parameters` validated against the published
-version's input definitions. Supply JSON numbers and booleans with their actual
-types. Review preview/approval requirements and the idempotency contract in the
-[v2 API reference](../../reference/api/v2) before integrating an external caller.
+- **Bound execution** — omit `parameters` or send `{}`. A non-empty
+  `parameters` object returns HTTP 400 with `RUNBOOK_DEFINITION_INVALID`.
+- **Unbound execution** — accepts `parameters` validated against the
+  published version's input definitions. Supply JSON numbers and booleans
+  with their actual types.
+
+Review preview/approval requirements and the idempotency contract in the
+[v2 API reference](../../reference/api/v2) before integrating.
 
 ## Cancellation and uncertain outcomes
 
-Use **Cancel execution** and confirm to request cancellation. Reconciliation
-handles the request; it is not a rollback and does not prove an in-flight write
-was stopped before executing. For **UNKNOWN** steps, independently inspect the
-target and record findings before considering another run.
+### Cancel execution
 
-Use **Runbooks → Executions** for recent execution history and
-**Runbooks → Health** for queue and safety signals. See
-[troubleshooting](../../troubleshooting/runbooks/) for waiting or uncertain executions.
+Use **Cancel execution** and confirm to request cancellation:
 
-Suggestions from detached rules remain visible as historical evidence and show **Rule detached**. Preview and execution are disabled; responders with execution permission can still dismiss them. Paused rules likewise cannot start a suggestion until reactivated.
+- Reconciliation handles the request.
+- Cancellation is **not a rollback** and does not prove an in-flight write was
+  stopped before executing.
+- Cancel is a request, not an instant stop — the step may complete before the
+  cancellation is processed.
 
-Administrators can set **Execution artifact retention** in Runbooks → Agents → Security. The 1–3650 day policy requires acknowledgement because background maintenance permanently removes expired artifact contents in bounded batches. Execution records remain, but deleted output cannot be restored. Export evidence before shortening the policy. Until an administrator saves an override, `RUNBOOK_ARTIFACT_RETENTION_DAYS` remains the fallback.
+### UNKNOWN outcomes
+
+For **UNKNOWN** steps:
+
+1. **Independently inspect** the target.
+2. Record findings.
+3. Only then consider another run.
+
+An uncertain write may have already executed. Do not assume it failed.
+Preserve logs and durable Agent state, including identity and spool.
+
+## Execution timeline and evidence
+
+The execution detail page shows:
+
+| Field                    | Description                            |
+| ------------------------ | -------------------------------------- |
+| Step/attempt status      | Current state of each step and attempt |
+| Queue time               | Time spent waiting for dispatch        |
+| Claim time               | When an Agent claimed the step         |
+| Start/completion         | Execution timestamps                   |
+| Claimed Agent            | Which Agent executed the step          |
+| Target                   | Resolved execution target              |
+| Lease expiry             | When the Agent's lease expires         |
+| Approval identity/digest | Who approved and the plan hash         |
+| Bounded output           | Sanitized step output                  |
+| Artifacts                | Downloadable output files              |
+
+## Suggestions and detached rules
+
+- Suggestions from detached rules remain visible as historical evidence with
+  **Rule detached** label.
+- Preview and execution are disabled for detached suggestions.
+- Responders with execution permission can still dismiss them.
+- Paused rules cannot start suggestions until reactivated.
+- Existing suggestions keep their frozen version, resolved inputs, and target
+  even if the service binding is later edited.
+
+## Use navigation
+
+- **Runbooks → Executions** for recent execution history.
+- **Runbooks → Health** for queue and safety signals.
+- See [troubleshooting](../../troubleshooting/runbooks/) for waiting or
+  uncertain executions.
