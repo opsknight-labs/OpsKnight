@@ -248,22 +248,24 @@
     "risk": "R2",
     "reason": "Frozen prepare, independent native review and atomic commit through the existing REST command; never generic.",
     "tool": null,
-    "routeSha256": "37a87eed505e711c0fa822b3e62c421ae165cbddc26bf057fa4932de049613e3",
+    "routeSha256": "5a2326c83f12044d8f66304b7eb8fdd43950d1d6463bb2238744a91191c42c1a",
     "resourceFilter": "existing REST route authorization and scoped projection",
     "evidence": "tests/integration/mcp-approval-teams-policies.test.ts",
     "contractSha256": "7350befb8b2b2b5bcb9df397cbf074a5da1444e2748729aa77cbef40e62c1a56",
     "actions": ["team.membership.manage"]
   },
   "removeTeamMember": {
-    "status": "DENIED_WITH_REASON",
+    "status": "APPROVAL_REQUIRED",
     "risk": "R3",
-    "reason": "Candidate for the destructive approval workflow, blocked on an item-level read of the target (GET /teams/{id}/members/{userId}): the only previews are paginated or capped parent collections, so neither the reviewer nor the postcondition could observe the exact target.",
+    "reason": "Destructive: frozen prepare with an impact preview, independent native review after a recent sign-in, re-check of the target at commit and a verified postcondition; never generic.",
     "tool": null,
-    "routeSha256": "37a87eed505e711c0fa822b3e62c421ae165cbddc26bf057fa4932de049613e3",
+    "routeSha256": "5a2326c83f12044d8f66304b7eb8fdd43950d1d6463bb2238744a91191c42c1a",
     "resourceFilter": "existing REST route authorization and scoped projection",
-    "evidence": "pending final-SHA parity certification",
-    "contractSha256": "a227eda2ea3b3f2b3aae77f76f67fbc6f558821a891d265dace95ce1d0528744",
-    "actions": ["team.membership.manage"]
+    "evidence": "tests/integration/mcp-approval-destructive-items.test.ts",
+    "contractSha256": "757c6e05234afb9d0c047fdecac7cceabf1896a4b75aee0565b6dc0a24d43388",
+    "actions": ["team.membership.manage"],
+    "impactPreview": "getTeamMember",
+    "additionalScopes": ["teams:read"]
   },
   "getUserInvitationPolicy": {
     "status": "DENIED_WITH_REASON",
@@ -1096,15 +1098,17 @@
     "actions": ["status_page.read"]
   },
   "deleteStatusPageAsset": {
-    "status": "DENIED_WITH_REASON",
+    "status": "APPROVAL_REQUIRED",
     "risk": "R3",
-    "reason": "Candidate for the destructive approval workflow, blocked on an item-level read of the target (GET /status-pages/{id}/assets/{assetId}): the only previews are paginated or capped parent collections, so neither the reviewer nor the postcondition could observe the exact target.",
+    "reason": "Destructive: frozen prepare with an impact preview, independent native review after a recent sign-in, re-check of the target at commit and a verified postcondition; never generic.",
     "tool": null,
-    "routeSha256": "471864cf32345a58433baae908464552a4480dcbf418c7200a12c013379d5db7",
+    "routeSha256": "976c453c08bbd68a9f42c161559712457c9483dc5db58e8da6439146fa58f714",
     "resourceFilter": "existing REST route authorization and scoped projection",
-    "evidence": "pending final-SHA parity certification",
-    "contractSha256": "ebcae723f81e768e3ba516582a429fe1f135d576a5b4d0923a2dc53af2f835c6",
-    "actions": ["status_page.manage"]
+    "evidence": "tests/integration/mcp-approval-destructive-items.test.ts",
+    "contractSha256": "37623557670047d5bf7a31a129b3d1d7511f96614abaafa11ee5a1dedcec64f3",
+    "actions": ["status_page.manage"],
+    "impactPreview": "getStatusPageAsset",
+    "additionalScopes": ["status-pages:read"]
   },
   "updateStatusPageSettings": {
     "status": "APPROVAL_REQUIRED",
@@ -1742,15 +1746,17 @@
     "actions": ["incident.manage"]
   },
   "removeIncidentWatcher": {
-    "status": "DENIED_WITH_REASON",
+    "status": "APPROVAL_REQUIRED",
     "risk": "R3",
-    "reason": "Candidate for the destructive approval workflow, blocked on an item-level read of the target (GET /incidents/{id}/watchers/{watcherId}): the only previews are paginated or capped parent collections, so neither the reviewer nor the postcondition could observe the exact target.",
+    "reason": "Destructive: frozen prepare with an impact preview, independent native review after a recent sign-in, re-check of the target at commit and a verified postcondition; never generic.",
     "tool": null,
-    "routeSha256": "068c8de08cdcfc5f6a0e697fb78fb0016d883711eabe6c52112e5980e89f5a2f",
+    "routeSha256": "ce602a5f21312af5bf1739b4be32d4bc6b1d443068fa97e70ba3a1a52f6eeb4c",
     "resourceFilter": "existing REST route authorization and scoped projection",
-    "evidence": "pending final-SHA parity certification",
-    "contractSha256": "11434e1468799ca30f0a01627ae022358d9bef981e01f390972718c64a5bfac6",
-    "actions": ["incident.manage"]
+    "evidence": "tests/integration/mcp-approval-destructive-items.test.ts",
+    "contractSha256": "ffad3a91e92e3288e9da8a6abbfecda237b16ef9431c09e7cfc6d5a6a7ab8cf9",
+    "actions": ["incident.manage"],
+    "impactPreview": "getIncidentWatcher",
+    "additionalScopes": ["incidents:read"]
   },
   "previewRunbookExecution": {
     "status": "CURATED",
@@ -1790,22 +1796,24 @@
     "risk": "R2",
     "reason": "Frozen prepare, independent native review and atomic commit through the existing REST command; never generic.",
     "tool": null,
-    "routeSha256": "12d060170352512b3f2e0674a29e2f2d2ce954228da8937d2b6761445e4d587f",
+    "routeSha256": "ef713affaa01f707b7975e232054f3b7aebab49a0c6ca5e0c07af8a153a738f2",
     "resourceFilter": "existing REST route authorization and scoped projection",
     "evidence": "tests/integration/mcp-approval-schedules.test.ts",
     "contractSha256": "ddf5660594669dd9b10212393166cc401404770930d4d78652a3c1fc0a93bb52",
     "actions": ["schedule.manage"]
   },
   "removeScheduleParticipant": {
-    "status": "DENIED_WITH_REASON",
+    "status": "APPROVAL_REQUIRED",
     "risk": "R3",
-    "reason": "Candidate for the destructive approval workflow, blocked on an item-level read of the target (GET /schedules/{id}/layers/{layerId}/participants/{userId}): the only previews are paginated or capped parent collections, so neither the reviewer nor the postcondition could observe the exact target.",
+    "reason": "Destructive: frozen prepare with an impact preview, independent native review after a recent sign-in, re-check of the target at commit and a verified postcondition; never generic.",
     "tool": null,
-    "routeSha256": "12d060170352512b3f2e0674a29e2f2d2ce954228da8937d2b6761445e4d587f",
+    "routeSha256": "ef713affaa01f707b7975e232054f3b7aebab49a0c6ca5e0c07af8a153a738f2",
     "resourceFilter": "existing REST route authorization and scoped projection",
-    "evidence": "pending final-SHA parity certification",
-    "contractSha256": "e607f286026c10ea0dec0b08950c693756b2434f821d2bf33252c247b252c953",
-    "actions": ["schedule.manage"]
+    "evidence": "tests/integration/mcp-approval-destructive-items.test.ts",
+    "contractSha256": "e12896087d732d9ffa3aeb97946bbc291e88d17e35f380a386fd2b0be45dae69",
+    "actions": ["schedule.manage"],
+    "impactPreview": "getScheduleParticipant",
+    "additionalScopes": ["schedules:read"]
   },
   "unsuppressIncident": {
     "status": "APPROVAL_REQUIRED",
@@ -2406,13 +2414,13 @@
     "actions": ["integration.read"]
   },
   "retryNotification": {
-    "status": "UNSUPPORTED_WITH_REASON",
+    "status": "APPROVAL_REQUIRED",
     "risk": "R2",
-    "reason": "Not exposed yet: a retry re-sends to external providers outside a single transaction, so an approval cannot be recorded atomically with the effect.",
+    "reason": "Frozen prepare, independent native review and commit recorded in the change's own transaction; never generic.",
     "tool": null,
-    "routeSha256": "fc88eb689a1ceabdc2a24d986088445184f2e2dcfb01231d675767dd7dbb6327",
+    "routeSha256": "f1965ccdafb6ce4882aa9fa529745c8a7fe1761168a83a644bcc6c7bc4deeb5f",
     "resourceFilter": "existing REST route authorization and scoped projection",
-    "evidence": "pending final-SHA parity certification",
+    "evidence": "tests/integration/mcp-approval-natural.test.ts",
     "contractSha256": "f694bfb14500925e450e9fd3e3e10bf85c2b9dda0c508334bc5f1a16ab2b7518",
     "actions": ["notification.manage"]
   },
@@ -2585,8 +2593,9 @@
     "routeSha256": "c96cfef5f2cd03e5b32234313bb27db1437e71caf0943c21258ac89325a54dac",
     "resourceFilter": "existing REST route authorization and scoped projection",
     "evidence": "pending final-SHA parity certification",
-    "contractSha256": "3d1f0d20963df9ec1e160678b41446546171a45c96f33e4ed200f37fab9bdca2",
-    "actions": ["postmortem.read"]
+    "contractSha256": "29ab018a230c8899ed0e03d721acd0cddf51a7f1f8e5f91992ec5c83a3ceef1e",
+    "actions": ["postmortem.read"],
+    "additionalScopes": ["incidents:read"]
   },
   "listPostmortemVersions": {
     "status": "DISCOVERABLE",
@@ -2596,8 +2605,9 @@
     "routeSha256": "76d1180244dd498ad58ae350c6691a07dd575abe4e3dcdbaf29b0f74768c78da",
     "resourceFilter": "postmortemReadWhere on parent ID or incident ID before reading its collection",
     "evidence": "tests/integration/mcp-postmortem-context.test.ts; pending final-SHA certification",
-    "contractSha256": "16072222206d902c5c9ffdabe7ec72dad65d22399241bb4ba969ea0ce2189697",
-    "actions": ["postmortem.read"]
+    "contractSha256": "1ae7b340c3cf6b33f94450f49513c35e69dd496287bed8de16824f67591a0df3",
+    "actions": ["postmortem.read"],
+    "additionalScopes": ["incidents:read"]
   },
   "listPostmortemActionItems": {
     "status": "DISCOVERABLE",
@@ -2607,8 +2617,9 @@
     "routeSha256": "b45662d862fae68b15ca4cfd91d953cdae846999b8a3c63b02682a2d29d105f7",
     "resourceFilter": "existing REST route authorization and scoped projection",
     "evidence": "pending final-SHA parity certification",
-    "contractSha256": "1fd1dd809b5970ca34dbf7decfbbc2647243413a2c66dab8e34e71005883973d",
-    "actions": ["postmortem.read"]
+    "contractSha256": "e6be5016f9bb607eb22a0cbf4e07b339b6e533f8af13e5798155fb53ed053b5e",
+    "actions": ["postmortem.read"],
+    "additionalScopes": ["incidents:read"]
   },
   "replacePostmortemActionItems": {
     "status": "APPROVAL_REQUIRED",
@@ -2618,30 +2629,34 @@
     "routeSha256": "b45662d862fae68b15ca4cfd91d953cdae846999b8a3c63b02682a2d29d105f7",
     "resourceFilter": "existing REST route authorization and scoped projection",
     "evidence": "tests/integration/mcp-approval-postmortems.test.ts",
-    "contractSha256": "f3a5ef939f60de9e7a6e98269d8ebe401eeaa03c3302aaba01c4bac028ccbb84",
-    "actions": ["postmortem.manage"]
+    "contractSha256": "089c5ef98ca7660cdeadc169a08317f6cae037f6f5e5f89bbdf5eb466d25fd40",
+    "actions": ["postmortem.manage"],
+    "additionalScopes": ["incidents:read"]
   },
   "updatePostmortemActionItem": {
     "status": "APPROVAL_REQUIRED",
     "risk": "R2",
     "reason": "Frozen prepare, independent native review and atomic commit through the existing REST command; never generic.",
     "tool": null,
-    "routeSha256": "61798a63777197e55ccfec6a0e89ce12f8fbce4182379bd1a0de486339263965",
+    "routeSha256": "2fe84b4430bac383735aae42fa6a0f3d97ed41bf1c81f32600601ff5e6c38273",
     "resourceFilter": "existing REST route authorization and scoped projection",
     "evidence": "tests/integration/mcp-approval-postmortems.test.ts",
-    "contractSha256": "134016bcebb21b7cd8bc693db05959ceabe990b74720ba1eeadda7c213985f65",
-    "actions": ["postmortem.manage"]
+    "contractSha256": "ef8efa8431e7e1ff68c4cead896c71900df5604cfd3f292c3310c344fd729f58",
+    "actions": ["postmortem.manage"],
+    "additionalScopes": ["incidents:read"]
   },
   "deletePostmortemActionItem": {
-    "status": "DENIED_WITH_REASON",
+    "status": "APPROVAL_REQUIRED",
     "risk": "R3",
-    "reason": "Candidate for the destructive approval workflow, blocked on an item-level read of the target (GET /postmortems/{id}/action-items/{itemId}): the only previews are paginated or capped parent collections, so neither the reviewer nor the postcondition could observe the exact target.",
+    "reason": "Destructive: frozen prepare with an impact preview, independent native review after a recent sign-in, re-check of the target at commit and a verified postcondition; never generic.",
     "tool": null,
-    "routeSha256": "61798a63777197e55ccfec6a0e89ce12f8fbce4182379bd1a0de486339263965",
+    "routeSha256": "2fe84b4430bac383735aae42fa6a0f3d97ed41bf1c81f32600601ff5e6c38273",
     "resourceFilter": "existing REST route authorization and scoped projection",
-    "evidence": "pending final-SHA parity certification",
-    "contractSha256": "9f28766c43f4cac4e1f474339b3051ce597950e9de7c298df48991ddd69672ff",
-    "actions": ["postmortem.manage"]
+    "evidence": "tests/integration/mcp-approval-destructive-items.test.ts",
+    "contractSha256": "aa07355f99ba3e1a33d3ff90d76da650418872e42f73452b159029b84a88f3b6",
+    "actions": ["postmortem.manage"],
+    "impactPreview": "getPostmortemActionItem",
+    "additionalScopes": ["postmortems:read", "incidents:read"]
   },
   "publishPostmortem": {
     "status": "APPROVAL_REQUIRED",
@@ -2651,8 +2666,9 @@
     "routeSha256": "7833e27f689b476021cc3c0f5bd6c91bd6e9851e5a1b5e0c92afc6337fdb3740",
     "resourceFilter": "existing REST route authorization and scoped projection",
     "evidence": "tests/integration/mcp-approval-postmortems.test.ts",
-    "contractSha256": "32a971568a504901efd345f8c0d7ac417d5070e716f1ac3082efa141ae7e0003",
-    "actions": ["postmortem.manage"]
+    "contractSha256": "2e8aa3803601cbcb00152f1ea7812088b5fd37e2c87c03761d9d99f2706d0155",
+    "actions": ["postmortem.manage"],
+    "additionalScopes": ["incidents:read"]
   },
   "listPostmortemContributors": {
     "status": "DISCOVERABLE",
@@ -2662,8 +2678,9 @@
     "routeSha256": "1b5bf714246b78742b53b20953499b7a4807947a018119dd71dd33c2ba2d213b",
     "resourceFilter": "postmortemReadWhere on parent ID or incident ID before reading its collection",
     "evidence": "tests/integration/mcp-postmortem-context.test.ts; pending final-SHA certification",
-    "contractSha256": "6a7204340fd143356961e4e8599c400372e009f0657317978ae2a985da4528da",
-    "actions": ["postmortem.read"]
+    "contractSha256": "16cf34e8a766fea4b264f2a302b689c39456a269227e94673fd923265e806eff",
+    "actions": ["postmortem.read"],
+    "additionalScopes": ["incidents:read"]
   },
   "replacePostmortemContributors": {
     "status": "APPROVAL_REQUIRED",
@@ -2673,8 +2690,9 @@
     "routeSha256": "1b5bf714246b78742b53b20953499b7a4807947a018119dd71dd33c2ba2d213b",
     "resourceFilter": "existing REST route authorization and scoped projection",
     "evidence": "tests/integration/mcp-approval-postmortems.test.ts",
-    "contractSha256": "1b12ebcf2002f7100ec14eb104188f8750a7d97774ab3ce2226ced205640ae51",
-    "actions": ["postmortem.manage"]
+    "contractSha256": "d7c3052093d00841799eefc1b80541aca271a9b55735a7fc1d7e0f431c243b85",
+    "actions": ["postmortem.manage"],
+    "additionalScopes": ["incidents:read"]
   },
   "updatePostmortem": {
     "status": "APPROVAL_REQUIRED",
@@ -2684,8 +2702,9 @@
     "routeSha256": "c96cfef5f2cd03e5b32234313bb27db1437e71caf0943c21258ac89325a54dac",
     "resourceFilter": "existing REST route authorization and scoped projection",
     "evidence": "tests/integration/mcp-approval-postmortems.test.ts",
-    "contractSha256": "a217e9ce5945935637364e8a69402df7f69f4a33d141506c648fb3d978249433",
-    "actions": ["postmortem.manage"]
+    "contractSha256": "6a2b3b5db01c30b7ea9e3151966c1e15e6133b8f85954d2ee70805b6557fb4b0",
+    "actions": ["postmortem.manage"],
+    "additionalScopes": ["incidents:read"]
   },
   "deletePostmortem": {
     "status": "APPROVAL_REQUIRED",
@@ -2695,8 +2714,8 @@
     "routeSha256": "c96cfef5f2cd03e5b32234313bb27db1437e71caf0943c21258ac89325a54dac",
     "resourceFilter": "existing REST route authorization and scoped projection",
     "evidence": "tests/integration/mcp-approval-destructive.test.ts",
-    "contractSha256": "cac6ccb410dd145059c7705b76db70e69b3ce109faaca612b7dec9e77cbd9077",
-    "additionalScopes": ["postmortems:read"],
+    "contractSha256": "879ee61a7dc25502c1c5e315e19437c5456b2dd21a23b45c51eb870fdf44ef14",
+    "additionalScopes": ["postmortems:read", "incidents:read"],
     "impactPreview": "getPostmortem",
     "actions": ["postmortem.manage"]
   },
@@ -2708,8 +2727,9 @@
     "routeSha256": "e7d8516d511fa761c3e578a9eb6ed0558fd8a72e328fb73e0d8823c85a48342a",
     "resourceFilter": "existing REST route authorization and scoped projection",
     "evidence": "pending final-SHA parity certification",
-    "contractSha256": "97664989814c7862210a4fee08a17a1d987ec083e91ddfec0dd984cbab673bf4",
-    "actions": ["postmortem.read"]
+    "contractSha256": "b334c32ef99da5b3701e4cab6d5796772b3a11baba4451f4ae7ce5a8900c50c7",
+    "actions": ["postmortem.read"],
+    "additionalScopes": ["incidents:read"]
   },
   "createPostmortem": {
     "status": "APPROVAL_REQUIRED",
@@ -2719,8 +2739,9 @@
     "routeSha256": "e7d8516d511fa761c3e578a9eb6ed0558fd8a72e328fb73e0d8823c85a48342a",
     "resourceFilter": "existing REST route authorization and scoped projection",
     "evidence": "tests/integration/mcp-approval-postmortems.test.ts",
-    "contractSha256": "0cc4e4102035e6956994e922bc95320c07a3a15d1535902f12fec9e395655e68",
-    "actions": ["postmortem.manage"]
+    "contractSha256": "e778a4c31da191712846699b9d4a95dc8038f4b3040453ecd906100f936ad788",
+    "actions": ["postmortem.manage"],
+    "additionalScopes": ["incidents:read"]
   },
   "getMetricsReport": {
     "status": "SENSITIVE_READ",
@@ -3031,33 +3052,35 @@
     "risk": "R0",
     "reason": "Candidate in-process REST contract adapter; current role, scopes and resource authorization required.",
     "tool": null,
-    "routeSha256": "3dae08b59d79d670978f120a58932db18c944b75994d5ee676a7b16c2c3e6f37",
+    "routeSha256": "ce6d5cfa3449ef59bf95cd697463542f628420641a8c0ff5f1d31e38d96ee8d4",
     "resourceFilter": "existing REST route authorization and scoped projection",
     "evidence": "pending final-SHA parity certification",
     "contractSha256": "aff7a728c434f468c9df7e3a36e5364ed26f33005640708d2e32e8f872facd4b",
     "actions": ["schedule.read"]
   },
   "createScheduleOverride": {
-    "status": "UNSUPPORTED_WITH_REASON",
+    "status": "APPROVAL_REQUIRED",
     "risk": "R2",
-    "reason": "Not exposed yet: the command mutates outside a single transaction, so an approval cannot be recorded atomically with the effect.",
+    "reason": "Frozen prepare, independent native review and commit recorded in the change's own transaction; never generic.",
     "tool": null,
-    "routeSha256": "3dae08b59d79d670978f120a58932db18c944b75994d5ee676a7b16c2c3e6f37",
+    "routeSha256": "ce6d5cfa3449ef59bf95cd697463542f628420641a8c0ff5f1d31e38d96ee8d4",
     "resourceFilter": "existing REST route authorization and scoped projection",
-    "evidence": "pending final-SHA parity certification",
+    "evidence": "tests/integration/mcp-approval-natural.test.ts",
     "contractSha256": "d58182cbf17474e964f4a3263be3753775fac33a1fcfd2a18be6c85ac77a9e1e",
     "actions": ["schedule.manage"]
   },
   "cancelScheduleOverride": {
-    "status": "DENIED_WITH_REASON",
+    "status": "APPROVAL_REQUIRED",
     "risk": "R3",
-    "reason": "Candidate for the destructive approval workflow, blocked on an item-level read of the target (GET /schedules/{id}/overrides/{overrideId}): the only previews are paginated or capped parent collections, so neither the reviewer nor the postcondition could observe the exact target.",
+    "reason": "Destructive: frozen prepare with an impact preview, independent native review after a recent sign-in, re-check of the target at commit and a verified postcondition; never generic.",
     "tool": null,
-    "routeSha256": "2e120f35fc8e259fb4cfbedf06ad49ace70307e0c65e04b0a97afe4e6f111278",
+    "routeSha256": "e8fa707fa4be83650fd2254de6145f00ba657bdd81048f5f0dd201e780246689",
     "resourceFilter": "existing REST route authorization and scoped projection",
-    "evidence": "pending final-SHA parity certification",
-    "contractSha256": "1fbb7cad01abb0ec4f5f2536cea0e0cb7d71c971752c7d389330a87e88c0d8a1",
-    "actions": ["schedule.manage"]
+    "evidence": "tests/integration/mcp-approval-destructive-items.test.ts",
+    "contractSha256": "5d34280a7261366f7e3ba509edbe022b636ad1afe96d7fbd7cd7af8e494171b6",
+    "actions": ["schedule.manage"],
+    "impactPreview": "getScheduleOverride",
+    "additionalScopes": ["schedules:read"]
   },
   "getScheduleCoverage": {
     "status": "DISCOVERABLE",
@@ -3396,7 +3419,7 @@
   "updateStatusPage": {
     "status": "UNSUPPORTED_WITH_REASON",
     "risk": "R2",
-    "reason": "Not exposed yet: the command mutates outside a single transaction, so an approval cannot be recorded atomically with the effect.",
+    "reason": "Not exposed: disabling a page withdraws the public projection before the transaction (a deliberate privacy guarantee) and no-op updates open no transaction, so an approval cannot be recorded atomically with the effect.",
     "tool": null,
     "routeSha256": "cd950378e5871a3caeb9c681f51d4436781620a6f7f644c6e42968f2f6516725",
     "resourceFilter": "existing REST route authorization and scoped projection",
@@ -3409,20 +3432,20 @@
     "risk": "R0",
     "reason": "Candidate in-process REST contract adapter; current role, scopes and resource authorization required.",
     "tool": null,
-    "routeSha256": "86917350dec4aeb8e8fed42209f17efd4b563a7c2a8d702b3a6700524704c492",
+    "routeSha256": "6721e2f9bd07030d5594fe70763f0b777869eea3b7f98eadc9fca3e3a02167dd",
     "resourceFilter": "existing REST route authorization and scoped projection",
     "evidence": "pending final-SHA parity certification",
     "contractSha256": "caccf259c413140ed1603a6f4d5c350e52292f0eaa6badecd570642096a2e6ab",
     "actions": ["status_page.read"]
   },
   "createStatusPage": {
-    "status": "UNSUPPORTED_WITH_REASON",
+    "status": "APPROVAL_REQUIRED",
     "risk": "R2",
-    "reason": "Not exposed yet: the command mutates outside a single transaction, so an approval cannot be recorded atomically with the effect.",
+    "reason": "Frozen prepare, independent native review and commit recorded in the change's own transaction; never generic.",
     "tool": null,
-    "routeSha256": "86917350dec4aeb8e8fed42209f17efd4b563a7c2a8d702b3a6700524704c492",
+    "routeSha256": "6721e2f9bd07030d5594fe70763f0b777869eea3b7f98eadc9fca3e3a02167dd",
     "resourceFilter": "existing REST route authorization and scoped projection",
-    "evidence": "pending final-SHA parity certification",
+    "evidence": "tests/integration/mcp-approval-natural.test.ts",
     "contractSha256": "22d806b7bec8b305179efc2f216477c4afc79a9e7a9319d08656ab7cf3a45eec",
     "actions": ["status_page.manage"]
   },
@@ -3504,5 +3527,72 @@
     "evidence": "pending final-SHA parity certification",
     "contractSha256": "5b2c795ec6a7a30d43d63f4684e15276ca211e244bc9ac7f746680923a523e59",
     "actions": ["user.read"]
+  },
+  "getTeamMember": {
+    "status": "DISCOVERABLE",
+    "risk": "R0",
+    "reason": "Candidate in-process REST contract adapter; current role, scopes and resource authorization required.",
+    "tool": null,
+    "routeSha256": "5a2326c83f12044d8f66304b7eb8fdd43950d1d6463bb2238744a91191c42c1a",
+    "resourceFilter": "existing REST route authorization and scoped projection",
+    "evidence": "tests/integration/mcp-item-previews.test.ts",
+    "contractSha256": "66093912deafb7fde35b021cd4e22f06b8cd73de610d02ab7805b6810acc991a",
+    "actions": ["team.membership.read"]
+  },
+  "getScheduleParticipant": {
+    "status": "DISCOVERABLE",
+    "risk": "R0",
+    "reason": "Candidate in-process REST contract adapter; current role, scopes and resource authorization required.",
+    "tool": null,
+    "routeSha256": "ef713affaa01f707b7975e232054f3b7aebab49a0c6ca5e0c07af8a153a738f2",
+    "resourceFilter": "existing REST route authorization and scoped projection",
+    "evidence": "tests/integration/mcp-item-previews.test.ts",
+    "contractSha256": "842e4e81b8d8b2bef2e44386240eebe43440248b5b4a9277e11a0dc6a34e0f5a",
+    "actions": ["schedule.read"]
+  },
+  "getScheduleOverride": {
+    "status": "DISCOVERABLE",
+    "risk": "R0",
+    "reason": "Candidate in-process REST contract adapter; current role, scopes and resource authorization required.",
+    "tool": null,
+    "routeSha256": "e8fa707fa4be83650fd2254de6145f00ba657bdd81048f5f0dd201e780246689",
+    "resourceFilter": "existing REST route authorization and scoped projection",
+    "evidence": "tests/integration/mcp-item-previews.test.ts",
+    "contractSha256": "55c14d537cded8022a7b395407e328a77b259c9ee3bb1356f925dba710ac9987",
+    "actions": ["schedule.read"]
+  },
+  "getPostmortemActionItem": {
+    "status": "DISCOVERABLE",
+    "risk": "R0",
+    "reason": "Candidate in-process REST contract adapter; current role, scopes and resource authorization required.",
+    "tool": null,
+    "routeSha256": "2fe84b4430bac383735aae42fa6a0f3d97ed41bf1c81f32600601ff5e6c38273",
+    "resourceFilter": "existing REST route authorization and scoped projection",
+    "evidence": "tests/integration/mcp-item-previews.test.ts",
+    "contractSha256": "42535268830f21bd53594524b7ac9110a540ffeeb9919129d34784af057e56c8",
+    "actions": ["postmortem.read"],
+    "additionalScopes": ["incidents:read"]
+  },
+  "getIncidentWatcher": {
+    "status": "SENSITIVE_READ",
+    "risk": "R2",
+    "reason": "Reviewed configuration read: read-only generic dispatch behind the administrator sensitive-reads opt-in, native authorization and recursive redaction.",
+    "tool": null,
+    "routeSha256": "ce602a5f21312af5bf1739b4be32d4bc6b1d443068fa97e70ba3a1a52f6eeb4c",
+    "resourceFilter": "existing REST route authorization and scoped projection",
+    "evidence": "tests/integration/mcp-item-previews.test.ts",
+    "contractSha256": "8f5b217ffb56d5d1f59ebbac5f905cdf273fd6b637e30f7b586e209dbea58c71",
+    "actions": ["incident.read"]
+  },
+  "getStatusPageAsset": {
+    "status": "SENSITIVE_READ",
+    "risk": "R2",
+    "reason": "Reviewed configuration read: read-only generic dispatch behind the administrator sensitive-reads opt-in, native authorization and recursive redaction.",
+    "tool": null,
+    "routeSha256": "976c453c08bbd68a9f42c161559712457c9483dc5db58e8da6439146fa58f714",
+    "resourceFilter": "existing REST route authorization and scoped projection",
+    "evidence": "tests/integration/mcp-item-previews.test.ts",
+    "contractSha256": "0f0c9c74ae5e5fc006759b226d0185b299b8e2acd9f1932b3546090b4a44bcfa",
+    "actions": ["status_page.read"]
   }
 }

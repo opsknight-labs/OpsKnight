@@ -187,6 +187,8 @@ async function main() {
     'tests/integration/mcp-approval-destructive.test.ts',
     'tests/integration/mcp-approval-destructive-safety.test.ts',
     'tests/integration/mcp-approval-natural.test.ts',
+    'tests/integration/mcp-approval-destructive-items.test.ts',
+    'tests/integration/mcp-item-previews.test.ts',
     'tests/integration/mcp-sensitive-reads.test.ts',
     'tests/integration/mcp-sensitive-reads-config.test.ts',
     'tests/integration/mcp-sensitive-reads-post.test.ts',

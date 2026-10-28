@@ -9,6 +9,32 @@ type Handler = {
 
 // Static imports: a client cannot select a module or a URL.
 export const MCP_HANDLERS = new Map<string, () => Promise<Handler>>([
+  [
+    'getTeamMember',
+    async () => (await import('@/app/api/v2/teams/[id]/members/[userId]/route')).GET,
+  ],
+  [
+    'getScheduleParticipant',
+    async () =>
+      (await import('@/app/api/v2/schedules/[id]/layers/[layerId]/participants/[userId]/route'))
+        .GET,
+  ],
+  [
+    'getScheduleOverride',
+    async () => (await import('@/app/api/v2/schedules/[id]/overrides/[overrideId]/route')).GET,
+  ],
+  [
+    'getPostmortemActionItem',
+    async () => (await import('@/app/api/v2/postmortems/[id]/action-items/[itemId]/route')).GET,
+  ],
+  [
+    'getIncidentWatcher',
+    async () => (await import('@/app/api/v2/incidents/[id]/watchers/[watcherId]/route')).GET,
+  ],
+  [
+    'getStatusPageAsset',
+    async () => (await import('@/app/api/v2/status-pages/[id]/assets/[assetId]/route')).GET,
+  ],
   ['listTeamServices', async () => (await import('@/app/api/v2/teams/[id]/services/route')).GET],
   ['listTeamMembers', async () => (await import('@/app/api/v2/teams/[id]/members/route')).GET],
   ['getTeamLead', async () => (await import('@/app/api/v2/teams/[id]/lead/route')).GET],
@@ -431,6 +457,41 @@ export const MCP_HANDLERS = new Map<string, () => Promise<Handler>>([
 
 // Reachable only from the frozen approval commit; never from generic dispatch.
 export const MCP_APPROVAL_HANDLERS = new Map<string, () => Promise<Handler>>([
+  [
+    'removeTeamMember',
+    async () => (await import('@/app/api/v2/teams/[id]/members/[userId]/route')).DELETE,
+  ],
+  [
+    'removeScheduleParticipant',
+    async () =>
+      (await import('@/app/api/v2/schedules/[id]/layers/[layerId]/participants/[userId]/route'))
+        .DELETE,
+  ],
+  [
+    'cancelScheduleOverride',
+    async () => (await import('@/app/api/v2/schedules/[id]/overrides/[overrideId]/route')).DELETE,
+  ],
+  [
+    'deletePostmortemActionItem',
+    async () => (await import('@/app/api/v2/postmortems/[id]/action-items/[itemId]/route')).DELETE,
+  ],
+  [
+    'removeIncidentWatcher',
+    async () => (await import('@/app/api/v2/incidents/[id]/watchers/[watcherId]/route')).DELETE,
+  ],
+  [
+    'deleteStatusPageAsset',
+    async () => (await import('@/app/api/v2/status-pages/[id]/assets/[assetId]/route')).DELETE,
+  ],
+  [
+    'createScheduleOverride',
+    async () => (await import('@/app/api/v2/schedules/[id]/overrides/route')).POST,
+  ],
+  ['createStatusPage', async () => (await import('@/app/api/v2/status-pages/route')).POST],
+  [
+    'retryNotification',
+    async () => (await import('@/app/api/v2/notifications/[id]/retry/route')).POST,
+  ],
   ['setTeamLead', async () => (await import('@/app/api/v2/teams/[id]/lead/route')).PUT],
   [
     'updateServiceSupportHours',
@@ -758,6 +819,32 @@ export const MCP_APPROVAL_HANDLERS = new Map<string, () => Promise<Handler>>([
 
 // Reads used only as impact previews for destructive approvals; never generic tools.
 export const MCP_PREVIEW_HANDLERS = new Map<string, () => Promise<Handler>>([
+  [
+    'getTeamMember',
+    async () => (await import('@/app/api/v2/teams/[id]/members/[userId]/route')).GET,
+  ],
+  [
+    'getScheduleParticipant',
+    async () =>
+      (await import('@/app/api/v2/schedules/[id]/layers/[layerId]/participants/[userId]/route'))
+        .GET,
+  ],
+  [
+    'getScheduleOverride',
+    async () => (await import('@/app/api/v2/schedules/[id]/overrides/[overrideId]/route')).GET,
+  ],
+  [
+    'getPostmortemActionItem',
+    async () => (await import('@/app/api/v2/postmortems/[id]/action-items/[itemId]/route')).GET,
+  ],
+  [
+    'getIncidentWatcher',
+    async () => (await import('@/app/api/v2/incidents/[id]/watchers/[watcherId]/route')).GET,
+  ],
+  [
+    'getStatusPageAsset',
+    async () => (await import('@/app/api/v2/status-pages/[id]/assets/[assetId]/route')).GET,
+  ],
   [
     'getCustomFieldDefinition',
     async () => (await import('@/app/api/v2/custom-fields/[id]/route')).GET,

@@ -21,7 +21,7 @@ import {
 import { MCP_APPROVAL_HANDLERS, MCP_HANDLERS, MCP_PREVIEW_HANDLERS } from '../operations/handlers';
 import { resolveMcpGrant } from '../auth/principal';
 import { CostBudget } from './budget';
-import { requireMcp } from './errors';
+import { McpBoundaryError, requireMcp } from './errors';
 import { lockMcpMutationAuthority } from './mutation-authority';
 import { projectMcpData } from './projection';
 
@@ -290,6 +290,16 @@ async function executeMcpOperation(
     'MCP_APPROVAL_GUARD_NOT_ENFORCED',
     500
   );
+  // A conflict carries its own retryability: a lost race may succeed later, a duplicate never will.
+  // Only that boolean is read; problem details are not passed to the agent.
+  if (response.status === 409) {
+    const problem = await readBoundedDomainResult(response, 16384).catch(() => null);
+    const retryable =
+      problem && typeof problem === 'object' && 'retryable' in problem
+        ? (problem as { retryable?: unknown }).retryable === true
+        : true;
+    throw new McpBoundaryError('MCP_DOMAIN_REJECTED', 409, retryable);
+  }
   // Do not pass REST problem details or stack traces through to an agent.
   requireMcp(
     response.ok,

@@ -42,17 +42,17 @@ CI notes from certifying this branch: the browser step is sensitive to slow shar
 
 ## Current checkpoint
 
-Inventory (from `npm run --silent mcp:coverage`): 314 operations.
+Inventory (from `npm run --silent mcp:coverage`): 320 operations.
 
-- 130 generic candidates: 71 ordinary, plus 59 sensitive reads behind the administrator opt-in.
-- 98 approval-gated: 84 R2 and 14 R3.
+- 136 generic candidates: 75 ordinary, plus 61 sensitive reads behind the administrator opt-in.
+- 107 approval-gated: 87 R2 and 20 R3.
 - 1 native equivalent (approved runbook execution).
-- 85 open. The [exclusion review packet](./exclusion-review.md) proposes implementing 10 and excluding 75. No exclusion is reviewed: `reviewedExclusions` is 0.
+- 76 open. The [exclusion review packet](./exclusion-review.md) proposes implementing 1 (`updateStatusPage`) and excluding 75. No exclusion is reviewed: `reviewedExclusions` is 0.
 - The parity report keeps `implementationComplete: false` and `certified: false`.
 
 Implemented since the previous checkpoint:
 
-- R2 approval batches for every family with a durable receipt, plus six receipt-less writes whose routes run the approval guard inside their transaction.
+- R2 approval batches for every family with a durable receipt, plus nine receipt-less writes whose routes run the approval guard inside their transaction (including schedule overrides, status-page creation and notification retry, whose domain commands now run the guard first in their own transaction).
 - Destructive (R3) approvals with impact preview, reviewer recent sign-in, commit-time re-read, postcondition and natural-delete reconciliation.
 - An atomic `COMMITTED` mark and commit audit written in the effect's own transaction.
 - Sensitive reads, including 4 reviewed side-effect-free POST reads.
@@ -74,7 +74,7 @@ Local evidence on PostgreSQL (not CI, not production):
 Still outstanding:
 
 - Named human review of the 75 proposed exclusions.
-- Item-level target reads for the 6 R3 candidates, and transactional domain commands for the 4 receipt-less writes.
+- A transactional design for disabling a status page that keeps the withdraw-before-commit privacy guarantee (`updateStatusPage`).
 - Certification with real external clients (ChatGPT, Claude, Cursor, VS Code).
 - Multi-replica and PostgreSQL failover drills on production-like infrastructure.
 - MCP Apps.

@@ -2,7 +2,7 @@
 
 This packet lists every operation still open in the MCP parity inventory, with a proposed disposition. It was generated from `npm run --silent mcp:coverage` to help reviewers; it does not record any decision. Automated tooling must not author `exclusion` records. An exclusion counts only when a named reviewer records it in `src/lib/mcp/catalog/review.json`. The record needs a date, a rationale of at least 20 characters, and a safe equivalent where one exists. The schema rejects anything else.
 
-Snapshot: 85 open operations of 314. Proposed: implement 10, exclude 75. Regenerate the inventory before reviewing. The operation IDs, risks and reasons below come from the registry.
+Snapshot: 76 open operations of 320. Proposed: implement 1, exclude 75. Regenerate the inventory before reviewing. The operation IDs, risks and reasons below come from the registry.
 
 ## How to record a decision
 
@@ -11,29 +11,13 @@ Snapshot: 85 open operations of 314. Proposed: implement 10, exclude 75. Regener
 3. For an implementation, follow the approval batch process in [full-parity delivery](./full-parity.md). Never re-label an operation to raise coverage.
 4. Run `npm run --silent mcp:coverage` and the parity unit tests. The artifact reports the reviewed count as `reviewedExclusions`.
 
-## Blocked on an item-level read of the target (candidate for the destructive approval workflow) (6)
+## Blocked on a transactional domain command (no durable receipt or single transaction) (1)
 
 Proposed disposition: **Implement**.
 
-| Operation                    | Risk | Method | Current reason                                                                                                                                                                                                                                                                                         | Reviewer | Date | Decision |
-| ---------------------------- | ---- | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------- | ---- | -------- |
-| `cancelScheduleOverride`     | R3   | DELETE | Candidate for the destructive approval workflow, blocked on an item-level read of the target (GET /schedules/{id}/overrides/{overrideId}): the only previews are paginated or capped parent collections, so neither the reviewer nor the postcondition could observe the exact target.                 |          |      |          |
-| `deletePostmortemActionItem` | R3   | DELETE | Candidate for the destructive approval workflow, blocked on an item-level read of the target (GET /postmortems/{id}/action-items/{itemId}): the only previews are paginated or capped parent collections, so neither the reviewer nor the postcondition could observe the exact target.                |          |      |          |
-| `deleteStatusPageAsset`      | R3   | DELETE | Candidate for the destructive approval workflow, blocked on an item-level read of the target (GET /status-pages/{id}/assets/{assetId}): the only previews are paginated or capped parent collections, so neither the reviewer nor the postcondition could observe the exact target.                    |          |      |          |
-| `removeIncidentWatcher`      | R3   | DELETE | Candidate for the destructive approval workflow, blocked on an item-level read of the target (GET /incidents/{id}/watchers/{watcherId}): the only previews are paginated or capped parent collections, so neither the reviewer nor the postcondition could observe the exact target.                   |          |      |          |
-| `removeScheduleParticipant`  | R3   | DELETE | Candidate for the destructive approval workflow, blocked on an item-level read of the target (GET /schedules/{id}/layers/{layerId}/participants/{userId}): the only previews are paginated or capped parent collections, so neither the reviewer nor the postcondition could observe the exact target. |          |      |          |
-| `removeTeamMember`           | R3   | DELETE | Candidate for the destructive approval workflow, blocked on an item-level read of the target (GET /teams/{id}/members/{userId}): the only previews are paginated or capped parent collections, so neither the reviewer nor the postcondition could observe the exact target.                           |          |      |          |
-
-## Blocked on a transactional domain command (no durable receipt or single transaction) (4)
-
-Proposed disposition: **Implement**.
-
-| Operation                | Risk | Method | Current reason                                                                                                                                      | Reviewer | Date | Decision |
-| ------------------------ | ---- | ------ | --------------------------------------------------------------------------------------------------------------------------------------------------- | -------- | ---- | -------- |
-| `createScheduleOverride` | R2   | POST   | Not exposed yet: the command mutates outside a single transaction, so an approval cannot be recorded atomically with the effect.                    |          |      |          |
-| `createStatusPage`       | R2   | POST   | Not exposed yet: the command mutates outside a single transaction, so an approval cannot be recorded atomically with the effect.                    |          |      |          |
-| `retryNotification`      | R2   | POST   | Not exposed yet: a retry re-sends to external providers outside a single transaction, so an approval cannot be recorded atomically with the effect. |          |      |          |
-| `updateStatusPage`       | R2   | PATCH  | Not exposed yet: the command mutates outside a single transaction, so an approval cannot be recorded atomically with the effect.                    |          |      |          |
+| Operation          | Risk | Method | Current reason                                                                                                                                                                                                             | Reviewer | Date | Decision |
+| ------------------ | ---- | ------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- | ---- | -------- |
+| `updateStatusPage` | R2   | PATCH  | Not exposed: disabling a page withdraws the public projection before the transaction (a deliberate privacy guarantee) and no-op updates open no transaction, so an approval cannot be recorded atomically with the effect. |          |      |          |
 
 ## Superseded by an approval-gated equivalent (1)
 

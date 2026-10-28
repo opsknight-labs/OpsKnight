@@ -590,7 +590,8 @@ export function commitApprovedMcpOperation(context: ExecutionContext, raw: unkno
         const definitive =
           error instanceof McpBoundaryError &&
           error.code === 'MCP_DOMAIN_REJECTED' &&
-          [400, 403, 404, 412, 422].includes(error.status);
+          ([400, 403, 404, 412, 422].includes(error.status) ||
+            (error.status === 409 && error.retryable === false));
         // A route can commit its transaction yet report failure; undo only this attempt's mark.
         if (error instanceof McpBoundaryError && error.code === 'MCP_DOMAIN_REJECTED')
           await revertAttempt(

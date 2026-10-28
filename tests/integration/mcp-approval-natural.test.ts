@@ -4,6 +4,7 @@ import {
   createTestOnCallSchedule,
   createTestService,
   createTestTeam,
+  createTestUser,
   testPrisma as db,
 } from '../helpers/test-db';
 import { fixture, type Fixture } from '../helpers/mcp-approval';
@@ -16,6 +17,7 @@ import {
 import { CostBudget } from '@/lib/mcp/core/budget';
 import { McpBoundaryError } from '@/lib/mcp/core/errors';
 import { commitApprovedMcpOperation, prepareMcpOperation } from '@/lib/mcp/approvals/operation';
+import { MCP_APPROVAL_HANDLERS } from '@/lib/mcp/operations/handlers';
 
 setupMcpApprovalDatabase();
 
@@ -24,6 +26,20 @@ setupMcpApprovalDatabase();
 
 const etag = (revision: number) => `"${revision}"`;
 const unique = (label: string) => `${label} ${randomUUID().slice(0, 8)}`;
+
+const overrideWindow = {
+  startDate: '2026-11-01T00:00:00.000Z',
+  endDate: '2026-11-01T08:00:00.000Z',
+};
+const overridesInWindow = (f: Fixture, s: Record<string, string>) =>
+  db.onCallOverride.count({
+    where: {
+      scheduleId: s.id,
+      userId: f.lead.id,
+      start: new Date(overrideWindow.startDate),
+      end: new Date(overrideWindow.endDate),
+    },
+  });
 
 const policySteps = (policyId: string) =>
   db.escalationRule.findMany({
@@ -175,6 +191,50 @@ const scenarios: Scenario[] = [
       await db.team.update({ where: { id: s.id }, data: { description: 'moved on' } });
     },
   },
+  {
+    name: 'schedule override creation',
+    operationId: 'createScheduleOverride',
+    setup: async () => ({ id: (await createTestOnCallSchedule('Override creation')).id }),
+    input: async (f, s) => ({
+      args: { path: { id: s.id }, body: { userId: f.lead.id, ...overrideWindow } },
+    }),
+    effect: overridesInWindow,
+  },
+  {
+    name: 'status page creation',
+    operationId: 'createStatusPage',
+    // One status page per account: the fixture's own page would otherwise exhaust the limit.
+    setup: async () => {
+      await db.statusPage.deleteMany();
+      return { name: unique('Reviewed status'), slug: `reviewed-${randomUUID().slice(0, 8)}` };
+    },
+    input: async (_f, s) => ({ args: { body: { name: s.name, slug: s.slug } } }),
+    effect: async (_f, s) =>
+      db.statusPage.findMany({ where: { slug: s.slug }, select: { name: true, slug: true } }),
+  },
+  {
+    name: 'notification retry',
+    operationId: 'retryNotification',
+    setup: async () => {
+      const recipient = await createTestUser({ role: 'RESPONDER' });
+      const notification = await db.notification.create({
+        data: {
+          userId: recipient.id,
+          channel: 'EMAIL',
+          status: 'FAILED',
+          attempts: 1,
+          maxAttempts: 3,
+          payloadEncrypted: 'v1:encrypted-placeholder',
+          failedAt: new Date(),
+          errorMsg: 'provider unavailable',
+        },
+      });
+      return { id: notification.id };
+    },
+    input: async (_f, s) => ({ args: { path: { id: s.id } } }),
+    effect: async (_f, s) =>
+      (await db.notification.findUniqueOrThrow({ where: { id: s.id } })).status,
+  },
 ];
 
 describeApprovalScenarios(scenarios);
@@ -268,6 +328,212 @@ describe('escalation policy creation without If-Match', () => {
       expect(await committedAudits(interrupted.approvalId), `failAt=${failAt}`).toBe(1);
     }
     expect(interruptedAfterEffect).toBeGreaterThan(0);
+  });
+});
+
+describe('receipt-less creates and requeues without a revision precondition', () => {
+  // Neither has an If-Match revision: the conflict check inside the effect's own transaction is
+  // what turns state that changed after review into a definitive refusal.
+  const natural: Array<{
+    operationId: string;
+    conflict: string;
+    /** Puts the target into a state the reviewed change can no longer apply to. */
+    preempt(f: Fixture, s: Record<string, string>): Promise<unknown>;
+    /** Effects applied by the route and its own audit rows for them. */
+    applied(f: Fixture, s: Record<string, string>): Promise<{ effects: number; audits: number }>;
+  }> = [
+    {
+      operationId: 'createScheduleOverride',
+      conflict: 'the same override created out of band',
+      preempt: (f, s) =>
+        db.onCallOverride.create({
+          data: {
+            scheduleId: s.id,
+            userId: f.lead.id,
+            start: new Date(overrideWindow.startDate),
+            end: new Date(overrideWindow.endDate),
+          },
+        }),
+      applied: async (f, s) => ({
+        effects: await overridesInWindow(f, s),
+        audits: await db.auditLog.count({
+          where: { action: 'schedule_override.created', entityId: s.id },
+        }),
+      }),
+    },
+    {
+      operationId: 'createStatusPage',
+      // The page limit is checked before the unique slug, so either refusal is the domain's.
+      conflict: 'a page with the reviewed slug created out of band',
+      preempt: (_f, s) => db.statusPage.create({ data: { name: 'Out of band', slug: s.slug } }),
+      applied: async (_f, s) => {
+        const pages = await db.statusPage.findMany({
+          where: { slug: s.slug },
+          select: { id: true },
+        });
+        return {
+          effects: await db.statusPage.count({ where: { slug: s.slug, name: s.name } }),
+          audits: await db.auditLog.count({
+            where: { action: 'status_page.created', entityId: { in: pages.map(p => p.id) } },
+          }),
+        };
+      },
+    },
+    {
+      operationId: 'retryNotification',
+      conflict: 'the notification delivered out of band',
+      preempt: (_f, s) =>
+        db.notification.update({
+          where: { id: s.id },
+          data: { status: 'SENT', sentAt: new Date(), failedAt: null, errorMsg: null },
+        }),
+      applied: async (_f, s) => ({
+        effects:
+          (await db.notification.findUniqueOrThrow({ where: { id: s.id } })).status === 'PENDING'
+            ? 1
+            : 0,
+        audits: await db.auditLog.count({
+          where: { action: 'notification.retry_requested', entityId: s.id },
+        }),
+      }),
+    },
+  ];
+  const scenarioFor = (operationId: string) =>
+    scenarios.find(scenario => scenario.operationId === operationId)!;
+
+  it.each(natural)(
+    'refuses $operationId definitively after $conflict, on commit and on retry',
+    async ({ operationId, preempt, applied }) => {
+      const scenario = scenarioFor(operationId);
+      const f = await fixture();
+      const s = await scenario.setup(f);
+      const approval = await approve(f, scenario, s);
+      await preempt(f, s);
+      const before = JSON.stringify(await scenario.effect(f, s));
+      const effectsBefore = await applied(f, s);
+      await expect(
+        commitApprovedMcpOperation(f.ctx(), { approvalId: approval.approvalId })
+      ).rejects.toThrow('MCP_DOMAIN_REJECTED');
+      expect(await approvalStatus(approval.approvalId)).toBe('FAILED');
+      await expect(
+        commitApprovedMcpOperation(f.ctx(), { approvalId: approval.approvalId })
+      ).resolves.toMatchObject({ status: 'FAILED', replayed: true });
+      expect(JSON.stringify(await scenario.effect(f, s))).toBe(before);
+      expect(await applied(f, s)).toEqual(effectsBefore);
+      expect(await approvalStatus(approval.approvalId)).toBe('FAILED');
+      expect(await committedAudits(approval.approvalId)).toBe(0);
+    }
+  );
+
+  it.each(natural)(
+    'applies $operationId once under eight concurrent commits of one approval',
+    async ({ operationId, applied }) => {
+      const scenario = scenarioFor(operationId);
+      const f = await fixture();
+      const s = await scenario.setup(f);
+      const approval = await approve(f, scenario, s);
+      const settled = await Promise.allSettled(
+        Array.from({ length: 8 }, () =>
+          commitApprovedMcpOperation(f.ctx(), { approvalId: approval.approvalId })
+        )
+      );
+      const committed = settled.filter(result => result.status === 'fulfilled');
+      expect(committed.length).toBeGreaterThan(0);
+      for (const result of committed) expect(result.value).toMatchObject({ status: 'COMMITTED' });
+      expect(await applied(f, s)).toEqual({ effects: 1, audits: 1 });
+      expect(await approvalStatus(approval.approvalId)).toBe('COMMITTED');
+      expect(await committedAudits(approval.approvalId)).toBe(1);
+      await expect(
+        commitApprovedMcpOperation(f.ctx(), { approvalId: approval.approvalId })
+      ).resolves.toMatchObject({ status: 'COMMITTED', replayed: true });
+      expect(await applied(f, s)).toEqual({ effects: 1, audits: 1 });
+    }
+  );
+});
+
+describe('conflict retryability', () => {
+  const create = scenarios.find(scenario => scenario.operationId === 'createStatusPage')!;
+  const pagesCreated = async (s: Record<string, string>) => {
+    const pages = await db.statusPage.findMany({
+      where: { slug: s.slug, name: s.name },
+      select: { id: true },
+    });
+    return {
+      pages: pages.length,
+      audits: await db.auditLog.count({
+        where: { action: 'status_page.created', entityId: { in: pages.map(page => page.id) } },
+      }),
+    };
+  };
+  const problem = (code: string, retryable: boolean) =>
+    JSON.stringify({ type: 'about:blank', title: 'Conflict', status: 409, code, retryable });
+
+  /** Answers the approved command with a 409 instead of running the real route. */
+  async function withConflict<T>(body: string, contentType: string, run: () => Promise<T>) {
+    const original = MCP_APPROVAL_HANDLERS.get(create.operationId)!;
+    MCP_APPROVAL_HANDLERS.set(
+      create.operationId,
+      async () => async () =>
+        new Response(body, { status: 409, headers: { 'content-type': contentType } })
+    );
+    try {
+      return await run();
+    } finally {
+      MCP_APPROVAL_HANDLERS.set(create.operationId, original);
+    }
+  }
+
+  it.each([
+    {
+      kind: 'retryable problem',
+      body: problem('TRANSIENT_CONFLICT', true),
+      contentType: 'application/problem+json',
+    },
+    { kind: 'non-JSON body', body: 'conflict, try again later', contentType: 'text/plain' },
+  ])(
+    'keeps the approval retryable after a 409 with a $kind, then commits once',
+    async ({ body, contentType }) => {
+      const f = await fixture();
+      const s = await create.setup(f);
+      const approval = await approve(f, create, s);
+      await withConflict(body, contentType, () =>
+        expect(
+          commitApprovedMcpOperation(f.ctx(), { approvalId: approval.approvalId })
+        ).rejects.toMatchObject({ code: 'MCP_DOMAIN_REJECTED', status: 409, retryable: true })
+      );
+      expect(await approvalStatus(approval.approvalId)).toBe('EXECUTING');
+      expect(await pagesCreated(s)).toEqual({ pages: 0, audits: 0 });
+      expect(await committedAudits(approval.approvalId)).toBe(0);
+
+      await expect(
+        commitApprovedMcpOperation(f.ctx(), { approvalId: approval.approvalId })
+      ).resolves.toMatchObject({ status: 'COMMITTED' });
+      await expect(
+        commitApprovedMcpOperation(f.ctx(), { approvalId: approval.approvalId })
+      ).resolves.toMatchObject({ status: 'COMMITTED', replayed: true });
+      expect(await approvalStatus(approval.approvalId)).toBe('COMMITTED');
+      expect(await pagesCreated(s)).toEqual({ pages: 1, audits: 1 });
+      expect(await committedAudits(approval.approvalId)).toBe(1);
+    }
+  );
+
+  it('ends the approval on a 409 marked not retryable, and never applies it later', async () => {
+    const f = await fixture();
+    const s = await create.setup(f);
+    const approval = await approve(f, create, s);
+    await withConflict(problem('RESOURCE_CONFLICT', false), 'application/problem+json', () =>
+      expect(
+        commitApprovedMcpOperation(f.ctx(), { approvalId: approval.approvalId })
+      ).rejects.toMatchObject({ code: 'MCP_DOMAIN_REJECTED', status: 409, retryable: false })
+    );
+    expect(await approvalStatus(approval.approvalId)).toBe('FAILED');
+
+    await expect(
+      commitApprovedMcpOperation(f.ctx(), { approvalId: approval.approvalId })
+    ).resolves.toMatchObject({ status: 'FAILED', replayed: true });
+    expect(await approvalStatus(approval.approvalId)).toBe('FAILED');
+    expect(await pagesCreated(s)).toEqual({ pages: 0, audits: 0 });
+    expect(await committedAudits(approval.approvalId)).toBe(0);
   });
 });
 
