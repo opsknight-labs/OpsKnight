@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+External-secrets support is an **implementation candidate, not certified support**. PR #931 remains draft. Live legacy Kubernetes startup, CSI synchronization/bootstrap and failure recovery, AWS/Azure workload identity, rotation (including decryption of stored data), and OpenShift arbitrary-UID/SCC/file-readability results are explicit merge and release blockers. Source/rendering tests and local filesystem probes do not clear these gates.
+
+### Added
+
+- Optional Secrets Store CSI mounts for integrated/split application workloads and migration Jobs, preserving existing Kubernetes Secret mappings. Includes Helm and Kustomize support, AWS/Azure SecretProviderClass examples, OpenShift application security profiles, rotation guidance, and rendering regression tests. Cluster driver/provider installation remains external; live cloud/OpenShift certification is required before production rollout.
+
 ## [2.1.2] - 2026-10-27
 
 OpsKnight 2.1.2 hardens the multi-tag OCI image promotion pipeline in the release workflow and completes patch alignment across deployment definitions.

@@ -427,3 +427,16 @@ pgbouncer:
     runAsUser: 70
     runAsGroup: 70
     readOnlyRootFilesystem: true
+
+# Requires a cluster-installed Secrets Store CSI driver and provider.
+# Secret synchronization and rotation are configured outside this chart.
+externalSecrets:
+  csi:
+    enabled: false
+    secretProviderClass: ''
+    mountPath: /mnt/opsknight-secrets
+
+# Extra workload labels, including azure.workload.identity/use when applicable.
+# Chart-owned name/instance/component/version/managed-by and helm.sh/chart keys
+# are reserved; the schema rejects attempts to override them.
+podLabels: {}

@@ -1,0 +1,59 @@
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+
+# Candidate application profile; validate the image under your namespace SCC.
+patches:
+  - target:
+      kind: Deployment
+      name: opsknight-(app|web|scheduler|general-worker|critical-worker|bulk-worker|runbook-worker|status-projector)
+    patch: |-
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: unused
+      spec:
+        template:
+          spec:
+            securityContext:
+              runAsUser: null
+              runAsGroup: null
+              fsGroup: null
+              runAsNonRoot: true
+              seccompProfile:
+                type: RuntimeDefault
+            containers:
+              - name: opsknight-app
+                securityContext:
+                  runAsUser: null
+                  runAsGroup: null
+                  runAsNonRoot: true
+                  allowPrivilegeEscalation: false
+                  capabilities:
+                    drop: [ALL]
+  - target:
+      kind: Job
+      name: opsknight-migration
+    patch: |-
+      apiVersion: batch/v1
+      kind: Job
+      metadata:
+        name: unused
+      spec:
+        template:
+          spec:
+            securityContext:
+              runAsUser: null
+              runAsGroup: null
+              fsGroup: null
+              runAsNonRoot: true
+              seccompProfile:
+                type: RuntimeDefault
+            containers:
+              - name: migrate
+                securityContext:
+                  runAsUser: null
+                  runAsGroup: null
+                  runAsNonRoot: true
+                  allowPrivilegeEscalation: false
+                  capabilities:
+                    drop: [ALL]
