@@ -173,6 +173,16 @@ async function main() {
     'tests/integration/mcp-approval-teams-policies.test.ts',
     'tests/integration/mcp-approval-automation.test.ts',
     'tests/integration/mcp-approval-runbook-rules.test.ts',
+    'tests/integration/mcp-approval-incidents.test.ts',
+    'tests/integration/mcp-approval-settings.test.ts',
+    'tests/integration/mcp-approval-reporting.test.ts',
+    'tests/integration/mcp-approval-postmortems.test.ts',
+    'tests/integration/mcp-approval-runbooks.test.ts',
+    'tests/integration/mcp-approval-schedules.test.ts',
+    'tests/integration/mcp-approval-services.test.ts',
+    'tests/integration/mcp-approval-status-pages.test.ts',
+    'tests/integration/mcp-protocol-features.test.ts',
+    'tests/integration/mcp-tasks.test.ts',
     'tests/integration/mcp-client-metadata.test.ts',
   ]);
   await node(

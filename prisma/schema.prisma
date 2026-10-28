@@ -4873,6 +4873,23 @@ model McpOperationApproval {
   @@index([status, expiresAt])
 }
 
+model McpTask {
+  // Unpredictable server-generated id; never a bearer capability on its own.
+  id String @id
+  grantId String
+  credentialId String
+  actorId String
+  toolName String
+  // The durable domain work this task observes; status is always derived from it.
+  kind String
+  resourceId String
+  cancelRequestedAt DateTime?
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+  @@index([grantId, createdAt])
+  @@index([expiresAt])
+}
+
 model McpConsentRequest {
   id String @id @default(cuid())
   userId String

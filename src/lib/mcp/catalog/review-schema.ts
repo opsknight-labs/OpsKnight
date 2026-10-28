@@ -18,6 +18,8 @@ export const operationReviewSchema = z
     resourceFilter: z.string().trim().min(1),
     evidence: z.string().trim().min(1),
     actions: z.array(z.string().trim().min(1)).min(1),
+    // Scopes a route needs beyond its declared action, e.g. a read filter on the target resource.
+    additionalScopes: z.array(z.string().regex(/^[a-z-]+:[a-z]+$/)).max(4).optional(),
     // Present only after a named person reviewed this specific exclusion; never inferred.
     exclusion: z
       .object({

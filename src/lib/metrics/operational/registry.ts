@@ -37,6 +37,11 @@ export const OPERATIONAL_METRICS = [
     estimatedMaxSeries: 8,
   },
   {
+    name: 'opsknight_mcp_subscriptions_active',
+    help: 'Open MCP subscriptions/listen streams on this process',
+    kind: 'gauge', labels: [], scope: 'instance', estimatedMaxSeries: 1,
+  },
+  {
     name: 'opsknight_mcp_request_duration_seconds',
     help: 'MCP top-level request duration including admission and domain work',
     kind: 'histogram',

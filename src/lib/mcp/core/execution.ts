@@ -157,6 +157,8 @@ async function executeMcpOperation(
     signal: context.budget.signal,
   });
   const handler = await loadHandler();
+  // An approved commit must recheck authority inside the effect's own transaction.
+  let guardEnforced = false;
   context.budget.check();
   const response = await withInternalV2Invocation(
     request,
@@ -171,8 +173,15 @@ async function executeMcpOperation(
         operation.authorizationActions,
         auth.actor
       );
-      await guard?.(tx, auth);
-      if (operation.domain === 'incidents') {
+      if (guard) {
+        await guard(tx, auth);
+        guardEnforced = true;
+      }
+      // Only routes that address one incident are fenced on it; templates authorize themselves.
+      if (
+        operation.domain === 'incidents' &&
+        (operationId === 'createIncident' || operation.path.startsWith('/incidents/{id}'))
+      ) {
         if (operationId === 'createIncident') {
           const body = args.body as { serviceId: string };
           await tx.$queryRaw`SELECT id FROM "Service" WHERE id = ${body.serviceId} FOR SHARE`;
@@ -217,6 +226,8 @@ async function executeMcpOperation(
       }
     }
   );
+  // A route that mutates without the shared idempotency path would skip the approval recheck.
+  requireMcp(!guard || !response.ok || guardEnforced, 'MCP_APPROVAL_GUARD_NOT_ENFORCED', 500);
   // Do not pass REST problem details or stack traces through to an agent.
   requireMcp(
     response.ok,

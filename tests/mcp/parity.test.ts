@@ -12,8 +12,11 @@ describe('honest MCP workflow inventory', () => {
         MCP_CATALOG.map(op => op.operationId).sort()
       );
     }
-    expect(report.pendingOperations).toContain('publishPostmortem');
-    expect(report.pendingOperations).toContain('updatePostmortemActionItem');
+    expect(report.pendingOperations).not.toContain('publishPostmortem');
+    expect(report.operations.find(op => op.operationId === 'publishPostmortem')?.disposition).toBe(
+      'APPROVAL_REQUIRED'
+    );
+    expect(report.pendingOperations).toContain('createReportExport');
     expect(report.pendingOperations).not.toContain('listPostmortemVersions');
     expect(report.implementationComplete).toBe(false);
     expect(report.certified).toBe(false);

@@ -593,6 +593,8 @@ async function runOnce() {
     try {
       const { cleanupMcpCredentials } = await import('./mcp/auth/retention');
       await cleanupMcpCredentials();
+      const { cleanupExpiredMcpTasks } = await import('./mcp/protocol/tasks');
+      await cleanupExpiredMcpTasks();
     } catch {
       logger.warn('[Cron] MCP credential cleanup unavailable');
     }

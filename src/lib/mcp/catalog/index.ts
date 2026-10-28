@@ -5,6 +5,7 @@ import reviewJson from './review.json';
 import { requireMcp } from '../core/errors';
 import { createHash } from 'node:crypto';
 import { operationReviewSchema, type OperationReview } from './review-schema';
+import { isApiScope } from '@/lib/authorization';
 import {
   AUTHORIZATION_ACTIONS,
   apiScopeForAction,
@@ -84,6 +85,10 @@ export const MCP_CATALOG = V2_OPERATIONS.map(operation => {
       ...authorizationActions.flatMap(action => {
         const scope = apiScopeForAction(action);
         return scope ? [scope] : [];
+      }),
+      ...(review.additionalScopes ?? []).map(scope => {
+        requireMcp(isApiScope(scope), `MCP_UNKNOWN_SCOPE_${operation.operationId}`);
+        return scope;
       }),
     ]),
   ].sort();

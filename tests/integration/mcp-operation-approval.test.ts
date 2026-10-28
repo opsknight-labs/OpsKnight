@@ -102,7 +102,7 @@ describe('independently approved sensitive MCP operations', () => {
     ).rejects.toThrow('MCP_OPERATION_UNAVAILABLE');
     await expect(
       prepareMcpOperation(f.ctx(), {
-        operationId: 'archiveRunbook',
+        operationId: 'createReportExport',
         args: { path: { id: 'x' } },
         idempotencyKey: 'prepare-ungated-operation',
       })
