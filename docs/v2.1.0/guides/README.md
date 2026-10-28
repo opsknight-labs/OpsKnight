@@ -20,7 +20,7 @@ test, current source/configuration, or a certified runtime journey.
 Browse by task area:
 
 - [Incidents](./incidents/), [on-call](./on-call/), and [escalation](./escalation/)
-- [Services](./services/) and [teams](./teams/)
+- [Services](./services/), [service automation](./services/service-automation), and [teams](./teams/)
 - [Runbooks: authoring, incident response, Agents, pools, and secrets](./runbooks/)
 - [Notifications](./notifications/), [ChatOps](./chatops/), and [status pages](./status-pages/)
 - [Profile](./profile/), [identity](./identity/), [administration](./administration/), and [privacy](./privacy/)
