@@ -46,7 +46,6 @@ describe('MCP configuration diagnostics', () => {
     expect(issues[0]).toContain('MCP_PUBLIC_ORIGIN or NEXTAUTH_URL');
   });
 
-
   it('rejects loopback HTTP origins in production even when explicitly configured', () => {
     const env = {
       NODE_ENV: 'production',
@@ -54,9 +53,32 @@ describe('MCP configuration diagnostics', () => {
       MCP_TOKEN_HASH_SECRET: 'a'.repeat(32),
     } as unknown as NodeJS.ProcessEnv;
     expect(() => mcpOrigin(env)).toThrow();
-    expect(mcpConfigurationIssues(env)).toEqual([
-      expect.stringContaining('MCP_PUBLIC_ORIGIN'),
-    ]);
+    expect(mcpConfigurationIssues(env)).toEqual([expect.stringContaining('MCP_PUBLIC_ORIGIN')]);
   });
 
+  it('allows production loopback HTTP only with the explicit opt-in and an explicit origin', () => {
+    const base = { NODE_ENV: 'production', MCP_TOKEN_HASH_SECRET: 'a'.repeat(32) };
+    const env = (extra: Record<string, string>) =>
+      ({ ...base, ...extra }) as unknown as NodeJS.ProcessEnv;
+    for (const origin of ['http://localhost:3042', 'http://127.0.0.1:3042', 'http://[::1]:3042'])
+      expect(
+        mcpOrigin(env({ MCP_PUBLIC_ORIGIN: origin, MCP_ALLOW_LOOPBACK_HTTP_ORIGIN: 'true' }))
+      ).toBe(new URL(origin).origin);
+    for (const value of ['1', 'yes', 'TRUE', ''])
+      expect(() =>
+        mcpOrigin(
+          env({ MCP_PUBLIC_ORIGIN: 'http://localhost:3042', MCP_ALLOW_LOOPBACK_HTTP_ORIGIN: value })
+        )
+      ).toThrow();
+    for (const origin of [
+      'http://opsknight.example.com',
+      'http://10.0.0.5:3000',
+      'http://localhost.example.com',
+    ])
+      expect(() =>
+        mcpOrigin(env({ MCP_PUBLIC_ORIGIN: origin, MCP_ALLOW_LOOPBACK_HTTP_ORIGIN: 'true' }))
+      ).toThrow();
+    // The opt-in never revives the silent fallback.
+    expect(() => mcpOrigin(env({ MCP_ALLOW_LOOPBACK_HTTP_ORIGIN: 'true' }))).toThrow();
+  });
 });

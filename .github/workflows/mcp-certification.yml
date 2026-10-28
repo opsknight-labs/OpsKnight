@@ -117,6 +117,8 @@ jobs:
           DATABASE_URL: postgresql://postgres:isolated-mcp-ci@localhost:5432/opsknight_mcp_browser_test
           HOSTNAME: localhost
           PORT: '3042'
+          # Production build on a loopback origin for local browser certification only.
+          MCP_ALLOW_LOOPBACK_HTTP_ORIGIN: 'true'
           MCP_E2E_OUTPUT: ${{ runner.temp }}/mcp-evidence/browser
         run: |
           npx playwright install --with-deps chromium firefox webkit

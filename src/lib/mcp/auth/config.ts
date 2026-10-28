@@ -10,9 +10,14 @@ export function mcpOrigin(env: NodeJS.ProcessEnv = process.env) {
     503
   );
   const url = new URL(configuredOrigin ?? 'http://localhost:3000');
+  // A production build may serve plain HTTP only on an explicitly configured loopback origin
+  // and only with an explicit opt-in (local certification); traffic never leaves the host.
+  const loopbackHttpAllowed =
+    env.NODE_ENV !== 'production' ||
+    (Boolean(configuredOrigin) && env.MCP_ALLOW_LOOPBACK_HTTP_ORIGIN === 'true');
   requireMcp(
     url.protocol === 'https:' ||
-      (env.NODE_ENV !== 'production' &&
+      (loopbackHttpAllowed &&
         url.protocol === 'http:' &&
         ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname)),
     'MCP_HTTPS_REQUIRED',
