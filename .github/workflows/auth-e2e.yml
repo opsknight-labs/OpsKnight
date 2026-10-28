@@ -41,7 +41,7 @@ jobs:
       - name: Set up Node & dependencies
         uses: ./.github/actions/setup-node
         with:
-          node-version: 20
+          node-version: 22
           generate-prisma: 'true'
 
       - name: Prepare browser-test database

@@ -18,7 +18,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
-        with: { node-version: 20, cache: npm }
+        with: { node-version: 22, cache: npm }
       - run: npm ci --legacy-peer-deps
       - run: npx prisma generate
       - name: Run the eval

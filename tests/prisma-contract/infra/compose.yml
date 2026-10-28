@@ -20,6 +20,10 @@ services:
     environment: *postgres-env
     ports: ['127.0.0.1:${PC_PG_PORT:-56501}:5432']
     healthcheck: *postgres-health
+    networks:
+      default:
+        # Host name accepted by scripts/ingestion/verify-image-prisma.cjs.
+        aliases: [opsknight-ingestion-cert-db]
 
   # Same server with a non-UTC default session time zone.
   pg-tz:

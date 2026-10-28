@@ -24,7 +24,7 @@ jobs:
       - name: Setup Node.js Runtime
         uses: actions/setup-node@v7
         with:
-          node-version: 20
+          node-version: 22
 
       - name: Validate Shell Script Syntax
         run: |
@@ -148,7 +148,7 @@ jobs:
       - name: Setup Node.js Runtime
         uses: actions/setup-node@v7
         with:
-          node-version: 20
+          node-version: 22
 
       # Contains moby/moby#52235: retry transient EBUSY during Swarm secret remounts.
       # This job has no pre-existing service containers; the action owns its isolated daemon.

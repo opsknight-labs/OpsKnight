@@ -59,7 +59,7 @@ jobs:
       - uses: actions/checkout@v7
       - uses: ./.github/actions/setup-node
         with:
-          node-version: '20'
+          node-version: 22
           ignore-scripts: 'true'
           generate-prisma: 'true'
       - uses: ./.github/actions/setup-test-db
@@ -105,7 +105,7 @@ jobs:
       - uses: actions/checkout@v7
       - uses: ./.github/actions/setup-node
         with:
-          node-version: '20'
+          node-version: 22
           ignore-scripts: 'true'
           generate-prisma: 'true'
       - uses: ./.github/actions/setup-test-db
@@ -152,7 +152,7 @@ jobs:
       - uses: actions/checkout@v7
       - uses: ./.github/actions/setup-node
         with:
-          node-version: '20'
+          node-version: 22
           ignore-scripts: 'true'
           generate-prisma: 'true'
       - uses: ./.github/actions/setup-test-db

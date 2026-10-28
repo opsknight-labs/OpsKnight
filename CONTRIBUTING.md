@@ -33,7 +33,7 @@ This contribution policy does not transfer ownership of your copyright to OpsKni
 
 ### Prerequisites
 
-- Node.js 18+
+- Node.js 22 LTS (22.12 or newer; see `.nvmrc`)
 - PostgreSQL 14+
 - Git
 
