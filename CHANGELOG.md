@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Optional Secrets Store CSI mounts for integrated/split application workloads and migration Jobs, preserving existing Kubernetes Secret mappings. Includes AWS/Azure SecretProviderClass examples, an OpenShift application security profile, rotation guidance, and rendering regression tests. Cluster driver/provider installation remains external; live cloud/OpenShift certification is required before production rollout.
+- Optional Secrets Store CSI mounts for integrated/split application workloads and migration Jobs, preserving existing Kubernetes Secret mappings. Includes Helm and Kustomize support, AWS/Azure SecretProviderClass examples, OpenShift application security profiles, rotation guidance, and rendering regression tests. Cluster driver/provider installation remains external; live cloud/OpenShift certification is required before production rollout.
 
 ## [2.1.2] - 2026-10-27
 

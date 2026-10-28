@@ -20,6 +20,7 @@ on:
       - 'docs/v2.0.0/troubleshooting/**'
       - 'tests/lib/deployment-config-unit.test.ts'
       - 'tests/lib/deployment-csi.test.ts'
+      - 'tests/lib/deployment-csi-kustomize.test.ts'
       - '.github/workflows/docker-image.yml'
       - '.github/workflows/deployment-validation.yml'
   push:
@@ -96,7 +97,7 @@ jobs:
           generate-prisma: 'true'
 
       - name: Validate external secrets deployment contracts
-        run: npx vitest run tests/lib/deployment-csi.test.ts --no-file-parallelism --maxWorkers=1
+        run: npx vitest run tests/lib/deployment-csi.test.ts tests/lib/deployment-csi-kustomize.test.ts --no-file-parallelism --maxWorkers=1
 
       - name: Lint Helm chart
         run: helm lint deploy/kubernetes/helm/opsknight

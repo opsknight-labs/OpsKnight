@@ -100,7 +100,7 @@ Use `values-openshift.yaml` after the other values files as an application secur
 
 A cluster administrator must select a [Red Hat supported Secrets Store CSI Driver Operator/provider combination](https://docs.redhat.com/en/documentation/openshift_container_platform/4.21/html/nodes/working-with-pods), check its compatibility with the actual target OpenShift release, and install its required node-level permissions/SCCs. Do not grant the application privileged SCC or install node plugins through this chart. AWS/Azure federation and supported provider features on OpenShift must be configured for that platform; EKS/AKS examples do not establish OpenShift identity federation automatically.
 
-Test the production image under the namespace-assigned UID range and selected SCC, including writable application/cache paths, mounted file group ownership, and migration execution. Optional agent and PgBouncer workloads need separate SCC/identity validation. Existing Kustomize profiles remain unchanged; this profile applies to Helm.
+Test the production image under the namespace-assigned UID range and selected SCC, including writable application/cache paths, mounted file group ownership, and migration execution. Optional agent and PgBouncer workloads need separate SCC/identity validation. Existing Kustomize profiles remain unchanged. Kustomize also provides opt-in [CSI profiles and an OpenShift component](../kustomize/external-secrets).
 
 ## Troubleshooting and live certification
 

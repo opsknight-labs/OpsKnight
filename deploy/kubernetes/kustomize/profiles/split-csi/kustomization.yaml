@@ -1,0 +1,48 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# External-database example. Apply a provider class and identity configuration first.
+resources:
+  - ../split
+
+components:
+  - ../../components/secrets-store-csi
+  - ../../components/external-secrets
+
+patches:
+  - target:
+      kind: StatefulSet
+      name: opsknight-postgres
+    patch: |-
+      apiVersion: apps/v1
+      kind: StatefulSet
+      metadata:
+        name: opsknight-postgres
+      $patch: delete
+  - target:
+      kind: Service
+      name: opsknight-postgres-service
+    patch: |-
+      apiVersion: v1
+      kind: Service
+      metadata:
+        name: opsknight-postgres-service
+      $patch: delete
+  - target:
+      kind: NetworkPolicy
+      name: opsknight-postgres-netpol
+    patch: |-
+      apiVersion: networking.k8s.io/v1
+      kind: NetworkPolicy
+      metadata:
+        name: opsknight-postgres-netpol
+      $patch: delete
+  - target:
+      kind: PodDisruptionBudget
+      name: opsknight-postgres-pdb
+    patch: |-
+      apiVersion: policy/v1
+      kind: PodDisruptionBudget
+      metadata:
+        name: opsknight-postgres-pdb
+      $patch: delete
