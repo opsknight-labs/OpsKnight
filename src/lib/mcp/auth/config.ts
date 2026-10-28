@@ -3,10 +3,18 @@ import { requireMcp } from '../core/errors';
 
 // Infrastructure bootstrap only; rollout and workload policy live in PostgreSQL.
 export function mcpOrigin(env: NodeJS.ProcessEnv = process.env) {
-  const url = new URL(env.MCP_PUBLIC_ORIGIN ?? env.NEXTAUTH_URL ?? 'http://localhost:3000');
+  const configuredOrigin = env.MCP_PUBLIC_ORIGIN ?? env.NEXTAUTH_URL;
+  requireMcp(
+    env.NODE_ENV !== 'production' || Boolean(configuredOrigin),
+    'MCP_ORIGIN_REQUIRED',
+    503
+  );
+  const url = new URL(configuredOrigin ?? 'http://localhost:3000');
   requireMcp(
     url.protocol === 'https:' ||
-      (url.protocol === 'http:' && ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname)),
+      (env.NODE_ENV !== 'production' &&
+        url.protocol === 'http:' &&
+        ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname)),
     'MCP_HTTPS_REQUIRED',
     503
   );
@@ -47,7 +55,7 @@ export function mcpConfigurationIssues(env: NodeJS.ProcessEnv = process.env) {
       mcpOrigin(env);
     } catch {
       issues.push(
-        'MCP_PUBLIC_ORIGIN (or NEXTAUTH_URL) must be an HTTPS origin without a path; HTTP is allowed only on loopback.'
+        'MCP_PUBLIC_ORIGIN (or NEXTAUTH_URL) must be an HTTPS origin without a path; HTTP is allowed only on loopback in development.'
       );
     }
   }

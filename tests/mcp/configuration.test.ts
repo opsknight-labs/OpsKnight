@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { mcpConfigurationIssues } from '@/lib/mcp/auth/config';
+import { mcpConfigurationIssues, mcpOrigin } from '@/lib/mcp/auth/config';
 
 const good = {
   MCP_PUBLIC_ORIGIN: 'https://opsknight.example.com',
@@ -44,6 +44,19 @@ describe('MCP configuration diagnostics', () => {
     } as unknown as NodeJS.ProcessEnv);
     expect(issues).toHaveLength(1);
     expect(issues[0]).toContain('MCP_PUBLIC_ORIGIN or NEXTAUTH_URL');
+  });
+
+
+  it('rejects loopback HTTP origins in production even when explicitly configured', () => {
+    const env = {
+      NODE_ENV: 'production',
+      MCP_PUBLIC_ORIGIN: 'http://localhost:3000',
+      MCP_TOKEN_HASH_SECRET: 'a'.repeat(32),
+    } as unknown as NodeJS.ProcessEnv;
+    expect(() => mcpOrigin(env)).toThrow();
+    expect(mcpConfigurationIssues(env)).toEqual([
+      expect.stringContaining('MCP_PUBLIC_ORIGIN'),
+    ]);
   });
 
 });
