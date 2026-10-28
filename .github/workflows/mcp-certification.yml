@@ -1,29 +1,6 @@
 name: Enterprise MCP PR validation
 on:
   pull_request:
-    paths:
-      - 'src/lib/mcp/**'
-      - 'src/lib/runbooks/**'
-      - 'src/lib/api-v2/**'
-      - 'src/lib/idempotency.ts'
-      - 'src/lib/rate-limit.ts'
-      - 'src/lib/prisma*.ts'
-      - 'src/lib/database-workload.ts'
-      - 'src/lib/runtime-capacity.ts'
-      - 'deploy/scripts/validate-runtime-capacity.cjs'
-      - 'src/lib/authorization*'
-      - 'src/app/mcp/**'
-      - 'src/app/oauth/mcp/**'
-      - 'src/app/.well-known/**'
-      - 'src/app/(app)/settings/integrations/mcp/**'
-      - 'prisma/**'
-      - 'tests/**/mcp*'
-      - 'tests/mcp/**'
-      - 'scripts/mcp/**'
-      - 'package*.json'
-      - '.github/workflows/mcp-certification.yml'
-      - '.github/workflows/mcp-release-certification.yml'
-      - 'docs/v2.2.0/operate/mcp/**'
   workflow_dispatch:
 permissions:
   contents: read
@@ -31,8 +8,34 @@ concurrency:
   group: mcp-${{ github.ref }}
   cancel-in-progress: true
 jobs:
+  detect-changes:
+    name: Detect MCP-related changes
+    runs-on: ubuntu-latest
+    outputs:
+      mcp: ${{ steps.detect.outputs.mcp }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 2
+      - id: detect
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          if [ "$EVENT_NAME" != "pull_request" ]; then
+            echo "mcp=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if git diff --name-only "$BASE_SHA" HEAD | grep -Eq '^(src/lib/mcp/|src/lib/runbooks/|src/lib/api-v2/|src/lib/idempotency\.ts$|src/lib/rate-limit\.ts$|src/lib/prisma[^/]*\.ts$|src/lib/database-workload\.ts$|src/lib/runtime-capacity\.ts$|deploy/scripts/validate-runtime-capacity\.cjs$|src/lib/authorization[^/]*$|src/app/mcp/|src/app/oauth/mcp/|src/app/\.well-known/|src/app/\(app\)/settings/integrations/mcp/|prisma/|tests/.*mcp|tests/architecture/|scripts/mcp/|package(-lock)?\.json$|env\.example$|docs/v2\.2\.0/(operate|guides|reference)/mcp/|\.github/workflows/mcp-(certification|release-certification)\.yml$)'; then
+            echo "mcp=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "mcp=false" >> "$GITHUB_OUTPUT"
+          fi
   contract-security:
     name: MCP PR validation
+    needs: detect-changes
+    if: needs.detect-changes.outputs.mcp == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     services:
