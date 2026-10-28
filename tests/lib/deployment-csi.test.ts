@@ -97,7 +97,9 @@ describe('additional Pod labels', () => {
             { encoding: 'utf8' }
           );
           expect(result.status).not.toBe(0);
-          expect(result.stderr).toContain('podLabels');
+          // Helm 3 and Helm 4 format propertyNames error paths differently.
+          // Assert schema rejection and the offending key, not the validator's path.
+          expect(result.stderr).toContain('schema');
           expect(result.stderr).toContain(key);
         });
       }
