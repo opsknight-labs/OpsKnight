@@ -1,4 +1,3 @@
-import Link from 'next/link';
 import { SettingsSection } from '@/components/settings/layout/SettingsSection';
 import { DeclareDependencyForm, DependencyList } from '@/components/settings/DependencyManager';
 import { Badge } from '@/components/ui/shadcn/badge';
@@ -44,9 +43,6 @@ export default async function IntelligenceResponsePage() {
   return (
     <div className="space-y-6">
       <header className="space-y-1">
-        <Link href="/settings/intelligence" className="text-xs text-muted-foreground hover:underline">
-          ← Intelligence
-        </Link>
         <h1 className="text-2xl font-semibold">Dependencies, changes and alert quality</h1>
         <p className="text-sm text-muted-foreground">
           Inputs for probable-cause suggestions. Everything here is advisory: nothing pages, mutes or runs automatically.

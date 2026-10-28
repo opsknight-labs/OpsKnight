@@ -1,0 +1,85 @@
+rule_files:
+  - opsknight-alerts.yaml
+evaluation_interval: 1m
+tests:
+  - interval: 1m
+    input_series:
+      - series: 'opsknight_intelligence_lane_last_cycle_age_seconds{instance="worker-a"}'
+        values: '10 400 460 520 580 640 700 760'
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: OpsKnightIntelligenceLaneStalled
+        exp_alerts: []
+      - eval_time: 7m
+        alertname: OpsKnightIntelligenceLaneStalled
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              summary: The intelligence lane has not completed a cycle for five minutes
+              description: Suggestions are going stale. Paging is unaffected. Check the worker or intelligence-worker logs and database health, then restart the worker if it is wedged.
+  - interval: 1m
+    input_series:
+      - series: 'opsknight_intelligence_lane_paused{instance="worker-a"}'
+        values: '1x20'
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: OpsKnightIntelligencePausedForPaging
+        exp_alerts: []
+      - eval_time: 16m
+        alertname: OpsKnightIntelligencePausedForPaging
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              summary: Intelligence has yielded to a paging backlog for fifteen minutes
+              description: The lane pauses itself while escalation or notification work is behind. Investigate the paging backlog first; intelligence resumes on its own when it clears.
+  - interval: 1m
+    input_series:
+      - series: opsknight_intelligence_queue_oldest_ready_age_seconds
+        values: '0 1000x15'
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: OpsKnightIntelligenceBacklogStale
+        exp_alerts: []
+      - eval_time: 12m
+        alertname: OpsKnightIntelligenceBacklogStale
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              summary: Intelligence work has waited more than fifteen minutes
+              description: Raise the batch size or concurrency in Settings, Intelligence, or run a dedicated intelligence-worker. Paging is unaffected.
+  - interval: 1m
+    input_series:
+      - series: opsknight_intelligence_dead_letters
+        values: '0 0 2x20'
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: OpsKnightIntelligenceDeadLetters
+        exp_alerts: []
+      - eval_time: 18m
+        alertname: OpsKnightIntelligenceDeadLetters
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              summary: Some intelligence work exhausted its retries
+              description: Review and replay the quarantined items in Settings, Intelligence. Affected incidents only lack suggestions; paging is unaffected.
+  # A disabled install exports no lane gauges and an empty queue: nothing fires.
+  - interval: 1m
+    input_series:
+      - series: opsknight_intelligence_queue_oldest_ready_age_seconds
+        values: '0x30'
+      - series: opsknight_intelligence_dead_letters
+        values: '0x30'
+    alert_rule_test:
+      - eval_time: 30m
+        alertname: OpsKnightIntelligenceLaneStalled
+        exp_alerts: []
+      - eval_time: 30m
+        alertname: OpsKnightIntelligenceBacklogStale
+        exp_alerts: []
+      - eval_time: 30m
+        alertname: OpsKnightIntelligenceDeadLetters
+        exp_alerts: []

@@ -5235,6 +5235,10 @@ model AiSettings {
   enabled                 Boolean  @default(false)
   squireEnabled           Boolean  @default(false)
   squireName              String   @default("Squire")
+  // Personalisation is opt-in: the default is a plain icon, a floating button and no motion.
+  squireAvatar            String   @default("ICON")
+  squireLauncher          String   @default("FLOATING")
+  squireAnimations        Boolean  @default(false)
   allowExternalFallback   Boolean  @default(false)
   requestsPerMinutePerUser Int     @default(20)
   dailyTokenBudget        Int      @default(500000)

@@ -12,12 +12,14 @@ const deny = (status: number, error: string) => jsonError(error, status, undefin
 
 /**
  * POST /api/intelligence/squire: one assistant turn, streamed as newline-delimited JSON events.
- * Authenticated by the session; the browser must send JSON from the same origin, which a cross-site
- * form post cannot do. The conversation lives in the browser: nothing is stored server-side.
+ * Authenticated by the session. Cross-site use is refused three ways: browsers send `Sec-Fetch-Site`, which
+ * page script cannot forge and proxies do not change (comparing `Origin` with the server's own idea of its
+ * origin breaks behind a reverse proxy); a JSON body needs a CORS preflight that is never granted; and the
+ * session cookie is SameSite=Lax. The conversation lives in the browser: nothing is stored server-side.
  */
 export async function POST(request: NextRequest) {
-  const origin = request.headers.get('origin');
-  if (origin && origin !== request.nextUrl.origin) return deny(403, 'Cross-origin requests are not allowed');
+  const site = request.headers.get('sec-fetch-site');
+  if (site && site !== 'same-origin' && site !== 'none') return deny(403, 'Cross-site requests are not allowed');
   if (!request.headers.get('content-type')?.toLowerCase().startsWith('application/json')) {
     return deny(415, 'Send application/json');
   }

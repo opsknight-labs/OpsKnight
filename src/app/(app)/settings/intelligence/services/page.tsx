@@ -1,4 +1,3 @@
-import Link from 'next/link';
 import { SettingsSection } from '@/components/settings/layout/SettingsSection';
 import { ClearOverrideButton, ServicePolicyForm } from '@/components/settings/ServicePolicyForms';
 import { Badge } from '@/components/ui/shadcn/badge';
@@ -36,9 +35,6 @@ export default async function IntelligenceServicesPage({
   return (
     <div className="space-y-6">
       <header className="space-y-1">
-        <Link href="/settings/intelligence" className="text-xs text-muted-foreground hover:underline">
-          ← Intelligence
-        </Link>
         <h1 className="text-2xl font-semibold">Per-service policies</h1>
         <p className="text-sm text-muted-foreground">
           Services follow the global policy unless you give them their own. An override starts from what currently applies to

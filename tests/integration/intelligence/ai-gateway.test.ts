@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { AiGatewayError, breakers, guardedFetchFor, invalidateGatewayCache, resolveGatewayPort } from '@/lib/intelligence/ai/gateway';
-import { getTodayUsage, recordAiUsage } from '@/lib/intelligence/ai/budget';
-import { getAiSettings, listAiProviders, saveAiProvider, updateAiSettings } from '@/lib/intelligence/ai/settings';
+import { getTodayUsage, getUsageHistory, recordAiUsage } from '@/lib/intelligence/ai/budget';
+import { getAiPublicStatus, getAiSettings, listAiProviders, saveAiProvider, updateAiSettings } from '@/lib/intelligence/ai/settings';
 import type { AiGenerateRequest, AiStreamEvent } from '@/lib/intelligence/ai/port';
 import { startFakeModel, type FakeServer } from '../../helpers/fake-model-server';
 import { trace } from '@opentelemetry/api';
@@ -123,6 +123,41 @@ describe('settings and providers', () => {
         actor
       )
     ).rejects.toMatchObject({ code: 'VALIDATION_FAILED' });
+  });
+});
+
+describe('assistant personalisation and usage history', () => {
+  const base = { enabled: false, squireEnabled: true, squireName: 'Pip', allowExternalFallback: false, requestsPerMinutePerUser: 5, dailyTokenBudget: 5000, maxOutputTokens: 256, requestTimeoutMs: 5000 };
+
+  it('defaults to a plain icon, floating button and no motion, and round-trips every option', async () => {
+    const admin = await createTestUser({ role: 'ADMIN' });
+    const actor = { actorId: admin.id, source: 'UI' as const };
+    expect(await getAiSettings()).toMatchObject({ squireAvatar: 'ICON', squireLauncher: 'FLOATING', squireAnimations: false });
+    await updateAiSettings({ ...base, expectedRevision: 0 }, actor);
+    expect(await getAiSettings()).toMatchObject({ squireAvatar: 'ICON', squireLauncher: 'FLOATING', squireAnimations: false });
+    await updateAiSettings({ ...base, squireAvatar: 'KNIGHT', squireLauncher: 'SEARCH_ONLY', squireAnimations: true, expectedRevision: 1 }, actor);
+    expect(await getAiPublicStatus()).toMatchObject({ squireName: 'Pip', squireAvatar: 'KNIGHT', squireLauncher: 'SEARCH_ONLY', squireAnimations: true });
+    await expect(updateAiSettings({ ...base, squireAvatar: 'DRAGON', expectedRevision: 2 }, actor)).rejects.toMatchObject({ code: 'VALIDATION_FAILED' });
+    await expect(updateAiSettings({ ...base, squireLauncher: 'POPUP', expectedRevision: 2 }, actor)).rejects.toMatchObject({ code: 'VALIDATION_FAILED' });
+  });
+
+  it('is constrained in the database too', async () => {
+    await expect(db.$executeRaw`INSERT INTO "AiSettings" ("id", "squireAvatar", "updatedAt") VALUES ('default', 'DRAGON', now())`).rejects.toThrow();
+  });
+
+  it('returns a zero-filled, oldest-first daily history', async () => {
+    const now = new Date('2026-03-10T12:00:00Z');
+    await recordAiUsage({ inputTokens: 10, outputTokens: 5 }, new Date('2026-03-08T01:00:00Z'));
+    await recordAiUsage({ inputTokens: 1, outputTokens: 1 }, new Date('2026-03-10T23:00:00Z'));
+    await recordAiUsage({ inputTokens: 99, outputTokens: 99 }, new Date('2026-02-01T00:00:00Z'));
+    const history = await getUsageHistory(3, now);
+    expect(history).toEqual([
+      { day: '2026-03-08', requests: 1, tokens: 15 },
+      { day: '2026-03-09', requests: 0, tokens: 0 },
+      { day: '2026-03-10', requests: 1, tokens: 2 },
+    ]);
+    expect(await getUsageHistory(0, now)).toHaveLength(1);
+    expect(await getUsageHistory(1000, now)).toHaveLength(90);
   });
 });
 

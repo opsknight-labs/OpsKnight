@@ -9,7 +9,8 @@ import {
   type AiActionState,
 } from '@/app/(app)/settings/intelligence/ai/actions';
 import { Button } from '@/components/ui/shadcn/button';
-import { AI_SETTINGS_BOUNDS } from '@/lib/intelligence/ai/contract';
+import { AI_SETTINGS_BOUNDS, type SquireAvatar, type SquireLauncherStyle } from '@/lib/intelligence/ai/contract';
+import SquireAvatarIcon from '@/components/squire/SquireAvatar';
 
 const initial: AiActionState = { message: '', ok: false };
 const fieldClass = 'w-full rounded-md border border-border bg-background p-2 text-sm';
@@ -51,10 +52,40 @@ function Field({ name, label, help, type = 'text', defaultValue, disabled, min, 
   );
 }
 
+const AVATARS: ReadonlyArray<readonly [SquireAvatar, string]> = [
+  ['ICON', 'Simple icon'],
+  ['KNIGHT', 'Knight'],
+  ['OWL', 'Owl'],
+  ['ROBOT', 'Robot'],
+];
+
+function SelectField({ name, label, defaultValue, disabled, options }: {
+  name: string; label: string; defaultValue: string; disabled: boolean; options: ReadonlyArray<readonly [string, string]>;
+}) {
+  const id = useId();
+  return (
+    <div className="space-y-1">
+      <label htmlFor={id} className="text-sm font-medium">
+        {label}
+      </label>
+      <select id={id} name={name} defaultValue={defaultValue} disabled={disabled} className={fieldClass}>
+        {options.map(([value, text]) => (
+          <option key={value} value={value}>
+            {text}
+          </option>
+        ))}
+      </select>
+    </div>
+  );
+}
+
 type SettingsValues = {
   enabled: boolean;
   squireEnabled: boolean;
   squireName: string;
+  squireAvatar: SquireAvatar;
+  squireLauncher: SquireLauncherStyle;
+  squireAnimations: boolean;
   allowExternalFallback: boolean;
   requestsPerMinutePerUser: number;
   dailyTokenBudget: number;
@@ -73,6 +104,29 @@ export function AiSettingsForm({ settings, canManage }: { settings: SettingsValu
       <Check name="enabled" label="Enable AI" help="Lets the assistant use a language model from the providers below. Off by default; nothing leaves your environment while it is off." defaultChecked={settings.enabled} disabled={disabled} />
       <Check name="squireEnabled" label="Show the assistant" help="Shows the assistant button for signed-in users. It works without AI, using your incident data." defaultChecked={settings.squireEnabled} disabled={disabled} />
       <Field name="squireName" label="Assistant name" help="Shown in the button and the chat. Letters, numbers, spaces, apostrophes, dots and hyphens." defaultValue={settings.squireName} disabled={disabled} required />
+      <fieldset className="space-y-2" disabled={disabled}>
+        <legend className="text-sm font-medium">Look</legend>
+        <div className="flex flex-wrap gap-2">
+          {AVATARS.map(([kind, label]) => (
+            <label key={kind} className="flex cursor-pointer items-center gap-2 rounded-md border border-border px-3 py-2 text-sm has-[:checked]:border-primary has-[:checked]:bg-primary/5">
+              <input type="radio" name="squireAvatar" value={kind} defaultChecked={settings.squireAvatar === kind} className="h-4 w-4" />
+              <SquireAvatarIcon kind={kind} size="md" />
+              <span>{label}</span>
+            </label>
+          ))}
+        </div>
+      </fieldset>
+      <SelectField
+        name="squireLauncher"
+        label="Where people find it"
+        defaultValue={settings.squireLauncher}
+        disabled={disabled}
+        options={[
+          ['FLOATING', 'Floating button in the corner, plus global search'],
+          ['SEARCH_ONLY', 'Global search and incident pages only (no floating button)'],
+        ]}
+      />
+      <Check name="squireAnimations" label="Gentle animation" help="A small idle motion on the mascot. Always off for people whose system asks for reduced motion." defaultChecked={settings.squireAnimations} disabled={disabled} />
       <Check name="allowExternalFallback" label="Allow fallback from self-hosted to external providers" help="Off keeps data on your own infrastructure when a self-hosted model is down; the assistant then answers without AI." defaultChecked={settings.allowExternalFallback} disabled={disabled} />
       <div className="grid gap-4 sm:grid-cols-2">
         <Field name="requestsPerMinutePerUser" label="Requests per minute, per user" type="number" min={b.requestsPerMinute.min} max={b.requestsPerMinute.max} defaultValue={settings.requestsPerMinutePerUser} disabled={disabled} required />

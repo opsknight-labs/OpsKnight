@@ -40,16 +40,21 @@ describe('POST /api/intelligence/squire', () => {
     expect(turns.run).toHaveBeenCalledWith({ id: 'u1', role: 'ADMIN' }, { message: 'hello', history: [] }, expect.any(AbortSignal));
   });
 
-  it('rejects cross-origin requests, non-JSON bodies and anonymous callers before doing any work', async () => {
-    expect((await POST(make({ message: 'x' }, { origin: 'https://evil.example' }))).status).toBe(403);
+  it('rejects cross-site requests, non-JSON bodies and anonymous callers before doing any work', async () => {
+    expect((await POST(make({ message: 'x' }, { 'sec-fetch-site': 'cross-site', origin: 'https://evil.example' }))).status).toBe(403);
+    // A sibling subdomain is also refused: it could be a different, less trusted application.
+    expect((await POST(make({ message: 'x' }, { 'sec-fetch-site': 'same-site' }))).status).toBe(403);
     expect((await POST(make({ message: 'x' }, { 'content-type': 'text/plain' }))).status).toBe(415);
     actor.get.mockRejectedValueOnce(new Error('no session'));
     expect((await POST(make({ message: 'x' }))).status).toBe(401);
     expect(turns.run).not.toHaveBeenCalled();
   });
 
-  it('allows a same-origin Origin header', async () => {
-    expect((await POST(make({ message: 'x' }, { origin: 'http://localhost:3000' }))).status).toBe(200);
+  it('accepts same-origin browser requests even when a proxy changes the host the server sees', async () => {
+    // Browser origin differs from the URL the server was reached on, as behind a reverse proxy.
+    const proxied = make({ message: 'x' }, { 'sec-fetch-site': 'same-origin', origin: 'https://ops.example.com' });
+    expect((await POST(proxied)).status).toBe(200);
+    expect((await POST(make({ message: 'x' }, { 'sec-fetch-site': 'none' }))).status).toBe(200);
   });
 
   it('validates the body strictly and bounds its size', async () => {

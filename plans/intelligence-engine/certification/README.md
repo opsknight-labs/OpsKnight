@@ -27,6 +27,9 @@ See `docs/architecture/intelligence.md`.
 | Prompt injection cannot widen access | `ai-security` red-team test: a model that obeys planted instructions still receives "no access" for another team's incident; credentials in tool output are redacted |
 | Secrets are redacted before egress | `intelligence-ai-gateway-pure` unit tests including adversarial input timing |
 | Spans never carry prompts, answers or error messages | `ai-gateway` tracing test |
+| UI renders and works in a real browser against a production build | `tests/e2e/intelligence-ui.spec.ts` (all five settings sections, incident suggestions and feedback, assistant from the incident panel, launcher and global search, 390 px phone width), run in the PR's Chromium browser job |
+| UI meets WCAG 2.1 AA | axe scans in the same spec over every settings section, the incident cards and the assistant dialog. The first run found a real contrast failure in the assistant, which is fixed |
+| Operators are alerted when it degrades, without paging anyone | warning-only `opsknight.intelligence` rules in `monitoring/prometheus/opsknight-alerts.yaml`, unit-tested with `promtool` in `monitoring/prometheus/intelligence.test.yml` |
 | Authorization matrix and OpenAPI/SDK are in sync | `api-v2-authorization-matrix`, `api-v2-docs-sync`, `api:clients:check` |
 
 ## CI evidence on the pull request
@@ -44,6 +47,12 @@ noted where they explain a change.
 
 The Service automation failure is open work on `main`. This ledger neither fixes nor waives it.
 
+## Operator documentation
+
+`docs/v2.2.0/operate/intelligence/production.md` (deploy, monitor, staged rollout, rollback) and
+`docs/v2.2.0/guides/intelligence/use-suggestions.md` (responders). Both pass the repository's frontmatter and link
+checks.
+
 ## Gates that are NOT passed
 
 | Gate | State |
@@ -54,6 +63,7 @@ The Service automation failure is open work on `main`. This ledger neither fixes
 | **Rollback drill** | Policy rollback and per-service override clearing are tested; a recorded operational drill is not |
 | **Prompt-injection and AI evaluation** | A deterministic red-team test against a scripted model. No evaluation against real models, no labelled answer-quality set |
 | **Independent security review** | Not performed |
+| **Usability with real responders** | Browser-tested and accessibility-scanned, but not yet used by responders on real incidents |
 | **Load of the assistant** | Rate limits and budgets are tested for correctness, not under load |
 
 ## Explicit non-goals of this build

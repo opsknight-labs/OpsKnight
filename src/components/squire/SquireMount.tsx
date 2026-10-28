@@ -4,12 +4,12 @@ import { getCurrentAuthorizationActor } from '@/lib/rbac';
 import { getAiPublicStatus } from '@/lib/intelligence/ai/settings';
 import SquireLauncher from '@/components/squire/SquireLauncher';
 
-async function loadName(): Promise<string | null> {
+async function loadStatus() {
   try {
     const actor = await getCurrentAuthorizationActor();
     if (!hasCapability(actor.role, CAPABILITIES.INTELLIGENCE_SUGGESTIONS_READ)) return null;
     const status = await getAiPublicStatus();
-    return status.squireEnabled ? status.squireName : null;
+    return status.squireEnabled ? status : null;
   } catch (error) {
     logger.debug('[Squire] Not mounted', { error: error instanceof Error ? error.message : String(error) });
     return null;
@@ -22,6 +22,14 @@ async function loadName(): Promise<string | null> {
  * assistant is optional and must never affect the page it sits on.
  */
 export default async function SquireMount() {
-  const name = await loadName();
-  return name ? <SquireLauncher name={name} /> : null;
+  const status = await loadStatus();
+  if (!status) return null;
+  return (
+    <SquireLauncher
+      name={status.squireName}
+      avatar={status.squireAvatar}
+      launcher={status.squireLauncher}
+      animated={status.squireAnimations}
+    />
+  );
 }

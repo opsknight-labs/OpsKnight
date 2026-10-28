@@ -56,6 +56,7 @@ jobs:
           "$tool_dir/promtool" check rules monitoring/prometheus/opsknight-alerts.yaml
           "$tool_dir/promtool" test rules monitoring/prometheus/runbook-maintenance.test.yml
           "$tool_dir/promtool" test rules monitoring/prometheus/ingestion.test.yml
+          "$tool_dir/promtool" test rules monitoring/prometheus/intelligence.test.yml
 
   runbook-ui:
     needs: changes

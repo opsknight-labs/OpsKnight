@@ -8,6 +8,9 @@ import { assertSafeOutboundUrl } from '@/lib/network-security';
 import { parseOrThrow, type IntelligenceActor } from '../settings/service';
 import {
   AI_SETTINGS_DEFAULTS,
+  SQUIRE_AVATARS,
+  type SquireAvatar,
+  type SquireLauncherStyle,
   aiProviderInputSchema,
   aiSettingsInputSchema,
   type AiProviderInput,
@@ -22,6 +25,9 @@ export interface AiSettingsView {
   enabled: boolean;
   squireEnabled: boolean;
   squireName: string;
+  squireAvatar: SquireAvatar;
+  squireLauncher: SquireLauncherStyle;
+  squireAnimations: boolean;
   allowExternalFallback: boolean;
   requestsPerMinutePerUser: number;
   dailyTokenBudget: number;
@@ -35,6 +41,9 @@ const SETTINGS_SELECT = {
   enabled: true,
   squireEnabled: true,
   squireName: true,
+  squireAvatar: true,
+  squireLauncher: true,
+  squireAnimations: true,
   allowExternalFallback: true,
   requestsPerMinutePerUser: true,
   dailyTokenBudget: true,
@@ -43,10 +52,21 @@ const SETTINGS_SELECT = {
   revision: true,
 } as const;
 
+type SettingsRow = Prisma.AiSettingsGetPayload<{ select: typeof SETTINGS_SELECT }>;
+
+/** The columns are CHECK-constrained; anything unexpected still renders as the safe default. */
+function toSettingsView(row: SettingsRow): AiSettingsView {
+  return {
+    ...row,
+    squireAvatar: (SQUIRE_AVATARS as readonly string[]).includes(row.squireAvatar) ? (row.squireAvatar as SquireAvatar) : 'ICON',
+    squireLauncher: row.squireLauncher === 'SEARCH_ONLY' ? 'SEARCH_ONLY' : 'FLOATING',
+  };
+}
+
 /** Reads never write: with no saved row, AI is off and everything uses the safe defaults. */
 export async function getAiSettings(client: Client = prisma): Promise<AiSettingsView> {
   const row = await client.aiSettings.findUnique({ where: { id: 'default' }, select: SETTINGS_SELECT });
-  return row ?? { ...AI_SETTINGS_DEFAULTS, revision: 0 };
+  return row ? toSettingsView(row) : { ...AI_SETTINGS_DEFAULTS, revision: 0 };
 }
 
 const auditSource = (actor: IntelligenceActor) => ({
@@ -61,12 +81,14 @@ export async function updateAiSettings(input: unknown, actor: IntelligenceActor)
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended('ai-settings', 0))`;
     const previous = await getAiSettings(tx);
     if (previous.revision !== expectedRevision) throw new AppError({ code: 'PRECONDITION_FAILED' });
-    const next = await tx.aiSettings.upsert({
-      where: { id: 'default' },
-      create: { ...values, revision: 1, updatedBy: actor.actorId },
-      update: { ...values, revision: { increment: 1 }, updatedBy: actor.actorId },
-      select: SETTINGS_SELECT,
-    });
+    const next = toSettingsView(
+      await tx.aiSettings.upsert({
+        where: { id: 'default' },
+        create: { ...values, revision: 1, updatedBy: actor.actorId },
+        update: { ...values, revision: { increment: 1 }, updatedBy: actor.actorId },
+        select: SETTINGS_SELECT,
+      })
+    );
     await logAudit(
       {
         action: 'intelligence.ai.settings.updated',
@@ -260,5 +282,12 @@ export type GatewayProvider = Awaited<ReturnType<typeof loadProvidersForGateway>
 /** What the browser may know: whether the assistant exists and what it is called. */
 export async function getAiPublicStatus(client: Client = prisma) {
   const settings = await getAiSettings(client);
-  return { squireEnabled: settings.squireEnabled, squireName: settings.squireName, aiEnabled: settings.enabled };
+  return {
+    squireEnabled: settings.squireEnabled,
+    squireName: settings.squireName,
+    squireAvatar: settings.squireAvatar,
+    squireLauncher: settings.squireLauncher,
+    squireAnimations: settings.squireAnimations,
+    aiEnabled: settings.enabled,
+  };
 }

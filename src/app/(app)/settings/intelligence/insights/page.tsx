@@ -32,9 +32,6 @@ export default async function IntelligenceInsightsPage() {
   return (
     <div className="space-y-6">
       <header className="space-y-1">
-        <Link href="/settings/intelligence" className="text-xs text-muted-foreground hover:underline">
-          ← Intelligence
-        </Link>
         <h1 className="text-2xl font-semibold">Insights</h1>
         <p className="text-sm text-muted-foreground">
           What the incident history says about repeated problems and how useful the suggestions are. Flags only: nothing is

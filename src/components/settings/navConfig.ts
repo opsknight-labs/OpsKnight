@@ -103,12 +103,12 @@ export const SETTINGS_NAV_SECTIONS: SettingsNavSection[] = [
         id: 'intelligence',
         label: 'Intelligence',
         description:
-          'Similar past incidents, analysis budgets and policy versions. Off by default and never on the paging path',
+          'Similar incidents, correlation, possible causes, insights and the AI assistant. Off by default and never on the paging path',
         href: '/settings/intelligence',
         icon: 'activity',
         requiresAdminOrAuditor: true,
         badge: 'Admin',
-        keywords: ['aiops', 'intelligence', 'similar incidents', 'correlation', 'noise', 'ai'],
+        keywords: ['aiops', 'intelligence', 'similar incidents', 'correlation', 'noise', 'ai', 'assistant', 'squire', 'llm', 'insights', 'dependencies', 'root cause'],
       },
       {
         id: 'custom-fields',

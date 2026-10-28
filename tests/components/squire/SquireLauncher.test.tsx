@@ -122,6 +122,63 @@ describe('SquireLauncher', () => {
     expect(document.documentElement.dataset.squireName).toBeUndefined();
   });
 
+  it('can hide the floating button while still opening from other entry points', async () => {
+    render(<SquireLauncher name="Pip" launcher="SEARCH_ONLY" />);
+    expect(screen.queryByRole('button', { name: /Ask Pip/ })).toBeNull();
+    window.dispatchEvent(new Event('squire:open'));
+    expect(await screen.findByRole('dialog')).toBeInTheDocument();
+  });
+
+  it('asks a question handed over by another part of the page', async () => {
+    fetchMock.mockResolvedValue(streamOf([{ type: 'delta', text: 'Here is what I found.' }, { type: 'done' }]));
+    nav.pathname = '/incidents/inc_7';
+    render(<SquireLauncher name="Pip" />);
+    window.dispatchEvent(new CustomEvent('squire:open', { detail: { message: 'Have we seen this before?' } }));
+    expect(await screen.findByText('Here is what I found.')).toBeInTheDocument();
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toMatchObject({ message: 'Have we seen this before?', incidentId: 'inc_7' });
+  });
+
+  it('does not lose a request made before the launcher has mounted', async () => {
+    const { openSquire } = await import('@/components/squire/SquireLauncher');
+    fetchMock.mockResolvedValue(streamOf([{ type: 'delta', text: 'Queued answer.' }, { type: 'done' }]));
+    openSquire('Summarise this incident');
+    render(<SquireLauncher name="Pip" />);
+    expect(await screen.findByText('Queued answer.')).toBeInTheDocument();
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toMatchObject({ message: 'Summarise this incident' });
+  });
+
+  it('ignores a malformed hand-off instead of sending it', async () => {
+    render(<SquireLauncher name="Pip" />);
+    window.dispatchEvent(new CustomEvent('squire:open', { detail: { message: { evil: true } } }));
+    expect(await screen.findByRole('dialog')).toBeInTheDocument();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('moves to the other side and remembers the choice', () => {
+    window.localStorage.removeItem('opsknight.squire.side');
+    const { container, unmount } = render(<SquireLauncher name="Pip" />);
+    expect(container.querySelector('[data-side]')!.getAttribute('data-side')).toBe('right');
+    fireEvent.click(screen.getByRole('button', { name: /Ask Pip/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Move Pip to the left side' }));
+    expect(container.querySelector('[data-side]')!.getAttribute('data-side')).toBe('left');
+    unmount();
+    const again = render(<SquireLauncher name="Pip" />);
+    expect(again.container.querySelector('[data-side]')!.getAttribute('data-side')).toBe('left');
+    window.localStorage.removeItem('opsknight.squire.side');
+  });
+
+  it('returns focus to the launcher when closed', () => {
+    render(<SquireLauncher name="Pip" />);
+    fireEvent.click(screen.getByRole('button', { name: /Ask Pip/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Close Pip' }));
+    expect(screen.getByRole('button', { name: /Ask Pip/ })).toHaveFocus();
+  });
+
+  it('shows the chosen mascot', () => {
+    const { container } = render(<SquireLauncher name="Pip" avatar="OWL" />);
+    expect(container.querySelector('[data-avatar="OWL"]')).not.toBeNull();
+  });
+
   it('disables sending an empty message', () => {
     render(<SquireLauncher name="Pip" />);
     fireEvent.click(screen.getByRole('button', { name: /Ask Pip/ }));

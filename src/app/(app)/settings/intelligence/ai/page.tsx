@@ -1,11 +1,11 @@
-import Link from 'next/link';
 import { SettingsSection } from '@/components/settings/layout/SettingsSection';
 import { AiSettingsForm, DeleteProviderButton, ProviderForm, TestProviderButton } from '@/components/settings/AiSettingsForms';
 import { Badge } from '@/components/ui/shadcn/badge';
 import { logger } from '@/lib/logger';
 import { assertCapability } from '@/lib/rbac';
 import { CAPABILITIES, hasCapability, type AppRole } from '@/lib/authorization';
-import { getTodayUsage } from '@/lib/intelligence/ai/budget';
+import { getTodayUsage, getUsageHistory } from '@/lib/intelligence/ai/budget';
+import AiUsageChart from '@/components/settings/AiUsageChart';
 import { getAiSettings, listAiProviders } from '@/lib/intelligence/ai/settings';
 
 export const dynamic = 'force-dynamic';
@@ -23,19 +23,17 @@ async function safely<T>(label: string, load: () => Promise<T>): Promise<T | nul
 export default async function IntelligenceAiPage() {
   const user = await assertCapability(CAPABILITIES.INTELLIGENCE_READ);
   const canManage = hasCapability(user.role as AppRole, CAPABILITIES.INTELLIGENCE_MANAGE);
-  const [settings, providers, usage] = await Promise.all([
+  const [settings, providers, usage, history] = await Promise.all([
     getAiSettings(),
     safely('providers', () => listAiProviders()),
     safely('usage', () => getTodayUsage()),
+    safely('usage history', () => getUsageHistory(14)),
   ]);
   const used = usage ? usage.inputTokens + usage.outputTokens : 0;
 
   return (
     <div className="space-y-6">
       <header className="space-y-1">
-        <Link href="/settings/intelligence" className="text-xs text-muted-foreground hover:underline">
-          ← Intelligence
-        </Link>
         <h1 className="text-2xl font-semibold">Assistant and AI</h1>
         <p className="text-sm text-muted-foreground">
           Configure {settings.squireName}, the in-app assistant, and the language models behind it. Everything is set here: no environment variables.
@@ -51,7 +49,7 @@ export default async function IntelligenceAiPage() {
         <AiSettingsForm settings={settings} canManage={canManage} />
       </SettingsSection>
 
-      <SettingsSection title="Usage today" description="Resets at 00:00 UTC.">
+      <SettingsSection title="Usage" description="Today's totals reset at 00:00 UTC. Red bars reached the daily budget.">
         <div className="grid gap-4 py-3 sm:grid-cols-3">
           <div>
             <p className="text-xs uppercase tracking-wide text-muted-foreground">Requests</p>
@@ -66,6 +64,7 @@ export default async function IntelligenceAiPage() {
             <p className="text-lg font-semibold">{settings.dailyTokenBudget.toLocaleString('en-US')}</p>
           </div>
         </div>
+              {history && <AiUsageChart history={history} budget={settings.dailyTokenBudget} />}
       </SettingsSection>
 
       <SettingsSection title="Providers" description="Tried in priority order. Each provider has its own limit on the data it may receive.">

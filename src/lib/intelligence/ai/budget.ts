@@ -49,3 +49,24 @@ export async function getTodayUsage(now: Date = new Date()) {
   const row = await prisma.aiUsageDay.findUnique({ where: { day: utcDay(now) } });
   return { requests: row?.requests ?? 0, inputTokens: row?.inputTokens ?? 0, outputTokens: row?.outputTokens ?? 0 };
 }
+
+export interface UsageDay {
+  day: string;
+  requests: number;
+  tokens: number;
+}
+
+/** One row per UTC day for the last `days` days, oldest first, with zero-filled gaps. */
+export async function getUsageHistory(days = 14, now: Date = new Date()): Promise<UsageDay[]> {
+  const span = Math.min(Math.max(Math.trunc(days), 1), 90);
+  const keys = Array.from({ length: span }, (_, index) => utcDay(new Date(now.getTime() - (span - 1 - index) * 86_400_000)));
+  const rows = await prisma.aiUsageDay.findMany({
+    where: { day: { gte: keys[0], lte: keys[keys.length - 1] } },
+    select: { day: true, requests: true, inputTokens: true, outputTokens: true },
+  });
+  const byDay = new Map(rows.map(row => [row.day, row]));
+  return keys.map(day => {
+    const row = byDay.get(day);
+    return { day, requests: row?.requests ?? 0, tokens: (row?.inputTokens ?? 0) + (row?.outputTokens ?? 0) };
+  });
+}

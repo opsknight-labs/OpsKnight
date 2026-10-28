@@ -1,5 +1,4 @@
 import { SettingsSection } from '@/components/settings/layout/SettingsSection';
-import Link from 'next/link';
 import {
   IntelligencePolicyForm,
   IntelligenceSettingsForm,
@@ -75,24 +74,10 @@ export default async function IntelligenceSettingsPage() {
       <header className="space-y-1">
         <h1 className="text-2xl font-semibold">Intelligence</h1>
         <p className="text-sm text-muted-foreground">
-          Learns from your incident history to surface similar past incidents. It runs entirely off
-          the paging path: it never delays escalation or notifications, and turning it off restores
-          exactly the previous behaviour.{' '}
-          <Link href="/settings/intelligence/response" className="underline">
-            Dependencies, changes and alert quality
-          </Link>
-          {' · '}
-          <Link href="/settings/intelligence/insights" className="underline">
-            Insights
-          </Link>
-          {' · '}
-          <Link href="/settings/intelligence/services" className="underline">
-            Per-service policies
-          </Link>
-          {' · '}
-          <Link href="/settings/intelligence/ai" className="underline">
-            Assistant and AI
-          </Link>
+          Learns from your incident history to suggest similar past incidents, related incidents,
+          possible causes and runbooks. It runs entirely off the paging path: it never delays escalation
+          or notifications, never changes an incident on its own, and turning it off restores exactly the
+          previous behaviour.
         </p>
       </header>
 
