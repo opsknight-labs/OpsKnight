@@ -73,4 +73,4 @@ The query-profile suite enforces small-fixture statement ceilings (4 discovery, 
 - Optional MCP Apps and stdio bridge, real supported-client consent/read/write/task verification.
 - Database-wide saturation shedding and reproducible performance/fault/HA/deployment certification, backup/restore and production-scale upgrade/rollback evidence. Independent local pool/SQL budgets are implemented; they do not certify shared-database capacity.
 
-Sensitive operations stay unavailable while these boundaries are incomplete. The release workflow deliberately fails its GA gate unless reviewed final-SHA external evidence is supplied; passing local unit tests cannot release this feature.
+Sensitive operations stay unavailable while these boundaries are incomplete. The separate manual MCP release workflow requires reviewed final-SHA evidence attached to the tagged GitHub Release and a protected environment approval. Passing PR automation or local unit tests cannot release this feature.

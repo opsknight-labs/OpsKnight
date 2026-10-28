@@ -1,13 +1,44 @@
 import { createRequire } from 'node:module';
 import { describe, expect, it } from 'vitest';
 
-const { evaluateAudit, validateBaseline } = createRequire(import.meta.url)(
+const { evaluateAudit, validateBaseline, validateAuditReport } = createRequire(import.meta.url)(
   '../../scripts/mcp/audit-gate.cjs'
 ) as typeof import('../../scripts/mcp/audit-gate.cjs');
 
 const vulnerability = (severity: string, ids: string[]) => ({
   severity,
   via: ids.map(id => ({ url: `https://github.com/advisories/${id}`, title: 't' })),
+
+  it('fails closed when npm audit returns an error document or inconsistent counts', () => {
+    expect(() => validateAuditReport({ error: { code: 'ENOAUDIT' } })).toThrow('complete JSON audit report');
+    expect(() => validateAuditReport({
+      vulnerabilities: {},
+      metadata: { vulnerabilities: { info: 0, low: 0, moderate: 0, high: 1, critical: 0, total: 1 } },
+    })).toThrow('counts disagree');
+    expect(() => validateAuditReport({
+      vulnerabilities: { zod: { severity: 'high', via: [] } },
+      metadata: { vulnerabilities: { info: 0, low: 0, moderate: 0, high: 1, critical: 0, total: 1 } },
+    })).toThrow('malformed vulnerability entry');
+  });
+  it('validates direct advisory evidence and permits only traceable transitive rows', () => {
+    const direct = vulnerability('high', ['GHSA-aaaa-bbbb-cccc']);
+    const report = {
+      vulnerabilities: { zod: direct, wrapper: { severity: 'high', via: ['zod'] } },
+      metadata: { vulnerabilities: { info: 0, low: 0, moderate: 0, high: 2, critical: 0, total: 2 } },
+    };
+    expect(validateAuditReport(report)).toBe(report);
+    expect(() => validateAuditReport({
+      vulnerabilities: { wrapper: { severity: 'high', via: ['missing-package'] } },
+      metadata: { vulnerabilities: { info: 0, low: 0, moderate: 0, high: 1, critical: 0, total: 1 } },
+    })).toThrow('no verifiable advisory cause');
+  });
+  it('rejects duplicate baseline advisory IDs rather than silently shadowing the earlier entry', () => {
+    expect(() => validateBaseline({ advisories: [
+      entry('GHSA-aaaa-bbbb-cccc'),
+      entry('GHSA-aaaa-bbbb-cccc', { expires: '2027-02-01' }),
+    ] })).toThrow('Duplicate advisory id');
+  });
+
 });
 const entry = (id: string, extra: Record<string, string> = {}) => ({
   id,

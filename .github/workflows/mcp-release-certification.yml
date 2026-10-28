@@ -1,0 +1,96 @@
+name: Enterprise MCP release certification
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Published or draft release tag to certify (for example v2.2.0)
+        required: true
+        type: string
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: mcp-release-${{ inputs.release_tag }}
+  cancel-in-progress: false
+jobs:
+  prepare:
+    name: Validate release evidence
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    outputs:
+      release_tag: ${{ steps.release.outputs.tag }}
+      source_sha: ${{ steps.release.outputs.sha }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+          fetch-depth: 0
+      - name: Require dispatch from main
+        run: |
+          if [ "$GITHUB_REF" != "refs/heads/main" ]; then
+            echo "::error::Dispatch this workflow from the protected main branch."
+            exit 1
+          fi
+      - name: Resolve release tag and exact source SHA
+        id: release
+        env:
+          RELEASE_TAG: ${{ inputs.release_tag }}
+        run: |
+          set -euo pipefail
+          if ! [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+            echo "::error::Release tag must use vMAJOR.MINOR.PATCH with an optional prerelease suffix."
+            exit 1
+          fi
+          git check-ref-format "refs/tags/$RELEASE_TAG"
+          git fetch --no-tags origin "refs/tags/$RELEASE_TAG:refs/tags/$RELEASE_TAG"
+          SOURCE_SHA="$(git rev-parse "refs/tags/$RELEASE_TAG^{commit}")"
+          if ! git merge-base --is-ancestor "$SOURCE_SHA" origin/main; then
+            echo "::error::Release tag does not point to a commit reachable from main."
+            exit 1
+          fi
+          git checkout --detach "$SOURCE_SHA"
+          echo "tag=$RELEASE_TAG" >> "$GITHUB_OUTPUT"
+          echo "sha=$SOURCE_SHA" >> "$GITHUB_OUTPUT"
+      - name: Download release evidence manifest
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/mcp-release-evidence"
+          gh release download "$RELEASE_TAG" \
+            --repo "$GITHUB_REPOSITORY" \
+            --pattern "mcp-release-evidence.json" \
+            --dir "$RUNNER_TEMP/mcp-release-evidence"
+          test -s "$RUNNER_TEMP/mcp-release-evidence/mcp-release-evidence.json"
+      - name: Validate evidence before requesting protected approval
+        env:
+          MCP_RELEASE_EVIDENCE: ${{ runner.temp }}/mcp-release-evidence/mcp-release-evidence.json
+        run: node scripts/mcp/certify.cjs
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mcp-release-evidence
+          path: ${{ runner.temp }}/mcp-release-evidence/mcp-release-evidence.json
+          if-no-files-found: error
+          retention-days: 90
+  certify:
+    needs: prepare
+    name: Protected MCP GA certification
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: mcp-release-certification
+      url: https://github.com/${{ github.repository }}/releases/tag/${{ needs.prepare.outputs.release_tag }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.prepare.outputs.source_sha }}
+          fetch-depth: 0
+      - uses: actions/download-artifact@v4
+        with:
+          name: mcp-release-evidence
+          path: ${{ runner.temp }}/mcp-release-evidence
+      - name: Revalidate evidence after protected approval
+        env:
+          MCP_RELEASE_EVIDENCE: ${{ runner.temp }}/mcp-release-evidence/mcp-release-evidence.json
+        run: node scripts/mcp/certify.cjs

@@ -14,6 +14,10 @@ export default async function McpSettings({
   searchParams: Promise<{ cursor?: string; q?: string }>;
 }) {
   const permissions = await getUserPermissions();
+  const configurationIssues = mcpConfigurationIssues();
+  const remoteEndpoint = configurationIssues.some(issue => issue.startsWith('MCP_PUBLIC_ORIGIN'))
+    ? 'Not configured'
+    : mcpResource();
   requireMcp(permissions.authenticated, 'MCP_LOGIN_REQUIRED', 401);
   const { cursor, q = '' } = await searchParams;
   requireMcp(!cursor || /^[A-Za-z0-9_-]{1,128}$/.test(cursor), 'MCP_INVALID_CURSOR');
@@ -63,7 +67,7 @@ export default async function McpSettings({
           Search
         </button>
       </form>
-      {permissions.isAdmin && mcpConfigurationIssues().length > 0 && (
+      {permissions.isAdmin && configurationIssues.length > 0 && (
         <section
           className="rounded-lg border border-destructive p-4 space-y-1"
           role="alert"
@@ -71,7 +75,7 @@ export default async function McpSettings({
         >
           <h2 className="font-semibold">MCP cannot be enabled yet</h2>
           <ul className="list-disc pl-5">
-            {mcpConfigurationIssues().map(issue => (
+            {configurationIssues.map(issue => (
               <li key={issue}>{issue}</li>
             ))}
           </ul>
@@ -82,7 +86,7 @@ export default async function McpSettings({
           <strong>Status:</strong> {policy?.enabled ? 'Enabled' : 'Disabled'}
         </p>
         <p className="break-all">
-          <strong>Remote endpoint:</strong> <code>{mcpResource()}</code>
+          <strong>Remote endpoint:</strong> <code>{remoteEndpoint}</code>
         </p>
         <p>
           Protocol: 2026-07-28. Register a client, use authorization code with PKCE S256, then

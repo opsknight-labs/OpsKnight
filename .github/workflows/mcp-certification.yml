@@ -1,4 +1,4 @@
-name: Enterprise MCP certification
+name: Enterprise MCP PR validation
 on:
   pull_request:
     paths:
@@ -22,6 +22,8 @@ on:
       - 'scripts/mcp/**'
       - 'package*.json'
       - '.github/workflows/mcp-certification.yml'
+      - '.github/workflows/mcp-release-certification.yml'
+      - 'docs/v2.2.0/operate/mcp/**'
   workflow_dispatch:
 permissions:
   contents: read
@@ -30,6 +32,7 @@ concurrency:
   cancel-in-progress: true
 jobs:
   contract-security:
+    name: MCP PR validation
     runs-on: ubuntu-latest
     timeout-minutes: 30
     services:
@@ -126,10 +129,3 @@ jobs:
         with:
           name: mcp-evidence-${{ github.sha }}
           path: ${{ runner.temp }}/mcp-evidence
-  release-gates:
-    needs: contract-security
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-      - name: Block GA until every required live gate has reviewed evidence
-        run: node scripts/mcp/certify.cjs

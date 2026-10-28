@@ -37,12 +37,19 @@ export function mcpConfigurationIssues(env: NodeJS.ProcessEnv = process.env) {
   const key = env.MCP_TOKEN_HASH_SECRET;
   if (!key || Buffer.byteLength(key) < 32)
     issues.push('MCP_TOKEN_HASH_SECRET must be a random secret of at least 32 bytes.');
-  try {
-    mcpOrigin(env);
-  } catch {
+  const configuredOrigin = env.MCP_PUBLIC_ORIGIN ?? env.NEXTAUTH_URL;
+  if (!configuredOrigin && env.NODE_ENV === 'production') {
     issues.push(
-      'MCP_PUBLIC_ORIGIN (or NEXTAUTH_URL) must be an HTTPS origin without a path; HTTP is allowed only on loopback.'
+      'MCP_PUBLIC_ORIGIN or NEXTAUTH_URL must be explicitly configured in production; localhost fallback is development-only.'
     );
+  } else {
+    try {
+      mcpOrigin(env);
+    } catch {
+      issues.push(
+        'MCP_PUBLIC_ORIGIN (or NEXTAUTH_URL) must be an HTTPS origin without a path; HTTP is allowed only on loopback.'
+      );
+    }
   }
   return issues;
 }

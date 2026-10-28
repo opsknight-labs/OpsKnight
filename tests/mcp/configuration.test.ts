@@ -36,4 +36,14 @@ describe('MCP configuration diagnostics', () => {
     mcpConfigurationIssues({} as NodeJS.ProcessEnv);
     expect(process.env).toBe(before);
   });
+
+  it('does not allow production to silently use the localhost origin fallback', () => {
+    const issues = mcpConfigurationIssues({
+      NODE_ENV: 'production',
+      MCP_TOKEN_HASH_SECRET: 'a'.repeat(32),
+    } as unknown as NodeJS.ProcessEnv);
+    expect(issues).toHaveLength(1);
+    expect(issues[0]).toContain('MCP_PUBLIC_ORIGIN or NEXTAUTH_URL');
+  });
+
 });
