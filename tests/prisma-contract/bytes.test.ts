@@ -62,7 +62,7 @@ describe('Bytes columns', () => {
   it('accepts Uint8Array and empty input on write', async () => {
     await prisma.userAvatar.update({
       where: { userId: `${RUN}-user` },
-      data: { data: new Uint8Array([0, 1, 2, 254, 255]) as Buffer },
+      data: { data: new Uint8Array([0, 1, 2, 254, 255]) },
     });
     golden.observe(
       'model.uint8ArrayWrite',

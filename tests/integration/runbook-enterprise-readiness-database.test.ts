@@ -29,7 +29,7 @@ import { getServiceRulePage } from '@/lib/runbooks/service-rule-page';
 
 const suite = process.env.VITEST_USE_REAL_DB === '1' ? describe : describe.skip;
 const leaseToken = 'enterprise-fixture-lease-token-012345678901234567890';
-const sha = (value: string | Buffer) => createHash('sha256').update(value).digest('hex');
+const sha = (value: string | Uint8Array) => createHash('sha256').update(value).digest('hex');
 suite('enterprise deadline, output and pagination contracts (real PostgreSQL)', () => {
   beforeEach(resetDatabase, 30000);
   async function fixture(future = false, malformed = false, withVerification = false) {

@@ -15,4 +15,13 @@ describe('status-page logo validation', () => {
     expect(parseStatusPageLogo(`data:image/png;base64,${Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]).toString('base64')}`)).toBeNull();
     expect(parseStatusPageLogo(`data:image/svg+xml;base64,${Buffer.from('<svg onload="alert(1)"/>').toString('base64')}`)).toBeNull();
   });
+
+  it('validates bytes read back from the database as Uint8Array, including offset views', () => {
+    const bytes = Buffer.from(png, 'base64');
+    expect(isValidStatusPageLogoBytes('image/png', new Uint8Array(bytes))).toBe(true);
+    const padded = new Uint8Array(bytes.length + 4);
+    padded.set(bytes, 2);
+    expect(isValidStatusPageLogoBytes('image/png', padded.subarray(2, 2 + bytes.length))).toBe(true);
+    expect(isValidStatusPageLogoBytes('image/jpeg', new Uint8Array(bytes))).toBe(false);
+  });
 });

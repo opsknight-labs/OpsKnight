@@ -20,7 +20,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       return new NextResponse(null, { status: 404 });
     }
 
-    // Convert Buffer to Uint8Array for NextResponse compatibility
+    // Prisma returns Bytes as Uint8Array; copy into a standalone body for NextResponse.
     const uint8Array = new Uint8Array(userAvatar.data);
 
     const ALLOWED_MIME_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
