@@ -30,6 +30,10 @@ documentation can help locate a topic, but it is never authoritative.
 
 ## Respond and operate
 
+- [Understand service automation](./concepts/service-automation),
+  [configure and roll it out](./guides/services/service-automation), and review
+  its [exact contracts](./reference/service-automation).
+
 - [Understand Runbook safety](./concepts/runbooks) and follow the
   [Runbooks guides](./guides/runbooks/) to author, bind, and execute workflows.
 - [Install outbound Agents](./operate/deploy/agent-operations), manage
