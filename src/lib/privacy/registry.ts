@@ -281,6 +281,7 @@ export const personalDataRegistry = [
     domain: 'intelligence',
     models: [
       'IncidentFingerprint',
+      'IncidentEmbedding',
       'CorrelationGroup',
       'CorrelationMember',
       'CorrelationDecisionEvent',
@@ -299,6 +300,7 @@ export const personalDataRegistry = [
       'IncidentFingerprint.template',
       'IncidentFingerprint.tokens',
       'IncidentFingerprint.labels',
+      'IncidentEmbedding.vector',
       'IntelligenceFinding.evidence',
       'IntelligenceFeedback.note',
       'IntelligenceFeedback.actorId',
@@ -311,6 +313,7 @@ export const personalDataRegistry = [
     ],
     purpose: [
       'Similar-incident suggestions',
+      'Optional semantic (embedding) search over masked incident titles',
       'Correlation and noise analysis',
       'Responder feedback on suggestions',
       'Policy change history',
@@ -326,7 +329,7 @@ export const personalDataRegistry = [
     },
     discoverable: 'PARTIAL',
     notes: [
-      'Derived data only; incidents and alerts remain the source of truth and are never modified. Fingerprint templates are masked copies of incident titles and can still contain customer identifiers typed by operators. Label values drop credential-shaped fields, and finding evidence stores numeric scores only, never text from another incident. Feedback and policy authorship use foreign keys that clear to null when a user is erased; free-text feedback notes need manual review.',
+      'Derived data only; incidents and alerts remain the source of truth and are never modified. Fingerprint templates are masked copies of incident titles and can still contain customer identifiers typed by operators. Label values drop credential-shaped fields, and finding evidence stores numeric scores only, never text from another incident. When an administrator turns on semantic search, masked titles are sent to the configured embedding provider (only one allowed to receive INTERNAL data) and the returned vectors are stored with fingerprint retention. Feedback and policy authorship use foreign keys that clear to null when a user is erased; free-text feedback notes need manual review.',
     ],
   },
   {

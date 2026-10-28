@@ -19,6 +19,8 @@ export const WORK_KINDS = {
   ANALYZE_INCIDENT: 'ANALYZE_INCIDENT',
   CORRELATE_INCIDENT: 'CORRELATE_INCIDENT',
   ANALYZE_RESPONSE: 'ANALYZE_RESPONSE',
+  /** One coalesced item: embeds a bounded batch of pending incidents per provider call. */
+  EMBED_PENDING: 'EMBED_PENDING',
 } as const;
 export type WorkKind = (typeof WORK_KINDS)[keyof typeof WORK_KINDS];
 
@@ -28,6 +30,7 @@ export const WORK_PRIORITY: Record<WorkKind, number> = {
   ANALYZE_INCIDENT: 20,
   CORRELATE_INCIDENT: 25,
   ANALYZE_RESPONSE: 30,
+  EMBED_PENDING: 40,
 };
 
 export const MAX_WORK_ATTEMPTS = 8;

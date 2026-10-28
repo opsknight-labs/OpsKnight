@@ -89,10 +89,10 @@ domains:
     deletion: { current: manual-review-preserve-immutable-routing-evidence, target: approved-subject-attribution-and-minimization }
 
   - domain: intelligence
-    data: [masked-incident-titles, content-tokens, credential-filtered-labels, numeric-match-evidence, feedback-notes, feedback-and-policy-authorship, work-item-errors, service-dependency-graph, operator-supplied-change-summaries]
-    purpose: [similar-incident-suggestions, correlation-and-noise-analysis, suggestion-feedback, policy-history, probable-cause-and-runbook-recommendations]
+    data: [masked-incident-titles, masked-title-embedding-vectors, content-tokens, credential-filtered-labels, numeric-match-evidence, feedback-notes, feedback-and-policy-authorship, work-item-errors, service-dependency-graph, operator-supplied-change-summaries]
+    purpose: [similar-incident-suggestions, optional-semantic-search, correlation-and-noise-analysis, suggestion-feedback, policy-history, probable-cause-and-runbook-recommendations]
     storage: [postgresql]
-    recipients: [authorized-workspace-users-limited-to-incidents-they-can-read]
+    recipients: [authorized-workspace-users-limited-to-incidents-they-can-read, administrator-configured-embedding-provider-when-semantic-search-is-on]
     retention: { current: ui-configured-per-entity-with-incident-cascade-and-sweep-while-disabled, target: retention-holds-honoured-and-free-text-minimization }
     exportable: partial
     deletion: { current: authorship-cleared-on-user-erasure-and-rows-deleted-with-incident, target: free-text-feedback-manual-review }

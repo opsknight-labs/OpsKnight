@@ -5,6 +5,7 @@ import { resolveEffectivePolicy, type IntelligenceSettingsView } from '../settin
 import type { ClaimedWorkItem } from '../jobs/work-queue';
 import { replaceSimilarFindings } from './findings';
 import { findSimilarIncidents } from './retrieval';
+import { currentEmbeddingModel } from '../semantic/embedder';
 
 export const SIMILAR_RESULT_LIMIT = 5;
 
@@ -40,6 +41,7 @@ export async function analyzeIncident(
     minScore: policy.definition.similarity.minScore,
     limit: SIMILAR_RESULT_LIMIT,
     maxDbMs: settings.maxDbMs,
+    semanticModel: await currentEmbeddingModel().catch(() => null),
   });
   if (!similar) throw new Error('Incident fingerprint disappeared during analysis');
 

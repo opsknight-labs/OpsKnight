@@ -1435,6 +1435,7 @@ model Incident {
   tags                                IncidentTag[]
   actionItemRecords                   ActionItem[]
   intelligenceFingerprint             IncidentFingerprint?
+  intelligenceEmbedding               IncidentEmbedding?
   correlationMemberships              CorrelationMember[]
   correlationAnchoredGroups           CorrelationGroup[]
   relationshipsAsSource               IncidentRelationship[]       @relation("IncidentRelationshipSource")
@@ -5306,4 +5307,22 @@ model AiPromptGuidance {
   revision  Int      @default(1)
   updatedBy String?
   updatedAt DateTime @updatedAt
+}
+
+// Semantic vector for an incident's masked title, unit-normalised so similarity is a dot product. Derived data:
+// rebuilt on demand, ignored when the configured embedding model changes, and removed with its incident.
+model IncidentEmbedding {
+  incidentId        String   @id
+  incident          Incident @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+  serviceId         String
+  model             String
+  /// Hash of the embedded text, so an unchanged incident is never embedded twice.
+  sourceHash        String
+  dims              Int
+  vector            Float[]  @db.Real
+  incidentCreatedAt DateTime
+  createdAt         DateTime @default(now())
+
+  @@index([model, incidentCreatedAt(sort: Desc)], map: "idx_incident_embedding_model_recent")
+  @@index([incidentCreatedAt], map: "idx_incident_embedding_retention")
 }

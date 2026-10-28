@@ -507,7 +507,7 @@ export async function resolveGatewayEmbedding(dataClass: AiDataClass): Promise<E
   const candidates = selectProviderChain(
     providers.filter(provider => Boolean(provider.embeddingModel)),
     dataClass,
-    { allowExternalFallback: true, allowedRegions: settings.allowedDataRegions }
+    { allowExternalFallback: settings.allowExternalFallback, allowedRegions: settings.allowedDataRegions }
   );
   const chosen = candidates.find(provider => breakers.canAttempt(provider.id));
   return chosen ? new GatewayEmbeddingPort(chosen, settings) : null;

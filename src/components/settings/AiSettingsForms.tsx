@@ -149,7 +149,7 @@ export function AiSettingsForm({ settings, canManage }: { settings: SettingsValu
       <Check
         name="embeddingsEnabled"
         label="Semantic search for similar incidents"
-        help="Sends incident titles to a provider with an embedding model to find similar incidents by meaning, not just wording. Needs a provider with an embedding model."
+        help="Sends masked incident titles (numbers and identifiers removed) to a provider with an embedding model, to find similar incidents by meaning, not just wording. Vectors follow fingerprint retention."
         defaultChecked={settings.embeddingsEnabled}
         disabled={disabled}
       />

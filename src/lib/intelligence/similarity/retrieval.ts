@@ -1,6 +1,8 @@
 import 'server-only';
 import { Prisma } from '@prisma/client';
+import { logger } from '@/lib/logger';
 import { withDbBudget } from '../jobs/db-budget';
+import { semanticNeighbours } from '../semantic/search';
 import { detectCapabilities, type SimilarityTier } from './capabilities';
 import { scoreSimilarity, type SimilarityComponents, type SimilarityFingerprint } from './scoring';
 
@@ -12,7 +14,13 @@ export interface SimilarityOptions {
   limit: number;
   maxDbMs: number;
   now?: Date;
+  /** The current embedding model; when set, semantic neighbours are added and scored. */
+  semanticModel?: string | null;
 }
+
+/** Most-recent vectors compared per search, as a multiple of the per-source candidate cap. */
+const SEMANTIC_SCAN_MULTIPLIER = 10;
+const MAX_SEMANTIC_SCAN = 2000;
 
 export interface SimilarIncident {
   incidentId: string;
@@ -66,7 +74,7 @@ export async function findSimilarIncidents(
   const lowerBound = new Date(now.getTime() - options.lookbackDays * 86_400_000);
   const capabilities = await detectCapabilities();
 
-  return withDbBudget({ maxDbMs: options.maxDbMs }, async tx => {
+  const lexical = await withDbBudget({ maxDbMs: options.maxDbMs }, async tx => {
     const source = await tx.incidentFingerprint.findUnique({ where: { incidentId } });
     if (!source) return null;
     const query = toFingerprint({ ...source, incidentId });
@@ -111,9 +119,33 @@ export async function findSimilarIncidents(
       );
     }
 
-    if (candidateIds.size === 0) {
-      return { tier: capabilities.similarityTier, candidatesEvaluated: 0, results: [] };
-    }
+    return { query, candidateIds };
+  });
+  if (!lexical) return null;
+  const { query, candidateIds } = lexical;
+
+  const cosines = options.semanticModel
+    ? await semanticNeighbours(incidentId, {
+        model: options.semanticModel,
+        lowerBound,
+        limit: options.candidateCap,
+        scanLimit: Math.min(MAX_SEMANTIC_SCAN, options.candidateCap * SEMANTIC_SCAN_MULTIPLIER),
+        alsoScore: [...candidateIds],
+        maxDbMs: options.maxDbMs,
+      }).catch(error => {
+        // Semantic search is an enhancement: on any failure the lexical results stand alone.
+        logger.warn('[Intelligence] Semantic search failed; using lexical similarity only', {
+          error: error instanceof Error ? error.message : String(error),
+        });
+        return new Map<string, number>();
+      })
+    : new Map<string, number>();
+  for (const id of cosines.keys()) candidateIds.add(id);
+
+  if (candidateIds.size === 0) {
+    return { tier: capabilities.similarityTier, candidatesEvaluated: 0, results: [] };
+  }
+  return withDbBudget({ maxDbMs: options.maxDbMs }, async tx => {
     const candidates = await tx.incidentFingerprint.findMany({
       where: { incidentId: { in: [...candidateIds] } },
     });
@@ -122,7 +154,7 @@ export async function findSimilarIncidents(
       .map(candidate => ({
         incidentId: candidate.incidentId,
         createdAt: candidate.incidentCreatedAt,
-        ...scoreSimilarity(query, toFingerprint(candidate), now),
+        ...scoreSimilarity(query, toFingerprint(candidate), now, cosines.get(candidate.incidentId)),
       }))
       .filter(result => result.score >= options.minScore)
       .sort(

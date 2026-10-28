@@ -25,6 +25,8 @@ export type SimilarityComponents = {
   recency: number;
   /** Resolved incidents carry a known outcome and are more useful as precedent. */
   resolved: number;
+  /** Cosine similarity of the two titles' embeddings, present only when semantic search is on. */
+  semantic?: number;
 };
 
 export interface SimilarityScore {
@@ -44,6 +46,17 @@ export const SIMILARITY_WEIGHTS = {
 export const RECENCY_HALF_LIFE_DAYS = 30;
 /** Below this, shared boilerplate (" on", "-<num>") is noise, not a match. */
 export const MIN_CONTENT_SIMILARITY = 0.15;
+/**
+ * Embedding cosine below this is treated as no semantic signal. Unrelated short texts commonly score
+ * 0.3-0.7 depending on the model, so only the top of the range counts, and it is rescaled to 0-1.
+ */
+export const SEMANTIC_FLOOR = 0.7;
+
+/** The part of a raw embedding cosine that counts as content similarity (0 when absent). */
+export function semanticContent(cosine: number | undefined): number {
+  if (cosine === undefined || !Number.isFinite(cosine)) return 0;
+  return Math.min(1, Math.max(0, (cosine - SEMANTIC_FLOOR) / (1 - SEMANTIC_FLOOR)));
+}
 
 function trigrams(text: string): Set<string> {
   const result = new Set<string>();
@@ -80,7 +93,8 @@ const round = (value: number) => Math.round(value * 1000) / 1000;
 export function scoreSimilarity(
   query: SimilarityFingerprint,
   candidate: SimilarityFingerprint,
-  now: Date = new Date()
+  now: Date = new Date(),
+  semantic?: number
 ): SimilarityScore {
   const tokens = jaccard(new Set(query.tokens), new Set(candidate.tokens));
   const template = trigramSimilarity(query.template, candidate.template);
@@ -92,10 +106,12 @@ export function scoreSimilarity(
     sameService: query.serviceId === candidate.serviceId ? 1 : 0,
     recency: round(recencyFactor(candidate.incidentCreatedAt, now)),
     resolved: candidate.resolvedAt ? 1 : 0,
+    ...(semantic !== undefined && Number.isFinite(semantic) ? { semantic: round(semantic) } : {}),
   };
   // Content similarity must be present for any match: service, recency and outcome only break ties
-  // between genuinely similar incidents and can never manufacture a match on their own.
-  const content = Math.max(components.tokens, components.template);
+  // between genuinely similar incidents and can never manufacture a match on their own. Meaning from
+  // embeddings can raise content similarity (different words, same problem) but never lower it.
+  const content = Math.max(components.tokens, components.template, semanticContent(components.semantic));
   if (content < MIN_CONTENT_SIMILARITY) return { score: 0, components, matchedTokenCount: tokens.shared };
 
   // When neither incident carries labels the label signal does not exist, so its weight is removed

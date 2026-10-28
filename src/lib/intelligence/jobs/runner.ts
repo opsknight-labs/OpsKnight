@@ -11,6 +11,7 @@ import { analyzeIncident } from '../similarity/analyzer';
 import { correlateIncident, shouldCorrelate } from '../correlation/handler';
 import { OBSERVE_INTERVAL_MS, suggestObservedDependencies } from '../dependencies/observer';
 import { analyzeResponse, shouldAnalyzeResponse } from '../response/handler';
+import { currentEmbeddingModel, embedIncidents, EMBED_BATCH_SIZE, EMBED_INTERVAL_MS, findIncidentsToEmbed } from '../semantic/embedder';
 import {
   claimWorkItems,
   completeWorkItem,
@@ -61,17 +62,39 @@ export const DEFAULT_HANDLERS: WorkHandlers = {
   [WORK_KINDS.ANALYZE_INCIDENT]: async (item, { settings }) => {
     await analyzeIncident(item, settings);
   },
+  // Semantic search is optional and never sits in front of analysis: incidents are analysed lexically
+  // straight away, then re-analysed once their vector exists, so a slow or failing embedding provider
+  // only delays the semantic signal. One provider call per pass, however many incidents arrive.
+  [WORK_KINDS.EMBED_PENDING]: async (_item, { signal }) => {
+    const model = await currentEmbeddingModel();
+    if (!model) return;
+    const pending = await findIncidentsToEmbed(model);
+    if (pending.length === 0) return;
+    const outcome = await embedIncidents(pending, signal);
+    if (outcome.status !== 'done') return;
+    const next: Array<{ kind: WorkKind; subjectKey: string }> = outcome.embedded.map(id => ({
+      kind: WORK_KINDS.ANALYZE_INCIDENT,
+      subjectKey: id,
+    }));
+    if (pending.length >= EMBED_BATCH_SIZE && outcome.embedded.length > 0) {
+      next.push({ kind: WORK_KINDS.EMBED_PENDING, subjectKey: SEMANTIC_SUBJECT });
+    }
+    await enqueueWorkItems(next);
+  },
 };
+
+const SEMANTIC_SUBJECT = 'pending';
 
 export interface LaneState {
   pause: PauseState;
   lastReconcileAt: number;
   lastRetentionAt: number;
   lastObserveAt: number;
+  lastEmbedAt: number;
 }
 
 export function createLaneState(): LaneState {
-  return { pause: { paused: false }, lastReconcileAt: 0, lastRetentionAt: 0, lastObserveAt: 0 };
+  return { pause: { paused: false }, lastReconcileAt: 0, lastRetentionAt: 0, lastObserveAt: 0, lastEmbedAt: 0 };
 }
 
 export interface CycleResult {
@@ -220,6 +243,20 @@ export async function runIntelligenceCycle(
         await suggestObservedDependencies(settings, new Date(now()));
       } catch (error) {
         logger.warn('[Intelligence] Dependency observation failed; will retry', {
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
+
+    // Cheap when semantic search is off: the model lookup is cached and nothing is enqueued.
+    if (handlers[WORK_KINDS.EMBED_PENDING] && now() - state.lastEmbedAt >= EMBED_INTERVAL_MS) {
+      state.lastEmbedAt = now();
+      try {
+        if (await currentEmbeddingModel()) {
+          await enqueueWorkItems([{ kind: WORK_KINDS.EMBED_PENDING, subjectKey: SEMANTIC_SUBJECT }]);
+        }
+      } catch (error) {
+        logger.warn('[Intelligence] Could not schedule semantic indexing; will retry', {
           error: error instanceof Error ? error.message : String(error),
         });
       }

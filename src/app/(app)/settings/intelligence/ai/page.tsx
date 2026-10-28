@@ -8,6 +8,7 @@ import { getTodayUsage, getUsageHistory } from '@/lib/intelligence/ai/budget';
 import AiUsageChart from '@/components/settings/AiUsageChart';
 import { getAiSettings, listAiProviders } from '@/lib/intelligence/ai/settings';
 import { BUILT_IN_PROMPTS, listGuidance, promptHash } from '@/lib/intelligence/ai/prompts';
+import { getSemanticIndexStatus } from '@/lib/intelligence/semantic/embedder';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -30,7 +31,10 @@ export default async function IntelligenceAiPage() {
     safely('usage', () => getTodayUsage()),
     safely('usage history', () => getUsageHistory(14)),
   ]);
-  const guidance = await safely('prompt guidance', () => listGuidance());
+  const [guidance, semantic] = await Promise.all([
+    safely('prompt guidance', () => listGuidance()),
+    settings.embeddingsEnabled ? safely('semantic index', () => getSemanticIndexStatus()) : Promise.resolve(null),
+  ]);
   const used = usage ? usage.inputTokens + usage.outputTokens : 0;
 
   return (
@@ -68,6 +72,38 @@ export default async function IntelligenceAiPage() {
         </div>
               {history && <AiUsageChart history={history} budget={settings.dailyTokenBudget} />}
       </SettingsSection>
+
+      {settings.embeddingsEnabled && (
+        <SettingsSection
+          title="Semantic search"
+          description="Similar incidents are found by meaning as well as wording. New incidents are indexed in the background within about a minute; matching never waits for it."
+        >
+          {semantic?.model ? (
+            <dl className="grid gap-4 py-3 sm:grid-cols-3">
+              <div>
+                <dt className="text-xs uppercase tracking-wide text-muted-foreground">Model</dt>
+                <dd className="break-all text-sm font-medium">{semantic.model}</dd>
+              </div>
+              <div>
+                <dt className="text-xs uppercase tracking-wide text-muted-foreground">Indexed incidents</dt>
+                <dd className="text-lg font-semibold">{semantic.indexed.toLocaleString('en-US')}</dd>
+              </div>
+              <div>
+                <dt className="text-xs uppercase tracking-wide text-muted-foreground">Waiting (last 30 days)</dt>
+                <dd className="text-lg font-semibold">
+                  {semantic.pending >= 1000 ? '1,000+' : semantic.pending.toLocaleString('en-US')}
+                </dd>
+              </div>
+            </dl>
+          ) : (
+            <p className="py-3 text-sm text-muted-foreground">
+              {semantic === null
+                ? 'Status is unavailable right now.'
+                : 'Not active: turn AI on and give an enabled provider an embedding model. That provider must be allowed to receive Internal data and be in an allowed region.'}
+            </p>
+          )}
+        </SettingsSection>
+      )}
 
       <SettingsSection title="Providers" description="Tried in priority order. Each provider has its own limit on the data it may receive.">
         {providers && providers.length > 0 ? (

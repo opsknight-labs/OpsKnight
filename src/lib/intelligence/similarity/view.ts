@@ -5,7 +5,7 @@ import { incidentReadWhere } from '@/lib/authorization-filters';
 import type { AuthorizationActor } from '@/lib/authorization-policy';
 import { resolveEffectivePolicy } from '../settings/service';
 import { getMyFeedback } from '../feedback/service';
-import type { SimilarityComponents } from './scoring';
+import { semanticContent, type SimilarityComponents } from './scoring';
 
 export interface SimilarIncidentView {
   /** The finding this row represents; the target of the viewer's feedback. */
@@ -28,7 +28,10 @@ const MAX_VISIBLE = 5;
 /** Human-readable reasons derived only from numeric components, never from stored text. */
 export function describeReasons(components: SimilarityComponents): string[] {
   const reasons: string[] = [];
-  if (Math.max(components.template, components.tokens) >= 0.6) reasons.push('Very similar wording');
+  const wording = Math.max(components.template, components.tokens);
+  const meaning = semanticContent(components.semantic);
+  if (meaning > wording && meaning >= 0.5) reasons.push('Similar meaning');
+  else if (wording >= 0.6) reasons.push('Very similar wording');
   else reasons.push('Similar wording');
   if (components.labels >= 0.5) reasons.push('Shared labels');
   if (components.sameService === 1) reasons.push('Same service');
@@ -45,7 +48,8 @@ function isComponents(value: unknown): value is SimilarityComponents {
     typeof c.labels === 'number' &&
     typeof c.sameService === 'number' &&
     typeof c.recency === 'number' &&
-    typeof c.resolved === 'number'
+    typeof c.resolved === 'number' &&
+    (c.semantic === undefined || typeof c.semantic === 'number')
   );
 }
 

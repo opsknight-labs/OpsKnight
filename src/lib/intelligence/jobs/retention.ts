@@ -8,6 +8,7 @@ const DAY_MS = 86_400_000;
 
 export interface RetentionResult {
   fingerprints: number;
+  embeddings: number;
   correlationGroups: number;
   relationships: number;
   findings: number;
@@ -47,6 +48,11 @@ export async function purgeExpiredIntelligenceData(
       DELETE FROM "IncidentFingerprint" WHERE "incidentId" IN (
         SELECT "incidentId" FROM "IncidentFingerprint"
         WHERE "incidentCreatedAt" < ${cutoff(settings.fingerprintRetentionDays)} LIMIT ${limit})`);
+    // Vectors are derived from the same title as the fingerprint and share its retention.
+    const embeddings = await tx.$executeRaw(Prisma.sql`
+      DELETE FROM "IncidentEmbedding" WHERE "incidentId" IN (
+        SELECT "incidentId" FROM "IncidentEmbedding"
+        WHERE "incidentCreatedAt" < ${cutoff(settings.fingerprintRetentionDays)} LIMIT ${limit})`);
     const correlationGroups = await tx.$executeRaw(Prisma.sql`
       DELETE FROM "CorrelationGroup" WHERE "id" IN (
         SELECT "id" FROM "CorrelationGroup"
@@ -78,7 +84,7 @@ export async function purgeExpiredIntelligenceData(
         SELECT "id" FROM "ChangeEvent"
         WHERE "occurredAt" < ${cutoff(settings.findingRetentionDays)} LIMIT ${limit})`);
 
-    const counts = { fingerprints, correlationGroups, relationships, findings, feedback, evaluationRuns, patterns, changeEvents };
+    const counts = { fingerprints, embeddings, correlationGroups, relationships, findings, feedback, evaluationRuns, patterns, changeEvents };
     return { ...counts, more: Object.values(counts).some(count => count >= limit) };
   });
 }
