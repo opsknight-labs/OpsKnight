@@ -13,6 +13,8 @@ verification:
 
 # Concepts
 
+- [Service automation: context, enrichment, routing, and version rollout](./service-automation)
+
 Concept pages explain the product model and its constraints. Procedures belong
 in [Guides](../guides/); exact contracts belong in
 [Reference](../reference/).

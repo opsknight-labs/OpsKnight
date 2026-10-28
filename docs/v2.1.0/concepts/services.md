@@ -41,6 +41,10 @@ new service for each environment, alert, incident, or short-lived project unless
 those boundaries genuinely have different owners, escalation, integrations, and
 reporting requirements.
 
+For typed alert context, priority enrichment, and conditional responder routing,
+see [Service automation](./service-automation) and the
+[configuration guide](../guides/services/service-automation).
+
 ## Access model
 
 - Admins and Responders can create services.

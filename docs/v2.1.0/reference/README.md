@@ -23,6 +23,7 @@ Use reference pages when you need an exact contract rather than a workflow:
 - [Configuration](./configuration/)
 - [Command line](./cli)
 - [Permissions](./permissions)
+- [Service automation fields, rules, versions, and readiness](./service-automation)
 - [Runbook steps, inputs, permissions, and limits](./runbooks)
 - [Notification delivery](./notifications/)
 - [Outbound webhooks](./webhooks)
