@@ -1,6 +1,8 @@
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
 
 const tasks = vi.hoisted(() => ({
+  startIngestionMaintenance: vi.fn(),
+  stopIngestionMaintenance: vi.fn().mockResolvedValue(undefined),
   processPendingEscalations: vi.fn(),
   processPendingJobs: vi.fn(),
   runQueueMaintenance: vi.fn(),
@@ -18,6 +20,10 @@ const tasks = vi.hoisted(() => ({
   schedulerQueryRaw: vi.fn(),
 }));
 
+vi.mock('@/lib/ingestion/maintenance', () => ({
+  startIngestionMaintenance: tasks.startIngestionMaintenance,
+  stopIngestionMaintenance: tasks.stopIngestionMaintenance,
+}));
 vi.mock('@/lib/escalation', () => ({
   processPendingEscalations: tasks.processPendingEscalations,
 }));
@@ -55,9 +61,13 @@ vi.mock('@/lib/status-pages/snapshot', () => ({
 vi.mock('@/lib/status-pages/route-operations', () => ({
   reconcileStatusPageRouteOperations: tasks.reconcileStatusPageRouteOperations,
 }));
-vi.mock('@/lib/war-room/reconcile', () => ({ reconcileWarRoomHealth: tasks.reconcileWarRoomHealth }));
+vi.mock('@/lib/war-room/reconcile', () => ({
+  reconcileWarRoomHealth: tasks.reconcileWarRoomHealth,
+}));
 vi.mock('@/lib/war-room/terminal-cleanup', () => ({
-  reconcileTerminalWarRoomDrift: vi.fn().mockResolvedValue({ checked: 0, cleaned: 0, stillPending: 0, satisfied: 0 }),
+  reconcileTerminalWarRoomDrift: vi
+    .fn()
+    .mockResolvedValue({ checked: 0, cleaned: 0, stillPending: 0, satisfied: 0 }),
 }));
 vi.mock('@/lib/war-room/engine', () => ({
   repairOrphanedClosingWarRooms: vi.fn().mockResolvedValue({ checked: 0, repaired: 0 }),
@@ -113,7 +123,12 @@ describe('cron-scheduler lifecycle', () => {
     tasks.processPendingJobs.mockResolvedValue({ processed: 0, failed: 0, total: 0 });
     tasks.runQueueMaintenance.mockResolvedValue(undefined);
     tasks.retryFailedNotifications.mockResolvedValue({ retried: 0, succeeded: 0, failed: 0 });
-    tasks.processCentralNotificationQueue.mockResolvedValue({ processed: 0, failed: 0, pending: 0, skipped: 0 });
+    tasks.processCentralNotificationQueue.mockResolvedValue({
+      processed: 0,
+      failed: 0,
+      pending: 0,
+      skipped: 0,
+    });
     tasks.processAutoUnsnoozeInternal.mockResolvedValue(0);
     tasks.checkSLABreaches.mockResolvedValue({ activeIncidentCount: 0, warningCount: 0 });
     tasks.reconcileEscalations.mockResolvedValue({});
@@ -133,8 +148,16 @@ describe('cron-scheduler lifecycle', () => {
 
   afterEach(async () => {
     await stopCronScheduler();
+    vi.unstubAllEnvs();
     vi.useRealTimers();
     vi.clearAllMocks();
+  });
+
+  it('keeps ingestion maintenance alive with external cron scheduling', () => {
+    vi.stubEnv('ENABLE_INTERNAL_CRON', 'false');
+    startCronScheduler();
+    expect(tasks.startIngestionMaintenance).toHaveBeenCalledTimes(1);
+    expect(tasks.processPendingEscalations).not.toHaveBeenCalled();
   });
 
   it('marks scheduler as running after start', async () => {

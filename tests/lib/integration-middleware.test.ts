@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
+import { IngestionUnavailableError } from '@/lib/ingestion/contract';
 
 const { findUnique, recordWebhookReceived, checkRateLimit } = vi.hoisted(() => ({
   findUnique: vi.fn(),
@@ -44,5 +45,19 @@ describe('withIntegrationMiddleware', () => {
       expect.any(Number),
       'UNAUTHORIZED'
     );
+  });
+
+  it('returns a retryable capacity error when shared quota storage is unavailable', async () => {
+    findUnique.mockResolvedValue({ key: 'routing-key', enabled: true, type: 'AZURE' });
+    checkRateLimit.mockRejectedValueOnce(new IngestionUnavailableError('Quota unavailable'));
+    const handler = vi.fn();
+    const request = new NextRequest(
+      'http://localhost/api/integrations/azure?integrationId=integration-1',
+      { headers: { 'x-integration-key': 'routing-key' } }
+    );
+    const response = await withIntegrationMiddleware(request, 'AZURE', handler);
+    expect(response.status).toBe(503);
+    expect(response.headers.get('Retry-After')).toBe('5');
+    expect(handler).not.toHaveBeenCalled();
   });
 });

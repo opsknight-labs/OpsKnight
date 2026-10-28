@@ -1,3 +1,4 @@
+import { ingestionErrorResponse } from '@/lib/ingestion/http';
 import { NextRequest } from 'next/server';
 import prisma from '@/lib/prisma';
 import { processIntegrationEvent } from '@/lib/events';
@@ -67,6 +68,8 @@ export async function POST(req: NextRequest) {
       });
       return jsonOk({ status: 'success', result }, 202);
     } catch (error: unknown) {
+      const ingestionError = ingestionErrorResponse(error);
+      if (ingestionError) return ingestionError;
       if (error instanceof IntegrationBodyTooLargeError) return jsonError(error.message, 413);
       logger.error('api.integration.newrelic_error', {
         error: error instanceof Error ? error.message : String(error),

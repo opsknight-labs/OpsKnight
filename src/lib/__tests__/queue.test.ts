@@ -9,6 +9,7 @@ import { provisionWarRoom, syncWarRoomParticipants } from '@/lib/war-room/engine
 type TestMock = ReturnType<typeof vi.fn>;
 
 const prismaMock = prisma as unknown as {
+  $executeRaw: TestMock;
   backgroundJob: {
     findUnique: TestMock;
     update: TestMock;
@@ -126,6 +127,7 @@ describe('queue.processJob WAR_ROOM_PROVISION', () => {
   });
 
   it('passes the durable fencing token to the Teams provisioning worker', async () => {
+    prismaMock.$executeRaw.mockResolvedValueOnce(1);
     const result = await queue.processJob({
       id: 'job-war-room',
       type: 'WAR_ROOM_PROVISION',
@@ -136,16 +138,11 @@ describe('queue.processJob WAR_ROOM_PROVISION', () => {
     });
     expect(result).toBe(true);
     expect(provisionWarRoomMock).toHaveBeenCalledWith('room-1', 'lease-a');
-    expect(prismaMock.backgroundJob.updateMany).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: { id: 'job-war-room', status: 'PROCESSING' },
-        data: expect.objectContaining({ status: 'COMPLETED' }),
-      })
-    );
+    expect(prismaMock.$executeRaw).toHaveBeenCalledTimes(1);
   });
 
   it('does not revive a job cancelled while its Graph request was in flight', async () => {
-    prismaMock.backgroundJob.updateMany.mockResolvedValue({ count: 0 });
+    prismaMock.$executeRaw.mockResolvedValueOnce(0);
     const result = await queue.processJob({
       id: 'job-war-room-cancelled',
       type: 'WAR_ROOM_PROVISION',
@@ -155,12 +152,7 @@ describe('queue.processJob WAR_ROOM_PROVISION', () => {
       maxAttempts: 6,
     });
     expect(result).toBe(false);
-    expect(prismaMock.backgroundJob.updateMany).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: { id: 'job-war-room-cancelled', status: 'PROCESSING' },
-        data: expect.objectContaining({ status: 'COMPLETED' }),
-      })
-    );
+    expect(prismaMock.$executeRaw).toHaveBeenCalledTimes(1);
   });
 
   it('keeps the retry budget intact while reconciling an ambiguous create marker', async () => {
@@ -240,6 +232,7 @@ describe('queue.processJob WAR_ROOM_PARTICIPANT_SYNC', () => {
   });
 
   it('runs participant synchronization only in the durable worker', async () => {
+    prismaMock.$executeRaw.mockResolvedValueOnce(1);
     const result = await queue.processJob({
       id: 'job-war-room-members',
       type: 'WAR_ROOM_PARTICIPANT_SYNC',
@@ -250,13 +243,8 @@ describe('queue.processJob WAR_ROOM_PARTICIPANT_SYNC', () => {
     });
     expect(result).toBe(true);
     expect(syncWarRoomParticipantsMock).toHaveBeenCalledWith('room-1');
-    // Fenced completion: must not resurrect a job cancelled while Graph was in flight.
-    expect(prismaMock.backgroundJob.updateMany).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: { id: 'job-war-room-members', status: 'PROCESSING' },
-        data: expect.objectContaining({ status: 'COMPLETED' }),
-      })
-    );
+    // Real status/attempt/token predicates are covered by the database suite.
+    expect(prismaMock.$executeRaw).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -310,7 +298,7 @@ describe('queue.processJob SCHEDULED_TASK event side effects', () => {
       maxAttempts: 5,
     });
     expect(result).toBe(true);
-    expect(processEventSideEffectMock).toHaveBeenCalledWith(payload);
+    expect(processEventSideEffectMock).toHaveBeenCalledWith(payload, undefined);
     expect(prismaMock.backgroundJob.update).toHaveBeenCalledWith(
       expect.objectContaining({
         where: { id: 'job-side-effect' },

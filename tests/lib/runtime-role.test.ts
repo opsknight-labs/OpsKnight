@@ -1,12 +1,29 @@
 import { describe, expect, it } from 'vitest';
 import {
   getOpsKnightProcessRole,
+  shouldRunIngestionConsumer,
   getRuntimeResponsibilities,
   getSchedulerOwnership,
   getSchedulerProfile,
 } from '@/lib/runtime-role';
 
 describe('runtime process roles', () => {
+  it('centralizes automatic ingestion ownership and the web upgrade fallback', () => {
+    expect(shouldRunIngestionConsumer('ingestion-worker', 'postgres')).toBe(true);
+    expect(shouldRunIngestionConsumer('integrated', 'postgres')).toBe(true);
+    expect(shouldRunIngestionConsumer('web', 'postgres')).toBe(true);
+    expect(shouldRunIngestionConsumer('integrated', 'sync')).toBe(false);
+    expect(shouldRunIngestionConsumer('ingestion-worker', 'sync')).toBe(false);
+  });
+
+  it('keeps explicit HTTP-only servers independent of consumers without changing upgrade defaults', () => {
+    expect(getOpsKnightProcessRole('http')).toBe('http');
+    expect(shouldRunIngestionConsumer('http', 'postgres')).toBe(false);
+    expect(shouldRunIngestionConsumer('web', 'postgres')).toBe(true);
+    expect(getRuntimeResponsibilities('http')).toEqual(getRuntimeResponsibilities('web'));
+    expect(getOpsKnightProcessRole(undefined)).toBe('integrated');
+  });
+
   it('preserves the integrated runtime by default and processes durable jobs in-process', () => {
     expect(getOpsKnightProcessRole(undefined)).toBe('integrated');
     expect(getRuntimeResponsibilities('integrated')).toEqual({
@@ -48,6 +65,15 @@ describe('runtime process roles', () => {
 
   it('normalizes configured role names', () => {
     expect(getOpsKnightProcessRole(' Worker ')).toBe('worker');
+  });
+
+  it('keeps ingestion workers independent from downstream notification and runbook lanes', () => {
+    expect(getOpsKnightProcessRole('ingestion-worker')).toBe('ingestion-worker');
+    expect(getRuntimeResponsibilities('ingestion-worker')).toMatchObject({
+      startScheduler: false,
+      startJobWorker: false,
+      startIsolatedRunbookWorker: false,
+    });
   });
 
   it('fails closed for an unknown role', () => {

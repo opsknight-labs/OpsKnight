@@ -1,7 +1,8 @@
+import { ingestionErrorResponse } from '@/lib/ingestion/http';
 import { NextRequest } from 'next/server';
 import { ZodError } from 'zod';
 import prisma from '@/lib/prisma';
-import { processIntegrationEvent } from '@/lib/events';
+import { processIntegrationBatch } from '@/lib/events';
 import { transformPrometheusToEvent, PrometheusAlert } from '@/lib/integrations/prometheus';
 
 import { jsonError, jsonOk } from '@/lib/api-response';
@@ -102,10 +103,16 @@ export async function POST(req: NextRequest) {
 
       const events = transformPrometheusToEvent((validation.data || body) as PrometheusAlert);
 
-      const results = [];
-      for (const event of events) {
-        results.push(await processIntegrationEvent({ event, serviceId: integration.serviceId, integrationId: integration.id, integrationType: 'PROMETHEUS', providerPayload: validation.data, receivedAt: new Date() }));
-      }
+      const results = await processIntegrationBatch(
+        {
+          serviceId: integration.serviceId,
+          integrationId: integration.id,
+          integrationType: 'PROMETHEUS',
+          providerPayload: validation.data,
+          receivedAt: new Date(),
+        },
+        events
+      );
 
       logger.info('api.integration.prometheus_success', {
         integrationId,
@@ -114,6 +121,8 @@ export async function POST(req: NextRequest) {
       });
       return jsonOk({ status: 'success', results }, 202);
     } catch (error: unknown) {
+      const ingestionError = ingestionErrorResponse(error);
+      if (ingestionError) return ingestionError;
       if (error instanceof IntegrationBodyTooLargeError) {
         return jsonError(
           new AppError({ code: 'PAYLOAD_TOO_LARGE', userMessage: error.message, cause: error })

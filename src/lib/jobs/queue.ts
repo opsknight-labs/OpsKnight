@@ -107,6 +107,14 @@ function pendingStatusForJobType(type: string): JobStatus {
   return isAnnouncementFanoutV2(type) ? STATUS_PAGE_ANNOUNCEMENT_FANOUT_V2_PENDING : 'PENDING';
 }
 
+function isCompactDispatchJob(job: { type: string; payload: unknown }): boolean {
+  return (
+    job.type === 'SCHEDULED_TASK' &&
+    payloadValue(job.payload, 'task') === 'EVENT_SIDE_EFFECT' &&
+    payloadValue(job.payload, 'effect') === 'DISPATCH_ORDINARY'
+  );
+}
+
 function processingStatusForJobType(type: string): JobStatus {
   return isAnnouncementFanoutV2(type)
     ? STATUS_PAGE_ANNOUNCEMENT_FANOUT_V2_PROCESSING
@@ -161,6 +169,8 @@ function payloadValue(payload: unknown, key: string): unknown {
       return values.statusPageId;
     case 'stepIndex':
       return values.stepIndex;
+    case 'effect':
+      return values.effect;
     case 'task':
       return values.task;
     case 'warRoomId':
@@ -301,6 +311,15 @@ export interface ClaimJobsOptions {
   readonly runMaintenance?: boolean;
   readonly automationObservationsOnly?: boolean;
   readonly excludeAutomationObservations?: boolean;
+  readonly criticalEffectsOnly?: boolean;
+  readonly excludeCriticalEffects?: boolean;
+}
+
+function validateClaimLane(type: JobType | undefined, options?: ClaimJobsOptions): void {
+  if (options?.criticalEffectsOnly && options.excludeCriticalEffects)
+    throw new Error('Critical effects cannot be selected and excluded together');
+  if (options?.criticalEffectsOnly && type && type !== 'SCHEDULED_TASK')
+    throw new Error('Critical incident effects must use the scheduled-task queue');
 }
 
 export async function runQueueMaintenance(prismaClient = prisma): Promise<QueueMaintenanceResult> {
@@ -373,6 +392,14 @@ export async function runQueueMaintenance(prismaClient = prisma): Promise<QueueM
     )
     .catch(err => logger.warn('[Queue] Failed to sweep zombie V2 fan-out jobs', { error: err }));
 
+  await prismaClient.$executeRaw`
+    UPDATE "BackgroundJob" SET status='FAILED'::"JobStatus", "failedAt"=NOW(),
+      error='Incident dispatch claim exhausted after worker loss'
+    WHERE type='SCHEDULED_TASK'::"JobType" AND payload->>'task'='EVENT_SIDE_EFFECT'
+      AND payload->>'effect'='DISPATCH_ORDINARY' AND status='PROCESSING_V2'::"JobStatus"
+      AND attempts >= "maxAttempts" AND ("startedAt" IS NULL OR "startedAt"<NOW()-INTERVAL '20 seconds')
+  `;
+
   return { executedAt: new Date() };
 }
 
@@ -382,6 +409,7 @@ export async function claimPendingJobs(
   excludeTypes: readonly JobType[] = [],
   options?: ClaimJobsOptions
 ): Promise<QueuedJob[]> {
+  validateClaimLane(type, options);
   if (options?.runMaintenance) {
     await runQueueMaintenance(prisma).catch(err =>
       logger.warn('[Queue] Explicit maintenance run during job claim failed', { error: err })
@@ -402,23 +430,38 @@ export async function claimPendingJobs(
     ? Prisma.sql`AND NOT (candidate."type"='SCHEDULED_TASK'::"JobType"
         AND candidate.payload->>'task' IS NOT DISTINCT FROM 'AUTOMATION_OBSERVE')`
     : Prisma.empty;
+  const criticalEffect = Prisma.sql`candidate."type"='SCHEDULED_TASK'::"JobType"
+    AND candidate.payload->>'task'='EVENT_SIDE_EFFECT'
+    AND candidate.payload->>'lane'='PERSONAL_NOTIFICATION'`;
+  const criticalEffectFilter = options?.criticalEffectsOnly
+    ? Prisma.sql`AND (${criticalEffect})`
+    : options?.excludeCriticalEffects
+      ? Prisma.sql`AND NOT COALESCE((${criticalEffect}), false)`
+      : Prisma.empty;
+  // Expose the live-state bound so PostgreSQL can prove the partial ordered
+  // index applies across the type-specific OR branches below.
   return prisma.$queryRaw<QueuedJob[]>(Prisma.sql`
     WITH cte AS (
       SELECT candidate."id" FROM "BackgroundJob" AS candidate
-      WHERE (
+      WHERE candidate."status" IN ('PENDING'::"JobStatus", 'PROCESSING'::"JobStatus",
+        'PENDING_V2'::"JobStatus", 'PROCESSING_V2'::"JobStatus") AND (
           (
-            candidate."type"='STATUS_PAGE_ANNOUNCEMENT_FANOUT_V2'::"JobType"
+            (candidate."type"='STATUS_PAGE_ANNOUNCEMENT_FANOUT_V2'::"JobType"
+              OR (candidate."type"='SCHEDULED_TASK'::"JobType" AND candidate.payload->>'task'='EVENT_SIDE_EFFECT'
+                AND candidate.payload->>'effect'='DISPATCH_ORDINARY'))
             AND (
               candidate."status"='PENDING_V2'::"JobStatus"
               OR (
                 candidate."status"='PROCESSING_V2'::"JobStatus"
-                AND (candidate."startedAt" IS NULL OR candidate."startedAt"<NOW()-INTERVAL '10 minutes')
+                AND (candidate."startedAt" IS NULL OR candidate."startedAt"<NOW()-(${operationalLease(true)}))
               )
             )
           )
           OR
           (
             candidate."type"<>'STATUS_PAGE_ANNOUNCEMENT_FANOUT_V2'::"JobType"
+            AND NOT COALESCE((candidate."type"='SCHEDULED_TASK'::"JobType" AND candidate.payload->>'task'='EVENT_SIDE_EFFECT'
+              AND candidate.payload->>'effect'='DISPATCH_ORDINARY'), false)
             AND (
               candidate."status"='PENDING'::"JobStatus"
               OR (
@@ -428,16 +471,18 @@ export async function claimPendingJobs(
             )
           )
         )
-        AND candidate."scheduledAt"<=NOW() AND candidate."attempts"<candidate."maxAttempts" ${typeFilter} ${excludedTypeFilter} ${observationFilter} ${excludedObservationFilter}
+        AND candidate."scheduledAt"<=NOW() AND candidate."attempts"<candidate."maxAttempts" ${typeFilter} ${excludedTypeFilter} ${observationFilter} ${excludedObservationFilter} ${criticalEffectFilter}
         AND (
           candidate."type"<>'SCHEDULED_TASK'::"JobType"
           OR candidate."payload"->>'task' IS DISTINCT FROM 'EVENT_SIDE_EFFECT'
           OR NOT EXISTS (
             SELECT 1 FROM "BackgroundJob" AS older
-            WHERE older."type"='SCHEDULED_TASK'::"JobType" AND older."status" IN ('PENDING','PROCESSING')
+            WHERE older."type"='SCHEDULED_TASK'::"JobType" AND older."status" IN ('PENDING','PROCESSING','PENDING_V2','PROCESSING_V2')
               AND older."payload"->>'task'='EVENT_SIDE_EFFECT'
               AND older."payload"->>'incidentId'=candidate."payload"->>'incidentId'
-              AND older."payload"->>'lane'=candidate."payload"->>'lane'
+              AND (older."payload"->>'lane'=candidate."payload"->>'lane'
+                OR (candidate."payload"->>'lane'<>'PERSONAL_NOTIFICATION'
+                  AND older."payload"->>'lane'='ORDINARY_DISPATCH'))
               AND older."id"<>candidate."id"
               AND (
                 (older."payload"->>'eventOrderAt')::timestamptz < (candidate."payload"->>'eventOrderAt')::timestamptz
@@ -445,7 +490,11 @@ export async function claimPendingJobs(
                   (older."payload"->>'eventOrderAt')::timestamptz = (candidate."payload"->>'eventOrderAt')::timestamptz
                   AND (
                     older."createdAt" < candidate."createdAt"
-                    OR (older."createdAt" = candidate."createdAt" AND older."id" < candidate."id")
+                    OR (older."createdAt" = candidate."createdAt" AND (
+                      COALESCE(older.payload->>'dispatchOrderId', older.id) < COALESCE(candidate.payload->>'dispatchOrderId', candidate.id)
+                      OR (COALESCE(older.payload->>'dispatchOrderId', older.id) = COALESCE(candidate.payload->>'dispatchOrderId', candidate.id)
+                        AND older.id < candidate.id)
+                    ))
                   )
                 )
               )
@@ -456,25 +505,28 @@ export async function claimPendingJobs(
     )
     UPDATE "BackgroundJob"
     SET "status"=CASE
-          WHEN "type"='STATUS_PAGE_ANNOUNCEMENT_FANOUT_V2'::"JobType" THEN 'PROCESSING_V2'::"JobStatus"
+          WHEN "type"='STATUS_PAGE_ANNOUNCEMENT_FANOUT_V2'::"JobType"
+            OR ("type"='SCHEDULED_TASK'::"JobType" AND payload->>'task'='EVENT_SIDE_EFFECT'
+              AND payload->>'effect'='DISPATCH_ORDINARY') THEN 'PROCESSING_V2'::"JobStatus"
           ELSE 'PROCESSING'::"JobStatus"
         END,
         "startedAt"=NOW(),
         "claimToken"=gen_random_uuid(),
         "attempts"=CASE WHEN "type" IN ('STATUS_PAGE_NOTIFICATION'::"JobType",'STATUS_PAGE_ANNOUNCEMENT_FANOUT'::"JobType",'STATUS_PAGE_ANNOUNCEMENT_FANOUT_V2'::"JobType") THEN "attempts" ELSE "attempts"+1 END
     WHERE "id" IN (SELECT "id" FROM cte)
-    RETURNING *;
+    RETURNING id, type, status, payload, attempts, "maxAttempts", "claimToken";
   `);
 }
 
 export async function markJobProcessing(jobId: string, claimToken?: string): Promise<void> {
   const existing = await prisma.backgroundJob.findUnique({
     where: { id: jobId },
-    select: { type: true },
+    select: { type: true, payload: true },
   });
   if (!existing) return;
   const type = existing.type as JobType;
   const isBulk = isBulkNotificationJob(type);
+  const compactDispatch = isCompactDispatchJob(existing);
   await prisma.backgroundJob.update({
     where: { id: jobId },
     data: isBulk
@@ -484,12 +536,34 @@ export async function markJobProcessing(jobId: string, claimToken?: string): Pro
           claimToken: claimToken ?? null,
         }
       : {
-          status: 'PROCESSING',
+          status: compactDispatch ? 'PROCESSING_V2' : 'PROCESSING',
           startedAt: new Date(),
           attempts: { increment: 1 },
           claimToken: claimToken ?? null,
         },
   });
+}
+
+/** One autocommitted statement retains all claim predicates without the
+ * extra driver BEGIN/COMMIT round trips of an ORM updateMany operation.
+ */
+async function completeClaimedJob(
+  jobId: string,
+  claimAttempt: number | undefined,
+  claimToken: string | null | undefined,
+  allowV2: boolean
+): Promise<number> {
+  const now = new Date();
+  return prisma.$executeRaw`
+    UPDATE "BackgroundJob" SET "status"='COMPLETED'::"JobStatus",
+      "completedAt"=${now}, "updatedAt"=${now}
+    WHERE "id"=${jobId}
+      AND ("status"='PROCESSING'::"JobStatus"
+        OR (${allowV2} AND "status"='PROCESSING_V2'::"JobStatus"))
+      AND (${claimAttempt === undefined} OR "attempts"=${claimAttempt ?? 0})
+      AND (${claimToken === undefined}
+        OR "claimToken" IS NOT DISTINCT FROM ${claimToken ?? null}::uuid)
+  `;
 }
 
 export async function markJobCompleted(
@@ -502,15 +576,7 @@ export async function markJobCompleted(
     await prisma.backgroundJob.update({ where: { id: jobId }, data });
     return;
   }
-  await prisma.backgroundJob.updateMany({
-    where: {
-      id: jobId,
-      attempts: claimAttempt,
-      status: { in: ['PROCESSING', 'PROCESSING_V2'] },
-      ...(claimToken === undefined ? {} : { claimToken }),
-    },
-    data,
-  });
+  await completeClaimedJob(jobId, claimAttempt, claimToken, true);
 }
 
 async function markWarRoomJobCompleted(
@@ -518,16 +584,7 @@ async function markWarRoomJobCompleted(
   claimAttempt?: number,
   claimToken?: string | null
 ): Promise<boolean> {
-  const result = await prisma.backgroundJob.updateMany({
-    where: {
-      id: jobId,
-      status: 'PROCESSING',
-      ...(claimAttempt === undefined ? {} : { attempts: claimAttempt }),
-      ...(claimToken === undefined ? {} : { claimToken }),
-    },
-    data: { status: 'COMPLETED', completedAt: new Date() },
-  });
-  return result.count === 1;
+  return (await completeClaimedJob(jobId, claimAttempt, claimToken, false)) === 1;
 }
 
 async function markWarRoomJobFailed(job: QueuedJob, error: string): Promise<void> {
@@ -798,7 +855,11 @@ export async function markJobFailed(
     data: {
       startedAt: null,
       claimToken: null,
-      status: shouldRetry ? ('PENDING' as const) : ('FAILED' as const),
+      status: shouldRetry
+        ? isCompactDispatchJob(job)
+          ? ('PENDING_V2' as const)
+          : ('PENDING' as const)
+        : ('FAILED' as const),
       failedAt: shouldRetry ? null : now,
       error: shouldRetry ? null : error,
       scheduledAt: shouldRetry
@@ -816,7 +877,10 @@ export async function markJobFailed(
   else
     await prisma.backgroundJob.updateMany({
       ...update,
-      where: { ...update.where, status: 'PROCESSING' },
+      where: {
+        ...update.where,
+        status: isCompactDispatchJob(job) ? 'PROCESSING_V2' : 'PROCESSING',
+      },
     });
 }
 
@@ -830,7 +894,9 @@ export async function processJob(jobInput: QueuedJob | string | null): Promise<b
   let leaseHeartbeat: NodeJS.Timeout | null = null;
   let claimAttempt = job.claimToken === undefined ? undefined : job.attempts;
   try {
-    const expectedProcessingStatus = processingStatusForJobType(job.type);
+    const expectedProcessingStatus = isCompactDispatchJob(job)
+      ? 'PROCESSING_V2'
+      : processingStatusForJobType(job.type);
     if (job.status !== expectedProcessingStatus) {
       job.claimToken = randomUUID();
       await markJobProcessing(job.id, job.claimToken);
@@ -859,13 +925,21 @@ export async function processJob(jobInput: QueuedJob | string | null): Promise<b
     switch (job.type) {
       case 'AUDIT_EXPORT': {
         const { processAuditExportJob } = await import('../api-v2/audit-exports');
-        await processAuditExportJob(requiredPayloadString(job.payload, 'exportId'), job.id, job.claimToken);
+        await processAuditExportJob(
+          requiredPayloadString(job.payload, 'exportId'),
+          job.id,
+          job.claimToken
+        );
         await markJobCompleted(job.id, claimAttempt, job.claimToken);
         return true;
       }
       case 'REPORT_EXPORT': {
         const { processReportExportJob } = await import('../api-v2/report-exports');
-        await processReportExportJob(requiredPayloadString(job.payload, 'exportId'), job.id, job.claimToken);
+        await processReportExportJob(
+          requiredPayloadString(job.payload, 'exportId'),
+          job.id,
+          job.claimToken
+        );
         await markJobCompleted(job.id, claimAttempt, job.claimToken);
         return true;
       }
@@ -1416,8 +1490,15 @@ export async function processJob(jobInput: QueuedJob | string | null): Promise<b
           });
           return false;
         }
+        if (payloadValue(job.payload, 'effect') === 'DISPATCH_ORDINARY') {
+          const { dispatchIncidentEffects } = await import('../incident-effect-dispatch');
+          return await dispatchIncidentEffects(job.id, claimAttempt, job.claimToken);
+        }
         const { processEventSideEffect } = await import('../event-side-effects');
-        await processEventSideEffect(job.payload as unknown as EventSideEffectPayload);
+        await processEventSideEffect(
+          job.payload as unknown as EventSideEffectPayload,
+          claimAttempt
+        );
         await markJobCompleted(job.id, claimAttempt, job.claimToken);
         return true;
       }
@@ -1576,7 +1657,9 @@ function heartbeatClaimedBatch(jobs: QueuedJob[]) {
           OR: jobs.map(job => ({
             id: job.id,
             attempts: job.attempts,
-            status: processingStatusForJobType(job.type as JobType),
+            status: isCompactDispatchJob(job)
+              ? 'PROCESSING_V2'
+              : processingStatusForJobType(job.type as JobType),
             ...(job.claimToken === undefined ? {} : { claimToken: job.claimToken }),
           })),
         },
@@ -1591,18 +1674,59 @@ function heartbeatClaimedBatch(jobs: QueuedJob[]) {
   return () => clearInterval(timer);
 }
 
+function validateProcessingConcurrency(concurrency: number): void {
+  if (!Number.isSafeInteger(concurrency) || concurrency < 1)
+    throw new Error('Job processing concurrency must be a positive safe integer');
+}
+
+/** Refill a free slot from the already fenced claim batch immediately. Claim
+ * boundaries, predecessor checks and waiting-job heartbeats remain unchanged.
+ * A rejected handler counts as failed without abandoning other claimed jobs.
+ */
+async function processClaimedJobs(pendingJobs: QueuedJob[], concurrency: number) {
+  let cursor = 0;
+  let processed = 0;
+  let failed = 0;
+  const stopHeartbeat = heartbeatClaimedBatch(pendingJobs);
+  try {
+    await Promise.all(
+      Array.from({ length: Math.min(concurrency, pendingJobs.length) }, async () => {
+        while (cursor < pendingJobs.length) {
+          const job = pendingJobs[cursor++];
+          try {
+            if (await processJob(job)) processed++;
+            else failed++;
+          } catch {
+            failed++;
+          }
+        }
+      })
+    );
+  } finally {
+    stopHeartbeat();
+  }
+  return { processed, failed, total: pendingJobs.length };
+}
+
 /** Reserve a bounded observation slice without increasing the worker batch or
  * concurrency. Ordinary work retains at least three quarters of every batch. */
-export async function claimPendingOperationalJobs(limit: number, excludeTypes: readonly JobType[]) {
+export async function claimPendingOperationalJobs(
+  limit: number,
+  excludeTypes: readonly JobType[],
+  options: Pick<ClaimJobsOptions, 'excludeCriticalEffects'> = {}
+) {
   const reserved = Math.min(16, Math.floor(limit / 4));
   if (!reserved || excludeTypes.includes('SCHEDULED_TASK'))
     return claimPendingJobs(limit, undefined, excludeTypes, {
+      ...options,
       excludeAutomationObservations: true,
     });
   const observations = await claimPendingJobs(reserved, 'SCHEDULED_TASK', [], {
+    ...options,
     automationObservationsOnly: true,
   });
   const ordinary = await claimPendingJobs(limit - observations.length, undefined, excludeTypes, {
+    ...options,
     excludeAutomationObservations: true,
   });
   return [...observations, ...ordinary];
@@ -1613,6 +1737,7 @@ export async function processPendingJobs(
   concurrency: number = 10,
   additionalExcludedTypes: JobType[] = []
 ): Promise<{ processed: number; failed: number; total: number }> {
+  validateProcessingConcurrency(concurrency);
   const excludeTypes: JobType[] = (await bulkDeliveryPaused())
     ? [
         'STATUS_PAGE_NOTIFICATION',
@@ -1622,23 +1747,7 @@ export async function processPendingJobs(
     : [];
   excludeTypes.push(...additionalExcludedTypes);
   const pendingJobs = await claimPendingOperationalJobs(limit, excludeTypes);
-  let processed = 0;
-  let failed = 0;
-  const stopHeartbeat = heartbeatClaimedBatch(pendingJobs);
-  try {
-    for (let i = 0; i < pendingJobs.length; i += concurrency) {
-      const results = await Promise.allSettled(
-        pendingJobs.slice(i, i + concurrency).map(job => processJob(job))
-      );
-      for (const result of results) {
-        if (result.status === 'fulfilled' && result.value) processed++;
-        else failed++;
-      }
-    }
-  } finally {
-    stopHeartbeat();
-  }
-  return { processed, failed, total: pendingJobs.length };
+  return processClaimedJobs(pendingJobs, concurrency);
 }
 
 /**
@@ -1650,52 +1759,26 @@ export async function processPendingGeneralJobs(
   limit: number = 50,
   concurrency: number = 10
 ): Promise<{ processed: number; failed: number; total: number }> {
-  const pendingJobs = await claimPendingOperationalJobs(limit, GENERAL_WORKER_EXCLUDED_JOB_TYPES);
-  let processed = 0;
-  let failed = 0;
-  const stopHeartbeat = heartbeatClaimedBatch(pendingJobs);
-  try {
-    for (let i = 0; i < pendingJobs.length; i += concurrency) {
-      const results = await Promise.allSettled(
-        pendingJobs.slice(i, i + concurrency).map(job => processJob(job))
-      );
-      for (const result of results) {
-        if (result.status === 'fulfilled' && result.value) processed++;
-        else failed++;
-      }
-    }
-  } finally {
-    stopHeartbeat();
-  }
-  return { processed, failed, total: pendingJobs.length };
+  validateProcessingConcurrency(concurrency);
+  const pendingJobs = await claimPendingOperationalJobs(limit, GENERAL_WORKER_EXCLUDED_JOB_TYPES, {
+    excludeCriticalEffects: true,
+  });
+  return processClaimedJobs(pendingJobs, concurrency);
 }
 
 export async function processPendingJobsByType(
   type: JobType,
   limit: number = 50,
-  concurrency: number = 10
+  concurrency: number = 10,
+  options?: Pick<ClaimJobsOptions, 'criticalEffectsOnly'>
 ): Promise<{ processed: number; failed: number; total: number }> {
+  validateProcessingConcurrency(concurrency);
+  validateClaimLane(type, options);
   if (isBulkNotificationJob(type) && (await bulkDeliveryPaused())) {
     return { processed: 0, failed: 0, total: 0 };
   }
-  const pendingJobs = await claimPendingJobs(limit, type);
-  let processed = 0;
-  let failed = 0;
-  const stopHeartbeat = heartbeatClaimedBatch(pendingJobs);
-  try {
-    for (let i = 0; i < pendingJobs.length; i += concurrency) {
-      const results = await Promise.allSettled(
-        pendingJobs.slice(i, i + concurrency).map(job => processJob(job))
-      );
-      for (const result of results) {
-        if (result.status === 'fulfilled' && result.value) processed++;
-        else failed++;
-      }
-    }
-  } finally {
-    stopHeartbeat();
-  }
-  return { processed, failed, total: pendingJobs.length };
+  const pendingJobs = await claimPendingJobs(limit, type, [], options);
+  return processClaimedJobs(pendingJobs, concurrency);
 }
 
 export async function cleanupOldJobs(olderThanDays: number = 7): Promise<number> {

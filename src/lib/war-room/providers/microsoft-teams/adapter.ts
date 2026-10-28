@@ -45,6 +45,7 @@ async function handleIncidentEvent(event: WarRoomIncidentEvent) {
 
 export const microsoftTeamsWarRoomAdapter: WarRoomProviderAdapter = {
   provider: 'MICROSOFT_TEAMS',
+  usesChatOpsPolicy: true,
   capabilities: {
     createRoom: true,
     privateRooms: false,

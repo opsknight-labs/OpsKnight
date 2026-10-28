@@ -65,8 +65,23 @@ export async function checkRateLimit(
  */
 export async function incrementSharedCounter(
   key: string,
-  windowMs: number
+  windowMs: number,
+  clock: 'application' | 'database' = 'application'
 ): Promise<{ count: number; resetAt: number }> {
+  if (!Number.isSafeInteger(windowMs) || windowMs < 1) throw new Error('Invalid rate-limit window');
+  if (clock === 'database') {
+    const [result] = await prisma.$queryRaw<Array<{ count: number; resetAt: number }>>`
+      WITH clock AS (
+        SELECT floor(EXTRACT(EPOCH FROM statement_timestamp()) * 1000 / ${windowMs})::bigint AS window
+      ) INSERT INTO "RateLimit" ("key", "count", "expiresAt")
+        SELECT ${key} || ':' || clock.window::text, 1,
+          to_timestamp((clock.window + 1) * ${windowMs} / 1000.0) FROM clock
+      ON CONFLICT ("key") DO UPDATE SET "count" = "RateLimit"."count" + 1
+      RETURNING "count", (EXTRACT(EPOCH FROM "expiresAt") * 1000)::double precision AS "resetAt"
+    `;
+    if (!result) throw new Error('Missing shared counter result');
+    return result;
+  }
   const now = Date.now();
   const windowStart = Math.floor(now / windowMs);
   const resetAt = (windowStart + 1) * windowMs;

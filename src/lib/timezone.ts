@@ -1,3 +1,4 @@
+import { createDateTimeFormatterCache } from './date-time-format';
 /**
  * Centralized timezone utilities for consistent date/time formatting
  * across all components in the incident management system
@@ -31,25 +32,15 @@ export type TimeZoneDisambiguation = 'reject' | 'earlier' | 'later' | 'compatibl
 type NormalizedLocalDateTimeParts = Required<LocalDateTimeParts>;
 
 const validTimeZoneCache = new Set<string>();
-const zonedDateTimeFormatterCache = new Map<string, Intl.DateTimeFormat>();
-
-function getZonedDateTimeFormatter(timeZone: string): Intl.DateTimeFormat {
-  let formatter = zonedDateTimeFormatterCache.get(timeZone);
-  if (!formatter) {
-    formatter = new Intl.DateTimeFormat('en-US', {
-      timeZone,
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
-      hourCycle: 'h23',
-    });
-    zonedDateTimeFormatterCache.set(timeZone, formatter);
-  }
-  return formatter;
-}
+export const getZonedDateTimeFormatter = createDateTimeFormatterCache('en-US', {
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+  hour: '2-digit',
+  minute: '2-digit',
+  second: '2-digit',
+  hourCycle: 'h23',
+});
 
 /**
  * Get user's timezone preference, fallback to UTC

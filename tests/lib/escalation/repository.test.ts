@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@/lib/prisma', () => ({
   __esModule: true,
   default: {
+    $executeRaw: vi.fn(),
     incident: { findUnique: vi.fn(), updateMany: vi.fn() },
     backgroundJob: { updateMany: vi.fn() },
   },
@@ -173,6 +174,19 @@ describe('generation-fenced state transitions', () => {
 
     expect(mocks.txIncidentEventCreate).not.toHaveBeenCalled();
     expect(mocks.txBackgroundJobCreate).not.toHaveBeenCalled();
+  });
+
+  it('uses one atomic database operation when no timeline must commit', async () => {
+    vi.mocked(prisma.$executeRaw).mockResolvedValueOnce(1);
+    await expect(finalizeEscalationExecution({
+      incidentId: 'inc-1', expectedGeneration: 4, expectedStep: 0, status: null,
+    })).resolves.toBe(true);
+    expect(prisma.$executeRaw).toHaveBeenCalledTimes(1);
+    expect(mocks.runSerializableTransaction).not.toHaveBeenCalled();
+    vi.mocked(prisma.$executeRaw).mockResolvedValueOnce(0);
+    await expect(finalizeEscalationExecution({
+      incidentId: 'inc-1', expectedGeneration: 3, expectedStep: 0, status: null,
+    })).resolves.toBe(false);
   });
 
   it('finalizes only the generation and cursor the caller observed', async () => {

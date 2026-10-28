@@ -2,6 +2,8 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { getServerSession } from 'next-auth';
 import { clearMetricsCache, collectWithTimeout, GET } from '@/lib/metrics/scrape';
 import prisma from '@/lib/prisma';
+import { collectIngestionQueueMetrics } from '@/lib/ingestion/metrics';
+vi.mock('@/lib/ingestion/metrics', () => ({ collectIngestionQueueMetrics: vi.fn() }));
 
 vi.mock('next-auth', () => ({
   getServerSession: vi.fn(),
@@ -35,15 +37,56 @@ describe('API Route - Prometheus Metrics (/api/metrics)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     clearMetricsCache();
+    vi.mocked(collectIngestionQueueMetrics).mockResolvedValue([]);
     vi.mocked(prisma.$transaction).mockImplementation(
       async operation => (operation as (tx: typeof prisma) => Promise<unknown>)(prisma) as never
     );
     vi.mocked(prisma.$queryRaw).mockResolvedValue([]);
+    vi.mocked(prisma.backgroundJob.groupBy).mockResolvedValue([]);
+    vi.mocked(prisma.incident.count).mockResolvedValue(0);
+    vi.mocked(prisma.user.count).mockResolvedValue(0);
     process.env = { ...originalEnv };
   });
 
   afterEach(() => {
     process.env = originalEnv;
+  });
+
+  it('exports persistent dead-letter and backlog evidence with automatic async mode', async () => {
+    delete process.env.OPSKNIGHT_INGESTION_MODE;
+    process.env.PROMETHEUS_SCRAPE_TOKEN = 'fixture-scrape';
+    vi.mocked(collectIngestionQueueMetrics).mockResolvedValue([
+      { status: 'DEAD', count: 2, oldestAgeSeconds: 180 },
+      { status: 'PENDING', count: 3, oldestAgeSeconds: 120 },
+    ]);
+    const response = await GET(
+      new Request('http://localhost/api/metrics', {
+        headers: { Authorization: 'Bearer fixture-scrape' },
+      })
+    );
+    const body = await response.text();
+    expect(response.status).toBe(200);
+    expect(body).toContain('opsknight_ingestion_enabled 1');
+    expect(collectIngestionQueueMetrics).toHaveBeenCalledOnce();
+    expect(body).toContain('opsknight_ingestion_unfinished{status="DEAD"} 2');
+    expect(body).toContain('opsknight_ingestion_unfinished{status="PENDING"} 3');
+    expect(body).toContain('opsknight_ingestion_oldest_unfinished_age_seconds 180');
+    expect(body).toContain('opsknight_ingestion_metrics_collection_success 1');
+  });
+
+  it('marks unavailable ingestion evidence instead of claiming a healthy empty queue', async () => {
+    process.env.OPSKNIGHT_INGESTION_MODE = 'postgres';
+    process.env.PROMETHEUS_SCRAPE_TOKEN = 'fixture-scrape';
+    vi.mocked(collectIngestionQueueMetrics).mockRejectedValue(new Error('Database unavailable'));
+    const response = await GET(
+      new Request('http://localhost/api/metrics', {
+        headers: { Authorization: 'Bearer fixture-scrape' },
+      })
+    );
+    const body = await response.text();
+    expect(body).toContain('opsknight_ingestion_enabled 1');
+    expect(body).toContain('opsknight_ingestion_metrics_collection_success 0');
+    expect(body).not.toContain('opsknight_ingestion_unfinished{status="DEAD"} 0');
   });
 
   it('bounds a hung collector without waiting for its database promise', async () => {

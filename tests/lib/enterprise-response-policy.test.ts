@@ -45,6 +45,7 @@ describe('enterprise response-policy contract', () => {
       }),
     ];
     const tx = {
+      $queryRaw: vi.fn().mockResolvedValue(policies.map(snapshot => ({ snapshot }))),
       incidentClassificationPolicy: {
         findFirst: vi.fn(({ where: { scopeKey } }) =>
           Promise.resolve(policies.find(candidate => candidate.scopeKey === scopeKey) ?? null)
@@ -73,6 +74,7 @@ describe('enterprise response-policy contract', () => {
       ),
     ];
     const tx = {
+      $queryRaw: vi.fn().mockResolvedValue(policies.map(snapshot => ({ snapshot }))),
       incidentClassificationPolicy: {
         findFirst: vi.fn(({ where: { scopeKey } }) =>
           Promise.resolve(policies.find(candidate => candidate.scopeKey === scopeKey) ?? null)
@@ -105,6 +107,7 @@ describe('enterprise response-policy contract', () => {
       },
     ];
     const tx = {
+      $queryRaw: vi.fn().mockResolvedValue(policies.map(snapshot => ({ snapshot }))),
       incidentClassificationPolicy: {
         findFirst: vi.fn(({ where: { scopeKey } }) =>
           Promise.resolve(policies.find(item => item.scopeKey === scopeKey) ?? null)
@@ -222,6 +225,7 @@ describe('enterprise response-policy contract', () => {
       exceptions: [],
     };
     const tx = {
+      $queryRaw: vi.fn().mockResolvedValue([{ snapshot: supportPolicy }]),
       responseSupportHoursPolicy: {
         findFirst: vi.fn(({ where: { scopeKey } }) =>
           Promise.resolve(scopeKey === 'workspace' ? supportPolicy : null)
@@ -262,6 +266,7 @@ describe('enterprise response-policy contract', () => {
       exceptions,
     };
     const tx = {
+      $queryRaw: vi.fn().mockResolvedValue([{ snapshot: supportPolicy }]),
       responseSupportHoursPolicy: {
         findFirst: vi.fn(({ where: { scopeKey } }) =>
           Promise.resolve(scopeKey === 'workspace' ? supportPolicy : null)
@@ -297,6 +302,7 @@ describe('enterprise response-policy contract', () => {
         exceptions: [],
       };
       const tx = {
+        $queryRaw: vi.fn().mockResolvedValue([{ snapshot: supportPolicy }]),
         responseSupportHoursPolicy: {
           findFirst: vi.fn(({ where: { scopeKey } }) =>
             Promise.resolve(scopeKey === 'workspace' ? supportPolicy : null)

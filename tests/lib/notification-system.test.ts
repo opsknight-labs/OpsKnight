@@ -180,7 +180,8 @@ describe('Notification System Tests', () => {
 
       expect(result.success).toBe(true);
       expect(enqueueCentralNotification).toHaveBeenCalledWith(
-        expect.objectContaining({ channel: 'SLACK', incidentId })
+        expect.objectContaining({ channel: 'SLACK', incidentId }),
+        { dispatchImmediately: true }
       );
     });
   });

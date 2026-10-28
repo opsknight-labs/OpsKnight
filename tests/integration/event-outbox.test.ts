@@ -12,7 +12,18 @@ type SideEffectPayload = {
   lane?: string;
   incidentId?: string;
   eventOrderAt?: string;
+  dispatch?: { version: number; effects: string[] };
 };
+
+function logicalEffects(jobs: Array<{ payload: unknown }>) {
+  return jobs.flatMap(job => {
+    const payload = job.payload as SideEffectPayload;
+    if (payload.effect !== 'DISPATCH_ORDINARY') return [payload.effect];
+    expect(payload.dispatch?.version).toBe(1);
+    expect(payload.lane).toBe('ORDINARY_DISPATCH');
+    return payload.dispatch!.effects;
+  });
+}
 
 describeIfRealDB('Event Transactional Outbox', { timeout: 30000 }, () => {
   beforeEach(async () => {
@@ -39,10 +50,10 @@ describeIfRealDB('Event Transactional Outbox', { timeout: 30000 }, () => {
       orderBy: { createdAt: 'asc' },
     });
 
-    expect(jobs).toHaveLength(5);
-    expect(jobs.every(job => job.status === 'PENDING')).toBe(true);
+    expect(jobs).toHaveLength(2);
+    expect(jobs.map(job => job.status).sort()).toEqual(['PENDING', 'PENDING_V2']);
     expect(jobs.every(job => job.maxAttempts === 5)).toBe(true);
-    expect(jobs.map(job => (job.payload as SideEffectPayload).effect).sort()).toEqual(
+    expect(logicalEffects(jobs).sort()).toEqual(
       [
         'TRIGGER_ESCALATION_NOTIFICATIONS',
         'TRIGGER_SERVICE_NOTIFICATION',
@@ -75,7 +86,7 @@ describeIfRealDB('Event Transactional Outbox', { timeout: 30000 }, () => {
 
     expect(first.action).toBe('triggered');
     expect(second.action).toBe('deduplicated');
-    expect(await testPrisma.backgroundJob.count({ where: { type: 'SCHEDULED_TASK' } })).toBe(5);
+    expect(await testPrisma.backgroundJob.count({ where: { type: 'SCHEDULED_TASK' } })).toBe(2);
   });
 
   it('enqueues action-specific jobs for acknowledge and resolve', async () => {
@@ -114,9 +125,10 @@ describeIfRealDB('Event Transactional Outbox', { timeout: 30000 }, () => {
     const jobs = await testPrisma.backgroundJob.findMany({
       where: { type: 'SCHEDULED_TASK' },
     });
-    const effects = jobs.map(job => (job.payload as SideEffectPayload).effect);
+    const effects = logicalEffects(jobs);
 
-    expect(jobs).toHaveLength(15);
+    expect(jobs).toHaveLength(6);
+    expect(effects).toHaveLength(15);
     for (const effect of [
       'LIFECYCLE_USER_NOTIFICATION',
       'LIFECYCLE_SERVICE_NOTIFICATION',
@@ -161,7 +173,7 @@ describeIfRealDB('Event Transactional Outbox', { timeout: 30000 }, () => {
     ).toBe('resolved');
 
     const firstClaim = await claimPendingJobs(20, 'SCHEDULED_TASK');
-    const firstEffects = firstClaim.map(job => (job.payload as SideEffectPayload).effect);
+    const firstEffects = logicalEffects(firstClaim);
 
     expect(firstEffects).toContain('TRIGGER_WEBHOOK');
     expect(firstEffects).toContain('TRIGGER_WAR_ROOM');
@@ -182,7 +194,7 @@ describeIfRealDB('Event Transactional Outbox', { timeout: 30000 }, () => {
     });
 
     const secondClaim = await claimPendingJobs(20, 'SCHEDULED_TASK');
-    const secondEffects = secondClaim.map(job => (job.payload as SideEffectPayload).effect);
+    const secondEffects = logicalEffects(secondClaim);
     expect(secondEffects.sort()).toEqual(
       [
         'LIFECYCLE_USER_NOTIFICATION',

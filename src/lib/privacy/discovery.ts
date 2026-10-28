@@ -120,6 +120,7 @@ export async function discoverSubjectData(input: unknown) {
       'Free text, email/name snapshots, IP addresses, JSON payloads and application or external logs are not searched.',
       'Status-page subscribers are not matched by email because they have no verified user relation.',
       'External identity, delivery, ChatOps and ticketing providers are not queried.',
+      'IngestionReceipt event/provider payloads, dead letters and orphaned receipts require manual review; they have no verified subject relation.',
       'A zero count does not prove absence of personal data, and this operation does not export, alter or delete records.',
     ],
   } as const;

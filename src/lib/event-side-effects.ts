@@ -1,3 +1,4 @@
+import { planIncidentEffects } from './incident-effect-planner';
 import prisma from './prisma';
 import { executeEscalation } from './notifications';
 import { logger } from './logger';
@@ -133,10 +134,12 @@ async function sendTriggerServiceNotification(payload: EventSideEffectPayload): 
   );
 }
 async function notifyCreatedIncidentStatusPage(payload: EventSideEffectPayload): Promise<void> {
-  if (!(await sideEffectSnapshotStillCurrent(payload))) return;
   const { notifyStatusPageSubscribers } = await import('./status-page-notifications');
   requireDelivery(
-    await notifyStatusPageSubscribers(payload.incidentId, 'triggered', payload.eventOrderAt),
+    await notifyStatusPageSubscribers(payload.incidentId, 'triggered', payload.eventOrderAt, {
+      status: payload.incidentStatus,
+      escalationGeneration: payload.escalationGeneration,
+    }),
     'status page notification'
   );
 }
@@ -378,7 +381,10 @@ async function archiveWarRoomIfStillResolved(payload: EventSideEffectPayload): P
   });
 }
 
-export async function processEventSideEffect(payload: EventSideEffectPayload): Promise<void> {
+export async function processEventSideEffect(
+  payload: EventSideEffectPayload,
+  parentAttempt?: number
+): Promise<void> {
   if (
     payload.task !== 'EVENT_SIDE_EFFECT' ||
     !payload.effect ||
@@ -401,11 +407,13 @@ export async function processEventSideEffect(payload: EventSideEffectPayload): P
       return;
     case 'TRIGGER_WAR_ROOM': {
       const { handleIncidentWarRoomEvent } = await import('./war-room/engine');
+      const plan = await planIncidentEffects(parentAttempt);
       await handleIncidentWarRoomEvent({
         kind: 'TRIGGER',
         incidentId: payload.incidentId,
         incidentEventId: payload.sourceEventId,
-      });
+      }, plan);
+      if (plan.collaboration === 'DISABLED') return;
       try {
         const { maybeAutoProvisionIncidentMeeting } =
           await import('./incident-collaboration/meeting-store');
@@ -418,6 +426,10 @@ export async function processEventSideEffect(payload: EventSideEffectPayload): P
             error: err instanceof Error ? err.message : String(err),
           }
         );
+        // Keep this durable parent retryable when configuration or meeting
+        // planning is unavailable. Replays retain sourceEventId; provider
+        // deliveries and meeting provisioning keep their existing fences.
+        throw err;
       }
       return;
     }

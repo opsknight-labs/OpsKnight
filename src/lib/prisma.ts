@@ -1,6 +1,6 @@
 import { PrismaClient } from '@prisma/client';
 import { configurePrismaDatasource, selectPrismaDatasourceUrl } from './prisma-datasource';
-import { getOpsKnightProcessRole } from './runtime-role';
+import { getOpsKnightProcessRole, isDedicatedHttpRole } from './runtime-role';
 
 /**
  * Prisma Client Configuration for Scale
@@ -19,6 +19,7 @@ function rolePoolSize(): string | undefined {
     case 'integrated':
       return process.env.DATABASE_POOL_SIZE_INTEGRATED;
     case 'web':
+    case 'http':
       return process.env.DATABASE_POOL_SIZE_WEB;
     case 'scheduler':
       return process.env.DATABASE_POOL_SIZE_SCHEDULER;
@@ -34,6 +35,8 @@ function rolePoolSize(): string | undefined {
       return process.env.DATABASE_POOL_SIZE_STATUS_PROJECTOR;
     case 'runbook-worker':
       return process.env.DATABASE_POOL_SIZE_RUNBOOK_WORKER;
+    case 'ingestion-worker':
+      return process.env.DATABASE_POOL_SIZE_INGESTION_WORKER;
   }
 }
 
@@ -43,7 +46,8 @@ const prismaClientSingleton = () => {
   // Log configuration for debugging
   const datasourceUrl = configurePrismaDatasource(
     rawDatasourceUrl,
-    rolePoolSize() ?? process.env.DATABASE_POOL_SIZE
+    rolePoolSize() ?? process.env.DATABASE_POOL_SIZE,
+    isDedicatedHttpRole(role) && process.env.PGBOUNCER_ENABLED === 'true'
   );
 
   const client = new PrismaClient({

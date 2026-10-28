@@ -1,6 +1,46 @@
 import { Prisma } from '@prisma/client';
 import { logger } from './logger';
 
+/** Acquire canonical text identities in the same JS order as legacy writers,
+ * with one database round trip. Materialization preserves that acquisition
+ * order before PostgreSQL evaluates the volatile advisory-lock function.
+ */
+export async function acquireTextAdvisoryLocks(
+  tx: Prisma.TransactionClient,
+  identities: string[]
+): Promise<void> {
+  const ordered = [...new Set(identities)].sort();
+  if (!ordered.length) return;
+  await tx.$executeRaw`
+    WITH ordered AS MATERIALIZED (
+      SELECT identity FROM unnest(${ordered}::text[]) WITH ORDINALITY AS locks(identity, position)
+      ORDER BY position
+    ) SELECT pg_advisory_xact_lock(hashtextextended(identity, 0)) FROM ordered`;
+}
+
+/** Admission must acknowledge only synchronous commits, even when a session
+ * default disables them. Materialized dependencies apply the transaction-local
+ * setting before taking canonical locks, in one round trip. Empty identities
+ * still execute the setting. No session state escapes transaction completion.
+ */
+export async function acquireDurableTextAdvisoryLocks(
+  tx: Prisma.TransactionClient,
+  identities: string[]
+): Promise<void> {
+  const ordered = [...new Set(identities)].sort();
+  await tx.$executeRaw`
+    WITH durability AS MATERIALIZED (
+      SELECT set_config('synchronous_commit', 'on', true) AS value
+    ), ordered AS MATERIALIZED (
+      SELECT identity FROM durability
+      CROSS JOIN unnest(${ordered}::text[]) WITH ORDINALITY AS locks(identity, position)
+      ORDER BY position
+    )
+    SELECT pg_advisory_xact_lock(hashtextextended(identity, 0)) FROM ordered
+    UNION ALL
+    SELECT NULL FROM durability WHERE NOT EXISTS (SELECT 1 FROM ordered)`;
+}
+
 /**
  * Postgres advisory-lock helpers.
  *

@@ -15,7 +15,7 @@ import {
   getIncidentSlaWarningWindowMs,
   isValidIncidentSlaWarningPolicy,
 } from './warning-policy';
-import { validateCapturedIncidentSlaContract } from './contract';
+import { validateCapturedIncidentSlaContract } from './captured-contract';
 
 export type * from './types';
 

@@ -217,3 +217,19 @@ it('shows the unattended-write panel with eligibility only to administrators', (
   );
   expect(screen.queryByRole('button', { name: 'Authorize v3' })).not.toBeInTheDocument();
 });
+
+it('keeps workflow and target searches available before a service has any rules', () => {
+  render(
+    <ServiceRunbooks
+      serviceId="empty-service"
+      bindings={[]}
+      availableRunbooks={[]}
+      availableAgents={[]}
+      availableAgentPools={[]}
+      canManage={true}
+    />
+  );
+  expect(screen.getByRole('textbox', { name: 'Workflow search' })).toBeVisible();
+  expect(screen.getByRole('textbox', { name: 'Agent / pool search' })).toBeVisible();
+  expect(screen.getByRole('button', { name: 'Search options' })).toBeVisible();
+});

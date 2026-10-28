@@ -131,3 +131,8 @@ __pycache__/
 .env.certification
 reports/**/EVIDENCE/*.png
 reports/**/*.png
+
+# Raw ingestion benchmark evidence (retained on feat/enterprise-event-ingestion, not committed)
+/plans/event-ingestion/*.json
+/plans/event-ingestion/*.jsonl
+/plans/event-ingestion/*.gz

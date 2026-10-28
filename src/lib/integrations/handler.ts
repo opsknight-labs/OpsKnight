@@ -1,3 +1,6 @@
+import { reserveIngestionReplay } from '@/lib/ingestion/replay';
+import { withIngestionRequestSlot } from '@/lib/ingestion/request-gate';
+import type { IngestionRateLimitError } from '@/lib/ingestion/contract';
 /**
  * Integration Handler Middleware
  *
@@ -10,6 +13,8 @@
  */
 
 import { NextRequest } from 'next/server';
+import { withIngestionDelivery, ingestionDeliveryKey } from '@/lib/ingestion/admission';
+import { ingestionErrorResponse } from '@/lib/ingestion/http';
 import prisma from '@/lib/prisma';
 import { jsonError, jsonOk } from '@/lib/api-response';
 import { AppError } from '@/lib/errors';
@@ -64,7 +69,9 @@ export interface HandlerOptions<T> {
 
 export function createIntegrationHandler<T>(
   options: HandlerOptions<T>,
-  processor: (ctx: IntegrationContext<T>) => Promise<{ action: string; incident?: unknown }>
+  processor: (
+    ctx: IntegrationContext<T>
+  ) => Promise<{ action: string; incident?: unknown; receiptId?: string; receipts?: string[] }>
 ) {
   const handler = async (req: NextRequest) => {
     const startTime = performance.now();
@@ -112,33 +119,49 @@ export function createIntegrationHandler<T>(
         );
       }
 
-      if (!(await isIntegrationAuthorized(req, integration.key, integration.previousKey, integration.previousKeyExpiresAt))) {
+      if (
+        !(await isIntegrationAuthorized(
+          req,
+          integration.key,
+          integration.previousKey,
+          integration.previousKeyExpiresAt
+        ))
+      ) {
         throw IntegrationErrors.invalidPayload('Invalid integration key');
       }
 
       integrationType = integration.type;
 
+      let replayOnly: IngestionRateLimitError | undefined;
       if (RATE_LIMIT_ENABLED && !options.skipRateLimit) {
         const rateResult = await checkRateLimit(integrationId);
 
         if (!rateResult.allowed) {
-          const headers = createRateLimitHeaders(rateResult);
-          recordWebhookReceived(
-            integrationType,
-            integrationId,
-            false,
-            performance.now() - startTime,
-            'RATE_LIMITED'
+          replayOnly = await reserveIngestionReplay(
+            `integration:${integrationId}`,
+            ingestionDeliveryKey(req.headers, options.integrationType),
+            rateResult,
+            'integration'
           );
+          if (!replayOnly) {
+            const headers = createRateLimitHeaders(rateResult);
+            recordWebhookReceived(
+              integrationType,
+              integrationId,
+              false,
+              performance.now() - startTime,
+              'RATE_LIMITED'
+            );
 
-          // Preserve the integration-specific wire contract for rate limits.
-          return new Response(
-            JSON.stringify({ error: 'RATE_LIMITED', message: 'Rate limit exceeded' }),
-            {
-              status: 429,
-              headers: { 'Content-Type': 'application/json', ...headers },
-            }
-          );
+            // Preserve the integration-specific wire contract for rate limits.
+            return new Response(
+              JSON.stringify({ error: 'RATE_LIMITED', message: 'Rate limit exceeded' }),
+              {
+                status: 429,
+                headers: { 'Content-Type': 'application/json', ...headers },
+              }
+            );
+          }
         }
       }
 
@@ -200,7 +223,9 @@ export function createIntegrationHandler<T>(
             // Payload parsing below returns the canonical invalid-payload error.
           }
         }
-        const claim = await claimInboundDelivery(integration.id, provider, deliveryId);
+        const claim = replayOnly
+          ? null
+          : await claimInboundDelivery(integration.id, provider, deliveryId);
         if (claim?.disposition === 'COMPLETED') return jsonOk({ status: 'duplicate' }, 200);
         if (claim?.disposition === 'BUSY') {
           return new Response(JSON.stringify({ error: 'DELIVERY_IN_PROGRESS' }), {
@@ -244,7 +269,12 @@ export function createIntegrationHandler<T>(
         startTime,
       };
 
-      const result = await processor(ctx);
+      const result = await withIngestionDelivery(
+        ingestionDeliveryKey(req.headers, options.integrationType) ??
+          (deliveryId ? `${options.integrationType}:${deliveryId}` : undefined),
+        () => processor(ctx),
+        replayOnly
+      );
       if (deliveryClaim) await completeInboundDelivery(deliveryClaim);
 
       recordWebhookReceived(integrationType, integrationId, true, performance.now() - startTime);
@@ -259,6 +289,8 @@ export function createIntegrationHandler<T>(
           })
         );
       }
+      const ingestionError = ingestionErrorResponse(error);
+      if (ingestionError) return ingestionError;
       if (error instanceof IntegrationBodyTooLargeError) {
         return jsonError(
           new AppError({
@@ -302,10 +334,13 @@ export function createIntegrationHandler<T>(
     }
   };
 
-  return withRequestContext(handler, `api.integration.${options.integrationType}`);
+  return withRequestContext(
+    (req: NextRequest) => withIngestionRequestSlot(() => handler(req)),
+    `api.integration.${options.integrationType}`
+  );
 }
 
-export async function withIntegrationMiddleware(
+async function runIntegrationMiddleware(
   req: NextRequest,
   integrationType: string,
   handler: () => Promise<Response>
@@ -402,7 +437,14 @@ export async function withIntegrationMiddleware(
     );
   }
 
-  if (!(await isIntegrationAuthorized(req, integration.key, integration.previousKey, integration.previousKeyExpiresAt))) {
+  if (
+    !(await isIntegrationAuthorized(
+      req,
+      integration.key,
+      integration.previousKey,
+      integration.previousKeyExpiresAt
+    ))
+  ) {
     logger.warn('integration.invalid_key', { integrationId });
     recordWebhookReceived(
       integrationType,
@@ -420,28 +462,41 @@ export async function withIntegrationMiddleware(
     );
   }
 
+  let replayOnly: IngestionRateLimitError | undefined;
   if (RATE_LIMIT_ENABLED) {
     const rateResult = await checkRateLimit(integrationId);
     if (!rateResult.allowed) {
-      recordWebhookReceived(
-        integrationType,
-        integrationId,
-        false,
-        performance.now() - startTime,
-        'RATE_LIMITED'
+      replayOnly = await reserveIngestionReplay(
+        `integration:${integrationId}`,
+        ingestionDeliveryKey(req.headers, integrationType),
+        rateResult,
+        'integration'
       );
-      return new Response(
-        JSON.stringify({ error: 'RATE_LIMITED', message: 'Rate limit exceeded' }),
-        {
-          status: 429,
-          headers: { 'Content-Type': 'application/json', ...createRateLimitHeaders(rateResult) },
-        }
-      );
+      if (!replayOnly) {
+        recordWebhookReceived(
+          integrationType,
+          integrationId,
+          false,
+          performance.now() - startTime,
+          'RATE_LIMITED'
+        );
+        return new Response(
+          JSON.stringify({ error: 'RATE_LIMITED', message: 'Rate limit exceeded' }),
+          {
+            status: 429,
+            headers: { 'Content-Type': 'application/json', ...createRateLimitHeaders(rateResult) },
+          }
+        );
+      }
     }
   }
 
   try {
-    const response = await handler();
+    const response = await withIngestionDelivery(
+      ingestionDeliveryKey(req.headers, integrationType),
+      handler,
+      replayOnly
+    );
     const success = response.status >= 200 && response.status < 300;
     recordWebhookReceived(integrationType, integrationId, success, performance.now() - startTime);
     return response;
@@ -467,6 +522,22 @@ export async function withIntegrationMiddleware(
       performance.now() - startTime,
       'ERROR'
     );
+    throw error;
+  }
+}
+
+export async function withIntegrationMiddleware(
+  req: NextRequest,
+  integrationType: string,
+  handler: () => Promise<Response>
+): Promise<Response> {
+  try {
+    return await withIngestionRequestSlot(() =>
+      runIntegrationMiddleware(req, integrationType, handler)
+    );
+  } catch (error) {
+    const response = ingestionErrorResponse(error);
+    if (response) return response;
     throw error;
   }
 }

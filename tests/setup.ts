@@ -5,6 +5,9 @@ import { cleanup } from '@testing-library/react';
 
 // Ensure consistent baseline key derivation secrets in unit test runners
 delete process.env.API_KEY_SECRET;
+// Legacy unit fixtures exercise the synchronous wire contract explicitly.
+// Default-mode and image-upgrade tests remove this override deliberately.
+vi.stubEnv('OPSKNIGHT_INGESTION_MODE', 'sync');
 
 if (typeof HTMLElement !== 'undefined' && !HTMLElement.prototype.scrollIntoView) {
   HTMLElement.prototype.scrollIntoView = vi.fn();

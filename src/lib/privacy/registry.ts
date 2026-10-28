@@ -8,6 +8,24 @@ import type { PersonalDataDomain } from './types';
  */
 export const personalDataRegistry = [
   {
+    domain: 'event-ingestion',
+    models: ['IngestionReceipt', 'IngestionBatch'],
+    fields: ['envelope.event.payload', 'envelope.providerPayload', 'payload.value', 'result'],
+    purpose: ['Durable alert processing', 'Authorized replay and reconciliation'],
+    classifications: ['INTERNAL', 'PERSONAL', 'SENSITIVE', 'SECRET'],
+    locations: ['DATABASE'],
+    retention: {
+      current:
+        'Completed raw envelopes expire under configured retention unless held. Unfinished work is retained; administrators can explicitly archive dead letters with a reason and accepted-work discard acknowledgement.',
+      target:
+        'Hold-aware payload minimization with permanent idempotency tombstones and audited dead-letter disposition.',
+    },
+    discoverable: 'NOT_COUNTED',
+    notes: [
+      'Provider-controlled JSON has no verified subject relation. Every subject export or erasure requires manual review of pending, completed, dead-letter and orphaned receipts. Never silently discard accepted work to satisfy a subject request.',
+    ],
+  },
+  {
     domain: 'service-automation',
     models: ['IncidentAutomationDecision', 'AutomationTrace', 'AutomationContextObservation'],
     fields: [

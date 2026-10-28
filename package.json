@@ -118,7 +118,14 @@
     "certify:scim:replicas": "node scripts/scim/certify-replicas.mjs",
     "certify:scim:outage": "node scripts/scim/certify-outage.mjs",
     "certify:scim:browser": "playwright test --config playwright.scim.config.ts",
-    "api:coverage": "TS_NODE_PROJECT=tsconfig.script.json node -r ts-node/register -r tsconfig-paths/register scripts/api-v2/coverage-matrix.ts"
+    "api:coverage": "TS_NODE_PROJECT=tsconfig.script.json node -r ts-node/register -r tsconfig-paths/register scripts/api-v2/coverage-matrix.ts",
+    "certify:ingestion:db": "vitest run --config vitest.ingestion.config.ts",
+    "certify:ingestion:unit": "vitest run --no-file-parallelism --maxWorkers=1 tests/ingestion/contract.test.ts tests/api/admin-ingestion.test.ts tests/api/ingestion-receipt.test.ts tests/lib/integration-middleware.test.ts tests/lib/integration-rate-limiter.test.ts tests/lib/incidents/event-lifecycle.test.ts tests/lib/event-outbox-runbook-trigger.test.ts tests/lib/event-notification-routing.test.ts tests/lib/event-side-effects.test.ts tests/lib/runtime-role.test.ts",
+    "benchmark:ingestion": "node scripts/ingestion/benchmark.cjs",
+    "certify:ingestion:upgrade": "node scripts/ingestion/certify-upgrade.cjs",
+    "certify:ingestion:outage": "node scripts/ingestion/certify-outage.cjs",
+    "certify:ingestion:http": "node scripts/ingestion/certify-http.cjs",
+    "certify:ingestion:docker": "node scripts/ingestion/certify-docker.cjs"
   },
   "dependencies": {
     "@aws-sdk/client-ses": "^3.1149.0",

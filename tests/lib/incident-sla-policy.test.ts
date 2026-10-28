@@ -34,7 +34,7 @@ const service = {
 };
 function transaction(policies: unknown[]) {
   return {
-    incidentSlaPolicy: { findMany: vi.fn().mockResolvedValue(policies) },
+    $queryRaw: vi.fn().mockResolvedValue(policies.map(snapshot => ({ snapshot }))),
   } as unknown as Prisma.TransactionClient;
 }
 const now = new Date('2026-09-07T00:00:00Z');

@@ -1,8 +1,18 @@
+import {
+  measureAdmissionStage,
+  measureAdmissionComputation,
+} from '@/lib/ingestion/admission-timing';
+import { reserveIngestionReplay } from '@/lib/ingestion/replay';
+import { withIngestionRequestSlot } from '@/lib/ingestion/request-gate';
+import type { IngestionRateLimitError } from '@/lib/ingestion/contract';
 import { NextRequest } from 'next/server';
+import { withIngestionDelivery } from '@/lib/ingestion/admission';
+import { ingestionErrorResponse } from '@/lib/ingestion/http';
+import { ingestionConfig } from '@/lib/ingestion/config';
 import prisma from '@/lib/prisma';
 import { processIntegrationEvent, EventPayload } from '@/lib/events';
 import { authenticateApiKey } from '@/lib/api-auth';
-import { checkRateLimit } from '@/lib/rate-limit';
+import { checkIngestionQuota as checkRateLimit } from '@/lib/ingestion/quota';
 import { jsonError, jsonOk } from '@/lib/api-response';
 import { EventSchema } from '@/lib/validation';
 import { logger, withRequestContext } from '@/lib/logger';
@@ -35,7 +45,9 @@ async function postEvent(req: NextRequest) {
 
     if (authHeader?.startsWith('Token token=')) {
       const key = authHeader.split('Token token=')[1];
-      const integration = await prisma.integration.findUnique({ where: { key } });
+      const integration = await measureAdmissionStage('authentication', () =>
+        prisma.integration.findUnique({ where: { key } })
+      );
       if (!integration) {
         return jsonError(
           new AppError({
@@ -68,7 +80,7 @@ async function postEvent(req: NextRequest) {
       integrationType = integration.type;
       serviceId = integration.serviceId;
     } else {
-      const apiKey = await authenticateApiKey(req);
+      const apiKey = await measureAdmissionStage('authentication', () => authenticateApiKey(req));
       if (!apiKey) {
         return jsonError(
           new AppError({ code: 'API_KEY_INVALID', userMessage: LEGACY_UNAUTHORIZED_MESSAGE })
@@ -80,8 +92,8 @@ async function postEvent(req: NextRequest) {
 
     let body: any; // eslint-disable-line @typescript-eslint/no-explicit-any
     try {
-      const rawBody = await readIntegrationBody(req);
-      body = JSON.parse(rawBody);
+      const rawBody = await measureAdmissionStage('body-read', () => readIntegrationBody(req));
+      body = measureAdmissionComputation('body-parse', () => JSON.parse(rawBody));
     } catch (error) {
       if (error instanceof IntegrationBodyTooLargeError) {
         return jsonError(
@@ -93,7 +105,7 @@ async function postEvent(req: NextRequest) {
       );
     }
 
-    const parsed = EventSchema.safeParse(body);
+    const parsed = measureAdmissionComputation('validation', () => EventSchema.safeParse(body));
     if (!parsed.success) {
       return jsonError(
         new AppError({ code: 'VALIDATION_FAILED', userMessage: LEGACY_INVALID_INPUT_MESSAGE }),
@@ -175,40 +187,62 @@ async function postEvent(req: NextRequest) {
       integrationId = 'api-key';
     }
 
+    const idempotencyKey =
+      ingestionConfig().mode === 'postgres' ? req.headers.get('Idempotency-Key') : null;
+    if (idempotencyKey && idempotencyKey.length > 256)
+      return jsonError('Invalid Idempotency-Key', 400);
+    let replayOnly: IngestionRateLimitError | undefined;
     if (process.env.INTEGRATION_RATE_LIMIT !== 'false') {
-      const rateKey = integrationId
-        ? `integration:${integrationId}:events`
-        : apiKeyId
-          ? `api:${apiKeyId}:events`
+      const rateKey = apiKeyId
+        ? `api:${apiKeyId}:events`
+        : integrationId
+          ? `integration:${integrationId}:events`
           : 'anonymous:events';
-      const rate = await checkRateLimit(rateKey, RATE_LIMIT_MAX, RATE_LIMIT_WINDOW_MS);
+      const rate = await measureAdmissionStage('quota', () =>
+        checkRateLimit(rateKey, RATE_LIMIT_MAX, RATE_LIMIT_WINDOW_MS)
+      );
       if (!rate.allowed) {
-        const retryAfter = Math.ceil((rate.resetAt - Date.now()) / 1000);
-        return jsonError(
-          new AppError({
-            code: 'RATE_LIMIT_EXCEEDED',
-            userMessage: 'Rate limit exceeded.',
-            details: { retryAfter },
-          }),
-          undefined,
-          undefined,
-          { 'Retry-After': String(retryAfter) }
+        replayOnly = await reserveIngestionReplay(
+          rateKey,
+          idempotencyKey ?? undefined,
+          rate,
+          'events'
         );
+        if (!replayOnly) {
+          const retryAfter = Math.ceil((rate.resetAt - Date.now()) / 1000);
+          return jsonError(
+            new AppError({
+              code: 'RATE_LIMIT_EXCEEDED',
+              userMessage: 'Rate limit exceeded.',
+              details: { retryAfter },
+            }),
+            undefined,
+            undefined,
+            { 'Retry-After': String(retryAfter) }
+          );
+        }
       }
     }
 
-    const result = await processIntegrationEvent({
-      event: { ...parsed.data, event_action: eventAction, dedup_key: dedupKey } as EventPayload,
-      serviceId,
-      integrationId: integrationId || 'api-key',
-      integrationType,
-      providerPayload: parsed.data,
-      receivedAt: new Date(),
-    });
+    const result = await withIngestionDelivery(
+      idempotencyKey ? `${apiKeyId ?? integrationId}:${idempotencyKey}` : undefined,
+      () =>
+        processIntegrationEvent({
+          event: { ...parsed.data, event_action: eventAction, dedup_key: dedupKey } as EventPayload,
+          serviceId,
+          integrationId: integrationId || 'api-key',
+          integrationType,
+          providerPayload: parsed.data,
+          receivedAt: new Date(),
+        }),
+      replayOnly
+    );
 
     logger.info('api.event.processed', { action: result.action, serviceId, integrationId });
     return jsonOk({ status: 'success', result }, 202);
   } catch (error: unknown) {
+    const ingestionError = ingestionErrorResponse(error);
+    if (ingestionError) return ingestionError;
     logger.error('api.event.error', {
       error: error instanceof Error ? error.message : String(error),
     });
@@ -216,4 +250,7 @@ async function postEvent(req: NextRequest) {
   }
 }
 
-export const POST = withRequestContext(postEvent, 'api.events');
+export const POST = withRequestContext(
+  (req: NextRequest) => withIngestionRequestSlot(() => postEvent(req)),
+  'api.events'
+);

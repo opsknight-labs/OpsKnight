@@ -1,6 +1,7 @@
+import { ingestionErrorResponse } from '@/lib/ingestion/http';
 import { NextRequest } from 'next/server';
 import prisma from '@/lib/prisma';
-import { processIntegrationEvent } from '@/lib/events';
+import { processIntegrationBatch } from '@/lib/events';
 import { transformGrafanaToEvents, GrafanaAlert } from '@/lib/integrations/grafana';
 
 import { verifyGrafanaSignature } from '@/lib/integrations/signature-verification';
@@ -26,8 +27,8 @@ const VERIFY_SIGNATURES = process.env.INTEGRATION_VERIFY_SIGNATURES !== 'false';
  */
 export async function POST(req: NextRequest) {
   return withIntegrationMiddleware(req, 'GRAFANA', async () => {
-  const startTime = Date.now();
-  let deliveryClaim: Extract<InboundDeliveryClaim, { disposition: 'CLAIMED' }> | null = null;
+    const startTime = Date.now();
+    let deliveryClaim: Extract<InboundDeliveryClaim, { disposition: 'CLAIMED' }> | null = null;
 
     try {
       const { searchParams } = new URL(req.url);
@@ -90,11 +91,16 @@ export async function POST(req: NextRequest) {
       }
 
       const events = transformGrafanaToEvents(validation.data as GrafanaAlert);
-      const results = [];
-      for (const event of events) {
-        const result = await processIntegrationEvent({ event, serviceId: integration.serviceId, integrationId: integration.id, integrationType: 'GRAFANA', providerPayload: validation.data, receivedAt: new Date() });
-        results.push(result);
-      }
+      const results = await processIntegrationBatch(
+        {
+          serviceId: integration.serviceId,
+          integrationId: integration.id,
+          integrationType: 'GRAFANA',
+          providerPayload: validation.data,
+          receivedAt: new Date(),
+        },
+        events
+      );
 
       const primaryResult = results[0] || { action: 'ignored' };
       if (deliveryClaim) await completeInboundDelivery(deliveryClaim);
@@ -108,6 +114,8 @@ export async function POST(req: NextRequest) {
       return jsonOk({ status: 'success', result: primaryResult, results }, 202);
     } catch (error: unknown) {
       if (deliveryClaim) await failInboundDelivery(deliveryClaim, error).catch(() => undefined);
+      const ingestionError = ingestionErrorResponse(error);
+      if (ingestionError) return ingestionError;
       if (error instanceof IntegrationBodyTooLargeError) {
         return jsonError(error.message, 413);
       }

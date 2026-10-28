@@ -5,6 +5,7 @@ import type { IncidentLifecycleCommand, IncidentLifecycleSource } from './incide
 export type EventOutboxAction = 'triggered' | 'resolved' | 'acknowledged';
 
 export type EventSideEffect =
+  | 'DISPATCH_ORDINARY'
   | 'TRIGGER_WEBHOOK'
   | 'TRIGGER_ESCALATION_NOTIFICATIONS'
   | 'TRIGGER_SERVICE_NOTIFICATION'
@@ -34,6 +35,7 @@ export type EventSideEffect =
   | 'INCIDENT_UPDATE_WEBHOOK';
 
 export type EventSideEffectLane =
+  | 'ORDINARY_DISPATCH'
   | 'WEBHOOK'
   | 'ESCALATION'
   | 'WAR_ROOM'
@@ -65,6 +67,9 @@ export interface EventSideEffectPayload {
   incidentStatus?: IncidentStatus;
   lifecycle?: LifecycleSideEffectContext;
   warRoom?: { message?: string; userId?: string; teamId?: string };
+  dispatch?: { version: 1; effects: EventSideEffect[] };
+  /** Original compact-parent tie-breaker, retained when planning legacy-compatible children. */
+  dispatchOrderId?: string;
 }
 export interface LifecycleOutboxInput {
   incidentId: string;
@@ -96,6 +101,16 @@ export function getEventSideEffects(action: EventOutboxAction): readonly EventSi
     case 'acknowledged':
       return [];
   }
+}
+
+/** Logical effect declarations stay stable for legacy readers/handlers. */
+export function getDurableEventSideEffects(
+  effects: readonly EventSideEffect[]
+): readonly EventSideEffect[] {
+  const critical = effects.filter(
+    effect => getEventSideEffectLane(effect) === 'PERSONAL_NOTIFICATION'
+  );
+  return effects.length > critical.length ? [...critical, 'DISPATCH_ORDINARY'] : critical;
 }
 
 export function getIncidentCreationSideEffects(
@@ -143,8 +158,10 @@ export function getLifecycleSideEffects(
   return Array.from(effects);
 }
 
-function getEventSideEffectLane(effect: EventSideEffect): EventSideEffectLane {
+export function getEventSideEffectLane(effect: EventSideEffect): EventSideEffectLane {
   switch (effect) {
+    case 'DISPATCH_ORDINARY':
+      return 'ORDINARY_DISPATCH';
     case 'TRIGGER_WEBHOOK':
     case 'RESOLVE_WEBHOOK':
     case 'LIFECYCLE_WEBHOOK':
@@ -199,7 +216,10 @@ async function enqueueSideEffects(
   lifecycle?: LifecycleSideEffectContext,
   warRoom?: EventSideEffectPayload['warRoom'],
   notBeforeByEffect?: ReadonlyMap<EventSideEffect, Date>,
-  incidentSnapshotInput?: { escalationGeneration?: number | null; status?: IncidentStatus | null } | null,
+  incidentSnapshotInput?: {
+    escalationGeneration?: number | null;
+    status?: IncidentStatus | null;
+  } | null,
   automationDecisionInput?: { mode: string; routeType: string } | null
 ): Promise<void> {
   const decision =
@@ -230,10 +250,16 @@ async function enqueueSideEffects(
   // One UUID per logical incident transition — every outbox row for this enqueue shares the same sourceEventId.
   // Retry of the same SCHEDULED_TASK preserves it; a new lifecycle transition allocates a fresh one.
   const sourceEventId = crypto.randomUUID();
+  // Preserve independently scheduled critical responder work. All ordinary
+  // lanes share a compact durable planning barrier for this source transition.
+  const ordinary = effects.filter(
+    effect => getEventSideEffectLane(effect) !== 'PERSONAL_NOTIFICATION'
+  );
+  const durableEffects = getDurableEventSideEffects(effects);
   await tx.backgroundJob.createMany({
-    data: effects.map(effect => ({
+    data: durableEffects.map(effect => ({
       type: 'SCHEDULED_TASK',
-      status: 'PENDING',
+      status: effect === 'DISPATCH_ORDINARY' ? 'PENDING_V2' : 'PENDING',
       scheduledAt: (() => {
         const notBefore = notBeforeByEffect?.get(effect);
         return notBefore && notBefore > eventOrderAt ? notBefore : eventOrderAt;
@@ -261,6 +287,9 @@ async function enqueueSideEffects(
             }
           : {}),
         ...(warRoom ? { warRoom } : {}),
+        ...(effect === 'DISPATCH_ORDINARY'
+          ? { dispatch: { version: 1 as const, effects: ordinary } }
+          : {}),
       } satisfies EventSideEffectPayload & Prisma.InputJsonObject,
     })),
   });
@@ -310,7 +339,10 @@ export async function enqueueEventSideEffects(
   action: EventOutboxAction,
   incidentId: string,
   responderNotBefore?: Date,
-  incidentSnapshot?: { escalationGeneration?: number | null; status?: IncidentStatus | null } | null,
+  incidentSnapshot?: {
+    escalationGeneration?: number | null;
+    status?: IncidentStatus | null;
+  } | null,
   automationDecision?: { mode: string; routeType: string } | null
 ): Promise<void> {
   await enqueueSideEffects(

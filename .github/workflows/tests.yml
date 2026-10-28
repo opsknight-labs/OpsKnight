@@ -147,6 +147,42 @@ jobs:
           upload-artifact: 'true'
           artifact-name: next-build-artifact
 
+  ingestion-durability:
+    name: Ingestion durability (isolated PostgreSQL)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: ingestion_test_ci
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd="pg_isready -U postgres -d ingestion_test_ci"
+          --health-interval=10s --health-timeout=5s --health-retries=5
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/ingestion_test_ci?connection_limit=5
+      ENCRYPTION_KEY: 68112f544b2c8b0f84436ea34293f733c33e49b41e657b9db0275f5edf09c7ba
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup-node
+        with:
+          node-version: 20
+          generate-prisma: 'true'
+      - uses: ./.github/actions/setup-test-db
+      - name: Real database ingestion regressions
+        run: >-
+          npx vitest run --config vitest.ingestion.config.ts
+          --reporter=default --reporter=junit --outputFile=reports/junit-ingestion.xml
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: junit-ingestion-report
+          path: reports/junit-ingestion.xml
+          if-no-files-found: error
+
   db-integration:
     name: Database integration (L2, shard ${{ matrix.shard }}/2)
     runs-on: ubuntu-latest

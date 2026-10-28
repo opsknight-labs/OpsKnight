@@ -143,8 +143,7 @@ export async function deliverWebhook(
             : String(retryResult.error),
       });
       const error = retryResult.error as
-        | (Error & { statusCode?: number; retryAfterMs?: number })
-        | undefined;
+        (Error & { statusCode?: number; retryAfterMs?: number }) | undefined;
       return {
         success: false,
         error: error?.message || 'Status-page webhook delivery failed',
@@ -227,9 +226,9 @@ export async function getStatusPagesForService(serviceId: string): Promise<strin
 /**
  * Trigger webhooks for a status page event.
  *
- * Delivery completion is persisted per webhook target. If a durable parent job
- * is retried after partial success, already-completed targets are skipped and
- * only failed targets are attempted again.
+ * Persist target intents and return without provider I/O. Retries reuse their
+ * durable identities; delivery workers own provider attempts and completion.
+ * Returned counts describe durable planning, not remote delivery success.
  */
 export async function triggerStatusPageWebhooks(
   statusPageId: string,
@@ -272,7 +271,7 @@ export async function triggerStatusPageWebhooks(
       data,
     };
 
-    // Deliver to webhooks in concurrency-controlled batches
+    // Bound concurrent durable intent creation; workers deliver independently.
     const BATCH_SIZE = 25;
     let attempted = 0;
     let failed = 0;
@@ -281,7 +280,8 @@ export async function triggerStatusPageWebhooks(
       const results = await Promise.allSettled(
         batch.map(async webhook => {
           const stableDeliveryId = statusWebhookDeliveryId(effectiveDeliveryKey, webhook.id);
-          const intent = await enqueueCentralNotification({
+          const intent = await enqueueCentralNotification(
+            {
               category: 'STATUS_PAGE',
               channel: 'WEBHOOK',
               recipientType: 'WEBHOOK',
@@ -307,7 +307,9 @@ export async function triggerStatusPageWebhooks(
                 expectedStatus: policy.expectedStatus,
                 escalationGeneration: policy.escalationGeneration,
               },
-            });
+            },
+            { dispatchImmediately: false }
+          );
 
           return { attempted: true, success: intent.delivered !== false };
         })
