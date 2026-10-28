@@ -8,40 +8,56 @@ audience: [responder, administrator, operator]
 verification:
   level: source
   verified_at: 2026-10-15
-  evidence: [src/app/(app)/runbooks, src/components/service/ServiceRunbooks.tsx, src/components/incident/IncidentRunbooks.tsx]
+  evidence:
+    [
+      src/app/(app)/runbooks,
+      src/components/service/ServiceRunbooks.tsx,
+      src/components/incident/IncidentRunbooks.tsx,
+    ]
 ---
 
 # Runbooks
 
-Runbooks is **Beta** in v2.1. Use a published, compatible server/Agent pair
-and qualify your deployment and target permissions before enabling automatic
-writes. Passing configuration checks or a preview does not prove recovery.
+> **Beta** — Runbooks is Beta in v2.1. Use a published, compatible server/Agent
+> pair and qualify your deployment and target permissions before enabling
+> automatic writes. Passing configuration checks or a preview does not prove
+> recovery.
 
-Read [Runbooks and safe remediation](../../concepts/runbooks) before enabling writes.
+Read [Runbooks and safe remediation](../../concepts/runbooks) for the
+architecture, risk model, and safety guarantees before enabling writes.
 
-1. [Author and publish a Runbook](./author).
-2. [Bind a workflow and respond to an incident](./respond).
-3. [Manage Agents, pools, and scoped secrets](./agents-pools-secrets).
-4. [Install and operate outbound Agents](../../operate/deploy/agent-operations).
-5. [Troubleshoot execution and Agent health](../../troubleshooting/runbooks/).
-6. [Configure action examples and local policy](./examples).
+## Guides
 
-Use [Runbook reference](../../reference/runbooks) for step types, input types,
-permissions, and limits. Begin with diagnostics and a manual binding before
-introducing approved writes or automatic triggers.
+| #   | Guide                                                | Audience           | What you'll learn                                                                                                             |
+| --- | ---------------------------------------------------- | ------------------ | ----------------------------------------------------------------------------------------------------------------------------- |
+| 1   | [Author and publish](./author)                       | Authors, Admins    | Create drafts, configure all 9 step types, define typed inputs, manage prechecks and verification, publish immutable versions |
+| 2   | [Bind and respond](./respond)                        | Admins, Responders | Attach workflows to services, configure triggers, preview and approve exact plans, handle cancellation and uncertain outcomes |
+| 3   | [Agents, pools, and secrets](./agents-pools-secrets) | Admins, Operators  | Enroll Agents, choose pool semantics, grant and rotate scoped secrets, monitor fleet health                                   |
+| 4   | [Permissions and security](./permissions)            | Admins             | All 9 capabilities, API scopes, service authorization, artifact access                                                        |
+| 5   | [Action examples](./examples)                        | Authors, Operators | Kubernetes recovery, Docker inspection, systemd checks, HTTP verification, static Bash commands                               |
+| 6   | [Health and monitoring](./health)                    | Operators          | Health dashboard, circuit breaker, remediation budgets, Prometheus alerts, worker evidence                                    |
+| 7   | [Service bindings and triggers](./service-bindings)  | Admins             | Automatic activation, trigger conditions, concurrent edits, rule lifecycle                                                    |
+
+## Reference and operations
+
+- [Runbook reference](../../reference/runbooks) — Step types, input types,
+  risk classes, permissions, limits, state machines, and maintenance.
+- [Agent operations](../../operate/deploy/agent-operations) — Installation,
+  deployment topologies, and upgrade procedures.
+- [Enterprise qualification](../../operate/deploy/runbook-qualification) —
+  Correctness, physical target, fault, and load receipts.
+- [Troubleshooting](../../troubleshooting/runbooks/) — Waiting executions,
+  unavailable Agents, uncertain outcomes, and common errors.
 
 ## Choose your starting point
 
-Responders should read the incident execution guide, including exact-plan
-approval, detached suggestions and uncertain outcomes. Authors should begin
-with a read-only workflow and publish an immutable version. Operators should
-complete Agent installation, inspect effective capabilities and local policy,
-and monitor durable worker evidence before enabling a service rule.
+| If you are a…                               | Start with…                                                                                                                                                                |
+| ------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Responder** new to Runbooks               | Read the [concepts](../../concepts/runbooks), then [Bind and respond](./respond) for incident execution, exact-plan approval, detached suggestions, and uncertain outcomes |
+| **Author** creating your first workflow     | [Author and publish](./author) — start with a read-only diagnostics workflow                                                                                               |
+| **Administrator** setting up infrastructure | [Agents, pools, and secrets](./agents-pools-secrets) → [Permissions](./permissions) → [Service bindings](./service-bindings)                                               |
+| **Operator** deploying Agents               | [Agent operations](../../operate/deploy/agent-operations) → [Health](./health) → [Enterprise qualification](../../operate/deploy/runbook-qualification)                    |
+| **API integrator**                          | [v2 API reference](../../reference/api/v2) — bound executions use saved inputs; request parameters cannot override them                                                    |
 
-For API integrations, see the [v2 API reference](../../reference/api/v2).
-Bound executions use the rule's saved inputs; request parameters cannot override
-them. The [Runbook reference](../../reference/runbooks) documents maintenance
-limits and the distinction between measured checks and release qualification.
-
-For staged enterprise qualification, physical target tests and authenticated HTTP
-measurements, follow [Runbook qualification](../../operate/deploy/runbook-qualification).
+Begin with diagnostics and a manual binding before introducing approved writes
+or automatic triggers.
