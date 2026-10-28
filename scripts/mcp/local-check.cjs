@@ -184,6 +184,15 @@ async function main() {
     'tests/integration/mcp-protocol-features.test.ts',
     'tests/integration/mcp-tasks.test.ts',
     'tests/integration/mcp-client-metadata.test.ts',
+    'tests/integration/mcp-approval-destructive.test.ts',
+    'tests/integration/mcp-approval-destructive-safety.test.ts',
+    'tests/integration/mcp-approval-natural.test.ts',
+    'tests/integration/mcp-sensitive-reads.test.ts',
+    'tests/integration/mcp-sensitive-reads-config.test.ts',
+    'tests/integration/mcp-sensitive-reads-post.test.ts',
+    'tests/integration/mcp-fault-injection.test.ts',
+    'tests/integration/mcp-fault-child.test.ts',
+    'tests/integration/mcp-load-worker.test.ts',
   ]);
   await node(
     'coverage',
