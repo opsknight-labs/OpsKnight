@@ -51,3 +51,7 @@ Inspect images, Secret references, migration ownership, database paths, Services
 - [Install with Helm](./install)
 - [Integrated values](./integrated)
 - [Split values](./split)
+
+## External secret stores
+
+`externalSecrets.csi.enabled` defaults to `false`. When enabled, set `secretProviderClass` to a pre-created class in the release namespace and optionally set `mountPath` (default `/mnt/opsknight-secrets`, must remain below `/mnt/`). Runtime roles and migration Jobs receive read-only mounts. Use `secrets.existingSecret` for synchronized environment credentials. `podLabels` supplies workload identity labels, including on CSI migration Jobs. Driver installation, synchronization and rotation remain cluster/operator responsibilities. See [external secrets and OpenShift](./external-secrets).

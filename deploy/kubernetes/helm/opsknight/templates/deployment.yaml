@@ -27,6 +27,9 @@ spec:
       {{- end }}
       labels:
         {{- include "opsknight.selectorLabels" . | nindent 8 }}
+        {{- with .Values.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
     spec:
       terminationGracePeriodSeconds: {{ .Values.terminationGracePeriodSeconds }}
       {{- with .Values.imagePullSecrets }}
@@ -109,20 +112,30 @@ spec:
                 command:
                   - /bin/sleep
                   - "3"
-          {{- if and (not .Values.postgresql.enabled) .Values.postgresql.tls.enabled }}
+          {{- if or .Values.externalSecrets.csi.enabled (and (not .Values.postgresql.enabled) .Values.postgresql.tls.enabled) }}
           volumeMounts:
+            {{- if .Values.externalSecrets.csi.enabled }}
+            {{- include "opsknight.csi.mount" . | nindent 12 }}
+            {{- end }}
+            {{- if and (not .Values.postgresql.enabled) .Values.postgresql.tls.enabled }}
             - name: database-tls
               mountPath: /etc/opsknight-db-tls
               readOnly: true
+            {{- end }}
           {{- end }}
-      {{- if and (not .Values.postgresql.enabled) .Values.postgresql.tls.enabled }}
+      {{- if or .Values.externalSecrets.csi.enabled (and (not .Values.postgresql.enabled) .Values.postgresql.tls.enabled) }}
       volumes:
+        {{- if .Values.externalSecrets.csi.enabled }}
+        {{- include "opsknight.csi.volume" . | nindent 8 }}
+        {{- end }}
+        {{- if and (not .Values.postgresql.enabled) .Values.postgresql.tls.enabled }}
         - name: database-tls
           secret:
             secretName: {{ required "postgresql.tls.existingSecret is required when external PostgreSQL TLS is enabled" .Values.postgresql.tls.existingSecret }}
             items:
               - key: {{ .Values.postgresql.tls.caKey }}
                 path: ca.crt
+        {{- end }}
       {{- end }}
       {{- with .Values.nodeSelector }}
       nodeSelector:

@@ -15,6 +15,8 @@ verification:
 
 Helm is the packaged Kubernetes path. The chart supports integrated or split runtime, bundled or external PostgreSQL, split-mode PgBouncer, ingress, migration hooks, disruption budgets, NetworkPolicy, autoscaling, and Prometheus Operator discovery.
 
+Optional [external secrets](./external-secrets) support CSI mounts, synchronized credentials, and an OpenShift application profile.
+
 ## Installation path
 
 1. Complete [Kubernetes prerequisites](../kubernetes/prerequisites).

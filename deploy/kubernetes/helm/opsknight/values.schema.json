@@ -2,6 +2,65 @@
   "$schema": "https://json-schema.org/draft-07/schema#",
   "type": "object",
   "properties": {
+    "externalSecrets": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "csi"
+      ],
+      "properties": {
+        "csi": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "enabled",
+            "secretProviderClass",
+            "mountPath"
+          ],
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "secretProviderClass": {
+              "type": "string",
+              "maxLength": 253,
+              "pattern": "^$|^[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?(\\.[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?)*$"
+            },
+            "mountPath": {
+              "type": "string",
+              "pattern": "^/[^\\s]+$"
+            }
+          },
+          "allOf": [
+            {
+              "if": {
+                "properties": {
+                  "enabled": {
+                    "const": true
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "secretProviderClass": {
+                    "minLength": 1
+                  },
+                  "mountPath": {
+                    "pattern": "^/mnt/[A-Za-z0-9_-]+(/[A-Za-z0-9_-]+)*$"
+                  }
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    "podLabels": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
     "runtime": {
       "type": "object",
       "additionalProperties": false,

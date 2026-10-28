@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Optional Secrets Store CSI mounts for integrated/split application workloads and migration Jobs, preserving existing Kubernetes Secret mappings. Includes AWS/Azure SecretProviderClass examples, an OpenShift application security profile, rotation guidance, and rendering regression tests. Cluster driver/provider installation remains external; live cloud/OpenShift certification is required before production rollout.
+
 ## [2.1.2] - 2026-10-27
 
 OpsKnight 2.1.2 hardens the multi-tag OCI image promotion pipeline in the release workflow and completes patch alignment across deployment definitions.

@@ -21,7 +21,16 @@ spec:
       labels:
         {{- include "opsknight.labels" . | nindent 8 }}
         app.kubernetes.io/component: migration
+        {{- with .Values.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
     spec:
+      {{- if .Values.externalSecrets.csi.enabled }}
+      serviceAccountName: {{ include "opsknight.serviceAccountName" . }}
+      automountServiceAccountToken: {{ .Values.serviceAccount.automount }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      {{- end }}
       restartPolicy: OnFailure
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
@@ -29,6 +38,10 @@ spec:
       {{- end }}
       containers:
         - name: migrate
+          {{- if .Values.externalSecrets.csi.enabled }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          {{- end }}
           image: {{ include "opsknight.image" . }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           envFrom:
@@ -111,19 +124,29 @@ spec:
             limits:
               cpu: 500m
               memory: 512Mi
-          {{- if and (not .Values.postgresql.enabled) .Values.postgresql.tls.enabled }}
+          {{- if or .Values.externalSecrets.csi.enabled (and (not .Values.postgresql.enabled) .Values.postgresql.tls.enabled) }}
           volumeMounts:
+            {{- if .Values.externalSecrets.csi.enabled }}
+            {{- include "opsknight.csi.mount" . | nindent 12 }}
+            {{- end }}
+            {{- if and (not .Values.postgresql.enabled) .Values.postgresql.tls.enabled }}
             - name: database-tls
               mountPath: /etc/opsknight-db-tls
               readOnly: true
+            {{- end }}
           {{- end }}
-      {{- if and (not .Values.postgresql.enabled) .Values.postgresql.tls.enabled }}
+      {{- if or .Values.externalSecrets.csi.enabled (and (not .Values.postgresql.enabled) .Values.postgresql.tls.enabled) }}
       volumes:
+        {{- if .Values.externalSecrets.csi.enabled }}
+        {{- include "opsknight.csi.volume" . | nindent 8 }}
+        {{- end }}
+        {{- if and (not .Values.postgresql.enabled) .Values.postgresql.tls.enabled }}
         - name: database-tls
           secret:
             secretName: {{ required "postgresql.tls.existingSecret is required when external PostgreSQL TLS is enabled" .Values.postgresql.tls.existingSecret }}
             items:
               - key: {{ .Values.postgresql.tls.caKey }}
                 path: ca.crt
+        {{- end }}
       {{- end }}
 {{- end }}
