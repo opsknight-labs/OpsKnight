@@ -6,7 +6,14 @@ interface InternalInvocation {
   request: Request;
   auth: V2AuthContext;
   admitted: boolean;
-  beforeMutation?: (tx: Prisma.TransactionClient) => Promise<void>;
+  /**
+   * 'replay' runs while looking up a stored idempotent result (possibly in its own transaction);
+   * 'mutation' runs in the transaction that applies the change. Default is 'mutation'.
+   */
+  beforeMutation?: (
+    tx: Prisma.TransactionClient,
+    phase?: 'replay' | 'mutation'
+  ) => Promise<void>;
 }
 
 // An in-process capability, bound to this exact Request. Headers cannot forge it.

@@ -169,7 +169,7 @@ export async function readIdempotentOperationResult<T>(
   }
 ): Promise<IdempotentExecution<T> | null> {
   const internalGuard = internalV2MutationGuard();
-  if (internalGuard) await internalGuard(tx);
+  if (internalGuard) await internalGuard(tx, 'replay');
   const context = normalizeContext(input.context);
   const fingerprint = fingerprintIdempotencyPayload(input.payload);
   const id = recordId(input.scope, context);
@@ -242,6 +242,8 @@ export async function executeIdempotentOperation<T>(
   const id = recordId(input.scope, context);
   const replay = await readIdempotentOperationResult<T>(tx, { ...input, context });
   if (replay) return replay;
+  const mutationGuard = internalV2MutationGuard();
+  if (mutationGuard) await mutationGuard(tx, 'mutation');
 
   const value = await input.execute();
   const now = new Date();

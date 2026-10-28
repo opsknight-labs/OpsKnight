@@ -66,6 +66,7 @@ export async function updateMcpPolicy(form: FormData) {
       maxInFlight: z.coerce.number().int().min(1).max(16),
       maxOperations: z.coerce.number().int().min(1).max(16),
       requestsPerMinute: z.coerce.number().int().min(1).max(600),
+      sensitiveReadsEnabled: z.boolean(),
       cimdEnabled: z.boolean(),
       cimdAllowedHosts: z.string().max(4096),
       cimdScopes: z.string().max(2048),
@@ -77,6 +78,7 @@ export async function updateMcpPolicy(form: FormData) {
       maxInFlight: form.get('maxInFlight'),
       maxOperations: form.get('maxOperations'),
       requestsPerMinute: form.get('requestsPerMinute'),
+      sensitiveReadsEnabled: form.get('sensitiveReadsEnabled') === 'on',
       cimdEnabled: form.get('cimdEnabled') === 'on',
       cimdAllowedHosts: String(form.get('cimdAllowedHosts') ?? ''),
       cimdScopes: String(form.get('cimdScopes') ?? ''),
@@ -114,6 +116,7 @@ export async function updateMcpPolicy(form: FormData) {
   const policy = {
     enabled: input.enabled,
     writesEnabled: input.writesEnabled,
+    sensitiveReadsEnabled: input.sensitiveReadsEnabled,
     maxInFlight: input.maxInFlight,
     maxOperations: input.maxOperations,
     requestsPerMinute: input.requestsPerMinute,

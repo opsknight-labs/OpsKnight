@@ -5,9 +5,14 @@ import {
   MCP_CATALOG,
   isMcpApprovalGated,
   isMcpExecutable,
+  isMcpSideEffectFreeRead,
   mcpContractHash,
 } from '../../src/lib/mcp/catalog';
-import { MCP_APPROVAL_HANDLERS, MCP_HANDLERS } from '../../src/lib/mcp/operations/handlers';
+import {
+  MCP_APPROVAL_HANDLERS,
+  MCP_HANDLERS,
+  MCP_PREVIEW_HANDLERS,
+} from '../../src/lib/mcp/operations/handlers';
 import { authorize } from '../../src/lib/authorization-policy';
 import { APP_ROLES } from '../../src/lib/authorization';
 import { declaredRouteActions } from './route-policy';
@@ -56,14 +61,44 @@ for (const operation of MCP_CATALOG) {
     failures.push(`Approval handler disposition mismatch: ${operation.operationId}`);
   if (isMcpApprovalGated(operation) && isMcpExecutable(operation))
     failures.push(`Approval-gated operation is generically executable: ${operation.operationId}`);
+  // A natural (receipt-less) write qualifies only when its transaction runs the approval hook,
+  // which records completion atomically with the effect.
+  const naturalDelete =
+    operation.mutation?.idempotency === 'natural' &&
+    (source.includes('internalV2MutationGuard()?.(tx)') ||
+      source.includes('runV2AuditedMutation('));
   if (
     isMcpApprovalGated(operation) &&
-    !['required', 'supported'].includes(operation.mutation?.idempotency ?? '')
+    !['required', 'supported'].includes(operation.mutation?.idempotency ?? '') &&
+    !naturalDelete
   )
     failures.push(`Approval-gated operation is not replay-safe: ${operation.operationId}`);
+  if (isMcpApprovalGated(operation) && operation.risk === 'R3') {
+    const preview = MCP_CATALOG.find(item => item.operationId === operation.impactPreview);
+    const names = (path: string) => [...path.matchAll(/\{(\w+)\}/g)].map(match => match[1]);
+    if (
+      !preview ||
+      preview.method !== 'get' ||
+      !MCP_PREVIEW_HANDLERS.has(preview.operationId) ||
+      !names(preview.path).every(name => names(operation.path).includes(name))
+    )
+      failures.push(
+        `Destructive approval without a valid impact preview: ${operation.operationId}`
+      );
+    else if (!preview.requiredScopes.every(scope => operation.requiredScopes.includes(scope)))
+      failures.push(`Destructive approval cannot read its own preview: ${operation.operationId}`);
+  }
+  if (MCP_PREVIEW_HANDLERS.has(operation.operationId) && operation.method !== 'get')
+    failures.push(`Preview handler is not a read: ${operation.operationId}`);
   if (!operation.reason || !operation.resourceFilter)
     failures.push(`Missing policy: ${operation.operationId}`);
-  if (['R2', 'R3', 'R4'].includes(operation.risk) && isMcpExecutable(operation))
+  if (operation.status === 'SENSITIVE_READ' && !isMcpSideEffectFreeRead(operation))
+    failures.push(`Sensitive read is not a read: ${operation.operationId}`);
+  if (
+    ['R2', 'R3', 'R4'].includes(operation.risk) &&
+    isMcpExecutable(operation) &&
+    !(operation.status === 'SENSITIVE_READ' && operation.risk === 'R2')
+  )
     failures.push(`Sensitive generic exposure: ${operation.operationId}`);
 }
 const parity = buildMcpParityReport(MCP_CATALOG);

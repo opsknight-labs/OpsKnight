@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { MCP_CATALOG, isMcpApprovalGated, isMcpExecutable } from '@/lib/mcp/catalog';
 import { MCP_APPROVAL_HANDLERS, MCP_HANDLERS } from '@/lib/mcp/operations/handlers';
@@ -21,9 +22,13 @@ describe('honest MCP workflow inventory', () => {
     expect(report.implementationComplete).toBe(false);
     expect(report.certified).toBe(false);
     expect(report.reviewedExclusions).toBe(0);
+    // A destructive operation with a reviewed workflow is gated; one without stays a blocker.
     expect(report.operations.find(op => op.operationId === 'deletePostmortem')?.disposition).toBe(
-      'PENDING_EXCLUSION_REVIEW'
+      'APPROVAL_REQUIRED'
     );
+    expect(
+      report.operations.find(op => op.operationId === 'rotateRunbookSecret')?.disposition
+    ).toBe('PENDING_EXCLUSION_REVIEW');
   });
   it('accounts for native runbook approvals without permitting generic execution', () => {
     const report = buildMcpParityReport(MCP_CATALOG);
@@ -73,12 +78,23 @@ describe('honest MCP workflow inventory', () => {
       [...MCP_APPROVAL_HANDLERS.keys()].sort()
     );
     for (const operation of gated) {
-      expect(operation.risk).toBe('R2');
+      expect(['R2', 'R3']).toContain(operation.risk);
+      if (operation.risk === 'R3') expect(operation.impactPreview).toBeTruthy();
       expect(operation.method).not.toBe('get');
       expect(operation.tool).toBeNull();
       expect(isMcpExecutable(operation)).toBe(false);
       expect(MCP_HANDLERS.has(operation.operationId)).toBe(false);
-      expect(['required', 'supported']).toContain(operation.mutation?.idempotency);
+      // Receipt-less writes qualify only when the route records the approval in its own transaction.
+      if (operation.mutation?.idempotency === 'natural') {
+        const route = `src/app/api/v2${operation.path.replace(/\{(\w+)\}/g, '[$1]')}/route.ts`;
+        // eslint-disable-next-line security/detect-non-literal-fs-filename -- checked-in registry only
+        const source = readFileSync(route, 'utf8');
+        expect(
+          source.includes('internalV2MutationGuard()?.(tx)') ||
+            source.includes('runV2AuditedMutation('),
+          operation.operationId
+        ).toBe(true);
+      } else expect(['required', 'supported']).toContain(operation.mutation?.idempotency);
     }
     const report = buildMcpParityReport(MCP_CATALOG);
     expect(report.approvalGatedOperations).toBe(gated.length);

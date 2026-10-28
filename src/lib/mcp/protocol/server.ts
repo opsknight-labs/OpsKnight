@@ -9,7 +9,7 @@ import {
 import { COMPLETION_SOURCES, completeAuthorizedIds, type CompletionSource } from './completion';
 import { z } from 'zod/v4';
 import type { AuthorizationActor } from '@/lib/authorization-policy';
-import { MCP_CATALOG, isMcpApprovalGated } from '../catalog';
+import { MCP_CATALOG, isMcpApprovalGated, isMcpSensitiveRead } from '../catalog';
 import {
   callMcpOperation,
   canDiscover,
@@ -56,7 +56,8 @@ async function safeTool(callback: () => Promise<unknown>) {
 export function createOpsKnightMcpServer(
   context: ExecutionContext,
   actor: AuthorizationActor,
-  writesEnabled: boolean
+  writesEnabled: boolean,
+  sensitiveReadsEnabled = false
 ) {
   const server = new McpServer(
     { name: 'opsknight', version: '2.2.0' },
@@ -133,7 +134,11 @@ export function createOpsKnightMcpServer(
     );
   }
   const visible = MCP_CATALOG.filter(
-    operation => canDiscover(actor, operation) && (operation.risk === 'R0' || writesEnabled)
+    operation =>
+      canDiscover(actor, operation) &&
+      (isMcpSensitiveRead(operation)
+        ? sensitiveReadsEnabled
+        : operation.risk === 'R0' || writesEnabled)
   );
   // Discovery only; every prepare and commit rechecks authority and independent review.
   const approvalGated = writesEnabled
@@ -308,7 +313,9 @@ export function createOpsKnightMcpServer(
       const found = [...visible, ...approvalGated].filter(
         operation =>
           (!input.domain || operation.domain === input.domain) &&
-          (!input.intent || (input.intent === 'read') === (operation.risk === 'R0')) &&
+          (!input.intent ||
+            (input.intent === 'read') ===
+              (operation.risk === 'R0' || isMcpSensitiveRead(operation))) &&
           `${operation.operationId} ${operation.tool ?? ''} ${operation.domain}`
             .toLowerCase()
             .includes(input.query.toLowerCase())

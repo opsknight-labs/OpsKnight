@@ -2,12 +2,12 @@
   "getChatOpsConfiguration": {
     "status": "UNSUPPORTED_WITH_REASON",
     "risk": "R2",
-    "reason": "Not exposed until shared command, independent approval and parity certification are complete.",
+    "reason": "Proposed exclusion (pending named review): ChatOps configuration contains webhook URLs whose path is itself a credential.",
     "tool": null,
     "routeSha256": "b9f13a0100a17a8ae3d87634d1ee12e5b4937219fda84ba7608560b7be014fe0",
     "resourceFilter": "existing REST route authorization and scoped projection",
     "evidence": "pending final-SHA parity certification",
-    "contractSha256": "cc05c8cfc84e3d55139a4b9bb0c14ea4919110bf9fa9a6c0cf0c60c80f1de360",
+    "contractSha256": "e3af0fd6b6d96f632184d1aaf6ef88a9faed69c3b37041f19ef5aadb76f240ae",
     "actions": ["chatops.read"]
   },
   "updateChatOpsConfiguration": {
@@ -22,14 +22,14 @@
     "actions": ["chatops.manage"]
   },
   "listCustomFieldDefinitions": {
-    "status": "UNSUPPORTED_WITH_REASON",
+    "status": "SENSITIVE_READ",
     "risk": "R2",
-    "reason": "Not exposed until shared command, independent approval and parity certification are complete.",
+    "reason": "Reviewed configuration read: read-only generic dispatch behind the administrator sensitive-reads opt-in, native authorization and recursive redaction.",
     "tool": null,
     "routeSha256": "53814832e2f3e51a98f159fab0e85c00032c087095ba9bee14f14602d4d152d5",
     "resourceFilter": "existing REST route authorization and scoped projection",
-    "evidence": "pending final-SHA parity certification",
-    "contractSha256": "3af2907bcf1b94ce687aeb7d930a262524f6b5c088433f61e4591f6e0d89cb14",
+    "evidence": "tests/integration/mcp-sensitive-reads.test.ts",
+    "contractSha256": "034c4edc6a79675f267a813eea084c8d9bc3851b7cec865a56af08a11b3b5d8e",
     "actions": ["custom_field.read"]
   },
   "createCustomFieldDefinition": {
@@ -44,14 +44,14 @@
     "actions": ["custom_field.manage"]
   },
   "getCustomFieldDefinition": {
-    "status": "UNSUPPORTED_WITH_REASON",
+    "status": "SENSITIVE_READ",
     "risk": "R2",
-    "reason": "Not exposed until shared command, independent approval and parity certification are complete.",
+    "reason": "Reviewed configuration read: read-only generic dispatch behind the administrator sensitive-reads opt-in, native authorization and recursive redaction.",
     "tool": null,
     "routeSha256": "2324856d24d08980d02b4e196c3ce8b5701ff7b84d340b3536ab82e73a9b2026",
     "resourceFilter": "existing REST route authorization and scoped projection",
-    "evidence": "pending final-SHA parity certification",
-    "contractSha256": "e9df1a2d7ac9c9bd82005be01925e1e9a4a5af724c0085dff1f55a6f35b2ecce",
+    "evidence": "tests/integration/mcp-sensitive-reads.test.ts",
+    "contractSha256": "61256414312ccab29f61af500246f756d49c4b39ee21048ca412e5aaf5206969",
     "actions": ["custom_field.read"]
   },
   "updateCustomFieldDefinition": {
@@ -66,14 +66,16 @@
     "actions": ["custom_field.manage"]
   },
   "deleteCustomFieldDefinition": {
-    "status": "DENIED_WITH_REASON",
+    "status": "APPROVAL_REQUIRED",
     "risk": "R3",
-    "reason": "Credential, personal-data or infrastructure boundary restricted to native administration.",
+    "reason": "Destructive: frozen prepare with an impact preview, independent native review after a recent sign-in, re-check of the target at commit and a verified postcondition; never generic.",
     "tool": null,
     "routeSha256": "2324856d24d08980d02b4e196c3ce8b5701ff7b84d340b3536ab82e73a9b2026",
     "resourceFilter": "existing REST route authorization and scoped projection",
-    "evidence": "pending final-SHA parity certification",
-    "contractSha256": "571261aa28490a68a2a8eff7c05c6e298bbd0b2081f1dedeb6beae1f34c5d193",
+    "evidence": "tests/integration/mcp-approval-destructive.test.ts",
+    "contractSha256": "c5377efa4c7a015a86170d75f4abea580bbd9868148cab4004182190ec6236e7",
+    "additionalScopes": ["custom-fields:read"],
+    "impactPreview": "getCustomFieldDefinition",
     "actions": ["custom_field.manage"]
   },
   "createAuditExport": {
@@ -95,7 +97,7 @@
     "routeSha256": "c743f8c3307e90639a3ea99e3b9b6a1ecae6091ff064fc5f91db58eec289d2ac",
     "resourceFilter": "existing REST route authorization and scoped projection",
     "evidence": "pending final-SHA parity certification",
-    "contractSha256": "10aa6aa2e6be944d814f63608d799853caa5add115a739e8f2919686f01ddd2d",
+    "contractSha256": "27d0c338476cef83839537f1d2abc5ba10bec3a7a6d220747ee893bf17c95d2a",
     "actions": ["audit.export"]
   },
   "downloadAuditExport": {
@@ -106,7 +108,7 @@
     "routeSha256": "79dec156e13106fc3a9c58fa94ca062cab5cbe405abfaf668b05a811a7a1c267",
     "resourceFilter": "existing REST route authorization and scoped projection",
     "evidence": "pending final-SHA parity certification",
-    "contractSha256": "b8edca298dabaf647a22f5e78ab5d443969d5170263e96320b457a6dd83030f5",
+    "contractSha256": "46708f7a13dd665d164f9fd7b174a5744e59ee8bece17264d019b8a54ac607a7",
     "actions": ["audit.export"]
   },
   "listNotificationProviders": {
@@ -117,7 +119,7 @@
     "routeSha256": "dfc2846a334013f7b71bc1133bd3251e5734d91d794b148a5a4d3c1ac00fb698",
     "resourceFilter": "existing REST route authorization and scoped projection",
     "evidence": "pending final-SHA parity certification",
-    "contractSha256": "f4333e78ca19aba608d2fe060b6e5bbe5d60512f5a2439be691d187bc99b6558",
+    "contractSha256": "52759537edda7f6daa18dbefa05e0dfe3b599cc4f8fd9a05c9a61e8ae02b9178",
     "actions": ["notification.provider.read"]
   },
   "getNotificationProvider": {
@@ -128,7 +130,7 @@
     "routeSha256": "1eb193acfab8148e55fbefc25356b9552b61080a2dd1bd9f37a44df3df8f513c",
     "resourceFilter": "existing REST route authorization and scoped projection",
     "evidence": "pending final-SHA parity certification",
-    "contractSha256": "7d207fd6850fcae25c88e871518e1ebfe510955a2a0e3628b00aaf91e7576961",
+    "contractSha256": "485d904fe27d0646b20503493bf535c6fb9cef68573b821f67321c77475998b0",
     "actions": ["notification.provider.read"]
   },
   "configureNotificationProvider": {
@@ -150,7 +152,7 @@
     "routeSha256": "0a917ae3043407cb30d973f7e3c1be08e91b85c248fea80a90375207a458ad86",
     "resourceFilter": "existing REST route authorization and scoped projection",
     "evidence": "pending final-SHA parity certification",
-    "contractSha256": "5dd99ed5b4a49bb4174c4eaa32906490f54f6bed4fdbd601e81197c6f71788e6",
+    "contractSha256": "59a75efccc07146f7a373e9b776a17de423159ca71cfeed903251ef5465bcf83",
     "actions": ["notification.provider.read"]
   },
   "testNotificationProvider": {
@@ -183,7 +185,7 @@
     "routeSha256": "b093f05f7ec8c17670362e588bb6fa17ac5a463bdc2769afc53641ef9bcc03a4",
     "resourceFilter": "existing REST route authorization and scoped projection",
     "evidence": "pending final-SHA parity certification",
-    "contractSha256": "1e84fd369470b5ce31cbca01d97d3367fdd3db322b4949b38266a95aa2fc5eb7",
+    "contractSha256": "515de8889e2a4684261fe1a42c8e12d2f17e5c251cce3667662d1fde3eb0a2e7",
     "actions": ["notification.preferences.read"]
   },
   "updateMyNotificationPreferences": {
@@ -198,14 +200,14 @@
     "actions": ["notification.preferences.manage"]
   },
   "listTeamActivity": {
-    "status": "UNSUPPORTED_WITH_REASON",
+    "status": "SENSITIVE_READ",
     "risk": "R2",
-    "reason": "Not exposed until shared command, independent approval and parity certification are complete.",
+    "reason": "Reviewed configuration read: read-only generic dispatch behind the administrator sensitive-reads opt-in, native authorization and recursive redaction.",
     "tool": null,
     "routeSha256": "3348bc5df24d71f39a03cad7271a6e55f9cc522d5c2fba602b571a1d2927cad9",
     "resourceFilter": "existing REST route authorization and scoped projection",
-    "evidence": "pending final-SHA parity certification",
-    "contractSha256": "b5b4303e88bf10a5f0d9c3c995e3396dfbb25cefd9146c2f320a570cb206cc63",
+    "evidence": "tests/integration/mcp-sensitive-reads.test.ts",
+    "contractSha256": "25c35e184a8f0a99bf71a2f618880aeb6589c028ed9faf1fb931c1746b6fb66d",
     "actions": ["team.activity.read"]
   },
   "listTeamServices": {
@@ -255,7 +257,7 @@
   "removeTeamMember": {
     "status": "DENIED_WITH_REASON",
     "risk": "R3",
-    "reason": "Credential, personal-data or infrastructure boundary restricted to native administration.",
+    "reason": "Candidate for the destructive approval workflow, blocked on an item-level read of the target (GET /teams/{id}/members/{userId}): the only previews are paginated or capped parent collections, so neither the reviewer nor the postcondition could observe the exact target.",
     "tool": null,
     "routeSha256": "37a87eed505e711c0fa822b3e62c421ae165cbddc26bf057fa4932de049613e3",
     "resourceFilter": "existing REST route authorization and scoped projection",
@@ -271,7 +273,7 @@
     "routeSha256": "4e1a64dc4178ae3d0ad9d6385c85f90f649a5d174c12124bae6d45d88a09bea2",
     "resourceFilter": "existing REST route authorization and scoped projection",
     "evidence": "pending final-SHA parity certification",
-    "contractSha256": "d49d028c7732e539dcd72499c8f53407fafdf3203a0ef84bf243e3b80a0671ed",
+    "contractSha256": "54be63d88546b4306273c10a1b2cb4cb73274f951c21d18e8ae936281563fb7a",
     "actions": ["user.administration.read"]
   },
   "createUserInvitation": {
@@ -293,7 +295,7 @@
     "routeSha256": "8a943bb632e6d376bfe0fe165a74bc88f17aeb2138006c0ee1888775c6fc0102",
     "resourceFilter": "existing REST route authorization and scoped projection",
     "evidence": "pending final-SHA parity certification",
-    "contractSha256": "3572fcdd0cb17187888d3171b1491bd38aa9ab9360e870c8f06b69af2b1969d5",
+    "contractSha256": "41b30d67be892b08d617cb7fd6d4d9a2f54d4290f63ee36d91b353eb828c346f",
     "actions": ["user.administration.read"]
   },
   "renewUserInvitation": {
@@ -315,7 +317,7 @@
     "routeSha256": "90d152cad1ef3161c8428c4613acbe3969486295173186cad6da4502c7a7a00d",
     "resourceFilter": "existing REST route authorization and scoped projection",
     "evidence": "pending final-SHA parity certification",
-    "contractSha256": "7b9a30ee3860a924904249b2bd3b684d763b17f53499176bd974c502ba35d4ee",
+    "contractSha256": "1ea29114aaaf18e1c167174a331f6cdcc701c5697564f6e7ab25984f82dc3771",
     "actions": ["user.administration.read"]
   },
   "getUserDependencies": {
@@ -326,7 +328,7 @@
     "routeSha256": "129f47166a08c1b8395ad5fe659db611b8d84a87f15f23593e6a92df01f95a8e",
     "resourceFilter": "existing REST route authorization and scoped projection",
     "evidence": "pending final-SHA parity certification",
-    "contractSha256": "9a2572bf17925cba9394c2188be3f8fb53f3c80719055637205cd39e6a469887",
+    "contractSha256": "3c33b1ca86b961000348546386524e403de628da28ebb6a996eb0b6680d9e15b",
     "actions": ["user.administration.read"]
   },
   "administerUser": {
@@ -370,7 +372,7 @@
     "routeSha256": "0b16f1cf4b10caf86e607421e489fe84ddb645c9b919db53ddc8f85a028d30b5",
     "resourceFilter": "existing REST route authorization and scoped projection",
     "evidence": "pending final-SHA parity certification",
-    "contractSha256": "20c5a040cde90c1720d3534d563ee43b650451c93f737ddde0aab9a202fa2189",
+    "contractSha256": "ed88bd3d3dea0a1288925a64dd44daf244d60cc9a337b649f949146960411239",
     "actions": ["runbook_signing.read"]
   },
   "stageRunbookSigningIdentity": {
@@ -414,7 +416,7 @@
     "routeSha256": "384be495041eb465920714f71daecebbd2ec0c3b9741a57b072317d7bb929520",
     "resourceFilter": "existing REST route authorization and scoped projection",
     "evidence": "pending final-SHA parity certification",
-    "contractSha256": "70fbc4c8a3c96281bb2321eab50d3713f41be6c05245742ca6011f7e737c3d08",
+    "contractSha256": "99907b66004aab49a683f9e535b2f7574f3f325d0fb870bbff961552db4ffc2f",
     "actions": ["runbook_secret.read"]
   },
   "retireRunbookAgentPool": {
@@ -436,7 +438,7 @@
     "routeSha256": "e920a29060b25dc28c164bf87d493f39f3790bb7f037c6b8f1d1bbbbd80ca750",
     "resourceFilter": "existing REST route authorization and scoped projection",
     "evidence": "pending final-SHA parity certification",
-    "contractSha256": "0665a1818ee73c7fab2cdae6365095e172bfe4065295998f801292f01464ee3e",
+    "contractSha256": "f4c0846ae0ef240e2a9283a2e1b05bb7c319763ae4b52ad0b804b95f855eebf1",
     "actions": ["runbook_agent.read"]
   },
   "createRunbookAgentPool": {
@@ -458,7 +460,7 @@
     "routeSha256": "2232946d6eb44abf0648e9b0e92561ef2269671a180f9752b1e46b6031e9e2f2",
     "resourceFilter": "existing REST route authorization and scoped projection",
     "evidence": "pending final-SHA parity certification",
-    "contractSha256": "5b7d289ab7599c38aacaa62d4eef719e2d81846c37f0d7c944bf73ecd17f5d63",
+    "contractSha256": "28d4ae5a85b26d295fb5bc77422ed39166a193df40ebbb5b8ff15c02b3e113f3",
     "actions": ["runbook_agent.read"]
   },
   "updateRunbookAgentPool": {
@@ -491,7 +493,7 @@
     "routeSha256": "4fa10c55e31a7f8f90f7105d0a32da9f53d54ba2bd15361570a55ad739da555a",
     "resourceFilter": "existing REST route authorization and scoped projection",
     "evidence": "pending final-SHA parity certification",
-    "contractSha256": "0b5d16ffb37e98d9bbcd359dd1a77d600c10a294cda929f5fcf7f440b79e1e6f",
+    "contractSha256": "0db391ae81000ab048f14b5f7d3ce4b8a01a98ce5def22c2ccda841616bfb4dd",
     "actions": ["runbook_agent.read"]
   },
   "listRunbookAgentPoolMembers": {
@@ -502,7 +504,7 @@
     "routeSha256": "5011735b63b7f987262944c519c8220b764eb508c9314fc3876f7f68c37e8b9a",
     "resourceFilter": "existing REST route authorization and scoped projection",
     "evidence": "pending final-SHA parity certification",
-    "contractSha256": "e3c48f5921be6c2056df62d517f955ffeb242d10fdb5002b05cb911dfb202137",
+    "contractSha256": "d71deb55d1820376da476f61ddd48f5a1593583322a125eff3bfa4efb2f570e1",
     "actions": ["runbook_agent.read"]
   },
   "setRunbookAgentPoolMember": {
@@ -535,7 +537,7 @@
     "routeSha256": "203c283405c7aed6a6963883f097739b3503ef3e06e4b22670587db59dd75153",
     "resourceFilter": "existing REST route authorization and scoped projection",
     "evidence": "pending final-SHA parity certification",
-    "contractSha256": "fbe06ab2b5d002ac990d93de784f872fd495da51f79cd47a3d5d7c6310b55397",
+    "contractSha256": "61e6cd2f7c9ebf3d4fde85ccfded3c02ae3923b6a81ffd949f563b03e61226d3",
     "actions": ["runbook_agent.read"]
   },
   "updateRunbookAgentConfiguration": {
@@ -557,7 +559,7 @@
     "routeSha256": "02b5fd0704683ed937cdbba4ab0acc0ab64118944314607f335eba94737cb104",
     "resourceFilter": "existing REST route authorization and scoped projection",
     "evidence": "pending final-SHA parity certification",
-    "contractSha256": "ae82dec684bad38546f2ba1be5ca4fa0a0ec5797c0888db3dba016e38d4a523a",
+    "contractSha256": "f65d9758caa39ed78e70a1857e56dde68c573ab112ec75726c3324818a9677b2",
     "actions": ["runbook_secret.read"]
   },
   "createRunbookSecret": {
@@ -579,7 +581,7 @@
     "routeSha256": "3f239281fce39b99b42978547f6047281220be4f46b03960fade42e68bcd8487",
     "resourceFilter": "existing REST route authorization and scoped projection",
     "evidence": "pending final-SHA parity certification",
-    "contractSha256": "ee4ba6e5d01ad46d83d1be52affeb3b4ace0a132f5a6dd7868031a5d662485de",
+    "contractSha256": "009a39d51b5af64f39e5bad65d91ed43dcaa14c1716136f55ec6f97d84618555",
     "actions": ["runbook_secret.read"]
   },
   "rotateRunbookSecret": {
@@ -601,7 +603,7 @@
     "routeSha256": "b85042c61dd4343382847e26027707e10896097725f8faf6394d339ffc401818",
     "resourceFilter": "existing REST route authorization and scoped projection",
     "evidence": "pending final-SHA parity certification",
-    "contractSha256": "f07fc5fc14a3bbb229af1c013b029e0cbd2bb1d407ad75aa8aa81df050bdf54f",
+    "contractSha256": "8288665fb2f8d1c25eb35df63f6a9b4ac153e7cb2a815bb406e48f59e78afc94",
     "actions": ["runbook_secret.read"]
   },
   "grantRunbookSecret": {
@@ -627,14 +629,14 @@
     "actions": ["runbook_secret.grant"]
   },
   "getRunbookSettings": {
-    "status": "UNSUPPORTED_WITH_REASON",
+    "status": "SENSITIVE_READ",
     "risk": "R2",
-    "reason": "Not exposed until shared command, independent approval and parity certification are complete.",
+    "reason": "Reviewed configuration read: read-only generic dispatch behind the administrator sensitive-reads opt-in, native authorization and recursive redaction.",
     "tool": null,
     "routeSha256": "25ce22d9ec884867c24be8ff39bde03552df6c3cc26db3217efde44b3e6af1bf",
     "resourceFilter": "existing REST route authorization and scoped projection",
-    "evidence": "pending final-SHA parity certification",
-    "contractSha256": "e8aa29793a620c2bb839c49940799dd1e1b625ab4ff29ba15d7afcc9975159b9",
+    "evidence": "tests/integration/mcp-sensitive-reads.test.ts",
+    "contractSha256": "be077a7fcbbb58093ec0f785ffffc59afa39fa379097117b39a2909a6f8ef8e5",
     "actions": ["runbook_settings.read"]
   },
   "updateRunbookSettings": {
@@ -656,7 +658,7 @@
     "routeSha256": "0b82a4607c5f76f001209d8ae522721308d689c94e8e98dc7fdf953d64bf3dbf",
     "resourceFilter": "existing REST route authorization and scoped projection",
     "evidence": "pending final-SHA parity certification",
-    "contractSha256": "a6040e39b507fb4f7c9708ad6946677e3069e38afa744ffb67f2875039ef2b99",
+    "contractSha256": "b6e7b677b225b1b9e0b3262aa78417b346916b576ca37c7b3688e9e01b15297a",
     "actions": ["runbook_agent.read"]
   },
   "getRunbookAgent": {
@@ -667,7 +669,7 @@
     "routeSha256": "1d9d53701e33f482695bdfc59762930fc81c0b2a640215400e2656dd5b549c4f",
     "resourceFilter": "existing REST route authorization and scoped projection",
     "evidence": "pending final-SHA parity certification",
-    "contractSha256": "81654b7b06f49768738dfae5e931831b01a72962c730ff62ace5a6179b60abbe",
+    "contractSha256": "b64bdb69b4d227bebd815720d17390ea22ec3f95306fd5b2cb04ac795ebad38b",
     "actions": ["runbook_agent.read"]
   },
   "getRunbookAgentPolicyStatus": {
@@ -678,7 +680,7 @@
     "routeSha256": "eb7e4f831436f17496bac3bde58c1e73eaa6d2aa3fc37ab78fe2a05e5a5e9cc2",
     "resourceFilter": "existing REST route authorization and scoped projection",
     "evidence": "pending final-SHA parity certification",
-    "contractSha256": "16162d6174ecb96bf24b00daa9e91d2479941045cdacc19a9fcc0b73635c7076",
+    "contractSha256": "51c9609f304806118112970a0b379d3e67d5f55bf64c23f2b8ec0e1b36fc78c5",
     "actions": ["runbook_agent.read"]
   },
   "createRunbookAgentEnrollment": {
@@ -700,7 +702,7 @@
     "routeSha256": "59683338cadf1a7467e0a0c8e9f6e5214adde00a170ebdef0aa86fd8f36c2c55",
     "resourceFilter": "existing REST route authorization and scoped projection",
     "evidence": "pending final-SHA parity certification",
-    "contractSha256": "5e1abf13ccc014d7ccdc01aa60a1aae4bade9af06cf1ead919502fc6785c942a",
+    "contractSha256": "f5f6ed1b9e47ce1d7873c1befaa2873836138b70985af05d09d4736e3d538e10",
     "actions": ["runbook_agent.read"]
   },
   "revokeRunbookAgent": {
@@ -715,14 +717,14 @@
     "actions": ["runbook_agent.revoke"]
   },
   "listRunbookExecutionSteps": {
-    "status": "UNSUPPORTED_WITH_REASON",
+    "status": "SENSITIVE_READ",
     "risk": "R2",
-    "reason": "Not exposed until shared command, independent approval and parity certification are complete.",
+    "reason": "Reviewed configuration read: read-only generic dispatch behind the administrator sensitive-reads opt-in, native authorization and recursive redaction.",
     "tool": null,
     "routeSha256": "9b66cfb135a2eed0cdd1fabd7da6a738d8ed60a3276819e294188de42bda8e9a",
     "resourceFilter": "existing REST route authorization and scoped projection",
-    "evidence": "pending final-SHA parity certification",
-    "contractSha256": "78fcc018c1e03769600f65a254f74170042d7279241a608d40176ab6a6dbd179",
+    "evidence": "tests/integration/mcp-sensitive-reads.test.ts",
+    "contractSha256": "29a0bf2dac52f2a45a897d934c68c30e2996d405ffb5c7c18c0f42bec7dcdbd8",
     "actions": ["runbook.read"]
   },
   "listRunbookExecutions": {
@@ -737,25 +739,25 @@
     "actions": ["incident.read", "runbook.read"]
   },
   "listRunbookExecutionEvidence": {
-    "status": "UNSUPPORTED_WITH_REASON",
+    "status": "SENSITIVE_READ",
     "risk": "R2",
-    "reason": "Not exposed until shared command, independent approval and parity certification are complete.",
+    "reason": "Reviewed configuration read: read-only generic dispatch behind the administrator sensitive-reads opt-in, native authorization and recursive redaction.",
     "tool": null,
     "routeSha256": "a45880000f21c0a5dfff10beaca873bace288a73aed955df6cbf979d3b806575",
     "resourceFilter": "existing REST route authorization and scoped projection",
-    "evidence": "pending final-SHA parity certification",
-    "contractSha256": "1afe2ad5cd360790fe133437b488fb76650e4783ce664095716d1ca985ac4d87",
+    "evidence": "tests/integration/mcp-sensitive-reads.test.ts",
+    "contractSha256": "531daf21ac2272338bd5054bda16bdee4adba028d17e4027d235203e5dc280c4",
     "actions": ["runbook.read"]
   },
   "listRunbookExecutionEvents": {
-    "status": "UNSUPPORTED_WITH_REASON",
+    "status": "SENSITIVE_READ",
     "risk": "R2",
-    "reason": "Not exposed until shared command, independent approval and parity certification are complete.",
+    "reason": "Reviewed configuration read: read-only generic dispatch behind the administrator sensitive-reads opt-in, native authorization and recursive redaction.",
     "tool": null,
     "routeSha256": "9235d5e2db3b825e64367d3544d6dc250746fae62ac6f48954889d9515f3623a",
     "resourceFilter": "existing REST route authorization and scoped projection",
-    "evidence": "pending final-SHA parity certification",
-    "contractSha256": "6b94d27fc4a840ca055f6cfd736c2ed47cfa77b3c9344e57075857fdfb330117",
+    "evidence": "tests/integration/mcp-sensitive-reads.test.ts",
+    "contractSha256": "1b03c5ff5a4a986b9956fe4337b87ecf3f2024ebf5af835a960bef079fffcd58",
     "actions": ["runbook.read"]
   },
   "approveRunbookExecutionStep": {
@@ -785,7 +787,7 @@
   "previewRunbookExecutionRerun": {
     "status": "UNSUPPORTED_WITH_REASON",
     "risk": "R2",
-    "reason": "Not exposed until shared command, independent approval and parity certification are complete.",
+    "reason": "Not exposed: the preview returns a rerun authorization token that would let the holder start execution; a model must never receive it. Proposed exclusion (pending named review); safe equivalent is runbook_prepare_execution with native review.",
     "tool": null,
     "routeSha256": "bd3ca9530029f2a25f447768976f138c6d1f75f1492a01a313ce41e2dffa5a4b",
     "resourceFilter": "existing REST route authorization and scoped projection",
@@ -806,25 +808,25 @@
     "actions": ["runbook.execute"]
   },
   "getServiceObjectiveCatalog": {
-    "status": "UNSUPPORTED_WITH_REASON",
+    "status": "SENSITIVE_READ",
     "risk": "R2",
-    "reason": "Not exposed until shared command, independent approval and parity certification are complete.",
+    "reason": "Reviewed configuration read: read-only generic dispatch behind the administrator sensitive-reads opt-in, native authorization and recursive redaction.",
     "tool": null,
     "routeSha256": "a8c62c482af0349a6f3e1fda5717ba2c88992c4abd9938952127bb41d3f135e9",
     "resourceFilter": "existing REST route authorization and scoped projection",
-    "evidence": "pending final-SHA parity certification",
-    "contractSha256": "d411c4866814b3622b5a3cda5e77ce1b518c2cbd69f6fbaa63238c435dae6606",
+    "evidence": "tests/integration/mcp-sensitive-reads.test.ts",
+    "contractSha256": "406768ed6246fd6e34113424a91b8d76557ec4e32eaf69e039bc0508a2b52ab7",
     "actions": ["service_objective.read"]
   },
   "listServiceObjectives": {
-    "status": "UNSUPPORTED_WITH_REASON",
+    "status": "SENSITIVE_READ",
     "risk": "R2",
-    "reason": "Not exposed until shared command, independent approval and parity certification are complete.",
+    "reason": "Reviewed configuration read: read-only generic dispatch behind the administrator sensitive-reads opt-in, native authorization and recursive redaction.",
     "tool": null,
     "routeSha256": "8890b1489ff1172a3f932d100143e968eaec624e34c6e76fe35bab807639bf0d",
     "resourceFilter": "existing REST route authorization and scoped projection",
-    "evidence": "pending final-SHA parity certification",
-    "contractSha256": "539988a05b441e2d41fd9cec1073f2242fbce9dc43a00e72fd1b78a667471338",
+    "evidence": "tests/integration/mcp-sensitive-reads.test.ts",
+    "contractSha256": "5ecd0f31f451ef73e93657eae24de919b496540d525ac80f8aaaa91f204669df",
     "actions": ["service_objective.read"]
   },
   "createServiceObjective": {
@@ -839,14 +841,14 @@
     "actions": ["service_objective.manage"]
   },
   "getServiceObjective": {
-    "status": "UNSUPPORTED_WITH_REASON",
+    "status": "SENSITIVE_READ",
     "risk": "R2",
-    "reason": "Not exposed until shared command, independent approval and parity certification are complete.",
+    "reason": "Reviewed configuration read: read-only generic dispatch behind the administrator sensitive-reads opt-in, native authorization and recursive redaction.",
     "tool": null,
     "routeSha256": "3383cf8c9e504a16386565d0dfcb8d7acf1d12d5c2a73f31d64dbed336730049",
     "resourceFilter": "existing REST route authorization and scoped projection",
-    "evidence": "pending final-SHA parity certification",
-    "contractSha256": "030323e8c5273f2afae920dd12eba80b6612849fe4c28fcf607227d420b46853",
+    "evidence": "tests/integration/mcp-sensitive-reads.test.ts",
+    "contractSha256": "48048a767f0a0709c7bf99cacf983ba2806c9fcb598c44fb0658190f395c4c94",
     "actions": ["service_objective.read"]
   },
   "updateServiceObjective": {
@@ -872,36 +874,36 @@
     "actions": ["service_objective.manage"]
   },
   "listServiceObjectiveVersions": {
-    "status": "UNSUPPORTED_WITH_REASON",
+    "status": "SENSITIVE_READ",
     "risk": "R2",
-    "reason": "Not exposed until shared command, independent approval and parity certification are complete.",
+    "reason": "Reviewed configuration read: read-only generic dispatch behind the administrator sensitive-reads opt-in, native authorization and recursive redaction.",
     "tool": null,
     "routeSha256": "cc1dadc446e7c3904191630baea844b77d372489f5964b90b48bb98cce8e92dd",
     "resourceFilter": "existing REST route authorization and scoped projection",
-    "evidence": "pending final-SHA parity certification",
-    "contractSha256": "2e4a4fe980562911e13df89c7a5899492e6639ade69fea9b278fabae43af7748",
+    "evidence": "tests/integration/mcp-sensitive-reads.test.ts",
+    "contractSha256": "29cced55388096f8efee599baa0040c7734e166a8ab11577d3033f285cc3fb40",
     "actions": ["service_objective.read"]
   },
   "listServiceObjectiveSnapshots": {
-    "status": "UNSUPPORTED_WITH_REASON",
+    "status": "SENSITIVE_READ",
     "risk": "R2",
-    "reason": "Not exposed until shared command, independent approval and parity certification are complete.",
+    "reason": "Reviewed configuration read: read-only generic dispatch behind the administrator sensitive-reads opt-in, native authorization and recursive redaction.",
     "tool": null,
     "routeSha256": "49badb2804f8ba222380cf5d20a699c589d6f335c1550aa431a6b95174dc5682",
     "resourceFilter": "existing REST route authorization and scoped projection",
-    "evidence": "pending final-SHA parity certification",
-    "contractSha256": "b6811430d19987f60ffeb8aeaf806e44ec2d54178a01048f00b36905efc75d82",
+    "evidence": "tests/integration/mcp-sensitive-reads.test.ts",
+    "contractSha256": "a77edd363f25250577dff16b00860d1455eb2324367ee1772831c0d8107ef716",
     "actions": ["service_objective.read"]
   },
   "getServiceObjectiveHistory": {
-    "status": "UNSUPPORTED_WITH_REASON",
+    "status": "SENSITIVE_READ",
     "risk": "R2",
-    "reason": "Not exposed until shared command, independent approval and parity certification are complete.",
+    "reason": "Reviewed configuration read: read-only generic dispatch behind the administrator sensitive-reads opt-in, native authorization and recursive redaction.",
     "tool": null,
     "routeSha256": "a36dfde702929a04cdd5779250fbf27e926c03a009d0f0acba85267a7515c549",
     "resourceFilter": "existing REST route authorization and scoped projection",
-    "evidence": "pending final-SHA parity certification",
-    "contractSha256": "6dda8abb778a516416827ea403fb0ca7e4abb8815220c7551de7a08c7383840c",
+    "evidence": "tests/integration/mcp-sensitive-reads.test.ts",
+    "contractSha256": "c651ac645b5b1ce2d4a7f84fd87c1e8fd12404c099fcf9d2144b4c0a9d6f4dd8",
     "actions": ["service_objective.read"]
   },
   "evaluateServiceObjective": {
@@ -916,25 +918,25 @@
     "actions": ["service_objective.evaluate"]
   },
   "getServiceObjectiveEvaluation": {
-    "status": "UNSUPPORTED_WITH_REASON",
+    "status": "SENSITIVE_READ",
     "risk": "R2",
-    "reason": "Not exposed until shared command, independent approval and parity certification are complete.",
+    "reason": "Reviewed configuration read: read-only generic dispatch behind the administrator sensitive-reads opt-in, native authorization and recursive redaction.",
     "tool": null,
     "routeSha256": "d6b4af5199802da80311c34746840611c27921c0786f4eac9986841439566cc3",
     "resourceFilter": "existing REST route authorization and scoped projection",
-    "evidence": "pending final-SHA parity certification",
-    "contractSha256": "81f2f1ae0e8ea763cf3d14a35288287ee5f2f5d8edc9af2c7d67e4b79b8c52a7",
+    "evidence": "tests/integration/mcp-sensitive-reads.test.ts",
+    "contractSha256": "dc216ff2d11ed4c83b8950f94ea0aa72918dcc785371dad09506880a3ca19815",
     "actions": ["service_objective.read"]
   },
   "getStatusPagePublication": {
-    "status": "UNSUPPORTED_WITH_REASON",
+    "status": "SENSITIVE_READ",
     "risk": "R2",
-    "reason": "Not exposed until shared command, independent approval and parity certification are complete.",
+    "reason": "Reviewed configuration read: read-only generic dispatch behind the administrator sensitive-reads opt-in, native authorization and recursive redaction.",
     "tool": null,
     "routeSha256": "a057b9d0c2e42dca68c26672c543ceeaa2d824527475f8199af4df990e17b81d",
     "resourceFilter": "existing REST route authorization and scoped projection",
-    "evidence": "pending final-SHA parity certification",
-    "contractSha256": "69bfead953e9d6022e7ccb5e1ef6ca178b54333edbe81b02a728352e92fc3d71",
+    "evidence": "tests/integration/mcp-sensitive-reads.test.ts",
+    "contractSha256": "3aa0d67e4f6cdc4c3d4022f10c4b92f92844d16ed91e785873c858a23c00af26",
     "actions": ["status_page.read"]
   },
   "retryStatusPagePublication": {
@@ -949,14 +951,14 @@
     "actions": ["status_page.manage"]
   },
   "getStatusPagePublicationJob": {
-    "status": "UNSUPPORTED_WITH_REASON",
+    "status": "SENSITIVE_READ",
     "risk": "R2",
-    "reason": "Not exposed until shared command, independent approval and parity certification are complete.",
+    "reason": "Reviewed configuration read: read-only generic dispatch behind the administrator sensitive-reads opt-in, native authorization and recursive redaction.",
     "tool": null,
     "routeSha256": "03045181654e745a3b45111e2fc21be3cee126e94fa9927b6939aff6d3d74e3c",
     "resourceFilter": "existing REST route authorization and scoped projection",
-    "evidence": "pending final-SHA parity certification",
-    "contractSha256": "e3ea6cc11931e4e3d8721864038ab23e723ace16a85953ce92a7e464a7e135a4",
+    "evidence": "tests/integration/mcp-sensitive-reads.test.ts",
+    "contractSha256": "8448139e272fc40fd6c54c18463a2f0c6618b157cf4f30a0233c1c4f32204c03",
     "actions": ["status_page.read"]
   },
   "listStatusPageServices": {
@@ -993,14 +995,14 @@
     "actions": ["status_page.manage"]
   },
   "getStatusPageAppearance": {
-    "status": "UNSUPPORTED_WITH_REASON",
+    "status": "SENSITIVE_READ",
     "risk": "R2",
-    "reason": "Not exposed until shared command, independent approval and parity certification are complete.",
+    "reason": "Reviewed configuration read: read-only generic dispatch behind the administrator sensitive-reads opt-in, native authorization and recursive redaction.",
     "tool": null,
     "routeSha256": "53c0191311d1540c1fee59e3db27da98a295646a5a8d5a6c90481c0cd688a7fb",
     "resourceFilter": "existing REST route authorization and scoped projection",
-    "evidence": "pending final-SHA parity certification",
-    "contractSha256": "4656a484a9944dd4418af18cc08c1fb642236f381230acd404d1ed603ed461e0",
+    "evidence": "tests/integration/mcp-sensitive-reads.test.ts",
+    "contractSha256": "8c1293e65bd757c17c13a4425f6d60078dcbd61841d0d85f2e3db89e437d5477",
     "actions": ["status_page.read"]
   },
   "updateStatusPageAppearance": {
@@ -1022,29 +1024,31 @@
     "routeSha256": "9d85d2e6c57018b79727a5ce4e0acc0374b6ec809795b2907106f82ab9c3647b",
     "resourceFilter": "existing REST route authorization and scoped projection",
     "evidence": "pending final-SHA parity certification",
-    "contractSha256": "b3409e629b65c100245b8cd3038cd5f237103952dadd93bdda91f60481e15c8a",
+    "contractSha256": "2ed73ec512dc3ffc10f4ddf661ac71c1ba61174c444c3028e30f18ea6bed6137",
     "actions": ["status_page.read"]
   },
   "updateStatusPagePrivacy": {
-    "status": "DENIED_WITH_REASON",
+    "status": "APPROVAL_REQUIRED",
     "risk": "R3",
-    "reason": "Credential, personal-data or infrastructure boundary restricted to native administration.",
+    "reason": "Destructive: frozen prepare with an impact preview, independent native review after a recent sign-in, re-check of the target at commit and a verified postcondition; never generic.",
     "tool": null,
     "routeSha256": "9d85d2e6c57018b79727a5ce4e0acc0374b6ec809795b2907106f82ab9c3647b",
     "resourceFilter": "existing REST route authorization and scoped projection",
-    "evidence": "pending final-SHA parity certification",
-    "contractSha256": "4d4402a660a6bdc8cd16b8c6c69c99ae8090387ac85975142163d41e7d877927",
+    "evidence": "tests/integration/mcp-approval-destructive.test.ts",
+    "contractSha256": "44648fb4898f4a6c775552b703718ed20c59494f2ac90a0e7595461bc9f10345",
+    "additionalScopes": ["status-pages:read"],
+    "impactPreview": "getStatusPagePrivacy",
     "actions": ["status_page.manage"]
   },
   "getStatusPageContent": {
-    "status": "UNSUPPORTED_WITH_REASON",
+    "status": "SENSITIVE_READ",
     "risk": "R2",
-    "reason": "Not exposed until shared command, independent approval and parity certification are complete.",
+    "reason": "Reviewed configuration read: read-only generic dispatch behind the administrator sensitive-reads opt-in, native authorization and recursive redaction.",
     "tool": null,
     "routeSha256": "65351a757c6dccebdc44c15362f30113ceef6a3daa86a95ea3f045dde2072348",
     "resourceFilter": "existing REST route authorization and scoped projection",
-    "evidence": "pending final-SHA parity certification",
-    "contractSha256": "3e4a1661c90fbd3867e1acf569bc5cc71072229a945a4013917c43f26cd57ec6",
+    "evidence": "tests/integration/mcp-sensitive-reads.test.ts",
+    "contractSha256": "e7774baa28a77b8fdb31fde50b147205ca167ed81a2f6b84eef4a51fd7591af8",
     "actions": ["status_page.read"]
   },
   "updateStatusPageContent": {
@@ -1059,20 +1063,20 @@
     "actions": ["status_page.manage"]
   },
   "getStatusPageSettings": {
-    "status": "UNSUPPORTED_WITH_REASON",
+    "status": "SENSITIVE_READ",
     "risk": "R2",
-    "reason": "Not exposed until shared command, independent approval and parity certification are complete.",
+    "reason": "Reviewed configuration read: read-only generic dispatch behind the administrator sensitive-reads opt-in, native authorization and recursive redaction.",
     "tool": null,
     "routeSha256": "a20f24d4e4737f0bb2753e7eda6b02225dbaa6815739194f4e5fb75aa657b28a",
     "resourceFilter": "existing REST route authorization and scoped projection",
-    "evidence": "pending final-SHA parity certification",
-    "contractSha256": "a0c358f93ef6131a390b16b0b06cdb9e884ce6969de6a42accaa74142fc6a54f",
+    "evidence": "tests/integration/mcp-sensitive-reads.test.ts",
+    "contractSha256": "5db22e632ee4905b1d7b35384b5d25806c28428126973ac1d2f838a6ee603e0d",
     "actions": ["status_page.read"]
   },
   "uploadStatusPageAsset": {
     "status": "UNSUPPORTED_WITH_REASON",
     "risk": "R2",
-    "reason": "Not exposed until shared command, independent approval and parity certification are complete.",
+    "reason": "Proposed exclusion (pending named review): a base64 image body of up to 2.8 MB exceeds the 64 KiB MCP request bound by design; upload through the native status-page editor.",
     "tool": null,
     "routeSha256": "92eb35190256d4c4dde6b68c2187ffeb28c0e4372e0725aec2e397949895cc7b",
     "resourceFilter": "existing REST route authorization and scoped projection",
@@ -1081,20 +1085,20 @@
     "actions": ["status_page.manage"]
   },
   "listStatusPageAssets": {
-    "status": "UNSUPPORTED_WITH_REASON",
+    "status": "SENSITIVE_READ",
     "risk": "R2",
-    "reason": "Not exposed until shared command, independent approval and parity certification are complete.",
+    "reason": "Reviewed configuration read: read-only generic dispatch behind the administrator sensitive-reads opt-in, native authorization and recursive redaction.",
     "tool": null,
     "routeSha256": "92eb35190256d4c4dde6b68c2187ffeb28c0e4372e0725aec2e397949895cc7b",
     "resourceFilter": "existing REST route authorization and scoped projection",
-    "evidence": "pending final-SHA parity certification",
-    "contractSha256": "455f8d0d5cc29fcd8120114b0b9f2b4e414d8ece9fa0f20e5aacd931a19add4e",
+    "evidence": "tests/integration/mcp-sensitive-reads.test.ts",
+    "contractSha256": "4e721068576e1289829cbb40e68e92658f60d6b5f5baa313a36dd178742ee397",
     "actions": ["status_page.read"]
   },
   "deleteStatusPageAsset": {
     "status": "DENIED_WITH_REASON",
     "risk": "R3",
-    "reason": "Credential, personal-data or infrastructure boundary restricted to native administration.",
+    "reason": "Candidate for the destructive approval workflow, blocked on an item-level read of the target (GET /status-pages/{id}/assets/{assetId}): the only previews are paginated or capped parent collections, so neither the reviewer nor the postcondition could observe the exact target.",
     "tool": null,
     "routeSha256": "471864cf32345a58433baae908464552a4480dcbf418c7200a12c013379d5db7",
     "resourceFilter": "existing REST route authorization and scoped projection",
@@ -1116,23 +1120,23 @@
   "listStatusPageSubscribers": {
     "status": "UNSUPPORTED_WITH_REASON",
     "risk": "R2",
-    "reason": "Not exposed until shared command, independent approval and parity certification are complete.",
+    "reason": "Proposed exclusion (pending named review): subscriber personal data; use getStatusPageSubscriberStats.",
     "tool": null,
     "routeSha256": "babdb4c30a3824eaf84eb7d15e5c6afbdebc0ecf306429a59edf7203c400a8a9",
     "resourceFilter": "existing REST route authorization and scoped projection",
     "evidence": "pending final-SHA parity certification",
-    "contractSha256": "2888d0041b80fd79bb77fffd8468d70ff42da8c0a1cb8d9b78e17af3e587b565",
+    "contractSha256": "bbcdb4f4add26b7eab0cc7ffdc53f9ba4a51cfd6bb16b493be53a16d6abbb45a",
     "actions": ["status_page.subscriber.read"]
   },
   "getStatusPageSubscriber": {
     "status": "UNSUPPORTED_WITH_REASON",
     "risk": "R2",
-    "reason": "Not exposed until shared command, independent approval and parity certification are complete.",
+    "reason": "Proposed exclusion (pending named review): subscriber personal data; use getStatusPageSubscriberStats.",
     "tool": null,
     "routeSha256": "38f2a65615fd25ec89c3265d8334f7b82e1fad1e9f42145d9db5f0ffcbdb9380",
     "resourceFilter": "existing REST route authorization and scoped projection",
     "evidence": "pending final-SHA parity certification",
-    "contractSha256": "92b432743653679bd02d1b584ddf69ab96b95f39e515fbb35fc89624b34aceee",
+    "contractSha256": "c6333a123ffc698d0e000121a117eff4f27cf30bbde01b74adc42ab7b04510e8",
     "actions": ["status_page.subscriber.read"]
   },
   "removeStatusPageSubscriber": {
@@ -1147,25 +1151,25 @@
     "actions": ["status_page.subscriber.manage"]
   },
   "getStatusPageSubscriberStats": {
-    "status": "UNSUPPORTED_WITH_REASON",
+    "status": "SENSITIVE_READ",
     "risk": "R2",
-    "reason": "Not exposed until shared command, independent approval and parity certification are complete.",
+    "reason": "Reviewed configuration read: read-only generic dispatch behind the administrator sensitive-reads opt-in, native authorization and recursive redaction.",
     "tool": null,
     "routeSha256": "f0e10f9445ef5c803e41efa484fa166cccfa7dea3f29ff0fc61bea2342bdbfab",
     "resourceFilter": "existing REST route authorization and scoped projection",
-    "evidence": "pending final-SHA parity certification",
-    "contractSha256": "0fddaa50bffef663804a8d6ccd394fc64beb8347fc26ce82f24c2174bb81efd2",
+    "evidence": "tests/integration/mcp-sensitive-reads.test.ts",
+    "contractSha256": "57d7d8837a88e2eff712fa82a1141fab7af9fd63a70f52b229dc6e34f21713a1",
     "actions": ["status_page.subscriber.read"]
   },
   "getStatusPageSubscriptionSettings": {
-    "status": "UNSUPPORTED_WITH_REASON",
+    "status": "SENSITIVE_READ",
     "risk": "R2",
-    "reason": "Not exposed until shared command, independent approval and parity certification are complete.",
+    "reason": "Reviewed configuration read: read-only generic dispatch behind the administrator sensitive-reads opt-in, native authorization and recursive redaction.",
     "tool": null,
     "routeSha256": "32f22d0c424fcf99409c9d742a35867f4c121da2a7c7b0d3709eddf9b6348502",
     "resourceFilter": "existing REST route authorization and scoped projection",
-    "evidence": "pending final-SHA parity certification",
-    "contractSha256": "987072dfc5050ee93d92c697b11eaaaf8da68fa71d5fc5f97c74b443c997eaf7",
+    "evidence": "tests/integration/mcp-sensitive-reads.test.ts",
+    "contractSha256": "c968e661264c1c7d07d55d995841719e58d326a1e2499ce726242f2e3bf18ab4",
     "actions": ["status_page.read"]
   },
   "listServiceRunbookRules": {
@@ -1213,36 +1217,39 @@
     "actions": ["runbook_rule.manage"]
   },
   "detachServiceRunbookRule": {
-    "status": "DENIED_WITH_REASON",
+    "status": "APPROVAL_REQUIRED",
     "risk": "R3",
-    "reason": "Credential, personal-data or infrastructure boundary restricted to native administration.",
+    "reason": "Destructive: frozen prepare with an impact preview, independent native review after a recent sign-in, re-check of the target at commit and a verified postcondition; never generic.",
     "tool": null,
     "routeSha256": "6b419e9a23c5e7331b0ff758d4250d7d6739277fab2c6c7bf44c980887258a04",
     "resourceFilter": "existing REST route authorization and scoped projection",
-    "evidence": "pending final-SHA parity certification",
-    "contractSha256": "3fa8f76cc38c02a4411c1c9e146e451f759293e5b0e81cc5c06e271c0c00f270",
+    "evidence": "tests/integration/mcp-approval-destructive.test.ts",
+    "contractSha256": "2d25b92e5f7da149575580c99795d60a0fb96de27b26f7db063aff3c5edcc547",
+    "additionalScopes": ["runbook-rules:read"],
+    "impactPreview": "getServiceRunbookRule",
     "actions": ["runbook_rule.manage"]
   },
   "validateServiceRunbookRule": {
-    "status": "UNSUPPORTED_WITH_REASON",
+    "status": "SENSITIVE_READ",
     "risk": "R2",
-    "reason": "Not exposed until shared command, independent approval and parity certification are complete.",
+    "reason": "Reviewed side-effect-free readiness check of the current rule; does not execute, enqueue, audit or reserve a replay key.",
     "tool": null,
     "routeSha256": "e86dc0491bc4adcf63dadd35b2aadc988e8b8411e6e7cf2e4ee4c08b79048db9",
     "resourceFilter": "existing REST route authorization and scoped projection",
-    "evidence": "pending final-SHA parity certification",
-    "contractSha256": "4abd9663f0155a082e7adeaecf9c99fe6a7eb45f049badf5a43e97eac9a7e9f1",
-    "actions": ["runbook_rule.read"]
+    "evidence": "tests/integration/mcp-sensitive-reads-post.test.ts",
+    "contractSha256": "0a288f1808a9289a6ef6be3c528fd0f742ff73bd3f015df85403d706404edae2",
+    "actions": ["runbook_rule.read"],
+    "sideEffectFree": true
   },
   "listRunbookRulePolicyChecks": {
-    "status": "UNSUPPORTED_WITH_REASON",
+    "status": "SENSITIVE_READ",
     "risk": "R2",
-    "reason": "Not exposed until shared command, independent approval and parity certification are complete.",
+    "reason": "Reviewed configuration read: read-only generic dispatch behind the administrator sensitive-reads opt-in, native authorization and recursive redaction.",
     "tool": null,
     "routeSha256": "a284b1a9d1caf190dd40f9ca6fd59522fb2510195e8788317e441951c283f5cf",
     "resourceFilter": "existing REST route authorization and scoped projection",
-    "evidence": "pending final-SHA parity certification",
-    "contractSha256": "dbd5e053fbb550dbc99178344287afdecac6a275469f60cf1977f3a3a344ad53",
+    "evidence": "tests/integration/mcp-sensitive-reads.test.ts",
+    "contractSha256": "ca92b4ed446fbe781958934adb703855bbfbe7802fdd894383860c6654de98a8",
     "actions": ["runbook_rule.read"]
   },
   "requestRunbookRulePolicyChecks": {
@@ -1301,14 +1308,14 @@
     "actions": ["runbook_rule.manage"]
   },
   "compareRunbookVersions": {
-    "status": "UNSUPPORTED_WITH_REASON",
+    "status": "SENSITIVE_READ",
     "risk": "R2",
-    "reason": "Not exposed until shared command, independent approval and parity certification are complete.",
+    "reason": "Reviewed configuration read: read-only generic dispatch behind the administrator sensitive-reads opt-in, native authorization and recursive redaction.",
     "tool": null,
     "routeSha256": "3e7b0d9de8f3ede6535c8947bbb4915dd6d8445cad3dacf97aa4f38385047e9a",
     "resourceFilter": "existing REST route authorization and scoped projection",
-    "evidence": "pending final-SHA parity certification",
-    "contractSha256": "5e5858a067aff288d1451399aa2acef31d183b962fcfc840a4694cef3163ebca",
+    "evidence": "tests/integration/mcp-sensitive-reads.test.ts",
+    "contractSha256": "d14c3b5c4151f6bd7fdc9ec68ab8b586d2ebb1ef66fe092902baed1678a3ebff",
     "actions": ["runbook.manage"]
   },
   "getRunbookMetadata": {
@@ -1356,20 +1363,20 @@
     "actions": ["runbook.manage"]
   },
   "checkRunbookDeletion": {
-    "status": "UNSUPPORTED_WITH_REASON",
+    "status": "SENSITIVE_READ",
     "risk": "R2",
-    "reason": "Not exposed until shared command, independent approval and parity certification are complete.",
+    "reason": "Reviewed configuration read: read-only generic dispatch behind the administrator sensitive-reads opt-in, native authorization and recursive redaction.",
     "tool": null,
     "routeSha256": "d51ff64c2feb1c2349ab29a3cab08046d68e6145fa9ef3feb5052e62798f6747",
     "resourceFilter": "existing REST route authorization and scoped projection",
-    "evidence": "pending final-SHA parity certification",
-    "contractSha256": "8227250568c9302b15f927671951f71946a602c16d3f3bb7605fc1005701fb9c",
+    "evidence": "tests/integration/mcp-sensitive-reads.test.ts",
+    "contractSha256": "ab5e71a0ca931fde80ad2a37df58cb187ed5f529987e1aace8137c6a7460fdf5",
     "actions": ["runbook.manage"]
   },
   "deleteRunbook": {
     "status": "DENIED_WITH_REASON",
     "risk": "R3",
-    "reason": "Credential, personal-data or infrastructure boundary restricted to native administration.",
+    "reason": "Proposed exclusion (pending named review): native rules forbid deleting a runbook with published versions; use archiveRunbook (approval-gated) instead.",
     "tool": null,
     "routeSha256": "b8a67b60d701ac2470064d82251568e1a1ee2997474414db0aaf9a1b4d8c13e5",
     "resourceFilter": "existing REST route authorization and scoped projection",
@@ -1433,14 +1440,14 @@
     "actions": ["automation.read", "incident.read"]
   },
   "listAutomationObservations": {
-    "status": "UNSUPPORTED_WITH_REASON",
+    "status": "SENSITIVE_READ",
     "risk": "R2",
-    "reason": "Not exposed until shared command, independent approval and parity certification are complete.",
+    "reason": "Reviewed configuration read: read-only generic dispatch behind the administrator sensitive-reads opt-in, native authorization and recursive redaction.",
     "tool": null,
     "routeSha256": "42c2668072f73410bf4cd2d571d6981a99fb7b53c4780b3b66a51347149ce04b",
     "resourceFilter": "existing REST route authorization and scoped projection",
-    "evidence": "pending final-SHA parity certification",
-    "contractSha256": "add10699288155e422e146fa081091009d59b5e1aab92bdc4cb35a44eb948c38",
+    "evidence": "tests/integration/mcp-sensitive-reads.test.ts",
+    "contractSha256": "f06782b039360d3f4f1bb5d085319eae329a3dcf6a089e2a1bfeb47fe04db472",
     "actions": ["automation.read"]
   },
   "listAutomationVersions": {
@@ -1521,25 +1528,27 @@
     "actions": ["automation.write"]
   },
   "getAutomationCandidate": {
-    "status": "UNSUPPORTED_WITH_REASON",
+    "status": "SENSITIVE_READ",
     "risk": "R2",
-    "reason": "Not exposed until shared command, independent approval and parity certification are complete.",
+    "reason": "Reviewed configuration read: read-only generic dispatch behind the administrator sensitive-reads opt-in, native authorization and recursive redaction.",
     "tool": null,
     "routeSha256": "8674595d481dfe6d7a2964d44e1afab1a546258bf52b5eda6f2b86bf3bf8de17",
     "resourceFilter": "existing REST route authorization and scoped projection",
-    "evidence": "pending final-SHA parity certification",
-    "contractSha256": "6019ea4cedc30b02a4d6a14bab57833a316b50f1f6227b86d0fbcda4e1ff0001",
+    "evidence": "tests/integration/mcp-sensitive-reads.test.ts",
+    "contractSha256": "75d9d1908f6363cf90062e5bb05189c14f414429ce9ca5802a5b3929b9581ef2",
     "actions": ["automation.read"]
   },
   "discardAutomationCandidate": {
-    "status": "DENIED_WITH_REASON",
+    "status": "APPROVAL_REQUIRED",
     "risk": "R3",
-    "reason": "Credential, personal-data or infrastructure boundary restricted to native administration.",
+    "reason": "Destructive: frozen prepare with an impact preview, independent native review after a recent sign-in, re-check of the target at commit and a verified postcondition; never generic.",
     "tool": null,
     "routeSha256": "8674595d481dfe6d7a2964d44e1afab1a546258bf52b5eda6f2b86bf3bf8de17",
     "resourceFilter": "existing REST route authorization and scoped projection",
-    "evidence": "pending final-SHA parity certification",
-    "contractSha256": "3e43dbf11ba3a50d06284a7da839433b2d7cc9aa3f09dd1339bea628aa252a07",
+    "evidence": "tests/integration/mcp-approval-destructive.test.ts",
+    "contractSha256": "1769fc8ecbd4e95372b30feb3816e0ef40a05ee1ff9aa25da8bc68dd07f9f5f5",
+    "additionalScopes": ["automation:read"],
+    "impactPreview": "getAutomationCandidate",
     "actions": ["automation.publish"]
   },
   "activateAutomationCandidate": {
@@ -1554,14 +1563,14 @@
     "actions": ["automation.publish"]
   },
   "getAutomationSettings": {
-    "status": "UNSUPPORTED_WITH_REASON",
+    "status": "SENSITIVE_READ",
     "risk": "R2",
-    "reason": "Not exposed until shared command, independent approval and parity certification are complete.",
+    "reason": "Reviewed configuration read: read-only generic dispatch behind the administrator sensitive-reads opt-in, native authorization and recursive redaction.",
     "tool": null,
     "routeSha256": "9e667d098484ec34b520963172592680b706b32540b5ffa65f940475e8695ea7",
     "resourceFilter": "existing REST route authorization and scoped projection",
-    "evidence": "pending final-SHA parity certification",
-    "contractSha256": "d69a694fa3e70317f461c81c2228a4829f6838b5817efb26b940051569a9273b",
+    "evidence": "tests/integration/mcp-sensitive-reads.test.ts",
+    "contractSha256": "758baed01021ad324aa69ff303412b80e9207a7217b4dc59632df1f08a08d50c",
     "actions": ["automation_settings.read"]
   },
   "updateAutomationSettings": {
@@ -1576,14 +1585,14 @@
     "actions": ["automation_settings.write"]
   },
   "listIncidentWatchers": {
-    "status": "UNSUPPORTED_WITH_REASON",
+    "status": "SENSITIVE_READ",
     "risk": "R2",
-    "reason": "Not exposed until shared command, independent approval and parity certification are complete.",
+    "reason": "Reviewed configuration read: read-only generic dispatch behind the administrator sensitive-reads opt-in, native authorization and recursive redaction.",
     "tool": null,
     "routeSha256": "0d569c87f4a8fc2a19292d0ba41fb98669bc480d5bbdcd06586b620c64304f58",
     "resourceFilter": "existing REST route authorization and scoped projection",
-    "evidence": "pending final-SHA parity certification",
-    "contractSha256": "05c3dc2a5fda28b379ed141cb4de9282cd4ff94ed839df15cc9c9edb53f32ae7",
+    "evidence": "tests/integration/mcp-sensitive-reads.test.ts",
+    "contractSha256": "5ba51139cf340e0172b18354d422c9ed3c8983d48a2e31106410feb1d2121d44",
     "actions": ["incident.read"]
   },
   "listIncidentTags": {
@@ -1609,14 +1618,14 @@
     "actions": ["incident.read"]
   },
   "listIncidentTemplates": {
-    "status": "UNSUPPORTED_WITH_REASON",
+    "status": "SENSITIVE_READ",
     "risk": "R2",
-    "reason": "Not exposed until shared command, independent approval and parity certification are complete.",
+    "reason": "Reviewed configuration read: read-only generic dispatch behind the administrator sensitive-reads opt-in, native authorization and recursive redaction.",
     "tool": null,
     "routeSha256": "f50c4df0e235d358a4ba5f1ec0ce7c741606fabfd78e75f885d61526d174168a",
     "resourceFilter": "existing REST route authorization and scoped projection",
-    "evidence": "pending final-SHA parity certification",
-    "contractSha256": "a9fffc245128b00dd565f3e9989d10e3e22de2849515420f799b2b21278741e5",
+    "evidence": "tests/integration/mcp-sensitive-reads.test.ts",
+    "contractSha256": "fd299ca224bf94a1eb4ea3b65f583fc9956df5a0c1cacecc75c26bc1050774df",
     "actions": ["incident.read"]
   },
   "createIncidentTemplate": {
@@ -1631,14 +1640,14 @@
     "actions": ["incident.manage"]
   },
   "getIncidentTemplate": {
-    "status": "UNSUPPORTED_WITH_REASON",
+    "status": "SENSITIVE_READ",
     "risk": "R2",
-    "reason": "Not exposed until shared command, independent approval and parity certification are complete.",
+    "reason": "Reviewed configuration read: read-only generic dispatch behind the administrator sensitive-reads opt-in, native authorization and recursive redaction.",
     "tool": null,
     "routeSha256": "246f5f872da7e6665da6f95f1c80f4541b4afd455209ce04757367bf3421a45e",
     "resourceFilter": "existing REST route authorization and scoped projection",
-    "evidence": "pending final-SHA parity certification",
-    "contractSha256": "cad1dabd9acc19d6d2e85e542a0d114f44506227e05a1b2e7ae19c72f3d68ff6",
+    "evidence": "tests/integration/mcp-sensitive-reads.test.ts",
+    "contractSha256": "97495e66cba76b6423e53914f45a9d974c6518bcdc3a1b83abe73de431017960",
     "actions": ["incident.read"]
   },
   "updateIncidentTemplate": {
@@ -1653,25 +1662,27 @@
     "actions": ["incident.manage"]
   },
   "deleteIncidentTemplate": {
-    "status": "DENIED_WITH_REASON",
+    "status": "APPROVAL_REQUIRED",
     "risk": "R3",
-    "reason": "Credential, personal-data or infrastructure boundary restricted to native administration.",
+    "reason": "Destructive: frozen prepare with an impact preview, independent native review after a recent sign-in, re-check of the target at commit and a verified postcondition; never generic.",
     "tool": null,
     "routeSha256": "246f5f872da7e6665da6f95f1c80f4541b4afd455209ce04757367bf3421a45e",
     "resourceFilter": "existing REST route authorization and scoped projection",
-    "evidence": "pending final-SHA parity certification",
-    "contractSha256": "866feb0e407fcaa8cb92bb608f320e013c7fe96e5e6c3a3e794a77d652559a34",
+    "evidence": "tests/integration/mcp-approval-destructive.test.ts",
+    "contractSha256": "98e52b0919c0eff912db9ee7a08677f283906a87c007b02a32276cdf5795ecfa",
+    "additionalScopes": ["incidents:read"],
+    "impactPreview": "getIncidentTemplate",
     "actions": ["incident.manage"]
   },
   "getIncidentCustomField": {
-    "status": "UNSUPPORTED_WITH_REASON",
+    "status": "SENSITIVE_READ",
     "risk": "R2",
-    "reason": "Not exposed until shared command, independent approval and parity certification are complete.",
+    "reason": "Reviewed configuration read: read-only generic dispatch behind the administrator sensitive-reads opt-in, native authorization and recursive redaction.",
     "tool": null,
     "routeSha256": "e9f20a384f36be61b79da164bfa082340730eb88bb1928149ce8e572b462fdef",
     "resourceFilter": "existing REST route authorization and scoped projection",
-    "evidence": "pending final-SHA parity certification",
-    "contractSha256": "907ca113b66aadfc46bed3e70d40aceb4ef732b8e65ca5bdf6a4b8d6c389d876",
+    "evidence": "tests/integration/mcp-sensitive-reads.test.ts",
+    "contractSha256": "cafe9d1b50b46ca9cc537db112336583dac5bfbc41b3740fd8fcfee1233e8f61",
     "actions": ["incident.read"]
   },
   "setIncidentCustomField": {
@@ -1733,7 +1744,7 @@
   "removeIncidentWatcher": {
     "status": "DENIED_WITH_REASON",
     "risk": "R3",
-    "reason": "Credential, personal-data or infrastructure boundary restricted to native administration.",
+    "reason": "Candidate for the destructive approval workflow, blocked on an item-level read of the target (GET /incidents/{id}/watchers/{watcherId}): the only previews are paginated or capped parent collections, so neither the reviewer nor the postcondition could observe the exact target.",
     "tool": null,
     "routeSha256": "068c8de08cdcfc5f6a0e697fb78fb0016d883711eabe6c52112e5980e89f5a2f",
     "resourceFilter": "existing REST route authorization and scoped projection",
@@ -1788,7 +1799,7 @@
   "removeScheduleParticipant": {
     "status": "DENIED_WITH_REASON",
     "risk": "R3",
-    "reason": "Credential, personal-data or infrastructure boundary restricted to native administration.",
+    "reason": "Candidate for the destructive approval workflow, blocked on an item-level read of the target (GET /schedules/{id}/layers/{layerId}/participants/{userId}): the only previews are paginated or capped parent collections, so neither the reviewer nor the postcondition could observe the exact target.",
     "tool": null,
     "routeSha256": "12d060170352512b3f2e0674a29e2f2d2ce954228da8937d2b6761445e4d587f",
     "resourceFilter": "existing REST route authorization and scoped projection",
@@ -1902,14 +1913,14 @@
     "actions": ["runbook.manage"]
   },
   "getRunbookDraft": {
-    "status": "UNSUPPORTED_WITH_REASON",
+    "status": "SENSITIVE_READ",
     "risk": "R2",
-    "reason": "Not exposed until shared command, independent approval and parity certification are complete.",
+    "reason": "Reviewed configuration read: read-only generic dispatch behind the administrator sensitive-reads opt-in, native authorization and recursive redaction.",
     "tool": null,
     "routeSha256": "e99f837127fd2a6654d5a9bc19f281a9171f0eb2c38b05cf63bd39f92ffa21b8",
     "resourceFilter": "existing REST route authorization and scoped projection",
-    "evidence": "pending final-SHA parity certification",
-    "contractSha256": "f5535639741194e59e6972cb83b202f10ad7efbb040d1b8ab0039dbbbc239ee7",
+    "evidence": "tests/integration/mcp-sensitive-reads.test.ts",
+    "contractSha256": "01f52158b6a608a26530aece13a17c6c46f5e8437eedff2d6946bc9e0e21ef19",
     "actions": ["runbook.manage"]
   },
   "updateRunbookDraft": {
@@ -1953,7 +1964,7 @@
     "routeSha256": "104207f1882daad88ab1119c7529bcb527ff8393dec98cf8c353dbc51eb81c10",
     "resourceFilter": "existing REST route authorization and scoped projection",
     "evidence": "pending final-SHA parity certification",
-    "contractSha256": "e69e2866768a92ba09cfb710013541ddcc83f7a748330d5d9011e59811311c17",
+    "contractSha256": "7900969e713ffbd254f14006c0a9e97b5ca8b63abd026ec2c7aaf02a82df64ee",
     "actions": ["audit.read"]
   },
   "getEscalationPolicy": {
@@ -1961,7 +1972,7 @@
     "risk": "R0",
     "reason": "Candidate in-process REST contract adapter; current role, scopes and resource authorization required.",
     "tool": "escalation_explain",
-    "routeSha256": "57514172ec895a67d8597f38dd4ff531e29b36f71ceac7ef08f9b761fc39456e",
+    "routeSha256": "76ca789f2340e24b3036cf07f089f4f4691d9abfa3861d67775fabe4e81eabad",
     "resourceFilter": "existing REST route authorization and scoped projection",
     "evidence": "pending final-SHA parity certification",
     "contractSha256": "6464a4213f2d17c2c52faa6e64c240a2fcff54f5e743d6527e63797558fc6760",
@@ -1979,25 +1990,25 @@
     "actions": ["escalation_policy.read"]
   },
   "validateEscalationPolicy": {
-    "status": "UNSUPPORTED_WITH_REASON",
+    "status": "SENSITIVE_READ",
     "risk": "R2",
-    "reason": "Not exposed until shared command, independent approval and parity certification are complete.",
+    "reason": "Reviewed configuration read: read-only generic dispatch behind the administrator sensitive-reads opt-in, native authorization and recursive redaction.",
     "tool": null,
     "routeSha256": "61eec9dd13b6d70a324674882bd9d1536e77e114440b3ee4f9895fbd75f71910",
     "resourceFilter": "existing REST route authorization and scoped projection",
-    "evidence": "pending final-SHA parity certification",
-    "contractSha256": "cc06d2426734b3b3179abfadc1f7274fa3554996fe8e80aa96315a66767af913",
+    "evidence": "tests/integration/mcp-sensitive-reads.test.ts",
+    "contractSha256": "1a442b96364232bfbbba3480749a6e730ed52b3c71e11ade560a570610e9ca3d",
     "actions": ["escalation_policy.read"]
   },
   "previewStatusPage": {
-    "status": "UNSUPPORTED_WITH_REASON",
+    "status": "SENSITIVE_READ",
     "risk": "R2",
-    "reason": "Not exposed until shared command, independent approval and parity certification are complete.",
+    "reason": "Reviewed configuration read: read-only generic dispatch behind the administrator sensitive-reads opt-in, native authorization and recursive redaction.",
     "tool": null,
     "routeSha256": "5f1a7da6e9feeab7838dc3742a5308a43779eb71bc57416b0ae6bc6eec7398b7",
     "resourceFilter": "existing REST route authorization and scoped projection",
-    "evidence": "pending final-SHA parity certification",
-    "contractSha256": "176cdb4d3eed32ee65dbc587ea8b7b4ad58581f7a3b7afad7a8cc6f9c5148b2f",
+    "evidence": "tests/integration/mcp-sensitive-reads.test.ts",
+    "contractSha256": "bec4fa66d2f13af9383091fefb311a8402134bbaab5f3ea59303b4d9f62cdb36",
     "actions": ["status_page.read"]
   },
   "listScheduleLayers": {
@@ -2045,14 +2056,16 @@
     "actions": ["schedule.manage"]
   },
   "deleteScheduleLayer": {
-    "status": "DENIED_WITH_REASON",
+    "status": "APPROVAL_REQUIRED",
     "risk": "R3",
-    "reason": "Credential, personal-data or infrastructure boundary restricted to native administration.",
+    "reason": "Destructive: frozen prepare with an impact preview, independent native review after a recent sign-in, re-check of the target at commit and a verified postcondition; never generic.",
     "tool": null,
     "routeSha256": "4ce65788a3271ab331436f035a6ab6291bbba84eebd8d2a9161e27526092802e",
     "resourceFilter": "existing REST route authorization and scoped projection",
-    "evidence": "pending final-SHA parity certification",
-    "contractSha256": "9424dd215030a67796db697b92356129340f013c6a5b49085172ff87510b4393",
+    "evidence": "tests/integration/mcp-approval-destructive.test.ts",
+    "contractSha256": "605e27484b1bf50ce8cdb7db4d2681e739c4dc87207688a5bb50f43ed7494739",
+    "additionalScopes": ["schedules:read"],
+    "impactPreview": "getScheduleLayer",
     "actions": ["schedule.manage"]
   },
   "reorderScheduleLayers": {
@@ -2078,47 +2091,49 @@
     "actions": ["schedule.manage"]
   },
   "getScheduleDependencies": {
-    "status": "UNSUPPORTED_WITH_REASON",
+    "status": "SENSITIVE_READ",
     "risk": "R2",
-    "reason": "Not exposed until shared command, independent approval and parity certification are complete.",
+    "reason": "Reviewed configuration read: read-only generic dispatch behind the administrator sensitive-reads opt-in, native authorization and recursive redaction.",
     "tool": null,
     "routeSha256": "d8bdec4c9ab6fd6d3668cea2524fb5bca76f81f1b3318e35a5344bf6ca1139ff",
     "resourceFilter": "existing REST route authorization and scoped projection",
-    "evidence": "pending final-SHA parity certification",
-    "contractSha256": "d0987a5c33fc4b36349896a286908ea717c6198eeac012731fac2e108942419e",
+    "evidence": "tests/integration/mcp-sensitive-reads.test.ts",
+    "contractSha256": "d6aee589d805e81187b9b4ea01a8088cd357c8352bd5525b83c6283365f1133c",
     "actions": ["schedule.manage"]
   },
   "listScheduleChanges": {
-    "status": "UNSUPPORTED_WITH_REASON",
+    "status": "SENSITIVE_READ",
     "risk": "R2",
-    "reason": "Not exposed until shared command, independent approval and parity certification are complete.",
+    "reason": "Reviewed configuration read: read-only generic dispatch behind the administrator sensitive-reads opt-in, native authorization and recursive redaction.",
     "tool": null,
     "routeSha256": "1f1f66ba44e94191b7318cf344011250646cb943abd85d883f5e29548f833193",
     "resourceFilter": "existing REST route authorization and scoped projection",
-    "evidence": "pending final-SHA parity certification",
-    "contractSha256": "b481e62d032cf852fbb02e9309e063d590a636be5a9ec6f13746938eac270973",
+    "evidence": "tests/integration/mcp-sensitive-reads.test.ts",
+    "contractSha256": "26796fe5ecf010369f8560ea6f8cd5bf1a7ad30a091dbe48e832459e3e710386",
     "actions": ["schedule.manage"]
   },
   "updateEscalationPolicy": {
-    "status": "UNSUPPORTED_WITH_REASON",
+    "status": "APPROVAL_REQUIRED",
     "risk": "R2",
-    "reason": "Not exposed until shared command, independent approval and parity certification are complete.",
+    "reason": "Frozen prepare, independent native review and commit recorded in the change's own transaction; never generic.",
     "tool": null,
-    "routeSha256": "57514172ec895a67d8597f38dd4ff531e29b36f71ceac7ef08f9b761fc39456e",
+    "routeSha256": "76ca789f2340e24b3036cf07f089f4f4691d9abfa3861d67775fabe4e81eabad",
     "resourceFilter": "existing REST route authorization and scoped projection",
-    "evidence": "pending final-SHA parity certification",
+    "evidence": "tests/integration/mcp-approval-natural.test.ts",
     "contractSha256": "9fa39def3ac1b62ad85dc3dae040549b25e80eeee5fce777d271567fada43c0a",
     "actions": ["escalation_policy.manage"]
   },
   "deleteEscalationPolicy": {
-    "status": "DENIED_WITH_REASON",
+    "status": "APPROVAL_REQUIRED",
     "risk": "R3",
-    "reason": "Credential, personal-data or infrastructure boundary restricted to native administration.",
+    "reason": "Destructive: frozen prepare with an impact preview, independent native review after a recent sign-in, re-check of the target at commit and a verified postcondition; never generic.",
     "tool": null,
-    "routeSha256": "57514172ec895a67d8597f38dd4ff531e29b36f71ceac7ef08f9b761fc39456e",
+    "routeSha256": "76ca789f2340e24b3036cf07f089f4f4691d9abfa3861d67775fabe4e81eabad",
     "resourceFilter": "existing REST route authorization and scoped projection",
-    "evidence": "pending final-SHA parity certification",
-    "contractSha256": "fbbad9e207dafb3c20c6b623b4749ceeda0748d70c0feb44fca3dfe0c2e23c49",
+    "evidence": "tests/integration/mcp-approval-destructive.test.ts",
+    "contractSha256": "4a35b1fceef2d3fb81c38e1049d44f9fa5b7d0f65a591c02eb0f36dedcfdde71",
+    "additionalScopes": ["escalation-policies:read"],
+    "impactPreview": "getEscalationPolicy",
     "actions": ["escalation_policy.manage"]
   },
   "listEscalationPolicies": {
@@ -2126,20 +2141,20 @@
     "risk": "R0",
     "reason": "Candidate in-process REST contract adapter; current role, scopes and resource authorization required.",
     "tool": null,
-    "routeSha256": "b8841109b54e5615da6ba0d39cc665c081a65cf545a2c07a29396fbefdf55377",
+    "routeSha256": "dec1048602565bb7ed6ff36d7715e7fec03a6ebf45b4829c809891bc862c2780",
     "resourceFilter": "existing REST route authorization and scoped projection",
     "evidence": "pending final-SHA parity certification",
     "contractSha256": "905fc220b1a6154a669df94ec839dc992ee6780bad504c996a568f5712a1dbf2",
     "actions": ["escalation_policy.read"]
   },
   "createEscalationPolicy": {
-    "status": "UNSUPPORTED_WITH_REASON",
+    "status": "APPROVAL_REQUIRED",
     "risk": "R2",
-    "reason": "Not exposed until shared command, independent approval and parity certification are complete.",
+    "reason": "Frozen prepare, independent native review and commit recorded in the change's own transaction; never generic.",
     "tool": null,
-    "routeSha256": "b8841109b54e5615da6ba0d39cc665c081a65cf545a2c07a29396fbefdf55377",
+    "routeSha256": "dec1048602565bb7ed6ff36d7715e7fec03a6ebf45b4829c809891bc862c2780",
     "resourceFilter": "existing REST route authorization and scoped projection",
-    "evidence": "pending final-SHA parity certification",
+    "evidence": "tests/integration/mcp-approval-natural.test.ts",
     "contractSha256": "f7bb14d667c543848d0052c77d80492dc6f4aa50dfed99e5dc4569b41faf8ca4",
     "actions": ["escalation_policy.manage"]
   },
@@ -2257,23 +2272,23 @@
   "getIntegration": {
     "status": "UNSUPPORTED_WITH_REASON",
     "risk": "R2",
-    "reason": "Not exposed until shared command, independent approval and parity certification are complete.",
+    "reason": "Proposed exclusion (pending named review): integration configuration can carry endpoint secrets; use listIntegrations and getIntegrationUsage.",
     "tool": null,
-    "routeSha256": "bd90a7bc9985690b94622c1e023945da9f67256291ca57473257bcfc160e1d42",
+    "routeSha256": "0eec4076d64c8f1e7a1e03b55d63af033392e8a88d97f5575e6f5ea03dbdba3c",
     "resourceFilter": "existing REST route authorization and scoped projection",
     "evidence": "pending final-SHA parity certification",
-    "contractSha256": "2a4b10be1fa7cec9fc79db1cbf78e8313df2a6c8416d82c6071316d0cbc9aa92",
+    "contractSha256": "be5ea5f2cbd5d9388edc9e6b252d922b190036ba5726c9037875009aac13234f",
     "actions": ["integration.read"]
   },
   "listIntegrationTypes": {
-    "status": "UNSUPPORTED_WITH_REASON",
+    "status": "SENSITIVE_READ",
     "risk": "R2",
-    "reason": "Not exposed until shared command, independent approval and parity certification are complete.",
+    "reason": "Reviewed configuration read: read-only generic dispatch behind the administrator sensitive-reads opt-in, native authorization and recursive redaction.",
     "tool": null,
     "routeSha256": "460f4069f1225986a3cc663cabf6e2012ac247df634e21815da5d3b0cce5c2da",
     "resourceFilter": "existing REST route authorization and scoped projection",
-    "evidence": "pending final-SHA parity certification",
-    "contractSha256": "5e4b61b1cdfd53ac4dc46f9db016aa1c354101b469dc037304b7f25ea4696624",
+    "evidence": "tests/integration/mcp-sensitive-reads.test.ts",
+    "contractSha256": "4288c836b0e95c71f43fee118dd23a1896d6efe4c244c809eb775e6f87b8f4cf",
     "actions": ["integration.read"]
   },
   "createServiceIntegration": {
@@ -2295,7 +2310,7 @@
     "routeSha256": "fc024b8af72826f33237083b2362bd027123a8e723c4be5ca7a6cdd8444465e6",
     "resourceFilter": "existing REST route authorization and scoped projection",
     "evidence": "pending final-SHA parity certification",
-    "contractSha256": "1b82f69eb7f34abea6a0687f7d7cd6506d672320f42e3740efd7777f6b277299",
+    "contractSha256": "921e9fb093c65f532f33d2733c6d7d2d7fe704e069a366789eec98b6fc80d402",
     "actions": ["integration.read"]
   },
   "rotateIntegrationCredentials": {
@@ -2310,86 +2325,90 @@
     "actions": ["integration.credentials.manage"]
   },
   "validateIntegrationPayload": {
-    "status": "UNSUPPORTED_WITH_REASON",
+    "status": "SENSITIVE_READ",
     "risk": "R2",
-    "reason": "Not exposed until shared command, independent approval and parity certification are complete.",
+    "reason": "Reviewed side-effect-free sample validation; does not ingest, emit or store the payload and returns bounded parser messages only.",
     "tool": null,
     "routeSha256": "d3c5ca168a5a8dd5fb1cede9e50f68ff210a77f5a95fac88a754f9609a0fedae",
     "resourceFilter": "existing REST route authorization and scoped projection",
-    "evidence": "pending final-SHA parity certification",
-    "contractSha256": "95538ae251425992a697c3849a221b01334ecc46e99234376e10aa1e2269d252",
-    "actions": ["integration.test"]
+    "evidence": "tests/integration/mcp-sensitive-reads-post.test.ts",
+    "contractSha256": "4850795af05e8bc6a488d6f39192fd57afd62d3aaf649dc7f2074a748f917650",
+    "actions": ["integration.test"],
+    "sideEffectFree": true
   },
   "getIntegrationDiagnostics": {
     "status": "UNSUPPORTED_WITH_REASON",
     "risk": "R2",
-    "reason": "Not exposed until shared command, independent approval and parity certification are complete.",
+    "reason": "Proposed exclusion (pending named review): diagnostics can echo endpoint and header configuration.",
     "tool": null,
     "routeSha256": "f99155e8bf41892b92331e83e1d8f2c845766a838a81865065ef0e58b490a8e5",
     "resourceFilter": "existing REST route authorization and scoped projection",
     "evidence": "pending final-SHA parity certification",
-    "contractSha256": "e8feeec95e3d806146e77a5d184940885635f824a9f4b9370d39e4db010c4d9b",
+    "contractSha256": "62061c02d5cd754327c8e25d7f382db7fa93a5d028df81a128a0c37b7b987da6",
     "actions": ["integration.read"]
   },
   "validateIntegrationConfiguration": {
-    "status": "UNSUPPORTED_WITH_REASON",
+    "status": "SENSITIVE_READ",
     "risk": "R2",
-    "reason": "Not exposed until shared command, independent approval and parity certification are complete.",
+    "reason": "Reviewed side-effect-free local configuration check; does not activate the integration, contact its provider or return credentials.",
     "tool": null,
     "routeSha256": "cd0de1a848274ccf374952cd47e3dbd64671d5ce6a16099f0d66968d498e088b",
     "resourceFilter": "existing REST route authorization and scoped projection",
-    "evidence": "pending final-SHA parity certification",
-    "contractSha256": "870ee31ffe60af1d5f2c76335600f1d81f2586b873fcf9e5103924b80ee860ef",
-    "actions": ["integration.test"]
+    "evidence": "tests/integration/mcp-sensitive-reads-post.test.ts",
+    "contractSha256": "0505df8b49143702703149c517596935614a0d9a29ad446ab783de6cbb759643",
+    "actions": ["integration.test"],
+    "sideEffectFree": true
   },
   "getIntegrationUsage": {
-    "status": "UNSUPPORTED_WITH_REASON",
+    "status": "SENSITIVE_READ",
     "risk": "R2",
-    "reason": "Not exposed until shared command, independent approval and parity certification are complete.",
+    "reason": "Reviewed configuration read: read-only generic dispatch behind the administrator sensitive-reads opt-in, native authorization and recursive redaction.",
     "tool": null,
     "routeSha256": "6db273ae1930c3ba3e4f873f4d8a5c5af16f9cef368de8b1837e425021b56365",
     "resourceFilter": "existing REST route authorization and scoped projection",
-    "evidence": "pending final-SHA parity certification",
-    "contractSha256": "8904e76e8ad6e79a733c76d5f3fb740fb25e24a1c84e2bcfa1e44a7715ca08fb",
+    "evidence": "tests/integration/mcp-sensitive-reads.test.ts",
+    "contractSha256": "67e763b955cf6e6d518c31f852d6ba74f874f46ed037a057901cf70c94acd0ef",
     "actions": ["integration.read"]
   },
   "deleteIntegration": {
-    "status": "DENIED_WITH_REASON",
+    "status": "APPROVAL_REQUIRED",
     "risk": "R3",
-    "reason": "Credential, personal-data or infrastructure boundary restricted to native administration.",
+    "reason": "Destructive: frozen prepare with an impact preview, independent native review after a recent sign-in, re-check of the target at commit and a verified postcondition; never generic.",
     "tool": null,
-    "routeSha256": "bd90a7bc9985690b94622c1e023945da9f67256291ca57473257bcfc160e1d42",
+    "routeSha256": "0eec4076d64c8f1e7a1e03b55d63af033392e8a88d97f5575e6f5ea03dbdba3c",
     "resourceFilter": "existing REST route authorization and scoped projection",
-    "evidence": "pending final-SHA parity certification",
-    "contractSha256": "1724f261d9672794dbb9d2471c1d8be19edaa7fbef7c0abd55fffbbfdb5081fa",
+    "evidence": "tests/integration/mcp-approval-destructive.test.ts",
+    "contractSha256": "cd9f67ad8d666f14398229f99111a58ba55679a2ff53d6a74a5867f55aa813fa",
+    "additionalScopes": ["integrations:read"],
+    "impactPreview": "getIntegration",
     "actions": ["integration.delete"]
   },
   "updateIntegration": {
-    "status": "UNSUPPORTED_WITH_REASON",
+    "status": "APPROVAL_REQUIRED",
     "risk": "R2",
-    "reason": "Not exposed until shared command, independent approval and parity certification are complete.",
+    "reason": "Frozen prepare, independent native review and commit recorded in the change's own transaction; never generic.",
     "tool": null,
-    "routeSha256": "bd90a7bc9985690b94622c1e023945da9f67256291ca57473257bcfc160e1d42",
+    "routeSha256": "0eec4076d64c8f1e7a1e03b55d63af033392e8a88d97f5575e6f5ea03dbdba3c",
     "resourceFilter": "existing REST route authorization and scoped projection",
-    "evidence": "pending final-SHA parity certification",
+    "evidence": "tests/integration/mcp-approval-natural.test.ts",
     "contractSha256": "b6d5c228a67fa65551d9fc7fdc27f1e85bcd272ad74c15f860ff0373eb04486d",
     "actions": ["integration.manage"]
   },
   "listIntegrations": {
-    "status": "UNSUPPORTED_WITH_REASON",
+    "status": "SENSITIVE_READ",
     "risk": "R2",
-    "reason": "Not exposed until shared command, independent approval and parity certification are complete.",
+    "reason": "Reviewed configuration read: read-only generic dispatch behind the administrator sensitive-reads opt-in, native authorization and recursive redaction.",
     "tool": null,
     "routeSha256": "95c06f1330251c4ae7a19540cc02d55cd71b944a0704cde459fe5e28e9c8d42b",
     "resourceFilter": "existing REST route authorization and scoped projection",
-    "evidence": "pending final-SHA parity certification",
-    "contractSha256": "e80606e7aebc342f13427e71580b3a0c01a7720f4df4a0507a7877e28429e073",
+    "evidence": "tests/integration/mcp-sensitive-reads.test.ts",
+    "contractSha256": "b8c38f26c7abf6ef18802c6c7997d9d23c335d0c2a0163b2939798d05d209c29",
     "actions": ["integration.read"]
   },
   "retryNotification": {
     "status": "UNSUPPORTED_WITH_REASON",
     "risk": "R2",
-    "reason": "Not exposed until shared command, independent approval and parity certification are complete.",
+    "reason": "Not exposed yet: a retry re-sends to external providers outside a single transaction, so an approval cannot be recorded atomically with the effect.",
     "tool": null,
     "routeSha256": "fc88eb689a1ceabdc2a24d986088445184f2e2dcfb01231d675767dd7dbb6327",
     "resourceFilter": "existing REST route authorization and scoped projection",
@@ -2398,36 +2417,36 @@
     "actions": ["notification.manage"]
   },
   "listNotifications": {
-    "status": "UNSUPPORTED_WITH_REASON",
+    "status": "SENSITIVE_READ",
     "risk": "R2",
-    "reason": "Not exposed until shared command, independent approval and parity certification are complete.",
+    "reason": "Reviewed configuration read: read-only generic dispatch behind the administrator sensitive-reads opt-in, native authorization and recursive redaction.",
     "tool": null,
     "routeSha256": "22c9ff6e321825d6ced1cc882554e8451b2cbe848fd1e194fe4332fa13eebd64",
     "resourceFilter": "existing REST route authorization and scoped projection",
-    "evidence": "pending final-SHA parity certification",
-    "contractSha256": "af613d573a7106b30c1ce281cb60cce157a974a4404ed35110c22922ccbd3ccb",
+    "evidence": "tests/integration/mcp-sensitive-reads.test.ts",
+    "contractSha256": "b1f51180f78917735f4039451ebc9445951d1881dff95967a6b453dde30870e8",
     "actions": ["notification.read"]
   },
   "listNotificationAttempts": {
-    "status": "UNSUPPORTED_WITH_REASON",
+    "status": "SENSITIVE_READ",
     "risk": "R2",
-    "reason": "Not exposed until shared command, independent approval and parity certification are complete.",
+    "reason": "Reviewed configuration read: read-only generic dispatch behind the administrator sensitive-reads opt-in, native authorization and recursive redaction.",
     "tool": null,
     "routeSha256": "2c7f4d4829594696156e56be60a792792a12bc507d32df3d662dfbf011306b85",
     "resourceFilter": "existing REST route authorization and scoped projection",
-    "evidence": "pending final-SHA parity certification",
-    "contractSha256": "022048899b82435bbf92ee12d16092ba5ac219f5770cef97a90c79095caf484a",
+    "evidence": "tests/integration/mcp-sensitive-reads.test.ts",
+    "contractSha256": "ae15415dc268de55a85aa62fe8238d470b55742a35959b3ac37e750f1bce3251",
     "actions": ["notification.read"]
   },
   "getNotificationFeedback": {
-    "status": "UNSUPPORTED_WITH_REASON",
+    "status": "SENSITIVE_READ",
     "risk": "R2",
-    "reason": "Not exposed until shared command, independent approval and parity certification are complete.",
+    "reason": "Reviewed configuration read: read-only generic dispatch behind the administrator sensitive-reads opt-in, native authorization and recursive redaction.",
     "tool": null,
     "routeSha256": "f819893b9e63008cb50df6f33869b79b2a052a660f4760f40d502fdca63bfcd1",
     "resourceFilter": "existing REST route authorization and scoped projection",
-    "evidence": "pending final-SHA parity certification",
-    "contractSha256": "760b9791cd42125ee7aadde545d9ec4e2443e116e226aadcb4c8e99994696c6c",
+    "evidence": "tests/integration/mcp-sensitive-reads.test.ts",
+    "contractSha256": "fef6ffcc032694d9ebbd7fce9f8dd8ede7fa491e962e2741236a46eb0d1f599a",
     "actions": ["notification.read"]
   },
   "getIncidentResponseActivity": {
@@ -2442,25 +2461,25 @@
     "actions": ["incident.read", "notification.read", "runbook.read"]
   },
   "listIncidentWarRooms": {
-    "status": "UNSUPPORTED_WITH_REASON",
+    "status": "SENSITIVE_READ",
     "risk": "R2",
-    "reason": "Not exposed until shared command, independent approval and parity certification are complete.",
+    "reason": "Reviewed configuration read: read-only generic dispatch behind the administrator sensitive-reads opt-in, native authorization and recursive redaction.",
     "tool": null,
     "routeSha256": "d4e287a133e2c907d28822d0a449102d492274c58d1de53b430364f59eea78c6",
     "resourceFilter": "existing REST route authorization and scoped projection",
-    "evidence": "pending final-SHA parity certification",
-    "contractSha256": "35a11f2c746b943f7499266ec4e1b47e26786c010952d2b875c129206f739a3e",
+    "evidence": "tests/integration/mcp-sensitive-reads.test.ts",
+    "contractSha256": "e2dc727c3cf330e2bccac4eb63f1bf0e186870646cf0cee79a59fa2244562469",
     "actions": ["incident.read"]
   },
   "listIncidentAlerts": {
-    "status": "UNSUPPORTED_WITH_REASON",
+    "status": "SENSITIVE_READ",
     "risk": "R2",
-    "reason": "Not exposed until shared command, independent approval and parity certification are complete.",
+    "reason": "Reviewed configuration read: read-only generic dispatch behind the administrator sensitive-reads opt-in, native authorization and recursive redaction.",
     "tool": null,
     "routeSha256": "9651a4d5d4571d1551f103b1d3ff93d760a6a9e0842acc191b2141ec3e6bbc2c",
     "resourceFilter": "existing REST route authorization and scoped projection",
-    "evidence": "pending final-SHA parity certification",
-    "contractSha256": "f358e685cf5a0de893b07c70d2f1d8222f760de11b671b8077c532918e186d0d",
+    "evidence": "tests/integration/mcp-sensitive-reads.test.ts",
+    "contractSha256": "b73dad639b9beec2c3697cb62c903de858908806f70ed2bfbfea3e36a2d9bf60",
     "actions": ["incident.read"]
   },
   "listIncidentRunbookExecutions": {
@@ -2475,14 +2494,14 @@
     "actions": ["incident.read", "runbook.read"]
   },
   "listIncidentNotificationAttempts": {
-    "status": "UNSUPPORTED_WITH_REASON",
+    "status": "SENSITIVE_READ",
     "risk": "R2",
-    "reason": "Not exposed until shared command, independent approval and parity certification are complete.",
+    "reason": "Reviewed configuration read: read-only generic dispatch behind the administrator sensitive-reads opt-in, native authorization and recursive redaction.",
     "tool": null,
     "routeSha256": "a000257102c0f019c6eea3df9ea5d3590259df55608930d250fd97658f40ed73",
     "resourceFilter": "existing REST route authorization and scoped projection",
-    "evidence": "pending final-SHA parity certification",
-    "contractSha256": "f471906fe7294d8408b256c3d73913fe0e18579a4da8daeec6ff46ea8fe19eee",
+    "evidence": "tests/integration/mcp-sensitive-reads.test.ts",
+    "contractSha256": "d1a5ea5a5b5fe391e7f1cf4ff47f635bd387860a96c3df08e68785fecc2f9a32",
     "actions": ["incident.read", "notification.read"]
   },
   "getIncidentAvailableActions": {
@@ -2508,25 +2527,25 @@
     "actions": ["incident.read"]
   },
   "listOperationalEvents": {
-    "status": "UNSUPPORTED_WITH_REASON",
+    "status": "SENSITIVE_READ",
     "risk": "R2",
-    "reason": "Not exposed until shared command, independent approval and parity certification are complete.",
+    "reason": "Reviewed configuration read: read-only generic dispatch behind the administrator sensitive-reads opt-in, native authorization and recursive redaction.",
     "tool": null,
     "routeSha256": "b45ceafbcdc672213addc609440e03b6dbdee65e7814e6bb6cb6db5ff11f64c3",
     "resourceFilter": "existing REST route authorization and scoped projection",
-    "evidence": "pending final-SHA parity certification",
-    "contractSha256": "ec17bccca0f8a1cba63bd2c89fcb3669070f153a6c269152292ef90d9ae308ac",
+    "evidence": "tests/integration/mcp-sensitive-reads.test.ts",
+    "contractSha256": "77a5c5d6979e34e339938c2e4cafc1e7ae12b1fa586238d4819e074c8f0c5dd4",
     "actions": ["incident.read"]
   },
   "listServiceChangeEvents": {
-    "status": "UNSUPPORTED_WITH_REASON",
+    "status": "SENSITIVE_READ",
     "risk": "R2",
-    "reason": "Not exposed until shared command, independent approval and parity certification are complete.",
+    "reason": "Reviewed configuration read: read-only generic dispatch behind the administrator sensitive-reads opt-in, native authorization and recursive redaction.",
     "tool": null,
     "routeSha256": "87e29ca89e83407a1499474f5b436b5c66aa5c9493c261116c529481b23acd4b",
     "resourceFilter": "existing REST route authorization and scoped projection",
-    "evidence": "pending final-SHA parity certification",
-    "contractSha256": "569059322a6242ffbfbaeef6692c9366a282c8adeb39595fc4ca2d9aaa5a1302",
+    "evidence": "tests/integration/mcp-sensitive-reads.test.ts",
+    "contractSha256": "519ff6773b03cc69a012ca408605c7e596bd548ae7ebd1bbbf5e673d52d07153",
     "actions": ["audit.read", "service.read"]
   },
   "previewEscalationPolicy": {
@@ -2563,7 +2582,7 @@
     "risk": "R0",
     "reason": "Candidate in-process REST contract adapter; current role, scopes and resource authorization required.",
     "tool": null,
-    "routeSha256": "5902140b15e4c6094439c37e032c0501bd021fc30b9485f2c54231c0b72a8609",
+    "routeSha256": "c96cfef5f2cd03e5b32234313bb27db1437e71caf0943c21258ac89325a54dac",
     "resourceFilter": "existing REST route authorization and scoped projection",
     "evidence": "pending final-SHA parity certification",
     "contractSha256": "3d1f0d20963df9ec1e160678b41446546171a45c96f33e4ed200f37fab9bdca2",
@@ -2616,7 +2635,7 @@
   "deletePostmortemActionItem": {
     "status": "DENIED_WITH_REASON",
     "risk": "R3",
-    "reason": "Credential, personal-data or infrastructure boundary restricted to native administration.",
+    "reason": "Candidate for the destructive approval workflow, blocked on an item-level read of the target (GET /postmortems/{id}/action-items/{itemId}): the only previews are paginated or capped parent collections, so neither the reviewer nor the postcondition could observe the exact target.",
     "tool": null,
     "routeSha256": "61798a63777197e55ccfec6a0e89ce12f8fbce4182379bd1a0de486339263965",
     "resourceFilter": "existing REST route authorization and scoped projection",
@@ -2662,21 +2681,23 @@
     "risk": "R2",
     "reason": "Frozen prepare, independent native review and atomic commit through the existing REST command; never generic.",
     "tool": null,
-    "routeSha256": "5902140b15e4c6094439c37e032c0501bd021fc30b9485f2c54231c0b72a8609",
+    "routeSha256": "c96cfef5f2cd03e5b32234313bb27db1437e71caf0943c21258ac89325a54dac",
     "resourceFilter": "existing REST route authorization and scoped projection",
     "evidence": "tests/integration/mcp-approval-postmortems.test.ts",
     "contractSha256": "a217e9ce5945935637364e8a69402df7f69f4a33d141506c648fb3d978249433",
     "actions": ["postmortem.manage"]
   },
   "deletePostmortem": {
-    "status": "DENIED_WITH_REASON",
+    "status": "APPROVAL_REQUIRED",
     "risk": "R3",
-    "reason": "Credential, personal-data or infrastructure boundary restricted to native administration.",
+    "reason": "Destructive: frozen prepare with an impact preview, independent native review after a recent sign-in, re-check of the target at commit and a verified postcondition; never generic.",
     "tool": null,
-    "routeSha256": "5902140b15e4c6094439c37e032c0501bd021fc30b9485f2c54231c0b72a8609",
+    "routeSha256": "c96cfef5f2cd03e5b32234313bb27db1437e71caf0943c21258ac89325a54dac",
     "resourceFilter": "existing REST route authorization and scoped projection",
-    "evidence": "pending final-SHA parity certification",
-    "contractSha256": "6121232f2a164e096062dcb6b2d227e5ea40c8067d605425ec027df600937ce8",
+    "evidence": "tests/integration/mcp-approval-destructive.test.ts",
+    "contractSha256": "cac6ccb410dd145059c7705b76db70e69b3ce109faaca612b7dec9e77cbd9077",
+    "additionalScopes": ["postmortems:read"],
+    "impactPreview": "getPostmortem",
     "actions": ["postmortem.manage"]
   },
   "listPostmortems": {
@@ -2702,14 +2723,15 @@
     "actions": ["postmortem.manage"]
   },
   "getMetricsReport": {
-    "status": "UNSUPPORTED_WITH_REASON",
+    "status": "SENSITIVE_READ",
     "risk": "R2",
-    "reason": "Not exposed until shared command, independent approval and parity certification are complete.",
+    "reason": "Reviewed configuration read: read-only generic dispatch behind the administrator sensitive-reads opt-in, native authorization and recursive redaction.",
     "tool": null,
     "routeSha256": "180693a88a010655a74fb07caf2ef0c22b05f34f9abc76f12907c518e832d01b",
     "resourceFilter": "existing REST route authorization and scoped projection",
-    "evidence": "pending final-SHA parity certification",
-    "contractSha256": "dcd6638686cc7466d1dd1c6e3413b2d5493256b4b17ba2f509e7d3cf5756e8b3",
+    "evidence": "tests/integration/mcp-sensitive-reads.test.ts",
+    "contractSha256": "dc5297549b1c342ff13756e72db4b160d5c301ecfe4ede1275c5436ac24d2928",
+    "additionalScopes": ["incidents:read"],
     "actions": ["report.read"]
   },
   "getReportCatalog": {
@@ -2724,15 +2746,16 @@
     "actions": ["report.read"]
   },
   "queryReportMetrics": {
-    "status": "UNSUPPORTED_WITH_REASON",
+    "status": "SENSITIVE_READ",
     "risk": "R2",
-    "reason": "Not exposed until shared command, independent approval and parity certification are complete.",
+    "reason": "Reviewed side-effect-free bounded analytics query; requires report and incident read authority and returns aggregate metrics only.",
     "tool": null,
     "routeSha256": "7efe089fa9566845213b83f91be833bcb6791f908f566dc918566f61d60fa272",
     "resourceFilter": "existing REST route authorization and scoped projection",
-    "evidence": "pending final-SHA parity certification",
-    "contractSha256": "4c4251f7fd1aa5cf4dcdc0419e92c638e15849d86a21fda739bd0ad46a4e0bac",
-    "actions": ["incident.read", "report.read"]
+    "evidence": "tests/integration/mcp-sensitive-reads-post.test.ts",
+    "contractSha256": "459d4f0d6dd74dd9f1868c5759656d5ed75afdb204c1053400ebc15f94a813c1",
+    "actions": ["incident.read", "report.read"],
+    "sideEffectFree": true
   },
   "listSavedReports": {
     "status": "DISCOVERABLE",
@@ -2779,14 +2802,16 @@
     "actions": ["report.manage"]
   },
   "deleteSavedReport": {
-    "status": "DENIED_WITH_REASON",
+    "status": "APPROVAL_REQUIRED",
     "risk": "R3",
-    "reason": "Credential, personal-data or infrastructure boundary restricted to native administration.",
+    "reason": "Destructive: frozen prepare with an impact preview, independent native review after a recent sign-in, re-check of the target at commit and a verified postcondition; never generic.",
     "tool": null,
     "routeSha256": "437a4583e8eca58ca658db68d33c7e3323e2ddc9dac80fab68422ed33004b32d",
     "resourceFilter": "existing REST route authorization and scoped projection",
-    "evidence": "pending final-SHA parity certification",
-    "contractSha256": "90e585ef654babad9d6ffafc54ab1b061ccd8602a39b1f99617037c1ec9d1a35",
+    "evidence": "tests/integration/mcp-approval-destructive.test.ts",
+    "contractSha256": "3b96973dc734021a25ba2e80a18cc37716c2d123ccb633f5e7f9d538c8eea914",
+    "additionalScopes": ["reports:read"],
+    "impactPreview": "getSavedReport",
     "actions": ["report.manage"]
   },
   "createReportExport": {
@@ -2803,23 +2828,23 @@
   "getReportExport": {
     "status": "UNSUPPORTED_WITH_REASON",
     "risk": "R2",
-    "reason": "Not exposed until shared command, independent approval and parity certification are complete.",
+    "reason": "Proposed exclusion (pending named review): exports are bound to API-key rows MCP principals do not have.",
     "tool": null,
     "routeSha256": "94aa15ccd9888ba3aaa1682fd38fb8fe1e5d5264cbc3af34f270848544ccf337",
     "resourceFilter": "existing REST route authorization and scoped projection",
     "evidence": "pending final-SHA parity certification",
-    "contractSha256": "cd7b0c2ba5a971741177497486dcecf22fc807b65c071b5f9b8a0bc968446409",
+    "contractSha256": "be4c3477a448be6f3bf85fb1676dd45e6f681abe806cbc9e9ec6818701c4947e",
     "actions": ["incident.read", "report.read"]
   },
   "downloadReportExport": {
     "status": "UNSUPPORTED_WITH_REASON",
     "risk": "R2",
-    "reason": "Not exposed until shared command, independent approval and parity certification are complete.",
+    "reason": "Proposed exclusion (pending named review): file export bound to API-key rows MCP principals do not have.",
     "tool": null,
     "routeSha256": "b93ba17030936116ff0cffa56f5f9a6672235a187c7bc21b844b2b6d4496d33b",
     "resourceFilter": "existing REST route authorization and scoped projection",
     "evidence": "pending final-SHA parity certification",
-    "contractSha256": "bb656b76f01b9b4687b4467be47e706d22450e3e57bab37e11a6d15fbc71f7dd",
+    "contractSha256": "52bfbf18ee222fed346f473118c45e5bc252901cce518e5ed90ea2fc3ece970a",
     "actions": ["incident.read", "report.read"]
   },
   "cancelReportExport": {
@@ -2834,14 +2859,14 @@
     "actions": ["incident.read", "report.read"]
   },
   "listReportDashboards": {
-    "status": "UNSUPPORTED_WITH_REASON",
+    "status": "SENSITIVE_READ",
     "risk": "R2",
-    "reason": "Not exposed until shared command, independent approval and parity certification are complete.",
+    "reason": "Reviewed configuration read: read-only generic dispatch behind the administrator sensitive-reads opt-in, native authorization and recursive redaction.",
     "tool": null,
     "routeSha256": "9a2dddbc5bd0793a3518fc42dacc0ad17a4129d06fe06ef02b1bdf669e94e61f",
     "resourceFilter": "existing REST route authorization and scoped projection",
-    "evidence": "pending final-SHA parity certification",
-    "contractSha256": "8f96d49d94517190ddd3a2b80d394e6722e4adf9acde8403b4065a13d6c54ba4",
+    "evidence": "tests/integration/mcp-sensitive-reads.test.ts",
+    "contractSha256": "a8880449f5d76c13be788e35f7a6b19a1da04f2435df41a184182566e496e8dc",
     "actions": ["report.read"]
   },
   "createReportDashboard": {
@@ -2856,36 +2881,37 @@
     "actions": ["report.manage"]
   },
   "getReportDashboard": {
-    "status": "UNSUPPORTED_WITH_REASON",
+    "status": "SENSITIVE_READ",
     "risk": "R2",
-    "reason": "Not exposed until shared command, independent approval and parity certification are complete.",
+    "reason": "Reviewed configuration read: read-only generic dispatch behind the administrator sensitive-reads opt-in, native authorization and recursive redaction.",
     "tool": null,
     "routeSha256": "e5104750bb75c9f6cc0aa2029b3f3d7cff175fe72d02aa99f6045fe021aa0998",
     "resourceFilter": "existing REST route authorization and scoped projection",
-    "evidence": "pending final-SHA parity certification",
-    "contractSha256": "7312aa84ca597120ee80ea25922a9cc6298e91b419110e05f88f41261e962500",
+    "evidence": "tests/integration/mcp-sensitive-reads.test.ts",
+    "contractSha256": "950a4668f597ac1d24ffc3a69762d59d6e8e789005ae26d68655fadafd3c6a42",
     "actions": ["report.read"]
   },
   "getReportDashboardData": {
-    "status": "UNSUPPORTED_WITH_REASON",
+    "status": "SENSITIVE_READ",
     "risk": "R2",
-    "reason": "Not exposed until shared command, independent approval and parity certification are complete.",
+    "reason": "Reviewed configuration read: read-only generic dispatch behind the administrator sensitive-reads opt-in, native authorization and recursive redaction.",
     "tool": null,
     "routeSha256": "f5c159e90daaf54e16fed07cd453a7958286780ebed575f9ccbee503adb1b6ad",
     "resourceFilter": "existing REST route authorization and scoped projection",
-    "evidence": "pending final-SHA parity certification",
-    "contractSha256": "e42baa1bd9984b16c510d0be1cd6b8bd04e7f6e0a150d617420e30eb639b46d2",
+    "evidence": "tests/integration/mcp-sensitive-reads.test.ts",
+    "contractSha256": "cd6dfb9f5290d4b734cd32badecb149d589c8ab44c053d43e8415ed4d186d4b2",
+    "additionalScopes": ["incidents:read"],
     "actions": ["report.read"]
   },
   "downloadReportDashboardData": {
     "status": "UNSUPPORTED_WITH_REASON",
     "risk": "R2",
-    "reason": "Not exposed until shared command, independent approval and parity certification are complete.",
+    "reason": "Proposed exclusion (pending named review): bulk data download; agents should use getReportDashboardData.",
     "tool": null,
     "routeSha256": "c6f02536567f6f7cee965d7237189e4fa4a90e61c54b567320ac1dbb89063e3d",
     "resourceFilter": "existing REST route authorization and scoped projection",
     "evidence": "pending final-SHA parity certification",
-    "contractSha256": "aca6f65f13711088d04564d4b7fa8e302ef46d43f19285e5cedc0725b2420bd9",
+    "contractSha256": "0724fc0dd7993f286d4d3171f244fb3745e9bb9f6c145853600b01911df351f4",
     "actions": ["report.read"]
   },
   "duplicateReportDashboard": {
@@ -2900,14 +2926,14 @@
     "actions": ["report.manage"]
   },
   "listReportDashboardWidgets": {
-    "status": "UNSUPPORTED_WITH_REASON",
+    "status": "SENSITIVE_READ",
     "risk": "R2",
-    "reason": "Not exposed until shared command, independent approval and parity certification are complete.",
+    "reason": "Reviewed configuration read: read-only generic dispatch behind the administrator sensitive-reads opt-in, native authorization and recursive redaction.",
     "tool": null,
     "routeSha256": "69bf51a4843bacffe449e2ea775c4572bf063fc78313d25a49f05274995af9ec",
     "resourceFilter": "existing REST route authorization and scoped projection",
-    "evidence": "pending final-SHA parity certification",
-    "contractSha256": "21a28dc3fe09e2daf5a28ce89ccb59cd99a695de2f8f13b7355742cb4cef2809",
+    "evidence": "tests/integration/mcp-sensitive-reads.test.ts",
+    "contractSha256": "031f00956ec70287730f7da3fa64325ef4b2175f61cf376b5efbab876e1e2bd7",
     "actions": ["report.read"]
   },
   "replaceReportDashboardWidgets": {
@@ -2933,14 +2959,16 @@
     "actions": ["report.manage"]
   },
   "deleteReportDashboard": {
-    "status": "DENIED_WITH_REASON",
+    "status": "APPROVAL_REQUIRED",
     "risk": "R3",
-    "reason": "Credential, personal-data or infrastructure boundary restricted to native administration.",
+    "reason": "Destructive: frozen prepare with an impact preview, independent native review after a recent sign-in, re-check of the target at commit and a verified postcondition; never generic.",
     "tool": null,
     "routeSha256": "e5104750bb75c9f6cc0aa2029b3f3d7cff175fe72d02aa99f6045fe021aa0998",
     "resourceFilter": "existing REST route authorization and scoped projection",
-    "evidence": "pending final-SHA parity certification",
-    "contractSha256": "839e9364c377acb37e30859127a7144e6c43162b326752969de1ccfe485bce65",
+    "evidence": "tests/integration/mcp-approval-destructive.test.ts",
+    "contractSha256": "3f1942a37210f505368a324c20afb8d55fd414a9d70ad96f9bd88e758569b248",
+    "additionalScopes": ["reports:read"],
+    "impactPreview": "getReportDashboard",
     "actions": ["report.manage"]
   },
   "executeRunbook": {
@@ -3012,7 +3040,7 @@
   "createScheduleOverride": {
     "status": "UNSUPPORTED_WITH_REASON",
     "risk": "R2",
-    "reason": "Not exposed until shared command, independent approval and parity certification are complete.",
+    "reason": "Not exposed yet: the command mutates outside a single transaction, so an approval cannot be recorded atomically with the effect.",
     "tool": null,
     "routeSha256": "3dae08b59d79d670978f120a58932db18c944b75994d5ee676a7b16c2c3e6f37",
     "resourceFilter": "existing REST route authorization and scoped projection",
@@ -3023,7 +3051,7 @@
   "cancelScheduleOverride": {
     "status": "DENIED_WITH_REASON",
     "risk": "R3",
-    "reason": "Credential, personal-data or infrastructure boundary restricted to native administration.",
+    "reason": "Candidate for the destructive approval workflow, blocked on an item-level read of the target (GET /schedules/{id}/overrides/{overrideId}): the only previews are paginated or capped parent collections, so neither the reviewer nor the postcondition could observe the exact target.",
     "tool": null,
     "routeSha256": "2e120f35fc8e259fb4cfbedf06ad49ace70307e0c65e04b0a97afe4e6f111278",
     "resourceFilter": "existing REST route authorization and scoped projection",
@@ -3047,32 +3075,34 @@
     "risk": "R0",
     "reason": "Candidate in-process REST contract adapter; current role, scopes and resource authorization required.",
     "tool": "schedule_get",
-    "routeSha256": "fa6d8db85292ab66a1904b095f0fd8dca927976bd5b7e3f52b03998a6cad3c8b",
+    "routeSha256": "3cd1c9c428d0381bf0e620d811d15a4ca8ecad0c0a41f3dba4f28364b246c7cd",
     "resourceFilter": "existing REST route authorization and scoped projection",
     "evidence": "pending final-SHA parity certification",
     "contractSha256": "8371bae590b383aecc3991428050ac6418e4acc996fd144541650b36c439e245",
     "actions": ["schedule.read"]
   },
   "updateSchedule": {
-    "status": "UNSUPPORTED_WITH_REASON",
+    "status": "APPROVAL_REQUIRED",
     "risk": "R2",
-    "reason": "Not exposed until shared command, independent approval and parity certification are complete.",
+    "reason": "Frozen prepare, independent native review and commit recorded in the change's own transaction; never generic.",
     "tool": null,
-    "routeSha256": "fa6d8db85292ab66a1904b095f0fd8dca927976bd5b7e3f52b03998a6cad3c8b",
+    "routeSha256": "3cd1c9c428d0381bf0e620d811d15a4ca8ecad0c0a41f3dba4f28364b246c7cd",
     "resourceFilter": "existing REST route authorization and scoped projection",
-    "evidence": "pending final-SHA parity certification",
+    "evidence": "tests/integration/mcp-approval-natural.test.ts",
     "contractSha256": "3a3f9ee7e5c98b963a1c2da0ae1f23a2ec12de0bcc8ed8fe68e72ec919d5b82e",
     "actions": ["schedule.manage"]
   },
   "deleteSchedule": {
-    "status": "DENIED_WITH_REASON",
+    "status": "APPROVAL_REQUIRED",
     "risk": "R3",
-    "reason": "Credential, personal-data or infrastructure boundary restricted to native administration.",
+    "reason": "Destructive: frozen prepare with an impact preview, independent native review after a recent sign-in, re-check of the target at commit and a verified postcondition; never generic.",
     "tool": null,
-    "routeSha256": "fa6d8db85292ab66a1904b095f0fd8dca927976bd5b7e3f52b03998a6cad3c8b",
+    "routeSha256": "3cd1c9c428d0381bf0e620d811d15a4ca8ecad0c0a41f3dba4f28364b246c7cd",
     "resourceFilter": "existing REST route authorization and scoped projection",
-    "evidence": "pending final-SHA parity certification",
-    "contractSha256": "c3aba7221d19c1db7e067d3273ab5466b3fe916753bcbb61421099976e496a3a",
+    "evidence": "tests/integration/mcp-approval-destructive.test.ts",
+    "contractSha256": "202687773c2e526d38b32cc78cfe366ff435f077d41b279c6863a473765e87ad",
+    "additionalScopes": ["schedules:read"],
+    "impactPreview": "getSchedule",
     "actions": ["schedule.manage"]
   },
   "listSchedules": {
@@ -3105,7 +3135,7 @@
     "routeSha256": "0729c00bc5421432ef637323a45bbc60aca3c3c6a180bb85eb8d503a9d53fd03",
     "resourceFilter": "existing REST route authorization and scoped projection",
     "evidence": "pending final-SHA parity certification",
-    "contractSha256": "1b9da0c7614d70a074e92b847025dab4a6c7fc2775a439275b6f350295413f51",
+    "contractSha256": "2605c876bcd9287f4174431ec7c49bc70cf7899a3a964a25b583fd65c194bca6",
     "actions": ["service_account.read"]
   },
   "deleteServiceAccount": {
@@ -3149,7 +3179,7 @@
     "routeSha256": "a3f2b818a230286bc8f81a12d0655976df896d256444ae31d476065aa7d34384",
     "resourceFilter": "existing REST route authorization and scoped projection",
     "evidence": "pending final-SHA parity certification",
-    "contractSha256": "49efb6df6c31bc4e3237546de1001bf07b7dbb742661dfb79003c4cdef18ed3c",
+    "contractSha256": "dd1aeb479525b096742b169fd7fd57beed96a13d58c80e8a5f7420ed4b149984",
     "actions": ["service_account.read"]
   },
   "createServiceAccount": {
@@ -3168,21 +3198,21 @@
     "risk": "R0",
     "reason": "Candidate in-process REST contract adapter; current role, scopes and resource authorization required.",
     "tool": null,
-    "routeSha256": "9cb4b476a990773481ac88663b7bf7fd391b9ef6ddd20c3e8c6facdd37e61ef1",
+    "routeSha256": "44e39e0cd2cc1853a6c66624b45d36f52398c40615e539e589845f46a6f19c5c",
     "resourceFilter": "existing REST route authorization and scoped projection",
     "evidence": "pending final-SHA parity certification",
     "contractSha256": "d7312ffe9be5d7362cfcb075db42b160dcd4c6172ad4c66fd15cbd97ef3cb7ed",
     "actions": ["service.read"]
   },
   "getServiceNotificationSettings": {
-    "status": "UNSUPPORTED_WITH_REASON",
+    "status": "SENSITIVE_READ",
     "risk": "R2",
-    "reason": "Not exposed until shared command, independent approval and parity certification are complete.",
+    "reason": "Reviewed configuration read: read-only generic dispatch behind the administrator sensitive-reads opt-in, native authorization and recursive redaction.",
     "tool": null,
     "routeSha256": "29a5eb019ee024f161c978919d1c34632c79846424bdc4a39424297fd129b3ce",
     "resourceFilter": "existing REST route authorization and scoped projection",
-    "evidence": "pending final-SHA parity certification",
-    "contractSha256": "8c171250e4f3008c1c1a2b47ffb943298cf283730e11a8f42c01876c199d56da",
+    "evidence": "tests/integration/mcp-sensitive-reads.test.ts",
+    "contractSha256": "ea5c2aae3731c70d525b2c2e4c29f8372de1992cc0341d941d8801a55817a182",
     "actions": ["service.read"]
   },
   "updateServiceNotificationSettings": {
@@ -3263,14 +3293,14 @@
     "actions": ["response_policy.manage"]
   },
   "getWorkspaceSlaPolicy": {
-    "status": "UNSUPPORTED_WITH_REASON",
+    "status": "SENSITIVE_READ",
     "risk": "R2",
-    "reason": "Not exposed until shared command, independent approval and parity certification are complete.",
+    "reason": "Reviewed configuration read: read-only generic dispatch behind the administrator sensitive-reads opt-in, native authorization and recursive redaction.",
     "tool": null,
     "routeSha256": "69ad56567994a2e9574493dfeaa1bfda69ec4219ec9dd7cb8dccf980e4bfd53c",
     "resourceFilter": "existing REST route authorization and scoped projection",
-    "evidence": "pending final-SHA parity certification",
-    "contractSha256": "4508f75d41852dc0f8a9bd68c80990c746422584de2c32654c177b950a4d863e",
+    "evidence": "tests/integration/mcp-sensitive-reads.test.ts",
+    "contractSha256": "595ca624f82a6927cbf511fe3d30db26e004c09272ee1cd47d3e31517b0b2b54",
     "actions": ["response_policy.read"]
   },
   "updateWorkspaceSlaPolicy": {
@@ -3285,25 +3315,27 @@
     "actions": ["response_policy.manage"]
   },
   "updateService": {
-    "status": "UNSUPPORTED_WITH_REASON",
+    "status": "APPROVAL_REQUIRED",
     "risk": "R2",
-    "reason": "Not exposed until shared command, independent approval and parity certification are complete.",
+    "reason": "Frozen prepare, independent native review and commit recorded in the change's own transaction; never generic.",
     "tool": null,
-    "routeSha256": "9cb4b476a990773481ac88663b7bf7fd391b9ef6ddd20c3e8c6facdd37e61ef1",
+    "routeSha256": "44e39e0cd2cc1853a6c66624b45d36f52398c40615e539e589845f46a6f19c5c",
     "resourceFilter": "existing REST route authorization and scoped projection",
-    "evidence": "pending final-SHA parity certification",
+    "evidence": "tests/integration/mcp-approval-natural.test.ts",
     "contractSha256": "c6feca2a3d441a1cf4d99dc2fa0f95dce1bd5d67a7a04efc23ea11e67df215df",
     "actions": ["service.update"]
   },
   "deleteService": {
-    "status": "DENIED_WITH_REASON",
+    "status": "APPROVAL_REQUIRED",
     "risk": "R3",
-    "reason": "Credential, personal-data or infrastructure boundary restricted to native administration.",
+    "reason": "Destructive: frozen prepare with an impact preview, independent native review after a recent sign-in, re-check of the target at commit and a verified postcondition; never generic.",
     "tool": null,
-    "routeSha256": "9cb4b476a990773481ac88663b7bf7fd391b9ef6ddd20c3e8c6facdd37e61ef1",
+    "routeSha256": "44e39e0cd2cc1853a6c66624b45d36f52398c40615e539e589845f46a6f19c5c",
     "resourceFilter": "existing REST route authorization and scoped projection",
-    "evidence": "pending final-SHA parity certification",
-    "contractSha256": "a89e0975183726a2cd5ac43eca7b8170369634afb17d13d9d73733619ec7f30b",
+    "evidence": "tests/integration/mcp-approval-destructive.test.ts",
+    "contractSha256": "cb0e2dde7515d8aa103524a706130823b30392ad1cde3b6d92f284f57762326d",
+    "additionalScopes": ["services:read"],
+    "impactPreview": "getService",
     "actions": ["service.delete"]
   },
   "listServices": {
@@ -3364,7 +3396,7 @@
   "updateStatusPage": {
     "status": "UNSUPPORTED_WITH_REASON",
     "risk": "R2",
-    "reason": "Not exposed until shared command, independent approval and parity certification are complete.",
+    "reason": "Not exposed yet: the command mutates outside a single transaction, so an approval cannot be recorded atomically with the effect.",
     "tool": null,
     "routeSha256": "cd950378e5871a3caeb9c681f51d4436781620a6f7f644c6e42968f2f6516725",
     "resourceFilter": "existing REST route authorization and scoped projection",
@@ -3386,7 +3418,7 @@
   "createStatusPage": {
     "status": "UNSUPPORTED_WITH_REASON",
     "risk": "R2",
-    "reason": "Not exposed until shared command, independent approval and parity certification are complete.",
+    "reason": "Not exposed yet: the command mutates outside a single transaction, so an approval cannot be recorded atomically with the effect.",
     "tool": null,
     "routeSha256": "86917350dec4aeb8e8fed42209f17efd4b563a7c2a8d702b3a6700524704c492",
     "resourceFilter": "existing REST route authorization and scoped projection",
@@ -3399,32 +3431,34 @@
     "risk": "R0",
     "reason": "Candidate in-process REST contract adapter; current role, scopes and resource authorization required.",
     "tool": null,
-    "routeSha256": "6cc7d457f43179eb47e319e498f0c6149b4d896791e1f8e6df21db10fde7b934",
+    "routeSha256": "e8d13d3da415120fce255c0eb31bfb17ea1ccb566f9cef308629907702697e30",
     "resourceFilter": "existing REST route authorization and scoped projection",
     "evidence": "pending final-SHA parity certification",
     "contractSha256": "afba8526b625b2fec4ed4f3a987dd87da2235c213ab745f4b7b25e7ccace598d",
     "actions": ["team.read"]
   },
   "updateTeam": {
-    "status": "UNSUPPORTED_WITH_REASON",
+    "status": "APPROVAL_REQUIRED",
     "risk": "R2",
-    "reason": "Not exposed until shared command, independent approval and parity certification are complete.",
+    "reason": "Frozen prepare, independent native review and commit recorded in the change's own transaction; never generic.",
     "tool": null,
-    "routeSha256": "6cc7d457f43179eb47e319e498f0c6149b4d896791e1f8e6df21db10fde7b934",
+    "routeSha256": "e8d13d3da415120fce255c0eb31bfb17ea1ccb566f9cef308629907702697e30",
     "resourceFilter": "existing REST route authorization and scoped projection",
-    "evidence": "pending final-SHA parity certification",
+    "evidence": "tests/integration/mcp-approval-natural.test.ts",
     "contractSha256": "03bd445d59703338048c8fea50da6b6b09a4adef8dc323701e565901637295d6",
     "actions": ["team.manage"]
   },
   "deleteTeam": {
-    "status": "DENIED_WITH_REASON",
+    "status": "APPROVAL_REQUIRED",
     "risk": "R3",
-    "reason": "Credential, personal-data or infrastructure boundary restricted to native administration.",
+    "reason": "Destructive: frozen prepare with an impact preview, independent native review after a recent sign-in, re-check of the target at commit and a verified postcondition; never generic.",
     "tool": null,
-    "routeSha256": "6cc7d457f43179eb47e319e498f0c6149b4d896791e1f8e6df21db10fde7b934",
+    "routeSha256": "e8d13d3da415120fce255c0eb31bfb17ea1ccb566f9cef308629907702697e30",
     "resourceFilter": "existing REST route authorization and scoped projection",
-    "evidence": "pending final-SHA parity certification",
-    "contractSha256": "0b307512171d57bc24c5d036271adb50c0fe5bdea8b29f394fc6c8d00125919d",
+    "evidence": "tests/integration/mcp-approval-destructive.test.ts",
+    "contractSha256": "5f7017521a4c1cec484ec5e90a7ee08abeb63e1b5dd8c10ea446ce9dcbb07157",
+    "additionalScopes": ["teams:read"],
+    "impactPreview": "getTeam",
     "actions": ["team.manage"]
   },
   "listTeams": {
@@ -3457,7 +3491,7 @@
     "routeSha256": "83360b2d95394d13d5feb1c7c71ee58c64a134c2e441d2f33f65ac011250b70d",
     "resourceFilter": "existing REST route authorization and scoped projection",
     "evidence": "pending final-SHA parity certification",
-    "contractSha256": "d04161ed530cab57967c8921ca59eb41327c757f12bbaac7ff0922aa1d84ec3a",
+    "contractSha256": "b4a447fcd5c749365afbd0bd3e2e3959adfef2fe5b8583c8d7db9c19b983a618",
     "actions": ["user.read"]
   },
   "listUsers": {
@@ -3468,7 +3502,7 @@
     "routeSha256": "510b7466075c4c9cc2aa5f84e70f6b2c15d16d9a99c84d5d9fdce9410395e3ca",
     "resourceFilter": "existing REST route authorization and scoped projection",
     "evidence": "pending final-SHA parity certification",
-    "contractSha256": "505de7a9850225685f320f8f42c0901d13c9cafd0cbbc0e55d71c7d717cf4e7d",
+    "contractSha256": "5b2c795ec6a7a30d43d63f4684e15276ca211e244bc9ac7f746680923a523e59",
     "actions": ["user.read"]
   }
 }

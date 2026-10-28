@@ -9,7 +9,7 @@ export default async function OperationApproval({ params }: { params: Promise<{ 
   requireMcp(permissions.authenticated, 'MCP_LOGIN_REQUIRED', 401);
   const user = await getCurrentUser();
   const { id } = await params;
-  const { approval, summary } = await loadMcpOperationReview(id, {
+  const { approval, summary, requiresFreshAuthentication } = await loadMcpOperationReview(id, {
     id: user.id,
     tokenVersion: user.tokenVersion,
   });
@@ -61,6 +61,18 @@ export default async function OperationApproval({ params }: { params: Promise<{ 
           </dl>
         </>
       )}
+      {summary.preview !== null && (
+        <>
+          <h2 className="text-lg font-semibold">Current state of the target (as reviewed)</h2>
+          <p>
+            This is a destructive change. The commit is refused if the target changes after your
+            review, and the result is verified afterwards.
+          </p>
+          <pre className="max-h-96 overflow-auto whitespace-pre-wrap break-words rounded border p-3 text-sm">
+            {summary.preview}
+          </pre>
+        </>
+      )}
       <h2 className="text-lg font-semibold">Frozen changes</h2>
       {summary.changes.length ? (
         <dl className="space-y-2 break-words">
@@ -79,6 +91,12 @@ export default async function OperationApproval({ params }: { params: Promise<{ 
         Execution checks current permissions, the bound revision and this exact plan again. A
         changed or expired plan requires a new request.
       </p>
+      {requiresFreshAuthentication && !decided && !expired && (
+        <p>
+          Approving requires that you signed in within the last two hours. If approval is refused,
+          sign out and sign in again, then return to this page.
+        </p>
+      )}
       {!decided && !expired && (
         <form action={reviewPreparedOperation} className="flex flex-wrap gap-4">
           <input type="hidden" name="id" value={approval.id} />

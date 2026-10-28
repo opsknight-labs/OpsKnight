@@ -176,7 +176,13 @@ async function handlePost(request: Request) {
       return await openListenStream(request, body, context, identity, subscribedUris);
     }
     const handler = createMcpHandler(
-      () => createOpsKnightMcpServer(context, identity.auth.actor, identity.policy.writesEnabled),
+      () =>
+        createOpsKnightMcpServer(
+          context,
+          identity.auth.actor,
+          identity.policy.writesEnabled,
+          identity.policy.sensitiveReadsEnabled
+        ),
       {
         legacy: 'reject',
         responseMode: 'auto',
@@ -290,7 +296,13 @@ async function openListenStream(
   const releaseStream = acquireStreamSlot(identity.grantId);
   const untrack = trackSubscription(uris);
   const handler = createMcpHandler(
-    () => createOpsKnightMcpServer(context, identity.auth.actor, identity.policy.writesEnabled),
+    () =>
+      createOpsKnightMcpServer(
+        context,
+        identity.auth.actor,
+        identity.policy.writesEnabled,
+        identity.policy.sensitiveReadsEnabled
+      ),
     {
       legacy: 'reject',
       responseMode: 'auto',

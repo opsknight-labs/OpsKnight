@@ -8,6 +8,8 @@ import { requireMcp } from '@/lib/mcp/core/errors';
 import { decideMcpRunbookReview } from '@/lib/mcp/approvals/runbook';
 import { decideMcpOperationReview } from '@/lib/mcp/approvals/operation';
 import { checkRateLimit } from '@/lib/rate-limit';
+import { getServerSession } from 'next-auth';
+import { getAuthOptions } from '@/lib/auth';
 
 export async function reviewPreparedRunbook(form: FormData) {
   const input = z
@@ -60,6 +62,12 @@ export async function reviewPreparedOperation(form: FormData) {
     429
   );
   // The command rechecks that this user is a different human authorized for the operation itself.
-  await decideMcpOperationReview(input, { id: user.id, tokenVersion: user.tokenVersion });
+  // Destructive approvals also need a recent sign-in, taken from the session, never the form.
+  const session = await getServerSession(await getAuthOptions());
+  await decideMcpOperationReview(input, {
+    id: user.id,
+    tokenVersion: user.tokenVersion,
+    authenticatedAt: session?.user?.id === user.id ? session.authenticatedAt : undefined,
+  });
   revalidatePath(`/settings/integrations/mcp/approvals/operations/${input.id}`);
 }

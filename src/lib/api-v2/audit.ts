@@ -1,4 +1,5 @@
 import type { AuditEntityType, Prisma } from '@prisma/client';
+import { internalV2MutationGuard } from './internal-context';
 import { logAudit } from '@/lib/audit';
 import { logger } from '@/lib/logger';
 
@@ -62,6 +63,8 @@ export async function runV2AuditedMutation<T>(
   existingTx?: Prisma.TransactionClient
 ): Promise<T> {
   const run = async (tx: Prisma.TransactionClient) => {
+    // In-process MCP approval recheck in the mutation's own transaction; a no-op for REST callers.
+    await internalV2MutationGuard()?.(tx, 'mutation');
     const result = await mutate(tx);
     await logV2Audit({ ...audit(result), tx });
     return result;

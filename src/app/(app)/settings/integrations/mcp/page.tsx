@@ -115,6 +115,15 @@ export default async function McpSettings({
               />
               Allow reviewed routine mutations and approved runbook executions
             </label>
+            <label className="flex gap-2">
+              <input
+                type="checkbox"
+                name="sensitiveReadsEnabled"
+                defaultChecked={policy?.sensitiveReadsEnabled ?? false}
+              />
+              Allow reviewed sensitive configuration reads (redacted, read-only, current
+              permissions)
+            </label>
             <fieldset className="space-y-3 rounded border p-3">
               <legend className="px-1 font-medium">Client ID metadata documents</legend>
               <label className="flex gap-2">

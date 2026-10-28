@@ -12,29 +12,58 @@ import {
 import { withInternalV2Invocation } from '@/lib/api-v2/internal-context';
 import { enforceV2ResourceAuthorization } from '@/lib/api-v2/rbac';
 import {
+  MCP_CATALOG,
   MCP_OPERATION_MAP,
   isMcpApprovalGated,
   isMcpExecutable,
-  type MCP_CATALOG,
+  isMcpSensitiveRead,
 } from '../catalog';
-import { MCP_APPROVAL_HANDLERS, MCP_HANDLERS } from '../operations/handlers';
+import { MCP_APPROVAL_HANDLERS, MCP_HANDLERS, MCP_PREVIEW_HANDLERS } from '../operations/handlers';
 import { resolveMcpGrant } from '../auth/principal';
 import { CostBudget } from './budget';
 import { requireMcp } from './errors';
 import { lockMcpMutationAuthority } from './mutation-authority';
 import { projectMcpData } from './projection';
 
+// Static: the reads that some approval-gated destructive operation declares as its preview.
+const MCP_CATALOG_PREVIEW_IDS = new Set(
+  MCP_CATALOG.filter(operation => isMcpApprovalGated(operation) && operation.impactPreview).map(
+    operation => operation.impactPreview as string
+  )
+);
+
 const validator = new Ajv2020({ strict: false, allErrors: false, validateFormats: true });
 addFormats(validator);
 // Static schemas only; no authorization or business data is cached here.
 const validators = new Map<string, ReturnType<typeof validator.compile>>();
-export function validateOperationArgs(operationId: string, args: unknown, approvalGated = false) {
-  const operation = MCP_OPERATION_MAP.get(operationId);
-  requireMcp(
-    operation && (approvalGated ? isMcpApprovalGated(operation) : isMcpExecutable(operation)),
-    'MCP_OPERATION_UNAVAILABLE',
-    403
+type ExecutionMode = 'generic' | 'approved' | 'preview';
+
+/** Reads a destructive approval may show its reviewer; never callable directly. */
+export function isMcpPreviewOperation(operation: (typeof MCP_CATALOG)[number]) {
+  return (
+    operation.method === 'get' &&
+    MCP_PREVIEW_HANDLERS.has(operation.operationId) &&
+    MCP_CATALOG_PREVIEW_IDS.has(operation.operationId)
   );
+}
+
+function availableIn(mode: ExecutionMode, operation: (typeof MCP_CATALOG)[number]) {
+  return mode === 'approved'
+    ? isMcpApprovalGated(operation)
+    : mode === 'preview'
+      ? isMcpPreviewOperation(operation)
+      : isMcpExecutable(operation);
+}
+
+export function validateOperationArgs(
+  operationId: string,
+  args: unknown,
+  modeOrGated: ExecutionMode | boolean = 'generic'
+) {
+  const mode: ExecutionMode =
+    typeof modeOrGated === 'boolean' ? (modeOrGated ? 'approved' : 'generic') : modeOrGated;
+  const operation = MCP_OPERATION_MAP.get(operationId);
+  requireMcp(operation && availableIn(mode, operation), 'MCP_OPERATION_UNAVAILABLE', 403);
   let validate = validators.get(operationId);
   if (!validate) {
     validate = validator.compile(operation.inputSchema);
@@ -68,7 +97,8 @@ export function canDiscover(actor: AuthorizationActor, operation: (typeof MCP_CA
 /** Runs inside the domain mutation transaction, before any effect. */
 export type ApprovedCommitGuard = (
   tx: Prisma.TransactionClient,
-  auth: Awaited<ReturnType<typeof resolveMcpGrant>>
+  auth: Awaited<ReturnType<typeof resolveMcpGrant>>,
+  phase: 'replay' | 'mutation'
 ) => Promise<void>;
 
 export interface ExecutionContext {
@@ -97,23 +127,35 @@ export function callApprovedMcpOperation(
   );
 }
 
+/** Only the approval workflow uses this, to capture and re-check a destructive change's target. */
+export function callPreviewMcpOperation(
+  context: ExecutionContext,
+  operationId: string,
+  rawArgs: unknown
+) {
+  return context.budget.track(
+    withMcpDatabase(() => executeMcpOperation(context, operationId, rawArgs, undefined, 'preview'))
+  );
+}
+
 async function executeMcpOperation(
   context: ExecutionContext,
   operationId: string,
   rawArgs: unknown,
-  guard?: ApprovedCommitGuard
+  guard?: ApprovedCommitGuard,
+  previewMode?: 'preview'
 ) {
+  const mode: ExecutionMode = guard ? 'approved' : (previewMode ?? 'generic');
   context.budget.consumeOperation();
   const operation = MCP_OPERATION_MAP.get(operationId);
-  requireMcp(
-    operation && (guard ? isMcpApprovalGated(operation) : isMcpExecutable(operation)),
-    'MCP_OPERATION_UNAVAILABLE',
-    403
-  );
-  const args = validateOperationArgs(operationId, rawArgs, Boolean(guard));
+  requireMcp(operation && availableIn(mode, operation), 'MCP_OPERATION_UNAVAILABLE', 403);
+  const args = validateOperationArgs(operationId, rawArgs, mode);
   const policy = await prisma.mcpPolicy.findUnique({ where: { id: 'default' } });
   requireMcp(
-    policy?.enabled && (operation.risk === 'R0' || policy.writesEnabled),
+    policy?.enabled &&
+      (mode === 'generic' && isMcpSensitiveRead(operation)
+        ? policy.sensitiveReadsEnabled
+        : operation.risk === 'R0' || policy.writesEnabled),
     'MCP_OPERATION_DISABLED',
     403
   );
@@ -122,7 +164,13 @@ async function executeMcpOperation(
   auth.apiKey.scopes = auth.apiKey.scopes.filter(scope => context.tokenScopes.includes(scope));
   auth.actor.apiKey = { id: auth.apiKey.id, scopes: auth.apiKey.scopes };
   requireMcp(hasOperationAuthority(auth.actor, operation), 'MCP_OPERATION_FORBIDDEN', 403);
-  const loadHandler = (guard ? MCP_APPROVAL_HANDLERS : MCP_HANDLERS).get(operationId);
+  const loadHandler = (
+    mode === 'approved'
+      ? MCP_APPROVAL_HANDLERS
+      : mode === 'preview'
+        ? MCP_PREVIEW_HANDLERS
+        : MCP_HANDLERS
+  ).get(operationId);
   requireMcp(loadHandler, 'MCP_OPERATION_UNAVAILABLE', 403);
   const path = args.path ?? {};
   const url = new URL(
@@ -139,7 +187,11 @@ async function executeMcpOperation(
     requireMcp(typeof value !== 'object', 'MCP_INVALID_QUERY');
     url.searchParams.set(key, String(value));
   }
-  if (operation.kind === 'list') {
+  // Bound page size only where the route accepts one; some list routes take no query at all.
+  const queryProperties = (
+    operation.inputSchema.properties.query as { properties?: Record<string, unknown> } | undefined
+  )?.properties;
+  if (operation.kind === 'list' && queryProperties && 'limit' in queryProperties) {
     const limit = Number(url.searchParams.get('limit') ?? 25);
     requireMcp(Number.isSafeInteger(limit) && limit >= 1 && limit <= 50, 'MCP_INVALID_PAGE_SIZE');
     url.searchParams.set('limit', String(limit));
@@ -159,12 +211,13 @@ async function executeMcpOperation(
   const handler = await loadHandler();
   // An approved commit must recheck authority inside the effect's own transaction.
   let guardEnforced = false;
+  let replayChecked = false;
   context.budget.check();
   const response = await withInternalV2Invocation(
     request,
     auth,
     () => handler(request, { params: Promise.resolve(path) }),
-    async tx => {
+    async (tx, phase = 'mutation') => {
       context.budget.check();
       await lockMcpMutationAuthority(
         tx,
@@ -174,8 +227,9 @@ async function executeMcpOperation(
         auth.actor
       );
       if (guard) {
-        await guard(tx, auth);
-        guardEnforced = true;
+        await guard(tx, auth, phase);
+        if (phase === 'mutation') guardEnforced = true;
+        else replayChecked = true;
       }
       // Only routes that address one incident are fenced on it; templates authorize themselves.
       if (
@@ -227,7 +281,15 @@ async function executeMcpOperation(
     }
   );
   // A route that mutates without the shared idempotency path would skip the approval recheck.
-  requireMcp(!guard || !response.ok || guardEnforced, 'MCP_APPROVAL_GUARD_NOT_ENFORCED', 500);
+  // A replayed receipt was checked in its own lookup; anything else must pass the mutation hook.
+  requireMcp(
+    !guard ||
+      !response.ok ||
+      guardEnforced ||
+      (replayChecked && response.headers.get('idempotency-replayed') === 'true'),
+    'MCP_APPROVAL_GUARD_NOT_ENFORCED',
+    500
+  );
   // Do not pass REST problem details or stack traces through to an agent.
   requireMcp(
     response.ok,

@@ -1,4 +1,5 @@
 import { NextRequest } from 'next/server';
+import { internalV2MutationGuard } from '@/lib/api-v2/internal-context';
 import prisma from '@/lib/prisma';
 import {
   apiV2Error,
@@ -115,6 +116,8 @@ export const PATCH = withV2Observability(async function PATCH(
 
     const updated = await withIfMatch(expected, () =>
       prisma.$transaction(async tx => {
+        // MCP approval recheck inside the change's own transaction; a no-op for REST callers.
+        await internalV2MutationGuard()?.(tx);
         await tx.escalationPolicy.update({
           where: { id, ...ifMatchWhere(expected) },
           data: {
@@ -200,6 +203,8 @@ export const DELETE = withV2Observability(async function DELETE(
 
     const { id } = await params;
     await prisma.$transaction(async tx => {
+      // MCP approval recheck inside the deletion's own transaction; a no-op for REST callers.
+      await internalV2MutationGuard()?.(tx);
       // A service assigning this policy must acquire a key-share FK lock. FOR UPDATE
       // serializes that assignment with the dependency check and deletion.
       const locked = await tx.$queryRaw<Array<{ id: string; name: string }>>`

@@ -121,7 +121,9 @@ export const MCP_CATALOG = V2_OPERATIONS.map(operation => {
     mutations.get(
       `${operation.method.toUpperCase()} /api/v2${operation.path.replace(/\{(\w+)\}/g, '[$1]')}`
     ) ?? null;
-  if (review.risk !== 'R0') {
+  // Reads never take an idempotency key or revision precondition, whatever their risk class.
+  const writes = operation.method !== 'get' && !review.sideEffectFree;
+  if (review.risk !== 'R0' && writes) {
     properties.idempotencyKey = {
       type: 'string',
       minLength: 16,
@@ -129,7 +131,7 @@ export const MCP_CATALOG = V2_OPERATIONS.map(operation => {
       pattern: '^[A-Za-z0-9_-]+$',
     };
   }
-  if (review.risk !== 'R0' || mutation?.preconditionRequired)
+  if ((review.risk !== 'R0' && writes) || mutation?.preconditionRequired)
     properties.ifMatch = { type: 'string', maxLength: 128 };
   return {
     ...operation,
@@ -146,7 +148,7 @@ export const MCP_CATALOG = V2_OPERATIONS.map(operation => {
       required: [
         ...(operation.path.includes('{') ? ['path'] : []),
         ...(requestBody?.required ? ['body'] : []),
-        ...(review.risk !== 'R0' ? ['idempotencyKey'] : []),
+        ...(review.risk !== 'R0' && writes ? ['idempotencyKey'] : []),
         ...(mutation?.preconditionRequired ? ['ifMatch'] : []),
       ],
     },
@@ -178,9 +180,25 @@ const reviewedContracts = new Set(
 export const MCP_OPERATION_MAP = new Map(
   MCP_CATALOG.map(operation => [operation.operationId, operation])
 );
+/** A non-GET read must be reviewed side-effect free and carry a receipt-less, unfenced contract. */
+export function isMcpSideEffectFreeRead(operation: (typeof MCP_CATALOG)[number]) {
+  return (
+    operation.method === 'get' ||
+    (operation.sideEffectFree === true &&
+      operation.method === 'post' &&
+      operation.mutation?.idempotency === 'natural' &&
+      operation.mutation.concurrency === 'none' &&
+      !operation.mutation.preconditionRequired)
+  );
+}
+export function isMcpSensitiveRead(operation: (typeof MCP_CATALOG)[number]) {
+  return operation.status === 'SENSITIVE_READ' && isMcpSideEffectFreeRead(operation);
+}
 export function isMcpExecutable(operation: (typeof MCP_CATALOG)[number]) {
   return (
-    (operation.status === 'CURATED' || operation.status === 'DISCOVERABLE') &&
+    (operation.status === 'CURATED' ||
+      operation.status === 'DISCOVERABLE' ||
+      isMcpSensitiveRead(operation)) &&
     reviewedContracts.has(operation)
   );
 }
@@ -189,7 +207,7 @@ export function isMcpExecutable(operation: (typeof MCP_CATALOG)[number]) {
 export function isMcpApprovalGated(operation: (typeof MCP_CATALOG)[number]) {
   return (
     operation.status === 'APPROVAL_REQUIRED' &&
-    operation.risk === 'R2' &&
+    (operation.risk === 'R2' || (operation.risk === 'R3' && Boolean(operation.impactPreview))) &&
     operation.method !== 'get' &&
     reviewedContracts.has(operation)
   );

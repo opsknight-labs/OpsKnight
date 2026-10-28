@@ -1,6 +1,6 @@
 import 'server-only';
-import { createHash } from 'node:crypto';
-import type { McpOperationApproval, Prisma } from '@prisma/client';
+import { createHash, randomUUID } from 'node:crypto';
+import { Prisma, type McpOperationApproval } from '@prisma/client';
 import { z } from 'zod';
 import { withMcpDatabase } from '@/lib/database-workload';
 import { runSerializableTransaction } from '@/lib/db-utils';
@@ -14,8 +14,10 @@ import { MCP_OPERATION_MAP, isMcpApprovalGated } from '../catalog';
 import { resolveMcpGrant } from '../auth/principal';
 import { mcpOrigin } from '../auth/config';
 import { McpBoundaryError, requireMcp } from '../core/errors';
+import { isAuthenticationFresh } from '@/lib/auth-control/actor';
 import {
   callApprovedMcpOperation,
+  callPreviewMcpOperation,
   hasOperationAuthority,
   validateOperationArgs,
   type ExecutionContext,
@@ -69,6 +71,8 @@ export const operationReviewSummarySchema = z
     query: z.array(z.tuple([z.string(), z.string()])).default([]),
     changes: z.array(z.tuple([z.string(), z.string()])),
     truncated: z.boolean(),
+    // R3 only: the reviewed target state, shown to the native reviewer and never to the agent.
+    preview: z.string().nullable().default(null),
   })
   .strict();
 
@@ -159,6 +163,47 @@ export function reviewSummary(operationId: string, frozen: Frozen) {
   });
 }
 
+const MAX_PREVIEW_CHARS = 4000;
+type Operation = ReturnType<typeof operationFor>;
+
+function isDestructive(operation: Operation) {
+  return operation.risk === 'R3';
+}
+
+/** The preview read addresses the same target: its path parameters come from the frozen path. */
+function previewArgs(operation: Operation, frozen: Frozen) {
+  const preview = MCP_OPERATION_MAP.get(operation.impactPreview!)!;
+  const names = [...preview.path.matchAll(/\{(\w+)\}/g)].map(match => match[1]);
+  return {
+    path: Object.fromEntries(names.map(name => [name, frozen.path?.[name] ?? ''])),
+  };
+}
+
+/** Reads the target for review; null when it is unavailable to this principal. */
+async function readPreview(context: ExecutionContext, operation: Operation, frozen: Frozen) {
+  try {
+    const read = await callPreviewMcpOperation(
+      context,
+      operation.impactPreview!,
+      previewArgs(operation, frozen)
+    );
+    return ((read.data as { data?: unknown })?.data ?? null) as unknown;
+  } catch (error) {
+    if (error instanceof McpBoundaryError && [403, 404].includes(error.status)) return null;
+    throw error;
+  }
+}
+
+/** Version fields when the resource has them, so time-derived fields do not invalidate review. */
+function previewDigestOf(data: unknown) {
+  const object = (data && typeof data === 'object' ? data : {}) as Record<string, unknown>;
+  const versioned = ['updatedAt', 'revision', 'version'].filter(key => key in object);
+  const basis = versioned.length
+    ? Object.fromEntries(['id', ...versioned].map(key => [key, object[key]]))
+    : data;
+  return createHash('sha256').update(canonicalJson(basis)).digest('hex');
+}
+
 async function admit(context: ExecutionContext) {
   context.budget.consumeOperation();
   requireMcp(context.credentialId, 'MCP_INVALID_TOKEN', 401);
@@ -232,6 +277,11 @@ export function prepareMcpOperation(context: ExecutionContext, raw: unknown) {
       const digest = mcpOperationDigest(input.operationId, frozen);
       const initial = await admit(context);
       requireMcp(hasOperationAuthority(initial.actor, operation), 'MCP_OPERATION_FORBIDDEN', 403);
+      // A destructive change is reviewed against the target's current state.
+      const preview = isDestructive(operation)
+        ? await readPreview(context, operation, frozen)
+        : null;
+      if (isDestructive(operation)) requireMcp(preview, 'MCP_RESOURCE_UNAVAILABLE', 404);
       const result = await runSerializableTransaction(async tx => {
         context.budget.check();
         const auth = await lockMcpMutationAuthority(
@@ -254,7 +304,14 @@ export function prepareMcpOperation(context: ExecutionContext, raw: unknown) {
               },
             });
             requireMcp(pending < MAX_PENDING_PER_GRANT, 'MCP_APPROVAL_BACKLOG', 429);
-            const summary = reviewSummary(input.operationId, frozen);
+            const previewText = preview === null ? null : JSON.stringify(preview, null, 2);
+            const summary = {
+              ...reviewSummary(input.operationId, frozen),
+              preview:
+                previewText && previewText.length > MAX_PREVIEW_CHARS
+                  ? `${previewText.slice(0, MAX_PREVIEW_CHARS)}\n…`
+                  : previewText,
+            };
             const approval = await tx.mcpOperationApproval.create({
               data: {
                 operationId: input.operationId,
@@ -266,6 +323,7 @@ export function prepareMcpOperation(context: ExecutionContext, raw: unknown) {
                 requesterCredentialId: context.credentialId!,
                 envelope: await encrypt(JSON.stringify(frozen)),
                 summary,
+                previewDigest: preview === null ? null : previewDigestOf(preview),
                 expiresAt: new Date(Date.now() + MCP_APPROVAL_TTL_MS),
               },
             });
@@ -290,7 +348,11 @@ export function prepareMcpOperation(context: ExecutionContext, raw: unknown) {
               status: 'REQUIRES_NATIVE_APPROVAL',
               expiresAt: approval.expiresAt.toISOString(),
               reviewUrl: `${mcpOrigin()}/settings/integrations/mcp/approvals/operations/${approval.id}`,
-              summary,
+              // The captured target state is for the human reviewer only.
+              summary: {
+                ...summary,
+                preview: summary.preview === null ? null : '[shown to reviewer]',
+              },
               warnings: [
                 'Nothing has been changed. A different authorized human must approve this exact change in the native OpsKnight UI. Approval permits one execution and current permissions are checked again.',
               ],
@@ -357,7 +419,12 @@ export function commitApprovedMcpOperation(context: ExecutionContext, raw: unkno
       const initial = await admit(context);
       type Claim =
         | { done: McpOperationApproval; approval?: undefined; frozen?: undefined }
-        | { done?: undefined; approval: McpOperationApproval; frozen: Frozen };
+        | {
+            done?: undefined;
+            approval: McpOperationApproval;
+            frozen: Frozen;
+            resumed: boolean;
+          };
       const claim: Claim = await runSerializableTransaction(async (tx): Promise<Claim> => {
         context.budget.check();
         const approval = await lockApproval(tx, input.approvalId);
@@ -398,27 +465,58 @@ export function commitApprovedMcpOperation(context: ExecutionContext, raw: unkno
           id: approval.reviewedById,
           tokenVersion: approval.reviewerTokenVersion,
         });
-        if (approval.status === 'APPROVED')
+        if (approval.riskClass === 'R3')
+          requireMcp(approval.reviewerAuthenticatedAt, 'MCP_REAUTHENTICATION_REQUIRED', 403);
+        const resumed = approval.status === 'EXECUTING';
+        if (!resumed)
           await tx.mcpOperationApproval.update({
             where: { id: approval.id },
             data: { status: 'EXECUTING', executingAt: new Date() },
           });
-        return { approval, frozen };
+        return { approval, frozen, resumed };
       });
       if (claim.done) {
         const replay = { ...publicState(claim.done), replayed: true };
         context.budget.consumeResult(replay);
         return replay;
       }
-      const { approval, frozen } = claim;
+      const { approval, frozen, resumed } = claim;
+      const attemptId = randomUUID();
+      const operation = operationFor(approval.operationId);
+      const deletes = operation.method === 'delete';
+      if (isDestructive(operation)) {
+        const current = await readPreview(context, operation, frozen);
+        if (current === null) {
+          // Resuming an interrupted delete: an absent target is the observed outcome, not a failure.
+          if (resumed && deletes)
+            return finishCommit(context, approval, initial.actor.id, null, {
+              postcondition: 'TARGET_ABSENT',
+              reconciled: true,
+            });
+          await markApprovalFailed(approval.id, context.grantId, 404, 'MCP_RESOURCE_UNAVAILABLE');
+          throw new McpBoundaryError('MCP_RESOURCE_UNAVAILABLE', 404);
+        }
+        // A fresh commit must act on exactly the reviewed target state.
+        if (!resumed && previewDigestOf(current) !== approval.previewDigest) {
+          await markApprovalFailed(approval.id, context.grantId, 409, 'MCP_APPROVAL_PLAN_CHANGED');
+          throw new McpBoundaryError('MCP_APPROVAL_PLAN_CHANGED', 409);
+        }
+      }
       try {
         const executed = await callApprovedMcpOperation(
           context,
           approval.operationId,
           { ...frozen, idempotencyKey: mcpApprovalCommitKey(approval.id) },
-          async (tx, auth) => {
+          async (tx, auth, phase) => {
             // Same transaction as the effect: authority and review are rechecked before it.
             const current = await lockApproval(tx, approval.id);
+            // Nested helpers may run the hook twice in one transaction; this attempt's mark is final.
+            if (
+              phase === 'mutation' &&
+              current?.status === 'COMMITTED' &&
+              attemptOf(current.outcome) === attemptId
+            )
+              return;
             requireMcp(
               current &&
                 current.status === 'EXECUTING' &&
@@ -434,23 +532,17 @@ export function commitApprovedMcpOperation(context: ExecutionContext, raw: unkno
               id: current.reviewedById,
               tokenVersion: current.reviewerTokenVersion,
             });
-          }
-        );
-        const committed = await runSerializableTransaction(async tx => {
-          const current = await lockApproval(tx, approval.id);
-          if (current && ['EXECUTING', 'FAILED'].includes(current.status)) {
-            const updated = await tx.mcpOperationApproval.update({
+            // A stored-result lookup only checks; completion is recorded in the mutation itself.
+            if (phase !== 'mutation') return;
+            // Record completion in the effect's own transaction: both commit or neither does,
+            // so a crash can never leave an applied change with an unfinished approval.
+            await tx.mcpOperationApproval.update({
               where: { id: approval.id },
               data: {
                 status: 'COMMITTED',
                 committedAt: new Date(),
                 envelope: null,
-                outcome: {
-                  ok: true,
-                  requestId: executed.evidence.requestId,
-                  etag: executed.evidence.etag,
-                  result: storableResult(executed.data),
-                } as Prisma.InputJsonValue,
+                outcome: { attempt: attemptId },
               },
             });
             await logAudit(
@@ -459,7 +551,7 @@ export function commitApprovedMcpOperation(context: ExecutionContext, raw: unkno
                 action: 'mcp.operation.committed',
                 entityType: 'SYSTEM_CONFIG',
                 entityId: approval.id,
-                actorId: initial.actor.id,
+                actorId: auth.actor.id,
                 details: {
                   operationId: approval.operationId,
                   operationDigest: approval.operationDigest,
@@ -468,33 +560,166 @@ export function commitApprovedMcpOperation(context: ExecutionContext, raw: unkno
               },
               tx
             );
-            return updated;
           }
-          return current ?? approval;
-        });
-        const result = {
-          ...publicState(committed),
-          result: executed.data,
-          evidence: executed.evidence,
-        };
-        context.budget.consumeResult(result);
-        return result;
+        );
+        // Verify the destructive effect is observable; record the truth either way.
+        let postcondition: string | undefined;
+        if (isDestructive(operation)) {
+          try {
+            const after = await readPreview(context, operation, frozen);
+            postcondition = (deletes ? after === null : after !== null)
+              ? 'VERIFIED'
+              : 'NOT_VERIFIED';
+          } catch {
+            postcondition = 'UNKNOWN';
+          }
+        }
+        return finishCommit(
+          context,
+          approval,
+          initial.actor.id,
+          executed,
+          { ...(postcondition ? { postcondition } : {}) },
+          attemptId
+        );
       } catch (error) {
         // Only definitive domain rejections end the approval; ambiguous outcomes stay retryable
         // under the same durable REST receipt.
-        if (
+        const definitive =
           error instanceof McpBoundaryError &&
           error.code === 'MCP_DOMAIN_REJECTED' &&
-          [400, 403, 404, 412, 422].includes(error.status)
-        )
-          await markApprovalFailed(approval.id, context.grantId, error.status);
+          [400, 403, 404, 412, 422].includes(error.status);
+        // A route can commit its transaction yet report failure; undo only this attempt's mark.
+        if (error instanceof McpBoundaryError && error.code === 'MCP_DOMAIN_REJECTED')
+          await revertAttempt(
+            approval.id,
+            attemptId,
+            definitive ? 'FAILED' : 'EXECUTING',
+            error.status
+          );
+        if (definitive) await markApprovalFailed(approval.id, context.grantId, error.status);
         throw error;
       }
     })
   );
 }
 
-async function markApprovalFailed(id: string, grantId: string, status: number) {
+const attemptOf = (outcome: unknown) =>
+  outcome && typeof outcome === 'object' && 'attempt' in outcome
+    ? (outcome as { attempt?: unknown }).attempt
+    : undefined;
+
+async function revertAttempt(
+  id: string,
+  attemptId: string,
+  status: 'FAILED' | 'EXECUTING',
+  httpStatus: number
+) {
+  await runSerializableTransaction(async tx => {
+    const current = await lockApproval(tx, id);
+    if (current?.status !== 'COMMITTED' || attemptOf(current.outcome) !== attemptId) return;
+    await tx.mcpOperationApproval.update({
+      where: { id },
+      data: {
+        status,
+        committedAt: null,
+        outcome:
+          status === 'FAILED'
+            ? { ok: false, code: 'MCP_DOMAIN_REJECTED', httpStatus }
+            : Prisma.DbNull,
+      },
+    });
+    await logAudit(
+      {
+        source: 'API',
+        action: 'mcp.operation.reverted',
+        entityType: 'SYSTEM_CONFIG',
+        entityId: id,
+        actorId: current.actorId,
+        details: { operationId: current.operationId, httpStatus, status },
+      },
+      tx
+    );
+  });
+}
+
+async function finishCommit(
+  context: ExecutionContext,
+  approval: McpOperationApproval,
+  actorId: string,
+  executed: { data: unknown; evidence: { requestId: string; etag: string | null } } | null,
+  extra: Record<string, unknown>,
+  attemptId?: string
+) {
+  const committed = await runSerializableTransaction(async tx => {
+    const current = await lockApproval(tx, approval.id);
+    // Already committed atomically with the effect: only the descriptive outcome remains.
+    if (
+      current?.status === 'COMMITTED' &&
+      (current.outcome === null || (attemptId && attemptOf(current.outcome) === attemptId))
+    )
+      return tx.mcpOperationApproval.update({
+        where: { id: approval.id },
+        data: {
+          outcome: {
+            ok: true,
+            requestId: executed?.evidence.requestId ?? null,
+            etag: executed?.evidence.etag ?? null,
+            result: executed ? storableResult(executed.data) : null,
+            ...extra,
+          } as Prisma.InputJsonValue,
+        },
+      });
+    if (current && ['EXECUTING', 'FAILED'].includes(current.status)) {
+      const updated = await tx.mcpOperationApproval.update({
+        where: { id: approval.id },
+        data: {
+          status: 'COMMITTED',
+          committedAt: new Date(),
+          envelope: null,
+          outcome: {
+            ok: true,
+            requestId: executed?.evidence.requestId ?? null,
+            etag: executed?.evidence.etag ?? null,
+            result: executed ? storableResult(executed.data) : null,
+            ...extra,
+          } as Prisma.InputJsonValue,
+        },
+      });
+      await logAudit(
+        {
+          source: 'API',
+          action: 'mcp.operation.committed',
+          entityType: 'SYSTEM_CONFIG',
+          entityId: approval.id,
+          actorId,
+          details: {
+            operationId: approval.operationId,
+            operationDigest: approval.operationDigest,
+            grantId: context.grantId,
+            ...extra,
+          },
+        },
+        tx
+      );
+      return updated;
+    }
+    return current ?? approval;
+  });
+  const result = {
+    ...publicState(committed),
+    ...(executed ? { result: executed.data, evidence: executed.evidence } : {}),
+  };
+  context.budget.consumeResult(result);
+  return result;
+}
+
+async function markApprovalFailed(
+  id: string,
+  grantId: string,
+  status: number,
+  code = 'MCP_DOMAIN_REJECTED'
+) {
   await runSerializableTransaction(async tx => {
     // A durable REST receipt proves the effect committed; never record failure over it.
     const receipt = await tx.backgroundJob.count({
@@ -508,7 +733,7 @@ async function markApprovalFailed(id: string, grantId: string, status: number) {
       data: {
         status: 'FAILED',
         envelope: null,
-        outcome: { ok: false, code: 'MCP_DOMAIN_REJECTED', httpStatus: status },
+        outcome: { ok: false, code, httpStatus: status },
       },
     });
   });
@@ -524,13 +749,17 @@ export async function loadMcpOperationReview(
     const approval = await lockApproval(tx, id);
     requireMcp(approval, 'MCP_APPROVAL_UNAVAILABLE', 404);
     await assertOperationReviewer(tx, approval, reviewer);
-    return { approval, summary: operationReviewSummarySchema.parse(approval.summary) };
+    return {
+      approval,
+      summary: operationReviewSummarySchema.parse(approval.summary),
+      requiresFreshAuthentication: approval.riskClass === 'R3',
+    };
   });
 }
 
 export async function decideMcpOperationReview(
   raw: unknown,
-  reviewer: { id: string; tokenVersion: number }
+  reviewer: { id: string; tokenVersion: number; authenticatedAt?: number }
 ) {
   const input = z
     .object({
@@ -562,6 +791,14 @@ export async function decideMcpOperationReview(
       operation.requiredScopes,
       operation.authorizationActions
     );
+    // Approving a destructive change needs a recent sign-in (the product step-up window).
+    const destructive = approval.riskClass === 'R3';
+    if (destructive && input.decision === 'approve')
+      requireMcp(
+        isAuthenticationFresh(reviewer.authenticatedAt, 'admin'),
+        'MCP_REAUTHENTICATION_REQUIRED',
+        403
+      );
     const now = new Date();
     const changed = await tx.mcpOperationApproval.updateMany({
       where: { id: approval.id, status: 'PENDING', operationDigest: input.operationDigest },
@@ -572,6 +809,9 @@ export async function decideMcpOperationReview(
               reviewedById: reviewer.id,
               reviewerTokenVersion: reviewer.tokenVersion,
               reviewedAt: now,
+              ...(destructive
+                ? { reviewerAuthenticatedAt: new Date(reviewer.authenticatedAt!) }
+                : {}),
             }
           : { status: 'REJECTED', rejectedAt: now, envelope: null },
     });

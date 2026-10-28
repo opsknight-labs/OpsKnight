@@ -4786,6 +4786,8 @@ model McpPolicy {
   maxOperations Int @default(8)
   requestsPerMinute Int @default(60)
   // Client ID Metadata Documents: off until an administrator lists exact trusted hosts and a scope ceiling.
+  // Reviewed configuration reads (SENSITIVE_READ) are off until an administrator enables them.
+  sensitiveReadsEnabled Boolean @default(false)
   cimdEnabled Boolean @default(false)
   cimdAllowedHosts String[] @default([])
   cimdScopes String[] @default([])
@@ -4868,6 +4870,9 @@ model McpOperationApproval {
   executingAt DateTime?
   committedAt DateTime?
   outcome Json?
+  // R3 only: when the reviewer last authenticated, and the digest of the reviewed target state.
+  reviewerAuthenticatedAt DateTime?
+  previewDigest String?
   createdAt DateTime @default(now())
   @@index([requesterGrantId, createdAt])
   @@index([status, expiresAt])

@@ -73,11 +73,13 @@ export async function fixture() {
   const review = (
     prepared: { approvalId: string; operationDigest: string },
     decision: 'approve' | 'reject' = 'approve',
-    by: { id: string; tokenVersion: number } = reviewer
+    by: { id: string; tokenVersion: number; authenticatedAt?: number } = reviewer,
+    // A reviewer signed in moments ago unless a test says otherwise (destructive step-up).
+    authenticatedAt: number | undefined = Date.now() - 60_000
   ) =>
     decideMcpOperationReview(
       { id: prepared.approvalId, operationDigest: prepared.operationDigest, decision },
-      by
+      { authenticatedAt, ...by }
     );
   return {
     user,

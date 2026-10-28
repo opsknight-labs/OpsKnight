@@ -129,6 +129,21 @@ export const MCP_HANDLERS = new Map<string, () => Promise<Handler>>([
     async () => (await import('@/app/api/v2/incidents/[id]/timeline/route')).GET,
   ],
   ['listIncidents', async () => (await import('@/app/api/v2/incidents/route')).GET],
+  // Reviewed side-effect-free POST reads (validation and bounded queries).
+  ['queryReportMetrics', async () => (await import('@/app/api/v2/reports/query/route')).POST],
+  [
+    'validateIntegrationConfiguration',
+    async () => (await import('@/app/api/v2/integrations/[id]/validate/route')).POST,
+  ],
+  [
+    'validateIntegrationPayload',
+    async () => (await import('@/app/api/v2/integrations/[id]/test/route')).POST,
+  ],
+  [
+    'validateServiceRunbookRule',
+    async () =>
+      (await import('@/app/api/v2/services/[id]/runbook-rules/[ruleId]/validate/route')).POST,
+  ],
   ['createIncident', async () => (await import('@/app/api/v2/incidents/route')).POST],
   [
     'getIncidentResponseActivity',
@@ -214,6 +229,204 @@ export const MCP_HANDLERS = new Map<string, () => Promise<Handler>>([
   ['listStatusPages', async () => (await import('@/app/api/v2/status-pages/route')).GET],
   ['getTeam', async () => (await import('@/app/api/v2/teams/[id]/route')).GET],
   ['listTeams', async () => (await import('@/app/api/v2/teams/route')).GET],
+  [
+    'getCustomFieldDefinition',
+    async () => (await import('@/app/api/v2/custom-fields/[id]/route')).GET,
+  ],
+  [
+    'listCustomFieldDefinitions',
+    async () => (await import('@/app/api/v2/custom-fields/route')).GET,
+  ],
+  ['getReportDashboard', async () => (await import('@/app/api/v2/dashboards/[id]/route')).GET],
+  [
+    'getReportDashboardData',
+    async () => (await import('@/app/api/v2/dashboards/[id]/data/route')).GET,
+  ],
+  [
+    'listReportDashboardWidgets',
+    async () => (await import('@/app/api/v2/dashboards/[id]/widgets/route')).GET,
+  ],
+  ['listReportDashboards', async () => (await import('@/app/api/v2/dashboards/route')).GET],
+  [
+    'validateEscalationPolicy',
+    async () => (await import('@/app/api/v2/escalation-policies/[id]/validation/route')).GET,
+  ],
+  [
+    'getIncidentCustomField',
+    async () => (await import('@/app/api/v2/incidents/[id]/custom-fields/[fieldId]/route')).GET,
+  ],
+  [
+    'getIncidentTemplate',
+    async () => (await import('@/app/api/v2/incidents/templates/[templateId]/route')).GET,
+  ],
+  [
+    'listIncidentAlerts',
+    async () => (await import('@/app/api/v2/incidents/[id]/alerts/route')).GET,
+  ],
+  [
+    'listIncidentNotificationAttempts',
+    async () => (await import('@/app/api/v2/incidents/[id]/notification-attempts/route')).GET,
+  ],
+  [
+    'listIncidentTemplates',
+    async () => (await import('@/app/api/v2/incidents/templates/route')).GET,
+  ],
+  [
+    'listIncidentWarRooms',
+    async () => (await import('@/app/api/v2/incidents/[id]/war-rooms/route')).GET,
+  ],
+  [
+    'listIncidentWatchers',
+    async () => (await import('@/app/api/v2/incidents/[id]/watchers/route')).GET,
+  ],
+  [
+    'getIntegrationUsage',
+    async () => (await import('@/app/api/v2/integrations/[id]/usage/route')).GET,
+  ],
+  ['listIntegrationTypes', async () => (await import('@/app/api/v2/integrations/types/route')).GET],
+  ['listIntegrations', async () => (await import('@/app/api/v2/integrations/route')).GET],
+  [
+    'getNotificationFeedback',
+    async () => (await import('@/app/api/v2/notifications/[id]/feedback/route')).GET,
+  ],
+  [
+    'listNotificationAttempts',
+    async () => (await import('@/app/api/v2/notifications/[id]/attempts/route')).GET,
+  ],
+  ['listNotifications', async () => (await import('@/app/api/v2/notifications/route')).GET],
+  [
+    'listOperationalEvents',
+    async () => (await import('@/app/api/v2/operational-events/route')).GET,
+  ],
+  ['getMetricsReport', async () => (await import('@/app/api/v2/reports/metrics/route')).GET],
+  [
+    'checkRunbookDeletion',
+    async () => (await import('@/app/api/v2/runbooks/[id]/delete-check/route')).GET,
+  ],
+  [
+    'compareRunbookVersions',
+    async () => (await import('@/app/api/v2/runbooks/[id]/versions/[versionId]/diff/route')).GET,
+  ],
+  [
+    'getRunbookDraft',
+    async () => (await import('@/app/api/v2/runbooks/[id]/drafts/[versionId]/route')).GET,
+  ],
+  [
+    'listRunbookExecutionEvents',
+    async () => (await import('@/app/api/v2/runbooks/executions/[id]/events/route')).GET,
+  ],
+  [
+    'listRunbookExecutionEvidence',
+    async () => (await import('@/app/api/v2/runbooks/executions/[id]/evidence/route')).GET,
+  ],
+  [
+    'listRunbookExecutionSteps',
+    async () => (await import('@/app/api/v2/runbooks/executions/[id]/steps/route')).GET,
+  ],
+  [
+    'getScheduleDependencies',
+    async () => (await import('@/app/api/v2/schedules/[id]/dependencies/route')).GET,
+  ],
+  [
+    'listScheduleChanges',
+    async () => (await import('@/app/api/v2/schedules/[id]/changes/route')).GET,
+  ],
+  [
+    'getServiceObjective',
+    async () => (await import('@/app/api/v2/service-objectives/[id]/route')).GET,
+  ],
+  [
+    'getServiceObjectiveCatalog',
+    async () => (await import('@/app/api/v2/service-objectives/catalog/route')).GET,
+  ],
+  [
+    'getServiceObjectiveEvaluation',
+    async () =>
+      (await import('@/app/api/v2/service-objectives/[id]/evaluations/[evaluationId]/route')).GET,
+  ],
+  [
+    'getServiceObjectiveHistory',
+    async () => (await import('@/app/api/v2/service-objectives/[id]/history/route')).GET,
+  ],
+  [
+    'listServiceObjectiveSnapshots',
+    async () => (await import('@/app/api/v2/service-objectives/[id]/snapshots/route')).GET,
+  ],
+  [
+    'listServiceObjectiveVersions',
+    async () => (await import('@/app/api/v2/service-objectives/[id]/versions/route')).GET,
+  ],
+  [
+    'listServiceObjectives',
+    async () => (await import('@/app/api/v2/service-objectives/route')).GET,
+  ],
+  [
+    'getAutomationCandidate',
+    async () => (await import('@/app/api/v2/services/[id]/automation/candidate/route')).GET,
+  ],
+  [
+    'getServiceNotificationSettings',
+    async () => (await import('@/app/api/v2/services/[id]/notification-settings/route')).GET,
+  ],
+  [
+    'listAutomationObservations',
+    async () => (await import('@/app/api/v2/services/[id]/automation/observations/route')).GET,
+  ],
+  [
+    'listRunbookRulePolicyChecks',
+    async () =>
+      (await import('@/app/api/v2/services/[id]/runbook-rules/[ruleId]/policy-checks/route')).GET,
+  ],
+  [
+    'listServiceChangeEvents',
+    async () => (await import('@/app/api/v2/services/[id]/change-events/route')).GET,
+  ],
+  [
+    'getAutomationSettings',
+    async () => (await import('@/app/api/v2/settings/automation/route')).GET,
+  ],
+  ['getRunbookSettings', async () => (await import('@/app/api/v2/settings/runbooks/route')).GET],
+  [
+    'getWorkspaceSlaPolicy',
+    async () => (await import('@/app/api/v2/settings/incident-sla/route')).GET,
+  ],
+  [
+    'getStatusPageAppearance',
+    async () => (await import('@/app/api/v2/status-pages/[id]/appearance/route')).GET,
+  ],
+  [
+    'getStatusPageContent',
+    async () => (await import('@/app/api/v2/status-pages/[id]/content/route')).GET,
+  ],
+  [
+    'getStatusPagePublication',
+    async () => (await import('@/app/api/v2/status-pages/[id]/publication/route')).GET,
+  ],
+  [
+    'getStatusPagePublicationJob',
+    async () => (await import('@/app/api/v2/status-pages/[id]/publication/jobs/[jobId]/route')).GET,
+  ],
+  [
+    'getStatusPageSettings',
+    async () => (await import('@/app/api/v2/status-pages/[id]/settings/route')).GET,
+  ],
+  [
+    'getStatusPageSubscriberStats',
+    async () => (await import('@/app/api/v2/status-pages/[id]/subscriber-stats/route')).GET,
+  ],
+  [
+    'getStatusPageSubscriptionSettings',
+    async () => (await import('@/app/api/v2/status-pages/[id]/subscription-settings/route')).GET,
+  ],
+  [
+    'listStatusPageAssets',
+    async () => (await import('@/app/api/v2/status-pages/[id]/assets/route')).GET,
+  ],
+  [
+    'previewStatusPage',
+    async () => (await import('@/app/api/v2/status-pages/[id]/preview/route')).GET,
+  ],
+  ['listTeamActivity', async () => (await import('@/app/api/v2/teams/[id]/activity/route')).GET],
 ]);
 
 // Reachable only from the frozen approval commit; never from generic dispatch.
@@ -491,4 +704,94 @@ export const MCP_APPROVAL_HANDLERS = new Map<string, () => Promise<Handler>>([
     async () => (await import('@/app/api/v2/status-pages/[id]/services/route')).PUT,
   ],
   ['createTeam', async () => (await import('@/app/api/v2/teams/route')).POST],
+  [
+    'deleteCustomFieldDefinition',
+    async () => (await import('@/app/api/v2/custom-fields/[id]/route')).DELETE,
+  ],
+  [
+    'deleteReportDashboard',
+    async () => (await import('@/app/api/v2/dashboards/[id]/route')).DELETE,
+  ],
+  [
+    'deleteIncidentTemplate',
+    async () => (await import('@/app/api/v2/incidents/templates/[templateId]/route')).DELETE,
+  ],
+  ['deleteSavedReport', async () => (await import('@/app/api/v2/reports/saved/[id]/route')).DELETE],
+  [
+    'deleteScheduleLayer',
+    async () => (await import('@/app/api/v2/schedules/[id]/layers/[layerId]/route')).DELETE,
+  ],
+  [
+    'detachServiceRunbookRule',
+    async () => (await import('@/app/api/v2/services/[id]/runbook-rules/[ruleId]/route')).DELETE,
+  ],
+  [
+    'discardAutomationCandidate',
+    async () => (await import('@/app/api/v2/services/[id]/automation/candidate/route')).DELETE,
+  ],
+  ['deleteIntegration', async () => (await import('@/app/api/v2/integrations/[id]/route')).DELETE],
+  [
+    'deleteEscalationPolicy',
+    async () => (await import('@/app/api/v2/escalation-policies/[id]/route')).DELETE,
+  ],
+  ['deletePostmortem', async () => (await import('@/app/api/v2/postmortems/[id]/route')).DELETE],
+  ['deleteSchedule', async () => (await import('@/app/api/v2/schedules/[id]/route')).DELETE],
+  ['deleteService', async () => (await import('@/app/api/v2/services/[id]/route')).DELETE],
+  ['deleteTeam', async () => (await import('@/app/api/v2/teams/[id]/route')).DELETE],
+  [
+    'updateStatusPagePrivacy',
+    async () => (await import('@/app/api/v2/status-pages/[id]/privacy/route')).PATCH,
+  ],
+  [
+    'createEscalationPolicy',
+    async () => (await import('@/app/api/v2/escalation-policies/route')).POST,
+  ],
+  [
+    'updateEscalationPolicy',
+    async () => (await import('@/app/api/v2/escalation-policies/[id]/route')).PATCH,
+  ],
+  ['updateIntegration', async () => (await import('@/app/api/v2/integrations/[id]/route')).PATCH],
+  ['updateSchedule', async () => (await import('@/app/api/v2/schedules/[id]/route')).PATCH],
+  ['updateService', async () => (await import('@/app/api/v2/services/[id]/route')).PATCH],
+  ['updateTeam', async () => (await import('@/app/api/v2/teams/[id]/route')).PATCH],
+]);
+
+// Reads used only as impact previews for destructive approvals; never generic tools.
+export const MCP_PREVIEW_HANDLERS = new Map<string, () => Promise<Handler>>([
+  [
+    'getCustomFieldDefinition',
+    async () => (await import('@/app/api/v2/custom-fields/[id]/route')).GET,
+  ],
+  ['getReportDashboard', async () => (await import('@/app/api/v2/dashboards/[id]/route')).GET],
+  [
+    'getIncidentTemplate',
+    async () => (await import('@/app/api/v2/incidents/templates/[templateId]/route')).GET,
+  ],
+  ['getSavedReport', async () => (await import('@/app/api/v2/reports/saved/[id]/route')).GET],
+  ['getRunbook', async () => (await import('@/app/api/v2/runbooks/[id]/route')).GET],
+  [
+    'getScheduleLayer',
+    async () => (await import('@/app/api/v2/schedules/[id]/layers/[layerId]/route')).GET,
+  ],
+  [
+    'getServiceRunbookRule',
+    async () => (await import('@/app/api/v2/services/[id]/runbook-rules/[ruleId]/route')).GET,
+  ],
+  [
+    'getAutomationCandidate',
+    async () => (await import('@/app/api/v2/services/[id]/automation/candidate/route')).GET,
+  ],
+  ['getIntegration', async () => (await import('@/app/api/v2/integrations/[id]/route')).GET],
+  [
+    'getStatusPagePrivacy',
+    async () => (await import('@/app/api/v2/status-pages/[id]/privacy/route')).GET,
+  ],
+  [
+    'getEscalationPolicy',
+    async () => (await import('@/app/api/v2/escalation-policies/[id]/route')).GET,
+  ],
+  ['getPostmortem', async () => (await import('@/app/api/v2/postmortems/[id]/route')).GET],
+  ['getSchedule', async () => (await import('@/app/api/v2/schedules/[id]/route')).GET],
+  ['getService', async () => (await import('@/app/api/v2/services/[id]/route')).GET],
+  ['getTeam', async () => (await import('@/app/api/v2/teams/[id]/route')).GET],
 ]);

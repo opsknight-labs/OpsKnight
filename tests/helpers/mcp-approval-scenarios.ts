@@ -130,7 +130,8 @@ export function describeApprovalScenarios(scenarios: Scenario[]) {
         const before = JSON.stringify(await scenario.effect(f, s));
         await expect(
           commitApprovedMcpOperation(f.ctx(), { approvalId: approval.approvalId })
-        ).rejects.toThrow('MCP_DOMAIN_REJECTED');
+          // Destructive operations detect the changed target from the preview before the domain does.
+        ).rejects.toThrow(/MCP_DOMAIN_REJECTED|MCP_APPROVAL_PLAN_CHANGED/);
         expect(JSON.stringify(await scenario.effect(f, s))).toBe(before);
         expect(
           (await db.mcpOperationApproval.findUniqueOrThrow({ where: { id: approval.approvalId } }))
