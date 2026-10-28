@@ -71,6 +71,16 @@ describe('intelligence architecture boundaries', () => {
     expect(sourceFiles(squireDir).filter(file => /PROPOSE_WRITE/.test(read(file))).map(file => relative(root, file))).toEqual([]);
   });
 
+  it('lets saved assistant conversations write only their own tables', () => {
+    const dir = join(intelligenceDir, 'conversations');
+    const delegates = sourceFiles(dir).flatMap(file =>
+      [...read(file).matchAll(/\b(?:tx|prisma)\.(\w+)\.(?:create|createMany|update|updateMany|upsert|delete|deleteMany)\(/g)].map(match => match[1])
+    );
+    expect(delegates.length).toBeGreaterThan(0);
+    expect([...new Set(delegates)].sort()).toEqual(['squireConversation', 'squireMessage']);
+    for (const file of sourceFiles(dir)) expect(read(file)).not.toMatch(/\$executeRaw/);
+  });
+
   it('routes every AI provider through the guarded fetch', () => {
     const gateway = read(join(intelligenceDir, 'ai/gateway.ts'));
     expect(gateway).toMatch(/const common = \{[^}]*fetch: fetchImpl[^}]*\}/);
@@ -212,7 +222,7 @@ describe('intelligence data model contracts', () => {
     const schema = read(join(root, 'prisma/schema.prisma'));
     const tables = [
       ...schema.matchAll(
-        /^model ((?:Intelligence|Correlation|IncidentFingerprint|IncidentEmbedding|IncidentRelationship|ServiceDependency|ChangeEvent)\w*) \{/gm
+        /^model ((?:Intelligence|Correlation|IncidentFingerprint|IncidentEmbedding|IncidentRelationship|ServiceDependency|ChangeEvent|Squire)\w*) \{/gm
       ),
     ].map(match => match[1]);
     expect(tables.length).toBeGreaterThan(10);

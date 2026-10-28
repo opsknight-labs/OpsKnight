@@ -340,18 +340,19 @@ export const personalDataRegistry = [
   },
   {
     domain: 'ai-assistant',
-    models: ['AiProvider', 'AiUsageDay'],
-    fields: ['AiProvider.apiKeyEncrypted'],
+    models: ['AiProvider', 'AiUsageDay', 'SquireConversation', 'SquireMessage'],
+    fields: ['AiProvider.apiKeyEncrypted', 'SquireConversation.titleEncrypted', 'SquireConversation.incidentId', 'SquireMessage.contentEncrypted'],
     purpose: [
       'Answering responders\' questions about incidents they can already read',
       'On-request incident summaries and postmortem drafts for people to review',
       'Token budget accounting',
+      'Optional saved assistant conversations, visible only to the person who had them',
     ],
     classifications: ['INTERNAL', 'PERSONAL', 'SECRET'],
     locations: ['DATABASE', 'EXTERNAL_PROVIDER'],
     retention: {
       current:
-        'Disabled by default. Conversations are held only in the browser and are not stored by OpsKnight; interaction audit entries record metadata (user, capability, provider, model, token counts) and never prompts or answers. Daily usage totals are aggregate counters.',
+        'Disabled by default. Conversations are held only in the browser unless an administrator turns on saved history; then questions and answers are stored encrypted for their owner only, capped at 50 conversations per person, deleted after the configured idle retention (1-365 days, default 30), all deleted when history is turned off, and deleted with the person. Interaction audit entries record metadata (user, capability, provider, model, token counts) and never prompts or answers. Daily usage totals are aggregate counters.',
       target: 'Audit entries follow the audit retention policy.',
     },
     discoverable: 'PARTIAL',

@@ -433,5 +433,7 @@ export async function getAiPublicStatus(client: Client = prisma) {
     squireLauncher: settings.squireLauncher,
     squireAnimations: settings.squireAnimations,
     aiEnabled: settings.enabled,
+    historyEnabled: settings.enabled && settings.squireHistoryEnabled,
+    historyRetentionDays: settings.squireHistoryRetentionDays,
   };
 }

@@ -2,7 +2,9 @@ import type { NextRequest } from 'next/server';
 import { jsonError } from '@/lib/api-response';
 import { getCurrentAuthorizationActor } from '@/lib/rbac';
 import { streamSquire } from '@/lib/intelligence/squire/chat';
-import { squireRequestSchema } from '@/lib/intelligence/squire/contract';
+import { squireRequestSchema, type SquireEvent } from '@/lib/intelligence/squire/contract';
+import { getHistoryStatus, recordExchange } from '@/lib/intelligence/conversations/store';
+import { logger } from '@/lib/logger';
 
 export const dynamic = 'force-dynamic';
 
@@ -15,7 +17,8 @@ const deny = (status: number, error: string) => jsonError(error, status, undefin
  * Authenticated by the session. Cross-site use is refused three ways: browsers send `Sec-Fetch-Site`, which
  * page script cannot forge and proxies do not change (comparing `Origin` with the server's own idea of its
  * origin breaks behind a reverse proxy); a JSON body needs a CORS preflight that is never granted; and the
- * session cookie is SameSite=Lax. The conversation lives in the browser: nothing is stored server-side.
+ * session cookie is SameSite=Lax. Conversations live in the browser unless an administrator has turned
+ * on saved history; then each completed answer is stored, encrypted, for the person who asked only.
  */
 export async function POST(request: NextRequest) {
   const site = request.headers.get('sec-fetch-site');
@@ -46,14 +49,39 @@ export async function POST(request: NextRequest) {
   request.signal.addEventListener('abort', () => controller.abort(), { once: true });
   const encoder = new TextEncoder();
   const events = streamSquire(actor, parsed.data, controller.signal);
+  const history = await getHistoryStatus().catch(() => ({ enabled: false, retentionDays: 0 }));
+  let answer = '';
+  let failed = false;
+
+  /** Saving is best effort: the person already has the answer, so a storage failure only loses history. */
+  const save = async (): Promise<SquireEvent | null> => {
+    if (!history.enabled || failed || controller.signal.aborted || !answer.trim()) return null;
+    try {
+      const id = await recordExchange({
+        userId: actor.id,
+        conversationId: parsed.data.conversationId,
+        incidentId: parsed.data.incidentId,
+        question: parsed.data.message,
+        answer,
+      });
+      return { type: 'conversation', id };
+    } catch (error) {
+      logger.warn('[Squire] Could not save the conversation', { error: error instanceof Error ? error.message : String(error) });
+      return null;
+    }
+  };
 
   const stream = new ReadableStream<Uint8Array>({
     async pull(streamController) {
       const next = await events.next();
       if (next.done) {
+        const saved = await save();
+        if (saved) streamController.enqueue(encoder.encode(`${JSON.stringify(saved)}\n`));
         streamController.close();
         return;
       }
+      if (next.value.type === 'delta') answer += next.value.text;
+      else if (next.value.type === 'error') failed = true;
       streamController.enqueue(encoder.encode(`${JSON.stringify(next.value)}\n`));
     },
     cancel() {

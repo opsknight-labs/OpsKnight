@@ -2,17 +2,33 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Fragment, useCallback, useEffect, useId, useRef, useState, useSyncExternalStore, type FormEvent, type KeyboardEvent } from 'react';
-import { ArrowLeftRight, Send, X } from 'lucide-react';
+import {
+  Fragment,
+  useCallback,
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type FormEvent,
+  type KeyboardEvent,
+} from 'react';
+import { ArrowLeftRight, History, Send, Trash2, X } from 'lucide-react';
 import SquireAvatar, { type SquireAvatarKind } from '@/components/squire/SquireAvatar';
 
 type Turn = { role: 'user' | 'assistant'; content: string; notice?: string; mode?: 'ai' | 'basic' };
+type SavedConversation = { id: string; title: string; updatedAt: string; messageCount: number };
+const CONVERSATIONS_URL = '/api/intelligence/squire/conversations';
 
 const HISTORY_TURNS = 10;
 const MAX_LENGTH = 2000;
 const INTERNAL_LINK = /(\/(?:incidents|runbooks)\/[A-Za-z0-9_-]{1,64})/g;
 const SUGGESTIONS = ['What is on fire?', 'Help'];
-const INCIDENT_SUGGESTIONS = ['Similar incidents?', 'What could have caused this?', 'Which runbook fits?'];
+const INCIDENT_SUGGESTIONS = [
+  'Similar incidents?',
+  'What could have caused this?',
+  'Which runbook fits?',
+];
 const SIDE_KEY = 'opsknight.squire.side';
 
 type Side = 'right' | 'left';
@@ -73,11 +89,14 @@ export default function SquireLauncher({
   avatar = 'ICON',
   launcher = 'FLOATING',
   animated = false,
+  history = null,
 }: {
   name: string;
   avatar?: SquireAvatarKind;
   launcher?: 'FLOATING' | 'SEARCH_ONLY';
   animated?: boolean;
+  /** Set when an administrator has turned on saved conversations. */
+  history?: { retentionDays: number } | null;
 }) {
   const pathname = usePathname();
   const side = useSyncExternalStore(subscribeSide, readSide, serverSide);
@@ -87,6 +106,11 @@ export default function SquireLauncher({
   const [turns, setTurns] = useState<Turn[]>([]);
   const [input, setInput] = useState('');
   const [busy, setBusy] = useState(false);
+  const [conversationId, setConversationId] = useState<string | undefined>(undefined);
+  const [showHistory, setShowHistory] = useState(false);
+  const [saved, setSaved] = useState<SavedConversation[] | null>(null);
+  const [historyError, setHistoryError] = useState('');
+  const [confirmDeleteAll, setConfirmDeleteAll] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const launcherRef = useRef<HTMLButtonElement>(null);
@@ -113,14 +137,17 @@ export default function SquireLauncher({
     const onOpen = (event: Event) => {
       setOpen(true);
       const message = (event as CustomEvent<{ message?: unknown } | undefined>).detail?.message;
-      if (typeof message === 'string' && message.trim()) void sendRef.current(message.slice(0, MAX_LENGTH));
+      if (typeof message === 'string' && message.trim())
+        void sendRef.current(message.slice(0, MAX_LENGTH));
     };
     window.addEventListener('squire:open', onOpen);
     launcherListening = true;
     // Replay a queued request once the rest of this render's effects (including sendRef) have run.
     const queued = queuedOpen;
     queuedOpen = null;
-    const replay = queued ? window.setTimeout(() => onOpen(new CustomEvent('squire:open', { detail: queued }))) : undefined;
+    const replay = queued
+      ? window.setTimeout(() => onOpen(new CustomEvent('squire:open', { detail: queued })))
+      : undefined;
     return () => {
       launcherListening = false;
       if (replay !== undefined) window.clearTimeout(replay);
@@ -152,23 +179,43 @@ export default function SquireLauncher({
     async (raw: string) => {
       const message = raw.trim().slice(0, MAX_LENGTH);
       if (!message || busy) return;
-      const history = turns.filter(turn => turn.content).slice(-HISTORY_TURNS).map(({ role, content }) => ({ role, content }));
-      setTurns(current => [...current, { role: 'user', content: message }, { role: 'assistant', content: '' }]);
+      const history = turns
+        .filter(turn => turn.content)
+        .slice(-HISTORY_TURNS)
+        .map(({ role, content }) => ({ role, content }));
+      setTurns(current => [
+        ...current,
+        { role: 'user', content: message },
+        { role: 'assistant', content: '' },
+      ]);
       setInput('');
       setBusy(true);
       const controller = new AbortController();
       abortRef.current = controller;
       const patch = (update: (turn: Turn) => Turn) =>
-        setTurns(current => current.map((turn, index) => (index === current.length - 1 ? update(turn) : turn)));
+        setTurns(current =>
+          current.map((turn, index) => (index === current.length - 1 ? update(turn) : turn))
+        );
       try {
         const response = await fetch('/api/intelligence/squire', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ message, history, ...(incidentId ? { incidentId } : {}) }),
+          body: JSON.stringify({
+            message,
+            history,
+            ...(incidentId ? { incidentId } : {}),
+            ...(conversationId ? { conversationId } : {}),
+          }),
           signal: controller.signal,
         });
         if (!response.ok || !response.body) {
-          patch(turn => ({ ...turn, content: response.status === 401 ? 'Please sign in again.' : 'I could not answer that. Please try again.' }));
+          patch(turn => ({
+            ...turn,
+            content:
+              response.status === 401
+                ? 'Please sign in again.'
+                : 'I could not answer that. Please try again.',
+          }));
           return;
         }
         const reader = response.body.getReader();
@@ -184,27 +231,114 @@ export default function SquireLauncher({
             buffer = buffer.slice(newline + 1);
             newline = buffer.indexOf('\n');
             if (!line) continue;
-            let event: { type: string; text?: string; message?: string; mode?: 'ai' | 'basic' };
+            let event: {
+              type: string;
+              text?: string;
+              message?: string;
+              mode?: 'ai' | 'basic';
+              id?: string;
+            };
             try {
               event = JSON.parse(line);
             } catch {
               continue;
             }
-            if (event.type === 'delta' && event.text) patch(turn => ({ ...turn, content: turn.content + event.text }));
-            else if (event.type === 'meta' && event.mode) patch(turn => ({ ...turn, mode: event.mode }));
-            else if (event.type === 'notice' && event.text) patch(turn => ({ ...turn, notice: event.text }));
-            else if (event.type === 'error') patch(turn => ({ ...turn, content: turn.content || event.message || 'Something went wrong.' }));
+            if (event.type === 'delta' && event.text)
+              patch(turn => ({ ...turn, content: turn.content + event.text }));
+            else if (event.type === 'meta' && event.mode)
+              patch(turn => ({ ...turn, mode: event.mode }));
+            else if (event.type === 'notice' && event.text)
+              patch(turn => ({ ...turn, notice: event.text }));
+            else if (event.type === 'conversation' && event.id) setConversationId(event.id);
+            else if (event.type === 'error')
+              patch(turn => ({
+                ...turn,
+                content: turn.content || event.message || 'Something went wrong.',
+              }));
           }
         }
       } catch (error) {
         if ((error as { name?: string }).name !== 'AbortError') {
-          patch(turn => ({ ...turn, content: turn.content || 'I could not reach the server. Please try again.' }));
+          patch(turn => ({
+            ...turn,
+            content: turn.content || 'I could not reach the server. Please try again.',
+          }));
         }
       } finally {
         setBusy(false);
       }
     },
-    [busy, incidentId, turns]
+    [busy, conversationId, incidentId, turns]
+  );
+
+  const newChat = useCallback(() => {
+    abortRef.current?.abort();
+    setTurns([]);
+    setConversationId(undefined);
+    setShowHistory(false);
+  }, []);
+
+  const loadSaved = useCallback(async () => {
+    setHistoryError('');
+    try {
+      const response = await fetch(CONVERSATIONS_URL, { cache: 'no-store' });
+      if (!response.ok) throw new Error(String(response.status));
+      const body = (await response.json()) as { data?: { conversations?: SavedConversation[] } };
+      setSaved(body.data?.conversations ?? []);
+    } catch {
+      setHistoryError('Saved conversations could not be loaded.');
+    }
+  }, []);
+
+  const toggleHistory = useCallback(() => {
+    setShowHistory(current => {
+      if (!current) void loadSaved();
+      return !current;
+    });
+  }, [loadSaved]);
+
+  const openSaved = useCallback(async (id: string) => {
+    setHistoryError('');
+    try {
+      const response = await fetch(`${CONVERSATIONS_URL}/${encodeURIComponent(id)}`, {
+        cache: 'no-store',
+      });
+      if (!response.ok) throw new Error(String(response.status));
+      const body = (await response.json()) as {
+        data?: {
+          conversation?: {
+            id: string;
+            messages: Array<{ role: 'user' | 'assistant'; content: string }>;
+          };
+        };
+      };
+      const conversation = body.data?.conversation;
+      if (!conversation) throw new Error('missing');
+      setTurns(conversation.messages.map(({ role, content }) => ({ role, content })));
+      setConversationId(conversation.id);
+      setShowHistory(false);
+    } catch {
+      setHistoryError('That conversation could not be opened.');
+    }
+  }, []);
+
+  const removeSaved = useCallback(
+    async (id?: string) => {
+      setHistoryError('');
+      try {
+        const response = await fetch(
+          id ? `${CONVERSATIONS_URL}/${encodeURIComponent(id)}` : CONVERSATIONS_URL,
+          { method: 'DELETE' }
+        );
+        if (!response.ok && response.status !== 404) throw new Error(String(response.status));
+        if (!id || id === conversationId) setConversationId(undefined);
+        setConfirmDeleteAll(false);
+        await loadSaved();
+      } catch {
+        setHistoryError('Could not delete. Please try again.');
+      }
+    },
+    [conversationId, loadSaved]
   );
 
   useEffect(() => {
@@ -225,7 +359,10 @@ export default function SquireLauncher({
   const suggestions = incidentId ? [...INCIDENT_SUGGESTIONS, ...SUGGESTIONS] : SUGGESTIONS;
 
   return (
-    <div className={`fixed bottom-4 z-40 print:hidden ${side === 'left' ? 'left-4' : 'right-4'}`} data-side={side}>
+    <div
+      className={`fixed bottom-4 z-40 print:hidden ${side === 'left' ? 'left-4' : 'right-4'}`}
+      data-side={side}
+    >
       {!open && launcher === 'FLOATING' && (
         <button
           ref={launcherRef}
@@ -253,9 +390,25 @@ export default function SquireLauncher({
               <h2 className="text-sm font-semibold">{name}</h2>
             </div>
             <div className="flex items-center gap-1">
-              {turns.length > 0 && (
-                <button type="button" onClick={() => setTurns([])} className="rounded px-2 py-1 text-xs text-muted-foreground hover:bg-accent">
+              {(turns.length > 0 || showHistory) && (
+                <button
+                  type="button"
+                  onClick={newChat}
+                  className="rounded px-2 py-1 text-xs text-muted-foreground hover:bg-accent"
+                >
                   New chat
+                </button>
+              )}
+              {history && (
+                <button
+                  type="button"
+                  onClick={toggleHistory}
+                  aria-pressed={showHistory}
+                  aria-label="Saved conversations"
+                  title="Saved conversations"
+                  className="rounded p-1 hover:bg-accent"
+                >
+                  <History className="h-4 w-4" aria-hidden="true" />
                 </button>
               )}
               <button
@@ -267,49 +420,149 @@ export default function SquireLauncher({
               >
                 <ArrowLeftRight className="h-4 w-4" aria-hidden="true" />
               </button>
-              <button type="button" onClick={close} aria-label={`Close ${name}`} className="rounded p-1 hover:bg-accent">
+              <button
+                type="button"
+                onClick={close}
+                aria-label={`Close ${name}`}
+                className="rounded p-1 hover:bg-accent"
+              >
                 <X className="h-4 w-4" aria-hidden="true" />
               </button>
             </div>
           </header>
 
-          <div className="flex-1 space-y-3 overflow-y-auto px-4 py-3 text-sm" aria-live="polite" aria-busy={busy}>
-            {turns.length === 0 && (
-              <div className="space-y-3">
-                <p className="text-muted-foreground">
-                  Hi, I&apos;m {name}. I can look through the incidents you can access and suggest what to check. I never change anything.
+          {showHistory && history ? (
+            <div className="flex-1 space-y-3 overflow-y-auto px-4 py-3 text-sm">
+              <p className="text-xs text-muted-foreground">
+                Only you can see these. They are deleted after {history.retentionDays}{' '}
+                {history.retentionDays === 1 ? 'day' : 'days'} without use.
+              </p>
+              {historyError && (
+                <p role="alert" className="text-xs text-destructive">
+                  {historyError}
                 </p>
-                <div className="flex flex-wrap gap-2">
-                  {suggestions.map(suggestion => (
-                    <button
-                      key={suggestion}
-                      type="button"
-                      onClick={() => void send(suggestion)}
-                      className="rounded-full border border-border px-3 py-1 text-xs hover:bg-accent"
+              )}
+              {saved === null && !historyError && <p className="text-muted-foreground">Loading…</p>}
+              {saved?.length === 0 && (
+                <p className="text-muted-foreground">No saved conversations yet.</p>
+              )}
+              {saved && saved.length > 0 && (
+                <>
+                  <ul className="divide-y divide-border rounded-md border border-border">
+                    {saved.map(item => (
+                      <li key={item.id} className="flex items-center gap-2 px-2 py-1.5">
+                        <button
+                          type="button"
+                          onClick={() => void openSaved(item.id)}
+                          className="min-w-0 flex-1 rounded px-1 py-1 text-left hover:bg-accent"
+                        >
+                          <span className="block truncate">{item.title}</span>
+                          <span className="block text-xs text-muted-foreground">
+                            {new Date(item.updatedAt).toLocaleString()} · {item.messageCount}{' '}
+                            messages
+                          </span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => void removeSaved(item.id)}
+                          aria-label={`Delete conversation: ${item.title}`}
+                          className="rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
+                        >
+                          <Trash2 className="h-4 w-4" aria-hidden="true" />
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                  {confirmDeleteAll ? (
+                    <div
+                      role="group"
+                      aria-label="Confirm deleting all saved conversations"
+                      className="flex items-center gap-3 text-xs"
                     >
-                      {suggestion}
+                      <span>Delete all of them?</span>
+                      <button
+                        type="button"
+                        onClick={() => void removeSaved()}
+                        className="font-medium text-destructive hover:underline"
+                      >
+                        Delete all
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setConfirmDeleteAll(false)}
+                        className="hover:underline"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setConfirmDeleteAll(true)}
+                      className="text-xs text-destructive underline-offset-2 hover:underline"
+                    >
+                      Delete all saved conversations
                     </button>
-                  ))}
-                </div>
-              </div>
-            )}
-            {turns.map((turn, index) => (
-              <div key={index} className={turn.role === 'user' ? 'flex justify-end' : 'flex justify-start'}>
-                <div
-                  className={`max-w-[85%] whitespace-pre-wrap break-words rounded-lg px-3 py-2 ${
-                    turn.role === 'user' ? 'bg-primary text-primary-foreground' : 'bg-muted'
-                  }`}
-                >
-                  {turn.notice && <p className="mb-1 text-xs font-medium text-foreground/80">{turn.notice}</p>}
-                  {turn.content ? <RichText text={turn.content} /> : busy && index === turns.length - 1 ? <span className="text-foreground/80">Thinking…</span> : null}
-                  {turn.role === 'assistant' && turn.mode === 'basic' && turn.content && (
-                    <p className="mt-1 text-xs text-foreground/80">Basic answer from your incident data</p>
                   )}
+                </>
+              )}
+            </div>
+          ) : (
+            <div
+              className="flex-1 space-y-3 overflow-y-auto px-4 py-3 text-sm"
+              aria-live="polite"
+              aria-busy={busy}
+            >
+              {turns.length === 0 && (
+                <div className="space-y-3">
+                  <p className="text-muted-foreground">
+                    Hi, I&apos;m {name}. I can look through the incidents you can access and suggest
+                    what to check. I never change anything.
+                    {history ? ' Our conversations are saved for you only.' : ''}
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {suggestions.map(suggestion => (
+                      <button
+                        key={suggestion}
+                        type="button"
+                        onClick={() => void send(suggestion)}
+                        className="rounded-full border border-border px-3 py-1 text-xs hover:bg-accent"
+                      >
+                        {suggestion}
+                      </button>
+                    ))}
+                  </div>
                 </div>
-              </div>
-            ))}
-            <div ref={endRef} />
-          </div>
+              )}
+              {turns.map((turn, index) => (
+                <div
+                  key={index}
+                  className={turn.role === 'user' ? 'flex justify-end' : 'flex justify-start'}
+                >
+                  <div
+                    className={`max-w-[85%] whitespace-pre-wrap break-words rounded-lg px-3 py-2 ${
+                      turn.role === 'user' ? 'bg-primary text-primary-foreground' : 'bg-muted'
+                    }`}
+                  >
+                    {turn.notice && (
+                      <p className="mb-1 text-xs font-medium text-foreground/80">{turn.notice}</p>
+                    )}
+                    {turn.content ? (
+                      <RichText text={turn.content} />
+                    ) : busy && index === turns.length - 1 ? (
+                      <span className="text-foreground/80">Thinking…</span>
+                    ) : null}
+                    {turn.role === 'assistant' && turn.mode === 'basic' && turn.content && (
+                      <p className="mt-1 text-xs text-foreground/80">
+                        Basic answer from your incident data
+                      </p>
+                    )}
+                  </div>
+                </div>
+              ))}
+              <div ref={endRef} />
+            </div>
+          )}
 
           <form onSubmit={onSubmit} className="flex items-end gap-2 border-t border-border p-3">
             <label htmlFor={`${panelId}-input`} className="sr-only">

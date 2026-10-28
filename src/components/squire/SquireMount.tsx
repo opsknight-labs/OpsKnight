@@ -30,6 +30,7 @@ export default async function SquireMount() {
       avatar={status.squireAvatar}
       launcher={status.squireLauncher}
       animated={status.squireAnimations}
+      history={status.historyEnabled ? { retentionDays: status.historyRetentionDays } : null}
     />
   );
 }

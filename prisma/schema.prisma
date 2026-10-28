@@ -543,6 +543,7 @@ model User {
   intelligenceFeedback        IntelligenceFeedback[]
   intelligencePolicyVersions  IntelligencePolicyVersion[]
   intelligenceEvaluationRuns  IntelligenceEvaluationRun[]
+  squireConversations         SquireConversation[]
   runbookStepsApproved        RunbookExecutionStep[]       @relation("RunbookStepApprovedBy")
   runbookAgentsCreated        RunbookAgent[]               @relation("RunbookAgentCreatedBy")
   runbookAgentsRevoked        RunbookAgent[]               @relation("RunbookAgentRevokedBy")
@@ -5351,4 +5352,34 @@ model IntelligenceDigestRun {
   completedAt  DateTime?
 
   @@index([startedAt], map: "idx_intelligence_digest_run_started")
+}
+
+// Saved assistant conversations: opt-in by an administrator, visible only to their owner, encrypted at
+// rest, bounded per person, removed by retention, and deleted with the person.
+model SquireConversation {
+  id             String          @id @default(cuid())
+  userId         String
+  user           User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  titleEncrypted String
+  // Context only, not a foreign key: access is re-checked on every question, and a deleted incident
+  // must not take the person's conversation with it.
+  incidentId     String?
+  messageCount   Int             @default(0)
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  messages       SquireMessage[]
+
+  @@index([userId, updatedAt(sort: Desc)], map: "idx_squire_conversation_owner_recent")
+  @@index([updatedAt], map: "idx_squire_conversation_retention")
+}
+
+model SquireMessage {
+  id               String             @id @default(cuid())
+  conversationId   String
+  conversation     SquireConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  role             String
+  contentEncrypted String
+  createdAt        DateTime           @default(now())
+
+  @@index([conversationId, createdAt], map: "idx_squire_message_conversation")
 }

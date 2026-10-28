@@ -11,6 +11,7 @@ import { analyzeIncident } from '../similarity/analyzer';
 import { correlateIncident, shouldCorrelate } from '../correlation/handler';
 import { OBSERVE_INTERVAL_MS, suggestObservedDependencies } from '../dependencies/observer';
 import { analyzeResponse, shouldAnalyzeResponse } from '../response/handler';
+import { purgeConversations } from '../conversations/store';
 import { DIGEST_CHECK_INTERVAL_MS, scheduleDigestIfDue, sendDigestPass } from '../digest/service';
 import { currentEmbeddingModel, embedIncidents, EMBED_BATCH_SIZE, EMBED_INTERVAL_MS, findIncidentsToEmbed } from '../semantic/embedder';
 import {
@@ -98,10 +99,11 @@ export interface LaneState {
   lastObserveAt: number;
   lastEmbedAt: number;
   lastDigestCheckAt: number;
+  lastConversationSweepAt: number;
 }
 
 export function createLaneState(): LaneState {
-  return { pause: { paused: false }, lastReconcileAt: 0, lastRetentionAt: 0, lastObserveAt: 0, lastEmbedAt: 0, lastDigestCheckAt: 0 };
+  return { pause: { paused: false }, lastReconcileAt: 0, lastRetentionAt: 0, lastObserveAt: 0, lastEmbedAt: 0, lastDigestCheckAt: 0, lastConversationSweepAt: 0 };
 }
 
 export interface CycleResult {
@@ -223,6 +225,20 @@ export async function runIntelligenceCycle(
         if (purged.more) state.lastRetentionAt = now() - RETENTION_INTERVAL_MS + 60_000;
       } catch (error) {
         logger.warn('[Intelligence] Retention sweep failed; will retry', {
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
+
+    // Saved assistant conversations are swept even with intelligence off: their retention, and their
+    // removal when history is switched off, are privacy promises that do not depend on the engine.
+    if (handlers === DEFAULT_HANDLERS && now() - state.lastConversationSweepAt >= RETENTION_INTERVAL_MS) {
+      state.lastConversationSweepAt = now();
+      try {
+        const swept = await purgeConversations(new Date(now()));
+        if (swept.more) state.lastConversationSweepAt = now() - RETENTION_INTERVAL_MS + 60_000;
+      } catch (error) {
+        logger.warn('[Intelligence] Conversation retention sweep failed; will retry', {
           error: error instanceof Error ? error.message : String(error),
         });
       }

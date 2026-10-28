@@ -7,6 +7,9 @@ vi.mock('@/lib/rbac', () => ({ getCurrentAuthorizationActor: actor.get }));
 const turns = vi.hoisted(() => ({ run: vi.fn() }));
 vi.mock('@/lib/intelligence/squire/chat', () => ({ streamSquire: turns.run }));
 
+const store = vi.hoisted(() => ({ status: vi.fn(), record: vi.fn() }));
+vi.mock('@/lib/intelligence/conversations/store', () => ({ getHistoryStatus: store.status, recordExchange: store.record }));
+
 import { POST } from '@/app/api/intelligence/squire/route';
 
 const URL_ = 'http://localhost:3000/api/intelligence/squire';
@@ -26,6 +29,8 @@ async function* events() {
 beforeEach(() => {
   actor.get.mockReset().mockResolvedValue({ id: 'u1', role: 'ADMIN' });
   turns.run.mockReset().mockImplementation(events);
+  store.status.mockReset().mockResolvedValue({ enabled: false, retentionDays: 30 });
+  store.record.mockReset().mockResolvedValue('conv1');
 });
 
 describe('POST /api/intelligence/squire', () => {
@@ -78,5 +83,38 @@ describe('POST /api/intelligence/squire', () => {
     await reader.read();
     await reader.cancel();
     expect(signal?.aborted).toBe(true);
+  });
+
+  it('saves nothing while history is off', async () => {
+    const lines = (await (await POST(make({ message: 'hello' }))).text()).trim().split('\n').map(line => JSON.parse(line));
+    expect(lines.map(line => line.type)).toEqual(['meta', 'delta', 'done']);
+    expect(store.record).not.toHaveBeenCalled();
+  });
+
+  it('with history on, saves the finished answer for the asker and returns the conversation id last', async () => {
+    store.status.mockResolvedValue({ enabled: true, retentionDays: 30 });
+    const response = await POST(make({ message: 'hello', conversationId: 'conv0', incidentId: 'inc1' }));
+    const lines = (await response.text()).trim().split('\n').map(line => JSON.parse(line));
+    expect(lines.at(-1)).toEqual({ type: 'conversation', id: 'conv1' });
+    expect(store.record).toHaveBeenCalledWith({ userId: 'u1', conversationId: 'conv0', incidentId: 'inc1', question: 'hello', answer: 'hi' });
+  });
+
+  it('does not save failed answers, and a storage failure never breaks the answer', async () => {
+    store.status.mockResolvedValue({ enabled: true, retentionDays: 30 });
+    turns.run.mockImplementation(async function* () {
+      yield { type: 'delta', text: 'partial' };
+      yield { type: 'error', message: 'boom' };
+    });
+    await (await POST(make({ message: 'hello' }))).text();
+    expect(store.record).not.toHaveBeenCalled();
+
+    turns.run.mockImplementation(events);
+    store.record.mockRejectedValue(new Error('db down'));
+    const lines = (await (await POST(make({ message: 'hello' }))).text()).trim().split('\n').map(line => JSON.parse(line));
+    expect(lines.map(line => line.type)).toEqual(['meta', 'delta', 'done']);
+  });
+
+  it('rejects malformed conversation ids', async () => {
+    expect((await POST(make({ message: 'x', conversationId: '../../etc' }))).status).toBe(400);
   });
 });
