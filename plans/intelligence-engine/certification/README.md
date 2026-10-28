@@ -31,17 +31,18 @@ See `docs/architecture/intelligence.md`.
 
 ## CI evidence on the pull request
 
-Recorded against PR #928 head `c7d656098` (base `3013d966d`). Re-check on the final commit before merge.
+Final state on PR #928 head `32f217c2b` (base `46563307e`, #930). Earlier runs on `c7d656098` and `6502e56fb` are
+noted where they explain a change.
 
 | Check | Result | Assessment |
 |---|---|---|
-| Changed-source ESLint gate | Failed: one `security/detect-object-injection` warning in `tests/components/SimilarIncidentFeedback.test.tsx` | **Ours, fixed.** Earlier lint runs covered only recently edited files; the whole branch diff is now linted |
-| Database integration, shard 1/2 | Failed: one test, `service-policies` ordering | **Ours, fixed.** The test compared against JavaScript locale order while the product sorts in the database, whose collation differs between CI and a local container. The test now compares with the database's own order. Shard 2/2 passed |
-| Service automation validation (browser matrix) | Failed: 75 failed / 21 passed, ten Automation routing and ingestion-policy specs across six browsers | **Pre-existing on `main`.** The same workflow on `main` commit `e86677e31` (no intelligence code) failed with the identical 75 / 21 and the same ten specs. Not caused by this PR; not fixed by it |
-| Runbook authoring and browser matrix | Failed once in the `pull_request` run: one Firefox-only wizard test timed out waiting for a database row | **Not shown to be ours.** The `push` run for the same commit passed, `main` passes, and this PR does not touch Runbook UI. Treated as a flake pending a green re-run on the final commit |
-| Build, auth/mobile/live-dashboard browser E2E, security suite (CodeQL, SCA, secret scan, ESLint security), idle-fleet capacity, ingestion durability | Passed | |
+| Changed-source ESLint gate | Failed on `c7d656098`, **passes now** | One `security/detect-object-injection` warning in `tests/components/SimilarIncidentFeedback.test.tsx`. Ours; fixed. Earlier lint runs had covered only recently edited files; the whole branch diff is now linted |
+| Database integration, shards 1/2 and 2/2 | Shard 1 failed on `c7d656098`, **both pass now** | One test: `service-policies` compared ordering with JavaScript locale order while the product sorts in PostgreSQL, whose collation differs between CI and a local container. Ours; the test now compares with the database's own order |
+| Fast validation, application build, auth, mobile, live-dashboard and emergency-recovery browser E2E, ingestion durability, multi-replica failover, idle-fleet capacity, Swarm convergence, CodeQL, SCA, secret scan, ESLint security | **Pass** | |
+| Runbook authoring and browser matrix | Failed twice on earlier commits, **passes now (both runs)** | The failing test was a different Firefox-only spec each time (`runbooks-ui` rule wizard, then `team-administration` `page.reload: NS_BINDING_ABORTED`). The `push` run of the same commit passed both times and `main` passes. Classified as a Firefox flake from that pattern; this PR does not touch Runbook or Teams UI |
+| Service automation validation (browser matrix) | **Fails: 75 failed / 21 passed** | **Pre-existing on `main`.** The same workflow on `main` commit `e86677e31`, which contains no intelligence code, fails with the *identical set of 75 tests* (compared test by test, including the `automation-release-certification` specs). Not caused by this PR, not fixed by it, and still a blocker for that workflow on `main` |
 
-Pre-existing failures are not "fixed" or "waived" by this ledger; they remain open work on `main`.
+The Service automation failure is open work on `main`. This ledger neither fixes nor waives it.
 
 ## Gates that are NOT passed
 
