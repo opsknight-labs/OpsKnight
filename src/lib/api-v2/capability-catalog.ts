@@ -82,6 +82,7 @@ const decisions: readonly ApiCapability[] = [
       'unsuppressIncident',
       'unacknowledgeIncident',
       'listIncidentWatchers',
+      'getIncidentWatcher',
       'setIncidentWatcher',
       'removeIncidentWatcher',
     ],
@@ -95,6 +96,7 @@ const decisions: readonly ApiCapability[] = [
       'Add active responders, remove and move participants through the same commands used by the UI. Layer configuration editing remains separate.',
     operationIds: [
       'addScheduleParticipant',
+      'getScheduleParticipant',
       'moveScheduleParticipant',
       'removeScheduleParticipant',
     ],
@@ -178,7 +180,7 @@ const decisions: readonly ApiCapability[] = [
     status: 'partial',
     explanation:
       'Override cancellation, bounded effective coverage and unsaved-layer previews, participant management, revision-protected layer CRUD, atomic precedence reordering, bounded escalation dependency inspection and redacted schedule change history use the canonical schedule engine and shared domain commands. Combined UI/REST certification remains open.',
-    operationIds: ['listScheduleLayers', 'createScheduleLayer', 'getScheduleLayer', 'updateScheduleLayer', 'deleteScheduleLayer', 'reorderScheduleLayers', 'previewScheduleCoverage', 'getScheduleDependencies', 'listScheduleChanges', 'cancelScheduleOverride', 'getScheduleCoverage', 'addScheduleParticipant', 'removeScheduleParticipant', 'moveScheduleParticipant'],
+    operationIds: ['listScheduleLayers', 'createScheduleLayer', 'getScheduleLayer', 'updateScheduleLayer', 'deleteScheduleLayer', 'reorderScheduleLayers', 'previewScheduleCoverage', 'getScheduleDependencies', 'listScheduleChanges', 'getScheduleOverride', 'cancelScheduleOverride', 'getScheduleCoverage', 'addScheduleParticipant', 'getScheduleParticipant', 'removeScheduleParticipant', 'moveScheduleParticipant'],
   },
   {
     id: 'escalation-validation',
@@ -198,6 +200,7 @@ const decisions: readonly ApiCapability[] = [
       'Bounded membership reads and revision-protected membership/lead changes use shared UI/REST commands, current ownership checks, last-active-owner protection, SCIM ownership restrictions, session revocation, transactional audits and notifications. Managed service lists/assignment and owner-only activity use shared UI/REST commands with Service revisions, cross-team transfer protection, redacted projections and bounded indexes. Combined certification remains pending.',
     operationIds: [
       'listTeamMembers',
+      'getTeamMember',
       'setTeamMember',
       'removeTeamMember',
       'getTeamLead',
@@ -376,6 +379,7 @@ const decisions: readonly ApiCapability[] = [
       'previewStatusPage',
       'uploadStatusPageAsset',
       'listStatusPageAssets',
+      'getStatusPageAsset',
       'deleteStatusPageAsset',
       'getStatusPagePublication',
       'retryStatusPagePublication',
@@ -405,7 +409,7 @@ const decisions: readonly ApiCapability[] = [
     status: 'partial',
     explanation:
       'Postmortem CRUD persists strictly validated impact, timeline, contributing factors and five-whys data. Revision-protected replacement and per-item commands manage corrective actions; active-user contributor roles use relational records. Publication records one business audit. Bounded version reads capture parent-row changes from deployment onward. Combined UI/REST certification remains pending.',
-    operationIds: ['createPostmortem', 'getPostmortem', 'updatePostmortem', 'listPostmortemVersions', 'listPostmortemActionItems', 'replacePostmortemActionItems', 'updatePostmortemActionItem', 'deletePostmortemActionItem', 'publishPostmortem', 'listPostmortemContributors', 'replacePostmortemContributors'],
+    operationIds: ['createPostmortem', 'getPostmortem', 'updatePostmortem', 'listPostmortemVersions', 'listPostmortemActionItems', 'getPostmortemActionItem', 'replacePostmortemActionItems', 'updatePostmortemActionItem', 'deletePostmortemActionItem', 'publishPostmortem', 'listPostmortemContributors', 'replacePostmortemContributors'],
   },
   {
     id: 'report-exports',

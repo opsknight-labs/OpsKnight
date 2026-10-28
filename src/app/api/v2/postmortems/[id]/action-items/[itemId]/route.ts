@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import type { Prisma } from '@prisma/client';
+import prisma from '@/lib/prisma';
 import { AppError } from '@/lib/errors';
 import { defineV2Route, logV2Audit } from '@/lib/api-v2';
 import { AUTHORIZATION_ACTIONS } from '@/lib/authorization-policy';
@@ -44,6 +45,24 @@ const replayAuthGuard = async ({ actor, params, tx }: {
   });
   if (!parent) throw new AppError({ code: 'POSTMORTEM_NOT_FOUND' });
 };
+
+export const GET = defineV2Route({
+  action: AUTHORIZATION_ACTIONS.POSTMORTEM_READ,
+  scopedFilter: true,
+  rateLimitTier: 'SEARCH_EXPORT',
+  paramsSchema,
+  querySchema: z.object({}).strict(),
+  handler: async ({ params, actor }) => {
+    const parent = await parentFor(prisma, actor, params.id);
+    const collection = await getPostmortemActionItems(prisma, parent.id);
+    const item = collection.items.find(entry => entry.id === params.itemId);
+    if (!item) {
+      throw new AppError({ code: 'RESOURCE_NOT_FOUND', userMessage: 'Corrective action not found.' });
+    }
+    return { data: { ...item, postmortemId: collection.postmortemId, revision: collection.revision },
+      headers: { ...etagHeaders(collection.revision), 'Cache-Control': 'private, no-store' } };
+  },
+});
 
 export const PATCH = defineV2Route({
   action: AUTHORIZATION_ACTIONS.POSTMORTEM_MANAGE,

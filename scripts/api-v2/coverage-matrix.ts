@@ -36,6 +36,7 @@ const schemas = new Map(Object.entries(spec.paths));
 const contracts = new Map(Object.entries(V2_MUTATION_CONTRACT));
 const reviewedOperationIds = new Set([
   'listTeamMembers',
+  'getTeamMember',
   'setTeamMember',
   'removeTeamMember',
   'getTeamLead',
@@ -109,6 +110,19 @@ const domainReviews = new Map<
       resourceAuthorization:
         'Current role/status and membership reloaded; scoped members see only their team. Cursor bound to team.',
       acceptanceTests: ['tests/integration/api-v2-team-administration.test.ts'],
+      finalCandidateCertification: 'pending',
+    },
+  ],
+  [
+    'getTeamMember',
+    {
+      sharedCommands: ['src/lib/teams/administration.ts:requireTeamAccess'],
+      uiCommands: ['src/app/(app)/teams/[id]/page.tsx:membership read'],
+      auditEvents: [],
+      sideEffects: [],
+      resourceAuthorization:
+        'Same authority as listTeamMembers: current role/status and membership reloaded; scoped members see only their team. Returns the parent Team revision fenced by membership changes.',
+      acceptanceTests: ['tests/integration/api-v2-item-reads.test.ts'],
       finalCandidateCertification: 'pending',
     },
   ],

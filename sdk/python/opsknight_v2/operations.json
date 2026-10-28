@@ -202,6 +202,14 @@
     "requiredHeaders": [],
     "bodyRequired": false
   },
+  "getTeamMember": {
+    "method": "GET",
+    "path": "/teams/{id}/members/{userId}",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
   "setTeamMember": {
     "method": "PUT",
     "path": "/teams/{id}/members/{userId}",
@@ -923,6 +931,14 @@
     ],
     "bodyRequired": false
   },
+  "getStatusPageAsset": {
+    "method": "GET",
+    "path": "/status-pages/{id}/assets/{assetId}",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
   "updateStatusPageSettings": {
     "method": "PATCH",
     "path": "/status-pages/{id}/settings",
@@ -1337,6 +1353,14 @@
     "requiredHeaders": [],
     "bodyRequired": false
   },
+  "getIncidentWatcher": {
+    "method": "GET",
+    "path": "/incidents/{id}/watchers/{watcherId}",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
   "listIncidentTags": {
     "method": "GET",
     "path": "/incidents/{id}/tags",
@@ -1494,6 +1518,14 @@
       "Idempotency-Key"
     ],
     "bodyRequired": true
+  },
+  "getScheduleParticipant": {
+    "method": "GET",
+    "path": "/schedules/{id}/layers/{layerId}/participants/{userId}",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
   },
   "moveScheduleParticipant": {
     "method": "PATCH",
@@ -2126,6 +2158,14 @@
     "requiredHeaders": [],
     "bodyRequired": false
   },
+  "getPostmortemActionItem": {
+    "method": "GET",
+    "path": "/postmortems/{id}/action-items/{itemId}",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
   "replacePostmortemActionItems": {
     "method": "PUT",
     "path": "/postmortems/{id}/action-items",
@@ -2468,6 +2508,14 @@
     "method": "GET",
     "path": "/schedules/{id}/overrides",
     "kind": "list",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "getScheduleOverride": {
+    "method": "GET",
+    "path": "/schedules/{id}/overrides/{overrideId}",
+    "kind": "item",
     "idempotency": null,
     "requiredHeaders": [],
     "bodyRequired": false

@@ -59,6 +59,7 @@ export type UserDependencies = { "userId": string; "userRevision": number; "asOf
 export type TeamManagedService = { "id": string; "name": string; "teamId": string | null; "revision": number; "createdAt": string; "updatedAt": string };
 export type TeamActivity = { "id": string; "action": string; "createdAt": string; "actor": { "id": string; "name": string | null } | null; "details": unknown };
 export type TeamMembership = { "id": string; "teamId": string; "userId": string; "role": "OWNER" | "ADMIN" | "MEMBER"; "receiveTeamNotifications": boolean; "createdAt": string };
+export type TeamMembershipItem = { "id": string; "teamId": string; "userId": string; "role": "OWNER" | "ADMIN" | "MEMBER"; "receiveTeamNotifications": boolean; "createdAt": string; "revision": number };
 export type TeamMembershipChange = { "teamId": string; "userId": string; "revision": number; "membership": TeamMembership | null };
 export type TeamLead = { "teamId": string; "teamLeadId": string | null; "revision": number };
 export type TeamLeadChange = { "teamId": string; "userId": string | null; "teamLeadId": string | null; "revision": number };
@@ -117,6 +118,7 @@ export type IncidentTagAdded = { "id": string; "incidentId": string; "name": str
 export type IncidentTagRemoved = { "id": string; "incidentId": string; "removed": boolean };
 export type RunbookCancellationRequested = { "executionId": string; "status": "CANCEL_REQUESTED"; "message": string };
 export type RunbookExecutionPreview = { "authorizationToken"?: string; "digest": string; "expiresAt"?: string; "versionId": string; "version": number; "checksum": string; "agentId": string | null; "agentPoolId": string | null; "timeoutSeconds": number; "readiness"?: Array<{ "state": "passed" | "blocked" | "deferred"; "message": string }>; "steps": Array<{ "key": string; "name": string; "type": string; "risk": string; "purpose": string; "requiresApproval": boolean; "timeoutSeconds": number }> };
+export type ScheduleParticipant = { "scheduleId": string; "layerId": string; "userId": string; "position": number; "revision": number };
 export type ScheduleParticipantMutation = { "scheduleId": string; "layerId": string; "userId": string; "layerName"?: string; "userName"?: string; "assignmentId"?: string; "position"?: number; "direction"?: "up" | "down"; "removed"?: boolean };
 export type IncidentLifecycleResult = { "incidentId": string; "command": string | null; "source": string; "previousStatus": string; "status": string; "changed": boolean };
 export type RunbookDefinitionInput = { "steps": Array<RunbookStepInput>; "description"?: string; "defaultTimeoutSeconds"?: number; "defaultMaxRetries"?: number };
@@ -147,6 +149,7 @@ export type ReportExport = { "id": string; "status": "PENDING" | "PROCESSING" | 
 export type ReportExportCancellation = { "id": string; "status": "CANCELLED" };
 export type ChatOpsConfiguration = { "revision": number; "updatedAt": string | null; "enabled": boolean; "channelPrefix": string; "autoCreateOnUrgency": Array<string>; "autoCreateOnPriority": Array<string>; "archiveOnResolve": boolean; "defaultVideoBridge": string; "customBridgeUrlTemplate": string; "defaultProviders": Array<string> } & Record<string, unknown>;
 export type StatusPageAssetCollection = { "statusPageId": string; "assets": Array<{ "assetId": string; "contentType": string; "createdAt": string; "url": string } & Record<string, unknown>> } & Record<string, unknown>;
+export type StatusPageAsset = { "statusPageId": string; "assetId": string; "contentType": string; "createdAt": string; "url": string } & Record<string, unknown>;
 export type CustomFieldDefinition = { "id": string; "revision": number; "name": string; "key": string; "type": "TEXT" | "NUMBER" | "DATE" | "SELECT" | "BOOLEAN" | "URL" | "EMAIL"; "required": boolean; "defaultValue"?: string | null; "options"?: Array<string> | null; "order": number; "showInList": boolean; "usageCount"?: number } & Record<string, unknown>;
 export type CustomFieldDefinitionCollection = { "fields": Array<CustomFieldDefinition>; "nextCursor": string | null } & Record<string, unknown>;
 export type AuditExport = { "id": string; "status": string; "createdAt": string; "expiresAt": string; "filter": Record<string, unknown>; "checksum"?: string | null; "sizeBytes"?: number | null; "recordCount"?: number | null } & Record<string, unknown>;
@@ -154,6 +157,7 @@ export type PostmortemVersionCollection = { "postmortemId": string; "currentRevi
 export type PostmortemContributors = { "postmortemId": string; "revision": number; "contributors": Array<{ "userId": string; "role": "AUTHOR" | "REVIEWER" | "CONTRIBUTOR"; "name": string } & Record<string, unknown>> } & Record<string, unknown>;
 export type PostmortemPublication = { "id": string; "revision": number; "status": "PUBLISHED"; "isPublic": boolean; "publishedAt": string } & Record<string, unknown>;
 export type PostmortemActionItemCollection = { "postmortemId": string; "revision": number; "items": Array<{ "id": string; "title": string; "description": string; "owner"?: string; "dueDate"?: string; "status": "OPEN" | "IN_PROGRESS" | "COMPLETED" | "BLOCKED"; "priority": "HIGH" | "MEDIUM" | "LOW"; "completedAt"?: string | null; "externalIssue"?: Record<string, unknown> } & Record<string, unknown>> } & Record<string, unknown>;
+export type PostmortemActionItem = { "id": string; "title": string; "description": string; "owner"?: string; "dueDate"?: string; "status": "OPEN" | "IN_PROGRESS" | "COMPLETED" | "BLOCKED"; "priority": "HIGH" | "MEDIUM" | "LOW"; "completedAt"?: string | null; "externalIssue"?: Record<string, unknown>; "postmortemId": string; "revision": number } & Record<string, unknown>;
 export type PostmortemActionItemChange = { "postmortemId": string; "revision": number; "item": Record<string, unknown> } & Record<string, unknown>;
 export type PostmortemActionItemDeletion = { "postmortemId": string; "revision": number; "deletedId": string } & Record<string, unknown>;
 export type ServiceHealthSummary = { "service": { "id": string; "name": string; "status": string; "escalationPolicyId": string | null } & Record<string, unknown>; "observedAt": string; "activeIncidentCount": number; "recentIncidents": Array<{ "id": string; "title": string; "status": string; "createdAt": string } & Record<string, unknown>>; "last24Hours": { "linkedAlertCount": number; "failedNotificationCount": number } & Record<string, unknown>; "onCallCoverage": { "state": string; "eligibleResponderCount": number | null; "basis": string } & Record<string, unknown>; "objectives": Array<{ "id": string; "name": string; "metricType": string; "target": number; "latestSnapshot": { "periodEnd": string; "value": number | null; "breached": boolean | null; "dataState": string } & Record<string, unknown> | null } & Record<string, unknown>>; "truncated": { "objectives": boolean; "recentIncidents": boolean } & Record<string, unknown> } & Record<string, unknown>;
@@ -215,6 +219,7 @@ export interface OperationRequests {
   listTeamServices: { "params": { "id": string }; "query"?: { "limit"?: number; "cursor"?: string } };
   assignTeamService: { "params": { "id": string; "serviceId": string }; "headers": { "Idempotency-Key": string; "If-Match": string }; "body": Record<string, never> };
   listTeamMembers: { "params": { "id": string }; "query"?: { "limit"?: number; "cursor"?: string } };
+  getTeamMember: { "params": { "id": string; "userId": string } };
   setTeamMember: { "params": { "id": string; "userId": string }; "headers": { "Idempotency-Key": string; "If-Match": string }; "body": { "role": "OWNER" | "ADMIN" | "MEMBER"; "receiveTeamNotifications"?: boolean } };
   removeTeamMember: { "params": { "id": string; "userId": string }; "headers": { "Idempotency-Key": string; "If-Match": string } };
   getUserInvitationPolicy: Record<string, never>;
@@ -293,6 +298,7 @@ export interface OperationRequests {
   uploadStatusPageAsset: { "params": { "id": string }; "body": { "image": string } };
   listStatusPageAssets: { "params": { "id": string } };
   deleteStatusPageAsset: { "params": { "id": string; "assetId": string }; "headers": { "Idempotency-Key": string } };
+  getStatusPageAsset: { "params": { "id": string; "assetId": string } };
   updateStatusPageSettings: { "params": { "id": string }; "headers": { "Idempotency-Key": string; "If-Match": string }; "body": { "name"?: string; "slug"?: string | null; "organizationName"?: string | null; "enabled"?: boolean; "requireAuth"?: boolean; "contactEmail"?: string | null; "contactUrl"?: string | null } };
   listStatusPageSubscribers: { "params": { "id": string }; "query"?: { "limit"?: number; "cursor"?: string } };
   getStatusPageSubscriber: { "params": { "id": string; "subscriberId": string } };
@@ -337,6 +343,7 @@ export interface OperationRequests {
   getAutomationSettings: Record<string, never>;
   updateAutomationSettings: { "headers": { "Idempotency-Key": string; "If-Match": string }; "body": { "automationEnabled": boolean; "automationStoreObservationPreviews"?: boolean; "automationReadinessPolicy"?: AutomationReadinessPolicy; "automationTraceRetentionDays": number } };
   listIncidentWatchers: { "params": { "id": string }; "query"?: { "limit"?: number; "cursor"?: string } };
+  getIncidentWatcher: { "params": { "id": string; "watcherId": string } };
   listIncidentTags: { "params": { "id": string }; "query"?: { "limit"?: number; "cursor"?: string } };
   listIncidentCustomFields: { "params": { "id": string }; "query"?: { "limit"?: number; "cursor"?: string } };
   listIncidentTemplates: { "query"?: { "limit"?: number; "cursor"?: string } };
@@ -354,6 +361,7 @@ export interface OperationRequests {
   previewRunbookExecution: { "params": { "id": string }; "body": { "incidentId"?: string | null; "serviceId"?: string | null; "bindingId"?: string | null; "parameters"?: Record<string, unknown> } };
   cancelRunbookExecution: { "params": { "id": string }; "headers": { "Idempotency-Key": string }; "body": { "reason": string } };
   addScheduleParticipant: { "params": { "id": string; "layerId": string }; "headers": { "Idempotency-Key": string }; "body": { "userId": string } };
+  getScheduleParticipant: { "params": { "id": string; "layerId": string; "userId": string } };
   moveScheduleParticipant: { "params": { "id": string; "layerId": string; "userId": string }; "headers": { "Idempotency-Key": string }; "body": { "direction": "up" | "down" } };
   removeScheduleParticipant: { "params": { "id": string; "layerId": string; "userId": string }; "headers": { "Idempotency-Key": string } };
   unsuppressIncident: { "params": { "id": string }; "headers": { "Idempotency-Key": string }; "body": { "note"?: string; "expectedStatus"?: "OPEN" | "ACKNOWLEDGED" | "RESOLVED" | "SNOOZED" | "SUPPRESSED" } };
@@ -427,6 +435,7 @@ export interface OperationRequests {
   getPostmortem: { "params": { "id": string } };
   listPostmortemVersions: { "params": { "id": string }; "query"?: { "limit"?: number; "beforeRevision"?: number } };
   listPostmortemActionItems: { "params": { "id": string } };
+  getPostmortemActionItem: { "params": { "id": string; "itemId": string } };
   replacePostmortemActionItems: { "params": { "id": string }; "headers": { "Idempotency-Key": string; "If-Match": string }; "body": { "items": Array<{ "id"?: string; "title": string; "description"?: string; "ownerId"?: string | null; "dueDate"?: string | null; "status"?: "OPEN" | "IN_PROGRESS" | "COMPLETED" | "BLOCKED"; "priority"?: "HIGH" | "MEDIUM" | "LOW" }> } };
   updatePostmortemActionItem: { "params": { "id": string; "itemId": string }; "headers": { "Idempotency-Key": string; "If-Match": string }; "body": { "title"?: string; "description"?: string; "ownerId"?: string | null; "dueDate"?: string | null; "status"?: "OPEN" | "IN_PROGRESS" | "COMPLETED" | "BLOCKED"; "priority"?: "HIGH" | "MEDIUM" | "LOW" } };
   deletePostmortemActionItem: { "params": { "id": string; "itemId": string }; "headers": { "Idempotency-Key": string; "If-Match": string } };
@@ -465,6 +474,7 @@ export interface OperationRequests {
   listRunbooks: { "query"?: { "limit"?: number; "cursor"?: string; "search"?: string } };
   getScheduleOnCall: { "params": { "id": string }; "query"?: { "at"?: string } };
   listScheduleOverrides: { "params": { "id": string } };
+  getScheduleOverride: { "params": { "id": string; "overrideId": string } };
   createScheduleOverride: { "params": { "id": string }; "body": { "userId": string; "startDate": string; "endDate": string; "replacesUserId"?: string | null } & Record<string, unknown> };
   cancelScheduleOverride: { "params": { "id": string; "overrideId": string }; "headers": { "Idempotency-Key": string } };
   getScheduleCoverage: { "params": { "id": string }; "query": { "start": string; "end": string } };
@@ -531,6 +541,7 @@ export interface OperationResponses {
   listTeamServices: { "data": Array<TeamManagedService>; "pagination"?: Pagination; "requestId": string; "timestamp": string } & Record<string, unknown>;
   assignTeamService: { "data": TeamManagedService; "requestId": string; "timestamp": string } & Record<string, unknown>;
   listTeamMembers: { "data": Array<TeamMembership>; "pagination"?: Pagination; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  getTeamMember: { "data": TeamMembershipItem; "requestId": string; "timestamp": string } & Record<string, unknown>;
   setTeamMember: { "data": TeamMembershipChange; "requestId": string; "timestamp": string } & Record<string, unknown>;
   removeTeamMember: { "data": TeamMembershipChange; "requestId": string; "timestamp": string } & Record<string, unknown>;
   getUserInvitationPolicy: { "data": UserInvitationPolicy; "requestId": string; "timestamp": string } & Record<string, unknown>;
@@ -609,6 +620,7 @@ export interface OperationResponses {
   uploadStatusPageAsset: { "data": StatusPageAssetUpload; "requestId": string; "timestamp": string } & Record<string, unknown>;
   listStatusPageAssets: { "data": StatusPageAssetCollection; "requestId": string; "timestamp": string } & Record<string, unknown>;
   deleteStatusPageAsset: null;
+  getStatusPageAsset: { "data": StatusPageAsset; "requestId": string; "timestamp": string } & Record<string, unknown>;
   updateStatusPageSettings: { "data": StatusPageConfigurationResult; "requestId": string; "timestamp": string } & Record<string, unknown>;
   listStatusPageSubscribers: { "data": Array<StatusPageSubscriber>; "pagination"?: Pagination; "requestId": string; "timestamp": string } & Record<string, unknown>;
   getStatusPageSubscriber: { "data": StatusPageSubscriber; "requestId": string; "timestamp": string } & Record<string, unknown>;
@@ -653,6 +665,7 @@ export interface OperationResponses {
   getAutomationSettings: { "data": AutomationSettings; "requestId": string; "timestamp": string } & Record<string, unknown>;
   updateAutomationSettings: { "data": AutomationSettings; "requestId": string; "timestamp": string } & Record<string, unknown>;
   listIncidentWatchers: { "data": Array<IncidentWatcher>; "pagination"?: Pagination; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  getIncidentWatcher: { "data": IncidentWatcher; "requestId": string; "timestamp": string } & Record<string, unknown>;
   listIncidentTags: { "data": Array<IncidentTag>; "pagination"?: Pagination; "requestId": string; "timestamp": string } & Record<string, unknown>;
   listIncidentCustomFields: { "data": Array<IncidentCustomField>; "pagination"?: Pagination; "requestId": string; "timestamp": string } & Record<string, unknown>;
   listIncidentTemplates: { "data": Array<IncidentTemplate>; "pagination"?: Pagination; "requestId": string; "timestamp": string } & Record<string, unknown>;
@@ -670,6 +683,7 @@ export interface OperationResponses {
   previewRunbookExecution: { "data": RunbookExecutionPreview; "requestId": string; "timestamp": string } & Record<string, unknown>;
   cancelRunbookExecution: { "data": RunbookCancellationRequested; "requestId": string; "timestamp": string } & Record<string, unknown>;
   addScheduleParticipant: { "data": ScheduleParticipantMutation; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  getScheduleParticipant: { "data": ScheduleParticipant; "requestId": string; "timestamp": string } & Record<string, unknown>;
   moveScheduleParticipant: { "data": ScheduleParticipantMutation; "requestId": string; "timestamp": string } & Record<string, unknown>;
   removeScheduleParticipant: { "data": ScheduleParticipantMutation; "requestId": string; "timestamp": string } & Record<string, unknown>;
   unsuppressIncident: { "data": IncidentLifecycleResult; "requestId": string; "timestamp": string } & Record<string, unknown>;
@@ -743,6 +757,7 @@ export interface OperationResponses {
   getPostmortem: { "data": Postmortem; "requestId": string; "timestamp": string } & Record<string, unknown>;
   listPostmortemVersions: { "data": PostmortemVersionCollection; "requestId": string; "timestamp": string } & Record<string, unknown>;
   listPostmortemActionItems: { "data": PostmortemActionItemCollection; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  getPostmortemActionItem: { "data": PostmortemActionItem; "requestId": string; "timestamp": string } & Record<string, unknown>;
   replacePostmortemActionItems: { "data": PostmortemActionItemCollection; "requestId": string; "timestamp": string } & Record<string, unknown>;
   updatePostmortemActionItem: { "data": PostmortemActionItemChange; "requestId": string; "timestamp": string } & Record<string, unknown>;
   deletePostmortemActionItem: { "data": PostmortemActionItemDeletion; "requestId": string; "timestamp": string } & Record<string, unknown>;
@@ -781,6 +796,7 @@ export interface OperationResponses {
   listRunbooks: { "data": Array<Runbook>; "pagination"?: Pagination; "requestId": string; "timestamp": string } & Record<string, unknown>;
   getScheduleOnCall: { "data": ScheduleOnCall; "requestId": string; "timestamp": string } & Record<string, unknown>;
   listScheduleOverrides: { "data": Array<ScheduleOverride>; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  getScheduleOverride: { "data": ScheduleOverride; "requestId": string; "timestamp": string } & Record<string, unknown>;
   createScheduleOverride: { "data": ScheduleOverride; "requestId": string; "timestamp": string } & Record<string, unknown>;
   cancelScheduleOverride: { "data": ScheduleOverrideCancellation; "requestId": string; "timestamp": string } & Record<string, unknown>;
   getScheduleCoverage: { "data": ScheduleCoverage; "requestId": string; "timestamp": string } & Record<string, unknown>;
@@ -1024,6 +1040,14 @@ export const OPERATIONS = {
     "method": "GET",
     "path": "/teams/{id}/members",
     "kind": "list",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "getTeamMember": {
+    "method": "GET",
+    "path": "/teams/{id}/members/{userId}",
+    "kind": "item",
     "idempotency": null,
     "requiredHeaders": [],
     "bodyRequired": false
@@ -1749,6 +1773,14 @@ export const OPERATIONS = {
     ],
     "bodyRequired": false
   },
+  "getStatusPageAsset": {
+    "method": "GET",
+    "path": "/status-pages/{id}/assets/{assetId}",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
   "updateStatusPageSettings": {
     "method": "PATCH",
     "path": "/status-pages/{id}/settings",
@@ -2163,6 +2195,14 @@ export const OPERATIONS = {
     "requiredHeaders": [],
     "bodyRequired": false
   },
+  "getIncidentWatcher": {
+    "method": "GET",
+    "path": "/incidents/{id}/watchers/{watcherId}",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
   "listIncidentTags": {
     "method": "GET",
     "path": "/incidents/{id}/tags",
@@ -2320,6 +2360,14 @@ export const OPERATIONS = {
       "Idempotency-Key"
     ],
     "bodyRequired": true
+  },
+  "getScheduleParticipant": {
+    "method": "GET",
+    "path": "/schedules/{id}/layers/{layerId}/participants/{userId}",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
   },
   "moveScheduleParticipant": {
     "method": "PATCH",
@@ -2952,6 +3000,14 @@ export const OPERATIONS = {
     "requiredHeaders": [],
     "bodyRequired": false
   },
+  "getPostmortemActionItem": {
+    "method": "GET",
+    "path": "/postmortems/{id}/action-items/{itemId}",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
   "replacePostmortemActionItems": {
     "method": "PUT",
     "path": "/postmortems/{id}/action-items",
@@ -3294,6 +3350,14 @@ export const OPERATIONS = {
     "method": "GET",
     "path": "/schedules/{id}/overrides",
     "kind": "list",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "getScheduleOverride": {
+    "method": "GET",
+    "path": "/schedules/{id}/overrides/{overrideId}",
+    "kind": "item",
     "idempotency": null,
     "requiredHeaders": [],
     "bodyRequired": false

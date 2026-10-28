@@ -8,14 +8,15 @@ const object = (
   required = Object.keys(properties)
 ): Schema => ({ type: 'object', additionalProperties: false, properties, required });
 const role = { type: 'string', enum: ['OWNER', 'ADMIN', 'MEMBER'] };
-const membership = object({
+const membershipProperties = {
   id: text,
   teamId: text,
   userId: text,
   role,
   receiveTeamNotifications: { type: 'boolean' },
   createdAt: { type: 'string', format: 'date-time' },
-});
+};
+const membership = object(membershipProperties);
 export const TEAM_ADMINISTRATION_SCHEMAS: Record<string, Schema> = {
   TeamManagedService: object({
     id: text,
@@ -33,6 +34,7 @@ export const TEAM_ADMINISTRATION_SCHEMAS: Record<string, Schema> = {
     details: {},
   }),
   TeamMembership: membership,
+  TeamMembershipItem: object({ ...membershipProperties, revision }),
   TeamMembershipChange: object({
     teamId: text,
     userId: text,
@@ -86,6 +88,13 @@ export const TEAM_ADMINISTRATION_OPERATIONS: Array<{
     paginated: true,
     description:
       'teams:read with organization directory-read permission or membership in this team. Bounded keyset pagination; cursors must belong to the same team. Returns the parent Team ETag.',
+  },
+  {
+    method: 'get',
+    path: '/teams/{id}/members/{userId}',
+    summary: 'Read one team membership and the team revision',
+    description:
+      'Same authority as listTeamMembers: teams:read with organization directory-read permission or membership in this team. Returns 404 when the team or membership does not exist. The ETag is the parent Team revision used by If-Match on membership changes.',
   },
   {
     method: 'put',

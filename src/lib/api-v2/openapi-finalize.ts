@@ -73,6 +73,12 @@ const extraSchemas: Json = {
       }, required: ['assetId', 'contentType', 'createdAt', 'url'] } },
     }, required: ['statusPageId', 'assets'],
   },
+  StatusPageAsset: {
+    type: 'object', properties: {
+      statusPageId: { type: 'string' }, assetId: { type: 'string' }, contentType: { type: 'string' },
+      createdAt: { type: 'string', format: 'date-time' }, url: { type: 'string' },
+    }, required: ['statusPageId', 'assetId', 'contentType', 'createdAt', 'url'],
+  },
   CustomFieldDefinition: {
     type: 'object', properties: {
       id: { type: 'string' }, revision: { type: 'integer' }, name: { type: 'string' },
@@ -138,6 +144,17 @@ const extraSchemas: Json = {
         externalIssue: { type: 'object', additionalProperties: true },
       }, required: ['id', 'title', 'description', 'status', 'priority'] } },
     }, required: ['postmortemId', 'revision', 'items'],
+  },
+  PostmortemActionItem: {
+    type: 'object', properties: {
+      id: { type: 'string' }, title: { type: 'string' }, description: { type: 'string' },
+      owner: { type: 'string' }, dueDate: { type: 'string', format: 'date' },
+      status: { type: 'string', enum: ['OPEN', 'IN_PROGRESS', 'COMPLETED', 'BLOCKED'] },
+      priority: { type: 'string', enum: ['HIGH', 'MEDIUM', 'LOW'] },
+      completedAt: { type: ['string', 'null'], format: 'date-time' },
+      externalIssue: { type: 'object', additionalProperties: true },
+      postmortemId: { type: 'string' }, revision: { type: 'integer' },
+    }, required: ['id', 'title', 'description', 'status', 'priority', 'postmortemId', 'revision'],
   },
   PostmortemActionItemChange: {
     type: 'object', properties: {
