@@ -437,4 +437,6 @@ externalSecrets:
     mountPath: /mnt/opsknight-secrets
 
 # Extra workload labels, including azure.workload.identity/use when applicable.
+# Chart-owned name/instance/component/version/managed-by and helm.sh/chart keys
+# are reserved; the schema rejects attempts to override them.
 podLabels: {}

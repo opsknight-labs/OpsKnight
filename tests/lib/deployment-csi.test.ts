@@ -62,6 +62,69 @@ function expectMount(doc: any) {
   expect(new Set(pod.volumes.map((volume: any) => volume.name)).size).toBe(pod.volumes.length);
 }
 
+describe('additional Pod labels', () => {
+  const reserved = [
+    'app.kubernetes.io/name',
+    'app.kubernetes.io/instance',
+    'app.kubernetes.io/component',
+    'app.kubernetes.io/version',
+    'app.kubernetes.io/managed-by',
+    'helm.sh/chart',
+  ];
+  for (const mode of ['integrated', 'split']) {
+    for (const enabled of [false, true]) {
+      const args = [
+        '--set',
+        `runtime.mode=${mode}`,
+        '--set',
+        'image.tag=test',
+        '--set',
+        'scheduler.profile=maintenance',
+        ...(enabled ? csi : []),
+      ];
+      for (const key of reserved) {
+        it(`rejects chart-owned ${key} in ${mode} mode with CSI ${enabled}`, () => {
+          const result = spawnSync(
+            'helm',
+            [
+              'template',
+              'test',
+              chart,
+              ...args,
+              '--set-string',
+              `podLabels.${key.replaceAll('.', '\\.')}=custom-value`,
+            ],
+            { encoding: 'utf8' }
+          );
+          expect(result.status).not.toBe(0);
+          expect(result.stderr).toContain('podLabels');
+          expect(result.stderr).toContain(key);
+        });
+      }
+      it(`keeps custom identity labels and required selectors in ${mode} mode with CSI ${enabled}`, () => {
+        const docs = render([
+          ...args,
+          '--set-string',
+          'podLabels.azure\\.workload\\.identity/use=true',
+          '--set-string',
+          'podLabels.app\\.kubernetes\\.io/part-of=platform',
+        ]);
+        for (const doc of pods(docs)) {
+          const labels = doc.spec.template.metadata.labels;
+          expect(labels['azure.workload.identity/use']).toBe('true');
+          expect(labels['app.kubernetes.io/part-of']).toBe('platform');
+          if (doc.kind === 'Deployment') {
+            expect(labels).toMatchObject(doc.spec.selector.matchLabels);
+          } else if (doc.kind === 'Job') {
+            expect(labels['app.kubernetes.io/component']).toBe('migration');
+            expect(labels['helm.sh/chart']).toBeDefined();
+          }
+        }
+      });
+    }
+  }
+});
+
 describe('optional Secrets Store CSI integration', () => {
   it('keeps CSI absent by default and preserves chart-owned Secrets', () => {
     const docs = render();

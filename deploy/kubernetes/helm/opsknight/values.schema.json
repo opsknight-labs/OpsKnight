@@ -57,6 +57,19 @@
     },
     "podLabels": {
       "type": "object",
+      "description": "Additional workload labels. Chart-owned selector and metadata label keys are reserved.",
+      "propertyNames": {
+        "not": {
+          "enum": [
+            "app.kubernetes.io/name",
+            "app.kubernetes.io/instance",
+            "app.kubernetes.io/component",
+            "app.kubernetes.io/version",
+            "app.kubernetes.io/managed-by",
+            "helm.sh/chart"
+          ]
+        }
+      },
       "additionalProperties": {
         "type": "string"
       }
