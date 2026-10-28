@@ -51,10 +51,10 @@ describe('backpressure hysteresis', () => {
 
 describe('lane lifecycle', () => {
   it('runs only on roles that host workers, never on web or scheduler-only roles', () => {
-    for (const role of ['integrated', 'worker', 'general-worker']) {
+    for (const role of ['integrated', 'worker', 'general-worker', 'intelligence-worker']) {
       expect(shouldRunIntelligenceLane(role)).toBe(true);
     }
-    for (const role of ['web', 'scheduler', 'critical-worker', 'bulk-worker', 'status-projector', 'runbook-worker']) {
+    for (const role of ['web', 'scheduler', 'critical-worker', 'bulk-worker', 'status-projector', 'runbook-worker', 'ingestion-worker']) {
       expect(shouldRunIntelligenceLane(role)).toBe(false);
     }
   });

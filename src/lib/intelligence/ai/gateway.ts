@@ -2,6 +2,7 @@ import 'server-only';
 import { generateText, jsonSchema, stepCountIs, streamText, tool, type LanguageModel, type ModelMessage, type ToolSet } from 'ai';
 import { logAudit } from '@/lib/audit';
 import { logger } from '@/lib/logger';
+import { failSpan, startSpan, withSpan } from '../telemetry';
 import { safeOutboundFetch } from '@/lib/network-security';
 import { admitAiRequest, recordAiUsage } from './budget';
 import { ProviderBreakers } from './breaker';
@@ -180,15 +181,24 @@ class GatewayPort implements LanguageModelPort {
     for (const [depth, provider] of this.candidates().entries()) {
       attempts += 1;
       try {
-        const result = await generateText({
-          model: await buildModel(provider),
-          messages: toMessages(request),
-          tools: toToolSet(request.tools),
-          stopWhen: stepCountIs(clampSteps(request.maxSteps)),
-          maxOutputTokens: Math.min(request.maxOutputTokens ?? this.data.settings.maxOutputTokens, this.data.settings.maxOutputTokens),
-          abortSignal: this.signalFor(request),
-          maxRetries: 1,
-        });
+        const result = await withSpan(
+          'intelligence.ai.generate',
+          { 'ai.capability': request.context.capability, 'ai.provider.kind': provider.kind, 'ai.fallback.depth': depth },
+          async span => {
+            const generated = await generateText({
+              model: await buildModel(provider),
+              messages: toMessages(request),
+              tools: toToolSet(request.tools),
+              stopWhen: stepCountIs(clampSteps(request.maxSteps)),
+              maxOutputTokens: Math.min(request.maxOutputTokens ?? this.data.settings.maxOutputTokens, this.data.settings.maxOutputTokens),
+              abortSignal: this.signalFor(request),
+              maxRetries: 1,
+            });
+            span.setAttribute('ai.tokens.input', generated.totalUsage.inputTokens ?? 0);
+            span.setAttribute('ai.tokens.output', generated.totalUsage.outputTokens ?? 0);
+            return generated;
+          }
+        );
         breakers.recordSuccess(provider.id);
         const served: AiGenerateResult = {
           text: result.text,
@@ -227,6 +237,11 @@ class GatewayPort implements LanguageModelPort {
 
     for (const [depth, provider] of candidates.entries()) {
       let emitted = false;
+      const span = startSpan('intelligence.ai.stream', {
+        'ai.capability': request.context.capability,
+        'ai.provider.kind': provider.kind,
+        'ai.fallback.depth': depth,
+      });
       try {
         const run = streamText({
           model: await buildModel(provider),
@@ -256,11 +271,14 @@ class GatewayPort implements LanguageModelPort {
           usage: { inputTokens: totalUsage.inputTokens ?? 0, outputTokens: totalUsage.outputTokens ?? 0 },
           served: { providerId: provider.id, model: provider.model, fallbackDepth: depth },
         };
+        span.setAttribute('ai.tokens.input', result.usage.inputTokens);
+        span.setAttribute('ai.tokens.output', result.usage.outputTokens);
         for (const call of result.toolCalls) yield { type: 'tool-call', call };
         await this.finish(request, result);
         yield { type: 'finish', result };
         return;
       } catch (error) {
+        failSpan(span, error);
         if (request.context.signal?.aborted) {
           yield { type: 'error', message: 'Request cancelled', retryable: false };
           return;
@@ -272,6 +290,8 @@ class GatewayPort implements LanguageModelPort {
           yield { type: 'error', message: 'The response was interrupted', retryable: true };
           return;
         }
+      } finally {
+        span.end();
       }
     }
     yield { type: 'error', message: 'AI is temporarily unavailable', retryable: true };

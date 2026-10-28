@@ -1,0 +1,147 @@
+import Link from 'next/link';
+import { SettingsSection } from '@/components/settings/layout/SettingsSection';
+import { ApplySuggestionForm } from '@/components/settings/InsightsForms';
+import { Badge } from '@/components/ui/shadcn/badge';
+import { logger } from '@/lib/logger';
+import { assertCapability, getCurrentAuthorizationActor } from '@/lib/rbac';
+import { CAPABILITIES, hasCapability, type AppRole } from '@/lib/authorization';
+import { MIN_FEEDBACK_FOR_SUGGESTION } from '@/lib/intelligence/insights/calibration';
+import { getInsights, RECURRING_MIN_OCCURRENCES, RECURRING_WINDOW_DAYS } from '@/lib/intelligence/insights/service';
+import { listPolicyVersions } from '@/lib/intelligence/settings/service';
+
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
+async function load() {
+  try {
+    const actor = await getCurrentAuthorizationActor();
+    const [insights, versions] = await Promise.all([getInsights(actor), listPolicyVersions({}, { limit: 1 })]);
+    return { insights, headVersion: versions.headVersion };
+  } catch (error) {
+    logger.warn('[Intelligence] Insights could not load', { error: error instanceof Error ? error.message : String(error) });
+    return null;
+  }
+}
+
+export default async function IntelligenceInsightsPage() {
+  const user = await assertCapability(CAPABILITIES.INTELLIGENCE_READ);
+  const canManage = hasCapability(user.role as AppRole, CAPABILITIES.INTELLIGENCE_MANAGE);
+  const loaded = await load();
+  const insights = loaded?.insights ?? null;
+
+  return (
+    <div className="space-y-6">
+      <header className="space-y-1">
+        <Link href="/settings/intelligence" className="text-xs text-muted-foreground hover:underline">
+          ← Intelligence
+        </Link>
+        <h1 className="text-2xl font-semibold">Insights</h1>
+        <p className="text-sm text-muted-foreground">
+          What the incident history says about repeated problems and how useful the suggestions are. Flags only: nothing is
+          changed, muted or paged, and any suggested change is applied only when you choose to.
+        </p>
+      </header>
+
+      {!insights ? (
+        <p className="text-sm text-muted-foreground">Unavailable.</p>
+      ) : (
+        <>
+          <SettingsSection
+            title="Recurring problems"
+            description={`The same masked incident title at least ${RECURRING_MIN_OCCURRENCES} times on at least 2 days in the last ${RECURRING_WINDOW_DAYS} days.`}
+          >
+            {insights.recurring.length === 0 ? (
+              <p className="py-3 text-sm text-muted-foreground">No recurring problems found.</p>
+            ) : (
+              <ul className="divide-y divide-border">
+                {insights.recurring.map(item => (
+                  <li key={`${item.serviceId}:${item.template}`} className="flex flex-wrap items-center justify-between gap-2 py-3">
+                    <div className="min-w-0 space-y-1">
+                      <Link href={`/incidents/${item.latestIncidentId}`} className="block truncate text-sm font-medium hover:underline">
+                        {item.template}
+                      </Link>
+                      <p className="text-xs text-muted-foreground">
+                        {item.serviceName} · {item.occurrences} times over {item.distinctDays} days · last{' '}
+                        {item.lastSeenAt.toISOString().slice(0, 10)}
+                      </p>
+                    </div>
+                    {!item.hasRunbook && <Badge variant="secondary">No runbook attached</Badge>}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </SettingsSection>
+
+          <SettingsSection title="Unusual volume" description="Services with at least 5 incidents this week and 3 times their recent weekly norm.">
+            {insights.anomalies.length === 0 ? (
+              <p className="py-3 text-sm text-muted-foreground">Nothing unusual.</p>
+            ) : (
+              <ul className="divide-y divide-border">
+                {insights.anomalies.map(item => (
+                  <li key={item.serviceId} className="flex flex-wrap items-center justify-between gap-2 py-3">
+                    <div>
+                      <p className="text-sm font-medium">{item.serviceName}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {item.recent} incidents this week vs about {item.baselineWeekly} per week before
+                      </p>
+                    </div>
+                    <Badge variant="outline">{item.ratio}× normal</Badge>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </SettingsSection>
+
+          {insights.calibration && (
+            <SettingsSection
+              title="Suggestion quality"
+              description="How responders rated similar-incident suggestions, by match score."
+            >
+              <div className="space-y-4 py-3">
+                <p className="text-sm">
+                  {insights.calibration.votes === 0
+                    ? 'No ratings yet.'
+                    : `${insights.calibration.helpful} of ${insights.calibration.votes} ratings were helpful.`}
+                </p>
+                {insights.calibration.buckets.length > 0 && (
+                  <ul className="space-y-1 text-sm">
+                    {insights.calibration.buckets.map(bucket => {
+                      const total = bucket.helpful + bucket.notHelpful;
+                      return (
+                        <li key={bucket.from} className="flex justify-between gap-4">
+                          <span>
+                            Score {bucket.from.toFixed(1)}–{bucket.to.toFixed(1)}
+                          </span>
+                          <span className="text-muted-foreground">
+                            {Math.round((bucket.helpful / total) * 100)}% helpful ({total})
+                          </span>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+                {insights.calibration.suggestion ? (
+                  <div className="space-y-2 rounded-md border border-border p-3">
+                    <p className="text-sm">
+                      Suggestions scoring below {insights.calibration.suggestion.suggested} are mostly unhelpful. Raising the minimum
+                      similarity from {insights.calibration.suggestion.current} to {insights.calibration.suggestion.suggested} keeps{' '}
+                      {insights.calibration.suggestion.votes} rated suggestions ({Math.round(insights.calibration.suggestion.helpfulRate * 100)}% helpful)
+                      and hides {insights.calibration.suggestion.hiddenVotes}.
+                    </p>
+                    {canManage && loaded && (
+                      <ApplySuggestionForm suggested={insights.calibration.suggestion.suggested} expectedHeadVersion={loaded.headVersion} />
+                    )}
+                  </div>
+                ) : (
+                  <p className="text-xs text-muted-foreground">
+                    A threshold suggestion needs at least {MIN_FEEDBACK_FOR_SUGGESTION} ratings and a clear pattern. None right now.
+                  </p>
+                )}
+              </div>
+            </SettingsSection>
+          )}
+        </>
+      )}
+    </div>
+  );
+}

@@ -227,18 +227,63 @@ port, so moving to a newer SDK later is a one-adapter change.
   answer length and on model/tool round trips. Credential-shaped text is redacted from everything sent
   to a model, including tool results.
 
+## Per-service policies
+
+Settings → Intelligence → Per-service policies shows, for each service, the mode that applies and
+whether it comes from the service's own policy or the global one. An administrator can create an override
+(it starts from what currently applies), publish new versions of it, or return the service to the global
+policy. Turning an override off sets `IntelligencePolicy.overrideActive = false`; it never deletes history,
+and publishing or rolling back re-activates it. The list is built in a fixed number of queries for a
+bounded page of services, filtered by the viewer's own service visibility.
+
+## Insights and adaptive suggestions
+
+Settings → Intelligence → Insights is computed on demand from bounded queries, so there is no background
+job to fall behind. Everything is flag-only and a person decides what to do.
+
+- **Recurring problems.** The same masked incident title at least three times on at least two days in
+  30 days, per service, with a flag when the service has no runbook attached.
+- **Unusual volume.** A service with at least five incidents this week and three times its own recent
+  weekly norm (a floor of one per week keeps quiet services from flapping).
+- **Suggestion quality.** Responder thumbs on similar-incident suggestions, bucketed by match score.
+  When there are at least 20 ratings and low-scoring suggestions are mostly unhelpful, it proposes a
+  higher minimum similarity, judged by the lower bound of the Wilson interval so a few thumbs-up cannot
+  justify a change. It never proposes lowering the threshold. Applying it is a button that publishes a new
+  audited global policy version; the suggestion is recomputed on the server and must match what was
+  shown, so a stale page or crafted request cannot set an arbitrary value. Aggregate feedback is visible
+  only to administrators.
+
+## REST API
+
+`GET /api/v2/incidents/{id}/intelligence` returns similar incidents, related incidents, possible changes,
+upstream incidents and runbook suggestions. It uses the existing `incidents:read` scope and the same
+actor-scoped views as the UI, so it cannot reveal anything the credential could not read; possible
+changes additionally need `services:read` and runbook suggestions need `runbooks:read`. The response is
+marked advisory and uncalibrated, and is empty in shadow mode. No MCP tools are added here; native MCP
+is delivered separately.
+
+## Deployment
+
+The lane runs in the `integrated`, `worker` and `general-worker` roles. A dedicated
+`intelligence-worker` role runs only the lane (no scheduler, job worker or runbook worker), so analysis
+can be scaled, resourced and failed independently of paging. Its connection pool can be sized with
+`DATABASE_POOL_SIZE_INTELLIGENCE_WORKER`, like the other roles; that is process-level infrastructure
+configuration, while every behavioural setting remains in the UI.
+
 ## Observability
 
 `/api/health?mode=readiness` includes an `intelligence` check that is `healthy`, `degraded` (paused to
 protect paging, or no recent cycle) or `disabled`, and is never `unhealthy`, so an optional advisory
 lane can never take a replica out of rotation. Five gauges are added to the metrics scrape: ready
-queue depth, oldest ready age, dead letters, lane paused, and seconds since the last cycle.
+queue depth, oldest ready age, dead letters, lane paused, and seconds since the last cycle. Work items and
+AI calls emit OpenTelemetry spans (`intelligence.work`, `intelligence.ai.generate`,
+`intelligence.ai.stream`) through the OpenTelemetry API, which is a no-op until a tracer provider is
+registered. Span attributes are bounded categories and token counts; never incident ids, prompts,
+answers or error messages.
 
 ## Not yet implemented
 
-Automatic grouping, any delay before paging, write actions from the assistant, a dedicated
-intelligence database pool and worker role, REST v2 endpoints and API scopes for intelligence data,
-embedding-based search, and adaptive learning (anomaly baselines, recurring-problem detection and
-approved policy suggestions) are future stages. MCP exposure is being delivered by the native MCP
-work, not here. Each will be introduced behind its own certification gate and will not change paging
-behaviour until that gate has passed.
+Automatic grouping, any delay before paging, write actions from the assistant, a weekly digest,
+embedding-based search, and learned correlation rules are future stages. MCP exposure is delivered by the
+native MCP work, not here. Each will be introduced behind its own certification gate and will not change
+paging behaviour until that gate has passed.

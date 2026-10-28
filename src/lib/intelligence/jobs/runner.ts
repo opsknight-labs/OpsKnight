@@ -1,5 +1,6 @@
 import 'server-only';
 import { logger } from '@/lib/logger';
+import { withSpan } from '../telemetry';
 import { getIntelligenceSettings, type IntelligenceSettingsView } from '../settings/service';
 import { evaluatePause, getCriticalBacklogLagMs, type PauseState } from './backpressure';
 import { withDbBudget } from './db-budget';
@@ -133,7 +134,9 @@ async function processItem(
   try {
     const handler = handlers[item.kind as WorkKind];
     if (!handler) throw new Error(`No handler registered for work kind ${item.kind}`);
-    await runWithTimeout(signal => handler(item, { settings, signal }), settings.maxJobMs);
+    await withSpan('intelligence.work', { 'work.kind': item.kind, 'work.attempt': item.attempts }, () =>
+      runWithTimeout(signal => handler(item, { settings, signal }), settings.maxJobMs)
+    );
     return (await completeWorkItem(item)) === 'requeued' ? 'requeued' : 'completed';
   } catch (error) {
     await failWorkItem(item, error).catch(releaseError =>
@@ -299,10 +302,10 @@ const BUSY_POLL_MS = 250;
 const DISABLED_POLL_MS = 30_000;
 
 /**
- * Roles that host the lane. It shares the general worker's place in the topology; a dedicated
- * `intelligence-worker` role is a separate, optional deployment decision.
+ * Roles that host the lane. It shares the general worker's place in the topology; the dedicated
+ * `intelligence-worker` role runs only this lane, so analysis can scale and fail apart from paging.
  */
-const LANE_ROLES: ReadonlySet<string> = new Set(['integrated', 'worker', 'general-worker']);
+const LANE_ROLES: ReadonlySet<string> = new Set(['integrated', 'worker', 'general-worker', 'intelligence-worker']);
 
 export function shouldRunIntelligenceLane(role: string): boolean {
   return LANE_ROLES.has(role);

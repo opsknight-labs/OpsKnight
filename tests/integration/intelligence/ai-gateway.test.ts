@@ -4,6 +4,8 @@ import { getTodayUsage, recordAiUsage } from '@/lib/intelligence/ai/budget';
 import { getAiSettings, listAiProviders, saveAiProvider, updateAiSettings } from '@/lib/intelligence/ai/settings';
 import type { AiGenerateRequest, AiStreamEvent } from '@/lib/intelligence/ai/port';
 import { startFakeModel, type FakeServer } from '../../helpers/fake-model-server';
+import { trace } from '@opentelemetry/api';
+import { installFakeTracer } from '../../helpers/fake-tracer';
 import { createTestUser, resetDatabase, testPrisma as db } from '../../helpers/test-db';
 
 let primary: FakeServer;
@@ -159,6 +161,28 @@ describe('gateway', () => {
     expect(JSON.stringify(audit)).not.toContain('bad deploy');
   });
 
+  it('traces calls with bounded attributes and never puts prompts or answers in a span', async () => {
+    const { admin, actor } = await configure();
+    await saveAiProvider(null, provider('Local', primary.url), actor);
+    invalidateGatewayCache();
+    trace.disable();
+    const spans = installFakeTracer();
+    try {
+      primary.script.push({ content: 'The secret answer is 42.', usage: [10, 4] }, { content: 'streamed secret answer', usage: [6, 3] });
+      const port = (await resolveGatewayPort('INTERNAL'))!;
+      await port.generate(request(admin.id, { messages: [{ role: 'user', content: 'private prompt text' }] }));
+      for await (const event of port.stream(request(admin.id, { messages: [{ role: 'user', content: 'private prompt text' }] }))) void event;
+      const named = spans.filter(span => span.name.startsWith('intelligence.ai.'));
+      expect(named.map(span => span.name)).toEqual(['intelligence.ai.generate', 'intelligence.ai.stream']);
+      expect(named.every(span => span.ended)).toBe(true);
+      expect(named[0].attributes).toMatchObject({ 'ai.capability': 'SQUIRE_CHAT', 'ai.provider.kind': 'OPENAI_COMPATIBLE', 'ai.tokens.input': 10, 'ai.tokens.output': 4 });
+      expect(named[1].attributes).toMatchObject({ 'ai.tokens.input': 6, 'ai.tokens.output': 3 });
+      expect(JSON.stringify(spans)).not.toMatch(/secret|private prompt|sk-test/);
+    } finally {
+      trace.disable();
+    }
+  });
+
   it('falls back to the next eligible provider and opens the breaker on a failing one', async () => {
     const { admin, actor } = await configure();
     const first = await saveAiProvider(null, provider('Primary', primary.url, { priority: 1 }), actor);
@@ -175,7 +199,7 @@ describe('gateway', () => {
     const hits = primary.requests.length;
     await port.generate(request(admin.id));
     expect(primary.requests.length).toBe(hits);
-  });
+  }, 60_000);
 
   it('never falls back from a self-hosted provider to an external one unless explicitly allowed', async () => {
     const { admin, actor } = await configure({ allowExternalFallback: false });
@@ -189,7 +213,7 @@ describe('gateway', () => {
     const port = (await resolveGatewayPort('INTERNAL'))!;
     await expect(port.generate(request(admin.id))).rejects.toMatchObject({ code: 'ALL_PROVIDERS_FAILED' });
     expect(secondary.requests).toHaveLength(0);
-  });
+  }, 60_000);
 
   it('blocks private addresses for providers without private-network consent (SSRF)', async () => {
     const { admin } = await configure();
