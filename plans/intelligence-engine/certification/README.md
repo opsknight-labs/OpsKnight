@@ -34,16 +34,18 @@ See `docs/architecture/intelligence.md`.
 
 ## CI evidence on the pull request
 
-Final state on PR #928 head `32f217c2b` (base `46563307e`, #930). Earlier runs on `c7d656098` and `6502e56fb` are
-noted where they explain a change.
+Final state on PR #928 head `719a143e6` (base `66b9b3878`, #932): 53 checks pass, one fails (Service automation,
+identical on `main`). Earlier runs on `c7d656098`, `6502e56fb` and `32f217c2b` are noted where they explain a change.
 
 | Check | Result | Assessment |
 |---|---|---|
 | Changed-source ESLint gate | Failed on `c7d656098`, **passes now** | One `security/detect-object-injection` warning in `tests/components/SimilarIncidentFeedback.test.tsx`. Ours; fixed. Earlier lint runs had covered only recently edited files; the whole branch diff is now linted |
 | Database integration, shards 1/2 and 2/2 | Shard 1 failed on `c7d656098`, **both pass now** | One test: `service-policies` compared ordering with JavaScript locale order while the product sorts in PostgreSQL, whose collation differs between CI and a local container. Ours; the test now compares with the database's own order |
+| Auth browser E2E, which now includes `intelligence-ui.spec.ts` | **Pass** | All five intelligence browser tests ran and passed; the navigation specs that run after them in the same job also passed, so the spec leaves no state behind |
+| Prometheus rules (`promtool check` and `promtool test`, including `intelligence.test.yml`) | **Pass** | 25 rules valid; all three alert test files pass |
 | Fast validation, application build, auth, mobile, live-dashboard and emergency-recovery browser E2E, ingestion durability, multi-replica failover, idle-fleet capacity, Swarm convergence, CodeQL, SCA, secret scan, ESLint security | **Pass** | |
 | Runbook authoring and browser matrix | Failed twice on earlier commits, **passes now (both runs)** | The failing test was a different Firefox-only spec each time (`runbooks-ui` rule wizard, then `team-administration` `page.reload: NS_BINDING_ABORTED`). The `push` run of the same commit passed both times and `main` passes. Classified as a Firefox flake from that pattern; this PR does not touch Runbook or Teams UI |
-| Service automation validation (browser matrix) | **Fails: 75 failed / 21 passed** | **Pre-existing on `main`.** The same workflow on `main` commit `e86677e31`, which contains no intelligence code, fails with the *identical set of 75 tests* (compared test by test, including the `automation-release-certification` specs). Not caused by this PR, not fixed by it, and still a blocker for that workflow on `main` |
+| Service automation validation (browser matrix) | **Fails: 75 failed / 21 passed** | **Pre-existing on `main`.** The same workflow on `main` commit `e86677e31`, which contains no intelligence code, fails with the *identical set of 75 tests* (compared test by test, including the `automation-release-certification` specs). Re-checked on `719a143e6`: still identical. Not caused by this PR, not fixed by it, and still a blocker for that workflow on `main` |
 
 The Service automation failure is open work on `main`. This ledger neither fixes nor waives it.
 
