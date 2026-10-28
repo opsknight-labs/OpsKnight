@@ -206,7 +206,12 @@ async function releaseFailedOperation(
 export async function requeueMicrosoftTeamsNotification(
   notificationId: string,
   /** Runs in the same transaction as the requeue, only when the requeue succeeded. */
-  inTx?: (tx: Prisma.TransactionClient) => Promise<void>
+  inTx?: (tx: Prisma.TransactionClient) => Promise<void>,
+  /**
+   * Runs first inside the requeue transaction. Its failure is rethrown rather than reported as a
+   * lost requeue, and a requeue that loses its compare-and-set rolls back what it wrote.
+   */
+  beforeWrite?: (tx: Prisma.TransactionClient) => Promise<void>
 ): Promise<boolean> {
   const notif = await prisma.notification.findFirst({
     where: {
@@ -248,8 +253,17 @@ export async function requeueMicrosoftTeamsNotification(
   const maxAttempts = Math.min(20, Math.max(notif.maxAttempts, notif.attempts + 1));
   const now = new Date();
 
+  let beforeWriteFailure: { error: unknown } | undefined;
   const requeued = await prisma
     .$transaction(async tx => {
+      if (beforeWrite) {
+        try {
+          await beforeWrite(tx);
+        } catch (error) {
+          beforeWriteFailure = { error };
+          throw error;
+        }
+      }
       const opUpdated = await tx.externalOperation.updateMany({
         where: { id: op!.id, status: 'FAILED' },
         data: {
@@ -260,7 +274,7 @@ export async function requeueMicrosoftTeamsNotification(
           lastError: null,
         },
       });
-      if (opUpdated.count === 0) return false;
+      if (opUpdated.count === 0) throw new Error('External operation is no longer FAILED');
 
       const notifUpdated = await tx.notification.updateMany({
         where: { id: notif.id, status: 'FAILED' },
@@ -290,7 +304,10 @@ export async function requeueMicrosoftTeamsNotification(
       if (inTx) await inTx(tx);
       return true;
     })
-    .catch(() => false);
+    .catch(() => {
+      if (beforeWriteFailure) throw beforeWriteFailure.error;
+      return false;
+    });
 
   return requeued;
 }

@@ -3354,7 +3354,12 @@ export async function getNextCentralNotificationAt(
 export async function requeueCentralNotification(
   notificationId: string,
   /** Runs in the same transaction as the requeue, only when the requeue succeeded. */
-  inTx?: (tx: Prisma.TransactionClient) => Promise<void>
+  inTx?: (tx: Prisma.TransactionClient) => Promise<void>,
+  /**
+   * Runs first inside the requeue transaction. A requeue that loses its compare-and-set rolls
+   * back, so nothing this writes outlives a requeue that did not happen.
+   */
+  beforeWrite?: (tx: Prisma.TransactionClient) => Promise<void>
 ): Promise<boolean> {
   const probe = await prisma.notification.findUnique({
     where: { id: notificationId },
@@ -3362,7 +3367,7 @@ export async function requeueCentralNotification(
   });
   if (probe?.channel === 'MICROSOFT_TEAMS') {
     const { requeueMicrosoftTeamsNotification } = await import('./microsoft-teams/delivery');
-    return requeueMicrosoftTeamsNotification(notificationId, inTx);
+    return requeueMicrosoftTeamsNotification(notificationId, inTx, beforeWrite);
   }
 
   const notification = await prisma.notification.findFirst({
@@ -3376,28 +3381,35 @@ export async function requeueCentralNotification(
   });
   if (!notification || notification.attempts >= 20) return false;
   const maxAttempts = Math.min(20, Math.max(notification.maxAttempts, notification.attempts + 1));
-  return prisma.$transaction(async tx => {
-    const updated = await tx.notification.updateMany({
-      where: {
-        id: notificationId,
-        payloadEncrypted: { not: null },
-        status: 'FAILED',
-        attempts: notification.attempts,
-        maxAttempts: notification.maxAttempts,
-      },
-      data: {
-        status: 'PENDING',
-        maxAttempts,
-        failedAt: null,
-        errorMsg: null,
-        lastAttemptAt: null,
-        nextAttemptAt: new Date(),
-      },
+  const notRequeued = new Error('Notification is no longer retryable');
+  return prisma
+    .$transaction(async tx => {
+      if (beforeWrite) await beforeWrite(tx);
+      const updated = await tx.notification.updateMany({
+        where: {
+          id: notificationId,
+          payloadEncrypted: { not: null },
+          status: 'FAILED',
+          attempts: notification.attempts,
+          maxAttempts: notification.maxAttempts,
+        },
+        data: {
+          status: 'PENDING',
+          maxAttempts,
+          failedAt: null,
+          errorMsg: null,
+          lastAttemptAt: null,
+          nextAttemptAt: new Date(),
+        },
+      });
+      if (updated.count === 0) throw notRequeued;
+      if (inTx) await inTx(tx);
+      return true;
+    })
+    .catch(error => {
+      if (error === notRequeued) return false;
+      throw error;
     });
-    if (updated.count === 0) return false;
-    if (inTx) await inTx(tx);
-    return true;
-  });
 }
 
 export async function cancelCentralNotification(

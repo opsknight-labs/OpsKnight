@@ -16,6 +16,7 @@ import { scheduleReadWhere } from '@/lib/authorization-filters';
 import { createScheduleOverrideMutation } from '@/lib/schedules/mutations';
 import { AppError } from '@/lib/errors';
 import { withV2Observability } from '@/lib/api-v2/observability';
+import { internalV2MutationGuard } from '@/lib/api-v2/internal-context';
 import { decodeCursor, encodeCursor } from '@/lib/api-v2/pagination';
 
 export const GET = withV2Observability(async function GET(
@@ -160,7 +161,11 @@ export const POST = withV2Observability(async function POST(
             endDate: override.end.toISOString(),
           },
           tx,
-        })
+        }),
+      // MCP approval recheck inside the change's own transaction; a no-op for REST callers.
+      async tx => {
+        await internalV2MutationGuard()?.(tx);
+      }
     );
 
     const dto = {

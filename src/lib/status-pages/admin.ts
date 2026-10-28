@@ -49,9 +49,12 @@ export async function createStatusPage(
   afterCreate?: (
     tx: Prisma.TransactionClient,
     page: Awaited<ReturnType<Prisma.TransactionClient['statusPage']['create']>>
-  ) => Promise<void>
+  ) => Promise<void>,
+  /** Runs first inside the creation transaction, before the lifecycle lock and any write. */
+  beforeWrite?: (tx: Prisma.TransactionClient) => Promise<void>
 ) {
   return prisma.$transaction(async tx => {
+    if (beforeWrite) await beforeWrite(tx);
     await lockLifecycle(tx);
     const count = await tx.statusPage.count();
 
