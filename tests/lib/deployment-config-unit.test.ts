@@ -950,9 +950,12 @@ describe('deployment configuration invariants', () => {
     });
     expect(result.breakdown.ingestionWorker.total).toBe(20);
     expect(result.directWorkerConnections).toBe(43);
-    expect(result.totalDemand).toBe(68);
+    // The isolated MCP pool is real database demand and is budgeted next to ingestion.
+    expect(result.mcpConnections).toBe(2);
+    expect(result.totalDemand).toBe(result.webConnections + 43 + result.mcpConnections + 10);
+    expect(result.totalDemand).toBe(70);
     expect(result.safe).toBe(false);
-    expect(result.headroom).toBe(-8);
+    expect(result.headroom).toBe(-10);
     expect(
       calculateRuntimeCapacity({
         INGESTION_WORKER_REPLICAS: '2',
@@ -964,7 +967,7 @@ describe('deployment configuration invariants', () => {
         OPSKNIGHT_RUNTIME_MODE: 'integrated',
         INGESTION_WORKER_REPLICAS: '2',
       }).totalDemand
-    ).toBe(31);
+    ).toBe(33); // previous total plus the two isolated MCP connections
     expect(() => calculateRuntimeCapacity({ INGESTION_WORKER_REPLICAS: '-1' })).toThrow();
     expect(() => calculateRuntimeCapacity({ DATABASE_CONNECTION_RESERVE: 'oops' })).toThrow();
   });
