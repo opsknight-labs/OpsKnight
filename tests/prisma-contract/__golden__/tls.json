@@ -1,0 +1,166 @@
+{
+  "plain.default": {
+    "ok": true,
+    "value": {
+      "ssl": false
+    }
+  },
+  "plain.disable": {
+    "ok": true,
+    "value": {
+      "ssl": false
+    }
+  },
+  "plain.prefer": {
+    "ok": true,
+    "value": {
+      "ssl": false
+    }
+  },
+  "plain.require": {
+    "ok": false,
+    "error": {
+      "sqlState": null,
+      "retryable": false,
+      "httpMapping": "DATABASE_UNAVAILABLE",
+      "escalation": "RETRYABLE_FAILURE",
+      "uniqueFields": null
+    }
+  },
+  "plain.verifyFull": {
+    "ok": true,
+    "value": {
+      "ssl": false
+    }
+  },
+  "tls.allow": {
+    "ok": true,
+    "value": {
+      "ssl": true
+    }
+  },
+  "tls.default": {
+    "ok": true,
+    "value": {
+      "ssl": true
+    }
+  },
+  "tls.disable": {
+    "ok": false,
+    "error": {
+      "sqlState": null,
+      "retryable": false,
+      "httpMapping": "DATABASE_UNAVAILABLE",
+      "escalation": "TERMINAL_FAILURE",
+      "uniqueFields": null
+    }
+  },
+  "tls.prefer": {
+    "ok": true,
+    "value": {
+      "ssl": true
+    }
+  },
+  "tls.require": {
+    "ok": true,
+    "value": {
+      "ssl": true
+    }
+  },
+  "tls.requireAcceptInvalid": {
+    "ok": true,
+    "value": {
+      "ssl": true
+    }
+  },
+  "tls.requireTrustedCaStrict": {
+    "ok": false,
+    "error": {
+      "sqlState": null,
+      "retryable": false,
+      "httpMapping": "DATABASE_UNAVAILABLE",
+      "escalation": "TERMINAL_FAILURE",
+      "uniqueFields": null
+    }
+  },
+  "tls.requireTrustedCaStrictWrongHost": {
+    "ok": false,
+    "error": {
+      "sqlState": null,
+      "retryable": false,
+      "httpMapping": "DATABASE_UNAVAILABLE",
+      "escalation": "RETRYABLE_FAILURE",
+      "uniqueFields": null
+    }
+  },
+  "tls.requireUntrustedCaStrict": {
+    "ok": false,
+    "error": {
+      "sqlState": null,
+      "retryable": false,
+      "httpMapping": "DATABASE_UNAVAILABLE",
+      "escalation": "TERMINAL_FAILURE",
+      "uniqueFields": null
+    }
+  },
+  "tls.requireWithTrustedRootCert": {
+    "ok": true,
+    "value": {
+      "ssl": true
+    }
+  },
+  "tls.requireWithUntrustedRootCert": {
+    "ok": true,
+    "value": {
+      "ssl": true
+    }
+  },
+  "tls.unknownMode": {
+    "ok": true,
+    "value": {
+      "ssl": true
+    }
+  },
+  "tls.verifyCaTrustedCa": {
+    "ok": true,
+    "value": {
+      "ssl": true
+    }
+  },
+  "tls.verifyCaUntrustedCa": {
+    "ok": true,
+    "value": {
+      "ssl": true
+    }
+  },
+  "tls.verifyCaWrongHost": {
+    "ok": true,
+    "value": {
+      "ssl": true
+    }
+  },
+  "tls.verifyFullNoRootCert": {
+    "ok": true,
+    "value": {
+      "ssl": true
+    }
+  },
+  "tls.verifyFullTrustedCa": {
+    "ok": true,
+    "value": {
+      "ssl": true
+    }
+  },
+  "tls.verifyFullUntrustedCa": {
+    "ok": true,
+    "value": {
+      "ssl": true
+    }
+  },
+  "tls.verifyFullWrongHost": {
+    "ok": true,
+    "value": {
+      "ssl": true
+    }
+  }
+}

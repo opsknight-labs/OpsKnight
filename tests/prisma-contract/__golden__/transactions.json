@@ -1,0 +1,74 @@
+{
+  "advisory.exclusive": {
+    "whileHeld": false,
+    "afterCommit": true
+  },
+  "advisory.shared": {
+    "bothSharedHeld": true,
+    "exclusiveWhileShared": false
+  },
+  "advisory.waits": {
+    "waiter": {
+      "ok": true,
+      "value": "ok"
+    },
+    "waitedAtLeast200ms": true
+  },
+  "atomic.batchResults": {
+    "ok": true,
+    "value": [
+      {
+        "t": "array",
+        "v": [
+          {
+            "t": "object",
+            "v": {
+              "v": 1
+            }
+          }
+        ]
+      },
+      {
+        "t": "number",
+        "v": 6
+      },
+      {
+        "t": "number",
+        "v": 6
+      }
+    ]
+  },
+  "atomic.batchRollback": {
+    "threw": true,
+    "persisted": 0
+  },
+  "atomic.interactiveRollback": {
+    "threw": true,
+    "persisted": 0
+  },
+  "claims.skipLocked": {
+    "sizes": [3, 3],
+    "overlap": 0,
+    "claimedRows": 6
+  },
+  "isolation.ReadCommitted": {
+    "ok": true,
+    "value": "read committed"
+  },
+  "isolation.RepeatableRead": {
+    "ok": true,
+    "value": "repeatable read"
+  },
+  "isolation.Serializable": {
+    "ok": true,
+    "value": "serializable"
+  },
+  "isolation.batchSerializable": {
+    "ok": true,
+    "value": "read committed"
+  },
+  "isolation.default": {
+    "ok": true,
+    "value": "read committed"
+  }
+}

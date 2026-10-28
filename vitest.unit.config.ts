@@ -16,6 +16,7 @@ export default mergeConfig(
             exclude: [
               'tests/integration/**',
               'tests/ingestion/**',
+              'tests/prisma-contract/**',
               'tests/e2e/**',
               'tests/docs/journeys/**',
               'tests/readme/**',
@@ -43,6 +44,7 @@ export default mergeConfig(
             exclude: [
               'tests/integration/**',
               'tests/ingestion/**',
+              'tests/prisma-contract/**',
               'tests/e2e/**',
               'tests/docs/journeys/**',
               'tests/readme/**',

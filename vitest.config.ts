@@ -28,6 +28,7 @@ export default defineConfig({
       'tests/e2e/**',
       'tests/evals/**',
       'tests/ingestion/**',
+      'tests/prisma-contract/**',
       'tests/docs/journeys/**',
       'tests/readme/**',
     ],

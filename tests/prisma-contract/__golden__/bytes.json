@@ -1,0 +1,39 @@
+{
+  "app.artifactSanitizer": {
+    "ok": true,
+    "value": {
+      "truncated": false,
+      "isBuffer": true
+    }
+  },
+  "app.logoValidationOnModelBytes": {
+    "ok": true,
+    "value": true
+  },
+  "app.logoValidationOnRawBytes": {
+    "ok": true,
+    "value": true
+  },
+  "app.uint8ArrayCopyIsByteExact": true,
+  "model.byteLength": 70,
+  "model.emptyWrite": {
+    "t": "bytes",
+    "ctor": "Buffer",
+    "v": ""
+  },
+  "model.read": {
+    "t": "bytes",
+    "ctor": "Buffer",
+    "v": "89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4890000000d4944415478da6364f8cf500f00038601805a347d6b0000000049454e44ae426082"
+  },
+  "model.uint8ArrayWrite": {
+    "t": "bytes",
+    "ctor": "Buffer",
+    "v": "000102feff"
+  },
+  "raw.read": {
+    "t": "bytes",
+    "ctor": "Buffer",
+    "v": "89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4890000000d4944415478da6364f8cf500f00038601805a347d6b0000000049454e44ae426082"
+  }
+}

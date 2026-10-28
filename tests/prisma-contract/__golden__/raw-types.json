@@ -1,0 +1,1113 @@
+{
+  "executeRaw.count": {
+    "ok": true,
+    "value": {
+      "t": "number",
+      "v": 0
+    }
+  },
+  "executeRaw.multiStatement": {
+    "ok": false,
+    "error": {
+      "sqlState": "42601",
+      "retryable": false,
+      "httpMapping": "unmapped",
+      "escalation": "TERMINAL_FAILURE",
+      "uniqueFields": null
+    }
+  },
+  "queryRawUnsafe.advisoryVoid": {
+    "ok": false,
+    "error": {
+      "sqlState": null,
+      "retryable": false,
+      "httpMapping": "unmapped",
+      "escalation": "TERMINAL_FAILURE",
+      "uniqueFields": null
+    }
+  },
+  "queryRawUnsafe.advisoryVoidText": {
+    "ok": true,
+    "value": {
+      "t": "string",
+      "v": ""
+    }
+  },
+  "queryRawUnsafe.avgInt": {
+    "ok": true,
+    "value": {
+      "t": "Decimal",
+      "v": "2.5"
+    }
+  },
+  "queryRawUnsafe.bool": {
+    "ok": true,
+    "value": {
+      "t": "boolean",
+      "v": true
+    }
+  },
+  "queryRawUnsafe.bytea": {
+    "ok": true,
+    "value": {
+      "t": "bytes",
+      "ctor": "Buffer",
+      "v": "deadbeef"
+    }
+  },
+  "queryRawUnsafe.byteaEmpty": {
+    "ok": true,
+    "value": {
+      "t": "bytes",
+      "ctor": "Buffer",
+      "v": ""
+    }
+  },
+  "queryRawUnsafe.char": {
+    "ok": true,
+    "value": {
+      "t": "string",
+      "v": "ab "
+    }
+  },
+  "queryRawUnsafe.count": {
+    "ok": true,
+    "value": {
+      "t": "bigint",
+      "v": "3"
+    }
+  },
+  "queryRawUnsafe.date": {
+    "ok": true,
+    "value": {
+      "t": "Date",
+      "v": "2026-10-28T00:00:00.000Z"
+    }
+  },
+  "queryRawUnsafe.decimalLiteral": {
+    "ok": true,
+    "value": {
+      "t": "Decimal",
+      "v": "4.2"
+    }
+  },
+  "queryRawUnsafe.enumArray": {
+    "ok": true,
+    "value": {
+      "t": "array",
+      "v": [
+        {
+          "t": "string",
+          "v": "ADMIN"
+        },
+        {
+          "t": "string",
+          "v": "USER"
+        }
+      ]
+    }
+  },
+  "queryRawUnsafe.enumValue": {
+    "ok": true,
+    "value": {
+      "t": "string",
+      "v": "ADMIN"
+    }
+  },
+  "queryRawUnsafe.extractEpoch": {
+    "ok": true,
+    "value": {
+      "t": "Decimal",
+      "v": "90"
+    }
+  },
+  "queryRawUnsafe.float4": {
+    "ok": true,
+    "value": {
+      "t": "number",
+      "v": 1.5
+    }
+  },
+  "queryRawUnsafe.float8": {
+    "ok": true,
+    "value": {
+      "t": "number",
+      "v": 0.1
+    }
+  },
+  "queryRawUnsafe.generatedTextLiteral": {
+    "ok": true,
+    "value": {
+      "t": "string",
+      "v": "literal"
+    }
+  },
+  "queryRawUnsafe.hashTextExtended": {
+    "ok": true,
+    "value": {
+      "t": "bigint",
+      "v": "-6747756470228489321"
+    }
+  },
+  "queryRawUnsafe.inet": {
+    "ok": true,
+    "value": {
+      "t": "string",
+      "v": "10.0.0.1"
+    }
+  },
+  "queryRawUnsafe.int2": {
+    "ok": true,
+    "value": {
+      "t": "number",
+      "v": 1
+    }
+  },
+  "queryRawUnsafe.int4": {
+    "ok": true,
+    "value": {
+      "t": "number",
+      "v": 2147483647
+    }
+  },
+  "queryRawUnsafe.int4Array": {
+    "ok": true,
+    "value": {
+      "t": "array",
+      "v": [
+        {
+          "t": "number",
+          "v": 1
+        },
+        {
+          "t": "number",
+          "v": 2
+        },
+        {
+          "t": "number",
+          "v": 3
+        }
+      ]
+    }
+  },
+  "queryRawUnsafe.int8": {
+    "ok": true,
+    "value": {
+      "t": "bigint",
+      "v": "9007199254740993"
+    }
+  },
+  "queryRawUnsafe.int8Array": {
+    "ok": true,
+    "value": {
+      "t": "array",
+      "v": [
+        {
+          "t": "bigint",
+          "v": "1"
+        },
+        {
+          "t": "bigint",
+          "v": "9007199254740993"
+        }
+      ]
+    }
+  },
+  "queryRawUnsafe.integerLiteral": {
+    "ok": true,
+    "value": {
+      "t": "number",
+      "v": 42
+    }
+  },
+  "queryRawUnsafe.interval": {
+    "ok": false,
+    "error": {
+      "sqlState": null,
+      "retryable": false,
+      "httpMapping": "unmapped",
+      "escalation": "TERMINAL_FAILURE",
+      "uniqueFields": null
+    }
+  },
+  "queryRawUnsafe.json": {
+    "ok": true,
+    "value": {
+      "t": "object",
+      "v": {
+        "a": 1,
+        "b": [true, null, "x"]
+      }
+    }
+  },
+  "queryRawUnsafe.jsonb": {
+    "ok": true,
+    "value": {
+      "t": "object",
+      "v": {
+        "n": 1.5,
+        "big": 12345678901234567000
+      }
+    }
+  },
+  "queryRawUnsafe.jsonbAgg": {
+    "ok": true,
+    "value": {
+      "t": "array",
+      "v": [
+        {
+          "t": "number",
+          "v": 1
+        },
+        {
+          "t": "number",
+          "v": 2
+        }
+      ]
+    }
+  },
+  "queryRawUnsafe.jsonbArray": {
+    "ok": true,
+    "value": {
+      "t": "array",
+      "v": [
+        {
+          "t": "number",
+          "v": 1
+        },
+        {
+          "t": "string",
+          "v": "two"
+        },
+        {
+          "t": "object",
+          "v": {
+            "three": 3
+          }
+        }
+      ]
+    }
+  },
+  "queryRawUnsafe.jsonbArrayType": {
+    "ok": true,
+    "value": {
+      "t": "array",
+      "v": [
+        {
+          "t": "object",
+          "v": {
+            "a": 1
+          }
+        }
+      ]
+    }
+  },
+  "queryRawUnsafe.jsonbNullLiteral": {
+    "ok": true,
+    "value": {
+      "t": "null"
+    }
+  },
+  "queryRawUnsafe.money": {
+    "ok": true,
+    "value": {
+      "t": "Decimal",
+      "v": "12.34"
+    }
+  },
+  "queryRawUnsafe.name": {
+    "ok": true,
+    "value": {
+      "t": "string",
+      "v": "pg"
+    }
+  },
+  "queryRawUnsafe.nullInt": {
+    "ok": true,
+    "value": {
+      "t": "null"
+    }
+  },
+  "queryRawUnsafe.nullText": {
+    "ok": true,
+    "value": {
+      "t": "null"
+    }
+  },
+  "queryRawUnsafe.nullUntyped": {
+    "ok": true,
+    "value": {
+      "t": "null"
+    }
+  },
+  "queryRawUnsafe.numeric": {
+    "ok": true,
+    "value": {
+      "t": "Decimal",
+      "v": "12345.6789"
+    }
+  },
+  "queryRawUnsafe.numericBig": {
+    "ok": true,
+    "value": {
+      "t": "Decimal",
+      "v": "1.23456789012345678901234567890123e+29"
+    }
+  },
+  "queryRawUnsafe.oid": {
+    "ok": true,
+    "value": {
+      "t": "bigint",
+      "v": "1"
+    }
+  },
+  "queryRawUnsafe.percentile": {
+    "ok": true,
+    "value": {
+      "t": "number",
+      "v": 2.5
+    }
+  },
+  "queryRawUnsafe.roundNumeric": {
+    "ok": true,
+    "value": {
+      "t": "Decimal",
+      "v": "3"
+    }
+  },
+  "queryRawUnsafe.sumInt4": {
+    "ok": true,
+    "value": {
+      "t": "bigint",
+      "v": "6"
+    }
+  },
+  "queryRawUnsafe.sumInt8": {
+    "ok": true,
+    "value": {
+      "t": "Decimal",
+      "v": "6"
+    }
+  },
+  "queryRawUnsafe.text": {
+    "ok": true,
+    "value": {
+      "t": "string",
+      "v": "héllo"
+    }
+  },
+  "queryRawUnsafe.textArray": {
+    "ok": true,
+    "value": {
+      "t": "array",
+      "v": [
+        {
+          "t": "string",
+          "v": "a"
+        },
+        {
+          "t": "string",
+          "v": "b,c"
+        },
+        {
+          "t": "null"
+        }
+      ]
+    }
+  },
+  "queryRawUnsafe.time": {
+    "ok": true,
+    "value": {
+      "t": "Date",
+      "v": "1970-01-01T13:14:15.123Z"
+    }
+  },
+  "queryRawUnsafe.timestamp": {
+    "ok": true,
+    "value": {
+      "t": "Date",
+      "v": "2026-10-28T13:14:15.123Z"
+    }
+  },
+  "queryRawUnsafe.timestamp3": {
+    "ok": true,
+    "value": {
+      "t": "Date",
+      "v": "2026-10-28T13:14:15.123Z"
+    }
+  },
+  "queryRawUnsafe.timestamptz": {
+    "ok": true,
+    "value": {
+      "t": "Date",
+      "v": "2026-10-28T07:44:15.123Z"
+    }
+  },
+  "queryRawUnsafe.timestamptzArray": {
+    "ok": true,
+    "value": {
+      "t": "array",
+      "v": [
+        {
+          "t": "Date",
+          "v": "2026-10-28T00:00:00.000Z"
+        }
+      ]
+    }
+  },
+  "queryRawUnsafe.timetz": {
+    "ok": true,
+    "value": {
+      "t": "Date",
+      "v": "1970-01-01T13:14:15.000Z"
+    }
+  },
+  "queryRawUnsafe.tryAdvisory": {
+    "ok": true,
+    "value": {
+      "t": "boolean",
+      "v": true
+    }
+  },
+  "queryRawUnsafe.uuid": {
+    "ok": true,
+    "value": {
+      "t": "string",
+      "v": "6f1e2c34-8b7a-4c1d-9e2f-0a1b2c3d4e5f"
+    }
+  },
+  "queryRawUnsafe.uuidArray": {
+    "ok": true,
+    "value": {
+      "t": "array",
+      "v": [
+        {
+          "t": "string",
+          "v": "6f1e2c34-8b7a-4c1d-9e2f-0a1b2c3d4e5f"
+        }
+      ]
+    }
+  },
+  "queryRawUnsafe.varchar": {
+    "ok": true,
+    "value": {
+      "t": "string",
+      "v": "abc"
+    }
+  },
+  "queryRawUnsafe.voidPgSleep": {
+    "ok": false,
+    "error": {
+      "sqlState": null,
+      "retryable": false,
+      "httpMapping": "unmapped",
+      "escalation": "TERMINAL_FAILURE",
+      "uniqueFields": null
+    }
+  },
+  "rows.ingestionQuota.model": {
+    "burst": {
+      "t": "number",
+      "v": 10
+    },
+    "key": {
+      "t": "string",
+      "v": "K"
+    },
+    "lastAllowed": {
+      "t": "boolean",
+      "v": true
+    },
+    "lastGranted": {
+      "t": "number",
+      "v": 0
+    },
+    "policyRevision": {
+      "t": "bigint",
+      "v": "9007199254740993"
+    },
+    "rate": {
+      "t": "number",
+      "v": 5
+    },
+    "tokens": {
+      "t": "number",
+      "v": 12.75
+    },
+    "updatedAt": {
+      "t": "Date",
+      "v": "2026-10-28T10:11:12.345Z"
+    }
+  },
+  "rows.ingestionQuota.raw": {
+    "burst": {
+      "t": "number",
+      "v": 10
+    },
+    "key": {
+      "t": "string",
+      "v": "K"
+    },
+    "lastAllowed": {
+      "t": "boolean",
+      "v": true
+    },
+    "lastGranted": {
+      "t": "number",
+      "v": 0
+    },
+    "policyRevision": {
+      "t": "bigint",
+      "v": "9007199254740993"
+    },
+    "rate": {
+      "t": "number",
+      "v": 5
+    },
+    "tokens": {
+      "t": "number",
+      "v": 12.75
+    },
+    "updatedAt": {
+      "t": "Date",
+      "v": "2026-10-28T10:11:12.345Z"
+    }
+  },
+  "rows.legacyCapture.model": {
+    "count": {
+      "t": "bigint",
+      "v": "5"
+    },
+    "day": {
+      "t": "Date",
+      "v": "2026-10-27T00:00:00.000Z"
+    },
+    "lastCaptureKind": {
+      "t": "null"
+    },
+    "lastIncidentId": {
+      "t": "null"
+    },
+    "lastSeenAt": {
+      "t": "Date",
+      "v": "2026-10-28T01:02:03.456Z"
+    },
+    "lastServiceId": {
+      "t": "null"
+    }
+  },
+  "rows.legacyCapture.raw": {
+    "count": {
+      "t": "bigint",
+      "v": "5"
+    },
+    "day": {
+      "t": "Date",
+      "v": "2026-10-27T00:00:00.000Z"
+    },
+    "lastCaptureKind": {
+      "t": "null"
+    },
+    "lastIncidentId": {
+      "t": "null"
+    },
+    "lastSeenAt": {
+      "t": "Date",
+      "v": "2026-10-28T01:02:03.456Z"
+    },
+    "lastServiceId": {
+      "t": "null"
+    }
+  },
+  "taggedTemplateInTransaction": {
+    "int2": {
+      "ok": true,
+      "value": {
+        "t": "number",
+        "v": 1
+      }
+    },
+    "int4": {
+      "ok": true,
+      "value": {
+        "t": "number",
+        "v": 2147483647
+      }
+    },
+    "int8": {
+      "ok": true,
+      "value": {
+        "t": "bigint",
+        "v": "9007199254740993"
+      }
+    },
+    "count": {
+      "ok": true,
+      "value": {
+        "t": "bigint",
+        "v": "3"
+      }
+    },
+    "sumInt4": {
+      "ok": true,
+      "value": {
+        "t": "bigint",
+        "v": "6"
+      }
+    },
+    "sumInt8": {
+      "ok": true,
+      "value": {
+        "t": "Decimal",
+        "v": "6"
+      }
+    },
+    "avgInt": {
+      "ok": true,
+      "value": {
+        "t": "Decimal",
+        "v": "2.5"
+      }
+    },
+    "numeric": {
+      "ok": true,
+      "value": {
+        "t": "Decimal",
+        "v": "12345.6789"
+      }
+    },
+    "numericBig": {
+      "ok": true,
+      "value": {
+        "t": "Decimal",
+        "v": "1.23456789012345678901234567890123e+29"
+      }
+    },
+    "float4": {
+      "ok": true,
+      "value": {
+        "t": "number",
+        "v": 1.5
+      }
+    },
+    "float8": {
+      "ok": true,
+      "value": {
+        "t": "number",
+        "v": 0.1
+      }
+    },
+    "percentile": {
+      "ok": true,
+      "value": {
+        "t": "number",
+        "v": 2.5
+      }
+    },
+    "extractEpoch": {
+      "ok": true,
+      "value": {
+        "t": "Decimal",
+        "v": "90"
+      }
+    },
+    "roundNumeric": {
+      "ok": true,
+      "value": {
+        "t": "Decimal",
+        "v": "3"
+      }
+    },
+    "bool": {
+      "ok": true,
+      "value": {
+        "t": "boolean",
+        "v": true
+      }
+    },
+    "text": {
+      "ok": true,
+      "value": {
+        "t": "string",
+        "v": "héllo"
+      }
+    },
+    "varchar": {
+      "ok": true,
+      "value": {
+        "t": "string",
+        "v": "abc"
+      }
+    },
+    "char": {
+      "ok": true,
+      "value": {
+        "t": "string",
+        "v": "ab "
+      }
+    },
+    "name": {
+      "ok": true,
+      "value": {
+        "t": "string",
+        "v": "pg"
+      }
+    },
+    "uuid": {
+      "ok": true,
+      "value": {
+        "t": "string",
+        "v": "6f1e2c34-8b7a-4c1d-9e2f-0a1b2c3d4e5f"
+      }
+    },
+    "date": {
+      "ok": true,
+      "value": {
+        "t": "Date",
+        "v": "2026-10-28T00:00:00.000Z"
+      }
+    },
+    "time": {
+      "ok": true,
+      "value": {
+        "t": "Date",
+        "v": "1970-01-01T13:14:15.123Z"
+      }
+    },
+    "timetz": {
+      "ok": true,
+      "value": {
+        "t": "Date",
+        "v": "1970-01-01T13:14:15.000Z"
+      }
+    },
+    "timestamp": {
+      "ok": true,
+      "value": {
+        "t": "Date",
+        "v": "2026-10-28T13:14:15.123Z"
+      }
+    },
+    "timestamp3": {
+      "ok": true,
+      "value": {
+        "t": "Date",
+        "v": "2026-10-28T13:14:15.123Z"
+      }
+    },
+    "timestamptz": {
+      "ok": true,
+      "value": {
+        "t": "Date",
+        "v": "2026-10-28T07:44:15.123Z"
+      }
+    },
+    "interval": {
+      "ok": false,
+      "error": {
+        "sqlState": null,
+        "retryable": false,
+        "httpMapping": "unmapped",
+        "escalation": "TERMINAL_FAILURE",
+        "uniqueFields": null
+      }
+    },
+    "json": {
+      "ok": true,
+      "value": {
+        "t": "object",
+        "v": {
+          "a": 1,
+          "b": [true, null, "x"]
+        }
+      }
+    },
+    "jsonb": {
+      "ok": true,
+      "value": {
+        "t": "object",
+        "v": {
+          "n": 1.5,
+          "big": 12345678901234567000
+        }
+      }
+    },
+    "jsonbNullLiteral": {
+      "ok": true,
+      "value": {
+        "t": "null"
+      }
+    },
+    "jsonbArray": {
+      "ok": true,
+      "value": {
+        "t": "array",
+        "v": [
+          {
+            "t": "number",
+            "v": 1
+          },
+          {
+            "t": "string",
+            "v": "two"
+          },
+          {
+            "t": "object",
+            "v": {
+              "three": 3
+            }
+          }
+        ]
+      }
+    },
+    "jsonbAgg": {
+      "ok": true,
+      "value": {
+        "t": "array",
+        "v": [
+          {
+            "t": "number",
+            "v": 1
+          },
+          {
+            "t": "number",
+            "v": 2
+          }
+        ]
+      }
+    },
+    "textArray": {
+      "ok": true,
+      "value": {
+        "t": "array",
+        "v": [
+          {
+            "t": "string",
+            "v": "a"
+          },
+          {
+            "t": "string",
+            "v": "b,c"
+          },
+          {
+            "t": "null"
+          }
+        ]
+      }
+    },
+    "int4Array": {
+      "ok": true,
+      "value": {
+        "t": "array",
+        "v": [
+          {
+            "t": "number",
+            "v": 1
+          },
+          {
+            "t": "number",
+            "v": 2
+          },
+          {
+            "t": "number",
+            "v": 3
+          }
+        ]
+      }
+    },
+    "int8Array": {
+      "ok": true,
+      "value": {
+        "t": "array",
+        "v": [
+          {
+            "t": "bigint",
+            "v": "1"
+          },
+          {
+            "t": "bigint",
+            "v": "9007199254740993"
+          }
+        ]
+      }
+    },
+    "uuidArray": {
+      "ok": true,
+      "value": {
+        "t": "array",
+        "v": [
+          {
+            "t": "string",
+            "v": "6f1e2c34-8b7a-4c1d-9e2f-0a1b2c3d4e5f"
+          }
+        ]
+      }
+    },
+    "timestamptzArray": {
+      "ok": true,
+      "value": {
+        "t": "array",
+        "v": [
+          {
+            "t": "Date",
+            "v": "2026-10-28T00:00:00.000Z"
+          }
+        ]
+      }
+    },
+    "jsonbArrayType": {
+      "ok": true,
+      "value": {
+        "t": "array",
+        "v": [
+          {
+            "t": "object",
+            "v": {
+              "a": 1
+            }
+          }
+        ]
+      }
+    },
+    "bytea": {
+      "ok": true,
+      "value": {
+        "t": "bytes",
+        "ctor": "Buffer",
+        "v": "deadbeef"
+      }
+    },
+    "byteaEmpty": {
+      "ok": true,
+      "value": {
+        "t": "bytes",
+        "ctor": "Buffer",
+        "v": ""
+      }
+    },
+    "enumValue": {
+      "ok": true,
+      "value": {
+        "t": "string",
+        "v": "ADMIN"
+      }
+    },
+    "enumArray": {
+      "ok": true,
+      "value": {
+        "t": "array",
+        "v": [
+          {
+            "t": "string",
+            "v": "ADMIN"
+          },
+          {
+            "t": "string",
+            "v": "USER"
+          }
+        ]
+      }
+    },
+    "money": {
+      "ok": true,
+      "value": {
+        "t": "Decimal",
+        "v": "12.34"
+      }
+    },
+    "inet": {
+      "ok": true,
+      "value": {
+        "t": "string",
+        "v": "10.0.0.1"
+      }
+    },
+    "oid": {
+      "ok": true,
+      "value": {
+        "t": "bigint",
+        "v": "1"
+      }
+    },
+    "nullInt": {
+      "ok": true,
+      "value": {
+        "t": "null"
+      }
+    },
+    "nullText": {
+      "ok": true,
+      "value": {
+        "t": "null"
+      }
+    },
+    "nullUntyped": {
+      "ok": true,
+      "value": {
+        "t": "null"
+      }
+    },
+    "voidPgSleep": {
+      "ok": false,
+      "error": {
+        "sqlState": null,
+        "retryable": false,
+        "httpMapping": "unmapped",
+        "escalation": "TERMINAL_FAILURE",
+        "uniqueFields": null
+      }
+    },
+    "advisoryVoid": {
+      "ok": false,
+      "error": {
+        "sqlState": null,
+        "retryable": false,
+        "httpMapping": "unmapped",
+        "escalation": "TERMINAL_FAILURE",
+        "uniqueFields": null
+      }
+    },
+    "advisoryVoidText": {
+      "ok": true,
+      "value": {
+        "t": "string",
+        "v": ""
+      }
+    },
+    "tryAdvisory": {
+      "ok": true,
+      "value": {
+        "t": "boolean",
+        "v": true
+      }
+    },
+    "hashTextExtended": {
+      "ok": true,
+      "value": {
+        "t": "bigint",
+        "v": "-6747756470228489321"
+      }
+    },
+    "generatedTextLiteral": {
+      "ok": true,
+      "value": {
+        "t": "string",
+        "v": "literal"
+      }
+    },
+    "integerLiteral": {
+      "ok": true,
+      "value": {
+        "t": "number",
+        "v": 42
+      }
+    },
+    "decimalLiteral": {
+      "ok": true,
+      "value": {
+        "t": "Decimal",
+        "v": "4.2"
+      }
+    }
+  }
+}
