@@ -13,6 +13,8 @@ verification:
 
 # External secrets with Kustomize
 
+**Implementation candidate — not certified external-secrets support.** PR #931 must remain draft until the functional release gates are satisfied. See the repository record `plans/certification/external-secrets-csi.json` for scoped evidence and explicit blockers. Live legacy Kubernetes startup, CSI bootstrap/recovery, cloud identity, rotation/decryption, and OpenShift SCC checks remain pending.
+
 Kustomize has opt-in CSI profiles for integrated and split runtime. They mount the same read-only secret directory as Helm, preserve the existing `opsknight-secrets` environment contract, and keep migration as a separate one-shot operation. Existing profiles continue rendering without CSI.
 
 Cluster driver/provider installation, workload identity, synchronization permissions, rotation, failure diagnostics, and live cloud/OpenShift validation requirements are described in the [external secrets guide](../helm/external-secrets). Those prerequisites apply equally to Kustomize; Helm values do not configure Kustomize.

@@ -13,6 +13,8 @@ verification:
 
 # External secrets with Secrets Store CSI
 
+**Implementation candidate — not certified external-secrets support.** PR #931 must remain draft until the functional release gates are satisfied. See the repository record `plans/certification/external-secrets-csi.json` for scoped evidence and explicit blockers. Live legacy Kubernetes startup, CSI bootstrap/recovery, cloud identity, rotation/decryption, and OpenShift SCC checks remain pending.
+
 The chart optionally mounts a pre-created `SecretProviderClass` into the integrated application, all seven split roles, and the migration Job. Existing deployments continue to use their existing Secret behavior with CSI disabled. The chart does not install cluster components, create a `SecretProviderClass`, enable driver rotation, or synchronize a Secret itself.
 
 ## Prerequisites and ownership
@@ -31,7 +33,7 @@ secrets:
   existingSecret: opsknight-runtime
 ```
 
-The mount is read-only, covers the entire directory, and uses no `subPath`. To avoid masking application/system directories the schema restricts custom mount paths to a child of `/mnt/`. Configure file permissions in the provider's objects, not in the application chart. Confirm that the assigned UID/groups can read them, particularly on OpenShift.
+The mount is read-only, covers the entire directory, and uses no `subPath`. To avoid masking application/system directories the schema restricts custom mount paths to a child of `/mnt/`. Configure file permissions in the provider's objects, not in the application chart. Confirm that the assigned UID/groups can read every required file, particularly on OpenShift. With the examples' `0440` permissions, an arbitrary UID without a matching owner/group cannot read the files. Verify provider/driver ownership and the SCC-assigned primary/supplemental groups on the target cluster; removing fixed IDs alone does not grant read access. Do not resolve this by granting privileged SCC or broadly readable file modes.
 
 Synchronization starts when a Pod mounts the CSI volume; the synchronized Secret depends on mounting Pods and can disappear when the last consumer is deleted. See the [driver synchronization lifecycle](https://secrets-store-csi-driver.sigs.k8s.io/topics/sync-as-kubernetes-secret). A missing required Secret/key blocks container startup. An unavailable driver, missing class, denied provider identity, or unreachable backend leaves the mount pending; the chart does not fall back to placeholder credentials when `existingSecret` is selected.
 

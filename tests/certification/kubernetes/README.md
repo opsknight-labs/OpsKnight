@@ -65,3 +65,9 @@ do not compare those two different digest types as if they were equivalent. Load
 Update the namespace source label, Helm image tag and certification source
 revision together. Record the workflow run URL and archive checksum alongside
 the deployment evidence. A built image is not a passing runtime certification.
+
+## External-secrets candidate (PR #931)
+
+`plans/certification/external-secrets-csi.json` records bounded source/local-image evidence and the unresolved functional, cloud, rotation, and OpenShift gates. A passed render or local permission probe does not certify retrieval or SCC admission.
+
+Run the local image probe with `node tests/certification/kubernetes/external-secrets-image-probe.mjs <local-image-reference>`. It resolves the reference to an image ID before use, uses synthetic `0440` fixtures, drops to the reported UID/groups, and prints metadata/booleans only. Its short-lived containers have no network or host mounts. Setup capabilities only create synthetic file ownership and drop runtime identity. The probe does not start OpsKnight, test writable application paths, use a CSI driver, or exercise a cloud/SCC. Run each live gate in the deployment guide against an explicitly authorized disposable target and record exact release/image/driver/provider versions before clearing it.
