@@ -92,6 +92,7 @@ describe('MCP release evidence gate', () => {
       'http://artifacts.example.com/a.json',
       'https://user:secret@artifacts.example.com/a.json',
       'https://localhost/a.json',
+      'https://192.168.1.1/evidence.json',
       'https://artifacts.example.com/a.json#fragment',
       'https://artifacts.example.com:444/a.json',
     ]) {

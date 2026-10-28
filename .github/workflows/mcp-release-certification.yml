@@ -86,10 +86,18 @@ jobs:
         with:
           ref: ${{ needs.prepare.outputs.source_sha }}
           fetch-depth: 0
-      - uses: actions/download-artifact@v4
-        with:
-          name: mcp-release-evidence
-          path: ${{ runner.temp }}/mcp-release-evidence
+      - name: Confirm release tag did not move while awaiting approval
+        env:
+          RELEASE_TAG: ${{ needs.prepare.outputs.release_tag }}
+          EXPECTED_SHA: ${{ needs.prepare.outputs.source_sha }}
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin "refs/tags/$RELEASE_TAG:refs/remotes/origin/mcp-release-tag-check"
+          ACTUAL_SHA="$(git rev-parse "refs/remotes/origin/mcp-release-tag-check^{commit}")"
+          if [ "$ACTUAL_SHA" != "$EXPECTED_SHA" ]; then
+            echo "::error::Release tag moved after evidence review; refusing certification."
+            exit 1
+          fi
       - name: Revalidate evidence after protected approval
         env:
           MCP_RELEASE_EVIDENCE: ${{ runner.temp }}/mcp-release-evidence/mcp-release-evidence.json
