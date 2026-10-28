@@ -17,10 +17,12 @@ verification:
     - src/lib/automation/settings-command.ts
     - src/lib/automation/readiness.ts
     - src/lib/automation/authoring.ts
+    - src/lib/api-v2/request-body.ts
+    - src/app/api/v2/services/[id]/automation/draft/route.ts
+    - src/app/(app)/services/[id]/automation/actions.ts
     - src/lib/automation/jobs.ts
     - src/lib/authorization.ts
     - src/lib/metrics/operational/registry.ts
-    - src/app/(app)/services/[id]/automation/actions.ts
     - src/app/api/v2/services/[id]/automation/candidate/route.ts
     - src/app/api/v2/services/[id]/automation/candidates/activate/route.ts
     - tests/integration/automation-certification.test.ts
@@ -122,7 +124,14 @@ prevent extraction or prohibit conditions from referencing the field.
 
 ## Bounds
 
-- Authoring/simulation payload size: at most 256 KiB of serialized UTF-8 JSON.
+- UI automation actions and the shared validation/simulation helpers enforce a
+  256 KiB serialized UTF-8 JSON limit. Validation checks the snapshot; simulation
+  also checks its full input, and UI actions check their full action input.
+- v2 API requests have a separate 1 MiB body limit. Draft PUT and publication do
+  not invoke the 256 KiB helper: a schema-valid draft above 256 KiB may be saved
+  and published through the API, even though validation/simulation or UI actions
+  can reject it. Keep configurations within the smaller limit when using both
+  the UI and API.
 - 64 custom fields; extraction path depth 12.
 - 32 mappings per field.
 - 200 aliases per field and up to 200 canonical enum choices.
@@ -149,11 +158,13 @@ active version and creates immutable history with a compiled checksum.
 - Restore copies history into a draft and preserves restoration lineage. It does
   not publish, activate, change mode, or discard a candidate.
 
-The first transition to Live requires a valid published active version and safe
-dependencies. No Shadow evidence in the last seven days requires
+Every mode-change request selecting Live requires a valid published active
+version and safe dependencies. No Shadow evidence in the last seven days requires
 `acknowledgeNoShadow`; any recorded errors/fallbacks require
 `acknowledgeShadowErrors`. Do not assume candidate quantity/freshness thresholds
-are enforced for this first transition.
+are enforced for mode changes to Live. These checks run again when re-enabling
+a previously Live service after Disabled or Shadow, and when requesting Live
+while already Live.
 
 Candidate promotion uses the configurable readiness policy. Defaults are:
 

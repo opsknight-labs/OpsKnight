@@ -174,10 +174,12 @@ count of identical alerts as sufficient confidence.
 
 ## 6. Enable Live
 
-Have an administrator review the published version and switch to **Live**. The
-first Live transition checks dependencies and asks for explicit acknowledgement
+Have an administrator review the published version and switch to **Live**. Every
+mode change to Live checks dependencies and asks for explicit acknowledgement
 if that version has no recent Shadow evaluations or recorded errors/fallbacks.
-The candidate readiness thresholds below are a separate promotion contract.
+These checks also apply when re-enabling a previously Live service after
+Disabled or Shadow. The candidate readiness thresholds below are a separate
+promotion contract.
 
 Send one controlled production case and one non-production case. Verify:
 
