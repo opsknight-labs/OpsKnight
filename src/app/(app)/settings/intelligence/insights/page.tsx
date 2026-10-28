@@ -1,13 +1,13 @@
 import Link from 'next/link';
 import { SettingsSection } from '@/components/settings/layout/SettingsSection';
-import { ApplySuggestionForm, DigestSettingsForm, SendTestDigestButton } from '@/components/settings/InsightsForms';
+import { ApplySuggestionForm, DigestSettingsForm, RuleSuggestionsPanel, SendTestDigestButton } from '@/components/settings/InsightsForms';
 import { Badge } from '@/components/ui/shadcn/badge';
 import { logger } from '@/lib/logger';
 import { assertCapability, getCurrentAuthorizationActor } from '@/lib/rbac';
 import { CAPABILITIES, hasCapability, type AppRole } from '@/lib/authorization';
 import { MIN_FEEDBACK_FOR_SUGGESTION } from '@/lib/intelligence/insights/calibration';
 import { getInsights, RECURRING_MIN_OCCURRENCES, RECURRING_WINDOW_DAYS } from '@/lib/intelligence/insights/service';
-import { listPolicyVersions } from '@/lib/intelligence/settings/service';
+import { listPolicyVersions, resolveEffectivePolicy } from '@/lib/intelligence/settings/service';
 import { getDigestSettings, getLatestDigestRun } from '@/lib/intelligence/digest/service';
 
 export const dynamic = 'force-dynamic';
@@ -16,13 +16,14 @@ export const revalidate = 0;
 async function load() {
   try {
     const actor = await getCurrentAuthorizationActor();
-    const [insights, versions, digest, lastRun] = await Promise.all([
+    const [insights, versions, digest, lastRun, policy] = await Promise.all([
       getInsights(actor),
       listPolicyVersions({}, { limit: 1 }),
       getDigestSettings(),
       getLatestDigestRun(),
+      resolveEffectivePolicy(null),
     ]);
-    return { insights, headVersion: versions.headVersion, digest, lastRun };
+    return { insights, headVersion: versions.headVersion, digest, lastRun, mode: policy.mode };
   } catch (error) {
     logger.warn('[Intelligence] Insights could not load', { error: error instanceof Error ? error.message : String(error) });
     return null;
@@ -163,6 +164,15 @@ export default async function IntelligenceInsightsPage() {
                   </p>
                 )}
               </div>
+            </SettingsSection>
+          )}
+
+          {canManage && loaded && (
+            <SettingsSection
+              title="Suggested grouping rules"
+              description="Grouping rules learned from the links responders confirmed and the suggestions they rejected, checked against recent history before they are offered."
+            >
+              <RuleSuggestionsPanel expectedHeadVersion={loaded.headVersion} mode={loaded.mode} />
             </SettingsSection>
           )}
 

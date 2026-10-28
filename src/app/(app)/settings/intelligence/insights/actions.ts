@@ -11,6 +11,7 @@ import { publishPolicyVersion, resolveEffectivePolicy } from '@/lib/intelligence
 import { DIGEST_DAYS } from '@/lib/intelligence/digest/contract';
 import { sendTestDigest, updateDigestSettings } from '@/lib/intelligence/digest/service';
 import { checkRateLimit } from '@/lib/rate-limit';
+import { adoptRuleSuggestion, suggestCorrelationRules } from '@/lib/intelligence/learning/service';
 
 export type InsightsActionState = { message: string; ok: boolean };
 
@@ -107,6 +108,65 @@ export async function sendTestDigestAction(_state: InsightsActionState): Promise
     return sent
       ? { message: 'Queued. It should arrive within a minute or two; delivery shows under Notifications.', ok: true }
       : { message: 'Could not send. Check that an email provider is configured under Notifications.', ok: false };
+  } catch (error) {
+    return failure(error);
+  }
+}
+
+export type RuleSuggestionView = {
+  ruleId: string;
+  kind: string;
+  keys: string[];
+  windowSeconds: number;
+  maxWindowSeconds: number;
+  support: number;
+  conflicts: number;
+  precision: number;
+  coverage: number;
+  replay: { incidentsEvaluated: number; groups: number; groupedIncidents: number; suggestedLinks: number };
+};
+export type RuleSuggestionsState = InsightsActionState & { suggestions?: RuleSuggestionView[] };
+
+/** Learns candidate grouping rules from people's link decisions. Read-only; nothing is changed. */
+export async function findRuleSuggestionsAction(_state: RuleSuggestionsState): Promise<RuleSuggestionsState> {
+  try {
+    await assertCapability(CAPABILITIES.INTELLIGENCE_MANAGE);
+    const suggestions = await suggestCorrelationRules();
+    return {
+      ok: true,
+      message:
+        suggestions.length === 0
+          ? 'No rule is well supported yet. Suggestions appear once people have confirmed at least 3 similar links.'
+          : `${suggestions.length} ${suggestions.length === 1 ? 'rule' : 'rules'} found. Nothing has been changed.`,
+      suggestions: suggestions.map(({ rule, support, conflicts, precision, coverage, replay }) => ({
+        ruleId: rule.id,
+        kind: rule.kind,
+        keys: rule.keys,
+        windowSeconds: rule.windowSeconds,
+        maxWindowSeconds: rule.maxWindowSeconds,
+        support,
+        conflicts,
+        precision,
+        coverage,
+        replay,
+      })),
+    };
+  } catch (error) {
+    return failure(error);
+  }
+}
+
+/** Publishes one learned rule as a new global policy version, in the current mode. */
+export async function adoptRuleSuggestionAction(_state: InsightsActionState, form: FormData): Promise<InsightsActionState> {
+  try {
+    const actor = await assertCapability(CAPABILITIES.INTELLIGENCE_MANAGE);
+    const result = await adoptRuleSuggestion(
+      { ruleId: String(form.get('ruleId') ?? ''), expectedHeadVersion: Number(form.get('expectedHeadVersion')) },
+      { actorId: actor.id, source: 'UI' }
+    );
+    revalidatePath(PATH);
+    revalidatePath('/settings/intelligence');
+    return { ok: true, message: `Rule ${result.suggestion.rule.id} added. Policy version ${result.version} published.` };
   } catch (error) {
     return failure(error);
   }

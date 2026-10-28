@@ -2,10 +2,14 @@
 
 import { useActionState } from 'react';
 import {
+  adoptRuleSuggestionAction,
   applyMinScoreSuggestion,
+  findRuleSuggestionsAction,
   saveDigestSettingsAction,
   sendTestDigestAction,
   type InsightsActionState,
+  type RuleSuggestionsState,
+  type RuleSuggestionView,
 } from '@/app/(app)/settings/intelligence/insights/actions';
 import { Button } from '@/components/ui/shadcn/button';
 import { DIGEST_DAYS } from '@/lib/intelligence/digest/contract';
@@ -105,5 +109,74 @@ export function SendTestDigestButton() {
       </Button>
       <Message state={state} />
     </form>
+  );
+}
+
+function formatWindow(seconds: number): string {
+  if (seconds % 3600 === 0) return `${seconds / 3600} h`;
+  return `${Math.round(seconds / 60)} min`;
+}
+
+function describeRule(suggestion: RuleSuggestionView): string {
+  return suggestion.kind === 'CONTENT_TEMPLATE'
+    ? 'Incidents with the same masked title'
+    : `Incidents with the same ${suggestion.keys.map(key => `"${key}"`).join(', ')} label`;
+}
+
+function AdoptRuleForm({ ruleId, expectedHeadVersion }: { ruleId: string; expectedHeadVersion: number }) {
+  const [state, action, pending] = useActionState(adoptRuleSuggestionAction, initial);
+  return (
+    <form action={action} className="flex flex-wrap items-center gap-3">
+      <input type="hidden" name="ruleId" value={ruleId} />
+      <input type="hidden" name="expectedHeadVersion" value={expectedHeadVersion} />
+      <Button type="submit" size="sm" variant="outline" disabled={pending || state.ok}>
+        {pending ? 'Publishing…' : state.ok ? 'Added' : 'Add as new policy version'}
+      </Button>
+      <Message state={state} />
+    </form>
+  );
+}
+
+const initialSuggestions: RuleSuggestionsState = { message: '', ok: false };
+
+export function RuleSuggestionsPanel({ expectedHeadVersion, mode }: { expectedHeadVersion: number; mode: string }) {
+  const [state, action, pending] = useActionState(findRuleSuggestionsAction, initialSuggestions);
+  return (
+    <div className="space-y-4 py-3">
+      <form action={action} className="flex flex-wrap items-center gap-3">
+        <Button type="submit" size="sm" disabled={pending}>
+          {pending ? 'Analysing decisions…' : 'Find rule suggestions'}
+        </Button>
+        <Message state={state} />
+      </form>
+      {state.suggestions && state.suggestions.length > 0 && (
+        <ul className="divide-y divide-border rounded-md border border-border">
+          {state.suggestions.map(suggestion => (
+            <li key={suggestion.ruleId} className="space-y-2 p-3">
+              <div className="flex flex-wrap items-baseline justify-between gap-2">
+                <p className="text-sm font-medium">
+                  {describeRule(suggestion)}, within {formatWindow(suggestion.windowSeconds)}
+                </p>
+                <code className="text-xs text-muted-foreground">{suggestion.ruleId}</code>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Reproduces {suggestion.support} confirmed {suggestion.support === 1 ? 'link' : 'links'} (
+                {Math.round(suggestion.coverage * 100)}% of all confirmed links) and would repeat {suggestion.conflicts} rejected{' '}
+                {suggestion.conflicts === 1 ? 'suggestion' : 'suggestions'}: {Math.round(suggestion.precision * 100)}% precision on
+                reviewed pairs. Over the last 30 days it would have formed {suggestion.replay.groups}{' '}
+                {suggestion.replay.groups === 1 ? 'group' : 'groups'} covering {suggestion.replay.groupedIncidents} of{' '}
+                {suggestion.replay.incidentsEvaluated} incidents.
+              </p>
+              <AdoptRuleForm ruleId={suggestion.ruleId} expectedHeadVersion={expectedHeadVersion} />
+            </li>
+          ))}
+        </ul>
+      )}
+      <p className="text-xs text-muted-foreground">
+        Rules are learned only from links people made, accepted or rejected, and are never added automatically. An added rule
+        runs in the current mode ({mode === 'SUGGEST' ? 'suggestions shown to responders' : mode === 'SHADOW' ? 'recorded only, not shown' : 'off'}); it never
+        merges incidents or changes paging.
+      </p>
+    </div>
   );
 }

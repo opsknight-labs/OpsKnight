@@ -79,8 +79,8 @@ export const intelligenceSettingsInputSchema = z
 export type IntelligenceSettingsInput = z.infer<typeof intelligenceSettingsInputSchema>;
 
 /**
- * Grouping rule kinds available to operators. Rules are deterministic and explainable; learned
- * scoring only ever ranks suggestions and never creates a rule.
+ * Grouping rule kinds available to operators. Rules are deterministic and explainable. Learning
+ * only proposes rules of these same kinds from people's link decisions; a person publishes them.
  */
 export const CORRELATION_RULE_KINDS = ['EXACT_FIELD', 'CONTENT_TEMPLATE', 'LABEL_SET'] as const;
 export type CorrelationRuleKind = (typeof CORRELATION_RULE_KINDS)[number];
