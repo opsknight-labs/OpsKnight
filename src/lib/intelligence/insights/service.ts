@@ -42,7 +42,18 @@ export interface FeedbackCalibration {
   suggestion: MinScoreSuggestion | null;
 }
 
+export interface WeeklySummary {
+  windowDays: number;
+  incidentsAnalyzed: number;
+  findingsByKind: Record<string, number>;
+  ratings: number;
+  helpfulRatings: number;
+  changesRecorded: number;
+  deadLetters: number;
+}
+
 export interface InsightsView {
+  weekly: WeeklySummary | null;
   recurring: RecurringProblem[];
   anomalies: RateAnomalyRow[];
   calibration: FeedbackCalibration | null;
@@ -139,6 +150,40 @@ export async function getFeedbackCalibration(client: typeof prisma = prisma): Pr
   };
 }
 
+export const WEEKLY_WINDOW_DAYS = 7;
+
+/** Aggregate counts only: no titles, no ids, nothing that names a service, so it is safe at any scope. */
+export async function getWeeklySummary(now: Date = new Date(), client: typeof prisma = prisma): Promise<WeeklySummary> {
+  const since = new Date(now.getTime() - WEEKLY_WINDOW_DAYS * DAY_MS);
+  const [findings, analyzed, ratings, changes, dead] = await Promise.all([
+    client.intelligenceFinding.groupBy({ by: ['kind'], where: { createdAt: { gte: since } }, _count: { _all: true } }),
+    client.intelligenceFinding.findMany({
+      where: { createdAt: { gte: since } },
+      distinct: ['incidentId'],
+      select: { incidentId: true },
+      take: 100_000,
+    }),
+    client.intelligenceFeedback.groupBy({
+      by: ['verdict'],
+      where: { createdAt: { gte: since }, verdict: { in: ['HELPFUL', 'NOT_HELPFUL'] } },
+      _count: { _all: true },
+    }),
+    client.changeEvent.count({ where: { createdAt: { gte: since } } }),
+    client.intelligenceWorkItem.count({ where: { attempts: { gte: 8 } } }),
+  ]);
+  const helpful = ratings.find(row => row.verdict === 'HELPFUL')?._count._all ?? 0;
+  const notHelpful = ratings.find(row => row.verdict === 'NOT_HELPFUL')?._count._all ?? 0;
+  return {
+    windowDays: WEEKLY_WINDOW_DAYS,
+    incidentsAnalyzed: analyzed.length,
+    findingsByKind: Object.fromEntries(findings.map(row => [row.kind, row._count._all])),
+    ratings: helpful + notHelpful,
+    helpfulRatings: helpful,
+    changesRecorded: changes,
+    deadLetters: dead,
+  };
+}
+
 /**
  * Operational insights for people who administer intelligence. Everything is flag-only and computed on
  * demand from bounded queries, so there is no background job to fail or fall behind. Service-level
@@ -153,7 +198,8 @@ export async function getInsights(
   if (!hasCapability(actor.role, CAPABILITIES.INTELLIGENCE_READ)) return null;
   const services = await visibleServices(actor, client);
   const ids = [...services.keys()];
-  const [recurring, anomalies, calibration] = await Promise.all([
+  const [weekly, recurring, anomalies, calibration] = await Promise.all([
+    hasCapability(actor.role, CAPABILITIES.INTELLIGENCE_MANAGE) ? getWeeklySummary(now, client) : Promise.resolve(null),
     recurringProblems(ids, now, client),
     rateAnomalies(ids, now, client),
     // Aggregate feedback is only shown to someone who can see every service, so it cannot reveal
@@ -161,6 +207,7 @@ export async function getInsights(
     hasCapability(actor.role, CAPABILITIES.INTELLIGENCE_MANAGE) ? getFeedbackCalibration(client) : Promise.resolve(null),
   ]);
   return {
+    weekly,
     recurring: recurring.map(row => ({ ...row, serviceName: services.get(row.serviceId) ?? row.serviceId })),
     anomalies: anomalies.map(row => ({ ...row, serviceName: services.get(row.serviceId) ?? row.serviceId })),
     calibration,

@@ -5,6 +5,7 @@ import {
   deleteAiProviderAction,
   saveAiProviderAction,
   saveAiSettingsAction,
+  testAiProviderAction,
   type AiActionState,
 } from '@/app/(app)/settings/intelligence/ai/actions';
 import { Button } from '@/components/ui/shadcn/button';
@@ -173,6 +174,19 @@ export function DeleteProviderButton({ id, name }: { id: string; name: string })
       <input type="hidden" name="id" value={id} />
       <Button type="submit" size="sm" variant="ghost" disabled={pending} aria-label={`Remove ${name}`}>
         Remove
+      </Button>
+      <Status state={state} />
+    </form>
+  );
+}
+
+export function TestProviderButton({ id, name }: { id: string; name: string }) {
+  const [state, action, pending] = useActionState(testAiProviderAction, initial);
+  return (
+    <form action={action} className="inline-flex items-center gap-2">
+      <input type="hidden" name="id" value={id} />
+      <Button type="submit" size="sm" variant="outline" disabled={pending} aria-label={`Test ${name}`}>
+        {pending ? 'Testing…' : 'Test connection'}
       </Button>
       <Status state={state} />
     </form>

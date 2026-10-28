@@ -3,7 +3,7 @@ import type { AppRole } from '@/lib/authorization';
 import { resolveUserActor } from '@/lib/authorization-actors';
 import { DEFAULT_POLICY_DEFINITION } from '@/lib/intelligence/contract';
 import { indexIncident } from '@/lib/intelligence/jobs/indexer';
-import { getFeedbackCalibration, getInsights } from '@/lib/intelligence/insights/service';
+import { getFeedbackCalibration, getInsights, getWeeklySummary } from '@/lib/intelligence/insights/service';
 import { publishPolicyVersion, resolveEffectivePolicy } from '@/lib/intelligence/settings/service';
 import { createTestIncident, createTestService, createTestTeam, createTestUser, resetDatabase, testPrisma as db } from '../../helpers/test-db';
 
@@ -177,5 +177,45 @@ describe('feedback calibration and applying a suggestion', () => {
   it('proposes nothing without feedback', async () => {
     const calibration = await getFeedbackCalibration();
     expect(calibration).toMatchObject({ votes: 0, helpful: 0, buckets: [], suggestion: null });
+  });
+});
+
+describe('weekly summary', () => {
+  it('counts only the last seven days, aggregates across services, and is for managers only', async () => {
+    const admin = await createTestUser({ role: 'ADMIN' });
+    const service = await createTestService('API');
+    const a = await createTestIncident('a', service.id);
+    const b = await createTestIncident('b', service.id);
+    const mk = (incidentId: string, kind: 'SIMILAR_INCIDENT' | 'CHANGE_CORRELATION', createdAt: Date, generation: number) =>
+      db.intelligenceFinding.create({ data: { incidentId, kind, confidence: 0.5, evidence: {}, generation, engineVersion: 't', createdAt } });
+    const recent = new Date(Date.now() - DAY);
+    const old = new Date(Date.now() - 20 * DAY);
+    const f1 = await mk(a.id, 'SIMILAR_INCIDENT', recent, 1);
+    await mk(a.id, 'CHANGE_CORRELATION', recent, 2);
+    await mk(b.id, 'SIMILAR_INCIDENT', recent, 3);
+    await mk(b.id, 'SIMILAR_INCIDENT', old, 4);
+    await db.intelligenceFeedback.create({ data: { subjectType: 'FINDING', subjectId: f1.id, verdict: 'HELPFUL', actorId: admin.id, createdAt: recent } });
+    await db.intelligenceFeedback.create({ data: { subjectType: 'FINDING', subjectId: f1.id, verdict: 'NOT_HELPFUL', createdAt: recent } });
+    await db.intelligenceFeedback.create({ data: { subjectType: 'FINDING', subjectId: f1.id, verdict: 'NOT_HELPFUL', createdAt: old } });
+    await db.changeEvent.create({ data: { serviceId: service.id, source: 'ci', kind: 'DEPLOY', summary: 'x', occurredAt: recent, createdAt: recent } });
+    await db.intelligenceWorkItem.create({ data: { kind: 'INDEX_INCIDENT', subjectKey: 'dead', attempts: 8 } });
+
+    const summary = await getWeeklySummary();
+    expect(summary).toEqual({
+      windowDays: 7,
+      incidentsAnalyzed: 2,
+      findingsByKind: { SIMILAR_INCIDENT: 2, CHANGE_CORRELATION: 1 },
+      ratings: 2,
+      helpfulRatings: 1,
+      changesRecorded: 1,
+      deadLetters: 1,
+    });
+    expect((await getInsights(await actorOf(admin.id)))!.weekly).toEqual(summary);
+    const responder = await createTestUser({ role: 'RESPONDER' });
+    expect((await getInsights(await actorOf(responder.id)))!.weekly).toBeNull();
+  });
+
+  it('is all zeros on an empty install', async () => {
+    expect(await getWeeklySummary()).toMatchObject({ incidentsAnalyzed: 0, findingsByKind: {}, ratings: 0, changesRecorded: 0, deadLetters: 0 });
   });
 });

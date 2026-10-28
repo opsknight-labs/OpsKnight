@@ -327,3 +327,36 @@ export function registerAiGateway(): void {
   registered = true;
   registerLanguageModelResolver((_capability, dataClass) => resolveGatewayPort(dataClass));
 }
+
+export type ProviderTestResult =
+  | { ok: true; latencyMs: number }
+  | { ok: false; reason: 'NOT_FOUND' | 'MISSING_KEY' | 'UNREACHABLE' | 'REJECTED' | 'TIMEOUT' | 'FAILED' };
+
+/**
+ * Sends one tiny fixed prompt to a single saved provider so an administrator can check its address, key
+ * and model before relying on it. It uses the same guarded fetch as real traffic. Only a fixed category
+ * is returned: provider error bodies can echo request details, so they are never shown or stored.
+ */
+export async function testProviderConnection(providerId: string): Promise<ProviderTestResult> {
+  const providers = await loadProvidersForGateway();
+  const provider = providers.find(candidate => candidate.id === providerId);
+  if (!provider) return { ok: false, reason: 'NOT_FOUND' };
+  if (provider.kind !== 'OPENAI_COMPATIBLE' && !provider.apiKey) return { ok: false, reason: 'MISSING_KEY' };
+  const started = Date.now();
+  try {
+    await generateText({
+      model: await buildModel(provider),
+      messages: [{ role: 'user', content: 'Reply with the single word OK.' }],
+      maxOutputTokens: 16,
+      abortSignal: AbortSignal.timeout(15_000),
+      maxRetries: 0,
+    });
+    return { ok: true, latencyMs: Date.now() - started };
+  } catch (error) {
+    const status = (error as { statusCode?: number }).statusCode;
+    if (error instanceof Error && (error.name === 'TimeoutError' || error.name === 'AbortError')) return { ok: false, reason: 'TIMEOUT' };
+    if (status === 401 || status === 403 || status === 404 || status === 400) return { ok: false, reason: 'REJECTED' };
+    if (status === undefined) return { ok: false, reason: 'UNREACHABLE' };
+    return { ok: false, reason: 'FAILED' };
+  }
+}

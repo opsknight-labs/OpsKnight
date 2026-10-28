@@ -5,7 +5,7 @@ import { AppError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { assertCapability } from '@/lib/rbac';
 import { CAPABILITIES } from '@/lib/authorization';
-import { invalidateGatewayCache } from '@/lib/intelligence/ai/gateway';
+import { invalidateGatewayCache, testProviderConnection } from '@/lib/intelligence/ai/gateway';
 import { deleteAiProvider, saveAiProvider, updateAiSettings } from '@/lib/intelligence/ai/settings';
 
 export type AiActionState = { message: string; ok: boolean };
@@ -96,6 +96,27 @@ export async function deleteAiProviderAction(_state: AiActionState, form: FormDa
     invalidateGatewayCache();
     revalidatePath(PATH);
     return result === 'deleted' ? { message: 'Provider removed.', ok: true } : { message: 'That provider no longer exists.', ok: false };
+  } catch (error) {
+    return failure(error);
+  }
+}
+
+const TEST_MESSAGES = {
+  NOT_FOUND: 'That provider no longer exists.',
+  MISSING_KEY: 'No API key is stored for this provider.',
+  UNREACHABLE: 'Could not reach the endpoint. Check the address and network access.',
+  REJECTED: 'The provider rejected the request. Check the key and model name.',
+  TIMEOUT: 'The provider did not answer in time.',
+  FAILED: 'The provider returned an error. Try again later.',
+} as const;
+
+export async function testAiProviderAction(_state: AiActionState, form: FormData): Promise<AiActionState> {
+  try {
+    await assertCapability(CAPABILITIES.INTELLIGENCE_MANAGE);
+    const result = await testProviderConnection(text(form, 'id'));
+    return result.ok
+      ? { message: `Connected in ${result.latencyMs} ms.`, ok: true }
+      : { message: TEST_MESSAGES[result.reason], ok: false };
   } catch (error) {
     return failure(error);
   }

@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { SettingsSection } from '@/components/settings/layout/SettingsSection';
-import { AiSettingsForm, DeleteProviderButton, ProviderForm } from '@/components/settings/AiSettingsForms';
+import { AiSettingsForm, DeleteProviderButton, ProviderForm, TestProviderButton } from '@/components/settings/AiSettingsForms';
 import { Badge } from '@/components/ui/shadcn/badge';
 import { logger } from '@/lib/logger';
 import { assertCapability } from '@/lib/rbac';
@@ -84,7 +84,12 @@ export default async function IntelligenceAiPage() {
                     </span>
                   </summary>
                   <ProviderForm provider={provider} canManage={canManage} />
-                  {canManage && <DeleteProviderButton id={provider.id} name={provider.name} />}
+                  {canManage && (
+                    <div className="flex flex-wrap items-center gap-3">
+                      <TestProviderButton id={provider.id} name={provider.name} />
+                      <DeleteProviderButton id={provider.id} name={provider.name} />
+                    </div>
+                  )}
                 </details>
               </li>
             ))}

@@ -46,6 +46,28 @@ export default async function IntelligenceInsightsPage() {
         <p className="text-sm text-muted-foreground">Unavailable.</p>
       ) : (
         <>
+          {insights.weekly && (
+            <SettingsSection title="Last 7 days" description="Counts across all services.">
+              <div className="grid gap-4 py-3 sm:grid-cols-2 lg:grid-cols-4">
+                {[
+                  ['Incidents analyzed', insights.weekly.incidentsAnalyzed],
+                  ['Similar incidents found', insights.weekly.findingsByKind.SIMILAR_INCIDENT ?? 0],
+                  ['Possible causes found', (insights.weekly.findingsByKind.CHANGE_CORRELATION ?? 0) + (insights.weekly.findingsByKind.PROBABLE_CAUSE ?? 0)],
+                  ['Runbooks suggested', insights.weekly.findingsByKind.RUNBOOK_RECOMMENDATION ?? 0],
+                  ['Ratings received', insights.weekly.ratings],
+                  ['Rated helpful', insights.weekly.ratings === 0 ? '–' : `${Math.round((insights.weekly.helpfulRatings / insights.weekly.ratings) * 100)}%`],
+                  ['Changes recorded', insights.weekly.changesRecorded],
+                  ['Stuck work items', insights.weekly.deadLetters],
+                ].map(([label, value]) => (
+                  <div key={label}>
+                    <p className="text-xs uppercase tracking-wide text-muted-foreground">{label}</p>
+                    <p className="text-lg font-semibold">{value}</p>
+                  </div>
+                ))}
+              </div>
+            </SettingsSection>
+          )}
+
           <SettingsSection
             title="Recurring problems"
             description={`The same masked incident title at least ${RECURRING_MIN_OCCURRENCES} times on at least 2 days in the last ${RECURRING_WINDOW_DAYS} days.`}

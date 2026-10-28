@@ -219,6 +219,9 @@ port, so moving to a newer SDK later is a one-adapter change.
   Fallback is ordered by priority but can never widen where data goes: a self-hosted primary does not
   fall back to an external provider unless an administrator allows it, and a provider whose ceiling is
   below the request's data class is never used. There are no hedged or parallel requests.
+- **Test connection.** Each saved provider has a button that sends one fixed tiny prompt through the same
+  guarded fetch and reports only a fixed category (connected, unreachable, rejected, timeout), never
+  provider error text.
 - **Resilience.** Per-provider circuit breakers (open after three consecutive failures, one probe after
   30 seconds), bounded timeouts, and fallback only before the first token of a streamed answer so two
   answers are never spliced. When AI is unavailable, over budget or rate limited, the assistant answers
@@ -245,6 +248,8 @@ job to fall behind. Everything is flag-only and a person decides what to do.
   30 days, per service, with a flag when the service has no runbook attached.
 - **Unusual volume.** A service with at least five incidents this week and three times its own recent
   weekly norm (a floor of one per week keeps quiet services from flapping).
+- **Last 7 days.** Aggregate counts (incidents analyzed, findings by kind, ratings, changes recorded,
+  stuck work items), visible to administrators only and naming no service or incident.
 - **Suggestion quality.** Responder thumbs on similar-incident suggestions, bucketed by match score.
   When there are at least 20 ratings and low-scoring suggestions are mostly unhelpful, it proposes a
   higher minimum similarity, judged by the lower bound of the Wilson interval so a few thumbs-up cannot
@@ -283,7 +288,9 @@ answers or error messages.
 
 ## Not yet implemented
 
-Automatic grouping, any delay before paging, write actions from the assistant, a weekly digest,
-embedding-based search, and learned correlation rules are future stages. MCP exposure is delivered by the
+Automatic grouping, any delay before paging, write actions from the assistant, scheduled digest
+delivery (a last-7-days summary is shown on demand in Insights), embedding-based search, and learned
+correlation rules are future stages. The evidence and the open gates are tracked in
+`plans/intelligence-engine/certification/README.md`. MCP exposure is delivered by the
 native MCP work, not here. Each will be introduced behind its own certification gate and will not change
 paging behaviour until that gate has passed.
