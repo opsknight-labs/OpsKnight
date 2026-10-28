@@ -140,3 +140,23 @@ TLS options, PgBouncer, and URI-encoded credentials can be supplied safely.
 {{- printf "postgresql://%s:%s@%s:%s/%s?schema=public&connection_limit=%d&pool_timeout=%d%s" (.Values.postgresql.username | urlquery) (.Values.postgresql.password | urlquery) $host .Values.postgresql.port .Values.postgresql.database (int $connLimit) (int $poolTimeout) $tlsQuery }}
 {{- end }}
 {{- end }}
+
+{{/* CSI lifecycle and Secret ownership belong to the cluster/operator. */}}
+{{- define "opsknight.csi.mount" -}}
+{{- if .Values.externalSecrets.csi.enabled }}
+- name: external-secrets
+  mountPath: {{ .Values.externalSecrets.csi.mountPath | quote }}
+  readOnly: true
+{{- end }}
+{{- end }}
+
+{{- define "opsknight.csi.volume" -}}
+{{- if .Values.externalSecrets.csi.enabled }}
+- name: external-secrets
+  csi:
+    driver: secrets-store.csi.k8s.io
+    readOnly: true
+    volumeAttributes:
+      secretProviderClass: {{ required "externalSecrets.csi.secretProviderClass is required" .Values.externalSecrets.csi.secretProviderClass | quote }}
+{{- end }}
+{{- end }}

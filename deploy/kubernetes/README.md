@@ -106,3 +106,7 @@ kubectl -n opsknight label deployment opsknight-pgbouncer app.kubernetes.io/comp
 Use the actual namespace and Helm-generated Deployment name. Keep application
 Deployments stopped until migration and new runtime readiness complete; do not
 label application Deployments as infrastructure or disable the cutover guard.
+
+## Optional external secrets
+
+Kustomize `profiles/integrated-csi` and `profiles/split-csi` mount externally managed secrets with an external database and exclude the placeholder Secret. Reusable `secrets-store-csi`, `external-secrets`, and `openshift` components cover environment-owned overlays and the separate migration Job. See [Kustomize external secrets](../../docs/v2.1.0/operate/deploy/kustomize/external-secrets.md) for identity, provider examples, migration ordering, and rotation.

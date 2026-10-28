@@ -19,6 +19,8 @@ on:
       - 'docs/v2.0.0/operate/upgrades/**'
       - 'docs/v2.0.0/troubleshooting/**'
       - 'tests/lib/deployment-config-unit.test.ts'
+      - 'tests/lib/deployment-csi.test.ts'
+      - 'tests/lib/deployment-csi-kustomize.test.ts'
       - '.github/workflows/docker-image.yml'
       - '.github/workflows/deployment-validation.yml'
   push:
@@ -87,6 +89,15 @@ jobs:
 
       - name: Set up kubectl
         uses: azure/setup-kubectl@v5
+
+      - name: Set up Node and dependencies for CSI contract tests
+        uses: ./.github/actions/setup-node
+        with:
+          node-version: 20
+          generate-prisma: 'true'
+
+      - name: Validate external secrets deployment contracts
+        run: npx vitest run tests/lib/deployment-csi.test.ts tests/lib/deployment-csi-kustomize.test.ts --no-file-parallelism --maxWorkers=1
 
       - name: Lint Helm chart
         run: helm lint deploy/kubernetes/helm/opsknight

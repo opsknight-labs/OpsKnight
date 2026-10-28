@@ -15,6 +15,8 @@ verification:
 
 Use Kustomize when the platform team owns manifests, environment overlays, and GitOps promotion. Keep a maintained profile as the base and express environment differences as patches; do not fork rendered YAML.
 
+Optional [external secrets and OpenShift components](./external-secrets) add Secrets Store CSI mounts to application and migration workloads.
+
 ## Installation path
 
 1. Review [profiles and overlays](./overlays).

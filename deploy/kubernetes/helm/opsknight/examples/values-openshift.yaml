@@ -1,0 +1,19 @@
+# Application profile for restricted SCCs. Validate on your target release.
+# Merge after your main values file; Helm null removes the chart's fixed IDs.
+podSecurityContext:
+  runAsUser: null
+  runAsGroup: null
+  fsGroup: null
+  runAsNonRoot: true
+  seccompProfile:
+    type: RuntimeDefault
+securityContext:
+  runAsUser: null
+  runAsNonRoot: true
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop: [ALL]
+# Bundled database/agent/PgBouncer require their own platform assessment.
+postgresql:
+  enabled: false
+  host: db.example.internal

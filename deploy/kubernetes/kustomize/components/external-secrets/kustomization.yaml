@@ -1,0 +1,16 @@
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+
+# Use when CSI/ESO (or another external owner) populates opsknight-secrets.
+# Exclude the placeholder Secret so GitOps cannot overwrite external values.
+patches:
+  - target:
+      version: v1
+      kind: Secret
+      name: opsknight-secrets
+    patch: |-
+      apiVersion: v1
+      kind: Secret
+      metadata:
+        name: opsknight-secrets
+      $patch: delete

@@ -68,6 +68,9 @@ spec:
       {{- end }}
       labels:
         {{- include "opsknight.roleSelectorLabels" (dict "root" $root "role" $role.name) | nindent 8 }}
+        {{- with $root.Values.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
     spec:
       terminationGracePeriodSeconds: {{ $role.values.terminationGracePeriodSeconds }}
       {{- with $root.Values.imagePullSecrets }}
@@ -179,20 +182,30 @@ spec:
                   - "3"
             {{- end }}
           {{- end }}
-          {{- if and (not $root.Values.postgresql.enabled) $root.Values.postgresql.tls.enabled }}
+          {{- if or $root.Values.externalSecrets.csi.enabled (and (not $root.Values.postgresql.enabled) $root.Values.postgresql.tls.enabled) }}
           volumeMounts:
+            {{- if $root.Values.externalSecrets.csi.enabled }}
+            {{- include "opsknight.csi.mount" $root | nindent 12 }}
+            {{- end }}
+            {{- if and (not $root.Values.postgresql.enabled) $root.Values.postgresql.tls.enabled }}
             - name: database-tls
               mountPath: /etc/opsknight-db-tls
               readOnly: true
+            {{- end }}
           {{- end }}
-      {{- if and (not $root.Values.postgresql.enabled) $root.Values.postgresql.tls.enabled }}
+      {{- if or $root.Values.externalSecrets.csi.enabled (and (not $root.Values.postgresql.enabled) $root.Values.postgresql.tls.enabled) }}
       volumes:
+        {{- if $root.Values.externalSecrets.csi.enabled }}
+        {{- include "opsknight.csi.volume" $root | nindent 8 }}
+        {{- end }}
+        {{- if and (not $root.Values.postgresql.enabled) $root.Values.postgresql.tls.enabled }}
         - name: database-tls
           secret:
             secretName: {{ required "postgresql.tls.existingSecret is required when external PostgreSQL TLS is enabled" $root.Values.postgresql.tls.existingSecret }}
             items:
               - key: {{ $root.Values.postgresql.tls.caKey }}
                 path: ca.crt
+        {{- end }}
       {{- end }}
       {{- with $root.Values.nodeSelector }}
       nodeSelector:
