@@ -21,6 +21,8 @@ export const WORK_KINDS = {
   ANALYZE_RESPONSE: 'ANALYZE_RESPONSE',
   /** One coalesced item: embeds a bounded batch of pending incidents per provider call. */
   EMBED_PENDING: 'EMBED_PENDING',
+  /** One item per ISO week (subject = week key), sending the digest in chunks. */
+  SEND_DIGEST: 'SEND_DIGEST',
 } as const;
 export type WorkKind = (typeof WORK_KINDS)[keyof typeof WORK_KINDS];
 
@@ -31,6 +33,7 @@ export const WORK_PRIORITY: Record<WorkKind, number> = {
   CORRELATE_INCIDENT: 25,
   ANALYZE_RESPONSE: 30,
   EMBED_PENDING: 40,
+  SEND_DIGEST: 50,
 };
 
 export const MAX_WORK_ATTEMPTS = 8;

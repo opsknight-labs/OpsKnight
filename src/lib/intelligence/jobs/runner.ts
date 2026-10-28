@@ -11,6 +11,7 @@ import { analyzeIncident } from '../similarity/analyzer';
 import { correlateIncident, shouldCorrelate } from '../correlation/handler';
 import { OBSERVE_INTERVAL_MS, suggestObservedDependencies } from '../dependencies/observer';
 import { analyzeResponse, shouldAnalyzeResponse } from '../response/handler';
+import { DIGEST_CHECK_INTERVAL_MS, scheduleDigestIfDue, sendDigestPass } from '../digest/service';
 import { currentEmbeddingModel, embedIncidents, EMBED_BATCH_SIZE, EMBED_INTERVAL_MS, findIncidentsToEmbed } from '../semantic/embedder';
 import {
   claimWorkItems,
@@ -81,6 +82,11 @@ export const DEFAULT_HANDLERS: WorkHandlers = {
     }
     await enqueueWorkItems(next);
   },
+  [WORK_KINDS.SEND_DIGEST]: async (item, { signal }) => {
+    if ((await sendDigestPass(item.subjectKey, new Date(), signal)) === 'more') {
+      await enqueueWorkItems([{ kind: WORK_KINDS.SEND_DIGEST, subjectKey: item.subjectKey }]);
+    }
+  },
 };
 
 const SEMANTIC_SUBJECT = 'pending';
@@ -91,10 +97,11 @@ export interface LaneState {
   lastRetentionAt: number;
   lastObserveAt: number;
   lastEmbedAt: number;
+  lastDigestCheckAt: number;
 }
 
 export function createLaneState(): LaneState {
-  return { pause: { paused: false }, lastReconcileAt: 0, lastRetentionAt: 0, lastObserveAt: 0, lastEmbedAt: 0 };
+  return { pause: { paused: false }, lastReconcileAt: 0, lastRetentionAt: 0, lastObserveAt: 0, lastEmbedAt: 0, lastDigestCheckAt: 0 };
 }
 
 export interface CycleResult {
@@ -257,6 +264,17 @@ export async function runIntelligenceCycle(
         }
       } catch (error) {
         logger.warn('[Intelligence] Could not schedule semantic indexing; will retry', {
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
+
+    if (handlers[WORK_KINDS.SEND_DIGEST] && now() - state.lastDigestCheckAt >= DIGEST_CHECK_INTERVAL_MS) {
+      state.lastDigestCheckAt = now();
+      try {
+        await scheduleDigestIfDue(new Date(now()));
+      } catch (error) {
+        logger.warn('[Intelligence] Could not schedule the weekly digest; will retry', {
           error: error instanceof Error ? error.message : String(error),
         });
       }

@@ -8,6 +8,9 @@ import { CAPABILITIES } from '@/lib/authorization';
 import type { PolicyDefinition } from '@/lib/intelligence/contract';
 import { getFeedbackCalibration } from '@/lib/intelligence/insights/service';
 import { publishPolicyVersion, resolveEffectivePolicy } from '@/lib/intelligence/settings/service';
+import { DIGEST_DAYS } from '@/lib/intelligence/digest/contract';
+import { sendTestDigest, updateDigestSettings } from '@/lib/intelligence/digest/service';
+import { checkRateLimit } from '@/lib/rate-limit';
 
 export type InsightsActionState = { message: string; ok: boolean };
 
@@ -61,6 +64,49 @@ export async function applyMinScoreSuggestion(
     revalidatePath(PATH);
     revalidatePath('/settings/intelligence');
     return { message: `Similarity threshold set to ${calibration.suggestion.suggested}. Policy version ${result.version} published.`, ok: true };
+  } catch (error) {
+    return failure(error);
+  }
+}
+
+/** Saves the weekly digest schedule. Revision-locked, so two admins cannot silently overwrite each other. */
+export async function saveDigestSettingsAction(_state: InsightsActionState, form: FormData): Promise<InsightsActionState> {
+  try {
+    const actor = await assertCapability(CAPABILITIES.INTELLIGENCE_MANAGE);
+    const next = await updateDigestSettings(
+      {
+        enabled: form.get('enabled') === 'on',
+        dayOfWeek: Number(form.get('dayOfWeek')),
+        hourUtc: Number(form.get('hourUtc')),
+        expectedRevision: Number(form.get('expectedRevision')),
+      },
+      { actorId: actor.id, source: 'UI' }
+    );
+    revalidatePath(PATH);
+    return {
+      message: next.enabled
+        ? `Saved. The digest goes out every ${DIGEST_DAYS[next.dayOfWeek] ?? 'week'} at ${String(next.hourUtc).padStart(2, '0')}:00 UTC.`
+        : 'Saved. The weekly digest is off.',
+      ok: true,
+    };
+  } catch (error) {
+    if (error instanceof AppError && error.code === 'PRECONDITION_FAILED') {
+      return { message: 'The digest settings changed since you opened the page. Refresh and try again.', ok: false };
+    }
+    return failure(error);
+  }
+}
+
+/** Emails the current digest to the signed-in admin only. Rate-limited so it cannot be used to spam. */
+export async function sendTestDigestAction(_state: InsightsActionState): Promise<InsightsActionState> {
+  try {
+    const actor = await assertCapability(CAPABILITIES.INTELLIGENCE_MANAGE);
+    const limit = await checkRateLimit(`intelligence:digest-test:${actor.id}`, 3, 10 * 60_000);
+    if (!limit.allowed) return { message: 'You can send 3 test digests every 10 minutes. Try again shortly.', ok: false };
+    const sent = await sendTestDigest(actor.id);
+    return sent
+      ? { message: 'Queued. It should arrive within a minute or two; delivery shows under Notifications.', ok: true }
+      : { message: 'Could not send. Check that an email provider is configured under Notifications.', ok: false };
   } catch (error) {
     return failure(error);
   }

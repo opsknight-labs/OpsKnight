@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { SettingsSection } from '@/components/settings/layout/SettingsSection';
-import { ApplySuggestionForm } from '@/components/settings/InsightsForms';
+import { ApplySuggestionForm, DigestSettingsForm, SendTestDigestButton } from '@/components/settings/InsightsForms';
 import { Badge } from '@/components/ui/shadcn/badge';
 import { logger } from '@/lib/logger';
 import { assertCapability, getCurrentAuthorizationActor } from '@/lib/rbac';
@@ -8,6 +8,7 @@ import { CAPABILITIES, hasCapability, type AppRole } from '@/lib/authorization';
 import { MIN_FEEDBACK_FOR_SUGGESTION } from '@/lib/intelligence/insights/calibration';
 import { getInsights, RECURRING_MIN_OCCURRENCES, RECURRING_WINDOW_DAYS } from '@/lib/intelligence/insights/service';
 import { listPolicyVersions } from '@/lib/intelligence/settings/service';
+import { getDigestSettings, getLatestDigestRun } from '@/lib/intelligence/digest/service';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -15,8 +16,13 @@ export const revalidate = 0;
 async function load() {
   try {
     const actor = await getCurrentAuthorizationActor();
-    const [insights, versions] = await Promise.all([getInsights(actor), listPolicyVersions({}, { limit: 1 })]);
-    return { insights, headVersion: versions.headVersion };
+    const [insights, versions, digest, lastRun] = await Promise.all([
+      getInsights(actor),
+      listPolicyVersions({}, { limit: 1 }),
+      getDigestSettings(),
+      getLatestDigestRun(),
+    ]);
+    return { insights, headVersion: versions.headVersion, digest, lastRun };
   } catch (error) {
     logger.warn('[Intelligence] Insights could not load', { error: error instanceof Error ? error.message : String(error) });
     return null;
@@ -158,6 +164,26 @@ export default async function IntelligenceInsightsPage() {
                 )}
               </div>
             </SettingsSection>
+          )}
+
+          {insights.weekly && loaded && (
+            <div id="digest" className="scroll-mt-24">
+              <SettingsSection
+                title="Weekly digest"
+                description="A short email with these numbers, recurring problems and unusual volume. Off by default; it never changes anything."
+                action={<Badge variant={loaded.digest.enabled ? 'default' : 'secondary'}>{loaded.digest.enabled ? 'On' : 'Off'}</Badge>}
+              >
+                <DigestSettingsForm settings={loaded.digest} canManage={canManage} />
+                <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border py-3">
+                  <p className="text-xs text-muted-foreground">
+                    {loaded.lastRun
+                      ? `Last digest ${loaded.lastRun.weekKey}: ${loaded.lastRun.status === 'COMPLETED' ? 'sent' : 'sending'} to ${loaded.lastRun.sent} ${loaded.lastRun.sent === 1 ? 'person' : 'people'}${loaded.lastRun.failed > 0 ? `, ${loaded.lastRun.failed} not delivered` : ''}.`
+                      : 'No digest has been sent yet.'}
+                  </p>
+                  {canManage && <SendTestDigestButton />}
+                </div>
+              </SettingsSection>
+            </div>
           )}
         </>
       )}

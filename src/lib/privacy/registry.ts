@@ -295,6 +295,8 @@ export const personalDataRegistry = [
       'IntelligencePattern',
       'ServiceDependency',
       'ChangeEvent',
+      'IntelligenceDigestSettings',
+      'IntelligenceDigestRun',
     ],
     fields: [
       'IncidentFingerprint.template',
@@ -310,6 +312,9 @@ export const personalDataRegistry = [
       'ChangeEvent.summary',
       'ChangeEvent.version',
       'ChangeEvent.url',
+      'IntelligenceDigestSettings.updatedBy',
+      'IntelligenceDigestRun.sentTo',
+      'IntelligenceDigestRun.failedTo',
     ],
     purpose: [
       'Similar-incident suggestions',
@@ -318,6 +323,7 @@ export const personalDataRegistry = [
       'Responder feedback on suggestions',
       'Policy change history',
       'Probable-cause and runbook recommendations from service dependencies and change events',
+      'Optional weekly digest email to people who manage intelligence',
     ],
     classifications: ['INTERNAL', 'PERSONAL'],
     locations: ['DATABASE', 'FREE_TEXT'],
@@ -329,7 +335,7 @@ export const personalDataRegistry = [
     },
     discoverable: 'PARTIAL',
     notes: [
-      'Derived data only; incidents and alerts remain the source of truth and are never modified. Fingerprint templates are masked copies of incident titles and can still contain customer identifiers typed by operators. Label values drop credential-shaped fields, and finding evidence stores numeric scores only, never text from another incident. When an administrator turns on semantic search, masked titles are sent to the configured embedding provider (only one allowed to receive INTERNAL data) and the returned vectors are stored with fingerprint retention. Feedback and policy authorship use foreign keys that clear to null when a user is erased; free-text feedback notes need manual review.',
+      'Derived data only; incidents and alerts remain the source of truth and are never modified. Fingerprint templates are masked copies of incident titles and can still contain customer identifiers typed by operators. Label values drop credential-shaped fields, and finding evidence stores numeric scores only, never text from another incident. When an administrator turns on semantic search, masked titles are sent to the configured embedding provider (only one allowed to receive INTERNAL data) and the returned vectors are stored with fingerprint retention. The optional weekly digest is built per recipient from services they can read; delivery records keep recipient user ids only and age out with finding retention. Feedback and policy authorship use foreign keys that clear to null when a user is erased; free-text feedback notes need manual review.',
     ],
   },
   {

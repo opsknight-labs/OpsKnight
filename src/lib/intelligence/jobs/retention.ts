@@ -16,6 +16,7 @@ export interface RetentionResult {
   evaluationRuns: number;
   patterns: number;
   changeEvents: number;
+  digestRuns: number;
   /** True when any table hit the batch ceiling and more expired rows may remain. */
   more: boolean;
 }
@@ -84,7 +85,13 @@ export async function purgeExpiredIntelligenceData(
         SELECT "id" FROM "ChangeEvent"
         WHERE "occurredAt" < ${cutoff(settings.findingRetentionDays)} LIMIT ${limit})`);
 
-    const counts = { fingerprints, embeddings, correlationGroups, relationships, findings, feedback, evaluationRuns, patterns, changeEvents };
+    // Digest delivery records name recipients by id; they are operational history only.
+    const digestRuns = await tx.$executeRaw(Prisma.sql`
+      DELETE FROM "IntelligenceDigestRun" WHERE "weekKey" IN (
+        SELECT "weekKey" FROM "IntelligenceDigestRun"
+        WHERE "startedAt" < ${cutoff(settings.findingRetentionDays)} LIMIT ${limit})`);
+
+    const counts = { fingerprints, embeddings, correlationGroups, relationships, findings, feedback, evaluationRuns, patterns, changeEvents, digestRuns };
     return { ...counts, more: Object.values(counts).some(count => count >= limit) };
   });
 }

@@ -5326,3 +5326,29 @@ model IncidentEmbedding {
   @@index([model, incidentCreatedAt(sort: Desc)], map: "idx_incident_embedding_model_recent")
   @@index([incidentCreatedAt], map: "idx_incident_embedding_retention")
 }
+
+// Schedule for the weekly intelligence digest email. Off by default; edited from Insights.
+model IntelligenceDigestSettings {
+  id        String   @id @default("default")
+  enabled   Boolean  @default(false)
+  // 0 = Sunday ... 6 = Saturday, at `hourUtc` in UTC.
+  dayOfWeek Int      @default(1)
+  hourUtc   Int      @default(8)
+  revision  Int      @default(1)
+  updatedBy String?
+  updatedAt DateTime @updatedAt
+}
+
+// One row per ISO week: claiming it is what makes the digest go out once, however many workers run.
+model IntelligenceDigestRun {
+  weekKey      String    @id
+  scheduledFor DateTime
+  status       String    @default("SENDING")
+  recipients   Int       @default(0)
+  sentTo       String[]  @default([])
+  failedTo     String[]  @default([])
+  startedAt    DateTime  @default(now())
+  completedAt  DateTime?
+
+  @@index([startedAt], map: "idx_intelligence_digest_run_started")
+}
