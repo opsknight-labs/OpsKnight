@@ -32,7 +32,11 @@ export async function resolveMcpGrant(
   // No values are interpolated into SQL syntax and no authority is cached.
   const [grant] = await db.$queryRaw<GrantAuthoritySnapshot[]>`
     SELECT g.id AS "grantId", g."userId", g."userTokenVersion",
-      g.scopes AS "grantScopes", c.scopes AS "clientScopes", g.resource,
+      g.scopes AS "grantScopes", g.resource,
+      -- A metadata client's effective ceiling is always the current policy, never its stored copy.
+      CASE WHEN c."metadataUrl" IS NULL THEN c.scopes
+        ELSE ARRAY(SELECT s FROM unnest(c.scopes) AS s WHERE s = ANY(p."cimdScopes")) END
+        AS "clientScopes",
       g."revokedAt", c."revokedAt" AS "clientRevokedAt", g."expiresAt",
       u.role::text AS role, u.status::text AS status, u."tokenVersion",
       ARRAY(SELECT tm."teamId" FROM "TeamMember" tm WHERE tm."userId" = u.id) AS "teamIds"

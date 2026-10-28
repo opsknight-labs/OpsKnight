@@ -9,19 +9,24 @@ type Database = Prisma.TransactionClient;
 type Model = OAuth2Server.AuthorizationCodeModel & OAuth2Server.RefreshTokenModel;
 
 export function createMcpOAuthModel(db: Database, onReuse: (grantId: string) => void): Model {
+  // A metadata client is only as trusted as the current policy: its host must still be listed and
+  // its scopes can never exceed the current ceiling, whatever copy was stored at registration.
+  const effectiveScopes = async (client: { metadataUrl: string | null; scopes: string[] }) => {
+    if (!client.metadataUrl) return client.scopes;
+    const policy = await db.mcpPolicy.findUnique({ where: { id: 'default' } });
+    if (!policy || !isCimdHostAllowed(policy, new URL(client.metadataUrl).hostname)) return null;
+    return client.scopes.filter(scope => policy.cimdScopes.includes(scope));
+  };
   const getClient = async (id: string) => {
     const client = await db.mcpClient.findUnique({ where: { id } });
     if (!client || client.revokedAt) return false;
-    if (client.metadataUrl) {
-      // Disabling the feature or removing a host takes effect at the next token request.
-      const policy = await db.mcpPolicy.findUnique({ where: { id: 'default' } });
-      if (!policy || !isCimdHostAllowed(policy, new URL(client.metadataUrl).hostname)) return false;
-    }
+    const scopes = await effectiveScopes(client);
+    if (!scopes) return false;
     return {
       id,
       redirectUris: client.redirectUris,
       grants: ['authorization_code', 'refresh_token'],
-      scopes: client.scopes,
+      scopes,
     };
   };
   const validateGrant = async (id: string) => {
@@ -55,8 +60,10 @@ export function createMcpOAuthModel(db: Database, onReuse: (grantId: string) => 
     getAccessToken: async () => false, // Resource verification uses the authoritative grant resolver.
     validateScope: async (user, client, scope) => {
       const grant = await validateGrant(String(user.grantId));
+      const ceiling = await effectiveScopes(grant.client);
       return scope?.length &&
-        scope.every(item => grant.scopes.includes(item) && grant.client.scopes.includes(item))
+        ceiling &&
+        scope.every(item => grant.scopes.includes(item) && ceiling.includes(item))
         ? scope
         : false;
     },
@@ -116,11 +123,14 @@ export function createMcpOAuthModel(db: Database, onReuse: (grantId: string) => 
           token.refreshTokenExpiresAt,
         'invalid_grant'
       );
-      const scopes: string[] = token.scope ?? grant.scopes;
-      requireMcp(
-        scopes.every(scope => grant.scopes.includes(scope) && grant.client.scopes.includes(scope)),
-        'invalid_scope'
+      const requested: string[] = token.scope ?? grant.scopes;
+      const ceiling = await effectiveScopes(grant.client);
+      requireMcp(ceiling, 'invalid_grant');
+      // A refresh after the policy ceiling was lowered yields only what is still permitted.
+      const scopes = requested.filter(
+        scope => grant.scopes.includes(scope) && ceiling.includes(scope)
       );
+      requireMcp(scopes.length, 'invalid_scope');
       await db.mcpToken.create({
         data: {
           grantId: grant.id,
@@ -131,7 +141,7 @@ export function createMcpOAuthModel(db: Database, onReuse: (grantId: string) => 
           refreshExpiresAt: token.refreshTokenExpiresAt,
         },
       });
-      return { ...token, accessToken: String(token.accessToken), client, user };
+      return { ...token, scope: scopes, accessToken: String(token.accessToken), client, user };
     },
     getRefreshToken: async refreshToken => {
       const token = await db.mcpToken.findUnique({

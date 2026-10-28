@@ -7,7 +7,7 @@ import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import prisma from '@/lib/prisma';
 import { getCurrentUser, getUserPermissions } from '@/lib/rbac';
-import { mcpIssuer, mcpResource } from '@/lib/mcp/auth/config';
+import { mcpConfigurationIssues, mcpIssuer, mcpResource } from '@/lib/mcp/auth/config';
 import { mcpOAuthServer } from '@/lib/mcp/auth/oauth-model';
 import { MCP_CATALOG, isMcpApprovalGated, isMcpExecutable } from '@/lib/mcp/catalog';
 import { isIP } from 'node:net';
@@ -104,6 +104,8 @@ export async function updateMcpPolicy(form: FormData) {
       }),
     'MCP_INVALID_CIMD_HOST'
   );
+  // Refuse to switch MCP on when its bootstrap configuration would fail at request time.
+  requireMcp(!input.enabled || !mcpConfigurationIssues().length, 'MCP_CONFIGURATION_INVALID');
   const cimdScopes = parseScopes(input.cimdScopes);
   requireMcp(
     !input.cimdEnabled || (cimdAllowedHosts.length > 0 && cimdScopes.length > 0),

@@ -183,6 +183,19 @@ describe('pinned metadata transport', () => {
       fetchPinnedMetadata(url, fakeTransport({ dnsFails: true }).dependencies)
     ).rejects.toThrow('MCP_CLIENT_METADATA_UNAVAILABLE');
   });
+  it('bounds a slow DNS resolver independently of the request timeout', async () => {
+    const { dependencies } = fakeTransport({});
+    const started = Date.now();
+    await expect(
+      fetchPinnedMetadata(url, {
+        ...dependencies,
+        dnsTimeoutMs: 40,
+        resolve: () =>
+          new Promise(resolve => setTimeout(() => resolve([{ address: '93.184.216.34' }]), 2000)),
+      })
+    ).rejects.toThrow('MCP_CLIENT_METADATA_TIMEOUT');
+    expect(Date.now() - started).toBeLessThan(1000);
+  });
   it('rejects redirects, errors and oversized documents', async () => {
     for (const status of [301, 302, 307, 404, 500])
       await expect(

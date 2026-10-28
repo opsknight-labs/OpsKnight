@@ -65,6 +65,8 @@ export const operationReviewSummarySchema = z
     description: z.string(),
     targets: z.record(z.string(), z.string()),
     ifMatch: z.string().nullable(),
+    // Query inputs are part of the digest, so the reviewer must see them. Older rows have none.
+    query: z.array(z.tuple([z.string(), z.string()])).default([]),
     changes: z.array(z.tuple([z.string(), z.string()])),
     truncated: z.boolean(),
   })
@@ -135,7 +137,8 @@ function flatten(value: unknown, path: string, out: [string, string][], depth = 
   out.push([path || '(value)', text.length > 300 ? `${text.slice(0, 300)}…` : text]);
 }
 
-function reviewSummary(operationId: string, frozen: Frozen) {
+/** What the native review screen shows; everything bound by the digest must appear here. */
+export function reviewSummary(operationId: string, frozen: Frozen) {
   const operation = operationFor(operationId);
   const changes: [string, string][] = [];
   flatten(frozen.body, '', changes);
@@ -147,6 +150,10 @@ function reviewSummary(operationId: string, frozen: Frozen) {
     description: operation.operationId,
     targets: frozen.path ?? {},
     ifMatch: frozen.ifMatch ?? null,
+    query: Object.entries(frozen.query ?? {}).map(([name, value]): [string, string] => [
+      name,
+      String(value).slice(0, 300),
+    ]),
     changes,
     truncated: changes.length >= 80,
   });

@@ -53,6 +53,8 @@ export interface CimdResponse {
 }
 export interface CimdTransportDependencies {
   resolve(host: string): Promise<{ address: string }[]>;
+  /** Budget for DNS resolution alone; the request has its own timeout. */
+  dnsTimeoutMs?: number;
   request(
     options: RequestOptions,
     onResponse: (response: import('node:http').IncomingMessage) => void
@@ -90,10 +92,23 @@ export async function fetchPinnedMetadata(
     'invalid_client'
   );
   let addresses: { address: string }[];
+  let timer: NodeJS.Timeout | undefined;
   try {
-    addresses = await dependencies.resolve(url.hostname);
-  } catch {
+    // A slow resolver must not hold an authorization request past its budget.
+    addresses = await Promise.race([
+      dependencies.resolve(url.hostname),
+      new Promise<never>((_resolve, reject) => {
+        timer = setTimeout(
+          () => reject(new McpBoundaryError('MCP_CLIENT_METADATA_TIMEOUT', 504)),
+          dependencies.dnsTimeoutMs ?? TIMEOUT_MS
+        );
+      }),
+    ]);
+  } catch (error) {
+    if (error instanceof McpBoundaryError) throw error;
     throw new McpBoundaryError('MCP_CLIENT_METADATA_UNAVAILABLE', 502);
+  } finally {
+    clearTimeout(timer);
   }
   requireMcp(
     addresses.length > 0 && addresses.length <= 16,

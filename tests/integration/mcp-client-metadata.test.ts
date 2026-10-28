@@ -163,4 +163,77 @@ describe('Client ID Metadata Documents', () => {
       apiKey: { scopes: [] },
     });
   });
+
+  it('applies a lowered scope ceiling immediately, without re-resolving the client document', async () => {
+    const user = await createTestUser({ role: 'ADMIN' });
+    await policy({ cimdScopes: ['incidents:read', 'services:read'] });
+    const client = await resolve();
+    expect(client.scopes.sort()).toEqual(['incidents:read', 'services:read']);
+    const grant = await db.mcpGrant.create({
+      data: {
+        clientId: client.id,
+        userId: user.id,
+        userTokenVersion: user.tokenVersion,
+        scopes: ['incidents:read', 'services:read'],
+        resource: mcpResource(),
+        expiresAt: new Date(Date.now() + 3600000),
+      },
+    });
+    const model = createMcpOAuthModel(db, () => undefined);
+    await expect(resolveMcpGrant(grant.id)).resolves.toMatchObject({
+      apiKey: { scopes: expect.arrayContaining(['incidents:read', 'services:read']) },
+    });
+
+    // Only the policy changes; the stored client copy still lists both scopes.
+    await policy({ cimdScopes: ['incidents:read'] });
+    expect((await db.mcpClient.findUniqueOrThrow({ where: { id } })).scopes.sort()).toEqual([
+      'incidents:read',
+      'services:read',
+    ]);
+    expect((await resolveMcpGrant(grant.id)).apiKey.scopes).toEqual(['incidents:read']);
+    expect((await model.getClient(id, '')) as unknown as { scopes: string[] }).toMatchObject({
+      scopes: ['incidents:read'],
+    });
+    const principal = { grantId: grant.id };
+    const oauthClient = (await model.getClient(id, '')) as never;
+    expect(await model.validateScope!(principal as never, oauthClient, ['services:read'])).toBe(
+      false
+    );
+    expect(await model.validateScope!(principal as never, oauthClient, ['incidents:read'])).toEqual(
+      ['incidents:read']
+    );
+
+    // A refresh that still lists the removed scope is narrowed, never widened.
+    const saved = await model.saveToken!(
+      {
+        accessToken: 'access-token-value',
+        refreshToken: 'refresh-token-value',
+        accessTokenExpiresAt: new Date(Date.now() + 3600000),
+        refreshTokenExpiresAt: new Date(Date.now() + 7200000),
+        scope: ['incidents:read', 'services:read'],
+      },
+      oauthClient,
+      principal as never
+    );
+    expect((saved as unknown as { scope: string[] }).scope).toEqual(['incidents:read']);
+    const stored = await db.mcpToken.findFirstOrThrow({ where: { grantId: grant.id } });
+    expect(stored.scopes).toEqual(['incidents:read']);
+
+    // Nothing left in the ceiling means no usable scopes at all.
+    await policy({ cimdScopes: ['admin-none:read'] });
+    expect((await resolveMcpGrant(grant.id)).apiKey.scopes).toEqual([]);
+    await expect(
+      model.saveToken!(
+        {
+          accessToken: 'access-token-two',
+          refreshToken: 'refresh-token-two',
+          accessTokenExpiresAt: new Date(Date.now() + 3600000),
+          refreshTokenExpiresAt: new Date(Date.now() + 7200000),
+          scope: ['incidents:read'],
+        },
+        oauthClient,
+        principal as never
+      )
+    ).rejects.toThrow('invalid_scope');
+  });
 });

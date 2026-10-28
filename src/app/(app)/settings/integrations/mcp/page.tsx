@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import prisma from '@/lib/prisma';
 import { getUserPermissions } from '@/lib/rbac';
-import { mcpResource } from '@/lib/mcp/auth/config';
+import { mcpConfigurationIssues, mcpResource } from '@/lib/mcp/auth/config';
 import { requireMcp } from '@/lib/mcp/core/errors';
 import { registerMcpClient, revokeMcpAccess, updateMcpPolicy } from './actions';
 
@@ -63,6 +63,20 @@ export default async function McpSettings({
           Search
         </button>
       </form>
+      {permissions.isAdmin && mcpConfigurationIssues().length > 0 && (
+        <section
+          className="rounded-lg border border-destructive p-4 space-y-1"
+          role="alert"
+          aria-label="MCP configuration problems"
+        >
+          <h2 className="font-semibold">MCP cannot be enabled yet</h2>
+          <ul className="list-disc pl-5">
+            {mcpConfigurationIssues().map(issue => (
+              <li key={issue}>{issue}</li>
+            ))}
+          </ul>
+        </section>
+      )}
       <section className="rounded-lg border p-4 space-y-2" aria-label="Connection status">
         <p>
           <strong>Status:</strong> {policy?.enabled ? 'Enabled' : 'Disabled'}

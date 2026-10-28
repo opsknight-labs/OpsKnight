@@ -48,6 +48,19 @@ export default async function OperationApproval({ params }: { params: Promise<{ 
         <dt>Status</dt>
         <dd>{expired ? 'Expired' : approval.status}</dd>
       </dl>
+      {summary.query.length > 0 && (
+        <>
+          <h2 className="text-lg font-semibold">Query parameters</h2>
+          <dl className="space-y-2 break-words">
+            {summary.query.map(([name, value]) => (
+              <div key={name} className="rounded border p-3">
+                <dt className="font-medium">{name}</dt>
+                <dd className="whitespace-pre-wrap">{value}</dd>
+              </div>
+            ))}
+          </dl>
+        </>
+      )}
       <h2 className="text-lg font-semibold">Frozen changes</h2>
       {summary.changes.length ? (
         <dl className="space-y-2 break-words">
