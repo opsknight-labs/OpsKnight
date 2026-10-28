@@ -1119,20 +1119,19 @@ jobs:
           has_curated_notes=false
           if [ -f "$release_notes_file" ]; then
             echo "Found curated release notes in ${release_notes_file}"
-            parsed_title="$(RELEASE_NOTES_FILE="$release_notes_file" CURATED_BODY_FILE="$curated_body_file" node <<'NODE'
-            const fs = require('node:fs');
-            const content = fs.readFileSync(process.env.RELEASE_NOTES_FILE, 'utf8');
-            const lines = content.split('\n');
-            let title = '';
-            let body = content;
-            if (lines[0].startsWith('# ')) {
-              title = lines[0].replace(/^#\s+/, '').trim();
-              body = lines.slice(1).join('\n').trimStart();
-            }
-            fs.writeFileSync(process.env.CURATED_BODY_FILE, body);
-            process.stdout.write(title);
-            NODE
-            )"
+            parsed_title="$(RELEASE_NOTES_FILE="$release_notes_file" CURATED_BODY_FILE="$curated_body_file" node -e '
+              const fs = require("node:fs");
+              const content = fs.readFileSync(process.env.RELEASE_NOTES_FILE, "utf8");
+              const lines = content.split("\n");
+              let title = "";
+              let body = content;
+              if (lines[0].startsWith("# ")) {
+                title = lines[0].replace(/^#\s+/, "").trim();
+                body = lines.slice(1).join("\n").trimStart();
+              }
+              fs.writeFileSync(process.env.CURATED_BODY_FILE, body);
+              process.stdout.write(title);
+            ')"
             if [ -n "$parsed_title" ]; then
               title="$parsed_title"
             fi
@@ -1178,13 +1177,13 @@ jobs:
 
           summary_asset="$(find release-certification -name "release-certification-${tag}.json" -print -quit 2>/dev/null || true)"
           if [ -n "$summary_asset" ] && [ -f "$summary_asset" ]; then
-            SUMMARY_ASSET="$summary_asset" node <<'NODE'
-            const fs = require('node:fs');
-            const summary = JSON.parse(fs.readFileSync(process.env.SUMMARY_ASSET, 'utf8'));
-            summary.releaseImageIndexDigest = process.env.RELEASE_IMAGE_DIGEST;
-            summary.pgbouncerImageDigest = process.env.PGBOUNCER_IMAGE_DIGEST;
-            fs.writeFileSync(process.env.SUMMARY_ASSET, `${JSON.stringify(summary, null, 2)}\n`);
-            NODE
+            SUMMARY_ASSET="$summary_asset" node -e '
+              const fs = require("node:fs");
+              const summary = JSON.parse(fs.readFileSync(process.env.SUMMARY_ASSET, "utf8"));
+              summary.releaseImageIndexDigest = process.env.RELEASE_IMAGE_DIGEST;
+              summary.pgbouncerImageDigest = process.env.PGBOUNCER_IMAGE_DIGEST;
+              fs.writeFileSync(process.env.SUMMARY_ASSET, `${JSON.stringify(summary, null, 2)}\n`);
+            '
             gh release upload "$tag" "$summary_asset" --clobber || true
           fi
 
@@ -1208,18 +1207,14 @@ jobs:
 
           release_body="$(gh release view "$tag" --json body --jq .body)"
           updated_body_file="$(mktemp)"
-          RELEASE_BODY="$release_body" UPDATED_BODY_FILE="$updated_body_file" node <<'NODE'
-          const fs = require('node:fs');
-          const marker = '<!-- opsknight-release-certification -->';
-          const section = `${marker}
-          ## Release certification
-          - Release image index digest: \`${process.env.RELEASE_IMAGE_DIGEST}\`
-          - PgBouncer image digest: \`${process.env.PGBOUNCER_IMAGE_DIGEST}\`
-          `;
-          const body = process.env.RELEASE_BODY || '';
-          const withoutOld = body.includes(marker) ? body.slice(0, body.indexOf(marker)).trimEnd() : body.trimEnd();
-          fs.writeFileSync(process.env.UPDATED_BODY_FILE, `${withoutOld}${withoutOld ? '\n\n' : ''}${section}\n`);
-          NODE
+          RELEASE_BODY="$release_body" UPDATED_BODY_FILE="$updated_body_file" node -e '
+            const fs = require("node:fs");
+            const marker = "<!-- opsknight-release-certification -->";
+            const section = marker + "\n## Release certification\n- Release image index digest: `" + process.env.RELEASE_IMAGE_DIGEST + "`\n- PgBouncer image digest: `" + process.env.PGBOUNCER_IMAGE_DIGEST + "`\n";
+            const body = process.env.RELEASE_BODY || "";
+            const withoutOld = body.includes(marker) ? body.slice(0, body.indexOf(marker)).trimEnd() : body.trimEnd();
+            fs.writeFileSync(process.env.UPDATED_BODY_FILE, `${withoutOld}${withoutOld ? "\n\n" : ""}${section}\n`);
+          '
           release_id="$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${tag}" --jq .id)"
           gh api --method PATCH "repos/${GITHUB_REPOSITORY}/releases/${release_id}" -F body=@"$updated_body_file" >/dev/null
           rm -f "$updated_body_file"
