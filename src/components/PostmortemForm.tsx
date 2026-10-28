@@ -51,6 +51,8 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { POSTMORTEM_STATUS_CONFIG } from './postmortem/shared';
+import { draftPostmortemWithAiAction } from '@/app/(app)/postmortems/ai-actions';
+import { mergeAiDraft } from './postmortem/merge-ai-draft';
 
 const postmortemSchema = z.object({
   title: z.string().min(1, 'Title is required').max(100, 'Title must be less than 100 characters'),
@@ -79,6 +81,8 @@ type PostmortemFormProps = {
     status?: string;
     isPublic?: boolean | null;
   };
+  /** Shows "Draft with AI" when an administrator has enabled AI. */
+  aiDraftAvailable?: boolean;
   users?: Array<{ id: string; name: string; email: string }>;
   resolvedIncidents?: Array<{
     id: string;
@@ -197,6 +201,7 @@ export default function PostmortemForm({
   resolvedIncidents = [],
   jiraCapability,
   incidentJiraIssues = [],
+  aiDraftAvailable = false,
 }: PostmortemFormProps) {
   const router = useRouter();
   const { userTimeZone } = useTimezone();
@@ -207,19 +212,22 @@ export default function PostmortemForm({
   // Parse initial data with proper types
   const parseTimeline = (timeline: unknown): TimelineEvent[] => {
     if (!timeline || !Array.isArray(timeline)) return [];
-    return timeline.map((e: any) => ({
-      id: e.id || `event-${Date.now()}-${Math.random()}`,
-      timestamp: e.timestamp || new Date().toISOString(),
-      type: e.type || 'DETECTION',
-      title: e.title || '',
-      description: e.description || '',
-      actor: e.actor,
-    }));
+    return timeline.map((raw: unknown) => {
+      const e = (raw && typeof raw === 'object' ? raw : {}) as Partial<TimelineEvent>;
+      return {
+        id: e.id || `event-${Date.now()}-${Math.random()}`,
+        timestamp: e.timestamp || new Date().toISOString(),
+        type: e.type || 'DETECTION',
+        title: e.title || '',
+        description: e.description || '',
+        actor: e.actor,
+      };
+    });
   };
 
   const parseImpact = (impact: unknown): ImpactMetrics => {
     if (!impact || typeof impact !== 'object') return {};
-    const imp = impact as any;
+    const imp = impact as Partial<ImpactMetrics>;
     return {
       usersAffected: imp.usersAffected,
       downtimeMinutes: imp.downtimeMinutes,
@@ -317,8 +325,8 @@ export default function PostmortemForm({
         } else {
           setGeneralError('Failed to save postmortem');
         }
-      } catch (err: any) {
-        setGeneralError(err.message || 'Failed to save postmortem');
+      } catch (err: unknown) {
+        setGeneralError((err instanceof Error && err.message) || 'Failed to save postmortem');
       }
     });
   };
@@ -362,10 +370,48 @@ export default function PostmortemForm({
       setSelectedFactors(inferred);
 
       toast.success('Draft generated successfully');
-    } catch (err: any) {
-      toast.error('Failed to generate draft: ' + (err.message || 'Unknown error'));
+    } catch (err: unknown) {
+      toast.error('Failed to generate draft: ' + ((err instanceof Error && err.message) || 'Unknown error'));
     } finally {
       setIsDrafting(false);
+    }
+  };
+
+  const [isAiDrafting, setIsAiDrafting] = useState(false);
+
+  const handleAiDraft = async () => {
+    const targetId = incidentId || selectedIncidentId;
+    if (!targetId) {
+      toast.error('Please select an incident first');
+      return;
+    }
+    setIsAiDrafting(true);
+    try {
+      const result = await draftPostmortemWithAiAction(targetId);
+      if (!result.ok) {
+        toast.error(result.message);
+        return;
+      }
+      const values = form.getValues();
+      const merged = mergeAiDraft(
+        { summary: values.summary ?? '', rootCause: values.rootCause ?? '', resolution: values.resolution ?? '', lessons: values.lessons ?? '' },
+        actionItems,
+        result.draft,
+        index => `ai-action-${Date.now()}-${index}`
+      );
+      for (const [key, value] of Object.entries(merged.fields)) {
+        if (value) form.setValue(key as 'summary' | 'rootCause' | 'resolution' | 'lessons', value, { shouldDirty: true });
+      }
+      if (merged.addedItems.length) setActionItems(current => [...current, ...merged.addedItems]);
+      toast.success(
+        merged.kept.length
+          ? 'AI draft added to empty fields; fields you had already written were kept. Review everything before saving.'
+          : 'AI draft added. Review and edit it before saving; nothing has been saved.'
+      );
+    } catch {
+      toast.error('AI is unavailable right now. Try again later.');
+    } finally {
+      setIsAiDrafting(false);
     }
   };
 
@@ -452,6 +498,23 @@ export default function PostmortemForm({
               )}
               Auto-Draft
             </Button>
+            {aiDraftAvailable && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={handleAiDraft}
+                disabled={isAiDrafting || isDrafting || (!incidentId && !selectedIncidentId)}
+                className="ml-2 bg-white hover:bg-purple-50 hover:text-purple-700 transition-colors border-purple-200"
+              >
+                {isAiDrafting ? (
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                ) : (
+                  <Sparkles className="w-4 h-4 mr-2 text-purple-600" />
+                )}
+                Draft with AI
+              </Button>
+            )}
           </CardHeader>
           <CardContent className="flex flex-col gap-4">
             <FormField

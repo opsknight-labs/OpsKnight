@@ -74,9 +74,23 @@ describe('intelligence architecture boundaries', () => {
   it('routes every AI provider through the guarded fetch', () => {
     const gateway = read(join(intelligenceDir, 'ai/gateway.ts'));
     expect(gateway).toMatch(/const common = \{[^}]*fetch: fetchImpl[^}]*\}/);
-    const creators = [...gateway.matchAll(/create(?:OpenAICompatible|OpenAI|Anthropic|GoogleGenerativeAI)\(\{([^)]*)\}\)/g)];
-    expect(creators.length).toBe(4);
-    for (const creator of creators) expect(creator[1]).toContain('...common');
+    const creators = [...gateway.matchAll(/\b(create(?:OpenAICompatible|OpenAI|Anthropic|GoogleGenerativeAI|Azure|AmazonBedrock|Vertex|Mistral|Groq))\(\{/g)];
+    expect(creators.map(match => match[1]).sort()).toEqual([
+      'createAmazonBedrock',
+      'createAnthropic',
+      'createAzure',
+      'createGoogleGenerativeAI',
+      'createGroq',
+      'createMistral',
+      'createOpenAI',
+      'createOpenAICompatible',
+      'createVertex',
+    ]);
+    // The guarded fetch must be the first thing every client is given.
+    for (const creator of creators) {
+      const opening = gateway.slice(creator.index! + creator[0].length, creator.index! + creator[0].length + 40);
+      expect(opening.trimStart().startsWith('...common'), creator[1]).toBe(true);
+    }
   });
 
   it('keeps the shared contract dependency-free so client components can import it', () => {

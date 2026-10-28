@@ -1,5 +1,18 @@
 import 'server-only';
-import { generateText, jsonSchema, stepCountIs, streamText, tool, type LanguageModel, type ModelMessage, type ToolSet } from 'ai';
+import {
+  Output,
+  embedMany,
+  generateText,
+  jsonSchema,
+  stepCountIs,
+  streamText,
+  tool,
+  zodSchema,
+  type EmbeddingModel,
+  type LanguageModel,
+  type ModelMessage,
+  type ToolSet,
+} from 'ai';
 import { logAudit } from '@/lib/audit';
 import { logger } from '@/lib/logger';
 import { failSpan, startSpan, withSpan } from '../telemetry';
@@ -9,8 +22,12 @@ import { ProviderBreakers } from './breaker';
 import { selectProviderChain } from './policy';
 import { redactSecrets } from './redact';
 import {
+  registerEmbeddingResolver,
   registerLanguageModelResolver,
   type AiDataClass,
+  type AiStructuredRequest,
+  type AiStructuredResult,
+  type EmbeddingPort,
   type AiGenerateRequest,
   type AiGenerateResult,
   type AiStreamEvent,
@@ -20,7 +37,13 @@ import {
 } from './port';
 import { getAiSettings, loadProvidersForGateway, type AiSettingsView, type GatewayProvider } from './settings';
 
-export type AiGatewayErrorCode = 'RATE_LIMITED' | 'BUDGET_EXHAUSTED' | 'NO_PROVIDER' | 'ALL_PROVIDERS_FAILED' | 'ABORTED';
+export type AiGatewayErrorCode =
+  | 'RATE_LIMITED'
+  | 'BUDGET_EXHAUSTED'
+  | 'NO_PROVIDER'
+  | 'ALL_PROVIDERS_FAILED'
+  | 'ABORTED'
+  | 'OUTPUT_INVALID';
 
 export class AiGatewayError extends Error {
   constructor(
@@ -61,28 +84,100 @@ export function guardedFetchFor(provider: Pick<GatewayProvider, 'allowPrivateNet
   return (input, init) => safeOutboundFetch(urlOf(input), init);
 }
 
-async function buildModel(provider: GatewayProvider): Promise<LanguageModel> {
+type ModelKind = 'chat' | 'embedding';
+
+function missingCredentials(): never {
+  throw new Error('Provider credentials are missing or unreadable');
+}
+
+const apiKeyOf = (provider: GatewayProvider) => (provider.credentials.type === 'apiKey' ? provider.credentials.apiKey : undefined);
+
+/**
+ * Builds a chat or embedding model for one provider. Every client gets `common`, which carries the guarded
+ * fetch, so every request a provider makes to its API goes through the same egress controls. The one
+ * exception is Vertex's OAuth token exchange, which always targets Google's fixed token endpoint.
+ */
+async function buildProviderModel(provider: GatewayProvider, kind: 'chat'): Promise<LanguageModel>;
+async function buildProviderModel(provider: GatewayProvider, kind: 'embedding'): Promise<EmbeddingModel>;
+async function buildProviderModel(provider: GatewayProvider, kind: ModelKind): Promise<LanguageModel | EmbeddingModel> {
   const fetchImpl = guardedFetchFor(provider) as typeof fetch;
-  const common = { apiKey: provider.apiKey ?? undefined, fetch: fetchImpl };
+  const common = { fetch: fetchImpl };
+  const baseURL = provider.baseUrl ?? undefined;
+  const embeddingId = provider.embeddingModel ?? '';
   switch (provider.kind) {
     case 'OPENAI': {
       const { createOpenAI } = await import('@ai-sdk/openai');
-      return createOpenAI({ ...common, baseURL: provider.baseUrl ?? undefined }).chat(provider.model);
+      const client = createOpenAI({ ...common, apiKey: apiKeyOf(provider), baseURL });
+      return kind === 'chat' ? client.chat(provider.model) : client.textEmbeddingModel(embeddingId);
     }
     case 'ANTHROPIC': {
+      if (kind === 'embedding') throw new Error('Anthropic does not provide embeddings');
       const { createAnthropic } = await import('@ai-sdk/anthropic');
-      return createAnthropic({ ...common, baseURL: provider.baseUrl ?? undefined })(provider.model);
+      return createAnthropic({ ...common, apiKey: apiKeyOf(provider), baseURL })(provider.model);
     }
     case 'GOOGLE': {
       const { createGoogleGenerativeAI } = await import('@ai-sdk/google');
-      return createGoogleGenerativeAI({ ...common, baseURL: provider.baseUrl ?? undefined })(provider.model);
+      const client = createGoogleGenerativeAI({ ...common, apiKey: apiKeyOf(provider), baseURL });
+      return kind === 'chat' ? client(provider.model) : client.textEmbeddingModel(embeddingId);
     }
     case 'OPENAI_COMPATIBLE': {
       const { createOpenAICompatible } = await import('@ai-sdk/openai-compatible');
-      return createOpenAICompatible({ ...common, name: 'compatible', baseURL: provider.baseUrl ?? '' }).chatModel(provider.model);
+      const client = createOpenAICompatible({ ...common, apiKey: apiKeyOf(provider), name: 'compatible', baseURL: baseURL ?? '' });
+      return kind === 'chat' ? client.chatModel(provider.model) : client.textEmbeddingModel(embeddingId);
+    }
+    case 'AZURE_OPENAI': {
+      const { createAzure } = await import('@ai-sdk/azure');
+      const client = createAzure({
+        ...common,
+        apiKey: apiKeyOf(provider),
+        ...(baseURL ? { baseURL } : { resourceName: provider.options.azureResourceName }),
+        ...(provider.options.azureApiVersion ? { apiVersion: provider.options.azureApiVersion } : {}),
+      });
+      // The model field is the deployment name.
+      return kind === 'chat' ? client.chat(provider.model) : client.textEmbeddingModel(embeddingId);
+    }
+    case 'BEDROCK': {
+      const { createAmazonBedrock } = await import('@ai-sdk/amazon-bedrock');
+      const credentials = provider.credentials;
+      const auth =
+        credentials.type === 'aws'
+          ? { accessKeyId: credentials.accessKeyId, secretAccessKey: credentials.secretAccessKey }
+          : credentials.type === 'apiKey'
+            ? { apiKey: credentials.apiKey }
+            : missingCredentials();
+      const client = createAmazonBedrock({ ...common, region: provider.options.awsRegion, ...auth });
+      return kind === 'chat' ? client(provider.model) : client.textEmbeddingModel(embeddingId);
+    }
+    case 'VERTEX': {
+      const credentials = provider.credentials;
+      if (credentials.type !== 'google') missingCredentials();
+      const { createVertex } = await import('@ai-sdk/google-vertex/edge');
+      const client = createVertex({
+        ...common,
+        project: provider.options.gcpProject,
+        location: provider.options.gcpLocation,
+        googleCredentials: {
+          clientEmail: credentials.clientEmail,
+          privateKey: credentials.privateKey,
+          ...(credentials.privateKeyId ? { privateKeyId: credentials.privateKeyId } : {}),
+        },
+      });
+      return kind === 'chat' ? client(provider.model) : client.textEmbeddingModel(embeddingId);
+    }
+    case 'MISTRAL': {
+      const { createMistral } = await import('@ai-sdk/mistral');
+      const client = createMistral({ ...common, apiKey: apiKeyOf(provider), baseURL });
+      return kind === 'chat' ? client(provider.model) : client.textEmbeddingModel(embeddingId);
+    }
+    case 'GROQ': {
+      if (kind === 'embedding') throw new Error('Groq does not provide embeddings');
+      const { createGroq } = await import('@ai-sdk/groq');
+      return createGroq({ ...common, apiKey: apiKeyOf(provider), baseURL })(provider.model);
     }
   }
 }
+
+const buildModel = (provider: GatewayProvider) => buildProviderModel(provider, 'chat');
 
 function capOutput(value: unknown): unknown {
   const text = typeof value === 'string' ? value : JSON.stringify(value ?? null);
@@ -153,7 +248,11 @@ class GatewayPort implements LanguageModelPort {
     return open;
   }
 
-  private async finish(request: AiGenerateRequest, result: AiGenerateResult): Promise<void> {
+  private async finish(
+    request: AiGenerateRequest,
+    result: Pick<AiGenerateResult, 'usage' | 'served'>,
+    extra: Record<string, string | number | boolean> = {}
+  ): Promise<void> {
     await recordAiUsage(result.usage).catch(error =>
       logger.warn('[AI] Could not record usage', { error: error instanceof Error ? error.message : String(error) })
     );
@@ -171,8 +270,74 @@ class GatewayPort implements LanguageModelPort {
         fallbackDepth: result.served.fallbackDepth,
         inputTokens: result.usage.inputTokens,
         outputTokens: result.usage.outputTokens,
+        ...(request.context.prompt
+          ? {
+              promptId: request.context.prompt.id,
+              promptVersion: request.context.prompt.version,
+              promptHash: request.context.prompt.hash,
+              guidanceRevision: request.context.prompt.guidanceRevision,
+            }
+          : {}),
+        ...extra,
       },
     }).catch(() => undefined);
+  }
+
+  async generateStructured<T>(request: AiStructuredRequest<T>): Promise<AiStructuredResult<T>> {
+    await this.admit(request);
+    let attempts = 0;
+    let invalidOutputs = 0;
+    for (const [depth, provider] of this.candidates().entries()) {
+      attempts += 1;
+      try {
+        const result = await withSpan(
+          'intelligence.ai.generate_structured',
+          { 'ai.capability': request.context.capability, 'ai.provider.kind': provider.kind, 'ai.fallback.depth': depth },
+          async span => {
+            const generated = await generateText({
+              model: await buildModel(provider),
+              messages: toMessages(request),
+              output: Output.object({ schema: zodSchema(request.schema as Parameters<typeof zodSchema>[0]), name: request.schemaName }),
+              maxOutputTokens: Math.min(request.maxOutputTokens ?? this.data.settings.maxOutputTokens, this.data.settings.maxOutputTokens),
+              abortSignal: this.signalFor(request),
+              maxRetries: 1,
+            });
+            span.setAttribute('ai.tokens.input', generated.totalUsage.inputTokens ?? 0);
+            span.setAttribute('ai.tokens.output', generated.totalUsage.outputTokens ?? 0);
+            return generated;
+          }
+        );
+        const usage = { inputTokens: result.totalUsage.inputTokens ?? 0, outputTokens: result.totalUsage.outputTokens ?? 0 };
+        const served = { providerId: provider.id, model: provider.model, fallbackDepth: depth };
+        // Validated again here, independently of the SDK, so nothing unchecked ever reaches a caller.
+        let candidate: unknown;
+        try {
+          candidate = result.output;
+        } catch {
+          candidate = undefined;
+        }
+        const checked = request.schema.safeParse(candidate);
+        breakers.recordSuccess(provider.id);
+        if (!checked.success) {
+          invalidOutputs += 1;
+          await this.finish(request, { usage, served }, { outputValid: false });
+          continue;
+        }
+        await this.finish(request, { usage, served }, { outputValid: true });
+        return { object: checked.data, usage, served };
+      } catch (error) {
+        if (request.context.signal?.aborted) throw new AiGatewayError('ABORTED', 'Request cancelled');
+        // A model that could not produce schema-shaped output is not a broken provider.
+        if (error instanceof Error && /NoObjectGenerated|NoOutputGenerated|TypeValidation|JSONParse/.test(error.name)) {
+          invalidOutputs += 1;
+          continue;
+        }
+        breakers.recordFailure(provider.id);
+        logger.warn('[AI] Provider call failed', { providerId: provider.id, error: error instanceof Error ? error.name : 'error' });
+      }
+    }
+    if (invalidOutputs > 0) throw new AiGatewayError('OUTPUT_INVALID', 'The AI response did not match the expected format');
+    throw new AiGatewayError('ALL_PROVIDERS_FAILED', `All ${attempts} AI provider attempts failed`);
   }
 
   async generate(request: AiGenerateRequest): Promise<AiGenerateResult> {
@@ -298,6 +463,56 @@ class GatewayPort implements LanguageModelPort {
   }
 }
 
+class GatewayEmbeddingPort implements EmbeddingPort {
+  readonly model: string;
+  readonly providerId: string;
+
+  constructor(
+    private readonly provider: GatewayProvider,
+    private readonly settings: AiSettingsView
+  ) {
+    this.model = `${provider.kind}:${provider.embeddingModel}`;
+    this.providerId = provider.id;
+  }
+
+  async embed(values: string[], context: { actorId: string; signal?: AbortSignal }) {
+    const decision = await admitAiRequest(context.actorId, this.settings);
+    if (!decision.allowed) throw new AiGatewayError(decision.reason, 'AI limits reached');
+    if (!breakers.canAttempt(this.provider.id)) throw new AiGatewayError('NO_PROVIDER', 'Embedding provider unavailable');
+    const timeout = AbortSignal.timeout(this.settings.requestTimeoutMs);
+    try {
+      const result = await withSpan('intelligence.ai.embed', { 'ai.provider.kind': this.provider.kind, 'ai.values': values.length }, async () =>
+        embedMany({
+          model: await buildProviderModel(this.provider, 'embedding'),
+          values: values.map(value => redactSecrets(value)),
+          maxRetries: 1,
+          abortSignal: context.signal ? AbortSignal.any([context.signal, timeout]) : timeout,
+        })
+      );
+      breakers.recordSuccess(this.provider.id);
+      const tokens = result.usage?.tokens ?? 0;
+      await recordAiUsage({ inputTokens: tokens, outputTokens: 0 }).catch(() => undefined);
+      return { vectors: result.embeddings, tokens };
+    } catch (error) {
+      breakers.recordFailure(this.provider.id);
+      throw error;
+    }
+  }
+}
+
+/** The first eligible provider with an embedding model, under the same data-class and residency rules. */
+export async function resolveGatewayEmbedding(dataClass: AiDataClass): Promise<EmbeddingPort | null> {
+  const { settings, providers } = await loadGatewayData();
+  if (!settings.enabled || !settings.embeddingsEnabled) return null;
+  const candidates = selectProviderChain(
+    providers.filter(provider => Boolean(provider.embeddingModel)),
+    dataClass,
+    { allowExternalFallback: true, allowedRegions: settings.allowedDataRegions }
+  );
+  const chosen = candidates.find(provider => breakers.canAttempt(provider.id));
+  return chosen ? new GatewayEmbeddingPort(chosen, settings) : null;
+}
+
 let cache: { at: number; data: { settings: AiSettingsView; providers: GatewayProvider[] } } | null = null;
 
 export function invalidateGatewayCache(): void {
@@ -315,7 +530,10 @@ async function loadGatewayData() {
 export async function resolveGatewayPort(dataClass: AiDataClass): Promise<LanguageModelPort | null> {
   const { settings, providers } = await loadGatewayData();
   if (!settings.enabled) return null;
-  const chain = selectProviderChain(providers, dataClass, { allowExternalFallback: settings.allowExternalFallback });
+  const chain = selectProviderChain(providers, dataClass, {
+    allowExternalFallback: settings.allowExternalFallback,
+    allowedRegions: settings.allowedDataRegions,
+  });
   return chain.length === 0 ? null : new GatewayPort({ settings, chain });
 }
 
@@ -326,6 +544,7 @@ export function registerAiGateway(): void {
   if (registered) return;
   registered = true;
   registerLanguageModelResolver((_capability, dataClass) => resolveGatewayPort(dataClass));
+  registerEmbeddingResolver(dataClass => resolveGatewayEmbedding(dataClass));
 }
 
 export type ProviderTestResult =

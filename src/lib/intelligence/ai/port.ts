@@ -39,6 +39,8 @@ export interface AiRequestContext {
   incidentId?: string;
   /** Aborts the call (user navigated away, budget exceeded, timeout). */
   signal?: AbortSignal;
+  /** Which registered prompt built the request, recorded in the audit trail. */
+  prompt?: { id: string; version: number; hash: string; guidanceRevision: number };
 }
 
 export interface AiToolDefinition {
@@ -88,9 +90,37 @@ export type AiStreamEvent =
   | { type: 'finish'; result: AiGenerateResult }
   | { type: 'error'; message: string; retryable: boolean };
 
+/** A validator for structured output. Matches zod's `safeParse` without importing a schema library here. */
+export interface AiOutputSchema<T> {
+  safeParse(value: unknown): { success: true; data: T } | { success: false };
+}
+
+export interface AiStructuredRequest<T> extends AiGenerateRequest {
+  /** JSON Schema the model is asked to follow; `schema` re-validates whatever comes back. */
+  schema: AiOutputSchema<T> & object;
+  /** Short name for the object, shown to providers that support named outputs. */
+  schemaName: string;
+}
+
+export interface AiStructuredResult<T> extends Omit<AiGenerateResult, 'text' | 'toolCalls'> {
+  object: T;
+}
+
 export interface LanguageModelPort {
   generate(request: AiGenerateRequest): Promise<AiGenerateResult>;
   stream(request: AiGenerateRequest): AsyncIterable<AiStreamEvent>;
+  /**
+   * Returns an object that passed `schema`. Output that fails validation is never returned: the next
+   * eligible provider is tried, and if none produces a valid object the call fails.
+   */
+  generateStructured<T>(request: AiStructuredRequest<T>): Promise<AiStructuredResult<T>>;
+}
+
+/** Turns text into vectors for semantic search. Resolved separately because few providers offer it. */
+export interface EmbeddingPort {
+  readonly model: string;
+  readonly providerId: string;
+  embed(values: string[], context: Pick<AiRequestContext, 'actorId' | 'signal'>): Promise<{ vectors: number[][]; tokens: number }>;
 }
 
 /**
@@ -118,6 +148,23 @@ export async function resolveLanguageModel(
     return await resolver(capability, dataClass);
   } catch {
     // A broken gateway must degrade to the deterministic path, never break the caller.
+    return null;
+  }
+}
+
+export type EmbeddingResolver = (dataClass: AiDataClass) => Promise<EmbeddingPort | null>;
+
+let embeddingResolver: EmbeddingResolver = async () => null;
+
+export function registerEmbeddingResolver(next: EmbeddingResolver): void {
+  embeddingResolver = next;
+}
+
+/** Null when embeddings are off, unconfigured, or no embedding provider may receive this data class. */
+export async function resolveEmbeddingModel(dataClass: AiDataClass): Promise<EmbeddingPort | null> {
+  try {
+    return await embeddingResolver(dataClass);
+  } catch {
     return null;
   }
 }

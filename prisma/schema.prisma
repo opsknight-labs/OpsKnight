@@ -5220,6 +5220,11 @@ enum AiProviderKind {
   ANTHROPIC
   GOOGLE
   OPENAI_COMPATIBLE
+  AZURE_OPENAI
+  BEDROCK
+  VERTEX
+  MISTRAL
+  GROQ
 }
 
 enum AiDataClass {
@@ -5239,6 +5244,12 @@ model AiSettings {
   squireAvatar            String   @default("ICON")
   squireLauncher          String   @default("FLOATING")
   squireAnimations        Boolean  @default(false)
+  // Residency: when non-empty, only providers tagged with one of these regions are ever used.
+  allowedDataRegions      String[] @default([])
+  embeddingsEnabled       Boolean  @default(false)
+  // Saved assistant conversations are opt-in, encrypted and visible only to their owner.
+  squireHistoryEnabled    Boolean  @default(false)
+  squireHistoryRetentionDays Int   @default(30)
   allowExternalFallback   Boolean  @default(false)
   requestsPerMinutePerUser Int     @default(20)
   dailyTokenBudget        Int      @default(500000)
@@ -5266,6 +5277,12 @@ model AiProvider {
   allowPrivateNetwork Boolean        @default(false)
   // Lower runs first; later enabled providers are fallbacks.
   priority            Int            @default(100)
+  // Non-secret, kind-specific settings (Azure resource and API version, AWS region, GCP project and location).
+  options             Json           @default("{}")
+  // Residency tag such as "eu" or "us"; matched against AiSettings.allowedDataRegions.
+  dataRegion          String?
+  // When set, this provider can also produce embeddings for semantic search.
+  embeddingModel      String?
   createdAt           DateTime       @default(now())
   updatedAt           DateTime       @updatedAt
 
@@ -5279,4 +5296,14 @@ model AiUsageDay {
   inputTokens  Int      @default(0)
   outputTokens Int      @default(0)
   updatedAt    DateTime @updatedAt
+}
+
+// Optional organisation guidance an administrator appends to a built-in prompt. It is added after the fixed
+// safety rules and cannot replace them. Every change is audited with the previous text.
+model AiPromptGuidance {
+  promptId  String   @id
+  text      String
+  revision  Int      @default(1)
+  updatedBy String?
+  updatedAt DateTime @updatedAt
 }

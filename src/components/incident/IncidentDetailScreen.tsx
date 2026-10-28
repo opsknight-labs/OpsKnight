@@ -5,6 +5,7 @@ import IncidentIntelligenceCard from '@/components/incident/IncidentIntelligence
 import IncidentRelatedCard from '@/components/incident/IncidentRelatedCard';
 import IncidentResponseCard from '@/components/incident/IncidentResponseCard';
 import IncidentAskSquireCard from '@/components/squire/IncidentAskSquireCard';
+import IncidentAiSummaryCard from '@/components/incident/IncidentAiSummaryCard';
 import EscalationExecutionHealth from '@/components/incident/detail/EscalationExecutionHealth';
 import { getEscalationExecutionHealth } from '@/lib/escalation/execution-health';
 import { visibleIncidentSource } from '@/lib/automation/presentation/source-visibility';
@@ -637,6 +638,9 @@ export default async function IncidentDetailScreen({
           </Suspense>
           <Suspense fallback={null}>
             <IncidentResponseCard incidentId={incident.id} />
+          </Suspense>
+          <Suspense fallback={null}>
+            <IncidentAiSummaryCard incidentId={incident.id} />
           </Suspense>
           <Suspense fallback={null}>
             <IncidentAskSquireCard />

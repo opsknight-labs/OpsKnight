@@ -7,6 +7,7 @@ import { assertCapability } from '@/lib/rbac';
 import { CAPABILITIES } from '@/lib/authorization';
 import { invalidateGatewayCache, testProviderConnection } from '@/lib/intelligence/ai/gateway';
 import { deleteAiProvider, saveAiProvider, updateAiSettings } from '@/lib/intelligence/ai/settings';
+import { setGuidance } from '@/lib/intelligence/ai/prompts';
 
 export type AiActionState = { message: string; ok: boolean };
 
@@ -50,6 +51,13 @@ export async function saveAiSettingsAction(_state: AiActionState, form: FormData
         dailyTokenBudget: integer(form, 'dailyTokenBudget'),
         maxOutputTokens: integer(form, 'maxOutputTokens'),
         requestTimeoutMs: integer(form, 'requestTimeoutMs'),
+        allowedDataRegions: text(form, 'allowedDataRegions')
+          .split(',')
+          .map(region => region.trim())
+          .filter(Boolean),
+        embeddingsEnabled: checked(form, 'embeddingsEnabled'),
+        squireHistoryEnabled: checked(form, 'squireHistoryEnabled'),
+        squireHistoryRetentionDays: integer(form, 'squireHistoryRetentionDays') || 30,
         expectedRevision: integer(form, 'expectedRevision'),
       },
       { actorId: actor.id, source: 'UI' }
@@ -81,6 +89,16 @@ export async function saveAiProviderAction(_state: AiActionState, form: FormData
         maxDataClass: text(form, 'maxDataClass'),
         allowPrivateNetwork: checked(form, 'allowPrivateNetwork'),
         priority: integer(form, 'priority'),
+        dataRegion: text(form, 'dataRegion') || null,
+        embeddingModel: text(form, 'embeddingModel') || null,
+        azureResourceName: text(form, 'azureResourceName') || null,
+        azureApiVersion: text(form, 'azureApiVersion') || null,
+        awsRegion: text(form, 'awsRegion') || null,
+        awsAccessKeyId: text(form, 'awsAccessKeyId') || null,
+        awsSecretAccessKey: text(form, 'awsSecretAccessKey') || null,
+        gcpProject: text(form, 'gcpProject') || null,
+        gcpLocation: text(form, 'gcpLocation') || null,
+        serviceAccountJson: text(form, 'serviceAccountJson') || null,
       },
       { actorId: actor.id, source: 'UI' }
     );
@@ -121,6 +139,22 @@ export async function testAiProviderAction(_state: AiActionState, form: FormData
       ? { message: `Connected in ${result.latencyMs} ms.`, ok: true }
       : { message: TEST_MESSAGES[result.reason], ok: false };
   } catch (error) {
+    return failure(error);
+  }
+}
+
+export async function savePromptGuidanceAction(_state: AiActionState, form: FormData): Promise<AiActionState> {
+  try {
+    const actor = await assertCapability(CAPABILITIES.INTELLIGENCE_MANAGE);
+    const result = await setGuidance(
+      text(form, 'promptId'),
+      { text: text(form, 'guidance'), expectedRevision: integer(form, 'expectedRevision') },
+      { actorId: actor.id, source: 'UI' }
+    );
+    revalidatePath(PATH);
+    return { message: `Guidance saved (revision ${result.revision}).`, ok: true };
+  } catch (error) {
+    if (error instanceof Error && error.message.startsWith('Unknown prompt')) return { message: 'Unknown prompt.', ok: false };
     return failure(error);
   }
 }

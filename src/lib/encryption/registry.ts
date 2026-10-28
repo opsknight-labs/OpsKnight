@@ -67,7 +67,7 @@ export const ENCRYPTION_TARGETS: EncryptionTargetDefinition[] = [
     storageType: 'SCALAR',
     plaintextLegacyAllowed: false,
     label: 'AI Provider API Key',
-    description: 'API key for a language-model provider configured in Intelligence settings',
+    description: 'Credentials for a language-model provider configured in Intelligence settings: an API key, an AWS access key pair, or a Google service-account key',
   },
   {
     id: 'jira.webhook-secret',

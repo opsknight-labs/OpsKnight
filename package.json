@@ -128,8 +128,13 @@
     "certify:ingestion:docker": "node scripts/ingestion/certify-docker.cjs"
   },
   "dependencies": {
+    "@ai-sdk/amazon-bedrock": "^4.0.204",
     "@ai-sdk/anthropic": "^3.0.135",
+    "@ai-sdk/azure": "^3.0.145",
     "@ai-sdk/google": "^3.0.139",
+    "@ai-sdk/google-vertex": "^4.0.222",
+    "@ai-sdk/groq": "^3.0.79",
+    "@ai-sdk/mistral": "^3.0.77",
     "@ai-sdk/openai": "^3.0.132",
     "@ai-sdk/openai-compatible": "^2.0.87",
     "@aws-sdk/client-ses": "^3.1149.0",

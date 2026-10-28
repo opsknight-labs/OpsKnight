@@ -5,6 +5,7 @@ import type { AuthorizationActor } from '@/lib/authorization-policy';
 import { registerAiGateway } from '../ai/gateway';
 import { resolveLanguageModel, type AiMessage } from '../ai/port';
 import { getAiSettings } from '../ai/settings';
+import { getGuidance } from '../ai/prompts';
 import { SQUIRE_LIMITS, type SquireEvent, type SquireRequest } from './contract';
 import { answerDeterministically, readIncidentForActor } from './deterministic';
 import { buildSystemPrompt } from './prompt';
@@ -43,14 +44,15 @@ export async function* streamSquire(
 
     if (port) {
       yield { type: 'meta', mode: 'ai', name: settings.squireName };
+      const prompt = buildSystemPrompt(settings.squireName, incident, await getGuidance('squire.system'));
       const messages: AiMessage[] = [
-        { role: 'system', content: buildSystemPrompt(settings.squireName, incident) },
+        { role: 'system', content: prompt.system },
         ...request.history.slice(-SQUIRE_LIMITS.historyMax).map(turn => ({ role: turn.role, content: turn.content })),
         { role: 'user', content: request.message },
       ];
       let emitted = false;
       for await (const event of port.stream({
-        context: { actorId: actor.id, capability: 'SQUIRE_CHAT', dataClass: 'INTERNAL', incidentId: incident?.id, signal },
+        context: { actorId: actor.id, capability: 'SQUIRE_CHAT', dataClass: 'INTERNAL', incidentId: incident?.id, signal, prompt: prompt.meta },
         messages,
         tools: buildSquireTools(actor),
         maxSteps: SQUIRE_LIMITS.maxSteps,

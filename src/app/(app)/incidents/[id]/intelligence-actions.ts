@@ -6,6 +6,8 @@ import { logger } from '@/lib/logger';
 import { getCurrentAuthorizationActor } from '@/lib/rbac';
 import { revokeFeedback, submitFeedback } from '@/lib/intelligence/feedback/service';
 import { decideRelationship } from '@/lib/intelligence/correlation/commands';
+import { summarizeIncident } from '@/lib/intelligence/drafts/service';
+import { DRAFT_FAILURE_MESSAGES, type IncidentSummary } from '@/lib/intelligence/drafts/schemas';
 
 export type SimilarFeedbackState = { ok: boolean; message: string; verdict: 'HELPFUL' | 'NOT_HELPFUL' | null };
 
@@ -90,5 +92,24 @@ export async function decideRelatedIncident(
       error: error instanceof Error ? error.message : String(error),
     });
     return { ok: false, message: 'Unable to save. Try again.', decision: previous.decision };
+  }
+}
+
+export type IncidentSummaryState =
+  | { status: 'idle' }
+  | { status: 'ok'; summary: IncidentSummary; model: string; promptVersion: number }
+  | { status: 'error'; message: string };
+
+/** Generates a read-only summary for the person who asked. Nothing is stored. */
+export async function summarizeIncidentAction(incidentId: string): Promise<IncidentSummaryState> {
+  try {
+    const actor = await getCurrentAuthorizationActor();
+    const result = await summarizeIncident(actor, incidentId);
+    return result.ok
+      ? { status: 'ok', summary: result.value, model: result.model, promptVersion: result.promptVersion }
+      : { status: 'error', message: DRAFT_FAILURE_MESSAGES[result.reason] };
+  } catch (error) {
+    logger.warn('[Intelligence] Incident summary failed', { error: error instanceof Error ? error.name : 'error' });
+    return { status: 'error', message: DRAFT_FAILURE_MESSAGES.UNAVAILABLE };
   }
 }

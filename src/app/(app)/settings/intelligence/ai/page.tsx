@@ -1,5 +1,5 @@
 import { SettingsSection } from '@/components/settings/layout/SettingsSection';
-import { AiSettingsForm, DeleteProviderButton, ProviderForm, TestProviderButton } from '@/components/settings/AiSettingsForms';
+import { AiSettingsForm, DeleteProviderButton, PromptGuidanceForm, ProviderForm, TestProviderButton } from '@/components/settings/AiSettingsForms';
 import { Badge } from '@/components/ui/shadcn/badge';
 import { logger } from '@/lib/logger';
 import { assertCapability } from '@/lib/rbac';
@@ -7,6 +7,7 @@ import { CAPABILITIES, hasCapability, type AppRole } from '@/lib/authorization';
 import { getTodayUsage, getUsageHistory } from '@/lib/intelligence/ai/budget';
 import AiUsageChart from '@/components/settings/AiUsageChart';
 import { getAiSettings, listAiProviders } from '@/lib/intelligence/ai/settings';
+import { BUILT_IN_PROMPTS, listGuidance, promptHash } from '@/lib/intelligence/ai/prompts';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -29,6 +30,7 @@ export default async function IntelligenceAiPage() {
     safely('usage', () => getTodayUsage()),
     safely('usage history', () => getUsageHistory(14)),
   ]);
+  const guidance = await safely('prompt guidance', () => listGuidance());
   const used = usage ? usage.inputTokens + usage.outputTokens : 0;
 
   return (
@@ -102,6 +104,37 @@ export default async function IntelligenceAiPage() {
             <ProviderForm canManage={canManage} />
           </details>
         )}
+      </SettingsSection>
+      <SettingsSection
+        title="Prompts"
+        description="Every instruction sent to a model is versioned. The version and fingerprint are recorded with each AI interaction in the audit log."
+      >
+        <ul className="divide-y divide-border">
+          {BUILT_IN_PROMPTS.map(prompt => {
+            const saved = guidance?.get(prompt.id);
+            return (
+              <li key={prompt.id} className="space-y-3 py-4">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <p className="text-sm font-medium">{prompt.title}</p>
+                    <p className="text-xs text-muted-foreground">{prompt.purpose}</p>
+                  </div>
+                  <span className="flex gap-2">
+                    <Badge variant="outline">v{prompt.version}</Badge>
+                    <Badge variant="outline" title="Content fingerprint">
+                      {promptHash(prompt.id)}
+                    </Badge>
+                  </span>
+                </div>
+                <details>
+                  <summary className="cursor-pointer text-xs text-muted-foreground">Show built-in rules</summary>
+                  <pre className="mt-2 whitespace-pre-wrap rounded-md bg-muted p-3 text-xs">{prompt.rules}</pre>
+                </details>
+                <PromptGuidanceForm promptId={prompt.id} text={saved?.text ?? ''} revision={saved?.revision ?? 0} canManage={canManage} />
+              </li>
+            );
+          })}
+        </ul>
       </SettingsSection>
     </div>
   );

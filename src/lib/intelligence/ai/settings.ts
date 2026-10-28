@@ -28,6 +28,10 @@ export interface AiSettingsView {
   squireAvatar: SquireAvatar;
   squireLauncher: SquireLauncherStyle;
   squireAnimations: boolean;
+  allowedDataRegions: string[];
+  embeddingsEnabled: boolean;
+  squireHistoryEnabled: boolean;
+  squireHistoryRetentionDays: number;
   allowExternalFallback: boolean;
   requestsPerMinutePerUser: number;
   dailyTokenBudget: number;
@@ -44,6 +48,10 @@ const SETTINGS_SELECT = {
   squireAvatar: true,
   squireLauncher: true,
   squireAnimations: true,
+  allowedDataRegions: true,
+  embeddingsEnabled: true,
+  squireHistoryEnabled: true,
+  squireHistoryRetentionDays: true,
   allowExternalFallback: true,
   requestsPerMinutePerUser: true,
   dailyTokenBudget: true,
@@ -66,7 +74,7 @@ function toSettingsView(row: SettingsRow): AiSettingsView {
 /** Reads never write: with no saved row, AI is off and everything uses the safe defaults. */
 export async function getAiSettings(client: Client = prisma): Promise<AiSettingsView> {
   const row = await client.aiSettings.findUnique({ where: { id: 'default' }, select: SETTINGS_SELECT });
-  return row ? toSettingsView(row) : { ...AI_SETTINGS_DEFAULTS, revision: 0 };
+  return row ? toSettingsView(row) : { ...AI_SETTINGS_DEFAULTS, allowedDataRegions: [], revision: 0 };
 }
 
 const auditSource = (actor: IntelligenceActor) => ({
@@ -105,6 +113,14 @@ export async function updateAiSettings(input: unknown, actor: IntelligenceActor)
   });
 }
 
+export interface AiProviderOptions {
+  azureResourceName?: string;
+  azureApiVersion?: string;
+  awsRegion?: string;
+  gcpProject?: string;
+  gcpLocation?: string;
+}
+
 export interface AiProviderView {
   id: string;
   name: string;
@@ -116,7 +132,10 @@ export interface AiProviderView {
   maxDataClass: AiDataClass;
   allowPrivateNetwork: boolean;
   priority: number;
-  /** Whether a key is stored. The key itself never leaves the server. */
+  dataRegion: string | null;
+  embeddingModel: string | null;
+  options: AiProviderOptions;
+  /** Whether a credential is stored. The credential itself never leaves the server. */
   hasApiKey: boolean;
 }
 
@@ -131,12 +150,27 @@ const PROVIDER_SELECT = {
   maxDataClass: true,
   allowPrivateNetwork: true,
   priority: true,
+  dataRegion: true,
+  embeddingModel: true,
+  options: true,
   apiKeyEncrypted: true,
 } as const;
 
+const OPTION_KEYS: ReadonlySet<string> = new Set(['azureResourceName', 'azureApiVersion', 'awsRegion', 'gcpProject', 'gcpLocation']);
+
+/** Only known string options survive, so a hand-edited row can never inject anything unexpected. */
+export function readProviderOptions(value: unknown): AiProviderOptions {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+  return Object.fromEntries(
+    Object.entries(value).filter(
+      ([key, raw]) => OPTION_KEYS.has(key) && typeof raw === 'string' && raw.length > 0 && raw.length <= 128
+    )
+  ) as AiProviderOptions;
+}
+
 function toView(row: Prisma.AiProviderGetPayload<{ select: typeof PROVIDER_SELECT }>): AiProviderView {
-  const { apiKeyEncrypted, ...rest } = row;
-  return { ...rest, hasApiKey: Boolean(apiKeyEncrypted) };
+  const { apiKeyEncrypted, options, ...rest } = row;
+  return { ...rest, options: readProviderOptions(options), hasApiKey: Boolean(apiKeyEncrypted) };
 }
 
 export async function listAiProviders(client: Client = prisma): Promise<AiProviderView[]> {
@@ -181,6 +215,67 @@ export async function validateProviderEndpoint(baseUrl: string, allowPrivateNetw
   return url.toString().replace(/\/$/, '');
 }
 
+/** A Vertex AI service-account key, reduced to the three fields the client needs. */
+export function parseServiceAccount(json: string): { clientEmail: string; privateKey: string; privateKeyId?: string } {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(json);
+  } catch {
+    throw invalid('serviceAccountJson', 'Paste the service account key JSON downloaded from Google Cloud');
+  }
+  const record = (parsed && typeof parsed === 'object' ? parsed : {}) as Record<string, unknown>;
+  const clientEmail = record.client_email;
+  const privateKey = record.private_key;
+  const privateKeyId = record.private_key_id;
+  if (
+    record.type !== 'service_account' ||
+    typeof clientEmail !== 'string' ||
+    !/^[^@\s]+@[a-z0-9.-]+\.iam\.gserviceaccount\.com$/i.test(clientEmail) ||
+    typeof privateKey !== 'string' ||
+    !privateKey.includes('PRIVATE KEY')
+  ) {
+    throw invalid('serviceAccountJson', 'This is not a Google Cloud service account key');
+  }
+  return { clientEmail, privateKey, ...(typeof privateKeyId === 'string' ? { privateKeyId } : {}) };
+}
+
+/**
+ * The secret to store for a provider, or undefined to keep the existing one. API-key providers store the key;
+ * Bedrock stores its access key pair and Vertex the essential fields of its service account, each as JSON.
+ */
+async function secretFor(parsed: AiProviderInput): Promise<string | undefined> {
+  switch (parsed.kind) {
+    case 'BEDROCK':
+      if (parsed.awsAccessKeyId && parsed.awsSecretAccessKey) {
+        return encrypt(JSON.stringify({ accessKeyId: parsed.awsAccessKeyId, secretAccessKey: parsed.awsSecretAccessKey }));
+      }
+      return parsed.apiKey ? encrypt(JSON.stringify({ apiKey: parsed.apiKey })) : undefined;
+    case 'VERTEX':
+      return parsed.serviceAccountJson ? encrypt(JSON.stringify(parseServiceAccount(parsed.serviceAccountJson))) : undefined;
+    default:
+      return parsed.apiKey ? encrypt(parsed.apiKey) : undefined;
+  }
+}
+
+function optionsFor(parsed: AiProviderInput): AiProviderOptions {
+  switch (parsed.kind) {
+    case 'AZURE_OPENAI':
+      return {
+        ...(parsed.azureResourceName ? { azureResourceName: parsed.azureResourceName.toLowerCase() } : {}),
+        ...(parsed.azureApiVersion ? { azureApiVersion: parsed.azureApiVersion } : {}),
+      };
+    case 'BEDROCK':
+      return parsed.awsRegion ? { awsRegion: parsed.awsRegion } : {};
+    case 'VERTEX':
+      return {
+        ...(parsed.gcpProject ? { gcpProject: parsed.gcpProject } : {}),
+        ...(parsed.gcpLocation ? { gcpLocation: parsed.gcpLocation } : {}),
+      };
+    default:
+      return {};
+  }
+}
+
 /** Caller must authorize INTELLIGENCE_MANAGE. */
 export async function saveAiProvider(
   id: string | null,
@@ -189,7 +284,7 @@ export async function saveAiProvider(
 ): Promise<AiProviderView> {
   const parsed = parseOrThrow(aiProviderInputSchema, input);
   const baseUrl = parsed.baseUrl ? await validateProviderEndpoint(parsed.baseUrl, parsed.allowPrivateNetwork) : null;
-  const apiKeyEncrypted = parsed.apiKey ? await encrypt(parsed.apiKey) : undefined;
+  const apiKeyEncrypted = await secretFor(parsed);
   const data = {
     name: parsed.name,
     kind: parsed.kind,
@@ -200,7 +295,17 @@ export async function saveAiProvider(
     maxDataClass: parsed.maxDataClass,
     allowPrivateNetwork: parsed.allowPrivateNetwork,
     priority: parsed.priority,
+    dataRegion: parsed.dataRegion ?? null,
+    embeddingModel: parsed.embeddingModel ?? null,
+    options: { ...optionsFor(parsed) },
   };
+  // Providers that authenticate with more than a key must have their credentials when first created.
+  if (id === null && !apiKeyEncrypted && (parsed.kind === 'BEDROCK' || parsed.kind === 'VERTEX')) {
+    throw invalid(
+      parsed.kind === 'BEDROCK' ? 'awsAccessKeyId' : 'serviceAccountJson',
+      parsed.kind === 'BEDROCK' ? 'Enter AWS credentials or a Bedrock API key' : 'Paste a service account key'
+    );
+  }
 
   return prisma.$transaction(async tx => {
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended('ai-providers', 0))`;
@@ -216,8 +321,12 @@ export async function saveAiProvider(
     if (id === null) {
       row = await tx.aiProvider.create({ data: { ...data, apiKeyEncrypted: apiKeyEncrypted ?? null }, select: PROVIDER_SELECT });
     } else {
-      const existing = await tx.aiProvider.findUnique({ where: { id }, select: { id: true } });
+      const existing = await tx.aiProvider.findUnique({ where: { id }, select: { kind: true } });
       if (!existing) throw new AppError({ code: 'RESOURCE_NOT_FOUND' });
+      // A stored credential has the shape of its kind, so changing kind requires a new one.
+      if (existing.kind !== data.kind && !apiKeyEncrypted) {
+        throw invalid('kind', 'Enter new credentials when changing the provider type');
+      }
       row = await tx.aiProvider.update({
         where: { id },
         data: { ...data, ...(apiKeyEncrypted !== undefined ? { apiKeyEncrypted } : {}) },
@@ -232,8 +341,8 @@ export async function saveAiProvider(
         entityId: row.id,
         actorId: actor.actorId,
         ...auditSource(actor),
-        // The key is never audited; only whether one is stored.
-        newValue: { ...view, keyReplaced: apiKeyEncrypted !== undefined },
+        // Credentials are never audited; only whether they were replaced.
+        newValue: { ...view, options: { ...view.options }, keyReplaced: apiKeyEncrypted !== undefined },
       },
       tx
     );
@@ -246,6 +355,7 @@ export async function deleteAiProvider(id: string, actor: IntelligenceActor): Pr
     const row = await tx.aiProvider.findUnique({ where: { id }, select: PROVIDER_SELECT });
     if (!row) return 'not_found';
     await tx.aiProvider.delete({ where: { id } });
+    const view = toView(row);
     await logAudit(
       {
         action: 'intelligence.ai.provider.deleted',
@@ -253,7 +363,7 @@ export async function deleteAiProvider(id: string, actor: IntelligenceActor): Pr
         entityId: id,
         actorId: actor.actorId,
         ...auditSource(actor),
-        oldValue: { ...toView(row) },
+        oldValue: { ...view, options: { ...view.options } },
       },
       tx
     );
@@ -261,7 +371,36 @@ export async function deleteAiProvider(id: string, actor: IntelligenceActor): Pr
   });
 }
 
-/** Server-only: loads enabled providers with their decrypted keys for the gateway. */
+export type GatewayCredentials =
+  | { type: 'none' }
+  | { type: 'apiKey'; apiKey: string }
+  | { type: 'aws'; accessKeyId: string; secretAccessKey: string }
+  | { type: 'google'; clientEmail: string; privateKey: string; privateKeyId?: string };
+
+function readCredentials(kind: AiProviderView['kind'], secret: string | null): GatewayCredentials {
+  if (!secret) return { type: 'none' };
+  if (kind !== 'BEDROCK' && kind !== 'VERTEX') return { type: 'apiKey', apiKey: secret };
+  try {
+    const value = JSON.parse(secret) as Record<string, unknown>;
+    if (kind === 'BEDROCK' && typeof value.accessKeyId === 'string' && typeof value.secretAccessKey === 'string') {
+      return { type: 'aws', accessKeyId: value.accessKeyId, secretAccessKey: value.secretAccessKey };
+    }
+    if (kind === 'BEDROCK' && typeof value.apiKey === 'string') return { type: 'apiKey', apiKey: value.apiKey };
+    if (kind === 'VERTEX' && typeof value.clientEmail === 'string' && typeof value.privateKey === 'string') {
+      return {
+        type: 'google',
+        clientEmail: value.clientEmail,
+        privateKey: value.privateKey,
+        ...(typeof value.privateKeyId === 'string' ? { privateKeyId: value.privateKeyId } : {}),
+      };
+    }
+  } catch {
+    // An unreadable credential is treated as missing; the provider then fails closed.
+  }
+  return { type: 'none' };
+}
+
+/** Server-only: loads enabled providers with their decrypted credentials for the gateway. */
 export async function loadProvidersForGateway(client: Client = prisma) {
   const rows = await client.aiProvider.findMany({
     where: { enabled: true },
@@ -270,10 +409,15 @@ export async function loadProvidersForGateway(client: Client = prisma) {
     select: PROVIDER_SELECT,
   });
   return Promise.all(
-    rows.map(async row => ({
-      ...toView(row),
-      apiKey: row.apiKeyEncrypted ? await decrypt(row.apiKeyEncrypted).catch(() => null) : null,
-    }))
+    rows.map(async row => {
+      const secret = row.apiKeyEncrypted ? await decrypt(row.apiKeyEncrypted).catch(() => null) : null;
+      const credentials = readCredentials(row.kind, secret);
+      return {
+        ...toView(row),
+        credentials,
+        apiKey: credentials.type === 'apiKey' ? credentials.apiKey : null,
+      };
+    })
   );
 }
 

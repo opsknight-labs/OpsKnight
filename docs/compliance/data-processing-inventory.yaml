@@ -98,8 +98,8 @@ domains:
     deletion: { current: authorship-cleared-on-user-erasure-and-rows-deleted-with-incident, target: free-text-feedback-manual-review }
 
   - domain: ai-assistant
-    data: [user-questions, recent-conversation-turns, incident-titles-and-lookup-results, provider-api-keys, token-usage-counters]
-    purpose: [answering-questions-about-incidents-the-user-can-read, token-budget-accounting]
+    data: [user-questions, recent-conversation-turns, incident-titles-and-lookup-results, incident-timelines-and-responder-notes-for-summaries-and-drafts, provider-credentials, token-usage-counters]
+    purpose: [answering-questions-about-incidents-the-user-can-read, incident-summaries-and-postmortem-drafts-for-review, token-budget-accounting]
     storage: [postgresql, administrator-configured-language-model-provider]
     recipients: [administrator-configured-language-model-provider]
     retention: { current: conversations-not-stored-audit-metadata-only-and-daily-counters, target: audit-retention-policy }

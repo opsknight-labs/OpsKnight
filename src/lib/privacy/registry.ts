@@ -335,6 +335,7 @@ export const personalDataRegistry = [
     fields: ['AiProvider.apiKeyEncrypted'],
     purpose: [
       'Answering responders\' questions about incidents they can already read',
+      'On-request incident summaries and postmortem drafts for people to review',
       'Token budget accounting',
     ],
     classifications: ['INTERNAL', 'PERSONAL', 'SECRET'],
@@ -346,7 +347,7 @@ export const personalDataRegistry = [
     },
     discoverable: 'PARTIAL',
     notes: [
-      'When an administrator enables AI, the user\'s question, recent conversation turns and the results of read-only lookups (incident titles, change summaries, runbook names) are sent to the configured provider after credential-shaped text is redacted. Each provider has a data-class ceiling, external providers are only used where the administrator allowed them, and a self-hosted provider never falls back to an external one unless explicitly permitted. Whether the provider retains data is governed by the administrator\'s agreement with it. Provider API keys are encrypted at rest and never returned to the browser.',
+      'When an administrator enables AI, the user\'s question, recent conversation turns and the results of read-only lookups (incident titles, change summaries, runbook names) are sent to the configured provider after credential-shaped text is redacted. Incident summaries and postmortem drafts additionally send the incident timeline and responder notes with author names, so they run only on providers whose data ceiling is Personal; the output is shown to the requester or placed in the editor and is never saved automatically. Each provider has a data-class ceiling and an optional residency tag that an allowed-regions setting can enforce, external providers are only used where the administrator allowed them, and a self-hosted provider never falls back to an external one unless explicitly permitted. Whether the provider retains data is governed by the administrator\'s agreement with it. Provider API keys are encrypted at rest and never returned to the browser.',
     ],
   },
 ] as const satisfies readonly PersonalDataDomain[];

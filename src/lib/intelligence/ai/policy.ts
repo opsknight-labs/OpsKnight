@@ -6,6 +6,13 @@ export interface PolicyProvider {
   isExternal: boolean;
   maxDataClass: AiDataClass;
   priority: number;
+  dataRegion?: string | null;
+}
+
+/** With no allowed regions configured every provider is eligible; otherwise only tagged, listed ones. */
+export function regionAllowed(provider: Pick<PolicyProvider, 'dataRegion'>, allowedRegions: readonly string[]): boolean {
+  if (allowedRegions.length === 0) return true;
+  return Boolean(provider.dataRegion) && allowedRegions.includes(provider.dataRegion as string);
 }
 
 /**
@@ -20,10 +27,11 @@ export interface PolicyProvider {
 export function selectProviderChain<T extends PolicyProvider>(
   providers: readonly T[],
   dataClass: AiDataClass,
-  options: { allowExternalFallback: boolean }
+  options: { allowExternalFallback: boolean; allowedRegions?: readonly string[] }
 ): T[] {
+  const regions = options.allowedRegions ?? [];
   const eligible = providers
-    .filter(provider => provider.enabled && dataClassAllows(provider.maxDataClass, dataClass))
+    .filter(provider => provider.enabled && dataClassAllows(provider.maxDataClass, dataClass) && regionAllowed(provider, regions))
     .sort((a, b) => a.priority - b.priority || a.id.localeCompare(b.id));
   const [primary, ...rest] = eligible;
   if (!primary) return [];
