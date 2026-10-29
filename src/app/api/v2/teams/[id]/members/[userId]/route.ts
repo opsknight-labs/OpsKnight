@@ -1,7 +1,9 @@
 import { z } from 'zod';
+import prisma from '@/lib/prisma';
 import { defineV2Route } from '@/lib/api-v2/endpoint';
 import { AUTHORIZATION_ACTIONS } from '@/lib/authorization-policy';
 import { etagHeaders, requireRevisionIfMatch } from '@/lib/api-v2/concurrency';
+import { AppError } from '@/lib/errors';
 import {
   teamMemberParams,
   teamActor,
@@ -9,10 +11,44 @@ import {
   invalidateTeamMemberAfterCommit,
 } from '@/lib/api-v2/team-administration';
 import {
+  requireTeamAccess,
   setTeamMembership,
   deleteTeamMembership,
   teamMemberInput,
 } from '@/lib/teams/administration';
+export const GET = defineV2Route({
+  action: AUTHORIZATION_ACTIONS.TEAM_MEMBERSHIP_READ,
+  paramsSchema: teamMemberParams,
+  querySchema: z.object({}).strict(),
+  scopedFilter: true,
+  handler: async context =>
+    prisma.$transaction(
+      async tx => {
+        const team = await requireTeamAccess(tx, context.params.id, teamActor(context), false);
+        const member = await tx.teamMember.findUnique({
+          where: { userId_teamId: { userId: context.params.userId, teamId: team.id } },
+          select: {
+            id: true,
+            teamId: true,
+            userId: true,
+            role: true,
+            receiveTeamNotifications: true,
+            createdAt: true,
+          },
+        });
+        if (!member)
+          throw new AppError({
+            code: 'RESOURCE_NOT_FOUND',
+            userMessage: 'Team or membership not found.',
+          });
+        return {
+          data: { ...member, revision: team.revision },
+          headers: { ...etagHeaders(team.revision), 'Cache-Control': 'no-store' },
+        };
+      },
+      { isolationLevel: 'Serializable' }
+    ),
+});
 export const PUT = defineV2Route({
   action: AUTHORIZATION_ACTIONS.TEAM_MEMBERSHIP_MANAGE,
   paramsSchema: teamMemberParams,

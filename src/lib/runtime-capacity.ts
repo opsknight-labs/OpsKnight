@@ -6,6 +6,8 @@ export interface CapacityEnv {
   WEB_DATABASE_URL?: string;
   DATABASE_URL?: string;
   DIRECT_DATABASE_URL?: string;
+  MCP_DATABASE_URL?: string;
+  MCP_DATABASE_POOL_SIZE?: string;
   WEB_REPLICAS?: string;
   DATABASE_POOL_SIZE_WEB?: string;
   PGBOUNCER_REPLICAS?: string;
@@ -37,12 +39,14 @@ export interface CapacityAnalysisResult {
   pgbouncer: boolean;
   webConnections: number;
   directWorkerConnections: number;
+  mcpConnections: number;
   totalDemand: number;
   connectionReserve: number;
   maxConnections: number;
   safe: boolean;
   headroom: number;
   breakdown: {
+    mcp: { replicas: number; pool: number; total: number };
     ingestionWorker: { replicas: number; pool: number; total: number };
     web: { replicas: number; pool: number; effective: number };
     pgbouncer: { replicas: number; defaultPool: number; reserve: number } | null;

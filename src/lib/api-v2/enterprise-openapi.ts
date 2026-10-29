@@ -70,13 +70,25 @@ const scheduleLayerProperties: Record<string, Schema> = {
   end: { type: ['string', 'null'], format: 'date-time' },
   rotationLengthHours: { type: 'integer', minimum: 1, maximum: 8760 },
   shiftLengthHours: { type: ['integer', 'null'], minimum: 1, maximum: 8760 },
-  restrictions: { oneOf: [object({
-    daysOfWeek: array({ type: 'integer', minimum: 0, maximum: 6 }, 7),
-    startHour: { type: 'integer', minimum: 0, maximum: 23 },
-    endHour: { type: 'integer', minimum: 0, maximum: 23 },
-  }), { type: 'null' }] },
+  restrictions: {
+    oneOf: [
+      object({
+        daysOfWeek: array({ type: 'integer', minimum: 0, maximum: 6 }, 7),
+        startHour: { type: 'integer', minimum: 0, maximum: 23 },
+        endHour: { type: 'integer', minimum: 0, maximum: 23 },
+      }),
+      { type: 'null' },
+    ],
+  },
 };
-const scheduleLayerRequired = ['name', 'start', 'end', 'rotationLengthHours', 'shiftLengthHours', 'restrictions'];
+const scheduleLayerRequired = [
+  'name',
+  'start',
+  'end',
+  'rotationLengthHours',
+  'shiftLengthHours',
+  'restrictions',
+];
 
 const ruleConfigurationProperties: Record<string, Schema> = {
   runbookId: id,
@@ -211,14 +223,135 @@ export const ENTERPRISE_SCHEMAS: Record<string, Schema> = {
   ...USER_INVITATION_SCHEMAS,
   ...USER_NOTIFICATION_PREFERENCE_SCHEMAS,
   ...NOTIFICATION_PROVIDER_SCHEMAS,
-  IntegrationCredentialState: object({ id, revision: integer, routingKeyConfigured: { type: 'boolean' }, signingSecretConfigured: { type: 'boolean' }, previousRoutingKeyValidUntil: { type: ['string', 'null'], format: 'date-time' }, previousSignatureSecretValidUntil: { type: ['string', 'null'], format: 'date-time' }, updatedAt: date }, ['id', 'revision', 'routingKeyConfigured', 'signingSecretConfigured', 'previousRoutingKeyValidUntil', 'previousSignatureSecretValidUntil', 'updatedAt']),
-  IntegrationCredentialRotation: object({ id, credential: { type: 'string', enum: ['routing-key', 'signature-secret'] }, secret: { type: ['string', 'null'] }, revision: integer, updatedAt: date }, ['id', 'credential', 'secret', 'revision', 'updatedAt']),
-  IntegrationCreated: object({ id, name: string(100), type: string(64), serviceId: id, enabled: { type: 'boolean' }, revision: integer, createdAt: date, updatedAt: date, key: { type: ['string', 'null'], description: 'Disclosed only on the initial successful response; replay returns null.' } }, ['id', 'name', 'type', 'serviceId', 'enabled', 'revision', 'createdAt', 'updatedAt', 'key']),
-  IntegrationTestResult: object({ valid: { type: 'boolean' }, provider: string(), errors: array(object({ path: string(), message: string() }, ['path', 'message']), 50) }, ['valid', 'provider', 'errors']),
-  IntegrationDiagnostics: object({ id, type: string(), enabled: { type: 'boolean' }, revision: integer, configurationState: string(), deliveryCounts: object({ recent: integer, failed: integer, processing: integer }, ['recent', 'failed', 'processing']), recentDeliveries: array(object({ status: string(), createdAt: date, completedAt: { type: ['string', 'null'], format: 'date-time' }, attempt: integer }, ['status', 'createdAt', 'completedAt', 'attempt']), 10) }, ['id', 'type', 'enabled', 'revision', 'configurationState', 'deliveryCounts', 'recentDeliveries']),
-  IntegrationType: object({ type: string(), direction: { const: 'INBOUND' }, authentication: array(string()), configurationFields: array(string()), testMode: { const: 'LOCAL_PAYLOAD_VALIDATION' } }, ['type', 'direction', 'authentication', 'configurationFields', 'testMode']),
-  IntegrationValidation: object({ id, type: string(), valid: { type: 'boolean' }, checks: array(object({ code: string(), valid: { type: 'boolean' } }, ['code', 'valid'])), activationAllowed: { type: 'boolean' }, revision: integer }, ['id', 'type', 'valid', 'checks', 'activationAllowed', 'revision']),
-  IntegrationUsage: object({ id, type: string(), service: object({ id, name: string() }, ['id', 'name']), deliveriesByStatus: { type: 'object', additionalProperties: { type: 'integer', minimum: 0 } }, automationObservations: integer, enabledServiceRunbookBindings: integer }, ['id', 'type', 'service', 'deliveriesByStatus', 'automationObservations', 'enabledServiceRunbookBindings']),
+  IntegrationCredentialState: object(
+    {
+      id,
+      revision: integer,
+      routingKeyConfigured: { type: 'boolean' },
+      signingSecretConfigured: { type: 'boolean' },
+      previousRoutingKeyValidUntil: { type: ['string', 'null'], format: 'date-time' },
+      previousSignatureSecretValidUntil: { type: ['string', 'null'], format: 'date-time' },
+      updatedAt: date,
+    },
+    [
+      'id',
+      'revision',
+      'routingKeyConfigured',
+      'signingSecretConfigured',
+      'previousRoutingKeyValidUntil',
+      'previousSignatureSecretValidUntil',
+      'updatedAt',
+    ]
+  ),
+  IntegrationCredentialRotation: object(
+    {
+      id,
+      credential: { type: 'string', enum: ['routing-key', 'signature-secret'] },
+      secret: { type: ['string', 'null'] },
+      revision: integer,
+      updatedAt: date,
+    },
+    ['id', 'credential', 'secret', 'revision', 'updatedAt']
+  ),
+  IntegrationCreated: object(
+    {
+      id,
+      name: string(100),
+      type: string(64),
+      serviceId: id,
+      enabled: { type: 'boolean' },
+      revision: integer,
+      createdAt: date,
+      updatedAt: date,
+      key: {
+        type: ['string', 'null'],
+        description: 'Disclosed only on the initial successful response; replay returns null.',
+      },
+    },
+    ['id', 'name', 'type', 'serviceId', 'enabled', 'revision', 'createdAt', 'updatedAt', 'key']
+  ),
+  IntegrationTestResult: object(
+    {
+      valid: { type: 'boolean' },
+      provider: string(),
+      errors: array(object({ path: string(), message: string() }, ['path', 'message']), 50),
+    },
+    ['valid', 'provider', 'errors']
+  ),
+  IntegrationDiagnostics: object(
+    {
+      id,
+      type: string(),
+      enabled: { type: 'boolean' },
+      revision: integer,
+      configurationState: string(),
+      deliveryCounts: object({ recent: integer, failed: integer, processing: integer }, [
+        'recent',
+        'failed',
+        'processing',
+      ]),
+      recentDeliveries: array(
+        object(
+          {
+            status: string(),
+            createdAt: date,
+            completedAt: { type: ['string', 'null'], format: 'date-time' },
+            attempt: integer,
+          },
+          ['status', 'createdAt', 'completedAt', 'attempt']
+        ),
+        10
+      ),
+    },
+    [
+      'id',
+      'type',
+      'enabled',
+      'revision',
+      'configurationState',
+      'deliveryCounts',
+      'recentDeliveries',
+    ]
+  ),
+  IntegrationType: object(
+    {
+      type: string(),
+      direction: { const: 'INBOUND' },
+      authentication: array(string()),
+      configurationFields: array(string()),
+      testMode: { const: 'LOCAL_PAYLOAD_VALIDATION' },
+    },
+    ['type', 'direction', 'authentication', 'configurationFields', 'testMode']
+  ),
+  IntegrationValidation: object(
+    {
+      id,
+      type: string(),
+      valid: { type: 'boolean' },
+      checks: array(object({ code: string(), valid: { type: 'boolean' } }, ['code', 'valid'])),
+      activationAllowed: { type: 'boolean' },
+      revision: integer,
+    },
+    ['id', 'type', 'valid', 'checks', 'activationAllowed', 'revision']
+  ),
+  IntegrationUsage: object(
+    {
+      id,
+      type: string(),
+      service: object({ id, name: string() }, ['id', 'name']),
+      deliveriesByStatus: { type: 'object', additionalProperties: { type: 'integer', minimum: 0 } },
+      automationObservations: integer,
+      enabledServiceRunbookBindings: integer,
+    },
+    [
+      'id',
+      'type',
+      'service',
+      'deliveriesByStatus',
+      'automationObservations',
+      'enabledServiceRunbookBindings',
+    ]
+  ),
   ...USER_ADMINISTRATION_SCHEMAS,
   ...TEAM_ADMINISTRATION_SCHEMAS,
   ...RUNBOOK_INTERVENTION_SCHEMAS,
@@ -755,12 +888,81 @@ export const ENTERPRISE_SCHEMAS: Record<string, Schema> = {
     'incidentId',
     'removed',
   ]),
-  IncidentTag: object({ id, incidentId: id, tagId: id, createdAt: date, tag: object({ name: string(100), color: { type: ['string', 'null'] } }, ['name', 'color']) }, ['id', 'incidentId', 'tagId', 'createdAt', 'tag']),
-  IncidentCustomField: object({ id, incidentId: id, customFieldId: id, value: { type: ['string', 'null'] }, createdAt: date, updatedAt: date, changed: { type: 'boolean' }, customField: object({ name: string(), key: string(), type: string() }, ['name', 'key', 'type']) }, ['id', 'incidentId', 'customFieldId', 'value', 'createdAt', 'updatedAt']),
-  IncidentTemplate: object({ id, revision: integer, name: string(120), description: { type: ['string', 'null'] }, title: string(200), descriptionText: { type: ['string', 'null'] }, defaultUrgency: { type: 'string', enum: ['HIGH', 'MEDIUM', 'LOW'] }, defaultPriority: { type: ['string', 'null'] }, defaultServiceId: { type: ['string', 'null'] }, createdById: { type: ['string', 'null'] }, isPublic: { type: 'boolean' }, createdAt: date, updatedAt: date }, ['id', 'revision', 'name', 'description', 'title', 'descriptionText', 'defaultUrgency', 'defaultPriority', 'defaultServiceId', 'createdById', 'isPublic', 'createdAt', 'updatedAt']),
+  IncidentTag: object(
+    {
+      id,
+      incidentId: id,
+      tagId: id,
+      createdAt: date,
+      tag: object({ name: string(100), color: { type: ['string', 'null'] } }, ['name', 'color']),
+    },
+    ['id', 'incidentId', 'tagId', 'createdAt', 'tag']
+  ),
+  IncidentCustomField: object(
+    {
+      id,
+      incidentId: id,
+      customFieldId: id,
+      value: { type: ['string', 'null'] },
+      createdAt: date,
+      updatedAt: date,
+      changed: { type: 'boolean' },
+      customField: object({ name: string(), key: string(), type: string() }, [
+        'name',
+        'key',
+        'type',
+      ]),
+    },
+    ['id', 'incidentId', 'customFieldId', 'value', 'createdAt', 'updatedAt']
+  ),
+  IncidentTemplate: object(
+    {
+      id,
+      revision: integer,
+      name: string(120),
+      description: { type: ['string', 'null'] },
+      title: string(200),
+      descriptionText: { type: ['string', 'null'] },
+      defaultUrgency: { type: 'string', enum: ['HIGH', 'MEDIUM', 'LOW'] },
+      defaultPriority: { type: ['string', 'null'] },
+      defaultServiceId: { type: ['string', 'null'] },
+      createdById: { type: ['string', 'null'] },
+      isPublic: { type: 'boolean' },
+      createdAt: date,
+      updatedAt: date,
+    },
+    [
+      'id',
+      'revision',
+      'name',
+      'description',
+      'title',
+      'descriptionText',
+      'defaultUrgency',
+      'defaultPriority',
+      'defaultServiceId',
+      'createdById',
+      'isPublic',
+      'createdAt',
+      'updatedAt',
+    ]
+  ),
   IncidentTemplateDeletion: object({ id, deleted: { const: true } }, ['id', 'deleted']),
-  IncidentTagAdded: object({ id, incidentId: id, name: string(100), color: { type: ['string', 'null'] }, added: { type: 'boolean' } }, ['id', 'incidentId', 'name', 'color', 'added']),
-  IncidentTagRemoved: object({ id, incidentId: id, removed: { type: 'boolean' } }, ['id', 'incidentId', 'removed']),
+  IncidentTagAdded: object(
+    {
+      id,
+      incidentId: id,
+      name: string(100),
+      color: { type: ['string', 'null'] },
+      added: { type: 'boolean' },
+    },
+    ['id', 'incidentId', 'name', 'color', 'added']
+  ),
+  IncidentTagRemoved: object({ id, incidentId: id, removed: { type: 'boolean' } }, [
+    'id',
+    'incidentId',
+    'removed',
+  ]),
   RunbookCancellationRequested: object(
     { executionId: id, status: { const: 'CANCEL_REQUESTED' }, message: string() },
     ['executionId', 'status', 'message']
@@ -809,6 +1011,16 @@ export const ENTERPRISE_SCHEMAS: Record<string, Schema> = {
       'timeoutSeconds',
       'steps',
     ]
+  ),
+  ScheduleParticipant: object(
+    {
+      scheduleId: id,
+      layerId: id,
+      userId: id,
+      position: integer,
+      revision: { type: 'integer', minimum: 1 },
+    },
+    ['scheduleId', 'layerId', 'userId', 'position', 'revision']
   ),
   ScheduleParticipantMutation: object(
     {
@@ -1027,16 +1239,35 @@ export const ENTERPRISE_SCHEMAS: Record<string, Schema> = {
         )
       ),
       inputKeys: object({ added: array(string()), removed: array(string()) }, ['added', 'removed']),
-      inputDetails: object({
-        added: array(object({
-          key: string(), label: string(), type: string(), required: { type: 'boolean' },
-        }, ['key', 'label', 'type', 'required'])),
-        removed: array(object({
-          key: string(), label: string(), type: string(), required: { type: 'boolean' },
-        }, ['key', 'label', 'type', 'required'])),
-        baseCount: integer,
-        nextCount: integer,
-      }, ['added', 'removed', 'baseCount', 'nextCount']),
+      inputDetails: object(
+        {
+          added: array(
+            object(
+              {
+                key: string(),
+                label: string(),
+                type: string(),
+                required: { type: 'boolean' },
+              },
+              ['key', 'label', 'type', 'required']
+            )
+          ),
+          removed: array(
+            object(
+              {
+                key: string(),
+                label: string(),
+                type: string(),
+                required: { type: 'boolean' },
+              },
+              ['key', 'label', 'type', 'required']
+            )
+          ),
+          baseCount: integer,
+          nextCount: integer,
+        },
+        ['added', 'removed', 'baseCount', 'nextCount']
+      ),
       rules: array(
         object(
           {
@@ -1164,67 +1395,164 @@ export const ENTERPRISE_SCHEMAS: Record<string, Schema> = {
     },
     ['valid', 'versionId', 'draftRevision', 'checksum']
   ),
-  ReportCatalog: object({
-    metrics: array(object({
-      key: string(), label: string(), description: string(), formula: string(),
-      scope: string(), direction: string(),
-    }), 16),
-    dimensions: array(string(), 1),
-    windowDays: object({ min: integer, max: integer, default: integer }, ['min', 'max', 'default']),
-  }, ['metrics', 'dimensions', 'windowDays']),
-  ReportQueryResult: object({
-    windowDays: integer, serviceId: { type: ['string', 'null'] },
-    effectiveStart: date, effectiveEnd: date, isClipped: { type: 'boolean' },
-    metrics: { type: 'object', additionalProperties: { type: ['number', 'null'] } },
-  }, ['windowDays', 'serviceId', 'effectiveStart', 'effectiveEnd', 'isClipped', 'metrics']),
-  SavedReport: object({
-    id, revision: integer, name: string(200), description: { type: ['string', 'null'] },
-    metricKeys: array(string(), 16), windowDays: { type: 'integer', minimum: 1, maximum: 90 },
-    serviceId: { type: ['string', 'null'] },
-    visibility: { type: 'string', enum: ['PRIVATE', 'TEAM', 'PUBLIC'] },
-    userId: id, teamId: { type: ['string', 'null'] },
-    createdAt: date, updatedAt: date, canEdit: { type: 'boolean' },
-  }, ['id', 'revision', 'name', 'description', 'metricKeys', 'windowDays', 'serviceId', 'visibility', 'userId', 'teamId', 'createdAt', 'updatedAt']),
+  ReportCatalog: object(
+    {
+      metrics: array(
+        object({
+          key: string(),
+          label: string(),
+          description: string(),
+          formula: string(),
+          scope: string(),
+          direction: string(),
+        }),
+        16
+      ),
+      dimensions: array(string(), 1),
+      windowDays: object({ min: integer, max: integer, default: integer }, [
+        'min',
+        'max',
+        'default',
+      ]),
+    },
+    ['metrics', 'dimensions', 'windowDays']
+  ),
+  ReportQueryResult: object(
+    {
+      windowDays: integer,
+      serviceId: { type: ['string', 'null'] },
+      effectiveStart: date,
+      effectiveEnd: date,
+      isClipped: { type: 'boolean' },
+      metrics: { type: 'object', additionalProperties: { type: ['number', 'null'] } },
+    },
+    ['windowDays', 'serviceId', 'effectiveStart', 'effectiveEnd', 'isClipped', 'metrics']
+  ),
+  SavedReport: object(
+    {
+      id,
+      revision: integer,
+      name: string(200),
+      description: { type: ['string', 'null'] },
+      metricKeys: array(string(), 16),
+      windowDays: { type: 'integer', minimum: 1, maximum: 90 },
+      serviceId: { type: ['string', 'null'] },
+      visibility: { type: 'string', enum: ['PRIVATE', 'TEAM', 'PUBLIC'] },
+      userId: id,
+      teamId: { type: ['string', 'null'] },
+      createdAt: date,
+      updatedAt: date,
+      canEdit: { type: 'boolean' },
+    },
+    [
+      'id',
+      'revision',
+      'name',
+      'description',
+      'metricKeys',
+      'windowDays',
+      'serviceId',
+      'visibility',
+      'userId',
+      'teamId',
+      'createdAt',
+      'updatedAt',
+    ]
+  ),
   ReportDashboardWidget: object({
-    id, dashboardId: id, widgetType: string(100), metricKey: string(100),
-    widgetDefinitionId: { type: ['string', 'null'] }, title: { type: ['string', 'null'] },
-    position: { type: 'object' }, config: { type: 'object' },
-    createdAt: date, updatedAt: date,
+    id,
+    dashboardId: id,
+    widgetType: string(100),
+    metricKey: string(100),
+    widgetDefinitionId: { type: ['string', 'null'] },
+    title: { type: ['string', 'null'] },
+    position: { type: 'object' },
+    config: { type: 'object' },
+    createdAt: date,
+    updatedAt: date,
   }),
   ReportDashboardSummary: object({
-    id, revision: integer, name: string(200), description: { type: ['string', 'null'] },
+    id,
+    revision: integer,
+    name: string(200),
+    description: { type: ['string', 'null'] },
     visibility: { type: 'string', enum: ['PRIVATE', 'TEAM', 'PUBLIC'] },
-    isDefault: { type: 'boolean' }, isTemplate: { type: 'boolean' },
-    templateId: { type: ['string', 'null'] }, userId: id, teamId: { type: ['string', 'null'] },
-    widgetCount: integer, createdAt: date, updatedAt: date,
+    isDefault: { type: 'boolean' },
+    isTemplate: { type: 'boolean' },
+    templateId: { type: ['string', 'null'] },
+    userId: id,
+    teamId: { type: ['string', 'null'] },
+    widgetCount: integer,
+    createdAt: date,
+    updatedAt: date,
   }),
   ReportDashboard: object({
-    id, revision: integer, name: string(200), description: { type: ['string', 'null'] },
+    id,
+    revision: integer,
+    name: string(200),
+    description: { type: ['string', 'null'] },
     visibility: { type: 'string', enum: ['PRIVATE', 'TEAM', 'PUBLIC'] },
-    isDefault: { type: 'boolean' }, isTemplate: { type: 'boolean' },
-    templateId: { type: ['string', 'null'] }, userId: id, teamId: { type: ['string', 'null'] },
-    layout: { type: 'object' }, config: { type: ['object', 'null'] },
+    isDefault: { type: 'boolean' },
+    isTemplate: { type: 'boolean' },
+    templateId: { type: ['string', 'null'] },
+    userId: id,
+    teamId: { type: ['string', 'null'] },
+    layout: { type: 'object' },
+    config: { type: ['object', 'null'] },
     widgets: array(ref('ReportDashboardWidget'), 50),
     user: object({ id, name: { type: ['string', 'null'] } }, ['id']),
-    team: { type: ['object', 'null'], properties: { id, name: string() }, required: ['id', 'name'] },
-    permissions: object({ canEdit: { type: 'boolean' }, canDelete: { type: 'boolean' } }, ['canEdit', 'canDelete']),
-    createdAt: date, updatedAt: date,
+    team: {
+      type: ['object', 'null'],
+      properties: { id, name: string() },
+      required: ['id', 'name'],
+    },
+    permissions: object({ canEdit: { type: 'boolean' }, canDelete: { type: 'boolean' } }, [
+      'canEdit',
+      'canDelete',
+    ]),
+    createdAt: date,
+    updatedAt: date,
   }),
-  ReportDashboardData: object({
-    dashboardId: id, windowDays: { type: 'integer', minimum: 1, maximum: 90 },
-    serviceId: { type: ['string', 'null'] }, generatedAt: date,
-    metrics: { type: 'object', description: 'Actor-scoped serialized SLA metrics for the requested window.' },
-  }, ['dashboardId', 'windowDays', 'serviceId', 'generatedAt', 'metrics']),
-  ReportDashboardWidgets: object({
-    dashboardId: id, widgets: array(ref('ReportDashboardWidget'), 50),
-  }, ['dashboardId', 'widgets']),
-  ReportExport: object({
-    id, status: { type: 'string', enum: ['PENDING', 'PROCESSING', 'COMPLETED', 'FAILED', 'CANCELLED', 'EXPIRED'] },
-    query: object({ metrics: array(string(), 16), windowDays: integer, serviceId: string() }, ['metrics', 'windowDays']),
-    createdAt: date, expiresAt: date, completedAt: { type: ['string', 'null'], format: 'date-time' },
-    failedAt: { type: ['string', 'null'], format: 'date-time' },
-    checksum: { type: ['string', 'null'] }, sizeBytes: { type: ['integer', 'null'] },
-  }, ['id', 'status', 'query', 'createdAt', 'expiresAt']),
+  ReportDashboardData: object(
+    {
+      dashboardId: id,
+      windowDays: { type: 'integer', minimum: 1, maximum: 90 },
+      serviceId: { type: ['string', 'null'] },
+      generatedAt: date,
+      metrics: {
+        type: 'object',
+        description: 'Actor-scoped serialized SLA metrics for the requested window.',
+      },
+    },
+    ['dashboardId', 'windowDays', 'serviceId', 'generatedAt', 'metrics']
+  ),
+  ReportDashboardWidgets: object(
+    {
+      dashboardId: id,
+      widgets: array(ref('ReportDashboardWidget'), 50),
+    },
+    ['dashboardId', 'widgets']
+  ),
+  ReportExport: object(
+    {
+      id,
+      status: {
+        type: 'string',
+        enum: ['PENDING', 'PROCESSING', 'COMPLETED', 'FAILED', 'CANCELLED', 'EXPIRED'],
+      },
+      query: object({ metrics: array(string(), 16), windowDays: integer, serviceId: string() }, [
+        'metrics',
+        'windowDays',
+      ]),
+      createdAt: date,
+      expiresAt: date,
+      completedAt: { type: ['string', 'null'], format: 'date-time' },
+      failedAt: { type: ['string', 'null'], format: 'date-time' },
+      checksum: { type: ['string', 'null'] },
+      sizeBytes: { type: ['integer', 'null'] },
+    },
+    ['id', 'status', 'query', 'createdAt', 'expiresAt']
+  ),
   ReportExportCancellation: object({ id, status: { const: 'CANCELLED' } }, ['id', 'status']),
 };
 
@@ -1237,6 +1565,7 @@ const draftInput = object(
 );
 
 interface Operation {
+  query?: Record<string, Schema>;
   method: 'get' | 'post' | 'patch' | 'put' | 'delete';
   path: string;
   summary: string;
@@ -1246,125 +1575,300 @@ interface Operation {
   paginated?: boolean;
 }
 const operations: Operation[] = [
-  { method: 'get', path: '/settings/chatops', summary: 'Read global ChatOps and incident collaboration policy' },
-  { method: 'put', path: '/settings/chatops', summary: 'Replace global ChatOps policy',
-    description: 'Uses the same command as the settings UI. Requires exact If-Match revision and Idempotency-Key; configuration, provider policy and canonical audit commit together.',
-    body: object({ enabled: { type: 'boolean' }, channelPrefix: string(20),
-      autoCreateOnUrgency: { type: 'array', items: { type: 'string' }, maxItems: 3 },
-      autoCreateOnPriority: { type: 'array', items: { type: 'string' }, maxItems: 5 },
-      archiveOnResolve: { type: 'boolean' }, defaultVideoBridge: { type: 'string' },
-      customBridgeUrlTemplate: string(2048),
-      defaultProviders: { type: 'array', items: { type: 'string' }, minItems: 1, maxItems: 2 },
-    }, ['enabled', 'channelPrefix', 'autoCreateOnUrgency', 'autoCreateOnPriority', 'archiveOnResolve',
-      'defaultVideoBridge', 'customBridgeUrlTemplate', 'defaultProviders']) },
-  { method: 'get', path: '/custom-fields', summary: 'Page through incident custom-field definitions and usage counts' },
-  { method: 'get', path: '/custom-fields/{id}', summary: 'Read one custom-field definition and exact revision' },
-  { method: 'post', path: '/custom-fields', summary: 'Create a validated incident custom-field definition',
-    description: 'Requires administrator capability, custom-fields:write, and Idempotency-Key. SELECT options are bounded and unique; the default must match its type.',
-    body: object({ name: string(200), key: string(100), type: { type: 'string' },
-      required: { type: 'boolean' }, defaultValue: { type: ['string', 'null'] },
-      options: { type: ['array', 'null'], items: { type: 'string' }, maxItems: 50 },
-      showInList: { type: 'boolean' } }, ['name', 'key', 'type']), status: 201 },
-  { method: 'patch', path: '/custom-fields/{id}', summary: 'Update a custom-field definition with exact revision',
-    description: 'Rejects SELECT options that would invalidate persisted incident values. Requires If-Match and Idempotency-Key.',
-    body: object({ name: string(200), required: { type: 'boolean' },
-      defaultValue: { type: ['string', 'null'] }, options: { type: ['array', 'null'], items: { type: 'string' }, maxItems: 50 },
-      showInList: { type: 'boolean' }, order: { type: 'integer', minimum: 0, maximum: 10000 } }, []) },
-  { method: 'delete', path: '/custom-fields/{id}', summary: 'Delete an unused custom-field definition',
-    description: 'Rejects deletion while incident values still depend on the field. Requires exact If-Match and Idempotency-Key.' },
   {
-    method: 'post', path: '/audit-exports',
-    summary: 'Request a bounded redacted audit evidence export',
-    description: 'Requires the separately issuable audit:export scope and an Idempotency-Key. Maximum 31-day historical window, 5000 records and 2 MiB. Exceeding a bound fails the job rather than silently truncating evidence. Result is encrypted and retained for 72 hours.',
-    body: object({
-      from: { type: 'string', format: 'date-time' },
-      to: { type: 'string', format: 'date-time' },
-      action: { type: 'string', maxLength: 100 },
-      entityType: { type: 'string' }, entityId: { type: 'string' }, actorId: { type: 'string' },
-      maxRecords: { type: 'integer', minimum: 1, maximum: 5000 },
-    }, ['from', 'to']),
+    method: 'get',
+    path: '/settings/chatops',
+    summary: 'Read global ChatOps and incident collaboration policy',
+  },
+  {
+    method: 'put',
+    path: '/settings/chatops',
+    summary: 'Replace global ChatOps policy',
+    description:
+      'Uses the same command as the settings UI. Requires exact If-Match revision and Idempotency-Key; configuration, provider policy and canonical audit commit together.',
+    body: object(
+      {
+        enabled: { type: 'boolean' },
+        channelPrefix: string(20),
+        autoCreateOnUrgency: { type: 'array', items: { type: 'string' }, maxItems: 3 },
+        autoCreateOnPriority: { type: 'array', items: { type: 'string' }, maxItems: 5 },
+        archiveOnResolve: { type: 'boolean' },
+        defaultVideoBridge: { type: 'string' },
+        customBridgeUrlTemplate: string(2048),
+        defaultProviders: { type: 'array', items: { type: 'string' }, minItems: 1, maxItems: 2 },
+      },
+      [
+        'enabled',
+        'channelPrefix',
+        'autoCreateOnUrgency',
+        'autoCreateOnPriority',
+        'archiveOnResolve',
+        'defaultVideoBridge',
+        'customBridgeUrlTemplate',
+        'defaultProviders',
+      ]
+    ),
+  },
+  {
+    method: 'get',
+    path: '/custom-fields',
+    summary: 'Page through incident custom-field definitions and usage counts',
+  },
+  {
+    method: 'get',
+    path: '/custom-fields/{id}',
+    summary: 'Read one custom-field definition and exact revision',
+  },
+  {
+    method: 'post',
+    path: '/custom-fields',
+    summary: 'Create a validated incident custom-field definition',
+    description:
+      'Requires administrator capability, custom-fields:write, and Idempotency-Key. SELECT options are bounded and unique; the default must match its type.',
+    body: object(
+      {
+        name: string(200),
+        key: string(100),
+        type: { type: 'string' },
+        required: { type: 'boolean' },
+        defaultValue: { type: ['string', 'null'] },
+        options: { type: ['array', 'null'], items: { type: 'string' }, maxItems: 50 },
+        showInList: { type: 'boolean' },
+      },
+      ['name', 'key', 'type']
+    ),
     status: 201,
   },
-  { method: 'get', path: '/audit-exports/{id}', summary: 'Read owned audit export job status and checksum' },
-  { method: 'get', path: '/audit-exports/{id}/download', summary: 'Download and verify owned audit evidence',
-    description: 'Rechecks the current credential and role, validates SHA-256 before returning bytes, and records a download audit event.' },
   {
-    method: 'get', path: '/postmortems/{id}/versions',
+    method: 'patch',
+    path: '/custom-fields/{id}',
+    summary: 'Update a custom-field definition with exact revision',
+    description:
+      'Rejects SELECT options that would invalidate persisted incident values. Requires If-Match and Idempotency-Key.',
+    body: object(
+      {
+        name: string(200),
+        required: { type: 'boolean' },
+        defaultValue: { type: ['string', 'null'] },
+        options: { type: ['array', 'null'], items: { type: 'string' }, maxItems: 50 },
+        showInList: { type: 'boolean' },
+        order: { type: 'integer', minimum: 0, maximum: 10000 },
+      },
+      []
+    ),
+  },
+  {
+    method: 'delete',
+    path: '/custom-fields/{id}',
+    summary: 'Delete an unused custom-field definition',
+    description:
+      'Rejects deletion while incident values still depend on the field. Requires exact If-Match and Idempotency-Key.',
+  },
+  {
+    method: 'post',
+    path: '/audit-exports',
+    summary: 'Request a bounded redacted audit evidence export',
+    description:
+      'Requires the separately issuable audit:export scope and an Idempotency-Key. Maximum 31-day historical window, 5000 records and 2 MiB. Exceeding a bound fails the job rather than silently truncating evidence. Result is encrypted and retained for 72 hours.',
+    body: object(
+      {
+        from: { type: 'string', format: 'date-time' },
+        to: { type: 'string', format: 'date-time' },
+        action: { type: 'string', maxLength: 100 },
+        entityType: { type: 'string' },
+        entityId: { type: 'string' },
+        actorId: { type: 'string' },
+        maxRecords: { type: 'integer', minimum: 1, maximum: 5000 },
+      },
+      ['from', 'to']
+    ),
+    status: 201,
+  },
+  {
+    method: 'get',
+    path: '/audit-exports/{id}',
+    summary: 'Read owned audit export job status and checksum',
+  },
+  {
+    method: 'get',
+    path: '/audit-exports/{id}/download',
+    summary: 'Download and verify owned audit evidence',
+    description:
+      'Rechecks the current credential and role, validates SHA-256 before returning bytes, and records a download audit event.',
+  },
+  {
+    method: 'get',
+    path: '/postmortems/{id}/versions',
     summary: 'List retained postmortem revisions',
-    description: 'Cursor over at most 50 descending revisions. Snapshots capture parent-row state on every insert and update, including UI and worker writes. Existing records begin with the state present when this feature was deployed; earlier revisions cannot be reconstructed. Incident visibility applies.',
+    query: {
+      limit: { type: 'integer', minimum: 1, maximum: 50, default: 25 },
+      beforeRevision: { type: 'integer', minimum: 1 },
+    },
+    description:
+      'Cursor over at most 50 descending revisions. Snapshots capture parent-row state on every insert and update, including UI and worker writes. Existing records begin with the state present when this feature was deployed; earlier revisions cannot be reconstructed. Incident visibility applies.',
   },
   {
-    method: 'get', path: '/postmortems/{id}/action-items',
+    method: 'get',
+    path: '/postmortems/{id}/action-items',
     summary: 'Read corrective actions from the same records as the postmortem UI',
-    description: 'Returns at most 100 actions and the parent postmortem revision. Legacy JSON actions are projected only when no relational records exist.',
+    description:
+      'Returns at most 100 actions and the parent postmortem revision. Legacy JSON actions are projected only when no relational records exist.',
   },
   {
-    method: 'put', path: '/postmortems/{id}/action-items',
+    method: 'put',
+    path: '/postmortems/{id}/action-items',
     summary: 'Replace all corrective actions using an exact postmortem revision',
-    description: 'The items array is a complete replacement. Omitting an existing item deletes it; a changed status advances its lifecycle. Requires If-Match and Idempotency-Key. Existing external-issue links on retained records are preserved.',
-    body: object({ items: array(object({
-      id: { type: 'string', minLength: 1, maxLength: 200 },
-      title: { type: 'string', minLength: 1, maxLength: 300 },
-      description: { type: 'string', maxLength: 5000 },
-      ownerId: { type: ['string', 'null'] },
-      dueDate: { type: ['string', 'null'], format: 'date' },
-      status: { type: 'string', enum: ['OPEN', 'IN_PROGRESS', 'COMPLETED', 'BLOCKED'] },
-      priority: { type: 'string', enum: ['HIGH', 'MEDIUM', 'LOW'] },
-    }, ['title']), 100) }, ['items']),
+    description:
+      'The items array is a complete replacement. Omitting an existing item deletes it; a changed status advances its lifecycle. Requires If-Match and Idempotency-Key. Existing external-issue links on retained records are preserved.',
+    body: object(
+      {
+        items: array(
+          object(
+            {
+              id: { type: 'string', minLength: 1, maxLength: 200 },
+              title: { type: 'string', minLength: 1, maxLength: 300 },
+              description: { type: 'string', maxLength: 5000 },
+              ownerId: { type: ['string', 'null'] },
+              dueDate: { type: ['string', 'null'], format: 'date' },
+              status: { type: 'string', enum: ['OPEN', 'IN_PROGRESS', 'COMPLETED', 'BLOCKED'] },
+              priority: { type: 'string', enum: ['HIGH', 'MEDIUM', 'LOW'] },
+            },
+            ['title']
+          ),
+          100
+        ),
+      },
+      ['items']
+    ),
   },
   {
-    method: 'patch', path: '/postmortems/{id}/action-items/{itemId}',
+    method: 'get',
+    path: '/postmortems/{id}/action-items/{itemId}',
+    summary: 'Read one corrective action and the postmortem revision',
+    description:
+      'Same visibility as listing corrective actions; {id} accepts the postmortem or incident ID. The ETag is the parent postmortem revision used by If-Match on action-item changes.',
+  },
+  {
+    method: 'patch',
+    path: '/postmortems/{id}/action-items/{itemId}',
     summary: 'Update one corrective action',
-    description: 'Requires the parent postmortem If-Match and Idempotency-Key. Preserves other actions and existing external issue links.',
-    body: object({
-      title: { type: 'string', minLength: 1, maxLength: 300 },
-      description: { type: 'string', maxLength: 5000 },
-      ownerId: { type: ['string', 'null'] }, dueDate: { type: ['string', 'null'], format: 'date' },
-      status: { type: 'string', enum: ['OPEN', 'IN_PROGRESS', 'COMPLETED', 'BLOCKED'] },
-      priority: { type: 'string', enum: ['HIGH', 'MEDIUM', 'LOW'] },
-    }, []),
+    description:
+      'Requires the parent postmortem If-Match and Idempotency-Key. Preserves other actions and existing external issue links.',
+    body: object(
+      {
+        title: { type: 'string', minLength: 1, maxLength: 300 },
+        description: { type: 'string', maxLength: 5000 },
+        ownerId: { type: ['string', 'null'] },
+        dueDate: { type: ['string', 'null'], format: 'date' },
+        status: { type: 'string', enum: ['OPEN', 'IN_PROGRESS', 'COMPLETED', 'BLOCKED'] },
+        priority: { type: 'string', enum: ['HIGH', 'MEDIUM', 'LOW'] },
+      },
+      []
+    ),
   },
   {
-    method: 'delete', path: '/postmortems/{id}/action-items/{itemId}',
+    method: 'delete',
+    path: '/postmortems/{id}/action-items/{itemId}',
     summary: 'Delete one corrective action',
-    description: 'Requires the parent postmortem If-Match and Idempotency-Key. Other actions remain unchanged.',
+    description:
+      'Requires the parent postmortem If-Match and Idempotency-Key. Other actions remain unchanged.',
   },
   {
-    method: 'post', path: '/postmortems/{id}/publish',
+    method: 'post',
+    path: '/postmortems/{id}/publish',
     summary: 'Publish a reviewed postmortem with explicit public visibility',
-    description: 'Requires a resolved incident, complete summary, exact If-Match revision and Idempotency-Key. An already-published revision with matching visibility returns the existing result without another audit.',
+    description:
+      'Requires a resolved incident, complete summary, exact If-Match revision and Idempotency-Key. An already-published revision with matching visibility returns the existing result without another audit.',
     body: object({ isPublic: { type: 'boolean' } }, ['isPublic']),
   },
   {
-    method: 'get', path: '/postmortems/{id}/contributors',
+    method: 'get',
+    path: '/postmortems/{id}/contributors',
     summary: 'List postmortem collaborators and roles',
-    description: 'Incident visibility applies. Returns user identifiers, names and roles without email addresses.',
+    description:
+      'Incident visibility applies. Returns user identifiers, names and roles without email addresses.',
   },
   {
-    method: 'put', path: '/postmortems/{id}/contributors',
+    method: 'put',
+    path: '/postmortems/{id}/contributors',
     summary: 'Replace the reviewed collaborator roster',
-    description: 'Requires an exact parent revision and Idempotency-Key. Only active users may be assigned; omitting a user removes the assignment.',
-    body: object({ contributors: array(object({
-      userId: { type: 'string' }, role: { type: 'string', enum: ['AUTHOR', 'REVIEWER', 'CONTRIBUTOR'] },
-    }, ['userId', 'role']), 50) }, ['contributors']),
+    description:
+      'Requires an exact parent revision and Idempotency-Key. Only active users may be assigned; omitting a user removes the assignment.',
+    body: object(
+      {
+        contributors: array(
+          object(
+            {
+              userId: { type: 'string' },
+              role: { type: 'string', enum: ['AUTHOR', 'REVIEWER', 'CONTRIBUTOR'] },
+            },
+            ['userId', 'role']
+          ),
+          50
+        ),
+      },
+      ['contributors']
+    ),
   },
-  { method: 'get', path: '/integrations/types', summary: 'List safe supported inbound provider types and configuration capabilities' },
   {
-    method: 'post', path: '/services/{id}/integrations', summary: 'Create a service inbound integration and disclose its API key once',
-    description: 'Requires integrations:create and an Idempotency-Key. The response contains the initial bearer key once; replay returns safe metadata with key null. Secrets are never stored in audit details.',
+    method: 'get',
+    path: '/integrations/types',
+    summary: 'List safe supported inbound provider types and configuration capabilities',
+  },
+  {
+    method: 'post',
+    path: '/services/{id}/integrations',
+    summary: 'Create a service inbound integration and disclose its API key once',
+    description:
+      'Requires integrations:create and an Idempotency-Key. The response contains the initial bearer key once; replay returns safe metadata with key null. Secrets are never stored in audit details.',
     body: object({ name: string(100), type: string(64), snsTopicArn: string(512) }, ['name']),
   },
-  { method: 'get', path: '/integrations/{id}/credentials', summary: 'Read signing credential state without secret material' },
   {
-    method: 'post', path: '/integrations/{id}/credentials', summary: 'Rotate an integration signing secret with bounded overlap',
-    description: 'Requires concrete If-Match and Idempotency-Key. Choose routing-key or signature-secret. Replacement material is disclosed once and never stored in replay receipts. Previous encrypted credentials are accepted only until the overlap deadline.',
-    body: object({ credential: { type: 'string', enum: ['routing-key', 'signature-secret'], default: 'signature-secret' }, overlapSeconds: { type: 'integer', minimum: 0, maximum: 86400, default: 3600 } }),
+    method: 'get',
+    path: '/integrations/{id}/credentials',
+    summary: 'Read signing credential state without secret material',
   },
-  { method: 'post', path: '/integrations/{id}/test', summary: 'Validate a bounded sample payload without ingesting an event', body: object({ payload: {} }) },
-  { method: 'get', path: '/integrations/{id}/diagnostics', summary: 'Read bounded integration delivery health and safe diagnostics' },
-  { method: 'post', path: '/integrations/{id}/validate', summary: 'Validate stored integration configuration without activation' },
-  { method: 'get', path: '/integrations/{id}/usage', summary: 'Inspect service, delivery, observation and enabled runbook usage' },
-  { method: 'delete', path: '/integrations/{id}', summary: 'Disable and safely delete an integration when no deliveries are in flight' },
+  {
+    method: 'post',
+    path: '/integrations/{id}/credentials',
+    summary: 'Rotate an integration signing secret with bounded overlap',
+    description:
+      'Requires concrete If-Match and Idempotency-Key. Choose routing-key or signature-secret. Replacement material is disclosed once and never stored in replay receipts. Previous encrypted credentials are accepted only until the overlap deadline.',
+    body: object({
+      credential: {
+        type: 'string',
+        enum: ['routing-key', 'signature-secret'],
+        default: 'signature-secret',
+      },
+      overlapSeconds: { type: 'integer', minimum: 0, maximum: 86400, default: 3600 },
+    }),
+  },
+  {
+    method: 'post',
+    path: '/integrations/{id}/test',
+    summary: 'Validate a bounded sample payload without ingesting an event',
+    body: object({ payload: {} }),
+  },
+  {
+    method: 'get',
+    path: '/integrations/{id}/diagnostics',
+    summary: 'Read bounded integration delivery health and safe diagnostics',
+  },
+  {
+    method: 'post',
+    path: '/integrations/{id}/validate',
+    summary: 'Validate stored integration configuration without activation',
+  },
+  {
+    method: 'get',
+    path: '/integrations/{id}/usage',
+    summary: 'Inspect service, delivery, observation and enabled runbook usage',
+  },
+  {
+    method: 'delete',
+    path: '/integrations/{id}',
+    summary: 'Disable and safely delete an integration when no deliveries are in flight',
+  },
   ...RUNBOOK_ADMINISTRATION_OPERATIONS,
   ...RUNBOOK_FLEET_OPERATIONS,
   ...USER_INVITATION_OPERATIONS,
@@ -1378,7 +1882,8 @@ const operations: Operation[] = [
     method: 'get',
     path: '/status-pages/{id}/preview',
     summary: 'Preview the current unpublished public projection without publishing it',
-    description: 'Returns the same privacy-filtered projection used by the status-page editor. A disabled page has no public preview snapshot. This read never changes publication state.',
+    description:
+      'Returns the same privacy-filtered projection used by the status-page editor. A disabled page has no public preview snapshot. This read never changes publication state.',
   },
   {
     method: 'get',
@@ -1444,15 +1949,28 @@ const operations: Operation[] = [
     method: 'post',
     path: '/status-pages/{id}/assets',
     summary: 'Upload a validated content-addressed branding image',
-    description: 'Accepts a PNG, JPEG, GIF or WebP data URL up to 2 MiB. Repeating the same bytes returns the same asset URL. Upload does not publish or change appearance; submit the returned URL through the revision-protected appearance endpoint. At most 20 distinct assets are retained per page.',
+    description:
+      'Accepts a PNG, JPEG, GIF or WebP data URL up to 2 MiB. Repeating the same bytes returns the same asset URL. Upload does not publish or change appearance; submit the returned URL through the revision-protected appearance endpoint. At most 20 distinct assets are retained per page.',
     status: 201,
     body: object({ image: { type: 'string', maxLength: 2800000 } }, ['image']),
   },
-  { method: 'get', path: '/status-pages/{id}/assets',
-    summary: 'List uploaded status-page branding assets without image bytes' },
-  { method: 'delete', path: '/status-pages/{id}/assets/{assetId}',
+  {
+    method: 'get',
+    path: '/status-pages/{id}/assets',
+    summary: 'List uploaded status-page branding assets without image bytes',
+  },
+  {
+    method: 'get',
+    path: '/status-pages/{id}/assets/{assetId}',
+    summary: 'Read one status-page branding asset without image bytes',
+  },
+  {
+    method: 'delete',
+    path: '/status-pages/{id}/assets/{assetId}',
     summary: 'Delete an unused status-page branding asset',
-    description: 'Requires Idempotency-Key. Rejects assets referenced by draft branding or the published snapshot. Successful deletion is audited and replay-safe.' },
+    description:
+      'Requires Idempotency-Key. Rejects assets referenced by draft branding or the published snapshot. Successful deletion is audited and replay-safe.',
+  },
   {
     method: 'patch',
     path: '/status-pages/{id}/appearance',
@@ -1913,17 +2431,88 @@ const operations: Operation[] = [
     paginated: true,
   },
   { method: 'get', path: '/incidents/{id}/tags', summary: 'List incident tags', paginated: true },
-  { method: 'get', path: '/incidents/{id}/custom-fields', summary: 'List incident custom-field values', paginated: true },
-  { method: 'get', path: '/incidents/templates', summary: 'List accessible incident templates', paginated: true },
-  { method: 'post', path: '/incidents/templates', summary: 'Create an incident template', body: object({ name: string(120), title: string(200), description: { type: ['string', 'null'] }, descriptionText: { type: ['string', 'null'] }, defaultUrgency: { type: 'string', enum: ['HIGH', 'MEDIUM', 'LOW'] }, defaultPriority: { type: ['string', 'null'] }, defaultServiceId: { type: ['string', 'null'] }, isPublic: { type: 'boolean' } }, ['name', 'title']) },
-  { method: 'get', path: '/incidents/templates/{templateId}', summary: 'Read an accessible incident template' },
-  { method: 'patch', path: '/incidents/templates/{templateId}', summary: 'Update an owned incident template', body: object({ name: string(120), title: string(200), description: { type: ['string', 'null'] }, descriptionText: { type: ['string', 'null'] }, defaultUrgency: { type: 'string', enum: ['HIGH', 'MEDIUM', 'LOW'] }, defaultPriority: { type: ['string', 'null'] }, defaultServiceId: { type: ['string', 'null'] }, isPublic: { type: 'boolean' } }) },
-  { method: 'delete', path: '/incidents/templates/{templateId}', summary: 'Delete an owned incident template' },
-  { method: 'get', path: '/incidents/{id}/custom-fields/{fieldId}', summary: 'Read an incident custom-field value' },
-  { method: 'put', path: '/incidents/{id}/custom-fields/{fieldId}', summary: 'Set an incident custom-field value', body: object({ value: { type: ['string', 'number', 'boolean', 'null'] } }, ['value']) },
-  { method: 'post', path: '/incidents/{id}/tags', summary: 'Add a tag to an incident', body: object({ name: { ...string(100), minLength: 1 } }, ['name']) },
-  { method: 'delete', path: '/incidents/{id}/tags/{tagId}', summary: 'Remove a tag from an incident' },
-  { method: 'get', path: '/incidents/{id}/routing-decision', summary: 'Read the redacted routing decision for an accessible incident' },
+  {
+    method: 'get',
+    path: '/incidents/{id}/custom-fields',
+    summary: 'List incident custom-field values',
+    paginated: true,
+  },
+  {
+    method: 'get',
+    path: '/incidents/templates',
+    summary: 'List accessible incident templates',
+    paginated: true,
+  },
+  {
+    method: 'post',
+    path: '/incidents/templates',
+    summary: 'Create an incident template',
+    body: object(
+      {
+        name: string(120),
+        title: string(200),
+        description: { type: ['string', 'null'] },
+        descriptionText: { type: ['string', 'null'] },
+        defaultUrgency: { type: 'string', enum: ['HIGH', 'MEDIUM', 'LOW'] },
+        defaultPriority: { type: ['string', 'null'] },
+        defaultServiceId: { type: ['string', 'null'] },
+        isPublic: { type: 'boolean' },
+      },
+      ['name', 'title']
+    ),
+  },
+  {
+    method: 'get',
+    path: '/incidents/templates/{templateId}',
+    summary: 'Read an accessible incident template',
+  },
+  {
+    method: 'patch',
+    path: '/incidents/templates/{templateId}',
+    summary: 'Update an owned incident template',
+    body: object({
+      name: string(120),
+      title: string(200),
+      description: { type: ['string', 'null'] },
+      descriptionText: { type: ['string', 'null'] },
+      defaultUrgency: { type: 'string', enum: ['HIGH', 'MEDIUM', 'LOW'] },
+      defaultPriority: { type: ['string', 'null'] },
+      defaultServiceId: { type: ['string', 'null'] },
+      isPublic: { type: 'boolean' },
+    }),
+  },
+  {
+    method: 'delete',
+    path: '/incidents/templates/{templateId}',
+    summary: 'Delete an owned incident template',
+  },
+  {
+    method: 'get',
+    path: '/incidents/{id}/custom-fields/{fieldId}',
+    summary: 'Read an incident custom-field value',
+  },
+  {
+    method: 'put',
+    path: '/incidents/{id}/custom-fields/{fieldId}',
+    summary: 'Set an incident custom-field value',
+    body: object({ value: { type: ['string', 'number', 'boolean', 'null'] } }, ['value']),
+  },
+  {
+    method: 'post',
+    path: '/incidents/{id}/tags',
+    summary: 'Add a tag to an incident',
+    body: object({ name: { ...string(100), minLength: 1 } }, ['name']),
+  },
+  {
+    method: 'delete',
+    path: '/incidents/{id}/tags/{tagId}',
+    summary: 'Remove a tag from an incident',
+  },
+  {
+    method: 'get',
+    path: '/incidents/{id}/routing-decision',
+    summary: 'Read the redacted routing decision for an accessible incident',
+  },
   {
     method: 'post',
     path: '/incidents/{id}/watchers',
@@ -1935,6 +2524,11 @@ const operations: Operation[] = [
       },
       ['userId']
     ),
+  },
+  {
+    method: 'get',
+    path: '/incidents/{id}/watchers/{watcherId}',
+    summary: 'Read one incident watcher',
   },
   {
     method: 'delete',
@@ -1963,7 +2557,8 @@ const operations: Operation[] = [
     method: 'get',
     path: '/runbooks/executions',
     summary: 'List bounded Runbook executions for an accessible incident',
-    description: 'Requires both runbooks:read and incidents:read. Returns execution metadata without inputs, plans, target details or agent output.',
+    description:
+      'Requires both runbooks:read and incidents:read. Returns execution metadata without inputs, plans, target details or agent output.',
     paginated: true,
   },
   {
@@ -1977,78 +2572,107 @@ const operations: Operation[] = [
     method: 'get',
     path: '/notifications/{id}/feedback',
     summary: 'Read bounded provider feedback correlated with a notification',
-    description: 'Returns at most 50 events correlated through up to 100 message identifiers. Identifiers and raw provider payloads are never disclosed; truncation flags describe the limits.',
+    description:
+      'Returns at most 50 events correlated through up to 100 message identifiers. Identifiers and raw provider payloads are never disclosed; truncation flags describe the limits.',
   },
   {
     method: 'get',
     path: '/incidents/{id}/response-activity',
-    summary: 'Read bounded incident response activity across alerting, routing, paging and remediation',
-    description: 'Requires incidents:read, notifications:read and runbooks:read. Each section contains at most 50 newest records with a truncation flag; follow its dedicated paginated endpoint for older records. Raw alert payloads, notification content and Runbook inputs/output are excluded.',
+    summary:
+      'Read bounded incident response activity across alerting, routing, paging and remediation',
+    description:
+      'Requires incidents:read, notifications:read and runbooks:read. Each section contains at most 50 newest records with a truncation flag; follow its dedicated paginated endpoint for older records. Raw alert payloads, notification content and Runbook inputs/output are excluded.',
   },
   {
-    method: 'get', path: '/incidents/{id}/war-rooms',
+    method: 'get',
+    path: '/incidents/{id}/war-rooms',
     summary: 'List persisted War Room state for an accessible incident',
-    description: 'Cursor-paginated. Includes provider, lifecycle, health, safe channel link and participant count. Provider errors, participant identities and provider tokens are omitted. No provider call is made.',
+    description:
+      'Cursor-paginated. Includes provider, lifecycle, health, safe channel link and participant count. Provider errors, participant identities and provider tokens are omitted. No provider call is made.',
     paginated: true,
   },
   {
-    method: 'get', path: '/incidents/{id}/alerts',
+    method: 'get',
+    path: '/incidents/{id}/alerts',
     summary: 'List redacted alerts linked to an incident',
-    description: 'Cursor-paginated. Correlation keys are returned only as keyed hashes; raw alert payloads are omitted.',
+    description:
+      'Cursor-paginated. Correlation keys are returned only as keyed hashes; raw alert payloads are omitted.',
     paginated: true,
   },
   {
-    method: 'get', path: '/incidents/{id}/runbook-executions',
+    method: 'get',
+    path: '/incidents/{id}/runbook-executions',
     summary: 'List incident Runbook execution metadata',
-    description: 'Requires incidents:read and runbooks:read. Inputs, plans, target details and agent output are omitted.',
+    description:
+      'Requires incidents:read and runbooks:read. Inputs, plans, target details and agent output are omitted.',
     paginated: true,
   },
   {
-    method: 'get', path: '/incidents/{id}/notification-attempts',
+    method: 'get',
+    path: '/incidents/{id}/notification-attempts',
     summary: 'List incident notification delivery attempts',
-    description: 'Requires incidents:read and notifications:read. Provider identifiers and raw errors are omitted.',
+    description:
+      'Requires incidents:read and notifications:read. Provider identifiers and raw errors are omitted.',
     paginated: true,
   },
   {
-    method: 'get', path: '/incidents/{id}/available-actions',
+    method: 'get',
+    path: '/incidents/{id}/available-actions',
     summary: 'Discover incident actions permitted for this credential and current state',
-    description: 'Advisory snapshot only. Mutations recheck authorization and state. Runbook execution requires selecting a runbook and calling its preview before execution.',
+    description:
+      'Advisory snapshot only. Mutations recheck authorization and state. Runbook execution requires selecting a runbook and calling its preview before execution.',
   },
   {
-    method: 'get', path: '/incidents/{id}/related-incidents',
+    method: 'get',
+    path: '/incidents/{id}/related-incidents',
     summary: 'Find accessible incidents linked by recorded alert correlation evidence',
-    description: 'Scans at most 100 source alerts and 500 matching alerts, returning at most 50 unique incidents. Returns keyed correlation hashes and truncation flags; no raw deduplication keys or alert payloads.',
+    description:
+      'Scans at most 100 source alerts and 500 matching alerts, returning at most 50 unique incidents. Returns keyed correlation hashes and truncation flags; no raw deduplication keys or alert payloads.',
   },
   {
-    method: 'get', path: '/incidents/{id}/intelligence',
+    method: 'get',
+    path: '/incidents/{id}/intelligence',
     summary: 'Read similar incidents, related incidents, possible causes and runbook suggestions',
-    description: 'Requires incidents:read; possible changes additionally require services:read and runbook suggestions require runbooks:read, otherwise those lists are empty. Returns advisory suggestions only; scores are uncalibrated ranking signals and possible causes are hypotheses to verify. Every referenced incident, change and runbook is filtered by the credential\'s own read access. Empty while intelligence is off for the incident\'s service or in shadow mode.',
+    description:
+      "Requires incidents:read; possible changes additionally require services:read and runbook suggestions require runbooks:read, otherwise those lists are empty. Returns advisory suggestions only; scores are uncalibrated ranking signals and possible causes are hypotheses to verify. Every referenced incident, change and runbook is filtered by the credential's own read access. Empty while intelligence is off for the incident's service or in shadow mode.",
   },
   {
-    method: 'get', path: '/operational-events',
+    method: 'get',
+    path: '/operational-events',
     summary: 'List incident operational events visible to this credential',
-    description: 'Cursor-paginated incident state events. Untrusted event messages and private incident details are omitted.',
+    description:
+      'Cursor-paginated incident state events. Untrusted event messages and private incident details are omitted.',
     paginated: true,
   },
   {
-    method: 'get', path: '/services/{id}/change-events',
+    method: 'get',
+    path: '/services/{id}/change-events',
     summary: 'List service configuration changes recorded in the canonical audit log',
-    description: 'Requires services:read and audit:read. Returns action metadata only, without audit details or deployment telemetry.',
+    description:
+      'Requires services:read and audit:read. Returns action metadata only, without audit details or deployment telemetry.',
     paginated: true,
   },
   {
-    method: 'post', path: '/escalation-policies/{id}/preview',
+    method: 'post',
+    path: '/escalation-policies/{id}/preview',
     summary: 'Preview escalation conditions and recipients without paging',
-    description: 'Read-only advisory preview. Requires escalation-policies:read, incidents:read, users:read and schedules:read. Actual escalation rechecks state and may use pinned policy versions.',
-    body: object({
-      incidentId: id,
-      at: { type: 'string', format: 'date-time' },
-    }, ['incidentId']),
+    description:
+      'Read-only advisory preview. Requires escalation-policies:read, incidents:read, users:read and schedules:read. Actual escalation rechecks state and may use pinned policy versions.',
+    body: object(
+      {
+        incidentId: id,
+        at: { type: 'string', format: 'date-time' },
+      },
+      ['incidentId']
+    ),
   },
   {
-    method: 'get', path: '/services/{id}/health-summary',
-    summary: 'Read bounded service health, visible incidents, paging failures and latest objectives',
-    description: 'Requires services:read, incidents:read, notifications:read, service-objectives:read, escalation-policies:read and schedules:read. On-call coverage is based on the current first unconditional escalation step; conditional steps are explicitly marked unevaluated.',
+    method: 'get',
+    path: '/services/{id}/health-summary',
+    summary:
+      'Read bounded service health, visible incidents, paging failures and latest objectives',
+    description:
+      'Requires services:read, incidents:read, notifications:read, service-objectives:read, escalation-policies:read and schedules:read. On-call coverage is based on the current first unconditional escalation step; conditional steps are explicitly marked unevaluated.',
   },
   {
     method: 'get',
@@ -2060,49 +2684,70 @@ const operations: Operation[] = [
     path: '/schedules/{id}/layers',
     summary: 'Create a rotation layer with active, unassigned responders',
     status: 201,
-    body: object({
-      ...scheduleLayerProperties,
-      responderIds: array({ ...id, maxLength: 100 }, 100),
-    }, [...scheduleLayerRequired, 'responderIds']),
+    body: object(
+      {
+        ...scheduleLayerProperties,
+        responderIds: array({ ...id, maxLength: 100 }, 100),
+      },
+      [...scheduleLayerRequired, 'responderIds']
+    ),
   },
   {
     method: 'post',
     path: '/schedules/{id}/coverage/preview',
     summary: 'Preview seven days of coverage after an unsaved layer change',
-    description: 'Read-only advisory simulation using the same rotation, precedence and override engine as live coverage. Requires the exact current schedule If-Match revision.',
-    body: object({
-      start: date, end: date,
-      layerId: { type: ['string', 'null'] },
-      proposedLayer: object({
-        ...scheduleLayerProperties,
-        responderIds: array({ ...id, maxLength: 100 }, 100),
-      }, [...scheduleLayerRequired, 'responderIds']),
-    }, ['start', 'end', 'layerId', 'proposedLayer']),
+    description:
+      'Read-only advisory simulation using the same rotation, precedence and override engine as live coverage. Requires the exact current schedule If-Match revision.',
+    body: object(
+      {
+        start: date,
+        end: date,
+        layerId: { type: ['string', 'null'] },
+        proposedLayer: object(
+          {
+            ...scheduleLayerProperties,
+            responderIds: array({ ...id, maxLength: 100 }, 100),
+          },
+          [...scheduleLayerRequired, 'responderIds']
+        ),
+      },
+      ['start', 'end', 'layerId', 'proposedLayer']
+    ),
   },
   {
     method: 'get',
     path: '/schedules/{id}/dependencies',
     summary: 'Inspect escalation-policy steps referencing a schedule',
-    description: 'Requires schedule administration. Returns at most 100 steps, the total count and a truncation flag; includes archived policies so deletion decisions account for all references.',
+    description:
+      'Requires schedule administration. Returns at most 100 steps, the total count and a truncation flag; includes archived policies so deletion decisions account for all references.',
   },
   {
     method: 'get',
     path: '/schedules/{id}/changes',
     summary: 'Read a redacted, cursor-paginated schedule change history',
-    description: 'Requires schedule administration. Includes only audit records attributed to the exact schedule; details use the standard redaction projection.',
+    description:
+      'Requires schedule administration. Includes only audit records attributed to the exact schedule; details use the standard redaction projection.',
   },
   {
     method: 'put',
     path: '/schedules/{id}/layers/order',
     summary: 'Atomically replace rotation-layer precedence using the schedule revision',
-    body: object({
-      orderedIds: array({ ...id, maxLength: 100 }, 100),
-    }, ['orderedIds']),
+    body: object(
+      {
+        orderedIds: array({ ...id, maxLength: 100 }, 100),
+      },
+      ['orderedIds']
+    ),
   },
   {
     method: 'get',
     path: '/schedules/{id}/layers/{layerId}',
     summary: 'Read a rotation layer and its current revision',
+  },
+  {
+    method: 'get',
+    path: '/schedules/{id}/overrides/{overrideId}',
+    summary: 'Read one schedule override',
   },
   {
     method: 'patch',
@@ -2121,6 +2766,11 @@ const operations: Operation[] = [
     summary: 'Add an active rotation participant',
     status: 201,
     body: object({ userId: { ...id, maxLength: 100 } }, ['userId']),
+  },
+  {
+    method: 'get',
+    path: '/schedules/{id}/layers/{layerId}/participants/{userId}',
+    summary: 'Read one rotation participant and the layer revision',
   },
   {
     method: 'patch',
@@ -2205,54 +2855,175 @@ const operations: Operation[] = [
     summary: 'Publish the validated saved draft',
     body: object({}),
   },
-  { method: 'get', path: '/reports/saved', summary: 'List owned and accessible saved reports', paginated: true },
-  { method: 'post', path: '/reports/saved', summary: 'Save a bounded report definition', status: 201,
-    body: object({ name: string(200), description: string(2000), metrics: array(string(), 16),
-      windowDays: { type: 'integer', minimum: 1, maximum: 90 }, serviceId: id,
-      visibility: string(), teamId: id }, ['name', 'metrics']) },
-  { method: 'get', path: '/reports/saved/{id}', summary: 'Read an accessible report definition' },
-  { method: 'patch', path: '/reports/saved/{id}', summary: 'Update an owned report with an exact revision precondition',
-    body: object({ name: string(200), description: string(2000), metrics: array(string(), 16),
-      windowDays: { type: 'integer', minimum: 1, maximum: 90 }, serviceId: id,
-      visibility: string(), teamId: id }) },
-  { method: 'delete', path: '/reports/saved/{id}', summary: 'Delete an owned saved report with an exact revision precondition', status: 204 },
-  { method: 'get', path: '/reports/catalog', summary: 'List supported report metrics and dimensions' },
-  { method: 'post', path: '/reports/query', summary: 'Run a bounded actor-scoped analytical query',
-    body: object({ metrics: array(string(), 16), windowDays: { type: 'integer', minimum: 1, maximum: 90 }, serviceId: id }, ['metrics']) },
   {
-    method: 'get', path: '/dashboards',
-    summary: 'List accessible saved dashboards and templates', paginated: true,
+    method: 'get',
+    path: '/reports/saved',
+    summary: 'List owned and accessible saved reports',
+    paginated: true,
   },
   {
-    method: 'post', path: '/dashboards',
-    summary: 'Create a saved dashboard', status: 201,
-    body: object({ name: string(200), description: string(2000), visibility: string(),
-      teamId: id, templateId: id, sourceTemplate: string(100),
-      widgets: array(ref('ReportDashboardWidget'), 50) }, ['name']),
+    method: 'post',
+    path: '/reports/saved',
+    summary: 'Save a bounded report definition',
+    status: 201,
+    body: object(
+      {
+        name: string(200),
+        description: string(2000),
+        metrics: array(string(), 16),
+        windowDays: { type: 'integer', minimum: 1, maximum: 90 },
+        serviceId: id,
+        visibility: string(),
+        teamId: id,
+      },
+      ['name', 'metrics']
+    ),
+  },
+  { method: 'get', path: '/reports/saved/{id}', summary: 'Read an accessible report definition' },
+  {
+    method: 'patch',
+    path: '/reports/saved/{id}',
+    summary: 'Update an owned report with an exact revision precondition',
+    body: object({
+      name: string(200),
+      description: string(2000),
+      metrics: array(string(), 16),
+      windowDays: { type: 'integer', minimum: 1, maximum: 90 },
+      serviceId: id,
+      visibility: string(),
+      teamId: id,
+    }),
+  },
+  {
+    method: 'delete',
+    path: '/reports/saved/{id}',
+    summary: 'Delete an owned saved report with an exact revision precondition',
+    status: 204,
+  },
+  {
+    method: 'get',
+    path: '/reports/catalog',
+    summary: 'List supported report metrics and dimensions',
+  },
+  {
+    method: 'post',
+    path: '/reports/query',
+    summary: 'Run a bounded actor-scoped analytical query',
+    body: object(
+      {
+        metrics: array(string(), 16),
+        windowDays: { type: 'integer', minimum: 1, maximum: 90 },
+        serviceId: id,
+      },
+      ['metrics']
+    ),
+  },
+  {
+    method: 'get',
+    path: '/dashboards',
+    summary: 'List accessible saved dashboards and templates',
+    paginated: true,
+  },
+  {
+    method: 'post',
+    path: '/dashboards',
+    summary: 'Create a saved dashboard',
+    status: 201,
+    body: object(
+      {
+        name: string(200),
+        description: string(2000),
+        visibility: string(),
+        teamId: id,
+        templateId: id,
+        sourceTemplate: string(100),
+        widgets: array(ref('ReportDashboardWidget'), 50),
+      },
+      ['name']
+    ),
   },
   { method: 'get', path: '/dashboards/{id}', summary: 'Read an accessible saved dashboard' },
-  { method: 'get', path: '/dashboards/{id}/data', summary: 'Calculate actor-scoped data for an accessible dashboard' },
-  { method: 'get', path: '/dashboards/{id}/export', summary: 'Download a bounded JSON snapshot of accessible dashboard data',
-    description: 'Requires reports:read and incidents:read. Uses the same actor-scoped calculation and optional days/serviceId filters as the data endpoint. Maximum 256 KiB; private no-store response with SHA-256 checksum and attributed download audit.' },
-  { method: 'post', path: '/dashboards/{id}/duplicate', summary: 'Duplicate an accessible dashboard into an owned dashboard', status: 201,
-    body: object({ name: string(200), visibility: string(), teamId: id }) },
-  { method: 'get', path: '/dashboards/{id}/widgets', summary: 'List widgets of an accessible dashboard' },
-  { method: 'put', path: '/dashboards/{id}/widgets', summary: 'Replace owned dashboard widgets with an exact revision precondition',
-    body: object({ widgets: array(ref('ReportDashboardWidget'), 50) }, ['widgets']) },
   {
-    method: 'patch', path: '/dashboards/{id}',
-    summary: 'Update an owned dashboard with a strong revision precondition',
-    body: object({ name: string(200), description: string(2000), visibility: string(),
-      teamId: id, layout: { type: 'object' }, config: { type: 'object' },
-      widgets: array(ref('ReportDashboardWidget'), 50) }),
+    method: 'get',
+    path: '/dashboards/{id}/data',
+    summary: 'Calculate actor-scoped data for an accessible dashboard',
   },
-  { method: 'delete', path: '/dashboards/{id}', summary: 'Delete an owned dashboard with a strong revision precondition', status: 204 },
-  { method: 'post', path: '/reports/exports', summary: 'Queue a bounded, encrypted report export', status: 201,
-    body: object({ metrics: array(string(), 16), windowDays: { type: 'integer', minimum: 1, maximum: 90 }, serviceId: id }, ['metrics']) },
-  { method: 'get', path: '/reports/exports/{id}', summary: 'Read owned report export job state and integrity metadata' },
-  { method: 'get', path: '/reports/exports/{id}/download', summary: 'Download an authorized report export',
-    description: 'Returns an application/json file, not a JSON response envelope. Requires current global report and incident permissions.' },
-  { method: 'post', path: '/reports/exports/{id}/cancel', summary: 'Cancel a pending owned report export' },
+  {
+    method: 'get',
+    path: '/dashboards/{id}/export',
+    summary: 'Download a bounded JSON snapshot of accessible dashboard data',
+    description:
+      'Requires reports:read and incidents:read. Uses the same actor-scoped calculation and optional days/serviceId filters as the data endpoint. Maximum 256 KiB; private no-store response with SHA-256 checksum and attributed download audit.',
+  },
+  {
+    method: 'post',
+    path: '/dashboards/{id}/duplicate',
+    summary: 'Duplicate an accessible dashboard into an owned dashboard',
+    status: 201,
+    body: object({ name: string(200), visibility: string(), teamId: id }),
+  },
+  {
+    method: 'get',
+    path: '/dashboards/{id}/widgets',
+    summary: 'List widgets of an accessible dashboard',
+  },
+  {
+    method: 'put',
+    path: '/dashboards/{id}/widgets',
+    summary: 'Replace owned dashboard widgets with an exact revision precondition',
+    body: object({ widgets: array(ref('ReportDashboardWidget'), 50) }, ['widgets']),
+  },
+  {
+    method: 'patch',
+    path: '/dashboards/{id}',
+    summary: 'Update an owned dashboard with a strong revision precondition',
+    body: object({
+      name: string(200),
+      description: string(2000),
+      visibility: string(),
+      teamId: id,
+      layout: { type: 'object' },
+      config: { type: 'object' },
+      widgets: array(ref('ReportDashboardWidget'), 50),
+    }),
+  },
+  {
+    method: 'delete',
+    path: '/dashboards/{id}',
+    summary: 'Delete an owned dashboard with a strong revision precondition',
+    status: 204,
+  },
+  {
+    method: 'post',
+    path: '/reports/exports',
+    summary: 'Queue a bounded, encrypted report export',
+    status: 201,
+    body: object(
+      {
+        metrics: array(string(), 16),
+        windowDays: { type: 'integer', minimum: 1, maximum: 90 },
+        serviceId: id,
+      },
+      ['metrics']
+    ),
+  },
+  {
+    method: 'get',
+    path: '/reports/exports/{id}',
+    summary: 'Read owned report export job state and integrity metadata',
+  },
+  {
+    method: 'get',
+    path: '/reports/exports/{id}/download',
+    summary: 'Download an authorized report export',
+    description:
+      'Returns an application/json file, not a JSON response envelope. Requires current global report and incident permissions.',
+  },
+  {
+    method: 'post',
+    path: '/reports/exports/{id}/cancel',
+    summary: 'Cancel a pending owned report export',
+  },
 ];
 
 /** Add only implemented operations; the canonical registry finalizes shared contracts. */
@@ -2283,31 +3054,42 @@ export function enterpriseOpenApiPaths() {
           ? 'Service Objectives'
           : operation.path.startsWith('/reports') || operation.path.startsWith('/dashboards')
             ? 'Reports'
-          : operation.path.startsWith('/status-pages')
-            ? 'Status Pages'
-            : operation.path.startsWith('/settings')
-              ? 'Settings'
-              : operation.path.startsWith('/runbooks')
-                ? 'Runbooks'
-                : operation.path.startsWith('/services')
-                  ? 'Services'
-                  : operation.path.startsWith('/schedules')
-                    ? 'Schedules'
-                    : operation.path.startsWith('/teams')
-                      ? 'Teams'
-                      : 'Incidents',
+            : operation.path.startsWith('/status-pages')
+              ? 'Status Pages'
+              : operation.path.startsWith('/settings')
+                ? 'Settings'
+                : operation.path.startsWith('/runbooks')
+                  ? 'Runbooks'
+                  : operation.path.startsWith('/services')
+                    ? 'Services'
+                    : operation.path.startsWith('/schedules')
+                      ? 'Schedules'
+                      : operation.path.startsWith('/teams')
+                        ? 'Teams'
+                        : 'Incidents',
       ],
       summary: operation.summary,
       ...(operation.description ? { description: operation.description } : {}),
       parameters: [
         ...parameters,
         ...queryParameters,
+        ...Object.entries(operation.query ?? {}).map(([name, schema]) => ({
+          name,
+          in: 'query',
+          required: false,
+          schema,
+        })),
         ...(operation.path === '/runbooks/executions'
           ? [{ name: 'incidentId', in: 'query', required: true, schema: { ...id, maxLength: 100 } }]
           : []),
         ...(['/dashboards/{id}/data', '/dashboards/{id}/export'].includes(operation.path)
           ? [
-              { name: 'days', in: 'query', required: false, schema: { type: 'integer', minimum: 1, maximum: 90 } },
+              {
+                name: 'days',
+                in: 'query',
+                required: false,
+                schema: { type: 'integer', minimum: 1, maximum: 90 },
+              },
               { name: 'serviceId', in: 'query', required: false, schema: id },
             ]
           : []),
@@ -2344,9 +3126,12 @@ export function enterpriseOpenApiPaths() {
       ],
       ...(operation.path.endsWith('/automation/decisions')
         ? { 'x-additional-required-scopes': ['incidents:read'] }
-        : operation.path === '/dashboards/{id}/data' || operation.path === '/dashboards/{id}/export' || operation.path === '/reports/query' || operation.path.startsWith('/reports/exports')
+        : operation.path === '/dashboards/{id}/data' ||
+            operation.path === '/dashboards/{id}/export' ||
+            operation.path === '/reports/query' ||
+            operation.path.startsWith('/reports/exports')
           ? { 'x-additional-required-scopes': ['incidents:read'] }
-        : {}),
+          : {}),
       ...(operation.body
         ? {
             requestBody: {

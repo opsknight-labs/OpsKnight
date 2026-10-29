@@ -108,7 +108,20 @@ export const SETTINGS_NAV_SECTIONS: SettingsNavSection[] = [
         icon: 'activity',
         requiresAdminOrAuditor: true,
         badge: 'Admin',
-        keywords: ['aiops', 'intelligence', 'similar incidents', 'correlation', 'noise', 'ai', 'assistant', 'squire', 'llm', 'insights', 'dependencies', 'root cause'],
+        keywords: [
+          'aiops',
+          'intelligence',
+          'similar incidents',
+          'correlation',
+          'noise',
+          'ai',
+          'assistant',
+          'squire',
+          'llm',
+          'insights',
+          'dependencies',
+          'root cause',
+        ],
       },
       {
         id: 'custom-fields',
@@ -175,7 +188,7 @@ export const SETTINGS_NAV_SECTIONS: SettingsNavSection[] = [
   {
     id: 'integrations',
     label: 'Integrations & ChatOps',
-    description: 'Connect alert sources, Slack war rooms, and ticketing integrations',
+    description: 'Connect alert sources, Slack war rooms, ticketing and AI assistant integrations',
     items: [
       {
         id: 'slack',
@@ -207,6 +220,25 @@ export const SETTINGS_NAV_SECTIONS: SettingsNavSection[] = [
         requiresAdmin: true,
         badge: 'Admin',
         keywords: ['war room', 'channel', 'chatops', 'slack', 'video', 'bridge'],
+      },
+      {
+        id: 'mcp',
+        label: 'MCP (AI Assistants)',
+        description:
+          'Connect AI assistants to OpsKnight with user consent, scoped access and approved changes',
+        href: '/settings/integrations/mcp',
+        icon: 'bot',
+        keywords: [
+          'mcp',
+          'ai',
+          'assistant',
+          'claude',
+          'chatgpt',
+          'cursor',
+          'copilot',
+          'oauth',
+          'agent',
+        ],
       },
       {
         id: 'jira',

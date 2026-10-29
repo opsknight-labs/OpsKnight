@@ -43,8 +43,11 @@ describe('intelligence architecture boundaries', () => {
     // Stage 0-2 must not change the paging-critical path. A later, separately certified stage may
     // add a single bounded hook from the dedicated ingest-hooks module only.
     for (const file of ['src/lib/events.ts', 'src/lib/incidents/creation.ts']) {
-      const imports = read(join(root, file)).match(/from\s+['"]@\/lib\/intelligence[^'"]*['"]/g) ?? [];
-      const disallowed = imports.filter(statement => !statement.includes('/intelligence/ingest-hooks'));
+      const imports =
+        read(join(root, file)).match(/from\s+['"]@\/lib\/intelligence[^'"]*['"]/g) ?? [];
+      const disallowed = imports.filter(
+        statement => !statement.includes('/intelligence/ingest-hooks')
+      );
       expect(disallowed, `${file} must not import intelligence internals`).toEqual([]);
     }
   });
@@ -65,16 +68,25 @@ describe('intelligence architecture boundaries', () => {
 
   it('keeps Squire strictly read-only: no database writes and no write tools', () => {
     const squireDir = join(intelligenceDir, 'squire');
-    const writes = /\.(?:create|createMany|update|updateMany|upsert|delete|deleteMany)\(|\$executeRaw|\$transaction/;
+    const writes =
+      /\.(?:create|createMany|update|updateMany|upsert|delete|deleteMany)\(|\$executeRaw|\$transaction/;
     const offenders = sourceFiles(squireDir).filter(file => writes.test(read(file)));
     expect(offenders.map(file => relative(root, file))).toEqual([]);
-    expect(sourceFiles(squireDir).filter(file => /PROPOSE_WRITE/.test(read(file))).map(file => relative(root, file))).toEqual([]);
+    expect(
+      sourceFiles(squireDir)
+        .filter(file => /PROPOSE_WRITE/.test(read(file)))
+        .map(file => relative(root, file))
+    ).toEqual([]);
   });
 
   it('lets saved assistant conversations write only their own tables', () => {
     const dir = join(intelligenceDir, 'conversations');
     const delegates = sourceFiles(dir).flatMap(file =>
-      [...read(file).matchAll(/\b(?:tx|prisma)\.(\w+)\.(?:create|createMany|update|updateMany|upsert|delete|deleteMany)\(/g)].map(match => match[1])
+      [
+        ...read(file).matchAll(
+          /\b(?:tx|prisma)\.(\w+)\.(?:create|createMany|update|updateMany|upsert|delete|deleteMany)\(/g
+        ),
+      ].map(match => match[1])
     );
     expect(delegates.length).toBeGreaterThan(0);
     expect([...new Set(delegates)].sort()).toEqual(['squireConversation', 'squireMessage']);
@@ -84,7 +96,11 @@ describe('intelligence architecture boundaries', () => {
   it('routes every AI provider through the guarded fetch', () => {
     const gateway = read(join(intelligenceDir, 'ai/gateway.ts'));
     expect(gateway).toMatch(/const common = \{[^}]*fetch: fetchImpl[^}]*\}/);
-    const creators = [...gateway.matchAll(/\b(create(?:OpenAICompatible|OpenAI|Anthropic|GoogleGenerativeAI|Azure|AmazonBedrock|Vertex|Mistral|Groq))\(\{/g)];
+    const creators = [
+      ...gateway.matchAll(
+        /\b(create(?:OpenAICompatible|OpenAI|Anthropic|GoogleGenerativeAI|Azure|AmazonBedrock|Vertex|Mistral|Groq))\(\{/g
+      ),
+    ];
     expect(creators.map(match => match[1]).sort()).toEqual([
       'createAmazonBedrock',
       'createAnthropic',
@@ -98,7 +114,10 @@ describe('intelligence architecture boundaries', () => {
     ]);
     // The guarded fetch must be the first thing every client is given.
     for (const creator of creators) {
-      const opening = gateway.slice(creator.index! + creator[0].length, creator.index! + creator[0].length + 40);
+      const opening = gateway.slice(
+        creator.index! + creator[0].length,
+        creator.index! + creator[0].length + 40
+      );
       expect(opening.trimStart().startsWith('...common'), creator[1]).toBe(true);
     }
   });
@@ -139,7 +158,10 @@ describe('runtime compatibility', () => {
       const manifestPath = join(root, 'node_modules', name, 'package.json');
       // eslint-disable-next-line security/detect-non-literal-fs-filename
       if (!existsSync(manifestPath)) continue;
-      const manifest = JSON.parse(read(manifestPath)) as { version: string; engines?: { node?: string } };
+      const manifest = JSON.parse(read(manifestPath)) as {
+        version: string;
+        engines?: { node?: string };
+      };
       const range = manifest.engines?.node;
       if (range && !intersects(range, pkg.engines.node)) {
         incompatible.push(`${name}@${manifest.version} requires node ${range}`);
@@ -190,14 +212,14 @@ describe('intelligence data model contracts', () => {
 
   it('adds no table partitioning until measurements justify it', () => {
     const migration = read(
-      join(root, 'prisma/migrations/20261027120000_intelligence_foundation/migration.sql')
+      join(root, 'prisma/migrations/20261029000100_intelligence_foundation/migration.sql')
     );
     expect(migration).not.toMatch(/PARTITION\s+BY/i);
   });
 
   it('makes policy versions and decision events append-only in the database', () => {
     const migration = read(
-      join(root, 'prisma/migrations/20261027120000_intelligence_foundation/migration.sql')
+      join(root, 'prisma/migrations/20261029000100_intelligence_foundation/migration.sql')
     );
     for (const table of [
       'IntelligencePolicyVersion',
@@ -212,7 +234,7 @@ describe('intelligence data model contracts', () => {
 
   it('never lets an unavailable extension fail a deployment', () => {
     const migration = read(
-      join(root, 'prisma/migrations/20261027120000_intelligence_foundation/migration.sql')
+      join(root, 'prisma/migrations/20261029000100_intelligence_foundation/migration.sql')
     );
     expect(migration).toMatch(/CREATE EXTENSION IF NOT EXISTS pg_trgm;\s*EXCEPTION WHEN OTHERS/);
     expect(migration).not.toMatch(/CREATE EXTENSION[^;]*\bvector\b/i);

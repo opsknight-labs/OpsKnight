@@ -335,6 +335,12 @@
     "AUDITOR": "allow:global",
     "USER": "allow:resource"
   },
+  "GET /incidents/{id}/watchers/{watcherId} [incidents:read]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "allow:global",
+    "AUDITOR": "allow:global",
+    "USER": "allow:resource"
+  },
   "DELETE /incidents/{id}/watchers/{watcherId} [incidents:write]": {
     "ADMIN": "allow:global",
     "RESPONDER": "allow:global",
@@ -522,6 +528,12 @@
     "USER": "deny:MISSING_CAPABILITY"
   },
   "GET /operational-events [incidents:read]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "allow:global",
+    "AUDITOR": "allow:global",
+    "USER": "allow:resource"
+  },
+  "GET /postmortems/{id}/action-items/{itemId} [postmortems:read]": {
     "ADMIN": "allow:global",
     "RESPONDER": "allow:global",
     "AUDITOR": "allow:global",
@@ -1055,6 +1067,12 @@
     "AUDITOR": "deny:MISSING_CAPABILITY",
     "USER": "deny:MISSING_CAPABILITY"
   },
+  "GET /schedules/{id}/layers/{layerId}/participants/{userId} [schedules:read]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "allow:global",
+    "AUDITOR": "allow:global",
+    "USER": "allow:resource"
+  },
   "PATCH /schedules/{id}/layers/{layerId}/participants/{userId} [schedules:write]": {
     "ADMIN": "allow:global",
     "RESPONDER": "allow:global",
@@ -1110,6 +1128,12 @@
     "USER": "deny:MISSING_CAPABILITY"
   },
   "GET /schedules/{id}/on-call [schedules:read]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "allow:global",
+    "AUDITOR": "allow:global",
+    "USER": "allow:resource"
+  },
+  "GET /schedules/{id}/overrides/{overrideId} [schedules:read]": {
     "ADMIN": "allow:global",
     "RESPONDER": "allow:global",
     "AUDITOR": "allow:global",
@@ -1595,6 +1619,12 @@
     "AUDITOR": "deny:MISSING_CAPABILITY",
     "USER": "deny:MISSING_CAPABILITY"
   },
+  "GET /status-pages/{id}/assets/{assetId} [status-pages:read]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "allow:global",
+    "AUDITOR": "allow:global",
+    "USER": "deny:MISSING_CAPABILITY"
+  },
   "DELETE /status-pages/{id}/assets/{assetId} [status-pages:write]": {
     "ADMIN": "allow:global",
     "RESPONDER": "deny:MISSING_CAPABILITY",
@@ -1761,6 +1791,12 @@
     "ADMIN": "allow:global",
     "RESPONDER": "allow:resource",
     "AUDITOR": "deny:MISSING_CAPABILITY",
+    "USER": "allow:resource"
+  },
+  "GET /teams/{id}/members/{userId} [teams:read]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "allow:global",
+    "AUDITOR": "allow:global",
     "USER": "allow:resource"
   },
   "PUT /teams/{id}/members/{userId} [teams:write]": {

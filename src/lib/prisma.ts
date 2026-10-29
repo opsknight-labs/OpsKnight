@@ -1,6 +1,12 @@
 import { PrismaClient } from '@prisma/client';
-import { configurePrismaDatasource, selectPrismaDatasourceUrl } from './prisma-datasource';
+import {
+  configurePrismaDatasource,
+  configureMcpPrismaDatasource,
+  selectMcpPrismaDatasourceUrl,
+  selectPrismaDatasourceUrl,
+} from './prisma-datasource';
 import { getOpsKnightProcessRole, isDedicatedHttpRole } from './runtime-role';
+import type {} from './database-workload';
 
 /**
  * Prisma Client Configuration for Scale
@@ -42,15 +48,21 @@ function rolePoolSize(): string | undefined {
   }
 }
 
-const prismaClientSingleton = () => {
+const prismaClientSingleton = (workload: 'primary' | 'mcp' = 'primary') => {
   const role = getOpsKnightProcessRole();
   const rawDatasourceUrl = selectPrismaDatasourceUrl(role);
   // Log configuration for debugging
-  const datasourceUrl = configurePrismaDatasource(
-    rawDatasourceUrl,
-    rolePoolSize() ?? process.env.DATABASE_POOL_SIZE,
-    isDedicatedHttpRole(role) && process.env.PGBOUNCER_ENABLED === 'true'
-  );
+  const datasourceUrl =
+    workload === 'mcp'
+      ? configureMcpPrismaDatasource(
+          selectMcpPrismaDatasourceUrl(),
+          process.env.MCP_DATABASE_POOL_SIZE
+        )
+      : configurePrismaDatasource(
+          rawDatasourceUrl,
+          rolePoolSize() ?? process.env.DATABASE_POOL_SIZE,
+          isDedicatedHttpRole(role) && process.env.PGBOUNCER_ENABLED === 'true'
+        );
 
   const client = new PrismaClient({
     log: [
@@ -72,6 +84,7 @@ const prismaClientSingleton = () => {
       JSON.stringify({
         level: 'warn',
         event: 'prisma.slow_query',
+        workload,
         durationMs: event.duration,
         target: event.target,
         timestamp: new Date().toISOString(),
@@ -83,18 +96,35 @@ const prismaClientSingleton = () => {
 
 declare global {
   var prismaGlobal: undefined | ReturnType<typeof prismaClientSingleton>;
+  var prismaMcpGlobal: undefined | ReturnType<typeof prismaClientSingleton>;
 }
 
-const prisma = globalThis.prismaGlobal ?? prismaClientSingleton();
+const primary = globalThis.prismaGlobal ?? prismaClientSingleton();
 // Next.js may evaluate this module in multiple chunks even in production. Keep
 // one client per process so every chunk shares the same connection pool.
-globalThis.prismaGlobal = prisma;
+globalThis.prismaGlobal = primary;
+
+// Resolve at invocation time so existing shared domain commands use MCP's pool
+// throughout nested calls. Interactive transaction clients remain Prisma's own
+// pinned clients. Outside the in-process context, behavior stays on primary.
+const prisma = new Proxy(primary, {
+  get(_target, property) {
+    // Read the server-installed context without importing async_hooks here:
+    // legacy client utility imports also traverse this module's browser stub.
+    const client =
+      globalThis.opsKnightDatabaseWorkload?.getStore() === 'mcp'
+        ? (globalThis.prismaMcpGlobal ??= prismaClientSingleton('mcp'))
+        : primary;
+    const value: unknown = Reflect.get(client, property, client);
+    return typeof value === 'function' ? value.bind(client) : value;
+  },
+});
 
 // Connection pool health check
 export async function checkDatabaseHealth(): Promise<{ ok: boolean; latencyMs: number }> {
   const start = Date.now();
   try {
-    await prisma.$queryRaw`SELECT 1`;
+    await primary.$queryRaw`SELECT 1`;
     return { ok: true, latencyMs: Date.now() - start };
   } catch (_error) {
     return { ok: false, latencyMs: Date.now() - start };
@@ -103,7 +133,7 @@ export async function checkDatabaseHealth(): Promise<{ ok: boolean; latencyMs: n
 
 // Graceful shutdown helper
 export async function disconnectPrisma(): Promise<void> {
-  await prisma.$disconnect();
+  await Promise.all([primary.$disconnect(), globalThis.prismaMcpGlobal?.$disconnect()]);
 }
 
 export default prisma;

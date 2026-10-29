@@ -1,4 +1,5 @@
 import { NextRequest } from 'next/server';
+import { internalV2MutationGuard } from '@/lib/api-v2/internal-context';
 import prisma from '@/lib/prisma';
 import {
   apiV2Error,
@@ -170,6 +171,8 @@ export const DELETE = withV2Observability(async function DELETE(
     }
 
     await prisma.$transaction(async tx => {
+      // MCP approval recheck inside the deletion's own transaction; a no-op for REST callers.
+      await internalV2MutationGuard()?.(tx);
       await tx.onCallOverride.deleteMany({ where: { scheduleId: id } });
       await tx.onCallLayerUser.deleteMany({ where: { layer: { scheduleId: id } } });
       await tx.onCallLayer.deleteMany({ where: { scheduleId: id } });

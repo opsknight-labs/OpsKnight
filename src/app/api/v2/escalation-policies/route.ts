@@ -1,4 +1,5 @@
 import { NextRequest } from 'next/server';
+import { internalV2MutationGuard } from '@/lib/api-v2/internal-context';
 import prisma from '@/lib/prisma';
 import {
   apiV2Created,
@@ -146,6 +147,8 @@ export const POST = withV2Observability(async function POST(req: NextRequest) {
     }
 
     const created = await prisma.$transaction(async tx => {
+      // MCP approval recheck inside the change's own transaction; a no-op for REST callers.
+      await internalV2MutationGuard()?.(tx);
       const policy = await tx.escalationPolicy.create({
         data: {
           name: normalizedName,

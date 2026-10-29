@@ -12,6 +12,7 @@ import { AUTHORIZATION_ACTIONS } from '@/lib/authorization-policy';
 import { requeueCentralNotification } from '@/lib/notification-control-plane';
 import { AppError } from '@/lib/errors';
 import { withV2Observability } from '@/lib/api-v2/observability';
+import { internalV2MutationGuard } from '@/lib/api-v2/internal-context';
 
 export const POST = withV2Observability(async function POST(
   req: NextRequest,
@@ -42,16 +43,23 @@ export const POST = withV2Observability(async function POST(
       });
     }
 
-    const requeued = await requeueCentralNotification(id, tx =>
-      logV2Audit({
-        action: 'notification.retry_requested',
-        entityType: 'SYSTEM_CONFIG',
-        entityId: id,
-        actorId: actor.id,
-        apiKeyId: apiKey.id,
-        details: { channel: notification.channel },
-        tx,
-      })
+    const requeued = await requeueCentralNotification(
+      id,
+      tx =>
+        logV2Audit({
+          action: 'notification.retry_requested',
+          entityType: 'SYSTEM_CONFIG',
+          entityId: id,
+          actorId: actor.id,
+          apiKeyId: apiKey.id,
+          details: { channel: notification.channel },
+          tx,
+        }),
+      // MCP approval recheck inside the requeue's own transaction; a no-op for REST callers.
+      // The requeue only moves FAILED to PENDING; the delivery worker sends after it commits.
+      async tx => {
+        await internalV2MutationGuard()?.(tx);
+      }
     );
     if (!requeued) {
       // A concurrent retry (possibly on another replica) wins the compare-and-set;

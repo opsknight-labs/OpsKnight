@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation';
 import {
   Activity,
   Bell,
+  Bot,
   Building2,
   CreditCard,
   Globe,
@@ -58,6 +59,7 @@ const iconMap: Record<string, React.ComponentType<{ size?: number; className?: s
   tickets: Tickets,
   target: Target,
   terminal: Terminal,
+  bot: Bot,
 };
 
 export default function SettingsNav({

@@ -2,6 +2,47 @@ import { isDedicatedHttpRole } from './runtime-role';
 
 const DEFAULT_POOL_SIZE = 10;
 
+export function selectMcpPrismaDatasourceUrl(
+  env = {
+    MCP_DATABASE_URL: process.env.MCP_DATABASE_URL,
+    DIRECT_DATABASE_URL: process.env.DIRECT_DATABASE_URL,
+    DATABASE_URL: process.env.DATABASE_URL,
+  }
+): string | undefined {
+  // Transaction poolers may discard per-connection startup settings. Keep the
+  // bounded MCP pool on the direct route until that topology is certified.
+  return env.MCP_DATABASE_URL ?? env.DIRECT_DATABASE_URL ?? env.DATABASE_URL;
+}
+
+/** MCP has an independent small pool even in the integrated web process. */
+export function configureMcpPrismaDatasource(rawUrl: string | undefined, size?: string): string {
+  if (size !== undefined && !/^\d+$/.test(size.trim())) {
+    throw new Error('MCP_DATABASE_POOL_SIZE must be an integer between 1 and 4');
+  }
+  const limit = size === undefined ? 2 : Number(size);
+  if (!Number.isInteger(limit) || limit < 1 || limit > 4) {
+    throw new Error('MCP_DATABASE_POOL_SIZE must be an integer between 1 and 4');
+  }
+  if (!rawUrl) throw new Error('MCP database URL is required');
+  const url = new URL(rawUrl);
+  if (!['postgres:', 'postgresql:'].includes(url.protocol)) {
+    throw new Error('MCP requires a PostgreSQL datasource');
+  }
+  if (url.searchParams.has('pgbouncer') && url.searchParams.get('pgbouncer') !== 'false') {
+    throw new Error('MCP requires a direct PostgreSQL route for SQL budget enforcement');
+  }
+  url.searchParams.set('connection_limit', String(limit));
+  url.searchParams.set('pool_timeout', '1');
+  url.searchParams.set('connect_timeout', '3');
+  url.searchParams.set('statement_cache_size', '100');
+  // Override inherited options: a shared URL must not relax MCP's SQL budget.
+  url.searchParams.set(
+    'options',
+    '-c statement_timeout=5000 -c lock_timeout=1000 -c idle_in_transaction_session_timeout=5000 -c application_name=opsknight-mcp'
+  );
+  return url.toString();
+}
+
 export function selectPrismaDatasourceUrl(
   role: string,
   env: { DATABASE_URL?: string; WEB_DATABASE_URL?: string } = {
