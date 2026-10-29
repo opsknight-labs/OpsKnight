@@ -1,7 +1,7 @@
 import 'server-only';
 import prisma from '@/lib/prisma';
 import { CAPABILITIES, hasCapability } from '@/lib/authorization';
-import { incidentReadWhere } from '@/lib/authorization-filters';
+import { incidentReadWhere, postmortemReadWhere } from '@/lib/authorization-filters';
 import type { AuthorizationActor } from '@/lib/authorization-policy';
 import { resolveEffectivePolicy, resolveEffectivePolicyForRequest } from '../settings/service';
 import { getMyFeedback } from '../feedback/service';
@@ -18,12 +18,22 @@ export interface SimilarIncidentView {
   serviceName: string;
   createdAt: Date;
   resolvedAt: Date | null;
+  /** How long the precedent took to resolve, in minutes; null while it is open. */
+  minutesToResolve: number | null;
+  /** The precedent's postmortem, when one exists and the viewer may read it: how it was fixed. */
+  postmortem: { href: string; resolution: string | null } | null;
   /** Ranking signal in percent. It is NOT a calibrated probability. */
   matchPercent: number;
   reasons: string[];
 }
 
 const MAX_VISIBLE = 5;
+
+const shortText = (text: string | null, max = 200) => {
+  const value = text?.replace(/\s+/g, ' ').trim() ?? '';
+  if (!value) return null;
+  return value.length > max ? `${value.slice(0, max - 1)}…` : value;
+};
 
 /** Human-readable reasons derived only from numeric components, never from stored text. */
 export function describeReasons(components: SimilarityComponents): string[] {
@@ -111,6 +121,22 @@ export async function getSimilarIncidentsForActor(
     },
   });
   const byId = new Map(visible.map(incident => [incident.id, incident]));
+  // How a precedent was fixed is the most useful thing about it; its postmortem is shown only when readable.
+  let postmortems = new Map<string, string | null>();
+  try {
+    const rows = await client.postmortem.findMany({
+      where: {
+        AND: [
+          { incidentId: { in: visible.map(incident => incident.id) } },
+          postmortemReadWhere(actor),
+        ],
+      },
+      select: { incidentId: true, resolution: true },
+    });
+    postmortems = new Map(rows.map(row => [row.incidentId, row.resolution]));
+  } catch {
+    // No postmortem access: precedents are still shown, without their postmortems.
+  }
   const mine = await getMyFeedback(
     actor,
     'FINDING',
@@ -133,6 +159,18 @@ export async function getSimilarIncidentsForActor(
       serviceName: target.service.name,
       createdAt: target.createdAt,
       resolvedAt: target.resolvedAt,
+      minutesToResolve: target.resolvedAt
+        ? Math.max(
+            0,
+            Math.round((target.resolvedAt.getTime() - target.createdAt.getTime()) / 60_000)
+          )
+        : null,
+      postmortem: postmortems.has(target.id)
+        ? {
+            href: `/postmortems/${target.id}`,
+            resolution: shortText(postmortems.get(target.id) ?? null),
+          }
+        : null,
       matchPercent: Math.round(finding.confidence * 100),
       reasons: isComponents(evidence?.components) ? describeReasons(evidence.components) : [],
     });

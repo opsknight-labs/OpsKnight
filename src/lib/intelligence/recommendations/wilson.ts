@@ -21,6 +21,8 @@ export interface RunbookOutcomeCounts {
   /** SUCCEEDED + FAILED + TIMED_OUT. Cancelled, unknown and in-flight executions say nothing about efficacy. */
   eligible: number;
   bound: boolean;
+  /** Runs on incidents with the same masked title as this one: the runbook's record on this exact problem. */
+  sameProblem?: { succeeded: number; eligible: number };
 }
 
 export interface RankedRunbook extends RunbookOutcomeCounts {
@@ -28,11 +30,24 @@ export interface RankedRunbook extends RunbookOutcomeCounts {
 }
 
 /** Highest lower bound first; bound-but-untried runbooks come after proven ones; ties are stable by id. */
-export function rankRunbooks(candidates: readonly RunbookOutcomeCounts[], limit: number): RankedRunbook[] {
+export function rankRunbooks(
+  candidates: readonly RunbookOutcomeCounts[],
+  limit: number
+): RankedRunbook[] {
   return candidates
     .map(candidate => ({
       ...candidate,
-      confidence: Math.round(wilsonLowerBound(candidate.succeeded, candidate.eligible) * 1000) / 1000,
+      // A runbook that has fixed this exact problem before is judged on that record when it is the stronger
+      // evidence; it is never penalised for it.
+      confidence:
+        Math.round(
+          Math.max(
+            wilsonLowerBound(candidate.succeeded, candidate.eligible),
+            candidate.sameProblem
+              ? wilsonLowerBound(candidate.sameProblem.succeeded, candidate.sameProblem.eligible)
+              : 0
+          ) * 1000
+        ) / 1000,
     }))
     .sort(
       (a, b) =>

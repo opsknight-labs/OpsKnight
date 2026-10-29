@@ -14,7 +14,7 @@ export interface SimilarityFingerprint {
 }
 
 export type SimilarityComponents = {
-  /** Overlap of content words (Jaccard). */
+  /** Overlap of content words, weighted by how rare each word is (weighted Jaccard). */
   tokens: number;
   /** Character-trigram similarity of the masked templates. */
   template: number;
@@ -80,6 +80,32 @@ function jaccard<T>(a: ReadonlySet<T>, b: ReadonlySet<T>): { value: number; shar
   return { value: shared / (a.size + b.size - shared), shared };
 }
 
+/**
+ * Weighted Jaccard: the summed weight of shared items over the summed weight of all items. With equal weights
+ * it is plain Jaccard; with inverse-document-frequency weights a shared rare word ("postgres") counts far more
+ * than a shared common one ("error").
+ */
+function weightedJaccard(
+  a: ReadonlySet<string>,
+  b: ReadonlySet<string>,
+  weight: (item: string) => number
+) {
+  if (a.size === 0 || b.size === 0) return { value: 0, shared: 0 };
+  let shared = 0;
+  let sharedWeight = 0;
+  let unionWeight = 0;
+  for (const item of a) {
+    const w = weight(item);
+    unionWeight += w;
+    if (b.has(item)) {
+      shared += 1;
+      sharedWeight += w;
+    }
+  }
+  for (const item of b) if (!a.has(item)) unionWeight += weight(item);
+  return { value: unionWeight > 0 ? sharedWeight / unionWeight : 0, shared };
+}
+
 /** Same definition as pg_trgm's similarity(): shared trigrams over the union. */
 export function trigramSimilarity(a: string, b: string): number {
   return jaccard(trigrams(a), trigrams(b)).value;
@@ -100,9 +126,11 @@ export function scoreSimilarity(
   query: SimilarityFingerprint,
   candidate: SimilarityFingerprint,
   now: Date = new Date(),
-  semantic?: number
+  semantic?: number,
+  /** Weight per word, normally its inverse document frequency; every word weighs 1 when absent. */
+  tokenWeight: (token: string) => number = () => 1
 ): SimilarityScore {
-  const tokens = jaccard(new Set(query.tokens), new Set(candidate.tokens));
+  const tokens = weightedJaccard(new Set(query.tokens), new Set(candidate.tokens), tokenWeight);
   const template = trigramSimilarity(query.template, candidate.template);
   const labels = jaccard(labelPairs(query.labels), labelPairs(candidate.labels)).value;
   const components: SimilarityComponents = {

@@ -4,14 +4,25 @@ import { scoreCause } from '@/lib/intelligence/root-cause/scoring';
 import { rankRunbooks, wilsonLowerBound } from '@/lib/intelligence/recommendations/wilson';
 import { RESPONSE_LIMITS } from '@/lib/intelligence/contract';
 
-const edge = (downstream: string, upstream: string) => ({ downstreamServiceId: downstream, upstreamServiceId: upstream });
+const edge = (downstream: string, upstream: string) => ({
+  downstreamServiceId: downstream,
+  upstreamServiceId: upstream,
+});
 
 describe('upstreamDistances', () => {
   it('walks transitively with the shortest distance and excludes the start', () => {
     const edges = [edge('web', 'api'), edge('api', 'db'), edge('web', 'db')];
-    expect(upstreamDistances(edges, 'web', 3)).toEqual(new Map([['api', 1], ['db', 1]]));
+    expect(upstreamDistances(edges, 'web', 3)).toEqual(
+      new Map([
+        ['api', 1],
+        ['db', 1],
+      ])
+    );
     expect(upstreamDistances([edge('web', 'api'), edge('api', 'db')], 'web', 3)).toEqual(
-      new Map([['api', 1], ['db', 2]])
+      new Map([
+        ['api', 1],
+        ['db', 2],
+      ])
     );
   });
 
@@ -41,8 +52,18 @@ describe('scoreCause', () => {
   it('ranks same service above upstream above global at equal timing', () => {
     const lead = 600;
     const same = scoreCause({ ...base, leadSeconds: lead }).confidence;
-    const up1 = scoreCause({ ...base, relation: 'UPSTREAM', depth: 1, leadSeconds: lead }).confidence;
-    const up3 = scoreCause({ ...base, relation: 'UPSTREAM', depth: 3, leadSeconds: lead }).confidence;
+    const up1 = scoreCause({
+      ...base,
+      relation: 'UPSTREAM',
+      depth: 1,
+      leadSeconds: lead,
+    }).confidence;
+    const up3 = scoreCause({
+      ...base,
+      relation: 'UPSTREAM',
+      depth: 3,
+      leadSeconds: lead,
+    }).confidence;
     const global = scoreCause({ ...base, relation: 'GLOBAL', leadSeconds: lead }).confidence;
     expect(same).toBeGreaterThan(up1);
     expect(up1).toBeGreaterThan(up3);
@@ -50,9 +71,13 @@ describe('scoreCause', () => {
   });
 
   it('never reaches certainty and rejects out-of-window or future candidates', () => {
-    expect(scoreCause({ ...base, leadSeconds: 0 }).confidence).toBeLessThanOrEqual(RESPONSE_LIMITS.maxCauseConfidence);
+    expect(scoreCause({ ...base, leadSeconds: 0 }).confidence).toBeLessThanOrEqual(
+      RESPONSE_LIMITS.maxCauseConfidence
+    );
     expect(scoreCause({ ...base, leadSeconds: -1 }).confidence).toBe(0);
-    expect(scoreCause({ ...base, leadSeconds: RESPONSE_LIMITS.causeLookbackMinutes * 60 + 1 }).confidence).toBe(0);
+    expect(
+      scoreCause({ ...base, leadSeconds: RESPONSE_LIMITS.causeLookbackMinutes * 60 + 1 }).confidence
+    ).toBe(0);
     expect(scoreCause({ ...base, leadSeconds: Number.NaN }).confidence).toBe(0);
   });
 });
@@ -87,5 +112,30 @@ describe('wilsonLowerBound and rankRunbooks', () => {
       5
     );
     expect(ranked.map(r => r.runbookId)).toEqual(['a', 'b']);
+  });
+
+  it('uses stronger same-problem evidence without reducing an otherwise proven score', () => {
+    const ranked = rankRunbooks(
+      [
+        { runbookId: 'general', succeeded: 20, eligible: 40, bound: false },
+        {
+          runbookId: 'specialist',
+          succeeded: 20,
+          eligible: 40,
+          bound: false,
+          sameProblem: { succeeded: 10, eligible: 10 },
+        },
+        {
+          runbookId: 'weak-subset',
+          succeeded: 20,
+          eligible: 40,
+          bound: false,
+          sameProblem: { succeeded: 0, eligible: 10 },
+        },
+      ],
+      3
+    );
+    expect(ranked.map(r => r.runbookId)).toEqual(['specialist', 'general', 'weak-subset']);
+    expect(ranked[1].confidence).toBe(ranked[2].confidence);
   });
 });

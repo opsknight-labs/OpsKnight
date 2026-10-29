@@ -3,6 +3,8 @@ import { Prisma } from '@prisma/client';
 import { z } from 'zod/v4';
 import prisma from '@/lib/prisma';
 import { AppError } from '@/lib/errors';
+import { RESPONSE_LIMITS } from '../contract';
+import { enqueueWorkItems, WORK_KINDS } from '../jobs/work-queue';
 import { parseOrThrow } from '../settings/service';
 
 export const CHANGE_KINDS = ['DEPLOY', 'CONFIG', 'FEATURE_FLAG', 'INFRA'] as const;
@@ -60,6 +62,33 @@ function invalid(field: string, message: string): AppError {
   return new AppError({ code: 'VALIDATION_FAILED', fields: [{ field, code: 'custom', message }] });
 }
 
+const LATE_CHANGE_REANALYSIS_LIMIT = 50;
+
+/**
+ * A change often arrives after the incident it caused (a deploy webhook that lags, or a backfill). Incidents
+ * that opened within the cause window after the change are analysed again so it can appear as a possible
+ * cause. Only already-indexed incidents are signalled, at most a bounded number, and only the coalesced work
+ * queue is touched: nothing on the paging path. A change tied to no service affects every service, so it
+ * re-signals the most recent incidents overall.
+ */
+async function reanalyzeAfterLateChange(serviceId: string | null, occurredAt: Date): Promise<void> {
+  const until = new Date(occurredAt.getTime() + RESPONSE_LIMITS.causeLookbackMinutes * 60_000);
+  const rows = await prisma.incidentFingerprint.findMany({
+    where: {
+      incidentCreatedAt: { gte: occurredAt, lte: until },
+      template: { not: '' },
+      ...(serviceId ? { serviceId } : {}),
+    },
+    orderBy: { incidentCreatedAt: 'desc' },
+    take: LATE_CHANGE_REANALYSIS_LIMIT,
+    select: { incidentId: true },
+  });
+  if (rows.length === 0) return;
+  await enqueueWorkItems(
+    rows.map(row => ({ kind: WORK_KINDS.ANALYZE_RESPONSE, subjectKey: row.incidentId }))
+  );
+}
+
 /**
  * Records a production change. Idempotent per (source, dedupKey), so a retried webhook never
  * creates a second row. Never touches the paging path: this is an independent write.
@@ -87,6 +116,7 @@ export async function recordChange(
   };
   try {
     const row = await prisma.changeEvent.create({ data, select: { id: true } });
+    await reanalyzeAfterLateChange(data.serviceId, data.occurredAt).catch(() => undefined);
     return { status: 'created', id: row.id };
   } catch (error) {
     if (error instanceof Prisma.PrismaClientKnownRequestError) {

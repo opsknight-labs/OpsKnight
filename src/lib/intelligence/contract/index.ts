@@ -7,7 +7,7 @@
 import { z } from 'zod/v4';
 
 /** Bumped whenever normalization, scoring or rule semantics change; stamped on every decision. */
-export const INTELLIGENCE_ENGINE_VERSION = '1.0.0';
+export const INTELLIGENCE_ENGINE_VERSION = '1.1.0';
 
 export const INTELLIGENCE_MODES = ['OFF', 'SHADOW', 'SUGGEST', 'AUTO'] as const;
 export type IntelligenceModeValue = (typeof INTELLIGENCE_MODES)[number];

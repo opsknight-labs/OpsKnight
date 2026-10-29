@@ -8,6 +8,15 @@ import SimilarIncidentFeedback from '@/components/incident/SimilarIncidentFeedba
 
 const formatDate = (date: Date) => date.toISOString().slice(0, 10);
 
+/** 45 min, 3 h 10 min, 2 d 4 h. */
+function formatDuration(minutes: number): string {
+  if (minutes < 60) return `${minutes} min`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 48) return minutes % 60 ? `${hours} h ${minutes % 60} min` : `${hours} h`;
+  const days = Math.floor(hours / 24);
+  return hours % 24 ? `${days} d ${hours % 24} h` : `${days} d`;
+}
+
 /**
  * Suggested precedents for an incident. Renders nothing unless intelligence is on for this service,
  * the viewer may read it, and there is something to show. Any failure also renders nothing: this card
@@ -42,14 +51,37 @@ export default async function IncidentIntelligenceCard({ incidentId }: { inciden
       </div>
       <ul className="divide-y divide-border">
         {similar.map(item => (
-          <li key={item.incidentId} className="flex flex-wrap items-start justify-between gap-2 py-2">
+          <li
+            key={item.incidentId}
+            className="flex flex-wrap items-start justify-between gap-2 py-2"
+          >
             <div className="min-w-0 space-y-1">
-              <Link href={`/incidents/${item.incidentId}`} className="text-sm font-medium hover:underline">
+              <Link
+                href={`/incidents/${item.incidentId}`}
+                className="text-sm font-medium hover:underline"
+              >
                 {item.title}
               </Link>
               <p className="text-xs text-muted-foreground">
                 {item.serviceName} · {formatDate(item.createdAt)} · {item.status.toLowerCase()}
+                {item.minutesToResolve !== null &&
+                  ` · resolved in ${formatDuration(item.minutesToResolve)}`}
               </p>
+              {item.postmortem && (
+                <p className="text-xs">
+                  {item.postmortem.resolution && (
+                    <span className="text-foreground/80">
+                      Fixed by: {item.postmortem.resolution}{' '}
+                    </span>
+                  )}
+                  <Link
+                    href={item.postmortem.href}
+                    className="font-medium underline-offset-2 hover:underline"
+                  >
+                    Postmortem
+                  </Link>
+                </p>
+              )}
               <ul className="flex flex-wrap gap-1" aria-label="Why this matched">
                 {item.reasons.map(reason => (
                   <li key={reason} className="rounded-full bg-muted px-2 py-0.5 text-xs">
@@ -77,8 +109,8 @@ export default async function IncidentIntelligenceCard({ incidentId }: { inciden
         ))}
       </ul>
       <p className="text-xs text-muted-foreground">
-        Suggestions are based on past incident wording and context. They are hints for responders and
-        never change routing or notifications.
+        Suggestions are based on past incident wording and context. They are hints for responders
+        and never change routing or notifications.
       </p>
     </section>
   );

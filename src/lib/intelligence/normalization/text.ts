@@ -59,6 +59,28 @@ function maskDigitRun(run: string): string {
   return `<num>${trailing}`;
 }
 
+/**
+ * The narrower mask used for label values: only identifiers that differ between replicas of the same thing
+ * (generated pod names, IP addresses, UUIDs, long hex ids, timestamps). Short numbers and readable names stay,
+ * because in a label they usually carry meaning (`eu-west-1`, a status code, a version).
+ */
+export function maskVolatileIdentifiers(input: string): string {
+  let text = input.slice(0, MAX_RAW_TEXT_LENGTH).toLowerCase();
+  text = text.replace(UUID_PATTERN, '<uuid>');
+  text = text.replace(TIMESTAMP_PATTERN, '<ts>');
+  text = text
+    .replace(TIMESTAMP_SECONDS_PATTERN, '')
+    .replace(TIMESTAMP_FRACTION_PATTERN, '')
+    .replace(TIMESTAMP_ZONE_PATTERN, '');
+  text = text
+    .replace(IPV4_PATTERN, '<ip>')
+    .replace(IP_PORT_PATTERN, '')
+    .replace(IP_PREFIX_PATTERN, '');
+  text = text.replace(DASHED_IDENTIFIER_PATTERN, collapseGeneratedName);
+  text = text.replace(HEX_PATTERN, match => (/\d/.test(match) ? '<hex>' : match));
+  return text.replace(WHITESPACE_PATTERN, ' ').trim();
+}
+
 export function maskVolatileText(input: unknown): string {
   if (typeof input !== 'string') return '';
   let text = input.slice(0, MAX_RAW_TEXT_LENGTH).toLowerCase();
@@ -71,7 +93,10 @@ export function maskVolatileText(input: unknown): string {
     .replace(TIMESTAMP_SECONDS_PATTERN, '')
     .replace(TIMESTAMP_FRACTION_PATTERN, '')
     .replace(TIMESTAMP_ZONE_PATTERN, '');
-  text = text.replace(IPV4_PATTERN, '<ip>').replace(IP_PORT_PATTERN, '').replace(IP_PREFIX_PATTERN, '');
+  text = text
+    .replace(IPV4_PATTERN, '<ip>')
+    .replace(IP_PORT_PATTERN, '')
+    .replace(IP_PREFIX_PATTERN, '');
   // Generated names run before the generic hex rule, which would otherwise consume the replica hash.
   text = text.replace(DASHED_IDENTIFIER_PATTERN, collapseGeneratedName);
   // Only strings that contain a digit are identifiers; plain words made of a-f stay readable.
@@ -87,9 +112,46 @@ const WORD_PATTERN = /[a-z]{2,32}/g;
 export const MAX_TOKENS = 64;
 
 const STOP_WORDS = new Set([
-  'the', 'and', 'for', 'are', 'was', 'were', 'has', 'have', 'had', 'with', 'from', 'that', 'this',
-  'not', 'but', 'its', 'can', 'will', 'all', 'out', 'any', 'too', 'than', 'then', 'into', 'over',
-  'on', 'in', 'at', 'to', 'of', 'is', 'it', 'or', 'by', 'an', 'as', 'be', 'no', 'if',
+  'the',
+  'and',
+  'for',
+  'are',
+  'was',
+  'were',
+  'has',
+  'have',
+  'had',
+  'with',
+  'from',
+  'that',
+  'this',
+  'not',
+  'but',
+  'its',
+  'can',
+  'will',
+  'all',
+  'out',
+  'any',
+  'too',
+  'than',
+  'then',
+  'into',
+  'over',
+  'on',
+  'in',
+  'at',
+  'to',
+  'of',
+  'is',
+  'it',
+  'or',
+  'by',
+  'an',
+  'as',
+  'be',
+  'no',
+  'if',
 ]);
 
 /** Sorted, unique, bounded word tokens from an already-masked template (placeholders excluded). */

@@ -5,7 +5,7 @@ import { withDbBudget } from '../jobs/db-budget';
 import { semanticNeighbours } from '../semantic/search';
 import { detectCapabilities, type SimilarityTier } from './capabilities';
 import { scoreSimilarity, type SimilarityComponents, type SimilarityFingerprint } from './scoring';
-import { selectQueryTerms, termFrequencies } from './term-stats';
+import { inverseDocumentFrequency, selectQueryTerms, termFrequencies } from './term-stats';
 
 export interface SimilarityOptions {
   /** Candidates fetched per source; the total examined is at most 3x this. */
@@ -179,6 +179,8 @@ export async function findSimilarIncidents(
     : new Map<string, number>();
   for (const id of cosines.keys()) candidateIds.add(id);
 
+  const idf = (token: string) => inverseDocumentFrequency(token, frequencies);
+
   if (candidateIds.size === 0) {
     return { tier: capabilities.similarityTier, candidatesEvaluated: 0, results: [] };
   }
@@ -191,7 +193,13 @@ export async function findSimilarIncidents(
       .map(candidate => ({
         incidentId: candidate.incidentId,
         createdAt: candidate.incidentCreatedAt,
-        ...scoreSimilarity(query, toFingerprint(candidate), now, cosines.get(candidate.incidentId)),
+        ...scoreSimilarity(
+          query,
+          toFingerprint(candidate),
+          now,
+          cosines.get(candidate.incidentId),
+          idf
+        ),
       }))
       .filter(result => result.score >= options.minScore)
       .sort(

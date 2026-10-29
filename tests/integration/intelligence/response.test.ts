@@ -5,6 +5,8 @@ import {
   INTELLIGENCE_SETTINGS_DEFAULTS,
 } from '@/lib/intelligence/contract';
 import { recordChange } from '@/lib/intelligence/changes/service';
+import { indexIncident } from '@/lib/intelligence/jobs/indexer';
+import { computeRunbookFindings } from '@/lib/intelligence/recommendations/ranker';
 import {
   declareDependency,
   listDependencies,
@@ -75,11 +77,21 @@ async function execution(
   serviceId: string,
   status: 'SUCCEEDED' | 'FAILED' | 'CANCELLED'
 ) {
+  const startedAt = new Date(Date.now() - 10 * MIN);
+  const completedAt = new Date(Date.now() - 5 * MIN);
+  const incident = await createTestIncident('Previously fixed problem', serviceId, {
+    createdAt: new Date(Date.now() - 20 * MIN),
+    status: 'RESOLVED',
+    resolvedAt: new Date(),
+  });
   await db.runbookExecution.create({
     data: {
       runbookId: runbook.id,
       runbookVersionId: versionId,
       serviceId,
+      incidentId: incident.id,
+      startedAt,
+      completedAt,
       status,
       deadlineAt: new Date(Date.now() + 3_600_000),
       definitionChecksum: 'x',
@@ -130,6 +142,32 @@ describe('recording changes', () => {
       const stored = await db.changeEvent.findUniqueOrThrow({ where: { id } });
       expect(Math.abs(stored.occurredAt.getTime() - at)).toBeLessThan(1_000);
     }
+  });
+
+  it('re-analyses incidents that opened after a change which arrived late', async () => {
+    const service = await createTestService('API');
+    const other = await createTestService('Other');
+    const opened = await createTestIncident('Latency high', service.id, {
+      createdAt: new Date(Date.now() - 10 * MIN),
+    });
+    const unrelated = await createTestIncident('Disk full', other.id, {
+      createdAt: new Date(Date.now() - 10 * MIN),
+    });
+    const before = await createTestIncident('Earlier', service.id, {
+      createdAt: new Date(Date.now() - 60 * MIN),
+    });
+    for (const incident of [opened, unrelated, before])
+      await db.$transaction(tx => indexIncident(incident.id, tx));
+
+    await recordChange({
+      serviceId: service.id,
+      source: 'ci',
+      kind: 'DEPLOY',
+      summary: 'v9',
+      occurredAt: new Date(Date.now() - 20 * MIN),
+    });
+    const queued = await db.intelligenceWorkItem.findMany({ where: { kind: 'ANALYZE_RESPONSE' } });
+    expect(queued.map(item => item.subjectKey)).toEqual([opened.id]);
   });
 
   it('rejects invalid, future, stale and unknown-service changes', async () => {
@@ -430,6 +468,68 @@ describe('response analysis', () => {
     ]);
     expect(found[0].evidence).toMatchObject({ succeeded: 9, eligible: 10, bound: false });
     expect(found[2].evidence).toMatchObject({ succeeded: 0, eligible: 0, bound: true });
+  });
+
+  it('credits resolved incidents only within the run outcome window, with separate same-problem evidence', async () => {
+    const service = await createTestService('API');
+    const target = await createTestIncident('Postgres replica lag', service.id);
+    await db.$transaction(tx => indexIncident(target.id, tx));
+    const { runbook, version } = await publishedRunbook('restart-replica');
+    await db.serviceAutomationRule.create({
+      data: { serviceId: service.id, runbookId: runbook.id },
+    });
+    const now = new Date();
+    const startedAt = new Date(now.getTime() - 180 * MIN);
+    const completedAt = new Date(now.getTime() - 170 * MIN);
+    // A fix during the run or shortly after it is useful evidence. A prior resolution, a late
+    // resolution, an open/reopened incident and a standalone script are not.
+    for (const [title, status, resolvedAt] of [
+      ['Postgres replica lag', 'RESOLVED', new Date(completedAt.getTime() + 10 * MIN)],
+      ['Different problem', 'RESOLVED', new Date(startedAt.getTime() + MIN)],
+      ['Postgres replica lag', 'RESOLVED', new Date(startedAt.getTime() - MIN)],
+      ['Postgres replica lag', 'RESOLVED', new Date(completedAt.getTime() + 121 * MIN)],
+      ['Postgres replica lag', 'OPEN', null],
+      ['Postgres replica lag', 'OPEN', new Date(completedAt.getTime() + MIN)],
+    ] as const) {
+      const incident = await createTestIncident(title, service.id, {
+        status,
+        resolvedAt,
+        createdAt: new Date(startedAt.getTime() - MIN),
+      });
+      await db.$transaction(tx => indexIncident(incident.id, tx));
+      await db.runbookExecution.create({
+        data: {
+          runbookId: runbook.id,
+          runbookVersionId: version.id,
+          serviceId: service.id,
+          incidentId: incident.id,
+          status: 'SUCCEEDED',
+          startedAt,
+          completedAt,
+          deadlineAt: now,
+          definitionChecksum: 'x',
+        },
+      });
+    }
+    await db.runbookExecution.create({
+      data: {
+        runbookId: runbook.id,
+        runbookVersionId: version.id,
+        serviceId: service.id,
+        status: 'SUCCEEDED',
+        startedAt,
+        completedAt,
+        deadlineAt: now,
+        definitionChecksum: 'x',
+      },
+    });
+    const findings = await db.$transaction(tx => computeRunbookFindings(tx, target, now));
+    expect(findings).toHaveLength(1);
+    expect(findings[0].evidence).toMatchObject({
+      succeeded: 2,
+      eligible: 7,
+      sameProblem: { succeeded: 1, eligible: 5 },
+    });
   });
 
   it('does nothing when the policy is OFF or response analysis is disabled', async () => {

@@ -47,7 +47,8 @@ describe('maskVolatileText', () => {
   });
 
   it('is total for non-string input', () => {
-    for (const value of [null, undefined, 42, {}, [], true]) expect(maskVolatileText(value)).toBe('');
+    for (const value of [null, undefined, 42, {}, [], true])
+      expect(maskVolatileText(value)).toBe('');
   });
 
   it('is idempotent and bounded across many generated inputs', () => {
@@ -92,14 +93,22 @@ describe('extractTokens', () => {
   });
 
   it('is capped', () => {
-    const many = Array.from({ length: 500 }, (_, i) => `word${String.fromCharCode(97 + (i % 26))}${String.fromCharCode(97 + ((i / 26) | 0) % 26)}`).join(' ');
+    const many = Array.from(
+      { length: 500 },
+      (_, i) =>
+        `word${String.fromCharCode(97 + (i % 26))}${String.fromCharCode(97 + (((i / 26) | 0) % 26))}`
+    ).join(' ');
     expect(extractTokens(many).length).toBeLessThanOrEqual(MAX_TOKENS);
   });
 });
 
 describe('canonicalizeLabels', () => {
   it('flattens, lowercases and sorts keys deterministically', () => {
-    const labels = canonicalizeLabels({ Service: 'Checkout', env: 'PROD', k8s: { Namespace: 'Payments' } });
+    const labels = canonicalizeLabels({
+      Service: 'Checkout',
+      env: 'PROD',
+      k8s: { Namespace: 'Payments' },
+    });
     expect(Object.keys(labels)).toEqual(['env', 'k8s.namespace', 'service']);
     expect(labels).toEqual({ env: 'prod', 'k8s.namespace': 'payments', service: 'checkout' });
   });
@@ -113,6 +122,42 @@ describe('canonicalizeLabels', () => {
       region: 'eu-west-1',
     });
     expect(labels).toEqual({ region: 'eu-west-1' });
+  });
+
+  it('keeps harmless keys that merely contain a secret-sounding word, and long readable names', () => {
+    const labels = canonicalizeLabels({
+      bypass: 'true',
+      compass: 'north',
+      author: 'dana',
+      private_ip: '10.0.1.23',
+      host: 'ip-10-0-1-23.eu-west-1.compute.internal',
+      dbPassword: 'hunter2hunter2',
+      clientSecret: 'abc',
+      blob: 'QWxhZGRpbjpvcGVuIHNlc2FtZQ9xK2Z4R1Z0bG9uZ2Jsb2I',
+    });
+    expect(Object.keys(labels).sort()).toEqual([
+      'author',
+      'bypass',
+      'compass',
+      'host',
+      'private_ip',
+    ]);
+    expect(labels.private_ip).toBe('<ip>');
+  });
+
+  it('masks replica-specific identifiers so labels from the same workload match, and keeps meaningful values', () => {
+    const a = canonicalizeLabels({
+      pod: 'checkout-api-7d9f8c6b54-x2x7k',
+      region: 'eu-west-1',
+      status: 503,
+    });
+    const b = canonicalizeLabels({
+      pod: 'checkout-api-7d9f8c6b54-p9q2z',
+      region: 'eu-west-1',
+      status: 503,
+    });
+    expect(a).toEqual(b);
+    expect(a).toMatchObject({ region: 'eu-west-1', status: '503' });
   });
 
   it('ignores arrays, nulls and non-objects and never throws', () => {
@@ -157,7 +202,10 @@ describe('buildIncidentFingerprint', () => {
 
   it('does not let description churn change the template', () => {
     const a = buildIncidentFingerprint({ title: 'Disk full', description: 'volume a' });
-    const b = buildIncidentFingerprint({ title: 'Disk full', description: 'something else entirely' });
+    const b = buildIncidentFingerprint({
+      title: 'Disk full',
+      description: 'something else entirely',
+    });
     expect(a.template).toBe(b.template);
   });
 });

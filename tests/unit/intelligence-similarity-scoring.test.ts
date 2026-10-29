@@ -58,7 +58,13 @@ describe('scoreSimilarity', () => {
     };
     const result = scoreSimilarity(base, candidate, now);
     expect(result.score).toBeGreaterThan(0.9);
-    expect(result.components).toMatchObject({ tokens: 1, template: 1, labels: 1, sameService: 1, resolved: 1 });
+    expect(result.components).toMatchObject({
+      tokens: 1,
+      template: 1,
+      labels: 1,
+      sameService: 1,
+      resolved: 1,
+    });
     expect(result.matchedTokenCount).toBe(5);
   });
 
@@ -95,7 +101,12 @@ describe('scoreSimilarity', () => {
     expect(scoreSimilarity(noLabels, noLabels, now).score).toBeGreaterThan(0.99);
     // Label-less and labelled sources therefore score on the same scale.
     const labelled = { ...base, resolvedAt: now };
-    expect(Math.abs(scoreSimilarity(labelled, labelled, now).score - scoreSimilarity(noLabels, noLabels, now).score)).toBeLessThan(0.01);
+    expect(
+      Math.abs(
+        scoreSimilarity(labelled, labelled, now).score -
+          scoreSimilarity(noLabels, noLabels, now).score
+      )
+    ).toBeLessThan(0.01);
   });
 
   it('counts a label mismatch against an incident when only one side has labels', () => {
@@ -111,7 +122,9 @@ describe('scoreSimilarity', () => {
       tokens: ['disk', 'low', 'node', 'space'],
     };
     const result = scoreSimilarity(base, disk, now);
-    expect(Math.max(result.components.tokens, result.components.template)).toBeLessThan(MIN_CONTENT_SIMILARITY);
+    expect(Math.max(result.components.tokens, result.components.template)).toBeLessThan(
+      MIN_CONTENT_SIMILARITY
+    );
     expect(result.score).toBe(0);
   });
 
@@ -132,5 +145,32 @@ describe('scoreSimilarity', () => {
     const result = scoreSimilarity(base, { ...base, template: 'secret customer name acme' }, now);
     expect(JSON.stringify(result)).not.toContain('acme');
     expect(Object.values(result.components).every(value => typeof value === 'number')).toBe(true);
+  });
+});
+
+describe('rare words', () => {
+  it('count for more than common ones when word frequencies are known', () => {
+    const query = {
+      ...base,
+      template: 'error postgres replica lag',
+      tokens: ['error', 'postgres', 'replica', 'lag'],
+    };
+    const sharesRare = {
+      ...base,
+      template: 'postgres replica down',
+      tokens: ['postgres', 'replica', 'down'],
+    };
+    const sharesCommon = {
+      ...base,
+      template: 'error high service',
+      tokens: ['error', 'high', 'service'],
+    };
+    const idf = (token: string) => (['error', 'high', 'service'].includes(token) ? 0.2 : 4);
+    const rare = scoreSimilarity(query, sharesRare, now, undefined, idf).components.tokens;
+    const common = scoreSimilarity(query, sharesCommon, now, undefined, idf).components.tokens;
+    expect(rare).toBeGreaterThan(0.45);
+    expect(common).toBeLessThan(0.05);
+    // Without frequencies every word weighs the same: plain Jaccard.
+    expect(scoreSimilarity(query, sharesRare, now).components.tokens).toBeCloseTo(2 / 5, 3);
   });
 });

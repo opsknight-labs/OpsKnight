@@ -7,9 +7,11 @@ import { replaceSimilarFindings } from './findings';
 import { findSimilarIncidents } from './retrieval';
 import { currentEmbeddingModel } from '../semantic/embedder';
 
-export const SIMILAR_RESULT_LIMIT = 5;
+/** Stored per incident. More than are shown, so a viewer who cannot see some precedents still gets some. */
+export const SIMILAR_RESULT_LIMIT = 10;
 
-export type AnalysisOutcome = 'analyzed' | 'skipped_off' | 'skipped_disabled_feature' | 'incident_gone' | 'stale';
+export type AnalysisOutcome =
+  'analyzed' | 'skipped_off' | 'skipped_disabled_feature' | 'incident_gone' | 'stale';
 
 /**
  * Computes and stores similar-incident findings for one incident. The effective policy gates all
@@ -25,7 +27,10 @@ export async function analyzeIncident(
     select: { serviceId: true },
   });
   if (!fingerprint) {
-    const exists = await prisma.incident.findUnique({ where: { id: incidentId }, select: { id: true } });
+    const exists = await prisma.incident.findUnique({
+      where: { id: incidentId },
+      select: { id: true },
+    });
     if (!exists) return 'incident_gone';
     // Indexing normally precedes analysis; a transient miss is retried with backoff.
     throw new Error('Incident fingerprint is not ready yet');
