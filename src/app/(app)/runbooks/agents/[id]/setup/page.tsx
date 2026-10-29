@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import prisma from '@/lib/prisma';
 import { assertCapability, getCurrentUser } from '@/lib/rbac';
 import { CAPABILITIES } from '@/lib/authorization';

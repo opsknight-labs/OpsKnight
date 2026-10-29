@@ -1,4 +1,4 @@
-import { ZodError } from 'zod';
+import { ZodError } from 'zod/v3';
 import { jsonError } from '@/lib/api-response';
 import { IncidentResponsePolicyError } from '@/lib/incident-sla/policy-config';
 import { logger } from '@/lib/logger';

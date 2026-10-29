@@ -1,6 +1,6 @@
 import 'server-only';
 
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import prisma from '@/lib/prisma';
 import { addOperationalMetric } from '@/lib/metrics/operational/registry';
 import { emitAuditEvent } from '@/lib/audit';
@@ -8,13 +8,26 @@ import type { WarRoomRepairAction, WarRoomRepairRequest, WarRoomRepairResult } f
 
 export const repairActionSchema = z.object({
   warRoomId: z.string().trim().min(1, 'warRoomId is required'),
-  action: z.enum(['TEST_CONNECTION', 'RECONCILE', 'RETRY_PROJECTION', 'RETRY_PARTICIPANT_SYNC', 'RETRY_EXTERNAL_CLEANUP', 'REFRESH_PERMISSIONS']),
+  action: z.enum([
+    'TEST_CONNECTION',
+    'RECONCILE',
+    'RETRY_PROJECTION',
+    'RETRY_PARTICIPANT_SYNC',
+    'RETRY_EXTERNAL_CLEANUP',
+    'REFRESH_PERMISSIONS',
+  ]),
 });
 
-export async function enqueueWarRoomRepair(input: WarRoomRepairRequest): Promise<WarRoomRepairResult> {
+export async function enqueueWarRoomRepair(
+  input: WarRoomRepairRequest
+): Promise<WarRoomRepairResult> {
   const parsed = repairActionSchema.safeParse({ warRoomId: input.warRoomId, action: input.action });
   if (!parsed.success) {
-    return { accepted: false, reasonCode: 'VALIDATION_FAILED', message: parsed.error.issues[0]?.message ?? 'Invalid repair request.' };
+    return {
+      accepted: false,
+      reasonCode: 'VALIDATION_FAILED',
+      message: parsed.error.issues[0]?.message ?? 'Invalid repair request.',
+    };
   }
 
   // Admin Control Plane — mutations are ADMIN-only (see /api/admin/war-rooms/*)
@@ -30,9 +43,20 @@ export async function enqueueWarRoomRepair(input: WarRoomRepairRequest): Promise
 
   const room = await prisma.incidentWarRoom.findUnique({
     where: { id: input.warRoomId },
-    select: { id: true, incidentId: true, provider: true, state: true, health: true, provisioningToken: true, projectionVersion: true, externalCleanupPending: true, destinationId: true },
+    select: {
+      id: true,
+      incidentId: true,
+      provider: true,
+      state: true,
+      health: true,
+      provisioningToken: true,
+      projectionVersion: true,
+      externalCleanupPending: true,
+      destinationId: true,
+    },
   });
-  if (!room) return { accepted: false, reasonCode: 'NOT_FOUND', message: 'War room was not found.' };
+  if (!room)
+    return { accepted: false, reasonCode: 'NOT_FOUND', message: 'War room was not found.' };
 
   // Deleted/disabled integration guard — repairs still enqueue reconciliations for triage, but TEST_CONNECTION is allowed
   const action = input.action as WarRoomRepairAction;
@@ -62,7 +86,13 @@ export async function enqueueWarRoomRepair(input: WarRoomRepairRequest): Promise
           break;
         }
         const job = await prisma.backgroundJob.create({
-          data: { type: 'WAR_ROOM_RECONCILE', status: 'PENDING', scheduledAt: new Date(), maxAttempts: 3, payload: { warRoomId: room.id, reason: 'connection_test' } as unknown as never },
+          data: {
+            type: 'WAR_ROOM_RECONCILE',
+            status: 'PENDING',
+            scheduledAt: new Date(),
+            maxAttempts: 3,
+            payload: { warRoomId: room.id, reason: 'connection_test' } as unknown as never,
+          },
         });
         jobId = job.id;
         jobType = 'WAR_ROOM_RECONCILE';
@@ -89,7 +119,17 @@ export async function enqueueWarRoomRepair(input: WarRoomRepairRequest): Promise
             break;
           }
           const job = await prisma.backgroundJob.create({
-            data: { type: 'WAR_ROOM_PROVISION', status: 'PENDING', scheduledAt: new Date(), maxAttempts: 6, payload: { warRoomId: room.id, provisioningToken: room.provisioningToken, reconciliationOnly: true } as unknown as never },
+            data: {
+              type: 'WAR_ROOM_PROVISION',
+              status: 'PENDING',
+              scheduledAt: new Date(),
+              maxAttempts: 6,
+              payload: {
+                warRoomId: room.id,
+                provisioningToken: room.provisioningToken,
+                reconciliationOnly: true,
+              } as unknown as never,
+            },
           });
           jobId = job.id;
           jobType = 'WAR_ROOM_PROVISION';
@@ -97,11 +137,19 @@ export async function enqueueWarRoomRepair(input: WarRoomRepairRequest): Promise
         }
         // READY/CLOSING → health reconciliation
         if (!['READY', 'CLOSING', 'FAILED'].includes(room.state)) {
-          return { accepted: false, reasonCode: 'STATE_NOT_RECONCILABLE', message: `Reconciliation is not applicable while war-room state is ${room.state}.` };
+          return {
+            accepted: false,
+            reasonCode: 'STATE_NOT_RECONCILABLE',
+            message: `Reconciliation is not applicable while war-room state is ${room.state}.`,
+          };
         }
         {
           const existing = await prisma.backgroundJob.findFirst({
-            where: { type: 'WAR_ROOM_RECONCILE', status: { in: ['PENDING', 'PROCESSING'] }, payload: { path: ['warRoomId'], equals: room.id } },
+            where: {
+              type: 'WAR_ROOM_RECONCILE',
+              status: { in: ['PENDING', 'PROCESSING'] },
+              payload: { path: ['warRoomId'], equals: room.id },
+            },
             select: { id: true },
           });
           if (existing) {
@@ -110,7 +158,13 @@ export async function enqueueWarRoomRepair(input: WarRoomRepairRequest): Promise
             break;
           }
           const job = await prisma.backgroundJob.create({
-            data: { type: 'WAR_ROOM_RECONCILE', status: 'PENDING', scheduledAt: new Date(), maxAttempts: 3, payload: { warRoomId: room.id } as unknown as never },
+            data: {
+              type: 'WAR_ROOM_RECONCILE',
+              status: 'PENDING',
+              scheduledAt: new Date(),
+              maxAttempts: 3,
+              payload: { warRoomId: room.id } as unknown as never,
+            },
           });
           jobId = job.id;
           jobType = 'WAR_ROOM_RECONCILE';
@@ -119,7 +173,11 @@ export async function enqueueWarRoomRepair(input: WarRoomRepairRequest): Promise
       }
       case 'RETRY_PROJECTION': {
         if (!['READY', 'CLOSING'].includes(room.state)) {
-          return { accepted: false, reasonCode: 'STATE_NOT_READY', message: 'Projection can only be retried while the war room is READY or CLOSING.' };
+          return {
+            accepted: false,
+            reasonCode: 'STATE_NOT_READY',
+            message: 'Projection can only be retried while the war room is READY or CLOSING.',
+          };
         }
         // Transactional + idempotent: coalesce inside the transaction so two
         // concurrent admins cannot both increment projection. Uses the neutral
@@ -144,7 +202,11 @@ export async function enqueueWarRoomRepair(input: WarRoomRepairRequest): Promise
             jobType = 'WAR_ROOM_PROJECT';
             break;
           }
-          return { accepted: false, reasonCode: 'STATE_CHANGED', message: 'War-room state changed before projection could be queued.' };
+          return {
+            accepted: false,
+            reasonCode: 'STATE_CHANGED',
+            message: 'War-room state changed before projection could be queued.',
+          };
         }
         const job = await prisma.backgroundJob.findFirst({
           where: {
@@ -163,7 +225,13 @@ export async function enqueueWarRoomRepair(input: WarRoomRepairRequest): Promise
         if (jobId) break;
         // Fallback: helper incremented but job lookup missed (test mock) — create if needed
         const fallback = await prisma.backgroundJob.create({
-          data: { type: 'WAR_ROOM_PROJECT', status: 'PENDING', scheduledAt: new Date(), maxAttempts: 5, payload: { warRoomId: room.id, projectionVersion: version } as unknown as never },
+          data: {
+            type: 'WAR_ROOM_PROJECT',
+            status: 'PENDING',
+            scheduledAt: new Date(),
+            maxAttempts: 5,
+            payload: { warRoomId: room.id, projectionVersion: version } as unknown as never,
+          },
         });
         jobId = fallback.id;
         jobType = 'WAR_ROOM_PROJECT';
@@ -171,11 +239,19 @@ export async function enqueueWarRoomRepair(input: WarRoomRepairRequest): Promise
       }
       case 'RETRY_PARTICIPANT_SYNC': {
         if (!['READY', 'CLOSING'].includes(room.state)) {
-          return { accepted: false, reasonCode: 'STATE_NOT_READY', message: 'Participant sync can only be retried while the war room is READY or CLOSING.' };
+          return {
+            accepted: false,
+            reasonCode: 'STATE_NOT_READY',
+            message: 'Participant sync can only be retried while the war room is READY or CLOSING.',
+          };
         }
         {
           const existing = await prisma.backgroundJob.findFirst({
-            where: { type: 'WAR_ROOM_PARTICIPANT_SYNC', status: { in: ['PENDING', 'PROCESSING'] }, payload: { path: ['warRoomId'], equals: room.id } },
+            where: {
+              type: 'WAR_ROOM_PARTICIPANT_SYNC',
+              status: { in: ['PENDING', 'PROCESSING'] },
+              payload: { path: ['warRoomId'], equals: room.id },
+            },
             select: { id: true },
           });
           if (existing) {
@@ -184,7 +260,13 @@ export async function enqueueWarRoomRepair(input: WarRoomRepairRequest): Promise
             break;
           }
           const job = await prisma.backgroundJob.create({
-            data: { type: 'WAR_ROOM_PARTICIPANT_SYNC', status: 'PENDING', scheduledAt: new Date(), maxAttempts: 5, payload: { warRoomId: room.id } as unknown as never },
+            data: {
+              type: 'WAR_ROOM_PARTICIPANT_SYNC',
+              status: 'PENDING',
+              scheduledAt: new Date(),
+              maxAttempts: 5,
+              payload: { warRoomId: room.id } as unknown as never,
+            },
           });
           jobId = job.id;
           jobType = 'WAR_ROOM_PARTICIPANT_SYNC';
@@ -196,7 +278,12 @@ export async function enqueueWarRoomRepair(input: WarRoomRepairRequest): Promise
         // CLOSING rooms can legitimately have externalCleanupPending=true before
         // falling through to terminal — never clear/claim that debt prematurely.
         if (!room.externalCleanupPending || !['CLOSED', 'ARCHIVED'].includes(room.state)) {
-          return { accepted: false, reasonCode: 'NOT_ELIGIBLE', message: 'External cleanup can only be retried when cleanup is pending and the war room is CLOSED or ARCHIVED.' };
+          return {
+            accepted: false,
+            reasonCode: 'NOT_ELIGIBLE',
+            message:
+              'External cleanup can only be retried when cleanup is pending and the war room is CLOSED or ARCHIVED.',
+          };
         }
         const existing = await prisma.backgroundJob.findFirst({
           where: {
@@ -255,17 +342,31 @@ export async function enqueueWarRoomRepair(input: WarRoomRepairRequest): Promise
           break;
         }
         const job = await prisma.backgroundJob.create({
-          data: { type: 'WAR_ROOM_RECONCILE', status: 'PENDING', scheduledAt: new Date(), maxAttempts: 3, payload: { warRoomId: room.id, reason: 'permission_refresh' } as unknown as never },
+          data: {
+            type: 'WAR_ROOM_RECONCILE',
+            status: 'PENDING',
+            scheduledAt: new Date(),
+            maxAttempts: 3,
+            payload: { warRoomId: room.id, reason: 'permission_refresh' } as unknown as never,
+          },
         });
         jobId = job.id;
         jobType = 'WAR_ROOM_RECONCILE';
         break;
       }
       default:
-        return { accepted: false, reasonCode: 'UNSUPPORTED_ACTION', message: `Unsupported repair action: ${action}` };
+        return {
+          accepted: false,
+          reasonCode: 'UNSUPPORTED_ACTION',
+          message: `Unsupported repair action: ${action}`,
+        };
     }
   } catch (error) {
-    return { accepted: false, reasonCode: 'ENQUEUE_FAILED', message: error instanceof Error ? error.message : String(error) };
+    return {
+      accepted: false,
+      reasonCode: 'ENQUEUE_FAILED',
+      message: error instanceof Error ? error.message : String(error),
+    };
   }
 
   function auditActionForRequest(a: WarRoomRepairAction): string {
@@ -310,7 +411,10 @@ export async function enqueueWarRoomRepair(input: WarRoomRepairRequest): Promise
     });
   } catch {}
 
-  addOperationalMetric('opsknight_war_room_reconciliation_total', 1, { provider: String(room.provider), result: 'repair_enqueued' } as never);
+  addOperationalMetric('opsknight_war_room_reconciliation_total', 1, {
+    provider: String(room.provider),
+    result: 'repair_enqueued',
+  } as never);
 
   return { accepted: true, jobId, jobType };
 }

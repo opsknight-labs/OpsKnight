@@ -3,7 +3,7 @@ import 'server-only';
 import crypto from 'crypto';
 import { buildExecutionPreview, checkExecutionReadiness } from './execution-preview';
 import type { IncidentEventType, Prisma, RunbookExecutionStep } from '@prisma/client';
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import prisma from '@/lib/prisma';
 import { logAudit } from '@/lib/audit';
 import { safeOutboundFetch } from '@/lib/network-security';

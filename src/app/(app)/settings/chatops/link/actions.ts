@@ -1,6 +1,6 @@
 'use server';
 
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import { redirect } from 'next/navigation';
 import { getCurrentUser } from '@/lib/rbac';
 import { consumeMicrosoftTeamsIdentityChallenge } from '@/lib/microsoft-teams/identity';

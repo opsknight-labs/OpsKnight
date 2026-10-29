@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import { resolveIngestionMode } from './mode';
 
 // The schema is immutable; only environment values are read per call.

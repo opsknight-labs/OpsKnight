@@ -48,14 +48,20 @@ describe('dependency audit gate', () => {
       vulnerabilities: {
         zod: vulnerability('high', ['GHSA-aaaa-bbbb-cccc']),
         left: vulnerability('critical', ['GHSA-dddd-eeee-ffff']),
-        minor: vulnerability('moderate', ['GHSA-gggg-hhhh-iiii']),
+        minor: vulnerability('low', ['GHSA-gggg-hhhh-iiii']),
       },
     };
     const result = evaluateAudit(audit, { advisories: [entry('GHSA-aaaa-bbbb-cccc')] }, now);
     expect(result.ok).toBe(false);
-    expect(result.blocking).toEqual([
-      { id: 'GHSA-dddd-eeee-ffff', package: 'left', state: 'NEW' },
-    ]);
+    expect(result.blocking).toEqual([{ id: 'GHSA-dddd-eeee-ffff', package: 'left', state: 'NEW' }]);
+  });
+
+  it('blocks an unreviewed moderate production advisory', () => {
+    const audit = { vulnerabilities: { qs: vulnerability('moderate', ['GHSA-6pq8-jhm2-2vcw']) } };
+    expect(evaluateAudit(audit, { advisories: [] }, now)).toMatchObject({
+      ok: false,
+      blocking: [{ id: 'GHSA-6pq8-jhm2-2vcw', package: 'qs', state: 'NEW' }],
+    });
   });
 
   it('reports baseline entries that no longer apply and rejects malformed baselines', () => {

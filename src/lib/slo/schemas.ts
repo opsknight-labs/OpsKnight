@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import { OBJECTIVE_COMPARATORS, OBJECTIVE_WINDOWS } from './types';
 
 export const CREATABLE_SERVICE_OBJECTIVE_METRICS = [

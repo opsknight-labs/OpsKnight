@@ -1,5 +1,5 @@
 import type { Prisma, RunbookInput, RunbookVersion } from '@prisma/client';
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import { AppError } from '@/lib/errors';
 import { etagHeaders, requireRevisionIfMatch, preconditionFailed } from './concurrency';
 import { projectRunbookSteps } from './runbook-projection';

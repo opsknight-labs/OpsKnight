@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { z } from 'zod/v3';
 
 // Email validation - RFC 5322 compliant
 const _emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;

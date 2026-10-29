@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import type { RunbookAgentPool, Prisma } from '@prisma/client';
 import { AppError } from '@/lib/errors';
 import { API_SCOPES } from '@/lib/authorization';

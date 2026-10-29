@@ -1,6 +1,7 @@
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import { mcpOrigin } from './config';
 import { requireMcp, McpBoundaryError } from '../core/errors';
+import { friendlyMcpError } from './friendly-error';
 
 export function assertMcpHost(request: Request, browserWrite = false) {
   const origin = mcpOrigin();
@@ -30,8 +31,10 @@ export function mcpHttpError(error: unknown) {
       : status === 400
         ? 'invalid_request'
         : 'MCP_UNAVAILABLE';
+  // Clients surface error_description to the person using them; keep it actionable.
+  const described = friendlyMcpError(code);
   return Response.json(
-    { error: code },
+    { error: code, ...(described.known ? { error_description: described.body } : {}) },
     {
       status,
       headers: {
@@ -52,11 +55,12 @@ export const authorizationQuerySchema = z
     client_id: z.string().min(1).max(256),
     redirect_uri: z.string().url().max(2048),
     response_type: z.literal('code'),
-    scope: z.string().min(1).max(2048),
+    scope: z.string().min(1).max(2048).optional(),
     state: z.string().min(16).max(512),
     code_challenge: z.string().regex(/^[A-Za-z0-9_-]{43}$/),
     code_challenge_method: z.literal('S256'),
-    resource: z.string().url(),
+    // RFC 8707 is optional here: the audience is always this server's MCP URL.
+    resource: z.string().url().optional(),
   })
   .strict();
 

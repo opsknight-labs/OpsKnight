@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import { requireMcp } from '../core/errors';
 import { readBoundedMcpText } from '../core/body';
 

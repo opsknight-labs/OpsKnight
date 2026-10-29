@@ -1,5 +1,5 @@
 import type { Prisma } from '@prisma/client';
-import type { z } from 'zod';
+import type { z } from 'zod/v3';
 import type { AuthorizationActor } from '@/lib/authorization-policy';
 import { incidentReadWhere } from '@/lib/authorization-filters';
 import { RunbookExecuteV2Schema } from './validation';

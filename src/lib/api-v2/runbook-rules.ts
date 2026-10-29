@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import type { Prisma, ServiceAutomationRule } from '@prisma/client';
 import { AppError } from '@/lib/errors';
 import { lockServiceRuleForUpdate } from '@/lib/runbooks/locking';

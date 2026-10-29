@@ -3,7 +3,7 @@ import { getAutomationSettings } from './settings';
 import { Prisma } from '@prisma/client';
 import { logger } from '@/lib/logger';
 import { persistObservationBatch } from './observation-batch';
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import prisma from '@/lib/prisma';
 import { createCentralNotificationIntent } from '@/lib/notification-control-plane';
 import { enqueueMicrosoftTeamsDeliveryInTransaction } from '@/lib/microsoft-teams/delivery';

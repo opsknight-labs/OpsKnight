@@ -1,5 +1,5 @@
 import prisma from '@/lib/prisma';
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import { defineV2Route, type V2RouteHandlerResult } from '@/lib/api-v2/endpoint';
 import { AUTHORIZATION_ACTIONS } from '@/lib/authorization-policy';
 import { ObjectiveParams } from '@/lib/api-v2/service-objectives';

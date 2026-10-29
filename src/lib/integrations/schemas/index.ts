@@ -5,7 +5,7 @@
  * Ensures data integrity before processing.
  */
 
-import { z } from 'zod';
+import { z } from 'zod/v3';
 
 // ============================================
 // Common Types
@@ -1282,8 +1282,7 @@ export type ManageEnginePayload = z.infer<typeof ManageEnginePayloadSchema>;
 // ============================================
 
 export type ValidationResult<T> =
-  | { success: true; data: T }
-  | { success: false; errors: Array<{ path: string; message: string }> };
+  { success: true; data: T } | { success: false; errors: Array<{ path: string; message: string }> };
 
 /**
  * Validate a payload against a schema and return structured result

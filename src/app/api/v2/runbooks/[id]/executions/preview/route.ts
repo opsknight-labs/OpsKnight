@@ -1,5 +1,5 @@
 import { projectExecutionPreview } from '@/lib/api-v2/runbook-preview';
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import prisma from '@/lib/prisma';
 import { defineV2Route } from '@/lib/api-v2/endpoint';
 import { RunbookExecuteV2Schema } from '@/lib/api-v2/validation';

@@ -12,7 +12,7 @@ import {
 } from '@/lib/api-v2';
 import { authorize, AUTHORIZATION_ACTIONS } from '@/lib/authorization-policy';
 import { NotificationChannel, NotificationStatus, type Prisma } from '@prisma/client';
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import { withV2Observability } from '@/lib/api-v2/observability';
 
 export const GET = withV2Observability(async function GET(req: NextRequest) {

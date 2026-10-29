@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { z } from 'zod/v3';
 
 // A typo in a review must fail closed rather than silently changing exposure.
 export const operationReviewSchema = z

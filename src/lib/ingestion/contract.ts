@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { normalizeDedupKeys } from '@/lib/incidents/event-identity';
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import { sanitizeIntegrationEnvelope } from '@/lib/integrations/payload-security';
 import type { IntegrationEventEnvelope } from '@/lib/automation/runtime';
 

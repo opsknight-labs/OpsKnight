@@ -30,10 +30,8 @@ async function connectClient(
     })
   );
   await page.goto(authorize.href);
-  await expect(
-    page.getByRole('heading', { name: `Allow ${name} to access OpsKnight?` })
-  ).toBeVisible();
-  await page.getByRole('button', { name: 'Allow requested scopes', exact: true }).click();
+  await expect(page.getByRole('heading', { name: `Connect ${name}?` })).toBeVisible();
+  await page.getByRole('button', { name: 'Allow', exact: true }).click();
   await page.waitForURL(url => url.origin === new URL(redirectUri).origin);
   const callback = new URL(page.url());
   expect(callback.searchParams.get('state')).toBe(state);
@@ -75,17 +73,17 @@ test('native MCP settings, PKCE consent, scoped call and revocation on desktop/m
   await expect(page.getByText('App URL (Settings → System)', { exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Copy MCP endpoint', exact: true })).toBeVisible();
   await page.getByRole('checkbox', { name: /Enable MCP/ }).check();
+  await page.locator('#main-content').getByText('Advanced', { exact: true }).click();
   await page.getByRole('checkbox', { name: /Allow reviewed routine mutations/ }).uncheck();
   await page.getByRole('button', { name: 'Save policy' }).click();
-  await expect(page.getByRole('region', { name: 'Connection status' })).toContainText(
-    'Status: Enabled'
-  );
+  await expect(page.getByText('MCP configuration saved', { exact: true })).toBeVisible();
+  await page.getByText('Manual client registration (advanced)', { exact: true }).click();
 
   const name = `Local ${browserName} ${Date.now()}`;
   const redirectUri = 'http://127.0.0.1:8799/callback';
   await page.getByLabel('Display name', { exact: true }).fill(name);
   await page.getByLabel('Exact redirect URI').fill(redirectUri);
-  await page.getByLabel(/Allowed scopes/).fill('incidents:read services:read schedules:read');
+  // Read-only scopes are pre-selected in the manual registration form.
   await page.getByRole('button', { name: 'Register client', exact: true }).click();
   const clientArticle = page
     .locator('article')

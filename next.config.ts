@@ -209,6 +209,13 @@ const nextConfig: NextConfig = {
           },
         ],
       },
+      ...['/oauth/mcp/:path*', '/settings/integrations/mcp/:path*'].map(source => ({
+        source,
+        headers: [
+          { key: 'Cache-Control', value: 'private, no-store' },
+          { key: 'Referrer-Policy', value: 'no-referrer' },
+        ],
+      })),
     ];
   },
   typescript: {

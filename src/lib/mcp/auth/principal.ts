@@ -34,7 +34,9 @@ export async function resolveMcpGrant(
     SELECT g.id AS "grantId", g."userId", g."userTokenVersion",
       g.scopes AS "grantScopes", g.resource,
       -- A metadata client's effective ceiling is always the current policy, never its stored copy.
-      CASE WHEN c."metadataUrl" IS NULL THEN c.scopes
+      CASE WHEN c."dynamicRegistration" THEN
+        ARRAY(SELECT s FROM unnest(c.scopes) AS s WHERE s = ANY(p."dcrScopes"))
+        WHEN c."metadataUrl" IS NULL THEN c.scopes
         ELSE ARRAY(SELECT s FROM unnest(c.scopes) AS s WHERE s = ANY(p."cimdScopes")) END
         AS "clientScopes",
       g."revokedAt", c."revokedAt" AS "clientRevokedAt", g."expiresAt",
@@ -44,9 +46,11 @@ export async function resolveMcpGrant(
     LEFT JOIN "User" u ON u.id = g."userId"
     LEFT JOIN "McpPolicy" p ON p.id = 'default'
     WHERE g.id = ${grantId}
+      AND (NOT c."dynamicRegistration" OR p."dcrEnabled")
       -- A metadata-document client stays valid only while its host remains trusted (substr skips https://).
       AND (c."metadataUrl" IS NULL OR (p."cimdEnabled"
-        AND split_part(substr(c."metadataUrl", 9), '/', 1) = ANY(p."cimdAllowedHosts")))
+        AND (cardinality(p."cimdAllowedHosts") = 0
+          OR split_part(substr(c."metadataUrl", 9), '/', 1) = ANY(p."cimdAllowedHosts"))))
       AND (${credentialId ?? null}::text IS NULL OR EXISTS (
         SELECT 1 FROM "McpToken" t WHERE t.id = ${credentialId ?? null}
           AND t."grantId" = g.id AND t."rotatedAt" IS NULL AND t."accessExpiresAt" > ${now}
@@ -91,7 +95,8 @@ export async function resolveMcpGrant(
   };
 }
 
-export async function authenticateMcp(request: Request, cost: number) {
+/** Authentication can precede body parsing; charge the validated cost separately in that case. */
+export async function authenticateMcp(request: Request, cost: number | null) {
   const policy = await prisma.mcpPolicy.findUnique({ where: { id: 'default' } });
   requireMcp(policy?.enabled, 'MCP_DISABLED', 503);
   const header = request.headers.get('authorization') ?? '';
@@ -108,9 +113,7 @@ export async function authenticateMcp(request: Request, cost: number) {
   const effectiveScopes = auth.apiKey.scopes.filter(scope => token.scopes.includes(scope));
   auth.apiKey.scopes = effectiveScopes;
   auth.actor.apiKey = { id: auth.apiKey.id, scopes: effectiveScopes };
-  // Charge the declared bounded plan before executing it. This is shared across replicas.
-  const quota = await incrementSharedCounter(`mcp:${token.grantId}`, 60000, 'application', cost);
-  requireMcp(quota.count <= policy.requestsPerMinute, 'MCP_RATE_LIMITED', 429);
+  if (cost !== null) await chargeMcpRequest({ grantId: token.grantId, policy }, cost);
   return {
     auth,
     grantId: token.grantId,
@@ -118,4 +121,13 @@ export async function authenticateMcp(request: Request, cost: number) {
     tokenScopes: token.scopes,
     policy,
   };
+}
+
+/** Charge the declared bounded plan once, after authenticating and validating its body. */
+export async function chargeMcpRequest(
+  identity: { grantId: string; policy: { requestsPerMinute: number } },
+  cost: number
+) {
+  const quota = await incrementSharedCounter(`mcp:${identity.grantId}`, 60000, 'application', cost);
+  requireMcp(quota.count <= identity.policy.requestsPerMinute, 'MCP_RATE_LIMITED', 429);
 }

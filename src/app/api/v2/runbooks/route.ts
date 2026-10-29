@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import { runbookReadWhere } from '@/lib/authorization-filters';
 import { defineV2Route } from '@/lib/api-v2/endpoint';
 import { CreateRunbookV2Schema, projectAuthoringVersion } from '@/lib/api-v2/runbook-authoring';

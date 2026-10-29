@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server';
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import { getCurrentUser } from '@/lib/rbac';
 import { jsonError, jsonOk } from '@/lib/api-response';
 import { enqueueWarRoomRepair } from '@/lib/war-room/operations/repair';
@@ -7,7 +7,14 @@ import { enqueueWarRoomRepair } from '@/lib/war-room/operations/repair';
 export const dynamic = 'force-dynamic';
 
 const bodySchema = z.object({
-  action: z.enum(['TEST_CONNECTION', 'RECONCILE', 'RETRY_PROJECTION', 'RETRY_PARTICIPANT_SYNC', 'RETRY_EXTERNAL_CLEANUP', 'REFRESH_PERMISSIONS']),
+  action: z.enum([
+    'TEST_CONNECTION',
+    'RECONCILE',
+    'RETRY_PROJECTION',
+    'RETRY_PARTICIPANT_SYNC',
+    'RETRY_EXTERNAL_CLEANUP',
+    'REFRESH_PERMISSIONS',
+  ]),
   reason: z.string().trim().max(500).optional().nullable(),
 });
 
@@ -51,13 +58,21 @@ export async function POST(
     });
 
     if (!result.accepted) {
-      const status = result.reasonCode === 'NOT_FOUND' ? 404 : result.reasonCode === 'FORBIDDEN' || result.reasonCode === 'UNAUTHORIZED' ? 403 : 422;
+      const status =
+        result.reasonCode === 'NOT_FOUND'
+          ? 404
+          : result.reasonCode === 'FORBIDDEN' || result.reasonCode === 'UNAUTHORIZED'
+            ? 403
+            : 422;
       return jsonError(result.message ?? 'Repair was not accepted', status);
     }
 
     // Never call Graph directly — repair enqueues a canonical durable job (WAR_ROOM_PROJECT/PARTICIPANT_SYNC/PROVISION reconciliationOnly etc.)
     // and the existing engine/adapter applies it. Idempotent: duplicate requests reuse the pending job.
-    return jsonOk({ jobId: result.jobId ?? null, jobType: result.jobType ?? null }, 200, { 'Cache-Control': 'private, no-store', Vary: 'Cookie' });
+    return jsonOk({ jobId: result.jobId ?? null, jobType: result.jobType ?? null }, 200, {
+      'Cache-Control': 'private, no-store',
+      Vary: 'Cookie',
+    });
   } catch (error) {
     return jsonError(error instanceof Error ? error.message : 'Unable to enqueue repair', 500);
   }

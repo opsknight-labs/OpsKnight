@@ -3,6 +3,14 @@ import { POST } from '@/app/mcp/route';
 import { boundMcpResponse } from '@/lib/mcp/core/response';
 import { assertMcpHost } from '@/lib/mcp/auth/http';
 
+// Parsing-envelope tests use an authenticated principal. Anonymous callers must now
+// fail authentication before their request bodies are read.
+vi.mock('@/lib/mcp/auth/principal', () => ({
+  authenticateMcp: vi.fn(async () => ({ policy: { maxInFlight: 2 } })),
+  chargeMcpRequest: vi.fn(),
+  resolveMcpGrant: vi.fn(),
+}));
+
 afterEach(() => vi.unstubAllEnvs());
 describe('MCP transport boundaries', () => {
   it('accepts a pinned ingress Host with an internal listener URL', () => {

@@ -49,7 +49,7 @@ import { formatDateTime } from '@/lib/timezone';
 import { AlertCircle, AlertTriangle, Loader2, Wand2, Sparkles } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import * as z from 'zod';
+import * as z from 'zod/v3';
 import { POSTMORTEM_STATUS_CONFIG } from './postmortem/shared';
 
 const postmortemSchema = z.object({
@@ -207,7 +207,7 @@ export default function PostmortemForm({
   // Parse initial data with proper types
   const parseTimeline = (timeline: unknown): TimelineEvent[] => {
     if (!timeline || !Array.isArray(timeline)) return [];
-    return timeline.map((e: any) => ({
+    return timeline.map((e: Partial<TimelineEvent>) => ({
       id: e.id || `event-${Date.now()}-${Math.random()}`,
       timestamp: e.timestamp || new Date().toISOString(),
       type: e.type || 'DETECTION',
@@ -219,7 +219,7 @@ export default function PostmortemForm({
 
   const parseImpact = (impact: unknown): ImpactMetrics => {
     if (!impact || typeof impact !== 'object') return {};
-    const imp = impact as any;
+    const imp = impact as Partial<ImpactMetrics>;
     return {
       usersAffected: imp.usersAffected,
       downtimeMinutes: imp.downtimeMinutes,
@@ -317,8 +317,8 @@ export default function PostmortemForm({
         } else {
           setGeneralError('Failed to save postmortem');
         }
-      } catch (err: any) {
-        setGeneralError(err.message || 'Failed to save postmortem');
+      } catch (err) {
+        setGeneralError(err instanceof Error ? err.message : 'Failed to save postmortem');
       }
     });
   };
@@ -362,8 +362,10 @@ export default function PostmortemForm({
       setSelectedFactors(inferred);
 
       toast.success('Draft generated successfully');
-    } catch (err: any) {
-      toast.error('Failed to generate draft: ' + (err.message || 'Unknown error'));
+    } catch (err) {
+      toast.error(
+        'Failed to generate draft: ' + (err instanceof Error ? err.message : 'Unknown error')
+      );
     } finally {
       setIsDrafting(false);
     }
@@ -423,7 +425,9 @@ export default function PostmortemForm({
         {incidentId && effectiveIncidentJiraIssues.length > 0 && (
           <Card className="border-blue-200/80 bg-blue-50/40 shadow-sm">
             <CardContent className="p-4 flex flex-col gap-1.5">
-              <div className="text-xs font-semibold text-foreground">Inherited incident context</div>
+              <div className="text-xs font-semibold text-foreground">
+                Inherited incident context
+              </div>
               <p className="text-xs text-muted-foreground">
                 These Jira issues belong to the incident and are shown read-only throughout this
                 postmortem. Action items can still have their own Jira tracking issues.

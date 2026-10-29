@@ -1,15 +1,14 @@
 import { logAudit } from '@/lib/audit';
 import { withMcpDatabase } from '@/lib/database-workload';
 import OAuth2Server from '@node-oauth/oauth2-server';
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import prisma from '@/lib/prisma';
-import { admitMcpOAuthRequest } from '@/lib/mcp/auth/admission';
+import { acquireMcpOAuthSlot, admitMcpOAuthRequest } from '@/lib/mcp/auth/admission';
 import { mcpOAuthServer } from '@/lib/mcp/auth/oauth-model';
 import { mcpResource, withMcpRuntime } from '@/lib/mcp/auth/config';
 import { assertMcpHost, mcpHttpError, uniqueQuery } from '@/lib/mcp/auth/http';
 import { requireMcp } from '@/lib/mcp/core/errors';
 import { readBoundedMcpText } from '@/lib/mcp/core/body';
-import { acquireMcpAuthenticationSlot } from '@/lib/mcp/core/budget';
 
 export const runtime = 'nodejs';
 const schema = z
@@ -24,7 +23,7 @@ const schema = z
     redirect_uri: z.string().url().max(2048).optional(),
     refresh_token: z.string().max(256).optional(),
     scope: z.string().max(2048).optional(),
-    resource: z.string().url(),
+    resource: z.string().url().optional(),
   })
   .strict();
 
@@ -37,7 +36,7 @@ async function handlePost(request: Request) {
   let release: (() => void) | undefined;
   try {
     assertMcpHost(request);
-    release = acquireMcpAuthenticationSlot();
+    release = acquireMcpOAuthSlot('token');
     const policy = await prisma.mcpPolicy.findUnique({ where: { id: 'default' } });
     requireMcp(policy?.enabled, 'MCP_DISABLED', 503);
     await admitMcpOAuthRequest(request, 'token');
@@ -48,7 +47,7 @@ async function handlePost(request: Request) {
     );
     const form = await readBoundedMcpText(request, 8192);
     const body = schema.parse(uniqueQuery(new URLSearchParams(form)));
-    requireMcp(body.resource === mcpResource(), 'invalid_target');
+    requireMcp(!body.resource || body.resource === mcpResource(), 'invalid_target');
     requireMcp(
       body.grant_type !== 'authorization_code' ||
         (body.code && body.code_verifier && body.redirect_uri),

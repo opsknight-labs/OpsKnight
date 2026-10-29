@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import prisma from '@/lib/prisma';
 import { AppError } from '@/lib/errors';
 import { defineV2Route } from '@/lib/api-v2/endpoint';

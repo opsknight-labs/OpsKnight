@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server';
 import { getToken } from 'next-auth/jwt';
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import { safeInternalCallbackUrl } from '@/lib/auth-redirect';
 import { SESSION_TOKEN_COOKIE_NAME, useSecureCookies } from '@/lib/auth-cookies';
 import { customJwtDecode } from '@/lib/auth-jwt-encoder';

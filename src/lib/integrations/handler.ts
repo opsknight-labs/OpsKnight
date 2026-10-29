@@ -26,7 +26,7 @@ import { IntegrationErrors, isIntegrationError } from './errors';
 import { integrationErrorToAppError } from './app-error';
 import { validatePayload, IntegrationSchemas } from './schemas';
 import { isIntegrationAuthorized } from './auth';
-import type { z } from 'zod';
+import type { z } from 'zod/v3';
 import { decryptStoredSecret } from '@/lib/encryption';
 import {
   IntegrationBodyTooLargeError,

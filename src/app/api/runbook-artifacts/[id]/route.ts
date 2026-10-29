@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import prisma from '@/lib/prisma';
 import { CAPABILITIES } from '@/lib/authorization';
 import { assertCanViewIncident, assertCanViewService, getUserPermissions } from '@/lib/rbac';

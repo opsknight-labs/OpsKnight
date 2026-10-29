@@ -1,5 +1,5 @@
 import { etagHeaders } from '@/lib/api-v2/concurrency';
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import { defineV2Route } from '@/lib/api-v2/endpoint';
 import { RunbookParams } from '@/lib/api-v2/runbook-authoring';
 import {

@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import { verificationResultSchema } from '@/lib/runbooks/evidence';
 
 /**
@@ -184,10 +184,7 @@ export function resolutionKindLabel(kind: string): string {
 }
 
 export type IncidentContextUnavailableReason =
-  | 'NO_LIVE_DECISION'
-  | 'FALLBACK'
-  | 'NOT_CAPTURED'
-  | 'INTEGRITY_FAILED';
+  'NO_LIVE_DECISION' | 'FALLBACK' | 'NOT_CAPTURED' | 'INTEGRITY_FAILED';
 
 const CONTEXT_REASON_LABEL = new Map<IncidentContextUnavailableReason, string>([
   ['NO_LIVE_DECISION', 'No live automation decision'],

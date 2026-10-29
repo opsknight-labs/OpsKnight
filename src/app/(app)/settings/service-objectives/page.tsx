@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import prisma from '@/lib/prisma';
 import { getCurrentAuthorizationActor } from '@/lib/rbac';
 import { CAPABILITIES, hasCapability } from '@/lib/authorization';

@@ -1,5 +1,5 @@
 import 'server-only';
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import prisma from '@/lib/prisma';
 import type { Prisma } from '@prisma/client';
 import { requireUserAdministrator, type UserAdministrationActor } from '@/lib/users/administration';

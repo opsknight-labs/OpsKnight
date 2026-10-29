@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import { defineV2Route } from '@/lib/api-v2/endpoint';
 import { AUTHORIZATION_ACTIONS } from '@/lib/authorization-policy';
 import { requireRevisionIfMatch } from '@/lib/api-v2/concurrency';

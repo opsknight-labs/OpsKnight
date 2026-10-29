@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { z } from 'zod/v3';
 export const AGENT_PROTOCOL_VERSION = 1;
 export const AGENT_POLICY_SCHEMA_VERSION = 1;
 const version = z.string().regex(/^\d+\.\d+\.\d+$/);

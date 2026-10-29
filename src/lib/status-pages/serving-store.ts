@@ -7,7 +7,7 @@ import {
 } from '@/lib/metrics/operational/registry';
 import { scalingFeatureEnabled } from '@/lib/scaling-feature-flags';
 import { createHash } from 'node:crypto';
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import { logger } from '@/lib/logger';
 
 /**

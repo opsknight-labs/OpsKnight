@@ -1,6 +1,6 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { NextRequest } from 'next/server';
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import {
   IntegrationBodyTooLargeError,
   readIntegrationBody,

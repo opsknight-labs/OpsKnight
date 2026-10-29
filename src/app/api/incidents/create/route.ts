@@ -1,6 +1,6 @@
 import { revalidatePath } from 'next/cache';
 import { NextRequest } from 'next/server';
-import { z } from 'zod';
+import { z } from 'zod/v3';
 
 import { jsonError, jsonOk } from '@/lib/api-response';
 import { AppError } from '@/lib/errors';

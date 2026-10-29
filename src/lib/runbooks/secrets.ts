@@ -1,6 +1,6 @@
 import 'server-only';
 import { Prisma, type RunbookSecret } from '@prisma/client';
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import { decrypt, encrypt } from '@/lib/encryption';
 import { AppError } from '@/lib/errors';
 import { preconditionFailed } from '@/lib/api-v2/concurrency';

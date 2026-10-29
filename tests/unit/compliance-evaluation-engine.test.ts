@@ -5,7 +5,7 @@ import type { ComplianceEvaluationContext } from '@/lib/compliance/evaluators/ty
 import { evaluateControl } from '@/lib/compliance/evaluation/engine';
 import { complianceEvaluatorRegistry } from '@/lib/compliance/evaluators';
 import { COLLECTOR_EVIDENCE_SCHEMAS } from '@/lib/compliance/evidence/schemas';
-import { z } from 'zod';
+import { z } from 'zod/v3';
 
 vi.mock('@/lib/audit', () => ({
   emitAuditEvent: vi.fn().mockResolvedValue(undefined),

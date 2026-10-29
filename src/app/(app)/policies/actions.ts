@@ -1,5 +1,5 @@
 'use server';
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import { transitionPolicyArchive } from '@/lib/escalation/policy-lifecycle';
 import {
   assertResponderPolicySnapshotSafe,

@@ -1,7 +1,7 @@
 import 'server-only';
 import type { PrismaClient } from '@prisma/client';
 import prisma from '@/lib/prisma';
-import { z } from 'zod';
+import { z } from 'zod/v3';
 const cursorSchema = z.object({ id: z.string().cuid(), createdAt: z.string().datetime() }).strict();
 export const SERVICE_RULE_PAGE_SIZE = 20;
 export async function getServiceRulePage(

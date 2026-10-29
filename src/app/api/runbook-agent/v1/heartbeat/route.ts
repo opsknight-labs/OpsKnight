@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import { jsonOk } from '@/lib/api-response';
 import { authenticatedAgentJson, agentApiError } from '@/lib/runbooks/agent-api';
 import { recordAgentHeartbeat } from '@/lib/runbooks/agent-claims';

@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { z } from 'zod/v3';
 
 /** Scheduling labels are written only through administrator-authorized actions. */
 export const schedulingLabelsSchema = z

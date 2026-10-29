@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server';
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import { assertCanModifyService } from '@/lib/rbac';
 import { jsonError, jsonOk } from '@/lib/api-response';
 import { AppError, isAppError } from '@/lib/errors';

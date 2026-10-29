@@ -4,7 +4,7 @@ import { getServerSession } from 'next-auth';
 import { getAuthOptions } from '@/lib/auth';
 import { logger } from '@/lib/logger';
 import { Prisma } from '@prisma/client';
-import { z } from 'zod';
+import { z } from 'zod/v3';
 
 const CreateDashboardSchema = z.object({
   name: z.string().min(1, 'Name is required').max(200).trim(),
@@ -13,19 +13,26 @@ const CreateDashboardSchema = z.object({
   teamId: z.string().nullish(),
   sourceTemplate: z.string().max(100).nullish(),
   templateId: z.string().nullish(), // backward compat
-  widgets: z.array(z.object({
-    widgetType: z.string().min(1),
-    metricKey: z.string().min(1),
-    widgetDefinitionId: z.string().max(100).nullish(),
-    title: z.string().max(200).nullish(),
-    position: z.object({
-      x: z.number().int().min(0),
-      y: z.number().int().min(0),
-      w: z.number().int().min(1).max(4),
-      h: z.number().int().min(1).max(4),
-    }).default({ x: 0, y: 0, w: 1, h: 1 }),
-    config: z.record(z.unknown()).default({}),
-  })).max(50, 'Maximum 50 widgets per dashboard').default([]),
+  widgets: z
+    .array(
+      z.object({
+        widgetType: z.string().min(1),
+        metricKey: z.string().min(1),
+        widgetDefinitionId: z.string().max(100).nullish(),
+        title: z.string().max(200).nullish(),
+        position: z
+          .object({
+            x: z.number().int().min(0),
+            y: z.number().int().min(0),
+            w: z.number().int().min(1).max(4),
+            h: z.number().int().min(1).max(4),
+          })
+          .default({ x: 0, y: 0, w: 1, h: 1 }),
+        config: z.record(z.unknown()).default({}),
+      })
+    )
+    .max(50, 'Maximum 50 widgets per dashboard')
+    .default([]),
 });
 
 export const dynamic = 'force-dynamic';
@@ -137,11 +144,15 @@ export async function POST(request: NextRequest) {
     const parseResult = CreateDashboardSchema.safeParse(body);
     if (!parseResult.success) {
       return NextResponse.json(
-        { error: 'Invalid dashboard configuration', details: parseResult.error.flatten().fieldErrors },
+        {
+          error: 'Invalid dashboard configuration',
+          details: parseResult.error.flatten().fieldErrors,
+        },
         { status: 400 }
       );
     }
-    const { name, description, visibility, teamId, sourceTemplate, templateId, widgets } = parseResult.data;
+    const { name, description, visibility, teamId, sourceTemplate, templateId, widgets } =
+      parseResult.data;
 
     const teamIds = new Set(user.teamMemberships.map(membership => membership.teamId));
     if (

@@ -13,7 +13,7 @@ import { jsonError, jsonOk } from '@/lib/api-response';
 import { AppError, isAppError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { logAudit } from '@/lib/audit';
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import { jsonSettingsChanged } from '@/lib/settings-api-response';
 import {
   SettingsChangedMutationError,

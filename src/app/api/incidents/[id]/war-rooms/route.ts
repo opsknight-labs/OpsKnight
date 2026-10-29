@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server';
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import prisma from '@/lib/prisma';
 import { jsonError, jsonOk } from '@/lib/api-response';
 import { AppError, isAppError } from '@/lib/errors';

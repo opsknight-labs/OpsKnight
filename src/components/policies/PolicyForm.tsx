@@ -1,10 +1,10 @@
 'use client';
 
-import { useState, useTransition } from 'react';
+import { useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import * as z from 'zod';
+import * as z from 'zod/v3';
 import { Button } from '@/components/ui/shadcn/button';
 import {
   Form,
@@ -18,7 +18,7 @@ import {
 import { Input } from '@/components/ui/shadcn/input';
 import { Textarea } from '@/components/ui/shadcn/textarea';
 import { createPolicy } from '@/app/(app)/policies/actions';
-import { Loader2, ArrowRight } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-product-notification';
 
 const formSchema = z.object({
@@ -67,8 +67,15 @@ export default function PolicyForm() {
         showToast('Policy created successfully', 'success');
         // The action likely redirects, but if not:
         // router.push('/policies');
-      } catch (error: any) {
-        if (error.message === 'NEXT_REDIRECT' || error.digest?.startsWith('NEXT_REDIRECT')) {
+      } catch (error) {
+        if (
+          typeof error === 'object' &&
+          error !== null &&
+          (('message' in error && error.message === 'NEXT_REDIRECT') ||
+            ('digest' in error &&
+              typeof error.digest === 'string' &&
+              error.digest.startsWith('NEXT_REDIRECT')))
+        ) {
           throw error;
         }
         showToast('Failed to create policy', 'error');

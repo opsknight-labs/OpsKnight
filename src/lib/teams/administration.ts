@@ -1,5 +1,5 @@
 import 'server-only';
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import type { Prisma } from '@prisma/client';
 import prisma from '@/lib/prisma';
 import { authorizationActorFromUser } from '@/lib/authorization-actors';

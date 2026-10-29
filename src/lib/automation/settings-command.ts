@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { automationReadinessPolicySchema } from './readiness-policy';
 import 'server-only';
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import type { Prisma } from '@prisma/client';
 import prisma from '@/lib/prisma';
 import { logAudit } from '@/lib/audit';
