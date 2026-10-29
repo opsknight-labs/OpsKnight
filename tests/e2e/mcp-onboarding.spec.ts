@@ -24,14 +24,20 @@ test('add URL, automatically register, sign in and revoke without manual client 
   const settingsResponse = await page.goto('/settings/integrations/mcp');
   expect(settingsResponse?.headers()['referrer-policy']).toBe('no-referrer');
   expect(settingsResponse?.headers()['cache-control']).toContain('no-store');
+  // First run: one click turns on read-only access with automatic connections.
+  const quickSetup = page.getByRole('button', { name: 'Turn on AI assistant access' });
+  if (await quickSetup.isVisible()) {
+    await quickSetup.click();
+    await expect(page.getByText('AI assistant access is on', { exact: true })).toBeVisible();
+  }
+  // Narrow the ceiling to a single scope so the later assertions are deterministic.
   await page.getByRole('checkbox', { name: /Enable MCP/ }).check();
-  await page.getByRole('checkbox', { name: /Allow reviewed routine mutations/ }).uncheck();
-  await page
-    .getByRole('checkbox', { name: 'Allow assistants to register automatically', exact: true })
-    .check();
-  await page
-    .getByLabel('Maximum scopes for automatically registered assistants')
-    .fill('incidents:read');
+  await page.getByRole('checkbox', { name: 'Automatic connections' }).check();
+  for (const scope of await page.getByRole('checkbox', { name: /^View / }).all()) {
+    if ((await scope.locator('xpath=..').innerText()).trim() === 'View incidents')
+      await scope.check();
+    else await scope.uncheck();
+  }
   await page.getByRole('button', { name: 'Save policy', exact: true }).click();
   await expect(page.getByText('MCP configuration saved', { exact: true })).toBeVisible();
   await expect(
@@ -46,8 +52,10 @@ test('add URL, automatically register, sign in and revoke without manual client 
     })
     .toEqual({ endpoint: `${origin}/oauth/mcp/register`, scopes: ['incidents:read'] });
 
+  // The admin can verify the whole setup from the page, with no terminal.
+  await page.getByRole('button', { name: 'Test connection', exact: true }).click();
   await expect(
-    page.getByText('Automatic connections are configured', { exact: true })
+    page.getByText('Everything needed for assistants to connect is working.')
   ).toBeVisible();
   expect((await checkMcpSetup(`${origin}/mcp`)).ready).toBe(true);
 
@@ -76,7 +84,7 @@ test('add URL, automatically register, sign in and revoke without manual client 
     client_id: client.client_id,
     redirect_uri: callback,
     response_type: 'code',
-    resource: `${origin}/mcp`,
+    // Assistants that omit the RFC 8707 resource parameter must still connect.
     state,
     code_challenge: createHash('sha256').update(verifier).digest('base64url'),
     code_challenge_method: 'S256',
@@ -90,11 +98,12 @@ test('add URL, automatically register, sign in and revoke without manual client 
   );
   // Scope is intentionally absent: the server uses the registered scope ceiling.
   await page.goto(`${metadata.authorization_endpoint}?${query}`);
-  await expect(
-    page.getByRole('heading', { name: `Allow ${name} to access OpsKnight?`, exact: true })
-  ).toBeVisible();
-  await expect(page.getByRole('note')).toContainText('not verified by OpsKnight');
-  await page.getByRole('button', { name: 'Allow requested scopes', exact: true }).click();
+  // One focused page: who is asking, what they get in plain language, Allow or Cancel.
+  await expect(page).toHaveURL(/\/oauth\/mcp\/consent\?id=/);
+  await expect(page.getByRole('heading', { name: `Connect ${name}?`, exact: true })).toBeVisible();
+  await expect(page.getByText('View incidents', { exact: true })).toBeVisible();
+  await expect(page.getByRole('navigation')).toHaveCount(0);
+  await page.getByRole('button', { name: 'Allow', exact: true }).click();
   await page.waitForURL(url => url.origin === new URL(callback).origin);
   const result = new URL(page.url());
   expect(result.searchParams.get('state')).toBe(state);
@@ -106,7 +115,6 @@ test('add URL, automatically register, sign in and revoke without manual client 
       code_verifier: verifier,
       grant_type: 'authorization_code',
       redirect_uri: callback,
-      resource: `${origin}/mcp`,
     },
   });
   expect(exchanged.status()).toBe(200);
@@ -152,9 +160,7 @@ test('add URL, automatically register, sign in and revoke without manual client 
   }
 
   await page.goto('/settings/integrations/mcp');
-  await page
-    .getByRole('checkbox', { name: 'Allow assistants to register automatically', exact: true })
-    .uncheck();
+  await page.getByRole('checkbox', { name: 'Automatic connections' }).uncheck();
   await page.getByRole('button', { name: 'Save policy', exact: true }).click();
   await expect.poll(async () => (await tools()).status()).toBe(401);
   if (replica) expect((await tools(replica)).status()).toBe(401);

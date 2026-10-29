@@ -2,7 +2,7 @@
 
 For the complete domain-independent administrator, user, proxy and troubleshooting steps, see [Self-hosted setup](self-hosted-setup.md).
 
-This feature is in development and disabled by default. It is not yet certified for production, external clients or multi-replica deployments. See [architecture and outstanding work](../../operate/mcp/architecture.md).
+MCP is disabled by default and is turned on by an administrator in one click. It is not yet certified for production capacity or against specific external clients; two-replica shared-state behavior is checked locally but is not a high-availability claim. See [architecture and outstanding work](../../operate/mcp/architecture.md).
 
 For a repeatable local check, install the locked dependencies on Node 20 (`npm ci --legacy-peer-deps`), start Docker, then run `npm run check:mcp:local`. The command creates its own PostgreSQL 16 container bound to loopback, installs all migrations into fresh test/browser databases, generates disposable secrets, runs typecheck, MCP unit/database/coverage checks, builds the production app and tests native consent/read/revoke in Chromium, Firefox and WebKit. It prints a private temporary evidence directory outside git and removes its own server/container on exit. Linux hosts need Playwright's system dependencies installed first. This local check does not satisfy final-SHA release certification.
 
@@ -55,4 +55,4 @@ After approval, call `runbook_execute_approved` with only `previewId` and a stab
 
 The local checker now tests native two-user review as well as consent/read/revocation in three browsers. Its production build defaults to a 6 GB Node heap unless `NODE_OPTIONS` is explicitly set; run heavy builds and full unit suites sequentially on resource-constrained hosts.
 
-No ChatGPT, Claude, Cursor or VS Code compatibility is claimed yet. CIMD, external issuers, machine grants, stdio, approvals for other sensitive domains, Tasks and Apps are pending. Do not substitute REST tokens or disable resource validation to work around a host compatibility failure.
+No ChatGPT, Claude, Cursor or VS Code compatibility is claimed yet. CIMD (client metadata documents) and durable Tasks for approved runbook execution are implemented. External issuers, machine grants, stdio, approvals for other sensitive domains and Apps are pending. Do not substitute REST tokens or disable resource validation to work around a host compatibility failure.

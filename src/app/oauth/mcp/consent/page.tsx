@@ -85,7 +85,7 @@ export default async function McpConsent({
           </button>
         </form>
         <p className="text-xs text-muted-foreground">
-          You can disconnect any time in Settings → Integrations → MCP.
+          You can disconnect any time in Settings → Integrations & ChatOps → MCP (AI Assistants).
           {client.dynamicRegistration && (
             <>
               {' '}

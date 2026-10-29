@@ -11,26 +11,28 @@ export function supportedMcpScopes() {
   ]);
 }
 
-const RESOURCE_LABEL: Record<string, string> = {
-  incidents: 'incidents',
-  services: 'services',
-  schedules: 'on-call schedules',
-  teams: 'teams',
-  reports: 'reports and analytics',
-  postmortems: 'postmortems',
-  pages: 'status pages',
-  runbooks: 'runbooks',
-  rules: 'routing rules',
-  policies: 'escalation policies',
-  integrations: 'integrations',
-  fields: 'custom fields',
-  automation: 'automation',
-};
+const RESOURCE_LABEL = new Map(
+  Object.entries({
+    incidents: 'incidents',
+    services: 'services',
+    schedules: 'on-call schedules',
+    teams: 'teams',
+    reports: 'reports and analytics',
+    postmortems: 'postmortems',
+    pages: 'status pages',
+    runbooks: 'runbooks',
+    rules: 'routing rules',
+    policies: 'escalation policies',
+    integrations: 'integrations',
+    fields: 'custom fields',
+    automation: 'automation',
+  })
+);
 
 /** Plain-language description of one scope, e.g. `incidents:read` → "View incidents". */
 export function describeMcpScope(scope: string) {
   const [resource = scope, action = 'read'] = scope.split(':');
-  const label = RESOURCE_LABEL[resource] ?? resource.replaceAll('_', ' ');
+  const label = RESOURCE_LABEL.get(resource) ?? resource.replaceAll('_', ' ');
   if (action === 'read') return `View ${label}`;
   if (action === 'write')
     return `Propose changes to ${label} (an administrator must approve each one)`;

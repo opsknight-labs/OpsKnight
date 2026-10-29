@@ -18,6 +18,7 @@ import { isIP } from 'node:net';
 import { McpBoundaryError, requireMcp } from '@/lib/mcp/core/errors';
 import type { Prisma } from '@prisma/client';
 import { DEFAULT_ASSISTANT_SCOPES, effectiveMcpClientScopes } from '@/lib/mcp/auth/client-policy';
+import { runMcpSetupCheck } from '@/lib/mcp/auth/setup-check';
 import { supportedMcpScopes } from '@/lib/mcp/auth/scopes';
 import { mcpSessionDates } from '@/lib/mcp/auth/session-lifetime';
 
@@ -86,6 +87,33 @@ export async function enableMcpQuickSetup() {
         entityType: 'SYSTEM_CONFIG',
         actorId: actor.id,
         details: { ...policy, quickSetup: true },
+      },
+      tx
+    );
+  });
+  revalidatePath(settingsPath);
+}
+
+export async function testMcpConnection() {
+  await admin();
+  await loadMcpRuntime();
+  return runMcpSetupCheck();
+}
+
+/** Re-allow a revoked client. Its old grants stay revoked, so users sign in again. */
+export async function restoreMcpClient(form: FormData) {
+  const actor = await admin();
+  const id = z.string().min(1).max(256).parse(form.get('id'));
+  await prisma.$transaction(async tx => {
+    await assertCurrentAdmin(tx, actor);
+    await tx.mcpClient.update({ where: { id }, data: { revokedAt: null } });
+    await logAudit(
+      {
+        source: 'UI',
+        action: 'mcp.client.restored',
+        entityType: 'SYSTEM_CONFIG',
+        entityId: id,
+        actorId: actor.id,
       },
       tx
     );

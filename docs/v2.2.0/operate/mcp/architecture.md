@@ -40,7 +40,7 @@ Configuration needs no MCP environment variables: the canonical public origin is
 
 ## Hostile inputs and privacy
 
-Threat actors include malicious remote clients, an authorized user targeting inaccessible IDs, compromised model instructions in business text, leaked or replayed bearer credentials, stale cached tool catalogs and malicious redirect/metadata endpoints. Host and Origin checks use the configured origin, not forwarded headers. Redirects are preregistered; there is no metadata URL fetch, DCR, token passthrough or arbitrary egress endpoint in this implementation.
+Threat actors include malicious remote clients, an authorized user targeting inaccessible IDs, compromised model instructions in business text, leaked or replayed bearer credentials, stale cached tool catalogs and malicious redirect/metadata endpoints. Host and Origin checks use the configured origin, not forwarded headers. Redirects are preregistered; there is no token passthrough or arbitrary egress endpoint. The only outbound fetch is the bounded, DNS-pinned, redirect-free client metadata document fetch to public HTTPS addresses (see the OAuth sections below); dynamic client registration is an administrator-enabled policy.
 
 MCP business text is returned as untrusted evidence and never interpolated into privileged instructions. Recursive output projection removes credential/PII fields and bearer or query-bearing URLs. Resources invoke the same operation authorization as tools. Safe failures omit raw REST problem details. Prompt templates do not confer authority and cannot approve actions. Static schemas may be cached; authorization and business data are not cached.
 

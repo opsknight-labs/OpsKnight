@@ -1,50 +1,52 @@
 import { McpBoundaryError } from '../core/errors';
 
-const MESSAGES: Record<string, { title: string; body: string }> = {
-  MCP_DISABLED: {
-    title: 'AI assistant access is turned off',
-    body: 'An OpsKnight administrator needs to enable it in Settings → Integrations → MCP.',
-  },
-  MCP_CONSENT_EXPIRED: {
-    title: 'This sign-in request expired',
-    body: 'Return to your assistant and connect again. Requests are valid for five minutes.',
-  },
-  MCP_CONSENT_REPLAY: {
-    title: 'This request was already used',
-    body: 'Return to your assistant. If it is not connected, start the connection again.',
-  },
-  MCP_CLIENT_REVOKED: {
-    title: 'This assistant was disconnected',
-    body: 'An administrator revoked it. Ask them to allow it again, then reconnect.',
-  },
-  MCP_RATE_LIMITED: {
-    title: 'Too many attempts',
-    body: 'Wait a minute, then connect again from your assistant.',
-  },
-  MCP_INACTIVE_PRINCIPAL: {
-    title: 'Your account cannot connect assistants',
-    body: 'Your OpsKnight account is inactive or was signed out. Sign in again and retry.',
-  },
-  invalid_client: {
-    title: 'This assistant is not allowed to connect',
-    body: 'It is unknown to this OpsKnight, or automatic connections are turned off. Ask an administrator.',
-  },
-  invalid_scope: {
-    title: 'The requested access is not available',
-    body: 'An administrator limited what assistants may access. Reconnect to get the allowed access.',
-  },
-  MCP_INVALID_HOST: {
-    title: 'Wrong address',
-    body: 'Open OpsKnight using the address configured in Settings → System.',
-  },
-};
+const MESSAGES = new Map<string, { title: string; body: string }>(
+  Object.entries({
+    MCP_DISABLED: {
+      title: 'AI assistant access is turned off',
+      body: 'An OpsKnight administrator needs to enable it in Settings → Integrations & ChatOps → MCP (AI Assistants).',
+    },
+    MCP_CONSENT_EXPIRED: {
+      title: 'This sign-in request expired',
+      body: 'Return to your assistant and connect again. Requests are valid for five minutes.',
+    },
+    MCP_CONSENT_REPLAY: {
+      title: 'This request was already used',
+      body: 'Return to your assistant. If it is not connected, start the connection again.',
+    },
+    MCP_CLIENT_REVOKED: {
+      title: 'This assistant was disconnected',
+      body: 'An administrator revoked it. Ask them to allow it again, then reconnect.',
+    },
+    MCP_RATE_LIMITED: {
+      title: 'Too many attempts',
+      body: 'Wait a minute, then connect again from your assistant.',
+    },
+    MCP_INACTIVE_PRINCIPAL: {
+      title: 'Your account cannot connect assistants',
+      body: 'Your OpsKnight account is inactive or was signed out. Sign in again and retry.',
+    },
+    invalid_client: {
+      title: 'This assistant is not allowed to connect',
+      body: 'It is unknown to this OpsKnight, or automatic connections are turned off. Ask an administrator.',
+    },
+    invalid_scope: {
+      title: 'The requested access is not available',
+      body: 'An administrator limited what assistants may access. Reconnect to get the allowed access.',
+    },
+    MCP_INVALID_HOST: {
+      title: 'Wrong address',
+      body: 'Open OpsKnight using the address configured in Settings → System.',
+    },
+  })
+);
 const FALLBACK = {
   title: 'We could not connect your assistant',
   body: 'Return to your assistant and try again. If it keeps failing, ask an administrator to run the MCP connection test in Settings.',
 };
 
 export function friendlyMcpError(code: string) {
-  return MESSAGES[code] ?? FALLBACK;
+  return MESSAGES.get(code) ?? FALLBACK;
 }
 
 const escape = (value: string) => value.replace(/[&<>"']/g, ch => `&#${ch.charCodeAt(0)};`);

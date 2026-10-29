@@ -3,13 +3,20 @@ import { z } from 'zod/v3';
 import { requireMcp } from '../core/errors';
 
 export const MAX_DYNAMIC_CLIENTS = 5000;
-let registering = false;
+// Registration is a short, rate-limited insert; a few may overlap so a team onboarding at once
+// is not turned away, while the bound still protects the database pool.
+const MAX_CONCURRENT_REGISTRATIONS = 3;
+let registering = 0;
 /** Separate from normal MCP authentication admission; never occupy all pool slots. */
 export function acquireRegistrationSlot() {
-  requireMcp(!registering, 'MCP_BUSY', 503);
-  registering = true;
+  requireMcp(registering < MAX_CONCURRENT_REGISTRATIONS, 'MCP_BUSY', 503);
+  registering += 1;
+  let released = false;
   return () => {
-    registering = false;
+    if (!released) {
+      released = true;
+      registering -= 1;
+    }
   };
 }
 
