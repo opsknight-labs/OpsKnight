@@ -48,6 +48,8 @@ const TOOL_LABELS: Record<string, string> = {
   list_alerts: 'Reading the alerts',
   who_is_on_call: 'Checking who is on call',
   find_people: 'Looking up people',
+  semantic_search_incidents: 'Searching incidents by meaning',
+  get_status_page: 'Reading the status page',
 };
 
 /**
@@ -75,6 +77,15 @@ export async function* streamSquire(
     }
 
     registerAiGateway();
+    // These reads depend only on the authenticated actor and readable incident, not provider selection.
+    // Start them together so provider discovery does not add serial database round trips.
+    const preparation = settings.enabled
+      ? Promise.all([
+          incident ? brief(actor, incident) : Promise.resolve(null),
+          getGuidance('squire.system').catch(() => null),
+          priorTurns(actor, request).catch(() => [] as AiMessage[]),
+        ])
+      : Promise.resolve(null);
     // Prefer a provider allowed to receive Personal data (timelines and on-call answers name people); fall
     // back to one allowed Internal data, which then gets no tools that return people's details.
     let port: LanguageModelPort | null = null;
@@ -87,11 +98,7 @@ export async function* streamSquire(
 
     if (port) {
       yield { type: 'meta', mode: 'ai', name: settings.squireName };
-      const [briefing, guidance, history] = await Promise.all([
-        incident ? brief(actor, incident) : Promise.resolve(null),
-        getGuidance('squire.system'),
-        priorTurns(actor, request),
-      ]);
+      const [briefing, guidance, history] = (await preparation) ?? [null, null, []];
       const prompt = buildSystemPrompt(settings.squireName, briefing, guidance);
       const messages: AiMessage[] = [
         { role: 'system', content: prompt.system },
@@ -160,6 +167,7 @@ export async function* streamSquire(
       return;
     }
 
+    await preparation;
     yield* basicAnswer(actor, request, incident, settings.squireName);
   } catch (error) {
     if (signal?.aborted) return;
@@ -196,25 +204,21 @@ async function brief(
   ]);
   return {
     incident,
-    similar: (similar ?? [])
-      .slice(0, 3)
-      .map(s => ({
-        id: s.incidentId,
-        title: s.title,
-        matchPercent: s.matchPercent,
-        status: s.status,
-      })),
+    similar: (similar ?? []).slice(0, 3).map(s => ({
+      id: s.incidentId,
+      title: s.title,
+      matchPercent: s.matchPercent,
+      status: s.status,
+    })),
     changes: (response?.changes ?? [])
       .slice(0, 3)
       .map(c => ({ summary: c.summary, kind: c.kind, minutesBeforeOnset: c.leadMinutes })),
-    runbooks: (response?.runbooks ?? [])
-      .slice(0, 3)
-      .map(r => ({
-        id: r.runbookId,
-        name: r.name,
-        succeeded: r.succeeded,
-        completedRuns: r.eligible,
-      })),
+    runbooks: (response?.runbooks ?? []).slice(0, 3).map(r => ({
+      id: r.runbookId,
+      name: r.name,
+      succeeded: r.succeeded,
+      completedRuns: r.eligible,
+    })),
   };
 }
 
@@ -228,12 +232,10 @@ async function priorTurns(actor: AuthorizationActor, request: SquireRequest): Pr
     if (status.enabled) {
       const saved = await getConversation(actor.id, request.conversationId).catch(() => null);
       if (saved) {
-        return saved.messages
-          .slice(-SQUIRE_LIMITS.historyMax)
-          .map(message => ({
-            role: message.role,
-            content: message.content.slice(0, SQUIRE_LIMITS.historyTurnMax),
-          }));
+        return saved.messages.slice(-SQUIRE_LIMITS.historyMax).map(message => ({
+          role: message.role,
+          content: message.content.slice(0, SQUIRE_LIMITS.historyTurnMax),
+        }));
       }
     }
   }

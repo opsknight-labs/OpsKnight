@@ -124,6 +124,36 @@ describe('POST /api/intelligence/squire', () => {
     expect(signal?.aborted).toBe(true);
   });
 
+  it('sends the first events without waiting for history persistence lookups', async () => {
+    store.status.mockImplementation(() => new Promise(() => undefined));
+    const response = await POST(make({ message: 'hello' }));
+    const reader = response.body!.getReader();
+    expect(new TextDecoder().decode((await reader.read()).value)).toContain('meta');
+    expect(new TextDecoder().decode((await reader.read()).value)).toContain('delta');
+    expect(store.status).not.toHaveBeenCalled();
+    await reader.cancel();
+  });
+
+  it('cancels an oversized streaming body before consuming its remaining chunks', async () => {
+    const cancelled = vi.fn();
+    const body = new ReadableStream({
+      start(controller) {
+        controller.enqueue(new Uint8Array(65_537));
+        controller.enqueue(new Uint8Array(10));
+      },
+      cancel: cancelled,
+    });
+    const request = new NextRequest(URL_, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body,
+      duplex: 'half',
+    } as NonNullable<ConstructorParameters<typeof NextRequest>[1]> & { duplex: 'half' });
+    expect((await POST(request)).status).toBe(413);
+    expect(cancelled).toHaveBeenCalledOnce();
+    expect(turns.run).not.toHaveBeenCalled();
+  });
+
   it('saves nothing while history is off', async () => {
     const lines = (await (await POST(make({ message: 'hello' }))).text())
       .trim()

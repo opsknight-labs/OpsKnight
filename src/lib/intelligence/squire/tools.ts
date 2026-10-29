@@ -9,9 +9,15 @@ import {
   scheduleReadWhere,
   serviceReadWhere,
 } from '@/lib/authorization-filters';
-import type { AuthorizationActor } from '@/lib/authorization-policy';
+import {
+  authorize,
+  AUTHORIZATION_ACTIONS,
+  type AuthorizationActor,
+} from '@/lib/authorization-policy';
 import { getActiveOnCallShifts } from '@/lib/oncall-shifts';
-import type { AiToolDefinition } from '../ai/port';
+import { resolveEmbeddingModel, type AiToolDefinition } from '../ai/port';
+import { maskVolatileText } from '../normalization/text';
+import { normalizeVector, dot } from '../semantic/vector';
 import { getResponseIntelligenceForActor } from '../response/view';
 import { getSimilarIncidentsForActor } from '../similarity/view';
 import { getRelatedIncidentsForActor } from '../correlation/view';
@@ -80,6 +86,84 @@ export function buildSquireTools(
   options: { personal: boolean }
 ): AiToolDefinition[] {
   const tools: AiToolDefinition[] = [
+    readTool(
+      'semantic_search_incidents',
+      'Find incidents with a similar meaning using optional embeddings. Bounded to recent incidents you may read; returns no results when embeddings are disabled.',
+      {
+        type: 'object',
+        properties: { query: { type: 'string', minLength: 1, maxLength: 300 } },
+        required: ['query'],
+        additionalProperties: false,
+      },
+      async input => {
+        const parsed = z
+          .object({ query: z.string().trim().min(1).max(300) })
+          .strict()
+          .safeParse(input);
+        if (!parsed.success) return { error: 'Invalid input' };
+        const readable = scoped(() => incidentReadWhere(actor));
+        if (!readable) return NOT_FOUND;
+        const port = await resolveEmbeddingModel('INTERNAL');
+        if (!port) return [];
+        const { vectors } = await port.embed([maskVolatileText(parsed.data.query)], {
+          actorId: actor.id,
+        });
+        const vector = normalizeVector(vectors[0] ?? []);
+        if (!vector) return [];
+        const rows = await prisma.incidentEmbedding.findMany({
+          where: {
+            model: port.model,
+            dims: vector.length,
+            incidentCreatedAt: { gte: new Date(Date.now() - 90 * 86_400_000) },
+            incident: readable,
+          },
+          take: 500,
+          orderBy: { incidentCreatedAt: 'desc' },
+          select: {
+            incidentId: true,
+            vector: true,
+            incident: { select: { title: true, status: true } },
+          },
+        });
+        return rows
+          .map(row => ({
+            id: row.incidentId,
+            title: short(row.incident.title, 160),
+            status: row.incident.status,
+            score: dot(vector, row.vector),
+            href: `/incidents/${row.incidentId}`,
+          }))
+          .filter(row => row.score >= 0.7)
+          .sort((a, b) => b.score - a.score)
+          .slice(0, MAX_ROWS);
+      }
+    ),
+    readTool(
+      'get_status_page',
+      'Read a status page and its current service statuses. Requires status-page read access.',
+      idOnly,
+      async input => {
+        const parsed = idInput.safeParse(input);
+        if (!parsed.success) return { error: 'Invalid input' };
+        if (!authorize({ actor, action: AUTHORIZATION_ACTIONS.STATUS_PAGE_READ }).allowed)
+          return NOT_FOUND;
+        const row = await prisma.statusPage.findUnique({
+          where: { id: parsed.data.id },
+          select: {
+            id: true,
+            name: true,
+            slug: true,
+            enabled: true,
+            services: {
+              take: MAX_ROWS,
+              select: { service: { select: { id: true, name: true, status: true } } },
+            },
+          },
+        });
+        if (!row) return NOT_FOUND;
+        return { ...row, services: row.services.map(link => link.service) };
+      }
+    ),
     readTool(
       'search_incidents',
       'Find incidents whose title contains all of the given words. Optional status filter. Returns at most 10, newest first.',
@@ -201,28 +285,22 @@ export function buildSquireTools(
           relatedIncidents: (related ?? [])
             .slice(0, 5)
             .map(item => ({ id: item.incidentId, title: short(item.title, 160) })),
-          possibleChanges: (response?.changes ?? [])
-            .slice(0, 5)
-            .map(c => ({
-              summary: short(c.summary, 200),
-              kind: c.kind,
-              minutesBeforeOnset: c.leadMinutes,
-            })),
-          upstreamIncidents: (response?.upstreamIncidents ?? [])
-            .slice(0, 5)
-            .map(u => ({
-              id: u.incidentId,
-              title: short(u.title, 160),
-              minutesBeforeThis: u.leadMinutes,
-            })),
-          runbooks: (response?.runbooks ?? [])
-            .slice(0, 5)
-            .map(r => ({
-              id: r.runbookId,
-              name: r.name,
-              succeeded: r.succeeded,
-              completedRuns: r.eligible,
-            })),
+          possibleChanges: (response?.changes ?? []).slice(0, 5).map(c => ({
+            summary: short(c.summary, 200),
+            kind: c.kind,
+            minutesBeforeOnset: c.leadMinutes,
+          })),
+          upstreamIncidents: (response?.upstreamIncidents ?? []).slice(0, 5).map(u => ({
+            id: u.incidentId,
+            title: short(u.title, 160),
+            minutesBeforeThis: u.leadMinutes,
+          })),
+          runbooks: (response?.runbooks ?? []).slice(0, 5).map(r => ({
+            id: r.runbookId,
+            name: r.name,
+            succeeded: r.succeeded,
+            completedRuns: r.eligible,
+          })),
         };
       }
     ),

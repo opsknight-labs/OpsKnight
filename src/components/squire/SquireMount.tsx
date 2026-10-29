@@ -2,7 +2,7 @@ import { logger } from '@/lib/logger';
 import { CAPABILITIES, hasCapability } from '@/lib/authorization';
 import { getCurrentAuthorizationActor } from '@/lib/rbac';
 import { getAiPublicStatus } from '@/lib/intelligence/ai/settings';
-import SquireLauncher from '@/components/squire/SquireLauncher';
+import SquireLauncher from '@/components/squire/LazySquireLauncher';
 
 async function loadStatus() {
   try {
@@ -11,7 +11,9 @@ async function loadStatus() {
     const status = await getAiPublicStatus();
     return status.squireEnabled ? status : null;
   } catch (error) {
-    logger.debug('[Squire] Not mounted', { error: error instanceof Error ? error.message : String(error) });
+    logger.debug('[Squire] Not mounted', {
+      error: error instanceof Error ? error.message : String(error),
+    });
     return null;
   }
 }

@@ -41,6 +41,7 @@
     "test:ci": "npx vitest run --no-file-parallelism --maxWorkers=1 --reporter=default --reporter=junit --outputFile=reports/junit.xml",
     "test:unit": "vitest run -c vitest.unit.config.ts",
     "test:int": "vitest run -c vitest.int.config.ts --no-file-parallelism",
+    "test:squire:eval": "vitest run -c vitest.squire-eval.config.ts",
     "test:ci:unit": "npx vitest run -c vitest.unit.config.ts --reporter=default --reporter=junit --outputFile=reports/junit-unit.xml",
     "test:ci:db": "npx vitest run -c vitest.int.config.ts --no-file-parallelism --maxWorkers=1 --reporter=default --reporter=junit --outputFile=reports/junit-db.xml",
     "test:authorization": "vitest run -c vitest.unit.config.ts tests/lib/rbac-read-guards.test.ts tests/architecture/rbac-page-guards.test.ts",

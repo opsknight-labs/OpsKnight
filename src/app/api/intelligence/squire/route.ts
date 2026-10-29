@@ -39,8 +39,28 @@ export async function POST(request: NextRequest) {
 
   const declared = Number(request.headers.get('content-length') ?? 0);
   if (declared > MAX_BODY_BYTES) return deny(413, 'Request is too large');
-  const raw = await request.text();
-  if (Buffer.byteLength(raw, 'utf8') > MAX_BODY_BYTES) return deny(413, 'Request is too large');
+  const reader = request.body?.getReader();
+  const chunks: Uint8Array[] = [];
+  let received = 0;
+  if (reader) {
+    try {
+      for (;;) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        received += value.byteLength;
+        if (received > MAX_BODY_BYTES) {
+          await reader.cancel();
+          return deny(413, 'Request is too large');
+        }
+        chunks.push(value);
+      }
+    } catch {
+      return deny(400, 'Could not read request');
+    } finally {
+      reader.releaseLock();
+    }
+  }
+  const raw = Buffer.concat(chunks).toString('utf8');
   let body: unknown;
   try {
     body = JSON.parse(raw);
@@ -54,19 +74,20 @@ export async function POST(request: NextRequest) {
   request.signal.addEventListener('abort', () => controller.abort(), { once: true });
   const encoder = new TextEncoder();
   const events = streamSquire(actor, parsed.data, controller.signal);
-  const [history, savedIncident] = await Promise.all([
-    getHistoryStatus().catch(() => ({ enabled: false, retentionDays: 0 })),
-    // A saved conversation only ever links to an incident the person can read.
-    parsed.data.incidentId
-      ? readIncidentForActor(actor, parsed.data.incidentId).catch(() => null)
-      : Promise.resolve(null),
-  ]);
   let answer = '';
   let failed = false;
 
   /** Saving is best effort: the person already has the answer, so a storage failure only loses history. */
   const save = async (): Promise<SquireEvent | null> => {
-    if (!history.enabled || failed || controller.signal.aborted || !answer.trim()) return null;
+    if (failed || controller.signal.aborted || !answer.trim()) return null;
+    // Persistence lookups do not delay the first answer token.
+    const [history, savedIncident] = await Promise.all([
+      getHistoryStatus().catch(() => ({ enabled: false, retentionDays: 0 })),
+      parsed.data.incidentId
+        ? readIncidentForActor(actor, parsed.data.incidentId).catch(() => null)
+        : Promise.resolve(null),
+    ]);
+    if (!history.enabled) return null;
     try {
       const id = await recordExchange({
         userId: actor.id,

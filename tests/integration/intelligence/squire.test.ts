@@ -9,6 +9,8 @@ import { saveAiProvider, updateAiSettings } from '@/lib/intelligence/ai/settings
 import { indexIncident } from '@/lib/intelligence/jobs/indexer';
 import { analyzeResponse } from '@/lib/intelligence/response/handler';
 import { streamSquire } from '@/lib/intelligence/squire/chat';
+import { buildSquireTools } from '@/lib/intelligence/squire/tools';
+import { registerEmbeddingResolver } from '@/lib/intelligence/ai/port';
 import type { SquireEvent, SquireRequest } from '@/lib/intelligence/squire/contract';
 import { publishPolicyVersion } from '@/lib/intelligence/settings/service';
 import { analyzeIncident } from '@/lib/intelligence/similarity/analyzer';
@@ -240,8 +242,10 @@ describe('AI mode', () => {
       'get_recent_changes',
       'get_runbook',
       'get_service',
+      'get_status_page',
       'search_incidents',
       'search_postmortems',
+      'semantic_search_incidents',
     ]);
     expect(tools).not.toContain('propose_reassign_incident');
   });
@@ -267,6 +271,41 @@ describe('AI mode', () => {
     model.requests.length = 0;
     await turn(admin.id, `look at ${theirs.id}`);
     expect(JSON.stringify(model.requests[1].body)).toContain('Payroll database corruption');
+  });
+
+  it('filters semantic candidates before ranking and refuses status pages without access', async () => {
+    await setup();
+    const { member, mine, theirs } = await scopedWorld();
+    const vector = [1, 0, 0, 0, 0, 0, 0, 0];
+    for (const incident of [mine, theirs])
+      await db.incidentEmbedding.create({
+        data: {
+          incidentId: incident.id,
+          serviceId: incident.serviceId,
+          model: 'eval-embedding',
+          sourceHash: 'eval',
+          dims: vector.length,
+          vector,
+          incidentCreatedAt: incident.createdAt,
+        },
+      });
+    registerEmbeddingResolver(async () => ({
+      model: 'eval-embedding',
+      providerId: 'eval',
+      embed: async () => ({ vectors: [vector], tokens: 1 }),
+    }));
+    try {
+      const tools = buildSquireTools(await actorOf(member.id), { personal: false });
+      const semantic = tools.find(tool => tool.name === 'semantic_search_incidents')!;
+      const results = await semantic.execute!({ query: 'checkout is slow' });
+      expect(results).toMatchObject([{ id: mine.id }]);
+      expect(JSON.stringify(results)).not.toContain(theirs.id);
+      const page = await db.statusPage.create({ data: { name: 'Restricted status' } });
+      const status = tools.find(tool => tool.name === 'get_status_page')!;
+      expect(await status.execute!({ id: page.id })).toMatchObject({ error: expect.any(String) });
+    } finally {
+      registerEmbeddingResolver(async () => null);
+    }
   });
 
   it('search tool is scoped and bounded', async () => {
