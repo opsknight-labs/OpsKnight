@@ -6,7 +6,7 @@
  * OpsKnight's existing Zod patterns (strict objects, trim, z.infer exports).
  */
 
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import { parseInputDefault } from './input-values';
 import { MAX_SELECT_OPTIONS, selectOptionsIssue } from './input-options';
 import { runbookEvidenceSchema } from './evidence';

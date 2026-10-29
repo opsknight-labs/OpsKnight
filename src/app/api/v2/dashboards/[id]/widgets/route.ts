@@ -1,9 +1,12 @@
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import prisma from '@/lib/prisma';
 import { defineV2Route, logV2Audit } from '@/lib/api-v2';
 import {
-  DashboardIdV2Schema, DashboardWidgetV2Schema,
-  dashboardReadWhere, dashboardWidgetCreate, requireCurrentDashboardTeamMembership,
+  DashboardIdV2Schema,
+  DashboardWidgetV2Schema,
+  dashboardReadWhere,
+  dashboardWidgetCreate,
+  requireCurrentDashboardTeamMembership,
 } from '@/lib/api-v2/dashboards';
 import { etagHeaders, requireRevisionIfMatch, withIfMatch } from '@/lib/api-v2/concurrency';
 import { AUTHORIZATION_ACTIONS } from '@/lib/authorization-policy';
@@ -19,13 +22,16 @@ export const GET = defineV2Route({
     const dashboard = await prisma.dashboard.findFirst({
       where: { id: params.id, AND: [dashboardReadWhere(actor)] },
       select: {
-        id: true, revision: true,
+        id: true,
+        revision: true,
         widgets: { orderBy: [{ createdAt: 'asc' }, { id: 'asc' }], take: 50 },
       },
     });
     if (!dashboard) throw new AppError({ code: 'RESOURCE_NOT_FOUND' });
-    return { data: { dashboardId: dashboard.id, widgets: dashboard.widgets },
-      headers: etagHeaders(dashboard.revision) };
+    return {
+      data: { dashboardId: dashboard.id, widgets: dashboard.widgets },
+      headers: etagHeaders(dashboard.revision),
+    };
   },
 });
 
@@ -62,21 +68,33 @@ export const PUT = defineV2Route({
       await db.dashboardWidget.deleteMany({ where: { dashboardId: params.id } });
       if (body.widgets.length > 0) {
         await db.dashboardWidget.createMany({
-          data: body.widgets.map(widget => ({ dashboardId: params.id, ...dashboardWidgetCreate(widget) })),
+          data: body.widgets.map(widget => ({
+            dashboardId: params.id,
+            ...dashboardWidgetCreate(widget),
+          })),
         });
       }
       return db.dashboard.findUniqueOrThrow({
         where: { id: params.id },
-        select: { id: true, revision: true,
-          widgets: { orderBy: [{ createdAt: 'asc' }, { id: 'asc' }], take: 50 } },
+        select: {
+          id: true,
+          revision: true,
+          widgets: { orderBy: [{ createdAt: 'asc' }, { id: 'asc' }], take: 50 },
+        },
       });
     });
     await logV2Audit({
-      action: 'dashboard.widgets_replaced', entityType: 'DASHBOARD', entityId: params.id,
-      actorId: actor.id, apiKeyId: apiKey.id,
-      details: { widgetCount: updated.widgets.length }, tx,
+      action: 'dashboard.widgets_replaced',
+      entityType: 'DASHBOARD',
+      entityId: params.id,
+      actorId: actor.id,
+      apiKeyId: apiKey.id,
+      details: { widgetCount: updated.widgets.length },
+      tx,
     });
-    return { data: { dashboardId: updated.id, widgets: updated.widgets },
-      headers: etagHeaders(updated.revision) };
+    return {
+      data: { dashboardId: updated.id, widgets: updated.widgets },
+      headers: etagHeaders(updated.revision),
+    };
   },
 });

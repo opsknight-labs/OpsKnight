@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import { AppError } from '@/lib/errors';
 import { incidentReadWhere } from '@/lib/authorization-filters';
 import {

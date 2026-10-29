@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import type { ComplianceFramework } from '../types';
 
 export const MAX_SELECTED_CONTROLS = 50;

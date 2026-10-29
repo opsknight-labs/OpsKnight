@@ -1,7 +1,7 @@
 import 'server-only';
 import { createHash } from 'node:crypto';
 import type { Prisma, RunbookPreviewAuthorization } from '@prisma/client';
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import { withMcpDatabase } from '@/lib/database-workload';
 import { runSerializableTransaction } from '@/lib/db-utils';
 import { encrypt, decrypt } from '@/lib/encryption';

@@ -1,6 +1,6 @@
 'use server';
 
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import { revalidatePath } from 'next/cache';
 import { getCurrentUser, getUserPermissions } from '@/lib/rbac';
 import { CAPABILITIES } from '@/lib/authorization';

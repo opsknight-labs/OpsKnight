@@ -1,6 +1,6 @@
 'use server';
 
-import { z, ZodError } from 'zod';
+import { z, ZodError } from 'zod/v3';
 import { Prisma } from '@prisma/client';
 import { revalidatePath } from 'next/cache';
 import {
@@ -138,22 +138,22 @@ export async function saveSlaSchedulerModeAction(rawMode: unknown) {
   const mode = parsed.data;
   try {
     const rejection = await prisma.$transaction(async tx => {
-    await acquireAdvisoryLock(tx, LOCK_KEYS.SLA_SCHEDULER);
-    const current = await tx.systemConfig.findUnique({
-      where: { key: 'incident_sla_scheduler' },
-      select: { value: true },
-    });
-    const currentValue =
-      current?.value && typeof current.value === 'object' && !Array.isArray(current.value)
-        ? (current.value as Record<string, unknown>)
-        : {};
-    if (mode === 'INDEXED') {
-      if (currentValue.mode !== 'SHADOW') return 'Run Shadow mode before enabling Indexed mode.';
-      if (Number(currentValue.lastShadowMismatchCount ?? 1) !== 0)
-        return 'Resolve Shadow mismatches before enabling Indexed mode.';
-      if (Number(currentValue.consecutiveCleanChecks ?? 0) < MIN_CLEAN_SHADOW_CHECKS)
-        return `Wait for ${MIN_CLEAN_SHADOW_CHECKS} consecutive clean Shadow checks before enabling Indexed mode.`;
-      const rows = await tx.$queryRaw<Array<{ ready: boolean; missing_hints: bigint }>>`
+      await acquireAdvisoryLock(tx, LOCK_KEYS.SLA_SCHEDULER);
+      const current = await tx.systemConfig.findUnique({
+        where: { key: 'incident_sla_scheduler' },
+        select: { value: true },
+      });
+      const currentValue =
+        current?.value && typeof current.value === 'object' && !Array.isArray(current.value)
+          ? (current.value as Record<string, unknown>)
+          : {};
+      if (mode === 'INDEXED') {
+        if (currentValue.mode !== 'SHADOW') return 'Run Shadow mode before enabling Indexed mode.';
+        if (Number(currentValue.lastShadowMismatchCount ?? 1) !== 0)
+          return 'Resolve Shadow mismatches before enabling Indexed mode.';
+        if (Number(currentValue.consecutiveCleanChecks ?? 0) < MIN_CLEAN_SHADOW_CHECKS)
+          return `Wait for ${MIN_CLEAN_SHADOW_CHECKS} consecutive clean Shadow checks before enabling Indexed mode.`;
+        const rows = await tx.$queryRaw<Array<{ ready: boolean; missing_hints: bigint }>>`
         SELECT EXISTS (
           SELECT 1 FROM pg_class c
           JOIN pg_index i ON i.indexrelid = c.oid
@@ -165,30 +165,30 @@ export async function saveSlaSchedulerModeAction(rawMode: unknown) {
             AND s."serviceNotifyOnSlaBreach" = true
             AND i."nextSlaTransitionAt" IS NULL)::bigint AS missing_hints
       `;
-      if (!rows[0]?.ready) return 'Install the SLA scheduler index before enabling Indexed mode.';
-      if (Number(rows[0]?.missing_hints ?? 0) > 0)
-        return 'Run Shadow mode until all active incidents have scheduling hints.';
-    }
-    const nextValue =
-      mode === 'SHADOW'
-        ? { mode, consecutiveCleanChecks: 0, lastShadowMismatchCount: 0 }
-        : { ...currentValue, mode };
-    await tx.systemConfig.upsert({
-      where: { key: 'incident_sla_scheduler' },
-      create: { key: 'incident_sla_scheduler', value: nextValue, updatedBy: permissions.id },
-      update: { value: nextValue as Prisma.InputJsonValue, updatedBy: permissions.id },
-    });
-    await emitAuditEvent(
-      {
-        action: 'incident_sla.scheduler.mode_changed',
-        source: 'UI',
-        target: { type: 'SYSTEM_CONFIG', id: 'incident_sla_scheduler' },
-        actor: { type: 'USER', id: permissions.id },
-        metadata: { mode },
-      },
-      tx
-    );
-    return null;
+        if (!rows[0]?.ready) return 'Install the SLA scheduler index before enabling Indexed mode.';
+        if (Number(rows[0]?.missing_hints ?? 0) > 0)
+          return 'Run Shadow mode until all active incidents have scheduling hints.';
+      }
+      const nextValue =
+        mode === 'SHADOW'
+          ? { mode, consecutiveCleanChecks: 0, lastShadowMismatchCount: 0 }
+          : { ...currentValue, mode };
+      await tx.systemConfig.upsert({
+        where: { key: 'incident_sla_scheduler' },
+        create: { key: 'incident_sla_scheduler', value: nextValue, updatedBy: permissions.id },
+        update: { value: nextValue as Prisma.InputJsonValue, updatedBy: permissions.id },
+      });
+      await emitAuditEvent(
+        {
+          action: 'incident_sla.scheduler.mode_changed',
+          source: 'UI',
+          target: { type: 'SYSTEM_CONFIG', id: 'incident_sla_scheduler' },
+          actor: { type: 'USER', id: permissions.id },
+          metadata: { mode },
+        },
+        tx
+      );
+      return null;
     });
     if (rejection) return { ok: false as const, message: rejection };
     invalidateSlaSchedulerMode();

@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { ZodError } from 'zod';
+import { ZodError } from 'zod/v3';
 import { ERROR_REGISTRY, isAppError, normalizeError, toPublicAppError } from '@/lib/errors';
 import { recordApiError, recordIdempotency } from './observability';
 import { mapDatabaseError } from './database-errors';

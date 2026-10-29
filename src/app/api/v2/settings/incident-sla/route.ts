@@ -1,25 +1,36 @@
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import { revalidatePath } from 'next/cache';
 import prisma from '@/lib/prisma';
 import { defineV2Route } from '@/lib/api-v2/endpoint';
 import { etagHeaders, preconditionFailed, requireRevisionIfMatch } from '@/lib/api-v2/concurrency';
 import { AUTHORIZATION_ACTIONS } from '@/lib/authorization-policy';
-import { saveIncidentSlaPolicy, IncidentResponsePolicyError } from '@/lib/incident-sla/policy-config';
+import {
+  saveIncidentSlaPolicy,
+  IncidentResponsePolicyError,
+} from '@/lib/incident-sla/policy-config';
 import { MAX_INCIDENT_SLA_TARGET_MS } from '@/lib/incident-sla/policy-validation';
 import { AppError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 
 const target = z.number().int().positive().max(MAX_INCIDENT_SLA_TARGET_MS);
-const bodySchema = z.object({
-  baseAckTargetMs: target,
-  baseResolveTargetMs: target,
-  rules: z.array(z.object({
-    priority: z.enum(['P1', 'P2', 'P3', 'P4', 'P5']),
-    ackTargetMs: target,
-    resolveTargetMs: target,
-    label: z.string().trim().max(120).optional(),
-  }).strict()).max(5),
-}).strict();
+const bodySchema = z
+  .object({
+    baseAckTargetMs: target,
+    baseResolveTargetMs: target,
+    rules: z
+      .array(
+        z
+          .object({
+            priority: z.enum(['P1', 'P2', 'P3', 'P4', 'P5']),
+            ackTargetMs: target,
+            resolveTargetMs: target,
+            label: z.string().trim().max(120).optional(),
+          })
+          .strict()
+      )
+      .max(5),
+  })
+  .strict();
 type Policy = Awaited<ReturnType<typeof saveIncidentSlaPolicy>>;
 
 function policyDto(policy: Policy) {
@@ -76,7 +87,12 @@ export const PUT = defineV2Route({
     try {
       const policy = await saveIncidentSlaPolicy(
         { ...body, scopeKey: 'workspace', expectedVersion, inheritWorkspace: false },
-        { actorId: actor.id, capabilities: ['admin.manage'], source: 'API', apiClientId: apiKey.id },
+        {
+          actorId: actor.id,
+          capabilities: ['admin.manage'],
+          source: 'API',
+          apiClientId: apiKey.id,
+        },
         tx
       );
       return {

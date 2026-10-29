@@ -14,7 +14,7 @@ import { Button } from '@/components/ui/shadcn/button';
 import { AvatarPicker } from '@/components/settings/AvatarPicker';
 import { useAvatarUpdater } from '@/hooks/useUserAvatar';
 import { isDefaultAvatar } from '@/lib/avatar';
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import { updateProfile } from '@/app/(app)/settings/actions';
 import { useRouter } from 'next/navigation';
 import { notify as toast } from '@/lib/toast';
@@ -102,7 +102,11 @@ export default function ProfileForm({
     [update, router]
   );
 
-  const { status: saveStatus, error: saveError, retry } = useAutosave({
+  const {
+    status: saveStatus,
+    error: saveError,
+    retry,
+  } = useAutosave({
     data: watchedData,
     onSave: handleAutoSave,
     delay: 600,

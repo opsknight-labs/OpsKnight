@@ -5,7 +5,7 @@ import { AutosaveForm } from '@/components/settings/forms/AutosaveForm';
 import { SettingsRow } from '@/components/settings/layout/SettingsRow';
 import TimeZoneSelect from '@/components/TimeZoneSelect';
 import { Clock } from 'lucide-react';
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import { updatePreferences } from '@/app/(app)/settings/actions';
 import { Controller } from 'react-hook-form';
 

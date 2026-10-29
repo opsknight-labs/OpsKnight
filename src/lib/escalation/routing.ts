@@ -1,5 +1,5 @@
 import type { Prisma } from '@prisma/client';
-import type { z } from 'zod';
+import type { z } from 'zod/v3';
 import prisma from '@/lib/prisma';
 import { AppError } from '@/lib/errors';
 import { responderSnapshotSchema } from './automation-snapshot';
@@ -16,15 +16,13 @@ export type ResponderRouting = {
   pinnedConditions?: Map<string, { field: string; operator: string; values: string[] }[]>;
 };
 
-export function buildResponderRoutingFromAutomation(
-  automation: {
-    mode: 'SHADOW' | 'LIVE';
-    policyId: string | null;
-    evaluationAt: Date;
-    responderPolicy?: z.infer<typeof responderSnapshotSchema> | null;
-    result: { outcome: { type: string } } | null;
-  }
-): ResponderRouting | null {
+export function buildResponderRoutingFromAutomation(automation: {
+  mode: 'SHADOW' | 'LIVE';
+  policyId: string | null;
+  evaluationAt: Date;
+  responderPolicy?: z.infer<typeof responderSnapshotSchema> | null;
+  result: { outcome: { type: string } } | null;
+}): ResponderRouting | null {
   if (automation.mode === 'LIVE' && automation.result?.outcome.type === 'NO_ESCALATION') {
     return { type: 'NO_ESCALATION', policy: null };
   }

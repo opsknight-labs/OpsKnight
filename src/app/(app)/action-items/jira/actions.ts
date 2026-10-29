@@ -1,6 +1,6 @@
 'use server';
 
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import prisma from '@/lib/prisma';
 import { assertAdminOrResponder } from '@/lib/rbac';
 import {
@@ -47,9 +47,7 @@ const EntityIdSchema = z
   .max(200)
   .regex(/^[A-Za-z0-9_-]+$/, 'Invalid identifier.');
 
-const CreateActionItemJiraSchema = z
-  .object({ actionItemId: EntityIdSchema })
-  .strict();
+const CreateActionItemJiraSchema = z.object({ actionItemId: EntityIdSchema }).strict();
 
 const LinkActionItemJiraSchema = z
   .object({
@@ -117,7 +115,10 @@ function capabilityFailure(
     return { success: false, error: 'Jira is not configured in workspace settings.' };
   }
   if (capability.workspaceState !== 'ENABLED') {
-    return { success: false, error: 'Jira is disabled or not fully configured in workspace settings.' };
+    return {
+      success: false,
+      error: 'Jira is disabled or not fully configured in workspace settings.',
+    };
   }
   if (operation === 'create' && !capability.serviceMapped) {
     return {
@@ -270,25 +271,22 @@ export async function linkJiraIssueToActionItem(
     if (!capability.canLink) return capabilityFailure(capability, 'link');
 
     try {
-      const result = await prisma.$transaction(
-        async tx => {
-          // Re-check workspace state after waiting for lifecycle changes, then
-          // serialize every own-ticket mutation for this action item.
-          await acquireJiraWorkspaceProviderFence(tx);
-          await acquireJiraActionItemLinkFence(tx, actionItemId);
+      const result = await prisma.$transaction(async tx => {
+        // Re-check workspace state after waiting for lifecycle changes, then
+        // serialize every own-ticket mutation for this action item.
+        await acquireJiraWorkspaceProviderFence(tx);
+        await acquireJiraActionItemLinkFence(tx, actionItemId);
 
-          const winner = await tx.externalIssueLink.findFirst({
-            where: { provider: 'JIRA', actionItemId },
-            select: { externalKey: true },
-          });
-          if (winner) {
-            throw new ActionItemJiraLinkChangedError(winner.externalKey);
-          }
+        const winner = await tx.externalIssueLink.findFirst({
+          where: { provider: 'JIRA', actionItemId },
+          select: { externalKey: true },
+        });
+        if (winner) {
+          throw new ActionItemJiraLinkChangedError(winner.externalKey);
+        }
 
-          return linkExistingJiraIssue({ actionItemId, jiraKey });
-        },
-        fencedTransactionOptions
-      );
+        return linkExistingJiraIssue({ actionItemId, jiraKey });
+      }, fencedTransactionOptions);
 
       revalidateActionItemPaths(actionItem.incidentId);
       return {
@@ -351,28 +349,25 @@ export async function unlinkJiraIssueFromActionItem(
     if (!capability.canUnlink) return capabilityFailure(capability, 'unlink');
 
     try {
-      await prisma.$transaction(
-        async tx => {
-          await acquireJiraWorkspaceProviderFence(tx);
-          await acquireJiraActionItemLinkFence(tx, actionItemId);
+      await prisma.$transaction(async tx => {
+        await acquireJiraWorkspaceProviderFence(tx);
+        await acquireJiraActionItemLinkFence(tx, actionItemId);
 
-          const current = await tx.externalIssueLink.findFirst({
-            where: { id: linkId, provider: 'JIRA', actionItemId },
-            select: { id: true },
-          });
-          if (!current) {
-            throw new ActionItemJiraLinkChangedError('Jira link changed before unlink.');
-          }
+        const current = await tx.externalIssueLink.findFirst({
+          where: { id: linkId, provider: 'JIRA', actionItemId },
+          select: { id: true },
+        });
+        if (!current) {
+          throw new ActionItemJiraLinkChangedError('Jira link changed before unlink.');
+        }
 
-          const deleted = await tx.externalIssueLink.deleteMany({
-            where: { id: linkId, provider: 'JIRA', actionItemId },
-          });
-          if (deleted.count !== 1) {
-            throw new ActionItemJiraLinkChangedError('Jira link changed before unlink.');
-          }
-        },
-        fencedTransactionOptions
-      );
+        const deleted = await tx.externalIssueLink.deleteMany({
+          where: { id: linkId, provider: 'JIRA', actionItemId },
+        });
+        if (deleted.count !== 1) {
+          throw new ActionItemJiraLinkChangedError('Jira link changed before unlink.');
+        }
+      }, fencedTransactionOptions);
     } catch (error) {
       if (error instanceof ActionItemJiraLinkChangedError) {
         return { success: false, error: 'Jira link changed before it could be unlinked. Retry.' };
@@ -430,23 +425,20 @@ export async function syncActionItemJiraIssue(
 
     let syncedIssue: ActionItemExternalIssue;
     try {
-      const result = await prisma.$transaction(
-        async tx => {
-          await acquireJiraWorkspaceProviderFence(tx);
-          await acquireJiraActionItemLinkFence(tx, actionItemId);
+      const result = await prisma.$transaction(async tx => {
+        await acquireJiraWorkspaceProviderFence(tx);
+        await acquireJiraActionItemLinkFence(tx, actionItemId);
 
-          const current = await tx.externalIssueLink.findFirst({
-            where: { id: linkId, provider: 'JIRA', actionItemId },
-            select: { id: true },
-          });
-          if (!current) {
-            throw new ActionItemJiraLinkChangedError('Jira link changed before sync.');
-          }
+        const current = await tx.externalIssueLink.findFirst({
+          where: { id: linkId, provider: 'JIRA', actionItemId },
+          select: { id: true },
+        });
+        if (!current) {
+          throw new ActionItemJiraLinkChangedError('Jira link changed before sync.');
+        }
 
-          return syncExternalIssueLink(current.id);
-        },
-        fencedTransactionOptions
-      );
+        return syncExternalIssueLink(current.id);
+      }, fencedTransactionOptions);
 
       if (!result) {
         return { success: false, error: 'Jira sync failed. Check integration health in Settings.' };

@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { z } from 'zod/v3';
 
 const measurement = z.number().finite();
 export const verificationResultSchema = z

@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server';
 import { getServerSession } from 'next-auth';
-import { z } from 'zod';
+import { z } from 'zod/v3';
 
 import { getAuthOptions } from '@/lib/auth';
 import prisma from '@/lib/prisma';

@@ -2,7 +2,7 @@
  * Pure, client-safe rules for Service Automation context in runbook bindings:
  * `automation.<key>` trigger conditions, context → input mappings and approved target mappings.
  */
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import { isValidInputValue } from './input-values';
 import type { RunbookConditionOperator, RunbookInputType } from './types';
 

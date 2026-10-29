@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import prisma from '@/lib/prisma';
 import { defineV2Route } from '@/lib/api-v2/endpoint';
 import { etagHeaders, preconditionFailed, requireRevisionIfMatch } from '@/lib/api-v2/concurrency';
@@ -8,13 +8,15 @@ import { IncidentResponsePolicyError } from '@/lib/incident-sla/policy-config';
 import { AppError } from '@/lib/errors';
 
 const paramsSchema = z.object({ id: z.string().trim().min(1).max(100) }).strict();
-const bodySchema = z.object({
-  timezone: z.string().trim().min(1).max(100),
-  inheritWorkspace: z.boolean(),
-  mode: z.enum(['INHERIT', 'ALWAYS', 'SCHEDULED']).optional(),
-  windows: z.array(z.unknown()).max(28),
-  exceptions: z.array(z.unknown()).max(366),
-}).strict();
+const bodySchema = z
+  .object({
+    timezone: z.string().trim().min(1).max(100),
+    inheritWorkspace: z.boolean(),
+    mode: z.enum(['INHERIT', 'ALWAYS', 'SCHEDULED']).optional(),
+    windows: z.array(z.unknown()).max(28),
+    exceptions: z.array(z.unknown()).max(366),
+  })
+  .strict();
 
 type Policy = Awaited<ReturnType<typeof saveSupportHoursPolicy>>;
 
@@ -45,7 +47,10 @@ export const GET = defineV2Route({
   paramsSchema,
   querySchema: z.object({}).strict(),
   handler: async ({ params }) => {
-    const exists = await prisma.service.findUnique({ where: { id: params.id }, select: { id: true } });
+    const exists = await prisma.service.findUnique({
+      where: { id: params.id },
+      select: { id: true },
+    });
     if (!exists) throw new AppError({ code: 'SERVICE_NOT_FOUND' });
     const policy = await prisma.responseSupportHoursPolicy.findFirst({
       where: { scopeKey: `service:${params.id}`, sealedAt: { not: null } },
@@ -76,7 +81,12 @@ export const PUT = defineV2Route({
     try {
       const policy = await saveSupportHoursPolicy(
         { ...body, scopeKey: `service:${params.id}`, expectedVersion },
-        { actorId: actor.id, capabilities: ['admin.manage'], source: 'API', apiClientId: apiKey.id },
+        {
+          actorId: actor.id,
+          capabilities: ['admin.manage'],
+          source: 'API',
+          apiClientId: apiKey.id,
+        },
         tx
       );
       return { data: { policy: policyDto(policy) }, headers: etagHeaders(policy.version) };

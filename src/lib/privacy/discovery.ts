@@ -1,6 +1,6 @@
 import 'server-only';
 
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import { emitAuditEvent } from '@/lib/audit';
 import prisma from '@/lib/prisma';
 

@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server';
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import prisma from '@/lib/prisma';
 import { CAPABILITIES } from '@/lib/authorization';
 import { assertCapability } from '@/lib/rbac';
@@ -11,7 +11,9 @@ const querySchema = z.object({ search: z.string().trim().min(0).max(100).optiona
 export async function GET(request: NextRequest) {
   try {
     await assertCapability(CAPABILITIES.PRIVACY_REQUESTS_MANAGE);
-    const parsed = querySchema.safeParse({ search: request.nextUrl.searchParams.get('search') ?? '' });
+    const parsed = querySchema.safeParse({
+      search: request.nextUrl.searchParams.get('search') ?? '',
+    });
     if (!parsed.success) {
       throw new AppError({
         code: 'VALIDATION_FAILED',
@@ -19,7 +21,13 @@ export async function GET(request: NextRequest) {
       });
     }
     const { search } = parsed.data;
-    const where: { status: 'ACTIVE'; OR?: Array<{ name?: { contains: string; mode: 'insensitive' }; email?: { contains: string; mode: 'insensitive' } }> } = {
+    const where: {
+      status: 'ACTIVE';
+      OR?: Array<{
+        name?: { contains: string; mode: 'insensitive' };
+        email?: { contains: string; mode: 'insensitive' };
+      }>;
+    } = {
       status: 'ACTIVE',
     };
     if (search.length > 0) {

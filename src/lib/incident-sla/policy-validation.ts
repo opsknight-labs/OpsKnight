@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { z } from 'zod/v3';
 
 // Deliberately 24 days, not 30: incident snapshots are signed PostgreSQL INTEGER ms.
 export const MAX_INCIDENT_SLA_TARGET_MS = 24 * 24 * 60 * 60 * 1000;

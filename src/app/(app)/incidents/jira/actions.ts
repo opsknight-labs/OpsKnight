@@ -1,6 +1,6 @@
 'use server';
 
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import prisma from '@/lib/prisma';
 import { assertAdminOrResponder } from '@/lib/rbac';
 import {
@@ -56,7 +56,10 @@ function capabilityFailure(
     return { success: false, error: 'Jira is not configured in workspace settings.' };
   }
   if (capability.workspaceState !== 'ENABLED') {
-    return { success: false, error: 'Jira is disabled or not fully configured in workspace settings.' };
+    return {
+      success: false,
+      error: 'Jira is disabled or not fully configured in workspace settings.',
+    };
   }
   if (operation === 'create' && !capability.serviceMapped) {
     return {

@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server';
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import { jsonApiOk, jsonError } from '@/lib/api-response';
 import type { AuthenticationResponseJSON } from '@simplewebauthn/server';
 import { readJsonBodyWithLimit } from '@/lib/request-body';

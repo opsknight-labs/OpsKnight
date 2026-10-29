@@ -3,7 +3,7 @@ import { readableObservationPreviews } from '@/lib/automation/observation-read-p
 import { readAutomationReadiness } from '@/lib/automation/readiness';
 import { candidateEvidenceFreshness } from '@/lib/automation/evidence-freshness';
 import { decodeExplanation } from '@/lib/automation/explanation';
-import { z, ZodError } from 'zod';
+import { z, ZodError } from 'zod/v3';
 import { AppError } from '@/lib/errors/app-error';
 import { logger } from '@/lib/logger';
 import prisma from '@/lib/prisma';

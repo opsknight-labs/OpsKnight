@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server';
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import prisma from '@/lib/prisma';
 import { CAPABILITIES } from '@/lib/authorization';
 import { assertCapability } from '@/lib/rbac';
@@ -26,7 +26,12 @@ export async function GET(request: NextRequest) {
   if (kind === 'target') {
     await assertCapability(CAPABILITIES.RUNBOOK_SECRET_MANAGE);
     const [agents, pools] = await Promise.all([
-      prisma.runbookAgent.findMany({ where: { status: { not: 'REVOKED' }, name }, select, take: 15, orderBy }),
+      prisma.runbookAgent.findMany({
+        where: { status: { not: 'REVOKED' }, name },
+        select,
+        take: 15,
+        orderBy,
+      }),
       prisma.runbookAgentPool.findMany({ where: { name }, select, take: 15, orderBy }),
     ]);
     return jsonOk({
@@ -60,7 +65,12 @@ export async function GET(request: NextRequest) {
         ? await prisma.runbook.findMany({ where, select, take: 30, orderBy })
         : kind === 'agent-history'
           ? await prisma.runbookAgent.findMany({ where, select: agentSelect, take: 30, orderBy })
-          : await prisma.runbookAgent.findMany({ where: { ...where, status: { not: 'REVOKED' } }, select: agentSelect, take: 30, orderBy });
+          : await prisma.runbookAgent.findMany({
+              where: { ...where, status: { not: 'REVOKED' } },
+              select: agentSelect,
+              take: 30,
+              orderBy,
+            });
 
   // Resolve the selected label even when it lies outside the search page.
   const selectedRow =
@@ -71,7 +81,10 @@ export async function GET(request: NextRequest) {
           ? await prisma.runbook.findUnique({ where: { id: selected }, select })
           : kind === 'agent-history'
             ? await prisma.runbookAgent.findUnique({ where: { id: selected }, select: agentSelect })
-            : await prisma.runbookAgent.findFirst({ where: { id: selected, status: { not: 'REVOKED' } }, select: agentSelect })
+            : await prisma.runbookAgent.findFirst({
+                where: { id: selected, status: { not: 'REVOKED' } },
+                select: agentSelect,
+              })
       : null;
 
   return jsonOk({

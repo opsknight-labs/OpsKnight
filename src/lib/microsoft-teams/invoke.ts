@@ -1,7 +1,7 @@
 import 'server-only';
 
 import type { Prisma } from '@prisma/client';
-import { ZodError } from 'zod';
+import { ZodError } from 'zod/v3';
 import prisma from '@/lib/prisma';
 import { logger } from '@/lib/logger';
 import { checkRateLimit } from '@/lib/rate-limit';
@@ -153,7 +153,9 @@ export async function handleMicrosoftTeamsAdaptiveCardAction(input: {
     // Teams Bot Framework invokes frequently omit aadGroupId, so we bridge them via the installation ledger.
     if (destination?.installation) {
       const inst = destination.installation;
-      const instIdentifiers = [inst.teamId, inst.channelId, inst.conversationId].filter(Boolean) as string[];
+      const instIdentifiers = [inst.teamId, inst.channelId, inst.conversationId].filter(
+        Boolean
+      ) as string[];
       if (instIdentifiers.some(id => candidateTeamIds.includes(id.trim()))) {
         for (const id of instIdentifiers) {
           candidateTeamIds.push(id.trim());
@@ -192,7 +194,8 @@ export async function handleMicrosoftTeamsAdaptiveCardAction(input: {
     if (warRoom?.providerChannelId && isChannelMatch(warRoom.providerChannelId)) {
       if (warRoom.providerContainerId) candidateTeamIds.push(warRoom.providerContainerId.trim());
       if (destination?.teamId) candidateTeamIds.push(destination.teamId.trim());
-      if (destination?.installation?.teamId) candidateTeamIds.push(destination.installation.teamId.trim());
+      if (destination?.installation?.teamId)
+        candidateTeamIds.push(destination.installation.teamId.trim());
     }
 
     const isTeamMatch = (storedId: string | null | undefined) => {
@@ -254,11 +257,19 @@ export async function handleMicrosoftTeamsAdaptiveCardAction(input: {
     const messageMatches = warRoom
       ? warRoom.messageGeneration === messageGeneration &&
         matchesConversation(warRoom.commandConversationId, input.activity.conversation?.id) &&
-        matchesMessage(warRoom.commandMessageId, input.activity.replyToId, input.activity.conversation?.id)
+        matchesMessage(
+          warRoom.commandMessageId,
+          input.activity.replyToId,
+          input.activity.conversation?.id
+        )
       : canonical &&
         canonical.messageGeneration === messageGeneration &&
         matchesConversation(canonical.conversationId, input.activity.conversation?.id) &&
-        matchesMessage(canonical.messageId, input.activity.replyToId, input.activity.conversation?.id);
+        matchesMessage(
+          canonical.messageId,
+          input.activity.replyToId,
+          input.activity.conversation?.id
+        );
     if (!routeMatches || !messageMatches) {
       logger.warn('[MicrosoftTeams] StaleCard verification failed', {
         routeMatches,
@@ -388,8 +399,7 @@ export async function handleMicrosoftTeamsAdaptiveCardAction(input: {
               : incident.acknowledgedAt
                 ? 'acknowledged'
                 : 'triggered';
-          const { getIncidentMeeting } =
-            await import('@/lib/incident-collaboration/meeting-store');
+          const { getIncidentMeeting } = await import('@/lib/incident-collaboration/meeting-store');
           const activeMeeting = await getIncidentMeeting(incident.id).catch(() => null);
           const meetingProjection =
             activeMeeting?.state === 'READY' && activeMeeting.joinUrl
@@ -443,110 +453,110 @@ export async function handleMicrosoftTeamsAdaptiveCardAction(input: {
           }
           switch (semanticKind) {
             case 'ACKNOWLEDGE':
-            await executeChatOpsCommand({
-              provider: 'MICROSOFT_TEAMS',
-              actor: { id: activeLink.userId, name: activeLink.displayName },
-              command: { kind: 'ACKNOWLEDGE', incidentId },
-              idempotency,
-            });
-            result = teamsActionSuccess('Incident acknowledged.');
-            break;
-          case 'RESOLVE':
-            await executeChatOpsCommand({
-              provider: 'MICROSOFT_TEAMS',
-              actor: { id: activeLink.userId, name: activeLink.displayName },
-              command: { kind: 'RESOLVE', incidentId, resolutionNote: actionData.resolutionNote },
-              idempotency,
-            });
-            result = teamsActionSuccess('Incident resolved.');
-            break;
-          case 'ASSIGN_SELF':
-            await executeChatOpsCommand({
-              provider: 'MICROSOFT_TEAMS',
-              actor: { id: activeLink.userId, name: activeLink.displayName },
-              command: { kind: 'ASSIGN', incidentId, targetUserId: activeLink.userId },
-              idempotency,
-            });
-            result = teamsActionSuccess('Incident assigned to you.');
-            break;
-          case 'ADD_NOTE':
-            await executeChatOpsCommand({
-              provider: 'MICROSOFT_TEAMS',
-              actor: { id: activeLink.userId, name: activeLink.displayName },
-              command: { kind: 'NOTE', incidentId, content: actionData.note! },
-              idempotency,
-            });
-            result = teamsActionSuccess('Note added.');
-            break;
-          case 'SET_PRIORITY':
-            await executeChatOpsCommand({
-              provider: 'MICROSOFT_TEAMS',
-              actor: { id: activeLink.userId, name: activeLink.displayName },
-              command: { kind: 'SET_PRIORITY', incidentId, priority: actionData.priority! },
-              idempotency,
-            });
-            result = teamsActionSuccess(`Priority changed to ${actionData.priority}.`);
-            break;
-          case 'SNOOZE':
-            await executeChatOpsCommand({
-              provider: 'MICROSOFT_TEAMS',
-              actor: { id: activeLink.userId, name: activeLink.displayName },
-              command: {
-                kind: 'SNOOZE',
-                incidentId,
-                snoozedUntil: new Date(String(persistedPayload.snoozedUntil)),
-                snoozeReason: actionData.reason,
-              },
-              idempotency,
-            });
-            result = teamsActionSuccess(`Incident snoozed for ${actionData.minutes} minutes.`);
-            break;
-          case 'ESCALATE':
-            await executeChatOpsCommand({
-              provider: 'MICROSOFT_TEAMS',
-              actor: { id: activeLink.userId, name: activeLink.displayName },
-              command: { kind: 'ESCALATE', incidentId },
-              idempotency,
-            });
-            result = teamsActionSuccess('Escalation requested.');
-            break;
-          case 'JOIN_RESPONDER':
-            await executeChatOpsCommand({
-              provider: 'MICROSOFT_TEAMS',
-              actor: { id: activeLink.userId, name: activeLink.displayName },
-              command: { kind: 'JOIN_RESPONDER', incidentId },
-              idempotency,
-            });
-            result = teamsActionSuccess('You joined as a responder.');
-            break;
-          case 'VIEW_RESPONDERS': {
-            await executeChatOpsCommand({
-              provider: 'MICROSOFT_TEAMS',
-              actor: { id: activeLink.userId, name: activeLink.displayName },
-              command: { kind: 'READ', incidentId },
-              idempotency,
-            });
-            const responders = await prisma.incident.findUnique({
-              where: { id: incidentId },
-              select: {
-                assignee: { select: { name: true } },
-                watchers: { select: { user: { select: { name: true } } }, take: 20 },
-              },
-            });
-            const names = [
-              responders?.assignee?.name,
-              ...(responders?.watchers.map(w => w.user.name) ?? []),
-            ].filter(Boolean);
-            result = teamsActionSuccess(
-              names.length
-                ? `Current responders: ${[...new Set(names)].join(', ')}`
-                : 'No responder is currently assigned.'
-            );
-            break;
+              await executeChatOpsCommand({
+                provider: 'MICROSOFT_TEAMS',
+                actor: { id: activeLink.userId, name: activeLink.displayName },
+                command: { kind: 'ACKNOWLEDGE', incidentId },
+                idempotency,
+              });
+              result = teamsActionSuccess('Incident acknowledged.');
+              break;
+            case 'RESOLVE':
+              await executeChatOpsCommand({
+                provider: 'MICROSOFT_TEAMS',
+                actor: { id: activeLink.userId, name: activeLink.displayName },
+                command: { kind: 'RESOLVE', incidentId, resolutionNote: actionData.resolutionNote },
+                idempotency,
+              });
+              result = teamsActionSuccess('Incident resolved.');
+              break;
+            case 'ASSIGN_SELF':
+              await executeChatOpsCommand({
+                provider: 'MICROSOFT_TEAMS',
+                actor: { id: activeLink.userId, name: activeLink.displayName },
+                command: { kind: 'ASSIGN', incidentId, targetUserId: activeLink.userId },
+                idempotency,
+              });
+              result = teamsActionSuccess('Incident assigned to you.');
+              break;
+            case 'ADD_NOTE':
+              await executeChatOpsCommand({
+                provider: 'MICROSOFT_TEAMS',
+                actor: { id: activeLink.userId, name: activeLink.displayName },
+                command: { kind: 'NOTE', incidentId, content: actionData.note! },
+                idempotency,
+              });
+              result = teamsActionSuccess('Note added.');
+              break;
+            case 'SET_PRIORITY':
+              await executeChatOpsCommand({
+                provider: 'MICROSOFT_TEAMS',
+                actor: { id: activeLink.userId, name: activeLink.displayName },
+                command: { kind: 'SET_PRIORITY', incidentId, priority: actionData.priority! },
+                idempotency,
+              });
+              result = teamsActionSuccess(`Priority changed to ${actionData.priority}.`);
+              break;
+            case 'SNOOZE':
+              await executeChatOpsCommand({
+                provider: 'MICROSOFT_TEAMS',
+                actor: { id: activeLink.userId, name: activeLink.displayName },
+                command: {
+                  kind: 'SNOOZE',
+                  incidentId,
+                  snoozedUntil: new Date(String(persistedPayload.snoozedUntil)),
+                  snoozeReason: actionData.reason,
+                },
+                idempotency,
+              });
+              result = teamsActionSuccess(`Incident snoozed for ${actionData.minutes} minutes.`);
+              break;
+            case 'ESCALATE':
+              await executeChatOpsCommand({
+                provider: 'MICROSOFT_TEAMS',
+                actor: { id: activeLink.userId, name: activeLink.displayName },
+                command: { kind: 'ESCALATE', incidentId },
+                idempotency,
+              });
+              result = teamsActionSuccess('Escalation requested.');
+              break;
+            case 'JOIN_RESPONDER':
+              await executeChatOpsCommand({
+                provider: 'MICROSOFT_TEAMS',
+                actor: { id: activeLink.userId, name: activeLink.displayName },
+                command: { kind: 'JOIN_RESPONDER', incidentId },
+                idempotency,
+              });
+              result = teamsActionSuccess('You joined as a responder.');
+              break;
+            case 'VIEW_RESPONDERS': {
+              await executeChatOpsCommand({
+                provider: 'MICROSOFT_TEAMS',
+                actor: { id: activeLink.userId, name: activeLink.displayName },
+                command: { kind: 'READ', incidentId },
+                idempotency,
+              });
+              const responders = await prisma.incident.findUnique({
+                where: { id: incidentId },
+                select: {
+                  assignee: { select: { name: true } },
+                  watchers: { select: { user: { select: { name: true } } }, take: 20 },
+                },
+              });
+              const names = [
+                responders?.assignee?.name,
+                ...(responders?.watchers.map(w => w.user.name) ?? []),
+              ].filter(Boolean);
+              result = teamsActionSuccess(
+                names.length
+                  ? `Current responders: ${[...new Set(names)].join(', ')}`
+                  : 'No responder is currently assigned.'
+              );
+              break;
+            }
+            default:
+              throw new Error(`Unhandled ChatOps kind: ${semanticKind}`);
           }
-          default:
-            throw new Error(`Unhandled ChatOps kind: ${semanticKind}`);
-        }
         }
         await emitAuditEvent({
           action: `microsoftTeams.chatops.${action.action.verb.split('.').pop()}`,

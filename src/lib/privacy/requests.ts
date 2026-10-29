@@ -5,7 +5,7 @@ import type {
   PrivacyRequestSubjectType,
   PrivacyRequestType,
 } from '@prisma/client';
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import prisma from '@/lib/prisma';
 import { emitAuditEvent } from '@/lib/audit';
 import { AppError } from '@/lib/errors/app-error';

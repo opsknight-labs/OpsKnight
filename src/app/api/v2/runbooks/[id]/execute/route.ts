@@ -3,7 +3,7 @@ import { preconditionFailed } from '@/lib/api-v2/concurrency';
 import { defineV2Route, RunbookExecuteV2Schema } from '@/lib/api-v2';
 import { AUTHORIZATION_ACTIONS } from '@/lib/authorization-policy';
 import { previewRunbookExecution, startRunbookExecution } from '@/lib/runbooks/orchestrator';
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import { resolveV2RunbookExecution } from '@/lib/api-v2/runbook-execution';
 
 export const POST = defineV2Route<{ id: string }, unknown, z.infer<typeof RunbookExecuteV2Schema>>({

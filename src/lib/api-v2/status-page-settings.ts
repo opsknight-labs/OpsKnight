@@ -4,7 +4,7 @@ import type {
   StatusPageConfigurationActor,
   StatusPageConfigurationIdempotency,
 } from '@/lib/status-pages/publish-configuration';
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import type { Prisma } from '@prisma/client';
 import { AppError } from '@/lib/errors';
 import { StatusPageSettingsSchema } from '@/lib/validation';

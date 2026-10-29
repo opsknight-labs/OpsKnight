@@ -1,6 +1,6 @@
 'use server';
 
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import { getServerSession } from 'next-auth';
 import bcrypt from 'bcryptjs';
 import { revalidatePath } from 'next/cache';

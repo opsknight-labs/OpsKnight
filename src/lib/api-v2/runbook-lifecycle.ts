@@ -1,6 +1,6 @@
 import type { getVersionImpact } from '@/lib/runbooks/version-impact';
 import type { Prisma, Runbook } from '@prisma/client';
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import { AppError } from '@/lib/errors';
 import { lockRunbookForUpdate } from '@/lib/runbooks/locking';
 import { updateRunbookSchema } from '@/lib/runbooks/schemas';

@@ -1,11 +1,11 @@
 #!/usr/bin/env node
 'use strict';
-// Fails on any high/critical production advisory that is not in the reviewed, expiring baseline.
+// Fails on any moderate/high/critical production advisory that is not in the reviewed, expiring baseline.
 // A malformed or failed npm audit response must fail closed, never look like a clean audit.
 const fs = require('node:fs');
 const { execFileSync } = require('node:child_process');
 
-const BLOCKING = new Set(['high', 'critical']);
+const BLOCKING = new Set(['moderate', 'high', 'critical']);
 const SEVERITIES = new Set(['info', 'low', 'moderate', 'high', 'critical']);
 const COUNT_FIELDS = ['info', 'low', 'moderate', 'high', 'critical', 'total'];
 
@@ -20,40 +20,60 @@ function advisoryIds(vulnerability) {
 }
 
 function validateAuditReport(audit) {
-  if (!isRecord(audit) || !isRecord(audit.vulnerabilities) ||
-      !isRecord(audit.metadata) || !isRecord(audit.metadata.vulnerabilities))
+  if (
+    !isRecord(audit) ||
+    !isRecord(audit.vulnerabilities) ||
+    !isRecord(audit.metadata) ||
+    !isRecord(audit.metadata.vulnerabilities)
+  )
     throw new Error('npm audit did not return a complete JSON audit report; refusing to pass');
   const counts = audit.metadata.vulnerabilities;
-  if (!COUNT_FIELDS.every(field => Number.isSafeInteger(counts[field]) && counts[field] >= 0) ||
-      counts.total !== COUNT_FIELDS.slice(0, -1).reduce((sum, field) => sum + counts[field], 0))
+  if (
+    !COUNT_FIELDS.every(field => Number.isSafeInteger(counts[field]) && counts[field] >= 0) ||
+    counts.total !== COUNT_FIELDS.slice(0, -1).reduce((sum, field) => sum + counts[field], 0)
+  )
     throw new Error('npm audit returned invalid vulnerability counts; refusing to pass');
 
   const vulnerabilities = audit.vulnerabilities;
   const rows = Object.entries(vulnerabilities);
   for (const [name, vulnerability] of rows) {
-    if (!isRecord(vulnerability) || !SEVERITIES.has(vulnerability.severity) ||
-        !Array.isArray(vulnerability.via) || vulnerability.via.length === 0)
+    if (
+      !isRecord(vulnerability) ||
+      !SEVERITIES.has(vulnerability.severity) ||
+      !Array.isArray(vulnerability.via) ||
+      vulnerability.via.length === 0
+    )
       throw new Error('npm audit returned a malformed vulnerability entry for ' + name);
     for (const cause of vulnerability.via) {
       if (typeof cause === 'string' && cause.length > 0) continue;
-      if (isRecord(cause) && typeof cause.url === 'string' &&
-          cause.url.length > 0 && cause.url.startsWith('https://')) continue;
+      if (
+        isRecord(cause) &&
+        typeof cause.url === 'string' &&
+        cause.url.length > 0 &&
+        cause.url.startsWith('https://')
+      )
+        continue;
       throw new Error('npm audit returned a malformed advisory cause for ' + name);
     }
   }
 
-  const blockingCount = counts.high + counts.critical;
+  const blockingCount = counts.moderate + counts.high + counts.critical;
   const blockingRows = rows.filter(([, vulnerability]) => BLOCKING.has(vulnerability.severity));
-  if ((blockingCount > 0) !== (blockingRows.length > 0))
-    throw new Error('npm audit vulnerability counts disagree with package details; refusing to pass');
+  if (blockingCount > 0 !== blockingRows.length > 0)
+    throw new Error(
+      'npm audit vulnerability counts disagree with package details; refusing to pass'
+    );
 
   // A transitive row can name the vulnerable package rather than repeating its advisory URL.
   // It is safe to skip that row only when the referenced package has an explicit advisory URL.
   for (const [name, vulnerability] of blockingRows) {
     if (advisoryIds(vulnerability).length > 0) continue;
     const causes = vulnerability.via.filter(cause => typeof cause === 'string');
-    if (!causes.some(cause =>
-      isRecord(vulnerabilities[cause]) && advisoryIds(vulnerabilities[cause]).length > 0))
+    if (
+      !causes.some(
+        cause => isRecord(vulnerabilities[cause]) && advisoryIds(vulnerabilities[cause]).length > 0
+      )
+    )
       throw new Error('npm audit has no verifiable advisory cause for blocking package ' + name);
   }
   return audit;
@@ -70,8 +90,13 @@ function evaluateAudit(audit, baseline, now = new Date()) {
     if (!ids.length) continue;
     for (const id of ids) {
       const entry = known.get(id);
-      const state = !entry ? 'NEW' : new Date(entry.expires) <= now ? 'BASELINE_EXPIRED'
-        : entry.package !== name ? 'BASELINE_PACKAGE_MISMATCH' : 'ACCEPTED';
+      const state = !entry
+        ? 'NEW'
+        : new Date(entry.expires) <= now
+          ? 'BASELINE_EXPIRED'
+          : entry.package !== name
+            ? 'BASELINE_PACKAGE_MISMATCH'
+            : 'ACCEPTED';
       findings.push({ id, package: name, severity: vulnerability.severity, state });
       if (state !== 'ACCEPTED') blocking.push({ id, package: name, state });
     }
@@ -94,9 +119,11 @@ function validateBaseline(baseline) {
     if (!/^GHSA-[a-z0-9-]+$/.test(entry.id)) throw new Error('Invalid advisory id ' + entry.id);
     if (seen.has(entry.id)) throw new Error('Duplicate advisory id ' + entry.id);
     seen.add(entry.id);
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(entry.expires) ||
-        Number.isNaN(Date.parse(entry.expires)) ||
-        new Date(entry.expires).toISOString().slice(0, 10) !== entry.expires)
+    if (
+      !/^\d{4}-\d{2}-\d{2}$/.test(entry.expires) ||
+      Number.isNaN(Date.parse(entry.expires)) ||
+      new Date(entry.expires).toISOString().slice(0, 10) !== entry.expires
+    )
       throw new Error('Invalid expiry for ' + entry.id);
   }
 }

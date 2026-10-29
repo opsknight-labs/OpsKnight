@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import { jsonError } from '@/lib/api-response';
 import { assertCapability } from '@/lib/rbac';
 import { CAPABILITIES } from '@/lib/authorization';

@@ -1,4 +1,4 @@
-import { ZodError } from 'zod';
+import { ZodError } from 'zod/v3';
 export type ScimAdminFailure = { scimError: string };
 /** Return actionable expected failures without leaking database errors through Server Actions. */
 export function adminFailure(error: unknown): ScimAdminFailure {

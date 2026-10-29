@@ -1,5 +1,5 @@
 import 'server-only';
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import { isIP } from 'node:net';
 import type { McpClient, McpPolicy, PrismaClient } from '@prisma/client';
 import { McpBoundaryError, requireMcp } from '../core/errors';

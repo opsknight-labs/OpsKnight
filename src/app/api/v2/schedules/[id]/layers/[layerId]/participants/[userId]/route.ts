@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import prisma from '@/lib/prisma';
 import { defineV2Route } from '@/lib/api-v2/endpoint';
 import { logV2Audit } from '@/lib/api-v2/audit';
@@ -30,7 +30,10 @@ export const GET = defineV2Route({
     if (!layer) throw new AppError({ code: 'SCHEDULE_LAYER_NOT_FOUND' });
     const [participant] = layer.users;
     if (!participant) {
-      throw new AppError({ code: 'RESOURCE_NOT_FOUND', userMessage: 'Schedule participant not found.' });
+      throw new AppError({
+        code: 'RESOURCE_NOT_FOUND',
+        userMessage: 'Schedule participant not found.',
+      });
     }
     return {
       data: {

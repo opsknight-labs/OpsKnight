@@ -4,7 +4,7 @@ import { assertPasswordOperationAllowed } from '@/lib/authentication-policy';
 
 import { createHash, timingSafeEqual } from 'crypto';
 import bcrypt from 'bcryptjs';
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import { headers } from 'next/headers';
 import prisma from '@/lib/prisma';
 import { logAudit } from '@/lib/audit';

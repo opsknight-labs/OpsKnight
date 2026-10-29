@@ -4,7 +4,7 @@ import * as React from 'react';
 import { useState, useActionState } from 'react';
 import { useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import * as z from 'zod';
+import * as z from 'zod/v3';
 import Link from 'next/link';
 import { Button } from '@/components/ui/shadcn/button';
 import {

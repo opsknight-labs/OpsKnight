@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import type { V2RouteContext, V2RouteHandlerResult } from './endpoint';
 import { requireTeamAccess } from '@/lib/teams/administration';
 import { invalidateSessionSecurityProjection } from '@/lib/session-security-projection';

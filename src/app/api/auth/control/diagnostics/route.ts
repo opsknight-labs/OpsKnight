@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server';
-import { ZodError } from 'zod';
+import { ZodError } from 'zod/v3';
 import { jsonApiOk, jsonError } from '@/lib/api-response';
 import { getControlActor } from '@/lib/auth-control/actor';
 import { consumeAuthRateLimit } from '@/lib/auth-abuse';

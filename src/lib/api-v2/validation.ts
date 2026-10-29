@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import { APP_ROLES, isApiScope } from '@/lib/authorization';
 import { INTEGRATION_TYPES } from '@/lib/integrations/catalog';
 
@@ -170,33 +170,62 @@ export const EscalationPolicyUpdateV2Schema = z.object({
   steps: z.array(EscalationStepSchema).optional(),
 });
 
-export const IntegrationUpdateV2Schema = z.object({
-  name: z.string().trim().min(1).max(100).optional(),
-  enabled: z.boolean().optional(),
-  snsTopicArn: z.string().trim().min(1).max(512).regex(/^arn:(aws|aws-us-gov|aws-cn):sns:[a-z0-9-]+:\d{12}:[A-Za-z0-9_-]{1,256}$/).optional(),
-}).strict().refine(value => Object.keys(value).length > 0, 'At least one supported field is required.');
+export const IntegrationUpdateV2Schema = z
+  .object({
+    name: z.string().trim().min(1).max(100).optional(),
+    enabled: z.boolean().optional(),
+    snsTopicArn: z
+      .string()
+      .trim()
+      .min(1)
+      .max(512)
+      .regex(/^arn:(aws|aws-us-gov|aws-cn):sns:[a-z0-9-]+:\d{12}:[A-Za-z0-9_-]{1,256}$/)
+      .optional(),
+  })
+  .strict()
+  .refine(value => Object.keys(value).length > 0, 'At least one supported field is required.');
 
-export const IntegrationCreateV2Schema = z.object({
-  name: z.string().trim().min(1).max(100),
-  type: z.enum(INTEGRATION_TYPES).default('EVENTS_API_V2'),
-  snsTopicArn: z.string().trim().min(1).max(512).optional(),
-}).strict().superRefine((value, ctx) => {
-  if (value.type === 'CLOUDWATCH' && !value.snsTopicArn) {
-    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['snsTopicArn'], message: 'CloudWatch requires an SNS topic ARN.' });
-  }
-  if (value.snsTopicArn && !/^arn:(aws|aws-us-gov|aws-cn):sns:[a-z0-9-]+:\d{12}:[A-Za-z0-9_-]{1,256}$/.test(value.snsTopicArn)) {
-    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['snsTopicArn'], message: 'A valid exact AWS SNS Topic ARN is required.' });
-  }
-});
+export const IntegrationCreateV2Schema = z
+  .object({
+    name: z.string().trim().min(1).max(100),
+    type: z.enum(INTEGRATION_TYPES).default('EVENTS_API_V2'),
+    snsTopicArn: z.string().trim().min(1).max(512).optional(),
+  })
+  .strict()
+  .superRefine((value, ctx) => {
+    if (value.type === 'CLOUDWATCH' && !value.snsTopicArn) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['snsTopicArn'],
+        message: 'CloudWatch requires an SNS topic ARN.',
+      });
+    }
+    if (
+      value.snsTopicArn &&
+      !/^arn:(aws|aws-us-gov|aws-cn):sns:[a-z0-9-]+:\d{12}:[A-Za-z0-9_-]{1,256}$/.test(
+        value.snsTopicArn
+      )
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['snsTopicArn'],
+        message: 'A valid exact AWS SNS Topic ARN is required.',
+      });
+    }
+  });
 
-export const IntegrationTestV2Schema = z.object({
-  payload: z.unknown().optional(),
-}).strict();
+export const IntegrationTestV2Schema = z
+  .object({
+    payload: z.unknown().optional(),
+  })
+  .strict();
 
-export const IntegrationCredentialRotateV2Schema = z.object({
-  credential: z.enum(['routing-key', 'signature-secret']).default('signature-secret'),
-  overlapSeconds: z.number().int().min(0).max(86400).default(3600),
-}).strict();
+export const IntegrationCredentialRotateV2Schema = z
+  .object({
+    credential: z.enum(['routing-key', 'signature-secret']).default('signature-secret'),
+    overlapSeconds: z.number().int().min(0).max(86400).default(3600),
+  })
+  .strict();
 
 export const StatusPageCreateV2Schema = z.object({
   name: z.string().trim().min(2).max(100),
@@ -287,75 +316,102 @@ export const PostmortemListQuerySchema = z.object({
   search: z.string().trim().max(100).optional(),
 });
 
-export const PostmortemImpactV2Schema = z.object({
-  usersAffected: z.number().int().min(0).max(1_000_000_000).optional(),
-  downtimeMinutes: z.number().int().min(0).max(10_000_000).optional(),
-  errorRate: z.number().min(0).max(100).optional(),
-  servicesAffected: z.array(z.string().trim().min(1).max(100)).max(100).optional(),
-  slaBreaches: z.number().int().min(0).max(1_000_000_000).optional(),
-  revenueImpact: z.number().min(0).max(1_000_000_000_000).optional(),
-  apiErrors: z.number().int().min(0).max(1_000_000_000).optional(),
-  performanceDegradation: z.number().min(0).max(100).optional(),
-}).strict();
+export const PostmortemImpactV2Schema = z
+  .object({
+    usersAffected: z.number().int().min(0).max(1_000_000_000).optional(),
+    downtimeMinutes: z.number().int().min(0).max(10_000_000).optional(),
+    errorRate: z.number().min(0).max(100).optional(),
+    servicesAffected: z.array(z.string().trim().min(1).max(100)).max(100).optional(),
+    slaBreaches: z.number().int().min(0).max(1_000_000_000).optional(),
+    revenueImpact: z.number().min(0).max(1_000_000_000_000).optional(),
+    apiErrors: z.number().int().min(0).max(1_000_000_000).optional(),
+    performanceDegradation: z.number().min(0).max(100).optional(),
+  })
+  .strict();
 
-export const PostmortemTimelineV2Schema = z.array(z.object({
-  id: z.string().trim().min(1).max(100),
-  timestamp: z.string().datetime(),
-  type: z.enum(['DETECTION', 'ESCALATION', 'MITIGATION', 'RESOLUTION']),
-  title: z.string().trim().min(1).max(200),
-  description: z.string().trim().max(2000),
-  actor: z.string().trim().max(200).optional(),
-}).strict()).max(100).refine(
-  events => new Set(events.map(event => event.id)).size === events.length,
-  'Timeline event IDs must be unique.'
-);
+export const PostmortemTimelineV2Schema = z
+  .array(
+    z
+      .object({
+        id: z.string().trim().min(1).max(100),
+        timestamp: z.string().datetime(),
+        type: z.enum(['DETECTION', 'ESCALATION', 'MITIGATION', 'RESOLUTION']),
+        title: z.string().trim().min(1).max(200),
+        description: z.string().trim().max(2000),
+        actor: z.string().trim().max(200).optional(),
+      })
+      .strict()
+  )
+  .max(100)
+  .refine(
+    events => new Set(events.map(event => event.id)).size === events.length,
+    'Timeline event IDs must be unique.'
+  );
 
-export const PostmortemFactorsV2Schema = z.array(z.object({
-  id: z.string().trim().min(1).max(100),
-  category: z.enum(['TECHNICAL', 'PROCESS', 'HUMAN', 'EXTERNAL', 'OTHER']),
-  description: z.string().trim().min(1).max(2000),
-  evidence: z.array(z.string().trim().min(1).max(500)).max(10).default([]),
-}).strict()).max(30).refine(
-  entries => new Set(entries.map(entry => entry.id)).size === entries.length,
-  'Contributing-factor IDs must be unique.'
-);
+export const PostmortemFactorsV2Schema = z
+  .array(
+    z
+      .object({
+        id: z.string().trim().min(1).max(100),
+        category: z.enum(['TECHNICAL', 'PROCESS', 'HUMAN', 'EXTERNAL', 'OTHER']),
+        description: z.string().trim().min(1).max(2000),
+        evidence: z.array(z.string().trim().min(1).max(500)).max(10).default([]),
+      })
+      .strict()
+  )
+  .max(30)
+  .refine(
+    entries => new Set(entries.map(entry => entry.id)).size === entries.length,
+    'Contributing-factor IDs must be unique.'
+  );
 
-export const PostmortemFiveWhysV2Schema = z.array(z.object({
-  id: z.string().trim().min(1).max(100),
-  question: z.string().trim().min(1).max(500),
-  answer: z.string().trim().min(1).max(2000),
-}).strict()).max(10).refine(
-  entries => new Set(entries.map(entry => entry.id)).size === entries.length,
-  'Five-whys step IDs must be unique.'
-);
+export const PostmortemFiveWhysV2Schema = z
+  .array(
+    z
+      .object({
+        id: z.string().trim().min(1).max(100),
+        question: z.string().trim().min(1).max(500),
+        answer: z.string().trim().min(1).max(2000),
+      })
+      .strict()
+  )
+  .max(10)
+  .refine(
+    entries => new Set(entries.map(entry => entry.id)).size === entries.length,
+    'Five-whys step IDs must be unique.'
+  );
 
-export const PostmortemCreateV2Schema = z.object({
-  incidentId: z.string().trim().min(1),
-  title: z.string().trim().min(2).max(200).optional(),
-  summary: z.string().trim().min(5).max(5000),
-  rootCause: z.string().trim().max(5000).optional(),
-  resolution: z.string().trim().max(5000).optional(),
-  mitigation: z.string().trim().max(5000).optional(),
-  impact: PostmortemImpactV2Schema.optional(),
-  timeline: PostmortemTimelineV2Schema.optional(),
-  contributingFactors: PostmortemFactorsV2Schema.optional(),
-  fiveWhys: PostmortemFiveWhysV2Schema.optional(),
-  lessons: z.string().trim().max(5000).optional(),
-  status: z.enum(['DRAFT', 'IN_REVIEW', 'PUBLISHED']).default('DRAFT'),
-  isPublic: z.boolean().default(true),
-}).strict();
+export const PostmortemCreateV2Schema = z
+  .object({
+    incidentId: z.string().trim().min(1),
+    title: z.string().trim().min(2).max(200).optional(),
+    summary: z.string().trim().min(5).max(5000),
+    rootCause: z.string().trim().max(5000).optional(),
+    resolution: z.string().trim().max(5000).optional(),
+    mitigation: z.string().trim().max(5000).optional(),
+    impact: PostmortemImpactV2Schema.optional(),
+    timeline: PostmortemTimelineV2Schema.optional(),
+    contributingFactors: PostmortemFactorsV2Schema.optional(),
+    fiveWhys: PostmortemFiveWhysV2Schema.optional(),
+    lessons: z.string().trim().max(5000).optional(),
+    status: z.enum(['DRAFT', 'IN_REVIEW', 'PUBLISHED']).default('DRAFT'),
+    isPublic: z.boolean().default(true),
+  })
+  .strict();
 
-export const PostmortemUpdateV2Schema = z.object({
-  title: z.string().trim().min(2).max(200).optional(),
-  summary: z.string().trim().min(5).max(5000).optional(),
-  rootCause: z.string().trim().max(5000).optional(),
-  resolution: z.string().trim().max(5000).optional(),
-  mitigation: z.string().trim().max(5000).optional(),
-  impact: PostmortemImpactV2Schema.optional(),
-  timeline: PostmortemTimelineV2Schema.optional(),
-  contributingFactors: PostmortemFactorsV2Schema.optional(),
-  fiveWhys: PostmortemFiveWhysV2Schema.optional(),
-  lessons: z.string().trim().max(5000).optional(),
-  status: z.enum(['DRAFT', 'IN_REVIEW', 'PUBLISHED', 'ARCHIVED']).optional(),
-  isPublic: z.boolean().optional(),
-}).strict();
+export const PostmortemUpdateV2Schema = z
+  .object({
+    title: z.string().trim().min(2).max(200).optional(),
+    summary: z.string().trim().min(5).max(5000).optional(),
+    rootCause: z.string().trim().max(5000).optional(),
+    resolution: z.string().trim().max(5000).optional(),
+    mitigation: z.string().trim().max(5000).optional(),
+    impact: PostmortemImpactV2Schema.optional(),
+    timeline: PostmortemTimelineV2Schema.optional(),
+    contributingFactors: PostmortemFactorsV2Schema.optional(),
+    fiveWhys: PostmortemFiveWhysV2Schema.optional(),
+    lessons: z.string().trim().max(5000).optional(),
+    status: z.enum(['DRAFT', 'IN_REVIEW', 'PUBLISHED', 'ARCHIVED']).optional(),
+    isPublic: z.boolean().optional(),
+  })
+  .strict();

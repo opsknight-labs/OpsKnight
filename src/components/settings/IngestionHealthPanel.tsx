@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import {
   Card,
   CardContent,

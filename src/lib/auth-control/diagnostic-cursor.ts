@@ -1,6 +1,6 @@
 import 'server-only';
 import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import { getNextAuthSecret } from '@/lib/secret-manager';
 import type { DiagnosticQuery } from './diagnostic-contract';
 

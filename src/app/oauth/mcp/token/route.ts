@@ -1,7 +1,7 @@
 import { logAudit } from '@/lib/audit';
 import { withMcpDatabase } from '@/lib/database-workload';
 import OAuth2Server from '@node-oauth/oauth2-server';
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import prisma from '@/lib/prisma';
 import { acquireMcpOAuthSlot, admitMcpOAuthRequest } from '@/lib/mcp/auth/admission';
 import { mcpOAuthServer } from '@/lib/mcp/auth/oauth-model';

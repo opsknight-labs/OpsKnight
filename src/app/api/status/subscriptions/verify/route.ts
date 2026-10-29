@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import { Prisma } from '@prisma/client';
 import { getStatusPagePublicUrl } from '@/lib/status-page-url';
 import { statusPageSlugMatches } from '@/lib/status-page-resolver';
@@ -67,9 +67,7 @@ export async function POST(req: NextRequest) {
   // If this was an ACTIVE subscriber's pending preference change, atomically install it.
   const prefs = subscription.preferences as Record<string, unknown> | null;
   const pendingPrefs = prefs?._pendingPreferences as
-    | { selectedServiceIds?: string[] }
-    | null
-    | undefined;
+    { selectedServiceIds?: string[] } | null | undefined;
   const pendingServiceIds = prefs?._pendingServiceIds as string[] | null | undefined;
   if (subscription.state === 'ACTIVE' && pendingPrefs !== undefined) {
     const newPrefs = pendingPrefs as unknown as Record<string, unknown> | null;

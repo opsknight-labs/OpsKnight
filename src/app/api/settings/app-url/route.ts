@@ -1,6 +1,6 @@
 import { Prisma } from '@prisma/client';
 import { NextRequest } from 'next/server';
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import prisma from '@/lib/prisma';
 import { assertAdmin } from '@/lib/rbac';
 import { logAudit } from '@/lib/audit';
@@ -27,12 +27,14 @@ function validateAppUrl(value: string): string | null {
   } catch {
     throw new AppError({
       code: 'VALIDATION_FAILED',
-      userMessage: 'Application URL must be an HTTP or HTTPS origin without credentials, a path, query, or fragment.',
+      userMessage:
+        'Application URL must be an HTTP or HTTPS origin without credentials, a path, query, or fragment.',
       fields: [
         {
           field: 'appUrl',
           code: 'invalid_url',
-          message: 'Application URL must be an HTTP or HTTPS origin without credentials, a path, query, or fragment.',
+          message:
+            'Application URL must be an HTTP or HTTPS origin without credentials, a path, query, or fragment.',
         },
       ],
     });
@@ -51,9 +53,7 @@ export async function GET() {
       appUrl: settings?.appUrl || null,
       updatedAt: settings?.updatedAt?.toISOString() || null,
       fallback:
-        process.env.NEXT_PUBLIC_APP_URL ||
-        process.env.NEXTAUTH_URL ||
-        'http://localhost:3000',
+        process.env.NEXT_PUBLIC_APP_URL || process.env.NEXTAUTH_URL || 'http://localhost:3000',
     });
   } catch (error) {
     if (isAppError(error)) return jsonError(error);

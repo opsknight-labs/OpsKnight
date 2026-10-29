@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import { defineV2Route } from '@/lib/api-v2/endpoint';
 import { logV2Audit } from '@/lib/api-v2/audit';
 import { AUTHORIZATION_ACTIONS } from '@/lib/authorization-policy';

@@ -11,7 +11,7 @@ import {
 import { readBoundedMcpText } from '@/lib/mcp/core/body';
 import { rejectDuplicateJsonKeys } from '@/lib/mcp/protocol/input';
 import { requireMcp } from '@/lib/mcp/core/errors';
-import { z } from 'zod';
+import { z } from 'zod/v3';
 
 export const runtime = 'nodejs';
 export function POST(request: Request) {

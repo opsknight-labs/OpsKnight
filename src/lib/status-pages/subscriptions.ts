@@ -8,7 +8,7 @@ import { getVerificationEmailTemplate } from '@/lib/status-page-email-templates'
 import { getBaseUrl } from '@/lib/env-validation';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { getClientIp } from '@/lib/client-ip';
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import { getServerSession } from 'next-auth';
 import { getAuthOptions } from '@/lib/auth';
 import { Prisma } from '@prisma/client';

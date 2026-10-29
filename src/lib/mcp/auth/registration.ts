@@ -1,5 +1,5 @@
 import 'server-only';
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import { requireMcp } from '../core/errors';
 
 export const MAX_DYNAMIC_CLIENTS = 5000;

@@ -46,7 +46,7 @@ import {
   notificationAgingFloor,
   NOTIFICATION_AGING_FLOOR,
 } from './notification-priority';
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import {
   countRelatedNotificationGroups,
   decideNotificationNoise,

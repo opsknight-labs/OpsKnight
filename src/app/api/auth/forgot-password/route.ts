@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import { initiatePasswordReset } from '@/lib/password-reset';
 import { logger } from '@/lib/logger';
 import { getClientIp } from '@/lib/client-ip';

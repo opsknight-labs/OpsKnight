@@ -3,7 +3,7 @@ import prisma from '@/lib/prisma';
 import { decrypt } from '@/lib/encryption';
 import { logger } from '@/lib/logger';
 import { normalizeOidcProviderType } from '@/lib/oidc-provider';
-import { z } from 'zod';
+import { z } from 'zod/v3';
 
 const OIDC_CONFIG_RECORD_CACHE_TTL_MS = Number.parseInt(
   process.env.OIDC_CONFIG_RECORD_CACHE_TTL_MS ?? '5000',

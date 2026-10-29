@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import { revalidatePath } from 'next/cache';
 import prisma from '@/lib/prisma';
 import { defineV2Route } from '@/lib/api-v2/endpoint';
@@ -10,11 +10,13 @@ import { AppError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 
 const paramsSchema = z.object({ id: z.string().trim().min(1).max(100) }).strict();
-const bodySchema = z.object({
-  derivePriorityFromUrgency: z.boolean().optional(),
-  priorityFallbackMode: z.enum(['INHERIT', 'ENABLED', 'DISABLED']).optional(),
-  rules: z.array(z.unknown()).length(4),
-}).strict();
+const bodySchema = z
+  .object({
+    derivePriorityFromUrgency: z.boolean().optional(),
+    priorityFallbackMode: z.enum(['INHERIT', 'ENABLED', 'DISABLED']).optional(),
+    rules: z.array(z.unknown()).length(4),
+  })
+  .strict();
 
 type Policy = Awaited<ReturnType<typeof saveClassificationPolicy>>;
 
@@ -39,14 +41,20 @@ export const GET = defineV2Route({
   paramsSchema,
   querySchema: z.object({}).strict(),
   handler: async ({ params }) => {
-    const exists = await prisma.service.findUnique({ where: { id: params.id }, select: { id: true } });
+    const exists = await prisma.service.findUnique({
+      where: { id: params.id },
+      select: { id: true },
+    });
     if (!exists) throw new AppError({ code: 'SERVICE_NOT_FOUND' });
     const policy = await prisma.incidentClassificationPolicy.findFirst({
       where: { scopeKey: `service:${params.id}`, sealedAt: { not: null } },
       orderBy: { version: 'desc' },
       include: { rules: true },
     });
-    return { data: { policy: policy ? policyDto(policy) : null }, headers: etagHeaders(policy?.version ?? 0) };
+    return {
+      data: { policy: policy ? policyDto(policy) : null },
+      headers: etagHeaders(policy?.version ?? 0),
+    };
   },
 });
 
@@ -78,7 +86,12 @@ export const PUT = defineV2Route({
       const policy = await saveClassificationPolicy(
         { ...body, scopeKey: `service:${params.id}`, expectedVersion },
         'API',
-        { actorId: actor.id, capabilities: ['admin.manage'], source: 'API', apiClientId: apiKey.id },
+        {
+          actorId: actor.id,
+          capabilities: ['admin.manage'],
+          source: 'API',
+          apiClientId: apiKey.id,
+        },
         tx
       );
       return { data: { policy: policyDto(policy) }, headers: etagHeaders(policy.version) };

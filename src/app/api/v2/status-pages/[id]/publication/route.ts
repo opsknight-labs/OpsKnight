@@ -1,6 +1,6 @@
 import { safePublicationDiagnostic } from '@/lib/status-pages/publication-diagnostics';
 import prisma from '@/lib/prisma';
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import { defineV2Route } from '@/lib/api-v2/endpoint';
 import { AUTHORIZATION_ACTIONS } from '@/lib/authorization-policy';
 import { StatusPageParams, requireStatusPageSettings } from '@/lib/api-v2/status-page-settings';

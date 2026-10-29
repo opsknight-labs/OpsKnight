@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import type { Prisma } from '@prisma/client';
 import { builtinFields, LIMITS, type Context, type Field, type FieldState } from './contract';
 

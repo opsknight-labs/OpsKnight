@@ -1,7 +1,7 @@
 import { assertNewIngestionWorkAllowed } from '@/lib/ingestion/delivery-context';
 import { ingestionErrorResponse } from '@/lib/ingestion/http';
 import { NextRequest } from 'next/server';
-import { ZodError } from 'zod';
+import { ZodError } from 'zod/v3';
 import prisma from '@/lib/prisma';
 import { processIntegrationEvent } from '@/lib/events';
 import { transformCloudWatchToEvent, CloudWatchAlarmMessage } from '@/lib/integrations/cloudwatch';

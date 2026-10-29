@@ -2,7 +2,7 @@
 
 import { logAudit } from '@/lib/audit';
 import OAuth2Server from '@node-oauth/oauth2-server';
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import prisma from '@/lib/prisma';

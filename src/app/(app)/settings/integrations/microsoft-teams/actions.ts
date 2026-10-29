@@ -1,7 +1,7 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import prisma from '@/lib/prisma';
 import { assertAdmin, getCurrentUser } from '@/lib/rbac';
 import { logAudit } from '@/lib/audit';
@@ -57,9 +57,7 @@ export async function saveMicrosoftTeamsConfig(
   const existingEarly = (await (
     prisma as unknown as Record<string, unknown> & {
       microsoftTeamsConfig: {
-        findFirst: (
-          a: unknown
-        ) => Promise<{
+        findFirst: (a: unknown) => Promise<{
           id: string;
           clientSecret: string;
           tenantId: string | null;
@@ -68,9 +66,7 @@ export async function saveMicrosoftTeamsConfig(
       };
     }
   ).microsoftTeamsConfig?.findFirst?.({ orderBy: { updatedAt: 'desc' } } as unknown as never)) as
-    | { id: string; clientSecret: string; clientId: string }
-    | null
-    | undefined;
+    { id: string; clientSecret: string; clientId: string } | null | undefined;
   // Allow rotating secret without re-entering clientId: reuse existing clientId when present and input is empty.
   const resolvedClientId =
     clientIdRaw || (existingEarly as unknown as { clientId?: string } | null)?.clientId || '';

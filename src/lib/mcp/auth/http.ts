@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import { mcpOrigin } from './config';
 import { requireMcp, McpBoundaryError } from '../core/errors';
 

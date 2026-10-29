@@ -1,7 +1,7 @@
 import { readStatusPageConfigurationReplay } from '@/lib/status-pages/publish-configuration';
 import { safePublicationResult } from '@/lib/status-pages/publication-diagnostics';
 import prisma from '@/lib/prisma';
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import { AppError } from '@/lib/errors';
 import { defineV2Route } from '@/lib/api-v2/endpoint';
 import { AUTHORIZATION_ACTIONS } from '@/lib/authorization-policy';

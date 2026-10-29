@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import type { Prisma } from '@prisma/client';
 import { AppError } from '@/lib/errors';
 import { RunbookSigningRotationError } from '@/lib/runbooks/execution-signing';

@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { beforeEach, expect, it } from 'vitest';
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import { defineV2Route } from '@/lib/api-v2/endpoint';
 import { requireRevisionIfMatch } from '@/lib/api-v2/concurrency';
 import { V2_MUTATION_CONTRACT } from '@/lib/api-v2/mutation-contract';

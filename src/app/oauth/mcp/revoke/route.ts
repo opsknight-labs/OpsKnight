@@ -1,6 +1,6 @@
 import { logAudit } from '@/lib/audit';
 import { withMcpDatabase } from '@/lib/database-workload';
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import prisma from '@/lib/prisma';
 import { acquireMcpOAuthSlot, admitMcpOAuthRequest } from '@/lib/mcp/auth/admission';
 import { digestMcpSecret, withMcpRuntime } from '@/lib/mcp/auth/config';
