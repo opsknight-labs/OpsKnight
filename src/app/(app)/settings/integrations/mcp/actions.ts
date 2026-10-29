@@ -106,6 +106,11 @@ export async function restoreMcpClient(form: FormData) {
   const id = z.string().min(1).max(256).parse(form.get('id'));
   await prisma.$transaction(async tx => {
     await assertCurrentAdmin(tx, actor);
+    // Anything still live from before the client was revoked must not come back with it.
+    await tx.mcpGrant.updateMany({
+      where: { clientId: id, revokedAt: null },
+      data: { revokedAt: new Date() },
+    });
     await tx.mcpClient.update({ where: { id }, data: { revokedAt: null } });
     await logAudit(
       {
@@ -284,7 +289,13 @@ export async function revokeMcpAccess(form: FormData) {
     );
     if (input.kind === 'client') {
       requireMcp(current.role === 'ADMIN', 'MCP_ADMIN_REQUIRED', 403);
-      await tx.mcpClient.update({ where: { id: input.id }, data: { revokedAt: new Date() } });
+      const now = new Date();
+      await tx.mcpClient.update({ where: { id: input.id }, data: { revokedAt: now } });
+      // "Revoke client and all its grants": make the grants themselves revoked, not only blocked.
+      await tx.mcpGrant.updateMany({
+        where: { clientId: input.id, revokedAt: null },
+        data: { revokedAt: now },
+      });
     } else {
       const grant = await tx.mcpGrant.findUnique({ where: { id: input.id } });
       requireMcp(

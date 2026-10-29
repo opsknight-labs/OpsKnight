@@ -306,6 +306,57 @@ describe('failures reach the assistant as OAuth errors', () => {
   });
 });
 
+describe('restoring a revoked client', () => {
+  beforeEach(async () => {
+    await db.mcpPolicy.create({ data: { enabled: true, dcrEnabled: true, dcrScopes: scopes } });
+  });
+  const authenticate = async (token: string) => {
+    const { authenticateMcp } = await import('@/lib/mcp/auth/principal');
+    return authenticateMcp(
+      new Request(`${origin}/mcp`, { headers: { authorization: `Bearer ${token}` } }),
+      1
+    );
+  };
+  const form = (fields: Record<string, string>) => {
+    const data = new FormData();
+    for (const [key, value] of Object.entries(fields)) data.set(key, value);
+    return data;
+  };
+
+  it('does not bring old connections back when the client is allowed again', async () => {
+    const admin = await createTestUser({ role: 'ADMIN' });
+    const { client_id } = await registerClient();
+    const token = await connectWithoutResource(client_id, admin);
+    await expect(authenticate(token.access_token)).resolves.toBeTruthy();
+    const { revokeMcpAccess, restoreMcpClient } =
+      await import('@/app/(app)/settings/integrations/mcp/actions');
+    actor.id = admin.id;
+    actor.tokenVersion = admin.tokenVersion;
+    await revokeMcpAccess(form({ kind: 'client', id: client_id }));
+    await expect(authenticate(token.access_token)).rejects.toThrow('MCP_INVALID_GRANT');
+    // Revoking the client revokes its grants themselves, not only the client record.
+    expect(await db.mcpGrant.count({ where: { clientId: client_id, revokedAt: null } })).toBe(0);
+    await restoreMcpClient(form({ id: client_id }));
+    await expect(authenticate(token.access_token)).rejects.toThrow('MCP_INVALID_GRANT');
+    // A fresh sign-in on the restored client works.
+    const again = await connectWithoutResource(client_id, admin);
+    await expect(authenticate(again.access_token)).resolves.toBeTruthy();
+  });
+
+  it('also revokes grants that were left live by a client revoked before this fix', async () => {
+    const admin = await createTestUser({ role: 'ADMIN' });
+    const { client_id } = await registerClient();
+    const token = await connectWithoutResource(client_id, admin);
+    await db.mcpClient.update({ where: { id: client_id }, data: { revokedAt: new Date() } });
+    expect(await db.mcpGrant.count({ where: { clientId: client_id, revokedAt: null } })).toBe(1);
+    const { restoreMcpClient } = await import('@/app/(app)/settings/integrations/mcp/actions');
+    actor.id = admin.id;
+    actor.tokenVersion = admin.tokenVersion;
+    await restoreMcpClient(form({ id: client_id }));
+    await expect(authenticate(token.access_token)).rejects.toThrow('MCP_INVALID_GRANT');
+  });
+});
+
 describe('one-click setup', () => {
   it('enables read-only automatic connections once and never overwrites an existing setup', async () => {
     const admin = await createTestUser({ role: 'ADMIN' });
