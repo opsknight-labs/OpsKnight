@@ -32,7 +32,7 @@ const MESSAGES = new Map<string, { title: string; body: string }>(
     },
     invalid_client: {
       title: 'This assistant is not allowed to connect',
-      body: 'It is unknown to this OpsKnight, or automatic connections are turned off. Ask an administrator.',
+      body: 'OpsKnight could not verify this assistant, or automatic connections are turned off. Ask an administrator to check the MCP page and server log.',
     },
     invalid_scope: {
       title: 'The requested access is not available',
