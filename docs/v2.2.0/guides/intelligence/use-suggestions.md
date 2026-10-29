@@ -18,7 +18,8 @@ verification:
 When an administrator has turned Intelligence on for a service, its incident pages can show:
 
 - **Similar past incidents**, with a match score and the reasons for the match. The score ranks suggestions;
-  it is not a probability.
+  it is not a probability. "Similar meaning" means the titles describe the same problem in different words
+  (shown only when your administrator has turned on semantic search).
 - **Related incidents**, linked by a grouping rule or by a responder. You can confirm, reject or unlink them.
 - **Possible causes**: recent changes on this service or a service it depends on, and incidents upstream.
   These are leads to check, not conclusions.
@@ -47,7 +48,16 @@ have caused this?" or "which runbook fits?".
   resolve or run a runbook.
 - "Basic answer from your incident data" means AI is off or unavailable, and the answer comes straight from the
   suggestions above.
-- Treat AI answers as a starting point and check them. Conversations are not saved; **New chat** or reloading
-  the page clears them.
+- Treat AI answers as a starting point and check them.
+- Conversations are not saved unless your administrator has turned saved conversations on. Then the clock
+  button lists yours: only you can see them, you can reopen or delete any of them, and they are deleted
+  automatically after a period without use. Otherwise **New chat** or reloading the page clears them.
 - Press **Escape** to close it. The arrows button moves it to the other side of the screen; your choice is
   remembered in this browser.
+
+## Summaries and postmortem drafts
+
+When AI is set up for it, an incident page offers **Summarise this incident**: it writes a short summary of what
+happened so far, the current state and suggested next steps. In the postmortem editor, **Draft with AI**
+fills in sections that are still empty and proposes action items. Nothing is saved until you save the
+postmortem, and you should edit the draft: it only knows what is recorded on the incident.

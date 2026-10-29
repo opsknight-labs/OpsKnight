@@ -6,8 +6,11 @@ cannot be selected.
 
 ## What the current build does (recommendations only)
 
-Similar incidents, reversible shadow/suggest correlation, possible causes, runbook suggestions, insights,
-the AI gateway and the read-only Squire assistant. Every feature is off by default and is configured in the UI.
+Similar incidents (lexical, plus optional semantic search), reversible shadow/suggest correlation, possible
+causes, runbook suggestions, insights with learned grouping-rule suggestions and an opt-in weekly digest, the
+AI gateway (nine provider kinds, residency tags, a versioned prompt registry, schema-validated structured
+output), incident summaries and postmortem drafts for people to review, and the read-only Squire assistant
+with opt-in saved conversations. Every feature is off by default and is configured in the UI.
 See `docs/architecture/intelligence.md`.
 
 ## Evidence that exists
@@ -30,6 +33,13 @@ See `docs/architecture/intelligence.md`.
 | UI renders and works in a real browser against a production build | `tests/e2e/intelligence-ui.spec.ts` (all five settings sections, incident suggestions and feedback, assistant from the incident panel, launcher and global search, 390 px phone width), run in the PR's Chromium browser job |
 | UI meets WCAG 2.1 AA | axe scans in the same spec over every settings section, the incident cards and the assistant dialog. The first run found a real contrast failure in the assistant, which is fixed |
 | Operators are alerted when it degrades, without paging anyone | warning-only `opsknight.intelligence` rules in `monitoring/prometheus/opsknight-alerts.yaml`, unit-tested with `promtool` in `monitoring/prometheus/intelligence.test.yml` |
+| Summaries and drafts never leave a person's visibility or bypass validation | `ai-drafts` integration test: invisible incidents refused, PERSONAL ceiling enforced, invalid model output falls through to the next provider then fails closed, nothing saved; `merge-ai-draft` fills only empty fields |
+| Prompts are versioned and guidance cannot outrank the rules | `intelligence-ai-governance` unit tests (registry, hashing, guidance sanitising and ordering); `ai-drafts` asserts prompt id/version/hash in the audit entry and revision-locked guidance |
+| Residency and new provider kinds are enforced | `intelligence-ai-governance` unit tests (region filter, kind-specific validation for Azure, Bedrock, Vertex, Mistral, Groq); architecture test requires all nine constructors to use the guarded fetch |
+| Semantic search is optional, bounded and fails soft | `semantic` integration test against the real AI SDK and a fake provider: paraphrase found only with vectors, masked text only, model-scoped vectors, unchanged titles not re-embedded, one batched call per pass, provider failure leaves lexical results intact, retention and cascade; `intelligence-semantic` unit tests for scoring floors |
+| The weekly digest is exactly-once and never competes with paging | `digest` integration test through the real notification control plane: active managers only, BULK system mail, chunked and resumable, de-duplicated even when the run record is lost, stale weeks and disabled schedules ignored, revision-locked and audited |
+| Learned rules are suggestions only and evidence-backed | `intelligence-rule-mining` unit tests (support, precision, window choice, breadth limit, id safety); `rule-learning` integration test (pending suggestions ignored, nothing changes until adopted, adoption recomputed and revision-locked) |
+| Saved conversations are private, bounded and erasable | `squire-history` integration test (encrypted at rest, owner-only reads, writes and endpoints, API keys and cross-site refused, caps, retention, delete-all on disable, cascade on user deletion); route unit tests (failed answers never saved, storage failure never breaks an answer); architecture test limits the store to its two tables |
 | Authorization matrix and OpenAPI/SDK are in sync | `api-v2-authorization-matrix`, `api-v2-docs-sync`, `api:clients:check` |
 
 ## CI evidence on the pull request
@@ -67,15 +77,17 @@ checks.
 | **Independent security review** | Not performed |
 | **Usability with real responders** | Browser-tested and accessibility-scanned, but not yet used by responders on real incidents |
 | **Load of the assistant** | Rate limits and budgets are tested for correctness, not under load |
+| **Semantic quality and cost** | The 0.7 cosine floor is a conservative default, not tuned on labelled data or across embedding models; first-day indexing cost on a large history is not measured |
+| **Native providers against live endpoints** | Azure, Bedrock, Vertex, Mistral and Groq are covered by validation and request-shape tests, not by calls to the real services |
+| **Digest deliverability** | Proven through the control plane with test providers; not observed with a real mail provider |
 
 ## Explicit non-goals of this build
 
 - Automatic grouping (AUTO) and any pre-paging hold: unimplemented and unselectable.
 - Assistant write actions (even as confirmed proposals): the assistant has no write tools by design.
-- Embedding or vector search: no `pgvector` dependency; search is full-text with optional `pg_trgm`.
-- Scheduled digest delivery: a last-7-days summary is shown on demand in Settings → Intelligence → Insights.
+- Automatically adopted rules: learned rules are only suggested and a person publishes them.
+- A vector extension: semantic search uses plain `REAL[]` columns, so no `pgvector` dependency is added.
 - MCP exposure: delivered by the native MCP work (PR #924), not this PR.
-- Native providers beyond OpenAI, Anthropic, Google and OpenAI-compatible endpoints.
 
 ## Before enabling anything beyond SUGGEST
 

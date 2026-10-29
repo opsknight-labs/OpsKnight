@@ -195,9 +195,33 @@ intelligence data. With AI enabled it answers free-form questions using a langua
 read-only tools (search incidents, get an incident, get its intelligence). Tools run under the asking
 user's own permissions through the same visibility rules as the rest of the application, so the model
 can never read more than the user can. **It has no write tools and cannot change anything**; an
-architecture test enforces that the assistant code performs no database writes. Conversations live in
-the browser only; OpsKnight stores nothing, and audit entries hold metadata (user, provider, model,
-token counts), never prompts or answers.
+architecture test enforces that the assistant code performs no database writes. By default conversations
+live in the browser only and audit entries hold metadata (user, provider, model, token counts, prompt id,
+version and hash), never prompts or answers.
+
+**Saved conversations (opt-in).** An administrator can let people save conversations. The chat route then
+stores each completed answer (never a failed or cancelled one) in `SquireConversation`/`SquireMessage`,
+encrypted at rest and registered in the encryption registry. Every read and write is keyed by the owner,
+so someone else's conversation is indistinguishable from one that does not exist; the endpoints accept
+signed-in, same-origin browsers only, never API keys. Storage is bounded (50 conversations per person,
+100 messages each), idle conversations are deleted after the configured retention (1–365 days), turning
+history off deletes all of them within one sweep, and deleting a person deletes theirs. The storage code
+lives outside the assistant module, and an architecture test limits it to those two tables.
+
+**Incident summaries and postmortem drafts.** On an incident, "Summarise" produces a short structured
+summary; in the postmortem editor, "Draft with AI" fills only fields that are still empty and adds
+de-duplicated action items. Both read the incident through the requester's own visibility, run only on
+providers whose ceiling is Personal (timelines include responder names), and validate the model's output
+against a bounded schema before anything is shown. Nothing is saved until the person saves the form.
+
+**Prompt registry and guidance.** Every prompt is a versioned entry in a registry; its id, version and
+content hash are written to the audit entry of every call. Administrators can add short guidance per
+prompt (for example house style). Guidance is sanitised, revision-locked and audited, and is appended
+after the fixed rules with an explicit statement that it cannot override them.
+
+**Structured output.** Calls that need data rather than prose ask the provider for JSON matching a schema,
+then re-validate it locally. Invalid output is never returned: the next eligible provider is tried, and if
+none produces valid output the call fails with a clear error.
 
 **Prompt-injection posture.** The browser can send only user and assistant turns (never a system turn),
 bounded in number and size. The system prompt tells the model that tool output and incident text are
@@ -205,9 +229,12 @@ data, never instructions. That prompt is defence in depth only: authority never 
 tools are read-only and permission-checked. Model output is rendered as plain text; only same-app
 `/incidents/…` and `/runbooks/…` paths become links.
 
-**Gateway.** Providers (OpenAI, Anthropic, Google, and any OpenAI-compatible endpoint such as Ollama,
-vLLM, LiteLLM or OmniRoute) are added in the UI. API keys are encrypted at rest, registered in the
-encryption registry, and never returned to the browser. The runtime is the AI SDK 6 line (the product
+**Gateway.** Providers are added in the UI: OpenAI, Anthropic, Google Gemini, Azure OpenAI, Amazon
+Bedrock, Google Vertex AI, Mistral, Groq, and any OpenAI-compatible endpoint (Ollama, vLLM, LiteLLM,
+OmniRoute). Credentials (an API key, an AWS access-key pair, or a Google service-account key) are encrypted
+at rest, registered in the encryption registry, and never returned to the browser; changing a provider's
+kind requires entering a new credential. Vertex AI obtains short-lived OAuth tokens from Google's fixed
+token endpoint; every model request still goes through the guarded fetch. The runtime is the AI SDK 6 line (the product
 is pinned to Node 20, which AI SDK 7 does not support); everything depends on a small provider-neutral
 port, so moving to a newer SDK later is a one-adapter change.
 
@@ -219,6 +246,8 @@ port, so moving to a newer SDK later is a one-adapter change.
   Fallback is ordered by priority but can never widen where data goes: a self-hosted primary does not
   fall back to an external provider unless an administrator allows it, and a provider whose ceiling is
   below the request's data class is never used. There are no hedged or parallel requests.
+- **Data residency.** A provider can carry a region tag (for example `eu`). When an allowed-regions list
+  is set, only providers tagged with one of those regions are ever used, for chat and embeddings alike.
 - **Test connection.** Each saved provider has a button that sends one fixed tiny prompt through the same
   guarded fetch and reports only a fixed category (connected, unreachable, rejected, timeout), never
   provider error text.
@@ -229,6 +258,25 @@ port, so moving to a newer SDK later is a one-adapter change.
 - **Cost controls.** Per-user requests per minute, a global daily token budget (UTC day), a cap on
   answer length and on model/tool round trips. Credential-shaped text is redacted from everything sent
   to a model, including tool results.
+
+## Semantic search (optional)
+
+With AI on, an administrator can turn on semantic search and give a provider an embedding model. Masked
+incident titles (numbers and identifiers already removed, so the request is Internal data) are then
+embedded, and similar-incident search also matches by meaning, not just wording.
+
+- **No extension.** Vectors are unit-normalised `REAL[]` rows in `IncidentEmbedding`; similarity is a dot
+  product computed in the database over a bounded number of the most recent vectors of the same model.
+  Vectors from different models are never compared.
+- **Never in the paging path or in front of analysis.** Incidents are analysed lexically as soon as they
+  are indexed. A single coalesced `EMBED_PENDING` work item then embeds up to 32 pending incidents per
+  provider call and re-queues their analysis, so a storm costs one call per batch, and a slow or failing
+  provider only delays the semantic signal. Unchanged titles are never re-embedded.
+- **Conservative scoring.** Cosine below 0.7 counts as no signal; above it the value is rescaled and can
+  raise content similarity but never lower it. The match is explained as "Similar meaning", and the raw
+  cosine is stored with the other numeric evidence. A failed semantic query falls back to lexical results.
+- **Lifecycle.** Vectors cascade with their incident and follow fingerprint retention. The AI settings
+  page shows the model in use, how many incidents are indexed, and how many are waiting.
 
 ## Per-service policies
 
@@ -257,6 +305,22 @@ job to fall behind. Everything is flag-only and a person decides what to do.
   audited global policy version; the suggestion is recomputed on the server and must match what was
   shown, so a stale page or crafted request cannot set an arbitrary value. Aggregate feedback is visible
   only to administrators.
+
+- **Suggested grouping rules.** Learned from what people decided, with no opaque model: links people made
+  or accepted are positives, suggestions they rejected or reverted are negatives. Candidates are ordinary
+  `LABEL_SET` or `CONTENT_TEMPLATE` rules. The narrowest standard window covering 90% of confirmed gaps is
+  chosen; a rule is offered only with at least three supporting links and 80% precision on reviewed
+  pairs, and is dropped if a replay over the last 30 days would group more than 30% of incidents. It runs
+  on request, read-only and bounded (2,000 decisions, 5,000 replayed incidents). Adopting one publishes a
+  new audited global policy version in the current mode; the suggestion is recomputed on the server and
+  must still be offered.
+- **Weekly digest (opt-in).** Administrators choose a day and UTC hour. Once per ISO week the lane queues
+  one `SEND_DIGEST` item; it claims an `IntelligenceDigestRun` row and hands each recipient's email to the
+  notification control plane as BULK system mail, so paging traffic is always served first and the
+  control plane owns retries and delivery history. Its de-duplication key makes each person's digest
+  exactly-once per week, even across replicas or a crash. Recipients are active people who can manage
+  intelligence (at most 100), and each digest is built from the services that person can read. A digest
+  missed during an outage is sent later that week, never carried into the next, and expires after a day.
 
 ## REST API
 
@@ -288,9 +352,8 @@ answers or error messages.
 
 ## Not yet implemented
 
-Automatic grouping, any delay before paging, write actions from the assistant, scheduled digest
-delivery (a last-7-days summary is shown on demand in Insights), embedding-based search, and learned
-correlation rules are future stages. The evidence and the open gates are tracked in
+Automatic grouping, any delay before paging or suppression, and write actions from the assistant are
+future stages. The evidence and the open gates are tracked in
 `plans/intelligence-engine/certification/README.md`. MCP exposure is delivered by the
 native MCP work, not here. Each will be introduced behind its own certification gate and will not change
 paging behaviour until that gate has passed.
