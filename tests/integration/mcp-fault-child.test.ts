@@ -20,6 +20,10 @@ it.skipIf(!child)(
       { approvalId: process.env.MCP_FAULT_APPROVAL! }
     );
     process.stdout.write(`FAULT_CHILD_DONE ${result.status}\n`);
+    // Keep the post-commit process alive until the parent injects SIGKILL. A fast
+    // normal exit would race the parent's polling and test no crash at all.
+    if (process.env.MCP_FAULT_HOLD_AFTER_COMMIT === '1')
+      await new Promise<void>(resolve => setTimeout(resolve, 120_000));
   },
   180_000
 );

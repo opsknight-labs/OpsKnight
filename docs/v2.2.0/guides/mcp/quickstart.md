@@ -1,5 +1,7 @@
 # MCP development quickstart
 
+For the complete domain-independent administrator, user, proxy and troubleshooting steps, see [Self-hosted setup](self-hosted-setup.md).
+
 This feature is in development and disabled by default. It is not yet certified for production, external clients or multi-replica deployments. See [architecture and outstanding work](../../operate/mcp/architecture.md).
 
 For a repeatable local check, install the locked dependencies on Node 20 (`npm ci --legacy-peer-deps`), start Docker, then run `npm run check:mcp:local`. The command creates its own PostgreSQL 16 container bound to loopback, installs all migrations into fresh test/browser databases, generates disposable secrets, runs typecheck, MCP unit/database/coverage checks, builds the production app and tests native consent/read/revoke in Chromium, Firefox and WebKit. It prints a private temporary evidence directory outside git and removes its own server/container on exit. Linux hosts need Playwright's system dependencies installed first. This local check does not satisfy final-SHA release certification.

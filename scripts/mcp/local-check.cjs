@@ -33,6 +33,7 @@ const report = {
 };
 let databaseOwned = false;
 let server;
+let replica;
 let active;
 let interrupted = false;
 const env = { ...process.env, CI: 'true', NEXT_TELEMETRY_DISABLED: '1' };
@@ -78,6 +79,7 @@ function stop() {
   interrupted = true;
   active?.kill('SIGTERM');
   server?.kill('SIGTERM');
+  replica?.kill('SIGTERM');
 }
 process.once('SIGINT', stop);
 process.once('SIGTERM', stop);
@@ -267,6 +269,42 @@ async function main() {
       return false;
     }
   });
+  const replicaListener = net.createServer();
+  await new Promise((resolve, reject) => {
+    replicaListener.once('error', reject);
+    replicaListener.listen(0, '127.0.0.1', resolve);
+  });
+  const replicaPort = replicaListener.address().port;
+  await new Promise(resolve => replicaListener.close(resolve));
+  env.MCP_E2E_REPLICA_URL = `http://localhost:${replicaPort}`;
+  const replicaFd = fs.openSync(path.join(output, 'replica.log'), 'w', 0o600);
+  replica = spawn(process.execPath, [path.join(buildDir, 'standalone/server.js')], {
+    cwd: root,
+    env: {
+      ...productEnvironment(),
+      PORT: String(replicaPort),
+      NODE_ENV: 'production',
+      LOG_LEVEL: 'error',
+    },
+    stdio: ['ignore', replicaFd, replicaFd],
+  });
+  fs.closeSync(replicaFd);
+  let replicaError;
+  replica.once('error', error => {
+    replicaError = error;
+  });
+  await waitFor(async () => {
+    if (replicaError || replica.exitCode !== null)
+      throw new Error('Local second replica failed to start');
+    try {
+      return (
+        await fetch(`${env.MCP_E2E_REPLICA_URL}/api/health`, { signal: AbortSignal.timeout(1000) })
+      ).ok;
+    } catch {
+      return false;
+    }
+  });
+  report.applicationReplicas = 2;
   await node('browser', 'node_modules/@playwright/test/cli.js', [
     'test',
     '-c',
@@ -283,6 +321,11 @@ main()
       server.kill('SIGTERM');
       await Promise.race([new Promise(resolve => server.once('exit', resolve)), delay(5000)]);
       if (server.exitCode === null) server.kill('SIGKILL');
+    }
+    if (replica && replica.exitCode === null) {
+      replica.kill('SIGTERM');
+      await Promise.race([new Promise(resolve => replica.once('exit', resolve)), delay(5000)]);
+      if (replica.exitCode === null) replica.kill('SIGKILL');
     }
     if (databaseOwned) {
       try {

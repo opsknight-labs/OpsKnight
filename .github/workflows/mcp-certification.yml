@@ -115,7 +115,9 @@ jobs:
           DATABASE_URL: postgresql://postgres:isolated-mcp-ci@localhost:5432/opsknight_mcp_browser_test
           HOSTNAME: localhost
           PORT: '3042'
-          # No MCP environment variables: the origin comes from the seeded App URL and the
+          MCP_E2E_REPLICA_URL: http://localhost:3043
+          # No MCP product configuration variables: MCP_E2E_* only configure the test harness.
+          # The origin comes from the seeded App URL and the
           # credential-hash key is derived from the existing application encryption key.
           MCP_E2E_OUTPUT: ${{ runner.temp }}/mcp-evidence/browser
         run: |
@@ -124,11 +126,13 @@ jobs:
           cp -R .next/static .next/standalone/.next/static
           node .next/standalone/server.js > "$RUNNER_TEMP/mcp-evidence/server.log" 2>&1 &
           appPid=$!
-          trap 'kill "$appPid"' EXIT
+          PORT=3043 node .next/standalone/server.js > "$RUNNER_TEMP/mcp-evidence/replica.log" 2>&1 &
+          replicaPid=$!
+          trap 'kill "$appPid" "$replicaPid"' EXIT
           node <<'JS'
           (async()=>{
             for(let attempt=0;attempt<60;attempt++){
-              try{if((await fetch('http://localhost:3042/api/health',{signal:AbortSignal.timeout(1000)})).ok)return;}catch{}
+              try{if((await fetch('http://localhost:3042/api/health',{signal:AbortSignal.timeout(1000)})).ok && (await fetch('http://localhost:3043/api/health',{signal:AbortSignal.timeout(1000)})).ok)return;}catch{}
               await new Promise(resolve=>setTimeout(resolve,500));
             }
             throw new Error('Local production server did not become healthy');

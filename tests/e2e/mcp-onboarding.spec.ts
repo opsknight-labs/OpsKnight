@@ -1,5 +1,9 @@
 import { test, expect } from '@playwright/test';
 import { createHash, randomBytes } from 'node:crypto';
+import { createRequire } from 'node:module';
+const { checkMcpSetup } = createRequire(import.meta.url)(
+  '../../scripts/mcp/doctor.cjs'
+) as typeof import('../../scripts/mcp/doctor.cjs');
 
 test('add URL, automatically register, sign in and revoke without manual client setup', async ({
   page,
@@ -41,6 +45,11 @@ test('add URL, automatically register, sign in and revoke without manual client 
       return { endpoint: advertised.registration_endpoint, scopes: advertised.scopes_supported };
     })
     .toEqual({ endpoint: `${origin}/oauth/mcp/register`, scopes: ['incidents:read'] });
+
+  await expect(
+    page.getByText('Automatic connections are configured', { exact: true })
+  ).toBeVisible();
+  expect((await checkMcpSetup(`${origin}/mcp`)).ready).toBe(true);
 
   const discovery = await request.get('/.well-known/oauth-authorization-server/oauth/mcp');
   const metadata = await discovery.json();
@@ -102,9 +111,10 @@ test('add URL, automatically register, sign in and revoke without manual client 
   });
   expect(exchanged.status()).toBe(200);
   const token = await exchanged.json();
-  const tools = () =>
-    request.post('/mcp', {
+  const tools = (target = origin) =>
+    request.post(`${target}/mcp`, {
       headers: {
+        host: new URL(origin).host,
         authorization: `Bearer ${token.access_token}`,
         'mcp-protocol-version': '2026-07-28',
         'mcp-method': 'tools/list',
@@ -131,6 +141,15 @@ test('add URL, automatically register, sign in and revoke without manual client 
   const names = (await allowed.json()).result.tools.map((tool: { name: string }) => tool.name);
   expect(names).toContain('incident_search');
   expect(names).not.toContain('incident_resolve');
+  const replica = process.env.MCP_E2E_REPLICA_URL;
+  if (replica) {
+    const mirrored = await tools(replica);
+    expect(mirrored.status()).toBe(200);
+    const replicaNames = (await mirrored.json()).result.tools.map(
+      (tool: { name: string }) => tool.name
+    );
+    expect(replicaNames).toEqual(names);
+  }
 
   await page.goto('/settings/integrations/mcp');
   await page
@@ -138,6 +157,7 @@ test('add URL, automatically register, sign in and revoke without manual client 
     .uncheck();
   await page.getByRole('button', { name: 'Save policy', exact: true }).click();
   await expect.poll(async () => (await tools()).status()).toBe(401);
+  if (replica) expect((await tools(replica)).status()).toBe(401);
   expect(
     await (await request.get('/.well-known/oauth-authorization-server/oauth/mcp')).json()
   ).not.toHaveProperty('registration_endpoint');

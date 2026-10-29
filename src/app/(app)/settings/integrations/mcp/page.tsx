@@ -15,6 +15,7 @@ import { getUserPermissions } from '@/lib/rbac';
 import { getMcpConfigurationStatus } from '@/lib/mcp/auth/config';
 import { requireMcp } from '@/lib/mcp/core/errors';
 import DetailHeroBanner from '@/components/ui/DetailHeroBanner';
+import { InlineNotice } from '@/components/ui/InlineNotice';
 import { Badge } from '@/components/ui/shadcn/badge';
 import { Button } from '@/components/ui/shadcn/button';
 import { Input } from '@/components/ui/shadcn/input';
@@ -138,9 +139,13 @@ export default async function McpSettings({
   ]);
   const enabled = policy?.enabled ?? false;
   const ready = configuration.issues.length === 0;
+  const automaticReady = ready && enabled && Boolean(policy?.dcrEnabled && policy.dcrScopes.length);
   const endpoint = configuration.origin ? `${configuration.origin}/mcp` : null;
   const claudeCommand = endpoint
     ? `claude mcp add --scope user --transport http opsknight '${endpoint.replaceAll("'", "'\\''")}'`
+    : null;
+  const doctorCommand = endpoint
+    ? `node scripts/mcp/doctor.cjs '${endpoint.replaceAll("'", "'\\''")}'`
     : null;
   const grantsTitle = permissions.isAdmin ? 'Client grants' : 'Your grants';
 
@@ -291,12 +296,27 @@ export default async function McpSettings({
           description="Add this server, then sign in with your own OpsKnight account."
         >
           <div className="space-y-4 py-4 text-sm">
-            {!(enabled && policy?.dcrEnabled) && (
-              <p>
-                Ask an administrator to enable automatic assistant connections below and save the
-                policy first.
-              </p>
-            )}
+            <InlineNotice
+              tone={automaticReady ? 'success' : 'warning'}
+              title={
+                automaticReady
+                  ? 'Automatic connections are configured'
+                  : 'Finish administrator setup first'
+              }
+            >
+              {automaticReady ? (
+                <p>
+                  Users can add the MCP URL, sign in and approve their own access. Their existing
+                  OpsKnight permissions still apply.
+                </p>
+              ) : (
+                <p>
+                  Configure the App URL in Settings → System, then enable MCP and automatic
+                  assistant registration with at least one allowed scope and save the policy. No
+                  separate MCP secret is needed.
+                </p>
+              )}
+            </InlineNotice>
             <div className="space-y-2">
               <p className="font-medium">Claude Code</p>
               <McpCopyField value={claudeCommand!} label="Claude Code setup command" />
@@ -314,9 +334,31 @@ export default async function McpSettings({
               </p>
             </div>
             <p className="text-muted-foreground">
+              Manage access below under {permissions.isAdmin ? 'Client grants' : 'Your grants'}.
+              Revoking a connection blocks its tokens; reconnecting requires sign-in and consent
+              again.
+            </p>
+            <p className="text-muted-foreground">
               Each user gets a separate, revocable connection with their own current permissions. No
               separate MCP secret is required.
             </p>
+            {permissions.isAdmin && (
+              <details className="rounded-md border border-border p-3">
+                <summary className="cursor-pointer font-medium">Connection troubleshooting</summary>
+                <div className="space-y-2 pt-3">
+                  <p>
+                    From your OpsKnight checkout or application container, run this read-only setup
+                    check. It uses your configured URL and creates no clients, tokens or grants.
+                  </p>
+                  <McpCopyField value={doctorCommand!} label="MCP setup check command" />
+                  <p className="text-muted-foreground">
+                    For assistants hosted outside your network, the URL must be reachable from that
+                    assistant. Keep HTTPS enabled and preserve the public Host and OAuth headers
+                    through your reverse proxy.
+                  </p>
+                </div>
+              </details>
+            )}
           </div>
         </SettingsSection>
       )}
