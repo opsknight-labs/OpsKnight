@@ -7,7 +7,12 @@ import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import prisma from '@/lib/prisma';
 import { getCurrentUser, getUserPermissions } from '@/lib/rbac';
-import { mcpConfigurationIssues, mcpIssuer, mcpResource } from '@/lib/mcp/auth/config';
+import {
+  getMcpConfigurationStatus,
+  loadMcpRuntime,
+  mcpIssuer,
+  mcpResource,
+} from '@/lib/mcp/auth/config';
 import { mcpOAuthServer } from '@/lib/mcp/auth/oauth-model';
 import { MCP_CATALOG, isMcpApprovalGated, isMcpExecutable } from '@/lib/mcp/catalog';
 import { isIP } from 'node:net';
@@ -107,7 +112,10 @@ export async function updateMcpPolicy(form: FormData) {
     'MCP_INVALID_CIMD_HOST'
   );
   // Refuse to switch MCP on when its bootstrap configuration would fail at request time.
-  requireMcp(!input.enabled || !mcpConfigurationIssues().length, 'MCP_CONFIGURATION_INVALID');
+  requireMcp(
+    !input.enabled || !(await getMcpConfigurationStatus({ force: true })).issues.length,
+    'MCP_CONFIGURATION_INVALID'
+  );
   const cimdScopes = parseScopes(input.cimdScopes);
   requireMcp(
     !input.cimdEnabled || (cimdAllowedHosts.length > 0 && cimdScopes.length > 0),
@@ -228,7 +236,32 @@ export async function revokeMcpAccess(form: FormData) {
   revalidatePath(settingsPath);
 }
 
+/** Revokes every active MCP grant at once, e.g. after a suspected credential exposure. */
+export async function revokeAllMcpConnections(form: FormData) {
+  const actor = await admin();
+  requireMcp(form.get('confirm') === 'on', 'MCP_CONFIRMATION_REQUIRED');
+  await prisma.$transaction(async tx => {
+    await assertCurrentAdmin(tx, actor);
+    const revoked = await tx.mcpGrant.updateMany({
+      where: { revokedAt: null },
+      data: { revokedAt: new Date() },
+    });
+    await logAudit(
+      {
+        source: 'UI',
+        action: 'mcp.grants.revoked_all',
+        entityType: 'SYSTEM_CONFIG',
+        actorId: actor.id,
+        details: { revokedGrants: revoked.count },
+      },
+      tx
+    );
+  });
+  revalidatePath(settingsPath);
+}
+
 export async function decideMcpConsent(form: FormData) {
+  await loadMcpRuntime();
   const actor = await getCurrentUser();
   const input = z
     .object({ id: z.string().min(1).max(128), decision: z.enum(['allow', 'deny']) })

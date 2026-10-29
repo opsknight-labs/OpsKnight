@@ -73,7 +73,6 @@ beforeAll(async () => {
   process.env.MCP_DATABASE_URL = process.env.DATABASE_URL;
   process.env.MCP_DATABASE_POOL_SIZE = '2';
   process.env.MCP_PUBLIC_ORIGIN = 'http://localhost:3000';
-  process.env.MCP_TOKEN_HASH_SECRET = randomBytes(32).toString('hex');
   await resetDatabase();
   await db.mcpPolicy.create({
     data: { enabled: true, writesEnabled: false, requestsPerMinute: 600 },

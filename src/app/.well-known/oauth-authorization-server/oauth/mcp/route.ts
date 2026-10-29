@@ -1,9 +1,10 @@
 import prisma from '@/lib/prisma';
-import { mcpIssuer } from '@/lib/mcp/auth/config';
+import { loadMcpRuntime, mcpIssuer } from '@/lib/mcp/auth/config';
 import { withMcpDatabase } from '@/lib/database-workload';
 
 export function GET() {
   return withMcpDatabase(async () => {
+    await loadMcpRuntime();
     const issuer = mcpIssuer();
     const policy = await prisma.mcpPolicy.findUnique({
       where: { id: 'default' },

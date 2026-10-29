@@ -18,7 +18,6 @@ beforeAll(async () => {
   if (!url.pathname.endsWith('_test') || !['127.0.0.1', 'localhost'].includes(url.hostname))
     throw new Error('Owned local PostgreSQL test database required');
   process.env.MCP_PUBLIC_ORIGIN = 'http://localhost:3000';
-  process.env.MCP_TOKEN_HASH_SECRET = randomBytes(32).toString('hex');
   await resetDatabase();
 }, 60000);
 beforeEach(async () => {

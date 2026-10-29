@@ -3,7 +3,7 @@ import { withMcpDatabase } from '@/lib/database-workload';
 import prisma from '@/lib/prisma';
 import { getCurrentUser } from '@/lib/rbac';
 import { checkRateLimit } from '@/lib/rate-limit';
-import { mcpOrigin, mcpResource } from '@/lib/mcp/auth/config';
+import { mcpOrigin, mcpResource, withMcpRuntime } from '@/lib/mcp/auth/config';
 import {
   assertMcpHost,
   authorizationQuerySchema,
@@ -15,7 +15,7 @@ import { isCimdClientId, resolveCimdClient } from '@/lib/mcp/auth/cimd';
 import { AppError } from '@/lib/errors';
 
 export function GET(request: Request) {
-  return withMcpDatabase(() => handleGet(request));
+  return withMcpDatabase(() => withMcpRuntime(() => handleGet(request)));
 }
 
 async function handleGet(request: Request) {

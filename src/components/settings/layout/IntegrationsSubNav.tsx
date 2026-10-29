@@ -5,10 +5,10 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import { SlackLogo, JiraLogo, MicrosoftTeamsLogo } from '@/components/common/BrandLogos';
-import { MessageSquare } from 'lucide-react';
+import { Bot, MessageSquare } from 'lucide-react';
 
 const INTEGRATION_LINKS = [
-  { id: 'mcp', label: 'MCP', href: '/settings/integrations/mcp', icon: MessageSquare },
+  { id: 'mcp', label: 'MCP (AI Assistants)', href: '/settings/integrations/mcp', icon: Bot },
   { id: 'slack', label: 'Slack', href: '/settings/integrations/slack', icon: SlackLogo },
   {
     id: 'microsoft-teams',

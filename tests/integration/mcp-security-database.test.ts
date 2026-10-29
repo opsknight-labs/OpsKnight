@@ -22,7 +22,6 @@ beforeAll(async () => {
   if (!new URL(process.env.DATABASE_URL ?? '').pathname.endsWith('_test'))
     throw new Error('Dedicated test DB required');
   process.env.MCP_PUBLIC_ORIGIN = 'http://localhost:3000';
-  process.env.MCP_TOKEN_HASH_SECRET = 'test-only-mcp-secret-at-least-32-bytes';
   await resetDatabase();
 }, 60000);
 // Tests own fresh principals/resources. Repeated global truncation can outlive

@@ -9,11 +9,13 @@ const { spawn, execFileSync } = require('node:child_process');
 
 if (process.argv.includes('--help')) {
   process.stdout.write(
-    'Node 20+, Docker and installed locked dependencies required.\nCreates disposable PostgreSQL, builds and tests MCP in Chromium, Firefox and WebKit.\nLogs remain outside git; owned server and database are removed on exit.\n'
+    'Node 20+, Docker and installed locked dependencies required.\nCreates disposable PostgreSQL, builds and tests MCP in Chromium, Firefox and WebKit.\nUse --browser-only to skip previously completed unit/database/coverage stages.\nLogs remain outside git; owned server and database are removed on exit.\n'
   );
   process.exit(0);
 }
-if (process.argv.length > 2) throw new Error('Unexpected argument; use --help');
+const browserOnly = process.argv.includes('--browser-only');
+if (process.argv.slice(2).some(arg => arg !== '--browser-only'))
+  throw new Error('Unexpected argument; use --help');
 if (Number(process.versions.node.split('.')[0]) < 20) throw new Error('Node 20+ required');
 const root = path.resolve(__dirname, '../..');
 const output = fs.mkdtempSync(path.join(os.tmpdir(), 'opsknight-mcp-local-'));
@@ -21,6 +23,7 @@ fs.chmodSync(output, 0o700);
 const container = `opsknight-mcp-local-${randomBytes(6).toString('hex')}`;
 const report = {
   certified: false,
+  mode: browserOnly ? 'browser-only' : 'full',
   sourceSha: execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim(),
   dirty: Boolean(
     execFileSync('git', ['status', '--porcelain'], { cwd: root, encoding: 'utf8' }).trim()
@@ -33,12 +36,15 @@ let server;
 let active;
 let interrupted = false;
 const env = { ...process.env, CI: 'true', NEXT_TELEMETRY_DISABLED: '1' };
-for (const key of [
-  'NEXTAUTH_SECRET',
-  'ENCRYPTION_KEY',
-  'API_KEY_SECRET',
-  'MCP_TOKEN_HASH_SECRET',
-]) {
+// Fixtures must use the generated application key and database-managed MCP defaults.
+for (const key of Object.keys(env)) {
+  if (key.startsWith('MCP_') || key === 'ENCRYPTION_KEYS') delete env[key];
+}
+const buildDir = env.BUILD_DIR || '.next';
+function productEnvironment() {
+  return Object.fromEntries(Object.entries(env).filter(([key]) => !key.startsWith('MCP_')));
+}
+for (const key of ['NEXTAUTH_SECRET', 'ENCRYPTION_KEY', 'API_KEY_SECRET']) {
   env[key] = randomBytes(32).toString('hex');
 }
 function run(name, command, args, stageEnv = env) {
@@ -88,7 +94,6 @@ async function main() {
   Object.assign(env, {
     NEXTAUTH_URL: origin,
     NEXT_PUBLIC_APP_URL: origin,
-    MCP_PUBLIC_ORIGIN: origin,
     MCP_E2E_BASE_URL: origin,
     MCP_E2E_OUTPUT: path.join(output, 'browser'),
     MCP_QUERY_PROFILE_OUTPUT: path.join(output, 'query-profile.json'),
@@ -139,71 +144,73 @@ async function main() {
   });
   env.DATABASE_URL = `postgresql://postgres:${password}@127.0.0.1:${pgPort}/opsknight_mcp_test`;
   env.WEB_DATABASE_URL = env.DATABASE_URL;
-  env.MCP_DATABASE_URL = env.DATABASE_URL;
-  env.MCP_DATABASE_POOL_SIZE = '2';
   await node('prisma-generate', 'node_modules/prisma/build/index.js', ['generate']);
   await node('migrate', 'node_modules/prisma/build/index.js', ['migrate', 'deploy']);
-  await node('typecheck', 'node_modules/typescript/bin/tsc', ['--noEmit']);
-  await node('mcp-unit', 'node_modules/vitest/vitest.mjs', [
-    'run',
-    '--no-file-parallelism',
-    '--maxWorkers=1',
-    'tests/mcp',
-  ]);
-  await node('database-config', 'node_modules/vitest/vitest.mjs', [
-    'run',
-    '--no-file-parallelism',
-    '--maxWorkers=1',
-    'tests/lib/prisma-datasource.test.ts',
-    'tests/lib/deployment-config-unit.test.ts',
-  ]);
-  await node('mcp-database', 'node_modules/vitest/vitest.mjs', [
-    'run',
-    '-c',
-    'vitest.int.config.ts',
-    '--no-file-parallelism',
-    '--maxWorkers=1',
-    'tests/integration/mcp-security-database.test.ts',
-    'tests/integration/mcp-database-isolation.test.ts',
-    'tests/integration/mcp-query-profile.test.ts',
-    'tests/integration/mcp-runbook-approval.test.ts',
-    'tests/integration/mcp-postmortem-context.test.ts',
-    'tests/integration/mcp-operation-approval.test.ts',
-    'tests/integration/mcp-approval-crash-safety.test.ts',
-    'tests/integration/mcp-approval-teams-policies.test.ts',
-    'tests/integration/mcp-approval-automation.test.ts',
-    'tests/integration/mcp-approval-runbook-rules.test.ts',
-    'tests/integration/mcp-approval-incidents.test.ts',
-    'tests/integration/mcp-approval-settings.test.ts',
-    'tests/integration/mcp-approval-reporting.test.ts',
-    'tests/integration/mcp-approval-postmortems.test.ts',
-    'tests/integration/mcp-approval-runbooks.test.ts',
-    'tests/integration/mcp-approval-schedules.test.ts',
-    'tests/integration/mcp-approval-services.test.ts',
-    'tests/integration/mcp-approval-status-pages.test.ts',
-    'tests/integration/mcp-protocol-features.test.ts',
-    'tests/integration/mcp-tasks.test.ts',
-    'tests/integration/mcp-client-metadata.test.ts',
-    'tests/integration/mcp-approval-destructive.test.ts',
-    'tests/integration/mcp-approval-destructive-safety.test.ts',
-    'tests/integration/mcp-approval-natural.test.ts',
-    'tests/integration/mcp-approval-destructive-items.test.ts',
-    'tests/integration/mcp-item-previews.test.ts',
-    'tests/integration/mcp-sensitive-reads.test.ts',
-    'tests/integration/mcp-sensitive-reads-config.test.ts',
-    'tests/integration/mcp-sensitive-reads-post.test.ts',
-    'tests/integration/mcp-fault-injection.test.ts',
-    'tests/integration/mcp-fault-child.test.ts',
-    'tests/integration/mcp-load-worker.test.ts',
-  ]);
-  await node(
-    'coverage',
-    'node_modules/ts-node/dist/bin.js',
-    ['-r', 'tsconfig-paths/register', 'scripts/mcp/coverage-matrix.ts'],
-    { ...env, TS_NODE_PROJECT: 'tsconfig.script.json' }
-  );
+  if (!browserOnly) {
+    await node('typecheck', 'node_modules/typescript/bin/tsc', ['--noEmit']);
+    await node('mcp-unit', 'node_modules/vitest/vitest.mjs', [
+      'run',
+      '--no-file-parallelism',
+      '--maxWorkers=1',
+      'tests/mcp',
+    ]);
+    await node('database-config', 'node_modules/vitest/vitest.mjs', [
+      'run',
+      '--no-file-parallelism',
+      '--maxWorkers=1',
+      'tests/lib/prisma-datasource.test.ts',
+      'tests/lib/deployment-config-unit.test.ts',
+    ]);
+    await node('mcp-database', 'node_modules/vitest/vitest.mjs', [
+      'run',
+      '-c',
+      'vitest.int.config.ts',
+      '--no-file-parallelism',
+      '--maxWorkers=1',
+      'tests/integration/mcp-security-database.test.ts',
+      'tests/integration/mcp-database-isolation.test.ts',
+      'tests/integration/mcp-query-profile.test.ts',
+      'tests/integration/mcp-runbook-approval.test.ts',
+      'tests/integration/mcp-postmortem-context.test.ts',
+      'tests/integration/mcp-operation-approval.test.ts',
+      'tests/integration/mcp-approval-crash-safety.test.ts',
+      'tests/integration/mcp-approval-teams-policies.test.ts',
+      'tests/integration/mcp-approval-automation.test.ts',
+      'tests/integration/mcp-approval-runbook-rules.test.ts',
+      'tests/integration/mcp-approval-incidents.test.ts',
+      'tests/integration/mcp-approval-settings.test.ts',
+      'tests/integration/mcp-approval-reporting.test.ts',
+      'tests/integration/mcp-approval-postmortems.test.ts',
+      'tests/integration/mcp-approval-runbooks.test.ts',
+      'tests/integration/mcp-approval-schedules.test.ts',
+      'tests/integration/mcp-approval-services.test.ts',
+      'tests/integration/mcp-approval-status-pages.test.ts',
+      'tests/integration/mcp-protocol-features.test.ts',
+      'tests/integration/mcp-tasks.test.ts',
+      'tests/integration/mcp-client-metadata.test.ts',
+      'tests/integration/mcp-managed-config.test.ts',
+      'tests/integration/mcp-approval-destructive.test.ts',
+      'tests/integration/mcp-approval-destructive-safety.test.ts',
+      'tests/integration/mcp-approval-natural.test.ts',
+      'tests/integration/mcp-approval-destructive-items.test.ts',
+      'tests/integration/mcp-item-previews.test.ts',
+      'tests/integration/mcp-sensitive-reads.test.ts',
+      'tests/integration/mcp-sensitive-reads-config.test.ts',
+      'tests/integration/mcp-sensitive-reads-post.test.ts',
+      'tests/integration/mcp-fault-injection.test.ts',
+      'tests/integration/mcp-fault-child.test.ts',
+      'tests/integration/mcp-load-worker.test.ts',
+    ]);
+    await node(
+      'coverage',
+      'node_modules/ts-node/dist/bin.js',
+      ['-r', 'tsconfig-paths/register', 'scripts/mcp/coverage-matrix.ts'],
+      { ...env, TS_NODE_PROJECT: 'tsconfig.script.json' }
+    );
+  }
   await node('build', 'node_modules/next/dist/bin/next', ['build', '--webpack'], {
-    ...env, NODE_OPTIONS: env.NODE_OPTIONS || '--max-old-space-size=6144',
+    ...productEnvironment(),
+    NODE_OPTIONS: env.NODE_OPTIONS || '--max-old-space-size=6144',
   });
   await run('browser-database', 'docker', [
     'exec',
@@ -215,7 +222,6 @@ async function main() {
   ]);
   env.DATABASE_URL = env.DATABASE_URL.replace('/opsknight_mcp_test', '/opsknight_mcp_browser_test');
   env.WEB_DATABASE_URL = env.DATABASE_URL;
-  env.MCP_DATABASE_URL = env.DATABASE_URL;
   await node('browser-migrate', 'node_modules/prisma/build/index.js', ['migrate', 'deploy']);
   await node('browser-seed', 'scripts/mcp/seed-local.cjs');
   await node('browser-auth', 'scripts/prepare-authentication-diagnostics.cjs');
@@ -225,16 +231,23 @@ async function main() {
     'firefox',
     'webkit',
   ]);
-  fs.cpSync(path.join(root, 'public'), path.join(root, '.next/standalone/public'), {
+  fs.cpSync(path.join(root, 'public'), path.join(root, buildDir, 'standalone/public'), {
     recursive: true,
   });
-  fs.cpSync(path.join(root, '.next/static'), path.join(root, '.next/standalone/.next/static'), {
-    recursive: true,
-  });
+  fs.cpSync(
+    path.join(root, buildDir, 'static'),
+    path.join(root, buildDir, 'standalone', buildDir, 'static'),
+    {
+      recursive: true,
+    }
+  );
+  report.productMcpEnvironmentVariables = Object.keys(productEnvironment()).filter(key =>
+    key.startsWith('MCP_')
+  );
   const fd = fs.openSync(path.join(output, 'server.log'), 'w', 0o600);
-  server = spawn(process.execPath, ['.next/standalone/server.js'], {
+  server = spawn(process.execPath, [path.join(buildDir, 'standalone/server.js')], {
     cwd: root,
-    env: { ...env, NODE_ENV: 'production', LOG_LEVEL: 'error' },
+    env: { ...productEnvironment(), NODE_ENV: 'production', LOG_LEVEL: 'error' },
     stdio: ['ignore', fd, fd],
   });
   fs.closeSync(fd);
