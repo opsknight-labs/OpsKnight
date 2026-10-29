@@ -32,7 +32,7 @@ const SHARED_RULES = [
 export const BUILT_IN_PROMPTS: readonly BuiltInPrompt[] = [
   {
     id: 'squire.system',
-    version: 3,
+    version: 4,
     title: 'Assistant',
     purpose: 'System prompt for free-form questions in the assistant.',
     capability: 'SQUIRE_CHAT',
@@ -40,10 +40,12 @@ export const BUILT_IN_PROMPTS: readonly BuiltInPrompt[] = [
     rules: [
       'You are {{name}}, a concise assistant inside OpsKnight, an incident-management product. You help on-call engineers understand incidents.',
       'Rules:',
-      '- You can only read information through the provided tools. You cannot change, acknowledge, resolve, page or run anything. If asked to, say you cannot and point the user to the relevant page.',
+      '- You read information only through the provided tools. Look facts up instead of guessing; if the tools do not have it, say so.',
+      '- You cannot change anything yourself. When an action would help (acknowledge, add a note, resolve, reassign, link incidents, open a runbook or postmortem), call the matching propose_ tool. The user sees it as a card and decides; never say an action was done, only that you suggested it.',
+      '- Propose an action only when the user asked for it or it clearly follows from the conversation, and at most two per answer.',
       SHARED_RULES,
-      '- Refer to incidents by title and as /incidents/<id>.',
-      '- Be brief: short sentences and bullet points. Plain text only, no markdown tables or HTML.',
+      '- Cite what you rely on: refer to incidents by title followed by /incidents/<id>, and runbooks by name followed by /runbooks/<id>.',
+      '- Lead with the answer. Be brief: short sentences and bullet points. Plain text only, no markdown tables or HTML.',
     ].join('\n'),
   },
   {
@@ -80,7 +82,12 @@ export const BUILT_IN_PROMPTS: readonly BuiltInPrompt[] = [
 ];
 
 const byId = new Map(BUILT_IN_PROMPTS.map(prompt => [prompt.id, prompt]));
-const hashes = new Map(BUILT_IN_PROMPTS.map(prompt => [prompt.id, createHash('sha256').update(prompt.rules).digest('hex').slice(0, 12)]));
+const hashes = new Map(
+  BUILT_IN_PROMPTS.map(prompt => [
+    prompt.id,
+    createHash('sha256').update(prompt.rules).digest('hex').slice(0, 12),
+  ])
+);
 
 export const MAX_GUIDANCE_LENGTH = 2000;
 
@@ -124,7 +131,8 @@ export function renderPrompt(
 ): RenderedPrompt {
   const prompt = getBuiltInPrompt(id);
   let rules = prompt.rules;
-  for (const [key, value] of Object.entries(variables)) rules = rules.split(`{{${key}}}`).join(value);
+  for (const [key, value] of Object.entries(variables))
+    rules = rules.split(`{{${key}}}`).join(value);
   const parts = [rules, ...context];
   if (guidance && guidance.text.trim()) {
     parts.push(
@@ -134,17 +142,27 @@ export function renderPrompt(
   }
   return {
     system: parts.join('\n'),
-    meta: { id: prompt.id, version: prompt.version, hash: promptHash(prompt.id), guidanceRevision: guidance?.revision ?? 0 },
+    meta: {
+      id: prompt.id,
+      version: prompt.version,
+      hash: promptHash(prompt.id),
+      guidanceRevision: guidance?.revision ?? 0,
+    },
   };
 }
 
 export async function getGuidance(promptId: string, client: typeof prisma = prisma) {
-  const row = await client.aiPromptGuidance.findUnique({ where: { promptId }, select: { text: true, revision: true } });
+  const row = await client.aiPromptGuidance.findUnique({
+    where: { promptId },
+    select: { text: true, revision: true },
+  });
   return row && row.text ? row : null;
 }
 
 export async function listGuidance(client: typeof prisma = prisma) {
-  const rows = await client.aiPromptGuidance.findMany({ select: { promptId: true, text: true, revision: true, updatedAt: true } });
+  const rows = await client.aiPromptGuidance.findMany({
+    select: { promptId: true, text: true, revision: true, updatedAt: true },
+  });
   return new Map(rows.map(row => [row.promptId, row]));
 }
 
@@ -158,8 +176,12 @@ export async function setGuidance(
   const text = sanitizeGuidance(input.text);
   return prisma.$transaction(async tx => {
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`ai-guidance:${promptId}`}, 0))`;
-    const previous = await tx.aiPromptGuidance.findUnique({ where: { promptId }, select: { text: true, revision: true } });
-    if ((previous?.revision ?? 0) !== input.expectedRevision) throw new AppError({ code: 'PRECONDITION_FAILED' });
+    const previous = await tx.aiPromptGuidance.findUnique({
+      where: { promptId },
+      select: { text: true, revision: true },
+    });
+    if ((previous?.revision ?? 0) !== input.expectedRevision)
+      throw new AppError({ code: 'PRECONDITION_FAILED' });
     const next = await tx.aiPromptGuidance.upsert({
       where: { promptId },
       create: { promptId, text, revision: 1, updatedBy: actor.actorId },

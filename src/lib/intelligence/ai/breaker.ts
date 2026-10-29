@@ -28,7 +28,20 @@ export class ProviderBreakers {
     return state;
   }
 
-  /** True when a call may go to this provider now. Half-open admits exactly one probe at a time. */
+  /**
+   * Side-effect free: true when a call could go to this provider now (closed, or open long enough for its
+   * probe and no probe in flight). Use it to choose providers; only `canAttempt` takes the probe.
+   */
+  available(id: string): boolean {
+    const state = this.state(id);
+    if (state.failures < this.options.failureThreshold) return true;
+    return this.now() >= state.openUntil && !state.probing;
+  }
+
+  /**
+   * Call immediately before contacting the provider. True when the call may proceed; half-open admits
+   * exactly one probe at a time, and that probe must end in recordSuccess, recordFailure or release.
+   */
   canAttempt(id: string): boolean {
     const state = this.state(id);
     if (state.failures < this.options.failureThreshold) return true;
@@ -36,6 +49,11 @@ export class ProviderBreakers {
     if (state.probing) return false;
     state.probing = true;
     return true;
+  }
+
+  /** Ends a call that says nothing about the provider's health (the caller cancelled), freeing its probe. */
+  release(id: string): void {
+    this.state(id).probing = false;
   }
 
   recordSuccess(id: string): void {
@@ -46,7 +64,8 @@ export class ProviderBreakers {
     const state = this.state(id);
     state.failures += 1;
     state.probing = false;
-    if (state.failures >= this.options.failureThreshold) state.openUntil = this.now() + this.options.openMs;
+    if (state.failures >= this.options.failureThreshold)
+      state.openUntil = this.now() + this.options.openMs;
   }
 
   isOpen(id: string): boolean {

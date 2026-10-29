@@ -24,7 +24,9 @@ function failure(error: unknown): AiActionState {
           : error.userMessage;
     return { message, ok: false };
   }
-  logger.error('[Intelligence] AI settings action failed', { error: error instanceof Error ? error.message : String(error) });
+  logger.error('[Intelligence] AI settings action failed', {
+    error: error instanceof Error ? error.message : String(error),
+  });
   return { message: 'Unable to save. Refresh and try again.', ok: false };
 }
 
@@ -35,7 +37,10 @@ const text = (form: FormData, name: string) => {
 const integer = (form: FormData, name: string) => Number(text(form, name));
 const checked = (form: FormData, name: string) => form.get(name) === 'on';
 
-export async function saveAiSettingsAction(_state: AiActionState, form: FormData): Promise<AiActionState> {
+export async function saveAiSettingsAction(
+  _state: AiActionState,
+  form: FormData
+): Promise<AiActionState> {
   try {
     const actor = await assertCapability(CAPABILITIES.INTELLIGENCE_MANAGE);
     await updateAiSettings(
@@ -49,6 +54,7 @@ export async function saveAiSettingsAction(_state: AiActionState, form: FormData
         allowExternalFallback: checked(form, 'allowExternalFallback'),
         requestsPerMinutePerUser: integer(form, 'requestsPerMinutePerUser'),
         dailyTokenBudget: integer(form, 'dailyTokenBudget'),
+        userDailyTokenBudget: integer(form, 'userDailyTokenBudget'),
         maxOutputTokens: integer(form, 'maxOutputTokens'),
         requestTimeoutMs: integer(form, 'requestTimeoutMs'),
         allowedDataRegions: text(form, 'allowedDataRegions')
@@ -72,7 +78,10 @@ export async function saveAiSettingsAction(_state: AiActionState, form: FormData
   }
 }
 
-export async function saveAiProviderAction(_state: AiActionState, form: FormData): Promise<AiActionState> {
+export async function saveAiProviderAction(
+  _state: AiActionState,
+  form: FormData
+): Promise<AiActionState> {
   try {
     const actor = await assertCapability(CAPABILITIES.INTELLIGENCE_MANAGE);
     const id = text(form, 'id');
@@ -110,13 +119,18 @@ export async function saveAiProviderAction(_state: AiActionState, form: FormData
   }
 }
 
-export async function deleteAiProviderAction(_state: AiActionState, form: FormData): Promise<AiActionState> {
+export async function deleteAiProviderAction(
+  _state: AiActionState,
+  form: FormData
+): Promise<AiActionState> {
   try {
     const actor = await assertCapability(CAPABILITIES.INTELLIGENCE_MANAGE);
     const result = await deleteAiProvider(text(form, 'id'), { actorId: actor.id, source: 'UI' });
     invalidateGatewayCache();
     revalidatePath(PATH);
-    return result === 'deleted' ? { message: 'Provider removed.', ok: true } : { message: 'That provider no longer exists.', ok: false };
+    return result === 'deleted'
+      ? { message: 'Provider removed.', ok: true }
+      : { message: 'That provider no longer exists.', ok: false };
   } catch (error) {
     return failure(error);
   }
@@ -131,7 +145,10 @@ const TEST_MESSAGES = {
   FAILED: 'The provider returned an error. Try again later.',
 } as const;
 
-export async function testAiProviderAction(_state: AiActionState, form: FormData): Promise<AiActionState> {
+export async function testAiProviderAction(
+  _state: AiActionState,
+  form: FormData
+): Promise<AiActionState> {
   try {
     await assertCapability(CAPABILITIES.INTELLIGENCE_MANAGE);
     const result = await testProviderConnection(text(form, 'id'));
@@ -143,7 +160,10 @@ export async function testAiProviderAction(_state: AiActionState, form: FormData
   }
 }
 
-export async function savePromptGuidanceAction(_state: AiActionState, form: FormData): Promise<AiActionState> {
+export async function savePromptGuidanceAction(
+  _state: AiActionState,
+  form: FormData
+): Promise<AiActionState> {
   try {
     const actor = await assertCapability(CAPABILITIES.INTELLIGENCE_MANAGE);
     const result = await setGuidance(
@@ -154,7 +174,8 @@ export async function savePromptGuidanceAction(_state: AiActionState, form: Form
     revalidatePath(PATH);
     return { message: `Guidance saved (revision ${result.revision}).`, ok: true };
   } catch (error) {
-    if (error instanceof Error && error.message.startsWith('Unknown prompt')) return { message: 'Unknown prompt.', ok: false };
+    if (error instanceof Error && error.message.startsWith('Unknown prompt'))
+      return { message: 'Unknown prompt.', ok: false };
     return failure(error);
   }
 }

@@ -8,7 +8,15 @@ const turns = vi.hoisted(() => ({ run: vi.fn() }));
 vi.mock('@/lib/intelligence/squire/chat', () => ({ streamSquire: turns.run }));
 
 const store = vi.hoisted(() => ({ status: vi.fn(), record: vi.fn() }));
-vi.mock('@/lib/intelligence/conversations/store', () => ({ getHistoryStatus: store.status, recordExchange: store.record }));
+vi.mock('@/lib/intelligence/conversations/store', () => ({
+  getHistoryStatus: store.status,
+  recordExchange: store.record,
+}));
+
+const incidents = vi.hoisted(() => ({ read: vi.fn() }));
+vi.mock('@/lib/intelligence/squire/deterministic', () => ({
+  readIncidentForActor: incidents.read,
+}));
 
 import { POST } from '@/app/api/intelligence/squire/route';
 
@@ -31,6 +39,9 @@ beforeEach(() => {
   turns.run.mockReset().mockImplementation(events);
   store.status.mockReset().mockResolvedValue({ enabled: false, retentionDays: 30 });
   store.record.mockReset().mockResolvedValue('conv1');
+  incidents.read
+    .mockReset()
+    .mockImplementation(async (_actor: unknown, id: string) => (id === 'inc1' ? { id } : null));
 });
 
 describe('POST /api/intelligence/squire', () => {
@@ -40,15 +51,34 @@ describe('POST /api/intelligence/squire', () => {
     expect(response.headers.get('content-type')).toContain('application/x-ndjson');
     expect(response.headers.get('cache-control')).toContain('no-store');
     expect(response.headers.get('x-content-type-options')).toBe('nosniff');
-    const lines = (await response.text()).trim().split('\n').map(line => JSON.parse(line));
-    expect(lines).toEqual([{ type: 'meta', mode: 'basic', name: 'Squire' }, { type: 'delta', text: 'hi' }, { type: 'done' }]);
-    expect(turns.run).toHaveBeenCalledWith({ id: 'u1', role: 'ADMIN' }, { message: 'hello', history: [] }, expect.any(AbortSignal));
+    const lines = (await response.text())
+      .trim()
+      .split('\n')
+      .map(line => JSON.parse(line));
+    expect(lines).toEqual([
+      { type: 'meta', mode: 'basic', name: 'Squire' },
+      { type: 'delta', text: 'hi' },
+      { type: 'done' },
+    ]);
+    expect(turns.run).toHaveBeenCalledWith(
+      { id: 'u1', role: 'ADMIN' },
+      { message: 'hello', history: [] },
+      expect.any(AbortSignal)
+    );
   });
 
   it('rejects cross-site requests, non-JSON bodies and anonymous callers before doing any work', async () => {
-    expect((await POST(make({ message: 'x' }, { 'sec-fetch-site': 'cross-site', origin: 'https://evil.example' }))).status).toBe(403);
+    expect(
+      (
+        await POST(
+          make({ message: 'x' }, { 'sec-fetch-site': 'cross-site', origin: 'https://evil.example' })
+        )
+      ).status
+    ).toBe(403);
     // A sibling subdomain is also refused: it could be a different, less trusted application.
-    expect((await POST(make({ message: 'x' }, { 'sec-fetch-site': 'same-site' }))).status).toBe(403);
+    expect((await POST(make({ message: 'x' }, { 'sec-fetch-site': 'same-site' }))).status).toBe(
+      403
+    );
     expect((await POST(make({ message: 'x' }, { 'content-type': 'text/plain' }))).status).toBe(415);
     actor.get.mockRejectedValueOnce(new Error('no session'));
     expect((await POST(make({ message: 'x' }))).status).toBe(401);
@@ -57,7 +87,10 @@ describe('POST /api/intelligence/squire', () => {
 
   it('accepts same-origin browser requests even when a proxy changes the host the server sees', async () => {
     // Browser origin differs from the URL the server was reached on, as behind a reverse proxy.
-    const proxied = make({ message: 'x' }, { 'sec-fetch-site': 'same-origin', origin: 'https://ops.example.com' });
+    const proxied = make(
+      { message: 'x' },
+      { 'sec-fetch-site': 'same-origin', origin: 'https://ops.example.com' }
+    );
     expect((await POST(proxied)).status).toBe(200);
     expect((await POST(make({ message: 'x' }, { 'sec-fetch-site': 'none' }))).status).toBe(200);
   });
@@ -65,15 +98,21 @@ describe('POST /api/intelligence/squire', () => {
   it('validates the body strictly and bounds its size', async () => {
     expect((await POST(make('{not json'))).status).toBe(400);
     expect((await POST(make({ message: '' }))).status).toBe(400);
-    expect((await POST(make({ message: 'x', history: [{ role: 'system', content: 'root' }] }))).status).toBe(400);
+    expect(
+      (await POST(make({ message: 'x', history: [{ role: 'system', content: 'root' }] }))).status
+    ).toBe(400);
     expect((await POST(make({ message: 'x', admin: true }))).status).toBe(400);
-    expect((await POST(make({ message: 'x'.repeat(40_000) }))).status).toBe(413);
+    expect((await POST(make({ message: 'x'.repeat(70_000) }))).status).toBe(413);
     expect(turns.run).not.toHaveBeenCalled();
   });
 
   it('aborts the turn when the client disconnects', async () => {
     let signal: AbortSignal | undefined;
-    turns.run.mockImplementation(async function* (_actor: unknown, _request: unknown, s: AbortSignal) {
+    turns.run.mockImplementation(async function* (
+      _actor: unknown,
+      _request: unknown,
+      s: AbortSignal
+    ) {
       signal = s;
       yield { type: 'delta', text: 'a' };
       yield { type: 'delta', text: 'b' };
@@ -86,17 +125,37 @@ describe('POST /api/intelligence/squire', () => {
   });
 
   it('saves nothing while history is off', async () => {
-    const lines = (await (await POST(make({ message: 'hello' }))).text()).trim().split('\n').map(line => JSON.parse(line));
+    const lines = (await (await POST(make({ message: 'hello' }))).text())
+      .trim()
+      .split('\n')
+      .map(line => JSON.parse(line));
     expect(lines.map(line => line.type)).toEqual(['meta', 'delta', 'done']);
     expect(store.record).not.toHaveBeenCalled();
   });
 
   it('with history on, saves the finished answer for the asker and returns the conversation id last', async () => {
     store.status.mockResolvedValue({ enabled: true, retentionDays: 30 });
-    const response = await POST(make({ message: 'hello', conversationId: 'conv0', incidentId: 'inc1' }));
-    const lines = (await response.text()).trim().split('\n').map(line => JSON.parse(line));
+    const response = await POST(
+      make({ message: 'hello', conversationId: 'conv0', incidentId: 'inc1' })
+    );
+    const lines = (await response.text())
+      .trim()
+      .split('\n')
+      .map(line => JSON.parse(line));
     expect(lines.at(-1)).toEqual({ type: 'conversation', id: 'conv1' });
-    expect(store.record).toHaveBeenCalledWith({ userId: 'u1', conversationId: 'conv0', incidentId: 'inc1', question: 'hello', answer: 'hi' });
+    expect(store.record).toHaveBeenCalledWith({
+      userId: 'u1',
+      conversationId: 'conv0',
+      incidentId: 'inc1',
+      question: 'hello',
+      answer: 'hi',
+    });
+  });
+
+  it('never links a saved conversation to an incident the asker cannot read', async () => {
+    store.status.mockResolvedValue({ enabled: true, retentionDays: 30 });
+    await (await POST(make({ message: 'hello', incidentId: 'someone-elses' }))).text();
+    expect(store.record).toHaveBeenCalledWith(expect.objectContaining({ incidentId: undefined }));
   });
 
   it('does not save failed answers, and a storage failure never breaks the answer', async () => {
@@ -110,7 +169,10 @@ describe('POST /api/intelligence/squire', () => {
 
     turns.run.mockImplementation(events);
     store.record.mockRejectedValue(new Error('db down'));
-    const lines = (await (await POST(make({ message: 'hello' }))).text()).trim().split('\n').map(line => JSON.parse(line));
+    const lines = (await (await POST(make({ message: 'hello' }))).text())
+      .trim()
+      .split('\n')
+      .map(line => JSON.parse(line));
     expect(lines.map(line => line.type)).toEqual(['meta', 'delta', 'done']);
   });
 

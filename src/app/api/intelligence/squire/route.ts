@@ -4,13 +4,15 @@ import { getCurrentAuthorizationActor } from '@/lib/rbac';
 import { streamSquire } from '@/lib/intelligence/squire/chat';
 import { squireRequestSchema, type SquireEvent } from '@/lib/intelligence/squire/contract';
 import { getHistoryStatus, recordExchange } from '@/lib/intelligence/conversations/store';
+import { readIncidentForActor } from '@/lib/intelligence/squire/deterministic';
 import { logger } from '@/lib/logger';
 
 export const dynamic = 'force-dynamic';
 
-const MAX_BODY_BYTES = 32_768;
+const MAX_BODY_BYTES = 65_536;
 
-const deny = (status: number, error: string) => jsonError(error, status, undefined, { 'Cache-Control': 'no-store' });
+const deny = (status: number, error: string) =>
+  jsonError(error, status, undefined, { 'Cache-Control': 'no-store' });
 
 /**
  * POST /api/intelligence/squire: one assistant turn, streamed as newline-delimited JSON events.
@@ -22,7 +24,8 @@ const deny = (status: number, error: string) => jsonError(error, status, undefin
  */
 export async function POST(request: NextRequest) {
   const site = request.headers.get('sec-fetch-site');
-  if (site && site !== 'same-origin' && site !== 'none') return deny(403, 'Cross-site requests are not allowed');
+  if (site && site !== 'same-origin' && site !== 'none')
+    return deny(403, 'Cross-site requests are not allowed');
   if (!request.headers.get('content-type')?.toLowerCase().startsWith('application/json')) {
     return deny(415, 'Send application/json');
   }
@@ -34,8 +37,10 @@ export async function POST(request: NextRequest) {
     return deny(401, 'Sign in to use the assistant');
   }
 
+  const declared = Number(request.headers.get('content-length') ?? 0);
+  if (declared > MAX_BODY_BYTES) return deny(413, 'Request is too large');
   const raw = await request.text();
-  if (raw.length > MAX_BODY_BYTES) return deny(413, 'Request is too large');
+  if (Buffer.byteLength(raw, 'utf8') > MAX_BODY_BYTES) return deny(413, 'Request is too large');
   let body: unknown;
   try {
     body = JSON.parse(raw);
@@ -49,7 +54,13 @@ export async function POST(request: NextRequest) {
   request.signal.addEventListener('abort', () => controller.abort(), { once: true });
   const encoder = new TextEncoder();
   const events = streamSquire(actor, parsed.data, controller.signal);
-  const history = await getHistoryStatus().catch(() => ({ enabled: false, retentionDays: 0 }));
+  const [history, savedIncident] = await Promise.all([
+    getHistoryStatus().catch(() => ({ enabled: false, retentionDays: 0 })),
+    // A saved conversation only ever links to an incident the person can read.
+    parsed.data.incidentId
+      ? readIncidentForActor(actor, parsed.data.incidentId).catch(() => null)
+      : Promise.resolve(null),
+  ]);
   let answer = '';
   let failed = false;
 
@@ -60,13 +71,15 @@ export async function POST(request: NextRequest) {
       const id = await recordExchange({
         userId: actor.id,
         conversationId: parsed.data.conversationId,
-        incidentId: parsed.data.incidentId,
+        incidentId: savedIncident?.id,
         question: parsed.data.message,
         answer,
       });
       return { type: 'conversation', id };
     } catch (error) {
-      logger.warn('[Squire] Could not save the conversation', { error: error instanceof Error ? error.message : String(error) });
+      logger.warn('[Squire] Could not save the conversation', {
+        error: error instanceof Error ? error.message : String(error),
+      });
       return null;
     }
   };
@@ -84,8 +97,10 @@ export async function POST(request: NextRequest) {
       else if (next.value.type === 'error') failed = true;
       streamController.enqueue(encoder.encode(`${JSON.stringify(next.value)}\n`));
     },
-    cancel() {
+    async cancel() {
       controller.abort();
+      // Let the turn finish its own cleanup (usage accounting, spans) instead of being abandoned mid-await.
+      await events.return(undefined).catch(() => undefined);
     },
   });
 
@@ -94,6 +109,8 @@ export async function POST(request: NextRequest) {
       'Content-Type': 'application/x-ndjson; charset=utf-8',
       'Cache-Control': 'no-store, no-transform',
       'X-Content-Type-Options': 'nosniff',
+      // Proxies such as nginx buffer responses by default, which would hold back the answer until it ends.
+      'X-Accel-Buffering': 'no',
     },
   });
 }

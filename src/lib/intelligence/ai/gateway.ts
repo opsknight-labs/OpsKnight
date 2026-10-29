@@ -17,7 +17,8 @@ import { logAudit } from '@/lib/audit';
 import { logger } from '@/lib/logger';
 import { failSpan, startSpan, withSpan } from '../telemetry';
 import { safeOutboundFetch } from '@/lib/network-security';
-import { admitAiRequest, recordAiUsage } from './budget';
+import { assertNotMetadataEndpoint } from './egress';
+import { admitAiRequest, estimateTokens, recordAiUsage } from './budget';
 import { ProviderBreakers } from './breaker';
 import { selectProviderChain } from './policy';
 import { redactSecrets } from './redact';
@@ -35,7 +36,12 @@ import {
   type AiToolDefinition,
   type LanguageModelPort,
 } from './port';
-import { getAiSettings, loadProvidersForGateway, type AiSettingsView, type GatewayProvider } from './settings';
+import {
+  getAiSettings,
+  loadProvidersForGateway,
+  type AiSettingsView,
+  type GatewayProvider,
+} from './settings';
 
 export type AiGatewayErrorCode =
   | 'RATE_LIMITED'
@@ -61,6 +67,8 @@ const TOOL_OUTPUT_LIMIT = 8_000;
 const CACHE_TTL_MS = 5_000;
 
 export const breakers = new ProviderBreakers();
+/** Embedding health is tracked separately: a broken embedding endpoint must not take chat down, or the reverse. */
+export const embeddingBreakers = new ProviderBreakers();
 
 type FetchFn = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
 
@@ -72,16 +80,25 @@ const urlOf = (input: RequestInfo | URL) =>
  * fetch (HTTPS, public addresses only, no redirects). A private endpoint is reachable only when an
  * administrator consented to it, and then only at the exact origin they approved.
  */
-export function guardedFetchFor(provider: Pick<GatewayProvider, 'allowPrivateNetwork' | 'baseUrl'>): FetchFn {
+export function guardedFetchFor(
+  provider: Pick<GatewayProvider, 'allowPrivateNetwork' | 'baseUrl'>
+): FetchFn {
   if (provider.allowPrivateNetwork && provider.baseUrl) {
     const origin = new URL(provider.baseUrl).origin;
     return async (input, init) => {
       const url = new URL(urlOf(input));
       if (url.origin !== origin) throw new Error('Request outside the approved provider origin');
+      await assertNotMetadataEndpoint(url);
       return fetch(url, { ...init, redirect: 'error' });
     };
   }
-  return (input, init) => safeOutboundFetch(urlOf(input), init);
+  // Public endpoints must be HTTPS on every request, not only when saved: a credential is attached.
+  return (input, init) => {
+    if (new URL(urlOf(input)).protocol !== 'https:') {
+      return Promise.reject(new Error('HTTPS is required for public AI endpoints'));
+    }
+    return safeOutboundFetch(urlOf(input), init);
+  };
 }
 
 type ModelKind = 'chat' | 'embedding';
@@ -90,7 +107,8 @@ function missingCredentials(): never {
   throw new Error('Provider credentials are missing or unreadable');
 }
 
-const apiKeyOf = (provider: GatewayProvider) => (provider.credentials.type === 'apiKey' ? provider.credentials.apiKey : undefined);
+const apiKeyOf = (provider: GatewayProvider) =>
+  provider.credentials.type === 'apiKey' ? provider.credentials.apiKey : undefined;
 
 /**
  * Builds a chat or embedding model for one provider. Every client gets `common`, which carries the guarded
@@ -98,8 +116,14 @@ const apiKeyOf = (provider: GatewayProvider) => (provider.credentials.type === '
  * exception is Vertex's OAuth token exchange, which always targets Google's fixed token endpoint.
  */
 async function buildProviderModel(provider: GatewayProvider, kind: 'chat'): Promise<LanguageModel>;
-async function buildProviderModel(provider: GatewayProvider, kind: 'embedding'): Promise<EmbeddingModel>;
-async function buildProviderModel(provider: GatewayProvider, kind: ModelKind): Promise<LanguageModel | EmbeddingModel> {
+async function buildProviderModel(
+  provider: GatewayProvider,
+  kind: 'embedding'
+): Promise<EmbeddingModel>;
+async function buildProviderModel(
+  provider: GatewayProvider,
+  kind: ModelKind
+): Promise<LanguageModel | EmbeddingModel> {
   const fetchImpl = guardedFetchFor(provider) as typeof fetch;
   const common = { fetch: fetchImpl };
   const baseURL = provider.baseUrl ?? undefined;
@@ -122,8 +146,15 @@ async function buildProviderModel(provider: GatewayProvider, kind: ModelKind): P
     }
     case 'OPENAI_COMPATIBLE': {
       const { createOpenAICompatible } = await import('@ai-sdk/openai-compatible');
-      const client = createOpenAICompatible({ ...common, apiKey: apiKeyOf(provider), name: 'compatible', baseURL: baseURL ?? '' });
-      return kind === 'chat' ? client.chatModel(provider.model) : client.textEmbeddingModel(embeddingId);
+      const client = createOpenAICompatible({
+        ...common,
+        apiKey: apiKeyOf(provider),
+        name: 'compatible',
+        baseURL: baseURL ?? '',
+      });
+      return kind === 'chat'
+        ? client.chatModel(provider.model)
+        : client.textEmbeddingModel(embeddingId);
     }
     case 'AZURE_OPENAI': {
       const { createAzure } = await import('@ai-sdk/azure');
@@ -131,7 +162,9 @@ async function buildProviderModel(provider: GatewayProvider, kind: ModelKind): P
         ...common,
         apiKey: apiKeyOf(provider),
         ...(baseURL ? { baseURL } : { resourceName: provider.options.azureResourceName }),
-        ...(provider.options.azureApiVersion ? { apiVersion: provider.options.azureApiVersion } : {}),
+        ...(provider.options.azureApiVersion
+          ? { apiVersion: provider.options.azureApiVersion }
+          : {}),
       });
       // The model field is the deployment name.
       return kind === 'chat' ? client.chat(provider.model) : client.textEmbeddingModel(embeddingId);
@@ -145,7 +178,11 @@ async function buildProviderModel(provider: GatewayProvider, kind: ModelKind): P
           : credentials.type === 'apiKey'
             ? { apiKey: credentials.apiKey }
             : missingCredentials();
-      const client = createAmazonBedrock({ ...common, region: provider.options.awsRegion, ...auth });
+      const client = createAmazonBedrock({
+        ...common,
+        region: provider.options.awsRegion,
+        ...auth,
+      });
       return kind === 'chat' ? client(provider.model) : client.textEmbeddingModel(embeddingId);
     }
     case 'VERTEX': {
@@ -182,7 +219,9 @@ const buildModel = (provider: GatewayProvider) => buildProviderModel(provider, '
 function capOutput(value: unknown): unknown {
   const text = typeof value === 'string' ? value : JSON.stringify(value ?? null);
   const safe = redactSecrets(text);
-  return safe.length > TOOL_OUTPUT_LIMIT ? `${safe.slice(0, TOOL_OUTPUT_LIMIT)}… [truncated]` : safe;
+  return safe.length > TOOL_OUTPUT_LIMIT
+    ? `${safe.slice(0, TOOL_OUTPUT_LIMIT)}… [truncated]`
+    : safe;
 }
 
 function toToolSet(definitions: AiToolDefinition[] | undefined): ToolSet | undefined {
@@ -190,7 +229,9 @@ function toToolSet(definitions: AiToolDefinition[] | undefined): ToolSet | undef
   const set: ToolSet = {};
   for (const definition of definitions) {
     const execute = definition.kind === 'READ' ? definition.execute : undefined;
-    const inputSchema = jsonSchema<unknown>(definition.inputSchema as Parameters<typeof jsonSchema>[0]);
+    const inputSchema = jsonSchema<unknown>(
+      definition.inputSchema as Parameters<typeof jsonSchema>[0]
+    );
     set[definition.name] = execute
       ? tool<unknown, unknown>({
           description: definition.description,
@@ -204,27 +245,68 @@ function toToolSet(definitions: AiToolDefinition[] | undefined): ToolSet | undef
             }
           },
         })
-      : tool<unknown, never>({ description: definition.description, inputSchema });
+      : // A proposal is acknowledged so the model can carry on and explain it, but nothing is executed: the
+        // caller receives the call and decides whether to show it to a person for confirmation.
+        tool<unknown, string>({
+          description: definition.description,
+          inputSchema,
+          execute: async () => PROPOSAL_ACKNOWLEDGEMENT,
+        });
   }
   return set;
 }
 
-const toMessages = (request: AiGenerateRequest): ModelMessage[] =>
-  request.messages.map(message => ({ role: message.role, content: redactSecrets(message.content) }));
+const PROPOSAL_ACKNOWLEDGEMENT =
+  'Shown to the user as a suggestion card. It happens only if they confirm it; do not say it has been done.';
 
-const clampSteps = (steps: number | undefined) => Math.max(1, Math.min(MAX_STEPS_CEILING, steps ?? DEFAULT_MAX_STEPS));
+/**
+ * The system prompt is the stable prefix of every request (rules, guidance, incident context), so providers
+ * that cache prompts explicitly are told to cache it; OpenAI-style providers cache long prefixes on their own.
+ */
+const CACHE_HINTS: Partial<
+  Record<GatewayProvider['kind'], Record<string, Record<string, unknown>>>
+> = {
+  ANTHROPIC: { anthropic: { cacheControl: { type: 'ephemeral' } } },
+  BEDROCK: { bedrock: { cachePoint: { type: 'default' } } },
+};
+
+const toMessages = (request: AiGenerateRequest, kind?: GatewayProvider['kind']): ModelMessage[] =>
+  request.messages.map(message => {
+    const content = redactSecrets(message.content);
+    // eslint-disable-next-line security/detect-object-injection -- kind is a member of the closed provider-kind union
+    const hint = message.role === 'system' && kind ? CACHE_HINTS[kind] : undefined;
+    return (
+      hint
+        ? { role: message.role, content, providerOptions: hint }
+        : { role: message.role, content }
+    ) as ModelMessage;
+  });
+
+const clampSteps = (steps: number | undefined) =>
+  Math.max(1, Math.min(MAX_STEPS_CEILING, steps ?? DEFAULT_MAX_STEPS));
 
 function proposedCalls(
   steps: ReadonlyArray<{ toolCalls: ReadonlyArray<{ toolName: string; input: unknown }> }>,
   definitions: AiToolDefinition[] | undefined
 ): AiToolCall[] {
-  const proposals = new Set((definitions ?? []).filter(d => d.kind === 'PROPOSE_WRITE').map(d => d.name));
-  return steps.flatMap(step => step.toolCalls.filter(call => proposals.has(call.toolName)).map(call => ({ name: call.toolName, input: call.input })));
+  const proposals = new Set(
+    (definitions ?? []).filter(d => d.kind === 'PROPOSE_WRITE').map(d => d.name)
+  );
+  return steps.flatMap(step =>
+    step.toolCalls
+      .filter(call => proposals.has(call.toolName))
+      .map(call => ({ name: call.toolName, input: call.input }))
+  );
 }
 
 interface GatewayContextData {
   settings: AiSettingsView;
   chain: GatewayProvider[];
+}
+
+/** Prompt size estimate for a call that ended before the provider reported usage. */
+function estimatedInput(request: AiGenerateRequest): number {
+  return estimateTokens(request.messages.map(message => message.content).join('\n'));
 }
 
 class GatewayPort implements LanguageModelPort {
@@ -233,7 +315,10 @@ class GatewayPort implements LanguageModelPort {
   private async admit(request: AiGenerateRequest) {
     const decision = await admitAiRequest(request.context.actorId, this.data.settings);
     if (!decision.allowed) {
-      throw new AiGatewayError(decision.reason, decision.reason === 'RATE_LIMITED' ? 'Too many requests' : 'Daily AI budget reached');
+      throw new AiGatewayError(
+        decision.reason,
+        decision.reason === 'RATE_LIMITED' ? 'Too many requests' : 'Daily AI budget reached'
+      );
     }
   }
 
@@ -243,8 +328,9 @@ class GatewayPort implements LanguageModelPort {
   }
 
   private candidates(): GatewayProvider[] {
-    const open = this.data.chain.filter(provider => breakers.canAttempt(provider.id));
-    if (open.length === 0) throw new AiGatewayError('NO_PROVIDER', 'No AI provider is currently available');
+    const open = this.data.chain.filter(provider => breakers.available(provider.id));
+    if (open.length === 0)
+      throw new AiGatewayError('NO_PROVIDER', 'No AI provider is currently available');
     return open;
   }
 
@@ -253,8 +339,10 @@ class GatewayPort implements LanguageModelPort {
     result: Pick<AiGenerateResult, 'usage' | 'served'>,
     extra: Record<string, string | number | boolean> = {}
   ): Promise<void> {
-    await recordAiUsage(result.usage).catch(error =>
-      logger.warn('[AI] Could not record usage', { error: error instanceof Error ? error.message : String(error) })
+    await recordAiUsage(result.usage, new Date(), request.context.actorId).catch(error =>
+      logger.warn('[AI] Could not record usage', {
+        error: error instanceof Error ? error.message : String(error),
+      })
     );
     await logAudit({
       action: 'intelligence.ai.interaction',
@@ -288,17 +376,28 @@ class GatewayPort implements LanguageModelPort {
     let attempts = 0;
     let invalidOutputs = 0;
     for (const [depth, provider] of this.candidates().entries()) {
+      if (!breakers.canAttempt(provider.id)) continue;
       attempts += 1;
       try {
         const result = await withSpan(
           'intelligence.ai.generate_structured',
-          { 'ai.capability': request.context.capability, 'ai.provider.kind': provider.kind, 'ai.fallback.depth': depth },
+          {
+            'ai.capability': request.context.capability,
+            'ai.provider.kind': provider.kind,
+            'ai.fallback.depth': depth,
+          },
           async span => {
             const generated = await generateText({
               model: await buildModel(provider),
-              messages: toMessages(request),
-              output: Output.object({ schema: zodSchema(request.schema as Parameters<typeof zodSchema>[0]), name: request.schemaName }),
-              maxOutputTokens: Math.min(request.maxOutputTokens ?? this.data.settings.maxOutputTokens, this.data.settings.maxOutputTokens),
+              messages: toMessages(request, provider.kind),
+              output: Output.object({
+                schema: zodSchema(request.schema as Parameters<typeof zodSchema>[0]),
+                name: request.schemaName,
+              }),
+              maxOutputTokens: Math.min(
+                request.maxOutputTokens ?? this.data.settings.maxOutputTokens,
+                this.data.settings.maxOutputTokens
+              ),
               abortSignal: this.signalFor(request),
               maxRetries: 1,
             });
@@ -307,7 +406,10 @@ class GatewayPort implements LanguageModelPort {
             return generated;
           }
         );
-        const usage = { inputTokens: result.totalUsage.inputTokens ?? 0, outputTokens: result.totalUsage.outputTokens ?? 0 };
+        const usage = {
+          inputTokens: result.totalUsage.inputTokens ?? 0,
+          outputTokens: result.totalUsage.outputTokens ?? 0,
+        };
         const served = { providerId: provider.id, model: provider.model, fallbackDepth: depth };
         // Validated again here, independently of the SDK, so nothing unchecked ever reaches a caller.
         let candidate: unknown;
@@ -326,17 +428,31 @@ class GatewayPort implements LanguageModelPort {
         await this.finish(request, { usage, served }, { outputValid: true });
         return { object: checked.data, usage, served };
       } catch (error) {
-        if (request.context.signal?.aborted) throw new AiGatewayError('ABORTED', 'Request cancelled');
+        if (request.context.signal?.aborted) {
+          breakers.release(provider.id);
+          throw new AiGatewayError('ABORTED', 'Request cancelled');
+        }
         // A model that could not produce schema-shaped output is not a broken provider.
-        if (error instanceof Error && /NoObjectGenerated|NoOutputGenerated|TypeValidation|JSONParse/.test(error.name)) {
+        if (
+          error instanceof Error &&
+          /NoObjectGenerated|NoOutputGenerated|TypeValidation|JSONParse/.test(error.name)
+        ) {
+          breakers.recordSuccess(provider.id);
           invalidOutputs += 1;
           continue;
         }
         breakers.recordFailure(provider.id);
-        logger.warn('[AI] Provider call failed', { providerId: provider.id, error: error instanceof Error ? error.name : 'error' });
+        logger.warn('[AI] Provider call failed', {
+          providerId: provider.id,
+          error: error instanceof Error ? error.name : 'error',
+        });
       }
     }
-    if (invalidOutputs > 0) throw new AiGatewayError('OUTPUT_INVALID', 'The AI response did not match the expected format');
+    if (invalidOutputs > 0)
+      throw new AiGatewayError(
+        'OUTPUT_INVALID',
+        'The AI response did not match the expected format'
+      );
     throw new AiGatewayError('ALL_PROVIDERS_FAILED', `All ${attempts} AI provider attempts failed`);
   }
 
@@ -344,18 +460,26 @@ class GatewayPort implements LanguageModelPort {
     await this.admit(request);
     let attempts = 0;
     for (const [depth, provider] of this.candidates().entries()) {
+      if (!breakers.canAttempt(provider.id)) continue;
       attempts += 1;
       try {
         const result = await withSpan(
           'intelligence.ai.generate',
-          { 'ai.capability': request.context.capability, 'ai.provider.kind': provider.kind, 'ai.fallback.depth': depth },
+          {
+            'ai.capability': request.context.capability,
+            'ai.provider.kind': provider.kind,
+            'ai.fallback.depth': depth,
+          },
           async span => {
             const generated = await generateText({
               model: await buildModel(provider),
-              messages: toMessages(request),
+              messages: toMessages(request, provider.kind),
               tools: toToolSet(request.tools),
               stopWhen: stepCountIs(clampSteps(request.maxSteps)),
-              maxOutputTokens: Math.min(request.maxOutputTokens ?? this.data.settings.maxOutputTokens, this.data.settings.maxOutputTokens),
+              maxOutputTokens: Math.min(
+                request.maxOutputTokens ?? this.data.settings.maxOutputTokens,
+                this.data.settings.maxOutputTokens
+              ),
               abortSignal: this.signalFor(request),
               maxRetries: 1,
             });
@@ -368,15 +492,24 @@ class GatewayPort implements LanguageModelPort {
         const served: AiGenerateResult = {
           text: result.text,
           toolCalls: proposedCalls(result.steps, request.tools),
-          usage: { inputTokens: result.totalUsage.inputTokens ?? 0, outputTokens: result.totalUsage.outputTokens ?? 0 },
+          usage: {
+            inputTokens: result.totalUsage.inputTokens ?? 0,
+            outputTokens: result.totalUsage.outputTokens ?? 0,
+          },
           served: { providerId: provider.id, model: provider.model, fallbackDepth: depth },
         };
         await this.finish(request, served);
         return served;
       } catch (error) {
-        if (request.context.signal?.aborted) throw new AiGatewayError('ABORTED', 'Request cancelled');
+        if (request.context.signal?.aborted) {
+          breakers.release(provider.id);
+          throw new AiGatewayError('ABORTED', 'Request cancelled');
+        }
         breakers.recordFailure(provider.id);
-        logger.warn('[AI] Provider call failed', { providerId: provider.id, error: error instanceof Error ? error.name : 'error' });
+        logger.warn('[AI] Provider call failed', {
+          providerId: provider.id,
+          error: error instanceof Error ? error.name : 'error',
+        });
       }
     }
     throw new AiGatewayError('ALL_PROVIDERS_FAILED', `All ${attempts} AI provider attempts failed`);
@@ -396,12 +529,20 @@ class GatewayPort implements LanguageModelPort {
     try {
       candidates = this.candidates();
     } catch (error) {
-      yield { type: 'error', message: error instanceof Error ? error.message : 'AI unavailable', retryable: true };
+      yield {
+        type: 'error',
+        message: error instanceof Error ? error.message : 'AI unavailable',
+        retryable: true,
+      };
       return;
     }
 
     for (const [depth, provider] of candidates.entries()) {
+      if (!breakers.canAttempt(provider.id)) continue;
       let emitted = false;
+      let text = '';
+      // Set once this attempt's usage is accounted for (finished, or failed on the provider's side).
+      let settled = false;
       const span = startSpan('intelligence.ai.stream', {
         'ai.capability': request.context.capability,
         'ai.provider.kind': provider.kind,
@@ -410,19 +551,32 @@ class GatewayPort implements LanguageModelPort {
       try {
         const run = streamText({
           model: await buildModel(provider),
-          messages: toMessages(request),
+          messages: toMessages(request, provider.kind),
           tools: toToolSet(request.tools),
           stopWhen: stepCountIs(clampSteps(request.maxSteps)),
-          maxOutputTokens: Math.min(request.maxOutputTokens ?? this.data.settings.maxOutputTokens, this.data.settings.maxOutputTokens),
+          maxOutputTokens: Math.min(
+            request.maxOutputTokens ?? this.data.settings.maxOutputTokens,
+            this.data.settings.maxOutputTokens
+          ),
           abortSignal: this.signalFor(request),
           maxRetries: 0,
         });
-        let text = '';
+        const proposals = new Set(
+          (request.tools ?? []).filter(d => d.kind === 'PROPOSE_WRITE').map(d => d.name)
+        );
         for await (const part of run.fullStream) {
           if (part.type === 'text-delta') {
             emitted = true;
             text += part.text;
             yield { type: 'text-delta', delta: part.text };
+          } else if (part.type === 'tool-call') {
+            // Something has been shown once a proposal is out, so a later failure must not switch provider.
+            if (proposals.has(part.toolName)) {
+              emitted = true;
+              yield { type: 'tool-call', call: { name: part.toolName, input: part.input } };
+            } else {
+              yield { type: 'tool-start', name: part.toolName };
+            }
           } else if (part.type === 'error') {
             throw part.error instanceof Error ? part.error : new Error('stream error');
           }
@@ -433,12 +587,15 @@ class GatewayPort implements LanguageModelPort {
         const result: AiGenerateResult = {
           text,
           toolCalls: proposedCalls(steps, request.tools),
-          usage: { inputTokens: totalUsage.inputTokens ?? 0, outputTokens: totalUsage.outputTokens ?? 0 },
+          usage: {
+            inputTokens: totalUsage.inputTokens ?? 0,
+            outputTokens: totalUsage.outputTokens ?? 0,
+          },
           served: { providerId: provider.id, model: provider.model, fallbackDepth: depth },
         };
         span.setAttribute('ai.tokens.input', result.usage.inputTokens);
         span.setAttribute('ai.tokens.output', result.usage.outputTokens);
-        for (const call of result.toolCalls) yield { type: 'tool-call', call };
+        settled = true;
         await this.finish(request, result);
         yield { type: 'finish', result };
         return;
@@ -448,14 +605,31 @@ class GatewayPort implements LanguageModelPort {
           yield { type: 'error', message: 'Request cancelled', retryable: false };
           return;
         }
+        settled = true;
         breakers.recordFailure(provider.id);
-        logger.warn('[AI] Provider stream failed', { providerId: provider.id, error: error instanceof Error ? error.name : 'error' });
+        logger.warn('[AI] Provider stream failed', {
+          providerId: provider.id,
+          error: error instanceof Error ? error.name : 'error',
+        });
         // After the first token the user has seen output; switching provider would splice two answers.
         if (emitted) {
           yield { type: 'error', message: 'The response was interrupted', retryable: true };
           return;
         }
       } finally {
+        // Cancelled, whether the abort surfaced as an error or the consumer simply stopped reading: the
+        // provider charged for what it produced, so cancelling must never keep that off the budget.
+        if (!settled) {
+          breakers.release(provider.id);
+          await this.finish(
+            request,
+            {
+              usage: { inputTokens: estimatedInput(request), outputTokens: estimateTokens(text) },
+              served: { providerId: provider.id, model: provider.model, fallbackDepth: depth },
+            },
+            { cancelled: true, usageEstimated: true }
+          );
+        }
         span.end();
       }
     }
@@ -478,42 +652,54 @@ class GatewayEmbeddingPort implements EmbeddingPort {
   async embed(values: string[], context: { actorId: string; signal?: AbortSignal }) {
     const decision = await admitAiRequest(context.actorId, this.settings);
     if (!decision.allowed) throw new AiGatewayError(decision.reason, 'AI limits reached');
-    if (!breakers.canAttempt(this.provider.id)) throw new AiGatewayError('NO_PROVIDER', 'Embedding provider unavailable');
+    if (!embeddingBreakers.canAttempt(this.provider.id)) {
+      throw new AiGatewayError('NO_PROVIDER', 'Embedding provider unavailable');
+    }
     const timeout = AbortSignal.timeout(this.settings.requestTimeoutMs);
     try {
-      const result = await withSpan('intelligence.ai.embed', { 'ai.provider.kind': this.provider.kind, 'ai.values': values.length }, async () =>
-        embedMany({
-          model: await buildProviderModel(this.provider, 'embedding'),
-          values: values.map(value => redactSecrets(value)),
-          maxRetries: 1,
-          abortSignal: context.signal ? AbortSignal.any([context.signal, timeout]) : timeout,
-        })
+      const result = await withSpan(
+        'intelligence.ai.embed',
+        { 'ai.provider.kind': this.provider.kind, 'ai.values': values.length },
+        async () =>
+          embedMany({
+            model: await buildProviderModel(this.provider, 'embedding'),
+            values: values.map(value => redactSecrets(value)),
+            maxRetries: 1,
+            abortSignal: context.signal ? AbortSignal.any([context.signal, timeout]) : timeout,
+          })
       );
-      breakers.recordSuccess(this.provider.id);
+      embeddingBreakers.recordSuccess(this.provider.id);
       const tokens = result.usage?.tokens ?? 0;
       await recordAiUsage({ inputTokens: tokens, outputTokens: 0 }).catch(() => undefined);
       return { vectors: result.embeddings, tokens };
     } catch (error) {
-      breakers.recordFailure(this.provider.id);
+      if (context.signal?.aborted) embeddingBreakers.release(this.provider.id);
+      else embeddingBreakers.recordFailure(this.provider.id);
       throw error;
     }
   }
 }
 
 /** The first eligible provider with an embedding model, under the same data-class and residency rules. */
-export async function resolveGatewayEmbedding(dataClass: AiDataClass): Promise<EmbeddingPort | null> {
+export async function resolveGatewayEmbedding(
+  dataClass: AiDataClass
+): Promise<EmbeddingPort | null> {
   const { settings, providers } = await loadGatewayData();
   if (!settings.enabled || !settings.embeddingsEnabled) return null;
   const candidates = selectProviderChain(
     providers.filter(provider => Boolean(provider.embeddingModel)),
     dataClass,
-    { allowExternalFallback: settings.allowExternalFallback, allowedRegions: settings.allowedDataRegions }
+    {
+      allowExternalFallback: settings.allowExternalFallback,
+      allowedRegions: settings.allowedDataRegions,
+    }
   );
-  const chosen = candidates.find(provider => breakers.canAttempt(provider.id));
+  const chosen = candidates.find(provider => embeddingBreakers.available(provider.id));
   return chosen ? new GatewayEmbeddingPort(chosen, settings) : null;
 }
 
-let cache: { at: number; data: { settings: AiSettingsView; providers: GatewayProvider[] } } | null = null;
+let cache: { at: number; data: { settings: AiSettingsView; providers: GatewayProvider[] } } | null =
+  null;
 
 export function invalidateGatewayCache(): void {
   cache = null;
@@ -527,7 +713,9 @@ async function loadGatewayData() {
 }
 
 /** Null whenever AI is off, unconfigured, or no provider may receive this data class. */
-export async function resolveGatewayPort(dataClass: AiDataClass): Promise<LanguageModelPort | null> {
+export async function resolveGatewayPort(
+  dataClass: AiDataClass
+): Promise<LanguageModelPort | null> {
   const { settings, providers } = await loadGatewayData();
   if (!settings.enabled) return null;
   const chain = selectProviderChain(providers, dataClass, {
@@ -549,7 +737,10 @@ export function registerAiGateway(): void {
 
 export type ProviderTestResult =
   | { ok: true; latencyMs: number }
-  | { ok: false; reason: 'NOT_FOUND' | 'MISSING_KEY' | 'UNREACHABLE' | 'REJECTED' | 'TIMEOUT' | 'FAILED' };
+  | {
+      ok: false;
+      reason: 'NOT_FOUND' | 'MISSING_KEY' | 'UNREACHABLE' | 'REJECTED' | 'TIMEOUT' | 'FAILED';
+    };
 
 /**
  * Sends one tiny fixed prompt to a single saved provider so an administrator can check its address, key
@@ -557,24 +748,34 @@ export type ProviderTestResult =
  * is returned: provider error bodies can echo request details, so they are never shown or stored.
  */
 export async function testProviderConnection(providerId: string): Promise<ProviderTestResult> {
-  const providers = await loadProvidersForGateway();
+  const providers = await loadProvidersForGateway(undefined, { includeDisabled: true });
   const provider = providers.find(candidate => candidate.id === providerId);
   if (!provider) return { ok: false, reason: 'NOT_FOUND' };
-  if (provider.kind !== 'OPENAI_COMPATIBLE' && !provider.apiKey) return { ok: false, reason: 'MISSING_KEY' };
+  // Each kind has its own credential shape (API key, AWS key pair, Google service account); only a kind
+  // that may run without one (a local OpenAI-compatible server) is allowed to have none.
+  if (provider.kind !== 'OPENAI_COMPATIBLE' && provider.credentials.type === 'none') {
+    return { ok: false, reason: 'MISSING_KEY' };
+  }
   const started = Date.now();
   try {
-    await generateText({
+    const result = await generateText({
       model: await buildModel(provider),
       messages: [{ role: 'user', content: 'Reply with the single word OK.' }],
       maxOutputTokens: 16,
       abortSignal: AbortSignal.timeout(15_000),
       maxRetries: 0,
     });
+    await recordAiUsage({
+      inputTokens: result.totalUsage.inputTokens ?? 0,
+      outputTokens: result.totalUsage.outputTokens ?? 0,
+    }).catch(() => undefined);
     return { ok: true, latencyMs: Date.now() - started };
   } catch (error) {
     const status = (error as { statusCode?: number }).statusCode;
-    if (error instanceof Error && (error.name === 'TimeoutError' || error.name === 'AbortError')) return { ok: false, reason: 'TIMEOUT' };
-    if (status === 401 || status === 403 || status === 404 || status === 400) return { ok: false, reason: 'REJECTED' };
+    if (error instanceof Error && (error.name === 'TimeoutError' || error.name === 'AbortError'))
+      return { ok: false, reason: 'TIMEOUT' };
+    if (status === 401 || status === 403 || status === 404 || status === 400)
+      return { ok: false, reason: 'REJECTED' };
     if (status === undefined) return { ok: false, reason: 'UNREACHABLE' };
     return { ok: false, reason: 'FAILED' };
   }

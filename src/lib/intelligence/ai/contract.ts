@@ -33,6 +33,7 @@ export const AI_SETTINGS_BOUNDS = {
   squireNameMax: 32,
   requestsPerMinute: { min: 1, max: 600 },
   dailyTokenBudget: { min: 1_000, max: 1_000_000_000 },
+  userDailyTokenBudget: { min: 1_000, max: 1_000_000_000 },
   maxOutputTokens: { min: 64, max: 8_192 },
   requestTimeoutMs: { min: 1_000, max: 120_000 },
 } as const;
@@ -47,6 +48,7 @@ export const AI_SETTINGS_DEFAULTS = {
   allowExternalFallback: false,
   requestsPerMinutePerUser: 20,
   dailyTokenBudget: 500_000,
+  userDailyTokenBudget: 100_000,
   maxOutputTokens: 1_024,
   requestTimeoutMs: 30_000,
   allowedDataRegions: [] as string[],
@@ -61,9 +63,13 @@ const squireName = z
   .trim()
   .min(1)
   .max(AI_SETTINGS_BOUNDS.squireNameMax)
-  .regex(/^[\p{L}\p{N}][\p{L}\p{N} '’.-]*$/u, 'Use letters, numbers, spaces, apostrophes, dots or hyphens');
+  .regex(
+    /^[\p{L}\p{N}][\p{L}\p{N} '’.-]*$/u,
+    'Use letters, numbers, spaces, apostrophes, dots or hyphens'
+  );
 
-const intIn = (range: { min: number; max: number }) => z.number().int().min(range.min).max(range.max);
+const intIn = (range: { min: number; max: number }) =>
+  z.number().int().min(range.min).max(range.max);
 
 export const aiSettingsInputSchema = z
   .object({
@@ -76,10 +82,19 @@ export const aiSettingsInputSchema = z
     allowExternalFallback: z.boolean(),
     requestsPerMinutePerUser: intIn(AI_SETTINGS_BOUNDS.requestsPerMinute),
     dailyTokenBudget: intIn(AI_SETTINGS_BOUNDS.dailyTokenBudget),
+    userDailyTokenBudget: intIn(AI_SETTINGS_BOUNDS.userDailyTokenBudget).default(
+      AI_SETTINGS_DEFAULTS.userDailyTokenBudget
+    ),
     maxOutputTokens: intIn(AI_SETTINGS_BOUNDS.maxOutputTokens),
     requestTimeoutMs: intIn(AI_SETTINGS_BOUNDS.requestTimeoutMs),
     allowedDataRegions: z
-      .array(z.string().trim().toLowerCase().regex(DATA_REGION, 'Use lowercase letters, digits and hyphens'))
+      .array(
+        z
+          .string()
+          .trim()
+          .toLowerCase()
+          .regex(DATA_REGION, 'Use lowercase letters, digits and hyphens')
+      )
       .max(20)
       .default([])
       .transform(regions => [...new Set(regions)]),
@@ -104,45 +119,95 @@ export const aiProviderInputSchema = z
     maxDataClass: z.enum(AI_DATA_CLASSES),
     allowPrivateNetwork: z.boolean(),
     priority: z.number().int().min(0).max(10_000),
-    dataRegion: z.string().trim().toLowerCase().regex(DATA_REGION, 'Use lowercase letters, digits and hyphens').nullish(),
+    dataRegion: z
+      .string()
+      .trim()
+      .toLowerCase()
+      .regex(DATA_REGION, 'Use lowercase letters, digits and hyphens')
+      .nullish(),
     embeddingModel: z.string().trim().min(1).max(128).nullish(),
     // Azure OpenAI
-    azureResourceName: z.string().trim().regex(AZURE_RESOURCE, 'Not a valid Azure resource name').nullish(),
-    azureApiVersion: z.string().trim().regex(AZURE_API_VERSION, 'Use a version such as 2024-10-21').nullish(),
+    azureResourceName: z
+      .string()
+      .trim()
+      .regex(AZURE_RESOURCE, 'Not a valid Azure resource name')
+      .nullish(),
+    azureApiVersion: z
+      .string()
+      .trim()
+      .regex(AZURE_API_VERSION, 'Use a version such as 2024-10-21')
+      .nullish(),
     // Amazon Bedrock (credentials are secret and kept only encrypted)
     awsRegion: z.string().trim().regex(AWS_REGION, 'Not a valid AWS region').nullish(),
-    awsAccessKeyId: z.string().trim().regex(/^[A-Z0-9]{16,128}$/, 'Not a valid access key ID').nullish(),
+    awsAccessKeyId: z
+      .string()
+      .trim()
+      .regex(/^[A-Z0-9]{16,128}$/, 'Not a valid access key ID')
+      .nullish(),
     awsSecretAccessKey: z.string().trim().min(16).max(256).nullish(),
     // Google Vertex AI
-    gcpProject: z.string().trim().regex(GCP_PROJECT, 'Not a valid Google Cloud project ID').nullish(),
-    gcpLocation: z.string().trim().regex(GCP_LOCATION, 'Not a valid Google Cloud location').nullish(),
+    gcpProject: z
+      .string()
+      .trim()
+      .regex(GCP_PROJECT, 'Not a valid Google Cloud project ID')
+      .nullish(),
+    gcpLocation: z
+      .string()
+      .trim()
+      .regex(GCP_LOCATION, 'Not a valid Google Cloud location')
+      .nullish(),
     serviceAccountJson: z.string().trim().max(10_000).nullish(),
   })
   .strict()
   .superRefine((value, ctx) => {
     if (value.kind === 'OPENAI_COMPATIBLE' && !value.baseUrl) {
-      ctx.addIssue({ code: 'custom', path: ['baseUrl'], message: 'A base URL is required for OpenAI-compatible endpoints' });
+      ctx.addIssue({
+        code: 'custom',
+        path: ['baseUrl'],
+        message: 'A base URL is required for OpenAI-compatible endpoints',
+      });
     }
     if (value.kind === 'AZURE_OPENAI' && !value.azureResourceName && !value.baseUrl) {
-      ctx.addIssue({ code: 'custom', path: ['azureResourceName'], message: 'Enter the Azure resource name or a base URL' });
+      ctx.addIssue({
+        code: 'custom',
+        path: ['azureResourceName'],
+        message: 'Enter the Azure resource name or a base URL',
+      });
     }
     if (value.kind === 'BEDROCK' && !value.awsRegion) {
-      ctx.addIssue({ code: 'custom', path: ['awsRegion'], message: 'An AWS region is required for Bedrock' });
+      ctx.addIssue({
+        code: 'custom',
+        path: ['awsRegion'],
+        message: 'An AWS region is required for Bedrock',
+      });
     }
     if (value.kind === 'VERTEX' && (!value.gcpProject || !value.gcpLocation)) {
-      ctx.addIssue({ code: 'custom', path: ['gcpProject'], message: 'A Google Cloud project and location are required for Vertex AI' });
+      ctx.addIssue({
+        code: 'custom',
+        path: ['gcpProject'],
+        message: 'A Google Cloud project and location are required for Vertex AI',
+      });
     }
     if (value.embeddingModel && NO_EMBEDDING_KINDS.has(value.kind)) {
-      ctx.addIssue({ code: 'custom', path: ['embeddingModel'], message: 'This provider does not offer embeddings' });
+      ctx.addIssue({
+        code: 'custom',
+        path: ['embeddingModel'],
+        message: 'This provider does not offer embeddings',
+      });
     }
     if (Boolean(value.awsAccessKeyId) !== Boolean(value.awsSecretAccessKey)) {
-      ctx.addIssue({ code: 'custom', path: ['awsSecretAccessKey'], message: 'Enter both the access key ID and the secret access key' });
+      ctx.addIssue({
+        code: 'custom',
+        path: ['awsSecretAccessKey'],
+        message: 'Enter both the access key ID and the secret access key',
+      });
     }
     if (value.allowPrivateNetwork && value.isExternal) {
       ctx.addIssue({
         code: 'custom',
         path: ['allowPrivateNetwork'],
-        message: 'A private-network endpoint is not external; clear "external" or the private-network consent',
+        message:
+          'A private-network endpoint is not external; clear "external" or the private-network consent',
       });
     }
   });

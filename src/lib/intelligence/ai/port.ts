@@ -86,6 +86,9 @@ export interface AiGenerateResult {
 
 export type AiStreamEvent =
   | { type: 'text-delta'; delta: string }
+  /** A READ tool started running; lets a UI show progress while the model gathers facts. */
+  | { type: 'tool-start'; name: string }
+  /** A PROPOSE_WRITE tool was called: a proposal for the caller to present, never something that ran. */
   | { type: 'tool-call'; call: AiToolCall }
   | { type: 'finish'; result: AiGenerateResult }
   | { type: 'error'; message: string; retryable: boolean };
@@ -120,7 +123,10 @@ export interface LanguageModelPort {
 export interface EmbeddingPort {
   readonly model: string;
   readonly providerId: string;
-  embed(values: string[], context: Pick<AiRequestContext, 'actorId' | 'signal'>): Promise<{ vectors: number[][]; tokens: number }>;
+  embed(
+    values: string[],
+    context: Pick<AiRequestContext, 'actorId' | 'signal'>
+  ): Promise<{ vectors: number[][]; tokens: number }>;
 }
 
 /**

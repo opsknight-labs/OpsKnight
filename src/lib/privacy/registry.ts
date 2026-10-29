@@ -340,24 +340,38 @@ export const personalDataRegistry = [
   },
   {
     domain: 'ai-assistant',
-    models: ['AiProvider', 'AiUsageDay', 'SquireConversation', 'SquireMessage'],
-    fields: ['AiProvider.apiKeyEncrypted', 'SquireConversation.titleEncrypted', 'SquireConversation.incidentId', 'SquireMessage.contentEncrypted'],
+    models: [
+      'AiProvider',
+      'AiUsageDay',
+      'AiUsageUserDay',
+      'SquireConversation',
+      'SquireMessage',
+      'SquireActionReceipt',
+    ],
+    fields: [
+      'AiProvider.apiKeyEncrypted',
+      'SquireConversation.titleEncrypted',
+      'SquireConversation.incidentId',
+      'SquireMessage.contentEncrypted',
+    ],
     purpose: [
-      'Answering responders\' questions about incidents they can already read',
+      "Answering responders' questions about incidents they can already read",
       'On-request incident summaries and postmortem drafts for people to review',
       'Token budget accounting',
       'Optional saved assistant conversations, visible only to the person who had them',
+      'Per-person daily token share, so one person cannot use up the shared AI budget',
+      'Making each assistant action a person confirmed run at most once',
     ],
     classifications: ['INTERNAL', 'PERSONAL', 'SECRET'],
     locations: ['DATABASE', 'EXTERNAL_PROVIDER'],
     retention: {
       current:
-        'Disabled by default. Conversations are held only in the browser unless an administrator turns on saved history; then questions and answers are stored encrypted for their owner only, capped at 50 conversations per person, deleted after the configured idle retention (1-365 days, default 30), all deleted when history is turned off, and deleted with the person. Interaction audit entries record metadata (user, capability, provider, model, token counts) and never prompts or answers. Daily usage totals are aggregate counters.',
+        'Disabled by default. Conversations are held only in the browser unless an administrator turns on saved history; then questions and answers are stored encrypted for their owner only, capped at 50 conversations per person, deleted after the configured idle retention (1-365 days, default 30), all deleted when history is turned off, and deleted with the person. Interaction audit entries record metadata (user, capability, provider, model, token counts) and never prompts or answers. Daily usage totals are aggregate counters; per-person daily token counts hold only a count per person per day and are deleted with the person. Assistant actions run only after the person confirms them, through the same permission checks as the application, are audited, and keep a single-use receipt (person, action, incident) for one day.',
       target: 'Audit entries follow the audit retention policy.',
     },
     discoverable: 'PARTIAL',
     notes: [
-      'When an administrator enables AI, the user\'s question, recent conversation turns and the results of read-only lookups (incident titles, change summaries, runbook names) are sent to the configured provider after credential-shaped text is redacted. Incident summaries and postmortem drafts additionally send the incident timeline and responder notes with author names, so they run only on providers whose data ceiling is Personal; the output is shown to the requester or placed in the editor and is never saved automatically. Each provider has a data-class ceiling and an optional residency tag that an allowed-regions setting can enforce, external providers are only used where the administrator allowed them, and a self-hosted provider never falls back to an external one unless explicitly permitted. Whether the provider retains data is governed by the administrator\'s agreement with it. Provider API keys are encrypted at rest and never returned to the browser.',
+      "When an administrator enables AI, the user's question, recent conversation turns and the results of read-only lookups (incident titles, change summaries, runbook names) are sent to the configured provider after credential-shaped text is redacted. Incident summaries and postmortem drafts additionally send the incident timeline and responder notes with author names, so they run only on providers whose data ceiling is Personal; the output is shown to the requester or placed in the editor and is never saved automatically. Each provider has a data-class ceiling and an optional residency tag that an allowed-regions setting can enforce, external providers are only used where the administrator allowed them, and a self-hosted provider never falls back to an external one unless explicitly permitted. Whether the provider retains data is governed by the administrator's agreement with it. Provider API keys are encrypted at rest and never returned to the browser.",
     ],
   },
 ] as const satisfies readonly PersonalDataDomain[];

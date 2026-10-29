@@ -544,6 +544,8 @@ model User {
   intelligencePolicyVersions  IntelligencePolicyVersion[]
   intelligenceEvaluationRuns  IntelligenceEvaluationRun[]
   squireConversations         SquireConversation[]
+  aiUsageDays                 AiUsageUserDay[]
+  squireActionReceipts        SquireActionReceipt[]
   runbookStepsApproved        RunbookExecutionStep[]       @relation("RunbookStepApprovedBy")
   runbookAgentsCreated        RunbookAgent[]               @relation("RunbookAgentCreatedBy")
   runbookAgentsRevoked        RunbookAgent[]               @relation("RunbookAgentRevokedBy")
@@ -5050,6 +5052,8 @@ model IncidentFingerprint {
   template          String
   /// sha256 of the template (32 hex chars); compared with an embedding's source hash.
   templateHash      String?
+  /// Generated from the template by the database (to_tsvector('simple', template)); never written by the app.
+  searchVector      Unsupported("tsvector")?
   tokens            String[]
   labels            Json
   resolutionSummary String?
@@ -5273,6 +5277,8 @@ model AiSettings {
   allowExternalFallback   Boolean  @default(false)
   requestsPerMinutePerUser Int     @default(20)
   dailyTokenBudget        Int      @default(500000)
+  // Per person per UTC day, so one heavy user cannot spend the whole budget for everyone.
+  userDailyTokenBudget    Int      @default(100000)
   maxOutputTokens         Int      @default(1024)
   requestTimeoutMs        Int      @default(30000)
   revision                Int      @default(1)
@@ -5318,6 +5324,31 @@ model AiUsageDay {
   updatedAt    DateTime @updatedAt
 }
 
+// One confirmed assistant action. Proposals are sealed and expire after minutes; inserting this row first
+// makes each one execute at most once. Kept for a day, since the audit log is the lasting record.
+model SquireActionReceipt {
+  id         String   @id
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  action     String
+  incidentId String?
+  createdAt  DateTime @default(now())
+
+  @@index([createdAt], map: "idx_squire_action_receipt_retention")
+}
+
+// Tokens one person used on one UTC day, for the per-user budget. Counts only; deleted with the person.
+model AiUsageUserDay {
+  day       String
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokens    Int      @default(0)
+  updatedAt DateTime @updatedAt
+
+  @@id([day, userId])
+  @@index([day], map: "idx_ai_usage_user_day_retention")
+}
+
 // Optional organisation guidance an administrator appends to a built-in prompt. It is added after the fixed
 // safety rules and cannot replace them. Every change is audited with the previous text.
 model AiPromptGuidance {
@@ -5343,6 +5374,7 @@ model IncidentEmbedding {
   createdAt         DateTime @default(now())
 
   @@index([model, incidentCreatedAt(sort: Desc)], map: "idx_incident_embedding_model_recent")
+  @@index([serviceId, model, incidentCreatedAt(sort: Desc)], map: "idx_incident_embedding_service_recent")
   @@index([incidentCreatedAt], map: "idx_incident_embedding_retention")
 }
 

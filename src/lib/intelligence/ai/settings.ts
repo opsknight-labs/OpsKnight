@@ -16,6 +16,7 @@ import {
   type AiProviderInput,
 } from './contract';
 import type { AiDataClass } from './port';
+import { assertNotMetadataEndpoint } from './egress';
 
 type Client = Prisma.TransactionClient | typeof prisma;
 
@@ -35,6 +36,7 @@ export interface AiSettingsView {
   allowExternalFallback: boolean;
   requestsPerMinutePerUser: number;
   dailyTokenBudget: number;
+  userDailyTokenBudget: number;
   maxOutputTokens: number;
   requestTimeoutMs: number;
   /** 0 means no row has been saved yet and defaults apply. */
@@ -55,6 +57,7 @@ const SETTINGS_SELECT = {
   allowExternalFallback: true,
   requestsPerMinutePerUser: true,
   dailyTokenBudget: true,
+  userDailyTokenBudget: true,
   maxOutputTokens: true,
   requestTimeoutMs: true,
   revision: true,
@@ -66,15 +69,22 @@ type SettingsRow = Prisma.AiSettingsGetPayload<{ select: typeof SETTINGS_SELECT 
 function toSettingsView(row: SettingsRow): AiSettingsView {
   return {
     ...row,
-    squireAvatar: (SQUIRE_AVATARS as readonly string[]).includes(row.squireAvatar) ? (row.squireAvatar as SquireAvatar) : 'ICON',
+    squireAvatar: (SQUIRE_AVATARS as readonly string[]).includes(row.squireAvatar)
+      ? (row.squireAvatar as SquireAvatar)
+      : 'ICON',
     squireLauncher: row.squireLauncher === 'SEARCH_ONLY' ? 'SEARCH_ONLY' : 'FLOATING',
   };
 }
 
 /** Reads never write: with no saved row, AI is off and everything uses the safe defaults. */
 export async function getAiSettings(client: Client = prisma): Promise<AiSettingsView> {
-  const row = await client.aiSettings.findUnique({ where: { id: 'default' }, select: SETTINGS_SELECT });
-  return row ? toSettingsView(row) : { ...AI_SETTINGS_DEFAULTS, allowedDataRegions: [], revision: 0 };
+  const row = await client.aiSettings.findUnique({
+    where: { id: 'default' },
+    select: SETTINGS_SELECT,
+  });
+  return row
+    ? toSettingsView(row)
+    : { ...AI_SETTINGS_DEFAULTS, allowedDataRegions: [], revision: 0 };
 }
 
 const auditSource = (actor: IntelligenceActor) => ({
@@ -83,7 +93,10 @@ const auditSource = (actor: IntelligenceActor) => ({
 });
 
 /** Caller must authorize INTELLIGENCE_MANAGE. Revision-locked; the audit entry commits atomically. */
-export async function updateAiSettings(input: unknown, actor: IntelligenceActor): Promise<AiSettingsView> {
+export async function updateAiSettings(
+  input: unknown,
+  actor: IntelligenceActor
+): Promise<AiSettingsView> {
   const { expectedRevision, ...values } = parseOrThrow(aiSettingsInputSchema, input);
   return prisma.$transaction(async tx => {
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended('ai-settings', 0))`;
@@ -156,19 +169,28 @@ const PROVIDER_SELECT = {
   apiKeyEncrypted: true,
 } as const;
 
-const OPTION_KEYS: ReadonlySet<string> = new Set(['azureResourceName', 'azureApiVersion', 'awsRegion', 'gcpProject', 'gcpLocation']);
+const OPTION_KEYS: ReadonlySet<string> = new Set([
+  'azureResourceName',
+  'azureApiVersion',
+  'awsRegion',
+  'gcpProject',
+  'gcpLocation',
+]);
 
 /** Only known string options survive, so a hand-edited row can never inject anything unexpected. */
 export function readProviderOptions(value: unknown): AiProviderOptions {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
   return Object.fromEntries(
     Object.entries(value).filter(
-      ([key, raw]) => OPTION_KEYS.has(key) && typeof raw === 'string' && raw.length > 0 && raw.length <= 128
+      ([key, raw]) =>
+        OPTION_KEYS.has(key) && typeof raw === 'string' && raw.length > 0 && raw.length <= 128
     )
   ) as AiProviderOptions;
 }
 
-function toView(row: Prisma.AiProviderGetPayload<{ select: typeof PROVIDER_SELECT }>): AiProviderView {
+function toView(
+  row: Prisma.AiProviderGetPayload<{ select: typeof PROVIDER_SELECT }>
+): AiProviderView {
   const { apiKeyEncrypted, options, ...rest } = row;
   return { ...rest, options: readProviderOptions(options), hasApiKey: Boolean(apiKeyEncrypted) };
 }
@@ -191,15 +213,25 @@ function invalid(field: string, message: string): AppError {
  * to public addresses. With consent it may be a private address, but the exact origin is what the
  * administrator approved and what every later request is pinned to.
  */
-export async function validateProviderEndpoint(baseUrl: string, allowPrivateNetwork: boolean): Promise<string> {
+export async function validateProviderEndpoint(
+  baseUrl: string,
+  allowPrivateNetwork: boolean
+): Promise<string> {
   let url: URL;
   try {
     url = new URL(baseUrl);
   } catch {
     throw invalid('baseUrl', 'Enter a valid URL');
   }
-  if (url.username || url.password) throw invalid('baseUrl', 'URLs containing credentials are not allowed');
-  if (url.protocol !== 'https:' && url.protocol !== 'http:') throw invalid('baseUrl', 'Use an http(s) URL');
+  if (url.username || url.password)
+    throw invalid('baseUrl', 'URLs containing credentials are not allowed');
+  if (url.protocol !== 'https:' && url.protocol !== 'http:')
+    throw invalid('baseUrl', 'Use an http(s) URL');
+  try {
+    await assertNotMetadataEndpoint(url);
+  } catch {
+    throw invalid('baseUrl', 'Link-local and cloud metadata addresses are never allowed');
+  }
   if (!allowPrivateNetwork) {
     try {
       await assertSafeOutboundUrl(url.toString(), { requireHttps: true });
@@ -216,12 +248,19 @@ export async function validateProviderEndpoint(baseUrl: string, allowPrivateNetw
 }
 
 /** A Vertex AI service-account key, reduced to the three fields the client needs. */
-export function parseServiceAccount(json: string): { clientEmail: string; privateKey: string; privateKeyId?: string } {
+export function parseServiceAccount(json: string): {
+  clientEmail: string;
+  privateKey: string;
+  privateKeyId?: string;
+} {
   let parsed: unknown;
   try {
     parsed = JSON.parse(json);
   } catch {
-    throw invalid('serviceAccountJson', 'Paste the service account key JSON downloaded from Google Cloud');
+    throw invalid(
+      'serviceAccountJson',
+      'Paste the service account key JSON downloaded from Google Cloud'
+    );
   }
   const record = (parsed && typeof parsed === 'object' ? parsed : {}) as Record<string, unknown>;
   const clientEmail = record.client_email;
@@ -247,11 +286,18 @@ async function secretFor(parsed: AiProviderInput): Promise<string | undefined> {
   switch (parsed.kind) {
     case 'BEDROCK':
       if (parsed.awsAccessKeyId && parsed.awsSecretAccessKey) {
-        return encrypt(JSON.stringify({ accessKeyId: parsed.awsAccessKeyId, secretAccessKey: parsed.awsSecretAccessKey }));
+        return encrypt(
+          JSON.stringify({
+            accessKeyId: parsed.awsAccessKeyId,
+            secretAccessKey: parsed.awsSecretAccessKey,
+          })
+        );
       }
       return parsed.apiKey ? encrypt(JSON.stringify({ apiKey: parsed.apiKey })) : undefined;
     case 'VERTEX':
-      return parsed.serviceAccountJson ? encrypt(JSON.stringify(parseServiceAccount(parsed.serviceAccountJson))) : undefined;
+      return parsed.serviceAccountJson
+        ? encrypt(JSON.stringify(parseServiceAccount(parsed.serviceAccountJson)))
+        : undefined;
     default:
       return parsed.apiKey ? encrypt(parsed.apiKey) : undefined;
   }
@@ -261,7 +307,9 @@ function optionsFor(parsed: AiProviderInput): AiProviderOptions {
   switch (parsed.kind) {
     case 'AZURE_OPENAI':
       return {
-        ...(parsed.azureResourceName ? { azureResourceName: parsed.azureResourceName.toLowerCase() } : {}),
+        ...(parsed.azureResourceName
+          ? { azureResourceName: parsed.azureResourceName.toLowerCase() }
+          : {}),
         ...(parsed.azureApiVersion ? { azureApiVersion: parsed.azureApiVersion } : {}),
       };
     case 'BEDROCK':
@@ -283,7 +331,9 @@ export async function saveAiProvider(
   actor: IntelligenceActor
 ): Promise<AiProviderView> {
   const parsed = parseOrThrow(aiProviderInputSchema, input);
-  const baseUrl = parsed.baseUrl ? await validateProviderEndpoint(parsed.baseUrl, parsed.allowPrivateNetwork) : null;
+  const baseUrl = parsed.baseUrl
+    ? await validateProviderEndpoint(parsed.baseUrl, parsed.allowPrivateNetwork)
+    : null;
   const apiKeyEncrypted = await secretFor(parsed);
   const data = {
     name: parsed.name,
@@ -303,7 +353,9 @@ export async function saveAiProvider(
   if (id === null && !apiKeyEncrypted && (parsed.kind === 'BEDROCK' || parsed.kind === 'VERTEX')) {
     throw invalid(
       parsed.kind === 'BEDROCK' ? 'awsAccessKeyId' : 'serviceAccountJson',
-      parsed.kind === 'BEDROCK' ? 'Enter AWS credentials or a Bedrock API key' : 'Paste a service account key'
+      parsed.kind === 'BEDROCK'
+        ? 'Enter AWS credentials or a Bedrock API key'
+        : 'Paste a service account key'
     );
   }
 
@@ -319,7 +371,10 @@ export async function saveAiProvider(
     if (duplicate) throw invalid('name', 'A provider with this name already exists');
     let row;
     if (id === null) {
-      row = await tx.aiProvider.create({ data: { ...data, apiKeyEncrypted: apiKeyEncrypted ?? null }, select: PROVIDER_SELECT });
+      row = await tx.aiProvider.create({
+        data: { ...data, apiKeyEncrypted: apiKeyEncrypted ?? null },
+        select: PROVIDER_SELECT,
+      });
     } else {
       const existing = await tx.aiProvider.findUnique({ where: { id }, select: { kind: true } });
       if (!existing) throw new AppError({ code: 'RESOURCE_NOT_FOUND' });
@@ -336,13 +391,18 @@ export async function saveAiProvider(
     const view = toView(row);
     await logAudit(
       {
-        action: id === null ? 'intelligence.ai.provider.created' : 'intelligence.ai.provider.updated',
+        action:
+          id === null ? 'intelligence.ai.provider.created' : 'intelligence.ai.provider.updated',
         entityType: 'SYSTEM_CONFIG',
         entityId: row.id,
         actorId: actor.actorId,
         ...auditSource(actor),
         // Credentials are never audited; only whether they were replaced.
-        newValue: { ...view, options: { ...view.options }, keyReplaced: apiKeyEncrypted !== undefined },
+        newValue: {
+          ...view,
+          options: { ...view.options },
+          keyReplaced: apiKeyEncrypted !== undefined,
+        },
       },
       tx
     );
@@ -350,7 +410,10 @@ export async function saveAiProvider(
   });
 }
 
-export async function deleteAiProvider(id: string, actor: IntelligenceActor): Promise<'deleted' | 'not_found'> {
+export async function deleteAiProvider(
+  id: string,
+  actor: IntelligenceActor
+): Promise<'deleted' | 'not_found'> {
   return prisma.$transaction(async tx => {
     const row = await tx.aiProvider.findUnique({ where: { id }, select: PROVIDER_SELECT });
     if (!row) return 'not_found';
@@ -382,11 +445,24 @@ function readCredentials(kind: AiProviderView['kind'], secret: string | null): G
   if (kind !== 'BEDROCK' && kind !== 'VERTEX') return { type: 'apiKey', apiKey: secret };
   try {
     const value = JSON.parse(secret) as Record<string, unknown>;
-    if (kind === 'BEDROCK' && typeof value.accessKeyId === 'string' && typeof value.secretAccessKey === 'string') {
-      return { type: 'aws', accessKeyId: value.accessKeyId, secretAccessKey: value.secretAccessKey };
+    if (
+      kind === 'BEDROCK' &&
+      typeof value.accessKeyId === 'string' &&
+      typeof value.secretAccessKey === 'string'
+    ) {
+      return {
+        type: 'aws',
+        accessKeyId: value.accessKeyId,
+        secretAccessKey: value.secretAccessKey,
+      };
     }
-    if (kind === 'BEDROCK' && typeof value.apiKey === 'string') return { type: 'apiKey', apiKey: value.apiKey };
-    if (kind === 'VERTEX' && typeof value.clientEmail === 'string' && typeof value.privateKey === 'string') {
+    if (kind === 'BEDROCK' && typeof value.apiKey === 'string')
+      return { type: 'apiKey', apiKey: value.apiKey };
+    if (
+      kind === 'VERTEX' &&
+      typeof value.clientEmail === 'string' &&
+      typeof value.privateKey === 'string'
+    ) {
       return {
         type: 'google',
         clientEmail: value.clientEmail,
@@ -400,17 +476,25 @@ function readCredentials(kind: AiProviderView['kind'], secret: string | null): G
   return { type: 'none' };
 }
 
-/** Server-only: loads enabled providers with their decrypted credentials for the gateway. */
-export async function loadProvidersForGateway(client: Client = prisma) {
+/**
+ * Server-only: loads providers with their decrypted credentials for the gateway. Only enabled ones by
+ * default; `includeDisabled` lets an administrator test a provider before switching it on.
+ */
+export async function loadProvidersForGateway(
+  client: Client = prisma,
+  options: { includeDisabled?: boolean } = {}
+) {
   const rows = await client.aiProvider.findMany({
-    where: { enabled: true },
+    where: options.includeDisabled ? {} : { enabled: true },
     orderBy: [{ priority: 'asc' }, { name: 'asc' }],
     take: MAX_AI_PROVIDERS,
     select: PROVIDER_SELECT,
   });
   return Promise.all(
     rows.map(async row => {
-      const secret = row.apiKeyEncrypted ? await decrypt(row.apiKeyEncrypted).catch(() => null) : null;
+      const secret = row.apiKeyEncrypted
+        ? await decrypt(row.apiKeyEncrypted).catch(() => null)
+        : null;
       const credentials = readCredentials(row.kind, secret);
       return {
         ...toView(row),

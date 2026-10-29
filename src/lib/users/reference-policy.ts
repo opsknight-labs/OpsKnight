@@ -67,6 +67,8 @@ export const USER_REFERENCE_POLICY = {
   intelligencePolicyVersions: { deactivate: 'KEEP', delete: 'SET_NULL' },
   intelligenceEvaluationRuns: { deactivate: 'KEEP', delete: 'SET_NULL' },
   squireConversations: { deactivate: 'KEEP', delete: 'CASCADE' },
+  aiUsageDays: { deactivate: 'KEEP', delete: 'CASCADE' },
+  squireActionReceipts: { deactivate: 'KEEP', delete: 'CASCADE' },
 } as const;
 
 export type UserReferenceName = keyof typeof USER_REFERENCE_POLICY;

@@ -46,9 +46,23 @@ describe('squireRequestSchema', () => {
       { message: 'x', extra: true },
       { message: '' },
       { message: 'a'.repeat(2001) },
-      { message: 'x', history: Array.from({ length: 11 }, () => ({ role: 'user', content: 'x' })) },
-      { message: 'x', history: [{ role: 'user', content: 'a'.repeat(2001) }] },
+      { message: 'x', history: Array.from({ length: 21 }, () => ({ role: 'user', content: 'x' })) },
+      { message: 'x', history: [{ role: 'user', content: 'a'.repeat(16_001) }] },
     ];
     for (const input of bad) expect(squireRequestSchema.safeParse(input).success).toBe(false);
+  });
+
+  it('trims long earlier answers and keeps only the most recent turns, so a follow-up question never fails', () => {
+    const long = 'a'.repeat(9_000);
+    const parsed = squireRequestSchema.parse({
+      message: 'and then?',
+      history: Array.from({ length: 14 }, (_, i) => ({
+        role: i % 2 ? 'assistant' : 'user',
+        content: i === 13 ? long : `turn ${i}`,
+      })),
+    });
+    expect(parsed.history).toHaveLength(10);
+    expect(parsed.history.at(-1)!.content).toHaveLength(4_000);
+    expect(parsed.history[0].content).toBe('turn 4');
   });
 });

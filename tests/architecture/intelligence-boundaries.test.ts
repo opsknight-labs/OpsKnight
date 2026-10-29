@@ -66,17 +66,38 @@ describe('intelligence architecture boundaries', () => {
     expect(offenders.map(file => relative(root, file))).toEqual([]);
   });
 
-  it('keeps Squire strictly read-only: no database writes and no write tools', () => {
+  it("confines Squire writes to confirmed actions, through the application's own commands", () => {
     const squireDir = join(intelligenceDir, 'squire');
+    const executor = join(squireDir, 'actions/execute.ts');
     const writes =
       /\.(?:create|createMany|update|updateMany|upsert|delete|deleteMany)\(|\$executeRaw|\$transaction/;
-    const offenders = sourceFiles(squireDir).filter(file => writes.test(read(file)));
+    // Reading, proposing and answering never write anything.
+    const offenders = sourceFiles(squireDir).filter(
+      file => file !== executor && writes.test(read(file))
+    );
     expect(offenders.map(file => relative(root, file))).toEqual([]);
-    expect(
-      sourceFiles(squireDir)
-        .filter(file => /PROPOSE_WRITE/.test(read(file)))
-        .map(file => relative(root, file))
-    ).toEqual([]);
+
+    // The executor writes only its single-use receipts; every change to an incident goes through the same
+    // domain commands (and permission checks) as the application's own buttons.
+    const executorSource = read(executor);
+    const delegates = [
+      ...executorSource.matchAll(
+        /\bprisma\.(\w+)\.(?:create|createMany|update|updateMany|upsert|delete|deleteMany)\(/g
+      ),
+    ].map(match => match[1]);
+    expect([...new Set(delegates)]).toEqual(['squireActionReceipt']);
+    expect(executorSource).not.toMatch(/\$executeRaw|\$transaction/);
+    expect(executorSource).toMatch(/openProposal\(token, actor\.id\)/);
+
+    // Proposal tools are declared in one place and never carry an executor of their own.
+    const proposing = sourceFiles(squireDir).filter(file => /PROPOSE_WRITE/.test(read(file)));
+    expect(proposing.map(file => relative(root, file))).toEqual([
+      'src/lib/intelligence/squire/tools.ts',
+    ]);
+    const proposalTool =
+      read(join(squireDir, 'tools.ts')).match(/function proposalTool[\s\S]*?\n\}/)?.[0] ?? '';
+    expect(proposalTool).toContain("kind: 'PROPOSE_WRITE'");
+    expect(proposalTool).not.toMatch(/execute/);
   });
 
   it('lets saved assistant conversations write only their own tables', () => {

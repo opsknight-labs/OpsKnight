@@ -15,13 +15,33 @@ import {
 } from 'react';
 import { ArrowLeftRight, History, Send, Trash2, X } from 'lucide-react';
 import SquireAvatar, { type SquireAvatarKind } from '@/components/squire/SquireAvatar';
+import SquireProposalCard, {
+  type SquireProposalView,
+} from '@/components/squire/SquireProposalCard';
 
-type Turn = { role: 'user' | 'assistant'; content: string; notice?: string; mode?: 'ai' | 'basic' };
+type Citation = { kind: 'incident' | 'runbook'; id: string; label: string; href: string };
+type Turn = {
+  role: 'user' | 'assistant';
+  content: string;
+  notice?: string;
+  mode?: 'ai' | 'basic';
+  /** What the assistant is looking up right now. */
+  activity?: string;
+  /** Shown after partial text when the answer was cut off. */
+  error?: string;
+  proposals?: SquireProposalView[];
+  citations?: Citation[];
+  suggestions?: string[];
+  /** The incident page the turn was asked on; history only carries turns from the same page. */
+  incidentId?: string;
+};
 type SavedConversation = { id: string; title: string; updatedAt: string; messageCount: number };
 const CONVERSATIONS_URL = '/api/intelligence/squire/conversations';
 
 const HISTORY_TURNS = 10;
 const MAX_LENGTH = 2000;
+/** The server keeps this much of each earlier turn as context; sending more only wastes the request. */
+const HISTORY_TURN_LENGTH = 4000;
 const INTERNAL_LINK = /(\/(?:incidents|runbooks)\/[A-Za-z0-9_-]{1,64})/g;
 const SUGGESTIONS = ['What is on fire?', 'Help'];
 const INCIDENT_SUGGESTIONS = [
@@ -112,17 +132,18 @@ export default function SquireLauncher({
   const [historyError, setHistoryError] = useState('');
   const [confirmDeleteAll, setConfirmDeleteAll] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
+  // Each request gets a number; a stream that is no longer the latest (new chat, opened conversation)
+  // cannot write into what is on screen now.
+  const requestSeq = useRef(0);
+  const pendingRef = useRef<string | null>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const launcherRef = useRef<HTMLButtonElement>(null);
   const wasOpen = useRef(false);
   const endRef = useRef<HTMLDivElement>(null);
   const panelId = useId();
 
-  const close = useCallback(() => {
-    abortRef.current?.abort();
-    setBusy(false);
-    setOpen(false);
-  }, []);
+  // Closing only hides the panel: an answer in progress keeps arriving and is there when it is reopened.
+  const close = useCallback(() => setOpen(false), []);
 
   useEffect(() => {
     document.documentElement.dataset.squireName = name;
@@ -178,24 +199,32 @@ export default function SquireLauncher({
   const send = useCallback(
     async (raw: string) => {
       const message = raw.trim().slice(0, MAX_LENGTH);
-      if (!message || busy) return;
+      if (!message) return;
+      if (busy) {
+        // Asked while an answer is still arriving (for example from another part of the page): send it next.
+        pendingRef.current = message;
+        return;
+      }
       const history = turns
-        .filter(turn => turn.content)
+        .filter(turn => turn.content && turn.incidentId === incidentId)
         .slice(-HISTORY_TURNS)
-        .map(({ role, content }) => ({ role, content }));
+        .map(({ role, content }) => ({ role, content: content.slice(0, HISTORY_TURN_LENGTH) }));
       setTurns(current => [
         ...current,
-        { role: 'user', content: message },
-        { role: 'assistant', content: '' },
+        { role: 'user', content: message, incidentId },
+        { role: 'assistant', content: '', incidentId },
       ]);
       setInput('');
       setBusy(true);
       const controller = new AbortController();
       abortRef.current = controller;
-      const patch = (update: (turn: Turn) => Turn) =>
+      const seq = ++requestSeq.current;
+      const patch = (update: (turn: Turn) => Turn) => {
+        if (seq !== requestSeq.current) return;
         setTurns(current =>
           current.map((turn, index) => (index === current.length - 1 ? update(turn) : turn))
         );
+      };
       try {
         const response = await fetch('/api/intelligence/squire', {
           method: 'POST',
@@ -235,8 +264,11 @@ export default function SquireLauncher({
               type: string;
               text?: string;
               message?: string;
+              label?: string;
               mode?: 'ai' | 'basic';
               id?: string;
+              proposal?: SquireProposalView;
+              items?: unknown[];
             };
             try {
               event = JSON.parse(line);
@@ -244,17 +276,45 @@ export default function SquireLauncher({
               continue;
             }
             if (event.type === 'delta' && event.text)
-              patch(turn => ({ ...turn, content: turn.content + event.text }));
+              patch(turn => ({ ...turn, content: turn.content + event.text, activity: undefined }));
             else if (event.type === 'meta' && event.mode)
               patch(turn => ({ ...turn, mode: event.mode }));
-            else if (event.type === 'notice' && event.text)
-              patch(turn => ({ ...turn, notice: event.text }));
-            else if (event.type === 'conversation' && event.id) setConversationId(event.id);
-            else if (event.type === 'error')
+            else if (event.type === 'tool' && event.label)
+              patch(turn => ({ ...turn, activity: event.label }));
+            else if (event.type === 'proposal' && event.proposal)
               patch(turn => ({
                 ...turn,
-                content: turn.content || event.message || 'Something went wrong.',
+                activity: undefined,
+                proposals: [...(turn.proposals ?? []), event.proposal!],
               }));
+            else if (event.type === 'citations' && Array.isArray(event.items))
+              patch(turn => ({ ...turn, citations: event.items as Citation[] }));
+            else if (event.type === 'suggestions' && Array.isArray(event.items))
+              patch(turn => ({
+                ...turn,
+                suggestions: (event.items as unknown[]).filter(
+                  (item): item is string => typeof item === 'string'
+                ),
+              }));
+            else if (event.type === 'notice' && event.text)
+              patch(turn => ({ ...turn, notice: event.text }));
+            else if (event.type === 'conversation' && event.id) {
+              if (seq === requestSeq.current) setConversationId(event.id);
+            } else if (event.type === 'error')
+              // Keep what already arrived and say it was cut off, rather than hiding the failure.
+              patch(turn =>
+                turn.content
+                  ? {
+                      ...turn,
+                      activity: undefined,
+                      error: event.message || 'The response was interrupted.',
+                    }
+                  : {
+                      ...turn,
+                      activity: undefined,
+                      content: event.message || 'Something went wrong.',
+                    }
+              );
           }
         }
       } catch (error) {
@@ -265,18 +325,34 @@ export default function SquireLauncher({
           }));
         }
       } finally {
-        setBusy(false);
+        patch(turn => ({ ...turn, activity: undefined }));
+        if (seq === requestSeq.current) setBusy(false);
       }
     },
     [busy, conversationId, incidentId, turns]
   );
 
-  const newChat = useCallback(() => {
+  // A question asked while busy goes out as soon as the current answer is complete.
+  useEffect(() => {
+    if (busy || !pendingRef.current) return;
+    const next = pendingRef.current;
+    pendingRef.current = null;
+    void send(next);
+  }, [busy, send]);
+
+  const stopCurrent = useCallback(() => {
+    requestSeq.current += 1;
     abortRef.current?.abort();
+    pendingRef.current = null;
+    setBusy(false);
+  }, []);
+
+  const newChat = useCallback(() => {
+    stopCurrent();
     setTurns([]);
     setConversationId(undefined);
     setShowHistory(false);
-  }, []);
+  }, [stopCurrent]);
 
   const loadSaved = useCallback(async () => {
     setHistoryError('');
@@ -297,30 +373,34 @@ export default function SquireLauncher({
     });
   }, [loadSaved]);
 
-  const openSaved = useCallback(async (id: string) => {
-    setHistoryError('');
-    try {
-      const response = await fetch(`${CONVERSATIONS_URL}/${encodeURIComponent(id)}`, {
-        cache: 'no-store',
-      });
-      if (!response.ok) throw new Error(String(response.status));
-      const body = (await response.json()) as {
-        data?: {
-          conversation?: {
-            id: string;
-            messages: Array<{ role: 'user' | 'assistant'; content: string }>;
+  const openSaved = useCallback(
+    async (id: string) => {
+      setHistoryError('');
+      try {
+        const response = await fetch(`${CONVERSATIONS_URL}/${encodeURIComponent(id)}`, {
+          cache: 'no-store',
+        });
+        if (!response.ok) throw new Error(String(response.status));
+        const body = (await response.json()) as {
+          data?: {
+            conversation?: {
+              id: string;
+              messages: Array<{ role: 'user' | 'assistant'; content: string }>;
+            };
           };
         };
-      };
-      const conversation = body.data?.conversation;
-      if (!conversation) throw new Error('missing');
-      setTurns(conversation.messages.map(({ role, content }) => ({ role, content })));
-      setConversationId(conversation.id);
-      setShowHistory(false);
-    } catch {
-      setHistoryError('That conversation could not be opened.');
-    }
-  }, []);
+        const conversation = body.data?.conversation;
+        if (!conversation) throw new Error('missing');
+        stopCurrent();
+        setTurns(conversation.messages.map(({ role, content }) => ({ role, content, incidentId })));
+        setConversationId(conversation.id);
+        setShowHistory(false);
+      } catch {
+        setHistoryError('That conversation could not be opened.');
+      }
+    },
+    [incidentId, stopCurrent]
+  );
 
   const removeSaved = useCallback(
     async (id?: string) => {
@@ -517,7 +597,7 @@ export default function SquireLauncher({
                 <div className="space-y-3">
                   <p className="text-muted-foreground">
                     Hi, I&apos;m {name}. I can look through the incidents you can access and suggest
-                    what to check. I never change anything.
+                    what to check. I can also suggest actions; they only happen if you confirm them.
                     {history ? ' Our conversations are saved for you only.' : ''}
                   </p>
                   <div className="flex flex-wrap gap-2">
@@ -550,8 +630,37 @@ export default function SquireLauncher({
                     {turn.content ? (
                       <RichText text={turn.content} />
                     ) : busy && index === turns.length - 1 ? (
-                      <span className="text-foreground/80">Thinking…</span>
+                      <span className="text-foreground/80">
+                        {turn.activity ? `${turn.activity}…` : 'Thinking…'}
+                      </span>
                     ) : null}
+                    {turn.content && turn.activity && busy && index === turns.length - 1 && (
+                      <p className="mt-1 text-xs text-foreground/80">{turn.activity}…</p>
+                    )}
+                    {turn.error && (
+                      <p role="alert" className="mt-1 text-xs font-medium text-destructive">
+                        {turn.error}
+                      </p>
+                    )}
+                    {turn.proposals?.map(proposal => (
+                      <SquireProposalCard key={proposal.token} proposal={proposal} />
+                    ))}
+                    {turn.citations && turn.citations.length > 0 && (
+                      <ul aria-label="Sources" className="mt-2 flex flex-wrap gap-1">
+                        {turn.citations.map(citation => (
+                          <li key={`${citation.kind}:${citation.id}`}>
+                            <Link
+                              href={citation.href}
+                              className="inline-block max-w-[14rem] truncate rounded-full border border-border bg-card px-2 py-0.5 text-xs hover:bg-accent"
+                              title={citation.label}
+                            >
+                              {citation.kind === 'runbook' ? 'Runbook: ' : ''}
+                              {citation.label}
+                            </Link>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
                     {turn.role === 'assistant' && turn.mode === 'basic' && turn.content && (
                       <p className="mt-1 text-xs text-foreground/80">
                         Basic answer from your incident data
@@ -560,6 +669,20 @@ export default function SquireLauncher({
                   </div>
                 </div>
               ))}
+              {!busy && (turns.at(-1)?.suggestions?.length ?? 0) > 0 && (
+                <div aria-label="Suggested questions" className="flex flex-wrap gap-2">
+                  {turns.at(-1)!.suggestions!.map(suggestion => (
+                    <button
+                      key={suggestion}
+                      type="button"
+                      onClick={() => void send(suggestion)}
+                      className="rounded-full border border-border px-3 py-1 text-xs hover:bg-accent"
+                    >
+                      {suggestion}
+                    </button>
+                  ))}
+                </div>
+              )}
               <div ref={endRef} />
             </div>
           )}
