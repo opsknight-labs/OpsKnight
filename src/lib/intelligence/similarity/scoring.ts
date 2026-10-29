@@ -45,7 +45,13 @@ export const SIMILARITY_WEIGHTS = {
 
 export const RECENCY_HALF_LIFE_DAYS = 30;
 /** Below this, shared boilerplate (" on", "-<num>") is noise, not a match. */
-export const MIN_CONTENT_SIMILARITY = 0.15;
+export const MIN_CONTENT_SIMILARITY = 0.25;
+/**
+ * Content similarity at which service, recency and outcome count in full. Below it they are scaled down in
+ * proportion, so a weak textual match on the same, recently resolved service cannot be pushed over the
+ * threshold by those signals alone.
+ */
+export const FULL_CONTEXT_CONTENT = 0.5;
 /**
  * Embedding cosine below this is treated as no semantic signal. Unrelated short texts commonly score
  * 0.3-0.7 depending on the model, so only the top of the range counts, and it is rescaled to 0-1.
@@ -111,8 +117,13 @@ export function scoreSimilarity(
   // Content similarity must be present for any match: service, recency and outcome only break ties
   // between genuinely similar incidents and can never manufacture a match on their own. Meaning from
   // embeddings can raise content similarity (different words, same problem) but never lower it.
-  const content = Math.max(components.tokens, components.template, semanticContent(components.semantic));
-  if (content < MIN_CONTENT_SIMILARITY) return { score: 0, components, matchedTokenCount: tokens.shared };
+  const content = Math.max(
+    components.tokens,
+    components.template,
+    semanticContent(components.semantic)
+  );
+  if (content < MIN_CONTENT_SIMILARITY)
+    return { score: 0, components, matchedTokenCount: tokens.shared };
 
   // When neither incident carries labels the label signal does not exist, so its weight is removed
   // and the rest renormalized. Otherwise a perfect duplicate would cap at 0.8 and scores from
@@ -120,12 +131,14 @@ export function scoreSimilarity(
   const hasLabels = Object.keys(query.labels).length + Object.keys(candidate.labels).length > 0;
   const labelWeight = hasLabels ? SIMILARITY_WEIGHTS.labels : 0;
   const totalWeight = 1 - SIMILARITY_WEIGHTS.labels + labelWeight;
+  const contextStrength = Math.min(1, content / FULL_CONTEXT_CONTENT);
   const score =
     (SIMILARITY_WEIGHTS.content * content +
       labelWeight * components.labels +
-      SIMILARITY_WEIGHTS.sameService * components.sameService +
-      SIMILARITY_WEIGHTS.recency * components.recency +
-      SIMILARITY_WEIGHTS.resolved * components.resolved) /
+      contextStrength *
+        (SIMILARITY_WEIGHTS.sameService * components.sameService +
+          SIMILARITY_WEIGHTS.recency * components.recency +
+          SIMILARITY_WEIGHTS.resolved * components.resolved)) /
     totalWeight;
   return { score: round(Math.min(1, score)), components, matchedTokenCount: tokens.shared };
 }

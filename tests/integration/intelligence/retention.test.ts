@@ -1,9 +1,18 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { INTELLIGENCE_SETTINGS_DEFAULTS } from '@/lib/intelligence/contract';
 import { createLaneState, runIntelligenceCycle } from '@/lib/intelligence/jobs/runner';
-import { RETENTION_INTERVAL_MS, purgeExpiredIntelligenceData } from '@/lib/intelligence/jobs/retention';
+import {
+  RETENTION_INTERVAL_MS,
+  purgeExpiredIntelligenceData,
+} from '@/lib/intelligence/jobs/retention';
 import { indexIncident } from '@/lib/intelligence/jobs/indexer';
-import { createTestIncident, createTestService, createTestUser, resetDatabase, testPrisma as db } from '../../helpers/test-db';
+import {
+  createTestIncident,
+  createTestService,
+  createTestUser,
+  resetDatabase,
+  testPrisma as db,
+} from '../../helpers/test-db';
 
 beforeEach(async () => {
   if (!new URL(process.env.DATABASE_URL ?? '').pathname.endsWith('_test')) {
@@ -17,7 +26,14 @@ const retention = { ...INTELLIGENCE_SETTINGS_DEFAULTS, maxDbMs: 5000 };
 
 async function finding(incidentId: string, createdAt: Date) {
   return db.intelligenceFinding.create({
-    data: { incidentId, kind: 'SIMILAR_INCIDENT', evidence: {}, generation: 1, engineVersion: 'test', createdAt },
+    data: {
+      incidentId,
+      kind: 'SIMILAR_INCIDENT',
+      evidence: {},
+      generation: 1,
+      engineVersion: 'test',
+      createdAt,
+    },
   });
 }
 
@@ -26,14 +42,27 @@ describe('retention sweep', () => {
     const service = await createTestService('Checkout');
     const oldIncident = await createTestIncident('Old', service.id, { createdAt: days(800) });
     const newIncident = await createTestIncident('New', service.id, { createdAt: days(1) });
-    for (const incident of [oldIncident, newIncident]) await db.$transaction(tx => indexIncident(incident.id, tx));
+    for (const incident of [oldIncident, newIncident])
+      await db.$transaction(tx => indexIncident(incident.id, tx));
     await finding(newIncident.id, days(400)); // beyond 365d findings retention
     await finding(newIncident.id, days(10));
     const user = await createTestUser({ role: 'ADMIN' });
     await db.intelligenceFeedback.createMany({
       data: [
-        { subjectType: 'FINDING', subjectId: 'a', verdict: 'HELPFUL', actorId: user.id, createdAt: days(800) },
-        { subjectType: 'FINDING', subjectId: 'b', verdict: 'HELPFUL', actorId: user.id, createdAt: days(5) },
+        {
+          subjectType: 'FINDING',
+          subjectId: 'a',
+          verdict: 'HELPFUL',
+          actorId: user.id,
+          createdAt: days(800),
+        },
+        {
+          subjectType: 'FINDING',
+          subjectId: 'b',
+          verdict: 'HELPFUL',
+          actorId: user.id,
+          createdAt: days(5),
+        },
       ],
     });
     await db.intelligencePattern.createMany({
@@ -44,13 +73,114 @@ describe('retention sweep', () => {
     });
 
     const result = await purgeExpiredIntelligenceData(retention, { batchSize: 100 });
-    expect(result).toMatchObject({ fingerprints: 1, findings: 1, feedback: 1, patterns: 1, more: false });
-    expect((await db.incidentFingerprint.findMany()).map(f => f.incidentId)).toEqual([newIncident.id]);
+    expect(result).toMatchObject({
+      fingerprints: 1,
+      findings: 1,
+      feedback: 1,
+      patterns: 1,
+      more: false,
+    });
+    expect((await db.incidentFingerprint.findMany()).map(f => f.incidentId)).toEqual([
+      newIncident.id,
+    ]);
     expect(await db.intelligenceFinding.count()).toBe(1);
     expect((await db.intelligenceFeedback.findMany()).map(f => f.subjectId)).toEqual(['b']);
     expect((await db.intelligencePattern.findMany()).map(p => p.key)).toEqual(['new']);
     // The retained incidents themselves are never touched.
     expect(await db.incident.count()).toBe(2);
+  });
+
+  it('keeps links a person made or confirmed, and drops expired system suggestions', async () => {
+    const service = await createTestService('Checkout');
+    const [a, b, c, d] = await Promise.all(
+      ['A', 'B', 'C', 'D'].map(title =>
+        createTestIncident(title, service.id, { createdAt: days(1) })
+      )
+    );
+    const old = days(400);
+    await db.incidentRelationship.createMany({
+      data: [
+        {
+          sourceIncidentId: a.id,
+          targetIncidentId: b.id,
+          type: 'RELATED',
+          origin: 'RULE',
+          decision: 'SUGGESTED',
+          score: 1,
+          evidence: {},
+          engineVersion: 't',
+          createdAt: old,
+        },
+        {
+          sourceIncidentId: a.id,
+          targetIncidentId: c.id,
+          type: 'RELATED',
+          origin: 'RULE',
+          decision: 'ACCEPTED',
+          score: 1,
+          evidence: {},
+          engineVersion: 't',
+          createdAt: old,
+        },
+        {
+          sourceIncidentId: a.id,
+          targetIncidentId: d.id,
+          type: 'RELATED',
+          origin: 'HUMAN',
+          decision: 'ACCEPTED',
+          score: 1,
+          evidence: {},
+          engineVersion: 't',
+          createdAt: old,
+        },
+      ],
+    });
+    const result = await purgeExpiredIntelligenceData(retention, { batchSize: 100 });
+    expect(result.relationships).toBe(1);
+    expect((await db.incidentRelationship.findMany()).map(r => r.targetIncidentId).sort()).toEqual(
+      [c.id, d.id].sort()
+    );
+  });
+
+  it('keeps superseded findings only briefly and closes groups whose window has passed', async () => {
+    const service = await createTestService('Checkout');
+    const incident = await createTestIncident('X', service.id, { createdAt: days(1) });
+    await db.intelligenceFinding.createMany({
+      data: [
+        {
+          incidentId: incident.id,
+          kind: 'SIMILAR_INCIDENT',
+          evidence: {},
+          generation: 1,
+          engineVersion: 't',
+          status: 'SUPERSEDED',
+          supersededAt: days(8),
+        },
+        {
+          incidentId: incident.id,
+          kind: 'SIMILAR_INCIDENT',
+          evidence: {},
+          generation: 2,
+          engineVersion: 't',
+          status: 'SUPERSEDED',
+          supersededAt: days(1),
+        },
+        {
+          incidentId: incident.id,
+          kind: 'SIMILAR_INCIDENT',
+          evidence: {},
+          generation: 3,
+          engineVersion: 't',
+        },
+      ],
+    });
+    const result = await purgeExpiredIntelligenceData(retention, { batchSize: 100 });
+    expect(result.supersededFindings).toBe(1);
+    expect(
+      (await db.intelligenceFinding.findMany({ orderBy: { generation: 'asc' } })).map(
+        f => f.generation
+      )
+    ).toEqual([2, 3]);
   });
 
   it('works through a backlog in bounded batches and reports when more remains', async () => {
@@ -71,7 +201,10 @@ describe('retention sweep', () => {
     const service = await createTestService('Checkout');
     const incident = await createTestIncident('Anchor', service.id);
     await finding(incident.id, days(40));
-    await purgeExpiredIntelligenceData({ ...retention, findingRetentionDays: 30 }, { batchSize: 100 });
+    await purgeExpiredIntelligenceData(
+      { ...retention, findingRetentionDays: 30 },
+      { batchSize: 100 }
+    );
     expect(await db.intelligenceFinding.count()).toBe(0);
   });
 });
@@ -81,7 +214,12 @@ describe('retention in the lane cycle', () => {
     const service = await createTestService('Checkout');
     const incident = await createTestIncident('Anchor', service.id);
     await db.intelligenceSettings.create({
-      data: { id: 'default', ...INTELLIGENCE_SETTINGS_DEFAULTS, enabled: false, findingRetentionDays: 30 },
+      data: {
+        id: 'default',
+        ...INTELLIGENCE_SETTINGS_DEFAULTS,
+        enabled: false,
+        findingRetentionDays: 30,
+      },
     });
     await finding(incident.id, days(40));
 

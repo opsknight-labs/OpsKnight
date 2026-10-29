@@ -5022,6 +5022,7 @@ model IncidentRelationship {
 
   @@unique([sourceIncidentId, targetIncidentId, type])
   @@index([targetIncidentId])
+  @@index([updatedAt], map: "idx_incident_relationship_updated")
 }
 
 model IncidentRelationshipEvent {
@@ -5047,6 +5048,8 @@ model IncidentFingerprint {
   serviceId         String
   service           Service   @relation(fields: [serviceId], references: [id], onDelete: Cascade)
   template          String
+  /// sha256 of the template (32 hex chars); compared with an embedding's source hash.
+  templateHash      String?
   tokens            String[]
   labels            Json
   resolutionSummary String?
@@ -5096,6 +5099,7 @@ model IntelligenceFinding {
 
   @@index([incidentId, status, kind, rank], map: "idx_intelligence_finding_lookup")
   @@index([createdAt], map: "idx_intelligence_finding_retention")
+  @@index([status, supersededAt], map: "idx_intelligence_finding_superseded")
 }
 
 model IntelligenceFeedback {
@@ -5149,6 +5153,8 @@ model IntelligenceWorkItem {
   claimedAt   DateTime?
   leaseUntil  DateTime?
   lastError   String?
+  /// When the item exhausted its attempts (a dead letter); used to revive it after a cool-down.
+  failedAt    DateTime?
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 

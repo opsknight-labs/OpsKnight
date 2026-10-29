@@ -1,11 +1,21 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { DEFAULT_POLICY_DEFINITION, INTELLIGENCE_SETTINGS_DEFAULTS, type CorrelationRule } from '@/lib/intelligence/contract';
+import {
+  DEFAULT_POLICY_DEFINITION,
+  INTELLIGENCE_SETTINGS_DEFAULTS,
+  type CorrelationRule,
+} from '@/lib/intelligence/contract';
 import { closeExpiredGroups } from '@/lib/intelligence/correlation/groups';
 import { correlateIncident, shouldCorrelate } from '@/lib/intelligence/correlation/handler';
 import { indexIncident } from '@/lib/intelligence/jobs/indexer';
 import { createLaneState, runIntelligenceCycle } from '@/lib/intelligence/jobs/runner';
 import { publishPolicyVersion } from '@/lib/intelligence/settings/service';
-import { createTestIncident, createTestService, createTestUser, resetDatabase, testPrisma as db } from '../../helpers/test-db';
+import {
+  createTestIncident,
+  createTestService,
+  createTestUser,
+  resetDatabase,
+  testPrisma as db,
+} from '../../helpers/test-db';
 
 beforeEach(async () => {
   if (!new URL(process.env.DATABASE_URL ?? '').pathname.endsWith('_test')) {
@@ -14,7 +24,12 @@ beforeEach(async () => {
   await resetDatabase();
 });
 
-const settings = { ...INTELLIGENCE_SETTINGS_DEFAULTS, maxJobMs: 60_000, maxDbMs: 30_000, revision: 1 };
+const settings = {
+  ...INTELLIGENCE_SETTINGS_DEFAULTS,
+  maxJobMs: 60_000,
+  maxDbMs: 30_000,
+  revision: 1,
+};
 const rule = (overrides: Partial<CorrelationRule> = {}): CorrelationRule => ({
   id: 'same-problem',
   kind: 'CONTENT_TEMPLATE',
@@ -26,9 +41,14 @@ const rule = (overrides: Partial<CorrelationRule> = {}): CorrelationRule => ({
   ...overrides,
 });
 
-async function configure(mode: 'SHADOW' | 'SUGGEST', rules: CorrelationRule[] = [rule()], enabled = true) {
+async function configure(
+  mode: 'SHADOW' | 'SUGGEST',
+  rules: CorrelationRule[] = [rule()],
+  enabled = true
+) {
   const admin = await createTestUser({ role: 'ADMIN' });
-  const head = (await db.intelligencePolicy.findUnique({ where: { scopeKey: 'global' } }))?.headVersion ?? 0;
+  const head =
+    (await db.intelligencePolicy.findUnique({ where: { scopeKey: 'global' } }))?.headVersion ?? 0;
   await publishPolicyVersion(
     {},
     {
@@ -48,7 +68,12 @@ async function configure(mode: 'SHADOW' | 'SUGGEST', rules: CorrelationRule[] = 
 const base = new Date('2026-10-27T10:00:00Z');
 const at = (seconds: number) => new Date(base.getTime() + seconds * 1000);
 
-async function incident(title: string, serviceId: string, createdAt: Date, urgency: 'LOW' | 'MEDIUM' | 'HIGH' = 'LOW') {
+async function incident(
+  title: string,
+  serviceId: string,
+  createdAt: Date,
+  urgency: 'LOW' | 'MEDIUM' | 'HIGH' = 'LOW'
+) {
   const created = await createTestIncident(title, serviceId, { createdAt, urgency });
   await db.$transaction(tx => indexIncident(created.id, tx));
   return created;
@@ -62,11 +87,16 @@ describe('SHADOW correlation', () => {
     const first = await incident('Database errors on db-primary-1', service.id, at(0));
     const second = await incident('Database errors on db-primary-7', service.id, at(30));
     const third = await incident('Database errors on db-primary-9', service.id, at(60));
-    for (const i of [first, second, third]) expect(await correlate(i.id)).toMatchObject({ outcome: 'correlated', groups: 1 });
+    for (const i of [first, second, third])
+      expect(await correlate(i.id)).toMatchObject({ outcome: 'correlated', groups: 1 });
 
     const groups = await db.correlationGroup.findMany();
     expect(groups).toHaveLength(1);
-    expect(groups[0]).toMatchObject({ anchorIncidentId: first.id, scopeKind: 'SERVICE', ruleId: 'same-problem' });
+    expect(groups[0]).toMatchObject({
+      anchorIncidentId: first.id,
+      scopeKind: 'SERVICE',
+      ruleId: 'same-problem',
+    });
     const members = await db.correlationMember.findMany({ orderBy: { createdAt: 'asc' } });
     expect(members.map(m => [m.role, m.decision])).toEqual([
       ['ANCHOR', 'SHADOW'],
@@ -103,11 +133,62 @@ describe('SUGGEST correlation', () => {
     const links = await db.incidentRelationship.findMany();
     expect(links).toHaveLength(1);
     expect(links[0]).toMatchObject({
-      sourceIncidentId: member.id, targetIncidentId: anchor.id, type: 'RELATED', origin: 'RULE', decision: 'SUGGESTED',
+      sourceIncidentId: member.id,
+      targetIncidentId: anchor.id,
+      type: 'RELATED',
+      origin: 'RULE',
+      decision: 'SUGGESTED',
     });
     expect(await db.incidentRelationshipEvent.count()).toBe(1);
     expect(await db.correlationMember.count()).toBe(2);
     expect(JSON.stringify(links[0].evidence)).not.toMatch(/Database/i); // numeric/enum evidence only
+  });
+});
+
+describe('anchor election', () => {
+  it('anchors the earliest incident even when a later one is processed first', async () => {
+    await configure('SUGGEST');
+    const service = await createTestService('Checkout');
+    const first = await incident('Database errors', service.id, at(0));
+    const second = await incident('Database errors', service.id, at(20));
+    const third = await incident('Database errors', service.id, at(40));
+    // A retry delayed the earliest incident: the others were correlated before it.
+    await correlate(third.id);
+    await correlate(second.id);
+    await correlate(first.id);
+
+    const group = await db.correlationGroup.findFirstOrThrow();
+    expect(group.anchorIncidentId).toBe(first.id);
+    expect(await db.correlationMember.findMany({ where: { role: 'ANCHOR' } })).toHaveLength(1);
+    const links = await db.incidentRelationship.findMany();
+    expect(links.map(l => [l.sourceIncidentId, l.targetIncidentId]).sort()).toEqual(
+      [
+        [second.id, first.id],
+        [third.id, first.id],
+      ].sort()
+    );
+  });
+
+  it('leaves a link a person already reviewed where it is when the anchor changes', async () => {
+    await configure('SUGGEST');
+    const service = await createTestService('Checkout');
+    const first = await incident('Database errors', service.id, at(0));
+    const second = await incident('Database errors', service.id, at(20));
+    const third = await incident('Database errors', service.id, at(40));
+    await correlate(second.id);
+    await correlate(third.id);
+    await db.incidentRelationship.updateMany({ data: { decision: 'ACCEPTED' } });
+    await correlate(first.id);
+
+    const links = await db.incidentRelationship.findMany();
+    expect(links.find(l => l.sourceIncidentId === third.id)).toMatchObject({
+      targetIncidentId: second.id,
+      decision: 'ACCEPTED',
+    });
+    expect(links.find(l => l.sourceIncidentId === second.id)).toMatchObject({
+      targetIncidentId: first.id,
+      decision: 'SUGGESTED',
+    });
   });
 });
 
@@ -116,7 +197,8 @@ describe('concurrency', () => {
     await configure('SUGGEST');
     const service = await createTestService('Checkout');
     const incidents = [];
-    for (let i = 0; i < 8; i += 1) incidents.push(await incident('Database errors', service.id, at(i)));
+    for (let i = 0; i < 8; i += 1)
+      incidents.push(await incident('Database errors', service.id, at(i)));
     await Promise.all(incidents.map(i => correlate(i.id)));
 
     expect(await db.correlationGroup.count()).toBe(1);
@@ -126,7 +208,9 @@ describe('concurrency', () => {
     expect(await db.correlationMember.count({ where: { role: 'MEMBER' } })).toBe(7);
     expect(await db.incidentRelationship.count()).toBe(7);
     // Every link points at the single anchor.
-    expect(new Set((await db.incidentRelationship.findMany()).map(r => r.targetIncidentId))).toEqual(new Set([group.anchorIncidentId]));
+    expect(
+      new Set((await db.incidentRelationship.findMany()).map(r => r.targetIncidentId))
+    ).toEqual(new Set([group.anchorIncidentId]));
   });
 });
 
@@ -204,9 +288,11 @@ describe('scope and windows', () => {
   it('never extends a window beyond its hard ceiling', async () => {
     await configure('SHADOW', [rule({ windowSeconds: 60, maxWindowSeconds: 120 })]);
     const service = await createTestService('Checkout');
-    for (const s of [0, 55, 110, 165]) await correlate((await incident('Database errors', service.id, at(s))).id);
+    for (const s of [0, 55, 110, 165])
+      await correlate((await incident('Database errors', service.id, at(s))).id);
     const groups = await db.correlationGroup.findMany();
-    for (const g of groups) expect(g.windowEnd.getTime()).toBeLessThanOrEqual(g.maxWindowEnd.getTime());
+    for (const g of groups)
+      expect(g.windowEnd.getTime()).toBeLessThanOrEqual(g.maxWindowEnd.getTime());
     expect(groups.length).toBeGreaterThan(1);
   });
 
@@ -228,15 +314,22 @@ describe('scope and windows', () => {
     await configure('SHADOW');
     const service = await createTestService('Checkout');
     await correlate((await incident('Database errors', service.id, at(0))).id);
-    const closed = await db.$transaction(tx => closeExpiredGroups(tx, new Date('2030-01-01T00:00:00Z'), 100));
+    const closed = await db.$transaction(tx =>
+      closeExpiredGroups(tx, new Date('2030-01-01T00:00:00Z'), 100)
+    );
     expect(closed).toBe(1);
     expect((await db.correlationGroup.findFirstOrThrow()).status).toBe('CLOSED');
     expect(await db.correlationMember.count()).toBe(1);
-    expect(await db.$transaction(tx => closeExpiredGroups(tx, new Date('2030-01-01T00:00:00Z'), 100))).toBe(0);
+    expect(
+      await db.$transaction(tx => closeExpiredGroups(tx, new Date('2030-01-01T00:00:00Z'), 100))
+    ).toBe(0);
   });
 
   it('creates one group per matching rule', async () => {
-    await configure('SHADOW', [rule(), rule({ id: 'by-service', kind: 'EXACT_FIELD', keys: ['service'] })]);
+    await configure('SHADOW', [
+      rule(),
+      rule({ id: 'by-service', kind: 'EXACT_FIELD', keys: ['service'] }),
+    ]);
     const service = await createTestService('Checkout');
     const a = await incident('Database errors', service.id, at(0));
     await correlate(a.id);

@@ -27,14 +27,20 @@ export interface JoinResult {
   relationshipCreated: boolean;
 }
 
-type GroupRow = { id: string; windowEnd: Date; maxWindowEnd: Date; anchorIncidentId: string | null };
+type GroupRow = {
+  id: string;
+  windowEnd: Date;
+  maxWindowEnd: Date;
+  anchorIncidentId: string | null;
+};
 
 /**
  * Joins an incident to the correlation group for (policy version, rule, service scope, signature,
  * window), creating the group if needed. Safe under any number of concurrent workers: group creation
- * is a single INSERT … ON CONFLICT DO NOTHING on the scope-aware identity, the anchor is elected by
- * compare-and-set, and membership/relationship inserts are idempotent. Incident and alert rows are
- * never touched. All times derive from the incident, so replays are deterministic.
+ * is a single INSERT … ON CONFLICT DO NOTHING on the scope-aware identity, the anchor is elected under
+ * the group's row lock, and membership/relationship inserts are idempotent. Incident and alert rows are
+ * never touched. All times derive from the incident, and the anchor is always the earliest incident
+ * (by creation time, then id), so the outcome does not depend on the order incidents are processed in.
  */
 export async function joinCorrelationGroup(tx: Tx, input: JoinInput): Promise<JoinResult> {
   const { rule, incident } = input;
@@ -70,12 +76,46 @@ export async function joinCorrelationGroup(tx: Tx, input: JoinInput): Promise<Jo
       WHERE "id" = ${group.id}`);
   }
 
-  // First to join becomes the anchor; compare-and-set makes the election race-free.
-  await tx.$executeRaw(Prisma.sql`
-    UPDATE "CorrelationGroup" SET "anchorIncidentId" = ${incident.id}, "updatedAt" = now()
-    WHERE "id" = ${group.id} AND "anchorIncidentId" IS NULL`);
-  const [{ anchor }] = await tx.$queryRaw<Array<{ anchor: string }>>(Prisma.sql`
-    SELECT "anchorIncidentId" AS anchor FROM "CorrelationGroup" WHERE "id" = ${group.id}`);
+  // The earliest incident is the anchor. The group row lock serialises elections; an incident that is
+  // processed late but opened first takes over, and the previous anchor becomes a member linked to it.
+  const [current] = await tx.$queryRaw<
+    Array<{ anchor: string | null; anchorCreatedAt: Date | null }>
+  >(Prisma.sql`
+    SELECT g."anchorIncidentId" AS anchor, a."createdAt" AS "anchorCreatedAt"
+    FROM "CorrelationGroup" g LEFT JOIN "Incident" a ON a."id" = g."anchorIncidentId"
+    WHERE g."id" = ${group.id}
+    FOR UPDATE OF g`);
+  const precedes =
+    !current?.anchor ||
+    !current.anchorCreatedAt ||
+    incident.createdAt.getTime() < current.anchorCreatedAt.getTime() ||
+    (incident.createdAt.getTime() === current.anchorCreatedAt.getTime() &&
+      incident.id < current.anchor);
+  let anchor = current?.anchor ?? incident.id;
+  if (precedes && anchor !== incident.id) {
+    const previous = anchor;
+    await tx.$executeRaw(Prisma.sql`
+      UPDATE "CorrelationMember" SET "role" = 'MEMBER'::"CorrelationMemberRole", "updatedAt" = now()
+      WHERE "groupId" = ${group.id} AND "incidentId" = ${previous}`);
+    if (input.decision === 'SUGGESTED') {
+      // Unreviewed suggestions follow the anchor, so every proposed link in a group points at its anchor.
+      // Links a person already accepted or rejected are their decision and stay as they are.
+      const moved = await tx.$queryRaw<Array<{ source: string }>>(Prisma.sql`
+        DELETE FROM "IncidentRelationship"
+        WHERE "targetIncidentId" = ${previous} AND "origin" = 'RULE'::"IntelligenceOrigin"
+          AND "decision" = 'SUGGESTED'::"CorrelationDecision" AND "evidence"->>'groupId' = ${group.id}
+        RETURNING "sourceIncidentId" AS source`);
+      for (const source of [previous, ...moved.map(row => row.source)]) {
+        if (source !== incident.id) await proposeLink(tx, source, incident.id, rule.id, group.id);
+      }
+    }
+    anchor = incident.id;
+  }
+  if (precedes) {
+    await tx.$executeRaw(Prisma.sql`
+      UPDATE "CorrelationGroup" SET "anchorIncidentId" = ${incident.id}, "updatedAt" = now()
+      WHERE "id" = ${group.id}`);
+  }
   const role = anchor === incident.id ? 'ANCHOR' : 'MEMBER';
 
   const evidence = JSON.stringify({
@@ -99,25 +139,35 @@ export async function joinCorrelationGroup(tx: Tx, input: JoinInput): Promise<Jo
       VALUES (gen_random_uuid()::text, ${inserted[0].id}, ${input.decision}::"CorrelationDecision", 'SYSTEM', 'RULE_MATCH')`);
   }
 
-  let relationshipCreated = false;
-  if (role === 'MEMBER' && input.decision === 'SUGGESTED') {
-    const relationshipEvidence = JSON.stringify({ type: 'correlation', ruleId: rule.id, groupId: group.id });
-    const relationship = await tx.$queryRaw<Array<{ id: string }>>(Prisma.sql`
-      INSERT INTO "IncidentRelationship"
-        ("id", "sourceIncidentId", "targetIncidentId", "type", "origin", "decision", "score", "evidence", "engineVersion", "updatedAt")
-      VALUES (gen_random_uuid()::text, ${incident.id}, ${anchor}, 'RELATED'::"IncidentRelationshipType",
-              'RULE'::"IntelligenceOrigin", 'SUGGESTED'::"CorrelationDecision", 1, ${relationshipEvidence}::jsonb,
-              ${INTELLIGENCE_ENGINE_VERSION}, now())
-      ON CONFLICT ("sourceIncidentId", "targetIncidentId", "type") DO NOTHING RETURNING "id"`);
-    relationshipCreated = relationship.length === 1;
-    if (relationshipCreated) {
-      await tx.$executeRaw(Prisma.sql`
-        INSERT INTO "IncidentRelationshipEvent" ("id", "relationshipId", "toDecision", "actorType", "reasonCode")
-        VALUES (gen_random_uuid()::text, ${relationship[0].id}, 'SUGGESTED'::"CorrelationDecision", 'SYSTEM', 'RULE_MATCH')`);
-    }
-  }
+  const relationshipCreated =
+    role === 'MEMBER' && input.decision === 'SUGGESTED'
+      ? await proposeLink(tx, incident.id, anchor, rule.id, group.id)
+      : false;
 
   return { groupId: group.id, anchorIncidentId: anchor, role, memberCreated, relationshipCreated };
+}
+
+/** Proposes a reversible RELATED link from a member to its anchor. Idempotent; true when newly created. */
+async function proposeLink(
+  tx: Tx,
+  sourceId: string,
+  targetId: string,
+  ruleId: string,
+  groupId: string
+) {
+  const evidence = JSON.stringify({ type: 'correlation', ruleId, groupId });
+  const relationship = await tx.$queryRaw<Array<{ id: string }>>(Prisma.sql`
+    INSERT INTO "IncidentRelationship"
+      ("id", "sourceIncidentId", "targetIncidentId", "type", "origin", "decision", "score", "evidence", "engineVersion", "updatedAt")
+    VALUES (gen_random_uuid()::text, ${sourceId}, ${targetId}, 'RELATED'::"IncidentRelationshipType",
+            'RULE'::"IntelligenceOrigin", 'SUGGESTED'::"CorrelationDecision", 1, ${evidence}::jsonb,
+            ${INTELLIGENCE_ENGINE_VERSION}, now())
+    ON CONFLICT ("sourceIncidentId", "targetIncidentId", "type") DO NOTHING RETURNING "id"`);
+  if (relationship.length !== 1) return false;
+  await tx.$executeRaw(Prisma.sql`
+    INSERT INTO "IncidentRelationshipEvent" ("id", "relationshipId", "toDecision", "actorType", "reasonCode")
+    VALUES (gen_random_uuid()::text, ${relationship[0].id}, 'SUGGESTED'::"CorrelationDecision", 'SYSTEM', 'RULE_MATCH')`);
+  return true;
 }
 
 /** Marks groups whose window has passed as closed. Membership of historical incidents is unaffected. */

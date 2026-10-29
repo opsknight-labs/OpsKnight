@@ -5,7 +5,12 @@ import {
   reconcileFingerprints,
 } from '@/lib/intelligence/jobs/discovery';
 import { indexIncident } from '@/lib/intelligence/jobs/indexer';
-import { createTestIncident, createTestService, resetDatabase, testPrisma as db } from '../../helpers/test-db';
+import {
+  createTestIncident,
+  createTestService,
+  resetDatabase,
+  testPrisma as db,
+} from '../../helpers/test-db';
 
 beforeEach(async () => {
   if (!new URL(process.env.DATABASE_URL ?? '').pathname.endsWith('_test')) {
@@ -52,7 +57,8 @@ describe('incident discovery', () => {
     );
     const later = new Date(Date.now() + DISCOVERY_SAFETY_LAG_MS + 1000);
     let total = 0;
-    for (let i = 0; i < 5; i += 1) total += (await discoverNewIncidents({ limit: 3, now: later })).discovered;
+    for (let i = 0; i < 5; i += 1)
+      total += (await discoverNewIncidents({ limit: 3, now: later })).discovered;
     expect(total).toBe(7);
     expect(new Set((await db.intelligenceWorkItem.findMany()).map(i => i.subjectKey))).toEqual(
       new Set(created.map(c => c.id))
@@ -61,7 +67,9 @@ describe('incident discovery', () => {
 
   it('allows only one concurrent discoverer', async () => {
     await discoverNewIncidents({ limit: 100 });
-    const results = await Promise.all(Array.from({ length: 6 }, () => discoverNewIncidents({ limit: 100 })));
+    const results = await Promise.all(
+      Array.from({ length: 6 }, () => discoverNewIncidents({ limit: 100 }))
+    );
     expect(results.filter(r => r.ran).length).toBeGreaterThanOrEqual(1);
     // No double work regardless of interleaving.
     expect(await db.intelligenceWorkItem.count()).toBe(0);
@@ -76,7 +84,7 @@ describe('fingerprint reconciliation (anti-entropy)', () => {
     await db.$transaction(tx => indexIncident(indexed.id, tx));
 
     const result = await reconcileFingerprints({ limit: 10, lookbackDays: 7 });
-    expect(result).toEqual({ missing: 1, staleResolution: 0 });
+    expect(result).toEqual({ missing: 1, staleResolution: 0, suppressed: 0 });
     expect((await db.intelligenceWorkItem.findMany()).map(i => i.subjectKey)).toEqual([lost.id]);
   });
 
@@ -84,36 +92,102 @@ describe('fingerprint reconciliation (anti-entropy)', () => {
     const service = await createTestService('Checkout');
     const open = await incident('Resolving', service.id, ago(10 * 60_000));
     await db.$transaction(tx => indexIncident(open.id, tx));
-    await db.incident.update({ where: { id: open.id }, data: { status: 'RESOLVED', resolvedAt: new Date() } });
+    await db.incident.update({
+      where: { id: open.id },
+      data: { status: 'RESOLVED', resolvedAt: new Date() },
+    });
 
-    expect(await reconcileFingerprints({ limit: 10, lookbackDays: 7 })).toEqual({ missing: 0, staleResolution: 1 });
+    expect(await reconcileFingerprints({ limit: 10, lookbackDays: 7 })).toEqual({
+      missing: 0,
+      staleResolution: 1,
+      suppressed: 0,
+    });
+  });
+
+  it('re-signals incidents reopened after they were indexed as resolved', async () => {
+    const service = await createTestService('Checkout');
+    const reopened = await incident('Flapping', service.id, ago(10 * 60_000));
+    await db.incident.update({
+      where: { id: reopened.id },
+      data: { status: 'RESOLVED', resolvedAt: new Date() },
+    });
+    await db.$transaction(tx => indexIncident(reopened.id, tx));
+    await db.incident.update({
+      where: { id: reopened.id },
+      data: { status: 'OPEN', resolvedAt: null },
+    });
+
+    expect(await reconcileFingerprints({ limit: 10, lookbackDays: 7 })).toEqual({
+      missing: 0,
+      staleResolution: 1,
+      suppressed: 0,
+    });
+  });
+
+  it('re-checks placeholders hourly, so switching a policy on catches up without a backfill', async () => {
+    const service = await createTestService('Checkout');
+    const fresh = await incident('Fresh placeholder', service.id, ago(10 * 60_000));
+    const old = await incident('Old placeholder', service.id, ago(3 * 3_600_000));
+    await db.$transaction(tx => indexIncident(fresh.id, tx, { suppressed: true }));
+    await db.$transaction(tx => indexIncident(old.id, tx, { suppressed: true }));
+    await db.$executeRaw`UPDATE "IncidentFingerprint" SET "updatedAt" = now() - interval '2 hours' WHERE "incidentId" = ${old.id}`;
+
+    expect(await reconcileFingerprints({ limit: 10, lookbackDays: 7 })).toEqual({
+      missing: 0,
+      staleResolution: 0,
+      suppressed: 1,
+    });
+    expect((await db.intelligenceWorkItem.findMany()).map(i => i.subjectKey)).toEqual([old.id]);
+  });
+
+  it('lets only one replica reconcile at a time', async () => {
+    const service = await createTestService('Checkout');
+    await incident('Lost signal', service.id, ago(10 * 60_000));
+    const results = await Promise.all(
+      Array.from({ length: 4 }, () => reconcileFingerprints({ limit: 10, lookbackDays: 7 }))
+    );
+    expect(results.filter(r => r.missing === 1).length).toBeGreaterThanOrEqual(1);
+    expect(await db.intelligenceWorkItem.count()).toBe(1);
   });
 
   it('ignores incidents outside the lookback window and inside the safety lag', async () => {
     const service = await createTestService('Checkout');
     await incident('Ancient', service.id, ago(30 * 86_400_000));
     await incident('Just now', service.id, new Date());
-    expect(await reconcileFingerprints({ limit: 10, lookbackDays: 7 })).toEqual({ missing: 0, staleResolution: 0 });
+    expect(await reconcileFingerprints({ limit: 10, lookbackDays: 7 })).toEqual({
+      missing: 0,
+      staleResolution: 0,
+      suppressed: 0,
+    });
   });
 });
 
 describe('incident indexer', () => {
   it('builds a masked fingerprint with safe labels from the first alert', async () => {
     const service = await createTestService('Checkout');
-    const created = await createTestIncident('DB errors on checkout-api-7d9f8c6b5-x2k4p (10.0.0.5)', service.id, {
-      description: 'Pool exhausted',
-    });
+    const created = await createTestIncident(
+      'DB errors on checkout-api-7d9f8c6b5-x2k4p (10.0.0.5)',
+      service.id,
+      {
+        description: 'Pool exhausted',
+      }
+    );
     await db.alert.create({
       data: {
         serviceId: service.id,
         incidentId: created.id,
         dedupKey: 'k1',
-        payload: { summary: 's', custom_details: { Env: 'Prod', password: 'hunter2', k8s: { namespace: 'Pay' } } },
+        payload: {
+          summary: 's',
+          custom_details: { Env: 'Prod', password: 'hunter2', k8s: { namespace: 'Pay' } },
+        },
       },
     });
 
     expect(await db.$transaction(tx => indexIncident(created.id, tx))).toBe('indexed');
-    const fingerprint = await db.incidentFingerprint.findUniqueOrThrow({ where: { incidentId: created.id } });
+    const fingerprint = await db.incidentFingerprint.findUniqueOrThrow({
+      where: { incidentId: created.id },
+    });
     expect(fingerprint.template).toBe('db errors on checkout-api-<pod> (<ip>)');
     expect(fingerprint.labels).toEqual({ env: 'prod', 'k8s.namespace': 'pay' });
     expect(fingerprint.serviceId).toBe(service.id);
@@ -129,11 +203,16 @@ describe('incident indexer', () => {
     expect(await db.incidentFingerprint.count()).toBe(1);
 
     const resolvedAt = new Date();
-    await db.incident.update({ where: { id: created.id }, data: { status: 'RESOLVED', resolvedAt } });
+    await db.incident.update({
+      where: { id: created.id },
+      data: { status: 'RESOLVED', resolvedAt },
+    });
     await db.$transaction(tx => indexIncident(created.id, tx));
-    expect((await db.incidentFingerprint.findUniqueOrThrow({ where: { incidentId: created.id } })).resolvedAt?.getTime()).toBe(
-      resolvedAt.getTime()
-    );
+    expect(
+      (
+        await db.incidentFingerprint.findUniqueOrThrow({ where: { incidentId: created.id } })
+      ).resolvedAt?.getTime()
+    ).toBe(resolvedAt.getTime());
   });
 
   it('reports missing incidents without failing and cascades on incident deletion', async () => {

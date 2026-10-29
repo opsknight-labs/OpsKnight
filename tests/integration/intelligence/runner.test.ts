@@ -13,9 +13,20 @@ import {
   stopIntelligenceLane,
   type WorkHandler,
 } from '@/lib/intelligence/jobs/runner';
-import { DEFAULT_POLICY_DEFINITION, INTELLIGENCE_SETTINGS_DEFAULTS } from '@/lib/intelligence/contract';
-import { publishPolicyVersion, type IntelligenceSettingsView } from '@/lib/intelligence/settings/service';
-import { createTestIncident, createTestService, resetDatabase, testPrisma as db } from '../../helpers/test-db';
+import {
+  DEFAULT_POLICY_DEFINITION,
+  INTELLIGENCE_SETTINGS_DEFAULTS,
+} from '@/lib/intelligence/contract';
+import {
+  publishPolicyVersion,
+  type IntelligenceSettingsView,
+} from '@/lib/intelligence/settings/service';
+import {
+  createTestIncident,
+  createTestService,
+  resetDatabase,
+  testPrisma as db,
+} from '../../helpers/test-db';
 
 beforeEach(async () => {
   if (!new URL(process.env.DATABASE_URL ?? '').pathname.endsWith('_test')) {
@@ -42,10 +53,22 @@ const noLag = async () => 0;
 
 describe('backpressure hysteresis', () => {
   it('pauses above the threshold and resumes only below half of it', () => {
-    expect(evaluatePause({ paused: false }, 14_000, 15_000)).toEqual({ paused: false, changed: false });
-    expect(evaluatePause({ paused: false }, 16_000, 15_000)).toEqual({ paused: true, changed: true });
-    expect(evaluatePause({ paused: true }, 10_000, 15_000)).toEqual({ paused: true, changed: false });
-    expect(evaluatePause({ paused: true }, 7_000, 15_000)).toEqual({ paused: false, changed: true });
+    expect(evaluatePause({ paused: false }, 14_000, 15_000)).toEqual({
+      paused: false,
+      changed: false,
+    });
+    expect(evaluatePause({ paused: false }, 16_000, 15_000)).toEqual({
+      paused: true,
+      changed: true,
+    });
+    expect(evaluatePause({ paused: true }, 10_000, 15_000)).toEqual({
+      paused: true,
+      changed: false,
+    });
+    expect(evaluatePause({ paused: true }, 7_000, 15_000)).toEqual({
+      paused: false,
+      changed: true,
+    });
   });
 });
 
@@ -54,7 +77,15 @@ describe('lane lifecycle', () => {
     for (const role of ['integrated', 'worker', 'general-worker', 'intelligence-worker']) {
       expect(shouldRunIntelligenceLane(role)).toBe(true);
     }
-    for (const role of ['web', 'scheduler', 'critical-worker', 'bulk-worker', 'status-projector', 'runbook-worker', 'ingestion-worker']) {
+    for (const role of [
+      'web',
+      'scheduler',
+      'critical-worker',
+      'bulk-worker',
+      'status-projector',
+      'runbook-worker',
+      'ingestion-worker',
+    ]) {
       expect(shouldRunIntelligenceLane(role)).toBe(false);
     }
   });
@@ -87,8 +118,12 @@ describe('intelligence cycle', () => {
     expect((await db.intelligenceWorkItem.findFirstOrThrow()).attempts).toBe(0);
 
     // Lag fell below the threshold but not below half of it: stay paused.
-    expect((await runIntelligenceCycle(state, { getCriticalLagMs: async () => 10_000 })).status).toBe('paused');
-    expect((await runIntelligenceCycle(state, { getCriticalLagMs: async () => 1_000 })).status).not.toBe('paused');
+    expect(
+      (await runIntelligenceCycle(state, { getCriticalLagMs: async () => 10_000 })).status
+    ).toBe('paused');
+    expect(
+      (await runIntelligenceCycle(state, { getCriticalLagMs: async () => 1_000 })).status
+    ).not.toBe('paused');
   });
 
   it('indexes newly created incidents end to end', async () => {
@@ -103,19 +138,66 @@ describe('intelligence cycle', () => {
     clock = Date.now() + DISCOVERY_SAFETY_LAG_MS + 5000;
     const result = await runIntelligenceCycle(state, deps);
 
-    expect(result).toMatchObject({ status: 'worked', discovered: 1, claimed: 1, completed: 1, failed: 0 });
-    const fingerprint = await db.incidentFingerprint.findUniqueOrThrow({ where: { incidentId: created.id } });
-    expect(fingerprint.template).toBe('latency high on api-<num>');
-    // Indexing chains exactly one analysis; with no policy it completes as a no-op next cycle.
-    expect((await db.intelligenceWorkItem.findMany()).map(i => i.kind)).toEqual(['ANALYZE_INCIDENT']);
-    expect(await runIntelligenceCycle(state, deps)).toMatchObject({ claimed: 1, completed: 1, failed: 0 });
+    expect(result).toMatchObject({
+      status: 'worked',
+      discovered: 1,
+      claimed: 1,
+      completed: 1,
+      failed: 0,
+    });
+    // With no policy the effective mode is OFF: only an empty placeholder is kept and nothing follows.
+    const placeholder = await db.incidentFingerprint.findUniqueOrThrow({
+      where: { incidentId: created.id },
+    });
+    expect(placeholder).toMatchObject({ template: '', tokens: [], templateHash: null });
     expect(await db.intelligenceWorkItem.count()).toBe(0);
     expect(await db.intelligenceFinding.count()).toBe(0);
   });
 
+  it('fingerprints and chains analysis in one step once a policy is on', async () => {
+    await enable();
+    const admin = await db.user.create({
+      data: {
+        email: 'index@example.com',
+        name: 'A',
+        passwordHash: 'x',
+        role: 'ADMIN',
+        status: 'ACTIVE',
+      },
+    });
+    await publishPolicyVersion(
+      {},
+      { mode: 'SHADOW', definition: DEFAULT_POLICY_DEFINITION, expectedHeadVersion: 0 },
+      { actorId: admin.id, source: 'UI' }
+    );
+    const service = await createTestService('Checkout');
+    const created = await createTestIncident('Latency high on api-3', service.id);
+    await enqueueWorkItems([{ kind: 'INDEX_INCIDENT', subjectKey: created.id }]);
+
+    expect(
+      await runIntelligenceCycle(createLaneState(), { getCriticalLagMs: noLag })
+    ).toMatchObject({ claimed: 1, completed: 1, failed: 0 });
+    const fingerprint = await db.incidentFingerprint.findUniqueOrThrow({
+      where: { incidentId: created.id },
+    });
+    expect(fingerprint.template).toBe('latency high on api-<num>');
+    expect(fingerprint.templateHash).toMatch(/^[0-9a-f]{32}$/);
+    expect(
+      (await db.intelligenceWorkItem.findMany({ orderBy: { priority: 'asc' } })).map(i => i.kind)
+    ).toEqual(['ANALYZE_INCIDENT', 'ANALYZE_RESPONSE']);
+  });
+
   it('chains response analysis only when the policy allows it, and produces findings end to end', async () => {
     await enable();
-    const admin = await db.user.create({ data: { email: 'chain@example.com', name: 'A', passwordHash: 'x', role: 'ADMIN', status: 'ACTIVE' } });
+    const admin = await db.user.create({
+      data: {
+        email: 'chain@example.com',
+        name: 'A',
+        passwordHash: 'x',
+        role: 'ADMIN',
+        status: 'ACTIVE',
+      },
+    });
     await publishPolicyVersion(
       {},
       { mode: 'SHADOW', definition: DEFAULT_POLICY_DEFINITION, expectedHeadVersion: 0 },
@@ -129,14 +211,22 @@ describe('intelligence cycle', () => {
     await runIntelligenceCycle(state, deps);
     const created = await createTestIncident('Latency high on api-3', service.id);
     await db.changeEvent.create({
-      data: { serviceId: service.id, source: 'ci', kind: 'DEPLOY', summary: 'v1', occurredAt: new Date(created.createdAt.getTime() - 120_000) },
+      data: {
+        serviceId: service.id,
+        source: 'ci',
+        kind: 'DEPLOY',
+        summary: 'v1',
+        occurredAt: new Date(created.createdAt.getTime() - 120_000),
+      },
     });
     clock = Date.now() + DISCOVERY_SAFETY_LAG_MS + 5000;
     // Cycle until indexing has chained its follow-ups; under load an item may legitimately retry once.
     let chained: string[] = [];
     for (let i = 0; i < 20 && chained.length < 2; i += 1) {
       await runIntelligenceCycle(state, deps);
-      chained = (await db.intelligenceWorkItem.findMany({ orderBy: { kind: 'asc' } })).map(item => item.kind);
+      chained = (await db.intelligenceWorkItem.findMany({ orderBy: { kind: 'asc' } })).map(
+        item => item.kind
+      );
       if (chained.length < 2) await new Promise(resolve => setTimeout(resolve, 200));
     }
     expect(chained).toEqual(['ANALYZE_INCIDENT', 'ANALYZE_RESPONSE']);
@@ -144,7 +234,9 @@ describe('intelligence cycle', () => {
       await runIntelligenceCycle(state, deps);
       await new Promise(resolve => setTimeout(resolve, 200));
     }
-    const finding = await db.intelligenceFinding.findFirstOrThrow({ where: { incidentId: created.id, kind: 'CHANGE_CORRELATION' } });
+    const finding = await db.intelligenceFinding.findFirstOrThrow({
+      where: { incidentId: created.id, kind: 'CHANGE_CORRELATION' },
+    });
     expect(finding.status).toBe('ACTIVE');
     expect(await db.intelligenceWorkItem.count()).toBe(0);
   });
@@ -190,20 +282,32 @@ describe('intelligence cycle', () => {
     expect(Date.now() - started).toBeLessThan(900);
     expect(result).toMatchObject({ failed: 1, completed: 0 });
     expect(aborted).toBe(true);
-    expect((await db.intelligenceWorkItem.findFirstOrThrow()).lastError).toMatch(/exceeded its 100ms budget/);
+    expect((await db.intelligenceWorkItem.findFirstOrThrow()).lastError).toMatch(
+      /exceeded its 100ms budget/
+    );
   });
 
   it('fails work with no registered handler instead of dropping it', async () => {
     await enable();
     await db.intelligenceWorkItem.create({ data: { kind: 'UNKNOWN_KIND', subjectKey: 'x' } });
-    const result = await runIntelligenceCycle(createLaneState(), { getCriticalLagMs: noLag, handlers: DEFAULT_HANDLERS });
+    const result = await runIntelligenceCycle(createLaneState(), {
+      getCriticalLagMs: noLag,
+      handlers: DEFAULT_HANDLERS,
+    });
     expect(result.failed).toBe(1);
-    expect((await db.intelligenceWorkItem.findFirstOrThrow()).lastError).toMatch(/No handler registered/);
+    expect((await db.intelligenceWorkItem.findFirstOrThrow()).lastError).toMatch(
+      /No handler registered/
+    );
   });
 
   it('never exceeds the configured concurrency', async () => {
     await enable({ maxConcurrency: 2, batchSize: 10 });
-    await enqueueWorkItems(Array.from({ length: 8 }, (_, i) => ({ kind: 'INDEX_INCIDENT' as const, subjectKey: `i${i}` })));
+    await enqueueWorkItems(
+      Array.from({ length: 8 }, (_, i) => ({
+        kind: 'INDEX_INCIDENT' as const,
+        subjectKey: `i${i}`,
+      }))
+    );
     let active = 0;
     let peak = 0;
     const handler: WorkHandler = async () => {
@@ -212,7 +316,10 @@ describe('intelligence cycle', () => {
       await new Promise(resolve => setTimeout(resolve, 20));
       active -= 1;
     };
-    const result = await runIntelligenceCycle(createLaneState(), { getCriticalLagMs: noLag, handlers: { INDEX_INCIDENT: handler } });
+    const result = await runIntelligenceCycle(createLaneState(), {
+      getCriticalLagMs: noLag,
+      handlers: { INDEX_INCIDENT: handler },
+    });
     expect(result.completed).toBe(8);
     expect(peak).toBeLessThanOrEqual(2);
   });

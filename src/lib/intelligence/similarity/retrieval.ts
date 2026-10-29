@@ -49,12 +49,15 @@ type StoredFingerprint = {
 };
 
 function toFingerprint(row: StoredFingerprint): SimilarityFingerprint {
-  const labels = row.labels && typeof row.labels === 'object' && !Array.isArray(row.labels) ? row.labels : {};
+  const labels =
+    row.labels && typeof row.labels === 'object' && !Array.isArray(row.labels) ? row.labels : {};
   return {
     template: row.template,
     tokens: row.tokens,
     labels: Object.fromEntries(
-      Object.entries(labels).filter((entry): entry is [string, string] => typeof entry[1] === 'string')
+      Object.entries(labels).filter(
+        (entry): entry is [string, string] => typeof entry[1] === 'string'
+      )
     ),
     serviceId: row.serviceId,
     incidentCreatedAt: row.incidentCreatedAt,
@@ -88,7 +91,7 @@ export async function findSimilarIncidents(
       await tx.$queryRaw<Array<{ incidentId: string }>>(Prisma.sql`
         SELECT "incidentId" FROM "IncidentFingerprint"
         WHERE "serviceId" = ${source.serviceId} AND "incidentId" <> ${incidentId}
-          AND "incidentCreatedAt" > ${lowerBound}
+          AND "incidentCreatedAt" > ${lowerBound} AND "template" <> ''
         ORDER BY "incidentCreatedAt" DESC
         LIMIT ${cap}`)
     );

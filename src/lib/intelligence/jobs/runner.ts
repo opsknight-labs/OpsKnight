@@ -1,24 +1,35 @@
 import 'server-only';
 import { logger } from '@/lib/logger';
 import { withSpan } from '../telemetry';
-import { getIntelligenceSettings, type IntelligenceSettingsView } from '../settings/service';
+import {
+  getIntelligenceSettings,
+  resolveEffectivePolicy,
+  type IntelligenceSettingsView,
+} from '../settings/service';
 import { evaluatePause, getCriticalBacklogLagMs, type PauseState } from './backpressure';
 import { withDbBudget } from './db-budget';
 import { reconcileFingerprints, discoverNewIncidents } from './discovery';
 import { indexIncident } from './indexer';
 import { purgeExpiredIntelligenceData, RETENTION_INTERVAL_MS } from './retention';
 import { analyzeIncident } from '../similarity/analyzer';
-import { correlateIncident, shouldCorrelate } from '../correlation/handler';
+import { correlateIncident } from '../correlation/handler';
 import { OBSERVE_INTERVAL_MS, suggestObservedDependencies } from '../dependencies/observer';
-import { analyzeResponse, shouldAnalyzeResponse } from '../response/handler';
+import { analyzeResponse } from '../response/handler';
 import { purgeConversations } from '../conversations/store';
 import { DIGEST_CHECK_INTERVAL_MS, scheduleDigestIfDue, sendDigestPass } from '../digest/service';
-import { currentEmbeddingModel, embedIncidents, EMBED_BATCH_SIZE, EMBED_INTERVAL_MS, findIncidentsToEmbed } from '../semantic/embedder';
+import {
+  currentEmbeddingModel,
+  embedIncidents,
+  EMBED_BATCH_SIZE,
+  EMBED_INTERVAL_MS,
+  findIncidentsToEmbed,
+} from '../semantic/embedder';
 import {
   claimWorkItems,
   completeWorkItem,
   enqueueWorkItems,
   failWorkItem,
+  renewWorkItemLease,
   WORK_KINDS,
   type ClaimedWorkItem,
   type WorkKind,
@@ -37,23 +48,33 @@ export type WorkHandler = (item: ClaimedWorkItem, context: HandlerContext) => Pr
 export type WorkHandlers = Partial<Record<WorkKind, WorkHandler>>;
 
 export const DEFAULT_HANDLERS: WorkHandlers = {
+  // The fingerprint and the follow-up work are written in one transaction, so a crash can never leave a
+  // fingerprint that is never analysed. With the effective policy OFF only an empty placeholder is stored:
+  // no text is kept and nothing follows, and reconciliation re-checks it once the policy changes.
   [WORK_KINDS.INDEX_INCIDENT]: async (item, { settings }) => {
-    const outcome = await withDbBudget(settings, tx => indexIncident(item.subjectKey, tx));
-    // Analysis always follows a fresh fingerprint; coalescing keeps this to one item per incident.
-    // Correlation is chained only when the effective policy has rules, so installs without rules
-    // pay no extra write per incident.
-    if (outcome === 'indexed') {
+    await withDbBudget(settings, async tx => {
+      const incident = await tx.incident.findUnique({
+        where: { id: item.subjectKey },
+        select: { serviceId: true },
+      });
+      if (!incident) return;
+      const policy = await resolveEffectivePolicy(incident.serviceId, tx);
+      const active = policy.effectiveMode !== 'OFF';
+      const outcome = await indexIncident(item.subjectKey, tx, { suppressed: !active });
+      if (outcome !== 'indexed' || !active) return;
+      // Correlation and response analysis are chained only when the policy uses them, so installs
+      // without rules pay no extra write per incident.
       const next: Array<{ kind: WorkKind; subjectKey: string }> = [
         { kind: WORK_KINDS.ANALYZE_INCIDENT, subjectKey: item.subjectKey },
       ];
-      if (await shouldCorrelate(item.subjectKey)) {
+      if (policy.policyId && policy.definition.correlation.rules.some(rule => rule.enabled)) {
         next.push({ kind: WORK_KINDS.CORRELATE_INCIDENT, subjectKey: item.subjectKey });
       }
-      if (await shouldAnalyzeResponse(item.subjectKey)) {
+      if (policy.definition.response.enabled) {
         next.push({ kind: WORK_KINDS.ANALYZE_RESPONSE, subjectKey: item.subjectKey });
       }
-      await enqueueWorkItems(next);
-    }
+      await enqueueWorkItems(next, tx);
+    });
   },
   [WORK_KINDS.CORRELATE_INCIDENT]: async (item, { settings }) => {
     await correlateIncident(item, settings);
@@ -92,6 +113,22 @@ export const DEFAULT_HANDLERS: WorkHandlers = {
 
 const SEMANTIC_SUBJECT = 'pending';
 
+/**
+ * Work that waits on an external provider or mail hand-off needs longer than the per-item database budget.
+ * Its lease is extended to cover the longer budget, so it is not re-claimed while still running.
+ */
+const KIND_MIN_BUDGET_MS: Partial<Record<WorkKind, number>> = {
+  [WORK_KINDS.EMBED_PENDING]: 120_000,
+  [WORK_KINDS.SEND_DIGEST]: 120_000,
+};
+
+export function workBudgetMs(
+  kind: string,
+  settings: Pick<IntelligenceSettingsView, 'maxJobMs'>
+): number {
+  return Math.max(settings.maxJobMs, KIND_MIN_BUDGET_MS[kind as WorkKind] ?? 0);
+}
+
 export interface LaneState {
   pause: PauseState;
   lastReconcileAt: number;
@@ -103,7 +140,15 @@ export interface LaneState {
 }
 
 export function createLaneState(): LaneState {
-  return { pause: { paused: false }, lastReconcileAt: 0, lastRetentionAt: 0, lastObserveAt: 0, lastEmbedAt: 0, lastDigestCheckAt: 0, lastConversationSweepAt: 0 };
+  return {
+    pause: { paused: false },
+    lastReconcileAt: 0,
+    lastRetentionAt: 0,
+    lastObserveAt: 0,
+    lastEmbedAt: 0,
+    lastDigestCheckAt: 0,
+    lastConversationSweepAt: 0,
+  };
 }
 
 export interface CycleResult {
@@ -114,6 +159,8 @@ export interface CycleResult {
   completed: number;
   requeued: number;
   failed: number;
+  /** Finished, but the claim had expired and another worker owns the item now. */
+  lost: number;
 }
 
 const EMPTY_RESULT: CycleResult = {
@@ -124,6 +171,7 @@ const EMPTY_RESULT: CycleResult = {
   completed: 0,
   requeued: 0,
   failed: 0,
+  lost: 0,
 };
 
 export interface CycleDependencies {
@@ -162,16 +210,24 @@ async function processItem(
   item: ClaimedWorkItem,
   settings: IntelligenceSettingsView,
   handlers: WorkHandlers
-): Promise<'completed' | 'requeued' | 'failed'> {
+): Promise<'completed' | 'requeued' | 'failed' | 'lost'> {
+  const budgetMs = workBudgetMs(item.kind, settings);
   try {
     const handler = handlers[item.kind as WorkKind];
     if (!handler) throw new Error(`No handler registered for work kind ${item.kind}`);
-    await withSpan('intelligence.work', { 'work.kind': item.kind, 'work.attempt': item.attempts }, () =>
-      runWithTimeout(signal => handler(item, { settings, signal }), settings.maxJobMs)
+    if (budgetMs > settings.maxJobMs && !(await renewWorkItemLease(item, budgetMs * 2)))
+      return 'lost';
+    await withSpan(
+      'intelligence.work',
+      { 'work.kind': item.kind, 'work.attempt': item.attempts },
+      () => runWithTimeout(signal => handler(item, { settings, signal }), budgetMs)
     );
-    return (await completeWorkItem(item)) === 'requeued' ? 'requeued' : 'completed';
+    return completeWorkItem(item);
   } catch (error) {
-    await failWorkItem(item, error).catch(releaseError =>
+    // A timed-out handler may still be inside a transaction; keep the item unclaimable until that
+    // transaction's own hard timeout has passed, so a retry never runs alongside it.
+    const minDelayMs = error instanceof WorkTimeoutError ? settings.maxDbMs + 5_000 : 0;
+    await failWorkItem(item, error, undefined, undefined, minDelayMs).catch(releaseError =>
       logger.warn('[Intelligence] Failed to release work item after error', {
         id: item.id,
         error: releaseError instanceof Error ? releaseError.message : String(releaseError),
@@ -187,14 +243,17 @@ async function processBatch(
   settings: IntelligenceSettingsView,
   handlers: WorkHandlers
 ) {
-  const counts = { completed: 0, requeued: 0, failed: 0 };
+  const counts = { completed: 0, requeued: 0, failed: 0, lost: 0 };
   let next = 0;
-  const workers = Array.from({ length: Math.min(settings.maxConcurrency, items.length) }, async () => {
-    while (next < items.length) {
-      const item = items[next++];
-      counts[await processItem(item, settings, handlers)] += 1;
+  const workers = Array.from(
+    { length: Math.min(settings.maxConcurrency, items.length) },
+    async () => {
+      while (next < items.length) {
+        const item = items[next++];
+        counts[await processItem(item, settings, handlers)] += 1;
+      }
     }
-  });
+  );
   await Promise.all(workers);
   return counts;
 }
@@ -212,8 +271,34 @@ export async function runIntelligenceCycle(
   try {
     const settings = await getIntelligenceSettings();
 
+    // Paging comes first, for every database-heavy step including retention. While intelligence is off the
+    // backlog is read only when a sweep is actually due, so a disabled install still reads one settings
+    // row per poll.
+    const sweepDue =
+      settings.revision > 0 &&
+      (now() - state.lastRetentionAt >= RETENTION_INTERVAL_MS ||
+        (handlers === DEFAULT_HANDLERS &&
+          now() - state.lastConversationSweepAt >= RETENTION_INTERVAL_MS));
+    if (!settings.enabled && !sweepDue) return { ...EMPTY_RESULT, status: 'disabled' };
+
+    const criticalLagMs = await (
+      dependencies.getCriticalLagMs ?? (() => getCriticalBacklogLagMs())
+    )();
+    const pause = evaluatePause(state.pause, criticalLagMs, settings.backpressureEscalationLagMs);
+    state.pause = { paused: pause.paused };
+    if (pause.changed) {
+      logger.warn(
+        pause.paused
+          ? '[Intelligence] Pausing: critical job backlog exceeded threshold'
+          : '[Intelligence] Resuming: critical job backlog recovered',
+        { criticalLagMs, thresholdMs: settings.backpressureEscalationLagMs }
+      );
+    }
+    if (pause.paused)
+      return { ...EMPTY_RESULT, status: settings.enabled ? 'paused' : 'disabled', criticalLagMs };
+
     // Retention is honoured even while intelligence is switched off; an unconfigured install
-    // (revision 0) has nothing to purge, so it pays no cost.
+    // (revision 0) has nothing to purge, so it pays no cost. One replica sweeps at a time.
     if (settings.revision > 0 && now() - state.lastRetentionAt >= RETENTION_INTERVAL_MS) {
       state.lastRetentionAt = now();
       try {
@@ -232,7 +317,10 @@ export async function runIntelligenceCycle(
 
     // Saved assistant conversations are swept even with intelligence off: their retention, and their
     // removal when history is switched off, are privacy promises that do not depend on the engine.
-    if (handlers === DEFAULT_HANDLERS && now() - state.lastConversationSweepAt >= RETENTION_INTERVAL_MS) {
+    if (
+      handlers === DEFAULT_HANDLERS &&
+      now() - state.lastConversationSweepAt >= RETENTION_INTERVAL_MS
+    ) {
       state.lastConversationSweepAt = now();
       try {
         const swept = await purgeConversations(new Date(now()));
@@ -245,19 +333,6 @@ export async function runIntelligenceCycle(
     }
 
     if (!settings.enabled) return { ...EMPTY_RESULT, status: 'disabled' };
-
-    const criticalLagMs = await (dependencies.getCriticalLagMs ?? (() => getCriticalBacklogLagMs()))();
-    const pause = evaluatePause(state.pause, criticalLagMs, settings.backpressureEscalationLagMs);
-    state.pause = { paused: pause.paused };
-    if (pause.changed) {
-      logger.warn(
-        pause.paused
-          ? '[Intelligence] Pausing: critical job backlog exceeded threshold'
-          : '[Intelligence] Resuming: critical job backlog recovered',
-        { criticalLagMs, thresholdMs: settings.backpressureEscalationLagMs }
-      );
-    }
-    if (pause.paused) return { ...EMPTY_RESULT, status: 'paused', criticalLagMs };
 
     // Hourly and bounded; a failure only skips this round.
     if (now() - state.lastObserveAt >= OBSERVE_INTERVAL_MS) {
@@ -276,7 +351,9 @@ export async function runIntelligenceCycle(
       state.lastEmbedAt = now();
       try {
         if (await currentEmbeddingModel()) {
-          await enqueueWorkItems([{ kind: WORK_KINDS.EMBED_PENDING, subjectKey: SEMANTIC_SUBJECT }]);
+          await enqueueWorkItems([
+            { kind: WORK_KINDS.EMBED_PENDING, subjectKey: SEMANTIC_SUBJECT },
+          ]);
         }
       } catch (error) {
         logger.warn('[Intelligence] Could not schedule semantic indexing; will retry', {
@@ -285,7 +362,10 @@ export async function runIntelligenceCycle(
       }
     }
 
-    if (handlers[WORK_KINDS.SEND_DIGEST] && now() - state.lastDigestCheckAt >= DIGEST_CHECK_INTERVAL_MS) {
+    if (
+      handlers[WORK_KINDS.SEND_DIGEST] &&
+      now() - state.lastDigestCheckAt >= DIGEST_CHECK_INTERVAL_MS
+    ) {
       state.lastDigestCheckAt = now();
       try {
         await scheduleDigestIfDue(new Date(now()));
@@ -310,7 +390,7 @@ export async function runIntelligenceCycle(
           lookbackDays: Math.min(settings.lookbackDays, RECONCILE_LOOKBACK_DAYS),
           now: new Date(now()),
         });
-        discovered += repaired.missing + repaired.staleResolution;
+        discovered += repaired.missing + repaired.staleResolution + repaired.suppressed;
       }
     } catch (error) {
       logger.warn('[Intelligence] Discovery failed; continuing with queued work', {
@@ -318,9 +398,17 @@ export async function runIntelligenceCycle(
       });
     }
 
-    const claimed = await claimWorkItems({ limit: settings.batchSize, leaseMs: settings.maxJobMs * 2 });
+    const claimed = await claimWorkItems({
+      limit: settings.batchSize,
+      leaseMs: settings.maxJobMs * 2,
+    });
     if (claimed.length === 0) {
-      return { ...EMPTY_RESULT, status: discovered > 0 ? 'worked' : 'idle', criticalLagMs, discovered };
+      return {
+        ...EMPTY_RESULT,
+        status: discovered > 0 ? 'worked' : 'idle',
+        criticalLagMs,
+        discovered,
+      };
     }
     const counts = await processBatch(claimed, settings, handlers);
     return { status: 'worked', criticalLagMs, discovered, claimed: claimed.length, ...counts };
@@ -338,6 +426,7 @@ export interface LaneTotals {
   completed: number;
   requeued: number;
   failed: number;
+  lost: number;
 }
 
 export interface LaneStatus {
@@ -364,7 +453,7 @@ const lane: {
   state: createLaneState(),
   lastCycleAt: null,
   lastResult: null,
-  totals: { cycles: 0, claimed: 0, completed: 0, requeued: 0, failed: 0 },
+  totals: { cycles: 0, claimed: 0, completed: 0, requeued: 0, failed: 0, lost: 0 },
 };
 
 const IDLE_POLL_MS = 5_000;
@@ -376,7 +465,12 @@ const DISABLED_POLL_MS = 30_000;
  * Roles that host the lane. It shares the general worker's place in the topology; the dedicated
  * `intelligence-worker` role runs only this lane, so analysis can scale and fail apart from paging.
  */
-const LANE_ROLES: ReadonlySet<string> = new Set(['integrated', 'worker', 'general-worker', 'intelligence-worker']);
+const LANE_ROLES: ReadonlySet<string> = new Set([
+  'integrated',
+  'worker',
+  'general-worker',
+  'intelligence-worker',
+]);
 
 export function shouldRunIntelligenceLane(role: string): boolean {
   return LANE_ROLES.has(role);
@@ -404,7 +498,15 @@ function schedule(delayMs: number) {
         lane.totals.completed += result.completed;
         lane.totals.requeued += result.requeued;
         lane.totals.failed += result.failed;
+        lane.totals.lost += result.lost;
         schedule(jittered(nextDelayMs(result)));
+      })
+      // runIntelligenceCycle never throws, but a lane that dies silently is the worst outcome: keep it alive.
+      .catch(error => {
+        logger.error('[Intelligence] Lane scheduling failed; restarting the loop', {
+          error: error instanceof Error ? error.message : String(error),
+        });
+        schedule(jittered(IDLE_POLL_MS));
       })
       .finally(() => {
         lane.active = null;

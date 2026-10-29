@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import {
+  DEAD_LETTER_REVIVE_MS,
   MAX_WORK_ATTEMPTS,
   claimWorkItems,
   completeWorkItem,
@@ -8,6 +9,7 @@ import {
   failWorkItem,
   getWorkBacklog,
   listDeadLetters,
+  purgeDeadLetters,
   renewWorkItemLease,
   replayDeadLetter,
 } from '@/lib/intelligence/jobs/work-queue';
@@ -28,10 +30,12 @@ const item = (subjectKey: string, extra: { priority?: number; scheduledAt?: Date
 
 describe('work item coalescing', () => {
   it('turns an alert storm into one row per subject and counts the signals', async () => {
-    for (let i = 0; i < 5; i += 1) await enqueueWorkItems([item('inc-1')]);
+    await enqueueWorkItems([item('inc-1')]);
+    const first = (await db.intelligenceWorkItem.findFirstOrThrow()).generation;
+    for (let i = 0; i < 4; i += 1) await enqueueWorkItems([item('inc-1')]);
     const rows = await db.intelligenceWorkItem.findMany();
     expect(rows).toHaveLength(1);
-    expect(rows[0].generation).toBe(5);
+    expect(rows[0].generation).toBeGreaterThan(first);
   });
 
   it('tolerates duplicate subjects inside a single batch', async () => {
@@ -41,7 +45,9 @@ describe('work item coalescing', () => {
 
   it('keeps the highest priority and earliest schedule when re-signalled', async () => {
     const early = new Date(Date.now() - 60_000);
-    await enqueueWorkItems([item('a', { priority: 50, scheduledAt: new Date(Date.now() + 60_000) })]);
+    await enqueueWorkItems([
+      item('a', { priority: 50, scheduledAt: new Date(Date.now() + 60_000) }),
+    ]);
     await enqueueWorkItems([item('a', { priority: 5, scheduledAt: early })]);
     const row = await db.intelligenceWorkItem.findFirstOrThrow();
     expect(row.priority).toBe(5);
@@ -55,7 +61,11 @@ describe('work item coalescing', () => {
 
 describe('claiming', () => {
   it('serves higher priority first and honours the limit', async () => {
-    await enqueueWorkItems([item('low', { priority: 90 }), item('high', { priority: 1 }), item('mid', { priority: 50 })]);
+    await enqueueWorkItems([
+      item('low', { priority: 90 }),
+      item('high', { priority: 1 }),
+      item('mid', { priority: 50 }),
+    ]);
     const claimed = await claimWorkItems({ limit: 2 });
     expect(claimed.map(c => c.subjectKey)).toEqual(['high', 'mid']);
     expect(claimed.every(c => c.attempts === 1 && c.claimToken)).toBe(true);
@@ -69,7 +79,9 @@ describe('claiming', () => {
 
   it('never gives the same item to two concurrent workers (SKIP LOCKED)', async () => {
     await enqueueWorkItems(Array.from({ length: 60 }, (_, i) => item(`inc-${i}`)));
-    const batches = await Promise.all(Array.from({ length: 6 }, () => claimWorkItems({ limit: 15 })));
+    const batches = await Promise.all(
+      Array.from({ length: 6 }, () => claimWorkItems({ limit: 15 }))
+    );
     const ids = batches.flat().map(c => c.id);
     expect(ids).toHaveLength(60);
     expect(new Set(ids).size).toBe(60);
@@ -78,7 +90,10 @@ describe('claiming', () => {
   it('re-claims work after a worker dies and its lease expires', async () => {
     await enqueueWorkItems([item('a')]);
     const [first] = await claimWorkItems({ limit: 1 });
-    await db.intelligenceWorkItem.update({ where: { id: first.id }, data: { leaseUntil: new Date(Date.now() - 1000) } });
+    await db.intelligenceWorkItem.update({
+      where: { id: first.id },
+      data: { leaseUntil: new Date(Date.now() - 1000) },
+    });
     const [second] = await claimWorkItems({ limit: 1 });
     expect(second.id).toBe(first.id);
     expect(second.attempts).toBe(2);
@@ -111,8 +126,21 @@ describe('completion and generations', () => {
     expect(await completeWorkItem(claimed)).toBe('requeued');
     const [again] = await claimWorkItems({ limit: 1 });
     expect(again.subjectKey).toBe('a');
-    expect(again.generation).toBe(2);
+    expect(again.generation).toBeGreaterThan(claimed.generation);
     expect(again.attempts).toBe(1);
+  });
+
+  it('never reuses a generation after finished work is deleted and the subject is signalled again', async () => {
+    await enqueueWorkItems([item('a')]);
+    await enqueueWorkItems([item('a')]);
+    const [first] = await claimWorkItems({ limit: 1 });
+    expect(await completeWorkItem(first)).toBe('completed');
+    expect(await db.intelligenceWorkItem.count()).toBe(0);
+
+    await enqueueWorkItems([item('a')]);
+    const [second] = await claimWorkItems({ limit: 1 });
+    // A restarted counter would make the new analysis look older than findings already written.
+    expect(second.generation).toBeGreaterThan(first.generation);
   });
 });
 
@@ -130,21 +158,93 @@ describe('failure handling and dead letters', () => {
   it('quarantines poison work at the attempt ceiling and allows operator replay', async () => {
     await enqueueWorkItems([item('poison')]);
     for (let attempt = 1; attempt <= MAX_WORK_ATTEMPTS; attempt += 1) {
-      await db.intelligenceWorkItem.updateMany({ data: { scheduledAt: new Date(Date.now() - 1000) } });
+      await db.intelligenceWorkItem.updateMany({
+        data: { scheduledAt: new Date(Date.now() - 1000) },
+      });
       const [claimed] = await claimWorkItems({ limit: 1 });
       expect(claimed.attempts).toBe(attempt);
       await failWorkItem(claimed, new Error('always fails'));
     }
-    await db.intelligenceWorkItem.updateMany({ data: { scheduledAt: new Date(Date.now() - 1000) } });
+    await db.intelligenceWorkItem.updateMany({
+      data: { scheduledAt: new Date(Date.now() - 1000) },
+    });
     expect(await claimWorkItems({ limit: 1 })).toHaveLength(0);
 
     const backlog = await getWorkBacklog();
     expect(backlog).toMatchObject({ deadLetters: 1, ready: 0 });
     const [dead] = await listDeadLetters();
-    expect(dead).toMatchObject({ subjectKey: 'poison', attempts: MAX_WORK_ATTEMPTS, lastError: 'always fails' });
+    expect(dead).toMatchObject({
+      subjectKey: 'poison',
+      attempts: MAX_WORK_ATTEMPTS,
+      lastError: 'always fails',
+    });
 
     expect(await replayDeadLetter(dead.id)).toBe(true);
     expect(await claimWorkItems({ limit: 1 })).toHaveLength(1);
+  });
+
+  async function deadLetter(subjectKey: string) {
+    await enqueueWorkItems([item(subjectKey)]);
+    for (let attempt = 1; attempt <= MAX_WORK_ATTEMPTS; attempt += 1) {
+      await db.intelligenceWorkItem.updateMany({
+        data: { scheduledAt: new Date(Date.now() - 1000) },
+      });
+      const [claimed] = await claimWorkItems({ limit: 1 });
+      await failWorkItem(claimed, new Error('database unavailable'));
+    }
+    const row = await db.intelligenceWorkItem.findFirstOrThrow({ where: { subjectKey } });
+    expect(row.attempts).toBe(MAX_WORK_ATTEMPTS);
+    expect(row.failedAt).not.toBeNull();
+    return row;
+  }
+
+  it('revives a dead letter that is signalled again after the cool-down, so an outage cannot stop work for good', async () => {
+    await deadLetter('outage');
+    await db.intelligenceWorkItem.updateMany({
+      data: {
+        failedAt: new Date(Date.now() - DEAD_LETTER_REVIVE_MS - 1000),
+        scheduledAt: new Date(Date.now() - 1000),
+      },
+    });
+    await enqueueWorkItems([item('outage')]);
+    const [claimed] = await claimWorkItems({ limit: 1 });
+    expect(claimed).toMatchObject({ subjectKey: 'outage', attempts: 1 });
+    expect((await db.intelligenceWorkItem.findFirstOrThrow()).failedAt).toBeNull();
+  });
+
+  it('does not revive a dead letter signalled again inside the cool-down', async () => {
+    await deadLetter('poison');
+    await enqueueWorkItems([item('poison')]);
+    await db.intelligenceWorkItem.updateMany({
+      data: { scheduledAt: new Date(Date.now() - 1000) },
+    });
+    expect(await claimWorkItems({ limit: 1 })).toHaveLength(0);
+  });
+
+  it('drops old dead letters during retention and keeps live work', async () => {
+    await deadLetter('old');
+    await db.intelligenceWorkItem.updateMany({
+      data: { failedAt: new Date(Date.now() - 8 * 86_400_000) },
+    });
+    await enqueueWorkItems([item('live')]);
+    expect(await purgeDeadLetters(7 * 86_400_000, 100)).toBe(1);
+    expect((await db.intelligenceWorkItem.findMany()).map(row => row.subjectKey)).toEqual(['live']);
+  });
+
+  it('claims an item whose lease expired, and never one whose lease is live', async () => {
+    await enqueueWorkItems([item('a'), item('b')]);
+    const claimed = await claimWorkItems({ limit: 2, leaseMs: 60_000 });
+    expect(claimed).toHaveLength(2);
+    expect(await claimWorkItems({ limit: 2 })).toHaveLength(0);
+    await db.intelligenceWorkItem.updateMany({
+      where: { subjectKey: 'a' },
+      data: { leaseUntil: new Date(Date.now() - 1000) },
+    });
+    const reclaimed = await claimWorkItems({ limit: 2 });
+    expect(reclaimed.map(row => row.subjectKey)).toEqual(['a']);
+    expect(reclaimed[0].claimToken).not.toBe(
+      claimed.find(row => row.subjectKey === 'a')!.claimToken
+    );
   });
 
   it('truncates very long error messages', async () => {
@@ -157,7 +257,11 @@ describe('failure handling and dead letters', () => {
 
 describe('backlog statistics', () => {
   it('reports ready, leased and oldest age', async () => {
-    await enqueueWorkItems([item('a', { scheduledAt: new Date(Date.now() - 5000) }), item('b'), item('c')]);
+    await enqueueWorkItems([
+      item('a', { scheduledAt: new Date(Date.now() - 5000) }),
+      item('b'),
+      item('c'),
+    ]);
     await claimWorkItems({ limit: 1 });
     const backlog = await getWorkBacklog();
     expect(backlog.leased).toBe(1);
@@ -170,8 +274,8 @@ describe('retry delay', () => {
   it('grows exponentially with jitter and is capped', () => {
     const lowest = (attempts: number) => computeRetryDelayMs(attempts, () => 0);
     const highest = (attempts: number) => computeRetryDelayMs(attempts, () => 0.999999);
-    expect(lowest(1)).toBe(1000);
-    expect(highest(1)).toBeLessThanOrEqual(2000);
+    expect(lowest(1)).toBe(2500);
+    expect(highest(1)).toBeLessThanOrEqual(5000);
     expect(lowest(4)).toBeGreaterThan(lowest(2));
     expect(highest(50)).toBeLessThanOrEqual(15 * 60_000);
     expect(lowest(50)).toBeGreaterThanOrEqual(7.5 * 60_000);
