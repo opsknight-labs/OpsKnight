@@ -27,6 +27,7 @@ test('add URL, automatically register, sign in and revoke without manual client 
     .getByLabel('Maximum scopes for automatically registered assistants')
     .fill('incidents:read');
   await page.getByRole('button', { name: 'Save policy', exact: true }).click();
+  await expect(page.getByText('MCP configuration saved', { exact: true })).toBeVisible();
   await expect(
     page.getByRole('button', { name: 'Copy Claude Code setup command', exact: true })
   ).toBeVisible();

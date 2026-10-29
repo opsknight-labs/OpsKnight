@@ -154,6 +154,7 @@ async function main() {
       '--maxWorkers=1',
       'tests/mcp',
       'tests/components/mcp-copy-field.test.tsx',
+      'tests/components/mcp-policy-form.test.tsx',
     ]);
     await node('database-config', 'node_modules/vitest/vitest.mjs', [
       'run',

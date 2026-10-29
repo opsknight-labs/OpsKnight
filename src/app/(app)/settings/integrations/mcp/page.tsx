@@ -21,6 +21,7 @@ import { Input } from '@/components/ui/shadcn/input';
 import { Label } from '@/components/ui/shadcn/label';
 import { SettingsSection } from '@/components/settings/layout/SettingsSection';
 import McpCopyField from '@/components/settings/mcp/McpCopyField';
+import McpPolicyForm from '@/components/settings/mcp/McpPolicyForm';
 import { DEFAULT_ASSISTANT_SCOPES } from '@/lib/mcp/auth/client-policy';
 import {
   registerMcpClient,
@@ -322,156 +323,144 @@ export default async function McpSettings({
 
       {permissions.isAdmin && (
         <>
-          <form action={updateMcpPolicy}>
-            <SettingsSection
-              title="Access and workload policy"
-              description="What assistants may do. Every change an assistant proposes still needs a different administrator to approve it in OpsKnight."
-              footer={
-                <div className="flex justify-end">
-                  <Button type="submit" size="sm">
-                    Save policy
-                  </Button>
-                </div>
-              }
-            >
-              <ToggleRow
-                name="enabled"
-                label="Enable MCP"
-                description="Uncheck for an immediate MCP-only shutdown; the rest of OpsKnight is unaffected."
-                defaultChecked={enabled}
-              />
-              <ToggleRow
-                name="writesEnabled"
-                label="Allow reviewed routine mutations and approved runbook executions"
-                description="Assistants can prepare changes; each one waits for approval by a different administrator."
-                defaultChecked={policy?.writesEnabled ?? false}
-              />
-              <ToggleRow
-                name="sensitiveReadsEnabled"
-                label="Allow reviewed sensitive configuration reads"
-                description="Redacted, read-only, and limited to what the signed-in user can already see."
-                defaultChecked={policy?.sensitiveReadsEnabled ?? false}
-              />
-              <fieldset className="space-y-4 border-b border-border py-4">
-                <legend className="text-sm font-medium">Workload limits</legend>
-                <div className="grid gap-4 sm:grid-cols-3">
-                  <div className="space-y-1.5">
-                    <Label htmlFor="mcp-max-in-flight">Concurrent requests per process</Label>
-                    <Input
-                      id="mcp-max-in-flight"
-                      name="maxInFlight"
-                      type="number"
-                      min="1"
-                      max="16"
-                      defaultValue={policy?.maxInFlight ?? 4}
-                      required
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label htmlFor="mcp-max-operations">Operations per request</Label>
-                    <Input
-                      id="mcp-max-operations"
-                      name="maxOperations"
-                      type="number"
-                      min="1"
-                      max="16"
-                      defaultValue={policy?.maxOperations ?? 8}
-                      required
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label htmlFor="mcp-rpm">Weighted operations per minute per grant</Label>
-                    <Input
-                      id="mcp-rpm"
-                      name="requestsPerMinute"
-                      type="number"
-                      min="1"
-                      max="600"
-                      defaultValue={policy?.requestsPerMinute ?? 60}
-                      required
-                    />
-                  </div>
-                </div>
-              </fieldset>
-              <fieldset className="space-y-4 py-4">
-                <legend className="text-sm font-medium">Automatic assistant connections</legend>
-                <label className="flex cursor-pointer items-start gap-3">
-                  <input
-                    type="checkbox"
-                    name="dcrEnabled"
-                    defaultChecked={policy?.dcrEnabled ?? true}
-                    className={checkboxClass}
-                  />
-                  <span className="text-sm">Allow assistants to register automatically</span>
-                </label>
+          <McpPolicyForm action={updateMcpPolicy}>
+            <ToggleRow
+              name="enabled"
+              label="Enable MCP"
+              description="Uncheck for an immediate MCP-only shutdown; the rest of OpsKnight is unaffected."
+              defaultChecked={enabled}
+            />
+            <ToggleRow
+              name="writesEnabled"
+              label="Allow reviewed routine mutations and approved runbook executions"
+              description="Assistants can prepare changes; each one waits for approval by a different administrator."
+              defaultChecked={policy?.writesEnabled ?? false}
+            />
+            <ToggleRow
+              name="sensitiveReadsEnabled"
+              label="Allow reviewed sensitive configuration reads"
+              description="Redacted, read-only, and limited to what the signed-in user can already see."
+              defaultChecked={policy?.sensitiveReadsEnabled ?? false}
+            />
+            <fieldset className="space-y-4 border-b border-border py-4">
+              <legend className="text-sm font-medium">Workload limits</legend>
+              <div className="grid gap-4 sm:grid-cols-3">
                 <div className="space-y-1.5">
-                  <Label htmlFor="mcp-dcr-scopes">
-                    Maximum scopes for automatically registered assistants
+                  <Label htmlFor="mcp-max-in-flight">Concurrent requests per process</Label>
+                  <Input
+                    id="mcp-max-in-flight"
+                    name="maxInFlight"
+                    type="number"
+                    min="1"
+                    max="16"
+                    defaultValue={policy?.maxInFlight ?? 4}
+                    required
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="mcp-max-operations">Operations per request</Label>
+                  <Input
+                    id="mcp-max-operations"
+                    name="maxOperations"
+                    type="number"
+                    min="1"
+                    max="16"
+                    defaultValue={policy?.maxOperations ?? 8}
+                    required
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="mcp-rpm">Weighted operations per minute per grant</Label>
+                  <Input
+                    id="mcp-rpm"
+                    name="requestsPerMinute"
+                    type="number"
+                    min="1"
+                    max="600"
+                    defaultValue={policy?.requestsPerMinute ?? 60}
+                    required
+                  />
+                </div>
+              </div>
+            </fieldset>
+            <fieldset className="space-y-4 py-4">
+              <legend className="text-sm font-medium">Automatic assistant connections</legend>
+              <label className="flex cursor-pointer items-start gap-3">
+                <input
+                  type="checkbox"
+                  name="dcrEnabled"
+                  defaultChecked={policy?.dcrEnabled ?? true}
+                  className={checkboxClass}
+                />
+                <span className="text-sm">Allow assistants to register automatically</span>
+              </label>
+              <div className="space-y-1.5">
+                <Label htmlFor="mcp-dcr-scopes">
+                  Maximum scopes for automatically registered assistants
+                </Label>
+                <Input
+                  id="mcp-dcr-scopes"
+                  name="dcrScopes"
+                  maxLength={2048}
+                  defaultValue={(policy?.dcrScopes.length
+                    ? policy.dcrScopes
+                    : DEFAULT_ASSISTANT_SCOPES
+                  ).join(' ')}
+                />
+              </div>
+              <p className="text-sm text-muted-foreground">
+                Users add the server URL and sign in with their own OpsKnight account. No manual
+                client ID or callback setup is needed. Registration alone grants no access. Users
+                must consent, and current roles, scopes and approval rules still apply. Turn this
+                off to disconnect automatically registered assistants immediately.
+              </p>
+            </fieldset>
+            <fieldset className="space-y-4 py-4">
+              <legend className="text-sm font-medium">Client ID metadata documents</legend>
+              <label className="flex cursor-pointer items-start gap-3">
+                <input
+                  type="checkbox"
+                  name="cimdEnabled"
+                  defaultChecked={policy?.cimdEnabled ?? false}
+                  className={checkboxClass}
+                />
+                <span className="text-sm">
+                  Allow clients identified by an HTTPS metadata document URL
+                </span>
+              </label>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-1.5">
+                  <Label htmlFor="mcp-cimd-hosts">
+                    Trusted hosts (one exact DNS name per line)
+                  </Label>
+                  <textarea
+                    id="mcp-cimd-hosts"
+                    className={textareaClass}
+                    name="cimdAllowedHosts"
+                    rows={3}
+                    maxLength={4096}
+                    defaultValue={(policy?.cimdAllowedHosts ?? []).join('\n')}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="mcp-cimd-scopes">
+                    Maximum scopes for these clients (space separated)
                   </Label>
                   <Input
-                    id="mcp-dcr-scopes"
-                    name="dcrScopes"
+                    id="mcp-cimd-scopes"
+                    name="cimdScopes"
                     maxLength={2048}
-                    defaultValue={(policy?.dcrScopes.length
-                      ? policy.dcrScopes
-                      : DEFAULT_ASSISTANT_SCOPES
-                    ).join(' ')}
+                    defaultValue={(policy?.cimdScopes ?? []).join(' ')}
                   />
                 </div>
-                <p className="text-sm text-muted-foreground">
-                  Users add the server URL and sign in with their own OpsKnight account. No manual
-                  client ID or callback setup is needed. Registration alone grants no access. Users
-                  must consent, and current roles, scopes and approval rules still apply. Turn this
-                  off to disconnect automatically registered assistants immediately.
-                </p>
-              </fieldset>
-              <fieldset className="space-y-4 py-4">
-                <legend className="text-sm font-medium">Client ID metadata documents</legend>
-                <label className="flex cursor-pointer items-start gap-3">
-                  <input
-                    type="checkbox"
-                    name="cimdEnabled"
-                    defaultChecked={policy?.cimdEnabled ?? false}
-                    className={checkboxClass}
-                  />
-                  <span className="text-sm">
-                    Allow clients identified by an HTTPS metadata document URL
-                  </span>
-                </label>
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <div className="space-y-1.5">
-                    <Label htmlFor="mcp-cimd-hosts">
-                      Trusted hosts (one exact DNS name per line)
-                    </Label>
-                    <textarea
-                      id="mcp-cimd-hosts"
-                      className={textareaClass}
-                      name="cimdAllowedHosts"
-                      rows={3}
-                      maxLength={4096}
-                      defaultValue={(policy?.cimdAllowedHosts ?? []).join('\n')}
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label htmlFor="mcp-cimd-scopes">
-                      Maximum scopes for these clients (space separated)
-                    </Label>
-                    <Input
-                      id="mcp-cimd-scopes"
-                      name="cimdScopes"
-                      maxLength={2048}
-                      defaultValue={(policy?.cimdScopes ?? []).join(' ')}
-                    />
-                  </div>
-                </div>
-                <p className="text-sm text-muted-foreground">
-                  Documents are fetched only from listed hosts over HTTPS to public addresses,
-                  without redirects, and cannot request more than these scopes. Users still consent
-                  to each grant; removing a host revokes its clients immediately.
-                </p>
-              </fieldset>
-            </SettingsSection>
-          </form>
+              </div>
+              <p className="text-sm text-muted-foreground">
+                Documents are fetched only from listed hosts over HTTPS to public addresses, without
+                redirects, and cannot request more than these scopes. Users still consent to each
+                grant; removing a host revokes its clients immediately.
+              </p>
+            </fieldset>
+          </McpPolicyForm>
 
           <form action={registerMcpClient}>
             <SettingsSection
