@@ -24,7 +24,11 @@ describe('provider-neutral war-room projection', () => {
   });
 
   it('shows Resolve only after acknowledgement (ACKNOWLEDGED phase)', () => {
-    const ackModel = buildWarRoomProjection({ ...incident, status: 'ACKNOWLEDGED', acknowledgedAt: new Date('2026-09-14T01:00:00Z') });
+    const ackModel = buildWarRoomProjection({
+      ...incident,
+      status: 'ACKNOWLEDGED',
+      acknowledgedAt: new Date('2026-09-14T01:00:00Z'),
+    });
     expect(ackModel.phase).toBe('ACKNOWLEDGED');
     expect(ackModel.actions).toEqual(['ASSIGN_SELF', 'RESOLVE']);
   });

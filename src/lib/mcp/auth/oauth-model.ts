@@ -4,6 +4,7 @@ import type { Prisma, McpClient } from '@prisma/client';
 import { digestMcpSecret, mcpResource } from './config';
 import { requireMcp } from '../core/errors';
 import { effectiveMcpClientScopes } from './client-policy';
+import { MCP_ABSOLUTE_SESSION_DAYS, slideMcpExpiry } from './session-lifetime';
 
 type Database = Prisma.TransactionClient;
 type Model = OAuth2Server.AuthorizationCodeModel & OAuth2Server.RefreshTokenModel;
@@ -140,6 +141,21 @@ export function createMcpOAuthModel(db: Database, onReuse: (grantId: string) => 
           refreshExpiresAt: token.refreshTokenExpiresAt,
         },
       });
+      // Using a connection keeps it signed in, up to the absolute cap.
+      const now = new Date();
+      const policy = await db.mcpPolicy.findUnique({ where: { id: 'default' } });
+      await db.mcpGrant.update({
+        where: { id: grant.id },
+        data: {
+          lastUsedAt: now,
+          expiresAt: slideMcpExpiry(
+            now,
+            policy?.sessionIdleDays,
+            grant.expiresAt,
+            grant.absoluteExpiresAt
+          ),
+        },
+      });
       return { ...token, scope: scopes, accessToken: String(token.accessToken), client, user };
     },
     getRefreshToken: async refreshToken => {
@@ -176,6 +192,7 @@ export function mcpOAuthServer(db: Database, onReuse: (id: string) => void) {
   return new OAuth2Server({
     model: createMcpOAuthModel(db, onReuse),
     accessTokenLifetime: 300,
-    refreshTokenLifetime: 86400,
+    // The grant expiry is authoritative; refresh tokens only need to outlive the idle window.
+    refreshTokenLifetime: MCP_ABSOLUTE_SESSION_DAYS * 86400,
   });
 }

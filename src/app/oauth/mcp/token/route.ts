@@ -23,7 +23,7 @@ const schema = z
     redirect_uri: z.string().url().max(2048).optional(),
     refresh_token: z.string().max(256).optional(),
     scope: z.string().max(2048).optional(),
-    resource: z.string().url(),
+    resource: z.string().url().optional(),
   })
   .strict();
 
@@ -47,7 +47,7 @@ async function handlePost(request: Request) {
     );
     const form = await readBoundedMcpText(request, 8192);
     const body = schema.parse(uniqueQuery(new URLSearchParams(form)));
-    requireMcp(body.resource === mcpResource(), 'invalid_target');
+    requireMcp(!body.resource || body.resource === mcpResource(), 'invalid_target');
     requireMcp(
       body.grant_type !== 'authorization_code' ||
         (body.code && body.code_verifier && body.redirect_uri),

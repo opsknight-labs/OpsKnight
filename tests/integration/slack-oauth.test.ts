@@ -244,9 +244,9 @@ describe('Slack OAuth Integration', () => {
         slackIntegration: { id: 'shared-workspace-x', workspaceId: 'workspace-x' },
       } as unknown as Awaited<ReturnType<typeof prisma.service.findUnique>>);
       vi.mocked(prisma.slackIntegration.findUnique).mockResolvedValue(null);
-      vi.mocked(prisma.slackIntegration.create).mockResolvedValue(
-        { id: 'workspace-y-row' } as unknown as Awaited<ReturnType<typeof prisma.slackIntegration.create>>
-      );
+      vi.mocked(prisma.slackIntegration.create).mockResolvedValue({
+        id: 'workspace-y-row',
+      } as unknown as Awaited<ReturnType<typeof prisma.slackIntegration.create>>);
 
       await callbackHandler(req);
 

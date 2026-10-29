@@ -10,7 +10,10 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@/lib/prisma', () => ({
   __esModule: true,
   default: {
-    notificationProviderCapacity: { findUnique: mocks.capacityFindUnique, findMany: mocks.capacityFindMany },
+    notificationProviderCapacity: {
+      findUnique: mocks.capacityFindUnique,
+      findMany: mocks.capacityFindMany,
+    },
     notificationRuntimeSettings: { findUnique: mocks.runtimeFindUnique },
     $transaction: vi.fn().mockImplementation((cb: (tx: unknown) => unknown) => cb({} as unknown)),
     $executeRaw: vi.fn(),
@@ -19,7 +22,11 @@ vi.mock('@/lib/prisma', () => ({
   },
 }));
 
-import { getEffectiveCapacity, getEffectiveWatermarks, resetCapacityResolverForTests } from '@/lib/notification-capacity/resolver';
+import {
+  getEffectiveCapacity,
+  getEffectiveWatermarks,
+  resetCapacityResolverForTests,
+} from '@/lib/notification-capacity/resolver';
 import { capacityCache, runtimeCache } from '@/lib/notification-capacity/cache';
 
 describe('notification capacity resolver regressions', () => {
@@ -64,12 +71,19 @@ describe('notification capacity resolver regressions', () => {
       NOTIFICATION_DEPLOYMENT_RATE_CEILING: '1000',
       NOTIFICATION_QUOTA_BLOCK_SIZE: '500',
     } as unknown as NodeJS.ProcessEnv;
-    const effective = await getEffectiveCapacity({ channel: 'EMAIL', provider: 'default', env, nowMs: 1_000 });
+    const effective = await getEffectiveCapacity({
+      channel: 'EMAIL',
+      provider: 'default',
+      env,
+      nowMs: 1_000,
+    });
     expect(effective.source).toBe('DATABASE');
     // DB bulkShare 50% preserved, not env default 80% / env 95%
     expect(effective.bulkShare).toBeCloseTo(0.5, 2);
     expect(effective.adaptiveBackpressure).toBe(false);
-    expect(effective.bulkRatePerSecond).toBe(Math.max(1, Math.floor(effective.effectiveRatePerSecond * 0.5)));
+    expect(effective.bulkRatePerSecond).toBe(
+      Math.max(1, Math.floor(effective.effectiveRatePerSecond * 0.5))
+    );
   });
 
   it('per-field env: only capacity-relevant vars drive ENV branch — ceiling/quota alone stay DEFAULT', async () => {
@@ -80,7 +94,12 @@ describe('notification capacity resolver regressions', () => {
       NOTIFICATION_DEPLOYMENT_RATE_CEILING: '1000',
       NOTIFICATION_QUOTA_BLOCK_SIZE: '200',
     } as unknown as NodeJS.ProcessEnv;
-    const effective = await getEffectiveCapacity({ channel: 'EMAIL', provider: 'default', env, nowMs: 2_000 });
+    const effective = await getEffectiveCapacity({
+      channel: 'EMAIL',
+      provider: 'default',
+      env,
+      nowMs: 2_000,
+    });
     expect(effective.source).toBe('DEFAULT');
     expect(effective.quotaBlockSize).toBe(200);
     // Ceiling still applies
@@ -121,7 +140,11 @@ describe('notification capacity resolver regressions', () => {
         updatedAt: new Date(),
       }); // fallback WEBHOOK:default
     mocks.runtimeFindUnique.mockResolvedValue(null);
-    const e = await getEffectiveCapacity({ channel: 'WEBHOOK', provider: 'https://hooks.example.com/a', nowMs: 20_000 });
+    const e = await getEffectiveCapacity({
+      channel: 'WEBHOOK',
+      provider: 'https://hooks.example.com/a',
+      nowMs: 20_000,
+    });
     expect(mocks.capacityFindUnique).toHaveBeenCalledTimes(2);
     expect(e.configuredRatePerSecond).toBe(42);
     expect(e.source).toBe('DATABASE');
@@ -130,7 +153,11 @@ describe('notification capacity resolver regressions', () => {
     runtimeCache.invalidate();
     capacityCache.invalidate();
     mocks.runtimeFindUnique.mockResolvedValue(null);
-    const e2 = await getEffectiveCapacity({ channel: 'EMAIL', provider: 'custom@origin', nowMs: 21_000 });
+    const e2 = await getEffectiveCapacity({
+      channel: 'EMAIL',
+      provider: 'custom@origin',
+      nowMs: 21_000,
+    });
     expect(e2.source).toBe('DEFAULT');
   });
 

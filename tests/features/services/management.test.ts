@@ -8,171 +8,169 @@ const getService = vi.fn();
 const listServices = vi.fn();
 
 describe('Service Management', () => {
-    beforeEach(() => {
-        vi.clearAllMocks();
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  describe('Service Creation', () => {
+    it('should create a new service with valid data', async () => {
+      const serviceData = {
+        name: 'API Gateway',
+        description: 'Main API gateway service',
+        healthCheckUrl: 'https://api.example.com/health',
+      };
+
+      createService.mockResolvedValue({
+        id: 'svc-123',
+        ...serviceData,
+        status: 'OPERATIONAL',
+        createdAt: new Date(),
+      });
+
+      const result = await createService(serviceData);
+
+      expect(createService).toHaveBeenCalledWith(serviceData);
+      expect(result.id).toBe('svc-123');
+      expect(result.name).toBe('API Gateway');
+      expect(result.status).toBe('OPERATIONAL');
     });
 
-    describe('Service Creation', () => {
-        it('should create a new service with valid data', async () => {
-            const serviceData = {
-                name: 'API Gateway',
-                description: 'Main API gateway service',
-                healthCheckUrl: 'https://api.example.com/health',
-            };
+    it('should validate required fields', async () => {
+      const invalidData = {
+        description: 'Missing name field',
+      };
 
-            createService.mockResolvedValue({
-                id: 'svc-123',
-                ...serviceData,
-                status: 'OPERATIONAL',
-                createdAt: new Date(),
-            });
+      createService.mockRejectedValue(new Error('Name is required'));
 
-            const result = await createService(serviceData);
+      await expect(createService(invalidData)).rejects.toThrow('Name is required');
+    });
+  });
 
-            expect(createService).toHaveBeenCalledWith(serviceData);
-            expect(result.id).toBe('svc-123');
-            expect(result.name).toBe('API Gateway');
-            expect(result.status).toBe('OPERATIONAL');
-        });
+  describe('Service Updates', () => {
+    it('should update service details', async () => {
+      const serviceId = 'svc-123';
+      const updates = {
+        name: 'Updated API Gateway',
+        description: 'Updated description',
+      };
 
-        it('should validate required fields', async () => {
-            const invalidData = {
-                description: 'Missing name field',
-            };
+      updateService.mockResolvedValue({
+        id: serviceId,
+        ...updates,
+        status: 'OPERATIONAL',
+      });
 
-            createService.mockRejectedValue(new Error('Name is required'));
+      const result = await updateService(serviceId, updates);
 
-            await expect(createService(invalidData)).rejects.toThrow('Name is required');
-        });
+      expect(updateService).toHaveBeenCalledWith(serviceId, updates);
+      expect(result.name).toBe('Updated API Gateway');
     });
 
-    describe('Service Updates', () => {
-        it('should update service details', async () => {
-            const serviceId = 'svc-123';
-            const updates = {
-                name: 'Updated API Gateway',
-                description: 'Updated description',
-            };
+    it('should update service status', async () => {
+      const serviceId = 'svc-123';
+      const statusUpdate = { status: 'DEGRADED' };
 
-            updateService.mockResolvedValue({
-                id: serviceId,
-                ...updates,
-                status: 'OPERATIONAL',
-            });
+      updateService.mockResolvedValue({
+        id: serviceId,
+        status: 'DEGRADED',
+      });
 
-            const result = await updateService(serviceId, updates);
+      const result = await updateService(serviceId, statusUpdate);
 
-            expect(updateService).toHaveBeenCalledWith(serviceId, updates);
-            expect(result.name).toBe('Updated API Gateway');
-        });
+      expect(result.status).toBe('DEGRADED');
+    });
+  });
 
-        it('should update service status', async () => {
-            const serviceId = 'svc-123';
-            const statusUpdate = { status: 'DEGRADED' };
+  describe('Service Deletion', () => {
+    it('should delete a service', async () => {
+      const serviceId = 'svc-123';
 
-            updateService.mockResolvedValue({
-                id: serviceId,
-                status: 'DEGRADED',
-            });
+      deleteService.mockResolvedValue({ success: true });
 
-            const result = await updateService(serviceId, statusUpdate);
+      const result = await deleteService(serviceId);
 
-            expect(result.status).toBe('DEGRADED');
-        });
+      expect(deleteService).toHaveBeenCalledWith(serviceId);
+      expect(result.success).toBe(true);
     });
 
-    describe('Service Deletion', () => {
-        it('should delete a service', async () => {
-            const serviceId = 'svc-123';
+    it('should handle deletion of non-existent service', async () => {
+      const serviceId = 'non-existent';
 
-            deleteService.mockResolvedValue({ success: true });
+      deleteService.mockRejectedValue(new Error('Service not found'));
 
-            const result = await deleteService(serviceId);
+      await expect(deleteService(serviceId)).rejects.toThrow('Service not found');
+    });
+  });
 
-            expect(deleteService).toHaveBeenCalledWith(serviceId);
-            expect(result.success).toBe(true);
-        });
+  describe('Service Retrieval', () => {
+    it('should get service by id', async () => {
+      const serviceId = 'svc-123';
+      const mockService = {
+        id: serviceId,
+        name: 'Database',
+        status: 'OPERATIONAL',
+      };
 
-        it('should handle deletion of non-existent service', async () => {
-            const serviceId = 'non-existent';
+      getService.mockResolvedValue(mockService);
 
-            deleteService.mockRejectedValue(new Error('Service not found'));
+      const result = await getService(serviceId);
 
-            await expect(deleteService(serviceId)).rejects.toThrow('Service not found');
-        });
+      expect(getService).toHaveBeenCalledWith(serviceId);
+      expect(result.id).toBe(serviceId);
+      expect(result.name).toBe('Database');
     });
 
-    describe('Service Retrieval', () => {
-        it('should get service by id', async () => {
-            const serviceId = 'svc-123';
-            const mockService = {
-                id: serviceId,
-                name: 'Database',
-                status: 'OPERATIONAL',
-            };
+    it('should list all services', async () => {
+      const mockServices = [
+        { id: 'svc-1', name: 'API', status: 'OPERATIONAL' },
+        { id: 'svc-2', name: 'Database', status: 'DEGRADED' },
+        { id: 'svc-3', name: 'Cache', status: 'OPERATIONAL' },
+      ];
 
-            getService.mockResolvedValue(mockService);
+      listServices.mockResolvedValue(mockServices);
 
-            const result = await getService(serviceId);
+      const result = await listServices();
 
-            expect(getService).toHaveBeenCalledWith(serviceId);
-            expect(result.id).toBe(serviceId);
-            expect(result.name).toBe('Database');
-        });
-
-        it('should list all services', async () => {
-            const mockServices = [
-                { id: 'svc-1', name: 'API', status: 'OPERATIONAL' },
-                { id: 'svc-2', name: 'Database', status: 'DEGRADED' },
-                { id: 'svc-3', name: 'Cache', status: 'OPERATIONAL' },
-            ];
-
-            listServices.mockResolvedValue(mockServices);
-
-            const result = await listServices();
-
-            expect(listServices).toHaveBeenCalled();
-            expect(result).toHaveLength(3);
-            expect(result[0].name).toBe('API');
-        });
-
-        it('should filter services by status', async () => {
-            const mockServices = [
-                { id: 'svc-1', name: 'API', status: 'OPERATIONAL' },
-            ];
-
-            listServices.mockResolvedValue(mockServices);
-
-            const result = await listServices({ status: 'OPERATIONAL' });
-
-            expect(listServices).toHaveBeenCalledWith({ status: 'OPERATIONAL' });
-            expect(result.every((s: any) => s.status === 'OPERATIONAL')).toBe(true); // eslint-disable-line @typescript-eslint/no-explicit-any
-        });
+      expect(listServices).toHaveBeenCalled();
+      expect(result).toHaveLength(3);
+      expect(result[0].name).toBe('API');
     });
 
-    describe('Service Health Monitoring', () => {
-        it('should track service health status', () => {
-            const healthData = {
-                serviceId: 'svc-123',
-                status: 'OPERATIONAL',
-                responseTime: 150,
-                lastChecked: new Date(),
-            };
+    it('should filter services by status', async () => {
+      const mockServices = [{ id: 'svc-1', name: 'API', status: 'OPERATIONAL' }];
 
-            expect(healthData.status).toBe('OPERATIONAL');
-            expect(healthData.responseTime).toBeLessThan(200);
-        });
+      listServices.mockResolvedValue(mockServices);
 
-        it('should detect degraded performance', () => {
-            const healthData = {
-                serviceId: 'svc-123',
-                status: 'DEGRADED',
-                responseTime: 2500,
-                lastChecked: new Date(),
-            };
+      const result = await listServices({ status: 'OPERATIONAL' });
 
-            expect(healthData.status).toBe('DEGRADED');
-            expect(healthData.responseTime).toBeGreaterThan(2000);
-        });
+      expect(listServices).toHaveBeenCalledWith({ status: 'OPERATIONAL' });
+      expect(result.every((s: any) => s.status === 'OPERATIONAL')).toBe(true); // eslint-disable-line @typescript-eslint/no-explicit-any
     });
+  });
+
+  describe('Service Health Monitoring', () => {
+    it('should track service health status', () => {
+      const healthData = {
+        serviceId: 'svc-123',
+        status: 'OPERATIONAL',
+        responseTime: 150,
+        lastChecked: new Date(),
+      };
+
+      expect(healthData.status).toBe('OPERATIONAL');
+      expect(healthData.responseTime).toBeLessThan(200);
+    });
+
+    it('should detect degraded performance', () => {
+      const healthData = {
+        serviceId: 'svc-123',
+        status: 'DEGRADED',
+        responseTime: 2500,
+        lastChecked: new Date(),
+      };
+
+      expect(healthData.status).toBe('DEGRADED');
+      expect(healthData.responseTime).toBeGreaterThan(2000);
+    });
+  });
 });

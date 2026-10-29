@@ -20,7 +20,9 @@ describe('categorizeTeamsErrorCode', () => {
 
   it('classifies consent/permission signals as CONSENT_REQUIRED', () => {
     expect(categorizeTeamsErrorCode('consent_required')).toBe('CONSENT_REQUIRED');
-    expect(categorizeTeamsErrorCode('Missing permission: ChannelMessage.Send.Group')).toBe('CONSENT_REQUIRED');
+    expect(categorizeTeamsErrorCode('Missing permission: ChannelMessage.Send.Group')).toBe(
+      'CONSENT_REQUIRED'
+    );
   });
 
   it('classifies auth/unauthorized/forbidden as AUTH_EXPIRED', () => {
@@ -45,8 +47,6 @@ describe('Microsoft Teams capability invariants', () => {
   it('required RSC permissions are the fail-closed set used by capabilities/health', async () => {
     // Phase 1 Bot transport: only ChannelSettings.Read.Group is required for
     // discovery; ChannelMessage.Send.Group is optional (Bot Connector is primary).
-    expect(MICROSOFT_TEAMS_REQUIRED_RSC_PERMISSIONS).toEqual([
-      'ChannelSettings.Read.Group',
-    ]);
+    expect(MICROSOFT_TEAMS_REQUIRED_RSC_PERMISSIONS).toEqual(['ChannelSettings.Read.Group']);
   });
 });

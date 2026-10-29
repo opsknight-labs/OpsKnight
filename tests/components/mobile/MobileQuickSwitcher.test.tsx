@@ -23,7 +23,10 @@ function mockVisualViewport(height: number, offsetTop = 0): MockVisualViewport {
       listeners.set(type, existing);
     },
     removeEventListener: (type, cb) => {
-      listeners.set(type, (listeners.get(type) ?? []).filter(l => l !== cb));
+      listeners.set(
+        type,
+        (listeners.get(type) ?? []).filter(l => l !== cb)
+      );
     },
     dispatch: type => {
       for (const cb of listeners.get(type) ?? []) cb();

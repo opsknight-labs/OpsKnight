@@ -1,8 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import {
-  isIncidentAfterHours,
-  DEFAULT_BUSINESS_HOURS_TIMEZONE,
-} from '@/lib/business-hours';
+import { isIncidentAfterHours, DEFAULT_BUSINESS_HOURS_TIMEZONE } from '@/lib/business-hours';
 
 // All fixture timestamps are explicit UTC instants so the assertions
 // don't depend on the test host's local TZ.

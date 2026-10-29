@@ -43,11 +43,11 @@ function configureTransaction(config?: {
           { ready: config?.ready ?? false, missing_hints: BigInt(config?.missingHints ?? 0) },
         ]),
       systemConfig: {
-        findUnique: vi.fn().mockResolvedValue(
-          config?.current === null
-            ? null
-            : { value: config?.current ?? { mode: 'LEGACY' } }
-        ),
+        findUnique: vi
+          .fn()
+          .mockResolvedValue(
+            config?.current === null ? null : { value: config?.current ?? { mode: 'LEGACY' } }
+          ),
         upsert,
       },
     });

@@ -92,7 +92,11 @@ describe('mobile route-literal architecture contract', () => {
         } catch {
           // Not URL-encoded; inspect the raw literal as-is.
         }
-        if (decoded === '/login' || decoded.startsWith('/login?') || decoded.startsWith('/login#')) {
+        if (
+          decoded === '/login' ||
+          decoded.startsWith('/login?') ||
+          decoded.startsWith('/login#')
+        ) {
           violations.push(`${file}: signs out to desktop "${decoded}" (use forcedSignOutUrl)`);
         }
       }

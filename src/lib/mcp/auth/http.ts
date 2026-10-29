@@ -56,7 +56,8 @@ export const authorizationQuerySchema = z
     state: z.string().min(16).max(512),
     code_challenge: z.string().regex(/^[A-Za-z0-9_-]{43}$/),
     code_challenge_method: z.literal('S256'),
-    resource: z.string().url(),
+    // RFC 8707 is optional here: the audience is always this server's MCP URL.
+    resource: z.string().url().optional(),
   })
   .strict();
 

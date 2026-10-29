@@ -95,9 +95,7 @@ describe('Jira workspace lifecycle', () => {
   });
 
   it('fails closed when the settings revision changed under the lifecycle fence', async () => {
-    mocks.tx.$queryRaw.mockResolvedValue([
-      currentWorkspace(new Date('2026-09-10T12:05:00.000Z')),
-    ]);
+    mocks.tx.$queryRaw.mockResolvedValue([currentWorkspace(new Date('2026-09-10T12:05:00.000Z'))]);
 
     const result = await removeJiraWorkspace(removalForm());
 

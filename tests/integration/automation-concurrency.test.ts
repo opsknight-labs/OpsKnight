@@ -159,8 +159,8 @@ describe('automation concurrency: policy modification racing with captureRespond
       });
     }
 
-    await expect(
-      db.$transaction(tx => captureResponderSnapshot(tx, policy.id))
-    ).rejects.toThrow(`Pinned escalation policy exceeds maximum step limit of ${MAX_ESCALATION_STEPS}`);
+    await expect(db.$transaction(tx => captureResponderSnapshot(tx, policy.id))).rejects.toThrow(
+      `Pinned escalation policy exceeds maximum step limit of ${MAX_ESCALATION_STEPS}`
+    );
   });
 });

@@ -80,7 +80,18 @@ describe('ApiKeysPanel Component', () => {
   });
 
   it('uses the friendly machine owner label without exposing its internal email', () => {
-    render(<ApiKeysPanel keys={[{ ...mockKeys[0], ownerLabel: 'Production Deployment', ownerEmail: 'sa_1792166039840_4eaf8d76@serviceaccount.opsknight.local' }]} canCreateWriteKeys={true} />);
+    render(
+      <ApiKeysPanel
+        keys={[
+          {
+            ...mockKeys[0],
+            ownerLabel: 'Production Deployment',
+            ownerEmail: 'sa_1792166039840_4eaf8d76@serviceaccount.opsknight.local',
+          },
+        ]}
+        canCreateWriteKeys={true}
+      />
+    );
     expect(screen.getByText('Production Deployment')).toBeDefined();
     expect(screen.queryByText(/@serviceaccount\.opsknight\.local/)).toBeNull();
   });
@@ -97,7 +108,9 @@ describe('ApiKeysPanel Component', () => {
     expect(form.method).toBe('get');
     expect((form.querySelector('input[name="tab"]') as HTMLInputElement).value).toBe('api-keys');
     expect((form.querySelector('input[name="kq"]') as HTMLInputElement).value).toBe('datadog');
-    expect((form.querySelector('select[name="kstatus"]') as HTMLSelectElement).value).toBe('ACTIVE');
+    expect((form.querySelector('select[name="kstatus"]') as HTMLSelectElement).value).toBe(
+      'ACTIVE'
+    );
     // Every row the server returned is shown; nothing is hidden client-side.
     expect(screen.getByText('Datadog Ingestion')).toBeDefined();
     expect(screen.getByText('GitHub CI Pipeline')).toBeDefined();
@@ -162,7 +175,6 @@ describe('ApiKeysPanel Component', () => {
     expect(screen.queryByText(title('service-accounts:read'))).toBeNull();
   });
 
-
   it('uses the standard confirmation dialog and revokes the selected key', async () => {
     vi.mocked(revokeApiKey).mockResolvedValue(undefined);
 
@@ -204,9 +216,8 @@ describe('ApiKeysPanel Component', () => {
 
 describe('one-time secret banner', () => {
   it('stays until the user confirms storage, then removes the secret from the page', async () => {
-    const { default: OneTimeSecretBanner } = await import(
-      '@/components/settings/OneTimeSecretBanner'
-    );
+    const { default: OneTimeSecretBanner } =
+      await import('@/components/settings/OneTimeSecretBanner');
     const onDismiss = vi.fn();
     const { rerender } = render(
       <OneTimeSecretBanner
@@ -218,7 +229,9 @@ describe('one-time secret banner', () => {
       />
     );
 
-    expect(screen.getByTestId('one-time-secret').textContent).toBe('ok_test_super_secret_value_123');
+    expect(screen.getByTestId('one-time-secret').textContent).toBe(
+      'ok_test_super_secret_value_123'
+    );
     const dismiss = screen.getByRole('button', { name: /dismiss and clear/i }) as HTMLButtonElement;
     expect(dismiss.disabled).toBe(true);
 

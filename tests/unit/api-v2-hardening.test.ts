@@ -3,7 +3,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import prisma from '@/lib/prisma';
 import { IncidentAssignV2Schema } from '@/lib/api-v2/validation';
 import { runV2AuditedMutation } from '@/lib/api-v2/audit';
-import { authorize, AUTHORIZATION_ACTIONS, type AuthorizationActor } from '@/lib/authorization-policy';
+import {
+  authorize,
+  AUTHORIZATION_ACTIONS,
+  type AuthorizationActor,
+} from '@/lib/authorization-policy';
 
 const auditMocks = vi.hoisted(() => ({ logAudit: vi.fn() }));
 vi.mock('@/lib/audit', () => ({ logAudit: auditMocks.logAudit }));

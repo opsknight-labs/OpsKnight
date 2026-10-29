@@ -8,14 +8,12 @@ it.each([{ snapshotUnavailable: true }, {}])(
     const lookup = vi.fn();
     const client = {
       incidentAutomationDecision: {
-        findUnique: vi
-          .fn()
-          .mockResolvedValue({
-            mode: 'LIVE',
-            routeType: 'SERVICE_DEFAULT',
-            escalationPolicyId: 'legacy',
-            summary,
-          }),
+        findUnique: vi.fn().mockResolvedValue({
+          mode: 'LIVE',
+          routeType: 'SERVICE_DEFAULT',
+          escalationPolicyId: 'legacy',
+          summary,
+        }),
       },
       escalationPolicy: { findUnique: lookup },
     } as unknown as Prisma.TransactionClient;

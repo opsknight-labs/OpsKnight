@@ -43,9 +43,21 @@ describeIfRealDB('privacy erasure concurrency (real PostgreSQL)', () => {
     // discoverErasureBlockersTx). Using a third ADMIN as actor would leave 2
     // admins after one deletion and both erasures would incorrectly succeed.
     const [adminA, adminB, actor] = await Promise.all([
-      createTestUser({ email: `erasure-admin-a-${Math.random().toString(36).slice(2)}@example.com`, role: 'ADMIN', status: 'ACTIVE' }),
-      createTestUser({ email: `erasure-admin-b-${Math.random().toString(36).slice(2)}@example.com`, role: 'ADMIN', status: 'ACTIVE' }),
-      createTestUser({ email: `erasure-actor-${Math.random().toString(36).slice(2)}@example.com`, role: 'USER', status: 'ACTIVE' }),
+      createTestUser({
+        email: `erasure-admin-a-${Math.random().toString(36).slice(2)}@example.com`,
+        role: 'ADMIN',
+        status: 'ACTIVE',
+      }),
+      createTestUser({
+        email: `erasure-admin-b-${Math.random().toString(36).slice(2)}@example.com`,
+        role: 'ADMIN',
+        status: 'ACTIVE',
+      }),
+      createTestUser({
+        email: `erasure-actor-${Math.random().toString(36).slice(2)}@example.com`,
+        role: 'USER',
+        status: 'ACTIVE',
+      }),
     ]);
 
     expect(await testPrisma.user.count({ where: { role: 'ADMIN', status: 'ACTIVE' } })).toBe(2);
@@ -69,12 +81,20 @@ describeIfRealDB('privacy erasure concurrency (real PostgreSQL)', () => {
     // inside the SERIALIZABLE destructive transaction, not silently deleted.
     expect(appErrorCodes(results)).toEqual(['PRIVACY_ERASURE_BLOCKED']);
 
-    const remainingAdmins = await testPrisma.user.count({ where: { role: 'ADMIN', status: 'ACTIVE' } });
+    const remainingAdmins = await testPrisma.user.count({
+      where: { role: 'ADMIN', status: 'ACTIVE' },
+    });
     expect(remainingAdmins).toBe(1);
 
     // Exactly one of the two targets still exists; the actor (USER) is not counted.
-    const aExists = await testPrisma.user.findUnique({ where: { id: adminA.id }, select: { id: true } });
-    const bExists = await testPrisma.user.findUnique({ where: { id: adminB.id }, select: { id: true } });
+    const aExists = await testPrisma.user.findUnique({
+      where: { id: adminA.id },
+      select: { id: true },
+    });
+    const bExists = await testPrisma.user.findUnique({
+      where: { id: adminB.id },
+      select: { id: true },
+    });
     expect(Boolean(aExists) !== Boolean(bExists)).toBe(true);
 
     // The blocked request's execution must be FAILED/BLOCKED (not leaked RUNNING)
@@ -95,8 +115,16 @@ describeIfRealDB('privacy erasure concurrency (real PostgreSQL)', () => {
 
   it('blocks erasure when an active/future on-call shift is created after the preview — shift survives', async () => {
     const [subject, actor] = await Promise.all([
-      createTestUser({ email: `erasure-shift-subject-${Math.random().toString(36).slice(2)}@example.com`, role: 'USER', status: 'ACTIVE' }),
-      createTestUser({ email: `erasure-shift-actor-${Math.random().toString(36).slice(2)}@example.com`, role: 'ADMIN', status: 'ACTIVE' }),
+      createTestUser({
+        email: `erasure-shift-subject-${Math.random().toString(36).slice(2)}@example.com`,
+        role: 'USER',
+        status: 'ACTIVE',
+      }),
+      createTestUser({
+        email: `erasure-shift-actor-${Math.random().toString(36).slice(2)}@example.com`,
+        role: 'ADMIN',
+        status: 'ACTIVE',
+      }),
     ]);
 
     const request = await createProcessingErasureRequest(subject.id, actor.id);
@@ -127,22 +155,37 @@ describeIfRealDB('privacy erasure concurrency (real PostgreSQL)', () => {
     });
 
     // Must not have deleted anything — transaction rolled back.
-    expect(await testPrisma.user.findUnique({ where: { id: subject.id }, select: { id: true } })).not.toBeNull();
+    expect(
+      await testPrisma.user.findUnique({ where: { id: subject.id }, select: { id: true } })
+    ).not.toBeNull();
     expect(await testPrisma.onCallShift.findUnique({ where: { id: shift.id } })).not.toBeNull();
 
-    const execution = await testPrisma.privacyErasureExecution.findUnique({ where: { requestId: request.id } });
+    const execution = await testPrisma.privacyErasureExecution.findUnique({
+      where: { requestId: request.id },
+    });
     expect(execution?.status).toBe('FAILED');
     expect(execution?.failureCode).toBe('BLOCKED');
   });
 
   it('allows erasure when only historical (past) on-call shifts exist', async () => {
     const [subject, actor] = await Promise.all([
-      createTestUser({ email: `erasure-hist-shift-${Math.random().toString(36).slice(2)}@example.com`, role: 'USER', status: 'ACTIVE' }),
-      createTestUser({ email: `erasure-hist-actor-${Math.random().toString(36).slice(2)}@example.com`, role: 'ADMIN', status: 'ACTIVE' }),
+      createTestUser({
+        email: `erasure-hist-shift-${Math.random().toString(36).slice(2)}@example.com`,
+        role: 'USER',
+        status: 'ACTIVE',
+      }),
+      createTestUser({
+        email: `erasure-hist-actor-${Math.random().toString(36).slice(2)}@example.com`,
+        role: 'ADMIN',
+        status: 'ACTIVE',
+      }),
     ]);
 
     const schedule = await testPrisma.onCallSchedule.create({
-      data: { name: `Erasure hist schedule ${Math.random().toString(36).slice(2)}`, timeZone: 'UTC' },
+      data: {
+        name: `Erasure hist schedule ${Math.random().toString(36).slice(2)}`,
+        timeZone: 'UTC',
+      },
     });
     // Historical shift: end in the past — must NOT block per policy.
     await testPrisma.onCallShift.create({

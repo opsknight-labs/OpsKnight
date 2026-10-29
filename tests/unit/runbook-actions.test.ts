@@ -109,7 +109,9 @@ describe('Runbook Server Actions Unit Tests', () => {
     it('asserts capability, duplicates runbook, and redirects to new runbook', async () => {
       const validCuid = 'clh1234567890123456789012';
       const newCuid = 'clh9876543210987654321098';
-      vi.mocked(duplicateRunbook).mockResolvedValueOnce({ id: newCuid } as unknown as Awaited<ReturnType<typeof duplicateRunbook>>);
+      vi.mocked(duplicateRunbook).mockResolvedValueOnce({ id: newCuid } as unknown as Awaited<
+        ReturnType<typeof duplicateRunbook>
+      >);
 
       await duplicateRunbookAction(validCuid);
 

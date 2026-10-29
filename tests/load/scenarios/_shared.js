@@ -213,9 +213,7 @@ export function loadSeedManifest() {
   };
 }
 
-http.setResponseCallback(
-  http.expectedStatuses({ min: 200, max: 399 }, 400, 409, 422, 429, 503)
-);
+http.setResponseCallback(http.expectedStatuses({ min: 200, max: 399 }, 400, 409, 422, 429, 503));
 
 export function pickCapacityIntegrationKey(manifest, vu, iter) {
   const keys = manifest.capacityIntegrationKeys || [];

@@ -36,10 +36,7 @@ vi.mock('@/lib/audit', () => ({
 }));
 vi.mock('next/cache', () => ({ revalidatePath: mocks.revalidatePath }));
 
-import {
-  extractJiraWebhookEventTime,
-  processJiraWebhookEvent,
-} from '@/lib/jira-sync';
+import { extractJiraWebhookEventTime, processJiraWebhookEvent } from '@/lib/jira-sync';
 
 function link(overrides: Record<string, unknown> = {}) {
   return {

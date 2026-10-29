@@ -22,23 +22,33 @@ describe('truthful capability inventory', () => {
     }
   });
   it('retains explicit security and product decisions for unfinished plan areas', () => {
-    expect(API_CAPABILITY_CATALOG.find(capability => capability.id === 'incident-collaboration')).toMatchObject({
+    expect(
+      API_CAPABILITY_CATALOG.find(capability => capability.id === 'incident-collaboration')
+    ).toMatchObject({
       status: 'partial',
       operationIds: ['listIncidentWarRooms'],
     });
-    expect(API_CAPABILITY_CATALOG.find(capability => capability.id === 'operational-settings')).toMatchObject({
+    expect(
+      API_CAPABILITY_CATALOG.find(capability => capability.id === 'operational-settings')
+    ).toMatchObject({
       status: 'partial',
       operationIds: expect.arrayContaining(['getWorkspaceSlaPolicy', 'updateWorkspaceSlaPolicy']),
     });
-    expect(API_CAPABILITY_CATALOG.find(capability => capability.id === 'audit-export')).toMatchObject({
+    expect(
+      API_CAPABILITY_CATALOG.find(capability => capability.id === 'audit-export')
+    ).toMatchObject({
       status: 'partial',
       operationIds: ['createAuditExport', 'getAuditExport', 'downloadAuditExport'],
     });
-    expect(API_CAPABILITY_CATALOG.find(capability => capability.id === 'postmortem-workflows')).toMatchObject({
+    expect(
+      API_CAPABILITY_CATALOG.find(capability => capability.id === 'postmortem-workflows')
+    ).toMatchObject({
       status: 'partial',
       operationIds: expect.arrayContaining(['createPostmortem', 'updatePostmortem']),
     });
-    expect(API_CAPABILITY_CATALOG.find(capability => capability.id === 'report-exports')).toMatchObject({
+    expect(
+      API_CAPABILITY_CATALOG.find(capability => capability.id === 'report-exports')
+    ).toMatchObject({
       status: 'partial',
       operationIds: expect.arrayContaining(['createReportExport', 'downloadReportExport']),
     });

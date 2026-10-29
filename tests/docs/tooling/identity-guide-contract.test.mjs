@@ -23,7 +23,8 @@ test('OIDC guide covers every supported provider and session-policy control', ()
     'Runtime availability and performance behavior',
     'JIT provisioning',
     'Change the issuer, client registration, or secret',
-  ]) assert.ok(oidc.includes(required), `OIDC guide must cover ${required}`);
+  ])
+    assert.ok(oidc.includes(required), `OIDC guide must cover ${required}`);
 });
 
 test('SCIM guide covers the complete implemented lifecycle', () => {
@@ -38,5 +39,6 @@ test('SCIM guide covers the complete implemented lifecycle', () => {
     'SCIM_BEARER_TOKEN',
     'externalId',
     'User deletion and roles',
-  ]) assert.ok(scim.includes(required), `SCIM guide must cover ${required}`);
+  ])
+    assert.ok(scim.includes(required), `SCIM guide must cover ${required}`);
 });

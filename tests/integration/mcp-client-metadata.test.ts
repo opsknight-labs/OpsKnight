@@ -234,4 +234,28 @@ describe('Client ID Metadata Documents', () => {
       )
     ).rejects.toThrow('invalid_scope');
   });
+
+  it('trusts any public HTTPS host when no allowlist is set, and still honours one when it is', async () => {
+    await policy({ cimdAllowedHosts: [] });
+    const user = await createTestUser({ role: 'ADMIN' });
+    const client = await resolve();
+    expect((await (await metadata()).json()).client_id_metadata_document_supported).toBe(true);
+    const grant = await db.mcpGrant.create({
+      data: {
+        clientId: client.id,
+        userId: user.id,
+        userTokenVersion: user.tokenVersion,
+        scopes: ['incidents:read'],
+        resource: mcpResource(),
+        expiresAt: new Date(Date.now() + 3600000),
+      },
+    });
+    await expect(resolveMcpGrant(grant.id)).resolves.toMatchObject({ actor: { id: user.id } });
+    // Restricting to other hosts removes it again, so the optional allowlist stays enforceable.
+    await policy({ cimdAllowedHosts: ['elsewhere.example.com'] });
+    await expect(resolveMcpGrant(grant.id)).rejects.toThrow('MCP_INVALID_GRANT');
+    await expect(resolve()).rejects.toThrow('invalid_client');
+    await policy({ cimdEnabled: false, cimdAllowedHosts: [] });
+    await expect(resolve()).rejects.toThrow('invalid_client');
+  });
 });

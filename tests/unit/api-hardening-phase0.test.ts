@@ -108,8 +108,9 @@ describe('accepted fields are stored or rejected, never silently dropped', () =>
       PostmortemCreateV2Schema.parse({ incidentId: 'inc_1', summary: 'Long summary', impact: 'x' })
     ).toThrow();
     expect(() => PostmortemUpdateV2Schema.parse({ impact: 'x' })).toThrow();
-    expect(PostmortemUpdateV2Schema.parse({ impact: { usersAffected: 12, errorRate: 2.5 } }).impact)
-      .toEqual({ usersAffected: 12, errorRate: 2.5 });
+    expect(
+      PostmortemUpdateV2Schema.parse({ impact: { usersAffected: 12, errorRate: 2.5 } }).impact
+    ).toEqual({ usersAffected: 12, errorRate: 2.5 });
     expect(() => PostmortemUpdateV2Schema.parse({ impact: { errorRate: 101 } })).toThrow();
   });
 });

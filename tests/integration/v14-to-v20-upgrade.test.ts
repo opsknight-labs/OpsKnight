@@ -43,187 +43,191 @@ if (!databaseUrl) {
       fs.rmSync(scratchRoot, { recursive: true, force: true });
     });
 
-    it(
-      'preserves v1.4 data and lazily migrates legacy API/status token hashes and v2 secrets',
-      async ctx => {
-        const originalEnv = snapshotEnv([
-          'DATABASE_URL',
-          'NODE_ENV',
-          'NEXTAUTH_SECRET',
-          'API_KEY_SECRET',
-          'ENCRYPTION_KEY',
-          'ENCRYPTION_KEYS',
-        ]);
-        let appPrisma: PrismaClient | undefined;
+    it('preserves v1.4 data and lazily migrates legacy API/status token hashes and v2 secrets', async ctx => {
+      const originalEnv = snapshotEnv([
+        'DATABASE_URL',
+        'NODE_ENV',
+        'NEXTAUTH_SECRET',
+        'API_KEY_SECRET',
+        'ENCRYPTION_KEY',
+        'ENCRYPTION_KEYS',
+      ]);
+      let appPrisma: PrismaClient | undefined;
 
+      try {
+        extractPrismaFromTag('v1.4.0', scratchRoot, repoRoot);
         try {
-          extractPrismaFromTag('v1.4.0', scratchRoot, repoRoot);
-          try {
-            await createDatabase(databaseUrl, databaseName);
-          } catch (error) {
-            if (isDatabaseUnavailable(error)) {
-              ctx.skip(
-                'DATABASE_URL is set, but PostgreSQL is not reachable; skipping v1.4 upgrade integration.'
-              );
-            }
-            throw error;
+          await createDatabase(databaseUrl, databaseName);
+        } catch (error) {
+          if (isDatabaseUnavailable(error)) {
+            ctx.skip(
+              'DATABASE_URL is set, but PostgreSQL is not reachable; skipping v1.4 upgrade integration.'
+            );
           }
-          runPrismaMigrate(
-            path.join(scratchRoot, 'prisma', 'schema.prisma'),
-            isolatedDatabaseUrl,
-            repoRoot
-          );
-          await seedV14Data(isolatedDatabaseUrl, {
-            OLD_NEXTAUTH_SECRET,
-            OLD_ENCRYPTION_KEY,
-            USER_ID,
-            USER_EMAIL,
-            SERVICE_ID,
-            POLICY_ID,
-            ESCALATION_RULE_ID,
-            INCIDENT_ID,
-            API_KEY_ID,
-            STATUS_PAGE_ID,
-            STATUS_TOKEN_ID,
-            SLACK_INTEGRATION_ID,
-            API_TOKEN,
-            STATUS_TOKEN,
-            INTEGRATION_SECRET,
-          });
-
-          runPrismaMigrate(
-            path.join(repoRoot, 'prisma', 'schema.prisma'),
-            isolatedDatabaseUrl,
-            repoRoot
-          );
-
-          process.env.DATABASE_URL = isolatedDatabaseUrl;
-          setProcessEnv('NODE_ENV', 'test');
-          process.env.NEXTAUTH_SECRET = OLD_NEXTAUTH_SECRET;
-          process.env.API_KEY_SECRET = NEW_API_KEY_SECRET;
-          process.env.ENCRYPTION_KEYS = `k2:${NEW_ENCRYPTION_KEY},k1:${OLD_ENCRYPTION_KEY}`;
-          delete process.env.ENCRYPTION_KEY;
-          vi.resetModules();
-
-          const [{ authenticateApiKey }, { authorizeStatusApiRequest }, apiKeys, encryption, prismaModule] =
-            await Promise.all([
-              import('@/lib/api-auth'),
-              import('@/lib/status-api-auth'),
-              import('@/lib/api-keys'),
-              import('@/lib/encryption'),
-              import('@/lib/prisma'),
-            ]);
-          appPrisma = prismaModule.default;
-
-          const expectedApiHash = apiKeys.hashTokenV2(API_TOKEN);
-          const expectedStatusHash = apiKeys.hashTokenV2(STATUS_TOKEN);
-          const seededApiKey = await appPrisma.apiKey.findUniqueOrThrow({
-            where: { id: API_KEY_ID },
-            select: { id: true, tokenHash: true },
-          });
-          expect(await apiKeys.hashLegacyScryptTokenCandidates(API_TOKEN)).toContain(
-            seededApiKey.tokenHash
-          );
-
-          const firstApiAuth = await authenticateApiKey(bearerRequest(API_TOKEN));
-          expect(firstApiAuth?.id).toBe(API_KEY_ID);
-          await expectApiKeyHash(appPrisma, API_KEY_ID, expectedApiHash);
-
-          const secondApiAuth = await authenticateApiKey(bearerRequest(API_TOKEN));
-          expect(secondApiAuth?.id).toBe(API_KEY_ID);
-          expect(await authenticateApiKey(bearerRequest(`ok_${'C'.repeat(43)}`))).toBeNull();
-
-          const firstStatusAuth = await authorizeStatusApiRequest(
-            bearerRequest(STATUS_TOKEN),
-            STATUS_PAGE_ID,
-            { requireToken: true, rateLimitEnabled: false }
-          );
-          expect(firstStatusAuth).toMatchObject({ allowed: true, tokenId: STATUS_TOKEN_ID });
-          await expectStatusTokenHash(appPrisma, STATUS_TOKEN_ID, expectedStatusHash);
-
-          const secondStatusAuth = await authorizeStatusApiRequest(
-            bearerRequest(STATUS_TOKEN),
-            STATUS_PAGE_ID,
-            { requireToken: true, rateLimitEnabled: false }
-          );
-          expect(secondStatusAuth).toMatchObject({ allowed: true, tokenId: STATUS_TOKEN_ID });
-          await expect(
-            authorizeStatusApiRequest(bearerRequest(`ok_${'D'.repeat(43)}`), STATUS_PAGE_ID, {
-              requireToken: true,
-              rateLimitEnabled: false,
-            })
-          ).resolves.toMatchObject({ allowed: false, status: 401 });
-
-          const seededSlack = await appPrisma.slackIntegration.findUniqueOrThrow({
-            where: { id: SLACK_INTEGRATION_ID },
-          });
-          expect(seededSlack.botToken.startsWith('v2:')).toBe(true);
-          await expect(encryption.decrypt(seededSlack.botToken)).resolves.toBe(INTEGRATION_SECRET);
-
-          delete process.env.ENCRYPTION_KEYS;
-          process.env.ENCRYPTION_KEY = OLD_ENCRYPTION_KEY;
-          await expect(encryption.decrypt(seededSlack.botToken)).resolves.toBe(INTEGRATION_SECRET);
-
-          process.env.ENCRYPTION_KEYS = `k2:${NEW_ENCRYPTION_KEY},k1:${OLD_ENCRYPTION_KEY}`;
-          delete process.env.ENCRYPTION_KEY;
-          const reencrypted = await encryption.encrypt(INTEGRATION_SECRET);
-          expect(reencrypted.startsWith('v3:k2:')).toBe(true);
-          await appPrisma.slackIntegration.update({
-            where: { id: SLACK_INTEGRATION_ID },
-            data: { botToken: reencrypted },
-          });
-          await expect(encryption.decrypt(reencrypted)).resolves.toBe(INTEGRATION_SECRET);
-
-          const user = await appPrisma.user.findUniqueOrThrow({
-            where: { id: USER_ID },
-            include: { apiKeys: true, devices: true, tokens: true, slackIntegrations: true },
-          });
-          expect(user).toMatchObject({ email: USER_EMAIL, status: 'ACTIVE', role: 'ADMIN' });
-          expect(user.devices).toHaveLength(1);
-          expect(user.tokens).toHaveLength(1);
-          expect(user.apiKeys[0]).toMatchObject({ id: API_KEY_ID, tokenHash: expectedApiHash });
-          expect(user.slackIntegrations[0]).toMatchObject({ id: SLACK_INTEGRATION_ID });
-
-          const service = await appPrisma.service.findUniqueOrThrow({
-            where: { id: SERVICE_ID },
-            include: {
-              incidents: true,
-              slackIntegration: true,
-              statusPageServices: { include: { statusPage: { include: { apiTokens: true } } } },
-              policy: { include: { steps: { include: { targetUser: true } } } },
-            },
-          });
-          expect(service).toMatchObject({
-            id: SERVICE_ID,
-            name: 'v1.4 Upgrade Service',
-            escalationPolicyId: POLICY_ID,
-          });
-          expect(service.policy?.steps[0]).toMatchObject({
-            id: ESCALATION_RULE_ID,
-            targetUserId: USER_ID,
-            stepOrder: 0,
-          });
-          expect(service.policy?.steps[0]?.targetUser?.email).toBe(USER_EMAIL);
-          expect(service.incidents[0]).toMatchObject({ id: INCIDENT_ID, title: 'v1.4 seeded incident' });
-          expect(service.slackIntegration?.botToken.startsWith('v3:k2:')).toBe(true);
-          expect(service.statusPageServices[0]?.statusPage.apiTokens[0]).toMatchObject({
-            id: STATUS_TOKEN_ID,
-            tokenHash: expectedStatusHash,
-          });
-
-          const incident = await appPrisma.incident.findUniqueOrThrow({
-            where: { id: INCIDENT_ID },
-            include: { service: true },
-          });
-          expect(incident.service.id).toBe(SERVICE_ID);
-        } finally {
-          if (appPrisma) await appPrisma.$disconnect();
-          restoreEnv(originalEnv);
-          vi.resetModules();
+          throw error;
         }
-      },
-      180_000
-    );
+        runPrismaMigrate(
+          path.join(scratchRoot, 'prisma', 'schema.prisma'),
+          isolatedDatabaseUrl,
+          repoRoot
+        );
+        await seedV14Data(isolatedDatabaseUrl, {
+          OLD_NEXTAUTH_SECRET,
+          OLD_ENCRYPTION_KEY,
+          USER_ID,
+          USER_EMAIL,
+          SERVICE_ID,
+          POLICY_ID,
+          ESCALATION_RULE_ID,
+          INCIDENT_ID,
+          API_KEY_ID,
+          STATUS_PAGE_ID,
+          STATUS_TOKEN_ID,
+          SLACK_INTEGRATION_ID,
+          API_TOKEN,
+          STATUS_TOKEN,
+          INTEGRATION_SECRET,
+        });
+
+        runPrismaMigrate(
+          path.join(repoRoot, 'prisma', 'schema.prisma'),
+          isolatedDatabaseUrl,
+          repoRoot
+        );
+
+        process.env.DATABASE_URL = isolatedDatabaseUrl;
+        setProcessEnv('NODE_ENV', 'test');
+        process.env.NEXTAUTH_SECRET = OLD_NEXTAUTH_SECRET;
+        process.env.API_KEY_SECRET = NEW_API_KEY_SECRET;
+        process.env.ENCRYPTION_KEYS = `k2:${NEW_ENCRYPTION_KEY},k1:${OLD_ENCRYPTION_KEY}`;
+        delete process.env.ENCRYPTION_KEY;
+        vi.resetModules();
+
+        const [
+          { authenticateApiKey },
+          { authorizeStatusApiRequest },
+          apiKeys,
+          encryption,
+          prismaModule,
+        ] = await Promise.all([
+          import('@/lib/api-auth'),
+          import('@/lib/status-api-auth'),
+          import('@/lib/api-keys'),
+          import('@/lib/encryption'),
+          import('@/lib/prisma'),
+        ]);
+        appPrisma = prismaModule.default;
+
+        const expectedApiHash = apiKeys.hashTokenV2(API_TOKEN);
+        const expectedStatusHash = apiKeys.hashTokenV2(STATUS_TOKEN);
+        const seededApiKey = await appPrisma.apiKey.findUniqueOrThrow({
+          where: { id: API_KEY_ID },
+          select: { id: true, tokenHash: true },
+        });
+        expect(await apiKeys.hashLegacyScryptTokenCandidates(API_TOKEN)).toContain(
+          seededApiKey.tokenHash
+        );
+
+        const firstApiAuth = await authenticateApiKey(bearerRequest(API_TOKEN));
+        expect(firstApiAuth?.id).toBe(API_KEY_ID);
+        await expectApiKeyHash(appPrisma, API_KEY_ID, expectedApiHash);
+
+        const secondApiAuth = await authenticateApiKey(bearerRequest(API_TOKEN));
+        expect(secondApiAuth?.id).toBe(API_KEY_ID);
+        expect(await authenticateApiKey(bearerRequest(`ok_${'C'.repeat(43)}`))).toBeNull();
+
+        const firstStatusAuth = await authorizeStatusApiRequest(
+          bearerRequest(STATUS_TOKEN),
+          STATUS_PAGE_ID,
+          { requireToken: true, rateLimitEnabled: false }
+        );
+        expect(firstStatusAuth).toMatchObject({ allowed: true, tokenId: STATUS_TOKEN_ID });
+        await expectStatusTokenHash(appPrisma, STATUS_TOKEN_ID, expectedStatusHash);
+
+        const secondStatusAuth = await authorizeStatusApiRequest(
+          bearerRequest(STATUS_TOKEN),
+          STATUS_PAGE_ID,
+          { requireToken: true, rateLimitEnabled: false }
+        );
+        expect(secondStatusAuth).toMatchObject({ allowed: true, tokenId: STATUS_TOKEN_ID });
+        await expect(
+          authorizeStatusApiRequest(bearerRequest(`ok_${'D'.repeat(43)}`), STATUS_PAGE_ID, {
+            requireToken: true,
+            rateLimitEnabled: false,
+          })
+        ).resolves.toMatchObject({ allowed: false, status: 401 });
+
+        const seededSlack = await appPrisma.slackIntegration.findUniqueOrThrow({
+          where: { id: SLACK_INTEGRATION_ID },
+        });
+        expect(seededSlack.botToken.startsWith('v2:')).toBe(true);
+        await expect(encryption.decrypt(seededSlack.botToken)).resolves.toBe(INTEGRATION_SECRET);
+
+        delete process.env.ENCRYPTION_KEYS;
+        process.env.ENCRYPTION_KEY = OLD_ENCRYPTION_KEY;
+        await expect(encryption.decrypt(seededSlack.botToken)).resolves.toBe(INTEGRATION_SECRET);
+
+        process.env.ENCRYPTION_KEYS = `k2:${NEW_ENCRYPTION_KEY},k1:${OLD_ENCRYPTION_KEY}`;
+        delete process.env.ENCRYPTION_KEY;
+        const reencrypted = await encryption.encrypt(INTEGRATION_SECRET);
+        expect(reencrypted.startsWith('v3:k2:')).toBe(true);
+        await appPrisma.slackIntegration.update({
+          where: { id: SLACK_INTEGRATION_ID },
+          data: { botToken: reencrypted },
+        });
+        await expect(encryption.decrypt(reencrypted)).resolves.toBe(INTEGRATION_SECRET);
+
+        const user = await appPrisma.user.findUniqueOrThrow({
+          where: { id: USER_ID },
+          include: { apiKeys: true, devices: true, tokens: true, slackIntegrations: true },
+        });
+        expect(user).toMatchObject({ email: USER_EMAIL, status: 'ACTIVE', role: 'ADMIN' });
+        expect(user.devices).toHaveLength(1);
+        expect(user.tokens).toHaveLength(1);
+        expect(user.apiKeys[0]).toMatchObject({ id: API_KEY_ID, tokenHash: expectedApiHash });
+        expect(user.slackIntegrations[0]).toMatchObject({ id: SLACK_INTEGRATION_ID });
+
+        const service = await appPrisma.service.findUniqueOrThrow({
+          where: { id: SERVICE_ID },
+          include: {
+            incidents: true,
+            slackIntegration: true,
+            statusPageServices: { include: { statusPage: { include: { apiTokens: true } } } },
+            policy: { include: { steps: { include: { targetUser: true } } } },
+          },
+        });
+        expect(service).toMatchObject({
+          id: SERVICE_ID,
+          name: 'v1.4 Upgrade Service',
+          escalationPolicyId: POLICY_ID,
+        });
+        expect(service.policy?.steps[0]).toMatchObject({
+          id: ESCALATION_RULE_ID,
+          targetUserId: USER_ID,
+          stepOrder: 0,
+        });
+        expect(service.policy?.steps[0]?.targetUser?.email).toBe(USER_EMAIL);
+        expect(service.incidents[0]).toMatchObject({
+          id: INCIDENT_ID,
+          title: 'v1.4 seeded incident',
+        });
+        expect(service.slackIntegration?.botToken.startsWith('v3:k2:')).toBe(true);
+        expect(service.statusPageServices[0]?.statusPage.apiTokens[0]).toMatchObject({
+          id: STATUS_TOKEN_ID,
+          tokenHash: expectedStatusHash,
+        });
+
+        const incident = await appPrisma.incident.findUniqueOrThrow({
+          where: { id: INCIDENT_ID },
+          include: { service: true },
+        });
+        expect(incident.service.id).toBe(SERVICE_ID);
+      } finally {
+        if (appPrisma) await appPrisma.$disconnect();
+        restoreEnv(originalEnv);
+        vi.resetModules();
+      }
+    }, 180_000);
   });
 }
 
@@ -389,8 +393,13 @@ async function seedV14Data(
 ) {
   const prisma = new PrismaClient({ datasources: { db: { url } } });
   const apiTokenHash = scryptSync(data.API_TOKEN, data.OLD_NEXTAUTH_SECRET, 32).toString('hex');
-  const statusTokenHash = scryptSync(data.STATUS_TOKEN, data.OLD_NEXTAUTH_SECRET, 32).toString('hex');
-  const encryptedIntegrationSecret = encryptV14WithKey(data.INTEGRATION_SECRET, data.OLD_ENCRYPTION_KEY);
+  const statusTokenHash = scryptSync(data.STATUS_TOKEN, data.OLD_NEXTAUTH_SECRET, 32).toString(
+    'hex'
+  );
+  const encryptedIntegrationSecret = encryptV14WithKey(
+    data.INTEGRATION_SECRET,
+    data.OLD_ENCRYPTION_KEY
+  );
 
   try {
     await prisma.$transaction(async tx => {

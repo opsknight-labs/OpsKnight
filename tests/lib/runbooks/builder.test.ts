@@ -46,8 +46,12 @@ describe('Runbook authoring templates', () => {
     expect(k8sTemplate.steps[1].verification?.steps).toHaveLength(1);
     expect(k8sTemplate.steps[1].verification?.steps[0].config.action).toBe('rollout-status');
     expect(k8sTemplate.steps[1].verification?.steps[0].config.resource).toBe('deployment');
-    expect(k8sTemplate.steps[1].verification?.steps[0].config.namespace).toBe('${{ inputs.namespace }}');
-    expect(k8sTemplate.steps[1].verification?.steps[0].config.name).toBe('${{ inputs.deployment_name }}');
+    expect(k8sTemplate.steps[1].verification?.steps[0].config.namespace).toBe(
+      '${{ inputs.namespace }}'
+    );
+    expect(k8sTemplate.steps[1].verification?.steps[0].config.name).toBe(
+      '${{ inputs.deployment_name }}'
+    );
 
     // Step 3: verify
     expect(k8sTemplate.steps[2].config.resource).toBe('deployment');
@@ -162,5 +166,3 @@ describe('Runbook authoring templates', () => {
     expect(() => parseRunbookDefinition(definition)).not.toThrow();
   });
 });
-
-

@@ -114,7 +114,8 @@ export function buildTeamFixtures(scale: ScaleDimensions): LoadTeamFixture[] {
 
 export function buildUserFixtures(
   scale: ScaleDimensions,
-  pushEmulatorBaseUrlOrTeams: string | LoadTeamFixture[] = 'http://push.emulator.opsknight.internal:8086',
+  pushEmulatorBaseUrlOrTeams:
+    string | LoadTeamFixture[] = 'http://push.emulator.opsknight.internal:8086',
   maybePushBaseUrl?: string
 ): LoadUserFixture[] {
   const pushEmulatorBaseUrl =

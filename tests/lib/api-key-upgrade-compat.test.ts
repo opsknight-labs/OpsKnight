@@ -117,7 +117,11 @@ describe('1.x -> 2.0 API credential compatibility', () => {
 
   it('authenticates a 1.x API key salted with the retained NEXTAUTH_SECRET and migrates it', async () => {
     const token = legacy1xToken();
-    store.apiKeys.push({ id: 'key-1', tokenHash: scryptHex(token, OLD_NEXTAUTH_SECRET), revokedAt: null });
+    store.apiKeys.push({
+      id: 'key-1',
+      tokenHash: scryptHex(token, OLD_NEXTAUTH_SECRET),
+      revokedAt: null,
+    });
 
     const first = await authenticateApiKey(apiRequest(token));
     expect(first?.id).toBe('key-1');
@@ -135,7 +139,11 @@ describe('1.x -> 2.0 API credential compatibility', () => {
 
   it('authenticates a 1.x API key that was salted with a 1.x API_KEY_SECRET', async () => {
     const token = legacy1xToken();
-    store.apiKeys.push({ id: 'key-1', tokenHash: scryptHex(token, NEW_API_KEY_SECRET), revokedAt: null });
+    store.apiKeys.push({
+      id: 'key-1',
+      tokenHash: scryptHex(token, NEW_API_KEY_SECRET),
+      revokedAt: null,
+    });
 
     await expect(authenticateApiKey(apiRequest(token))).resolves.toMatchObject({ id: 'key-1' });
     expect(store.apiKeys[0].tokenHash).toBe(hashTokenV2(token));
@@ -161,13 +169,19 @@ describe('1.x -> 2.0 API credential compatibility', () => {
       revokedAt: null,
     });
 
-    await expect(authenticateApiKey(apiRequest(token))).resolves.toMatchObject({ id: 'key-default' });
+    await expect(authenticateApiKey(apiRequest(token))).resolves.toMatchObject({
+      id: 'key-default',
+    });
     expect(store.apiKeys[0].tokenHash).toBe(hashTokenV2(token));
   });
 
   it('keeps 2.0 keys signed with NEXTAUTH_SECRET valid after API_KEY_SECRET is introduced', async () => {
     const token = `ok_live_${randomBytes(32).toString('base64url')}`;
-    store.apiKeys.push({ id: 'key-2', tokenHash: hmacV2(token, OLD_NEXTAUTH_SECRET), revokedAt: null });
+    store.apiKeys.push({
+      id: 'key-2',
+      tokenHash: hmacV2(token, OLD_NEXTAUTH_SECRET),
+      revokedAt: null,
+    });
 
     await expect(authenticateApiKey(apiRequest(token))).resolves.toMatchObject({ id: 'key-2' });
     expect(store.apiKeys[0].tokenHash).toBe(hmacV2(token, NEW_API_KEY_SECRET));
@@ -176,7 +190,11 @@ describe('1.x -> 2.0 API credential compatibility', () => {
   it('rejects invalid, unknown-secret and revoked legacy keys', async () => {
     const token = legacy1xToken();
     store.apiKeys.push(
-      { id: 'other-secret', tokenHash: scryptHex(token, 'some-other-secret-value-not-configured'), revokedAt: null },
+      {
+        id: 'other-secret',
+        tokenHash: scryptHex(token, 'some-other-secret-value-not-configured'),
+        revokedAt: null,
+      },
       { id: 'revoked', tokenHash: scryptHex(token, OLD_NEXTAUTH_SECRET), revokedAt: new Date() }
     );
 
@@ -195,11 +213,17 @@ describe('1.x -> 2.0 API credential compatibility', () => {
       revokedAt: null,
     });
 
-    await expect(statusRequest(token)).resolves.toMatchObject({ allowed: true, tokenId: 'status-1' });
+    await expect(statusRequest(token)).resolves.toMatchObject({
+      allowed: true,
+      tokenId: 'status-1',
+    });
     expect(store.statusTokens[0].tokenHash).toBe(hmacV2(token, NEW_API_KEY_SECRET));
 
     vi.mocked(prisma.statusPageApiToken.findFirst).mockClear();
-    await expect(statusRequest(token)).resolves.toMatchObject({ allowed: true, tokenId: 'status-1' });
+    await expect(statusRequest(token)).resolves.toMatchObject({
+      allowed: true,
+      tokenId: 'status-1',
+    });
     expect(prisma.statusPageApiToken.findFirst).toHaveBeenCalledTimes(1);
 
     await expect(statusRequest(legacy1xToken())).resolves.toMatchObject({

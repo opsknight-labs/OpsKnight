@@ -14,7 +14,11 @@ function subscription(endpoint: string, applicationServerKey: ArrayBuffer | null
   return {
     endpoint,
     options: { applicationServerKey },
-    toJSON: () => ({ endpoint, expirationTime: null, keys: { p256dh: 'p'.repeat(20), auth: 'a'.repeat(10) } }),
+    toJSON: () => ({
+      endpoint,
+      expirationTime: null,
+      keys: { p256dh: 'p'.repeat(20), auth: 'a'.repeat(10) },
+    }),
   };
 }
 
@@ -30,15 +34,24 @@ function loadWorker({
   const messages: Array<Record<string, unknown>> = [];
   const subscribe = vi.fn(async (options: { applicationServerKey: Uint8Array }) => {
     expect(options).toMatchObject({ userVisibleOnly: true });
-    return subscription('https://fcm.googleapis.com/fcm/send/new-token', options.applicationServerKey.buffer as ArrayBuffer);
+    return subscription(
+      'https://fcm.googleapis.com/fcm/send/new-token',
+      options.applicationServerKey.buffer as ArrayBuffer
+    );
   });
 
   const fetch = vi.fn(async (url: string, init: RequestInit = {}) => {
     fetchCalls.push({ url, init });
     const key = `${init.method ?? 'GET'} ${url}`;
     const status = responses[key] ?? 200;
-    const body = url === '/api/system/vapid-public-key' ? { enabled: true, publicKey: VAPID_KEY_B64URL } : { success: status < 400, error: status >= 400 ? 'Authentication required' : undefined };
-    return new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
+    const body =
+      url === '/api/system/vapid-public-key'
+        ? { enabled: true, publicKey: VAPID_KEY_B64URL }
+        : { success: status < 400, error: status >= 400 ? 'Authentication required' : undefined };
+    return new Response(JSON.stringify(body), {
+      status,
+      headers: { 'content-type': 'application/json' },
+    });
   });
 
   const self = {
@@ -48,7 +61,9 @@ function loadWorker({
     crypto: globalThis.crypto,
   };
   const clients = {
-    matchAll: async () => [{ postMessage: (message: Record<string, unknown>) => messages.push(message) }],
+    matchAll: async () => [
+      { postMessage: (message: Record<string, unknown>) => messages.push(message) },
+    ],
   };
   vm.runInNewContext(workerSource, {
     self,
@@ -67,11 +82,20 @@ function loadWorker({
 
   async function dispatch(event: Record<string, unknown>) {
     let pending: Promise<unknown> = Promise.resolve();
-    listeners.get('pushsubscriptionchange')!({ ...event, waitUntil: (promise: Promise<unknown>) => (pending = promise) });
+    listeners.get('pushsubscriptionchange')!({
+      ...event,
+      waitUntil: (promise: Promise<unknown>) => (pending = promise),
+    });
     await pending;
   }
 
-  return { dispatch, fetchCalls, messages, subscribe, hasListener: () => listeners.has('pushsubscriptionchange') };
+  return {
+    dispatch,
+    fetchCalls,
+    messages,
+    subscribe,
+    hasListener: () => listeners.has('pushsubscriptionchange'),
+  };
 }
 
 const body = (call: FetchCall) => JSON.parse(String(call.init.body));
@@ -90,9 +114,15 @@ describe('service worker pushsubscriptionchange recovery', () => {
 
     expect(worker.subscribe).not.toHaveBeenCalled();
     const [save, retire] = worker.fetchCalls;
-    expect(save).toMatchObject({ url: '/api/user/push-subscription', init: { method: 'POST', credentials: 'include' } });
+    expect(save).toMatchObject({
+      url: '/api/user/push-subscription',
+      init: { method: 'POST', credentials: 'include' },
+    });
     expect(body(save).endpoint).toBe('https://fcm.googleapis.com/fcm/send/rotated-token');
-    expect(retire).toMatchObject({ url: '/api/user/push-subscription', init: { method: 'DELETE' } });
+    expect(retire).toMatchObject({
+      url: '/api/user/push-subscription',
+      init: { method: 'DELETE' },
+    });
     expect(body(retire)).toEqual({ endpoint: 'https://fcm.googleapis.com/fcm/send/old-token' });
     expect(worker.messages).toContainEqual({ type: 'PUSH_SUBSCRIPTION_CHANGED' });
   });
@@ -100,13 +130,18 @@ describe('service worker pushsubscriptionchange recovery', () => {
   it('re-subscribes with the previous VAPID key when the browser provides no replacement', async () => {
     const worker = loadWorker({});
     await worker.dispatch({
-      oldSubscription: subscription('https://fcm.googleapis.com/fcm/send/old-token', VAPID_KEY_BYTES.buffer),
+      oldSubscription: subscription(
+        'https://fcm.googleapis.com/fcm/send/old-token',
+        VAPID_KEY_BYTES.buffer
+      ),
       newSubscription: null,
     });
 
     expect(worker.subscribe).toHaveBeenCalledTimes(1);
     expect(worker.fetchCalls.map(call => call.url)).not.toContain('/api/system/vapid-public-key');
-    expect(body(worker.fetchCalls[0]).endpoint).toBe('https://fcm.googleapis.com/fcm/send/new-token');
+    expect(body(worker.fetchCalls[0]).endpoint).toBe(
+      'https://fcm.googleapis.com/fcm/send/new-token'
+    );
   });
 
   it('fetches the server VAPID key when the old subscription is unavailable', async () => {
@@ -116,7 +151,10 @@ describe('service worker pushsubscriptionchange recovery', () => {
     expect(worker.fetchCalls[0].url).toBe('/api/system/vapid-public-key');
     const key = worker.subscribe.mock.calls[0][0].applicationServerKey as Uint8Array;
     expect(Array.from(key)).toEqual(Array.from(VAPID_KEY_BYTES));
-    expect(worker.fetchCalls[1]).toMatchObject({ url: '/api/user/push-subscription', init: { method: 'POST' } });
+    expect(worker.fetchCalls[1]).toMatchObject({
+      url: '/api/user/push-subscription',
+      init: { method: 'POST' },
+    });
     expect(worker.fetchCalls).toHaveLength(2);
   });
 

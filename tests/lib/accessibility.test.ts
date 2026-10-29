@@ -1,5 +1,10 @@
 import { describe, it, expect, vi } from 'vitest';
-import { ARIA_LABELS, KEYBOARD_HANDLERS, getActionAriaLabel, getIconButtonAriaLabel } from '@/lib/accessibility';
+import {
+  ARIA_LABELS,
+  KEYBOARD_HANDLERS,
+  getActionAriaLabel,
+  getIconButtonAriaLabel,
+} from '@/lib/accessibility';
 
 describe('Accessibility Utilities', () => {
   describe('getActionAriaLabel', () => {
@@ -49,7 +54,7 @@ describe('Accessibility Utilities', () => {
         key: 'Enter',
         preventDefault: vi.fn(),
       } as unknown as React.KeyboardEvent;
-      
+
       KEYBOARD_HANDLERS.handleButtonKeyDown(event, handler);
       expect(handler).toHaveBeenCalled();
       expect(event.preventDefault).toHaveBeenCalled();
@@ -61,7 +66,7 @@ describe('Accessibility Utilities', () => {
         key: ' ',
         preventDefault: vi.fn(),
       } as unknown as React.KeyboardEvent;
-      
+
       KEYBOARD_HANDLERS.handleButtonKeyDown(event, handler);
       expect(handler).toHaveBeenCalled();
       expect(event.preventDefault).toHaveBeenCalled();
@@ -73,7 +78,7 @@ describe('Accessibility Utilities', () => {
         key: 'Enter',
         preventDefault: vi.fn(),
       } as unknown as React.KeyboardEvent;
-      
+
       KEYBOARD_HANDLERS.handleButtonKeyDown(event, handler, true);
       expect(handler).not.toHaveBeenCalled();
     });
@@ -83,7 +88,7 @@ describe('Accessibility Utilities', () => {
       const event = {
         key: 'Escape',
       } as unknown as React.KeyboardEvent;
-      
+
       KEYBOARD_HANDLERS.handleEscapeKey(event, handler);
       expect(handler).toHaveBeenCalled();
     });
@@ -93,23 +98,31 @@ describe('Accessibility Utilities', () => {
       const onDown = vi.fn();
       const onLeft = vi.fn();
       const onRight = vi.fn();
-      
+
       const upEvent = { key: 'ArrowUp', preventDefault: vi.fn() } as unknown as React.KeyboardEvent;
       KEYBOARD_HANDLERS.handleArrowKeys(upEvent, { onUp });
       expect(onUp).toHaveBeenCalled();
-      
-      const downEvent = { key: 'ArrowDown', preventDefault: vi.fn() } as unknown as React.KeyboardEvent;
+
+      const downEvent = {
+        key: 'ArrowDown',
+        preventDefault: vi.fn(),
+      } as unknown as React.KeyboardEvent;
       KEYBOARD_HANDLERS.handleArrowKeys(downEvent, { onDown });
       expect(onDown).toHaveBeenCalled();
-      
-      const leftEvent = { key: 'ArrowLeft', preventDefault: vi.fn() } as unknown as React.KeyboardEvent;
+
+      const leftEvent = {
+        key: 'ArrowLeft',
+        preventDefault: vi.fn(),
+      } as unknown as React.KeyboardEvent;
       KEYBOARD_HANDLERS.handleArrowKeys(leftEvent, { onLeft });
       expect(onLeft).toHaveBeenCalled();
-      
-      const rightEvent = { key: 'ArrowRight', preventDefault: vi.fn() } as unknown as React.KeyboardEvent;
+
+      const rightEvent = {
+        key: 'ArrowRight',
+        preventDefault: vi.fn(),
+      } as unknown as React.KeyboardEvent;
       KEYBOARD_HANDLERS.handleArrowKeys(rightEvent, { onRight });
       expect(onRight).toHaveBeenCalled();
     });
   });
 });
-

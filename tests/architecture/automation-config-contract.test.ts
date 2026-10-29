@@ -89,7 +89,11 @@ describe('service automation configuration contract', () => {
       'SERVICE_AUTOMATION_FLAG',
     ]);
 
-    const manifest = ['AUTOMATION_RPS=20', '- name: AUTOMATION_TOPOLOGY', 'ENV AUTOMATION_X 1'].join('\n');
+    const manifest = [
+      'AUTOMATION_RPS=20',
+      '- name: AUTOMATION_TOPOLOGY',
+      'ENV AUTOMATION_X 1',
+    ].join('\n');
     expect(findAutomationEnvKeys(manifest, MANIFEST_ENV_KEY).sort()).toEqual([
       'AUTOMATION_RPS',
       'AUTOMATION_TOPOLOGY',

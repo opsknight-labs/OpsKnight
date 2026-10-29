@@ -32,7 +32,9 @@ describe('API key inventory query', () => {
       AND: Array<{ OR: unknown[] }>;
     };
     expect(where.AND[0].OR).toHaveLength(4);
-    expect(where.AND[0].OR).toContainEqual({ user: { name: { contains: 'ci', mode: 'insensitive' } } });
+    expect(where.AND[0].OR).toContainEqual({
+      user: { name: { contains: 'ci', mode: 'insensitive' } },
+    });
   });
 
   it('round-trips a keyset cursor and ignores malformed params', () => {
@@ -51,12 +53,18 @@ describe('API key inventory query', () => {
   });
 });
 
-
 describe('service account inventory search', () => {
   it('finds machine identities by name or account ID while retaining machine-only scope', () => {
-    expect(buildServiceAccountWhere({ role: 'ALL', q: 'production' })).toEqual({ AND: [
-      { email: { endsWith: '@serviceaccount.opsknight.local', mode: 'insensitive' } },
-      { OR: [{ name: { contains: 'production', mode: 'insensitive' } }, { id: { contains: 'production', mode: 'insensitive' } }] },
-    ] });
+    expect(buildServiceAccountWhere({ role: 'ALL', q: 'production' })).toEqual({
+      AND: [
+        { email: { endsWith: '@serviceaccount.opsknight.local', mode: 'insensitive' } },
+        {
+          OR: [
+            { name: { contains: 'production', mode: 'insensitive' } },
+            { id: { contains: 'production', mode: 'insensitive' } },
+          ],
+        },
+      ],
+    });
   });
 });

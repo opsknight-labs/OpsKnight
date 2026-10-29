@@ -4794,6 +4794,8 @@ model McpPolicy {
   // Anonymous registration creates only a client identity; users must still sign in and consent.
   dcrEnabled Boolean @default(false)
   dcrScopes String[] @default([])
+  // A connection stays signed in while it is used: each refresh extends it by this many idle days.
+  sessionIdleDays Int @default(30)
   updatedAt DateTime @updatedAt
 }
 
@@ -4822,6 +4824,9 @@ model McpGrant {
   resource String
   revokedAt DateTime?
   expiresAt DateTime
+  // Hard cap for sliding renewal; null for grants created before sliding sessions.
+  absoluteExpiresAt DateTime?
+  lastUsedAt DateTime?
   createdAt DateTime @default(now())
   client McpClient @relation(fields: [clientId], references: [id], onDelete: Cascade)
   codes McpAuthorizationCode[]

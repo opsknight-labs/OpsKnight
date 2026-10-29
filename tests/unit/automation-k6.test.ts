@@ -24,21 +24,42 @@ it('preserves host execution and scopes the new topology to the owned fixture', 
 });
 
 it('keeps all scenarios and frozen settings while retrieving a unique remote summary', () => {
-  const launch = controlledK6Launch(env, 'live-small', '123456', '/tmp/result.json', '10.96.137.17');
+  const launch = controlledK6Launch(
+    env,
+    'live-small',
+    '123456',
+    '/tmp/result.json',
+    '10.96.137.17'
+  );
   expect(launch.target).toMatchObject({ mode: 'IN_CLUSTER', namespace: 'automation-cert' });
   expect(launch.args).toEqual([
-    '--context', 'kind-opsknight-automation', '-n', 'automation-cert', 'exec',
-    'k6-automation-cert', '--', 'env',
+    '--context',
+    'kind-opsknight-automation',
+    '-n',
+    'automation-cert',
+    'exec',
+    'k6-automation-cert',
+    '--',
+    'env',
     'BASE_URL=http://127.0.0.1:3439',
-    'LOAD_SEED_MANIFEST=/work/seed-manifest.json', 'AUTOMATION_RPS=20',
-    'AUTOMATION_DURATION=120s', 'AUTOMATION_LOAD_PROFILE=live-small',
-    'AUTOMATION_RUN_ID=123456', 'AUTOMATION_RECOVERY_DRILL=false',
-    'k6', 'run', '--config', '/work/results/123456-transport.json',
-    '--summary-export', '/work/results/123456.json',
+    'LOAD_SEED_MANIFEST=/work/seed-manifest.json',
+    'AUTOMATION_RPS=20',
+    'AUTOMATION_DURATION=120s',
+    'AUTOMATION_LOAD_PROFILE=live-small',
+    'AUTOMATION_RUN_ID=123456',
+    'AUTOMATION_RECOVERY_DRILL=false',
+    'k6',
+    'run',
+    '--config',
+    '/work/results/123456-transport.json',
+    '--summary-export',
+    '/work/results/123456.json',
     '/work/scenarios/automation.js',
   ]);
   expect(launch.transportConfig).toEqual({ hosts: { '127.0.0.1:3439': '10.96.137.17:3000' } });
   for (const ip of [undefined, '127.0.0.1', '8.8.8.8', '10.999.1.1', 'not-an-ip'])
     expect(() => controlledK6Launch(env, 'live-small', '123456', '/tmp/result.json', ip)).toThrow();
-  expect(() => controlledK6Launch(env, 'live-small', '../old-result', '/tmp/result.json')).toThrow();
+  expect(() =>
+    controlledK6Launch(env, 'live-small', '../old-result', '/tmp/result.json')
+  ).toThrow();
 });

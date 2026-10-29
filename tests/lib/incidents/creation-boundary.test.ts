@@ -42,7 +42,9 @@ describe('incident creation architecture', () => {
       }
 
       if (text.includes('sideEffectPolicy')) {
-        violations.push(`${relativePath}: legacy lifecycle sideEffectPolicy escape hatch is forbidden`);
+        violations.push(
+          `${relativePath}: legacy lifecycle sideEffectPolicy escape hatch is forbidden`
+        );
       }
 
       if (ALLOWED_CREATE_FILES.has(relativePath)) continue;

@@ -64,9 +64,9 @@ export async function verifyLoadCertificationResults(options?: {
 }): Promise<CorrectnessInvariantReport> {
   const topology = options?.topology ?? process.env.LOAD_TOPOLOGY ?? 'manual';
   const maxCriticalPendingAgeMs = options?.maxCriticalPendingAgeMs ?? 30_000;
-  const controlBaseUrl =
-    options?.controlBaseUrl ?? DEFAULT_EMULATOR_ENDPOINTS.controlBaseUrl;
-  const waitForDrainMs = options?.waitForDrainMs ?? Number(process.env.LOAD_DRAIN_WAIT_MS ?? 15_000);
+  const controlBaseUrl = options?.controlBaseUrl ?? DEFAULT_EMULATOR_ENDPOINTS.controlBaseUrl;
+  const waitForDrainMs =
+    options?.waitForDrainMs ?? Number(process.env.LOAD_DRAIN_WAIT_MS ?? 15_000);
 
   const prisma = new PrismaClient();
   try {
@@ -75,36 +75,32 @@ export async function verifyLoadCertificationResults(options?: {
       while (Date.now() < deadline) {
         const remainingMs = deadline - Date.now();
         if (remainingMs <= 0) break;
-        const [
-          pendingCriticalTotal,
-          pendingTransactional,
-          pendingBulk,
-          pendingBackgroundJobs,
-        ] = await Promise.all([
-          prisma.notification.count({
-            where: {
-              status: 'PENDING',
-              trafficClass: 'CRITICAL',
-            },
-          }),
-          prisma.notification.count({
-            where: {
-              status: 'PENDING',
-              trafficClass: 'TRANSACTIONAL',
-            },
-          }),
-          prisma.notification.count({
-            where: {
-              status: 'PENDING',
-              trafficClass: 'BULK',
-            },
-          }),
-          prisma.backgroundJob.count({
-            where: {
-              status: { in: ['PENDING', 'PENDING_V2', 'PROCESSING', 'PROCESSING_V2'] },
-            },
-          }),
-        ]);
+        const [pendingCriticalTotal, pendingTransactional, pendingBulk, pendingBackgroundJobs] =
+          await Promise.all([
+            prisma.notification.count({
+              where: {
+                status: 'PENDING',
+                trafficClass: 'CRITICAL',
+              },
+            }),
+            prisma.notification.count({
+              where: {
+                status: 'PENDING',
+                trafficClass: 'TRANSACTIONAL',
+              },
+            }),
+            prisma.notification.count({
+              where: {
+                status: 'PENDING',
+                trafficClass: 'BULK',
+              },
+            }),
+            prisma.backgroundJob.count({
+              where: {
+                status: { in: ['PENDING', 'PENDING_V2', 'PROCESSING', 'PROCESSING_V2'] },
+              },
+            }),
+          ]);
         if (
           pendingCriticalTotal === 0 &&
           pendingTransactional === 0 &&
@@ -249,7 +245,7 @@ export async function verifyLoadCertificationResults(options?: {
 
     // 6. Provider emulator duplicate idempotency check
     const requireEmulator =
-      options?.requireEmulator ?? (process.env.LOAD_REQUIRE_EMULATOR !== 'false');
+      options?.requireEmulator ?? process.env.LOAD_REQUIRE_EMULATOR !== 'false';
     const duplicateDeliveryKeysByProvider: Record<string, number> = {};
     let emulatorAvailable = false;
     let emulatorError: string | null = null;
@@ -259,10 +255,7 @@ export async function verifyLoadCertificationResults(options?: {
       });
       if (res.ok) {
         const payload = (await res.json()) as {
-          providers?: Record<
-            string,
-            { duplicateDeliveries?: number; duplicateRequests?: number }
-          >;
+          providers?: Record<string, { duplicateDeliveries?: number; duplicateRequests?: number }>;
         };
         if (payload.providers) {
           emulatorAvailable = true;
@@ -280,19 +273,15 @@ export async function verifyLoadCertificationResults(options?: {
       emulatorError = err instanceof Error ? err.message : String(err);
     }
 
-    const [
-      incidentsCreated,
-      notificationsTotal,
-      backgroundJobsPending,
-      backgroundJobsFailed,
-    ] = await Promise.all([
-      prisma.incident.count({ where: { serviceId: { startsWith: 'lt-' } } }),
-      prisma.notification.count(),
-      prisma.backgroundJob.count({
-        where: { status: { in: ['PENDING', 'PENDING_V2', 'PROCESSING', 'PROCESSING_V2'] } },
-      }),
-      prisma.backgroundJob.count({ where: { status: 'FAILED' } }),
-    ]);
+    const [incidentsCreated, notificationsTotal, backgroundJobsPending, backgroundJobsFailed] =
+      await Promise.all([
+        prisma.incident.count({ where: { serviceId: { startsWith: 'lt-' } } }),
+        prisma.notification.count(),
+        prisma.backgroundJob.count({
+          where: { status: { in: ['PENDING', 'PENDING_V2', 'PROCESSING', 'PROCESSING_V2'] } },
+        }),
+        prisma.backgroundJob.count({ where: { status: 'FAILED' } }),
+      ]);
 
     const zeroDuplicateOpenIncidentsPassed = duplicateSamples.length === 0;
     const zeroLostAcceptedAlertsPassed = unlinkedAlerts === 0;
@@ -302,8 +291,7 @@ export async function verifyLoadCertificationResults(options?: {
       resolvedWithoutTimestamp === 0 &&
       snoozedWithoutUntil === 0;
     const starvationOccurred =
-      pendingCriticalCount > 0 &&
-      oldestPendingCriticalAgeMs > maxCriticalPendingAgeMs;
+      pendingCriticalCount > 0 && oldestPendingCriticalAgeMs > maxCriticalPendingAgeMs;
 
     const zeroCriticalStarvationPassed = !starvationOccurred;
 
@@ -313,8 +301,8 @@ export async function verifyLoadCertificationResults(options?: {
     );
     // Explicit invariant: emulator unavailable != PASS. Certification requires emulator telemetry availability AND zero duplicate deliveries.
     const providerIdempotencyPassed = requireEmulator
-      ? (emulatorAvailable && totalDuplicateDeliveries === 0)
-      : (totalDuplicateDeliveries === 0);
+      ? emulatorAvailable && totalDuplicateDeliveries === 0
+      : totalDuplicateDeliveries === 0;
 
     const report: CorrectnessInvariantReport = {
       passed:

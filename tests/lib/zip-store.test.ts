@@ -13,6 +13,8 @@ describe('buildStoredZip', () => {
     expect(view.getUint16(zip.length - 14, true)).toBe(2);
     expect(new TextDecoder().decode(zip)).toContain('manifest.json');
     expect(new TextDecoder().decode(zip)).toContain('color.png');
-    expect(buildStoredZip([{ name: 'a', data: new Uint8Array([1]) }])).toEqual(buildStoredZip([{ name: 'a', data: new Uint8Array([1]) }]));
+    expect(buildStoredZip([{ name: 'a', data: new Uint8Array([1]) }])).toEqual(
+      buildStoredZip([{ name: 'a', data: new Uint8Array([1]) }])
+    );
   });
 });

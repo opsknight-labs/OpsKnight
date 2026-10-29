@@ -94,7 +94,12 @@ describe('Dashboards API CRUD Contract', () => {
         name: 'New Custom Dashboard',
         templateId: 'executive-summary',
         widgets: [
-          { id: 'w-1', widgetType: 'metric', metricKey: 'totalIncidents', widgetDefinitionId: 'total-incidents' },
+          {
+            id: 'w-1',
+            widgetType: 'metric',
+            metricKey: 'totalIncidents',
+            widgetDefinitionId: 'total-incidents',
+          },
         ],
       });
 
@@ -167,10 +172,9 @@ describe('Dashboards API CRUD Contract', () => {
         widgets: [],
       });
 
-      const res = await getDashboardById(
-        new NextRequest('http://localhost/api/dashboards/d-1'),
-        { params: Promise.resolve({ id: 'd-1' }) }
-      );
+      const res = await getDashboardById(new NextRequest('http://localhost/api/dashboards/d-1'), {
+        params: Promise.resolve({ id: 'd-1' }),
+      });
       const body = await res.json();
 
       expect(res.status).toBe(200);
@@ -206,7 +210,12 @@ describe('Dashboards API CRUD Contract', () => {
         id: 'd-1',
         name: 'Updated Dashboard',
         widgets: [
-          { id: 'w-new', widgetType: 'chart', metricKey: 'trendSeries', widgetDefinitionId: 'incident-trend' },
+          {
+            id: 'w-new',
+            widgetType: 'chart',
+            metricKey: 'trendSeries',
+            widgetDefinitionId: 'incident-trend',
+          },
         ],
       });
 
@@ -259,10 +268,9 @@ describe('Dashboards API CRUD Contract', () => {
         isTemplate: false,
       });
 
-      const res = await deleteDashboard(
-        new NextRequest('http://localhost/api/dashboards/d-1'),
-        { params: Promise.resolve({ id: 'd-1' }) }
-      );
+      const res = await deleteDashboard(new NextRequest('http://localhost/api/dashboards/d-1'), {
+        params: Promise.resolve({ id: 'd-1' }),
+      });
       expect(res.status).toBe(200);
       expect(mocks.prisma.dashboard.delete).toHaveBeenCalledWith({ where: { id: 'd-1' } });
     });

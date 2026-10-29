@@ -157,7 +157,11 @@ export function stormResponderMutations() {
 
   opsknightMetrics.lifecycleLatencyMs.add(createRes.timings.duration);
 
-  if (createRes.status === 429 || createRes.status === 503 || (createRes.status === 500 && createRes.body && createRes.body.includes('"retryable":true'))) {
+  if (
+    createRes.status === 429 ||
+    createRes.status === 503 ||
+    (createRes.status === 500 && createRes.body && createRes.body.includes('"retryable":true'))
+  ) {
     opsknightMetrics.lifecycleSuccessRate.add(true);
     sleep(0.2);
     return;
@@ -211,7 +215,11 @@ export function stormResponderMutations() {
       }
       opsknightMetrics.lifecycleLatencyMs.add(patchRes.timings.duration);
       opsknightMetrics.lifecycleSuccessRate.add(
-        patchRes.status === 200 || patchRes.status === 409 || patchRes.status === 429 || patchRes.status === 503 || (patchRes.status === 500 && patchRes.body && patchRes.body.includes('"retryable":true'))
+        patchRes.status === 200 ||
+          patchRes.status === 409 ||
+          patchRes.status === 429 ||
+          patchRes.status === 503 ||
+          (patchRes.status === 500 && patchRes.body && patchRes.body.includes('"retryable":true'))
       );
     }
   }
@@ -254,9 +262,7 @@ export function stormSseStreams() {
     timeout: '3s',
     tags: { endpoint: 'sse_stream' },
   });
-  const ok =
-    res.status === 200 ||
-    (res.error_code === 1050 && (!res.status || res.status === 200));
+  const ok = res.status === 200 || (res.error_code === 1050 && (!res.status || res.status === 200));
   opsknightMetrics.sseConnectSuccessRate.add(ok);
   sleep(0.2);
 }

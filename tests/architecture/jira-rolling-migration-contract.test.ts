@@ -42,7 +42,7 @@ describe('Jira rolling migration contract', () => {
     expect(repairMigration).toContain(
       'BEFORE UPDATE OF "provider", "actionItemId" ON "ExternalIssueLink"'
     );
-    expect(repairMigration).toContain('IF TG_OP = \'UPDATE\' THEN');
+    expect(repairMigration).toContain("IF TG_OP = 'UPDATE' THEN");
     expect(repairMigration).toContain('"id" <> NEW."id"');
     expect(repairMigration).toContain("ERRCODE = '23505'");
   });

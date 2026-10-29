@@ -17,7 +17,12 @@ describe('Execution signing cache', () => {
   it('reuses parsed keys and invalidates on ciphertext replacement and encryption-key retirement', async () => {
     const keys = generateKeyPairSync('ed25519');
     const pem = keys.privateKey.export({ type: 'pkcs8', format: 'pem' }).toString();
-    const row = { id: 'default', state: 'ACTIVE', publicKey: 'pin', privateKeyEncrypted: 'ciphertext1' };
+    const row = {
+      id: 'default',
+      state: 'ACTIVE',
+      publicKey: 'pin',
+      privateKeyEncrypted: 'ciphertext1',
+    };
     mocks.find.mockImplementation(async () => ({ ...row }));
     mocks.decrypt.mockResolvedValue(pem);
     vi.stubEnv('ENCRYPTION_KEYS', 'first');

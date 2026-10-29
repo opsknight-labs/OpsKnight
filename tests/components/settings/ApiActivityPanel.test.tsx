@@ -122,7 +122,11 @@ describe('ApiActivityPanel Component', () => {
 
   it('shows a filtered empty state with a reset link', () => {
     render(
-      <ApiActivityPanel activities={[]} nextCursor={null} filters={{ ...noFilters, q: 'nonexistent' }} />
+      <ApiActivityPanel
+        activities={[]}
+        nextCursor={null}
+        filters={{ ...noFilters, q: 'nonexistent' }}
+      />
     );
     expect(screen.getByText('No matching API activity')).toBeDefined();
     expect(screen.getByRole('link', { name: /reset filters/i })).toBeDefined();
@@ -149,7 +153,13 @@ describe('ApiActivityPanel Component', () => {
     );
     expect(screen.getByText('Older results')).toBeDefined();
     expect(screen.getByText('42')).toBeDefined();
-    expect(screen.getByText((_, el) => el?.tagName.toLowerCase() === 'span' && /Showing.*3.*of.*42.*events/i.test(el.textContent || ''))).toBeDefined();
+    expect(
+      screen.getByText(
+        (_, el) =>
+          el?.tagName.toLowerCase() === 'span' &&
+          /Showing.*3.*of.*42.*events/i.test(el.textContent || '')
+      )
+    ).toBeDefined();
     expect(screen.getByRole('link', { name: /newest/i })).toBeDefined();
     expect(screen.getByRole('link', { name: /older events/i })).toBeDefined();
   });

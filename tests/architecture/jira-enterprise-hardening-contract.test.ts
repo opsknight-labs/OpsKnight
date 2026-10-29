@@ -33,8 +33,10 @@ describe('Jira enterprise hardening architecture', () => {
   it('uses one workspace-level provider admission state for Jira operations', () => {
     const worker = readFileSync('src/lib/external-operations.ts', 'utf8');
     expect(worker).toContain("const JIRA_PROVIDER_KEY = 'jira:workspace'");
-    expect(worker.match(/assertProviderAdmitted\(JIRA_PROVIDER_KEY\)/g)?.length).toBeGreaterThanOrEqual(2);
+    expect(
+      worker.match(/assertProviderAdmitted\(JIRA_PROVIDER_KEY\)/g)?.length
+    ).toBeGreaterThanOrEqual(2);
     expect(worker).toContain('providerRetryAfterMs');
-    expect(worker).toContain("operationFailureStatus(operation.attempts)");
+    expect(worker).toContain('operationFailureStatus(operation.attempts)');
   });
 });

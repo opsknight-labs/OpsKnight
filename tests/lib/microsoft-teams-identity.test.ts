@@ -135,13 +135,11 @@ describe('Microsoft Teams explicit identity linking', () => {
     userFindFirst.mockResolvedValue(historical[0]);
     userFindMany.mockResolvedValue(historical);
     getGraphTokenMock.mockResolvedValue('must-not-be-used');
-    const graph = vi
-      .spyOn(globalThis, 'fetch')
-      .mockResolvedValue(
-        new Response(JSON.stringify({ id: 'unknown-object', mail: 'case@example.test' }), {
-          status: 200,
-        })
-      );
+    const graph = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ id: 'unknown-object', mail: 'case@example.test' }), {
+        status: 200,
+      })
+    );
     try {
       const { resolveMicrosoftTeamsUser } = await import('@/lib/microsoft-teams/identity');
       expect(

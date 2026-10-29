@@ -505,15 +505,13 @@ describe('Runbook Lifecycle Unit Tests', () => {
             name: 'Original Workflow (Copy)',
             slug: 'orig-workflow-copy',
           }),
-          update: vi
-            .fn()
-            .mockResolvedValue({
-              id: 'rb_dup_1',
-              name: 'Original Workflow (Copy)',
-              slug: 'orig-workflow-copy',
-              draftVersionId: 'ver_dup_1',
-              revision: 2,
-            }),
+          update: vi.fn().mockResolvedValue({
+            id: 'rb_dup_1',
+            name: 'Original Workflow (Copy)',
+            slug: 'orig-workflow-copy',
+            draftVersionId: 'ver_dup_1',
+            revision: 2,
+          }),
         },
         runbookVersion: { create: vi.fn().mockResolvedValue({ id: 'ver_dup_1', version: 1 }) },
       };

@@ -146,25 +146,25 @@ describe('Service Health Utilities', () => {
   describe('getHealthScoreColor', () => {
     it('should return success color for excellent score', () => {
       const color = getHealthScoreColor(95);
-      
+
       expect(color).toBe('var(--success)');
     });
 
     it('should return appropriate color for good score', () => {
       const color = getHealthScoreColor(80);
-      
+
       expect(color).toBe('#4ade80');
     });
 
     it('should return warning color for fair score', () => {
       const color = getHealthScoreColor(65);
-      
+
       expect(color).toBe('var(--warning)');
     });
 
     it('should return danger color for poor score', () => {
       const color = getHealthScoreColor(30);
-      
+
       expect(color).toBe('var(--danger)');
     });
   });
@@ -196,4 +196,3 @@ describe('Service Health Utilities', () => {
     });
   });
 });
-

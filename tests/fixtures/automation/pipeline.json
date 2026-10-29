@@ -8,10 +8,7 @@
       "label": "Environment",
       "type": "ENUM",
       "caseSensitive": false,
-      "allowedValues": [
-        "production",
-        "staging"
-      ],
+      "allowedValues": ["production", "staging"],
       "aliases": {
         "prd": "production",
         "stg": "staging"
@@ -38,10 +35,7 @@
       "label": "Environment",
       "type": "ENUM",
       "caseSensitive": false,
-      "allowedValues": [
-        "production",
-        "staging"
-      ],
+      "allowedValues": ["production", "staging"],
       "aliases": {
         "prd": "production",
         "stg": "staging"
@@ -67,10 +61,7 @@
       "label": "Environment",
       "type": "ENUM",
       "caseSensitive": false,
-      "allowedValues": [
-        "production",
-        "staging"
-      ],
+      "allowedValues": ["production", "staging"],
       "aliases": {
         "prd": "production",
         "stg": "staging"
@@ -97,10 +88,7 @@
       "label": "Environment",
       "type": "ENUM",
       "caseSensitive": false,
-      "allowedValues": [
-        "production",
-        "staging"
-      ],
+      "allowedValues": ["production", "staging"],
       "aliases": {
         "prd": "production",
         "stg": "staging"
@@ -126,10 +114,7 @@
       "label": "Environment",
       "type": "NUMBER",
       "caseSensitive": false,
-      "allowedValues": [
-        "production",
-        "staging"
-      ],
+      "allowedValues": ["production", "staging"],
       "aliases": {},
       "mappings": [
         {
@@ -153,10 +138,7 @@
       "label": "Environment",
       "type": "BOOLEAN",
       "caseSensitive": false,
-      "allowedValues": [
-        "production",
-        "staging"
-      ],
+      "allowedValues": ["production", "staging"],
       "aliases": {},
       "mappings": [
         {
@@ -180,10 +162,7 @@
       "label": "Environment",
       "type": "NUMBER",
       "caseSensitive": false,
-      "allowedValues": [
-        "production",
-        "staging"
-      ],
+      "allowedValues": ["production", "staging"],
       "aliases": {},
       "mappings": [
         {
@@ -207,10 +186,7 @@
       "label": "Environment",
       "type": "NUMBER",
       "caseSensitive": false,
-      "allowedValues": [
-        "production",
-        "staging"
-      ],
+      "allowedValues": ["production", "staging"],
       "aliases": {},
       "mappings": [
         {
@@ -234,10 +210,7 @@
       "label": "Environment",
       "type": "STRING",
       "caseSensitive": true,
-      "allowedValues": [
-        "production",
-        "staging"
-      ],
+      "allowedValues": ["production", "staging"],
       "aliases": {},
       "mappings": [
         {
@@ -264,10 +237,7 @@
           "label": "Environment",
           "type": "ENUM",
           "caseSensitive": false,
-          "allowedValues": [
-            "production",
-            "staging"
-          ],
+          "allowedValues": ["production", "staging"],
           "aliases": {
             "prd": "production",
             "stg": "staging"
@@ -312,10 +282,7 @@
           "label": "Environment",
           "type": "ENUM",
           "caseSensitive": false,
-          "allowedValues": [
-            "production",
-            "staging"
-          ],
+          "allowedValues": ["production", "staging"],
           "aliases": {
             "prd": "production",
             "stg": "staging"
@@ -410,9 +377,7 @@
         "type": "ESCALATION_POLICY",
         "policyId": "policy-b"
       },
-      "tags": [
-        "vip"
-      ],
+      "tags": ["vip"],
       "priority": "P1"
     }
   },
@@ -428,10 +393,7 @@
           "label": "Environment",
           "type": "ENUM",
           "caseSensitive": false,
-          "allowedValues": [
-            "production",
-            "staging"
-          ],
+          "allowedValues": ["production", "staging"],
           "aliases": {
             "prd": "production",
             "stg": "staging"
@@ -524,9 +486,7 @@
       "outcome": {
         "type": "NO_ESCALATION"
       },
-      "tags": [
-        "vip"
-      ],
+      "tags": ["vip"],
       "priority": "P1"
     }
   },
@@ -542,10 +502,7 @@
           "label": "Environment",
           "type": "ENUM",
           "caseSensitive": false,
-          "allowedValues": [
-            "production",
-            "staging"
-          ],
+          "allowedValues": ["production", "staging"],
           "aliases": {
             "prd": "production",
             "stg": "staging"
@@ -587,10 +544,7 @@
           "label": "Environment",
           "type": "ENUM",
           "caseSensitive": false,
-          "allowedValues": [
-            "production",
-            "staging"
-          ],
+          "allowedValues": ["production", "staging"],
           "aliases": {
             "Prod": "production",
             "PROD": "staging"
@@ -619,10 +573,7 @@
           "label": "Environment",
           "type": "ENUM",
           "caseSensitive": false,
-          "allowedValues": [
-            "production",
-            "staging"
-          ],
+          "allowedValues": ["production", "staging"],
           "aliases": {
             "prd": "production",
             "stg": "staging"

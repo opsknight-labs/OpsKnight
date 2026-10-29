@@ -101,8 +101,7 @@ describe('Auto Recovery Migration System', () => {
         migration_name: migrationName,
         started_at: new Date(),
         finished_at: null,
-        logs:
-          'Database error: Cannot enforce one Jira issue per action item: duplicate Jira links exist. Review and unlink duplicates before applying this migration.',
+        logs: 'Database error: Cannot enforce one Jira issue per action item: duplicate Jira links exist. Review and unlink duplicates before applying this migration.',
       },
     ]);
 
@@ -130,8 +129,7 @@ describe('Auto Recovery Migration System', () => {
         migration_name: migrationName,
         started_at: new Date(),
         finished_at: null,
-        logs:
-          'ERROR: could not create unique index "ExternalIssueLink_jira_actionItemId_unique" DETAIL: Key (actionItemId)=(ai_123) is duplicated.',
+        logs: 'ERROR: could not create unique index "ExternalIssueLink_jira_actionItemId_unique" DETAIL: Key (actionItemId)=(ai_123) is duplicated.',
       },
     ]);
 

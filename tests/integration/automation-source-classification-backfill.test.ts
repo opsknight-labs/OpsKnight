@@ -30,9 +30,13 @@ async function seedHistoricalTraces(count: number) {
   });
   const captured = [];
   for (let index = 0; index < count; index += 1) {
-    captured.push(await db.incident.create({ data: { serviceId: service.id, title: `old ${index}` } }));
+    captured.push(
+      await db.incident.create({ data: { serviceId: service.id, title: `old ${index}` } })
+    );
   }
-  const untouched = await db.incident.create({ data: { serviceId: service.id, title: 'never evaluated' } });
+  const untouched = await db.incident.create({
+    data: { serviceId: service.id, title: 'never evaluated' },
+  });
   // Simulates rows written before the classification trigger existed.
   await db.$executeRawUnsafe(
     'ALTER TABLE "AutomationTrace" DISABLE TRIGGER automation_shadow_source_classification'
@@ -77,9 +81,12 @@ describe('automation source classification backfill', () => {
       where: { id: { in: [...captured.map(incident => incident.id), untouched.id] } },
       select: { id: true, automationSourceRestricted: true },
     });
-    expect(rows.filter(row => row.automationSourceRestricted).map(row => row.id).sort()).toEqual(
-      captured.map(incident => incident.id).sort()
-    );
+    expect(
+      rows
+        .filter(row => row.automationSourceRestricted)
+        .map(row => row.id)
+        .sort()
+    ).toEqual(captured.map(incident => incident.id).sort());
     expect(rows.find(row => row.id === untouched.id)?.automationSourceRestricted).toBe(false);
     expect(await pendingClassificationCount(db)).toBe(0);
     expect(await backfillAutomationSourceClassification(db)).toBe(0);

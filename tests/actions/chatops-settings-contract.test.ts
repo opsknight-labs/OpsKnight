@@ -64,7 +64,10 @@ describe('ChatOps settings contract', () => {
       return {};
     });
     mocks.findUniqueOrThrow.mockResolvedValue({ updatedAt: new Date('2026-09-09T00:00:00Z') });
-    mocks.getPolicy.mockResolvedValue({ defaultProviders: ['SLACK', 'MICROSOFT_TEAMS'], defaultMeetingProvider: 'NONE' });
+    mocks.getPolicy.mockResolvedValue({
+      defaultProviders: ['SLACK', 'MICROSOFT_TEAMS'],
+      defaultMeetingProvider: 'NONE',
+    });
     mocks.executeRaw.mockResolvedValue(1);
     mocks.transaction.mockImplementation(async callback => callback(tx));
   });

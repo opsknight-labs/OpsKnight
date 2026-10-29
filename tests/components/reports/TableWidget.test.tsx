@@ -16,12 +16,7 @@ describe('TableWidget', () => {
       },
     ];
 
-    render(
-      <TableWidget
-        metricKey="currentShifts"
-        data={data}
-      />
-    );
+    render(<TableWidget metricKey="currentShifts" data={data} />);
 
     expect(screen.getByText('Alice Engineer')).toBeDefined();
     expect(screen.getByText('Primary On-Call')).toBeDefined();
@@ -39,12 +34,7 @@ describe('TableWidget', () => {
       },
     ];
 
-    render(
-      <TableWidget
-        metricKey="serviceSlaTable"
-        data={data}
-      />
-    );
+    render(<TableWidget metricKey="serviceSlaTable" data={data} />);
 
     expect(screen.getByText('Billing Gateway')).toBeDefined();
     const dashes = screen.getAllByText('–');
@@ -52,12 +42,7 @@ describe('TableWidget', () => {
   });
 
   it('displays empty state when data array is empty', () => {
-    render(
-      <TableWidget
-        metricKey="topServices"
-        data={[]}
-      />
-    );
+    render(<TableWidget metricKey="topServices" data={[]} />);
 
     expect(screen.getByText('No data available')).toBeDefined();
   });

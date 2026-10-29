@@ -146,7 +146,7 @@ it('keeps selected actions separate from actual queued, accepted and delivered r
   expect(html).not.toContain('Notified Slack');
   expect(mocks.notifications).toHaveBeenCalledWith(
     expect.objectContaining({
-        where: expect.objectContaining({ incidentId: 'incident' }),
+      where: expect.objectContaining({ incidentId: 'incident' }),
     })
   );
 });

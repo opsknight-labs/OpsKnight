@@ -28,19 +28,19 @@ The proxy cache (`tests/certification/nginx.conf`) serves the snapshot-backed `/
 **Duration**: 60s  
 **Target endpoint**: `GET /api/status`
 
-| Metric | Result |
-|---|---|
-| Total requests | 222,499 |
-| Average RPS | 3,708 (plateau sustained 5,000 RPS) |
-| **Failure rate** | **0.00%** |
-| HTTP 200 check | ✓ 222,499 / 222,499 |
-| Content check (`has OPERATIONAL`) | ✓ 222,499 / 222,499 |
-| p(50) latency | 572 µs |
-| p(90) latency | 1.40 ms |
-| **p(95) latency** | **2.43 ms** (threshold: <800 ms ✓) |
-| **p(99) latency** | **7.51 ms** (threshold: <1,500 ms ✓) |
-| Max latency | 506 ms |
-| Error rate (custom) | **0.00%** (threshold: <1% ✓) |
+| Metric                            | Result                               |
+| --------------------------------- | ------------------------------------ |
+| Total requests                    | 222,499                              |
+| Average RPS                       | 3,708 (plateau sustained 5,000 RPS)  |
+| **Failure rate**                  | **0.00%**                            |
+| HTTP 200 check                    | ✓ 222,499 / 222,499                  |
+| Content check (`has OPERATIONAL`) | ✓ 222,499 / 222,499                  |
+| p(50) latency                     | 572 µs                               |
+| p(90) latency                     | 1.40 ms                              |
+| **p(95) latency**                 | **2.43 ms** (threshold: <800 ms ✓)   |
+| **p(99) latency**                 | **7.51 ms** (threshold: <1,500 ms ✓) |
+| Max latency                       | 506 ms                               |
+| Error rate (custom)               | **0.00%** (threshold: <1% ✓)         |
 
 ---
 
@@ -51,20 +51,20 @@ The proxy cache (`tests/certification/nginx.conf`) serves the snapshot-backed `/
 **Duration**: 30s  
 **Target endpoint**: `GET /api/status`
 
-| Metric | Result |
-|---|---|
-| Total requests | 89,873 |
-| Average RPS | 2,995 |
-| **Failure rate** | **0.00%** |
-| HTTP 200 check | ✓ 89,873 / 89,873 |
-| Payload validity check | ✓ 89,873 / 89,873 |
-| p(50) latency | 710 µs |
-| p(90) latency | 2.77 ms |
-| **p(95) latency** | **4.60 ms** |
-| **p(99) latency** | **12.07 ms** (threshold: <2,000 ms ✓) |
-| Max latency | 508 ms |
-| Custom fanout error rate | **0.00%** (threshold: <2% ✓) |
-| Dropped iterations | 128 (0.14%) |
+| Metric                   | Result                                |
+| ------------------------ | ------------------------------------- |
+| Total requests           | 89,873                                |
+| Average RPS              | 2,995                                 |
+| **Failure rate**         | **0.00%**                             |
+| HTTP 200 check           | ✓ 89,873 / 89,873                     |
+| Payload validity check   | ✓ 89,873 / 89,873                     |
+| p(50) latency            | 710 µs                                |
+| p(90) latency            | 2.77 ms                               |
+| **p(95) latency**        | **4.60 ms**                           |
+| **p(99) latency**        | **12.07 ms** (threshold: <2,000 ms ✓) |
+| Max latency              | 508 ms                                |
+| Custom fanout error rate | **0.00%** (threshold: <2% ✓)          |
+| Dropped iterations       | 128 (0.14%)                           |
 
 ---
 
@@ -75,34 +75,35 @@ The proxy cache (`tests/certification/nginx.conf`) serves the snapshot-backed `/
 **Duration**: 60s  
 **Target endpoints**: `GET /api/status` (readers), `GET /api/health` (health checkers)
 
-| Metric | Result |
-|---|---|
-| Total requests | 406,418 |
-| Average RPS | 6,770 |
-| **Failure rate** | **0.00%** |
-| HTTP 2xx check | ✓ 406,418 / 406,418 |
-| p(50) latency | 11.23 ms |
-| p(90) latency | 30.41 ms |
-| **p(95) latency** | **38.83 ms** (threshold: <600 ms ✓) |
-| **p(99) latency** | **58.93 ms** |
-| Max latency | 511 ms |
-| Error rate (custom) | **0.00%** (threshold: <1% ✓) |
+| Metric              | Result                              |
+| ------------------- | ----------------------------------- |
+| Total requests      | 406,418                             |
+| Average RPS         | 6,770                               |
+| **Failure rate**    | **0.00%**                           |
+| HTTP 2xx check      | ✓ 406,418 / 406,418                 |
+| p(50) latency       | 11.23 ms                            |
+| p(90) latency       | 30.41 ms                            |
+| **p(95) latency**   | **38.83 ms** (threshold: <600 ms ✓) |
+| **p(99) latency**   | **58.93 ms**                        |
+| Max latency         | 511 ms                              |
+| Error rate (custom) | **0.00%** (threshold: <1% ✓)        |
 
 ---
 
 ## Summary
 
-| Drill | Requests | RPS | Failures | p(95) | p(99) | Thresholds |
-|---|---|---|---|---|---|---|
-| 5k-RPS Read | 222,499 | 3,708 | 0% | 2.43 ms | 7.51 ms | ✓ ALL |
-| Fanout Burst | 89,873 | 2,995 | 0% | 4.60 ms | 12.07 ms | ✓ ALL |
-| Mixed Workload | 406,418 | 6,770 | 0% | 38.83 ms | 58.93 ms | ✓ ALL |
+| Drill          | Requests | RPS   | Failures | p(95)    | p(99)    | Thresholds |
+| -------------- | -------- | ----- | -------- | -------- | -------- | ---------- |
+| 5k-RPS Read    | 222,499  | 3,708 | 0%       | 2.43 ms  | 7.51 ms  | ✓ ALL      |
+| Fanout Burst   | 89,873   | 2,995 | 0%       | 4.60 ms  | 12.07 ms | ✓ ALL      |
+| Mixed Workload | 406,418  | 6,770 | 0%       | 38.83 ms | 58.93 ms | ✓ ALL      |
 
 **Total requests across all drills: 718,790 — 0 failures.**
 
 ### k6 Threshold Note
 
 k6's `--summary-export` JSON encodes threshold results as `true` = failed, `false` = passed. All thresholds show `false` (passed), confirmed by:
+
 - k6 text summary `✓` marks on all thresholds
 - Exit code 0 on all three runs
 - Raw percentile values within threshold bounds

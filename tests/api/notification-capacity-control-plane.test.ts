@@ -28,11 +28,18 @@ const mocks = vi.hoisted(() => ({
   },
 }));
 
-const admin = { id: 'admin-1', authenticated: true, capabilities: ['admin.manage'], role: 'ADMIN' as const };
+const admin = {
+  id: 'admin-1',
+  authenticated: true,
+  capabilities: ['admin.manage'],
+  role: 'ADMIN' as const,
+};
 
 vi.mock('@/lib/rbac', () => ({ getUserPermissions: mocks.getUserPermissions }));
 vi.mock('@/lib/audit', () => ({ logAudit: mocks.logAudit }));
-vi.mock('@/lib/notification-capacity-control', () => ({ invalidateNotificationCapacityControl: vi.fn() }));
+vi.mock('@/lib/notification-capacity-control', () => ({
+  invalidateNotificationCapacityControl: vi.fn(),
+}));
 vi.mock('@/lib/notification-capacity/cache', async importOriginal => {
   const actual = (await importOriginal()) as Record<string, unknown>;
   return {
@@ -42,22 +49,29 @@ vi.mock('@/lib/notification-capacity/cache', async importOriginal => {
   };
 });
 vi.mock('@/lib/notification-capacity/resolver', () => ({
-  getEffectiveCapacity: vi.fn(async ({ channel, provider }: { channel: string; provider: string }) => ({
-    channel,
-    provider,
-    mode: 'CUSTOM' as const,
-    source: 'DATABASE' as const,
-    configuredRatePerSecond: 100,
-    effectiveRatePerSecond: 100,
-    bulkRatePerSecond: 80,
-    maxInFlight: 20,
-    bulkMaxInFlight: 16,
-    quotaBlockSize: 100,
-    bulkShare: 0.8,
-    adaptiveBackpressure: true,
+  getEffectiveCapacity: vi.fn(
+    async ({ channel, provider }: { channel: string; provider: string }) => ({
+      channel,
+      provider,
+      mode: 'CUSTOM' as const,
+      source: 'DATABASE' as const,
+      configuredRatePerSecond: 100,
+      effectiveRatePerSecond: 100,
+      bulkRatePerSecond: 80,
+      maxInFlight: 20,
+      bulkMaxInFlight: 16,
+      quotaBlockSize: 100,
+      bulkShare: 0.8,
+      adaptiveBackpressure: true,
+      revision: 1,
+    })
+  ),
+  getEffectiveWatermarks: vi.fn(async () => ({
+    low: 5000,
+    high: 25000,
+    source: 'DATABASE',
     revision: 1,
   })),
-  getEffectiveWatermarks: vi.fn(async () => ({ low: 5000, high: 25000, source: 'DATABASE', revision: 1 })),
   recordCapacityPressure: vi.fn(),
   recordHealthyCapacity: vi.fn(),
   resetCapacityResolverForTests: vi.fn(),
@@ -75,7 +89,10 @@ function jsonRequest(body: unknown): NextRequest {
 }
 
 function p2002(): Prisma.PrismaClientKnownRequestError {
-  return new Prisma.PrismaClientKnownRequestError('Unique constraint', { code: 'P2002', clientVersion: 'test' });
+  return new Prisma.PrismaClientKnownRequestError('Unique constraint', {
+    code: 'P2002',
+    clientVersion: 'test',
+  });
 }
 
 describe('notification capacity control plane — API regression', () => {
@@ -116,7 +133,13 @@ describe('notification capacity control plane — API regression', () => {
     mocks.prisma.notificationRuntimeSettings.updateMany.mockResolvedValue({ count: 0 });
 
     const res = await PATCH(
-      jsonRequest({ bulkQueueLowWatermark: 6000, bulkQueueHighWatermark: 30000, defaultBulkSharePercent: 80, adaptiveBackpressure: true, revision: 5 })
+      jsonRequest({
+        bulkQueueLowWatermark: 6000,
+        bulkQueueHighWatermark: 30000,
+        defaultBulkSharePercent: 80,
+        adaptiveBackpressure: true,
+        revision: 5,
+      })
     );
     expect(res.status).toBe(409);
     const body = await res.json();
@@ -135,10 +158,19 @@ describe('notification capacity control plane — API regression', () => {
     };
     mocks.prisma.notificationRuntimeSettings.findUnique.mockResolvedValue(row);
     mocks.prisma.notificationRuntimeSettings.updateMany.mockResolvedValue({ count: 1 });
-    mocks.prisma.notificationRuntimeSettings.findUniqueOrThrow.mockResolvedValue({ revision: 6, updatedAt: new Date() });
+    mocks.prisma.notificationRuntimeSettings.findUniqueOrThrow.mockResolvedValue({
+      revision: 6,
+      updatedAt: new Date(),
+    });
 
     const res = await PATCH(
-      jsonRequest({ bulkQueueLowWatermark: 6000, bulkQueueHighWatermark: 30000, defaultBulkSharePercent: 80, adaptiveBackpressure: true, revision: 5 })
+      jsonRequest({
+        bulkQueueLowWatermark: 6000,
+        bulkQueueHighWatermark: 30000,
+        defaultBulkSharePercent: 80,
+        adaptiveBackpressure: true,
+        revision: 5,
+      })
     );
     expect(res.status).toBe(200);
     const body = await res.json();
@@ -148,7 +180,13 @@ describe('notification capacity control plane — API regression', () => {
     mocks.prisma.notificationRuntimeSettings.findUnique.mockResolvedValue({ ...row, revision: 6 });
     mocks.prisma.notificationRuntimeSettings.updateMany.mockResolvedValue({ count: 0 });
     const stale = await PATCH(
-      jsonRequest({ bulkQueueLowWatermark: 7000, bulkQueueHighWatermark: 30000, defaultBulkSharePercent: 80, adaptiveBackpressure: true, revision: 5 })
+      jsonRequest({
+        bulkQueueLowWatermark: 7000,
+        bulkQueueHighWatermark: 30000,
+        defaultBulkSharePercent: 80,
+        adaptiveBackpressure: true,
+        revision: 5,
+      })
     );
     expect(stale.status).toBe(409);
   });
@@ -158,7 +196,15 @@ describe('notification capacity control plane — API regression', () => {
     mocks.prisma.notificationProviderCapacity.create.mockRejectedValue(p2002());
 
     const res = await PATCH(
-      jsonRequest({ provider: 'ses', channel: 'EMAIL', mode: 'CUSTOM', ratePerSecond: 100, maxInFlight: 20, bulkSharePercent: 80, adaptiveBackpressure: true })
+      jsonRequest({
+        provider: 'ses',
+        channel: 'EMAIL',
+        mode: 'CUSTOM',
+        ratePerSecond: 100,
+        maxInFlight: 20,
+        bulkSharePercent: 80,
+        adaptiveBackpressure: true,
+      })
     );
     expect(res.status).toBe(409);
   });
@@ -178,7 +224,16 @@ describe('notification capacity control plane — API regression', () => {
     mocks.prisma.notificationProviderCapacity.updateMany.mockResolvedValue({ count: 0 });
 
     const res = await PATCH(
-      jsonRequest({ provider: 'ses', channel: 'EMAIL', mode: 'CUSTOM', ratePerSecond: 200, maxInFlight: 30, bulkSharePercent: 75, adaptiveBackpressure: false, revision: 3 })
+      jsonRequest({
+        provider: 'ses',
+        channel: 'EMAIL',
+        mode: 'CUSTOM',
+        ratePerSecond: 200,
+        maxInFlight: 30,
+        bulkSharePercent: 75,
+        adaptiveBackpressure: false,
+        revision: 3,
+      })
     );
     expect(res.status).toBe(409);
   });
@@ -195,9 +250,14 @@ describe('notification capacity control plane — API regression', () => {
       revision: 3,
       updatedAt: new Date(),
     };
-    mocks.prisma.notificationProviderCapacity.findUnique.mockResolvedValue(existing as unknown as typeof existing);
+    mocks.prisma.notificationProviderCapacity.findUnique.mockResolvedValue(
+      existing as unknown as typeof existing
+    );
     mocks.prisma.notificationProviderCapacity.updateMany.mockResolvedValue({ count: 1 });
-    mocks.prisma.notificationProviderCapacity.findUniqueOrThrow.mockResolvedValue({ revision: 4, updatedAt: new Date() });
+    mocks.prisma.notificationProviderCapacity.findUniqueOrThrow.mockResolvedValue({
+      revision: 4,
+      updatedAt: new Date(),
+    });
     // Audit throws inside TX => TX should reject and route should not return 200
     mocks.logAudit.mockRejectedValueOnce(new Error('audit down'));
     // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Prisma $transaction callback mock
@@ -211,7 +271,18 @@ describe('notification capacity control plane — API regression', () => {
     });
 
     await expect(
-      PATCH(jsonRequest({ provider: 'ses', channel: 'EMAIL', mode: 'CUSTOM', ratePerSecond: 110, maxInFlight: 21, bulkSharePercent: 80, adaptiveBackpressure: true, revision: 3 }))
+      PATCH(
+        jsonRequest({
+          provider: 'ses',
+          channel: 'EMAIL',
+          mode: 'CUSTOM',
+          ratePerSecond: 110,
+          maxInFlight: 21,
+          bulkSharePercent: 80,
+          adaptiveBackpressure: true,
+          revision: 3,
+        })
+      )
     ).rejects.toThrow(/audit down/);
   });
 
@@ -228,7 +299,15 @@ describe('notification capacity control plane — API regression', () => {
       updatedAt: new Date(),
     });
     const res = await PATCH(
-      jsonRequest({ provider: 'twilio', channel: 'SMS', mode: 'CUSTOM', ratePerSecond: 60, maxInFlight: 12, bulkSharePercent: 80, adaptiveBackpressure: true })
+      jsonRequest({
+        provider: 'twilio',
+        channel: 'SMS',
+        mode: 'CUSTOM',
+        ratePerSecond: 60,
+        maxInFlight: 12,
+        bulkSharePercent: 80,
+        adaptiveBackpressure: true,
+      })
     );
     expect(res.status).toBe(409);
     expect((await res.json()).error).toMatch(/revision is required/i);
@@ -236,7 +315,9 @@ describe('notification capacity control plane — API regression', () => {
 
   it('GET returns revision for provider capacities', async () => {
     mocks.getUserPermissions.mockResolvedValue(admin);
-    mocks.prisma.systemConfig.findUnique.mockResolvedValue({ value: { bulkPaused: false } } as unknown as Awaited<ReturnType<typeof mocks.prisma.systemConfig.findUnique>>);
+    mocks.prisma.systemConfig.findUnique.mockResolvedValue({
+      value: { bulkPaused: false },
+    } as unknown as Awaited<ReturnType<typeof mocks.prisma.systemConfig.findUnique>>);
     mocks.prisma.notificationRuntimeSettings.findUnique.mockResolvedValue({
       id: 'default',
       bulkQueueLowWatermark: 5000,
@@ -245,7 +326,9 @@ describe('notification capacity control plane — API regression', () => {
       adaptiveBackpressure: true,
       revision: 7,
       updatedAt: new Date('2026-09-01T00:00:00.000Z'),
-    } as unknown as Awaited<ReturnType<typeof mocks.prisma.notificationRuntimeSettings.findUnique>>);
+    } as unknown as Awaited<
+      ReturnType<typeof mocks.prisma.notificationRuntimeSettings.findUnique>
+    >);
     mocks.prisma.notificationProviderCapacity.findMany.mockResolvedValue([
       {
         provider: 'ses',
@@ -268,8 +351,10 @@ describe('notification capacity control plane — API regression', () => {
   });
 
   it('branches on code, not message text (error-contract invariant)', async () => {
-    const src = await import('node:fs').then(m => m.readFileSync('src/app/api/admin/notifications/capacity/route.ts', 'utf8'));
-    expect(src).not.toContain('e.message === \'CAS_CONFLICT\'');
+    const src = await import('node:fs').then(m =>
+      m.readFileSync('src/app/api/admin/notifications/capacity/route.ts', 'utf8')
+    );
+    expect(src).not.toContain("e.message === 'CAS_CONFLICT'");
     expect(src).not.toContain('e.message === "CAS_CONFLICT"');
     expect(src).toContain("code === 'CAS_CONFLICT'");
   });

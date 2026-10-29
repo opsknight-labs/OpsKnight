@@ -49,7 +49,8 @@ export async function resolveMcpGrant(
       AND (NOT c."dynamicRegistration" OR p."dcrEnabled")
       -- A metadata-document client stays valid only while its host remains trusted (substr skips https://).
       AND (c."metadataUrl" IS NULL OR (p."cimdEnabled"
-        AND split_part(substr(c."metadataUrl", 9), '/', 1) = ANY(p."cimdAllowedHosts")))
+        AND (cardinality(p."cimdAllowedHosts") = 0
+          OR split_part(substr(c."metadataUrl", 9), '/', 1) = ANY(p."cimdAllowedHosts"))))
       AND (${credentialId ?? null}::text IS NULL OR EXISTS (
         SELECT 1 FROM "McpToken" t WHERE t.id = ${credentialId ?? null}
           AND t."grantId" = g.id AND t."rotatedAt" IS NULL AND t."accessExpiresAt" > ${now}

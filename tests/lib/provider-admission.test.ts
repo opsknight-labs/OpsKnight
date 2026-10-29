@@ -165,8 +165,7 @@ describe('provider admission control', () => {
     });
     // verify the SMS bucket was used (key contains sms, not email)
     const lastQuotaCall = mocks.queryRaw.mock.calls[mocks.queryRaw.mock.calls.length - 1]?.[0] as
-      | { strings?: string[] }
-      | undefined;
+      { strings?: string[] } | undefined;
     expect(lastQuotaCall).toBeDefined();
   });
 

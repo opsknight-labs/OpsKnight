@@ -1,17 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import {
-  WORKSPACE_TABS,
-  normalizeWorkspaceTab,
-} from '@/lib/api-keys-workspace';
+import { WORKSPACE_TABS, normalizeWorkspaceTab } from '@/lib/api-keys-workspace';
 
 describe('api-keys-workspace helper', () => {
   it('defines the 4 canonical workspace tab IDs', () => {
-    expect(WORKSPACE_TABS).toEqual([
-      'api-keys',
-      'service-accounts',
-      'explorer',
-      'activity',
-    ]);
+    expect(WORKSPACE_TABS).toEqual(['api-keys', 'service-accounts', 'explorer', 'activity']);
   });
 
   it('normalizes valid tabs correctly', () => {

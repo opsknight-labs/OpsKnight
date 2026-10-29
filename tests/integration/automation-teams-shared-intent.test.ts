@@ -14,7 +14,9 @@ async function fixture() {
   const service = await db.service.create({
     data: { name: 'Teams lifecycle', serviceNotificationChannels: [] },
   });
-  const incident = await db.incident.create({ data: { serviceId: service.id, title: 'Teams card' } });
+  const incident = await db.incident.create({
+    data: { serviceId: service.id, title: 'Teams card' },
+  });
   const destination = await db.microsoftTeamsDestination.create({
     data: { serviceId: service.id, tenantId: 'tenant', teamId: 'team', channelId: 'channel' },
   });

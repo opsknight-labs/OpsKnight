@@ -202,13 +202,20 @@ it('keeps personal delivery independent from a blocked service-integration lane'
     transitionAt: DB_NOW,
   });
   const jobs = tx.backgroundJob.createMany.mock.calls[0]?.[0]?.data as
-    | Array<{ payload: { effect: string; lane: string } }>
-    | undefined;
+    Array<{ payload: { effect: string; lane: string } }> | undefined;
   const personal = jobs?.find(job => job.payload.effect === 'LIFECYCLE_USER_NOTIFICATION');
   const ordinary = jobs?.find(job => job.payload.effect === 'DISPATCH_ORDINARY');
   expect(personal?.payload.lane).toBe('PERSONAL_NOTIFICATION');
-  expect(ordinary).toMatchObject({ status: 'PENDING_V2', payload: { lane: 'ORDINARY_DISPATCH', dispatch: { version: 1, effects: expect.arrayContaining(['LIFECYCLE_SERVICE_NOTIFICATION']) } } });
-  expect(ordinary).not.toMatchObject({ payload: { dispatch: { effects: expect.arrayContaining(['LIFECYCLE_USER_NOTIFICATION']) } } });
+  expect(ordinary).toMatchObject({
+    status: 'PENDING_V2',
+    payload: {
+      lane: 'ORDINARY_DISPATCH',
+      dispatch: { version: 1, effects: expect.arrayContaining(['LIFECYCLE_SERVICE_NOTIFICATION']) },
+    },
+  });
+  expect(ordinary).not.toMatchObject({
+    payload: { dispatch: { effects: expect.arrayContaining(['LIFECYCLE_USER_NOTIFICATION']) } },
+  });
 });
 describe('incident creation outbox', () => {
   it('separates service delivery from responder escalation for every creation source', () => {
@@ -236,8 +243,22 @@ describe('incident creation outbox', () => {
     const call = tx.backgroundJob.createMany.mock.calls[0]?.[0];
     expect(call?.data).toHaveLength(2);
     expect(call?.data.every((job: { scheduledAt: Date }) => job.scheduledAt === DB_NOW)).toBe(true);
-    expect(call?.data.find((job: { payload: { effect: string } }) => job.payload.effect === 'DISPATCH_ORDINARY')).toMatchObject({
-      payload: { dispatch: { version: 1, effects: ['TRIGGER_SERVICE_NOTIFICATION', 'TRIGGER_STATUS_PAGE', 'TRIGGER_WAR_ROOM', 'TRIGGER_JIRA'] } },
+    expect(
+      call?.data.find(
+        (job: { payload: { effect: string } }) => job.payload.effect === 'DISPATCH_ORDINARY'
+      )
+    ).toMatchObject({
+      payload: {
+        dispatch: {
+          version: 1,
+          effects: [
+            'TRIGGER_SERVICE_NOTIFICATION',
+            'TRIGGER_STATUS_PAGE',
+            'TRIGGER_WAR_ROOM',
+            'TRIGGER_JIRA',
+          ],
+        },
+      },
     });
   });
 });
@@ -249,12 +270,15 @@ it('orders initial responder paging ahead of later personal lifecycle delivery',
     source: 'WEB',
   });
   const jobs = tx.backgroundJob.createMany.mock.calls[0]?.[0]?.data as
-    | Array<{ payload: { effect: string; lane: string } }>
-    | undefined;
+    Array<{ payload: { effect: string; lane: string } }> | undefined;
   expect(
     jobs?.find(job => job.payload.effect === 'TRIGGER_ESCALATION_NOTIFICATIONS')?.payload.lane
   ).toBe('PERSONAL_NOTIFICATION');
   expect(jobs?.find(job => job.payload.effect === 'DISPATCH_ORDINARY')).toMatchObject({
-    status: 'PENDING_V2', payload: { lane: 'ORDINARY_DISPATCH', dispatch: { version: 1, effects: expect.arrayContaining(['TRIGGER_SERVICE_NOTIFICATION']) } },
+    status: 'PENDING_V2',
+    payload: {
+      lane: 'ORDINARY_DISPATCH',
+      dispatch: { version: 1, effects: expect.arrayContaining(['TRIGGER_SERVICE_NOTIFICATION']) },
+    },
   });
 });

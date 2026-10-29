@@ -46,17 +46,13 @@ export function runSecuritySanityUnderLoad() {
     opsknightMetrics.securityCheckSuccessRate.add(ok);
   } else if (probeType === 1) {
     // Probe 2: Malformed JSON body must return 400
-    res = http.post(
-      `${baseUrl}/api/events`,
-      '{"event_action": "trigger", "unclosed_json: true',
-      {
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Token token=${manifest.contractIntegrationKey}`,
-        },
-        tags: { endpoint: 'sec_probe_malformed_json' },
-      }
-    );
+    res = http.post(`${baseUrl}/api/events`, '{"event_action": "trigger", "unclosed_json: true', {
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Token token=${manifest.contractIntegrationKey}`,
+      },
+      tags: { endpoint: 'sec_probe_malformed_json' },
+    });
     const ok = check(res, {
       'malformed JSON rejected with 400': r => r.status === 400,
     });
@@ -99,7 +95,11 @@ export function runSecuritySanityUnderLoad() {
     );
     const ok = check(res, {
       'SSRF loopback rejected with 400, 403, or 422': r =>
-        r.status === 400 || r.status === 403 || r.status === 404 || r.status === 422 || r.status === 429,
+        r.status === 400 ||
+        r.status === 403 ||
+        r.status === 404 ||
+        r.status === 422 ||
+        r.status === 429,
     });
     opsknightMetrics.securityCheckSuccessRate.add(ok);
   }

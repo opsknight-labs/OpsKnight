@@ -236,7 +236,9 @@ describe('persistObservationBatch', () => {
     expect(sql.values).toContain('EVENT');
     expect(sql.values).toContain('PROVIDER');
     expect(sql.values).not.toContain('open');
-    expect(sql.values.filter(v => typeof v === 'string' && /^[a-f0-9]{64}$/.test(v))).toHaveLength(2);
+    expect(sql.values.filter(v => typeof v === 'string' && /^[a-f0-9]{64}$/.test(v))).toHaveLength(
+      2
+    );
     expect(sql.values.filter(v => v === 'status')).toHaveLength(4);
   });
 

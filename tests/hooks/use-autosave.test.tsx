@@ -213,10 +213,9 @@ describe('useAutosave contract', () => {
 
   it('guards beforeunload only while the current value is dirty', async () => {
     const onSave = vi.fn().mockResolvedValue({ success: true });
-    const { rerender } = renderHook(
-      ({ data }) => useAutosave({ data, onSave, delay: 100 }),
-      { initialProps: { data: { value: 'A' } as TestData } }
-    );
+    const { rerender } = renderHook(({ data }) => useAutosave({ data, onSave, delay: 100 }), {
+      initialProps: { data: { value: 'A' } as TestData },
+    });
 
     const cleanEvent = new Event('beforeunload', { cancelable: true });
     expect(window.dispatchEvent(cleanEvent)).toBe(true);
@@ -261,10 +260,9 @@ describe('useAutosave contract', () => {
 
   it('persists only the latest value after rapid A/B/C edits inside one debounce window', async () => {
     const onSave = vi.fn().mockResolvedValue({ success: true });
-    const { rerender } = renderHook(
-      ({ data }) => useAutosave({ data, onSave, delay: 100 }),
-      { initialProps: { data: { value: 'A' } as TestData } }
-    );
+    const { rerender } = renderHook(({ data }) => useAutosave({ data, onSave, delay: 100 }), {
+      initialProps: { data: { value: 'A' } as TestData },
+    });
 
     rerender({ data: { value: 'B' } });
     await advance(25);

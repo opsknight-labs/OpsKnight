@@ -32,13 +32,10 @@ describe('mobile incident status idempotency', () => {
 
     expect(response.status).toBe(200);
     expect(await response.json()).toMatchObject({ success: true });
-    expect(updateIncidentStatus).toHaveBeenCalledWith(
-      'inc-1',
-      'ACKNOWLEDGED',
-      'OPEN',
-      'MOBILE',
-      { key: 'offline-action-1', principalId: 'responder@example.com' }
-    );
+    expect(updateIncidentStatus).toHaveBeenCalledWith('inc-1', 'ACKNOWLEDGED', 'OPEN', 'MOBILE', {
+      key: 'offline-action-1',
+      principalId: 'responder@example.com',
+    });
   });
 
   it('returns the persisted result as a duplicate without inventing a second mutation path', async () => {

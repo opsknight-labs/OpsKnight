@@ -183,8 +183,7 @@ export function runCapacityIngestionScenario() {
     });
   } else {
     check(res, {
-      'capacity event accepted (202 or 429 under storm)': r =>
-        r.status === 202 || r.status === 429,
+      'capacity event accepted (202 or 429 under storm)': r => r.status === 202 || r.status === 429,
     });
   }
 

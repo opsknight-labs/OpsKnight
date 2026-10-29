@@ -106,8 +106,12 @@ const metadataSchema = z
 type Policy = Pick<McpPolicy, 'cimdEnabled' | 'cimdAllowedHosts' | 'cimdScopes'>;
 type Database = Pick<PrismaClient, 'mcpClient'>;
 
+/** An empty allowlist trusts any public HTTPS host; a non-empty one restricts to exact hosts. */
 export function isCimdHostAllowed(policy: Policy, host: string) {
-  return policy.cimdEnabled && policy.cimdAllowedHosts.includes(host.toLowerCase());
+  return (
+    policy.cimdEnabled &&
+    (policy.cimdAllowedHosts.length === 0 || policy.cimdAllowedHosts.includes(host.toLowerCase()))
+  );
 }
 
 export function parseCimdDocument(clientId: string, response: CimdResponse) {

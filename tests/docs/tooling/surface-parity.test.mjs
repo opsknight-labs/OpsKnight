@@ -10,12 +10,20 @@ test('all task docs pass the implementation-backed product-surface guard', () =>
   const byId = new Map(registry.contracts.map(contract => [contract.id, contract]));
 
   assert.deepEqual(byId.get('incident.escalate').surfaces, {
-    web: 'NOT_SUPPORTED', mobile: 'NOT_SUPPORTED', slack: 'NOT_SUPPORTED',
-    teams: 'PARTIAL', api: 'NOT_SUPPORTED', automatic: 'SUPPORTED',
+    web: 'NOT_SUPPORTED',
+    mobile: 'NOT_SUPPORTED',
+    slack: 'NOT_SUPPORTED',
+    teams: 'PARTIAL',
+    api: 'NOT_SUPPORTED',
+    automatic: 'SUPPORTED',
   });
   assert.deepEqual(byId.get('incident.reopen').surfaces, {
-    web: 'NOT_SUPPORTED', mobile: 'NOT_SUPPORTED', slack: 'NOT_SUPPORTED',
-    teams: 'NOT_SUPPORTED', api: 'API_ONLY', automatic: 'AUTOMATIC_ONLY',
+    web: 'NOT_SUPPORTED',
+    mobile: 'NOT_SUPPORTED',
+    slack: 'NOT_SUPPORTED',
+    teams: 'NOT_SUPPORTED',
+    api: 'API_ONLY',
+    automatic: 'AUTOMATIC_ONLY',
   });
 
   const report = readFileSync('generated/docs-certification/surface-parity-report.md', 'utf8');

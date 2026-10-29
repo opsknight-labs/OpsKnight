@@ -53,7 +53,9 @@ describe('DashboardShareModal Component', () => {
     fireEvent.click(copyBtn);
 
     await waitFor(() => {
-      expect(writeTextMock).toHaveBeenCalledWith(expect.stringContaining('/reports/executive/dash-test-1'));
+      expect(writeTextMock).toHaveBeenCalledWith(
+        expect.stringContaining('/reports/executive/dash-test-1')
+      );
       expect(screen.getByText('Copied')).toBeDefined();
     });
   });
@@ -84,18 +86,10 @@ describe('DashboardShareModal Component', () => {
   });
 
   it('displays template explanation badge when isTemplate is true', () => {
-    render(
-      <DashboardShareModal
-        {...defaultProps}
-        isTemplate={true}
-        dashboardId={undefined}
-      />
-    );
+    render(<DashboardShareModal {...defaultProps} isTemplate={true} dashboardId={undefined} />);
 
     expect(screen.getByText('Template')).toBeDefined();
-    expect(
-      screen.getByText(/Share a direct link to "Production SRE Dashboard"/i)
-    ).toBeDefined();
+    expect(screen.getByText(/Share a direct link to "Production SRE Dashboard"/i)).toBeDefined();
     // Saved permissions should not be rendered for built-in template
     expect(screen.queryByText('Access Permissions')).toBeNull();
   });

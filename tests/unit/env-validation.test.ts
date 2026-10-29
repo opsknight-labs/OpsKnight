@@ -81,7 +81,9 @@ describe('validateProductionEnv', () => {
     });
 
     expect(() => validateProductionEnv()).toThrow(/Known insecure or placeholder secrets detected/);
-    expect(() => validateProductionEnv()).toThrow(/NEXTAUTH_SECRET uses a known default placeholder/);
+    expect(() => validateProductionEnv()).toThrow(
+      /NEXTAUTH_SECRET uses a known default placeholder/
+    );
   });
 
   it('rejects NEXTAUTH_SECRET shorter than 32 characters in production', () => {
@@ -112,7 +114,9 @@ describe('validateProductionEnv', () => {
       ENCRYPTION_KEY: '9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08',
     });
 
-    expect(() => validateProductionEnv()).toThrow(/ENCRYPTION_KEY is a known weak or default placeholder/);
+    expect(() => validateProductionEnv()).toThrow(
+      /ENCRYPTION_KEY is a known weak or default placeholder/
+    );
   });
 
   it('rejects all-zero weak ENCRYPTION_KEY in production', () => {
@@ -120,7 +124,9 @@ describe('validateProductionEnv', () => {
       ENCRYPTION_KEY: '0'.repeat(64),
     });
 
-    expect(() => validateProductionEnv()).toThrow(/ENCRYPTION_KEY is a known weak or default placeholder/);
+    expect(() => validateProductionEnv()).toThrow(
+      /ENCRYPTION_KEY is a known weak or default placeholder/
+    );
   });
 
   it('rejects known placeholder key in ENCRYPTION_KEYS keyring', () => {
@@ -129,7 +135,9 @@ describe('validateProductionEnv', () => {
       ENCRYPTION_KEYS: 'k1:9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08',
     });
 
-    expect(() => validateProductionEnv()).toThrow(/ENCRYPTION_KEYS contains a known weak or default placeholder key/);
+    expect(() => validateProductionEnv()).toThrow(
+      /ENCRYPTION_KEYS contains a known weak or default placeholder key/
+    );
   });
 
   it('supports versioned ENCRYPTION_KEYS keyring when all keys are strong', () => {
@@ -166,7 +174,9 @@ describe('validateProductionEnv', () => {
         'postgresql://opsknight:opsknight_secure_password_change_me@db:5432/opsknight_db',
     });
 
-    expect(() => validateProductionEnv()).toThrow(/DATABASE_URL contains the default PostgreSQL password placeholder/);
+    expect(() => validateProductionEnv()).toThrow(
+      /DATABASE_URL contains the default PostgreSQL password placeholder/
+    );
   });
 
   it('rejects default POSTGRES_PASSWORD environment variable', () => {
@@ -174,7 +184,9 @@ describe('validateProductionEnv', () => {
       POSTGRES_PASSWORD: 'opsknight_secure_password_change_me',
     });
 
-    expect(() => validateProductionEnv()).toThrow(/POSTGRES_PASSWORD uses a known default placeholder/);
+    expect(() => validateProductionEnv()).toThrow(
+      /POSTGRES_PASSWORD uses a known default placeholder/
+    );
   });
 
   it('rejects the env.example development database password in production', () => {
@@ -182,7 +194,9 @@ describe('validateProductionEnv', () => {
       POSTGRES_PASSWORD: 'devpassword',
     });
 
-    expect(() => validateProductionEnv()).toThrow(/POSTGRES_PASSWORD uses a known default placeholder/);
+    expect(() => validateProductionEnv()).toThrow(
+      /POSTGRES_PASSWORD uses a known default placeholder/
+    );
   });
 
   it('rejects the NEXTAUTH_SECRET placeholder shipped in env.example', () => {
@@ -190,7 +204,9 @@ describe('validateProductionEnv', () => {
       NEXTAUTH_SECRET: 'changeme_to_a_secure_random_string',
     });
 
-    expect(() => validateProductionEnv()).toThrow(/NEXTAUTH_SECRET uses a known default placeholder/);
+    expect(() => validateProductionEnv()).toThrow(
+      /NEXTAUTH_SECRET uses a known default placeholder/
+    );
   });
 
   it('rejects the API_KEY_SECRET placeholder shipped in env.example', () => {
@@ -198,7 +214,9 @@ describe('validateProductionEnv', () => {
       API_KEY_SECRET: 'changeme_to_a_different_secure_random_string',
     });
 
-    expect(() => validateProductionEnv()).toThrow(/API_KEY_SECRET uses a known default placeholder/);
+    expect(() => validateProductionEnv()).toThrow(
+      /API_KEY_SECRET uses a known default placeholder/
+    );
   });
 
   it('allows placeholder secrets when ALLOW_INSECURE_SECRETS is enabled', () => {
@@ -261,22 +279,19 @@ describe('validateProductionEnv', () => {
     it.each([
       ['a weak legacy key', '9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08'],
       ['a repeated-character legacy key', 'b'.repeat(64)],
-    ])(
-      'keeps the keyring authoritative and the injected %s decrypt-only',
-      (_label, legacy) => {
-        Object.assign(process.env, validProductionEnv, {
-          ENCRYPTION_KEY: legacy,
-          ENCRYPTION_KEYS: `k2:${k2},k1:${k1}`,
-        });
+    ])('keeps the keyring authoritative and the injected %s decrypt-only', (_label, legacy) => {
+      Object.assign(process.env, validProductionEnv, {
+        ENCRYPTION_KEY: legacy,
+        ENCRYPTION_KEYS: `k2:${k2},k1:${k1}`,
+      });
 
-        expect(() => validateProductionEnv()).not.toThrow();
-        expect(getEncryptionKeyringEntries()).toEqual([
-          { id: 'k2', key: k2 },
-          { id: 'k1', key: k1 },
-          { id: 'legacy', key: legacy },
-        ]);
-      }
-    );
+      expect(() => validateProductionEnv()).not.toThrow();
+      expect(getEncryptionKeyringEntries()).toEqual([
+        { id: 'k2', key: k2 },
+        { id: 'k1', key: k1 },
+        { id: 'legacy', key: legacy },
+      ]);
+    });
 
     it('ignores a non-hex legacy key injected next to a valid keyring', () => {
       Object.assign(process.env, validProductionEnv, {
@@ -304,7 +319,9 @@ describe('validateProductionEnv', () => {
       expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('retained only to decrypt'));
 
       process.env.ENCRYPTION_KEYS = `k1:${composeDefault},k2:${k2}`;
-      expect(() => validateProductionEnv()).toThrow(/known weak or default placeholder key for "k1"/);
+      expect(() => validateProductionEnv()).toThrow(
+        /known weak or default placeholder key for "k1"/
+      );
     });
 
     it('keeps a strong legacy key readable as k1 alongside a new keyring', () => {
@@ -323,7 +340,9 @@ describe('validateProductionEnv', () => {
     it('rejects a non-hex ENCRYPTION_KEY when no keyring is configured', () => {
       Object.assign(process.env, validProductionEnv, { ENCRYPTION_KEY: 'not-a-hex-key' });
       delete process.env.ENCRYPTION_KEYS;
-      expect(() => validateProductionEnv()).toThrow(/ENCRYPTION_KEY must be a 64-character hex key/);
+      expect(() => validateProductionEnv()).toThrow(
+        /ENCRYPTION_KEY must be a 64-character hex key/
+      );
     });
 
     it('does not let ALLOW_INSECURE_SECRETS start the runtime without a usable key', () => {

@@ -89,10 +89,7 @@ describe('incident creation domain engine', () => {
   it('commits a new incident and its creation outbox work through one transaction', async () => {
     const result = await executeIncidentCreation(baseInput());
 
-    expect(mocks.runSerializableTransaction).toHaveBeenCalledWith(
-      expect.any(Function),
-      5
-    );
+    expect(mocks.runSerializableTransaction).toHaveBeenCalledWith(expect.any(Function), 5);
     expect(tx.incident.create).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
@@ -104,10 +101,10 @@ describe('incident creation domain engine', () => {
         select: { id: true },
       })
     );
-    expect(mocks.enqueueIncidentCreationSideEffects).toHaveBeenCalledWith(
-      asTransactionClient(tx),
-      { incidentId: 'inc-new', source: 'WEB' }
-    );
+    expect(mocks.enqueueIncidentCreationSideEffects).toHaveBeenCalledWith(asTransactionClient(tx), {
+      incidentId: 'inc-new',
+      source: 'WEB',
+    });
     expect(result).toEqual({ id: 'inc-new', outcome: 'CREATED' });
   });
 
@@ -139,13 +136,11 @@ describe('incident creation domain engine', () => {
   });
 
   it('reopens a recent resolved dedup match through lifecycle and lets lifecycle own effects', async () => {
-    tx.incident.findFirst
-      .mockResolvedValueOnce(null)
-      .mockResolvedValueOnce({
-        id: 'inc-resolved',
-        status: 'RESOLVED',
-        resolvedAt: new Date(NOW.getTime() - 10 * 60_000),
-      });
+    tx.incident.findFirst.mockResolvedValueOnce(null).mockResolvedValueOnce({
+      id: 'inc-resolved',
+      status: 'RESOLVED',
+      resolvedAt: new Date(NOW.getTime() - 10 * 60_000),
+    });
 
     const result = await applyIncidentCreation(asTransactionClient(tx), {
       ...baseInput(),
@@ -184,10 +179,10 @@ describe('incident creation domain engine', () => {
     });
 
     expect(tx.customField.findMany).not.toHaveBeenCalled();
-    expect(mocks.enqueueIncidentCreationSideEffects).toHaveBeenCalledWith(
-      asTransactionClient(tx),
-      { incidentId: 'inc-new', source: 'REST_API' }
-    );
+    expect(mocks.enqueueIncidentCreationSideEffects).toHaveBeenCalledWith(asTransactionClient(tx), {
+      incidentId: 'inc-new',
+      source: 'REST_API',
+    });
     expect(result.outcome).toBe('CREATED');
   });
 
@@ -203,12 +198,12 @@ describe('incident creation domain engine', () => {
       },
     ]);
 
-    await expect(
-      applyIncidentCreation(asTransactionClient(tx), baseInput())
-    ).rejects.toMatchObject({
-      code: 'INCIDENT_INVALID_ARGUMENT',
-      fields: [expect.objectContaining({ field: 'customField_impact' })],
-    });
+    await expect(applyIncidentCreation(asTransactionClient(tx), baseInput())).rejects.toMatchObject(
+      {
+        code: 'INCIDENT_INVALID_ARGUMENT',
+        fields: [expect.objectContaining({ field: 'customField_impact' })],
+      }
+    );
 
     expect(tx.incident.create).not.toHaveBeenCalled();
     expect(mocks.enqueueIncidentCreationSideEffects).not.toHaveBeenCalled();

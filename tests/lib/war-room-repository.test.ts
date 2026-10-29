@@ -78,7 +78,12 @@ describe('war-room generation lifecycle', () => {
           incidentId: 'incident-1',
           provider: 'MICROSOFT_TEAMS',
         }),
-        data: expect.objectContaining({ state: 'CLOSING', provisioningToken: null, projectionLeaseToken: null, projectionLeaseExpiresAt: null }),
+        data: expect.objectContaining({
+          state: 'CLOSING',
+          provisioningToken: null,
+          projectionLeaseToken: null,
+          projectionLeaseExpiresAt: null,
+        }),
       })
     );
     const where = updateMany.mock.calls[0][0].where;

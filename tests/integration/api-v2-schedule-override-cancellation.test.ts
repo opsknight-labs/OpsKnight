@@ -14,7 +14,9 @@ beforeEach(async () => {
 it('calculates one schedule through the canonical engine and hides it from unrelated readers', async () => {
   const admin = await createV2Credential(['schedules:read']);
   const outsider = await createV2Credential(['schedules:read'], 'USER');
-  const schedule = await db.onCallSchedule.create({ data: { name: 'Coverage test', timeZone: 'UTC' } });
+  const schedule = await db.onCallSchedule.create({
+    data: { name: 'Coverage test', timeZone: 'UTC' },
+  });
   await db.onCallLayer.create({
     data: {
       scheduleId: schedule.id,
@@ -30,11 +32,17 @@ it('calculates one schedule through the canonical engine and hides it from unrel
   const data = (await coverage.json()).data;
   expect(data.shifts.length).toBeGreaterThan(0);
   expect(data.gaps).toEqual([]);
-  expect(data.shifts.every((shift: { userId: string }) => shift.userId === admin.user.id)).toBe(true);
-  expect((await invokeV2(getCoverage, outsider.token, 'GET', path, { id: schedule.id })).status).toBe(404);
+  expect(data.shifts.every((shift: { userId: string }) => shift.userId === admin.user.id)).toBe(
+    true
+  );
+  expect(
+    (await invokeV2(getCoverage, outsider.token, 'GET', path, { id: schedule.id })).status
+  ).toBe(404);
 
   const tooLong = `/schedules/${schedule.id}/coverage?start=2026-11-01T00:00:00.000Z&end=2026-11-09T00:00:00.000Z`;
-  expect((await invokeV2(getCoverage, admin.token, 'GET', tooLong, { id: schedule.id })).status).toBe(400);
+  expect(
+    (await invokeV2(getCoverage, admin.token, 'GET', tooLong, { id: schedule.id })).status
+  ).toBe(400);
 });
 
 it('cancels once, replays safely, and rejects a new cancellation without another audit', async () => {
@@ -51,9 +59,13 @@ it('cancels once, replays safely, and rejects a new cancellation without another
   const path = `/schedules/${schedule.id}/overrides/${override.id}`;
   const params = { id: schedule.id, overrideId: override.id };
   const unauthorized = await createV2Credential(['schedules:write'], 'USER');
-  expect((await invokeV2(cancelOverride, unauthorized.token, 'DELETE', path, params, undefined, {
-    'Idempotency-Key': 'cancel-unauthorized',
-  })).status).toBe(403);
+  expect(
+    (
+      await invokeV2(cancelOverride, unauthorized.token, 'DELETE', path, params, undefined, {
+        'Idempotency-Key': 'cancel-unauthorized',
+      })
+    ).status
+  ).toBe(403);
   expect(await db.onCallOverride.count({ where: { id: override.id } })).toBe(1);
   const first = await invokeV2(cancelOverride, admin.token, 'DELETE', path, params, undefined, {
     'Idempotency-Key': 'cancel-override-1',

@@ -14,28 +14,44 @@ it('simulates a replacement with the canonical engine without persisting it', as
   const manager = await createV2Credential(['schedules:write']);
   const existing = await createTestUser();
   const proposed = await createTestUser();
-  const schedule = await db.onCallSchedule.create({ data: { name: 'Preview schedule', timeZone: 'UTC' } });
-  const layer = await db.onCallLayer.create({ data: {
-    scheduleId: schedule.id, name: 'Current',
-    start: new Date('2026-11-01T00:00:00.000Z'), rotationLengthHours: 24,
-    users: { create: [{ userId: existing.id, position: 1 }] },
-  } });
-  const revision = (await db.onCallSchedule.findUniqueOrThrow({ where: { id: schedule.id } })).revision;
-  const path = `/schedules/${schedule.id}/coverage/preview`;
-  const request = () => invokeV2(POST, manager.token, 'POST', path, { id: schedule.id }, {
-    start: '2026-11-01T00:00:00.000Z',
-    end: '2026-11-02T00:00:00.000Z',
-    layerId: layer.id,
-    proposedLayer: {
-      name: 'Proposed',
-      start: '2026-11-01T00:00:00.000Z',
-      end: null,
+  const schedule = await db.onCallSchedule.create({
+    data: { name: 'Preview schedule', timeZone: 'UTC' },
+  });
+  const layer = await db.onCallLayer.create({
+    data: {
+      scheduleId: schedule.id,
+      name: 'Current',
+      start: new Date('2026-11-01T00:00:00.000Z'),
       rotationLengthHours: 24,
-      shiftLengthHours: null,
-      restrictions: null,
-      responderIds: [proposed.id],
+      users: { create: [{ userId: existing.id, position: 1 }] },
     },
-  }, { 'If-Match': `"${revision}"` });
+  });
+  const revision = (await db.onCallSchedule.findUniqueOrThrow({ where: { id: schedule.id } }))
+    .revision;
+  const path = `/schedules/${schedule.id}/coverage/preview`;
+  const request = () =>
+    invokeV2(
+      POST,
+      manager.token,
+      'POST',
+      path,
+      { id: schedule.id },
+      {
+        start: '2026-11-01T00:00:00.000Z',
+        end: '2026-11-02T00:00:00.000Z',
+        layerId: layer.id,
+        proposedLayer: {
+          name: 'Proposed',
+          start: '2026-11-01T00:00:00.000Z',
+          end: null,
+          rotationLengthHours: 24,
+          shiftLengthHours: null,
+          restrictions: null,
+          responderIds: [proposed.id],
+        },
+      },
+      { 'If-Match': `"${revision}"` }
+    );
   const response = await request();
   expect(response.status).toBe(200);
   const data = (await response.json()).data;
@@ -43,8 +59,12 @@ it('simulates a replacement with the canonical engine without persisting it', as
   expect(data.shifts.length).toBeGreaterThan(0);
   expect(data.shifts.every((shift: { userId: string }) => shift.userId === proposed.id)).toBe(true);
   expect(JSON.stringify(data)).not.toContain(proposed.email);
-  expect((await db.onCallLayer.findUniqueOrThrow({ where: { id: layer.id } })).name).toBe('Current');
-  expect((await db.onCallSchedule.findUniqueOrThrow({ where: { id: schedule.id } })).revision).toBe(revision);
+  expect((await db.onCallLayer.findUniqueOrThrow({ where: { id: layer.id } })).name).toBe(
+    'Current'
+  );
+  expect((await db.onCallSchedule.findUniqueOrThrow({ where: { id: schedule.id } })).revision).toBe(
+    revision
+  );
   await db.onCallLayer.update({ where: { id: layer.id }, data: { name: 'Changed concurrently' } });
   expect((await request()).status).toBe(412);
 });
@@ -55,14 +75,24 @@ it('denies credentials without schedule administration and rejects oversized win
   const schedule = await db.onCallSchedule.create({ data: { name: 'Preview denial' } });
   const path = `/schedules/${schedule.id}/coverage/preview`;
   const input = {
-    start: '2026-11-01T00:00:00.000Z', end: '2026-11-09T00:00:00.000Z',
+    start: '2026-11-01T00:00:00.000Z',
+    end: '2026-11-09T00:00:00.000Z',
     layerId: null,
     proposedLayer: {
-      name: 'New', start: '2026-11-01T00:00:00.000Z', end: null,
-      rotationLengthHours: 24, shiftLengthHours: null, restrictions: null, responderIds: [],
+      name: 'New',
+      start: '2026-11-01T00:00:00.000Z',
+      end: null,
+      rotationLengthHours: 24,
+      shiftLengthHours: null,
+      restrictions: null,
+      responderIds: [],
     },
   };
   const headers = { 'If-Match': `"${schedule.revision}"` };
-  expect((await invokeV2(POST, reader.token, 'POST', path, { id: schedule.id }, input, headers)).status).toBe(403);
-  expect((await invokeV2(POST, manager.token, 'POST', path, { id: schedule.id }, input, headers)).status).toBe(400);
+  expect(
+    (await invokeV2(POST, reader.token, 'POST', path, { id: schedule.id }, input, headers)).status
+  ).toBe(403);
+  expect(
+    (await invokeV2(POST, manager.token, 'POST', path, { id: schedule.id }, input, headers)).status
+  ).toBe(400);
 });

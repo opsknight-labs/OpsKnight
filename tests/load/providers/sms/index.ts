@@ -16,8 +16,7 @@ export async function handleSmsEmulatorRequest(
     : '';
 
   const deliveryKey =
-    callbackNotificationId ||
-    crypto.createHash('sha256').update(`${to}:${body}`).digest('hex');
+    callbackNotificationId || crypto.createHash('sha256').update(`${to}:${body}`).digest('hex');
 
   const decision = await executeProviderEmulatorStep('sms', {
     deliveryKey,

@@ -20,8 +20,7 @@ export const DEFAULT_EMULATOR_ENDPOINTS: LoadProviderEndpointsConfig = {
   smtpUser: 'opsknight-load',
   smtpPassword: 'opsknight-load-smtp-secret',
   fromEmail: 'alerts@loadtest.opsknight.internal',
-  webhookBaseUrl:
-    process.env.LOAD_WEBHOOK_BASE_URL || 'http://host.docker.internal:8086',
+  webhookBaseUrl: process.env.LOAD_WEBHOOK_BASE_URL || 'http://host.docker.internal:8086',
   pushBaseUrl: process.env.LOAD_PUSH_BASE_URL || 'http://host.docker.internal:8086',
   controlBaseUrl: process.env.LOAD_EMULATOR_CONTROL_URL || 'http://127.0.0.1:8088',
   // Deterministic P-256 VAPID keypair generated exclusively for local load-certification
@@ -54,9 +53,7 @@ export function buildStatusPageFixture(
     name: 'OpsKnight Load Certification Status',
     slug: 'load-cert-status',
     organizationName: 'OpsKnight Enterprise Certification',
-    serviceIds: (services.length > 1 ? services.slice(1, 2) : services.slice(0, 1)).map(
-      s => s.id
-    ),
+    serviceIds: (services.length > 1 ? services.slice(1, 2) : services.slice(0, 1)).map(s => s.id),
     webhookId: 'lt-status-webhook-001',
     webhookUrl: `${endpoints.webhookBaseUrl.replace(/\/$/, '')}/status-webhook/lt-status-page-001`,
     webhookSecret: 'lt_status_webhook_hmac_secret_key_001',

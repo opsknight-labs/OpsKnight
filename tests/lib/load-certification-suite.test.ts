@@ -14,11 +14,7 @@ import {
 } from '../load/fixtures/notification-providers';
 import { buildScheduleFixtures } from '../load/fixtures/schedules';
 import { buildServiceFixtures } from '../load/fixtures/services';
-import {
-  buildTeamFixtures,
-  buildUserFixtures,
-  SCALE_PROFILES,
-} from '../load/fixtures/users';
+import { buildTeamFixtures, buildUserFixtures, SCALE_PROFILES } from '../load/fixtures/users';
 import { parsePrometheusText } from '../load/helpers/metrics';
 import {
   assertCertificationSummaryMergeCompatible,
@@ -185,9 +181,7 @@ describe('OpsKnight Load & Scalability Certification Suite', () => {
     const capacityIntegrations = integrations.filter(i => !i.isContractKey);
     expect(contractIntegrations).toHaveLength(1);
     expect(contractIntegrations[0].key).toBe('lt_contract_events_key_0001');
-    expect(capacityIntegrations).toHaveLength(
-      scale.services * scale.integrationsPerService - 1
-    );
+    expect(capacityIntegrations).toHaveLength(scale.services * scale.integrationsPerService - 1);
   });
 
   it('runs the programmable provider emulator suite with 200, 429 Retry-After, 503 outage, and duplicate tracking', async () => {
@@ -223,13 +217,10 @@ describe('OpsKnight Load & Scalability Certification Suite', () => {
         body: JSON.stringify({ channel: '#ops', text: 'Incident triggered' }),
       });
 
-      const smsRes = await fetch(
-        `${httpBase}/2010-04-01/Accounts/AC123/Messages.json`,
-        {
-          method: 'POST',
-          body: 'To=%2B15550100001&Body=Alert',
-        }
-      );
+      const smsRes = await fetch(`${httpBase}/2010-04-01/Accounts/AC123/Messages.json`, {
+        method: 'POST',
+        body: 'To=%2B15550100001&Body=Alert',
+      });
       expect(smsRes.status).toBe(201);
 
       const pushRes = await fetch(`${httpBase}/push/sub-001`, {
@@ -387,12 +378,39 @@ opsknight_db_pool_active 18
       invariants: {
         zeroDuplicateOpenIncidents: { passed: true, duplicateGroups: 0, samples: [] },
         zeroLostAcceptedAlerts: { passed: true, totalLoadAlerts: 1000, unlinkedAlerts: 0 },
-        zeroFalseEscalationsAfterAckOrResolve: { passed: true, violationCount: 0, sampleIncidentIds: [] },
-        zeroCorruptedIncidentStates: { passed: true, acknowledgedWithoutTimestamp: 0, resolvedWithoutTimestamp: 0, snoozedWithoutUntil: 0 },
-        zeroCriticalNotificationStarvation: { passed: true, pendingCriticalCount: 0, oldestPendingCriticalAgeMs: 0, pendingBulkCount: 0, deliveredCriticalCount: 100, deliveredBulkCount: 100 },
-        providerIdempotencyCheck: { passed: true, emulatorAvailable: true, duplicateDeliveryKeysByProvider: {}, totalDuplicateDeliveries: 0 },
+        zeroFalseEscalationsAfterAckOrResolve: {
+          passed: true,
+          violationCount: 0,
+          sampleIncidentIds: [],
+        },
+        zeroCorruptedIncidentStates: {
+          passed: true,
+          acknowledgedWithoutTimestamp: 0,
+          resolvedWithoutTimestamp: 0,
+          snoozedWithoutUntil: 0,
+        },
+        zeroCriticalNotificationStarvation: {
+          passed: true,
+          pendingCriticalCount: 0,
+          oldestPendingCriticalAgeMs: 0,
+          pendingBulkCount: 0,
+          deliveredCriticalCount: 100,
+          deliveredBulkCount: 100,
+        },
+        providerIdempotencyCheck: {
+          passed: true,
+          emulatorAvailable: true,
+          duplicateDeliveryKeysByProvider: {},
+          totalDuplicateDeliveries: 0,
+        },
       },
-      totals: { incidentsCreated: 100, alertsPersisted: 1000, notificationsTotal: 200, backgroundJobsPending: 0, backgroundJobsFailed: 0 },
+      totals: {
+        incidentsCreated: 100,
+        alertsPersisted: 1000,
+        notificationsTotal: 200,
+        backgroundJobsPending: 0,
+        backgroundJobsFailed: 0,
+      },
     };
 
     // Case 1: Scenarios that failed thresholds or high error rate should NOT become certified capacity
@@ -411,7 +429,11 @@ opsknight_db_pool_active 18
       },
     ];
 
-    const profFailed = deriveCapacityFromScenarios('compose_split_pgbouncer', failedScenarios, mockVerificationPass);
+    const profFailed = deriveCapacityFromScenarios(
+      'compose_split_pgbouncer',
+      failedScenarios,
+      mockVerificationPass
+    );
     expect(profFailed.sustainedAlertRps).toBe('No certified sustainable capacity');
     expect(profFailed.bottleneck).toContain('limits reached at L2');
 
@@ -432,20 +454,24 @@ opsknight_db_pool_active 18
       },
     };
 
-    const profInvFail = deriveCapacityFromScenarios('compose_split_pgbouncer', [
-      {
-        scenario: 'alert-ingestion.js',
-        loadLevel: 'L1',
-        durationMs: 30000,
-        exitCode: 0,
-        p50Ms: 20,
-        p95Ms: 80,
-        p99Ms: 120,
-        rps: 100,
-        errorRate: 0,
-        thresholdsPassed: true,
-      },
-    ], mockVerificationFail);
+    const profInvFail = deriveCapacityFromScenarios(
+      'compose_split_pgbouncer',
+      [
+        {
+          scenario: 'alert-ingestion.js',
+          loadLevel: 'L1',
+          durationMs: 30000,
+          exitCode: 0,
+          p50Ms: 20,
+          p95Ms: 80,
+          p99Ms: 120,
+          rps: 100,
+          errorRate: 0,
+          thresholdsPassed: true,
+        },
+      ],
+      mockVerificationFail
+    );
 
     expect(profInvFail.sustainedAlertRps).toBe('No certified sustainable capacity');
     expect(profInvFail.bottleneck).toBe('Critical notification queue starvation');
@@ -455,10 +481,7 @@ opsknight_db_pool_active 18
     const phase6Topologies = TOPOLOGY_MATRIX.filter(t => t.phase === 6);
     expect(phase6Topologies.length).toBeGreaterThanOrEqual(14);
 
-    const dryRunPhase6 = await runLoadCertificationOrchestrator([
-      '--dry-run',
-      '--phase=6',
-    ]);
+    const dryRunPhase6 = await runLoadCertificationOrchestrator(['--dry-run', '--phase=6']);
     expect(dryRunPhase6).toHaveProperty('mode', 'dry-run');
     expect(dryRunPhase6).toHaveProperty('topologiesCount', phase6Topologies.length);
 
@@ -522,10 +545,31 @@ opsknight_db_pool_active 18
           invariants: {
             zeroDuplicateOpenIncidents: { passed: true, duplicateGroups: 0, samples: [] },
             zeroLostAcceptedAlerts: { passed: true, totalLoadAlerts: 75000, unlinkedAlerts: 0 },
-            zeroFalseEscalationsAfterAckOrResolve: { passed: true, violationCount: 0, sampleIncidentIds: [] },
-            zeroCorruptedIncidentStates: { passed: true, acknowledgedWithoutTimestamp: 0, resolvedWithoutTimestamp: 0, snoozedWithoutUntil: 0 },
-            zeroCriticalNotificationStarvation: { passed: true, pendingCriticalCount: 0, oldestPendingCriticalAgeMs: 0, pendingBulkCount: 0, deliveredCriticalCount: 1500, deliveredBulkCount: 8500 },
-            providerIdempotencyCheck: { passed: true, emulatorAvailable: true, duplicateDeliveryKeysByProvider: {}, totalDuplicateDeliveries: 0 },
+            zeroFalseEscalationsAfterAckOrResolve: {
+              passed: true,
+              violationCount: 0,
+              sampleIncidentIds: [],
+            },
+            zeroCorruptedIncidentStates: {
+              passed: true,
+              acknowledgedWithoutTimestamp: 0,
+              resolvedWithoutTimestamp: 0,
+              snoozedWithoutUntil: 0,
+            },
+            zeroCriticalNotificationStarvation: {
+              passed: true,
+              pendingCriticalCount: 0,
+              oldestPendingCriticalAgeMs: 0,
+              pendingBulkCount: 0,
+              deliveredCriticalCount: 1500,
+              deliveredBulkCount: 8500,
+            },
+            providerIdempotencyCheck: {
+              passed: true,
+              emulatorAvailable: true,
+              duplicateDeliveryKeysByProvider: {},
+              totalDuplicateDeliveries: 0,
+            },
           },
           totals: {
             incidentsCreated: 12500,
@@ -569,10 +613,31 @@ opsknight_db_pool_active 18
       invariants: {
         zeroDuplicateOpenIncidents: { passed: true, duplicateGroups: 0, samples: [] },
         zeroLostAcceptedAlerts: { passed: true, totalLoadAlerts: 100, unlinkedAlerts: 0 },
-        zeroFalseEscalationsAfterAckOrResolve: { passed: true, violationCount: 0, sampleIncidentIds: [] },
-        zeroCorruptedIncidentStates: { passed: true, acknowledgedWithoutTimestamp: 0, resolvedWithoutTimestamp: 0, snoozedWithoutUntil: 0 },
-        zeroCriticalNotificationStarvation: { passed: true, pendingCriticalCount: 0, oldestPendingCriticalAgeMs: 0, pendingBulkCount: 0, deliveredCriticalCount: 10, deliveredBulkCount: 10 },
-        providerIdempotencyCheck: { passed: true, emulatorAvailable: true, duplicateDeliveryKeysByProvider: {}, totalDuplicateDeliveries: 0 },
+        zeroFalseEscalationsAfterAckOrResolve: {
+          passed: true,
+          violationCount: 0,
+          sampleIncidentIds: [],
+        },
+        zeroCorruptedIncidentStates: {
+          passed: true,
+          acknowledgedWithoutTimestamp: 0,
+          resolvedWithoutTimestamp: 0,
+          snoozedWithoutUntil: 0,
+        },
+        zeroCriticalNotificationStarvation: {
+          passed: true,
+          pendingCriticalCount: 0,
+          oldestPendingCriticalAgeMs: 0,
+          pendingBulkCount: 0,
+          deliveredCriticalCount: 10,
+          deliveredBulkCount: 10,
+        },
+        providerIdempotencyCheck: {
+          passed: true,
+          emulatorAvailable: true,
+          duplicateDeliveryKeysByProvider: {},
+          totalDuplicateDeliveries: 0,
+        },
       },
       totals: {
         incidentsCreated: 10,
@@ -583,10 +648,16 @@ opsknight_db_pool_active 18
       },
     };
 
-    const emptyScenariosProfile = deriveCapacityFromScenarios('phase6_compose_split', [], mockVerificationPass);
+    const emptyScenariosProfile = deriveCapacityFromScenarios(
+      'phase6_compose_split',
+      [],
+      mockVerificationPass
+    );
     expect(emptyScenariosProfile.bottleneck).toBe('No scenarios executed');
     expect(emptyScenariosProfile.sustainedAlertRps).toBe('No scenarios executed');
-    expect(emptyScenariosProfile.deploymentRecommendation).toContain('Do not deploy: Zero scenarios executed');
+    expect(emptyScenariosProfile.deploymentRecommendation).toContain(
+      'Do not deploy: Zero scenarios executed'
+    );
 
     // 3. Verify report explicitly separates measured testbed limits from theoretical targets
     const markdown = generateCertificationMarkdownReport([
@@ -620,7 +691,9 @@ opsknight_db_pool_active 18
     expect(markdown).toContain('Empirically Measured Limits (Phase 6 Testbed)');
     expect(markdown).toContain('Peak **95.5 Alert RPS**');
     expect(markdown).toContain('Target / Theoretical Multi-Replica Production Sizing Guidance');
-    expect(markdown).toContain('> Sizing tiers above the single-node / 4-node testbed maximums (> 230 RPS) represent theoretical scaling models');
+    expect(markdown).toContain(
+      '> Sizing tiers above the single-node / 4-node testbed maximums (> 230 RPS) represent theoretical scaling models'
+    );
   });
 
   it('guarantees drain observation inspects all queues/retries and protects against sleep overshoot', () => {
@@ -639,49 +712,59 @@ opsknight_db_pool_active 18
       snap.pendingBackgroundJobs === 0;
 
     // False if critical future-scheduled retries exist (even if due critical is 0)
-    expect(isDrained({
-      pendingCritical: 1,
-      futureScheduledCritical: 1,
-      pendingTransactional: 0,
-      pendingBulk: 0,
-      pendingBackgroundJobs: 0,
-    })).toBe(false);
+    expect(
+      isDrained({
+        pendingCritical: 1,
+        futureScheduledCritical: 1,
+        pendingTransactional: 0,
+        pendingBulk: 0,
+        pendingBackgroundJobs: 0,
+      })
+    ).toBe(false);
 
     // False if transactional queue has pending items
-    expect(isDrained({
-      pendingCritical: 0,
-      futureScheduledCritical: 0,
-      pendingTransactional: 5,
-      pendingBulk: 0,
-      pendingBackgroundJobs: 0,
-    })).toBe(false);
+    expect(
+      isDrained({
+        pendingCritical: 0,
+        futureScheduledCritical: 0,
+        pendingTransactional: 5,
+        pendingBulk: 0,
+        pendingBackgroundJobs: 0,
+      })
+    ).toBe(false);
 
     // False if bulk queue has pending items
-    expect(isDrained({
-      pendingCritical: 0,
-      futureScheduledCritical: 0,
-      pendingTransactional: 0,
-      pendingBulk: 12,
-      pendingBackgroundJobs: 0,
-    })).toBe(false);
+    expect(
+      isDrained({
+        pendingCritical: 0,
+        futureScheduledCritical: 0,
+        pendingTransactional: 0,
+        pendingBulk: 12,
+        pendingBackgroundJobs: 0,
+      })
+    ).toBe(false);
 
     // False if background jobs are pending
-    expect(isDrained({
-      pendingCritical: 0,
-      futureScheduledCritical: 0,
-      pendingTransactional: 0,
-      pendingBulk: 0,
-      pendingBackgroundJobs: 1,
-    })).toBe(false);
+    expect(
+      isDrained({
+        pendingCritical: 0,
+        futureScheduledCritical: 0,
+        pendingTransactional: 0,
+        pendingBulk: 0,
+        pendingBackgroundJobs: 1,
+      })
+    ).toBe(false);
 
     // True ONLY when all queues and future retries are 0
-    expect(isDrained({
-      pendingCritical: 0,
-      futureScheduledCritical: 0,
-      pendingTransactional: 0,
-      pendingBulk: 0,
-      pendingBackgroundJobs: 0,
-    })).toBe(true);
+    expect(
+      isDrained({
+        pendingCritical: 0,
+        futureScheduledCritical: 0,
+        pendingTransactional: 0,
+        pendingBulk: 0,
+        pendingBackgroundJobs: 0,
+      })
+    ).toBe(true);
 
     // 2. Dynamic polling sleep never overshoots drainDeadline
     const calculatePollSleep = (remainingMs: number, maxIntervalMs = 5000) => {
@@ -705,7 +788,7 @@ opsknight_db_pool_active 18
     // - 7 pending transactional notifications
     // - 15 pending bulk notifications
     // - 4 pending background jobs
-    let countCallIndex = 0;
+    const countCallIndex = 0;
     const mockPrisma = {
       notification: {
         count: async ({ where }: { where: Record<string, any> }) => {

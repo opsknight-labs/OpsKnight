@@ -25,9 +25,11 @@ it('commits one immutable service SLA version and canonical audit under replay',
   const before = await invokeV2(GET, admin.token, 'GET', path, params);
   expect(before.status).toBe(200);
   expect(before.headers.get('etag')).toBe('"0"');
-  const put = (key: string) => invokeV2(PUT, admin.token, 'PUT', path, params, body, {
-    'If-Match': '"0"', 'Idempotency-Key': key,
-  });
+  const put = (key: string) =>
+    invokeV2(PUT, admin.token, 'PUT', path, params, body, {
+      'If-Match': '"0"',
+      'Idempotency-Key': key,
+    });
   const first = await put('sla-policy-1');
   expect(first.status).toBe(200);
   expect(first.headers.get('etag')).toBe('"1"');
@@ -36,9 +38,15 @@ it('commits one immutable service SLA version and canonical audit under replay',
   expect(replay.status).toBe(200);
   expect(replay.headers.get('idempotency-replayed')).toBe('true');
   expect((await put('sla-policy-2')).status).toBe(412);
-  expect(await db.incidentSlaPolicy.count({ where: { scopeKey: `service:${service.id}` } })).toBe(1);
-  const audit = await db.auditLog.findFirstOrThrow({ where: { action: 'incident_sla.policy.version_created' } });
-  expect((audit.details as { metadata: { apiClientId: string } }).metadata.apiClientId).toBe(admin.key.id);
+  expect(await db.incidentSlaPolicy.count({ where: { scopeKey: `service:${service.id}` } })).toBe(
+    1
+  );
+  const audit = await db.auditLog.findFirstOrThrow({
+    where: { action: 'incident_sla.policy.version_created' },
+  });
+  expect((audit.details as { metadata: { apiClientId: string } }).metadata.apiClientId).toBe(
+    admin.key.id
+  );
 });
 
 it('rejects insufficient scope and invalid target pairs', async () => {
@@ -48,7 +56,23 @@ it('rejects insufficient scope and invalid target pairs', async () => {
   const path = `/services/${service.id}/response-policy/sla`;
   const params = { id: service.id };
   const headers = { 'If-Match': '"0"', 'Idempotency-Key': 'sla-denied' };
-  expect((await invokeV2(PUT, serviceWriter.token, 'PUT', path, params, body, headers)).status).toBe(403);
-  expect((await invokeV2(PUT, admin.token, 'PUT', path, params, { ...body, baseAckTargetMs: 9999999 }, headers)).status).toBe(400);
-  expect(await db.incidentSlaPolicy.count({ where: { scopeKey: `service:${service.id}` } })).toBe(0);
+  expect(
+    (await invokeV2(PUT, serviceWriter.token, 'PUT', path, params, body, headers)).status
+  ).toBe(403);
+  expect(
+    (
+      await invokeV2(
+        PUT,
+        admin.token,
+        'PUT',
+        path,
+        params,
+        { ...body, baseAckTargetMs: 9999999 },
+        headers
+      )
+    ).status
+  ).toBe(400);
+  expect(await db.incidentSlaPolicy.count({ where: { scopeKey: `service:${service.id}` } })).toBe(
+    0
+  );
 });

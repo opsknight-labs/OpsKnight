@@ -1,8 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-  integrationProviderError,
-  notificationProviderUnavailable,
-} from '@/lib/provider-errors';
+import { integrationProviderError, notificationProviderUnavailable } from '@/lib/provider-errors';
 
 describe('provider error normalization', () => {
   it('maps provider authentication codes without inspecting messages', () => {

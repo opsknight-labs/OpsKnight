@@ -36,7 +36,9 @@ describe('IncidentSlaPolicySettings', () => {
 
   it('uses the newly saved version for an immediate second save', async () => {
     const save = vi.mocked(saveIncidentSlaPolicyAction);
-    save.mockResolvedValueOnce({ ok: true, version: 3 }).mockResolvedValueOnce({ ok: true, version: 4 });
+    save
+      .mockResolvedValueOnce({ ok: true, version: 3 })
+      .mockResolvedValueOnce({ ok: true, version: 4 });
 
     render(
       <IncidentSlaPolicySettings

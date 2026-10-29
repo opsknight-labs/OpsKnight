@@ -195,7 +195,7 @@ describe('automatic MCP client registration', () => {
     });
     await expect(authenticate(token.access_token)).rejects.toThrow('MCP_INVALID_GRANT');
   });
-  it('rejects unsafe metadata, secret grants, scope escalation, duplicate keys and oversized bodies', async () => {
+  it('rejects unsafe metadata, secret grants, duplicate keys and oversized bodies', async () => {
     const before = await db.mcpClient.count();
     for (const body of [
       { ...metadata, redirect_uris: ['http://evil.example/callback'] },
@@ -204,8 +204,6 @@ describe('automatic MCP client registration', () => {
       { ...metadata, redirect_uris: [callback, callback] },
       { ...metadata, token_endpoint_auth_method: 'client_secret_post' },
       { ...metadata, grant_types: ['client_credentials'] },
-      { ...metadata, scope: 'admin:manage' },
-      { ...metadata, scope: 'incidents:write' },
       { ...metadata, client_secret: 'not-supported' },
       { ...metadata, client_id: 'impersonate-existing' },
       '{"redirect_uris":["http://localhost:19345/callback"],"client_name":"one","client_name":"two"}',
@@ -215,6 +213,18 @@ describe('automatic MCP client registration', () => {
       413
     );
     expect(await db.mcpClient.count()).toBe(before);
+  });
+  it('narrows requested scopes to the policy ceiling instead of failing or escalating', async () => {
+    for (const scope of ['admin:manage', 'incidents:write', 'openid offline_access']) {
+      const response = await register(request({ ...metadata, scope }));
+      expect(response.status).toBe(201);
+      const registered = await response.json();
+      const policy = await db.mcpPolicy.findUniqueOrThrow({ where: { id: 'default' } });
+      for (const granted of registered.scope.split(' ')) {
+        expect(policy.dcrScopes).toContain(granted);
+        expect(granted).not.toBe('admin:manage');
+      }
+    }
   });
   it('retains active consent and authenticated client identities while cleaning unused registrations', async () => {
     const unused = await client();

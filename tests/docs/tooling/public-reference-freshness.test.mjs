@@ -16,6 +16,10 @@ test('published generated-backed references match current discovery output', () 
   for (const path of generatedBackedReferences) {
     const published = readFileSync(`docs/${currentDocsVersion}/${path}`, 'utf8');
     const generated = readFileSync(`generated/docs-reference/${path}`, 'utf8');
-    assert.equal(published, generated, `${path}: public reference is stale; regenerate and publish it`);
+    assert.equal(
+      published,
+      generated,
+      `${path}: public reference is stale; regenerate and publish it`
+    );
   }
 });

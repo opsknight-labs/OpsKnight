@@ -90,7 +90,9 @@ describe('ChatOps Slash Command Dispatcher', () => {
       status: input.command === 'ACKNOWLEDGE' ? 'ACKNOWLEDGED' : 'RESOLVED',
       changed: true,
     }));
-    vi.mocked(prisma.$transaction).mockImplementation(async operation => operation(prisma as never));
+    vi.mocked(prisma.$transaction).mockImplementation(async operation =>
+      operation(prisma as never)
+    );
   });
 
   const basePayload: SlashCommandPayload = {

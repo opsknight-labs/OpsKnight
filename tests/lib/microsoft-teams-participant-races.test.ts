@@ -81,7 +81,9 @@ describe('Microsoft Teams participant race fences', () => {
     mocks.findRoom.mockResolvedValueOnce(room());
     mocks.listChannelMembers.mockResolvedValue({
       ok: true,
-      value: new Map([['target-object', { id: 'membership-target', userId: 'target-object', roles: [] }]]),
+      value: new Map([
+        ['target-object', { id: 'membership-target', userId: 'target-object', roles: [] }],
+      ]),
     });
     mocks.findParticipant
       .mockResolvedValueOnce({ state: 'REMOVED', desiredVersion: 5 })
@@ -90,12 +92,21 @@ describe('Microsoft Teams participant race fences', () => {
 
     await syncMicrosoftTeamsWarRoomParticipants('room-1');
 
-    expect(mocks.removeChannelMember).toHaveBeenCalledWith(expect.objectContaining({ membershipId: 'membership-target' }));
-    expect(mocks.updateParticipant).toHaveBeenCalledWith(expect.objectContaining({
-      where: expect.objectContaining({ desiredVersion: 5 }),
-      data: expect.objectContaining({ state: 'REMOVED' }),
-    }));
-    expect(mocks.scheduleJob).toHaveBeenCalledWith('WAR_ROOM_PARTICIPANT_SYNC', expect.any(Date), { warRoomId: 'room-1' }, 5);
+    expect(mocks.removeChannelMember).toHaveBeenCalledWith(
+      expect.objectContaining({ membershipId: 'membership-target' })
+    );
+    expect(mocks.updateParticipant).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ desiredVersion: 5 }),
+        data: expect.objectContaining({ state: 'REMOVED' }),
+      })
+    );
+    expect(mocks.scheduleJob).toHaveBeenCalledWith(
+      'WAR_ROOM_PARTICIPANT_SYNC',
+      expect.any(Date),
+      { warRoomId: 'room-1' },
+      5
+    );
   });
 
   it('refuses to promote an owner candidate whose desired generation changed', async () => {
@@ -148,9 +159,16 @@ describe('Microsoft Teams participant race fences', () => {
 
     await syncMicrosoftTeamsWarRoomParticipants('room-1');
 
-    expect(mocks.updateChannelMemberRoles).toHaveBeenCalledWith(expect.objectContaining({ membershipId: 'membership-candidate', roles: ['owner'] }));
+    expect(mocks.updateChannelMemberRoles).toHaveBeenCalledWith(
+      expect.objectContaining({ membershipId: 'membership-candidate', roles: ['owner'] })
+    );
     expect(mocks.removeChannelMember).not.toHaveBeenCalled();
-    expect(mocks.scheduleJob).toHaveBeenCalledWith('WAR_ROOM_PARTICIPANT_SYNC', expect.any(Date), { warRoomId: 'room-1' }, 5);
+    expect(mocks.scheduleJob).toHaveBeenCalledWith(
+      'WAR_ROOM_PARTICIPANT_SYNC',
+      expect.any(Date),
+      { warRoomId: 'room-1' },
+      5
+    );
   });
 
   it('does not accept an already-present replacement unless Graph confirms its owner role', async () => {
@@ -162,18 +180,40 @@ describe('Microsoft Teams participant race fences', () => {
       desiredVersion: 7,
     };
     mocks.findRoom.mockResolvedValueOnce(room([target, candidate]));
-    mocks.listTeamMembers.mockResolvedValue({ ok: true, value: new Map([['candidate-object', { id: 'team-member' }]]) });
+    mocks.listTeamMembers.mockResolvedValue({
+      ok: true,
+      value: new Map([['candidate-object', { id: 'team-member' }]]),
+    });
     mocks.listChannelMembers
-      .mockResolvedValueOnce({ ok: true, value: new Map([['target-object', { id: 'membership-target', userId: 'target-object', roles: ['owner'] }]]) })
-      .mockResolvedValueOnce({ ok: true, value: new Map([['candidate-object', { id: 'membership-candidate', userId: 'candidate-object', roles: [] }]]) });
+      .mockResolvedValueOnce({
+        ok: true,
+        value: new Map([
+          ['target-object', { id: 'membership-target', userId: 'target-object', roles: ['owner'] }],
+        ]),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        value: new Map([
+          [
+            'candidate-object',
+            { id: 'membership-candidate', userId: 'candidate-object', roles: [] },
+          ],
+        ]),
+      });
     mocks.findParticipant
       .mockResolvedValueOnce({ state: 'REMOVED', desiredVersion: 5 })
       .mockResolvedValueOnce({ state: 'PRESENT', desiredVersion: 7 });
-    mocks.addChannelMember.mockResolvedValue({ ok: false, code: 'MEMBER_ALREADY_PRESENT', message: 'already present' });
+    mocks.addChannelMember.mockResolvedValue({
+      ok: false,
+      code: 'MEMBER_ALREADY_PRESENT',
+      message: 'already present',
+    });
 
     await syncMicrosoftTeamsWarRoomParticipants('room-1');
 
-    expect(mocks.addChannelMember).toHaveBeenCalledWith(expect.objectContaining({ userObjectId: 'candidate-object', owner: true }));
+    expect(mocks.addChannelMember).toHaveBeenCalledWith(
+      expect.objectContaining({ userObjectId: 'candidate-object', owner: true })
+    );
     expect(mocks.removeChannelMember).not.toHaveBeenCalled();
   });
 });

@@ -74,11 +74,7 @@ describe('announcement fanout execution eligibility', () => {
       startDate: new Date('2026-09-15T09:30:00.000Z'),
     });
 
-    const result = await executeAnnouncementNotificationFanout(
-      'announcement-1',
-      'page-1',
-      7
-    );
+    const result = await executeAnnouncementNotificationFanout('announcement-1', 'page-1', 7);
 
     expect(result).toEqual({
       status: 'NOT_DUE',
@@ -97,11 +93,7 @@ describe('announcement fanout execution eligibility', () => {
     });
     mocks.readGeneration.mockResolvedValue(8);
 
-    const result = await executeAnnouncementNotificationFanout(
-      'announcement-1',
-      'page-1',
-      7
-    );
+    const result = await executeAnnouncementNotificationFanout('announcement-1', 'page-1', 7);
 
     expect(result).toEqual({
       status: 'STALE',

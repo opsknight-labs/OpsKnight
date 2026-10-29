@@ -101,11 +101,7 @@ describe('ActionItemJiraContext visibility contract', () => {
 
   it('shows create and link actions when Jira and the service mapping are operational', () => {
     render(
-      <ActionItemJiraContext
-        actionItemId="action-1"
-        canManage
-        jiraCapability={capability()}
-      />
+      <ActionItemJiraContext actionItemId="action-1" canManage jiraCapability={capability()} />
     );
 
     expect(screen.getByText('Action Item Jira')).toBeInTheDocument();

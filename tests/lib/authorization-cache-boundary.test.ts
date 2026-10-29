@@ -76,9 +76,7 @@ function activeIncident(title: string) {
 }
 
 function queueOperationalProjection(title: string) {
-  mocks.incidentFindMany
-    .mockResolvedValueOnce([activeIncident(title)])
-    .mockResolvedValueOnce([]);
+  mocks.incidentFindMany.mockResolvedValueOnce([activeIncident(title)]).mockResolvedValueOnce([]);
 }
 
 describe('authorization-sensitive cache generation boundaries', () => {
@@ -95,7 +93,9 @@ describe('authorization-sensitive cache generation boundaries', () => {
     generation = '1';
     failGeneration = false;
     mocks.generation.mockImplementation(() =>
-      failGeneration ? Promise.reject(new Error('control plane unavailable')) : Promise.resolve(generation)
+      failGeneration
+        ? Promise.reject(new Error('control plane unavailable'))
+        : Promise.resolve(generation)
     );
     mocks.statusPageFindFirst.mockResolvedValue(null);
     mocks.serviceFindMany.mockResolvedValue([{ id: 'service-1', name: 'API' }]);

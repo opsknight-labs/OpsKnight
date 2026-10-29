@@ -17,6 +17,8 @@ describe('Microsoft Teams Bot Connector signing-key endorsements', () => {
   it('fails closed for missing keys, channel IDs, or endorsement metadata', () => {
     expect(__isBotSigningKeyEndorsedForTests(jwks, 'missing', 'msteams')).toBe(false);
     expect(__isBotSigningKeyEndorsedForTests(jwks, 'teams-key', '')).toBe(false);
-    expect(__isBotSigningKeyEndorsedForTests({ keys: [{ kid: 'teams-key' }] }, 'teams-key', 'msteams')).toBe(false);
+    expect(
+      __isBotSigningKeyEndorsedForTests({ keys: [{ kid: 'teams-key' }] }, 'teams-key', 'msteams')
+    ).toBe(false);
   });
 });

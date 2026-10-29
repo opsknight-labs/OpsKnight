@@ -26,15 +26,30 @@ test('pinned documentation runtimes still pull fresh-runner dependencies', () =>
 });
 
 test('certification uses an immutable local image ID and a shared API-key secret', () => {
-  assert.equal((workflow.match(/DOCS_OPSKNIGHT_IMAGE=\$\(docker image inspect --format '\{\{\.Id\}\}'/g) ?? []).length, 2);
+  assert.equal(
+    (workflow.match(/DOCS_OPSKNIGHT_IMAGE=\$\(docker image inspect --format '\{\{\.Id\}\}'/g) ?? [])
+      .length,
+    2
+  );
   assert.match(evidenceHelper, /isImmutableContainerReference/);
-  assert.match(playwrightConfig, /process\.env\.API_KEY_SECRET \|\|= 'docs-runtime-only-api-key-secret'/);
+  assert.match(
+    playwrightConfig,
+    /process\.env\.API_KEY_SECRET \|\|= 'docs-runtime-only-api-key-secret'/
+  );
 });
 
 test('all documentation certification paths share both immutable-reference forms', () => {
-  assert.equal(isImmutableContainerReference(`registry.example.com/opsknight/runtime@sha256:${'a'.repeat(64)}`), true);
+  assert.equal(
+    isImmutableContainerReference(
+      `registry.example.com/opsknight/runtime@sha256:${'a'.repeat(64)}`
+    ),
+    true
+  );
   assert.equal(isImmutableContainerReference(`sha256:${'b'.repeat(64)}`), true);
   assert.equal(isImmutableContainerReference('opsknight:latest'), false);
   assert.equal(isImmutableContainerReference('sha256:short'), false);
-  assert.match(readFileSync('scripts/docs/check-evidence.mjs', 'utf8'), /isImmutableContainerReference/);
+  assert.match(
+    readFileSync('scripts/docs/check-evidence.mjs', 'utf8'),
+    /isImmutableContainerReference/
+  );
 });

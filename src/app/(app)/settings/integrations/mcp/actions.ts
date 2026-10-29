@@ -14,23 +14,15 @@ import {
   mcpResource,
 } from '@/lib/mcp/auth/config';
 import { mcpOAuthServer } from '@/lib/mcp/auth/oauth-model';
-import { MCP_CATALOG, isMcpApprovalGated, isMcpExecutable } from '@/lib/mcp/catalog';
 import { isIP } from 'node:net';
-import { requireMcp } from '@/lib/mcp/core/errors';
-import { MCP_REVIEWED_RUNBOOK_SCOPES } from '@/lib/mcp/approvals/policy';
+import { McpBoundaryError, requireMcp } from '@/lib/mcp/core/errors';
 import type { Prisma } from '@prisma/client';
-import { effectiveMcpClientScopes } from '@/lib/mcp/auth/client-policy';
+import { DEFAULT_ASSISTANT_SCOPES, effectiveMcpClientScopes } from '@/lib/mcp/auth/client-policy';
+import { supportedMcpScopes } from '@/lib/mcp/auth/scopes';
+import { mcpSessionDates } from '@/lib/mcp/auth/session-lifetime';
 
 const settingsPath = '/settings/integrations/mcp';
-// Only scopes a reviewed direct or approval-gated workflow can use may be granted.
-function supportedScopes() {
-  return new Set([
-    ...MCP_CATALOG.filter(
-      operation => isMcpExecutable(operation) || isMcpApprovalGated(operation)
-    ).flatMap(operation => operation.requiredScopes),
-    ...MCP_REVIEWED_RUNBOOK_SCOPES,
-  ]);
-}
+const supportedScopes = supportedMcpScopes;
 function parseScopes(value: string) {
   const supported = supportedScopes();
   const scopes = [...new Set(value.split(/\s+/).filter(Boolean))];
@@ -63,6 +55,44 @@ async function assertCurrentAdmin(
   );
 }
 
+/** One-click first-run setup: read-only assistant access with automatic connections. */
+export async function enableMcpQuickSetup() {
+  const actor = await admin();
+  await loadMcpRuntime();
+  requireMcp(
+    !(await getMcpConfigurationStatus({ force: true })).issues.length,
+    'MCP_CONFIGURATION_INVALID'
+  );
+  const scopes = DEFAULT_ASSISTANT_SCOPES.filter(scope => supportedScopes().has(scope));
+  requireMcp(scopes.length > 0, 'MCP_INVALID_SCOPE');
+  const policy = {
+    enabled: true,
+    dcrEnabled: true,
+    dcrScopes: scopes,
+    cimdEnabled: true,
+    cimdAllowedHosts: [] as string[],
+    cimdScopes: scopes,
+  };
+  await prisma.$transaction(async tx => {
+    await assertCurrentAdmin(tx, actor);
+    // Never overwrite an existing configuration: this is only the first-run shortcut.
+    const existing = await tx.mcpPolicy.findUnique({ where: { id: 'default' } });
+    requireMcp(!existing?.enabled, 'MCP_ALREADY_CONFIGURED');
+    await tx.mcpPolicy.upsert({ where: { id: 'default' }, create: policy, update: policy });
+    await logAudit(
+      {
+        source: 'UI',
+        action: 'mcp.policy.updated',
+        entityType: 'SYSTEM_CONFIG',
+        actorId: actor.id,
+        details: { ...policy, quickSetup: true },
+      },
+      tx
+    );
+  });
+  revalidatePath(settingsPath);
+}
+
 export async function updateMcpPolicy(form: FormData) {
   const actor = await admin();
   const input = z
@@ -73,11 +103,10 @@ export async function updateMcpPolicy(form: FormData) {
       maxOperations: z.coerce.number().int().min(1).max(16),
       requestsPerMinute: z.coerce.number().int().min(1).max(600),
       sensitiveReadsEnabled: z.boolean(),
-      cimdEnabled: z.boolean(),
       cimdAllowedHosts: z.string().max(4096),
-      cimdScopes: z.string().max(2048),
       dcrEnabled: z.boolean(),
       dcrScopes: z.string().max(2048),
+      sessionIdleDays: z.coerce.number().int().min(1).max(90),
     })
     .strict()
     .parse({
@@ -87,11 +116,11 @@ export async function updateMcpPolicy(form: FormData) {
       maxOperations: form.get('maxOperations'),
       requestsPerMinute: form.get('requestsPerMinute'),
       sensitiveReadsEnabled: form.get('sensitiveReadsEnabled') === 'on',
-      cimdEnabled: form.get('cimdEnabled') === 'on',
       cimdAllowedHosts: String(form.get('cimdAllowedHosts') ?? ''),
-      cimdScopes: String(form.get('cimdScopes') ?? ''),
       dcrEnabled: form.get('dcrEnabled') === 'on',
-      dcrScopes: String(form.get('dcrScopes') ?? ''),
+      // Scope checkboxes submit one value each; a plain text field submits a space-separated list.
+      dcrScopes: form.getAll('dcrScopes').map(String).join(' '),
+      sessionIdleDays: form.get('sessionIdleDays') ?? 30,
     });
   const cimdAllowedHosts = [
     ...new Set(
@@ -121,13 +150,12 @@ export async function updateMcpPolicy(form: FormData) {
     !input.enabled || !(await getMcpConfigurationStatus({ force: true })).issues.length,
     'MCP_CONFIGURATION_INVALID'
   );
-  const cimdScopes = parseScopes(input.cimdScopes);
   const dcrScopes = parseScopes(input.dcrScopes);
   requireMcp(!input.dcrEnabled || dcrScopes.length > 0, 'MCP_DCR_REQUIRES_SCOPES');
-  requireMcp(
-    !input.cimdEnabled || (cimdAllowedHosts.length > 0 && cimdScopes.length > 0),
-    'MCP_CIMD_REQUIRES_HOSTS_AND_SCOPES'
-  );
+  // "Automatic connections" is one switch: assistants may register themselves (DCR) or identify with
+  // a metadata document (CIMD) under the same scope ceiling. An optional host list narrows CIMD.
+  const cimdEnabled = input.dcrEnabled;
+  const cimdScopes = dcrScopes;
   const policy = {
     enabled: input.enabled,
     writesEnabled: input.writesEnabled,
@@ -135,11 +163,12 @@ export async function updateMcpPolicy(form: FormData) {
     maxInFlight: input.maxInFlight,
     maxOperations: input.maxOperations,
     requestsPerMinute: input.requestsPerMinute,
-    cimdEnabled: input.cimdEnabled,
+    cimdEnabled,
     cimdAllowedHosts,
     cimdScopes,
     dcrEnabled: input.dcrEnabled,
     dcrScopes,
+    sessionIdleDays: input.sessionIdleDays,
   };
   await prisma.$transaction(async tx => {
     await assertCurrentAdmin(tx, actor);
@@ -283,111 +312,119 @@ export async function decideMcpConsent(form: FormData) {
     .object({ id: z.string().min(1).max(128), decision: z.enum(['allow', 'deny']) })
     .strict()
     .parse({ id: form.get('id'), decision: form.get('decision') });
-  const location = await prisma.$transaction(
-    async tx => {
-      const policy = await tx.mcpPolicy.findUnique({ where: { id: 'default' } });
-      requireMcp(policy?.enabled, 'MCP_DISABLED', 503);
-      const pending = await tx.mcpConsentRequest.findUnique({ where: { id: input.id } });
-      requireMcp(
-        pending &&
-          pending.userId === actor.id &&
-          !pending.consumedAt &&
-          pending.expiresAt > new Date(),
-        'MCP_CONSENT_EXPIRED'
-      );
-      const client = await tx.mcpClient.findUnique({ where: { id: pending.clientId } });
-      requireMcp(
-        client && !client.revokedAt && client.redirectUris.includes(pending.redirectUri),
-        'invalid_client'
-      );
-      // Bind consent to the current registration policy, not a stale pending form.
-      await tx.$queryRaw`SELECT id FROM "McpClient" WHERE id = ${client.id} FOR UPDATE`;
-      await tx.$queryRaw`SELECT id FROM "McpPolicy" WHERE id = 'default' FOR SHARE`;
-      const currentClient = await tx.mcpClient.findUniqueOrThrow({ where: { id: client.id } });
-      const currentPolicy = await tx.mcpPolicy.findUnique({ where: { id: 'default' } });
-      const ceiling = effectiveMcpClientScopes(currentClient, currentPolicy);
-      requireMcp(
-        ceiling && pending.scopes.every(scope => ceiling.includes(scope)),
-        'invalid_scope'
-      );
-      const consumed = await tx.mcpConsentRequest.updateMany({
-        where: { id: pending.id, consumedAt: null },
-        data: { consumedAt: new Date() },
-      });
-      requireMcp(consumed.count === 1, 'MCP_CONSENT_REPLAY');
-      const user = await tx.user.findUnique({
-        where: { id: actor.id },
-        select: { status: true, tokenVersion: true },
-      });
-      requireMcp(
-        user?.status === 'ACTIVE' && user.tokenVersion === actor.tokenVersion,
-        'MCP_INACTIVE_PRINCIPAL',
-        403
-      );
-      const target = new URL(pending.redirectUri);
-      target.searchParams.set('state', pending.state);
-      target.searchParams.set('iss', mcpIssuer());
-      if (input.decision === 'deny') {
-        target.searchParams.set('error', 'access_denied');
-        return target.href;
-      }
-      if (currentClient.dynamicRegistration && !currentClient.firstAuthorizedAt)
-        await tx.mcpClient.update({
-          where: { id: client.id },
-          data: { firstAuthorizedAt: new Date() },
+  let location: string;
+  try {
+    location = await prisma.$transaction(
+      async tx => {
+        const policy = await tx.mcpPolicy.findUnique({ where: { id: 'default' } });
+        requireMcp(policy?.enabled, 'MCP_DISABLED', 503);
+        const pending = await tx.mcpConsentRequest.findUnique({ where: { id: input.id } });
+        requireMcp(
+          pending &&
+            pending.userId === actor.id &&
+            !pending.consumedAt &&
+            pending.expiresAt > new Date(),
+          'MCP_CONSENT_EXPIRED'
+        );
+        const client = await tx.mcpClient.findUnique({ where: { id: pending.clientId } });
+        requireMcp(
+          client && !client.revokedAt && client.redirectUris.includes(pending.redirectUri),
+          'invalid_client'
+        );
+        // Bind consent to the current registration policy, not a stale pending form.
+        await tx.$queryRaw`SELECT id FROM "McpClient" WHERE id = ${client.id} FOR UPDATE`;
+        await tx.$queryRaw`SELECT id FROM "McpPolicy" WHERE id = 'default' FOR SHARE`;
+        const currentClient = await tx.mcpClient.findUniqueOrThrow({ where: { id: client.id } });
+        const currentPolicy = await tx.mcpPolicy.findUnique({ where: { id: 'default' } });
+        const ceiling = effectiveMcpClientScopes(currentClient, currentPolicy);
+        requireMcp(
+          ceiling && pending.scopes.every(scope => ceiling.includes(scope)),
+          'invalid_scope'
+        );
+        const consumed = await tx.mcpConsentRequest.updateMany({
+          where: { id: pending.id, consumedAt: null },
+          data: { consumedAt: new Date() },
         });
-      const grant = await tx.mcpGrant.create({
-        data: {
-          userId: actor.id,
-          userTokenVersion: user.tokenVersion,
-          clientId: client.id,
-          scopes: pending.scopes,
-          resource: mcpResource(),
-          expiresAt: new Date(Date.now() + 86400000),
-        },
-      });
-      const response = new OAuth2Server.Response();
-      await mcpOAuthServer(tx, () => {}).authorize(
-        new OAuth2Server.Request({
-          method: 'GET',
-          headers: {},
-          body: {},
-          query: {
-            client_id: client.id,
-            redirect_uri: pending.redirectUri,
-            response_type: 'code',
-            state: pending.state,
-            scope: pending.scopes.join(' '),
-            code_challenge: pending.challenge,
-            code_challenge_method: 'S256',
-          },
-        }),
-        response,
-        {
-          allowEmptyState: false,
-          requirePKCE: true,
-          authorizationCodeLifetime: 60,
-          authenticateHandler: { handle: async () => ({ id: actor.id, grantId: grant.id }) },
+        requireMcp(consumed.count === 1, 'MCP_CONSENT_REPLAY');
+        const user = await tx.user.findUnique({
+          where: { id: actor.id },
+          select: { status: true, tokenVersion: true },
+        });
+        requireMcp(
+          user?.status === 'ACTIVE' && user.tokenVersion === actor.tokenVersion,
+          'MCP_INACTIVE_PRINCIPAL',
+          403
+        );
+        const target = new URL(pending.redirectUri);
+        target.searchParams.set('state', pending.state);
+        target.searchParams.set('iss', mcpIssuer());
+        if (input.decision === 'deny') {
+          target.searchParams.set('error', 'access_denied');
+          return target.href;
         }
-      );
-      requireMcp(response.headers?.location, 'MCP_AUTHORIZATION_FAILED');
-      const authorized = new URL(response.headers.location);
-      requireMcp(authorized.searchParams.has('code'), 'MCP_AUTHORIZATION_FAILED');
-      authorized.searchParams.set('iss', mcpIssuer());
-      await logAudit(
-        {
-          source: 'UI',
-          action: 'mcp.grant.consented',
-          entityType: 'SYSTEM_CONFIG',
-          entityId: grant.id,
-          actorId: actor.id,
-          details: { scopes: grant.scopes, clientId: client.id },
-        },
-        tx
-      );
-      return authorized.href;
-    },
-    { isolationLevel: 'Serializable', timeout: 5000 }
-  );
+        if (currentClient.dynamicRegistration && !currentClient.firstAuthorizedAt)
+          await tx.mcpClient.update({
+            where: { id: client.id },
+            data: { firstAuthorizedAt: new Date() },
+          });
+        const grant = await tx.mcpGrant.create({
+          data: {
+            userId: actor.id,
+            userTokenVersion: user.tokenVersion,
+            clientId: client.id,
+            scopes: pending.scopes,
+            resource: mcpResource(),
+            ...mcpSessionDates(new Date(), currentPolicy?.sessionIdleDays),
+          },
+        });
+        const response = new OAuth2Server.Response();
+        await mcpOAuthServer(tx, () => {}).authorize(
+          new OAuth2Server.Request({
+            method: 'GET',
+            headers: {},
+            body: {},
+            query: {
+              client_id: client.id,
+              redirect_uri: pending.redirectUri,
+              response_type: 'code',
+              state: pending.state,
+              scope: pending.scopes.join(' '),
+              code_challenge: pending.challenge,
+              code_challenge_method: 'S256',
+            },
+          }),
+          response,
+          {
+            allowEmptyState: false,
+            requirePKCE: true,
+            authorizationCodeLifetime: 60,
+            authenticateHandler: { handle: async () => ({ id: actor.id, grantId: grant.id }) },
+          }
+        );
+        requireMcp(response.headers?.location, 'MCP_AUTHORIZATION_FAILED');
+        const authorized = new URL(response.headers.location);
+        requireMcp(authorized.searchParams.has('code'), 'MCP_AUTHORIZATION_FAILED');
+        authorized.searchParams.set('iss', mcpIssuer());
+        await logAudit(
+          {
+            source: 'UI',
+            action: 'mcp.grant.consented',
+            entityType: 'SYSTEM_CONFIG',
+            entityId: grant.id,
+            actorId: actor.id,
+            details: { scopes: grant.scopes, clientId: client.id },
+          },
+          tx
+        );
+        return authorized.href;
+      },
+      { isolationLevel: 'Serializable', timeout: 5000 }
+    );
+  } catch (error) {
+    // Show what happened and what to do, not the generic settings error.
+    if (error instanceof McpBoundaryError)
+      redirect(`/oauth/mcp/consent/result?code=${encodeURIComponent(error.code)}`);
+    throw error;
+  }
   redirect(location);
 }

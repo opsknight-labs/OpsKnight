@@ -25,10 +25,7 @@ vi.mock('@/lib/prisma', () => ({
   default: prismaMock,
 }));
 
-import {
-  attemptAutoUnsnoozeInternal,
-  processAutoUnsnoozeIncidentInternal,
-} from '@/lib/unsnooze';
+import { attemptAutoUnsnoozeInternal, processAutoUnsnoozeIncidentInternal } from '@/lib/unsnooze';
 
 const NOW = new Date('2026-08-28T04:30:00.000Z');
 

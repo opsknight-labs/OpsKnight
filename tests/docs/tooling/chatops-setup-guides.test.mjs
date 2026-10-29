@@ -23,7 +23,8 @@ test('Slack setup guide covers the complete app and ChatOps journey', () => {
     'Configure service delivery',
     'Configure responder actions',
     'Production acceptance checklist',
-  ]) assert.ok(slack.includes(requirement), `Slack setup guide must cover ${requirement}`);
+  ])
+    assert.ok(slack.includes(requirement), `Slack setup guide must cover ${requirement}`);
 });
 
 test('Teams setup guide covers the complete Microsoft 365 and ChatOps journey', () => {
@@ -38,5 +39,6 @@ test('Teams setup guide covers the complete Microsoft 365 and ChatOps journey', 
     'Configure service destinations',
     'Configure identities and incident actions',
     'Production acceptance checklist',
-  ]) assert.ok(teams.includes(requirement), `Teams setup guide must cover ${requirement}`);
+  ])
+    assert.ok(teams.includes(requirement), `Teams setup guide must cover ${requirement}`);
 });

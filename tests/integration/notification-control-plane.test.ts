@@ -149,7 +149,7 @@ describeIfRealDB('notification control-plane database guarantees', { timeout: 30
                 to: user.email,
                 subject: 'Workspace invitation',
                 text: 'Private invitation payload',
-              html: '<p>Private invitation payload</p>',
+                html: '<p>Private invitation payload</p>',
               },
             },
             tx

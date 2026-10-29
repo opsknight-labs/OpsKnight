@@ -53,12 +53,15 @@ describe('Prisma error normalization', () => {
   });
 
   it('maps P2025 to the domain not-found code', () => {
-    const mapped = prismaToAppError({ code: 'P2025' }, {
-      notFound: {
-        code: 'STATUS_PAGE_WEBHOOK_NOT_FOUND',
-        userMessage: 'Webhook not found',
-      },
-    });
+    const mapped = prismaToAppError(
+      { code: 'P2025' },
+      {
+        notFound: {
+          code: 'STATUS_PAGE_WEBHOOK_NOT_FOUND',
+          userMessage: 'Webhook not found',
+        },
+      }
+    );
 
     expect(mapped?.code).toBe('STATUS_PAGE_WEBHOOK_NOT_FOUND');
     expect(mapped?.status).toBe(404);

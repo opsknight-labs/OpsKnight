@@ -10,7 +10,9 @@ Swapins: 500.
 Swapouts: 600.`;
 
 it('normalizes swap units and page counters without confusing compressed pages with bytes', () => {
-  expect(parseMacHostPressure(vm, 'vm.swapusage: total = 8192.00M used = 7416.88M free = 775.12M')).toEqual({
+  expect(
+    parseMacHostPressure(vm, 'vm.swapusage: total = 8192.00M used = 7416.88M free = 775.12M')
+  ).toEqual({
     pageSizeBytes: 16384,
     freeBytes: 1638400,
     compressorBytes: 3276800,
@@ -25,7 +27,9 @@ it('normalizes swap units and page counters without confusing compressed pages w
 });
 
 it('rejects incomplete observations instead of interpreting missing counters as zero', () => {
-  expect(() => parseMacHostPressure(vm.replace('Swapins: 500.', ''), 'used = 1M')).toThrow('counter');
+  expect(() => parseMacHostPressure(vm.replace('Swapins: 500.', ''), 'used = 1M')).toThrow(
+    'counter'
+  );
   expect(() => parseMacHostPressure(vm, 'used = unknown')).toThrow('units');
   expect(() => parseMacHostPressure('', 'used = 1M')).toThrow('units');
 });

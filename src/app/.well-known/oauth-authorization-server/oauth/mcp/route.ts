@@ -18,9 +18,15 @@ export function GET() {
       },
     });
     // Advertise only what is enabled and usable in this deployment.
-    const cimd = Boolean(
-      policy?.cimdEnabled && policy.cimdAllowedHosts.length && policy.cimdScopes.length
-    );
+    const cimd = Boolean(policy?.enabled && policy.cimdEnabled && policy.cimdScopes.length);
+    const scopes = policy?.enabled
+      ? [
+          ...new Set([
+            ...(policy.dcrEnabled ? policy.dcrScopes : []),
+            ...(cimd ? policy.cimdScopes : []),
+          ]),
+        ]
+      : [];
     return Response.json(
       {
         issuer,
@@ -34,8 +40,9 @@ export function GET() {
         authorization_response_iss_parameter_supported: true,
         client_id_metadata_document_supported: cimd,
         ...(policy?.enabled && policy.dcrEnabled && policy.dcrScopes.length
-          ? { registration_endpoint: `${issuer}/register`, scopes_supported: policy.dcrScopes }
+          ? { registration_endpoint: `${issuer}/register` }
           : {}),
+        ...(scopes.length ? { scopes_supported: scopes } : {}),
       },
       { headers: { 'Cache-Control': 'no-store' } }
     );

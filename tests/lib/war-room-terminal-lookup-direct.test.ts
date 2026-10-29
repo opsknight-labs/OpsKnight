@@ -16,7 +16,10 @@ vi.mock('@/lib/logger', () => ({
 
 import { findSlackWarRoomForTerminalCleanup } from '@/lib/war-room/providers/slack/client';
 
-function mockListJson(page: { channels: Array<{ id: string; name: string }>; next_cursor?: string }) {
+function mockListJson(page: {
+  channels: Array<{ id: string; name: string }>;
+  next_cursor?: string;
+}) {
   return {
     ok: true,
     channels: page.channels,
@@ -30,12 +33,26 @@ describe('findSlackWarRoomForTerminalCleanup — direct helper (conversations.in
   });
 
   async function withMocks(opts: {
-    listPages: Array<{ channels: Array<{ id: string; name: string }>; next_cursor?: string } | { ok: false; error: string; httpStatus?: number }>;
-    infoByChannelId: Record<string, { ok: boolean; error?: string; channel?: { topic?: { value?: string }; purpose?: { value?: string } }; transportFailure?: boolean }>;
+    listPages: Array<
+      | { channels: Array<{ id: string; name: string }>; next_cursor?: string }
+      | { ok: false; error: string; httpStatus?: number }
+    >;
+    infoByChannelId: Record<
+      string,
+      {
+        ok: boolean;
+        error?: string;
+        channel?: { topic?: { value?: string }; purpose?: { value?: string } };
+        transportFailure?: boolean;
+      }
+    >;
   }) {
     let listIdx = 0;
     h.retryFetch.mockImplementation(async (url: string, init: RequestInit) => {
-      const body = JSON.parse(String((init as { body?: string }).body ?? '{}')) as Record<string, unknown>;
+      const body = JSON.parse(String((init as { body?: string }).body ?? '{}')) as Record<
+        string,
+        unknown
+      >;
       const isList = url.includes('conversations.list');
       const isInfo = url.includes('conversations.info');
 
@@ -62,7 +79,9 @@ describe('findSlackWarRoomForTerminalCleanup — direct helper (conversations.in
         const cid = String(body.channel ?? '');
         const entry = opts.infoByChannelId[cid];
         if (!entry) {
-          return { json: async () => ({ ok: false, error: 'channel_not_found' }) } as unknown as Response;
+          return {
+            json: async () => ({ ok: false, error: 'channel_not_found' }),
+          } as unknown as Response;
         }
         if (entry.transportFailure) {
           throw new Error('fetch failed: network error');
@@ -150,7 +169,9 @@ describe('findSlackWarRoomForTerminalCleanup — direct helper (conversations.in
   it('marker FOUND via topic still returns FOUND', async () => {
     const result = await withMocks({
       listPages: [{ channels: [{ id: 'C1', name: 'some-channel' }] }],
-      infoByChannelId: { C1: { ok: true, channel: { topic: { value: 'hello [OKWR:inc-1:g1] world' } } } },
+      infoByChannelId: {
+        C1: { ok: true, channel: { topic: { value: 'hello [OKWR:inc-1:g1] world' } } },
+      },
     });
     expect(result.status).toBe('FOUND');
     if (result.status === 'FOUND') expect(result.channel.id).toBe('C1');

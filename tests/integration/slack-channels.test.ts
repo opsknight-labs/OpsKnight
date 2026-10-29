@@ -81,9 +81,7 @@ describe('Slack Channels API', () => {
   });
 
   it('returns 401 when an administrator is not authenticated', async () => {
-    vi.mocked(assertAdmin).mockRejectedValueOnce(
-      new AppError({ code: 'AUTHENTICATION_REQUIRED' })
-    );
+    vi.mocked(assertAdmin).mockRejectedValueOnce(new AppError({ code: 'AUTHENTICATION_REQUIRED' }));
 
     const req = new NextRequest('http://localhost:3000/api/slack/channels');
     const response = await GET(req);

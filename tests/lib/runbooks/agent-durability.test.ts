@@ -434,18 +434,18 @@ describe('Agent authority and durable recovery', () => {
       await spool.initialize();
 
       // 1. Simulate a writeFile failure on the probe file (e.g. disk full ENOSPC)
-      await expect(
-        spool.probeStorageIntegrity({ simulateWriteFailure: true })
-      ).rejects.toThrow('Simulated ENOSPC during probe write');
+      await expect(spool.probeStorageIntegrity({ simulateWriteFailure: true })).rejects.toThrow(
+        'Simulated ENOSPC during probe write'
+      );
 
       // Assert that NO temporary .probe-*.tmp files were left abandoned on disk
       const filesAfterWrite = await readdir(directory);
       expect(filesAfterWrite.filter(f => f.startsWith('.probe-'))).toHaveLength(0);
 
       // 2. Simulate an fsync failure on the probe file (e.g. storage I/O error EIO)
-      await expect(
-        spool.probeStorageIntegrity({ simulateSyncFailure: true })
-      ).rejects.toThrow('Simulated EIO during probe fsync');
+      await expect(spool.probeStorageIntegrity({ simulateSyncFailure: true })).rejects.toThrow(
+        'Simulated EIO during probe fsync'
+      );
 
       const filesAfterSync = await readdir(directory);
       expect(filesAfterSync.filter(f => f.startsWith('.probe-'))).toHaveLength(0);

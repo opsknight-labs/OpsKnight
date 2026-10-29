@@ -46,11 +46,7 @@ describe('InlineNotice', () => {
 
   it('handles dismiss button click', () => {
     const onDismiss = vi.fn();
-    render(
-      <InlineNotice onDismiss={onDismiss}>
-        Dismissible notice
-      </InlineNotice>
-    );
+    render(<InlineNotice onDismiss={onDismiss}>Dismissible notice</InlineNotice>);
     const dismissButton = screen.getByRole('button', { name: /dismiss/i });
     fireEvent.click(dismissButton);
     expect(onDismiss).toHaveBeenCalledTimes(1);

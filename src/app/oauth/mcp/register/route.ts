@@ -43,12 +43,11 @@ async function handlePost(request: Request) {
           'MCP_REGISTRATION_DISABLED',
           403
         );
-        const scopes = input.scope ? [...new Set(input.scope.split(/\s+/))] : current.dcrScopes;
-        requireMcp(
-          scopes.length &&
-            scopes.every(scope => scope !== 'admin:manage' && current.dcrScopes.includes(scope)),
-          'invalid_client_metadata'
-        );
+        const asked = input.scope ? [...new Set(input.scope.split(/\s+/))] : [];
+        const allowed = current.dcrScopes.filter(scope => scope !== 'admin:manage');
+        const narrowed = asked.filter(scope => allowed.includes(scope));
+        const scopes = narrowed.length ? narrowed : allowed;
+        requireMcp(scopes.length, 'invalid_client_metadata');
         requireMcp(
           (await tx.mcpClient.count({ where: { dynamicRegistration: true, revokedAt: null } })) <
             MAX_DYNAMIC_CLIENTS,
