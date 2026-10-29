@@ -6,6 +6,10 @@ const MESSAGES = new Map<string, { title: string; body: string }>(
       title: 'AI assistant access is turned off',
       body: 'An OpsKnight administrator needs to enable it in Settings → Integrations & ChatOps → MCP (AI Assistants).',
     },
+    MCP_INVALID_TOKEN: {
+      title: 'Sign-in required',
+      body: 'Connect OpsKnight again from your assistant to sign in.',
+    },
     MCP_CONSENT_EXPIRED: {
       title: 'This sign-in request expired',
       body: 'Return to your assistant and connect again. Requests are valid for five minutes.',
@@ -46,7 +50,31 @@ const FALLBACK = {
 };
 
 export function friendlyMcpError(code: string) {
-  return MESSAGES.get(code) ?? FALLBACK;
+  const message = MESSAGES.get(code);
+  return message ? { ...message, known: true } : { ...FALLBACK, known: false };
+}
+
+/** OAuth error code a redirected authorization failure should carry back to the assistant. */
+export function oauthErrorFor(code: string) {
+  switch (code) {
+    case 'invalid_scope':
+      return 'invalid_scope';
+    case 'MCP_RATE_LIMITED':
+    case 'MCP_DISABLED':
+    case 'MCP_BUSY':
+      return 'temporarily_unavailable';
+    case 'invalid_client':
+    case 'MCP_CLIENT_REVOKED':
+      return 'unauthorized_client';
+    case 'MCP_INACTIVE_PRINCIPAL':
+      return 'access_denied';
+    case 'invalid_request':
+    case 'invalid_target':
+    case 'MCP_DUPLICATE_PARAMETER':
+      return 'invalid_request';
+    default:
+      return 'server_error';
+  }
 }
 
 const escape = (value: string) => value.replace(/[&<>"']/g, ch => `&#${ch.charCodeAt(0)};`);

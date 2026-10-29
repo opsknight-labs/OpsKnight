@@ -1,6 +1,7 @@
 import { z } from 'zod/v3';
 import { mcpOrigin } from './config';
 import { requireMcp, McpBoundaryError } from '../core/errors';
+import { friendlyMcpError } from './friendly-error';
 
 export function assertMcpHost(request: Request, browserWrite = false) {
   const origin = mcpOrigin();
@@ -30,8 +31,10 @@ export function mcpHttpError(error: unknown) {
       : status === 400
         ? 'invalid_request'
         : 'MCP_UNAVAILABLE';
+  // Clients surface error_description to the person using them; keep it actionable.
+  const described = friendlyMcpError(code);
   return Response.json(
-    { error: code },
+    { error: code, ...(described.known ? { error_description: described.body } : {}) },
     {
       status,
       headers: {

@@ -220,6 +220,92 @@ describe('easy assistant onboarding', () => {
   });
 });
 
+describe('failures reach the assistant as OAuth errors', () => {
+  beforeEach(async () => {
+    await db.mcpPolicy.create({ data: { enabled: true, dcrEnabled: true, dcrScopes: scopes } });
+  });
+
+  it('redirects a verified client back with a readable error instead of showing JSON', async () => {
+    const user = await createTestUser({ role: 'USER' });
+    const { client_id } = await registerClient();
+    // The administrator emptied the ceiling after the assistant registered.
+    await db.mcpPolicy.update({ where: { id: 'default' }, data: { dcrScopes: [] } });
+    const result = await authorizeOnly(client_id, user, {});
+    expect(result.response.status).toBe(307);
+    const target = new URL(result.response.headers.get('location')!);
+    expect(`${target.origin}${target.pathname}`).toBe(callback);
+    expect(target.searchParams.get('error')).toBe('unauthorized_client');
+    expect(target.searchParams.get('error_description')).toMatch(/administrator/i);
+    expect(target.searchParams.get('state')).toBe(result.state);
+    expect(target.searchParams.get('iss')).toBe(`${origin}/oauth/mcp`);
+  });
+
+  it('keeps pre-verification failures in the browser, not on the client address', async () => {
+    const user = await createTestUser({ role: 'USER' });
+    const { client_id } = await registerClient();
+    await db.rateLimit.deleteMany({ where: { key: { startsWith: 'mcp:consent:' } } });
+    for (let attempt = 0; attempt < 10; attempt += 1) await authorizeOnly(client_id, user, {});
+    const limited = await authorizeOnly(client_id, user, {});
+    expect(limited.response.status).toBe(429);
+    expect(limited.response.headers.get('location')).toBeNull();
+    expect(limited.response.headers.get('content-type')).toContain('text/html');
+  });
+
+  it('never redirects to an address the client did not register', async () => {
+    const user = await createTestUser({ role: 'USER' });
+    const { client_id } = await registerClient();
+    actor.id = user.id;
+    actor.tokenVersion = user.tokenVersion;
+    const query = new URLSearchParams({
+      client_id,
+      redirect_uri: 'https://evil.example/steal',
+      response_type: 'code',
+      state: randomBytes(24).toString('hex'),
+      code_challenge: createHash('sha256').update('x').digest('base64url'),
+      code_challenge_method: 'S256',
+      scope: 'incidents:read',
+    });
+    const response = await authorize(new Request(`${origin}/oauth/mcp/authorize?${query}`));
+    expect(response.status).toBe(400);
+    expect(response.headers.get('location')).toBeNull();
+    expect(response.headers.get('content-type')).toContain('text/html');
+  });
+
+  it('sends an expired, unused consent back to the assistant as a retryable error', async () => {
+    const user = await createTestUser({ role: 'USER' });
+    const other = await createTestUser({ role: 'USER' });
+    const { client_id } = await registerClient();
+    const { response, state } = await authorizeOnly(client_id, user, {});
+    const id = new URL(response.headers.get('location')!).searchParams.get('id')!;
+    const { expiredConsentReturn } = await import('@/lib/mcp/auth/consent');
+    expect(await expiredConsentReturn(id)).toBeNull(); // still valid: nothing to return
+    await db.mcpConsentRequest.update({
+      where: { id },
+      data: { expiresAt: new Date(Date.now() - 1000) },
+    });
+    const back = new URL((await expiredConsentReturn(id))!);
+    expect(back.searchParams.get('error')).toBe('temporarily_unavailable');
+    expect(back.searchParams.get('state')).toBe(state);
+    // Not for someone else's request, and not once it was used.
+    actor.id = other.id;
+    expect(await expiredConsentReturn(id)).toBeNull();
+    actor.id = user.id;
+    await db.mcpConsentRequest.update({ where: { id }, data: { consumedAt: new Date() } });
+    expect(await expiredConsentReturn(id)).toBeNull();
+  });
+
+  it('gives API callers a human-readable description when MCP is off', async () => {
+    const { mcpHttpError } = await import('@/lib/mcp/auth/http');
+    const { McpBoundaryError } = await import('@/lib/mcp/core/errors');
+    const response = mcpHttpError(new McpBoundaryError('MCP_DISABLED', 503));
+    expect(response.status).toBe(503);
+    expect(await response.json()).toMatchObject({
+      error: 'MCP_DISABLED',
+      error_description: expect.stringContaining('administrator'),
+    });
+  });
+});
+
 describe('one-click setup', () => {
   it('enables read-only automatic connections once and never overwrites an existing setup', async () => {
     const admin = await createTestUser({ role: 'ADMIN' });

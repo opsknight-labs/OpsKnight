@@ -232,7 +232,8 @@ export async function registerMcpClient(form: FormData) {
     .parse({
       name: form.get('name'),
       redirectUri: form.get('redirectUri'),
-      scopes: form.get('scopes'),
+      // Scope checkboxes submit one value each.
+      scopes: form.getAll('scopes').map(String).join(' '),
     });
   const url = new URL(input.redirectUri);
   requireMcp(

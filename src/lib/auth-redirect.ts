@@ -1,5 +1,9 @@
 const INTERNAL_ORIGIN = 'https://opsknight.invalid';
 const MAX_CALLBACK_LENGTH = 2048;
+// Assistants send long redirect URIs and state values; the OAuth authorize URL is rebuilt exactly
+// after sign-in, so it needs more room than ordinary application links.
+const MAX_MCP_AUTHORIZE_CALLBACK_LENGTH = 6144;
+const MCP_AUTHORIZE_PREFIX = '/oauth/mcp/authorize?';
 const FORBIDDEN_AUTH_PREFIXES = [
   '/login',
   '/m/login',
@@ -34,16 +38,16 @@ function decodePathSafely(pathname: string): string {
  * characters and authentication-loop destinations. This helper is deliberately
  * runtime-agnostic so middleware and client auth pages use the exact same policy.
  */
-export function safeInternalCallbackUrl(
-  value: string | null | undefined,
-  fallback = '/'
-): string {
+export function safeInternalCallbackUrl(value: string | null | undefined, fallback = '/'): string {
   if (!value) return fallback;
   if (/[\\\u0000-\u001F\u007F]/.test(value)) return fallback;
   const candidate = value.trim();
   if (
     candidate.length === 0 ||
-    candidate.length > MAX_CALLBACK_LENGTH ||
+    candidate.length >
+      (candidate.startsWith(MCP_AUTHORIZE_PREFIX)
+        ? MAX_MCP_AUTHORIZE_CALLBACK_LENGTH
+        : MAX_CALLBACK_LENGTH) ||
     !candidate.startsWith('/') ||
     candidate.startsWith('//') ||
     candidate.startsWith('/\\')

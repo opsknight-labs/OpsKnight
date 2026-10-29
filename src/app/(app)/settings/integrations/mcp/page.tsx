@@ -23,6 +23,7 @@ import { Label } from '@/components/ui/shadcn/label';
 import { SettingsSection } from '@/components/settings/layout/SettingsSection';
 import McpCopyField from '@/components/settings/mcp/McpCopyField';
 import McpPolicyForm from '@/components/settings/mcp/McpPolicyForm';
+import McpAppUrlSetup from '@/components/settings/mcp/McpAppUrlSetup';
 import McpQuickSetup from '@/components/settings/mcp/McpQuickSetup';
 import McpConnectionTest from '@/components/settings/mcp/McpConnectionTest';
 import { DEFAULT_ASSISTANT_SCOPES } from '@/lib/mcp/auth/client-policy';
@@ -100,7 +101,7 @@ export default async function McpSettings({
   const { cursor, q = '' } = await searchParams;
   requireMcp(!cursor || /^[A-Za-z0-9_-]{1,128}$/.test(cursor), 'MCP_INVALID_CURSOR');
   requireMcp(q.length <= 100, 'MCP_INVALID_SEARCH');
-  const [configuration, policy, clients, grants, activeGrants] = await Promise.all([
+  const [configuration, policy, clients, grants, activeGrants, systemSettings] = await Promise.all([
     getMcpConfigurationStatus(),
     prisma.mcpPolicy.findUnique({ where: { id: 'default' } }),
     permissions.isAdmin
@@ -143,6 +144,9 @@ export default async function McpSettings({
         ...(permissions.isAdmin ? {} : { userId: permissions.id }),
       },
     }),
+    permissions.isAdmin
+      ? prisma.systemSettings.findUnique({ where: { id: 'default' }, select: { updatedAt: true } })
+      : Promise.resolve(null),
   ]);
   const people = new Map(
     (
@@ -267,9 +271,13 @@ export default async function McpSettings({
               <li key={issue}>{issue}</li>
             ))}
           </ul>
-          <Button asChild variant="outline" size="sm">
-            <Link href="/settings/system">Open System settings</Link>
-          </Button>
+          {!configuration.origin ? (
+            <McpAppUrlSetup revision={systemSettings?.updatedAt.toISOString() ?? null} />
+          ) : (
+            <Button asChild variant="outline" size="sm">
+              <Link href="/settings/system">Open System settings</Link>
+            </Button>
+          )}
         </section>
       )}
 
@@ -558,15 +566,23 @@ export default async function McpSettings({
                     placeholder="http://127.0.0.1:8765/callback"
                   />
                 </div>
-                <div className="space-y-1.5 sm:col-span-2">
-                  <Label htmlFor="mcp-client-scopes">Allowed scopes (space separated)</Label>
-                  <Input
-                    id="mcp-client-scopes"
-                    name="scopes"
-                    required
-                    placeholder="incidents:read services:read schedules:read"
-                  />
-                </div>
+                <fieldset className="space-y-2 sm:col-span-2">
+                  <legend className="text-sm font-medium">Allowed scopes</legend>
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    {scopeChoices.map(scope => (
+                      <label key={scope} className="flex cursor-pointer items-start gap-2 text-sm">
+                        <input
+                          type="checkbox"
+                          name="scopes"
+                          value={scope}
+                          defaultChecked={DEFAULT_ASSISTANT_SCOPES.includes(scope)}
+                          className={checkboxClass}
+                        />
+                        <span>{describeMcpScope(scope)}</span>
+                      </label>
+                    ))}
+                  </div>
+                </fieldset>
               </div>
               <div className="flex justify-end">
                 <Button type="submit" size="sm">
@@ -598,6 +614,11 @@ export default async function McpSettings({
             <div className="space-y-3 py-4">
               {clients.length === 0 && (
                 <p className="text-sm text-muted-foreground">No clients registered.</p>
+              )}
+              {clients.length === 50 && (
+                <p className="text-sm text-muted-foreground">
+                  Showing the first 50 clients. Use the search above to find a specific one.
+                </p>
               )}
               {clients.map(client => (
                 <article key={client.id} className="space-y-2 rounded-lg border border-border p-3">
@@ -650,6 +671,15 @@ export default async function McpSettings({
           title={grantsTitle}
           description="Each grant is one user's consent to one assistant. Revoking takes effect on the next request."
         >
+          {permissions.isAdmin && (
+            <p className="pt-4 text-sm text-muted-foreground">
+              Changes to MCP settings and connections are recorded in the{' '}
+              <Link className="underline" href="/audit">
+                audit log
+              </Link>
+              .
+            </p>
+          )}
           <div className="space-y-3 py-4">
             {grants.length === 0 && <p className="text-sm text-muted-foreground">No grants.</p>}
             {grants.slice(0, 25).map(grant => (

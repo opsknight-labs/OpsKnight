@@ -3,12 +3,12 @@ import { withMcpDatabase } from '@/lib/database-workload';
 import prisma from '@/lib/prisma';
 import { getCurrentUser } from '@/lib/rbac';
 import { checkRateLimit } from '@/lib/rate-limit';
-import { mcpOrigin, mcpResource, withMcpRuntime } from '@/lib/mcp/auth/config';
+import { mcpIssuer, mcpOrigin, mcpResource, withMcpRuntime } from '@/lib/mcp/auth/config';
 import { assertMcpHost, authorizationQuerySchema, uniqueQuery } from '@/lib/mcp/auth/http';
-import { requireMcp } from '@/lib/mcp/core/errors';
+import { McpBoundaryError, requireMcp } from '@/lib/mcp/core/errors';
 import { isCimdClientId, resolveCimdClient } from '@/lib/mcp/auth/cimd';
 import { AppError } from '@/lib/errors';
-import { mcpErrorPage } from '@/lib/mcp/auth/friendly-error';
+import { friendlyMcpError, mcpErrorPage, oauthErrorFor } from '@/lib/mcp/auth/friendly-error';
 import { effectiveMcpClientScopes } from '@/lib/mcp/auth/client-policy';
 
 export function GET(request: Request) {
@@ -16,6 +16,9 @@ export function GET(request: Request) {
 }
 
 async function handleGet(request: Request) {
+  // Set once the client and its exact redirect URI are verified; only then is it safe to send
+  // failures back to the assistant instead of showing them in the browser.
+  let trusted: { redirectUri: string; state: string } | undefined;
   try {
     assertMcpHost(request);
     const policy = await prisma.mcpPolicy.findUnique({ where: { id: 'default' } });
@@ -45,6 +48,7 @@ async function handleGet(request: Request) {
       client && !client.revokedAt && client.redirectUris.includes(query.redirect_uri),
       'invalid_client'
     );
+    trusted = { redirectUri: query.redirect_uri, state: query.state };
     const ceiling = effectiveMcpClientScopes(client, policy);
     requireMcp(ceiling?.length, 'invalid_client');
     // Assistants often ask for generic scopes (openid, offline_access) or more than policy allows;
@@ -86,6 +90,14 @@ async function handleGet(request: Request) {
         new URL(request.url).pathname + new URL(request.url).search
       );
       return NextResponse.redirect(login);
+    }
+    if (trusted && error instanceof McpBoundaryError) {
+      const target = new URL(trusted.redirectUri);
+      target.searchParams.set('error', oauthErrorFor(error.code));
+      target.searchParams.set('error_description', friendlyMcpError(error.code).body);
+      target.searchParams.set('state', trusted.state);
+      target.searchParams.set('iss', mcpIssuer());
+      return NextResponse.redirect(target);
     }
     return mcpErrorPage(error);
   }

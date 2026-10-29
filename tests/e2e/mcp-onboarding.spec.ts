@@ -11,7 +11,11 @@ test('add URL, automatically register, sign in and revoke without manual client 
   request,
   baseURL,
   browserName,
-}) => {
+}, testInfo) => {
+  const shot = (name: string) =>
+    browserName === 'chromium'
+      ? page.screenshot({ path: testInfo.outputPath(`${name}.png`), fullPage: true })
+      : undefined;
   const origin = baseURL!;
   expect(['localhost', '127.0.0.1']).toContain(new URL(origin).hostname);
   await page.goto('/login');
@@ -25,12 +29,22 @@ test('add URL, automatically register, sign in and revoke without manual client 
   const settingsResponse = await page.goto('/settings/integrations/mcp');
   expect(settingsResponse?.headers()['referrer-policy']).toBe('no-referrer');
   expect(settingsResponse?.headers()['cache-control']).toContain('no-store');
+  // Earlier specs share this database and may have enabled MCP; return to a true first-run state.
+  if (!(await page.getByRole('button', { name: 'Turn on AI assistant access' }).isVisible())) {
+    await page.getByRole('checkbox', { name: /Enable MCP/ }).uncheck();
+    await page.getByRole('button', { name: 'Save policy', exact: true }).click();
+    await expect(page.getByText('MCP configuration saved', { exact: true })).toBeVisible();
+    await page.reload();
+  }
   // First run: one click turns on read-only access with automatic connections.
   const quickSetup = page.getByRole('button', { name: 'Turn on AI assistant access' });
-  if (await quickSetup.isVisible()) {
-    await quickSetup.click();
-    await expect(page.getByText('AI assistant access is on', { exact: true })).toBeVisible();
-  }
+  await expect(quickSetup).toBeVisible();
+  await shot('01-first-run');
+  await quickSetup.click();
+  await expect(page.getByText('AI assistant access is on', { exact: true })).toBeVisible();
+  // Setup alone must leave the connect instructions and a working Test connection.
+  await expect(page.getByText('MCP server URL', { exact: true })).toBeVisible();
+  await shot('02-after-setup');
   // Narrow the ceiling to a single scope so the later assertions are deterministic.
   await page.getByRole('checkbox', { name: /Enable MCP/ }).check();
   await page.getByRole('checkbox', { name: 'Automatic connections' }).check();
@@ -104,6 +118,9 @@ test('add URL, automatically register, sign in and revoke without manual client 
   await expect(page.getByRole('heading', { name: `Connect ${name}?`, exact: true })).toBeVisible();
   await expect(page.getByText('View incidents', { exact: true })).toBeVisible();
   await expect(page.getByRole('navigation')).toHaveCount(0);
+  await shot('03-consent-desktop');
+  await page.setViewportSize({ width: 390, height: 844 });
+  await shot('04-consent-mobile');
   await page.getByRole('button', { name: 'Allow', exact: true }).click();
   await page.waitForURL(url => url.origin === new URL(callback).origin);
   const result = new URL(page.url());

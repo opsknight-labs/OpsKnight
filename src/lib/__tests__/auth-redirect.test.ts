@@ -47,4 +47,14 @@ describe('safeInternalCallbackUrl', () => {
   ])('rejects auth-loop destination %s', value => {
     expect(safeInternalCallbackUrl(value, '/safe')).toBe('/safe');
   });
+
+  it('allows a long OAuth authorize URL for MCP sign-in but keeps ordinary links capped', () => {
+    const longQuery = `/oauth/mcp/authorize?state=${'a'.repeat(3000)}`;
+    expect(safeInternalCallbackUrl(longQuery, '/')).toBe(longQuery);
+    expect(safeInternalCallbackUrl(`/oauth/mcp/authorize?state=${'a'.repeat(7000)}`, '/')).toBe(
+      '/'
+    );
+    expect(safeInternalCallbackUrl(`/incidents?x=${'a'.repeat(3000)}`, '/')).toBe('/');
+    expect(safeInternalCallbackUrl(`/oauth/mcp/other?x=${'a'.repeat(3000)}`, '/')).toBe('/');
+  });
 });

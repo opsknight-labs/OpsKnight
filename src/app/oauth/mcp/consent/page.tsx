@@ -2,7 +2,7 @@ import Image from 'next/image';
 import { redirect } from 'next/navigation';
 import { AppError } from '@/lib/errors';
 import { getCurrentUser } from '@/lib/rbac';
-import { assertCanReviewMcpConsent } from '@/lib/mcp/auth/consent';
+import { assertCanReviewMcpConsent, expiredConsentReturn } from '@/lib/mcp/auth/consent';
 import { McpBoundaryError } from '@/lib/mcp/core/errors';
 import { describeMcpScope } from '@/lib/mcp/auth/scopes';
 import { decideMcpConsent } from '@/app/(app)/settings/integrations/mcp/actions';
@@ -33,6 +33,11 @@ export default async function McpConsent({
     )
       redirect(`/login?callbackUrl=${encodeURIComponent(`/oauth/mcp/consent?id=${id}`)}`);
     const code = error instanceof McpBoundaryError ? error.code : 'MCP_UNAVAILABLE';
+    if (code === 'MCP_CONSENT_EXPIRED') {
+      // Send the person back to their assistant so it can offer a retry, instead of a dead end.
+      const back = await expiredConsentReturn(id);
+      if (back) redirect(back);
+    }
     redirect(`/oauth/mcp/consent/result?code=${encodeURIComponent(code)}`);
   }
   const { request, client } = review;
@@ -42,13 +47,32 @@ export default async function McpConsent({
   } catch {}
   return (
     <main className="mx-auto flex min-h-screen max-w-md flex-col justify-center gap-6 px-4 py-10">
-      <div className="flex items-center gap-2">
-        <Image src="/logo.png" alt="OpsKnight" width={28} height={28} />
+      <a
+        href="https://opsknight.com/"
+        target="_blank"
+        rel="noopener noreferrer"
+        className="flex items-center gap-2"
+      >
+        <Image
+          src="/logo.png"
+          alt=""
+          width={32}
+          height={32}
+          className="h-8 w-8 object-contain"
+          priority
+          unoptimized
+        />
         <span className="text-lg font-semibold">OpsKnight</span>
-      </div>
+      </a>
       <section className="space-y-5 rounded-xl border border-border bg-card p-6 shadow-sm">
         <div className="space-y-1">
-          <h1 className="text-xl font-semibold">Connect {client.name}?</h1>
+          <h1
+            className="break-words font-semibold"
+            // The global h1 style is a large display size; this is a compact dialog title.
+            style={{ fontSize: '1.25rem', lineHeight: 1.35 }}
+          >
+            Connect {client.name}?
+          </h1>
           <p className="text-sm text-muted-foreground">
             Signed in as <strong>{who.email ?? who.name ?? 'you'}</strong>. This assistant will act
             as you, with your current permissions.
