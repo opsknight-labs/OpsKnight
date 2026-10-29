@@ -182,8 +182,13 @@ export async function updateMcpPolicy(form: FormData) {
   requireMcp(!input.dcrEnabled || dcrScopes.length > 0, 'MCP_DCR_REQUIRES_SCOPES');
   // "Automatic connections" is one switch: assistants may register themselves (DCR) or identify with
   // a metadata document (CIMD) under the same scope ceiling. An optional host list narrows CIMD.
-  const cimdEnabled = input.dcrEnabled;
-  const cimdScopes = dcrScopes;
+  // A pre-existing host-restricted metadata-document setup keeps working when registration is off.
+  const existing = await prisma.mcpPolicy.findUnique({ where: { id: 'default' } });
+  const keepsRestrictedCimd = Boolean(
+    !input.dcrEnabled && existing?.cimdEnabled && existing.cimdAllowedHosts.length > 0
+  );
+  const cimdEnabled = input.dcrEnabled || keepsRestrictedCimd;
+  const cimdScopes = keepsRestrictedCimd ? existing!.cimdScopes : dcrScopes;
   const policy = {
     enabled: input.enabled,
     writesEnabled: input.writesEnabled,

@@ -704,7 +704,16 @@ function getSecurityHeaders(): Record<string, string> {
   };
 }
 
+const MCP_SENSITIVE_PREFIXES = ['/oauth/mcp', '/settings/integrations/mcp'];
+
 function applySensitiveAuthHeaders(response: NextResponse, pathname: string) {
+  // MCP consent and settings carry one-time identifiers: never cache them or leak them in Referer.
+  if (
+    MCP_SENSITIVE_PREFIXES.some(prefix => pathname === prefix || pathname.startsWith(`${prefix}/`))
+  ) {
+    response.headers.set('Cache-Control', 'private, no-store');
+    response.headers.set('Referrer-Policy', 'no-referrer');
+  }
   if (
     pathname === '/reset-password' ||
     pathname === '/m/reset-password' ||

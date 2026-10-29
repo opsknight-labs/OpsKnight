@@ -253,3 +253,57 @@ describe('one-click setup', () => {
     expect(await db.mcpPolicy.count()).toBe(0);
   });
 });
+
+describe('saving the policy form', () => {
+  const form = (fields: Record<string, string | string[]>) => {
+    const data = new FormData();
+    data.set('maxInFlight', '4');
+    data.set('maxOperations', '8');
+    data.set('requestsPerMinute', '60');
+    data.set('sessionIdleDays', '30');
+    for (const [key, value] of Object.entries(fields))
+      for (const item of [value].flat()) data.append(key, item);
+    return data;
+  };
+  it('turns client metadata documents on and off with automatic connections', async () => {
+    const admin = await createTestUser({ role: 'ADMIN' });
+    actor.id = admin.id;
+    actor.tokenVersion = admin.tokenVersion;
+    const { updateMcpPolicy } = await import('@/app/(app)/settings/integrations/mcp/actions');
+    await updateMcpPolicy(form({ enabled: 'on', dcrEnabled: 'on', dcrScopes: scopes }));
+    expect(await db.mcpPolicy.findUniqueOrThrow({ where: { id: 'default' } })).toMatchObject({
+      dcrEnabled: true,
+      cimdEnabled: true,
+      cimdScopes: scopes,
+      sessionIdleDays: 30,
+    });
+    await updateMcpPolicy(form({ enabled: 'on', dcrScopes: scopes }));
+    expect(await db.mcpPolicy.findUniqueOrThrow({ where: { id: 'default' } })).toMatchObject({
+      dcrEnabled: false,
+      cimdEnabled: false,
+    });
+  });
+  it('does not silently drop an existing host-restricted metadata setup', async () => {
+    const admin = await createTestUser({ role: 'ADMIN' });
+    actor.id = admin.id;
+    actor.tokenVersion = admin.tokenVersion;
+    await db.mcpPolicy.create({
+      data: {
+        enabled: true,
+        cimdEnabled: true,
+        cimdAllowedHosts: ['client.example.com'],
+        cimdScopes: ['incidents:read'],
+      },
+    });
+    const { updateMcpPolicy } = await import('@/app/(app)/settings/integrations/mcp/actions');
+    await updateMcpPolicy(
+      form({ enabled: 'on', cimdAllowedHosts: 'client.example.com', dcrScopes: scopes })
+    );
+    expect(await db.mcpPolicy.findUniqueOrThrow({ where: { id: 'default' } })).toMatchObject({
+      cimdEnabled: true,
+      cimdAllowedHosts: ['client.example.com'],
+      cimdScopes: ['incidents:read'],
+      dcrEnabled: false,
+    });
+  });
+});
