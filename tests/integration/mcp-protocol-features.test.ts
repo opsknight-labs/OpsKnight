@@ -18,7 +18,6 @@ beforeAll(async () => {
     throw new Error('Owned local test database required');
   process.env.MCP_PUBLIC_ORIGIN = 'http://localhost:3000';
   process.env.MCP_DATABASE_URL = process.env.DATABASE_URL;
-  process.env.MCP_TOKEN_HASH_SECRET = randomBytes(32).toString('hex');
   await resetDatabase();
 }, 60000);
 beforeEach(async () => {

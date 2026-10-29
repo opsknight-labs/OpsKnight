@@ -1,3 +1,4 @@
+import { withMcpRuntime } from '@/lib/mcp/auth/config';
 import { randomUUID } from 'node:crypto';
 import { withMcpDatabase } from '@/lib/database-workload';
 import { createMcpHandler } from '@modelcontextprotocol/server';
@@ -36,7 +37,7 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 export function POST(request: Request) {
-  return withMcpDatabase(() => handlePost(request));
+  return withMcpDatabase(() => withMcpRuntime(() => handlePost(request)));
 }
 
 async function handlePost(request: Request) {

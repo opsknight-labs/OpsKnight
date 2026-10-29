@@ -5,7 +5,7 @@ import { z } from 'zod';
 import prisma from '@/lib/prisma';
 import { admitMcpOAuthRequest } from '@/lib/mcp/auth/admission';
 import { mcpOAuthServer } from '@/lib/mcp/auth/oauth-model';
-import { mcpResource } from '@/lib/mcp/auth/config';
+import { mcpResource, withMcpRuntime } from '@/lib/mcp/auth/config';
 import { assertMcpHost, mcpHttpError, uniqueQuery } from '@/lib/mcp/auth/http';
 import { requireMcp } from '@/lib/mcp/core/errors';
 import { readBoundedMcpText } from '@/lib/mcp/core/body';
@@ -29,7 +29,7 @@ const schema = z
   .strict();
 
 export function POST(request: Request) {
-  return withMcpDatabase(() => handlePost(request));
+  return withMcpDatabase(() => withMcpRuntime(() => handlePost(request)));
 }
 
 async function handlePost(request: Request) {

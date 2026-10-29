@@ -29,8 +29,7 @@ The PR-only `mcp-certification.yml` runs modern protocol/security tests, Postgre
 
 Before review-ready status, rerun `npm run test:unit`, `npm run test:int`, `npm run build`, `npm run api:clients:check`, `npm run api:coverage`, `npm run mcp:coverage`, changed-file ESLint, typecheck, security and deployment workflows on the final SHA. Certify fresh install and populated upgrade/rollback. Compare matched ingestion/paging P95/P99, job age, SQL/auth/rate-limit counts, WAL, pool waits and failure recovery at 0/10/25/50/100 MCP concurrency across one/two/three replicas. Record actual host compatibility only after successful consent, read, write and long-task flows.
 
-MCP-only emergency rollback: disable MCP in Settings, revoke clients/grants, and retain additive database tables while reverting application code. Do not drop authentication or task evidence during incident response. A database backup must preserve grant/client/code/token tables and the digest secret must be restored through infrastructure secret management. Full disaster-recovery validation remains pending.
-
+MCP-only emergency rollback: disable MCP in Settings, revoke clients/grants, and retain additive database tables while reverting application code. Do not drop authentication or task evidence during incident response. A database backup must preserve grant/client/code/token tables and the active application encryption key must be restored with it, because MCP token digests are derived from that key. Full disaster-recovery validation remains pending.
 
 ## Running the release-only gate
 
@@ -42,3 +41,11 @@ MCP-only emergency rollback: disable MCP in Settings, revoke clients/grants, and
 The manifest is JSON with `schemaVersion: 1`, a 40-character `sourceRevision`, `imageDigest` in `sha256:<64 lowercase hex characters>` form, an `imageSourceRevision` equal to the same source SHA, an HTTPS `imageProvenanceUrl`, and a `review` object containing `reviewedBy` (GitHub username), UTC `reviewedAt`, and HTTPS `referenceUrl`. The `gates` object must contain exactly these required gate names: `architecture`, `protocol`, `oauth`, `rbac`, `workflowParity`, `approvals`, `durableTasks`, `mixedLoad`, `faultTolerance`, `clients`, `deployment`, `migrationUpgrade`, `security`, and `documentation`. Every row needs `status: "passed"`, the same `sourceRevision`, and one to twenty unique, syntactically valid HTTPS `artifactUrls`. URLs with credentials, fragments, IP literals, local hostnames, or non-default ports are rejected.
 
 No example manifest in this document is intended to pass. The evidence asset must be prepared from real results for the release SHA and image digest; do not mark pending work as passed.
+
+## Managed-configuration browser checkpoint
+
+On 2026-10-29, a fresh owned PostgreSQL 16 fixture, isolated production build and separate loopback server passed all six Chromium/Firefox/WebKit MCP browser flows. The production build/server received no MCP-prefixed environment variables. The settings page reported the database App URL as its origin source. Tests covered native login, PKCE consent and issuer checks, scoped calls, individual revocation, two-user runbook review/execution/retry, mobile layout and the new confirmation-gated revoke-all action against a live OAuth token.
+
+The production build included its TypeScript check; the browser run took 32.5 seconds. Evidence was captured from a dirty tree based on `4b8d30ccca0c3bfc1e43186431b940c45bef57dd`, not a final commit. Logs and disposable secrets remained outside git; the owned server, database container and separate build directory were removed. The existing development server was left running. Copilot's reported 998 database passes were not rerun for this browser checkpoint. This is local evidence, not final-SHA CI, live-client or production capacity certification.
+
+Use `npm run check:mcp:local -- --browser-only` to repeat the production browser stage after a separately completed database suite. The evidence report distinguishes this mode from a full local run.

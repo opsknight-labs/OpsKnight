@@ -1,4 +1,3 @@
-import { randomBytes } from 'node:crypto';
 import { beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { createTestUser, resetDatabase, testPrisma as db } from '../helpers/test-db';
 import { createMcpOAuthModel } from '@/lib/mcp/auth/oauth-model';
@@ -52,7 +51,6 @@ beforeAll(async () => {
   if (!url.pathname.endsWith('_test') || !['localhost', '127.0.0.1'].includes(url.hostname))
     throw new Error('Owned local test database required');
   process.env.MCP_PUBLIC_ORIGIN = 'http://localhost:3000';
-  process.env.MCP_TOKEN_HASH_SECRET = randomBytes(32).toString('hex');
   await resetDatabase();
 }, 60000);
 beforeEach(async () => {

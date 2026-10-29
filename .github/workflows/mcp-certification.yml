@@ -63,8 +63,6 @@ jobs:
       NEXTAUTH_SECRET: isolated-mcp-ci-nextauth-secret-32-bytes
       NEXTAUTH_URL: http://localhost:3042
       NEXT_PUBLIC_APP_URL: http://localhost:3042
-      MCP_PUBLIC_ORIGIN: http://localhost:3042
-      MCP_TOKEN_HASH_SECRET: isolated-mcp-ci-hash-secret-at-least-32-bytes
       OPSKNIGHT_PROCESS_ROLE: web
     steps:
       - uses: actions/checkout@v7
@@ -76,7 +74,7 @@ jobs:
           node <<'JS'
           const {randomBytes}=require('node:crypto');
           const {appendFileSync}=require('node:fs');
-          for (const name of ['NEXTAUTH_SECRET','ENCRYPTION_KEY','API_KEY_SECRET','MCP_TOKEN_HASH_SECRET']) {
+          for (const name of ['NEXTAUTH_SECRET','ENCRYPTION_KEY','API_KEY_SECRET']) {
             const value=randomBytes(32).toString('hex');
             console.log(`::add-mask::${value}`);
             appendFileSync(process.env.GITHUB_ENV,`${name}=${value}\n`);
@@ -91,7 +89,7 @@ jobs:
           MCP_QUERY_PROFILE_OUTPUT: ${{ runner.temp }}/mcp-evidence/query-profile.json
         run: |
           mkdir -p "$RUNNER_TEMP/mcp-evidence"
-          npx vitest run -c vitest.int.config.ts --no-file-parallelism --maxWorkers=1 tests/integration/mcp-security-database.test.ts tests/integration/mcp-database-isolation.test.ts tests/integration/mcp-query-profile.test.ts tests/integration/mcp-runbook-approval.test.ts tests/integration/mcp-postmortem-context.test.ts tests/integration/mcp-operation-approval.test.ts tests/integration/mcp-approval-crash-safety.test.ts tests/integration/mcp-approval-teams-policies.test.ts tests/integration/mcp-approval-automation.test.ts tests/integration/mcp-approval-runbook-rules.test.ts tests/integration/mcp-approval-incidents.test.ts tests/integration/mcp-approval-settings.test.ts tests/integration/mcp-approval-reporting.test.ts tests/integration/mcp-approval-postmortems.test.ts tests/integration/mcp-approval-runbooks.test.ts tests/integration/mcp-approval-schedules.test.ts tests/integration/mcp-approval-services.test.ts tests/integration/mcp-approval-status-pages.test.ts tests/integration/mcp-protocol-features.test.ts tests/integration/mcp-tasks.test.ts tests/integration/mcp-client-metadata.test.ts tests/integration/mcp-approval-destructive.test.ts tests/integration/mcp-approval-destructive-safety.test.ts tests/integration/mcp-approval-natural.test.ts tests/integration/mcp-approval-destructive-items.test.ts tests/integration/mcp-item-previews.test.ts tests/integration/mcp-sensitive-reads.test.ts tests/integration/mcp-sensitive-reads-config.test.ts tests/integration/mcp-sensitive-reads-post.test.ts tests/integration/mcp-fault-injection.test.ts tests/integration/mcp-fault-child.test.ts tests/integration/mcp-load-worker.test.ts
+          npx vitest run -c vitest.int.config.ts --no-file-parallelism --maxWorkers=1 tests/integration/mcp-security-database.test.ts tests/integration/mcp-database-isolation.test.ts tests/integration/mcp-query-profile.test.ts tests/integration/mcp-runbook-approval.test.ts tests/integration/mcp-postmortem-context.test.ts tests/integration/mcp-operation-approval.test.ts tests/integration/mcp-approval-crash-safety.test.ts tests/integration/mcp-approval-teams-policies.test.ts tests/integration/mcp-approval-automation.test.ts tests/integration/mcp-approval-runbook-rules.test.ts tests/integration/mcp-approval-incidents.test.ts tests/integration/mcp-approval-settings.test.ts tests/integration/mcp-approval-reporting.test.ts tests/integration/mcp-approval-postmortems.test.ts tests/integration/mcp-approval-runbooks.test.ts tests/integration/mcp-approval-schedules.test.ts tests/integration/mcp-approval-services.test.ts tests/integration/mcp-approval-status-pages.test.ts tests/integration/mcp-protocol-features.test.ts tests/integration/mcp-tasks.test.ts tests/integration/mcp-client-metadata.test.ts tests/integration/mcp-managed-config.test.ts tests/integration/mcp-approval-destructive.test.ts tests/integration/mcp-approval-destructive-safety.test.ts tests/integration/mcp-approval-natural.test.ts tests/integration/mcp-approval-destructive-items.test.ts tests/integration/mcp-item-previews.test.ts tests/integration/mcp-sensitive-reads.test.ts tests/integration/mcp-sensitive-reads-config.test.ts tests/integration/mcp-sensitive-reads-post.test.ts tests/integration/mcp-fault-injection.test.ts tests/integration/mcp-fault-child.test.ts tests/integration/mcp-load-worker.test.ts
       - name: Source-labelled canonical coverage
         run: |
           mkdir -p "$RUNNER_TEMP/mcp-evidence"
@@ -117,8 +115,8 @@ jobs:
           DATABASE_URL: postgresql://postgres:isolated-mcp-ci@localhost:5432/opsknight_mcp_browser_test
           HOSTNAME: localhost
           PORT: '3042'
-          # Production build on a loopback origin for local browser certification only.
-          MCP_ALLOW_LOOPBACK_HTTP_ORIGIN: 'true'
+          # No MCP environment variables: the origin comes from the seeded App URL and the
+          # credential-hash key is derived from the existing application encryption key.
           MCP_E2E_OUTPUT: ${{ runner.temp }}/mcp-evidence/browser
         run: |
           npx playwright install --with-deps chromium firefox webkit

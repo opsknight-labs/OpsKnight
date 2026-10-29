@@ -10,7 +10,9 @@ it.skipIf(!child)(
   async () => {
     process.env.MCP_DATABASE_URL = process.env.DATABASE_URL;
     const { testPrisma: prisma } = await import('../helpers/test-db');
-    const { digestMcpSecret, mcpResource } = await import('@/lib/mcp/auth/config');
+    const { digestMcpSecret, loadMcpRuntime, mcpResource } = await import('@/lib/mcp/auth/config');
+    // Uses the database-managed origin and credential secret; no MCP environment is required.
+    await loadMcpRuntime();
     const { CostBudget } = await import('@/lib/mcp/core/budget');
     const { callMcpOperation } = await import('@/lib/mcp/core/execution');
     const concurrency = Number(process.env.MCP_LOAD_CONCURRENCY);

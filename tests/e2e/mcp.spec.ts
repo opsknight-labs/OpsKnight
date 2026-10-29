@@ -1,43 +1,14 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, type APIRequestContext, type Page } from '@playwright/test';
 import { createHash, randomBytes } from 'node:crypto';
 
-test('native MCP settings, PKCE consent, scoped call and revocation on desktop/mobile', async ({
-  page,
-  request,
-  browserName,
-  baseURL,
-}) => {
-  const origin = baseURL!;
-  // This suite is restricted to owned local fixtures; it never accepts live credentials.
-  expect(['localhost', '127.0.0.1']).toContain(new URL(origin).hostname);
-  await page.goto('/login');
-  await page.getByLabel(/email/i).fill('mcp-admin@example.test');
-  await page.getByLabel(/^password$/i).fill('Local-only MCP browser fixture passphrase 2026');
-  await page.getByRole('button', { name: /sign in/i, exact: true }).click();
-  await page.waitForURL(
-    url => !url.pathname.startsWith('/login') && !url.pathname.startsWith('/api/auth')
-  );
-  await page.goto('/settings/integrations/mcp');
-  await expect(page.getByRole('heading', { name: 'MCP integration', exact: true })).toBeVisible();
-  await page.getByRole('checkbox', { name: /Enable MCP/ }).check();
-  await page.getByRole('checkbox', { name: /Allow reviewed routine mutations/ }).uncheck();
-  await page.getByRole('button', { name: 'Save policy' }).click();
-  await expect(page.getByRole('region', { name: 'Connection status' })).toContainText(
-    'Status: Enabled'
-  );
-
-  const name = `Local ${browserName} ${Date.now()}`;
-  const redirectUri = 'http://127.0.0.1:8799/callback';
-  await page.getByLabel('Display name', { exact: true }).fill(name);
-  await page.getByLabel('Exact redirect URI').fill(redirectUri);
-  await page.getByLabel(/Allowed scopes/).fill('incidents:read services:read schedules:read');
-  await page.getByRole('button', { name: 'Register client', exact: true }).click();
-  const clientArticle = page
-    .locator('article')
-    .filter({ has: page.getByRole('heading', { name, exact: true }) });
-  await expect(clientArticle).toHaveCount(1);
-  const clientId = await clientArticle.locator('code').innerText();
-
+async function connectClient(
+  page: Page,
+  request: APIRequestContext,
+  origin: string,
+  clientId: string,
+  name: string,
+  redirectUri: string
+) {
   const verifier = randomBytes(32).toString('base64url');
   const state = randomBytes(16).toString('base64url');
   const authorize = new URL('/oauth/mcp/authorize', origin);
@@ -80,7 +51,49 @@ test('native MCP settings, PKCE consent, scoped call and revocation on desktop/m
     },
   });
   expect(exchange.status()).toBe(200);
-  const token = (await exchange.json()) as { access_token: string };
+  return (await exchange.json()) as { access_token: string };
+}
+
+test('native MCP settings, PKCE consent, scoped call and revocation on desktop/mobile', async ({
+  page,
+  request,
+  browserName,
+  baseURL,
+}) => {
+  const origin = baseURL!;
+  // This suite is restricted to owned local fixtures; it never accepts live credentials.
+  expect(['localhost', '127.0.0.1']).toContain(new URL(origin).hostname);
+  await page.goto('/login');
+  await page.getByLabel(/email/i).fill('mcp-admin@example.test');
+  await page.getByLabel(/^password$/i).fill('Local-only MCP browser fixture passphrase 2026');
+  await page.getByRole('button', { name: /sign in/i, exact: true }).click();
+  await page.waitForURL(
+    url => !url.pathname.startsWith('/login') && !url.pathname.startsWith('/api/auth')
+  );
+  await page.goto('/settings/integrations/mcp');
+  await expect(page.getByRole('heading', { name: 'MCP integration', exact: true })).toBeVisible();
+  await expect(page.getByText('App URL (Settings → System)', { exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Copy MCP endpoint', exact: true })).toBeVisible();
+  await page.getByRole('checkbox', { name: /Enable MCP/ }).check();
+  await page.getByRole('checkbox', { name: /Allow reviewed routine mutations/ }).uncheck();
+  await page.getByRole('button', { name: 'Save policy' }).click();
+  await expect(page.getByRole('region', { name: 'Connection status' })).toContainText(
+    'Status: Enabled'
+  );
+
+  const name = `Local ${browserName} ${Date.now()}`;
+  const redirectUri = 'http://127.0.0.1:8799/callback';
+  await page.getByLabel('Display name', { exact: true }).fill(name);
+  await page.getByLabel('Exact redirect URI').fill(redirectUri);
+  await page.getByLabel(/Allowed scopes/).fill('incidents:read services:read schedules:read');
+  await page.getByRole('button', { name: 'Register client', exact: true }).click();
+  const clientArticle = page
+    .locator('article')
+    .filter({ has: page.getByRole('heading', { name, exact: true }) });
+  await expect(clientArticle).toHaveCount(1);
+  const clientId = await clientArticle.locator('code').innerText();
+
+  let token = await connectClient(page, request, origin, clientId, name, redirectUri);
   const rpc = (method: string, params: Record<string, unknown> = {}) =>
     request.post('/mcp', {
       headers: {
@@ -141,4 +154,22 @@ test('native MCP settings, PKCE consent, scoped call and revocation on desktop/m
   await grant.getByRole('button', { name: 'Revoke grant', exact: true }).click();
   await expect(grant.getByText('Revoked', { exact: true })).toBeVisible();
   expect((await rpc('tools/list')).status()).toBe(401);
+
+  // A new consent is usable after individual revocation. The emergency action
+  // then invalidates this live credential through the real native server action.
+  token = await connectClient(page, request, origin, clientId, name, redirectUri);
+  expect((await rpc('tools/list')).status()).toBe(200);
+  await page.goto('/settings/integrations/mcp');
+  const confirmation = page.getByRole('checkbox', {
+    name: 'I understand every user must reconnect their assistants.',
+    exact: true,
+  });
+  await expect(confirmation).toHaveAttribute('required', '');
+  const revokeAll = page.getByRole('button', { name: 'Revoke all MCP connections', exact: true });
+  await revokeAll.click();
+  await expect(confirmation).not.toBeChecked();
+  expect((await rpc('tools/list')).status()).toBe(200);
+  await confirmation.check();
+  await revokeAll.click();
+  await expect.poll(async () => (await rpc('tools/list')).status()).toBe(401);
 });
