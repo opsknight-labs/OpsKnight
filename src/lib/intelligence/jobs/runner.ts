@@ -4,6 +4,7 @@ import { withSpan } from '../telemetry';
 import {
   getIntelligenceSettings,
   resolveEffectivePolicy,
+  withIntelligenceReadMemo,
   type IntelligenceSettingsView,
 } from '../settings/service';
 import { evaluatePause, getCriticalBacklogLagMs, type PauseState } from './backpressure';
@@ -58,7 +59,7 @@ export const DEFAULT_HANDLERS: WorkHandlers = {
         select: { serviceId: true },
       });
       if (!incident) return;
-      const policy = await resolveEffectivePolicy(incident.serviceId, tx);
+      const policy = await resolveEffectivePolicy(incident.serviceId);
       const active = policy.effectiveMode !== 'OFF';
       const outcome = await indexIncident(item.subjectKey, tx, { suppressed: !active });
       if (outcome !== 'indexed' || !active) return;
@@ -266,6 +267,10 @@ export async function runIntelligenceCycle(
   state: LaneState,
   dependencies: CycleDependencies = {}
 ): Promise<CycleResult> {
+  return withIntelligenceReadMemo(() => runCycle(state, dependencies));
+}
+
+async function runCycle(state: LaneState, dependencies: CycleDependencies): Promise<CycleResult> {
   const handlers = dependencies.handlers ?? DEFAULT_HANDLERS;
   const now = dependencies.now ?? Date.now;
   try {

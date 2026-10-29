@@ -3,7 +3,7 @@ import prisma from '@/lib/prisma';
 import { CAPABILITIES, hasCapability } from '@/lib/authorization';
 import { incidentReadWhere } from '@/lib/authorization-filters';
 import type { AuthorizationActor } from '@/lib/authorization-policy';
-import { resolveEffectivePolicy } from '../settings/service';
+import { resolveEffectivePolicy, resolveEffectivePolicyForRequest } from '../settings/service';
 
 export interface RelatedIncidentView {
   relationshipId: string;
@@ -49,7 +49,11 @@ export async function getRelatedIncidentsForActor(
   });
   if (!source) return null;
 
-  const policy = await resolveEffectivePolicy(source.serviceId, client);
+  // Deduplicated per request: an incident page renders several cards that all need the same policy.
+  const policy =
+    client === prisma
+      ? await resolveEffectivePolicyForRequest(source.serviceId)
+      : await resolveEffectivePolicy(source.serviceId, client);
   const surfaced = policy.effectiveMode === 'SUGGEST' || policy.effectiveMode === 'AUTO';
 
   const links = await client.incidentRelationship.findMany({
@@ -62,7 +66,14 @@ export async function getRelatedIncidentsForActor(
     },
     orderBy: [{ decision: 'asc' }, { createdAt: 'desc' }],
     take: MAX_VISIBLE * 3,
-    select: { id: true, decision: true, origin: true, evidence: true, sourceIncidentId: true, targetIncidentId: true },
+    select: {
+      id: true,
+      decision: true,
+      origin: true,
+      evidence: true,
+      sourceIncidentId: true,
+      targetIncidentId: true,
+    },
   });
   if (links.length === 0) return null;
 
@@ -73,7 +84,13 @@ export async function getRelatedIncidentsForActor(
   const otherIds = pairs.map(pair => pair.otherId);
   const visible = await client.incident.findMany({
     where: { AND: [{ id: { in: otherIds } }, readable] },
-    select: { id: true, title: true, status: true, createdAt: true, service: { select: { name: true } } },
+    select: {
+      id: true,
+      title: true,
+      status: true,
+      createdAt: true,
+      service: { select: { name: true } },
+    },
   });
   const byId = new Map(visible.map(incident => [incident.id, incident]));
 

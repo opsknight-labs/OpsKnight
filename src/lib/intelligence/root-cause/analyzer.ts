@@ -28,15 +28,22 @@ export async function computeCauseFindings(
   const upstream = upstreamDistances(edges, incident.serviceId, RESPONSE_LIMITS.maxUpstreamDepth);
   const serviceIds = [incident.serviceId, ...upstream.keys()];
 
-  const [changes, upstreamIncidents] = await Promise.all([
+  // Changes on the incident's own and upstream services and changes tied to no service are read as
+  // separate capped sets, so a busy source of global changes can never crowd out a same-service deploy.
+  const changeWindow = { gte: windowStart, lte: incident.createdAt };
+  const changeSelect = { id: true, serviceId: true, kind: true, occurredAt: true } as const;
+  const [scopedChanges, globalChanges, upstreamIncidents] = await Promise.all([
     tx.changeEvent.findMany({
-      where: {
-        occurredAt: { gte: windowStart, lte: incident.createdAt },
-        OR: [{ serviceId: { in: serviceIds } }, { serviceId: null }],
-      },
+      where: { occurredAt: changeWindow, serviceId: { in: serviceIds } },
       orderBy: { occurredAt: 'desc' },
       take: RESPONSE_LIMITS.maxCauseCandidates,
-      select: { id: true, serviceId: true, kind: true, occurredAt: true },
+      select: changeSelect,
+    }),
+    tx.changeEvent.findMany({
+      where: { occurredAt: changeWindow, serviceId: null },
+      orderBy: { occurredAt: 'desc' },
+      take: RESPONSE_LIMITS.maxCauseCandidates,
+      select: changeSelect,
     }),
     upstream.size === 0
       ? Promise.resolve([])
@@ -52,7 +59,7 @@ export async function computeCauseFindings(
         }),
   ]);
 
-  const changeRows = changes
+  const changeRows = [...scopedChanges, ...globalChanges]
     .map(change => {
       let relation: CauseRelation = 'GLOBAL';
       let depth = 0;
@@ -62,11 +69,18 @@ export async function computeCauseFindings(
         depth = upstream.get(change.serviceId) ?? 1;
       }
       const leadSeconds = Math.round((onset - change.occurredAt.getTime()) / 1000);
-      const score = scoreCause({ relation, depth, leadSeconds, kind: change.kind as ChangeKindValue });
+      const score = scoreCause({
+        relation,
+        depth,
+        leadSeconds,
+        kind: change.kind as ChangeKindValue,
+      });
       return { change, relation, depth, leadSeconds, score };
     })
     .filter(candidate => candidate.score.confidence > 0)
-    .sort((a, b) => b.score.confidence - a.score.confidence || a.change.id.localeCompare(b.change.id))
+    .sort(
+      (a, b) => b.score.confidence - a.score.confidence || a.change.id.localeCompare(b.change.id)
+    )
     .slice(0, RESPONSE_LIMITS.maxCauseFindings)
     .map(candidate => ({
       confidence: candidate.score.confidence,

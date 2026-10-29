@@ -13,6 +13,8 @@ export type SimilarityTier = 'TRIGRAM_FTS' | 'FTS_ONLY';
 export interface IntelligenceCapabilities {
   similarityTier: SimilarityTier;
   trigramAvailable: boolean;
+  /** pgvector is installed, so semantic search can use approximate nearest-neighbour indexes. */
+  vectorAvailable: boolean;
 }
 
 const CACHE_TTL_MS = 60_000;
@@ -25,16 +27,20 @@ export async function detectCapabilities(
 ): Promise<IntelligenceCapabilities> {
   if (cached && now - cached.at < CACHE_TTL_MS) return cached.value;
   let trigramAvailable = false;
+  let vectorAvailable = false;
   try {
-    const rows = await client.$queryRaw<Array<{ present: boolean }>>`
+    const rows = await client.$queryRaw<Array<{ present: boolean; vector: boolean }>>`
       SELECT EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'pg_trgm') AND
-             EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'idx_incident_fingerprint_trgm') AS present`;
+             EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'idx_incident_fingerprint_trgm_gist') AS present,
+             EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'vector') AS vector`;
     trigramAvailable = rows[0]?.present === true;
+    vectorAvailable = rows[0]?.vector === true;
   } catch {
     trigramAvailable = false;
   }
   const value: IntelligenceCapabilities = {
     trigramAvailable,
+    vectorAvailable,
     similarityTier: trigramAvailable ? 'TRIGRAM_FTS' : 'FTS_ONLY',
   };
   cached = { value, at: now };

@@ -3,8 +3,6 @@ import { Prisma } from '@prisma/client';
 import prisma from '@/lib/prisma';
 import { enqueueWorkItems, WORK_KINDS } from './work-queue';
 
-type Client = Prisma.TransactionClient | typeof prisma;
-
 const CURSOR_NAME = 'incident-discovery';
 
 /**

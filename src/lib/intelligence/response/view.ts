@@ -3,7 +3,7 @@ import prisma from '@/lib/prisma';
 import { CAPABILITIES, hasCapability } from '@/lib/authorization';
 import { incidentReadWhere, runbookReadWhere, serviceReadWhere } from '@/lib/authorization-filters';
 import type { AuthorizationActor } from '@/lib/authorization-policy';
-import { resolveEffectivePolicy } from '../settings/service';
+import { resolveEffectivePolicy, resolveEffectivePolicyForRequest } from '../settings/service';
 
 export interface ChangeCauseView {
   findingId: string;
@@ -49,8 +49,10 @@ export interface ResponseIntelligenceView {
 const MAX_PER_SECTION = 5;
 
 type Evidence = Record<string, unknown>;
-const asEvidence = (value: unknown): Evidence => (value && typeof value === 'object' ? (value as Evidence) : {});
-const num = (value: unknown): number => (typeof value === 'number' && Number.isFinite(value) ? value : 0);
+const asEvidence = (value: unknown): Evidence =>
+  value && typeof value === 'object' ? (value as Evidence) : {};
+const num = (value: unknown): number =>
+  typeof value === 'number' && Number.isFinite(value) ? value : 0;
 
 function relationOf(value: unknown): ChangeCauseView['relation'] {
   return value === 'SAME_SERVICE' || value === 'UPSTREAM' ? value : 'GLOBAL';
@@ -80,7 +82,11 @@ export async function getResponseIntelligenceForActor(
   });
   if (!source) return null;
 
-  const policy = await resolveEffectivePolicy(source.serviceId, client);
+  // Deduplicated per request: an incident page renders several cards that all need the same policy.
+  const policy =
+    client === prisma
+      ? await resolveEffectivePolicyForRequest(source.serviceId)
+      : await resolveEffectivePolicy(source.serviceId, client);
   if (policy.effectiveMode !== 'SUGGEST' && policy.effectiveMode !== 'AUTO') return null;
   if (!policy.definition.response.enabled) return null;
 
@@ -140,13 +146,20 @@ export async function getResponseIntelligenceForActor(
     causeFindings.length === 0
       ? []
       : client.incident.findMany({
-          where: { AND: [{ id: { in: causeFindings.map(f => f.subjectRef as string) } }, incidentReadable] },
+          where: {
+            AND: [{ id: { in: causeFindings.map(f => f.subjectRef as string) } }, incidentReadable],
+          },
           select: { id: true, title: true, status: true, service: { select: { name: true } } },
         }),
     runbookFindings.length === 0 || !runbookReadable
       ? []
       : client.runbook.findMany({
-          where: { AND: [{ id: { in: runbookFindings.map(f => f.subjectRef as string) } }, runbookReadable] },
+          where: {
+            AND: [
+              { id: { in: runbookFindings.map(f => f.subjectRef as string) } },
+              runbookReadable,
+            ],
+          },
           select: { id: true, name: true },
         }),
   ]);

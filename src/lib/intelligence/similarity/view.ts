@@ -3,7 +3,7 @@ import prisma from '@/lib/prisma';
 import { CAPABILITIES, hasCapability } from '@/lib/authorization';
 import { incidentReadWhere } from '@/lib/authorization-filters';
 import type { AuthorizationActor } from '@/lib/authorization-policy';
-import { resolveEffectivePolicy } from '../settings/service';
+import { resolveEffectivePolicy, resolveEffectivePolicyForRequest } from '../settings/service';
 import { getMyFeedback } from '../feedback/service';
 import { semanticContent, type SimilarityComponents } from './scoring';
 
@@ -82,7 +82,11 @@ export async function getSimilarIncidentsForActor(
   });
   if (!source) return null;
 
-  const policy = await resolveEffectivePolicy(source.serviceId, client);
+  // Deduplicated per request: an incident page renders several cards that all need the same policy.
+  const policy =
+    client === prisma
+      ? await resolveEffectivePolicyForRequest(source.serviceId)
+      : await resolveEffectivePolicy(source.serviceId, client);
   if (policy.effectiveMode !== 'SUGGEST' && policy.effectiveMode !== 'AUTO') return null;
 
   const findings = await client.intelligenceFinding.findMany({

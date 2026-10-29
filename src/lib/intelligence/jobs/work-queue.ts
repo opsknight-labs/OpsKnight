@@ -47,6 +47,7 @@ const BACKOFF_BASE_MS = 5_000;
 const BACKOFF_MAX_MS = 15 * 60_000;
 /** A dead letter signalled again after this long gets a fresh set of attempts (the outage is likely over). */
 export const DEAD_LETTER_REVIVE_MS = 30 * 60_000;
+const ENQUEUE_CHUNK = 1_000;
 
 export interface WorkItemInput {
   kind: WorkKind;
@@ -87,23 +88,31 @@ export async function enqueueWorkItems(
   const unique = new Map<string, WorkItemInput>();
   for (const item of items) unique.set(`${item.kind}\u0000${item.subjectKey}`, item);
   const now = new Date();
-  const rows = [...unique.values()].map(
-    item =>
-      Prisma.sql`(gen_random_uuid()::text, ${item.kind}, ${item.subjectKey}, ${item.priority ?? WORK_PRIORITY[item.kind]}, ${item.scheduledAt ?? now}, nextval('"IntelligenceWorkItem_generation_seq"')::int, now())`
-  );
   const revive = Prisma.sql`"IntelligenceWorkItem"."attempts" >= ${MAX_WORK_ATTEMPTS}
         AND "IntelligenceWorkItem"."failedAt" < now() - (${DEAD_LETTER_REVIVE_MS} * interval '1 millisecond')`;
-  return client.$executeRaw(Prisma.sql`
-    INSERT INTO "IntelligenceWorkItem" ("id", "kind", "subjectKey", "priority", "scheduledAt", "generation", "updatedAt")
-    VALUES ${Prisma.join(rows)}
-    ON CONFLICT ("kind", "subjectKey") DO UPDATE SET
-      "generation" = EXCLUDED."generation",
-      "priority" = LEAST("IntelligenceWorkItem"."priority", EXCLUDED."priority"),
-      "scheduledAt" = LEAST("IntelligenceWorkItem"."scheduledAt", EXCLUDED."scheduledAt"),
-      "attempts" = CASE WHEN ${revive} THEN 0 ELSE "IntelligenceWorkItem"."attempts" END,
-      "failedAt" = CASE WHEN ${revive} THEN NULL ELSE "IntelligenceWorkItem"."failedAt" END,
-      "updatedAt" = now()
-  `);
+  const values = [...unique.values()];
+  let written = 0;
+  // Chunked: PostgreSQL allows at most 32,767 bind parameters per statement, and each row uses four.
+  for (let start = 0; start < values.length; start += ENQUEUE_CHUNK) {
+    const rows = values
+      .slice(start, start + ENQUEUE_CHUNK)
+      .map(
+        item =>
+          Prisma.sql`(gen_random_uuid()::text, ${item.kind}, ${item.subjectKey}, ${item.priority ?? WORK_PRIORITY[item.kind]}, ${item.scheduledAt ?? now}, nextval('"IntelligenceWorkItem_generation_seq"')::int, now())`
+      );
+    written += await client.$executeRaw(Prisma.sql`
+      INSERT INTO "IntelligenceWorkItem" ("id", "kind", "subjectKey", "priority", "scheduledAt", "generation", "updatedAt")
+      VALUES ${Prisma.join(rows)}
+      ON CONFLICT ("kind", "subjectKey") DO UPDATE SET
+        "generation" = EXCLUDED."generation",
+        "priority" = LEAST("IntelligenceWorkItem"."priority", EXCLUDED."priority"),
+        "scheduledAt" = LEAST("IntelligenceWorkItem"."scheduledAt", EXCLUDED."scheduledAt"),
+        "attempts" = CASE WHEN ${revive} THEN 0 ELSE "IntelligenceWorkItem"."attempts" END,
+        "failedAt" = CASE WHEN ${revive} THEN NULL ELSE "IntelligenceWorkItem"."failedAt" END,
+        "updatedAt" = now()
+    `);
+  }
+  return written;
 }
 
 /**

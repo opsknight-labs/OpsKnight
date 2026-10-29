@@ -1,4 +1,6 @@
 import 'server-only';
+import { AsyncLocalStorage } from 'node:async_hooks';
+import { cache } from 'react';
 import type { Prisma } from '@prisma/client';
 import prisma from '@/lib/prisma';
 import { logAudit } from '@/lib/audit';
@@ -19,8 +21,7 @@ import {
 } from '../contract';
 
 export type IntelligenceActor = { actorId: string } & (
-  | { source: 'UI' }
-  | { source: 'API'; apiClientId: string }
+  { source: 'UI' } | { source: 'API'; apiClientId: string }
 );
 
 type Client = Prisma.TransactionClient | typeof prisma;
@@ -58,13 +59,42 @@ const SETTINGS_SELECT = {
   revision: true,
 } as const;
 
-/** Reads never write: an absent singleton yields the safe defaults (disabled, revision 0). */
-export async function getIntelligenceSettings(client: Client = prisma): Promise<IntelligenceSettingsView> {
-  const row = await client.intelligenceSettings.findUnique({
-    where: { id: 'default' },
-    select: SETTINGS_SELECT,
+/**
+ * Settings and policy reads are memoised for the duration of one lane cycle. Every incident in a batch
+ * resolves the same handful of rows, and each analysis step resolves them again; within a cycle (a few
+ * seconds) they cannot meaningfully change, and the next cycle reads fresh values. Reads through a
+ * transaction client are never memoised.
+ */
+const cycleMemo = new AsyncLocalStorage<Map<string, Promise<unknown>>>();
+
+export function withIntelligenceReadMemo<T>(work: () => Promise<T>): Promise<T> {
+  return cycleMemo.run(new Map(), work);
+}
+
+function memoized<T>(key: string, client: Client, load: () => Promise<T>): Promise<T> {
+  const store = cycleMemo.getStore();
+  if (!store || client !== prisma) return load();
+  const hit = store.get(key) as Promise<T> | undefined;
+  if (hit) return hit;
+  const pending = load().catch(error => {
+    store.delete(key);
+    throw error;
   });
-  return row ?? { ...INTELLIGENCE_SETTINGS_DEFAULTS, revision: 0 };
+  store.set(key, pending);
+  return pending;
+}
+
+/** Reads never write: an absent singleton yields the safe defaults (disabled, revision 0). */
+export async function getIntelligenceSettings(
+  client: Client = prisma
+): Promise<IntelligenceSettingsView> {
+  return memoized('settings', client, async () => {
+    const row = await client.intelligenceSettings.findUnique({
+      where: { id: 'default' },
+      select: SETTINGS_SELECT,
+    });
+    return row ?? { ...INTELLIGENCE_SETTINGS_DEFAULTS, revision: 0 };
+  });
 }
 
 function auditSource(actor: IntelligenceActor) {
@@ -140,6 +170,10 @@ const OFF_DEFAULT: Omit<PolicySnapshot, 'scopeKey'> = {
 };
 
 async function readHeadVersion(client: Client, scopeKey: string): Promise<PolicySnapshot | null> {
+  return memoized(`policy:${scopeKey}`, client, () => loadHeadVersion(client, scopeKey));
+}
+
+async function loadHeadVersion(client: Client, scopeKey: string): Promise<PolicySnapshot | null> {
   const policy = await client.intelligencePolicy.findUnique({
     where: { scopeKey },
     select: { id: true, headVersion: true, overrideActive: true },
@@ -153,7 +187,13 @@ async function readHeadVersion(client: Client, scopeKey: string): Promise<Policy
   // Stored definitions are immutable but the schema may evolve; an unreadable one fails safe to OFF.
   const definition = policyDefinitionSchema.safeParse(version.definition);
   if (!definition.success) {
-    return { scopeKey, policyId: policy.id, version: version.version, mode: 'OFF', definition: DEFAULT_POLICY_DEFINITION };
+    return {
+      scopeKey,
+      policyId: policy.id,
+      version: version.version,
+      mode: 'OFF',
+      definition: DEFAULT_POLICY_DEFINITION,
+    };
   }
   return {
     scopeKey,
@@ -187,6 +227,14 @@ export async function resolveEffectivePolicy(
   };
 }
 
+/**
+ * The effective policy for rendering a page: deduplicated per request, so the several intelligence cards on
+ * an incident page resolve it once instead of once each.
+ */
+export const resolveEffectivePolicyForRequest = cache((serviceId: string | null) =>
+  resolveEffectivePolicy(serviceId)
+);
+
 function assertModeAllowed(mode: IntelligenceModeValue) {
   if (mode === 'AUTO' && !AUTO_MODE_AVAILABLE) {
     throw new AppError({
@@ -213,7 +261,10 @@ async function lockPolicyScope(tx: Prisma.TransactionClient, scopeKey: string) {
 
 async function ensurePolicy(tx: Prisma.TransactionClient, scope: PolicyScope, scopeKey: string) {
   if (scope.serviceId) {
-    const service = await tx.service.findUnique({ where: { id: scope.serviceId }, select: { id: true } });
+    const service = await tx.service.findUnique({
+      where: { id: scope.serviceId },
+      select: { id: true },
+    });
     if (!service) throw new AppError({ code: 'SERVICE_NOT_FOUND' });
   }
   return tx.intelligencePolicy.upsert({
@@ -323,7 +374,11 @@ export async function rollbackPolicy(
       throw new AppError({
         code: 'VALIDATION_FAILED',
         fields: [
-          { field: 'targetVersion', code: 'not_older', message: 'Target must be an older version.' },
+          {
+            field: 'targetVersion',
+            code: 'not_older',
+            message: 'Target must be an older version.',
+          },
         ],
       });
     }
@@ -438,9 +493,14 @@ export async function listServicePolicyOverview(
         select: { policyId: true, version: true, mode: true, definition: true },
       })
     : [];
-  const overrideByService = new Map<string, { mode: IntelligenceModeValue; version: number; definition: PolicyDefinition }>();
+  const overrideByService = new Map<
+    string,
+    { mode: IntelligenceModeValue; version: number; definition: PolicyDefinition }
+  >();
   for (const policy of active) {
-    const head = versions.find(version => version.policyId === policy.id && version.version === policy.headVersion);
+    const head = versions.find(
+      version => version.policyId === policy.id && version.version === policy.headVersion
+    );
     if (!head || !policy.serviceId) continue;
     const definition = policyDefinitionSchema.safeParse(head.definition);
     overrideByService.set(policy.serviceId, {
@@ -451,7 +511,15 @@ export async function listServicePolicyOverview(
   }
   return services.map(service => {
     const override = overrideByService.get(service.id);
-    const chosen = override ?? (globalPolicy ? { mode: globalPolicy.mode, version: globalPolicy.version, definition: globalPolicy.definition } : null);
+    const chosen =
+      override ??
+      (globalPolicy
+        ? {
+            mode: globalPolicy.mode,
+            version: globalPolicy.version,
+            definition: globalPolicy.definition,
+          }
+        : null);
     const mode = chosen?.mode ?? 'OFF';
     const definition = chosen?.definition ?? DEFAULT_POLICY_DEFINITION;
     return {
@@ -500,7 +568,16 @@ export async function listPolicyVersions(
 }
 
 export function parseOrThrow<T>(
-  schema: { safeParse: (value: unknown) => { success: true; data: T } | { success: false; error: { issues: Array<{ path: PropertyKey[]; code: string; message: string }> } } },
+  schema: {
+    safeParse: (
+      value: unknown
+    ) =>
+      | { success: true; data: T }
+      | {
+          success: false;
+          error: { issues: Array<{ path: PropertyKey[]; code: string; message: string }> };
+        };
+  },
   input: unknown
 ): T {
   const result = schema.safeParse(input);

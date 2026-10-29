@@ -38,6 +38,12 @@ describe('work item coalescing', () => {
     expect(rows[0].generation).toBeGreaterThan(first);
   });
 
+  it('accepts batches larger than one statement can carry', async () => {
+    const subjects = Array.from({ length: 9_000 }, (_, i) => item(`bulk-${i}`));
+    expect(await enqueueWorkItems(subjects)).toBe(9_000);
+    expect(await db.intelligenceWorkItem.count()).toBe(9_000);
+  });
+
   it('tolerates duplicate subjects inside a single batch', async () => {
     await enqueueWorkItems([item('a'), item('a'), item('b')]);
     expect(await db.intelligenceWorkItem.count()).toBe(2);

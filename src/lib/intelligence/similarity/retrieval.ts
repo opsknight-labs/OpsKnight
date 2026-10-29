@@ -5,6 +5,7 @@ import { withDbBudget } from '../jobs/db-budget';
 import { semanticNeighbours } from '../semantic/search';
 import { detectCapabilities, type SimilarityTier } from './capabilities';
 import { scoreSimilarity, type SimilarityComponents, type SimilarityFingerprint } from './scoring';
+import { selectQueryTerms, termFrequencies } from './term-stats';
 
 export interface SimilarityOptions {
   /** Candidates fetched per source; the total examined is at most 3x this. */
@@ -35,8 +36,31 @@ export interface SimilarityResult {
   results: SimilarIncident[];
 }
 
-const MAX_QUERY_TOKENS = 16;
 const TRIGRAM_THRESHOLD = '0.3';
+
+/**
+ * Runs one candidate source inside a savepoint. A source that hits its statement timeout (or fails for any
+ * other reason) is skipped and the others still count, so one slow index can never fail the analysis.
+ */
+async function tolerant<T>(
+  tx: Prisma.TransactionClient,
+  name: string,
+  work: () => Promise<T[]>
+): Promise<T[]> {
+  await tx.$executeRawUnsafe(`SAVEPOINT intelligence_${name}`);
+  try {
+    const rows = await work();
+    await tx.$executeRawUnsafe(`RELEASE SAVEPOINT intelligence_${name}`);
+    return rows;
+  } catch (error) {
+    await tx.$executeRawUnsafe(`ROLLBACK TO SAVEPOINT intelligence_${name}`);
+    logger.warn('[Intelligence] A similarity source failed; continuing with the others', {
+      source: name,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return [];
+  }
+}
 
 type StoredFingerprint = {
   incidentId: string;
@@ -75,7 +99,7 @@ export async function findSimilarIncidents(
 ): Promise<SimilarityResult | null> {
   const now = options.now ?? new Date();
   const lowerBound = new Date(now.getTime() - options.lookbackDays * 86_400_000);
-  const capabilities = await detectCapabilities();
+  const [capabilities, frequencies] = await Promise.all([detectCapabilities(), termFrequencies()]);
 
   const lexical = await withDbBudget({ maxDbMs: options.maxDbMs }, async tx => {
     const source = await tx.incidentFingerprint.findUnique({ where: { incidentId } });
@@ -88,37 +112,47 @@ export async function findSimilarIncidents(
     };
 
     collect(
-      await tx.$queryRaw<Array<{ incidentId: string }>>(Prisma.sql`
-        SELECT "incidentId" FROM "IncidentFingerprint"
-        WHERE "serviceId" = ${source.serviceId} AND "incidentId" <> ${incidentId}
-          AND "incidentCreatedAt" > ${lowerBound} AND "template" <> ''
-        ORDER BY "incidentCreatedAt" DESC
-        LIMIT ${cap}`)
+      await tolerant(tx, 'service', () =>
+        tx.$queryRaw<Array<{ incidentId: string }>>(Prisma.sql`
+          SELECT "incidentId" FROM "IncidentFingerprint"
+          WHERE "serviceId" = ${source.serviceId} AND "incidentId" <> ${incidentId}
+            AND "incidentCreatedAt" > ${lowerBound} AND "template" <> ''
+          ORDER BY "incidentCreatedAt" DESC
+          LIMIT ${cap}`)
+      )
     );
 
-    const tokens = source.tokens.slice(0, MAX_QUERY_TOKENS);
-    if (tokens.length > 0) {
+    // Rare words first and very common ones dropped, using the column's own statistics: "error" or
+    // "service" would otherwise match a large share of history and make this the most expensive query.
+    // ts_rank over the stored vector is enough to pick candidates (they are re-scored below); cover
+    // density ranking cost ~30x more per matching row.
+    const terms = selectQueryTerms(source.tokens, frequencies);
+    if (terms.length > 0) {
       // Tokens are restricted to [a-z]{2,32} by normalization, so the OR query is always valid.
-      const tsQuery = tokens.join(' | ');
+      const tsQuery = terms.join(' | ');
       collect(
-        await tx.$queryRaw<Array<{ incidentId: string }>>(Prisma.sql`
-          SELECT "incidentId" FROM "IncidentFingerprint"
-          WHERE to_tsvector('simple', "template") @@ to_tsquery('simple', ${tsQuery})
-            AND "incidentId" <> ${incidentId} AND "incidentCreatedAt" > ${lowerBound}
-          ORDER BY ts_rank_cd(to_tsvector('simple', "template"), to_tsquery('simple', ${tsQuery})) DESC
-          LIMIT ${cap}`)
+        await tolerant(tx, 'fulltext', () =>
+          tx.$queryRaw<Array<{ incidentId: string }>>(Prisma.sql`
+            SELECT "incidentId" FROM "IncidentFingerprint"
+            WHERE "searchVector" @@ to_tsquery('simple', ${tsQuery})
+              AND "incidentId" <> ${incidentId} AND "incidentCreatedAt" > ${lowerBound}
+            ORDER BY ts_rank("searchVector", to_tsquery('simple', ${tsQuery})) DESC, "incidentCreatedAt" DESC
+            LIMIT ${cap}`)
+        )
       );
     }
 
     if (capabilities.trigramAvailable && source.template.length > 0) {
-      await tx.$executeRaw`SELECT set_config('pg_trgm.similarity_threshold', ${TRIGRAM_THRESHOLD}, true)`;
       collect(
-        await tx.$queryRaw<Array<{ incidentId: string }>>(Prisma.sql`
-          SELECT "incidentId" FROM "IncidentFingerprint"
-          WHERE "template" % ${source.template}
-            AND "incidentId" <> ${incidentId} AND "incidentCreatedAt" > ${lowerBound}
-          ORDER BY similarity("template", ${source.template}) DESC
-          LIMIT ${cap}`)
+        await tolerant(tx, 'trigram', async () => {
+          await tx.$executeRaw`SELECT set_config('pg_trgm.similarity_threshold', ${TRIGRAM_THRESHOLD}, true)`;
+          return tx.$queryRaw<Array<{ incidentId: string }>>(Prisma.sql`
+            SELECT "incidentId" FROM "IncidentFingerprint"
+            WHERE "template" % ${source.template}
+              AND "incidentId" <> ${incidentId} AND "incidentCreatedAt" > ${lowerBound}
+            ORDER BY "template" <-> ${source.template}
+            LIMIT ${cap}`);
+        })
       );
     }
 

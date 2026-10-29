@@ -115,7 +115,7 @@ describe('similar incident retrieval', () => {
     const target = await indexed('Database connection errors on db-primary-1', service.id);
     const precedent = await indexed('Database connection errors on db-primary-9', service.id);
 
-    await db.$executeRawUnsafe('DROP INDEX IF EXISTS "idx_incident_fingerprint_trgm"');
+    await db.$executeRawUnsafe('DROP INDEX IF EXISTS "idx_incident_fingerprint_trgm_gist"');
     resetCapabilityCacheForTests();
     try {
       expect(await detectCapabilities()).toMatchObject({
@@ -127,7 +127,7 @@ describe('similar incident retrieval', () => {
       expect(result!.results[0].incidentId).toBe(precedent.id);
     } finally {
       await db.$executeRawUnsafe(
-        'CREATE INDEX IF NOT EXISTS "idx_incident_fingerprint_trgm" ON "IncidentFingerprint" USING GIN ("template" gin_trgm_ops)'
+        'CREATE INDEX IF NOT EXISTS "idx_incident_fingerprint_trgm_gist" ON "IncidentFingerprint" USING GIST ("template" gist_trgm_ops)'
       );
       resetCapabilityCacheForTests();
     }

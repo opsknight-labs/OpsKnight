@@ -1,9 +1,10 @@
 import 'server-only';
-import { createHash } from 'node:crypto';
 import prisma from '@/lib/prisma';
 import { registerAiGateway } from '../ai/gateway';
 import { resolveEmbeddingModel } from '../ai/port';
-import { normalizeVector } from './vector';
+import { templateHash } from '../jobs/indexer';
+import { ensureAnnIndex } from './search';
+import { MIN_DIMENSIONS, normalizeVector } from './vector';
 
 /** Rate-limit and audit identity for background embedding; it is never a person. */
 export const EMBEDDING_ACTOR = 'intelligence:embedder';
@@ -14,13 +15,10 @@ export const EMBED_INTERVAL_MS = 60_000;
 const EMBED_LOOKBACK_DAYS = 30;
 
 export type EmbedOutcome =
-  | { status: 'disabled' }
-  | { status: 'done'; model: string; embedded: string[] };
+  { status: 'disabled' } | { status: 'done'; model: string; embedded: string[] };
 
-/** Must match the SQL in `findIncidentsToEmbed`: sha256 of the stored template, first 32 hex chars. */
-function sourceHash(template: string): string {
-  return createHash('sha256').update(template, 'utf8').digest('hex').slice(0, 32);
-}
+/** The same hash the indexer stores on the fingerprint, so pending work is an indexed comparison. */
+const sourceHash = templateHash;
 
 /** The configured embedding model, or null when semantic search is off or unavailable. */
 export async function currentEmbeddingModel(): Promise<string | null> {
@@ -34,7 +32,10 @@ export async function currentEmbeddingModel(): Promise<string | null> {
  * not allowed to receive INTERNAL data are never chosen. Incidents whose text and model are unchanged
  * are skipped, so re-indexing (for example on resolve) costs nothing.
  */
-export async function embedIncidents(incidentIds: readonly string[], signal?: AbortSignal): Promise<EmbedOutcome> {
+export async function embedIncidents(
+  incidentIds: readonly string[],
+  signal?: AbortSignal
+): Promise<EmbedOutcome> {
   registerAiGateway();
   const port = await resolveEmbeddingModel('INTERNAL');
   if (!port) return { status: 'disabled' };
@@ -52,41 +53,66 @@ export async function embedIncidents(incidentIds: readonly string[], signal?: Ab
   ]);
   const current = new Set(existing.map(row => `${row.incidentId}|${row.model}|${row.sourceHash}`));
   const pending = fingerprints
-    .map(fingerprint => ({ ...fingerprint, text: fingerprint.template, hash: sourceHash(fingerprint.template) }))
-    .filter(item => item.text.length > 0 && !current.has(`${item.incidentId}|${port.model}|${item.hash}`));
+    .map(fingerprint => ({
+      ...fingerprint,
+      text: fingerprint.template,
+      hash: sourceHash(fingerprint.template),
+    }))
+    .filter(
+      item => item.text.length > 0 && !current.has(`${item.incidentId}|${port.model}|${item.hash}`)
+    );
   if (pending.length === 0) return { status: 'done', model: port.model, embedded: [] };
 
   const { vectors } = await port.embed(
     pending.map(item => item.text),
     { actorId: EMBEDDING_ACTOR, signal }
   );
-  if (vectors.length !== pending.length) throw new Error('Embedding provider returned the wrong number of vectors');
+  if (vectors.length !== pending.length)
+    throw new Error('Embedding provider returned the wrong number of vectors');
 
   const embedded: string[] = [];
+  const dimensions = new Set<number>();
   for (const [index, item] of pending.entries()) {
     const vector = normalizeVector(vectors.at(index) ?? []);
-    if (!vector) continue;
-    const data = {
-      serviceId: item.serviceId,
-      model: port.model,
-      sourceHash: item.hash,
-      dims: vector.length,
-      vector,
-      incidentCreatedAt: item.incidentCreatedAt,
-      createdAt: new Date(),
-    };
+    if (vector) dimensions.add(vector.length);
     try {
-      await prisma.incidentEmbedding.upsert({
-        where: { incidentId: item.incidentId },
-        create: { incidentId: item.incidentId, ...data },
-        update: data,
-      });
-      embedded.push(item.incidentId);
+      if (vector) {
+        const data = {
+          serviceId: item.serviceId,
+          model: port.model,
+          sourceHash: item.hash,
+          dims: vector.length,
+          vector,
+          incidentCreatedAt: item.incidentCreatedAt,
+          createdAt: new Date(),
+        };
+        await prisma.incidentEmbedding.upsert({
+          where: { incidentId: item.incidentId },
+          create: { incidentId: item.incidentId, ...data },
+          update: data,
+        });
+        embedded.push(item.incidentId);
+      } else {
+        // An unusable vector is recorded without one (never searched), so this text is not retried on
+        // every pass and cannot hold up newer incidents behind it.
+        await prisma.$executeRaw`
+          INSERT INTO "IncidentEmbedding"
+            ("incidentId", "serviceId", "model", "sourceHash", "dims", "vector", "incidentCreatedAt", "createdAt")
+          VALUES (${item.incidentId}, ${item.serviceId}, ${port.model}, ${item.hash}, ${MIN_DIMENSIONS}, NULL,
+                  ${item.incidentCreatedAt}, now())
+          ON CONFLICT ("incidentId") DO UPDATE SET
+            "serviceId" = EXCLUDED."serviceId", "model" = EXCLUDED."model", "sourceHash" = EXCLUDED."sourceHash",
+            "dims" = EXCLUDED."dims", "vector" = NULL, "createdAt" = now()`;
+      }
     } catch (error) {
       // The incident was deleted while we were embedding it: nothing to keep.
-      if ((error as { code?: string }).code !== 'P2003') throw error;
+      const code = (error as { code?: string; meta?: { code?: string } }).code;
+      if (code !== 'P2003' && !(code === 'P2010' && /foreign key/i.test(String(error))))
+        throw error;
     }
   }
+  // Background and best effort: with pgvector this builds the nearest-neighbour index once per size.
+  for (const dims of dimensions) void ensureAnnIndex(dims);
   return { status: 'done', model: port.model, embedded };
 }
 
@@ -94,14 +120,17 @@ export async function embedIncidents(incidentIds: readonly string[], signal?: Ab
  * Recent incidents whose vector is missing or out of date: new incidents, an edited title, a changed
  * model, or work that failed while a provider was down. Newest first and bounded per pass.
  */
-export async function findIncidentsToEmbed(model: string, now: Date = new Date()): Promise<string[]> {
+export async function findIncidentsToEmbed(
+  model: string,
+  now: Date = new Date()
+): Promise<string[]> {
   const lowerBound = new Date(now.getTime() - EMBED_LOOKBACK_DAYS * 86_400_000);
   const rows = await prisma.$queryRaw<Array<{ incidentId: string }>>`
     SELECT f."incidentId" FROM "IncidentFingerprint" f
     LEFT JOIN "IncidentEmbedding" e ON e."incidentId" = f."incidentId"
     WHERE f."incidentCreatedAt" > ${lowerBound} AND length(f."template") > 0
-      AND (e."incidentId" IS NULL OR e."model" <> ${model}
-           OR e."sourceHash" <> left(encode(sha256(convert_to(f."template", 'UTF8')), 'hex'), 32))
+      AND f."templateHash" IS NOT NULL
+      AND (e."incidentId" IS NULL OR e."model" <> ${model} OR e."sourceHash" <> f."templateHash")
     ORDER BY f."incidentCreatedAt" DESC
     LIMIT ${EMBED_BATCH_SIZE}`;
   return rows.map(row => row.incidentId);
@@ -124,7 +153,10 @@ export async function getSemanticIndexStatus(now: Date = new Date()): Promise<Se
   if (!model) return { model: null, indexed: 0, pending: 0 };
   const lowerBound = new Date(now.getTime() - EMBED_LOOKBACK_DAYS * 86_400_000);
   const [indexed, pending] = await Promise.all([
-    prisma.incidentEmbedding.count({ where: { model } }),
+    prisma.$queryRaw<Array<{ count: bigint }>>`
+      SELECT count(*) AS count FROM "IncidentEmbedding" WHERE "model" = ${model} AND "vector" IS NOT NULL`.then(
+      rows => Number(rows[0]?.count ?? 0)
+    ),
     prisma.$queryRaw<Array<{ count: bigint }>>`
       SELECT count(*) AS count FROM (
         SELECT 1 FROM "IncidentFingerprint" f

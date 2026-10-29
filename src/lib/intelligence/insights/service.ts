@@ -4,9 +4,20 @@ import prisma from '@/lib/prisma';
 import { CAPABILITIES, hasCapability } from '@/lib/authorization';
 import { serviceReadWhere } from '@/lib/authorization-filters';
 import type { AuthorizationActor } from '@/lib/authorization-policy';
+import { MAX_WORK_ATTEMPTS } from '../jobs/work-queue';
 import { resolveEffectivePolicy } from '../settings/service';
-import { ANOMALY_BASELINE_WEEKS, ANOMALY_RECENT_DAYS, detectRateAnomaly, type RateAnomaly } from './anomaly';
-import { bucketVerdicts, suggestMinScore, type MinScoreSuggestion, type ScoreBucket } from './calibration';
+import {
+  ANOMALY_BASELINE_WEEKS,
+  ANOMALY_RECENT_DAYS,
+  detectRateAnomaly,
+  type RateAnomaly,
+} from './anomaly';
+import {
+  bucketVerdicts,
+  suggestMinScore,
+  type MinScoreSuggestion,
+  type ScoreBucket,
+} from './calibration';
 
 const DAY_MS = 86_400_000;
 export const RECURRING_WINDOW_DAYS = 30;
@@ -66,15 +77,30 @@ async function visibleServices(actor: AuthorizationActor, client: typeof prisma)
   } catch {
     return new Map<string, string>();
   }
-  const rows = await client.service.findMany({ where, take: MAX_SERVICES, select: { id: true, name: true } });
+  const rows = await client.service.findMany({
+    where,
+    take: MAX_SERVICES,
+    select: { id: true, name: true },
+  });
   return new Map(rows.map(row => [row.id, row.name]));
 }
 
-async function recurringProblems(serviceIds: string[], now: Date, client: typeof prisma): Promise<Omit<RecurringProblem, 'serviceName'>[]> {
+async function recurringProblems(
+  serviceIds: string[],
+  now: Date,
+  client: typeof prisma
+): Promise<Omit<RecurringProblem, 'serviceName'>[]> {
   if (serviceIds.length === 0) return [];
   const since = new Date(now.getTime() - RECURRING_WINDOW_DAYS * DAY_MS);
   const rows = await client.$queryRaw<
-    Array<{ serviceId: string; template: string; occurrences: number; days: number; lastSeen: Date; latest: string }>
+    Array<{
+      serviceId: string;
+      template: string;
+      occurrences: number;
+      days: number;
+      lastSeen: Date;
+      latest: string;
+    }>
   >(Prisma.sql`
     SELECT "serviceId", "template",
            count(*)::int AS occurrences,
@@ -91,7 +117,11 @@ async function recurringProblems(serviceIds: string[], now: Date, client: typeof
   `);
   if (rows.length === 0) return [];
   const bound = await client.serviceAutomationRule.findMany({
-    where: { serviceId: { in: [...new Set(rows.map(row => row.serviceId))] }, enabled: true, detachedAt: null },
+    where: {
+      serviceId: { in: [...new Set(rows.map(row => row.serviceId))] },
+      enabled: true,
+      detachedAt: null,
+    },
     select: { serviceId: true },
     distinct: ['serviceId'],
   });
@@ -107,11 +137,17 @@ async function recurringProblems(serviceIds: string[], now: Date, client: typeof
   }));
 }
 
-async function rateAnomalies(serviceIds: string[], now: Date, client: typeof prisma): Promise<Array<RateAnomaly & { serviceId: string }>> {
+async function rateAnomalies(
+  serviceIds: string[],
+  now: Date,
+  client: typeof prisma
+): Promise<Array<RateAnomaly & { serviceId: string }>> {
   if (serviceIds.length === 0) return [];
   const recentStart = new Date(now.getTime() - ANOMALY_RECENT_DAYS * DAY_MS);
   const baselineStart = new Date(recentStart.getTime() - ANOMALY_BASELINE_WEEKS * 7 * DAY_MS);
-  const rows = await client.$queryRaw<Array<{ serviceId: string; recent: number; baseline: number }>>(Prisma.sql`
+  const rows = await client.$queryRaw<
+    Array<{ serviceId: string; recent: number; baseline: number }>
+  >(Prisma.sql`
     SELECT "serviceId",
            count(*) FILTER (WHERE "createdAt" >= ${recentStart})::int AS recent,
            count(*) FILTER (WHERE "createdAt" < ${recentStart})::int AS baseline
@@ -128,7 +164,9 @@ async function rateAnomalies(serviceIds: string[], now: Date, client: typeof pri
   return flagged.sort((a, b) => b.ratio - a.ratio || b.recent - a.recent).slice(0, MAX_LIST);
 }
 
-export async function getFeedbackCalibration(client: typeof prisma = prisma): Promise<FeedbackCalibration> {
+export async function getFeedbackCalibration(
+  client: typeof prisma = prisma
+): Promise<FeedbackCalibration> {
   const rows = await client.$queryRaw<Array<{ confidence: number; verdict: string }>>(Prisma.sql`
     SELECT f."confidence", fb."verdict"::text AS verdict
     FROM "IntelligenceFeedback" fb
@@ -153,29 +191,33 @@ export async function getFeedbackCalibration(client: typeof prisma = prisma): Pr
 export const WEEKLY_WINDOW_DAYS = 7;
 
 /** Aggregate counts only: no titles, no ids, nothing that names a service, so it is safe at any scope. */
-export async function getWeeklySummary(now: Date = new Date(), client: typeof prisma = prisma): Promise<WeeklySummary> {
+export async function getWeeklySummary(
+  now: Date = new Date(),
+  client: typeof prisma = prisma
+): Promise<WeeklySummary> {
   const since = new Date(now.getTime() - WEEKLY_WINDOW_DAYS * DAY_MS);
   const [findings, analyzed, ratings, changes, dead] = await Promise.all([
-    client.intelligenceFinding.groupBy({ by: ['kind'], where: { createdAt: { gte: since } }, _count: { _all: true } }),
-    client.intelligenceFinding.findMany({
+    client.intelligenceFinding.groupBy({
+      by: ['kind'],
       where: { createdAt: { gte: since } },
-      distinct: ['incidentId'],
-      select: { incidentId: true },
-      take: 100_000,
+      _count: { _all: true },
     }),
+    // Counted in the database; pulling distinct ids into the process grew with every incident.
+    client.$queryRaw<Array<{ count: bigint }>>`
+      SELECT count(DISTINCT "incidentId") AS count FROM "IntelligenceFinding" WHERE "createdAt" >= ${since}`,
     client.intelligenceFeedback.groupBy({
       by: ['verdict'],
       where: { createdAt: { gte: since }, verdict: { in: ['HELPFUL', 'NOT_HELPFUL'] } },
       _count: { _all: true },
     }),
     client.changeEvent.count({ where: { createdAt: { gte: since } } }),
-    client.intelligenceWorkItem.count({ where: { attempts: { gte: 8 } } }),
+    client.intelligenceWorkItem.count({ where: { attempts: { gte: MAX_WORK_ATTEMPTS } } }),
   ]);
   const helpful = ratings.find(row => row.verdict === 'HELPFUL')?._count._all ?? 0;
   const notHelpful = ratings.find(row => row.verdict === 'NOT_HELPFUL')?._count._all ?? 0;
   return {
     windowDays: WEEKLY_WINDOW_DAYS,
-    incidentsAnalyzed: analyzed.length,
+    incidentsAnalyzed: Number(analyzed[0]?.count ?? 0),
     findingsByKind: Object.fromEntries(findings.map(row => [row.kind, row._count._all])),
     ratings: helpful + notHelpful,
     helpfulRatings: helpful,
@@ -199,17 +241,27 @@ export async function getInsights(
   const services = await visibleServices(actor, client);
   const ids = [...services.keys()];
   const [weekly, recurring, anomalies, calibration] = await Promise.all([
-    hasCapability(actor.role, CAPABILITIES.INTELLIGENCE_MANAGE) ? getWeeklySummary(now, client) : Promise.resolve(null),
+    hasCapability(actor.role, CAPABILITIES.INTELLIGENCE_MANAGE)
+      ? getWeeklySummary(now, client)
+      : Promise.resolve(null),
     recurringProblems(ids, now, client),
     rateAnomalies(ids, now, client),
     // Aggregate feedback is only shown to someone who can see every service, so it cannot reveal
     // anything about a service outside a scoped viewer's reach.
-    hasCapability(actor.role, CAPABILITIES.INTELLIGENCE_MANAGE) ? getFeedbackCalibration(client) : Promise.resolve(null),
+    hasCapability(actor.role, CAPABILITIES.INTELLIGENCE_MANAGE)
+      ? getFeedbackCalibration(client)
+      : Promise.resolve(null),
   ]);
   return {
     weekly,
-    recurring: recurring.map(row => ({ ...row, serviceName: services.get(row.serviceId) ?? row.serviceId })),
-    anomalies: anomalies.map(row => ({ ...row, serviceName: services.get(row.serviceId) ?? row.serviceId })),
+    recurring: recurring.map(row => ({
+      ...row,
+      serviceName: services.get(row.serviceId) ?? row.serviceId,
+    })),
+    anomalies: anomalies.map(row => ({
+      ...row,
+      serviceName: services.get(row.serviceId) ?? row.serviceId,
+    })),
     calibration,
   };
 }
