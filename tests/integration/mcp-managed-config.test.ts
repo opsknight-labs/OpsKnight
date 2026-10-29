@@ -150,11 +150,55 @@ describe('MCP configuration without MCP environment variables', () => {
 
     actor.id = admin.id;
     actor.capabilities = ['admin.manage'];
-    await expect(revokeAllMcpConnections(new FormData())).rejects.toThrow(
-      'MCP_CONFIRMATION_REQUIRED'
-    );
-    expect(await db.mcpGrant.count({ where: { revokedAt: null } })).toBe(2);
+    const auditsBefore = await db.auditLog.count({ where: { action: 'mcp.grants.revoked_all' } });
+    const invalidPayloads: Array<[string, Array<[string, string | File]>]> = [
+      ['missing confirmation', []],
+      ['unchecked confirmation', [['confirm', 'off']]],
+      ['boolean-looking confirmation', [['confirm', 'true']]],
+      [
+        'extra field',
+        [
+          ['confirm', 'on'],
+          ['grantId', 'unexpected'],
+        ],
+      ],
+      [
+        'duplicate confirmation',
+        [
+          ['confirm', 'on'],
+          ['confirm', 'on'],
+        ],
+      ],
+      [
+        'conflicting confirmation',
+        [
+          ['confirm', 'off'],
+          ['confirm', 'on'],
+        ],
+      ],
+      ['file confirmation', [['confirm', new File(['on'], 'confirmation.txt')]]],
+      [
+        'prototype field',
+        [
+          ['confirm', 'on'],
+          ['__proto__', 'unexpected'],
+        ],
+      ],
+    ];
+    for (const [scenario, fields] of invalidPayloads) {
+      const malformed = new FormData();
+      for (const [key, value] of fields) malformed.append(key, value);
+      await expect(revokeAllMcpConnections(malformed), scenario).rejects.toThrow(
+        'MCP_CONFIRMATION_REQUIRED'
+      );
+      expect(await db.mcpGrant.count({ where: { revokedAt: null } }), scenario).toBe(2);
+      expect(
+        await db.auditLog.count({ where: { action: 'mcp.grants.revoked_all' } }),
+        scenario
+      ).toBe(auditsBefore);
+    }
 
+    confirmed.set('$ACTION_ID_framework-metadata', '');
     await revokeAllMcpConnections(confirmed);
     expect(await db.mcpGrant.count({ where: { revokedAt: null } })).toBe(0);
     const audit = await db.auditLog.findFirstOrThrow({

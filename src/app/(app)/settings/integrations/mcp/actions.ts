@@ -239,7 +239,14 @@ export async function revokeMcpAccess(form: FormData) {
 /** Revokes every active MCP grant at once, e.g. after a suspected credential exposure. */
 export async function revokeAllMcpConnections(form: FormData) {
   const actor = await admin();
-  requireMcp(form.get('confirm') === 'on', 'MCP_CONFIRMATION_REQUIRED');
+  // Next.js adds reserved action metadata; every business field is validated.
+  const entries = Array.from(form.entries()).filter(([key]) => !key.startsWith('$ACTION_'));
+  const input = z
+    .object({ confirm: z.literal('on') })
+    .strict()
+    .safeParse(Object.fromEntries(entries));
+  // Object.fromEntries collapses duplicate keys, so require exactly one entry too.
+  requireMcp(input.success && entries.length === 1, 'MCP_CONFIRMATION_REQUIRED');
   await prisma.$transaction(async tx => {
     await assertCurrentAdmin(tx, actor);
     const revoked = await tx.mcpGrant.updateMany({
