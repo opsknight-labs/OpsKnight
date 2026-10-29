@@ -7,6 +7,8 @@ export type SettingsNavItem = {
   keywords?: string[];
   requiresAdmin?: boolean;
   requiresAdminOrAuditor?: boolean;
+  /** Admins, auditors and responders: everyone who may view a read-only settings area. */
+  requiresResponderOrAuditor?: boolean;
   requiresResponder?: boolean;
   badge?: string;
 };
@@ -106,8 +108,8 @@ export const SETTINGS_NAV_SECTIONS: SettingsNavSection[] = [
           'Similar incidents, correlation, possible causes, insights and the AI assistant. Off by default and never on the paging path',
         href: '/settings/intelligence',
         icon: 'activity',
-        requiresAdminOrAuditor: true,
-        badge: 'Admin',
+        // Matches the pages: anyone with intelligence.read may view them; only admins change anything.
+        requiresResponderOrAuditor: true,
         keywords: [
           'aiops',
           'intelligence',

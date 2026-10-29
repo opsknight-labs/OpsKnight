@@ -190,10 +190,12 @@ export async function GET(request: NextRequest) {
     };
   }
 
+  // Memory is diagnostic and intelligence is an optional advisory lane: both are reported, but neither
+  // decides whether this replica is ready (a paused intelligence lane must not look like an app problem).
   const readinessChecks =
     mode === 'readiness'
       ? Object.entries(checks)
-          .filter(([key]) => key !== 'memory')
+          .filter(([key]) => key !== 'memory' && key !== 'intelligence')
           .map(([, value]) => value)
       : Object.values(checks);
   const allHealthy =

@@ -20,6 +20,7 @@ import { safeOutboundFetch } from '@/lib/network-security';
 import { assertNotMetadataEndpoint } from './egress';
 import { admitAiRequest, estimateTokens, recordAiUsage } from './budget';
 import { ProviderBreakers } from './breaker';
+import { AI_SETTINGS_BOUNDS } from './contract';
 import { selectProviderChain } from './policy';
 import { redactSecrets } from './redact';
 import {
@@ -394,9 +395,11 @@ class GatewayPort implements LanguageModelPort {
                 schema: zodSchema(request.schema as Parameters<typeof zodSchema>[0]),
                 name: request.schemaName,
               }),
+              // A structured document (a postmortem draft) is not a chat answer: it may ask for more than the
+              // answer-length setting, up to the hard ceiling, so it is never cut off and rejected as invalid.
               maxOutputTokens: Math.min(
                 request.maxOutputTokens ?? this.data.settings.maxOutputTokens,
-                this.data.settings.maxOutputTokens
+                Math.max(this.data.settings.maxOutputTokens, AI_SETTINGS_BOUNDS.maxOutputTokens.max)
               ),
               abortSignal: this.signalFor(request),
               maxRetries: 1,

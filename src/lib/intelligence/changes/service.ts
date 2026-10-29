@@ -41,7 +41,15 @@ export const changeInputSchema = z
     version: z.string().transform(stripControl).pipe(z.string().max(100)).nullish(),
     url: httpUrl.nullish(),
     dedupKey: z.string().trim().min(1).max(128).nullish(),
-    occurredAt: z.coerce.date(),
+    // Numbers below 10^11 are Unix seconds (10^11 s is the year 5138); larger ones are milliseconds. Many
+    // CI systems send seconds, which read as milliseconds would land in January 1970 and be rejected.
+    occurredAt: z.preprocess(
+      value =>
+        typeof value === 'number' && Number.isFinite(value) && Math.abs(value) < 1e11
+          ? value * 1000
+          : value,
+      z.coerce.date()
+    ),
   })
   .strict();
 export type ChangeInput = z.input<typeof changeInputSchema>;
@@ -56,7 +64,10 @@ function invalid(field: string, message: string): AppError {
  * Records a production change. Idempotent per (source, dedupKey), so a retried webhook never
  * creates a second row. Never touches the paging path: this is an independent write.
  */
-export async function recordChange(input: ChangeInput, now: Date = new Date()): Promise<RecordChangeResult> {
+export async function recordChange(
+  input: ChangeInput,
+  now: Date = new Date()
+): Promise<RecordChangeResult> {
   const parsed = parseOrThrow(changeInputSchema, input);
   if (parsed.occurredAt.getTime() > now.getTime() + MAX_FUTURE_SKEW_MS) {
     throw invalid('occurredAt', 'Change time is in the future');

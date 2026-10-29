@@ -39,6 +39,8 @@ export function CommandPalette({ isAdmin, isResponderOrAbove, isAuditor }: Props
   const canAccess = (item: SettingsNavItem) => {
     if (item.requiresAdmin && !isAdmin) return false;
     if (item.requiresAdminOrAuditor && !isAdmin && !isAuditor) return false;
+    if (item.requiresResponderOrAuditor && !isAdmin && !isAuditor && !isResponderOrAbove)
+      return false;
     if (item.requiresResponder && !isResponderOrAbove) return false;
     return true;
   };

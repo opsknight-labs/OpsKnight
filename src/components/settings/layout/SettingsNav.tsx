@@ -74,10 +74,13 @@ export default function SettingsNav({
   const isItemDisabled = (item: {
     requiresAdmin?: boolean;
     requiresAdminOrAuditor?: boolean;
+    requiresResponderOrAuditor?: boolean;
     requiresResponder?: boolean;
   }) => {
     if (item.requiresAdmin && !isAdmin) return true;
     if (item.requiresAdminOrAuditor && !isAdmin && !isAuditor) return true;
+    if (item.requiresResponderOrAuditor && !isAdmin && !isAuditor && !isResponderOrAbove)
+      return true;
     if (item.requiresResponder && !isResponderOrAbove) return true;
     return false;
   };

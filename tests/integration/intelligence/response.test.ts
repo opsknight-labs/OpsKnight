@@ -112,6 +112,26 @@ describe('recording changes', () => {
     expect((await recordChange(loose)).id).not.toBe((await recordChange(loose)).id);
   });
 
+  it('accepts ISO strings, Unix seconds and Unix milliseconds for the time of the change', async () => {
+    const service = await createTestService('API');
+    const at = Date.now() - 5 * MIN;
+    const base = {
+      serviceId: service.id,
+      source: 'ci',
+      kind: 'DEPLOY' as const,
+      summary: 'release',
+    };
+    for (const [key, occurredAt] of [
+      ['iso', new Date(at).toISOString()],
+      ['seconds', Math.floor(at / 1000)],
+      ['millis', at],
+    ] as const) {
+      const { id } = await recordChange({ ...base, dedupKey: key, occurredAt });
+      const stored = await db.changeEvent.findUniqueOrThrow({ where: { id } });
+      expect(Math.abs(stored.occurredAt.getTime() - at)).toBeLessThan(1_000);
+    }
+  });
+
   it('rejects invalid, future, stale and unknown-service changes', async () => {
     const base = { source: 'ci', kind: 'DEPLOY' as const, summary: 'x', occurredAt: new Date() };
     await expect(recordChange({ ...base, summary: '   ' })).rejects.toMatchObject({
