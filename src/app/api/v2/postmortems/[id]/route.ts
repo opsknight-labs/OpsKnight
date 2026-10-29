@@ -1,6 +1,10 @@
 import prisma from '@/lib/prisma';
 import { internalV2MutationGuard } from '@/lib/api-v2/internal-context';
-import { defineV2Route, logV2Audit, PostmortemUpdateV2Schema } from '@/lib/api-v2';
+import {
+  defineV2Route,
+  logV2Audit,
+  PostmortemUpdateV2Schema,
+} from '@/lib/api-v2';
 import { AUTHORIZATION_ACTIONS } from '@/lib/authorization-policy';
 import { postmortemReadWhere } from '@/lib/authorization-filters';
 import { AppError } from '@/lib/errors';
@@ -15,7 +19,10 @@ export const GET = defineV2Route<{ id: string }>({
 
     const postmortem = await prisma.postmortem.findFirst({
       where: {
-        AND: [{ OR: [{ id }, { incidentId: id }] }, accessWhere],
+        AND: [
+          { OR: [{ id }, { incidentId: id }] },
+          accessWhere,
+        ],
       },
       select: {
         id: true,
@@ -62,10 +69,7 @@ export const GET = defineV2Route<{ id: string }>({
       });
     }
 
-    return {
-      data: postmortem,
-      headers: { ...etagHeaders(postmortem.revision), 'Cache-Control': 'no-store' },
-    };
+    return { data: postmortem, headers: { ...etagHeaders(postmortem.revision), 'Cache-Control': 'no-store' } };
   },
 });
 
@@ -74,12 +78,9 @@ export const PATCH = defineV2Route<{ id: string }>({
   bodySchema: PostmortemUpdateV2Schema,
   idempotent: true,
   replayAuthGuard: async ({ actor, params, tx }) => {
-    const found = await tx!.postmortem.findFirst({
-      where: {
-        AND: [{ OR: [{ id: params.id }, { incidentId: params.id }] }, postmortemReadWhere(actor)],
-      },
-      select: { id: true },
-    });
+    const found = await tx!.postmortem.findFirst({ where: {
+      AND: [{ OR: [{ id: params.id }, { incidentId: params.id }] }, postmortemReadWhere(actor)],
+    }, select: { id: true } });
     if (!found) throw new AppError({ code: 'POSTMORTEM_NOT_FOUND' });
   },
   handler: async ({ actor, apiKey, params, body, req, tx }) => {
@@ -90,7 +91,10 @@ export const PATCH = defineV2Route<{ id: string }>({
 
     const existing = await db.postmortem.findFirst({
       where: {
-        AND: [{ OR: [{ id }, { incidentId: id }] }, accessWhere],
+        AND: [
+          { OR: [{ id }, { incidentId: id }] },
+          accessWhere,
+        ],
       },
       include: { incident: { select: { status: true } } },
     });
@@ -103,16 +107,10 @@ export const PATCH = defineV2Route<{ id: string }>({
     }
     if (body.status === 'PUBLISHED' && existing.status !== 'PUBLISHED') {
       if (existing.status === 'ARCHIVED' || existing.incident.status !== 'RESOLVED') {
-        throw new AppError({
-          code: 'RESOURCE_CONFLICT',
-          userMessage: 'Only postmortems for resolved incidents can be published.',
-        });
+        throw new AppError({ code: 'RESOURCE_CONFLICT', userMessage: 'Only postmortems for resolved incidents can be published.' });
       }
       if ((body.summary ?? existing.summary ?? '').trim().length < 5) {
-        throw new AppError({
-          code: 'VALIDATION_FAILED',
-          userMessage: 'A postmortem summary is required before publication.',
-        });
+        throw new AppError({ code: 'VALIDATION_FAILED', userMessage: 'A postmortem summary is required before publication.' });
       }
     }
 
@@ -124,76 +122,72 @@ export const PATCH = defineV2Route<{ id: string }>({
     }
 
     const updatedCount = await db.postmortem.updateMany({
-      where: { id: existing.id, ...ifMatchWhere(expectedRevision) },
-      data: {
-        ...(body.title !== undefined ? { title: body.title } : {}),
-        ...(body.summary !== undefined ? { summary: body.summary } : {}),
-        ...(body.rootCause !== undefined ? { rootCause: body.rootCause } : {}),
-        ...(body.resolution !== undefined
-          ? { resolution: body.resolution }
-          : body.mitigation !== undefined
-            ? { resolution: body.mitigation }
-            : {}),
-        ...(body.lessons !== undefined ? { lessons: body.lessons } : {}),
-        ...(body.impact !== undefined ? { impact: body.impact } : {}),
-        ...(body.timeline !== undefined ? { timeline: body.timeline } : {}),
-        ...(body.contributingFactors !== undefined
-          ? { contributingFactors: body.contributingFactors }
-          : {}),
-        ...(body.fiveWhys !== undefined ? { fiveWhys: body.fiveWhys } : {}),
-        ...(body.status !== undefined ? { status: body.status, publishedAt } : {}),
-        ...(body.isPublic !== undefined ? { isPublic: body.isPublic } : {}),
-      },
+        where: { id: existing.id, ...ifMatchWhere(expectedRevision) },
+        data: {
+          ...(body.title !== undefined ? { title: body.title } : {}),
+          ...(body.summary !== undefined ? { summary: body.summary } : {}),
+          ...(body.rootCause !== undefined ? { rootCause: body.rootCause } : {}),
+          ...(body.resolution !== undefined
+            ? { resolution: body.resolution }
+            : body.mitigation !== undefined
+              ? { resolution: body.mitigation }
+              : {}),
+          ...(body.lessons !== undefined ? { lessons: body.lessons } : {}),
+          ...(body.impact !== undefined ? { impact: body.impact } : {}),
+          ...(body.timeline !== undefined ? { timeline: body.timeline } : {}),
+          ...(body.contributingFactors !== undefined ? { contributingFactors: body.contributingFactors } : {}),
+          ...(body.fiveWhys !== undefined ? { fiveWhys: body.fiveWhys } : {}),
+          ...(body.status !== undefined ? { status: body.status, publishedAt } : {}),
+          ...(body.isPublic !== undefined ? { isPublic: body.isPublic } : {}),
+        },
     });
     if (updatedCount.count !== 1) throw new AppError({ code: 'PRECONDITION_FAILED' });
     const rec = await db.postmortem.findUniqueOrThrow({
-      where: { id: existing.id },
-      select: {
-        id: true,
-        revision: true,
-        incidentId: true,
-        title: true,
-        summary: true,
-        rootCause: true,
-        resolution: true,
-        lessons: true,
-        impact: true,
-        timeline: true,
-        contributingFactors: true,
-        fiveWhys: true,
-        status: true,
-        isPublic: true,
-        publishedAt: true,
-        createdAt: true,
-        updatedAt: true,
-        incident: {
-          select: {
-            id: true,
-            title: true,
-            status: true,
+        where: { id: existing.id },
+        select: {
+          id: true,
+          revision: true,
+          incidentId: true,
+          title: true,
+          summary: true,
+          rootCause: true,
+          resolution: true,
+          lessons: true,
+          impact: true,
+          timeline: true,
+          contributingFactors: true,
+          fiveWhys: true,
+          status: true,
+          isPublic: true,
+          publishedAt: true,
+          createdAt: true,
+          updatedAt: true,
+          incident: {
+            select: {
+              id: true,
+              title: true,
+              status: true,
+            },
+          },
+          createdBy: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+            },
           },
         },
-        createdBy: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-          },
-        },
-      },
-    });
-    await logV2Audit({
-      action:
-        body.status === 'PUBLISHED' && existing.status !== 'PUBLISHED'
-          ? 'postmortem.published'
-          : 'postmortem.updated',
-      entityType: 'INCIDENT',
-      entityId: rec.incidentId,
-      actorId: actor.id,
-      apiKeyId: apiKey.id,
-      details: { changes: Object.keys(body), postmortemId: rec.id },
-      tx,
-    });
+      });
+      await logV2Audit({
+        action: body.status === 'PUBLISHED' && existing.status !== 'PUBLISHED'
+          ? 'postmortem.published' : 'postmortem.updated',
+        entityType: 'INCIDENT',
+        entityId: rec.incidentId,
+        actorId: actor.id,
+        apiKeyId: apiKey.id,
+        details: { changes: Object.keys(body), postmortemId: rec.id },
+        tx,
+      });
 
     return { data: rec, headers: { ...etagHeaders(rec.revision), 'Cache-Control': 'no-store' } };
   },
@@ -208,7 +202,10 @@ export const DELETE = defineV2Route<{ id: string }>({
 
     const existing = await prisma.postmortem.findFirst({
       where: {
-        AND: [{ OR: [{ id }, { incidentId: id }] }, accessWhere],
+        AND: [
+          { OR: [{ id }, { incidentId: id }] },
+          accessWhere,
+        ],
       },
     });
 

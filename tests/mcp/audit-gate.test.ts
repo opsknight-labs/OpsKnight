@@ -53,7 +53,9 @@ describe('dependency audit gate', () => {
     };
     const result = evaluateAudit(audit, { advisories: [entry('GHSA-aaaa-bbbb-cccc')] }, now);
     expect(result.ok).toBe(false);
-    expect(result.blocking).toEqual([{ id: 'GHSA-dddd-eeee-ffff', package: 'left', state: 'NEW' }]);
+    expect(result.blocking).toEqual([
+      { id: 'GHSA-dddd-eeee-ffff', package: 'left', state: 'NEW' },
+    ]);
   });
 
   it('reports baseline entries that no longer apply and rejects malformed baselines', () => {
