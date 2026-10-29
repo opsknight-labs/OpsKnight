@@ -4791,6 +4791,9 @@ model McpPolicy {
   cimdEnabled Boolean @default(false)
   cimdAllowedHosts String[] @default([])
   cimdScopes String[] @default([])
+  // Anonymous registration creates only a client identity; users must still sign in and consent.
+  dcrEnabled Boolean @default(false)
+  dcrScopes String[] @default([])
   updatedAt DateTime @updatedAt
 }
 
@@ -4803,8 +4806,11 @@ model McpClient {
   // Set only for clients identified by an HTTPS metadata document URL (their id).
   metadataUrl String?
   metadataFetchedAt DateTime?
+  dynamicRegistration Boolean @default(false)
+  firstAuthorizedAt DateTime?
   createdAt DateTime @default(now())
   grants McpGrant[]
+  @@index([dynamicRegistration, createdAt])
 }
 
 model McpGrant {

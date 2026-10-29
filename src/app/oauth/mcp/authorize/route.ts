@@ -13,6 +13,7 @@ import {
 import { requireMcp } from '@/lib/mcp/core/errors';
 import { isCimdClientId, resolveCimdClient } from '@/lib/mcp/auth/cimd';
 import { AppError } from '@/lib/errors';
+import { effectiveMcpClientScopes } from '@/lib/mcp/auth/client-policy';
 
 export function GET(request: Request) {
   return withMcpDatabase(() => withMcpRuntime(() => handleGet(request)));
@@ -48,22 +49,33 @@ async function handleGet(request: Request) {
       client && !client.revokedAt && client.redirectUris.includes(query.redirect_uri),
       'invalid_client'
     );
-    const scopes = query.scope.split(' ');
+    const ceiling = effectiveMcpClientScopes(client, policy);
+    requireMcp(ceiling?.length, 'invalid_client');
+    const scopes = query.scope ? [...new Set(query.scope.split(' '))] : ceiling;
     requireMcp(
       scopes.length > 0 &&
-        scopes.every(scope => scope && scope !== 'admin:manage' && client.scopes.includes(scope)),
+        scopes.every(scope => scope && scope !== 'admin:manage' && ceiling.includes(scope)),
       'invalid_scope'
     );
-    const pending = await prisma.mcpConsentRequest.create({
-      data: {
-        userId: user.id,
-        clientId: client.id,
-        redirectUri: query.redirect_uri,
-        scopes,
-        state: query.state,
-        challenge: query.code_challenge,
-        expiresAt: new Date(Date.now() + 300000),
-      },
+    const pending = await prisma.$transaction(async tx => {
+      // Coordinate unused-registration cleanup with creation of a live consent form.
+      await tx.$queryRaw`SELECT id FROM "McpClient" WHERE id = ${client.id} FOR SHARE`;
+      const current = await tx.mcpClient.findUnique({ where: { id: client.id } });
+      requireMcp(
+        current && !current.revokedAt && current.redirectUris.includes(query.redirect_uri),
+        'invalid_client'
+      );
+      return tx.mcpConsentRequest.create({
+        data: {
+          userId: user.id,
+          clientId: client.id,
+          redirectUri: query.redirect_uri,
+          scopes,
+          state: query.state,
+          challenge: query.code_challenge,
+          expiresAt: new Date(Date.now() + 300000),
+        },
+      });
     });
     return NextResponse.redirect(
       new URL(`/settings/integrations/mcp/consent?id=${pending.id}`, mcpOrigin())

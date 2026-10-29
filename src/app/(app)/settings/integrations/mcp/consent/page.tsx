@@ -18,6 +18,12 @@ export default async function McpConsent({
         This client will act with your current role and resource access. You can revoke access in
         MCP settings at any time.
       </p>
+      {client.dynamicRegistration && (
+        <p role="note" className="rounded border border-amber-500/40 bg-amber-500/10 p-3">
+          This application registered automatically. Its name is supplied by the application, not
+          verified by OpsKnight. Check the return address and requested access before allowing it.
+        </p>
+      )}
       <p className="break-all">
         Client ID: <code>{client.id}</code>
       </p>

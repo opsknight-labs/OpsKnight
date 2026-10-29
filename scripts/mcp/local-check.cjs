@@ -153,6 +153,7 @@ async function main() {
       '--no-file-parallelism',
       '--maxWorkers=1',
       'tests/mcp',
+      'tests/components/mcp-copy-field.test.tsx',
     ]);
     await node('database-config', 'node_modules/vitest/vitest.mjs', [
       'run',
@@ -189,6 +190,7 @@ async function main() {
       'tests/integration/mcp-tasks.test.ts',
       'tests/integration/mcp-client-metadata.test.ts',
       'tests/integration/mcp-managed-config.test.ts',
+      'tests/integration/mcp-registration.test.ts',
       'tests/integration/mcp-approval-destructive.test.ts',
       'tests/integration/mcp-approval-destructive-safety.test.ts',
       'tests/integration/mcp-approval-natural.test.ts',

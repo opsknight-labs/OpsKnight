@@ -1,9 +1,9 @@
 import OAuth2Server from '@node-oauth/oauth2-server';
 import { randomBytes } from 'node:crypto';
-import type { Prisma } from '@prisma/client';
+import type { Prisma, McpClient } from '@prisma/client';
 import { digestMcpSecret, mcpResource } from './config';
 import { requireMcp } from '../core/errors';
-import { isCimdHostAllowed } from './cimd';
+import { effectiveMcpClientScopes } from './client-policy';
 
 type Database = Prisma.TransactionClient;
 type Model = OAuth2Server.AuthorizationCodeModel & OAuth2Server.RefreshTokenModel;
@@ -11,11 +11,10 @@ type Model = OAuth2Server.AuthorizationCodeModel & OAuth2Server.RefreshTokenMode
 export function createMcpOAuthModel(db: Database, onReuse: (grantId: string) => void): Model {
   // A metadata client is only as trusted as the current policy: its host must still be listed and
   // its scopes can never exceed the current ceiling, whatever copy was stored at registration.
-  const effectiveScopes = async (client: { metadataUrl: string | null; scopes: string[] }) => {
-    if (!client.metadataUrl) return client.scopes;
+  const effectiveScopes = async (client: McpClient) => {
+    if (!client.metadataUrl && !client.dynamicRegistration) return client.scopes;
     const policy = await db.mcpPolicy.findUnique({ where: { id: 'default' } });
-    if (!policy || !isCimdHostAllowed(policy, new URL(client.metadataUrl).hostname)) return null;
-    return client.scopes.filter(scope => policy.cimdScopes.includes(scope));
+    return effectiveMcpClientScopes(client, policy);
   };
   const getClient = async (id: string) => {
     const client = await db.mcpClient.findUnique({ where: { id } });

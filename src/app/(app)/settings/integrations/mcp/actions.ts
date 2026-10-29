@@ -19,6 +19,7 @@ import { isIP } from 'node:net';
 import { requireMcp } from '@/lib/mcp/core/errors';
 import { MCP_REVIEWED_RUNBOOK_SCOPES } from '@/lib/mcp/approvals/policy';
 import type { Prisma } from '@prisma/client';
+import { effectiveMcpClientScopes } from '@/lib/mcp/auth/client-policy';
 
 const settingsPath = '/settings/integrations/mcp';
 // Only scopes a reviewed direct or approval-gated workflow can use may be granted.
@@ -75,6 +76,8 @@ export async function updateMcpPolicy(form: FormData) {
       cimdEnabled: z.boolean(),
       cimdAllowedHosts: z.string().max(4096),
       cimdScopes: z.string().max(2048),
+      dcrEnabled: z.boolean(),
+      dcrScopes: z.string().max(2048),
     })
     .strict()
     .parse({
@@ -87,6 +90,8 @@ export async function updateMcpPolicy(form: FormData) {
       cimdEnabled: form.get('cimdEnabled') === 'on',
       cimdAllowedHosts: String(form.get('cimdAllowedHosts') ?? ''),
       cimdScopes: String(form.get('cimdScopes') ?? ''),
+      dcrEnabled: form.get('dcrEnabled') === 'on',
+      dcrScopes: String(form.get('dcrScopes') ?? ''),
     });
   const cimdAllowedHosts = [
     ...new Set(
@@ -117,6 +122,8 @@ export async function updateMcpPolicy(form: FormData) {
     'MCP_CONFIGURATION_INVALID'
   );
   const cimdScopes = parseScopes(input.cimdScopes);
+  const dcrScopes = parseScopes(input.dcrScopes);
+  requireMcp(!input.dcrEnabled || dcrScopes.length > 0, 'MCP_DCR_REQUIRES_SCOPES');
   requireMcp(
     !input.cimdEnabled || (cimdAllowedHosts.length > 0 && cimdScopes.length > 0),
     'MCP_CIMD_REQUIRES_HOSTS_AND_SCOPES'
@@ -131,6 +138,8 @@ export async function updateMcpPolicy(form: FormData) {
     cimdEnabled: input.cimdEnabled,
     cimdAllowedHosts,
     cimdScopes,
+    dcrEnabled: input.dcrEnabled,
+    dcrScopes,
   };
   await prisma.$transaction(async tx => {
     await assertCurrentAdmin(tx, actor);
@@ -291,6 +300,16 @@ export async function decideMcpConsent(form: FormData) {
         client && !client.revokedAt && client.redirectUris.includes(pending.redirectUri),
         'invalid_client'
       );
+      // Bind consent to the current registration policy, not a stale pending form.
+      await tx.$queryRaw`SELECT id FROM "McpClient" WHERE id = ${client.id} FOR UPDATE`;
+      await tx.$queryRaw`SELECT id FROM "McpPolicy" WHERE id = 'default' FOR SHARE`;
+      const currentClient = await tx.mcpClient.findUniqueOrThrow({ where: { id: client.id } });
+      const currentPolicy = await tx.mcpPolicy.findUnique({ where: { id: 'default' } });
+      const ceiling = effectiveMcpClientScopes(currentClient, currentPolicy);
+      requireMcp(
+        ceiling && pending.scopes.every(scope => ceiling.includes(scope)),
+        'invalid_scope'
+      );
       const consumed = await tx.mcpConsentRequest.updateMany({
         where: { id: pending.id, consumedAt: null },
         data: { consumedAt: new Date() },
@@ -312,6 +331,11 @@ export async function decideMcpConsent(form: FormData) {
         target.searchParams.set('error', 'access_denied');
         return target.href;
       }
+      if (currentClient.dynamicRegistration && !currentClient.firstAuthorizedAt)
+        await tx.mcpClient.update({
+          where: { id: client.id },
+          data: { firstAuthorizedAt: new Date() },
+        });
       const grant = await tx.mcpGrant.create({
         data: {
           userId: actor.id,

@@ -21,6 +21,7 @@ import { Input } from '@/components/ui/shadcn/input';
 import { Label } from '@/components/ui/shadcn/label';
 import { SettingsSection } from '@/components/settings/layout/SettingsSection';
 import McpCopyField from '@/components/settings/mcp/McpCopyField';
+import { DEFAULT_ASSISTANT_SCOPES } from '@/lib/mcp/auth/client-policy';
 import {
   registerMcpClient,
   revokeAllMcpConnections,
@@ -99,7 +100,14 @@ export default async function McpSettings({
           where: { name: { contains: q, mode: 'insensitive' } },
           take: 50,
           orderBy: { id: 'asc' },
-          select: { id: true, name: true, revokedAt: true, scopes: true, metadataUrl: true },
+          select: {
+            id: true,
+            name: true,
+            revokedAt: true,
+            scopes: true,
+            metadataUrl: true,
+            dynamicRegistration: true,
+          },
         })
       : Promise.resolve([]),
     prisma.mcpGrant.findMany({
@@ -130,6 +138,9 @@ export default async function McpSettings({
   const enabled = policy?.enabled ?? false;
   const ready = configuration.issues.length === 0;
   const endpoint = configuration.origin ? `${configuration.origin}/mcp` : null;
+  const claudeCommand = endpoint
+    ? `claude mcp add --scope user --transport http opsknight '${endpoint.replaceAll("'", "'\\''")}'`
+    : null;
   const grantsTitle = permissions.isAdmin ? 'Client grants' : 'Your grants';
 
   return (
@@ -273,6 +284,42 @@ export default async function McpSettings({
         </SettingsSection>
       </section>
 
+      {endpoint && (
+        <SettingsSection
+          title="Connect your assistant"
+          description="Add this server, then sign in with your own OpsKnight account."
+        >
+          <div className="space-y-4 py-4 text-sm">
+            {!(enabled && policy?.dcrEnabled) && (
+              <p>
+                Ask an administrator to enable automatic assistant connections below and save the
+                policy first.
+              </p>
+            )}
+            <div className="space-y-2">
+              <p className="font-medium">Claude Code</p>
+              <McpCopyField value={claudeCommand!} label="Claude Code setup command" />
+              <p>
+                Run the command in your terminal, then use <code>/mcp</code> in Claude Code to sign
+                in.
+              </p>
+            </div>
+            <div className="space-y-2">
+              <p className="font-medium">ChatGPT and other HTTP MCP clients</p>
+              <p>
+                Add the remote endpoint above and select OAuth authentication. Automatic
+                registration handles the client ID and callback address; you approve the requested
+                access after signing in.
+              </p>
+            </div>
+            <p className="text-muted-foreground">
+              Each user gets a separate, revocable connection with their own current permissions. No
+              separate MCP secret is required.
+            </p>
+          </div>
+        </SettingsSection>
+      )}
+
       {permissions.isAdmin && (
         <>
           <form action={updateMcpPolicy}>
@@ -347,6 +394,38 @@ export default async function McpSettings({
                 </div>
               </fieldset>
               <fieldset className="space-y-4 py-4">
+                <legend className="text-sm font-medium">Automatic assistant connections</legend>
+                <label className="flex cursor-pointer items-start gap-3">
+                  <input
+                    type="checkbox"
+                    name="dcrEnabled"
+                    defaultChecked={policy?.dcrEnabled ?? true}
+                    className={checkboxClass}
+                  />
+                  <span className="text-sm">Allow assistants to register automatically</span>
+                </label>
+                <div className="space-y-1.5">
+                  <Label htmlFor="mcp-dcr-scopes">
+                    Maximum scopes for automatically registered assistants
+                  </Label>
+                  <Input
+                    id="mcp-dcr-scopes"
+                    name="dcrScopes"
+                    maxLength={2048}
+                    defaultValue={(policy?.dcrScopes.length
+                      ? policy.dcrScopes
+                      : DEFAULT_ASSISTANT_SCOPES
+                    ).join(' ')}
+                  />
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  Users add the server URL and sign in with their own OpsKnight account. No manual
+                  client ID or callback setup is needed. Registration alone grants no access. Users
+                  must consent, and current roles, scopes and approval rules still apply. Turn this
+                  off to disconnect automatically registered assistants immediately.
+                </p>
+              </fieldset>
+              <fieldset className="space-y-4 py-4">
                 <legend className="text-sm font-medium">Client ID metadata documents</legend>
                 <label className="flex cursor-pointer items-start gap-3">
                   <input
@@ -396,8 +475,8 @@ export default async function McpSettings({
 
           <form action={registerMcpClient}>
             <SettingsSection
-              title="Register a client"
-              description="Register each assistant with its exact OAuth redirect URI and the most scopes it may request."
+              title="Manual client registration (advanced)"
+              description="For clients that require a preconfigured OAuth identity. Most assistants can use automatic connections above."
               footer={
                 <div className="flex justify-end">
                   <Button type="submit" size="sm">
@@ -461,6 +540,9 @@ export default async function McpSettings({
                 <article key={client.id} className="space-y-2 rounded-lg border border-border p-3">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <h3 className="text-sm font-semibold">{client.name}</h3>
+                    {client.dynamicRegistration && (
+                      <Badge variant="outline">Automatically registered</Badge>
+                    )}
                     {client.revokedAt ? (
                       <Badge variant="outline">Revoked</Badge>
                     ) : client.metadataUrl ? (

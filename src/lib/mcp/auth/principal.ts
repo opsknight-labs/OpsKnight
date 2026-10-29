@@ -34,7 +34,9 @@ export async function resolveMcpGrant(
     SELECT g.id AS "grantId", g."userId", g."userTokenVersion",
       g.scopes AS "grantScopes", g.resource,
       -- A metadata client's effective ceiling is always the current policy, never its stored copy.
-      CASE WHEN c."metadataUrl" IS NULL THEN c.scopes
+      CASE WHEN c."dynamicRegistration" THEN
+        ARRAY(SELECT s FROM unnest(c.scopes) AS s WHERE s = ANY(p."dcrScopes"))
+        WHEN c."metadataUrl" IS NULL THEN c.scopes
         ELSE ARRAY(SELECT s FROM unnest(c.scopes) AS s WHERE s = ANY(p."cimdScopes")) END
         AS "clientScopes",
       g."revokedAt", c."revokedAt" AS "clientRevokedAt", g."expiresAt",
@@ -44,6 +46,7 @@ export async function resolveMcpGrant(
     LEFT JOIN "User" u ON u.id = g."userId"
     LEFT JOIN "McpPolicy" p ON p.id = 'default'
     WHERE g.id = ${grantId}
+      AND (NOT c."dynamicRegistration" OR p."dcrEnabled")
       -- A metadata-document client stays valid only while its host remains trusted (substr skips https://).
       AND (c."metadataUrl" IS NULL OR (p."cimdEnabled"
         AND split_part(substr(c."metadataUrl", 9), '/', 1) = ANY(p."cimdAllowedHosts")))
