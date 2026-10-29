@@ -256,9 +256,9 @@ describe('API v2 Pre-Authentication Legacy Token DoS Protection', () => {
     const { OVER_BUDGET_IP_CONCURRENCY: max } = await import('@/lib/api-v2/rate-limit');
     vi.mocked(prisma.apiKey.findFirst).mockResolvedValue(null);
     for (let i = 0; i < 60; i++) {
-      await authenticateV2Request(request(`ok_live_warm_${i}_${'w'.repeat(24)}`, clientIp)).catch(
-        () => undefined
-      );
+      await authenticateV2Request(
+        request(`ok_live_warm_${i}_${'w'.repeat(24)}`, clientIp)
+      ).catch(() => undefined);
     }
 
     const gates: Array<() => void> = [];
@@ -277,9 +277,9 @@ describe('API v2 Pre-Authentication Legacy Token DoS Protection', () => {
     expect(shed.details.retryAfter).toBeGreaterThanOrEqual(1);
 
     // Another address is unaffected while this one is saturated.
-    const otherIp = authenticateV2Request(
-      request(`ok_live_other_${'o'.repeat(24)}`, '198.51.100.79')
-    ).catch(e => e);
+    const otherIp = authenticateV2Request(request(`ok_live_other_${'o'.repeat(24)}`, '198.51.100.79')).catch(
+      e => e
+    );
     await vi.waitFor(() => expect(gates.length).toBe(max + 1));
     gates.forEach(release => release());
     expect((await otherIp).code).toBe('API_KEY_INVALID');
@@ -514,9 +514,7 @@ describe('priority admission for recently verified credentials', () => {
     const { verifiedCredentialHints } = await import('@/lib/api-v2/cache');
     verifiedCredentialHints.clear();
     vi.mocked(prisma.apiKey.findFirst).mockResolvedValue(null);
-    await authenticateV2Request(request(`ok_live_nobody_${'n'.repeat(24)}`, ip)).catch(
-      () => undefined
-    );
+    await authenticateV2Request(request(`ok_live_nobody_${'n'.repeat(24)}`, ip)).catch(() => undefined);
     expect(verifiedCredentialHints.size).toBe(0);
   });
 });

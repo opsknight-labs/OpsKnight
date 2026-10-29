@@ -29,7 +29,8 @@ vi.stubGlobal('EventSource', mockEventSourceCtor);
 
 function getMockEventSourceInstance(index = 0): MockEventSourceInstance {
   const instance = mockEventSourceCtor.mock.results.at(index)?.value as
-    MockEventSourceInstance | undefined;
+    | MockEventSourceInstance
+    | undefined;
   if (!instance) throw new Error(`Missing EventSource instance ${index}`);
   return instance;
 }

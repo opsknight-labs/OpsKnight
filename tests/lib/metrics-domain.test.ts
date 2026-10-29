@@ -58,10 +58,7 @@ describe('canonical metric domain', () => {
       }).source
     ).toBe('definition');
     expect(
-      resolveLegacySlaTarget({
-        priority: '1',
-        serviceTargets: { ackMinutes: 90, resolveMinutes: 900 },
-      })
+      resolveLegacySlaTarget({ priority: '1', serviceTargets: { ackMinutes: 90, resolveMinutes: 900 } })
     ).toMatchObject({ ackTargetMs: 300_000, source: 'priority' });
     expect(
       resolveLegacySlaTarget({ serviceTargets: { ackMinutes: 20, resolveMinutes: 200 } })

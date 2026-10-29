@@ -115,9 +115,7 @@ describe('Enterprise Announcement Timing & Timezone Flow', () => {
       });
       expect(parsed.success).toBe(false);
       if (!parsed.success) {
-        expect(parsed.error.issues[0].message).toContain(
-          'startDate must be a valid ISO date string'
-        );
+        expect(parsed.error.issues[0].message).toContain('startDate must be a valid ISO date string');
       }
     });
 

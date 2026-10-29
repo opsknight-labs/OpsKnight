@@ -33,11 +33,7 @@ async function main() {
       imageConfigDigest: string;
       loadGenerator?: { pod: string; imageConfigDigest: string };
     };
-    await verifyControlledImage(
-      provenance.imageConfigDigest,
-      environment,
-      provenance.loadGenerator
-    );
+    await verifyControlledImage(provenance.imageConfigDigest, environment, provenance.loadGenerator);
     let childExitCode: number | null = 0;
     const child = await exec(
       'npx',

@@ -113,8 +113,7 @@ export async function runContentionWorkload(
 }
 
 export function formatComparisonMarkdown(results: BenchmarkMetrics[]): string {
-  let md =
-    '| Profile | Total Tx | Success | Fail | p50 (ms) | p95 (ms) | p99 (ms) | Peak Conns | Pool Timeouts |\n';
+  let md = '| Profile | Total Tx | Success | Fail | p50 (ms) | p95 (ms) | p99 (ms) | Peak Conns | Pool Timeouts |\n';
   md += '| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |\n';
   for (const r of results) {
     md += `| ${r.profile} | ${r.totalTransactions} | ${r.successfulTransactions} | ${r.failedTransactions} | ${r.p50Ms} | ${r.p95Ms} | ${r.p99Ms} | ${r.peakActiveConnections} | ${r.poolTimeoutCount} |\n`;

@@ -66,7 +66,11 @@ export function buildBaselineIncidentFixtures(
 
     const statusMod = i % 4;
     const status: LoadIncidentFixture['status'] =
-      statusMod === 0 || statusMod === 1 ? 'OPEN' : statusMod === 2 ? 'ACKNOWLEDGED' : 'RESOLVED';
+      statusMod === 0 || statusMod === 1
+        ? 'OPEN'
+        : statusMod === 2
+          ? 'ACKNOWLEDGED'
+          : 'RESOLVED';
 
     const createdAt = new Date(now.getTime() - (scale.baselineIncidents - i) * 15_000);
     const acknowledgedAt =

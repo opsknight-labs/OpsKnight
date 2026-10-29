@@ -21,9 +21,7 @@ const fixture = {
     runtimeRoles: [{ name: 'web', sources: ['deploy/compose/compose.yml'] }],
     topologies: [{ name: 'compose', files: ['deploy/compose/compose.yml'] }],
   },
-  limits: [
-    { id: 'src/app/api/events/route.ts:RATE_LIMIT_MAX', source: 'src/app/api/events/route.ts' },
-  ],
+  limits: [{ id: 'src/app/api/events/route.ts:RATE_LIMIT_MAX', source: 'src/app/api/events/route.ts' }],
 };
 
 describe('granular documentation feature graph', () => {
@@ -31,10 +29,7 @@ describe('granular documentation feature graph', () => {
     const graph = buildFeatureGraph(fixture);
     assert.equal(graph.unclassified.length, 0);
     assert.equal(graph.duplicateIds.length, 0);
-    assert.equal(
-      graph.nodes.find(node => node.id === 'api:/api/events')?.classification,
-      'PUBLIC_API'
-    );
+    assert.equal(graph.nodes.find(node => node.id === 'api:/api/events')?.classification, 'PUBLIC_API');
     assert.ok(graph.nodes.every(node => node.owner && node.sources.length > 0));
   });
 });

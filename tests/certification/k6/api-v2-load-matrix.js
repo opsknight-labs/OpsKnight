@@ -49,10 +49,8 @@ export function sustainedWorkload() {
   });
   check(resSvc, {
     'sustained: services status 200': r => r.status === 200,
-    'sustained: has rate limit headers': r =>
-      Boolean(r.headers['X-Ratelimit-Limit'] || r.headers['x-ratelimit-limit']),
-    'sustained: has requestId': r =>
-      Boolean(r.headers['X-Request-Id'] || r.headers['x-request-id']),
+    'sustained: has rate limit headers': r => Boolean(r.headers['X-Ratelimit-Limit'] || r.headers['x-ratelimit-limit']),
+    'sustained: has requestId': r => Boolean(r.headers['X-Request-Id'] || r.headers['x-request-id']),
   });
 
   // 2. Filtered incident list
@@ -78,8 +76,7 @@ export function sustainedWorkload() {
 }
 
 // Dynamic token from secure test environment or key pool
-const overflowToken =
-  __ENV.OVERFLOW_TOKEN || __ENV.API_KEY || (keyPool && keyPool.length > 0 ? keyPool[0] : '');
+const overflowToken = __ENV.OVERFLOW_TOKEN || __ENV.API_KEY || (keyPool && keyPool.length > 0 ? keyPool[0] : '');
 
 export function admissionControlTest() {
   const headers = {
@@ -94,8 +91,7 @@ export function admissionControlTest() {
 
   check(res, {
     'admission: returns valid status (200 or 429)': r => r.status === 200 || r.status === 429,
-    'admission: when 429 has Retry-After': r =>
-      r.status !== 429 || Boolean(r.headers['Retry-After'] || r.headers['retry-after']),
+    'admission: when 429 has Retry-After': r => r.status !== 429 || Boolean(r.headers['Retry-After'] || r.headers['retry-after']),
   });
 
   sleep(0.05);

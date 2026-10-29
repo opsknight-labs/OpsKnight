@@ -1,12 +1,6 @@
 {
   "source": "https://developer.okta.com/docs/api/openapi/okta-scim/guides/scim-20/",
-  "userPatch": {
-    "schemas": ["urn:ietf:params:scim:api:messages:2.0:PatchOp"],
-    "Operations": [{ "op": "replace", "value": { "active": false } }]
-  },
-  "groupReplace": {
-    "schemas": ["urn:ietf:params:scim:api:messages:2.0:PatchOp"],
-    "Operations": [{ "op": "replace", "path": "members", "value": [{ "value": "user-id" }] }]
-  },
+  "userPatch": { "schemas": ["urn:ietf:params:scim:api:messages:2.0:PatchOp"], "Operations": [{ "op": "replace", "value": { "active": false } }] },
+  "groupReplace": { "schemas": ["urn:ietf:params:scim:api:messages:2.0:PatchOp"], "Operations": [{ "op": "replace", "path": "members", "value": [{ "value": "user-id" }] }] },
   "count": 100
 }

@@ -60,10 +60,7 @@ describe('encryption keyring rotation across 1.x -> 2.0', () => {
 
   it.each([
     ['ENCRYPTION_KEYS only', { ENCRYPTION_KEYS: `k2:${NEW_KEY},k1:${OLD_KEY}` }],
-    [
-      'both during migration',
-      { ENCRYPTION_KEY: OLD_KEY, ENCRYPTION_KEYS: `k2:${NEW_KEY},k1:${OLD_KEY}` },
-    ],
+    ['both during migration', { ENCRYPTION_KEY: OLD_KEY, ENCRYPTION_KEYS: `k2:${NEW_KEY},k1:${OLD_KEY}` }],
     ['new keyring plus legacy key', { ENCRYPTION_KEY: OLD_KEY, ENCRYPTION_KEYS: `k2:${NEW_KEY}` }],
   ])('reads 1.4 v2 and 2.0 v3:k1 data after rotating to k2 (%s)', async (_label, env) => {
     setKeys({ ENCRYPTION_KEY: OLD_KEY });

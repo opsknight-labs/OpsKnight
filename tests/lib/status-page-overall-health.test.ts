@@ -70,8 +70,12 @@ describe('deriveOverallPublicHealth', () => {
   });
 
   it('keeps partial and major impact distinct without claiming the whole page is down', () => {
-    expect(deriveOverallPublicHealth(services('PARTIAL_OUTAGE')).headline).toBe('Partial outage');
-    expect(deriveOverallPublicHealth(services('MAJOR_OUTAGE')).headline).toBe('One service down');
+    expect(deriveOverallPublicHealth(services('PARTIAL_OUTAGE')).headline).toBe(
+      'Partial outage'
+    );
+    expect(deriveOverallPublicHealth(services('MAJOR_OUTAGE')).headline).toBe(
+      'One service down'
+    );
     expect(
       deriveOverallPublicHealth(services('OPERATIONAL', 'MAJOR_OUTAGE', 'MAJOR_OUTAGE')).headline
     ).toBe('Partial outage');

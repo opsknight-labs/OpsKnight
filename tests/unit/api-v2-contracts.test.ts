@@ -68,27 +68,17 @@ describe('API v2 Contracts & Security', () => {
     };
 
     it('allows admin actor with admin:manage scope for any action', () => {
-      expect(() =>
-        enforceV2Authorization(adminActor, AUTHORIZATION_ACTIONS.INCIDENT_CREATE)
-      ).not.toThrow();
-      expect(() =>
-        enforceV2Authorization(adminActor, AUTHORIZATION_ACTIONS.SERVICE_CREATE)
-      ).not.toThrow();
-      expect(() =>
-        enforceV2Authorization(adminActor, AUTHORIZATION_ACTIONS.POSTMORTEM_MANAGE)
-      ).not.toThrow();
+      expect(() => enforceV2Authorization(adminActor, AUTHORIZATION_ACTIONS.INCIDENT_CREATE)).not.toThrow();
+      expect(() => enforceV2Authorization(adminActor, AUTHORIZATION_ACTIONS.SERVICE_CREATE)).not.toThrow();
+      expect(() => enforceV2Authorization(adminActor, AUTHORIZATION_ACTIONS.POSTMORTEM_MANAGE)).not.toThrow();
     });
 
     it('allows responder with incidents:write to create incidents', () => {
-      expect(() =>
-        enforceV2Authorization(responderActor, AUTHORIZATION_ACTIONS.INCIDENT_CREATE)
-      ).not.toThrow();
+      expect(() => enforceV2Authorization(responderActor, AUTHORIZATION_ACTIONS.INCIDENT_CREATE)).not.toThrow();
     });
 
     it('rejects viewer attempting write action with AppError 403', () => {
-      expect(() =>
-        enforceV2Authorization(viewerActor, AUTHORIZATION_ACTIONS.INCIDENT_CREATE)
-      ).toThrow(AppError);
+      expect(() => enforceV2Authorization(viewerActor, AUTHORIZATION_ACTIONS.INCIDENT_CREATE)).toThrow(AppError);
       try {
         enforceV2Authorization(viewerActor, AUTHORIZATION_ACTIONS.INCIDENT_CREATE);
       } catch (err) {
@@ -110,9 +100,7 @@ describe('API v2 Contracts & Security', () => {
       const headers = await enforceV2RateLimit(apiKeyId, 'READ');
 
       expect(headers['X-RateLimit-Limit']).toBe(String(RATE_LIMIT_CONFIGS.READ.limit));
-      expect(Number(headers['X-RateLimit-Remaining'])).toBeLessThanOrEqual(
-        RATE_LIMIT_CONFIGS.READ.limit
-      );
+      expect(Number(headers['X-RateLimit-Remaining'])).toBeLessThanOrEqual(RATE_LIMIT_CONFIGS.READ.limit);
       expect(headers['X-RateLimit-Reset']).toBeTruthy();
     });
   });
@@ -125,13 +113,7 @@ describe('API v2 Contracts & Security', () => {
       });
 
       const spy = vi.fn().mockResolvedValue({ id: 'inc_new' });
-      const execution = await runV2IdempotentMutation(
-        req,
-        'key_123',
-        'incidents:create',
-        { title: 'Test' },
-        spy
-      );
+      const execution = await runV2IdempotentMutation(req, 'key_123', 'incidents:create', { title: 'Test' }, spy);
 
       expect(spy).toHaveBeenCalledTimes(1);
       expect(execution.value).toEqual({ id: 'inc_new' });
@@ -195,9 +177,7 @@ describe('API v2 Contracts & Security', () => {
       expect(valid.incidentId).toBe('inc_123');
       expect(valid.status).toBe('DRAFT');
 
-      expect(() =>
-        PostmortemCreateV2Schema.parse({ incidentId: 'inc_123', summary: 'Too' })
-      ).toThrow();
+      expect(() => PostmortemCreateV2Schema.parse({ incidentId: 'inc_123', summary: 'Too' })).toThrow();
     });
 
     it('validates Service Account creation and token issuance schemas', () => {

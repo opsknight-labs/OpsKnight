@@ -108,7 +108,11 @@ async function handleControlRequest(
     }
 
     const validTarget: ProviderName | 'all' =
-      !target || target === 'all' ? 'all' : ALL_PROVIDERS.includes(target) ? target : 'all';
+      !target || target === 'all'
+        ? 'all'
+        : ALL_PROVIDERS.includes(target)
+          ? target
+          : 'all';
 
     setProviderBehavior(validTarget, patch);
 
@@ -133,10 +137,16 @@ async function handleControlRequest(
           : 60;
     const normalizedMode = normalizeProviderMode(body.mode);
     const outageMode: 'outage' | 'rate_limit' | 'timeout' =
-      normalizedMode === 'rate_limit' || normalizedMode === 'timeout' ? normalizedMode : 'outage';
+      normalizedMode === 'rate_limit' || normalizedMode === 'timeout'
+        ? normalizedMode
+        : 'outage';
 
     const validTarget: ProviderName | 'all' =
-      !target || target === 'all' ? 'all' : ALL_PROVIDERS.includes(target) ? target : 'all';
+      !target || target === 'all'
+        ? 'all'
+        : ALL_PROVIDERS.includes(target)
+          ? target
+          : 'all';
 
     scheduleProviderOutage(validTarget, durationSeconds, outageMode);
 
@@ -215,11 +225,7 @@ export async function routeProviderHttpRequest(
     return;
   }
 
-  if (
-    pathname.startsWith('/webhook') ||
-    pathname.startsWith('/status-webhook') ||
-    host.includes('webhook')
-  ) {
+  if (pathname.startsWith('/webhook') || pathname.startsWith('/status-webhook') || host.includes('webhook')) {
     await handleWebhookEmulatorRequest(req, res, rawBody);
     return;
   }

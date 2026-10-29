@@ -74,6 +74,7 @@ mode deletes one replica of each of the three roles. A missing target or an
 unsupported runtime mode fails the drill. Screening diagnostics are separate
 from the unchanged six-profile sustained certification.
 
+
 The `values-automation-isolated-workers.yaml` fixture isolates two Web pods,
 four general workers and two critical workers (one guaranteed CPU each), with
 two guaranteed PostgreSQL CPUs. General workers use batch 100/concurrency 15

@@ -91,9 +91,10 @@ describe('Resend Provider Transport Contract', () => {
     );
 
     expect(result.success).toBe(true);
-    expect(mockResendSend).toHaveBeenCalledWith(expect.anything(), {
-      idempotencyKey: 'custom-idemp-key-xyz',
-    });
+    expect(mockResendSend).toHaveBeenCalledWith(
+      expect.anything(),
+      { idempotencyKey: 'custom-idemp-key-xyz' }
+    );
   });
 
   it('handles 429 rate limit with statusCode 429 and retryAfterMs', async () => {

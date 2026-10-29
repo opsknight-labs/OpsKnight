@@ -20,15 +20,11 @@ describe('Installer logic and OS-release contract', () => {
   it('maps correct package dependencies per distro family', () => {
     // RedHat / Amazon Linux / Alma / Rocky
     expect(installScript).toContain('amzn|rhel|centos|rocky|almalinux|fedora)');
-    expect(installScript).toContain(
-      'install_packages procps-ng iproute ca-certificates tar gzip curl'
-    );
+    expect(installScript).toContain('install_packages procps-ng iproute ca-certificates tar gzip curl');
 
     // Debian / Ubuntu
     expect(installScript).toContain('ubuntu|debian)');
-    expect(installScript).toContain(
-      'install_packages procps iproute2 ca-certificates tar gzip curl'
-    );
+    expect(installScript).toContain('install_packages procps iproute2 ca-certificates tar gzip curl');
 
     // SLES
     expect(installScript).toContain('sles|opensuse*)');
@@ -47,19 +43,15 @@ describe('Installer logic and OS-release contract', () => {
     expect(serviceUnit).toContain('NoNewPrivileges=true');
     expect(serviceUnit).toContain('EnvironmentFile=/etc/opsknight-agent/agent.env');
     expect(serviceUnit).not.toContain('EnvironmentFile=-');
-    expect(serviceUnit).toContain(
-      'ExecStart=/opt/opsknight-agent/runtime/bin/node /opt/opsknight-agent/opsknight-agent.mjs'
-    );
+    expect(serviceUnit).toContain('ExecStart=/opt/opsknight-agent/runtime/bin/node /opt/opsknight-agent/opsknight-agent.mjs');
     expect(serviceUnit).toContain('After=network-online.target time-sync.target');
     expect(serviceUnit).toContain('Wants=network-online.target time-sync.target');
   });
 
   it('enforces live permission write probes in state directory', () => {
     expect(installScript).toContain('Performing State Directory Permission Probe');
-    expect(installScript).toContain(
-      'su -s /bin/bash "${SERVICE_USER}" -c "test -w \'${STATE_DIR}\'"'
-    );
-    expect(installScript).toContain("touch '${TEST_FILE}' && rm -f '${TEST_FILE}'");
+    expect(installScript).toContain('su -s /bin/bash "${SERVICE_USER}" -c "test -w \'${STATE_DIR}\'"');
+    expect(installScript).toContain('touch \'${TEST_FILE}\' && rm -f \'${TEST_FILE}\'');
   });
 
   it('validates artifact sha256 checksums before installation', () => {
@@ -69,9 +61,7 @@ describe('Installer logic and OS-release contract', () => {
 
   it('fails closed when local tarball is missing instead of falling back to remote download', () => {
     expect(installScript).toContain('if [[ -n "${TARBALL_OVERRIDE}" ]]');
-    expect(installScript).toContain(
-      "ERROR: Specified local tarball '${TARBALL_OVERRIDE}' does not exist."
-    );
+    expect(installScript).toContain('ERROR: Specified local tarball \'${TARBALL_OVERRIDE}\' does not exist.');
   });
 
   it('writes correct agent enrollment and execution signing environment variables and supports rotation', () => {
@@ -114,12 +104,10 @@ describe('Installer logic and OS-release contract', () => {
 
   it('initiates transactional rollback on activation or restart failure with ERR trap', () => {
     expect(installScript).toContain('rollback_and_fail');
-    expect(installScript).toContain("trap 'rollback_and_fail");
+    expect(installScript).toContain('trap \'rollback_and_fail');
     expect(installScript).toContain('Initiating transactional rollback to previous installation');
     expect(installScript).toContain('health.json');
-    expect(installScript).toContain(
-      'CRITICAL: Restored service restart did not reach healthy active state'
-    );
+    expect(installScript).toContain('CRITICAL: Restored service restart did not reach healthy active state');
     expect(installScript).toContain('exit 2');
   });
 
@@ -146,12 +134,8 @@ describe('Installer logic and OS-release contract', () => {
   it('fails preflight when bundled node execution fails, keys are invalid, or configuration is incomplete', () => {
     const preflightScript = readFileSync('deploy/agent/preflight.sh', 'utf8');
     expect(preflightScript).toContain('Bundled node binary at ${NODE_BIN} failed to execute');
-    expect(preflightScript).toContain(
-      'OPSKNIGHT_EXECUTION_PUBLIC_KEY or OPSKNIGHT_EXECUTION_PUBLIC_KEYS missing in ${ENV_FILE}'
-    );
-    expect(preflightScript).toContain(
-      'Neither existing ${IDENTITY_FILE} nor OPSKNIGHT_AGENT_ENROLLMENT_TOKEN is present'
-    );
+    expect(preflightScript).toContain('OPSKNIGHT_EXECUTION_PUBLIC_KEY or OPSKNIGHT_EXECUTION_PUBLIC_KEYS missing in ${ENV_FILE}');
+    expect(preflightScript).toContain('Neither existing ${IDENTITY_FILE} nor OPSKNIGHT_AGENT_ENROLLMENT_TOKEN is present');
     expect(preflightScript).toContain('sudo ${INSTALL_PREFIX}/preflight.sh');
   });
 });

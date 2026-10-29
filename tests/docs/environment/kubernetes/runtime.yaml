@@ -6,7 +6,7 @@ metadata:
 type: Opaque
 stringData:
   # checkov:skip=CKV_SECRET_4: Ephemeral documentation-only database URI.
-  database-url: 'postgresql://opsknight_docs:opsknight_docs@postgres:5432/opsknight_docs?schema=public'
+  database-url: "postgresql://opsknight_docs:opsknight_docs@postgres:5432/opsknight_docs?schema=public"
   # checkov:skip=CKV_SECRET_6: Ephemeral documentation-only secret.
   nextauth-secret: docs-kubernetes-runtime-only-nextauth-secret
   # checkov:skip=CKV_SECRET_6: Ephemeral documentation-only secret.
@@ -115,10 +115,10 @@ spec:
           imagePullPolicy: Always
           env:
             - { name: NODE_ENV, value: production }
-            - { name: PORT, value: '3000' }
+            - { name: PORT, value: "3000" }
             - { name: HOSTNAME, value: 0.0.0.0 }
-            - { name: NEXTAUTH_URL, value: 'http://localhost:3200' }
-            - { name: NEXT_PUBLIC_APP_URL, value: 'http://localhost:3200' }
+            - { name: NEXTAUTH_URL, value: "http://localhost:3200" }
+            - { name: NEXT_PUBLIC_APP_URL, value: "http://localhost:3200" }
             - name: DATABASE_URL
               valueFrom: { secretKeyRef: { name: docs-runtime, key: database-url } }
             - name: DIRECT_DATABASE_URL
@@ -132,16 +132,16 @@ spec:
           ports: [{ name: http, containerPort: 3000 }]
           readinessProbe:
             httpGet:
-              path: '/api/health?mode=readiness'
+              path: "/api/health?mode=readiness"
               port: http
-              httpHeaders: [{ name: Host, value: 'localhost:3200' }]
+              httpHeaders: [{ name: Host, value: "localhost:3200" }]
             initialDelaySeconds: 30
             periodSeconds: 5
           livenessProbe:
             httpGet:
-              path: '/api/health?mode=liveness'
+              path: "/api/health?mode=liveness"
               port: http
-              httpHeaders: [{ name: Host, value: 'localhost:3200' }]
+              httpHeaders: [{ name: Host, value: "localhost:3200" }]
             initialDelaySeconds: 45
             periodSeconds: 10
           resources:

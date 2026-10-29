@@ -242,9 +242,7 @@ it('queues provider tests once and exposes only bounded diagnostics', async () =
   expect(delivery.sendEmail).toHaveBeenCalledTimes(1);
   const delivered = await db.notification.findUniqueOrThrow({ where: { id: payloads[0].data.id } });
   expect(delivered.status).toBe('SENT');
-  expect(
-    await db.notificationDeliveryAttempt.count({ where: { notificationId: delivered.id } })
-  ).toBe(1);
+  expect(await db.notificationDeliveryAttempt.count({ where: { notificationId: delivered.id } })).toBe(1);
   const postDeliveryDiagnostics = await invokeV2(
     getDiagnostics,
     credential.token,

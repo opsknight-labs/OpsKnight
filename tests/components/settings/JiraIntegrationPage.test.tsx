@@ -81,9 +81,7 @@ describe('JiraIntegrationPage Component', () => {
 
     expect(screen.getByText('Not Configured')).toBeInTheDocument();
     expect(screen.getByRole('switch', { name: /Enable Jira integration/i })).not.toBeChecked();
-    expect(
-      screen.queryByRole('button', { name: /Remove Jira Workspace/i })
-    ).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Remove Jira Workspace/i })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Save Changes/i })).toBeDisabled();
   });
 });

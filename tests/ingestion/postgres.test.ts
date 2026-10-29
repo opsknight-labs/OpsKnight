@@ -3,12 +3,7 @@ import { getIngestionAutomationConfigs } from '@/lib/automation/settings';
 import { resolveSupportHours } from '@/lib/incidents/support-hours';
 import { finalizeEscalationExecution } from '@/lib/escalation/repository';
 import { dispatchIncidentEffects } from '@/lib/incident-effect-dispatch';
-import {
-  readPublishedIncidentPolicies,
-  readPublishedClassificationPolicies,
-  readPublishedSlaPolicies,
-  readPublishedSupportPolicies,
-} from '@/lib/incident-policies/published';
+import { readPublishedIncidentPolicies, readPublishedClassificationPolicies, readPublishedSlaPolicies, readPublishedSupportPolicies } from '@/lib/incident-policies/published';
 import { resolveIncidentClassification } from '@/lib/incidents/classification';
 import { resolveNewIncidentSlaContract } from '@/lib/incident-sla/contract';
 import { prepareReceiptInsert, type ReceiptInsert } from '@/lib/ingestion/receipt-insert';
@@ -174,50 +169,30 @@ describe('PostgreSQL ingestion durability', () => {
     const pending = processEvent(envelope(key).event, serviceId, 'integration');
     void pending.catch(() => undefined);
     try {
-      await expect
-        .poll(async () => {
-          const [row] = await prisma.$queryRaw<Array<{ waiting: number }>>`
+      await expect.poll(async () => {
+        const [row] = await prisma.$queryRaw<Array<{ waiting: number }>>`
           SELECT count(*)::int AS waiting FROM pg_stat_activity
           WHERE datid = (SELECT oid FROM pg_database WHERE datname = current_database())
             AND wait_event_type = 'Lock' AND wait_event = 'advisory'
         `;
-          return row.waiting;
-        })
-        .toBeGreaterThan(0);
-      const policy = await prisma.escalationPolicy.create({
-        data: {
-          name: `Owned policy race ${randomUUID()}`,
-          steps: {
-            create: {
-              stepOrder: 0,
-              delayMinutes: 5,
-              targetType: 'USER',
-              targetUserId: actorId,
-              notificationChannels: [],
-            },
-          },
-        },
-      });
-      await prisma.service.update({
-        where: { id: serviceId },
-        data: { escalationPolicyId: policy.id },
-      });
+        return row.waiting;
+      }).toBeGreaterThan(0);
+      const policy = await prisma.escalationPolicy.create({ data: {
+        name: `Owned policy race ${randomUUID()}`,
+        steps: { create: { stepOrder: 0, delayMinutes: 5, targetType: 'USER', targetUserId: actorId, notificationChannels: [] } },
+      } });
+      await prisma.service.update({ where: { id: serviceId }, data: { escalationPolicyId: policy.id } });
       block.release();
       await block.done;
       const result = await pending;
       if (!('incident' in result) || !result.incident) throw new Error('Expected incident');
-      const incident = await prisma.incident.findUniqueOrThrow({
-        where: { id: result.incident.id },
-      });
+      const incident = await prisma.incident.findUniqueOrThrow({ where: { id: result.incident.id } });
       expect(incident.escalationStatus).toBe('ESCALATING');
       expect(incident.currentEscalationStep).toBe(0);
       expect(incident.nextEscalationAt?.getTime()).toBe(incident.createdAt.getTime() + 5 * 60000);
-      const jobs = await prisma.backgroundJob.findMany({
-        where: {
-          type: 'ESCALATION',
-          payload: { path: ['incidentId'], equals: incident.id },
-        },
-      });
+      const jobs = await prisma.backgroundJob.findMany({ where: {
+        type: 'ESCALATION', payload: { path: ['incidentId'], equals: incident.id },
+      } });
       expect(jobs).toHaveLength(1);
       expect(jobs[0].scheduledAt).toEqual(incident.nextEscalationAt);
     } finally {
@@ -228,49 +203,27 @@ describe('PostgreSQL ingestion durability', () => {
   });
 
   it('avoids redundant routing reads for a newly created incident without Automation or a policy', async () => {
-    const previous = await prisma.systemSettings.findUnique({
-      where: { id: 'default' },
-      select: { automationEnabled: true },
-    });
-    await prisma.systemSettings.upsert({
-      where: { id: 'default' },
-      create: { automationEnabled: false },
-      update: { automationEnabled: false },
-    });
-    let active = true,
-      serviceReads = 0,
-      decisionReads = 0;
+    const previous = await prisma.systemSettings.findUnique({ where: { id: 'default' }, select: { automationEnabled: true } });
+    await prisma.systemSettings.upsert({ where: { id: 'default' }, create: { automationEnabled: false }, update: { automationEnabled: false } });
+    let active = true, serviceReads = 0, decisionReads = 0;
     prisma.$on('query', event => {
       if (!active || !event.query.trimStart().startsWith('SELECT')) return;
       if (event.query.includes('"Service"')) serviceReads++;
       if (event.query.includes('"IncidentAutomationDecision"')) decisionReads++;
     });
     try {
-      const result = await processEvent(
-        envelope('new-no-policy-routing').event,
-        serviceId,
-        'integration'
-      );
+      const result = await processEvent(envelope('new-no-policy-routing').event, serviceId, 'integration');
       expect(result.action).toBe('triggered');
       await expect.poll(() => serviceReads).toBe(1);
       expect(decisionReads).toBe(0);
       if (!('incident' in result) || !result.incident) throw new Error('Expected incident');
-      const jobs = await prisma.backgroundJob.findMany({
-        where: { payload: { path: ['incidentId'], equals: result.incident.id } },
-      });
-      expect(
-        jobs.some(
-          job => (job.payload as Prisma.JsonObject).effect === 'TRIGGER_ESCALATION_NOTIFICATIONS'
-        )
-      ).toBe(true);
+      const jobs = await prisma.backgroundJob.findMany({ where: { payload: { path: ['incidentId'], equals: result.incident.id } } });
+      expect(jobs.some(job => (job.payload as Prisma.JsonObject).effect === 'TRIGGER_ESCALATION_NOTIFICATIONS')).toBe(true);
       expect(jobs.some(job => job.type === 'RUNBOOK')).toBe(true);
       expect(jobs.some(job => job.type === 'ESCALATION')).toBe(false);
     } finally {
       active = false;
-      await prisma.systemSettings.update({
-        where: { id: 'default' },
-        data: { automationEnabled: previous?.automationEnabled ?? false },
-      });
+      await prisma.systemSettings.update({ where: { id: 'default' }, data: { automationEnabled: previous?.automationEnabled ?? false } });
     }
   });
 
@@ -278,67 +231,38 @@ describe('PostgreSQL ingestion durability', () => {
     const result = await processEvent(envelope('compact-default').event, serviceId, 'integration');
     expect(result.action).toBe('triggered');
     if (!('incident' in result) || !result.incident) throw new Error('Expected a new incident');
-    const jobs = await prisma.backgroundJob.findMany({
-      where: { payload: { path: ['incidentId'], equals: result.incident!.id } },
-    });
+    const jobs = await prisma.backgroundJob.findMany({ where: { payload: { path: ['incidentId'], equals: result.incident!.id } } });
     expect(jobs.filter(job => job.type === 'SCHEDULED_TASK')).toHaveLength(2);
     expect(jobs.filter(job => job.type === 'RUNBOOK')).toHaveLength(1);
     const payloads = jobs.map(job => job.payload as Prisma.JsonObject);
-    expect(payloads.some(payload => payload.effect === 'TRIGGER_ESCALATION_NOTIFICATIONS')).toBe(
-      true
-    );
-    const parent = jobs.find(
-      job => (job.payload as Prisma.JsonObject).effect === 'DISPATCH_ORDINARY'
-    )!;
+    expect(payloads.some(payload => payload.effect === 'TRIGGER_ESCALATION_NOTIFICATIONS')).toBe(true);
+    const parent = jobs.find(job => (job.payload as Prisma.JsonObject).effect === 'DISPATCH_ORDINARY')!;
     const token = randomUUID();
-    await prisma.backgroundJob.update({
-      where: { id: parent.id },
-      data: { status: 'PROCESSING_V2', attempts: 1, claimToken: token },
-    });
+    await prisma.backgroundJob.update({ where: { id: parent.id }, data: { status: 'PROCESSING_V2', attempts: 1, claimToken: token } });
     const config = await prisma.chatOpsConfig.findUnique({ where: { id: 'default' } });
     try {
-      if (config)
-        await prisma.chatOpsConfig.update({ where: { id: 'default' }, data: { enabled: false } });
+      if (config) await prisma.chatOpsConfig.update({ where: { id: 'default' }, data: { enabled: false } });
       expect(await dispatchIncidentEffects(parent.id, 1, token)).toBe(true);
       expect(await dispatchIncidentEffects(parent.id, 1, token)).toBe(false);
-      const final = await prisma.backgroundJob.findMany({
-        where: { payload: { path: ['incidentId'], equals: result.incident!.id } },
-      });
+      const final = await prisma.backgroundJob.findMany({ where: { payload: { path: ['incidentId'], equals: result.incident!.id } } });
       expect(final).toHaveLength(3);
       expect(final.find(job => job.id === parent.id)?.status).toBe('COMPLETED');
     } finally {
-      if (config)
-        await prisma.chatOpsConfig.update({
-          where: { id: 'default' },
-          data: { enabled: config.enabled },
-        });
+      if (config) await prisma.chatOpsConfig.update({ where: { id: 'default' }, data: { enabled: config.enabled } });
     }
   });
 
   it('fences stale dispatch claims and atomically rolls back child intents on completion failure', async () => {
-    const incident = await prisma.incident.create({
-      data: { title: 'Dispatch rollback', serviceId },
-    });
+    const incident = await prisma.incident.create({ data: { title: 'Dispatch rollback', serviceId } });
     const at = new Date();
     const token = randomUUID();
-    const parent = await prisma.backgroundJob.create({
-      data: {
-        type: 'SCHEDULED_TASK',
-        status: 'PROCESSING_V2',
-        attempts: 2,
-        claimToken: token,
-        scheduledAt: at,
-        payload: {
-          task: 'EVENT_SIDE_EFFECT',
-          effect: 'DISPATCH_ORDINARY',
-          lane: 'ORDINARY_DISPATCH',
-          incidentId: incident.id,
-          sourceEventId: randomUUID(),
-          eventOrderAt: at.toISOString(),
-          dispatch: { version: 1, effects: ['LIFECYCLE_WEBHOOK'] },
-        },
+    const parent = await prisma.backgroundJob.create({ data: {
+      type: 'SCHEDULED_TASK', status: 'PROCESSING_V2', attempts: 2, claimToken: token, scheduledAt: at,
+      payload: { task: 'EVENT_SIDE_EFFECT', effect: 'DISPATCH_ORDINARY', lane: 'ORDINARY_DISPATCH',
+        incidentId: incident.id, sourceEventId: randomUUID(), eventOrderAt: at.toISOString(),
+        dispatch: { version: 1, effects: ['LIFECYCLE_WEBHOOK'] },
       },
-    });
+    } });
     expect(await dispatchIncidentEffects(parent.id, 1, randomUUID())).toBe(false);
     await prisma.$executeRawUnsafe(`CREATE FUNCTION ingestion_test_dispatch_completion() RETURNS trigger LANGUAGE plpgsql AS $$
       BEGIN IF NEW.status='COMPLETED' AND NEW.payload->>'effect'='DISPATCH_ORDINARY' THEN
@@ -347,200 +271,94 @@ describe('PostgreSQL ingestion durability', () => {
       FOR EACH ROW EXECUTE FUNCTION ingestion_test_dispatch_completion()`);
     try {
       await expect(dispatchIncidentEffects(parent.id, 2, token)).rejects.toThrow();
-      expect(
-        await prisma.backgroundJob.count({
-          where: { payload: { path: ['incidentId'], equals: incident.id } },
-        })
-      ).toBe(1);
-      expect(
-        (await prisma.backgroundJob.findUniqueOrThrow({ where: { id: parent.id } })).status
-      ).toBe('PROCESSING_V2');
+      expect(await prisma.backgroundJob.count({ where: { payload: { path: ['incidentId'], equals: incident.id } } })).toBe(1);
+      expect((await prisma.backgroundJob.findUniqueOrThrow({ where: { id: parent.id } })).status).toBe('PROCESSING_V2');
     } finally {
-      await prisma.$executeRawUnsafe(
-        'DROP TRIGGER ingestion_test_dispatch_completion ON "BackgroundJob"'
-      );
+      await prisma.$executeRawUnsafe('DROP TRIGGER ingestion_test_dispatch_completion ON "BackgroundJob"');
       await prisma.$executeRawUnsafe('DROP FUNCTION ingestion_test_dispatch_completion()');
     }
     expect(await dispatchIncidentEffects(parent.id, 2, token)).toBe(true);
-    const children = await prisma.backgroundJob.findMany({
-      where: { id: { startsWith: `${parent.id}:` } },
-    });
+    const children = await prisma.backgroundJob.findMany({ where: { id: { startsWith: `${parent.id}:` } } });
     expect(children).toHaveLength(1);
     expect(children[0].createdAt).toEqual(parent.createdAt);
-    expect(children[0].payload).toMatchObject({
-      effect: 'LIFECYCLE_WEBHOOK',
-      sourceEventId: (parent.payload as Prisma.JsonObject).sourceEventId,
-      dispatchOrderId: parent.id,
-    });
+    expect(children[0].payload).toMatchObject({ effect: 'LIFECYCLE_WEBHOOK', sourceEventId: (parent.payload as Prisma.JsonObject).sourceEventId, dispatchOrderId: parent.id });
   });
 
   it('keeps compact generation out of old claims and orders same-instant children before later legacy work', async () => {
     await prisma.backgroundJob.deleteMany();
-    const incident = await prisma.incident.create({
-      data: { title: 'Dispatch ordering', serviceId },
-    });
+    const incident = await prisma.incident.create({ data: { title: 'Dispatch ordering', serviceId } });
     const at = new Date('2026-01-01T00:00:00.000Z');
-    const context = {
-      task: 'EVENT_SIDE_EFFECT',
-      incidentId: incident.id,
-      sourceEventId: randomUUID(),
-      eventOrderAt: at.toISOString(),
-    };
+    const context = { task: 'EVENT_SIDE_EFFECT', incidentId: incident.id, sourceEventId: randomUUID(), eventOrderAt: at.toISOString() };
     const prefix = randomUUID();
-    const parentId = `${prefix}:a`,
-      legacyId = `${prefix}:b`,
-      criticalId = `${prefix}:c`;
-    await prisma.backgroundJob.createMany({
-      data: [
-        {
-          id: parentId,
-          type: 'SCHEDULED_TASK',
-          status: 'PENDING_V2',
-          scheduledAt: at,
-          createdAt: at,
-          payload: {
-            ...context,
-            effect: 'DISPATCH_ORDINARY',
-            lane: 'ORDINARY_DISPATCH',
-            dispatch: { version: 1, effects: ['LIFECYCLE_WEBHOOK'] },
-          },
-        },
-        {
-          id: legacyId,
-          type: 'SCHEDULED_TASK',
-          status: 'PENDING',
-          scheduledAt: at,
-          createdAt: at,
-          payload: {
-            ...context,
-            effect: 'RESOLVE_WEBHOOK',
-            lane: 'WEBHOOK',
-          },
-        },
-        {
-          id: criticalId,
-          type: 'SCHEDULED_TASK',
-          status: 'PENDING',
-          scheduledAt: at,
-          createdAt: at,
-          payload: {
-            ...context,
-            effect: 'TRIGGER_ESCALATION_NOTIFICATIONS',
-            lane: 'PERSONAL_NOTIFICATION',
-          },
-        },
-      ],
-    });
+    const parentId = `${prefix}:a`, legacyId = `${prefix}:b`, criticalId = `${prefix}:c`;
+    await prisma.backgroundJob.createMany({ data: [
+      { id: parentId, type: 'SCHEDULED_TASK', status: 'PENDING_V2', scheduledAt: at, createdAt: at, payload: {
+        ...context, effect: 'DISPATCH_ORDINARY', lane: 'ORDINARY_DISPATCH', dispatch: { version: 1, effects: ['LIFECYCLE_WEBHOOK'] },
+      } },
+      { id: legacyId, type: 'SCHEDULED_TASK', status: 'PENDING', scheduledAt: at, createdAt: at, payload: {
+        ...context, effect: 'RESOLVE_WEBHOOK', lane: 'WEBHOOK',
+      } },
+      { id: criticalId, type: 'SCHEDULED_TASK', status: 'PENDING', scheduledAt: at, createdAt: at, payload: {
+        ...context, effect: 'TRIGGER_ESCALATION_NOTIFICATIONS', lane: 'PERSONAL_NOTIFICATION',
+      } },
+    ] });
     // Old ordinary candidate eligibility excludes V2 state regardless of task.
-    const oldEligible = await prisma.backgroundJob.findMany({
-      where: { id: parentId, status: { in: ['PENDING', 'PROCESSING'] } },
-    });
+    const oldEligible = await prisma.backgroundJob.findMany({ where: { id: parentId, status: { in: ['PENDING', 'PROCESSING'] } } });
     expect(oldEligible).toHaveLength(0);
     try {
       const initial = await claimPendingJobs(10, 'SCHEDULED_TASK');
       expect(initial.map(job => job.id).sort()).toEqual([parentId, criticalId].sort());
       const parent = initial.find(job => job.id === parentId)!;
       expect(parent.status).toBe('PROCESSING_V2');
-      expect(Object.keys(parent).sort()).toEqual(
-        ['id', 'type', 'status', 'payload', 'attempts', 'maxAttempts', 'claimToken'].sort()
-      );
-      expect(await dispatchIncidentEffects(parent.id, parent.attempts, parent.claimToken)).toBe(
-        true
-      );
+      expect(Object.keys(parent).sort()).toEqual(['id', 'type', 'status', 'payload', 'attempts', 'maxAttempts', 'claimToken'].sort());
+      expect(await dispatchIncidentEffects(parent.id, parent.attempts, parent.claimToken)).toBe(true);
       const next = await claimPendingJobs(10, 'SCHEDULED_TASK');
       expect(next).toHaveLength(1);
       expect(next[0].id.startsWith(`${parentId}:`)).toBe(true);
-      await prisma.backgroundJob.update({
-        where: { id: next[0].id },
-        data: { status: 'COMPLETED' },
-      });
+      await prisma.backgroundJob.update({ where: { id: next[0].id }, data: { status: 'COMPLETED' } });
       expect((await claimPendingJobs(10, 'SCHEDULED_TASK')).map(job => job.id)).toEqual([legacyId]);
     } finally {
-      await prisma.backgroundJob.deleteMany({
-        where: { payload: { path: ['incidentId'], equals: incident.id } },
-      });
+      await prisma.backgroundJob.deleteMany({ where: { payload: { path: ['incidentId'], equals: incident.id } } });
     }
   });
 
   it('observes service configuration enabled while dispatch waits and retains the committed child after disablement', async () => {
-    const incident = await prisma.incident.create({
-      data: { title: 'Dispatch configuration', serviceId },
-    });
+    const incident = await prisma.incident.create({ data: { title: 'Dispatch configuration', serviceId } });
     const at = new Date();
-    const parent = await prisma.backgroundJob.create({
-      data: {
-        type: 'SCHEDULED_TASK',
-        status: 'PENDING_V2',
-        scheduledAt: at,
-        payload: {
-          task: 'EVENT_SIDE_EFFECT',
-          effect: 'DISPATCH_ORDINARY',
-          lane: 'ORDINARY_DISPATCH',
-          incidentId: incident.id,
-          sourceEventId: randomUUID(),
-          eventOrderAt: at.toISOString(),
-          dispatch: { version: 1, effects: ['TRIGGER_SERVICE_NOTIFICATION'] },
-        },
+    const parent = await prisma.backgroundJob.create({ data: {
+      type: 'SCHEDULED_TASK', status: 'PENDING_V2', scheduledAt: at,
+      payload: { task: 'EVENT_SIDE_EFFECT', effect: 'DISPATCH_ORDINARY', lane: 'ORDINARY_DISPATCH',
+        incidentId: incident.id, sourceEventId: randomUUID(), eventOrderAt: at.toISOString(),
+        dispatch: { version: 1, effects: ['TRIGGER_SERVICE_NOTIFICATION'] },
       },
-    });
-    const previous = await prisma.service.findUniqueOrThrow({
-      where: { id: serviceId },
-      select: { serviceNotificationChannels: true },
-    });
+    } });
+    const previous = await prisma.service.findUniqueOrThrow({ where: { id: serviceId }, select: { serviceNotificationChannels: true } });
     try {
-      await prisma.service.update({
-        where: { id: serviceId },
-        data: { serviceNotificationChannels: ['WEBHOOK'] },
-      });
+      await prisma.service.update({ where: { id: serviceId }, data: { serviceNotificationChannels: ['WEBHOOK'] } });
       const token = randomUUID();
-      await prisma.backgroundJob.update({
-        where: { id: parent.id },
-        data: { status: 'PROCESSING_V2', attempts: 1, claimToken: token },
-      });
+      await prisma.backgroundJob.update({ where: { id: parent.id }, data: { status: 'PROCESSING_V2', attempts: 1, claimToken: token } });
       expect(await dispatchIncidentEffects(parent.id, 1, token)).toBe(true);
-      await prisma.service.update({
-        where: { id: serviceId },
-        data: { serviceNotificationChannels: [] },
-      });
+      await prisma.service.update({ where: { id: serviceId }, data: { serviceNotificationChannels: [] } });
       expect(await dispatchIncidentEffects(parent.id, 1, token)).toBe(false);
-      const children = await prisma.backgroundJob.findMany({
-        where: { id: { startsWith: `${parent.id}:` } },
-      });
+      const children = await prisma.backgroundJob.findMany({ where: { id: { startsWith: `${parent.id}:` } } });
       expect(children).toHaveLength(1);
-      expect(children[0].payload).toMatchObject({
-        effect: 'TRIGGER_SERVICE_NOTIFICATION',
-        lane: 'SERVICE_NOTIFICATION',
-        sourceEventId: (parent.payload as Prisma.JsonObject).sourceEventId,
-      });
+      expect(children[0].payload).toMatchObject({ effect: 'TRIGGER_SERVICE_NOTIFICATION', lane: 'SERVICE_NOTIFICATION', sourceEventId: (parent.payload as Prisma.JsonObject).sourceEventId });
     } finally {
-      await prisma.service.update({
-        where: { id: serviceId },
-        data: { serviceNotificationChannels: previous.serviceNotificationChannels },
-      });
+      await prisma.service.update({ where: { id: serviceId }, data: { serviceNotificationChannels: previous.serviceNotificationChannels } });
     }
   });
 
   it('atomically fences single-row escalation finalization by generation, status and cursor', async () => {
-    const incident = await prisma.incident.create({
-      data: {
-        title: 'Single-row escalation finalization',
-        serviceId,
-        status: 'OPEN',
-        escalationGeneration: 7,
-        currentEscalationStep: 2,
-        escalationStatus: 'ESCALATING',
-        nextEscalationAt: new Date(),
-      },
-    });
+    const incident = await prisma.incident.create({ data: {
+      title: 'Single-row escalation finalization', serviceId, status: 'OPEN', escalationGeneration: 7,
+      currentEscalationStep: 2, escalationStatus: 'ESCALATING', nextEscalationAt: new Date(),
+    } });
     const input = { incidentId: incident.id, expectedGeneration: 7, expectedStep: 2, status: null };
     expect(await finalizeEscalationExecution({ ...input, expectedGeneration: 6 })).toBe(false);
     expect(await finalizeEscalationExecution({ ...input, expectedStep: 1 })).toBe(false);
     expect(await finalizeEscalationExecution(input)).toBe(true);
     expect(await prisma.incident.findUniqueOrThrow({ where: { id: incident.id } })).toMatchObject({
-      escalationStatus: null,
-      currentEscalationStep: null,
-      nextEscalationAt: null,
-      escalationGeneration: 7,
+      escalationStatus: null, currentEscalationStep: null, nextEscalationAt: null, escalationGeneration: 7,
     });
     expect(await finalizeEscalationExecution({ ...input, expectedStep: 0 })).toBe(true);
     await prisma.incident.update({ where: { id: incident.id }, data: { status: 'ACKNOWLEDGED' } });
@@ -550,169 +368,92 @@ describe('PostgreSQL ingestion durability', () => {
 
   it('finalizes distinct incidents concurrently and permits only one matching cursor winner', async () => {
     const ids = Array.from({ length: 32 }, () => randomUUID());
-    await prisma.incident.createMany({
-      data: ids.map(id => ({
-        id,
-        title: 'Concurrent fenced finalization',
-        serviceId,
-        status: 'OPEN',
-        escalationGeneration: 9,
-        currentEscalationStep: 2,
-        escalationStatus: 'ESCALATING',
-        nextEscalationAt: new Date(),
-      })),
-    });
-    const results = await Promise.all(
-      ids.map(incidentId =>
-        finalizeEscalationExecution({
-          incidentId,
-          expectedGeneration: 9,
-          expectedStep: 2,
-          status: null,
-        })
-      )
-    );
+    await prisma.incident.createMany({ data: ids.map(id => ({
+      id, title: 'Concurrent fenced finalization', serviceId, status: 'OPEN',
+      escalationGeneration: 9, currentEscalationStep: 2, escalationStatus: 'ESCALATING',
+      nextEscalationAt: new Date(),
+    })) });
+    const results = await Promise.all(ids.map(incidentId => finalizeEscalationExecution({
+      incidentId, expectedGeneration: 9, expectedStep: 2, status: null,
+    })));
     expect(results.every(Boolean)).toBe(true);
     await prisma.incident.update({ where: { id: ids[0] }, data: { currentEscalationStep: 2 } });
-    const contenders = await Promise.all(
-      Array.from({ length: 8 }, () =>
-        finalizeEscalationExecution({
-          incidentId: ids[0],
-          expectedGeneration: 9,
-          expectedStep: 2,
-          status: null,
-        })
-      )
-    );
+    const contenders = await Promise.all(Array.from({ length: 8 }, () => finalizeEscalationExecution({
+      incidentId: ids[0], expectedGeneration: 9, expectedStep: 2, status: null,
+    })));
     expect(contenders.filter(Boolean)).toHaveLength(1);
-    expect(
-      await prisma.incident.count({
-        where: {
-          id: { in: ids },
-          currentEscalationStep: null,
-          escalationStatus: null,
-          nextEscalationAt: null,
-        },
-      })
-    ).toBe(ids.length);
+    expect(await prisma.incident.count({ where: {
+      id: { in: ids }, currentEscalationStep: null, escalationStatus: null, nextEscalationAt: null,
+    } })).toBe(ids.length);
   });
 
   it('settles dispatch planning failures into the protected retry generation', async () => {
     const incident = await prisma.incident.create({ data: { title: 'Dispatch retry', serviceId } });
     const at = new Date();
-    const parent = await prisma.backgroundJob.create({
-      data: {
-        type: 'SCHEDULED_TASK',
-        status: 'PROCESSING_V2',
-        attempts: 1,
-        maxAttempts: 5,
-        claimToken: randomUUID(),
-        scheduledAt: at,
-        payload: {
-          task: 'EVENT_SIDE_EFFECT',
-          effect: 'DISPATCH_ORDINARY',
-          lane: 'ORDINARY_DISPATCH',
-          incidentId: incident.id,
-          sourceEventId: randomUUID(),
-          eventOrderAt: at.toISOString(),
-          dispatch: { version: 999, effects: ['TRIGGER_WEBHOOK'] },
-        },
+    const parent = await prisma.backgroundJob.create({ data: {
+      type: 'SCHEDULED_TASK', status: 'PROCESSING_V2', attempts: 1, maxAttempts: 5, claimToken: randomUUID(), scheduledAt: at,
+      payload: { task: 'EVENT_SIDE_EFFECT', effect: 'DISPATCH_ORDINARY', lane: 'ORDINARY_DISPATCH',
+        incidentId: incident.id, sourceEventId: randomUUID(), eventOrderAt: at.toISOString(),
+        dispatch: { version: 999, effects: ['TRIGGER_WEBHOOK'] },
       },
-    });
+    } });
     expect(await processJob(parent)).toBe(false);
     const retry = await prisma.backgroundJob.findUniqueOrThrow({ where: { id: parent.id } });
     expect(retry.status).toBe('PENDING_V2');
     expect(retry.claimToken).toBeNull();
     expect(retry.scheduledAt.getTime()).toBeGreaterThan(at.getTime());
-    expect(
-      await prisma.backgroundJob.count({ where: { id: { startsWith: `${parent.id}:` } } })
-    ).toBe(0);
+    expect(await prisma.backgroundJob.count({ where: { id: { startsWith: `${parent.id}:` } } })).toBe(0);
     await prisma.backgroundJob.delete({ where: { id: parent.id } });
   });
 
   it('reads admission control and scoped Automation together without caching the emergency switch', async () => {
     const rollback = new Error('Rollback owned admission settings fixture');
-    await expect(
-      prisma.$transaction(async tx => {
-        await tx.systemSettings.upsert({
-          where: { id: 'default' },
-          create: { automationEnabled: true },
-          update: { automationEnabled: true },
-        });
-        await tx.serviceAutomationConfig.upsert({
-          where: { serviceId },
-          create: { serviceId, mode: 'SHADOW' },
-          update: { mode: 'SHADOW' },
-        });
-        const other = await tx.service.create({
-          data: { name: 'Outside admission settings scope' },
-        });
-        await tx.serviceAutomationConfig.create({ data: { serviceId: other.id, mode: 'LIVE' } });
-        const policy = await getIngestionPolicy(tx);
-        const automation = await getIngestionAutomationConfigs(tx, [serviceId]);
-        const query = vi.spyOn(tx, '$queryRaw');
-        try {
-          const shared = await readIngestionAdmissionSettings(tx, [serviceId, serviceId]);
-          expect({
-            paused: shared.paused,
-            revision: shared.revision,
-            policy: shared.policy,
-          }).toEqual(policy);
-          expect(shared.automation).toEqual(automation);
-          expect([...shared.automation.keys()]).toEqual([serviceId]);
-          expect(query).toHaveBeenCalledTimes(1);
-          await tx.serviceAutomationConfig.update({ where: { serviceId }, data: { mode: 'LIVE' } });
-          query.mockClear();
-          expect(
-            (await readIngestionAdmissionSettings(tx, [serviceId])).automation.get(serviceId)?.mode
-          ).toBe('LIVE');
-          expect(query).toHaveBeenCalledTimes(1);
-          await tx.systemSettings.update({
-            where: { id: 'default' },
-            data: { automationEnabled: false },
-          });
-          query.mockClear();
-          expect((await readIngestionAdmissionSettings(tx, [serviceId])).automation.size).toBe(0);
-          expect(query).toHaveBeenCalledTimes(1);
-        } finally {
-          query.mockRestore();
-        }
-        throw rollback;
-      })
-    ).rejects.toBe(rollback);
+    await expect(prisma.$transaction(async tx => {
+      await tx.systemSettings.upsert({ where: { id: 'default' },
+        create: { automationEnabled: true }, update: { automationEnabled: true },
+      });
+      await tx.serviceAutomationConfig.upsert({ where: { serviceId },
+        create: { serviceId, mode: 'SHADOW' }, update: { mode: 'SHADOW' },
+      });
+      const other = await tx.service.create({ data: { name: 'Outside admission settings scope' } });
+      await tx.serviceAutomationConfig.create({ data: { serviceId: other.id, mode: 'LIVE' } });
+      const policy = await getIngestionPolicy(tx);
+      const automation = await getIngestionAutomationConfigs(tx, [serviceId]);
+      const query = vi.spyOn(tx, '$queryRaw');
+      try {
+        const shared = await readIngestionAdmissionSettings(tx, [serviceId, serviceId]);
+        expect({ paused: shared.paused, revision: shared.revision, policy: shared.policy }).toEqual(policy);
+        expect(shared.automation).toEqual(automation);
+        expect([...shared.automation.keys()]).toEqual([serviceId]);
+        expect(query).toHaveBeenCalledTimes(1);
+        await tx.serviceAutomationConfig.update({ where: { serviceId }, data: { mode: 'LIVE' } });
+        query.mockClear();
+        expect((await readIngestionAdmissionSettings(tx, [serviceId])).automation.get(serviceId)?.mode).toBe('LIVE');
+        expect(query).toHaveBeenCalledTimes(1);
+        await tx.systemSettings.update({ where: { id: 'default' }, data: { automationEnabled: false } });
+        query.mockClear();
+        expect((await readIngestionAdmissionSettings(tx, [serviceId])).automation.size).toBe(0);
+        expect(query).toHaveBeenCalledTimes(1);
+      } finally { query.mockRestore(); }
+      throw rollback;
+    })).rejects.toBe(rollback);
   });
 
   it('shares one authoritative published policy snapshot without re-reading during resolution', async () => {
-    const support = await prisma.responseSupportHoursPolicy.create({
-      data: {
-        scopeKey: `service:${serviceId}`,
-        version: 1,
-        timezone: 'UTC',
-        mode: 'SCHEDULED',
-        windows: { create: { dayOfWeek: 1, startMinute: 540, endMinute: 1020 } },
-        exceptions: { create: { localDate: new Date('2026-10-27T00:00:00Z'), available: false } },
-      },
-    });
-    await prisma.responseSupportHoursPolicy.update({
-      where: { id: support.id },
-      data: { sealedAt: new Date() },
-    });
-    await prisma.responseSupportHoursPolicy.create({
-      data: {
-        scopeKey: `service:${serviceId}`,
-        version: 2,
-        timezone: 'UTC',
-        mode: 'ALWAYS',
-      },
-    });
+    const support = await prisma.responseSupportHoursPolicy.create({ data: {
+      scopeKey: `service:${serviceId}`, version: 1, timezone: 'UTC', mode: 'SCHEDULED',
+      windows: { create: { dayOfWeek: 1, startMinute: 540, endMinute: 1020 } },
+      exceptions: { create: { localDate: new Date('2026-10-27T00:00:00Z'), available: false } },
+    } });
+    await prisma.responseSupportHoursPolicy.update({ where: { id: support.id }, data: { sealedAt: new Date() } });
+    await prisma.responseSupportHoursPolicy.create({ data: {
+      scopeKey: `service:${serviceId}`, version: 2, timezone: 'UTC', mode: 'ALWAYS',
+    } });
     await prisma.$transaction(async tx => {
       const keys = ['integration:integration', `service:${serviceId}`, 'workspace'];
       const expectedClassification = await readPublishedClassificationPolicies(tx, keys);
       const expectedSla = await readPublishedSlaPolicies(tx, [`service:${serviceId}`, 'workspace']);
-      const expectedSupport = await readPublishedSupportPolicies(tx, [
-        `service:${serviceId}`,
-        'workspace',
-      ]);
+      const expectedSupport = await readPublishedSupportPolicies(tx, [`service:${serviceId}`, 'workspace']);
       const query = vi.spyOn(tx, '$queryRaw');
       try {
         const snapshot = await readPublishedIncidentPolicies(tx, serviceId, 'integration');
@@ -720,102 +461,56 @@ describe('PostgreSQL ingestion durability', () => {
         expect(snapshot.sla).toEqual(expectedSla);
         expect(snapshot.support).toEqual(expectedSupport);
         expect(query).toHaveBeenCalledTimes(1);
-        const classification = await resolveIncidentClassification(
-          tx,
-          {
-            serviceId,
-            integrationId: 'integration',
-            alertSeverity: 'critical',
-          },
-          snapshot.classification
-        );
-        const contract = await resolveNewIncidentSlaContract(
-          tx,
-          {
-            serviceId,
-            priority: classification.priority,
-            now: new Date(),
-          },
-          snapshot.sla
-        );
+        const classification = await resolveIncidentClassification(tx, {
+          serviceId, integrationId: 'integration', alertSeverity: 'critical',
+        }, snapshot.classification);
+        const contract = await resolveNewIncidentSlaContract(tx, {
+          serviceId, priority: classification.priority, now: new Date(),
+        }, snapshot.sla);
         expect(contract.ackTargetMs).toBeGreaterThan(0);
         expect(snapshot.support[0].version).toBe(1);
-        expect(snapshot.support[0].exceptions[0].localDate.toISOString()).toBe(
-          '2026-10-27T00:00:00.000Z'
-        );
-        expect(
-          await resolveSupportHours(
-            tx,
-            { serviceId, at: new Date('2026-10-26T10:00:00Z') },
-            snapshot.support
-          )
-        ).toMatchObject({ state: 'INSIDE', policyVersion: 1 });
+        expect(snapshot.support[0].exceptions[0].localDate.toISOString()).toBe('2026-10-27T00:00:00.000Z');
+        expect(await resolveSupportHours(tx, { serviceId, at: new Date('2026-10-26T10:00:00Z') }, snapshot.support)).toMatchObject({ state: 'INSIDE', policyVersion: 1 });
         expect(query).toHaveBeenCalledTimes(1);
-      } finally {
-        query.mockRestore();
-      }
+      } finally { query.mockRestore(); }
     });
   });
 
   it('atomically inserts only reserved receipt ordinals and preserves prepared JSON', async () => {
     const policy = (await getIngestionPolicy()).policy;
     const stored = encodeEnvelope(envelope('raw-insert'));
-    const dangerous = 'quote \' ); DROP TABLE nope; -- and " json';
+    const dangerous = "quote ' ); DROP TABLE nope; -- and \" json";
     stored.event.payload.summary = dangerous;
     const rows: ReceiptInsert[] = [0, 1, 2].map(index => ({
-      id: randomUUID(),
-      receivedAt: new Date(stored.receivedAt),
-      serviceId,
-      integrationId: 'integration',
-      partitionKey: `insert-${index}`,
-      orderingKeys: [`insert:${randomUUID()}`],
-      idempotencyKey: randomUUID(),
-      contentHash: 'fixture-hash',
-      payloadBytes: 100,
-      critical: true,
-      envelope: stored,
+      id: randomUUID(), receivedAt: new Date(stored.receivedAt), serviceId,
+      integrationId: 'integration', partitionKey: `insert-${index}`,
+      orderingKeys: [`insert:${randomUUID()}`], idempotencyKey: randomUUID(), contentHash: 'fixture-hash',
+      payloadBytes: 100, critical: true, envelope: stored,
     }));
     const insert = prepareReceiptInsert(rows);
     stored.event.payload.summary = 'changed after preparation';
     const before = await prisma.ingestionBudget.aggregate({ _sum: { pending: true, bytes: true } });
     await prisma.$transaction(async tx => {
-      const shards = await reserveIngestionBudgets(
-        tx,
-        policy,
-        [0, 1].map(() => ({
-          payloadBytes: 100,
-          critical: true,
-          preferredShard: 0,
-        }))
-      );
+      const shards = await reserveIngestionBudgets(tx, policy, [0, 1].map(() => ({
+        payloadBytes: 100, critical: true, preferredShard: 0,
+      })));
       expect(shards.every(shard => shard !== undefined)).toBe(true);
       await insert(tx, [shards[0], undefined, shards[1]]);
     });
-    const inserted = await prisma.ingestionReceipt.findMany({
-      where: { id: { in: rows.map(row => row.id) } },
-      orderBy: { sequence: 'asc' },
-    });
+    const inserted = await prisma.ingestionReceipt.findMany({ where: { id: { in: rows.map(row => row.id) } }, orderBy: { sequence: 'asc' } });
     expect(inserted.map(row => row.id)).toEqual([rows[0].id, rows[2].id]);
-    expect(inserted.every(row => row.status === 'PENDING' && row.availableAt.getTime() === 0)).toBe(
-      true
-    );
+    expect(inserted.every(row => row.status === 'PENDING' && row.availableAt.getTime() === 0)).toBe(true);
     expect(decodeEnvelope(inserted[0].envelope).event.payload.summary).toBe(dangerous);
     const after = await prisma.ingestionBudget.aggregate({ _sum: { pending: true, bytes: true } });
     expect(after._sum.pending! - before._sum.pending!).toBe(2);
     expect(after._sum.bytes! - before._sum.bytes!).toBe(BigInt(200));
     // An insertion constraint failure must roll back the reservation too.
     const duplicate = prepareReceiptInsert([rows[0]]);
-    await expect(
-      prisma.$transaction(async tx => {
-        const shards = await reserveIngestionBudgets(tx, policy, [
-          { payloadBytes: 100, critical: true, preferredShard: 0 },
-        ]);
-        await duplicate(tx, shards);
-      })
-    ).rejects.toThrow();
-    expect(
-      await prisma.ingestionBudget.aggregate({ _sum: { pending: true, bytes: true } })
-    ).toEqual(after);
+    await expect(prisma.$transaction(async tx => {
+      const shards = await reserveIngestionBudgets(tx, policy, [{ payloadBytes: 100, critical: true, preferredShard: 0 }]);
+      await duplicate(tx, shards);
+    })).rejects.toThrow();
+    expect(await prisma.ingestionBudget.aggregate({ _sum: { pending: true, bytes: true } })).toEqual(after);
   });
 
   it('inserts a single prepared receipt without changing its captured identity or payload', async () => {
@@ -824,21 +519,13 @@ describe('PostgreSQL ingestion durability', () => {
     const orderingKeys = [`single:${randomUUID()}`];
     const id = randomUUID();
     const row: ReceiptInsert = {
-      id,
-      receivedAt,
-      serviceId,
-      integrationId: 'integration',
-      partitionKey: 'single-values',
-      orderingKeys,
-      idempotencyKey: randomUUID(),
-      contentHash: 'single-hash',
-      payloadBytes: 100,
-      critical: true,
-      envelope: stored,
+      id, receivedAt, serviceId, integrationId: 'integration', partitionKey: 'single-values',
+      orderingKeys, idempotencyKey: randomUUID(), contentHash: 'single-hash',
+      payloadBytes: 100, critical: true, envelope: stored,
     };
     const expectedAt = receivedAt.getTime();
     const expectedKeys = [...orderingKeys];
-    const summary = 'quoted \' value with " JSON';
+    const summary = "quoted ' value with \" JSON";
     stored.event.payload.summary = summary;
     const insert = prepareReceiptInsert([row]);
     stored.event.payload.summary = 'mutated';
@@ -846,13 +533,9 @@ describe('PostgreSQL ingestion durability', () => {
     orderingKeys.push('mutated');
     row.id = 'mutated';
     await prisma.$transaction(async tx => {
-      const shards = await reserveIngestionBudgets(tx, (await getIngestionPolicy(tx)).policy, [
-        {
-          payloadBytes: 100,
-          critical: true,
-          preferredShard: 0,
-        },
-      ]);
+      const shards = await reserveIngestionBudgets(tx, (await getIngestionPolicy(tx)).policy, [{
+        payloadBytes: 100, critical: true, preferredShard: 0,
+      }]);
       await insert(tx, shards);
     });
     const receipt = await prisma.ingestionReceipt.findUniqueOrThrow({ where: { id } });
@@ -865,116 +548,55 @@ describe('PostgreSQL ingestion durability', () => {
 
   it('plans collaboration at execution and recovers a committed child intent after disable', async () => {
     const previous = await prisma.chatOpsConfig.findUnique({ where: { id: 'default' } });
-    const incident = await prisma.incident.create({
-      data: {
-        title: 'Planner configuration boundary',
-        serviceId,
-        status: 'OPEN',
-      },
-    });
+    const incident = await prisma.incident.create({ data: {
+      title: 'Planner configuration boundary', serviceId, status: 'OPEN',
+    } });
     const payload = {
-      task: 'EVENT_SIDE_EFFECT' as const,
-      effect: 'TRIGGER_WAR_ROOM' as const,
-      lane: 'WAR_ROOM' as const,
-      incidentId: incident.id,
-      sourceEventId: randomUUID(),
-      eventOrderAt: new Date().toISOString(),
+      task: 'EVENT_SIDE_EFFECT' as const, effect: 'TRIGGER_WAR_ROOM' as const,
+      lane: 'WAR_ROOM' as const, incidentId: incident.id,
+      sourceEventId: randomUUID(), eventOrderAt: new Date().toISOString(),
     };
     try {
-      await prisma.chatOpsConfig.upsert({
-        where: { id: 'default' },
-        create: { enabled: false },
-        update: { enabled: false },
-      });
+      await prisma.chatOpsConfig.upsert({ where: { id: 'default' },
+        create: { enabled: false }, update: { enabled: false } });
       await processEventSideEffect(payload, 1);
-      expect(
-        await prisma.warRoomProviderEventDelivery.count({ where: { incidentId: incident.id } })
-      ).toBe(0);
+      expect(await prisma.warRoomProviderEventDelivery.count({ where: { incidentId: incident.id } })).toBe(0);
       // This durable parent was enqueued before enablement but not yet executed.
       const queued = { ...payload, sourceEventId: randomUUID() };
       await prisma.chatOpsConfig.update({ where: { id: 'default' }, data: { enabled: true } });
       await processEventSideEffect(queued, 1);
-      expect(
-        await prisma.warRoomProviderEventDelivery.count({ where: { incidentId: incident.id } })
-      ).toBe(2);
+      expect(await prisma.warRoomProviderEventDelivery.count({ where: { incidentId: incident.id } })).toBe(2);
       await prisma.chatOpsConfig.update({ where: { id: 'default' }, data: { enabled: false } });
       const recovery = { ...payload, sourceEventId: randomUUID() };
-      const event = {
-        kind: 'TRIGGER' as const,
-        incidentId: incident.id,
-        incidentEventId: recovery.sourceEventId,
-      };
-      const delivery = await ensureWarRoomDelivery({
-        provider: 'SLACK',
-        incidentId: incident.id,
-        kind: 'TRIGGER',
-        idempotencyKey: warRoomIdempotencyKey(event),
-        eventPayload: event,
-      });
-      expect(
-        await prisma.backgroundJob.count({
-          where: {
-            type: 'WAR_ROOM_PROVIDER_EVENT',
-            payload: { path: ['deliveryId'], equals: delivery.id },
-          },
-        })
-      ).toBe(0);
+      const event = { kind: 'TRIGGER' as const, incidentId: incident.id, incidentEventId: recovery.sourceEventId };
+      const delivery = await ensureWarRoomDelivery({ provider: 'SLACK', incidentId: incident.id,
+        kind: 'TRIGGER', idempotencyKey: warRoomIdempotencyKey(event), eventPayload: event });
+      expect(await prisma.backgroundJob.count({ where: { type: 'WAR_ROOM_PROVIDER_EVENT',
+        payload: { path: ['deliveryId'], equals: delivery.id } } })).toBe(0);
       await processEventSideEffect(recovery, 2);
-      expect(
-        await prisma.backgroundJob.count({
-          where: {
-            type: 'WAR_ROOM_PROVIDER_EVENT',
-            payload: { path: ['deliveryId'], equals: delivery.id },
-          },
-        })
-      ).toBe(1);
-      expect(
-        await prisma.warRoomProviderEventDelivery.count({ where: { incidentId: incident.id } })
-      ).toBe(4);
+      expect(await prisma.backgroundJob.count({ where: { type: 'WAR_ROOM_PROVIDER_EVENT',
+        payload: { path: ['deliveryId'], equals: delivery.id } } })).toBe(1);
+      expect(await prisma.warRoomProviderEventDelivery.count({ where: { incidentId: incident.id } })).toBe(4);
       // A reclaimed parent must wait for an older producer's uncommitted
       // unique-key delivery, not conclude that disabled config makes it absent.
       const late = { ...payload, sourceEventId: randomUUID() };
-      const lateEvent = {
-        kind: 'TRIGGER' as const,
-        incidentId: incident.id,
-        incidentEventId: late.sourceEventId,
-      };
+      const lateEvent = { kind: 'TRIGGER' as const, incidentId: incident.id, incidentEventId: late.sourceEventId };
       let releaseWriter!: () => void;
       let inserted!: () => void;
-      const held = new Promise<void>(resolve => {
-        releaseWriter = resolve;
-      });
-      const ready = new Promise<void>(resolve => {
-        inserted = resolve;
-      });
+      const held = new Promise<void>(resolve => { releaseWriter = resolve; });
+      const ready = new Promise<void>(resolve => { inserted = resolve; });
       const lateId = randomUUID();
-      const writer = prisma.$transaction(
-        async tx => {
-          await tx.warRoomProviderEventDelivery.create({
-            data: {
-              id: lateId,
-              provider: 'SLACK',
-              incidentId: incident.id,
-              kind: 'TRIGGER',
-              idempotencyKey: warRoomIdempotencyKey(lateEvent),
-              eventPayload: lateEvent,
-            },
-          });
-          inserted();
-          await held;
-        },
-        { timeout: 10000 }
-      );
-      await Promise.race([
-        ready,
-        writer.then(() => {
-          throw new Error('Writer ended before overlap');
-        }),
-      ]);
+      const writer = prisma.$transaction(async tx => {
+        await tx.warRoomProviderEventDelivery.create({ data: {
+          id: lateId, provider: 'SLACK', incidentId: incident.id, kind: 'TRIGGER',
+          idempotencyKey: warRoomIdempotencyKey(lateEvent), eventPayload: lateEvent,
+        } });
+        inserted();
+        await held;
+      }, { timeout: 10000 });
+      await Promise.race([ready, writer.then(() => { throw new Error('Writer ended before overlap'); })]);
       let retryFinished = false;
-      const retry = processEventSideEffect(late, 2).then(() => {
-        retryFinished = true;
-      });
+      const retry = processEventSideEffect(late, 2).then(() => { retryFinished = true; });
       try {
         await new Promise(resolve => setTimeout(resolve, 50));
         expect(retryFinished).toBe(false);
@@ -983,20 +605,10 @@ describe('PostgreSQL ingestion durability', () => {
         await writer;
         await retry;
       }
-      expect(
-        await prisma.backgroundJob.count({
-          where: {
-            type: 'WAR_ROOM_PROVIDER_EVENT',
-            payload: { path: ['deliveryId'], equals: lateId },
-          },
-        })
-      ).toBe(1);
+      expect(await prisma.backgroundJob.count({ where: { type: 'WAR_ROOM_PROVIDER_EVENT',
+        payload: { path: ['deliveryId'], equals: lateId } } })).toBe(1);
     } finally {
-      if (previous)
-        await prisma.chatOpsConfig.update({
-          where: { id: 'default' },
-          data: { enabled: previous.enabled },
-        });
+      if (previous) await prisma.chatOpsConfig.update({ where: { id: 'default' }, data: { enabled: previous.enabled } });
       else await prisma.chatOpsConfig.deleteMany({ where: { id: 'default' } });
     }
   });
@@ -3137,32 +2749,17 @@ describe('PostgreSQL ingestion durability', () => {
   });
   it('coalesces mixed quota keys without transferring credit or exceeding per-key bursts', async () => {
     const current = await getIngestionPolicy();
-    await applyIngestionCommand(
-      {
-        action: 'configure',
-        expectedRevision: current.revision,
-        policy: {
-          ...current.policy,
-          quotas: {
-            eventsPerMinute: 1,
-            eventsBurst: 1,
-            integrationPerMinute: 1,
-            integrationBurst: 2,
-          },
-        },
-      },
-      actorId
-    );
-    const keys = Array.from(
-      { length: 32 },
-      (_, index) => `mixed-quota-${randomUUID()}${index % 2 ? ':events' : ':integration'}`
-    );
+    await applyIngestionCommand({ action: 'configure', expectedRevision: current.revision,
+      policy: { ...current.policy, quotas: {
+        eventsPerMinute: 1, eventsBurst: 1, integrationPerMinute: 1, integrationBurst: 2,
+      } },
+    }, actorId);
+    const keys = Array.from({ length: 32 }, (_, index) =>
+      `mixed-quota-${randomUUID()}${index % 2 ? ':events' : ':integration'}`);
     const requests = keys.flatMap(key => Array.from({ length: 3 }, () => key));
     const decisions = await Promise.all(requests.map(key => checkIngestionQuota(key, 120, 60000)));
     for (const key of keys) {
-      const allowed = decisions.filter(
-        (decision, index) => requests.at(index) === key && decision.allowed
-      );
+      const allowed = decisions.filter((decision, index) => requests.at(index) === key && decision.allowed);
       expect(allowed).toHaveLength(key.endsWith(':events') ? 1 : 2);
       const row = await prisma.ingestionQuota.findUniqueOrThrow({ where: { key } });
       expect(row.tokens).toBeGreaterThanOrEqual(0);

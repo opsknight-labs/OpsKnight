@@ -42,11 +42,8 @@ describeIntegration('Bootstrap authorization integration', () => {
       Array.from({ length: 20 }, () => issueBootstrapAuthorization())
     );
     const fulfilled = results.filter(
-      (
-        result
-      ): result is PromiseFulfilledResult<
-        Awaited<ReturnType<typeof issueBootstrapAuthorization>>
-      > => result.status === 'fulfilled'
+      (result): result is PromiseFulfilledResult<Awaited<ReturnType<typeof issueBootstrapAuthorization>>> =>
+        result.status === 'fulfilled'
     );
     const rejected = results.filter(result => result.status === 'rejected');
 

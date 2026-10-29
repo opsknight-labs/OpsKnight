@@ -42,7 +42,8 @@ export async function runLoadCleanup(options?: {
 }): Promise<LoadCleanupSummary> {
   assertSafeCleanupDatabase();
 
-  const controlBaseUrl = options?.controlBaseUrl ?? DEFAULT_EMULATOR_ENDPOINTS.controlBaseUrl;
+  const controlBaseUrl =
+    options?.controlBaseUrl ?? DEFAULT_EMULATOR_ENDPOINTS.controlBaseUrl;
   const prisma = new PrismaClient();
 
   try {
@@ -79,18 +80,16 @@ export async function runLoadCleanup(options?: {
 
     // Strictly scoped foreign key disassociations for load test entities only
     if (loadServiceIds.length > 0 || loadIncidentIds.length > 0) {
-      await prisma.alert
-        .updateMany({
-          where: {
-            OR: [
-              { serviceId: { in: loadServiceIds } },
-              { incidentId: { in: loadIncidentIds } },
-              { dedupKey: { contains: 'lt-' } },
-            ],
-          },
-          data: { incidentId: null },
-        })
-        .catch(() => undefined);
+      await prisma.alert.updateMany({
+        where: {
+          OR: [
+            { serviceId: { in: loadServiceIds } },
+            { incidentId: { in: loadIncidentIds } },
+            { dedupKey: { contains: 'lt-' } },
+          ],
+        },
+        data: { incidentId: null },
+      }).catch(() => undefined);
     }
 
     // 2. Atomically delete load-test background jobs, notifications, alerts, and incidents in dependency order
@@ -103,132 +102,116 @@ export async function runLoadCleanup(options?: {
       _deletedNotes,
       deletedAlerts,
       deletedIncidents,
-    ] = await prisma
-      .$transaction([
-        prisma.backgroundJob.deleteMany({
-          where: {
-            OR: [{ id: { startsWith: 'lt-' } }, { payload: { string_contains: 'lt-' } }],
-          },
-        }),
-        prisma.notificationDeliveryAttempt.deleteMany({
-          where: {
-            OR: [{ id: { startsWith: 'lt-' } }, { notificationId: { in: loadNotificationIds } }],
-          },
-        }),
-        prisma.notification.deleteMany({
-          where: { id: { in: loadNotificationIds } },
-        }),
-        prisma.notificationFanout.deleteMany({
-          where: { statusPageId: { startsWith: 'lt-' } },
-        }),
-        prisma.incidentEvent.deleteMany({
-          where: { incidentId: { in: loadIncidentIds } },
-        }),
-        prisma.incidentNote.deleteMany({
-          where: { incidentId: { in: loadIncidentIds } },
-        }),
-        prisma.alert.deleteMany({
-          where: {
-            OR: [
-              { serviceId: { in: loadServiceIds } },
-              { incidentId: { in: loadIncidentIds } },
-              { dedupKey: { contains: 'lt-' } },
-            ],
-          },
-        }),
-        prisma.incident.deleteMany({
-          where: { id: { in: loadIncidentIds } },
-        }),
-      ])
-      .catch(async () => {
-        // Scoped fallback if transaction encounters serialization / deadlocks under load
-        const delAttempts = await prisma.notificationDeliveryAttempt
-          .deleteMany({
-            where: {
-              OR: [{ id: { startsWith: 'lt-' } }, { notificationId: { in: loadNotificationIds } }],
-            },
-          })
-          .catch(() => ({ count: 0 }));
-
-        const delNotifs = await prisma.notification
-          .deleteMany({
-            where: { id: { in: loadNotificationIds } },
-          })
-          .catch(() => ({ count: 0 }));
-
-        const delJobs = await prisma.backgroundJob
-          .deleteMany({
-            where: {
-              OR: [{ id: { startsWith: 'lt-' } }, { payload: { string_contains: 'lt-' } }],
-            },
-          })
-          .catch(() => ({ count: 0 }));
-
-        await prisma.notificationFanout
-          .deleteMany({
-            where: { statusPageId: { startsWith: 'lt-' } },
-          })
-          .catch(() => undefined);
-
-        await prisma.incidentEvent
-          .deleteMany({
-            where: { incidentId: { in: loadIncidentIds } },
-          })
-          .catch(() => undefined);
-
-        await prisma.incidentNote
-          .deleteMany({
-            where: { incidentId: { in: loadIncidentIds } },
-          })
-          .catch(() => undefined);
-
-        const delAlerts = await prisma.alert
-          .deleteMany({
-            where: {
-              OR: [
-                { serviceId: { in: loadServiceIds } },
-                { incidentId: { in: loadIncidentIds } },
-                { dedupKey: { contains: 'lt-' } },
-              ],
-            },
-          })
-          .catch(() => ({ count: 0 }));
-
-        const delIncs = await prisma.incident
-          .deleteMany({
-            where: { id: { in: loadIncidentIds } },
-          })
-          .catch(() => ({ count: 0 }));
-
-        return [
-          delJobs,
-          delAttempts,
-          delNotifs,
-          { count: 0 },
-          { count: 0 },
-          { count: 0 },
-          delAlerts,
-          delIncs,
-        ];
-      });
-
-    await prisma.statusPageService
-      .deleteMany({
-        where: {
-          OR: [{ statusPageId: { startsWith: 'lt-' } }, { serviceId: { in: loadServiceIds } }],
-        },
-      })
-      .catch(() => undefined);
-    await prisma.statusPageSubscriptionService
-      .deleteMany({
+    ] = await prisma.$transaction([
+      prisma.backgroundJob.deleteMany({
         where: {
           OR: [
-            { subscription: { statusPageId: { startsWith: 'lt-' } } },
-            { serviceId: { in: loadServiceIds } },
+            { id: { startsWith: 'lt-' } },
+            { payload: { string_contains: 'lt-' } },
           ],
         },
-      })
-      .catch(() => undefined);
+      }),
+      prisma.notificationDeliveryAttempt.deleteMany({
+        where: {
+          OR: [
+            { id: { startsWith: 'lt-' } },
+            { notificationId: { in: loadNotificationIds } },
+          ],
+        },
+      }),
+      prisma.notification.deleteMany({
+        where: { id: { in: loadNotificationIds } },
+      }),
+      prisma.notificationFanout.deleteMany({
+        where: { statusPageId: { startsWith: 'lt-' } },
+      }),
+      prisma.incidentEvent.deleteMany({
+        where: { incidentId: { in: loadIncidentIds } },
+      }),
+      prisma.incidentNote.deleteMany({
+        where: { incidentId: { in: loadIncidentIds } },
+      }),
+      prisma.alert.deleteMany({
+        where: {
+          OR: [
+            { serviceId: { in: loadServiceIds } },
+            { incidentId: { in: loadIncidentIds } },
+            { dedupKey: { contains: 'lt-' } },
+          ],
+        },
+      }),
+      prisma.incident.deleteMany({
+        where: { id: { in: loadIncidentIds } },
+      }),
+    ]).catch(async () => {
+      // Scoped fallback if transaction encounters serialization / deadlocks under load
+      const delAttempts = await prisma.notificationDeliveryAttempt.deleteMany({
+        where: {
+          OR: [
+            { id: { startsWith: 'lt-' } },
+            { notificationId: { in: loadNotificationIds } },
+          ],
+        },
+      }).catch(() => ({ count: 0 }));
+
+      const delNotifs = await prisma.notification.deleteMany({
+        where: { id: { in: loadNotificationIds } },
+      }).catch(() => ({ count: 0 }));
+
+      const delJobs = await prisma.backgroundJob.deleteMany({
+        where: {
+          OR: [
+            { id: { startsWith: 'lt-' } },
+            { payload: { string_contains: 'lt-' } },
+          ],
+        },
+      }).catch(() => ({ count: 0 }));
+
+      await prisma.notificationFanout.deleteMany({
+        where: { statusPageId: { startsWith: 'lt-' } },
+      }).catch(() => undefined);
+
+      await prisma.incidentEvent.deleteMany({
+        where: { incidentId: { in: loadIncidentIds } },
+      }).catch(() => undefined);
+
+      await prisma.incidentNote.deleteMany({
+        where: { incidentId: { in: loadIncidentIds } },
+      }).catch(() => undefined);
+
+      const delAlerts = await prisma.alert.deleteMany({
+        where: {
+          OR: [
+            { serviceId: { in: loadServiceIds } },
+            { incidentId: { in: loadIncidentIds } },
+            { dedupKey: { contains: 'lt-' } },
+          ],
+        },
+      }).catch(() => ({ count: 0 }));
+
+      const delIncs = await prisma.incident.deleteMany({
+        where: { id: { in: loadIncidentIds } },
+      }).catch(() => ({ count: 0 }));
+
+      return [delJobs, delAttempts, delNotifs, { count: 0 }, { count: 0 }, { count: 0 }, delAlerts, delIncs];
+    });
+
+    await prisma.statusPageService.deleteMany({
+      where: {
+        OR: [
+          { statusPageId: { startsWith: 'lt-' } },
+          { serviceId: { in: loadServiceIds } },
+        ],
+      },
+    }).catch(() => undefined);
+    await prisma.statusPageSubscriptionService.deleteMany({
+      where: {
+        OR: [
+          { subscription: { statusPageId: { startsWith: 'lt-' } } },
+          { serviceId: { in: loadServiceIds } },
+        ],
+      },
+    }).catch(() => undefined);
 
     const deletedStatusPageSubscribers = await prisma.statusPageSubscription.deleteMany({
       where: { statusPageId: { startsWith: 'lt-' } },
@@ -253,159 +236,116 @@ export async function runLoadCleanup(options?: {
         { id: { in: loadIncidentIds } },
       ],
     };
-    const incsToDelete = await prisma.incident
-      .findMany({
-        where: targetIncidentCondition,
-        select: { id: true },
-      })
-      .catch(() => []);
+    const incsToDelete = await prisma.incident.findMany({
+      where: targetIncidentCondition,
+      select: { id: true },
+    }).catch(() => []);
     const incIds = incsToDelete.map(i => i.id);
 
     if (incIds.length > 0) {
-      await prisma.notificationDeliveryAttempt
-        .deleteMany({
-          where: { notification: { incidentId: { in: incIds } } },
-        })
-        .catch(() => undefined);
-      await prisma.notification
-        .deleteMany({
-          where: { incidentId: { in: incIds } },
-        })
-        .catch(() => undefined);
-      await prisma.alert
-        .deleteMany({
-          where: { incidentId: { in: incIds } },
-        })
-        .catch(() => undefined);
-      await prisma.incidentEvent
-        .deleteMany({
-          where: { incidentId: { in: incIds } },
-        })
-        .catch(() => undefined);
-      await prisma.incidentNote
-        .deleteMany({
-          where: { incidentId: { in: incIds } },
-        })
-        .catch(() => undefined);
-      await prisma.incidentWatcher
-        .deleteMany({
-          where: { incidentId: { in: incIds } },
-        })
-        .catch(() => undefined);
-      await prisma.incidentTag
-        .deleteMany({
-          where: { incidentId: { in: incIds } },
-        })
-        .catch(() => undefined);
-      await prisma.actionItem
-        .deleteMany({
-          where: { incidentId: { in: incIds } },
-        })
-        .catch(() => undefined);
-      await prisma.statusPageAnnouncement
-        .deleteMany({
-          where: { incidentId: { in: incIds } },
-        })
-        .catch(() => undefined);
-      await prisma.incidentSlaPause
-        .deleteMany({
-          where: { incidentId: { in: incIds } },
-        })
-        .catch(() => undefined);
-      await prisma.customFieldValue
-        .deleteMany({
-          where: { incidentId: { in: incIds } },
-        })
-        .catch(() => undefined);
-      await prisma.postmortem
-        .deleteMany({
-          where: { incidentId: { in: incIds } },
-        })
-        .catch(() => undefined);
-      await prisma.externalIssueLink
-        .deleteMany({
-          where: { incidentId: { in: incIds } },
-        })
-        .catch(() => undefined);
-      await prisma.slackPinnedMessage
-        .deleteMany({
-          where: { incidentId: { in: incIds } },
-        })
-        .catch(() => undefined);
-      await prisma.microsoftTeamsIncidentMessage
-        .deleteMany({
-          where: { incidentId: { in: incIds } },
-        })
-        .catch(() => undefined);
-      await prisma.incidentWarRoom
-        .deleteMany({
-          where: { incidentId: { in: incIds } },
-        })
-        .catch(() => undefined);
-      await prisma.incidentMeeting
-        .deleteMany({
-          where: { incidentId: { in: incIds } },
-        })
-        .catch(() => undefined);
+      await prisma.notificationDeliveryAttempt.deleteMany({
+        where: { notification: { incidentId: { in: incIds } } },
+      }).catch(() => undefined);
+      await prisma.notification.deleteMany({
+        where: { incidentId: { in: incIds } },
+      }).catch(() => undefined);
+      await prisma.alert.deleteMany({
+        where: { incidentId: { in: incIds } },
+      }).catch(() => undefined);
+      await prisma.incidentEvent.deleteMany({
+        where: { incidentId: { in: incIds } },
+      }).catch(() => undefined);
+      await prisma.incidentNote.deleteMany({
+        where: { incidentId: { in: incIds } },
+      }).catch(() => undefined);
+      await prisma.incidentWatcher.deleteMany({
+        where: { incidentId: { in: incIds } },
+      }).catch(() => undefined);
+      await prisma.incidentTag.deleteMany({
+        where: { incidentId: { in: incIds } },
+      }).catch(() => undefined);
+      await prisma.actionItem.deleteMany({
+        where: { incidentId: { in: incIds } },
+      }).catch(() => undefined);
+      await prisma.statusPageAnnouncement.deleteMany({
+        where: { incidentId: { in: incIds } },
+      }).catch(() => undefined);
+      await prisma.incidentSlaPause.deleteMany({
+        where: { incidentId: { in: incIds } },
+      }).catch(() => undefined);
+      await prisma.customFieldValue.deleteMany({
+        where: { incidentId: { in: incIds } },
+      }).catch(() => undefined);
+      await prisma.postmortem.deleteMany({
+        where: { incidentId: { in: incIds } },
+      }).catch(() => undefined);
+      await prisma.externalIssueLink.deleteMany({
+        where: { incidentId: { in: incIds } },
+      }).catch(() => undefined);
+      await prisma.slackPinnedMessage.deleteMany({
+        where: { incidentId: { in: incIds } },
+      }).catch(() => undefined);
+      await prisma.microsoftTeamsIncidentMessage.deleteMany({
+        where: { incidentId: { in: incIds } },
+      }).catch(() => undefined);
+      await prisma.incidentWarRoom.deleteMany({
+        where: { incidentId: { in: incIds } },
+      }).catch(() => undefined);
+      await prisma.incidentMeeting.deleteMany({
+        where: { incidentId: { in: incIds } },
+      }).catch(() => undefined);
     }
 
-    await prisma.notificationDeliveryAttempt
-      .deleteMany({
-        where: {
-          OR: [
-            { notification: { incident: { serviceId: { in: loadServiceIds } } } },
-            { notification: { incidentId: { in: incIds } } },
-            { notification: { id: { startsWith: 'lt-' } } },
-          ],
-        },
-      })
-      .catch(() => undefined);
+    await prisma.notificationDeliveryAttempt.deleteMany({
+      where: {
+        OR: [
+          { notification: { incident: { serviceId: { in: loadServiceIds } } } },
+          { notification: { incidentId: { in: incIds } } },
+          { notification: { id: { startsWith: 'lt-' } } },
+        ],
+      },
+    }).catch(() => undefined);
 
-    await prisma.notification
-      .deleteMany({
-        where: {
-          OR: [
-            { incident: { serviceId: { in: loadServiceIds } } },
-            { incidentId: { in: incIds } },
-            { id: { startsWith: 'lt-' } },
-          ],
-        },
-      })
-      .catch(() => undefined);
+    await prisma.notification.deleteMany({
+      where: {
+        OR: [
+          { incident: { serviceId: { in: loadServiceIds } } },
+          { incidentId: { in: incIds } },
+          { id: { startsWith: 'lt-' } },
+        ],
+      },
+    }).catch(() => undefined);
 
-    await prisma.alert
-      .deleteMany({
-        where: {
-          OR: [
-            { serviceId: { in: loadServiceIds } },
-            { incidentId: { in: incIds } },
-            { id: { startsWith: 'lt-' } },
-            { dedupKey: { contains: 'lt-' } },
-          ],
-        },
-      })
-      .catch(() => undefined);
+    await prisma.alert.deleteMany({
+      where: {
+        OR: [
+          { serviceId: { in: loadServiceIds } },
+          { incidentId: { in: incIds } },
+          { id: { startsWith: 'lt-' } },
+          { dedupKey: { contains: 'lt-' } },
+        ],
+      },
+    }).catch(() => undefined);
 
-    await prisma.incident
-      .deleteMany({
-        where: {
-          OR: [
-            { serviceId: { in: loadServiceIds } },
-            { serviceId: { startsWith: 'lt-' } },
-            { id: { startsWith: 'lt-' } },
-            { id: { in: loadIncidentIds } },
-          ],
-        },
-      })
-      .catch(() => ({ count: 0 }));
+    await prisma.incident.deleteMany({
+      where: {
+        OR: [
+          { serviceId: { in: loadServiceIds } },
+          { serviceId: { startsWith: 'lt-' } },
+          { id: { startsWith: 'lt-' } },
+          { id: { in: loadIncidentIds } },
+        ],
+      },
+    }).catch(() => ({ count: 0 }));
 
-    const deletedServices = await prisma.service
-      .deleteMany({
-        where: {
-          OR: [{ id: { startsWith: 'lt-' } }, { id: { in: loadServiceIds } }],
-        },
-      })
-      .catch(() => ({ count: 0 }));
+    const deletedServices = await prisma.service.deleteMany({
+      where: {
+        OR: [
+          { id: { startsWith: 'lt-' } },
+          { id: { in: loadServiceIds } },
+        ],
+      },
+    }).catch(() => ({ count: 0 }));
 
     await prisma.slackIntegration.deleteMany({
       where: { id: { startsWith: 'lt-' } },

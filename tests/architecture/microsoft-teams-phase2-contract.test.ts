@@ -18,14 +18,8 @@ describe('Microsoft Teams Phase 2 architecture', () => {
   });
 
   it('does not add broad Graph identity permissions', () => {
-    const sources = [
-      fs.readFileSync('src/lib/microsoft-teams/app-manifest.ts', 'utf8'),
-      fs.readFileSync('src/lib/microsoft-teams/identity.ts', 'utf8'),
-      fs.readFileSync('src/lib/microsoft-teams/invoke.ts', 'utf8'),
-    ].join('\n');
-    expect(sources).not.toMatch(
-      /User\.Read\.All|Directory\.Read\.All|TeamMember\.Read\.All|ChannelMessage\.Read\.All/
-    );
+    const sources = [fs.readFileSync('src/lib/microsoft-teams/app-manifest.ts', 'utf8'), fs.readFileSync('src/lib/microsoft-teams/identity.ts', 'utf8'), fs.readFileSync('src/lib/microsoft-teams/invoke.ts', 'utf8')].join('\n');
+    expect(sources).not.toMatch(/User\.Read\.All|Directory\.Read\.All|TeamMember\.Read\.All|ChannelMessage\.Read\.All/);
   });
 
   it('uses one central Action.Execute verb registry', () => {
@@ -38,16 +32,14 @@ describe('Microsoft Teams Phase 2 architecture', () => {
     const auth = fs.readFileSync('src/lib/microsoft-teams/auth.ts', 'utf8');
     const route = fs.readFileSync('src/app/api/microsoft-teams/messages/route.ts', 'utf8');
     expect(auth).not.toMatch(/claims\.(?:tid|tenantId)/);
-    expect(route).toContain('activity.channelData?.tenant?.id');
+    expect(route).toContain("activity.channelData?.tenant?.id");
     expect(route).toContain('enforceMicrosoftTeamsTenantAllowlist');
   });
 
   it('increments canonical generation on replacement update and never uses updatedAt as a route fence', () => {
     const delivery = fs.readFileSync('src/lib/microsoft-teams/delivery.ts', 'utf8');
     expect(delivery).toContain('messageGeneration: 1');
-    expect(delivery).toMatch(
-      /update:\s*\{[\s\S]*replacingCanonicalActivity[\s\S]*messageGeneration: \{ increment: 1 \}/
-    );
+    expect(delivery).toMatch(/update:\s*\{[\s\S]*replacingCanonicalActivity[\s\S]*messageGeneration: \{ increment: 1 \}/);
     expect(delivery).not.toContain('Teams destination was updated after enqueue');
   });
 
@@ -62,9 +54,7 @@ describe('Microsoft Teams Phase 2 architecture', () => {
 
   it('persists relative snooze input as an absolute intent deadline', () => {
     const invoke = fs.readFileSync('src/lib/microsoft-teams/invoke.ts', 'utf8');
-    expect(invoke).toContain(
-      'const snoozedUntil = action.action.verb === TEAMS_CHATOPS_VERBS.SNOOZE'
-    );
+    expect(invoke).toContain('const snoozedUntil = action.action.verb === TEAMS_CHATOPS_VERBS.SNOOZE');
     expect(invoke).toContain('persistedPayload.snoozedUntil');
     expect(invoke).not.toContain('snoozedUntil: new Date(Date.now() + actionData.minutes');
   });

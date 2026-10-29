@@ -85,16 +85,13 @@ function resolveObjectLiteral(
   return resolved;
 }
 
-function incidentMutation(
-  call: ts.CallExpression
-): { method: string; data: ts.Expression | null } | null {
+function incidentMutation(call: ts.CallExpression): { method: string; data: ts.Expression | null } | null {
   if (!ts.isPropertyAccessExpression(call.expression)) return null;
   const method = call.expression.name.text;
   if (!MUTATION_METHODS.has(method)) return null;
 
   const modelAccess = call.expression.expression;
-  if (!ts.isPropertyAccessExpression(modelAccess) || modelAccess.name.text !== 'incident')
-    return null;
+  if (!ts.isPropertyAccessExpression(modelAccess) || modelAccess.name.text !== 'incident') return null;
 
   const firstArg = call.arguments[0];
   if (!firstArg || !ts.isObjectLiteralExpression(firstArg)) return { method, data: null };

@@ -184,12 +184,14 @@ describe('durable Jira provider concurrency contract', () => {
   });
 
   it('fails instead of transferring a Jira issue already owned by another entity', async () => {
-    mocks.tx.externalIssueLink.findFirst.mockResolvedValueOnce(null).mockResolvedValueOnce({
-      id: 'link-other',
-      incidentId: 'inc-other',
-      actionItemId: null,
-      externalKey: 'OPS-101',
-    });
+    mocks.tx.externalIssueLink.findFirst
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({
+        id: 'link-other',
+        incidentId: 'inc-other',
+        actionItemId: null,
+        externalKey: 'OPS-101',
+      });
     mocks.findJiraIssueByCorrelationLabel.mockResolvedValue({
       id: 'jira-1',
       key: 'OPS-101',

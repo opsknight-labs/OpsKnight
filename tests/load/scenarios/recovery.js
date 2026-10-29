@@ -85,7 +85,9 @@ export function runRecoveryHealthAndApiProbe() {
     tags: { endpoint: 'incidents_list_recovery' },
   });
   opsknightMetrics.lifecycleLatencyMs.add(listRes.timings.duration);
-  opsknightMetrics.lifecycleSuccessRate.add(listRes.status === 200 || listRes.status === 429);
+  opsknightMetrics.lifecycleSuccessRate.add(
+    listRes.status === 200 || listRes.status === 429
+  );
 
   sleep(0.25);
 }

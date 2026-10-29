@@ -22,9 +22,7 @@ describe('Runbook Lifecycle Architecture Guard', () => {
     // 3. Lifecycle query builder must allow querying archived items
     expect(files.lifecycle).toContain("filter.tab === 'archived'");
     expect(files.lifecycle).toContain("filter.status === 'archived'");
-    expect(files.lifecycle).toMatch(
-      /archivedAt:\s*isArchivedView\s*\?\s*\{\s*not:\s*null\s*\}\s*:\s*null/
-    );
+    expect(files.lifecycle).toMatch(/archivedAt:\s*isArchivedView\s*\?\s*\{\s*not:\s*null\s*\}\s*:\s*null/);
   });
 
   it('enforces safe delete rules preventing destruction of execution history', () => {
@@ -41,9 +39,7 @@ describe('Runbook Lifecycle Architecture Guard', () => {
     expect(files.lifecycle).toContain('service bindings');
 
     // 4. Schema relation foreign key safety: RunbookExecution must restrict runbook deletion
-    expect(files.schemaPrisma).toMatch(
-      /model\s+RunbookExecution\s+\{[\s\S]*?runbook\s+Runbook\s+@relation\([\s\S]*?onDelete:\s*Restrict/
-    );
+    expect(files.schemaPrisma).toMatch(/model\s+RunbookExecution\s+\{[\s\S]*?runbook\s+Runbook\s+@relation\([\s\S]*?onDelete:\s*Restrict/);
   });
 
   it('guarantees restore does not silently re-enable bindings and mandates typed confirmation', () => {

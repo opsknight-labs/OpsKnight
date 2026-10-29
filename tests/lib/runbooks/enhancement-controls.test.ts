@@ -327,13 +327,7 @@ describe('runbook enhancement safety', () => {
 
     const deniedName = attempt(
       'KUBERNETES',
-      {
-        action: 'scale',
-        namespace: 'payments',
-        resource: 'deployment',
-        name: 'worker',
-        replicas: 3,
-      },
+      { action: 'scale', namespace: 'payments', resource: 'deployment', name: 'worker', replicas: 3 },
       'IDEMPOTENT_WRITE'
     );
     expect(() => assertPolicyAllows(deniedName, fineGrainedPolicy)).toThrow(

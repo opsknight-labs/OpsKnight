@@ -13,9 +13,7 @@ function markdownFiles(directory) {
 }
 
 test('reader documentation has one source page per rendered URL', () => {
-  const files = new Set(
-    markdownFiles(documentationRoot).map(file => relative(documentationRoot, file))
-  );
+  const files = new Set(markdownFiles(documentationRoot).map(file => relative(documentationRoot, file)));
   const collisions = [...files]
     .filter(file => file.endsWith('/README.md'))
     .map(file => file.slice(0, -'/README.md'.length) + '.md')

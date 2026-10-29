@@ -24,3 +24,4 @@ describe('SkipLinks', () => {
     expect(styles.position).toBe('absolute');
   });
 });
+

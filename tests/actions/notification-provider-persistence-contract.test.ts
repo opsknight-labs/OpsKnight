@@ -69,18 +69,10 @@ describe('notification provider UI adapter contract', () => {
   it('passes the loaded monotonic revision and actor to the shared transactional command', async () => {
     const config = { apiKey: '********', fromEmail: 'new@example.com' };
     const result = await updateNotificationProvider(
-      'provider-1',
-      'resend',
-      true,
-      config,
-      previous.updatedAt.toISOString()
+      'provider-1', 'resend', true, config, previous.updatedAt.toISOString()
     );
     expect(mocks.saveNotificationProvider).toHaveBeenCalledWith({
-      provider: 'resend',
-      enabled: true,
-      config,
-      actorId: 'admin-1',
-      expectedRevision: 7,
+      provider: 'resend', enabled: true, config, actorId: 'admin-1', expectedRevision: 7,
     });
     expect(result).toEqual({ success: true, updatedAt: '2026-09-08T12:01:00.000Z' });
     expect(mocks.revalidatePath).toHaveBeenCalledWith('/settings/notifications');
@@ -88,25 +80,19 @@ describe('notification provider UI adapter contract', () => {
 
   it('rejects a provider ID that belongs to a different provider type', async () => {
     mocks.findUnique.mockResolvedValue({ ...previous, provider: 'smtp' });
-    await expect(
-      updateNotificationProvider(
-        'provider-1',
-        'resend',
-        true,
-        { apiKey: 'replacement' },
-        previous.updatedAt.toISOString()
-      )
-    ).rejects.toThrow('Provider identity does not match');
+    await expect(updateNotificationProvider(
+      'provider-1', 'resend', true, { apiKey: 'replacement' }, previous.updatedAt.toISOString()
+    )).rejects.toThrow('Provider identity does not match');
     expect(mocks.saveNotificationProvider).not.toHaveBeenCalled();
   });
 
   it('rejects stale or absent UI revisions before calling the shared command', async () => {
-    await expect(
-      updateNotificationProvider('provider-1', 'resend', false, {}, '2026-09-08T11:59:00.000Z')
-    ).rejects.toThrow('Settings changed elsewhere');
-    await expect(updateNotificationProvider('provider-1', 'resend', false, {})).rejects.toThrow(
-      'Settings revision is required'
-    );
+    await expect(updateNotificationProvider(
+      'provider-1', 'resend', false, {}, '2026-09-08T11:59:00.000Z'
+    )).rejects.toThrow('Settings changed elsewhere');
+    await expect(updateNotificationProvider(
+      'provider-1', 'resend', false, {}
+    )).rejects.toThrow('Settings revision is required');
     expect(mocks.saveNotificationProvider).not.toHaveBeenCalled();
   });
 
@@ -114,19 +100,14 @@ describe('notification provider UI adapter contract', () => {
     mocks.findUnique.mockResolvedValue(null);
     await updateNotificationProvider(null, 'resend', true, { apiKey: 'new-secret' }, null);
     expect(mocks.saveNotificationProvider).toHaveBeenCalledWith({
-      provider: 'resend',
-      enabled: true,
-      config: { apiKey: 'new-secret' },
-      actorId: 'admin-1',
-      expectedRevision: null,
+      provider: 'resend', enabled: true, config: { apiKey: 'new-secret' },
+      actorId: 'admin-1', expectedRevision: null,
     });
   });
 
   it('regenerates Web Push keys when the existing private key cannot decrypt', async () => {
     mocks.findUnique.mockResolvedValue({
-      ...previous,
-      provider: 'web-push',
-      config: { vapidPrivateKey: 'enc:corrupted' },
+      ...previous, provider: 'web-push', config: { vapidPrivateKey: 'enc:corrupted' },
     });
     mocks.decryptProviderConfig.mockRejectedValueOnce(new Error('unreadable credential'));
     mocks.encryptProviderConfig.mockResolvedValue({ encrypted: true });
@@ -134,22 +115,16 @@ describe('notification provider UI adapter contract', () => {
     mocks.findUniqueOrThrow.mockResolvedValue({
       updatedAt: new Date('2026-09-08T12:01:00.000Z'),
     });
-    mocks.transaction.mockImplementation(async callback =>
-      callback({
-        notificationProvider: { updateMany: mocks.txUpdateMany },
-      })
-    );
+    mocks.transaction.mockImplementation(async callback => callback({
+      notificationProvider: { updateMany: mocks.txUpdateMany },
+    }));
     mocks.logAudit.mockResolvedValue({ id: 'audit-1' });
-    await expect(
-      generateVapidKeys({
-        expectedUpdatedAt: previous.updatedAt.toISOString(),
-      })
-    ).resolves.toMatchObject({ publicKey: 'new-public' });
+    await expect(generateVapidKeys({
+      expectedUpdatedAt: previous.updatedAt.toISOString(),
+    })).resolves.toMatchObject({ publicKey: 'new-public' });
     expect(mocks.encryptProviderConfig).toHaveBeenCalledWith(
-      'web-push',
-      expect.objectContaining({
-        vapidPublicKey: 'new-public',
-        vapidPrivateKey: 'new-private',
+      'web-push', expect.objectContaining({
+        vapidPublicKey: 'new-public', vapidPrivateKey: 'new-private',
       })
     );
     expect(mocks.logAudit).toHaveBeenCalledTimes(1);

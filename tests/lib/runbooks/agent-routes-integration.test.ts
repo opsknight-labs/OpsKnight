@@ -64,12 +64,9 @@ describe('Agent API Routes — HTTP status and error contract integration', () =
     };
     mockAuthenticatedAgentJson.mockRejectedValueOnce(crossChunkNotFoundError);
 
-    const request = new Request(
-      'http://localhost:3000/api/runbook-agent/v1/jobs/cuid123456789012345678901/start',
-      {
-        method: 'POST',
-      }
-    );
+    const request = new Request('http://localhost:3000/api/runbook-agent/v1/jobs/cuid123456789012345678901/start', {
+      method: 'POST',
+    });
     const response = await startRoute(request, {
       params: Promise.resolve({ id: 'cuid123456789012345678901' }),
     });
@@ -105,12 +102,9 @@ describe('Agent API Routes — HTTP status and error contract integration', () =
       message: 'Fence verification failed.',
     });
 
-    const request = new Request(
-      'http://localhost:3000/api/runbook-agent/v1/jobs/cuid123456789012345678901/start',
-      {
-        method: 'POST',
-      }
-    );
+    const request = new Request('http://localhost:3000/api/runbook-agent/v1/jobs/cuid123456789012345678901/start', {
+      method: 'POST',
+    });
     const response = await startRoute(request, {
       params: Promise.resolve({ id: 'cuid123456789012345678901' }),
     });
@@ -133,12 +127,9 @@ describe('Agent API Routes — HTTP status and error contract integration', () =
       message: 'Token mismatch.',
     });
 
-    const resultReq = new Request(
-      'http://localhost:3000/api/runbook-agent/v1/jobs/cuid123456789012345678901/result',
-      {
-        method: 'POST',
-      }
-    );
+    const resultReq = new Request('http://localhost:3000/api/runbook-agent/v1/jobs/cuid123456789012345678901/result', {
+      method: 'POST',
+    });
     const resultRes = await resultRoute(resultReq, {
       params: Promise.resolve({ id: 'cuid123456789012345678901' }),
     });
@@ -154,12 +145,9 @@ describe('Agent API Routes — HTTP status and error contract integration', () =
       json: { invalidField: 'missing leaseToken' },
     });
 
-    const request = new Request(
-      'http://localhost:3000/api/runbook-agent/v1/jobs/cuid123456789012345678901/start',
-      {
-        method: 'POST',
-      }
-    );
+    const request = new Request('http://localhost:3000/api/runbook-agent/v1/jobs/cuid123456789012345678901/start', {
+      method: 'POST',
+    });
     const response = await startRoute(request, {
       params: Promise.resolve({ id: 'cuid123456789012345678901' }),
     });
@@ -173,12 +161,9 @@ describe('Agent API Routes — HTTP status and error contract integration', () =
       new Error('PostgreSQL connection terminated unexpectedly')
     );
 
-    const req1 = new Request(
-      'http://localhost:3000/api/runbook-agent/v1/jobs/cuid123456789012345678901/start',
-      {
-        method: 'POST',
-      }
-    );
+    const req1 = new Request('http://localhost:3000/api/runbook-agent/v1/jobs/cuid123456789012345678901/start', {
+      method: 'POST',
+    });
     const res1 = await startRoute(req1, {
       params: Promise.resolve({ id: 'cuid123456789012345678901' }),
     });
@@ -210,14 +195,13 @@ describe('Agent API Routes — HTTP status and error contract integration', () =
         status: 'SUCCEEDED',
       },
     });
-    mockSubmitAgentResult.mockRejectedValueOnce(new Error('PostgreSQL disk full'));
-
-    const req3 = new Request(
-      'http://localhost:3000/api/runbook-agent/v1/jobs/cuid123456789012345678901/result',
-      {
-        method: 'POST',
-      }
+    mockSubmitAgentResult.mockRejectedValueOnce(
+      new Error('PostgreSQL disk full')
     );
+
+    const req3 = new Request('http://localhost:3000/api/runbook-agent/v1/jobs/cuid123456789012345678901/result', {
+      method: 'POST',
+    });
     const res3 = await resultRoute(req3, {
       params: Promise.resolve({ id: 'cuid123456789012345678901' }),
     });

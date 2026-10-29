@@ -16,10 +16,7 @@ import { notifyStatusPageSubscribers } from '@/lib/status-page-notifications';
 import { maybeAutoProvisionIncidentMeeting } from '@/lib/incident-collaboration/meeting-store';
 import { processEventSideEffect } from '@/lib/event-side-effects';
 import type { EventSideEffectPayload } from '@/lib/event-outbox';
-import {
-  handleIncidentWarRoomEvent as mockedHandleIncidentWarRoomEvent,
-  closeIncidentWarRoomsNeutral as mockedCloseIncidentWarRoomsNeutral,
-} from '@/lib/war-room/engine';
+import { handleIncidentWarRoomEvent as mockedHandleIncidentWarRoomEvent, closeIncidentWarRoomsNeutral as mockedCloseIncidentWarRoomsNeutral } from '@/lib/war-room/engine';
 
 type TestMock = ReturnType<typeof vi.fn>;
 
@@ -47,10 +44,7 @@ vi.mock('@/lib/user-notifications', () => ({ sendIncidentNotifications: vi.fn() 
 vi.mock('@/lib/status-page-webhooks', () => ({ triggerWebhooksForService: vi.fn() }));
 vi.mock('@/lib/status-page-notifications', () => ({ notifyStatusPageSubscribers: vi.fn() }));
 vi.mock('@/lib/slack', () => ({ notifySlackForIncident: vi.fn() }));
-vi.mock('@/lib/war-room/engine', () => ({
-  handleIncidentWarRoomEvent: vi.fn(),
-  closeIncidentWarRoomsNeutral: vi.fn().mockResolvedValue({ closed: 1, skipped: 0 }),
-}));
+vi.mock('@/lib/war-room/engine', () => ({ handleIncidentWarRoomEvent: vi.fn(), closeIncidentWarRoomsNeutral: vi.fn().mockResolvedValue({ closed: 1, skipped: 0 }) }));
 vi.mock('@/lib/war-room/microsoft-teams', () => ({
   requestMicrosoftTeamsWarRoom: vi.fn().mockResolvedValue({ accepted: false, code: 'DISABLED' }),
   settleMicrosoftTeamsWarRoomsOnIncidentResolve: vi.fn().mockResolvedValue(undefined),
@@ -513,34 +507,25 @@ describe('durable meeting planning recovery', () => {
     expect(calls).toHaveLength(2);
     expect(calls[0][0]).toEqual(calls[1][0]);
     expect(calls[0][0]).toMatchObject({
-      incidentEventId: event.sourceEventId,
-      incidentId: event.incidentId,
+      incidentEventId: event.sourceEventId, incidentId: event.incidentId,
     });
   });
 });
+
 
 describe('status-page planning boundary', () => {
   it('passes the captured fence to the fresh subscriber read without a duplicate read', async () => {
     vi.clearAllMocks();
     vi.mocked(notifyStatusPageSubscribers).mockResolvedValue({ success: true, sent: 0, failed: 0 });
-    const event = {
-      ...payload('TRIGGER_STATUS_PAGE', 'STATUS_PAGE'),
-      incidentStatus: 'OPEN' as const,
-      escalationGeneration: 7,
-    };
+    const event = { ...payload('TRIGGER_STATUS_PAGE', 'STATUS_PAGE'),
+      incidentStatus: 'OPEN' as const, escalationGeneration: 7 };
     await processEventSideEffect(event);
     expect(prismaMock.incident.findUnique).not.toHaveBeenCalled();
     expect(notifyStatusPageSubscribers).toHaveBeenCalledWith(
-      event.incidentId,
-      'triggered',
-      event.eventOrderAt,
+      event.incidentId, 'triggered', event.eventOrderAt,
       { status: 'OPEN', escalationGeneration: 7 }
     );
-    vi.mocked(notifyStatusPageSubscribers).mockResolvedValueOnce({
-      success: false,
-      sent: 0,
-      failed: 1,
-    });
+    vi.mocked(notifyStatusPageSubscribers).mockResolvedValueOnce({ success: false, sent: 0, failed: 1 });
     await expect(processEventSideEffect(event)).rejects.toThrow('status page notification failed');
   });
 });

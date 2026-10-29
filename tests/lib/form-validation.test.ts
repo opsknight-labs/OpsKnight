@@ -133,9 +133,7 @@ describe('Form Validation Utilities', () => {
     });
 
     it('should return error for invalid format', () => {
-      expect(getDedupKeyValidationError('alert with spaces')).toContain(
-        'letters, numbers, hyphens, and underscores'
-      );
+      expect(getDedupKeyValidationError('alert with spaces')).toContain('letters, numbers, hyphens, and underscores');
     });
 
     it('should return error for dedup key that is too long', () => {
@@ -144,3 +142,4 @@ describe('Form Validation Utilities', () => {
     });
   });
 });
+

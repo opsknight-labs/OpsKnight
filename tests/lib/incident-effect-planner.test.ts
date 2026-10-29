@@ -28,14 +28,9 @@ describe('execution-time incident effect planner', () => {
   });
 });
 
-it.each([undefined, 0, 2, 7])(
-  'keeps overlapping/legacy attempt %s on the original handoff',
-  async attempt => {
-    vi.clearAllMocks();
-    expect(await planIncidentEffects(attempt)).toEqual({
-      collaboration: 'EXECUTE',
-      chatOpsRevision: null,
-    });
-    expect(prisma.chatOpsConfig.findUnique).not.toHaveBeenCalled();
-  }
-);
+
+it.each([undefined, 0, 2, 7])('keeps overlapping/legacy attempt %s on the original handoff', async attempt => {
+  vi.clearAllMocks();
+  expect(await planIncidentEffects(attempt)).toEqual({ collaboration: 'EXECUTE', chatOpsRevision: null });
+  expect(prisma.chatOpsConfig.findUnique).not.toHaveBeenCalled();
+});

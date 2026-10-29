@@ -14,7 +14,7 @@ vi.mock('@/lib/prisma', () => ({
         if (!Object.hasOwn(prismaMock, prop)) Reflect.set(prismaMock, prop, {});
         return Reflect.get(prismaMock, prop);
       },
-    }
+    },
   ),
 }));
 
@@ -66,11 +66,7 @@ describe('WarRoomProviderEventDelivery durability', () => {
       findUnique: ReturnType<typeof vi.fn>;
     };
     const p2002 = Object.assign(new Error('Unique constraint'), { code: 'P2002' });
-    delivery.create = vi
-      .fn()
-      .mockResolvedValueOnce({ id: 'd1' })
-      .mockRejectedValueOnce(p2002)
-      .mockRejectedValueOnce(p2002);
+    delivery.create = vi.fn().mockResolvedValueOnce({ id: 'd1' }).mockRejectedValueOnce(p2002).mockRejectedValueOnce(p2002);
     delivery.findUnique = vi
       .fn()
       .mockResolvedValueOnce({ id: 'd1', status: 'PENDING' })
@@ -108,41 +104,22 @@ describe('WarRoomProviderEventDelivery durability', () => {
 
   it('handleIncidentWarRoomEvent skips already-COMPLETED deliveries and recovers missing jobs', async () => {
     const prisma = (await import('@/lib/prisma')).default as unknown as Record<string, unknown>;
-    const deliveryCreate = vi
-      .fn()
-      .mockResolvedValueOnce({ id: 'd-slack' })
-      .mockResolvedValueOnce({ id: 'd-teams' });
+    const deliveryCreate = vi.fn().mockResolvedValueOnce({ id: 'd-slack' }).mockResolvedValueOnce({ id: 'd-teams' });
     (prisma.warRoomProviderEventDelivery as unknown as { create: unknown }).create = deliveryCreate;
-    (prisma.warRoomProviderEventDelivery as unknown as { findUnique: unknown }).findUnique = vi
-      .fn()
-      .mockResolvedValue(null);
+    (prisma.warRoomProviderEventDelivery as unknown as { findUnique: unknown }).findUnique = vi.fn().mockResolvedValue(null);
     const { handleIncidentWarRoomEvent } = await import('@/lib/war-room/engine');
     const { scheduleJob } = await import('@/lib/jobs/queue');
-    await handleIncidentWarRoomEvent({
-      kind: 'MESSAGE',
-      incidentId: 'inc-1',
-      message: 'hello',
-      incidentEventId: 'evt-1',
-    } as never);
+    await handleIncidentWarRoomEvent({ kind: 'MESSAGE', incidentId: 'inc-1', message: 'hello', incidentEventId: 'evt-1' } as never);
     expect(scheduleJob).toHaveBeenCalledTimes(2);
 
     const p2002 = Object.assign(new Error('Unique constraint'), { code: 'P2002' });
-    (prisma.warRoomProviderEventDelivery as unknown as { create: unknown }).create = vi
-      .fn()
-      .mockRejectedValue(p2002);
+    (prisma.warRoomProviderEventDelivery as unknown as { create: unknown }).create = vi.fn().mockRejectedValue(p2002);
     (prisma.warRoomProviderEventDelivery as unknown as { findUnique: unknown }).findUnique = vi
       .fn()
       .mockResolvedValue({ id: 'd-slack', status: 'PENDING' });
-    (prisma.backgroundJob as unknown as { findMany: ReturnType<typeof vi.fn> }).findMany = vi
-      .fn()
-      .mockResolvedValue([]);
+    (prisma.backgroundJob as unknown as { findMany: ReturnType<typeof vi.fn> }).findMany = vi.fn().mockResolvedValue([]);
     vi.mocked(scheduleJob).mockClear();
-    await handleIncidentWarRoomEvent({
-      kind: 'MESSAGE',
-      incidentId: 'inc-1',
-      message: 'hello',
-      incidentEventId: 'evt-1',
-    } as never);
+    await handleIncidentWarRoomEvent({ kind: 'MESSAGE', incidentId: 'inc-1', message: 'hello', incidentEventId: 'evt-1' } as never);
     expect(scheduleJob).toHaveBeenCalled();
   });
 
@@ -152,13 +129,9 @@ describe('WarRoomProviderEventDelivery durability', () => {
     const delivery = prisma.warRoomProviderEventDelivery as unknown as {
       findUnique: ReturnType<typeof vi.fn>;
     };
-    delivery.findUnique = vi
-      .fn()
-      .mockResolvedValue({ id: 'd1', status: 'PENDING', leaseExpiresAt: null });
+    delivery.findUnique = vi.fn().mockResolvedValue({ id: 'd1', status: 'PENDING', leaseExpiresAt: null });
     prismaMock.$executeRaw = vi.fn().mockResolvedValue(0);
-    await expect(
-      claimWarRoomDelivery({ provider: 'SLACK', idempotencyKey: 'k1' })
-    ).rejects.toMatchObject({
+    await expect(claimWarRoomDelivery({ provider: 'SLACK', idempotencyKey: 'k1' })).rejects.toMatchObject({
       name: 'WarRoomRetryableError',
       retryBudgetNeutral: true,
     });
@@ -178,32 +151,29 @@ describe('WarRoomProviderEventDelivery durability', () => {
         if (!stages.has(data.stage)) stages.set(data.stage, 'PENDING');
         return { id: `id-${data.stage}`, ...data, status: stages.get(data.stage) } as unknown;
       }),
-      updateMany: vi.fn(
-        async ({ where, data }: { where: { stage: string }; data: { status: string } }) => {
-          const stage = where.stage;
-          if (!stage) return { count: 0 };
-          if (data.status === 'ATTEMPTING') {
-            const cur = stages.get(stage);
-            if (cur === 'COMPLETED' || cur === 'SKIPPED' || cur === 'AMBIGUOUS')
-              return { count: 0 };
-            stages.set(stage, 'ATTEMPTING');
-            return { count: 1 };
-          }
-          if (data.status === 'COMPLETED') {
-            stages.set(stage, 'COMPLETED');
-            return { count: 1 };
-          }
-          if (data.status === 'FAILED') {
-            stages.set(stage, 'FAILED');
-            return { count: 1 };
-          }
-          if (data.status === 'AMBIGUOUS') {
-            stages.set(stage, 'AMBIGUOUS');
-            return { count: 1 };
-          }
+      updateMany: vi.fn(async ({ where, data }: { where: { stage: string }; data: { status: string } }) => {
+        const stage = where.stage;
+        if (!stage) return { count: 0 };
+        if (data.status === 'ATTEMPTING') {
+          const cur = stages.get(stage);
+          if (cur === 'COMPLETED' || cur === 'SKIPPED' || cur === 'AMBIGUOUS') return { count: 0 };
+          stages.set(stage, 'ATTEMPTING');
           return { count: 1 };
         }
-      ),
+        if (data.status === 'COMPLETED') {
+          stages.set(stage, 'COMPLETED');
+          return { count: 1 };
+        }
+        if (data.status === 'FAILED') {
+          stages.set(stage, 'FAILED');
+          return { count: 1 };
+        }
+        if (data.status === 'AMBIGUOUS') {
+          stages.set(stage, 'AMBIGUOUS');
+          return { count: 1 };
+        }
+        return { count: 1 };
+      }),
     } as unknown;
     (prismaMock as Record<string, unknown>).warRoomProviderEventDelivery = {
       findUnique: vi.fn().mockResolvedValue(null),
@@ -220,7 +190,7 @@ describe('WarRoomProviderEventDelivery durability', () => {
     const { slackWarRoomAdapter } = await import('@/lib/war-room/providers/slack/adapter');
     const first = await slackWarRoomAdapter.handleIncidentEvent(
       { kind: 'LIFECYCLE', incidentId: 'inc-1', status: 'ACKNOWLEDGED', message: 'hi' } as never,
-      { deliveryId: 'd1', idempotencyKey: 'k1' }
+      { deliveryId: 'd1', idempotencyKey: 'k1' },
     );
     expect(first.ok).toBe(false);
     expect(lifecycleMocks.postSlackWarRoomUpdate).toHaveBeenCalledTimes(1);
@@ -229,7 +199,7 @@ describe('WarRoomProviderEventDelivery durability', () => {
     lifecycleMocks.updateSlackWarRoomTopic.mockClear();
     const second = await slackWarRoomAdapter.handleIncidentEvent(
       { kind: 'LIFECYCLE', incidentId: 'inc-1', status: 'ACKNOWLEDGED', message: 'hi' } as never,
-      { deliveryId: 'd1', idempotencyKey: 'k1' }
+      { deliveryId: 'd1', idempotencyKey: 'k1' },
     );
     expect(second.ok).toBe(true);
     expect(lifecycleMocks.postSlackWarRoomUpdate).not.toHaveBeenCalled();
@@ -240,8 +210,7 @@ describe('WarRoomProviderEventDelivery durability', () => {
     const neutral = { projectIncidentWarRoomParticipants: vi.fn().mockResolvedValue(undefined) };
     vi.doMock('@/lib/war-room/participant-desired-state', () => neutral);
     vi.resetModules();
-    const { projectMicrosoftTeamsWarRoomParticipants } =
-      await import('@/lib/war-room/providers/microsoft-teams/participants');
+    const { projectMicrosoftTeamsWarRoomParticipants } = await import('@/lib/war-room/providers/microsoft-teams/participants');
     await projectMicrosoftTeamsWarRoomParticipants('room-1');
     expect(neutral.projectIncidentWarRoomParticipants).toHaveBeenCalledWith('room-1');
   });
@@ -251,9 +220,7 @@ describe('WarRoomProviderEventDelivery durability', () => {
     const stageKey = 'slack:lifecycle:message';
     const expiredLease = new Date(Date.now() - 60_000);
     (prismaMock as Record<string, unknown>).warRoomProviderEventStage = {
-      findUnique: vi.fn(
-        async () => ({ id: 'st-1', status: 'ATTEMPTING', leaseExpiresAt: expiredLease }) as unknown
-      ),
+      findUnique: vi.fn(async () => ({ id: 'st-1', status: 'ATTEMPTING', leaseExpiresAt: expiredLease } as unknown)),
       updateMany: vi.fn(async ({ where }: { where: { status?: string } }) => {
         if (where.status === 'ATTEMPTING') return { count: 1 };
         return { count: 0 };
@@ -269,9 +236,7 @@ describe('WarRoomProviderEventDelivery durability', () => {
     const { claimWarRoomStageAttempt } = await import('@/lib/war-room/delivery');
     const futureLease = new Date(Date.now() + 60_000);
     (prismaMock as Record<string, unknown>).warRoomProviderEventStage = {
-      findUnique: vi.fn(
-        async () => ({ id: 'st-1', status: 'ATTEMPTING', leaseExpiresAt: futureLease }) as unknown
-      ),
+      findUnique: vi.fn(async () => ({ id: 'st-1', status: 'ATTEMPTING', leaseExpiresAt: futureLease } as unknown)),
       updateMany: vi.fn(),
       create: vi.fn(),
     } as unknown;
@@ -284,17 +249,10 @@ describe('WarRoomProviderEventDelivery durability', () => {
     const { markStageAmbiguous } = await import('@/lib/war-room/delivery');
     const updateMany = vi.fn().mockResolvedValue({ count: 0 });
     (prismaMock as Record<string, unknown>).warRoomProviderEventStage = { updateMany } as unknown;
-    const result = await markStageAmbiguous(
-      'd1',
-      'slack:lifecycle:message',
-      'boom',
-      'stale-op',
-      'stale-lease'
-    );
+    const result = await markStageAmbiguous('d1', 'slack:lifecycle:message', 'boom', 'stale-op', 'stale-lease');
     expect(result).toBe(false);
     expect(updateMany).toHaveBeenCalledTimes(1);
-    const where = (updateMany.mock.calls[0] as unknown as [{ where: Record<string, unknown> }])[0]
-      .where;
+    const where = (updateMany.mock.calls[0] as unknown as [{ where: Record<string, unknown> }])[0].where;
     expect(where.operationId).toBe('stale-op');
     expect(where.leaseToken).toBe('stale-lease');
   });
@@ -305,8 +263,7 @@ describe('WarRoomProviderEventDelivery durability', () => {
     let call = 0;
     (prismaMock as Record<string, unknown>).warRoomProviderEventStage = {
       findUnique: vi.fn(async () => {
-        if (call++ === 0)
-          return { id: 'st-1', status: 'ATTEMPTING', leaseExpiresAt: expiredLease } as unknown;
+        if (call++ === 0) return { id: 'st-1', status: 'ATTEMPTING', leaseExpiresAt: expiredLease } as unknown;
         return { id: 'st-1', status: 'AMBIGUOUS', leaseExpiresAt: null } as unknown;
       }),
       updateMany: vi.fn(async () => ({ count: 1 })),
@@ -329,7 +286,7 @@ describe('WarRoomProviderEventDelivery durability', () => {
     const { slackWarRoomAdapter } = await import('@/lib/war-room/providers/slack/adapter');
     const adapterRes = await slackWarRoomAdapter.handleIncidentEvent(
       { kind: 'LIFECYCLE', incidentId: 'inc-1', status: 'ACKNOWLEDGED', message: 'hi' } as never,
-      { deliveryId: 'd1', idempotencyKey: 'k1' }
+      { deliveryId: 'd1', idempotencyKey: 'k1' },
     );
     expect(adapterRes.ok).toBe(false);
     if (!adapterRes.ok) expect(adapterRes.code).toBe('AMBIGUOUS_SIDE_EFFECT');
@@ -413,6 +370,7 @@ describe('WAR_ROOM_CLOSE terminal projection fencing', () => {
   });
 });
 
+
 describe('configuration-aware collaboration job planning', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -432,38 +390,28 @@ describe('configuration-aware collaboration job planning', () => {
   }
   it('creates no provider jobs or delivery rows for disabled built-in trigger work', async () => {
     const x = await setup();
-    await x.handleIncidentWarRoomEvent(
-      { kind: 'TRIGGER', incidentId: 'inc-1', incidentEventId: 'event-1' },
-      { collaboration: 'DISABLED', chatOpsRevision: 4 }
-    );
+    await x.handleIncidentWarRoomEvent({ kind: 'TRIGGER', incidentId: 'inc-1', incidentEventId: 'event-1' },
+      { collaboration: 'DISABLED', chatOpsRevision: 4 });
     expect(x.deliveries.create).not.toHaveBeenCalled();
     expect(x.scheduleJob).not.toHaveBeenCalled();
   });
   it('recovers previously committed delivery intent even after configuration is disabled', async () => {
     const x = await setup([{ provider: 'SLACK' }]);
-    await x.handleIncidentWarRoomEvent(
-      { kind: 'TRIGGER', incidentId: 'inc-1', incidentEventId: 'event-1' },
-      { collaboration: 'DISABLED', chatOpsRevision: 4 }
-    );
+    await x.handleIncidentWarRoomEvent({ kind: 'TRIGGER', incidentId: 'inc-1', incidentEventId: 'event-1' },
+      { collaboration: 'DISABLED', chatOpsRevision: 4 });
     expect(x.deliveries.create).toHaveBeenCalledTimes(1);
-    expect(x.deliveries.create).toHaveBeenCalledWith(
-      expect.objectContaining({ data: expect.objectContaining({ provider: 'SLACK' }) })
-    );
+    expect(x.deliveries.create).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ provider: 'SLACK' }) }));
     expect(x.scheduleJob).toHaveBeenCalledTimes(1);
   });
   it('retains unknown/custom adapter behavior and existing lifecycle work', async () => {
     const x = await setup();
     planningAdapters[0].usesChatOpsPolicy = false;
-    await x.handleIncidentWarRoomEvent(
-      { kind: 'TRIGGER', incidentId: 'inc-1' },
-      { collaboration: 'DISABLED', chatOpsRevision: null }
-    );
+    await x.handleIncidentWarRoomEvent({ kind: 'TRIGGER', incidentId: 'inc-1' },
+      { collaboration: 'DISABLED', chatOpsRevision: null });
     expect(x.scheduleJob).toHaveBeenCalledTimes(1);
     vi.clearAllMocks();
-    await x.handleIncidentWarRoomEvent(
-      { kind: 'ARCHIVE', incidentId: 'inc-1' },
-      { collaboration: 'DISABLED', chatOpsRevision: null }
-    );
+    await x.handleIncidentWarRoomEvent({ kind: 'ARCHIVE', incidentId: 'inc-1' },
+      { collaboration: 'DISABLED', chatOpsRevision: null });
     expect(x.scheduleJob).toHaveBeenCalledTimes(2);
     expect(x.deliveries.findMany).not.toHaveBeenCalled();
   });

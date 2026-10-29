@@ -42,8 +42,7 @@ export async function handleSlackEmulatorRequest(
       res.end(
         JSON.stringify({
           ok: false,
-          error:
-            decision.statusCode === 429 ? 'rate_limited' : decision.errorCode || 'internal_error',
+          error: decision.statusCode === 429 ? 'rate_limited' : decision.errorCode || 'internal_error',
         })
       );
     }

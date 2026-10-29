@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 
-const migrationPath = 'prisma/migrations/20260910174500_guard_jira_mapping_workspace/migration.sql';
+const migrationPath =
+  'prisma/migrations/20260910174500_guard_jira_mapping_workspace/migration.sql';
 
 describe('Jira workspace concurrency architecture', () => {
   it('uses one stable workspace lock key for provider and lifecycle fencing', () => {

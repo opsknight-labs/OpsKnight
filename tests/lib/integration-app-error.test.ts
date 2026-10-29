@@ -29,9 +29,7 @@ describe('integration AppError adapter', () => {
     const source = IntegrationErrors.unauthorized('provider-secret-auth-detail');
     const appError = integrationErrorToAppError(source);
 
-    expect(appError?.userMessage).toBe(
-      ERROR_REGISTRY.INTEGRATION_AUTHENTICATION_FAILED.userMessage
-    );
+    expect(appError?.userMessage).toBe(ERROR_REGISTRY.INTEGRATION_AUTHENTICATION_FAILED.userMessage);
     expect(appError?.userMessage).not.toContain('provider-secret-auth-detail');
     expect(appError?.cause).toBe(source);
   });

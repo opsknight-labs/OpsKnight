@@ -55,20 +55,20 @@ describe('Fail-Closed Secret Decryption', () => {
         fromEmail: 'alerts@opsknight.io',
       };
 
-      await expect(decryptProviderConfig('resend', corruptedConfig)).rejects.toThrow(
-        ProviderDecryptionError
-      );
+      await expect(
+        decryptProviderConfig('resend', corruptedConfig)
+      ).rejects.toThrow(ProviderDecryptionError);
 
-      await expect(decryptProviderConfig('resend', corruptedConfig)).rejects.toMatchObject({
+      await expect(
+        decryptProviderConfig('resend', corruptedConfig)
+      ).rejects.toMatchObject({
         code: PROVIDER_ERROR_CODES.DECRYPTION_FAILED,
       });
     });
 
     it('throws ProviderDecryptionError when decryptValue encounters corrupted ciphertext', async () => {
       const { getEncryptionKey, decrypt } = await import('@/lib/encryption');
-      vi.mocked(getEncryptionKey).mockResolvedValue(
-        '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef'
-      );
+      vi.mocked(getEncryptionKey).mockResolvedValue('0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef');
       vi.mocked(decrypt).mockRejectedValue(new Error('Ciphertext authentication tag mismatch'));
 
       const corruptedTwilio = {
@@ -77,11 +77,13 @@ describe('Fail-Closed Secret Decryption', () => {
         fromNumber: '+15005550006',
       };
 
-      await expect(decryptProviderConfig('twilio', corruptedTwilio)).rejects.toThrow(
-        ProviderDecryptionError
-      );
+      await expect(
+        decryptProviderConfig('twilio', corruptedTwilio)
+      ).rejects.toThrow(ProviderDecryptionError);
 
-      await expect(decryptProviderConfig('twilio', corruptedTwilio)).rejects.toMatchObject({
+      await expect(
+        decryptProviderConfig('twilio', corruptedTwilio)
+      ).rejects.toMatchObject({
         code: PROVIDER_ERROR_CODES.DECRYPTION_FAILED,
       });
     });
@@ -103,9 +105,7 @@ describe('Fail-Closed Secret Decryption', () => {
   describe('Notification Provider Loaders Fail Closed', () => {
     it('skips corrupted email providers without passing enc: ciphertext to caller', async () => {
       const { getEncryptionKey, decrypt } = await import('@/lib/encryption');
-      vi.mocked(getEncryptionKey).mockResolvedValue(
-        '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef'
-      );
+      vi.mocked(getEncryptionKey).mockResolvedValue('0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef');
       vi.mocked(decrypt).mockRejectedValue(new Error('Invalid padding / bad ciphertext'));
 
       vi.mocked(prisma.notificationProvider.findMany).mockResolvedValue([
@@ -136,9 +136,7 @@ describe('Fail-Closed Secret Decryption', () => {
 
     it('disables Twilio SMS when credentials fail decryption', async () => {
       const { getEncryptionKey, decrypt } = await import('@/lib/encryption');
-      vi.mocked(getEncryptionKey).mockResolvedValue(
-        '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef'
-      );
+      vi.mocked(getEncryptionKey).mockResolvedValue('0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef');
       vi.mocked(decrypt).mockRejectedValue(new Error('Corrupted IV'));
 
       vi.mocked(prisma.notificationProvider.findUnique).mockResolvedValue({
@@ -160,9 +158,7 @@ describe('Fail-Closed Secret Decryption', () => {
 
     it('disables Twilio WhatsApp when credentials fail decryption', async () => {
       const { getEncryptionKey, decrypt } = await import('@/lib/encryption');
-      vi.mocked(getEncryptionKey).mockResolvedValue(
-        '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef'
-      );
+      vi.mocked(getEncryptionKey).mockResolvedValue('0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef');
       vi.mocked(decrypt).mockRejectedValue(new Error('Corrupted auth tag'));
 
       vi.mocked(prisma.notificationProvider.findUnique).mockResolvedValue({
@@ -185,9 +181,7 @@ describe('Fail-Closed Secret Decryption', () => {
 
     it('disables Web Push when VAPID private key fails decryption', async () => {
       const { getEncryptionKey, decrypt } = await import('@/lib/encryption');
-      vi.mocked(getEncryptionKey).mockResolvedValue(
-        '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef'
-      );
+      vi.mocked(getEncryptionKey).mockResolvedValue('0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef');
       vi.mocked(decrypt).mockRejectedValue(new Error('Corrupted private key'));
 
       vi.mocked(prisma.notificationProvider.findUnique).mockResolvedValue({
@@ -290,9 +284,7 @@ describe('Fail-Closed Secret Decryption', () => {
   describe('Zero-Leakage Security Invariant', () => {
     it('never logs raw ciphertext in error messages or logs', async () => {
       const { getEncryptionKey, decrypt } = await import('@/lib/encryption');
-      vi.mocked(getEncryptionKey).mockResolvedValue(
-        '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef'
-      );
+      vi.mocked(getEncryptionKey).mockResolvedValue('0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef');
       vi.mocked(decrypt).mockRejectedValue(new Error('Decryption failed'));
 
       const secretCiphertext = 'enc:SUPER_SECRET_PAYLOAD_CIPHERTEXT_999';

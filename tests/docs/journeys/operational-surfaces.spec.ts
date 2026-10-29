@@ -79,9 +79,7 @@ test.describe.serial('operational documentation surfaces', () => {
     await expect(
       page.getByRole('heading', { name: 'Production Reliability Overview', exact: true })
     ).toBeVisible();
-    await expect(
-      page.getByText('Service Health', { exact: true }).filter({ visible: true }).first()
-    ).toBeVisible();
+    await expect(page.getByText('Service Health', { exact: true }).filter({ visible: true }).first()).toBeVisible();
     await captureEvidence(page, testInfo, 'analytics', 'dashboard-saved');
 
     await page.getByRole('button', { name: 'Dashboard settings' }).click();
@@ -133,9 +131,7 @@ test.describe.serial('operational documentation surfaces', () => {
 
   test('captures the postmortem workflow', async ({ page }, testInfo) => {
     await page.goto('/postmortems');
-    await expect(
-      page.getByText('Transactional email delivery degradation review').first()
-    ).toBeVisible();
+    await expect(page.getByText('Transactional email delivery degradation review').first()).toBeVisible();
     await captureEvidence(page, testInfo, 'response', 'postmortems');
   });
 });

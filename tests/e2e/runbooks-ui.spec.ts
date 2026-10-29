@@ -1524,10 +1524,7 @@ test('detached-rule suggestions stay visible with disabled execution and can be 
   await expect(
     history.getByRole('link', { name: /view archived (?:rule )?evidence/i })
   ).not.toBeVisible();
-  await history
-    .getByRole('combobox', { name: 'Rule history', exact: true })
-    .filter({ visible: true })
-    .selectOption('archived');
+  await history.getByRole('combobox', { name: 'Rule history', exact: true }).filter({ visible: true }).selectOption('archived');
   await expect(history).toHaveURL(/rulesState=archived/);
   await history
     .getByPlaceholder('Search rules by name, runbook, or target agent…')

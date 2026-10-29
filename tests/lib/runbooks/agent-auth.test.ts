@@ -81,8 +81,7 @@ describe('Runbook Agent request authentication', () => {
 
   it('canonicalizes query parameters and resists query tampering', async () => {
     const body = '{"status":"ok"}';
-    const originalUrl =
-      'https://opsknight.example.com/api/runbook-agent/v1/claim?mode=READ_ONLY_ONLY&waitSeconds=25';
+    const originalUrl = 'https://opsknight.example.com/api/runbook-agent/v1/claim?mode=READ_ONLY_ONLY&waitSeconds=25';
 
     // Valid signed request
     const req = signedRequest(body, new Date().toISOString(), 'nonce-q1', originalUrl);

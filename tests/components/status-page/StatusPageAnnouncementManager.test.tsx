@@ -146,9 +146,7 @@ describe('StatusPageAnnouncementManager Component', () => {
     fireEvent.click(screen.getByRole('button', { name: /New Announcement/i }));
     const dialog = await screen.findByRole('dialog');
 
-    const titleInput = within(dialog).getByPlaceholderText(
-      /Scheduled Database Maintenance Window/i
-    );
+    const titleInput = within(dialog).getByPlaceholderText(/Scheduled Database Maintenance Window/i);
     const messageInput = within(dialog).getByPlaceholderText(/Describe the scope/i);
 
     fireEvent.change(titleInput, { target: { value: 'Test Window' } });
@@ -347,9 +345,7 @@ describe('StatusPageAnnouncementManager Component', () => {
     fireEvent.click(screen.getByRole('button', { name: /New Announcement/i }));
     const dialog = await screen.findByRole('dialog');
 
-    const titleInput = within(dialog).getByPlaceholderText(
-      /Scheduled Database Maintenance Window/i
-    );
+    const titleInput = within(dialog).getByPlaceholderText(/Scheduled Database Maintenance Window/i);
     const messageInput = within(dialog).getByPlaceholderText(/Describe the scope/i);
 
     fireEvent.change(titleInput, { target: { value: 'Resolved Database Incident' } });

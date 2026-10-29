@@ -643,9 +643,9 @@ describe('getIncidentResponseTimeline', () => {
       tone: 'warning',
       detail: expect.stringContaining('never retried automatically'),
     });
-    expect(
-      timeline!.entries.find(entry => entry.id === 'execution:x3:started')?.facts
-    ).toContainEqual({ label: 'Current status', value: 'Waiting for approval — paging continues' });
+    expect(timeline!.entries.find(entry => entry.id === 'execution:x3:started')?.facts).toContainEqual(
+      { label: 'Current status', value: 'Waiting for approval — paging continues' }
+    );
     expect(timeline!.entries.some(entry => entry.id === 'execution:x3:finished')).toBe(false);
   });
 });

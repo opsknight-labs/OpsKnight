@@ -14,21 +14,13 @@ it('limits change history to the exact schedule and redacts sensitive details', 
   const reader = await createV2Credential(['schedules:read']);
   const schedule = await db.onCallSchedule.create({ data: { name: 'Change schedule' } });
   const other = await db.onCallSchedule.create({ data: { name: 'Other change schedule' } });
-  await db.auditLog.create({
-    data: {
-      action: 'schedule.layer.created',
-      entityType: 'SCHEDULE',
-      entityId: schedule.id,
-      details: { layerId: 'test-layer', password: 'a-private-value' },
-    },
-  });
-  await db.auditLog.create({
-    data: {
-      action: 'schedule.layer.deleted',
-      entityType: 'SCHEDULE',
-      entityId: other.id,
-    },
-  });
+  await db.auditLog.create({ data: {
+    action: 'schedule.layer.created', entityType: 'SCHEDULE', entityId: schedule.id,
+    details: { layerId: 'test-layer', password: 'a-private-value' },
+  } });
+  await db.auditLog.create({ data: {
+    action: 'schedule.layer.deleted', entityType: 'SCHEDULE', entityId: other.id,
+  } });
   const path = `/schedules/${schedule.id}/changes`;
   expect((await invokeV2(GET, reader.token, 'GET', path, { id: schedule.id })).status).toBe(403);
   const response = await invokeV2(GET, admin.token, 'GET', path, { id: schedule.id });

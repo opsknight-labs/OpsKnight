@@ -18,8 +18,6 @@ describe('legacy encryption UTF-8 compatibility', () => {
   });
 
   it('rejects decrypted bytes that are not valid UTF-8', async () => {
-    await expect(
-      decryptWithKey(legacyCiphertext(Buffer.from([0xff, 0xfe])), KEY)
-    ).rejects.toThrow();
+    await expect(decryptWithKey(legacyCiphertext(Buffer.from([0xff, 0xfe])), KEY)).rejects.toThrow();
   });
 });

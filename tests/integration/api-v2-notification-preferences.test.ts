@@ -55,9 +55,7 @@ it('lets a USER credential read and revision-protect only its own preferences', 
   const audit = await db.auditLog.findFirstOrThrow({
     where: { action: 'user.notification_preferences.updated' },
   });
-  expect(
-    await db.auditLog.count({ where: { action: 'user.notification_preferences.updated' } })
-  ).toBe(1);
+  expect(await db.auditLog.count({ where: { action: 'user.notification_preferences.updated' } })).toBe(1);
   expect(audit).toMatchObject({ actorId: credential.user.id });
   expect(JSON.stringify(audit)).not.toContain('test-password');
   expect(JSON.stringify(audit)).not.toContain('+14155550123');

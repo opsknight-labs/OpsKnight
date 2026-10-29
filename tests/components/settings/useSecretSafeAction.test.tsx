@@ -28,11 +28,9 @@ describe('useSecretSafeAction', () => {
 
   it('passes errors through untouched and does not invoke the callback', async () => {
     const onSecret = vi.fn();
-    const action = vi.fn(async (): Promise<State> => ({
-      error: 'Not allowed',
-      success: false,
-      token: null,
-    }));
+    const action = vi.fn(
+      async (): Promise<State> => ({ error: 'Not allowed', success: false, token: null })
+    );
     const { result } = renderHook(() =>
       useSecretSafeAction<State>(action, { error: null, success: false, token: null }, onSecret)
     );

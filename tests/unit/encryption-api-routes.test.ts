@@ -21,12 +21,14 @@ const {
   };
 
   return {
-    mockAssertCapability: vi.fn().mockResolvedValue({
-      id: 'usr-admin-1',
-      email: 'admin@example.com',
-      name: 'Admin',
-      role: 'ADMIN',
-    }),
+    mockAssertCapability: vi
+      .fn()
+      .mockResolvedValue({
+        id: 'usr-admin-1',
+        email: 'admin@example.com',
+        name: 'Admin',
+        role: 'ADMIN',
+      }),
     mockPrisma,
     mockGetEncryptionKeyringMetadata: vi.fn().mockResolvedValue({
       activeKeyId: 'k2',

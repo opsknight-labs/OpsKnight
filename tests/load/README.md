@@ -56,18 +56,18 @@ OpsKnight's `/api/events` endpoint enforces a rate limit of **120 requests per 6
 
 ## 3. Load Levels (`L0`–`L9`) & Scale Profiles
 
-| Load Level | Name                        | Target VUs | Target RPS | SSE Streams | Purpose                                      |
-| :--------- | :-------------------------- | :--------: | :--------: | :---------: | :------------------------------------------- |
-| **`L0`**   | `L0_smoke`                  |     8      |     15     |     10      | Fast smoke correctness check                 |
-| **`L1`**   | `L1_steady_baseline`        |     25     |     50     |     100     | Steady baseline throughput & latency         |
-| **`L2`**   | `L2_normal_production_peak` |    100     |    150     |     250     | Normal enterprise peak workload              |
-| **`L3`**   | `L3_alert_storm`            |    250     |    500     |     500     | Multi-service alert storm                    |
-| **`L4`**   | `L4_dedup_storm`            |    250     |    500     |     250     | Hot dedup-key advisory lock contention       |
-| **`L5`**   | `L5_major_outage_fanout`    |    300     |    300     |     500     | Major outage + 50k+ notification fanout      |
-| **`L6`**   | `L6_provider_degradation`   |    150     |    150     |     250     | Downstream 429 / 503 / timeout headwinds     |
-| **`L7`**   | `L7_realtime_sse_scale`     |  500–5000  |    100     |  1500–5000  | Concurrent SSE fanout scale                  |
-| **`L8`**   | `L8_Chaos_Recovery`         |    150     |    150     |     200     | Worker / scheduler / PgBouncer kill recovery |
-| **`L9`**   | `L9_breaking_point_ramp`    |  500–1000  |    1000    |    1000     | Breaking-point step ramp                     |
+| Load Level | Name | Target VUs | Target RPS | SSE Streams | Purpose |
+| :--- | :--- | :---: | :---: | :---: | :--- |
+| **`L0`** | `L0_smoke` | 8 | 15 | 10 | Fast smoke correctness check |
+| **`L1`** | `L1_steady_baseline` | 25 | 50 | 100 | Steady baseline throughput & latency |
+| **`L2`** | `L2_normal_production_peak` | 100 | 150 | 250 | Normal enterprise peak workload |
+| **`L3`** | `L3_alert_storm` | 250 | 500 | 500 | Multi-service alert storm |
+| **`L4`** | `L4_dedup_storm` | 250 | 500 | 250 | Hot dedup-key advisory lock contention |
+| **`L5`** | `L5_major_outage_fanout` | 300 | 300 | 500 | Major outage + 50k+ notification fanout |
+| **`L6`** | `L6_provider_degradation` | 150 | 150 | 250 | Downstream 429 / 503 / timeout headwinds |
+| **`L7`** | `L7_realtime_sse_scale` | 500–5000 | 100 | 1500–5000 | Concurrent SSE fanout scale |
+| **`L8`** | `L8_Chaos_Recovery` | 150 | 150 | 200 | Worker / scheduler / PgBouncer kill recovery |
+| **`L9`** | `L9_breaking_point_ramp` | 500–1000 | 1000 | 1000 | Breaking-point step ramp |
 
 ### Scale Profiles (`--scale=<small|medium|large|storm>`)
 
@@ -75,12 +75,12 @@ These values mirror `fixtures/users/index.ts`. They describe current test-data
 shapes, not certified deployment capacities and not necessarily the profile
 used by a historical artifact.
 
-| Profile  | Teams | Users | Services | Integrations/service | Schedules | Escalation policies | Baseline incidents | SSE sessions | Status subscribers | API keys |
-| -------- | ----: | ----: | -------: | -------------------: | --------: | ------------------: | -----------------: | -----------: | -----------------: | -------: |
-| `small`  |     4 |    40 |       12 |                    2 |         8 |                   8 |                 24 |          100 |              1,000 |       12 |
-| `medium` |     8 |   120 |       32 |                    4 |        16 |                  16 |                100 |          500 |             10,000 |       32 |
-| `large`  |    12 |   400 |       80 |                    5 |        32 |                  32 |                300 |        2,500 |            100,000 |       64 |
-| `storm`  |    20 | 1,000 |      200 |                    5 |        50 |                  50 |                500 |        5,000 |            100,000 |      100 |
+| Profile | Teams | Users | Services | Integrations/service | Schedules | Escalation policies | Baseline incidents | SSE sessions | Status subscribers | API keys |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| `small` | 4 | 40 | 12 | 2 | 8 | 8 | 24 | 100 | 1,000 | 12 |
+| `medium` | 8 | 120 | 32 | 4 | 16 | 16 | 100 | 500 | 10,000 | 32 |
+| `large` | 12 | 400 | 80 | 5 | 32 | 32 | 300 | 2,500 | 100,000 | 64 |
+| `storm` | 20 | 1,000 | 200 | 5 | 50 | 50 | 500 | 5,000 | 100,000 | 100 |
 
 ---
 
@@ -99,39 +99,33 @@ used by a historical artifact.
 ## 5. Quickstart Commands
 
 ### Inspect the Sequential 6-Phase Certification Plan (Dry Run)
-
 ```bash
 npm run load:certify -- --dry-run
 ```
 
 ### Start the Programmable Provider Emulator Suite Standalone
-
 ```bash
 npm run load:providers
 # HTTP Providers: :8086 | SMTP: :2525 | Control & Telemetry API: :8088
 ```
 
 ### Seed Deterministic Load-Test Data
-
 ```bash
 npm run load:seed -- --scale=small --base-url=http://127.0.0.1:3000
 ```
 
 ### Run an Individual k6 Scenario
-
 ```bash
 k6 run -e BASE_URL=http://127.0.0.1:3000 -e LOAD_LEVEL=L1 -e LOAD_DURATION_PROFILE=fast tests/load/scenarios/alert-ingestion.js
 ```
 
 ### Verify Post-Run Correctness Invariants & Clean Up
-
 ```bash
 npm run load:verify
 npm run load:cleanup
 ```
 
 ### Execute Sequential Certification for a Specific Phase or Topology
-
 ```bash
 # Phase 1: Docker Compose Matrix (Integrated, Split, Split + PgBouncer)
 npm run load:certify -- --phase=1 --scale=medium --duration=fast

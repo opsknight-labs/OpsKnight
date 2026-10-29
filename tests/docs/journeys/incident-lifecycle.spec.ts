@@ -11,9 +11,7 @@ test.describe.serial('incident lifecycle documentation journey', () => {
 
     await page.getByRole('link', { name: DOCS_FIXTURES.incident, exact: true }).first().click();
     await expect(page).toHaveURL(/\/incidents\/[^/]+$/);
-    await expect(
-      page.getByRole('heading', { level: 1, name: DOCS_FIXTURES.incident, exact: true })
-    ).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: DOCS_FIXTURES.incident, exact: true })).toBeVisible();
     await captureEvidence(page, testInfo, 'incidents', 'detail');
 
     const acknowledge = page.getByRole('button', { name: 'Acknowledge', exact: true }).first();
@@ -22,9 +20,7 @@ test.describe.serial('incident lifecycle documentation journey', () => {
     await captureEvidence(page, testInfo, 'incidents', 'acknowledge');
 
     await page.getByText('Timeline', { exact: true }).first().click();
-    const timelineEvent = page
-      .getByText(/Incident triggered by production monitoring|acknowledged/i)
-      .first();
+    const timelineEvent = page.getByText(/Incident triggered by production monitoring|acknowledged/i).first();
     await expect(timelineEvent).toBeVisible();
     const timelinePanel = page
       .getByRole('tab', { name: 'Timeline' })
@@ -33,10 +29,7 @@ test.describe.serial('incident lifecycle documentation journey', () => {
 
     await page.goto('/incidents');
     await expect(page.getByText(DOCS_FIXTURES.incident).first()).toBeVisible();
-    await page
-      .getByRole('button', { name: /Create incident/i })
-      .first()
-      .click();
+    await page.getByRole('button', { name: /Create incident/i }).first().click();
     await expect(page.getByRole('dialog')).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Declare Incident' })).toBeVisible();
     await expect(page.getByLabel(/Incident Title/)).toBeVisible();

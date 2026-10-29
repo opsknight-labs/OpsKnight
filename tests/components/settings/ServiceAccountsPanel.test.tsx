@@ -2,9 +2,7 @@
 import { issuableScopesForRole } from '@/lib/api-scope-registry';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import ServiceAccountsPanel, {
-  type ServiceAccountItem,
-} from '@/components/settings/ServiceAccountsPanel';
+import ServiceAccountsPanel, { type ServiceAccountItem } from '@/components/settings/ServiceAccountsPanel';
 import {
   issueServiceAccountTokenAction,
   deleteServiceAccountAction,
@@ -19,9 +17,7 @@ vi.mock('next/navigation', () => ({
 
 vi.mock('@/app/(app)/settings/actions', () => ({
   createServiceAccountAction: vi.fn().mockResolvedValue({ success: true }),
-  issueServiceAccountTokenAction: vi
-    .fn()
-    .mockResolvedValue({ success: true, token: 'ok_live_test_token' }),
+  issueServiceAccountTokenAction: vi.fn().mockResolvedValue({ success: true, token: 'ok_live_test_token' }),
   deleteServiceAccountAction: vi.fn().mockResolvedValue(undefined),
   revokeServiceAccountTokenAction: vi.fn().mockResolvedValue(undefined),
 }));
@@ -147,9 +143,7 @@ describe('ServiceAccountsPanel Component', () => {
       'service-accounts'
     );
     expect((form.querySelector('input[name="sq"]') as HTMLInputElement).value).toBe('Pager');
-    expect((form.querySelector('select[name="srole"]') as HTMLSelectElement).value).toBe(
-      'RESPONDER'
-    );
+    expect((form.querySelector('select[name="srole"]') as HTMLSelectElement).value).toBe('RESPONDER');
     // Rows are exactly what the server returned.
     expect(screen.getByText('Pager Monitoring Relay')).toBeDefined();
     expect(screen.getByText('CI/CD Automation Bot')).toBeDefined();
@@ -245,9 +239,7 @@ describe('ServiceAccountsPanel Component', () => {
     expect(screen.getByText(new RegExp(`of ${total} scopes`, 'i'))).toBeDefined();
 
     fireEvent.click(screen.getByRole('button', { name: 'Admin Full' }));
-    expect(
-      screen.getByText(new RegExp(`selected: ${total} of ${total} scopes`, 'i'))
-    ).toBeDefined();
+    expect(screen.getByText(new RegExp(`selected: ${total} of ${total} scopes`, 'i'))).toBeDefined();
 
     fireEvent.click(screen.getByRole('button', { name: 'Clear' }));
     expect(screen.getByText(new RegExp(`selected: 0 of ${total} scopes`, 'i'))).toBeDefined();

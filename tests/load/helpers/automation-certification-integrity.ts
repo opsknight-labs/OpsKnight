@@ -9,9 +9,7 @@ export const FROZEN_CERTIFICATION = {
 } as const;
 
 /** k6 omits counters that never receive a sample, including an all-rejected run. */
-export function acceptedAutomationEvents(metrics: {
-  automation_accepted_events?: { count: number };
-}) {
+export function acceptedAutomationEvents(metrics: { automation_accepted_events?: { count: number } }) {
   const counter = metrics.automation_accepted_events;
   if (counter === undefined) return 0;
   if (!Number.isSafeInteger(counter.count) || counter.count < 0)

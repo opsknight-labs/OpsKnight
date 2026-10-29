@@ -21,9 +21,7 @@ vi.mock('@/lib/rbac', async importOriginal => {
 vi.mock('@/lib/microsoft-teams/graph/channels', () => ({
   getChannelById: vi.fn(),
   findWarRoomChannel: vi.fn(),
-  warRoomMarker: vi.fn(
-    (incidentId: string, generation: number) => `wr:${incidentId}:g${generation}`
-  ),
+  warRoomMarker: vi.fn((incidentId: string, generation: number) => `wr:${incidentId}:g${generation}`),
 }));
 vi.mock('@/lib/war-room/engine', () => ({
   requestWarRoomProjectionNeutral: vi.fn(async () => 5),
@@ -79,9 +77,7 @@ import { requestWarRoomProjectionNeutral } from '@/lib/war-room/engine';
       }
       // Ensure backgroundJob.$transaction-like on prisma root for requestWarRoomProjectionNeutral
       if (name === 'incidentWarRoom' && !('$transaction' in (pAny as Record<string, unknown>))) {
-        (pAny as Record<string, unknown>).$transaction = vi.fn(
-          async (fn: (tx: unknown) => unknown) => fn(prisma)
-        );
+        (pAny as Record<string, unknown>).$transaction = vi.fn(async (fn: (tx: unknown) => unknown) => fn(prisma));
       }
     }
   };
@@ -100,10 +96,7 @@ import { requestWarRoomProjectionNeutral } from '@/lib/war-room/engine';
 }
 import { classifyOperationalHealth, toOperationalSnapshot } from '@/lib/war-room/operations/health';
 import { summarizeOperationalHealth } from '@/lib/war-room/operations/summary';
-import {
-  getWarRoomDiagnosticsSnapshot,
-  getWarRoomOperationalSnapshots,
-} from '@/lib/war-room/operations/diagnostics';
+import { getWarRoomDiagnosticsSnapshot, getWarRoomOperationalSnapshots } from '@/lib/war-room/operations/diagnostics';
 import { enqueueWarRoomRepair } from '@/lib/war-room/operations/repair';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -182,20 +175,13 @@ describe('war-room operations — deterministic health (Phase 5)', () => {
   });
 
   it('DEGRADED for permission error', () => {
-    const out = classifyOperationalHealth(
-      healthyInput({
-        lastErrorCode: 'MISSING_PERMISSION',
-        healthState: 'PERMISSION_ERROR' as never,
-      })
-    );
+    const out = classifyOperationalHealth(healthyInput({ lastErrorCode: 'MISSING_PERMISSION', healthState: 'PERMISSION_ERROR' as never }));
     expect(out.operationalHealth).toBe('DEGRADED');
     expect(out.reasonCode).toBe('MISSING_PERMISSION');
   });
 
   it('DEGRADED for projection lag (behind by N)', () => {
-    const out = classifyOperationalHealth(
-      healthyInput({ projectionVersion: 5, lastProjectedVersion: 3 })
-    );
+    const out = classifyOperationalHealth(healthyInput({ projectionVersion: 5, lastProjectedVersion: 3 }));
     expect(out.operationalHealth).toBe('DEGRADED');
     expect(out.reasonCode).toBe('PROJECTION_BEHIND');
   });
@@ -212,200 +198,84 @@ describe('war-room operations — deterministic health (Phase 5)', () => {
   });
 
   it('UNAVAILABLE when integration disabled', () => {
-    expect(
-      classifyOperationalHealth(healthyInput({ integrationEnabled: false })).operationalHealth
-    ).toBe('UNAVAILABLE');
-    expect(classifyOperationalHealth(healthyInput({ integrationEnabled: false })).reasonCode).toBe(
-      'INTEGRATION_DISABLED'
-    );
+    expect(classifyOperationalHealth(healthyInput({ integrationEnabled: false })).operationalHealth).toBe('UNAVAILABLE');
+    expect(classifyOperationalHealth(healthyInput({ integrationEnabled: false })).reasonCode).toBe('INTEGRATION_DISABLED');
   });
 
   it('UNAVAILABLE when config disabled / warRooms disabled', () => {
-    expect(
-      classifyOperationalHealth(healthyInput({ configEnabled: false })).operationalHealth
-    ).toBe('UNAVAILABLE');
-    expect(
-      classifyOperationalHealth(healthyInput({ warRoomsEnabled: false })).operationalHealth
-    ).toBe('UNAVAILABLE');
+    expect(classifyOperationalHealth(healthyInput({ configEnabled: false })).operationalHealth).toBe('UNAVAILABLE');
+    expect(classifyOperationalHealth(healthyInput({ warRoomsEnabled: false })).operationalHealth).toBe('UNAVAILABLE');
   });
 
   it('UNAVAILABLE when destination disabled', () => {
-    expect(
-      classifyOperationalHealth(healthyInput({ destinationEnabled: false })).operationalHealth
-    ).toBe('UNAVAILABLE');
-    expect(classifyOperationalHealth(healthyInput({ destinationEnabled: false })).reasonCode).toBe(
-      'DESTINATION_DISABLED'
-    );
-    expect(
-      classifyOperationalHealth(healthyInput({ destinationWarRoomEnabled: false }))
-        .operationalHealth
-    ).toBe('UNAVAILABLE');
+    expect(classifyOperationalHealth(healthyInput({ destinationEnabled: false })).operationalHealth).toBe('UNAVAILABLE');
+    expect(classifyOperationalHealth(healthyInput({ destinationEnabled: false })).reasonCode).toBe('DESTINATION_DISABLED');
+    expect(classifyOperationalHealth(healthyInput({ destinationWarRoomEnabled: false })).operationalHealth).toBe('UNAVAILABLE');
   });
 
   it('UNAVAILABLE when bot not installed (installationEnabled=false or installCountForProvider=0)', () => {
-    expect(
-      classifyOperationalHealth(healthyInput({ installationEnabled: false })).operationalHealth
-    ).toBe('UNAVAILABLE');
-    expect(classifyOperationalHealth(healthyInput({ installationEnabled: false })).reasonCode).toBe(
-      'BOT_NOT_INSTALLED'
-    );
-    expect(
-      classifyOperationalHealth(healthyInput({ installCountForProvider: 0 })).operationalHealth
-    ).toBe('UNAVAILABLE');
+    expect(classifyOperationalHealth(healthyInput({ installationEnabled: false })).operationalHealth).toBe('UNAVAILABLE');
+    expect(classifyOperationalHealth(healthyInput({ installationEnabled: false })).reasonCode).toBe('BOT_NOT_INSTALLED');
+    expect(classifyOperationalHealth(healthyInput({ installCountForProvider: 0 })).operationalHealth).toBe('UNAVAILABLE');
   });
 
   it('DRIFTED for externalCleanupPending', () => {
-    const out = classifyOperationalHealth(
-      healthyInput({ externalCleanupPending: true, externalCleanupReason: 'CLOSE_ORPHAN' })
-    );
+    const out = classifyOperationalHealth(healthyInput({ externalCleanupPending: true, externalCleanupReason: 'CLOSE_ORPHAN' }));
     expect(out.operationalHealth).toBe('DRIFTED');
     expect(out.reasonCode).toBe('CLOSE_ORPHAN');
   });
 
   it('DRIFTED for MISSING healthState / CHANNEL_MISSING / DUPLICATE_WAR_ROOMS', () => {
-    expect(
-      classifyOperationalHealth(healthyInput({ healthState: 'MISSING' as never })).operationalHealth
-    ).toBe('DRIFTED');
-    expect(
-      classifyOperationalHealth(healthyInput({ lastErrorCode: 'CHANNEL_MISSING' }))
-        .operationalHealth
-    ).toBe('DRIFTED');
-    expect(
-      classifyOperationalHealth(healthyInput({ lastErrorCode: 'DUPLICATE_WAR_ROOMS' }))
-        .operationalHealth
-    ).toBe('DRIFTED');
-    expect(
-      classifyOperationalHealth(healthyInput({ lastErrorCode: 'TEAM_NOT_FOUND' })).operationalHealth
-    ).toBe('DRIFTED');
+    expect(classifyOperationalHealth(healthyInput({ healthState: 'MISSING' as never })).operationalHealth).toBe('DRIFTED');
+    expect(classifyOperationalHealth(healthyInput({ lastErrorCode: 'CHANNEL_MISSING' })).operationalHealth).toBe('DRIFTED');
+    expect(classifyOperationalHealth(healthyInput({ lastErrorCode: 'DUPLICATE_WAR_ROOMS' })).operationalHealth).toBe('DRIFTED');
+    expect(classifyOperationalHealth(healthyInput({ lastErrorCode: 'TEAM_NOT_FOUND' })).operationalHealth).toBe('DRIFTED');
   });
 
   it('DRIFTED when providerChannelId absent on READY/CLOSING (orphan)', () => {
-    expect(
-      classifyOperationalHealth(healthyInput({ providerChannelId: null, state: 'READY' }))
-        .operationalHealth
-    ).toBe('DRIFTED');
-    expect(
-      classifyOperationalHealth(healthyInput({ providerChannelId: null, state: 'CLOSING' }))
-        .operationalHealth
-    ).toBe('DRIFTED');
-    expect(
-      classifyOperationalHealth(healthyInput({ providerChannelId: null, state: 'CLOSED' }))
-        .operationalHealth
-    ).not.toBe('DRIFTED');
+    expect(classifyOperationalHealth(healthyInput({ providerChannelId: null, state: 'READY' })).operationalHealth).toBe('DRIFTED');
+    expect(classifyOperationalHealth(healthyInput({ providerChannelId: null, state: 'CLOSING' })).operationalHealth).toBe('DRIFTED');
+    expect(classifyOperationalHealth(healthyInput({ providerChannelId: null, state: 'CLOSED' })).operationalHealth).not.toBe('DRIFTED');
   });
 
   it('UNKNOWN for provider API unavailable with stale reconciliation — 429 / 5xx / timeout / token (not resource missing)', () => {
     const stale = new Date(Date.now() - 20 * 60_000);
-    expect(
-      classifyOperationalHealth(
-        healthyInput({ lastErrorCode: 'RATE_LIMITED', lastReconciledAt: stale })
-      ).operationalHealth
-    ).toBe('UNKNOWN');
-    expect(
-      classifyOperationalHealth(
-        healthyInput({ lastErrorCode: 'GRAPH_TOKEN_FAILED', lastReconciledAt: stale })
-      ).operationalHealth
-    ).toBe('UNKNOWN');
-    expect(
-      classifyOperationalHealth(
-        healthyInput({ lastErrorCode: 'TRANSIENT_READ', lastReconciledAt: stale })
-      ).operationalHealth
-    ).toBe('UNKNOWN');
-    expect(
-      classifyOperationalHealth(
-        healthyInput({ lastError: 'Graph returned 429 rate limited', lastReconciledAt: stale })
-      ).operationalHealth
-    ).toBe('UNKNOWN');
-    expect(
-      classifyOperationalHealth(
-        healthyInput({ lastError: 'request timeout after 10000ms', lastReconciledAt: stale })
-      ).operationalHealth
-    ).toBe('UNKNOWN');
-    expect(
-      classifyOperationalHealth(
-        healthyInput({ lastError: 'Graph returned 503', lastReconciledAt: stale })
-      ).operationalHealth
-    ).toBe('UNKNOWN');
-    expect(
-      classifyOperationalHealth(
-        healthyInput({ lastErrorCode: 'RATE_LIMITED', lastReconciledAt: new Date() })
-      ).operationalHealth
-    ).not.toBe('UNKNOWN');
+    expect(classifyOperationalHealth(healthyInput({ lastErrorCode: 'RATE_LIMITED', lastReconciledAt: stale })).operationalHealth).toBe('UNKNOWN');
+    expect(classifyOperationalHealth(healthyInput({ lastErrorCode: 'GRAPH_TOKEN_FAILED', lastReconciledAt: stale })).operationalHealth).toBe('UNKNOWN');
+    expect(classifyOperationalHealth(healthyInput({ lastErrorCode: 'TRANSIENT_READ', lastReconciledAt: stale })).operationalHealth).toBe('UNKNOWN');
+    expect(classifyOperationalHealth(healthyInput({ lastError: 'Graph returned 429 rate limited', lastReconciledAt: stale })).operationalHealth).toBe('UNKNOWN');
+    expect(classifyOperationalHealth(healthyInput({ lastError: 'request timeout after 10000ms', lastReconciledAt: stale })).operationalHealth).toBe('UNKNOWN');
+    expect(classifyOperationalHealth(healthyInput({ lastError: 'Graph returned 503', lastReconciledAt: stale })).operationalHealth).toBe('UNKNOWN');
+    expect(classifyOperationalHealth(healthyInput({ lastErrorCode: 'RATE_LIMITED', lastReconciledAt: new Date() })).operationalHealth).not.toBe('UNKNOWN');
   });
 
   it('provider unavailable != resource missing — MISSING stays DRIFTED even when stale', () => {
     const stale = new Date(Date.now() - 20 * 60_000);
-    const drifted = classifyOperationalHealth(
-      healthyInput({
-        lastErrorCode: 'MISSING',
-        lastReconciledAt: stale,
-        healthState: 'MISSING' as never,
-      })
-    );
+    const drifted = classifyOperationalHealth(healthyInput({ lastErrorCode: 'MISSING', lastReconciledAt: stale, healthState: 'MISSING' as never }));
     expect(drifted.operationalHealth).toBe('DRIFTED');
   });
 
   it('precedence: UNKNOWN > UNAVAILABLE > DRIFTED > DEGRADED > HEALTHY', () => {
     const stale = new Date(Date.now() - 20 * 60_000);
-    expect(
-      classifyOperationalHealth(
-        healthyInput({
-          integrationEnabled: false,
-          lastErrorCode: 'RATE_LIMITED',
-          lastReconciledAt: new Date(),
-        })
-      ).operationalHealth
-    ).toBe('UNAVAILABLE');
-    expect(
-      classifyOperationalHealth(
-        healthyInput({ destinationEnabled: false, externalCleanupPending: true })
-      ).operationalHealth
-    ).toBe('UNAVAILABLE');
-    expect(
-      classifyOperationalHealth(
-        healthyInput({
-          externalCleanupPending: true,
-          projectionVersion: 5,
-          lastProjectedVersion: 3,
-        })
-      ).operationalHealth
-    ).toBe('DRIFTED');
-    expect(classifyOperationalHealth(healthyInput({ participantDrift: 1 })).operationalHealth).toBe(
-      'DEGRADED'
-    );
+    expect(classifyOperationalHealth(healthyInput({ integrationEnabled: false, lastErrorCode: 'RATE_LIMITED', lastReconciledAt: new Date() })).operationalHealth).toBe('UNAVAILABLE');
+    expect(classifyOperationalHealth(healthyInput({ destinationEnabled: false, externalCleanupPending: true })).operationalHealth).toBe('UNAVAILABLE');
+    expect(classifyOperationalHealth(healthyInput({ externalCleanupPending: true, projectionVersion: 5, lastProjectedVersion: 3 })).operationalHealth).toBe('DRIFTED');
+    expect(classifyOperationalHealth(healthyInput({ participantDrift: 1 })).operationalHealth).toBe('DEGRADED');
     expect(classifyOperationalHealth(healthyInput()).operationalHealth).toBe('HEALTHY');
-    expect(
-      classifyOperationalHealth(
-        healthyInput({
-          lastErrorCode: 'RATE_LIMITED',
-          lastReconciledAt: stale,
-          externalCleanupPending: true,
-        })
-      ).operationalHealth
-    ).toBe('UNKNOWN');
+    expect(classifyOperationalHealth(healthyInput({ lastErrorCode: 'RATE_LIMITED', lastReconciledAt: stale, externalCleanupPending: true })).operationalHealth).toBe('UNKNOWN');
   });
 
   it('Teams unavailable (RSC unknown + missing channel + stale) -> UNKNOWN, otherwise DEGRADED', () => {
     const stale = new Date(Date.now() - 20 * 60_000);
-    expect(
-      classifyOperationalHealth(
-        healthyInput({ rscUnknown: true, providerChannelId: null, lastReconciledAt: stale })
-      ).operationalHealth
-    ).toBe('UNKNOWN');
-    expect(
-      classifyOperationalHealth(
-        healthyInput({ rscUnknown: true, providerChannelId: '19:chan', lastReconciledAt: stale })
-      ).operationalHealth
-    ).not.toBe('UNKNOWN');
+    expect(classifyOperationalHealth(healthyInput({ rscUnknown: true, providerChannelId: null, lastReconciledAt: stale })).operationalHealth).toBe('UNKNOWN');
+    expect(classifyOperationalHealth(healthyInput({ rscUnknown: true, providerChannelId: '19:chan', lastReconciledAt: stale })).operationalHealth).not.toBe('UNKNOWN');
   });
 });
 
 // ── toOperationalSnapshot + summarizeOperationalHealth ──────────────────
 describe('toOperationalSnapshot & summarizeOperationalHealth', () => {
   it('maps snapshot with lag/drift and surfaces health reason', () => {
-    const snap = toOperationalSnapshot(
-      snapshotInput({ projectionVersion: 5, lastProjectedVersion: 3 })
-    );
+    const snap = toOperationalSnapshot(snapshotInput({ projectionVersion: 5, lastProjectedVersion: 3 }));
     expect(snap.projectionLag).toBe(2);
     expect(snap.projectionBehind).toBe(true);
     expect(snap.operationalHealth).toBe('DEGRADED');
@@ -421,27 +291,12 @@ describe('toOperationalSnapshot & summarizeOperationalHealth', () => {
   });
 
   it('summarizeOperationalHealth worst-wins UNKNOWN>UNAVAILABLE>DRIFTED>DEGRADED>HEALTHY', () => {
-    const make = (h: string) =>
-      ({
-        provider: 'MICROSOFT_TEAMS',
-        operationalHealth: h,
-        externalCleanupPending: false,
-      }) as never;
-    expect(
-      summarizeOperationalHealth([make('HEALTHY'), make('HEALTHY')])[0].operationalHealth
-    ).toBe('HEALTHY');
-    expect(
-      summarizeOperationalHealth([make('HEALTHY'), make('DEGRADED')])[0].operationalHealth
-    ).toBe('DEGRADED');
-    expect(
-      summarizeOperationalHealth([make('DEGRADED'), make('DRIFTED')])[0].operationalHealth
-    ).toBe('DRIFTED');
-    expect(
-      summarizeOperationalHealth([make('DRIFTED'), make('UNAVAILABLE')])[0].operationalHealth
-    ).toBe('UNAVAILABLE');
-    expect(
-      summarizeOperationalHealth([make('UNAVAILABLE'), make('UNKNOWN')])[0].operationalHealth
-    ).toBe('UNKNOWN');
+    const make = (h: string) => ({ provider: 'MICROSOFT_TEAMS', operationalHealth: h, externalCleanupPending: false } as never);
+    expect(summarizeOperationalHealth([make('HEALTHY'), make('HEALTHY')])[0].operationalHealth).toBe('HEALTHY');
+    expect(summarizeOperationalHealth([make('HEALTHY'), make('DEGRADED')])[0].operationalHealth).toBe('DEGRADED');
+    expect(summarizeOperationalHealth([make('DEGRADED'), make('DRIFTED')])[0].operationalHealth).toBe('DRIFTED');
+    expect(summarizeOperationalHealth([make('DRIFTED'), make('UNAVAILABLE')])[0].operationalHealth).toBe('UNAVAILABLE');
+    expect(summarizeOperationalHealth([make('UNAVAILABLE'), make('UNKNOWN')])[0].operationalHealth).toBe('UNKNOWN');
   });
 
   it('summarize counts per health and externalCleanupPending', () => {
@@ -460,9 +315,7 @@ describe('toOperationalSnapshot & summarizeOperationalHealth', () => {
   });
 
   it('Slack neutral shape — same snapshot contract as Teams', () => {
-    const slackSnap = toOperationalSnapshot(
-      snapshotInput({ provider: 'SLACK', providerTenantId: null, providerContainerId: 'C123' })
-    );
+    const slackSnap = toOperationalSnapshot(snapshotInput({ provider: 'SLACK', providerTenantId: null, providerContainerId: 'C123' }));
     expect(slackSnap.provider).toBe('SLACK');
     expect(typeof slackSnap.warRoomId).toBe('string');
     expect(typeof slackSnap.operationalHealth).toBe('string');
@@ -540,33 +393,10 @@ describe('diagnostics — detail contract', () => {
       closedAt: new Date(),
       archivedAt: null,
       incident: { title: 'Payments outage', status: 'RESOLVED' },
-      participants: [
-        {
-          id: 'p1',
-          userId: 'u1',
-          providerUserId: 'teams-u1',
-          source: 'INCIDENT',
-          state: 'PRESENT',
-          lastSyncAt: new Date(),
-          lastErrorCode: null,
-        },
-      ],
+      participants: [{ id: 'p1', userId: 'u1', providerUserId: 'teams-u1', source: 'INCIDENT', state: 'PRESENT', lastSyncAt: new Date(), lastErrorCode: null }],
     };
-    vi.mocked(prisma.incidentWarRoom.findUnique as unknown as Mock).mockResolvedValue(
-      room as never
-    );
-    vi.mocked(
-      (prisma as unknown as { microsoftTeamsDestination: { findUnique: Mock } })
-        .microsoftTeamsDestination.findUnique as unknown as Mock
-    ).mockResolvedValue({
-      id: 'dest-1',
-      enabled: true,
-      warRoomEnabled: true,
-      teamId: 'team-1',
-      channelId: 'ch',
-      teamName: 'Team',
-      channelName: 'chan',
-    } as never);
+    vi.mocked(prisma.incidentWarRoom.findUnique as unknown as Mock).mockResolvedValue(room as never);
+    vi.mocked((prisma as unknown as { microsoftTeamsDestination: { findUnique: Mock } }).microsoftTeamsDestination.findUnique as unknown as Mock).mockResolvedValue({ id: 'dest-1', enabled: true, warRoomEnabled: true, teamId: 'team-1', channelId: 'ch', teamName: 'Team', channelName: 'chan' } as never);
 
     const diag = await getWarRoomDiagnosticsSnapshot('wr-1');
     expect(diag).not.toBeNull();
@@ -576,9 +406,7 @@ describe('diagnostics — detail contract', () => {
     expect(raw).not.toMatch(/accessToken/i);
     expect(raw).not.toMatch(/lease-abc/);
     expect(diag!.provisioning.hasProvisioningToken).toBe(true);
-    expect(
-      (diag!.provisioning as unknown as Record<string, unknown>).provisioningToken
-    ).toBeUndefined();
+    expect((diag!.provisioning as unknown as Record<string, unknown>).provisioningToken).toBeUndefined();
     expect(diag!.cleanup.externalCleanupPending).toBe(true);
     expect(diag!.cleanup.externalCleanupReason).toBe('CLOSE_ORPHAN');
     expect(diag!.incidentTitle).toBe('Payments outage');
@@ -622,34 +450,12 @@ describe('diagnostics — detail contract', () => {
       incident: { title: 'Latency', status: 'OPEN' },
       participants: [],
     };
-    vi.mocked(prisma.incidentWarRoom.findUnique as unknown as Mock).mockResolvedValue(
-      room as never
-    );
+    vi.mocked(prisma.incidentWarRoom.findUnique as unknown as Mock).mockResolvedValue(room as never);
     // Infra is healthy so DEGRADED comes from projection lag, not UNAVAILABLE
-    vi.mocked(
-      (prisma as unknown as { microsoftTeamsDestination: { findUnique: Mock } })
-        .microsoftTeamsDestination.findUnique as unknown as Mock
-    ).mockResolvedValue({
-      id: 'dest-2',
-      enabled: true,
-      warRoomEnabled: true,
-      teamId: 'team-2',
-      channelId: 'ch2',
-      teamName: 'Team',
-      channelName: 'chan',
-    } as never);
-    vi.mocked(
-      (prisma as unknown as { microsoftTeamsInstallation: { findUnique: Mock; count: Mock } })
-        .microsoftTeamsInstallation.findUnique as unknown as Mock
-    ).mockResolvedValue({ enabled: true } as never);
-    vi.mocked(
-      (prisma as unknown as { microsoftTeamsInstallation: { findUnique: Mock; count: Mock } })
-        .microsoftTeamsInstallation.count as unknown as Mock
-    ).mockResolvedValue(1 as never);
-    vi.mocked(
-      (prisma as unknown as { microsoftTeamsConfig: { findFirst: Mock } }).microsoftTeamsConfig
-        .findFirst as unknown as Mock
-    ).mockResolvedValue({ enabled: true, warRoomsEnabled: true } as never);
+    vi.mocked((prisma as unknown as { microsoftTeamsDestination: { findUnique: Mock } }).microsoftTeamsDestination.findUnique as unknown as Mock).mockResolvedValue({ id: 'dest-2', enabled: true, warRoomEnabled: true, teamId: 'team-2', channelId: 'ch2', teamName: 'Team', channelName: 'chan' } as never);
+    vi.mocked((prisma as unknown as { microsoftTeamsInstallation: { findUnique: Mock; count: Mock } }).microsoftTeamsInstallation.findUnique as unknown as Mock).mockResolvedValue({ enabled: true } as never);
+    vi.mocked((prisma as unknown as { microsoftTeamsInstallation: { findUnique: Mock; count: Mock } }).microsoftTeamsInstallation.count as unknown as Mock).mockResolvedValue(1 as never);
+    vi.mocked((prisma as unknown as { microsoftTeamsConfig: { findFirst: Mock } }).microsoftTeamsConfig.findFirst as unknown as Mock).mockResolvedValue({ enabled: true, warRoomsEnabled: true } as never);
     const diag = await getWarRoomDiagnosticsSnapshot('wr-2');
     expect(diag!.generation).toBe(2);
     expect(diag!.state).toBe('READY');
@@ -687,55 +493,29 @@ describe('repair — UI → Admin API → RBAC+state → enqueue canonical durab
   }
 
   it('RECONCILE on AMBIGUOUS uses WAR_ROOM_PROVISION reconciliationOnly (marker-only, triple-AND dedupe) and never POSTs', async () => {
-    vi.mocked(getCurrentUser).mockResolvedValue({
-      id: 'admin-1',
-      email: 'admin@test.test',
-      role: 'ADMIN',
-    } as never);
-    vi.mocked(prisma.incidentWarRoom.findUnique as unknown as Mock).mockResolvedValue(
-      baseRoom({ state: 'AMBIGUOUS', provisioningToken: 'tok-amb' }) as never
-    );
+    vi.mocked(getCurrentUser).mockResolvedValue({ id: 'admin-1', email: 'admin@test.test', role: 'ADMIN' } as never);
+    vi.mocked(prisma.incidentWarRoom.findUnique as unknown as Mock).mockResolvedValue(baseRoom({ state: 'AMBIGUOUS', provisioningToken: 'tok-amb' }) as never);
     vi.mocked(prisma.backgroundJob.findFirst as unknown as Mock).mockResolvedValue(null);
-    vi.mocked(prisma.backgroundJob.create as unknown as Mock).mockResolvedValue({
-      id: 'job-1',
-    } as never);
+    vi.mocked(prisma.backgroundJob.create as unknown as Mock).mockResolvedValue({ id: 'job-1' } as never);
 
-    const res = await enqueueWarRoomRepair({
-      warRoomId: 'wr-1',
-      action: 'RECONCILE',
-      actorId: 'admin-1',
-    });
+    const res = await enqueueWarRoomRepair({ warRoomId: 'wr-1', action: 'RECONCILE', actorId: 'admin-1' });
     expect(res.accepted).toBe(true);
     expect(res.jobType).toBe('WAR_ROOM_PROVISION');
     const createCall = vi.mocked(prisma.backgroundJob.create as unknown as Mock).mock.calls[0]?.[0];
     expect(createCall.data.type).toBe('WAR_ROOM_PROVISION');
     expect(createCall.data.payload.reconciliationOnly).toBe(true);
     expect(createCall.data.payload.provisioningToken).toBe('tok-amb');
-    const findCall = vi.mocked(prisma.backgroundJob.findFirst as unknown as Mock).mock
-      .calls[0]?.[0];
+    const findCall = vi.mocked(prisma.backgroundJob.findFirst as unknown as Mock).mock.calls[0]?.[0];
     expect(findCall.where.AND).toHaveLength(3);
-    expect(vi.mocked(emitAuditEvent)).toHaveBeenCalledWith(
-      expect.objectContaining({
-        action: 'WAR_ROOM_RECONCILIATION_REQUESTED',
-        metadata: expect.objectContaining({ initiatedBy: 'operator' }),
-      })
-    );
+    expect(vi.mocked(emitAuditEvent)).toHaveBeenCalledWith(expect.objectContaining({ action: 'WAR_ROOM_RECONCILIATION_REQUESTED', metadata: expect.objectContaining({ initiatedBy: 'operator' }) }));
   });
 
   it('RECONCILE on READY enqueues WAR_ROOM_RECONCILE and is idempotent (duplicate reuses pending job)', async () => {
     vi.mocked(getCurrentUser).mockResolvedValue({ id: 'admin-1', role: 'ADMIN' } as never);
-    vi.mocked(prisma.incidentWarRoom.findUnique as unknown as Mock).mockResolvedValue(
-      baseRoom({ state: 'READY' }) as never
-    );
-    vi.mocked(prisma.backgroundJob.findFirst as unknown as Mock).mockResolvedValue({
-      id: 'existing-job',
-    } as never);
+    vi.mocked(prisma.incidentWarRoom.findUnique as unknown as Mock).mockResolvedValue(baseRoom({ state: 'READY' }) as never);
+    vi.mocked(prisma.backgroundJob.findFirst as unknown as Mock).mockResolvedValue({ id: 'existing-job' } as never);
 
-    const res = await enqueueWarRoomRepair({
-      warRoomId: 'wr-1',
-      action: 'RECONCILE',
-      actorId: 'admin-1',
-    });
+    const res = await enqueueWarRoomRepair({ warRoomId: 'wr-1', action: 'RECONCILE', actorId: 'admin-1' });
     expect(res.accepted).toBe(true);
     expect(res.jobId).toBe('existing-job');
     expect(res.jobType).toBe('WAR_ROOM_RECONCILE');
@@ -744,20 +524,12 @@ describe('repair — UI → Admin API → RBAC+state → enqueue canonical durab
 
   it('RETRY_PROJECTION increments projection only when READY/CLOSING and dedupes by version', async () => {
     vi.mocked(getCurrentUser).mockResolvedValue({ id: 'admin-1', role: 'ADMIN' } as never);
-    vi.mocked(prisma.incidentWarRoom.findUnique as unknown as Mock).mockResolvedValue(
-      baseRoom({ state: 'READY', projectionVersion: 4 }) as never
-    );
+    vi.mocked(prisma.incidentWarRoom.findUnique as unknown as Mock).mockResolvedValue(baseRoom({ state: 'READY', projectionVersion: 4 }) as never);
     vi.mocked(requestWarRoomProjectionNeutral as unknown as Mock).mockResolvedValue(5 as never);
     // Helper already enqueued the job; lookup reuses it (no fallback create)
-    vi.mocked(prisma.backgroundJob.findFirst as unknown as Mock).mockResolvedValue({
-      id: 'job-proj',
-    } as never);
+    vi.mocked(prisma.backgroundJob.findFirst as unknown as Mock).mockResolvedValue({ id: 'job-proj' } as never);
 
-    const res = await enqueueWarRoomRepair({
-      warRoomId: 'wr-1',
-      action: 'RETRY_PROJECTION',
-      actorId: 'admin-1',
-    });
+    const res = await enqueueWarRoomRepair({ warRoomId: 'wr-1', action: 'RETRY_PROJECTION', actorId: 'admin-1' });
     expect(res.accepted).toBe(true);
     expect(res.jobType).toBe('WAR_ROOM_PROJECT');
     expect(requestWarRoomProjectionNeutral).toHaveBeenCalledWith('wr-1');
@@ -766,318 +538,163 @@ describe('repair — UI → Admin API → RBAC+state → enqueue canonical durab
 
   it('RETRY_PROJECTION is idempotent — coalesces by warRoomId+projectionVersion', async () => {
     vi.mocked(getCurrentUser).mockResolvedValue({ id: 'admin-1', role: 'ADMIN' } as never);
-    vi.mocked(prisma.incidentWarRoom.findUnique as unknown as Mock).mockResolvedValue(
-      baseRoom({ state: 'READY', projectionVersion: 4 }) as never
-    );
+    vi.mocked(prisma.incidentWarRoom.findUnique as unknown as Mock).mockResolvedValue(baseRoom({ state: 'READY', projectionVersion: 4 }) as never);
     vi.mocked(requestWarRoomProjectionNeutral as unknown as Mock).mockResolvedValue(null as never);
-    vi.mocked(prisma.backgroundJob.findFirst as unknown as Mock).mockResolvedValue({
-      id: 'existing-proj',
-    } as never);
-    const res = await enqueueWarRoomRepair({
-      warRoomId: 'wr-1',
-      action: 'RETRY_PROJECTION',
-      actorId: 'admin-1',
-    });
+    vi.mocked(prisma.backgroundJob.findFirst as unknown as Mock).mockResolvedValue({ id: 'existing-proj' } as never);
+    const res = await enqueueWarRoomRepair({ warRoomId: 'wr-1', action: 'RETRY_PROJECTION', actorId: 'admin-1' });
     expect(res.jobId).toBe('existing-proj');
     expect(requestWarRoomProjectionNeutral).toHaveBeenCalledWith('wr-1');
   });
 
   it('RETRY_PROJECTION rejected when not READY/CLOSING', async () => {
     vi.mocked(getCurrentUser).mockResolvedValue({ id: 'admin-1', role: 'ADMIN' } as never);
-    vi.mocked(prisma.incidentWarRoom.findUnique as unknown as Mock).mockResolvedValue(
-      baseRoom({ state: 'CLOSED' }) as never
-    );
-    const res = await enqueueWarRoomRepair({
-      warRoomId: 'wr-1',
-      action: 'RETRY_PROJECTION',
-      actorId: 'admin-1',
-    });
+    vi.mocked(prisma.incidentWarRoom.findUnique as unknown as Mock).mockResolvedValue(baseRoom({ state: 'CLOSED' }) as never);
+    const res = await enqueueWarRoomRepair({ warRoomId: 'wr-1', action: 'RETRY_PROJECTION', actorId: 'admin-1' });
     expect(res.accepted).toBe(false);
     expect(res.reasonCode).toBe('STATE_NOT_READY');
   });
 
   it('RETRY_PARTICIPANT_SYNC only READY/CLOSING and deduped', async () => {
     vi.mocked(getCurrentUser).mockResolvedValue({ id: 'admin-1', role: 'ADMIN' } as never);
-    vi.mocked(prisma.incidentWarRoom.findUnique as unknown as Mock).mockResolvedValue(
-      baseRoom({ state: 'READY' }) as never
-    );
+    vi.mocked(prisma.incidentWarRoom.findUnique as unknown as Mock).mockResolvedValue(baseRoom({ state: 'READY' }) as never);
     vi.mocked(prisma.backgroundJob.findFirst as unknown as Mock).mockResolvedValue(null);
-    vi.mocked(prisma.backgroundJob.create as unknown as Mock).mockResolvedValue({
-      id: 'job-part',
-    } as never);
-    const ok = await enqueueWarRoomRepair({
-      warRoomId: 'wr-1',
-      action: 'RETRY_PARTICIPANT_SYNC',
-      actorId: 'admin-1',
-    });
+    vi.mocked(prisma.backgroundJob.create as unknown as Mock).mockResolvedValue({ id: 'job-part' } as never);
+    const ok = await enqueueWarRoomRepair({ warRoomId: 'wr-1', action: 'RETRY_PARTICIPANT_SYNC', actorId: 'admin-1' });
     expect(ok.accepted).toBe(true);
     expect(ok.jobType).toBe('WAR_ROOM_PARTICIPANT_SYNC');
 
-    vi.mocked(prisma.backgroundJob.findFirst as unknown as Mock).mockResolvedValue({
-      id: 'existing-part',
-    } as never);
-    const dup = await enqueueWarRoomRepair({
-      warRoomId: 'wr-1',
-      action: 'RETRY_PARTICIPANT_SYNC',
-      actorId: 'admin-1',
-    });
+    vi.mocked(prisma.backgroundJob.findFirst as unknown as Mock).mockResolvedValue({ id: 'existing-part' } as never);
+    const dup = await enqueueWarRoomRepair({ warRoomId: 'wr-1', action: 'RETRY_PARTICIPANT_SYNC', actorId: 'admin-1' });
     expect(dup.jobId).toBe('existing-part');
   });
 
   it('TEST_CONNECTION enqueues RECONCILE probe (never direct Graph) and is idempotent', async () => {
     vi.mocked(getCurrentUser).mockResolvedValue({ id: 'admin-1', role: 'ADMIN' } as never);
-    vi.mocked(prisma.incidentWarRoom.findUnique as unknown as Mock).mockResolvedValue(
-      baseRoom() as never
-    );
+    vi.mocked(prisma.incidentWarRoom.findUnique as unknown as Mock).mockResolvedValue(baseRoom() as never);
     vi.mocked(prisma.backgroundJob.findFirst as unknown as Mock).mockResolvedValue(null);
-    vi.mocked(prisma.backgroundJob.create as unknown as Mock).mockResolvedValue({
-      id: 'job-test',
-    } as never);
-    const res = await enqueueWarRoomRepair({
-      warRoomId: 'wr-1',
-      action: 'TEST_CONNECTION',
-      actorId: 'admin-1',
-    });
+    vi.mocked(prisma.backgroundJob.create as unknown as Mock).mockResolvedValue({ id: 'job-test' } as never);
+    const res = await enqueueWarRoomRepair({ warRoomId: 'wr-1', action: 'TEST_CONNECTION', actorId: 'admin-1' });
     expect(res.jobType).toBe('WAR_ROOM_RECONCILE');
-    expect(vi.mocked(emitAuditEvent)).toHaveBeenCalledWith(
-      expect.objectContaining({ action: 'TEAMS_CHANNEL_VERIFICATION_REQUESTED' })
-    );
-    const payload = vi.mocked(prisma.backgroundJob.create as unknown as Mock).mock.calls[0][0].data
-      .payload;
+    expect(vi.mocked(emitAuditEvent)).toHaveBeenCalledWith(expect.objectContaining({ action: 'TEAMS_CHANNEL_VERIFICATION_REQUESTED' }));
+    const payload = vi.mocked(prisma.backgroundJob.create as unknown as Mock).mock.calls[0][0].data.payload;
     expect(payload.reason).toBe('connection_test');
     const repairSource = fs.readFileSync('src/lib/war-room/operations/repair.ts', 'utf8');
-    expect(repairSource).not.toMatch(
-      /microsoftTeamsGraphRequest|getChannelById|findWarRoomChannel/
-    );
+    expect(repairSource).not.toMatch(/microsoftTeamsGraphRequest|getChannelById|findWarRoomChannel/);
   });
 
   it('REFRESH_PERMISSIONS enqueues RECONCILE with permission_refresh reason and scopes dedupe to that reason', async () => {
     vi.mocked(getCurrentUser).mockResolvedValue({ id: 'admin-1', role: 'ADMIN' } as never);
-    vi.mocked(prisma.incidentWarRoom.findUnique as unknown as Mock).mockResolvedValue(
-      baseRoom() as never
-    );
+    vi.mocked(prisma.incidentWarRoom.findUnique as unknown as Mock).mockResolvedValue(baseRoom() as never);
     vi.mocked(prisma.backgroundJob.findFirst as unknown as Mock).mockResolvedValue(null);
-    vi.mocked(prisma.backgroundJob.create as unknown as Mock).mockResolvedValue({
-      id: 'job-perm',
-    } as never);
-    const res = await enqueueWarRoomRepair({
-      warRoomId: 'wr-1',
-      action: 'REFRESH_PERMISSIONS',
-      actorId: 'admin-1',
-    });
+    vi.mocked(prisma.backgroundJob.create as unknown as Mock).mockResolvedValue({ id: 'job-perm' } as never);
+    const res = await enqueueWarRoomRepair({ warRoomId: 'wr-1', action: 'REFRESH_PERMISSIONS', actorId: 'admin-1' });
     expect(res.accepted).toBe(true);
-    expect(vi.mocked(emitAuditEvent)).toHaveBeenCalledWith(
-      expect.objectContaining({ action: 'TEAMS_PERMISSION_REFRESH_REQUESTED' })
-    );
-    const payload = vi.mocked(prisma.backgroundJob.create as unknown as Mock).mock.calls[0][0].data
-      .payload;
+    expect(vi.mocked(emitAuditEvent)).toHaveBeenCalledWith(expect.objectContaining({ action: 'TEAMS_PERMISSION_REFRESH_REQUESTED' }));
+    const payload = vi.mocked(prisma.backgroundJob.create as unknown as Mock).mock.calls[0][0].data.payload;
     expect(payload.reason).toBe('permission_refresh');
-    const findCall = vi.mocked(prisma.backgroundJob.findFirst as unknown as Mock).mock
-      .calls[0]?.[0];
+    const findCall = vi.mocked(prisma.backgroundJob.findFirst as unknown as Mock).mock.calls[0]?.[0];
     expect(findCall.where.AND).toHaveLength(2);
-    expect(findCall.where.AND[1]).toEqual({
-      payload: { path: ['reason'], equals: 'permission_refresh' },
-    });
+    expect(findCall.where.AND[1]).toEqual({ payload: { path: ['reason'], equals: 'permission_refresh' } });
 
     // A generic reconcile must not swallow an RSC probe — call again still enqueues permission_refresh
     vi.mocked(prisma.backgroundJob.findFirst as unknown as Mock).mockResolvedValueOnce(null);
-    vi.mocked(prisma.backgroundJob.create as unknown as Mock).mockResolvedValue({
-      id: 'job-perm-2',
-    } as never);
-    const res2 = await enqueueWarRoomRepair({
-      warRoomId: 'wr-1',
-      action: 'REFRESH_PERMISSIONS',
-      actorId: 'admin-1',
-    });
+    vi.mocked(prisma.backgroundJob.create as unknown as Mock).mockResolvedValue({ id: 'job-perm-2' } as never);
+    const res2 = await enqueueWarRoomRepair({ warRoomId: 'wr-1', action: 'REFRESH_PERMISSIONS', actorId: 'admin-1' });
     expect(res2.accepted).toBe(true);
     expect(res2.jobId).toBe('job-perm-2');
   });
 
   it('REFRESH_PERMISSIONS reuses pending permission_refresh job (idempotent)', async () => {
     vi.mocked(getCurrentUser).mockResolvedValue({ id: 'admin-1', role: 'ADMIN' } as never);
-    vi.mocked(prisma.incidentWarRoom.findUnique as unknown as Mock).mockResolvedValue(
-      baseRoom() as never
-    );
-    vi.mocked(prisma.backgroundJob.findFirst as unknown as Mock).mockResolvedValue({
-      id: 'existing-perm',
-    } as never);
-    const dup = await enqueueWarRoomRepair({
-      warRoomId: 'wr-1',
-      action: 'REFRESH_PERMISSIONS',
-      actorId: 'admin-1',
-    });
+    vi.mocked(prisma.incidentWarRoom.findUnique as unknown as Mock).mockResolvedValue(baseRoom() as never);
+    vi.mocked(prisma.backgroundJob.findFirst as unknown as Mock).mockResolvedValue({ id: 'existing-perm' } as never);
+    const dup = await enqueueWarRoomRepair({ warRoomId: 'wr-1', action: 'REFRESH_PERMISSIONS', actorId: 'admin-1' });
     expect(dup.jobId).toBe('existing-perm');
     expect(prisma.backgroundJob.create).not.toHaveBeenCalled();
   });
 
   it('RETRY_EXTERNAL_CLEANUP enqueues reconciler lane and is deduped (idempotent)', async () => {
     vi.mocked(getCurrentUser).mockResolvedValue({ id: 'admin-1', role: 'ADMIN' } as never);
-    vi.mocked(prisma.incidentWarRoom.findUnique as unknown as Mock).mockResolvedValue(
-      baseRoom({ state: 'CLOSED', externalCleanupPending: true }) as never
-    );
-    vi.mocked(prisma.backgroundJob.findFirst as unknown as Mock).mockResolvedValue({
-      id: 'existing-cleanup',
-    } as never);
-    const dup = await enqueueWarRoomRepair({
-      warRoomId: 'wr-1',
-      action: 'RETRY_EXTERNAL_CLEANUP',
-      actorId: 'admin-1',
-    });
+    vi.mocked(prisma.incidentWarRoom.findUnique as unknown as Mock).mockResolvedValue(baseRoom({ state: 'CLOSED', externalCleanupPending: true }) as never);
+    vi.mocked(prisma.backgroundJob.findFirst as unknown as Mock).mockResolvedValue({ id: 'existing-cleanup' } as never);
+    const dup = await enqueueWarRoomRepair({ warRoomId: 'wr-1', action: 'RETRY_EXTERNAL_CLEANUP', actorId: 'admin-1' });
     expect(dup.jobId).toBe('existing-cleanup');
     expect(prisma.backgroundJob.create).not.toHaveBeenCalled();
 
     vi.mocked(prisma.backgroundJob.findFirst as unknown as Mock).mockResolvedValue(null);
-    vi.mocked(prisma.backgroundJob.create as unknown as Mock).mockResolvedValue({
-      id: 'job-cleanup',
-    } as never);
-    const res = await enqueueWarRoomRepair({
-      warRoomId: 'wr-1',
-      action: 'RETRY_EXTERNAL_CLEANUP',
-      actorId: 'admin-1',
-    });
+    vi.mocked(prisma.backgroundJob.create as unknown as Mock).mockResolvedValue({ id: 'job-cleanup' } as never);
+    const res = await enqueueWarRoomRepair({ warRoomId: 'wr-1', action: 'RETRY_EXTERNAL_CLEANUP', actorId: 'admin-1' });
     expect(res.jobType).toBe('WAR_ROOM_RECONCILE');
-    expect(vi.mocked(emitAuditEvent)).toHaveBeenCalledWith(
-      expect.objectContaining({ action: 'WAR_ROOM_EXTERNAL_CLEANUP_RETRY_REQUESTED' })
-    );
+    expect(vi.mocked(emitAuditEvent)).toHaveBeenCalledWith(expect.objectContaining({ action: 'WAR_ROOM_EXTERNAL_CLEANUP_RETRY_REQUESTED' }));
   });
 
   it('RETRY_EXTERNAL_CLEANUP rejected when not CLOSED/ARCHIVED or no pending debt (lifecycle race guard)', async () => {
     vi.mocked(getCurrentUser).mockResolvedValue({ id: 'admin-1', role: 'ADMIN' } as never);
-    vi.mocked(prisma.incidentWarRoom.findUnique as unknown as Mock).mockResolvedValue(
-      baseRoom({ state: 'CLOSING', externalCleanupPending: true }) as never
-    );
-    const closing = await enqueueWarRoomRepair({
-      warRoomId: 'wr-1',
-      action: 'RETRY_EXTERNAL_CLEANUP',
-      actorId: 'admin-1',
-    });
+    vi.mocked(prisma.incidentWarRoom.findUnique as unknown as Mock).mockResolvedValue(baseRoom({ state: 'CLOSING', externalCleanupPending: true }) as never);
+    const closing = await enqueueWarRoomRepair({ warRoomId: 'wr-1', action: 'RETRY_EXTERNAL_CLEANUP', actorId: 'admin-1' });
     expect(closing.accepted).toBe(false);
     expect(closing.reasonCode).toBe('NOT_ELIGIBLE');
 
-    vi.mocked(prisma.incidentWarRoom.findUnique as unknown as Mock).mockResolvedValue(
-      baseRoom({ state: 'CLOSED', externalCleanupPending: false }) as never
-    );
-    const noDebt = await enqueueWarRoomRepair({
-      warRoomId: 'wr-1',
-      action: 'RETRY_EXTERNAL_CLEANUP',
-      actorId: 'admin-1',
-    });
+    vi.mocked(prisma.incidentWarRoom.findUnique as unknown as Mock).mockResolvedValue(baseRoom({ state: 'CLOSED', externalCleanupPending: false }) as never);
+    const noDebt = await enqueueWarRoomRepair({ warRoomId: 'wr-1', action: 'RETRY_EXTERNAL_CLEANUP', actorId: 'admin-1' });
     expect(noDebt.accepted).toBe(false);
     expect(noDebt.reasonCode).toBe('NOT_ELIGIBLE');
   });
 
   it('RBAC: requires ADMIN — viewer and responder are rejected', async () => {
-    vi.mocked(getCurrentUser).mockResolvedValue({
-      id: 'viewer-1',
-      role: 'VIEWER',
-      email: 'v@test.test',
-    } as never);
-    vi.mocked(prisma.incidentWarRoom.findUnique as unknown as Mock).mockResolvedValue(
-      baseRoom() as never
-    );
-    const res = await enqueueWarRoomRepair({
-      warRoomId: 'wr-1',
-      action: 'RECONCILE',
-      actorId: 'viewer-1',
-    });
+    vi.mocked(getCurrentUser).mockResolvedValue({ id: 'viewer-1', role: 'VIEWER', email: 'v@test.test' } as never);
+    vi.mocked(prisma.incidentWarRoom.findUnique as unknown as Mock).mockResolvedValue(baseRoom() as never);
+    const res = await enqueueWarRoomRepair({ warRoomId: 'wr-1', action: 'RECONCILE', actorId: 'viewer-1' });
     expect(res.accepted).toBe(false);
     expect(res.reasonCode).toBe('FORBIDDEN');
-    vi.mocked(getCurrentUser).mockResolvedValue({
-      id: 'resp-1',
-      role: 'RESPONDER',
-      email: 'r@test.test',
-    } as never);
-    const resp = await enqueueWarRoomRepair({
-      warRoomId: 'wr-1',
-      action: 'RECONCILE',
-      actorId: 'resp-1',
-    });
+    vi.mocked(getCurrentUser).mockResolvedValue({ id: 'resp-1', role: 'RESPONDER', email: 'r@test.test' } as never);
+    const resp = await enqueueWarRoomRepair({ warRoomId: 'wr-1', action: 'RECONCILE', actorId: 'resp-1' });
     expect(resp.accepted).toBe(false);
     expect(resp.reasonCode).toBe('FORBIDDEN');
-    vi.mocked(getCurrentUser).mockResolvedValue({
-      id: 'admin-1',
-      role: 'ADMIN',
-      email: 'admin@test.test',
-    } as never);
+    vi.mocked(getCurrentUser).mockResolvedValue({ id: 'admin-1', role: 'ADMIN', email: 'admin@test.test' } as never);
     vi.mocked(prisma.backgroundJob.findFirst as unknown as Mock).mockResolvedValue(null);
-    vi.mocked(prisma.backgroundJob.create as unknown as Mock).mockResolvedValue({
-      id: 'job-ok',
-    } as never);
-    const ok = await enqueueWarRoomRepair({
-      warRoomId: 'wr-1',
-      action: 'RECONCILE',
-      actorId: 'admin-1',
-    });
+    vi.mocked(prisma.backgroundJob.create as unknown as Mock).mockResolvedValue({ id: 'job-ok' } as never);
+    const ok = await enqueueWarRoomRepair({ warRoomId: 'wr-1', action: 'RECONCILE', actorId: 'admin-1' });
     expect(ok.accepted).toBe(true);
   });
 
   it('unauthenticated -> UNAUTHORIZED', async () => {
     vi.mocked(getCurrentUser).mockRejectedValue(new Error('Unauthorized'));
-    vi.mocked(prisma.incidentWarRoom.findUnique as unknown as Mock).mockResolvedValue(
-      baseRoom() as never
-    );
-    const res = await enqueueWarRoomRepair({
-      warRoomId: 'wr-1',
-      action: 'RECONCILE',
-      actorId: 'anon',
-    });
+    vi.mocked(prisma.incidentWarRoom.findUnique as unknown as Mock).mockResolvedValue(baseRoom() as never);
+    const res = await enqueueWarRoomRepair({ warRoomId: 'wr-1', action: 'RECONCILE', actorId: 'anon' });
     expect(res.accepted).toBe(false);
     expect(res.reasonCode).toBe('UNAUTHORIZED');
   });
 
   it('audit includes actor/provider/warRoomId/incidentId/action/result/reason/timestamp + operator vs auto', async () => {
     vi.mocked(getCurrentUser).mockResolvedValue({ id: 'admin-1', role: 'ADMIN' } as never);
-    vi.mocked(prisma.incidentWarRoom.findUnique as unknown as Mock).mockResolvedValue(
-      baseRoom() as never
-    );
+    vi.mocked(prisma.incidentWarRoom.findUnique as unknown as Mock).mockResolvedValue(baseRoom() as never);
     vi.mocked(prisma.backgroundJob.findFirst as unknown as Mock).mockResolvedValue(null);
-    vi.mocked(prisma.backgroundJob.create as unknown as Mock).mockResolvedValue({
-      id: 'job-audit',
-    } as never);
-    await enqueueWarRoomRepair({
-      warRoomId: 'wr-1',
-      action: 'RETRY_PARTICIPANT_SYNC',
-      actorId: 'admin-1',
-      actorEmail: 'admin@test.test',
-      reason: 'manual check',
-    });
-    expect(vi.mocked(emitAuditEvent)).toHaveBeenCalledWith(
-      expect.objectContaining({
-        action: 'WAR_ROOM_PARTICIPANT_SYNC_REQUESTED',
-        source: 'UI',
-        metadata: expect.objectContaining({
-          provider: 'MICROSOFT_TEAMS',
-          warRoomId: 'wr-1',
-          incidentId: 'inc-1',
-          action: 'RETRY_PARTICIPANT_SYNC',
-          result: 'accepted',
-          reason: 'manual check',
-          initiatedBy: 'operator',
-          timestamp: expect.any(String),
-        }),
-      })
-    );
-    expect(vi.mocked(addOperationalMetric)).toHaveBeenCalledWith(
-      'opsknight_war_room_reconciliation_total',
-      1,
-      expect.objectContaining({ provider: 'MICROSOFT_TEAMS', result: 'repair_enqueued' })
-    );
+    vi.mocked(prisma.backgroundJob.create as unknown as Mock).mockResolvedValue({ id: 'job-audit' } as never);
+    await enqueueWarRoomRepair({ warRoomId: 'wr-1', action: 'RETRY_PARTICIPANT_SYNC', actorId: 'admin-1', actorEmail: 'admin@test.test', reason: 'manual check' });
+    expect(vi.mocked(emitAuditEvent)).toHaveBeenCalledWith(expect.objectContaining({
+      action: 'WAR_ROOM_PARTICIPANT_SYNC_REQUESTED',
+      source: 'UI',
+      metadata: expect.objectContaining({
+        provider: 'MICROSOFT_TEAMS',
+        warRoomId: 'wr-1',
+        incidentId: 'inc-1',
+        action: 'RETRY_PARTICIPANT_SYNC',
+        result: 'accepted',
+        reason: 'manual check',
+        initiatedBy: 'operator',
+        timestamp: expect.any(String),
+      }),
+    }));
+    expect(vi.mocked(addOperationalMetric)).toHaveBeenCalledWith('opsknight_war_room_reconciliation_total', 1, expect.objectContaining({ provider: 'MICROSOFT_TEAMS', result: 'repair_enqueued' }));
   });
 
   it('disabled integration still allows RECONCILE for triage (does not block enqueue)', async () => {
     vi.mocked(getCurrentUser).mockResolvedValue({ id: 'admin-1', role: 'ADMIN' } as never);
-    vi.mocked(prisma.incidentWarRoom.findUnique as unknown as Mock).mockResolvedValue(
-      baseRoom({ state: 'READY' }) as never
-    );
+    vi.mocked(prisma.incidentWarRoom.findUnique as unknown as Mock).mockResolvedValue(baseRoom({ state: 'READY' }) as never);
     vi.mocked(prisma.backgroundJob.findFirst as unknown as Mock).mockResolvedValue(null);
-    vi.mocked(prisma.backgroundJob.create as unknown as Mock).mockResolvedValue({
-      id: 'job-disabled',
-    } as never);
-    const res = await enqueueWarRoomRepair({
-      warRoomId: 'wr-1',
-      action: 'RECONCILE',
-      actorId: 'admin-1',
-    });
+    vi.mocked(prisma.backgroundJob.create as unknown as Mock).mockResolvedValue({ id: 'job-disabled' } as never);
+    const res = await enqueueWarRoomRepair({ warRoomId: 'wr-1', action: 'RECONCILE', actorId: 'admin-1' });
     expect(res.accepted).toBe(true);
   });
 });
@@ -1127,8 +744,7 @@ describe('Teams adapter — provider raw state → neutral (Graph codes → heal
   beforeEach(() => vi.clearAllMocks());
 
   it('probeMicrosoftTeamsChannelHealth maps Graph MISSING_PERMISSION to PERMISSION_ERROR (DEGRADED path)', async () => {
-    const { probeMicrosoftTeamsChannelHealth } =
-      await import('@/lib/war-room/providers/microsoft-teams/operations');
+    const { probeMicrosoftTeamsChannelHealth } = await import('@/lib/war-room/providers/microsoft-teams/operations');
     vi.mocked(prisma.incidentWarRoom.findUnique as unknown as Mock).mockResolvedValue({
       id: 'wr-1',
       provider: 'MICROSOFT_TEAMS',
@@ -1138,19 +754,14 @@ describe('Teams adapter — provider raw state → neutral (Graph codes → heal
       incidentId: 'inc-1',
       generation: 1,
     } as never);
-    vi.mocked(getChannelById).mockResolvedValue({
-      ok: false,
-      code: 'MISSING_PERMISSION',
-      message: 'Missing RSC',
-    } as never);
+    vi.mocked(getChannelById).mockResolvedValue({ ok: false, code: 'MISSING_PERMISSION', message: 'Missing RSC' } as never);
     const out = await probeMicrosoftTeamsChannelHealth('wr-1');
     expect(out.health).toBe('PERMISSION_ERROR');
     expect(out.code).toBe('MISSING_PERMISSION');
   });
 
   it('maps 404/ok-null to MISSING (DRIFTED path) and never collapses transient to MISSING', async () => {
-    const { probeMicrosoftTeamsChannelHealth } =
-      await import('@/lib/war-room/providers/microsoft-teams/operations');
+    const { probeMicrosoftTeamsChannelHealth } = await import('@/lib/war-room/providers/microsoft-teams/operations');
     vi.mocked(prisma.incidentWarRoom.findUnique as unknown as Mock).mockResolvedValue({
       id: 'wr-1',
       provider: 'MICROSOFT_TEAMS',
@@ -1168,23 +779,8 @@ describe('Teams adapter — provider raw state → neutral (Graph codes → heal
 
   it('preserves per-installation correlation — neutral snapshot does not aggregate away a broken Team', async () => {
     const strategies = [
-      toOperationalSnapshot(
-        snapshotInput({
-          id: 'wr-a',
-          destinationEnabled: true,
-          installationEnabled: true,
-          installCountForProvider: 2,
-        })
-      ),
-      toOperationalSnapshot(
-        snapshotInput({
-          id: 'wr-b',
-          destinationEnabled: false,
-          providerChannelId: 'ch',
-          installationEnabled: true,
-          installCountForProvider: 2,
-        })
-      ),
+      toOperationalSnapshot(snapshotInput({ id: 'wr-a', destinationEnabled: true, installationEnabled: true, installCountForProvider: 2 })),
+      toOperationalSnapshot(snapshotInput({ id: 'wr-b', destinationEnabled: false, providerChannelId: 'ch', installationEnabled: true, installCountForProvider: 2 })),
     ];
     expect(strategies[0].operationalHealth).toBe('HEALTHY');
     expect(strategies[1].operationalHealth).toBe('UNAVAILABLE');
@@ -1197,109 +793,41 @@ describe('Teams adapter — provider raw state → neutral (Graph codes → heal
 // ── State-specific matrix ───────────────────────────────────────────────
 describe('health matrix — READY / AMBIGUOUS / CLOSING / CLOSED + cleanup', () => {
   it('READY current projection + present participants -> HEALTHY', () => {
-    expect(
-      toOperationalSnapshot(
-        snapshotInput({
-          state: 'READY',
-          health: 'HEALTHY' as never,
-          projectionVersion: 3,
-          lastProjectedVersion: 3,
-          participantDrift: 0,
-        })
-      ).operationalHealth
-    ).toBe('HEALTHY');
+    expect(toOperationalSnapshot(snapshotInput({ state: 'READY', health: 'HEALTHY' as never, projectionVersion: 3, lastProjectedVersion: 3, participantDrift: 0 })).operationalHealth).toBe('HEALTHY');
   });
 
   it('READY behind projection -> DEGRADED (lag)', () => {
-    expect(
-      toOperationalSnapshot(
-        snapshotInput({ state: 'READY', projectionVersion: 5, lastProjectedVersion: 3 })
-      ).operationalHealth
-    ).toBe('DEGRADED');
+    expect(toOperationalSnapshot(snapshotInput({ state: 'READY', projectionVersion: 5, lastProjectedVersion: 3 })).operationalHealth).toBe('DEGRADED');
   });
 
   it('READY with participant drift -> DEGRADED', () => {
-    expect(
-      toOperationalSnapshot(snapshotInput({ state: 'READY', participantDrift: 2 }))
-        .operationalHealth
-    ).toBe('DEGRADED');
+    expect(toOperationalSnapshot(snapshotInput({ state: 'READY', participantDrift: 2 })).operationalHealth).toBe('DEGRADED');
   });
 
   it('AMBIGUOUS with provisioningToken — reconcilable via provisioning reconciliationOnly', async () => {
-    vi.mocked(getCurrentUser).mockResolvedValue({
-      id: 'admin-1',
-      role: 'ADMIN',
-      email: 'a@t.test',
-    } as never);
-    vi.mocked(prisma.incidentWarRoom.findUnique as unknown as Mock).mockResolvedValue({
-      id: 'wr-1',
-      incidentId: 'inc-1',
-      provider: 'MICROSOFT_TEAMS',
-      state: 'AMBIGUOUS',
-      health: 'HEALTHY',
-      provisioningToken: 'tok-amb',
-      projectionVersion: 1,
-      externalCleanupPending: false,
-      destinationId: null,
-    } as never);
+    vi.mocked(getCurrentUser).mockResolvedValue({ id: 'admin-1', role: 'ADMIN', email: 'a@t.test' } as never);
+    vi.mocked(prisma.incidentWarRoom.findUnique as unknown as Mock).mockResolvedValue({ id: 'wr-1', incidentId: 'inc-1', provider: 'MICROSOFT_TEAMS', state: 'AMBIGUOUS', health: 'HEALTHY', provisioningToken: 'tok-amb', projectionVersion: 1, externalCleanupPending: false, destinationId: null } as never);
     vi.mocked(prisma.backgroundJob.findFirst as unknown as Mock).mockResolvedValue(null);
-    vi.mocked(prisma.backgroundJob.create as unknown as Mock).mockResolvedValue({
-      id: 'job-amb',
-    } as never);
-    const res = await enqueueWarRoomRepair({
-      warRoomId: 'wr-1',
-      action: 'RECONCILE',
-      actorId: 'admin-1',
-    });
+    vi.mocked(prisma.backgroundJob.create as unknown as Mock).mockResolvedValue({ id: 'job-amb' } as never);
+    const res = await enqueueWarRoomRepair({ warRoomId: 'wr-1', action: 'RECONCILE', actorId: 'admin-1' });
     expect(res.jobType).toBe('WAR_ROOM_PROVISION');
   });
 
   it('AMBIGUOUS without token is not reconcilable as provisioning — falls to state gate', async () => {
-    vi.mocked(getCurrentUser).mockResolvedValue({
-      id: 'admin-1',
-      role: 'ADMIN',
-      email: 'a@t.test',
-    } as never);
-    vi.mocked(prisma.incidentWarRoom.findUnique as unknown as Mock).mockResolvedValue({
-      id: 'wr-1',
-      incidentId: 'inc-1',
-      provider: 'MICROSOFT_TEAMS',
-      state: 'AMBIGUOUS',
-      health: 'HEALTHY',
-      provisioningToken: null,
-      projectionVersion: 1,
-      externalCleanupPending: false,
-      destinationId: null,
-    } as never);
-    const res = await enqueueWarRoomRepair({
-      warRoomId: 'wr-1',
-      action: 'RECONCILE',
-      actorId: 'admin-1',
-    });
+    vi.mocked(getCurrentUser).mockResolvedValue({ id: 'admin-1', role: 'ADMIN', email: 'a@t.test' } as never);
+    vi.mocked(prisma.incidentWarRoom.findUnique as unknown as Mock).mockResolvedValue({ id: 'wr-1', incidentId: 'inc-1', provider: 'MICROSOFT_TEAMS', state: 'AMBIGUOUS', health: 'HEALTHY', provisioningToken: null, projectionVersion: 1, externalCleanupPending: false, destinationId: null } as never);
+    const res = await enqueueWarRoomRepair({ warRoomId: 'wr-1', action: 'RECONCILE', actorId: 'admin-1' });
     expect(res.accepted).toBe(false);
     expect(res.reasonCode).toBe('STATE_NOT_RECONCILABLE');
   });
 
   it('CLOSING with providerChannelId -> not drifted; without -> DRIFTED (orphan) but still reconcilable', () => {
-    expect(
-      toOperationalSnapshot(snapshotInput({ state: 'CLOSING', providerChannelId: '19:ch' }))
-        .operationalHealth
-    ).toBe('HEALTHY');
-    expect(
-      toOperationalSnapshot(snapshotInput({ state: 'CLOSING', providerChannelId: null }))
-        .operationalHealth
-    ).toBe('DRIFTED');
+    expect(toOperationalSnapshot(snapshotInput({ state: 'CLOSING', providerChannelId: '19:ch' })).operationalHealth).toBe('HEALTHY');
+    expect(toOperationalSnapshot(snapshotInput({ state: 'CLOSING', providerChannelId: null })).operationalHealth).toBe('DRIFTED');
   });
 
   it('CLOSED + externalCleanupPending -> DRIFTED and diagnostics surfaces cleanup pending', () => {
-    const snap = toOperationalSnapshot(
-      snapshotInput({
-        state: 'CLOSED',
-        providerChannelId: null,
-        externalCleanupPending: true,
-        externalCleanupReason: 'CLOSE_ORPHAN',
-      })
-    );
+    const snap = toOperationalSnapshot(snapshotInput({ state: 'CLOSED', providerChannelId: null, externalCleanupPending: true, externalCleanupReason: 'CLOSE_ORPHAN' }));
     expect(snap.operationalHealth).toBe('DRIFTED');
     expect(snap.externalCleanupPending).toBe(true);
   });
@@ -1327,24 +855,15 @@ describe('static contracts — no regressions', () => {
   });
 
   it('repair route and lib never import Graph client directly — UI→API→job→engine→adapter only', () => {
-    const repairLib = fs.readFileSync(
-      path.resolve('src/lib/war-room/operations/repair.ts'),
-      'utf8'
-    );
+    const repairLib = fs.readFileSync(path.resolve('src/lib/war-room/operations/repair.ts'), 'utf8');
     expect(repairLib).not.toMatch(/from ['"]@\/lib\/microsoft-teams\/graph/);
     expect(repairLib).not.toMatch(/microsoftTeamsGraphRequest/);
-    const repairRoute = fs.readFileSync(
-      path.resolve('src/app/api/admin/war-rooms/[warRoomId]/repair/route.ts'),
-      'utf8'
-    );
+    const repairRoute = fs.readFileSync(path.resolve('src/app/api/admin/war-rooms/[warRoomId]/repair/route.ts'), 'utf8');
     expect(repairRoute).not.toMatch(/microsoftTeamsGraphRequest|getChannelById/);
   });
 
   it('diagnostics never leaks secrets — no token field is selected from prisma', () => {
-    const diag = fs.readFileSync(
-      path.resolve('src/lib/war-room/operations/diagnostics.ts'),
-      'utf8'
-    );
+    const diag = fs.readFileSync(path.resolve('src/lib/war-room/operations/diagnostics.ts'), 'utf8');
     expect(diag.toLowerCase()).not.toMatch(/clientsecret|botToken|accessToken/);
   });
 });
@@ -1356,25 +875,16 @@ describe('Admin API RBAC — static guard check', () => {
     expect(listRoute).toMatch(/getCurrentUser/);
     expect(listRoute).toMatch(/role !== 'ADMIN'/);
 
-    const diagRoute = fs.readFileSync(
-      path.resolve('src/app/api/admin/war-rooms/[warRoomId]/route.ts'),
-      'utf8'
-    );
+    const diagRoute = fs.readFileSync(path.resolve('src/app/api/admin/war-rooms/[warRoomId]/route.ts'), 'utf8');
     expect(diagRoute).toMatch(/getCurrentUser/);
     expect(diagRoute).toMatch(/role !== 'ADMIN'/);
 
-    const repairRoute = fs.readFileSync(
-      path.resolve('src/app/api/admin/war-rooms/[warRoomId]/repair/route.ts'),
-      'utf8'
-    );
+    const repairRoute = fs.readFileSync(path.resolve('src/app/api/admin/war-rooms/[warRoomId]/repair/route.ts'), 'utf8');
     expect(repairRoute).toMatch(/role !== 'ADMIN'/);
     expect(repairRoute).not.toMatch(/RESPONDER/);
     expect(repairRoute).toMatch(/z\.object|bodySchema/);
 
-    const repairLib = fs.readFileSync(
-      path.resolve('src/lib/war-room/operations/repair.ts'),
-      'utf8'
-    );
+    const repairLib = fs.readFileSync(path.resolve('src/lib/war-room/operations/repair.ts'), 'utf8');
     expect(repairLib).toMatch(/role !== 'ADMIN'/);
     expect(repairLib).not.toMatch(/RESPONDER/);
   });
@@ -1389,11 +899,8 @@ describe('worker — processJob reason routing (enqueue → processJob → engin
 
   it('external_cleanup_retry routes to reconcileTerminalWarRoomDriftForRoom', async () => {
     const { processJob } = await import('@/lib/jobs/queue');
-    const { reconcileTerminalWarRoomDriftForRoom } =
-      await import('@/lib/war-room/terminal-cleanup');
-    vi.mocked(prisma.backgroundJob.updateMany as unknown as Mock).mockResolvedValue({
-      count: 1,
-    } as never);
+    const { reconcileTerminalWarRoomDriftForRoom } = await import('@/lib/war-room/terminal-cleanup');
+    vi.mocked(prisma.backgroundJob.updateMany as unknown as Mock).mockResolvedValue({ count: 1 } as never);
     const ok = await processJob({
       id: 'job-cleanup',
       type: 'WAR_ROOM_RECONCILE',
@@ -1403,9 +910,7 @@ describe('worker — processJob reason routing (enqueue → processJob → engin
       payload: { warRoomId: 'wr-1', reason: 'external_cleanup_retry' },
     } as never);
     expect(ok).toBe(true);
-    expect(vi.mocked(reconcileTerminalWarRoomDriftForRoom as unknown as Mock)).toHaveBeenCalledWith(
-      'wr-1'
-    );
+    expect(vi.mocked(reconcileTerminalWarRoomDriftForRoom as unknown as Mock)).toHaveBeenCalledWith('wr-1');
   });
 
   it('permission_refresh probes full RSC grant set then reconcileWarRoom and emits completion audit', async () => {
@@ -1416,9 +921,7 @@ describe('worker — processJob reason routing (enqueue → processJob → engin
       providerTenantId: 'tenant-1',
       providerContainerId: 'team-1',
     } as never);
-    vi.mocked(prisma.backgroundJob.updateMany as unknown as Mock).mockResolvedValue({
-      count: 1,
-    } as never);
+    vi.mocked(prisma.backgroundJob.updateMany as unknown as Mock).mockResolvedValue({ count: 1 } as never);
     const ok = await processJob({
       id: 'job-perm',
       type: 'WAR_ROOM_RECONCILE',
@@ -1429,12 +932,10 @@ describe('worker — processJob reason routing (enqueue → processJob → engin
     } as never);
     expect(ok).toBe(true);
     const { getTeamsWarRoomRscGrantState } = await import('@/lib/microsoft-teams/client');
-    expect(vi.mocked(getTeamsWarRoomRscGrantState as unknown as Mock)).toHaveBeenCalledWith(
-      expect.objectContaining({
-        tenantId: 'tenant-1',
-        teamId: 'team-1',
-      })
-    );
+    expect(vi.mocked(getTeamsWarRoomRscGrantState as unknown as Mock)).toHaveBeenCalledWith(expect.objectContaining({
+      tenantId: 'tenant-1',
+      teamId: 'team-1',
+    }));
     expect(vi.mocked(reconcileWarRoom as unknown as Mock)).toHaveBeenCalledWith('wr-1');
   });
 
@@ -1442,15 +943,9 @@ describe('worker — processJob reason routing (enqueue → processJob → engin
     const { processJob } = await import('@/lib/jobs/queue');
     const { reconcileWarRoom } = await import('@/lib/war-room/engine');
     const teamsOps = await import('@/lib/war-room/providers/microsoft-teams/operations');
-    const probeSpy = vi
-      .spyOn(teamsOps, 'probeMicrosoftTeamsChannelHealth')
-      .mockResolvedValue({ health: 'HEALTHY', code: null, message: null } as never);
-    vi.mocked(prisma.incidentWarRoom.findUnique as unknown as Mock).mockResolvedValue({
-      provider: 'MICROSOFT_TEAMS',
-    } as never);
-    vi.mocked(prisma.backgroundJob.updateMany as unknown as Mock).mockResolvedValue({
-      count: 1,
-    } as never);
+    const probeSpy = vi.spyOn(teamsOps, 'probeMicrosoftTeamsChannelHealth').mockResolvedValue({ health: 'HEALTHY', code: null, message: null } as never);
+    vi.mocked(prisma.incidentWarRoom.findUnique as unknown as Mock).mockResolvedValue({ provider: 'MICROSOFT_TEAMS' } as never);
+    vi.mocked(prisma.backgroundJob.updateMany as unknown as Mock).mockResolvedValue({ count: 1 } as never);
     const ok = await processJob({
       id: 'job-probe',
       type: 'WAR_ROOM_RECONCILE',
@@ -1468,9 +963,7 @@ describe('worker — processJob reason routing (enqueue → processJob → engin
   it('generic reconcile (no reason) still calls reconcileWarRoom', async () => {
     const { processJob } = await import('@/lib/jobs/queue');
     const { reconcileWarRoom } = await import('@/lib/war-room/engine');
-    vi.mocked(prisma.backgroundJob.updateMany as unknown as Mock).mockResolvedValue({
-      count: 1,
-    } as never);
+    vi.mocked(prisma.backgroundJob.updateMany as unknown as Mock).mockResolvedValue({ count: 1 } as never);
     const ok = await processJob({
       id: 'job-generic',
       type: 'WAR_ROOM_RECONCILE',
@@ -1489,8 +982,7 @@ describe('fleet aggregate — unbounded health summary', () => {
   beforeEach(() => vi.clearAllMocks());
 
   it('getWarRoomFleetOperationalSummary reflects health outside the latest-100 window', async () => {
-    const { getWarRoomFleetOperationalSummary } =
-      await import('@/lib/war-room/operations/diagnostics');
+    const { getWarRoomFleetOperationalSummary } = await import('@/lib/war-room/operations/diagnostics');
     // 101 rooms: 100 HEALTHY + 1 DRIFTED past the window
     const rooms = Array.from({ length: 101 }, (_, i) => ({
       id: `wr-${i}`,
@@ -1516,14 +1008,8 @@ describe('fleet aggregate — unbounded health summary', () => {
       participants: [],
     }));
     vi.mocked(prisma.incidentWarRoom.findMany as unknown as Mock).mockResolvedValue(rooms as never);
-    vi.mocked(
-      (prisma as unknown as { microsoftTeamsConfig: { findFirst: Mock } }).microsoftTeamsConfig
-        .findFirst as unknown as Mock
-    ).mockResolvedValue({ enabled: true, warRoomsEnabled: true } as never);
-    vi.mocked(
-      (prisma as unknown as { microsoftTeamsInstallation: { count: Mock } })
-        .microsoftTeamsInstallation.count as unknown as Mock
-    ).mockResolvedValue(1 as never);
+    vi.mocked((prisma as unknown as { microsoftTeamsConfig: { findFirst: Mock } }).microsoftTeamsConfig.findFirst as unknown as Mock).mockResolvedValue({ enabled: true, warRoomsEnabled: true } as never);
+    vi.mocked((prisma as unknown as { microsoftTeamsInstallation: { count: Mock } }).microsoftTeamsInstallation.count as unknown as Mock).mockResolvedValue(1 as never);
     const summary = await getWarRoomFleetOperationalSummary({ provider: 'MICROSOFT_TEAMS' });
     const teams = summary.find(s => s.provider === 'MICROSOFT_TEAMS')!;
     expect(teams.totalRooms).toBe(101);
@@ -1532,10 +1018,7 @@ describe('fleet aggregate — unbounded health summary', () => {
   });
 
   it('enqueue audit uses REQUESTED (not succeeded) — success is only at worker completion', async () => {
-    const repairSource = fs.readFileSync(
-      path.resolve('src/lib/war-room/operations/repair.ts'),
-      'utf8'
-    );
+    const repairSource = fs.readFileSync(path.resolve('src/lib/war-room/operations/repair.ts'), 'utf8');
     expect(repairSource).toMatch(/TEAMS_CHANNEL_VERIFICATION_REQUESTED/);
     expect(repairSource).toMatch(/TEAMS_PERMISSION_REFRESH_REQUESTED/);
     expect(repairSource).not.toMatch(/TEAMS_CONNECTION_TESTED/);

@@ -46,10 +46,7 @@ describe('API activity query', () => {
 
     const where = buildApiActivityWhere(parsed) as { AND: Array<Record<string, unknown>> };
     expect(where.AND[1]).toEqual({
-      OR: [
-        { createdAt: { lt: row.createdAt } },
-        { createdAt: row.createdAt, id: { lt: 'audit_9' } },
-      ],
+      OR: [{ createdAt: { lt: row.createdAt } }, { createdAt: row.createdAt, id: { lt: 'audit_9' } }],
     });
   });
 

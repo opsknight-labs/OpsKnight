@@ -51,11 +51,7 @@ describe('Policy Step Actions', () => {
       }
     );
     vi.mocked(lockResponderPolicy).mockResolvedValue(undefined);
-    vi.mocked(assertResponderPolicySnapshotSafe).mockResolvedValue({
-      id: 'pol-1',
-      name: 'Policy',
-      steps: [],
-    });
+    vi.mocked(assertResponderPolicySnapshotSafe).mockResolvedValue({ id: 'pol-1', name: 'Policy', steps: [] });
     prismaMock.user.count.mockResolvedValue(1);
     prismaMock.team.count.mockResolvedValue(1);
     prismaMock.onCallSchedule.count.mockResolvedValue(1);

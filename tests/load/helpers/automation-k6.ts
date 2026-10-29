@@ -42,15 +42,10 @@ export function controlledK6Launch(
     throw new Error('Invalid controlled load execution identity');
   const octets = clusterIp?.split('.').map(Number);
   if (
-    !clusterIp ||
-    !/^\d+\.\d+\.\d+\.\d+$/.test(clusterIp) ||
-    !octets ||
+    !clusterIp || !/^\d+\.\d+\.\d+\.\d+$/.test(clusterIp) || !octets ||
     octets.some(value => !Number.isInteger(value) || value < 0 || value > 255) ||
-    !(
-      octets[0] === 10 ||
-      (octets[0] === 172 && octets[1] >= 16 && octets[1] <= 31) ||
-      (octets[0] === 192 && octets[1] === 168)
-    )
+    !(octets[0] === 10 || (octets[0] === 172 && octets[1] >= 16 && octets[1] <= 31) ||
+      (octets[0] === 192 && octets[1] === 168))
   )
     throw new Error('In-cluster transport requires the owned service ClusterIP');
   const summaryPath = `/work/results/${runId}.json`;

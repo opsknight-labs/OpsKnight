@@ -27,12 +27,8 @@ vi.mock('@/lib/prisma', () => {
     incident,
     incidentEvent,
     $transaction: vi.fn(
-      async (
-        callback: (tx: {
-          incident: typeof incident;
-          incidentEvent: typeof incidentEvent;
-        }) => unknown
-      ) => callback({ incident, incidentEvent })
+      async (callback: (tx: { incident: typeof incident; incidentEvent: typeof incidentEvent }) => unknown) =>
+        callback({ incident, incidentEvent })
     ),
     auditLog: { create: vi.fn() },
     systemSettings: { findUnique: vi.fn(), upsert: vi.fn() },

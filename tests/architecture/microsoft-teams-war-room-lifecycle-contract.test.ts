@@ -14,9 +14,9 @@ describe('Microsoft Teams war-room lifecycle contract', () => {
     expect(effects).toContain("kind: 'TRIGGER'");
     expect(effects).toContain("kind: 'ENSURE'");
     expect(effects).toContain("kind: 'ARCHIVE'");
-    expect(effects).not.toContain('war-room/microsoft-teams');
-    expect(effects).not.toContain('war-room/participants');
-    expect(effects).not.toContain('war-room/projection');
+    expect(effects).not.toContain("war-room/microsoft-teams");
+    expect(effects).not.toContain("war-room/participants");
+    expect(effects).not.toContain("war-room/projection");
     expect(effects).not.toContain('createChannel(');
     expect(actions).not.toContain('requestMicrosoftTeamsWarRoom(');
     expect(actions).not.toContain('handleIncidentWarRoomEvent(');
@@ -57,16 +57,12 @@ describe('Microsoft Teams war-room lifecycle contract', () => {
     };
     const teams = readFacadeOrCanonical();
     expect(teams).toContain("lastErrorCode: 'INCIDENT_RESOLVED_DURING_CREATE'");
-    expect(teams).toContain(
-      'const token = alreadyReconciliationOnly ? prior.provisioningToken! : crypto.randomUUID()'
-    );
+    expect(teams).toContain('const token = alreadyReconciliationOnly ? prior.provisioningToken! : crypto.randomUUID()');
     expect(teams).toContain('reconciliationOnly: true');
     expect(teams).toContain('createAttemptedAt: { not: null }');
     expect(teams).toContain('createAttemptedAt: null');
     expect(teams).toContain('if (room.createAttemptedAt)');
-    expect(teams).toContain(
-      'A prior Teams channel-create may have succeeded; reconciling by marker only.'
-    );
+    expect(teams).toContain('A prior Teams channel-create may have succeeded; reconciling by marker only.');
     const firstAttempted = teams.indexOf('createAttemptedAt: { not: null }');
     const safeFailure = teams.indexOf('createAttemptedAt: null');
     const secondAttempted = teams.indexOf('createAttemptedAt: { not: null }', firstAttempted + 1);
@@ -80,7 +76,7 @@ describe('Microsoft Teams war-room lifecycle contract', () => {
     expect(repository).toContain("const resolved = current.incident.status === 'RESOLVED'");
     // Any RESOLVED channel must adopt as CLOSING (never direct CLOSED) so the
     // durable CLOSING → terminal projection → provider archive lifecycle owns it.
-    expect(repository).toContain('const shouldClose = resolved');
+    expect(repository).toContain("const shouldClose = resolved");
     expect(repository).toContain("state: shouldClose ? 'CLOSING' : 'READY'");
     expect(repository).toContain("return shouldClose ? 'CLOSING' : 'READY'");
     expect(repository).toContain('Never adopt a late-created channel directly as CLOSED');

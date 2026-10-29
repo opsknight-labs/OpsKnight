@@ -8,11 +8,12 @@ networkPolicy:
     - 2525
 
 secrets:
-  nextauthSecret: 'load_cert_nextauth_secret_32_bytes_minimum_value_0123456789'
+  nextauthSecret: "load_cert_nextauth_secret_32_bytes_minimum_value_0123456789"
 
 extraEnv:
   - name: OPSKNIGHT_LOAD_TEST_ALLOW_HOSTS
-    value: 'host.docker.internal,10.0.2.2,127.0.0.1,opsknight-emulator'
+    value: "host.docker.internal,10.0.2.2,127.0.0.1,opsknight-emulator"
 
 postgresql:
-  password: 'devpassword'
+  password: "devpassword"
+

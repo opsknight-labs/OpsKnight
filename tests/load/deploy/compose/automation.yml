@@ -18,24 +18,15 @@ services:
     command:
       [
         postgres,
-        '-c',
-        'max_connections=${AUTOMATION_POSTGRES_MAX_CONNECTIONS:-300}',
-        '-c',
-        'shared_buffers=512MB',
-        '-c',
-        'work_mem=16MB',
-        '-c',
-        'maintenance_work_mem=128MB',
-        '-c',
-        'wal_buffers=64MB',
-        '-c',
-        'checkpoint_completion_target=0.9',
-        '-c',
-        'checkpoint_timeout=15min',
-        '-c',
-        'max_wal_size=4GB',
-        '-c',
-        'min_wal_size=512MB',
+        '-c', 'max_connections=${AUTOMATION_POSTGRES_MAX_CONNECTIONS:-300}',
+        '-c', 'shared_buffers=512MB',
+        '-c', 'work_mem=16MB',
+        '-c', 'maintenance_work_mem=128MB',
+        '-c', 'wal_buffers=64MB',
+        '-c', 'checkpoint_completion_target=0.9',
+        '-c', 'checkpoint_timeout=15min',
+        '-c', 'max_wal_size=4GB',
+        '-c', 'min_wal_size=512MB',
       ]
     environment:
       POSTGRES_USER: automation

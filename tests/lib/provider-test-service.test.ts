@@ -1,9 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import {
-  executeProviderTest,
-  prepareProviderTestIntent,
-  resolveTestNotificationOutcome,
-} from '@/lib/provider-test-service';
+import { executeProviderTest, prepareProviderTestIntent, resolveTestNotificationOutcome } from '@/lib/provider-test-service';
 import prisma from '@/lib/prisma';
 import { enqueueCentralNotification } from '@/lib/notification-control-plane';
 
@@ -256,11 +252,9 @@ describe('Provider Test Service', () => {
       await expect(prepareProviderTestIntent('twilio', noPhone, 'test-sms')).rejects.toMatchObject({
         code: 'VALIDATION_FAILED',
       });
-      await expect(prepareProviderTestIntent('whatsapp', noPhone, 'test-wa')).rejects.toMatchObject(
-        {
-          code: 'VALIDATION_FAILED',
-        }
-      );
+      await expect(prepareProviderTestIntent('whatsapp', noPhone, 'test-wa')).rejects.toMatchObject({
+        code: 'VALIDATION_FAILED',
+      });
       expect((await executeProviderTest('twilio', noPhone)).success).toBe(false);
       expect((await executeProviderTest('whatsapp', noPhone)).success).toBe(false);
       expect(enqueueCentralNotification).not.toHaveBeenCalled();
@@ -328,10 +322,7 @@ describe('Provider Test Service', () => {
         ],
       } as never);
 
-      const result = await executeProviderTest('resend', {
-        ...adminUser,
-        name: '<script>alert(1)</script>',
-      });
+      const result = await executeProviderTest('resend', { ...adminUser, name: '<script>alert(1)</script>' });
 
       expect(result).toMatchObject({
         status: 'ACCEPTED',

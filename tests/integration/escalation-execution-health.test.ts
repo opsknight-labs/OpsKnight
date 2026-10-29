@@ -15,10 +15,7 @@ async function job(
       attempts: status === 'FAILED' ? 3 : 1,
       maxAttempts: 3,
       scheduledAt: new Date(),
-      error:
-        status === 'FAILED'
-          ? 'Job timed out in PROCESSING state after exceeding maxAttempts'
-          : null,
+      error: status === 'FAILED' ? 'Job timed out in PROCESSING state after exceeding maxAttempts' : null,
       failedAt: status === 'FAILED' ? new Date() : null,
       completedAt: status === 'COMPLETED' ? new Date() : null,
       payload: {
@@ -46,20 +43,8 @@ describe('escalation execution health (PostgreSQL)', () => {
         name: 'Two step',
         steps: {
           create: [
-            {
-              stepOrder: 0,
-              delayMinutes: 0,
-              targetType: 'USER',
-              targetUserId: user.id,
-              notificationChannels: ['EMAIL'],
-            },
-            {
-              stepOrder: 1,
-              delayMinutes: 1,
-              targetType: 'USER',
-              targetUserId: user.id,
-              notificationChannels: ['EMAIL'],
-            },
+            { stepOrder: 0, delayMinutes: 0, targetType: 'USER', targetUserId: user.id, notificationChannels: ['EMAIL'] },
+            { stepOrder: 1, delayMinutes: 1, targetType: 'USER', targetUserId: user.id, notificationChannels: ['EMAIL'] },
           ],
         },
       },

@@ -44,9 +44,7 @@ export function createSmtpEmulatorServer(): net.Server {
             messageIdMatch?.[1]?.trim() ||
             crypto
               .createHash('sha256')
-              .update(
-                `${mailFrom}:${recipient}:${subjectMatch?.[1]?.trim() || dataBuffer.slice(0, 200)}`
-              )
+              .update(`${mailFrom}:${recipient}:${subjectMatch?.[1]?.trim() || dataBuffer.slice(0, 200)}`)
               .digest('hex');
 
           const decision = await executeProviderEmulatorStep('email', {
@@ -65,9 +63,7 @@ export function createSmtpEmulatorServer(): net.Server {
             return;
           }
           if (decision.allow) {
-            writeLine(
-              `250 2.0.0 OK queued as <${crypto.randomUUID()}@smtp.emulator.opsknight.internal>`
-            );
+            writeLine(`250 2.0.0 OK queued as <${crypto.randomUUID()}@smtp.emulator.opsknight.internal>`);
           } else if (decision.statusCode === 429) {
             writeLine('421 4.7.0 Too many requests, rate limit exceeded');
           } else if (decision.statusCode >= 500) {

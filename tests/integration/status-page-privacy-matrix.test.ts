@@ -124,7 +124,9 @@ describe('status page privacy matrix', () => {
       expect(read(enabled.snapshot)).toBeDefined();
 
       await resetDatabase();
-      const off = Object.fromEntries([toggle, ...(alsoDisable ?? [])].map(field => [field, false]));
+      const off = Object.fromEntries(
+        [toggle, ...(alsoDisable ?? [])].map(field => [field, false])
+      );
       const disabled = await project(off);
       expect(read(disabled.snapshot)).toBeUndefined();
     }

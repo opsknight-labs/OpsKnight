@@ -84,11 +84,7 @@ async function main() {
     for (const run of schedule) {
       await snapshot.restore();
       const environment = await captureControlledEnvironment();
-      await verifyControlledImage(
-        provenance.imageConfigDigest,
-        environment,
-        provenance.loadGenerator
-      );
+      await verifyControlledImage(provenance.imageConfigDigest, environment, provenance.loadGenerator);
       const childTopology = `${topology}-${run.runId}`;
       const childArtifact = path.join(
         'artifacts/load-certification/automation',

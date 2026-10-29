@@ -124,9 +124,7 @@ describe('automation history and service deletion cascade guards', () => {
 
     // Verify service and decision remain intact
     expect(await db.service.findUnique({ where: { id: service.id } })).not.toBeNull();
-    expect(
-      await db.incidentAutomationDecision.findUnique({ where: { incidentId: incident.id } })
-    ).not.toBeNull();
+    expect(await db.incidentAutomationDecision.findUnique({ where: { incidentId: incident.id } })).not.toBeNull();
   });
 
   it('blocks escalation policy deletion when referenced by AutomationVersionPolicyRef or Decision', async () => {

@@ -9,7 +9,10 @@ function expectCentralizedParent(source: string, name: string) {
 
 describe('action-item Jira UX surface contract', () => {
   it('centralizes the Action Item Jira label and capability-aware visibility', () => {
-    const canonical = readFileSync('src/components/action-items/ActionItemJiraContext.tsx', 'utf8');
+    const canonical = readFileSync(
+      'src/components/action-items/ActionItemJiraContext.tsx',
+      'utf8'
+    );
 
     expect(canonical).toContain('Action Item Jira');
     expect(canonical).toContain('jiraCapability.canCreate || jiraCapability.canLink');

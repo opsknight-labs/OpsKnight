@@ -29,10 +29,7 @@ vi.mock('@/lib/actor-metrics', () => ({
     mttd: 4.5,
     mttr: 25.0,
     slaCompliance: 95.5,
-    statusMix: [
-      { status: 'RESOLVED', count: 10 },
-      { status: 'OPEN', count: 2 },
-    ],
+    statusMix: [{ status: 'RESOLVED', count: 10 }, { status: 'OPEN', count: 2 }],
   }),
 }));
 
@@ -147,9 +144,7 @@ describe('API v2 Cross-Team Isolation & Domain Parity', () => {
       (prisma.onCallSchedule.findFirst as any).mockResolvedValueOnce(null);
 
       const req = new NextRequest('http://localhost:3000/api/v2/schedules/sched_secret/on-call');
-      const res = await getScheduleOnCallRoute(req, {
-        params: Promise.resolve({ id: 'sched_secret' }),
-      });
+      const res = await getScheduleOnCallRoute(req, { params: Promise.resolve({ id: 'sched_secret' }) });
 
       expect(res.status).toBe(404);
       const body = await res.json();
@@ -186,9 +181,7 @@ describe('API v2 Cross-Team Isolation & Domain Parity', () => {
       ]);
 
       const req = new NextRequest('http://localhost:3000/api/v2/schedules/sched_alpha/on-call');
-      const res = await getScheduleOnCallRoute(req, {
-        params: Promise.resolve({ id: 'sched_alpha' }),
-      });
+      const res = await getScheduleOnCallRoute(req, { params: Promise.resolve({ id: 'sched_alpha' }) });
 
       expect(res.status).toBe(200);
       const body = await res.json();
@@ -227,7 +220,9 @@ describe('API v2 Cross-Team Isolation & Domain Parity', () => {
       expect((prisma.incident as any).groupBy).toHaveBeenCalledWith(
         expect.objectContaining({
           where: expect.objectContaining({
-            AND: expect.arrayContaining([expect.anything()]),
+            AND: expect.arrayContaining([
+              expect.anything(),
+            ]),
           }),
         })
       );
@@ -282,9 +277,11 @@ describe('API v2 Cross-Team Isolation & Domain Parity', () => {
         })
       );
 
-      expect(enqueueIncidentUpdateSideEffects).toHaveBeenCalledWith(mockTx, 'inc_123', [
-        'INCIDENT_ASSIGNED_TO_TEAM_NOTIFICATION',
-      ]);
+      expect(enqueueIncidentUpdateSideEffects).toHaveBeenCalledWith(
+        mockTx,
+        'inc_123',
+        ['INCIDENT_ASSIGNED_TO_TEAM_NOTIFICATION']
+      );
       expect(enqueueWarRoomSideEffects).toHaveBeenCalledWith(
         mockTx,
         'inc_123',
@@ -303,9 +300,7 @@ describe('API v2 Cross-Team Isolation & Domain Parity', () => {
 
       // Tampering with payload part:
       const [, sig] = valid.split('.');
-      const tamperedPayload = Buffer.from(
-        JSON.stringify({ id: 'inc_hacked', createdAt: '2026-10-13T12:00:00.000Z' })
-      ).toString('base64url');
+      const tamperedPayload = Buffer.from(JSON.stringify({ id: 'inc_hacked', createdAt: '2026-10-13T12:00:00.000Z' })).toString('base64url');
       const tamperedCursor = `${tamperedPayload}.${sig}`;
 
       expect(() => decodeCursor(tamperedCursor)).toThrowError();

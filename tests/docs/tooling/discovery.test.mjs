@@ -2,11 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { routeFromFile } from '../../../scripts/docs/discovery-lib.mjs';
 import { inspectConfig } from '../../../scripts/docs/inspect-config.mjs';
-import {
-  effectiveRouteSources,
-  exportedHttpMethods,
-  inspectApi,
-} from '../../../scripts/docs/inspect-api.mjs';
+import { effectiveRouteSources, exportedHttpMethods, inspectApi } from '../../../scripts/docs/inspect-api.mjs';
 import { inspectNotificationProviders } from '../../../scripts/docs/inspect-notification-providers.mjs';
 
 describe('documentation route discovery', () => {
@@ -47,15 +43,12 @@ describe('notification provider discovery', () => {
 
 describe('API method discovery', () => {
   it('detects direct, aliased, and re-exported route handlers', () => {
-    assert.deepEqual(
-      exportedHttpMethods(`
+    assert.deepEqual(exportedHttpMethods(`
       export async function GET() {}
       const handler = () => {};
       export { handler as POST, handler as PATCH };
       export { DELETE } from '../shared';
-    `),
-      ['GET', 'POST', 'PATCH', 'DELETE']
-    );
+    `), ['GET', 'POST', 'PATCH', 'DELETE']);
   });
 });
 
@@ -74,24 +67,12 @@ describe('configuration discovery', () => {
 
   it('excludes documentation harness variables from the product contract', () => {
     const variables = inspectConfig();
-    assert.equal(
-      variables.some(entry => entry.name.startsWith('DOCS_')),
-      false
-    );
-    assert.equal(
-      variables.some(entry => entry.sources.some(source => source.startsWith('scripts/docs/'))),
-      false
-    );
+    assert.equal(variables.some(entry => entry.name.startsWith('DOCS_')), false);
+    assert.equal(variables.some(entry => entry.sources.some(source => source.startsWith('scripts/docs/'))), false);
   });
 
   it('classifies each discovered configuration by semantic scope', () => {
-    const allowed = new Set([
-      'PRODUCT_RUNTIME',
-      'PRODUCT_DEPLOYMENT',
-      'BUILD_PUBLIC',
-      'INTERNAL_TOOLING',
-    ]);
-    for (const variable of inspectConfig())
-      assert.ok(allowed.has(variable.semanticClassification), variable.name);
+    const allowed = new Set(['PRODUCT_RUNTIME', 'PRODUCT_DEPLOYMENT', 'BUILD_PUBLIC', 'INTERNAL_TOOLING']);
+    for (const variable of inspectConfig()) assert.ok(allowed.has(variable.semanticClassification), variable.name);
   });
 });

@@ -33,19 +33,9 @@ describe('ProviderCapacitySettings — nested-form regression', () => {
 
   it('save capacity does not submit the enclosing ProviderCard form (type="button")', async () => {
     const fetchSpy = vi.spyOn(globalThis, 'fetch');
-    fetchSpy.mockResolvedValueOnce(
-      new Response(JSON.stringify(mockCapacityResponse()), {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
-      })
-    );
+    fetchSpy.mockResolvedValueOnce(new Response(JSON.stringify(mockCapacityResponse()), { status: 200, headers: { 'Content-Type': 'application/json' } }));
     // second fetch is refresh after save
-    fetchSpy.mockResolvedValue(
-      new Response(JSON.stringify(mockCapacityResponse({ providerCapacities: [] })), {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
-      })
-    );
+    fetchSpy.mockResolvedValue(new Response(JSON.stringify(mockCapacityResponse({ providerCapacities: [] })), { status: 200, headers: { 'Content-Type': 'application/json' } }));
 
     const onFormSubmit = vi.fn(e => e.preventDefault());
     const { container } = render(
@@ -75,10 +65,7 @@ describe('ProviderCapacitySettings — nested-form regression', () => {
 
   it('all actionable buttons inside the capacity card are type="button"', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(
-      new Response(JSON.stringify(mockCapacityResponse()), {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
-      })
+      new Response(JSON.stringify(mockCapacityResponse()), { status: 200, headers: { 'Content-Type': 'application/json' } })
     );
     const { container } = render(<ProviderCapacitySettings providerKey="twilio" />);
 

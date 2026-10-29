@@ -68,34 +68,16 @@ const composeArgs = [
 async function runK6(profile: string, output: string) {
   const runId = String(Date.now());
   const target = controlledK6Target(process.env);
-  const clusterIp =
-    target.mode === 'IN_CLUSTER'
-      ? (
-          await exec('kubectl', [
-            '--context',
-            'kind-opsknight-automation',
-            '-n',
-            target.namespace,
-            'get',
-            'service',
-            'automation',
-            '-o',
-            'jsonpath={.spec.clusterIP}',
-          ])
-        ).stdout.trim()
-      : undefined;
+  const clusterIp = target.mode === 'IN_CLUSTER'
+    ? (await exec('kubectl', [
+        '--context', 'kind-opsknight-automation', '-n', target.namespace,
+        'get', 'service', 'automation', '-o', 'jsonpath={.spec.clusterIP}',
+      ])).stdout.trim()
+    : undefined;
   const launch = controlledK6Launch(process.env, profile, runId, output, clusterIp);
   if (launch.target.mode === 'IN_CLUSTER') {
     const base = ['--context', 'kind-opsknight-automation', '-n', launch.target.namespace];
-    await exec('kubectl', [
-      ...base,
-      'exec',
-      launch.target.pod,
-      '--',
-      'mkdir',
-      '-p',
-      '/work/results',
-    ]);
+    await exec('kubectl', [...base, 'exec', launch.target.pod, '--', 'mkdir', '-p', '/work/results']);
     await exec('kubectl', [
       ...base,
       'cp',
@@ -118,24 +100,25 @@ async function runK6(profile: string, output: string) {
     const transportArtifact = output.replace(/\.json$/, '-transport.json');
     await fs.writeFile(transportArtifact, JSON.stringify(launch.transportConfig, null, 2) + '\n');
     await exec('kubectl', [
-      ...base,
-      'cp',
-      '--no-preserve',
-      transportArtifact,
+      ...base, 'cp', '--no-preserve', transportArtifact,
       `${launch.target.pod}:${launch.transportPath}`,
     ]);
   }
   const recoveryTargets = process.env.AUTOMATION_K8S_NAMESPACE
     ? kubernetesRecoveryTargets(process.env.AUTOMATION_K8S_RUNTIME_MODE)
     : ['web', 'critical', 'general'].map(role => ({ role, selector: '' }));
-  const child = spawn(launch.command, launch.args, {
-    env: {
-      ...process.env,
-      AUTOMATION_LOAD_PROFILE: profile,
-      AUTOMATION_RUN_ID: runId,
-    },
-    stdio: ['ignore', 'pipe', 'pipe'],
-  });
+  const child = spawn(
+    launch.command,
+    launch.args,
+    {
+      env: {
+        ...process.env,
+        AUTOMATION_LOAD_PROFILE: profile,
+        AUTOMATION_RUN_ID: runId,
+      },
+      stdio: ['ignore', 'pipe', 'pipe'],
+    }
+  );
   const chunks: string[] = [];
   child.stdout.on('data', chunk => chunks.push(String(chunk)));
   child.stderr.on('data', chunk => chunks.push(String(chunk)));
@@ -235,9 +218,7 @@ async function main() {
   );
   await db.$executeRawUnsafe(`DELETE FROM "BackgroundJob" WHERE status = 'COMPLETED'`);
   await db.$executeRawUnsafe(`DELETE FROM "InAppNotification"`);
-  await db.$executeRawUnsafe(
-    `DELETE FROM "WarRoomProviderEventDelivery" WHERE status = 'COMPLETED'`
-  );
+  await db.$executeRawUnsafe(`DELETE FROM "WarRoomProviderEventDelivery" WHERE status = 'COMPLETED'`);
   await db.$executeRawUnsafe(
     `DELETE FROM "NotificationDeliveryAttempt" WHERE "notificationId" IN (SELECT id FROM "Notification" WHERE status != 'PENDING')`
   );
@@ -432,9 +413,7 @@ async function main() {
     const recoveryDrainMs = Date.now() - drainStarted;
     await db.$executeRawUnsafe(`DELETE FROM "BackgroundJob" WHERE status = 'COMPLETED'`);
     await db.$executeRawUnsafe(`DELETE FROM "InAppNotification"`);
-    await db.$executeRawUnsafe(
-      `DELETE FROM "WarRoomProviderEventDelivery" WHERE status = 'COMPLETED'`
-    );
+    await db.$executeRawUnsafe(`DELETE FROM "WarRoomProviderEventDelivery" WHERE status = 'COMPLETED'`);
     await db.$executeRawUnsafe(
       `DELETE FROM "NotificationDeliveryAttempt" WHERE "notificationId" IN (SELECT id FROM "Notification" WHERE status != 'PENDING')`
     );

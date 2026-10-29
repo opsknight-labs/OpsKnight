@@ -10,8 +10,8 @@ export interface LoadEscalationRuleFixture {
   targetUserId?: string;
   targetScheduleId?: string;
   targetTeamId?: string;
-  notifyOnlyTeamLead?: boolean;
-  notificationChannels: Array<'EMAIL' | 'SMS' | 'PUSH' | 'SLACK' | 'WEBHOOK' | 'MICROSOFT_TEAMS'>;
+   notifyOnlyTeamLead?: boolean;
+   notificationChannels: Array<'EMAIL' | 'SMS' | 'PUSH' | 'SLACK' | 'WEBHOOK' | 'MICROSOFT_TEAMS'>;
 }
 
 export interface LoadEscalationPolicyFixture {

@@ -35,8 +35,7 @@ vi.mock('@/lib/rbac', () => ({
 }));
 
 vi.mock('@/lib/user-friendly-errors', () => ({
-  getUserFriendlyError: (error: unknown) =>
-    error instanceof Error ? error.message : String(error),
+  getUserFriendlyError: (error: unknown) => (error instanceof Error ? error.message : String(error)),
 }));
 
 vi.mock('@/lib/logger', () => ({

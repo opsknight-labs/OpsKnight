@@ -34,11 +34,7 @@ describe('client log ingestion', () => {
     const request = new NextRequest('http://localhost/api/logs/ingest', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        level: 'warn',
-        message: 'Request failed',
-        context: { route: '/status' },
-      }),
+      body: JSON.stringify({ level: 'warn', message: 'Request failed', context: { route: '/status' } }),
     });
 
     const response = await POST(request);

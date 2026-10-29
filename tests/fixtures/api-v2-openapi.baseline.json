@@ -172,7 +172,10 @@
             "default": 20
           },
           "nextCursor": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "hasMore": {
             "type": "boolean"
@@ -181,7 +184,10 @@
             "type": "integer"
           }
         },
-        "required": ["limit", "hasMore"]
+        "required": [
+          "limit",
+          "hasMore"
+        ]
       },
       "Incident": {
         "type": "object",
@@ -193,19 +199,42 @@
             "type": "string"
           },
           "description": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "status": {
             "type": "string",
-            "enum": ["OPEN", "ACKNOWLEDGED", "RESOLVED", "SNOOZED", "SUPPRESSED"]
+            "enum": [
+              "OPEN",
+              "ACKNOWLEDGED",
+              "RESOLVED",
+              "SNOOZED",
+              "SUPPRESSED"
+            ]
           },
           "priority": {
-            "type": ["string", "null"],
-            "enum": ["P1", "P2", "P3", "P4", "P5", null]
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "P1",
+              "P2",
+              "P3",
+              "P4",
+              "P5",
+              null
+            ]
           },
           "urgency": {
             "type": "string",
-            "enum": ["LOW", "MEDIUM", "HIGH"]
+            "enum": [
+              "LOW",
+              "MEDIUM",
+              "HIGH"
+            ]
           },
           "serviceId": {
             "type": "string"
@@ -222,7 +251,10 @@
             }
           },
           "assignee": {
-            "type": ["object", "null"],
+            "type": [
+              "object",
+              "null"
+            ],
             "properties": {
               "id": {
                 "type": "string"
@@ -236,7 +268,10 @@
             }
           },
           "teamId": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "createdAt": {
             "type": "string",
@@ -247,18 +282,30 @@
             "format": "date-time"
           },
           "acknowledgedAt": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "format": "date-time"
           },
           "resolvedAt": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "format": "date-time"
           },
           "assigneeId": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "team": {
-            "type": ["object", "null"],
+            "type": [
+              "object",
+              "null"
+            ],
             "properties": {
               "id": {
                 "type": "string"
@@ -269,21 +316,41 @@
             }
           },
           "snoozedUntil": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "format": "date-time"
           },
           "slaPausedMs": {
-            "type": ["integer", "null"],
+            "type": [
+              "integer",
+              "null"
+            ],
             "description": "Milliseconds the SLA clock was paused."
           },
           "slaAckElapsedMs": {
-            "type": ["integer", "null"]
+            "type": [
+              "integer",
+              "null"
+            ]
           },
           "slaResolveElapsedMs": {
-            "type": ["integer", "null"]
+            "type": [
+              "integer",
+              "null"
+            ]
           }
         },
-        "required": ["id", "title", "status", "urgency", "serviceId", "createdAt", "updatedAt"]
+        "required": [
+          "id",
+          "title",
+          "status",
+          "urgency",
+          "serviceId",
+          "createdAt",
+          "updatedAt"
+        ]
       },
       "IncidentNote": {
         "type": "object",
@@ -319,7 +386,11 @@
             }
           }
         },
-        "required": ["id", "content", "createdAt"]
+        "required": [
+          "id",
+          "content",
+          "createdAt"
+        ]
       },
       "IncidentTimelineEvent": {
         "type": "object",
@@ -344,7 +415,13 @@
             "format": "date-time"
           }
         },
-        "required": ["id", "incidentId", "type", "message", "createdAt"]
+        "required": [
+          "id",
+          "incidentId",
+          "type",
+          "message",
+          "createdAt"
+        ]
       },
       "Service": {
         "type": "object",
@@ -361,11 +438,20 @@
             "type": "string"
           },
           "description": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "status": {
             "type": "string",
-            "enum": ["OPERATIONAL", "DEGRADED", "PARTIAL_OUTAGE", "MAJOR_OUTAGE", "MAINTENANCE"]
+            "enum": [
+              "OPERATIONAL",
+              "DEGRADED",
+              "PARTIAL_OUTAGE",
+              "MAJOR_OUTAGE",
+              "MAINTENANCE"
+            ]
           },
           "teamId": {
             "type": "string"
@@ -432,7 +518,10 @@
             "type": "string"
           },
           "description": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "memberCount": {
             "type": "integer"
@@ -449,7 +538,12 @@
             "format": "date-time"
           }
         },
-        "required": ["id", "name", "createdAt", "updatedAt"]
+        "required": [
+          "id",
+          "name",
+          "createdAt",
+          "updatedAt"
+        ]
       },
       "User": {
         "type": "object",
@@ -473,17 +567,29 @@
             "type": "string"
           },
           "department": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "jobTitle": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "createdAt": {
             "type": "string",
             "format": "date-time"
           }
         },
-        "required": ["id", "name", "email", "role", "status"]
+        "required": [
+          "id",
+          "name",
+          "email",
+          "role",
+          "status"
+        ]
       },
       "Schedule": {
         "type": "object",
@@ -503,7 +609,10 @@
             "type": "string"
           },
           "description": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "createdAt": {
             "type": "string",
@@ -514,7 +623,13 @@
             "format": "date-time"
           }
         },
-        "required": ["id", "name", "timeZone", "createdAt", "updatedAt"]
+        "required": [
+          "id",
+          "name",
+          "timeZone",
+          "createdAt",
+          "updatedAt"
+        ]
       },
       "EscalationPolicy": {
         "type": "object",
@@ -531,7 +646,10 @@
             "type": "string"
           },
           "description": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "stepCount": {
             "type": "integer"
@@ -554,7 +672,12 @@
             "format": "date-time"
           }
         },
-        "required": ["id", "name", "createdAt", "updatedAt"]
+        "required": [
+          "id",
+          "name",
+          "createdAt",
+          "updatedAt"
+        ]
       },
       "Integration": {
         "type": "object",
@@ -599,7 +722,15 @@
             "format": "date-time"
           }
         },
-        "required": ["id", "name", "type", "enabled", "serviceId", "createdAt", "updatedAt"]
+        "required": [
+          "id",
+          "name",
+          "type",
+          "enabled",
+          "serviceId",
+          "createdAt",
+          "updatedAt"
+        ]
       },
       "Notification": {
         "type": "object",
@@ -614,16 +745,25 @@
             "type": "string"
           },
           "incidentId": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "userId": {
             "type": "string"
           },
           "failureReason": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "sentAt": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "format": "date-time"
           },
           "createdAt": {
@@ -631,7 +771,13 @@
             "format": "date-time"
           }
         },
-        "required": ["id", "channel", "status", "userId", "createdAt"]
+        "required": [
+          "id",
+          "channel",
+          "status",
+          "userId",
+          "createdAt"
+        ]
       },
       "StatusPage": {
         "type": "object",
@@ -652,7 +798,10 @@
             "type": "boolean"
           },
           "description": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "createdAt": {
             "type": "string",
@@ -668,22 +817,41 @@
             "properties": {
               "status": {
                 "type": "string",
-                "enum": ["LIVE", "PUBLISHING", "FAILED", "DISABLED"]
+                "enum": [
+                  "LIVE",
+                  "PUBLISHING",
+                  "FAILED",
+                  "DISABLED"
+                ]
               },
               "revision": {
                 "type": "string"
               },
               "lastError": {
-                "type": ["string", "null"]
+                "type": [
+                  "string",
+                  "null"
+                ]
               },
               "stale": {
                 "type": "boolean"
               }
             },
-            "required": ["status", "revision"]
+            "required": [
+              "status",
+              "revision"
+            ]
           }
         },
-        "required": ["id", "name", "slug", "isDefault", "enabled", "createdAt", "updatedAt"]
+        "required": [
+          "id",
+          "name",
+          "slug",
+          "isDefault",
+          "enabled",
+          "createdAt",
+          "updatedAt"
+        ]
       },
       "StatusPageAnnouncement": {
         "type": "object",
@@ -704,11 +872,17 @@
             "type": "boolean"
           },
           "startDate": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "format": "date-time"
           },
           "endDate": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "format": "date-time"
           },
           "createdAt": {
@@ -716,7 +890,14 @@
             "format": "date-time"
           }
         },
-        "required": ["id", "title", "message", "type", "isActive", "createdAt"]
+        "required": [
+          "id",
+          "title",
+          "message",
+          "type",
+          "isActive",
+          "createdAt"
+        ]
       },
       "Runbook": {
         "type": "object",
@@ -731,7 +912,10 @@
             "type": "string"
           },
           "description": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "version": {
             "type": "integer"
@@ -751,7 +935,14 @@
             "format": "date-time"
           }
         },
-        "required": ["id", "name", "slug", "version", "createdAt", "updatedAt"]
+        "required": [
+          "id",
+          "name",
+          "slug",
+          "version",
+          "createdAt",
+          "updatedAt"
+        ]
       },
       "RunbookExecution": {
         "type": "object",
@@ -777,20 +968,29 @@
             }
           },
           "incidentId": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "status": {
             "type": "string"
           },
           "triggeredByUserId": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "startedAt": {
             "type": "string",
             "format": "date-time"
           },
           "completedAt": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "format": "date-time"
           },
           "steps": {
@@ -800,7 +1000,12 @@
             }
           }
         },
-        "required": ["id", "runbookId", "status", "startedAt"]
+        "required": [
+          "id",
+          "runbookId",
+          "status",
+          "startedAt"
+        ]
       },
       "ServiceAccount": {
         "type": "object",
@@ -815,7 +1020,10 @@
             "type": "string"
           },
           "description": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "status": {
             "type": "string"
@@ -861,18 +1069,28 @@
                 },
                 "status": {
                   "type": "string",
-                  "enum": ["ACTIVE", "EXPIRED", "REVOKED"]
+                  "enum": [
+                    "ACTIVE",
+                    "EXPIRED",
+                    "REVOKED"
+                  ]
                 },
                 "createdAt": {
                   "type": "string",
                   "format": "date-time"
                 },
                 "lastUsedAt": {
-                  "type": ["string", "null"],
+                  "type": [
+                    "string",
+                    "null"
+                  ],
                   "format": "date-time"
                 },
                 "expiresAt": {
-                  "type": ["string", "null"],
+                  "type": [
+                    "string",
+                    "null"
+                  ],
                   "format": "date-time"
                 }
               }
@@ -883,7 +1101,13 @@
             "format": "date-time"
           }
         },
-        "required": ["id", "name", "role", "status", "createdAt"]
+        "required": [
+          "id",
+          "name",
+          "role",
+          "status",
+          "createdAt"
+        ]
       },
       "AuditLog": {
         "type": "object",
@@ -898,29 +1122,52 @@
             "type": "string"
           },
           "entityId": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "actorId": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "actorEmail": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "actorName": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "details": {
-            "type": ["object", "null"]
+            "type": [
+              "object",
+              "null"
+            ]
           },
           "ip": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "createdAt": {
             "type": "string",
             "format": "date-time"
           }
         },
-        "required": ["id", "action", "entityType", "createdAt"]
+        "required": [
+          "id",
+          "action",
+          "entityType",
+          "createdAt"
+        ]
       },
       "MetricsReport": {
         "type": "object",
@@ -929,16 +1176,25 @@
             "type": "integer"
           },
           "serviceId": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "slaCompliancePercent": {
             "type": "number"
           },
           "meanTimeToAcknowledgeMinutes": {
-            "type": ["number", "null"]
+            "type": [
+              "number",
+              "null"
+            ]
           },
           "meanTimeToResolveMinutes": {
-            "type": ["number", "null"]
+            "type": [
+              "number",
+              "null"
+            ]
           },
           "totalIncidents": {
             "type": "integer"
@@ -956,7 +1212,12 @@
             }
           }
         },
-        "required": ["windowDays", "slaCompliancePercent", "totalIncidents", "resolvedIncidents"]
+        "required": [
+          "windowDays",
+          "slaCompliancePercent",
+          "totalIncidents",
+          "resolvedIncidents"
+        ]
       },
       "Postmortem": {
         "type": "object",
@@ -968,29 +1229,52 @@
             "type": "string"
           },
           "title": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "summary": {
             "type": "string"
           },
           "rootCause": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "resolution": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "mitigation": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "impact": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "lessons": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "status": {
             "type": "string",
-            "enum": ["DRAFT", "IN_REVIEW", "PUBLISHED", "ARCHIVED"]
+            "enum": [
+              "DRAFT",
+              "IN_REVIEW",
+              "PUBLISHED",
+              "ARCHIVED"
+            ]
           },
           "isPublic": {
             "type": "boolean"
@@ -1004,7 +1288,15 @@
             "format": "date-time"
           }
         },
-        "required": ["id", "incidentId", "summary", "status", "isPublic", "createdAt", "updatedAt"]
+        "required": [
+          "id",
+          "incidentId",
+          "summary",
+          "status",
+          "isPublic",
+          "createdAt",
+          "updatedAt"
+        ]
       },
       "ActionResult": {
         "type": "object",
@@ -1016,7 +1308,9 @@
             "type": "string"
           }
         },
-        "required": ["success"]
+        "required": [
+          "success"
+        ]
       },
       "IncidentTransition": {
         "type": "object",
@@ -1030,21 +1324,40 @@
           },
           "status": {
             "type": "string",
-            "enum": ["OPEN", "ACKNOWLEDGED", "RESOLVED", "SNOOZED", "SUPPRESSED"]
+            "enum": [
+              "OPEN",
+              "ACKNOWLEDGED",
+              "RESOLVED",
+              "SNOOZED",
+              "SUPPRESSED"
+            ]
           },
           "priority": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "urgency": {
             "type": "string",
-            "enum": ["LOW", "MEDIUM", "HIGH"]
+            "enum": [
+              "LOW",
+              "MEDIUM",
+              "HIGH"
+            ]
           },
           "acknowledgedAt": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "format": "date-time"
           },
           "resolvedAt": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "format": "date-time"
           },
           "updatedAt": {
@@ -1052,7 +1365,13 @@
             "format": "date-time"
           }
         },
-        "required": ["id", "title", "status", "urgency", "updatedAt"]
+        "required": [
+          "id",
+          "title",
+          "status",
+          "urgency",
+          "updatedAt"
+        ]
       },
       "IncidentAssignment": {
         "type": "object",
@@ -1068,13 +1387,22 @@
             "type": "string"
           },
           "assigneeId": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "teamId": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "assignee": {
-            "type": ["object", "null"],
+            "type": [
+              "object",
+              "null"
+            ],
             "properties": {
               "id": {
                 "type": "string"
@@ -1088,7 +1416,10 @@
             }
           },
           "team": {
-            "type": ["object", "null"],
+            "type": [
+              "object",
+              "null"
+            ],
             "properties": {
               "id": {
                 "type": "string"
@@ -1103,7 +1434,11 @@
             "format": "date-time"
           }
         },
-        "required": ["id", "status", "updatedAt"]
+        "required": [
+          "id",
+          "status",
+          "updatedAt"
+        ]
       },
       "ScheduleOnCall": {
         "type": "object",
@@ -1144,13 +1479,20 @@
                   "type": "string"
                 },
                 "timeZone": {
-                  "type": ["string", "null"]
+                  "type": [
+                    "string",
+                    "null"
+                  ]
                 }
               }
             }
           }
         },
-        "required": ["schedule", "at", "onCallUsers"]
+        "required": [
+          "schedule",
+          "at",
+          "onCallUsers"
+        ]
       },
       "ScheduleOverride": {
         "type": "object",
@@ -1165,7 +1507,10 @@
             "type": "string"
           },
           "replacesUserId": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "startDate": {
             "type": "string",
@@ -1180,7 +1525,13 @@
             "format": "date-time"
           }
         },
-        "required": ["id", "scheduleId", "userId", "startDate", "endDate"]
+        "required": [
+          "id",
+          "scheduleId",
+          "userId",
+          "startDate",
+          "endDate"
+        ]
       },
       "RunbookExecutionStarted": {
         "type": "object",
@@ -1195,16 +1546,26 @@
             "type": "string"
           },
           "incidentId": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "serviceId": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "message": {
             "type": "string"
           }
         },
-        "required": ["executionId", "status", "runbookId"]
+        "required": [
+          "executionId",
+          "status",
+          "runbookId"
+        ]
       },
       "RunbookStep": {
         "type": "object",
@@ -1220,10 +1581,16 @@
             "type": "string"
           },
           "riskClass": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "description": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "requiresApproval": {
             "type": "boolean"
@@ -1232,10 +1599,16 @@
             "type": "boolean"
           },
           "timeoutSeconds": {
-            "type": ["integer", "null"]
+            "type": [
+              "integer",
+              "null"
+            ]
           },
           "maxRetries": {
-            "type": ["integer", "null"]
+            "type": [
+              "integer",
+              "null"
+            ]
           },
           "precheckSteps": {
             "type": "array",
@@ -1250,7 +1623,13 @@
             }
           }
         },
-        "required": ["key", "name", "type", "requiresApproval", "requiresAgent"]
+        "required": [
+          "key",
+          "name",
+          "type",
+          "requiresApproval",
+          "requiresAgent"
+        ]
       },
       "ServiceAccountTokenIssued": {
         "type": "object",
@@ -1282,14 +1661,26 @@
                 "format": "date-time"
               },
               "expiresAt": {
-                "type": ["string", "null"],
+                "type": [
+                  "string",
+                  "null"
+                ],
                 "format": "date-time"
               }
             },
-            "required": ["id", "name", "prefix", "scopes", "createdAt"]
+            "required": [
+              "id",
+              "name",
+              "prefix",
+              "scopes",
+              "createdAt"
+            ]
           }
         },
-        "required": ["token", "apiKey"]
+        "required": [
+          "token",
+          "apiKey"
+        ]
       }
     },
     "responses": {
@@ -1364,7 +1755,9 @@
   "paths": {
     "/incidents": {
       "get": {
-        "tags": ["Incidents"],
+        "tags": [
+          "Incidents"
+        ],
         "summary": "List incidents with cursor pagination",
         "parameters": [
           {
@@ -1387,7 +1780,13 @@
             "in": "query",
             "schema": {
               "type": "string",
-              "enum": ["OPEN", "ACKNOWLEDGED", "RESOLVED", "SNOOZED", "SUPPRESSED"]
+              "enum": [
+                "OPEN",
+                "ACKNOWLEDGED",
+                "RESOLVED",
+                "SNOOZED",
+                "SUPPRESSED"
+              ]
             }
           },
           {
@@ -1395,7 +1794,13 @@
             "in": "query",
             "schema": {
               "type": "string",
-              "enum": ["P1", "P2", "P3", "P4", "P5"]
+              "enum": [
+                "P1",
+                "P2",
+                "P3",
+                "P4",
+                "P5"
+              ]
             }
           },
           {
@@ -1403,7 +1808,11 @@
             "in": "query",
             "schema": {
               "type": "string",
-              "enum": ["LOW", "MEDIUM", "HIGH"]
+              "enum": [
+                "LOW",
+                "MEDIUM",
+                "HIGH"
+              ]
             }
           },
           {
@@ -1495,7 +1904,9 @@
         "description": "Requires API scope `incidents:read` (Incidents read)."
       },
       "post": {
-        "tags": ["Incidents"],
+        "tags": [
+          "Incidents"
+        ],
         "summary": "Create incident with idempotency",
         "parameters": [
           {
@@ -1513,34 +1924,63 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": ["title", "serviceId"],
+                "required": [
+                  "title",
+                  "serviceId"
+                ],
                 "properties": {
                   "title": {
                     "type": "string"
                   },
                   "description": {
-                    "type": ["string", "null"]
+                    "type": [
+                      "string",
+                      "null"
+                    ]
                   },
                   "serviceId": {
                     "type": "string"
                   },
                   "urgency": {
                     "type": "string",
-                    "enum": ["LOW", "MEDIUM", "HIGH"],
+                    "enum": [
+                      "LOW",
+                      "MEDIUM",
+                      "HIGH"
+                    ],
                     "default": "HIGH"
                   },
                   "priority": {
-                    "type": ["string", "null"],
-                    "enum": ["P1", "P2", "P3", "P4", "P5", null]
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "enum": [
+                      "P1",
+                      "P2",
+                      "P3",
+                      "P4",
+                      "P5",
+                      null
+                    ]
                   },
                   "assigneeId": {
-                    "type": ["string", "null"]
+                    "type": [
+                      "string",
+                      "null"
+                    ]
                   },
                   "teamId": {
-                    "type": ["string", "null"]
+                    "type": [
+                      "string",
+                      "null"
+                    ]
                   },
                   "dedupKey": {
-                    "type": ["string", "null"]
+                    "type": [
+                      "string",
+                      "null"
+                    ]
                   },
                   "customFields": {
                     "type": "array",
@@ -1579,7 +2019,11 @@
                       "format": "date-time"
                     }
                   },
-                  "required": ["data", "requestId", "timestamp"]
+                  "required": [
+                    "data",
+                    "requestId",
+                    "timestamp"
+                  ]
                 }
               }
             },
@@ -1632,7 +2076,9 @@
     },
     "/incidents/{id}": {
       "get": {
-        "tags": ["Incidents"],
+        "tags": [
+          "Incidents"
+        ],
         "summary": "Get incident details",
         "parameters": [
           {
@@ -1663,7 +2109,11 @@
                       "format": "date-time"
                     }
                   },
-                  "required": ["data", "requestId", "timestamp"]
+                  "required": [
+                    "data",
+                    "requestId",
+                    "timestamp"
+                  ]
                 }
               }
             },
@@ -1709,7 +2159,9 @@
         "description": "Requires API scope `incidents:read` (Incidents read)."
       },
       "patch": {
-        "tags": ["Incidents"],
+        "tags": [
+          "Incidents"
+        ],
         "summary": "Update incident metadata atomically",
         "parameters": [
           {
@@ -1743,22 +2195,48 @@
                     "type": "string"
                   },
                   "description": {
-                    "type": ["string", "null"]
+                    "type": [
+                      "string",
+                      "null"
+                    ]
                   },
                   "priority": {
-                    "type": ["string", "null"],
-                    "enum": ["P1", "P2", "P3", "P4", "P5", null]
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "enum": [
+                      "P1",
+                      "P2",
+                      "P3",
+                      "P4",
+                      "P5",
+                      null
+                    ]
                   },
                   "urgency": {
                     "type": "string",
-                    "enum": ["LOW", "MEDIUM", "HIGH"]
+                    "enum": [
+                      "LOW",
+                      "MEDIUM",
+                      "HIGH"
+                    ]
                   },
                   "status": {
                     "type": "string",
-                    "enum": ["OPEN", "ACKNOWLEDGED", "RESOLVED", "SNOOZED", "SUPPRESSED"]
+                    "enum": [
+                      "OPEN",
+                      "ACKNOWLEDGED",
+                      "RESOLVED",
+                      "SNOOZED",
+                      "SUPPRESSED"
+                    ]
                   },
                   "assigneeId": {
-                    "type": ["string", "null"]
+                    "type": [
+                      "string",
+                      "null"
+                    ]
                   }
                 }
               },
@@ -1789,7 +2267,11 @@
                       "format": "date-time"
                     }
                   },
-                  "required": ["data", "requestId", "timestamp"]
+                  "required": [
+                    "data",
+                    "requestId",
+                    "timestamp"
+                  ]
                 }
               }
             },
@@ -1845,7 +2327,9 @@
     },
     "/incidents/{id}/acknowledge": {
       "post": {
-        "tags": ["Incidents"],
+        "tags": [
+          "Incidents"
+        ],
         "summary": "Acknowledge incident via certified domain lifecycle",
         "parameters": [
           {
@@ -1904,7 +2388,11 @@
                       "format": "date-time"
                     }
                   },
-                  "required": ["data", "requestId", "timestamp"]
+                  "required": [
+                    "data",
+                    "requestId",
+                    "timestamp"
+                  ]
                 }
               }
             },
@@ -1960,7 +2448,9 @@
     },
     "/incidents/{id}/resolve": {
       "post": {
-        "tags": ["Incidents"],
+        "tags": [
+          "Incidents"
+        ],
         "summary": "Resolve incident via certified domain lifecycle",
         "parameters": [
           {
@@ -1994,7 +2484,13 @@
                   },
                   "resolutionKind": {
                     "type": "string",
-                    "enum": ["MANUAL", "SOURCE_RECOVERY", "AUTOMATION", "AUTO_TIMEOUT", "UNKNOWN"]
+                    "enum": [
+                      "MANUAL",
+                      "SOURCE_RECOVERY",
+                      "AUTOMATION",
+                      "AUTO_TIMEOUT",
+                      "UNKNOWN"
+                    ]
                   }
                 }
               },
@@ -2024,7 +2520,11 @@
                       "format": "date-time"
                     }
                   },
-                  "required": ["data", "requestId", "timestamp"]
+                  "required": [
+                    "data",
+                    "requestId",
+                    "timestamp"
+                  ]
                 }
               }
             },
@@ -2080,7 +2580,9 @@
     },
     "/incidents/{id}/assign": {
       "post": {
-        "tags": ["Incidents"],
+        "tags": [
+          "Incidents"
+        ],
         "summary": "Assign incident to a user or team",
         "parameters": [
           {
@@ -2111,10 +2613,16 @@
                 "type": "object",
                 "properties": {
                   "assigneeId": {
-                    "type": ["string", "null"]
+                    "type": [
+                      "string",
+                      "null"
+                    ]
                   },
                   "teamId": {
-                    "type": ["string", "null"]
+                    "type": [
+                      "string",
+                      "null"
+                    ]
                   }
                 }
               },
@@ -2143,7 +2651,11 @@
                       "format": "date-time"
                     }
                   },
-                  "required": ["data", "requestId", "timestamp"]
+                  "required": [
+                    "data",
+                    "requestId",
+                    "timestamp"
+                  ]
                 }
               }
             },
@@ -2199,7 +2711,9 @@
     },
     "/incidents/{id}/notes": {
       "get": {
-        "tags": ["Incidents"],
+        "tags": [
+          "Incidents"
+        ],
         "summary": "List incident notes",
         "parameters": [
           {
@@ -2233,7 +2747,11 @@
                       "format": "date-time"
                     }
                   },
-                  "required": ["data", "requestId", "timestamp"]
+                  "required": [
+                    "data",
+                    "requestId",
+                    "timestamp"
+                  ]
                 }
               }
             },
@@ -2279,7 +2797,9 @@
         "description": "Requires API scope `incidents:read` (Incidents read)."
       },
       "post": {
-        "tags": ["Incidents"],
+        "tags": [
+          "Incidents"
+        ],
         "summary": "Add note to incident",
         "parameters": [
           {
@@ -2308,7 +2828,9 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": ["content"],
+                "required": [
+                  "content"
+                ],
                 "properties": {
                   "content": {
                     "type": "string"
@@ -2340,7 +2862,11 @@
                       "format": "date-time"
                     }
                   },
-                  "required": ["data", "requestId", "timestamp"]
+                  "required": [
+                    "data",
+                    "requestId",
+                    "timestamp"
+                  ]
                 }
               }
             },
@@ -2396,7 +2922,9 @@
     },
     "/incidents/{id}/timeline": {
       "get": {
-        "tags": ["Incidents"],
+        "tags": [
+          "Incidents"
+        ],
         "summary": "List incident timeline events with cursor pagination",
         "parameters": [
           {
@@ -2448,7 +2976,11 @@
                       "format": "date-time"
                     }
                   },
-                  "required": ["data", "requestId", "timestamp"]
+                  "required": [
+                    "data",
+                    "requestId",
+                    "timestamp"
+                  ]
                 }
               }
             },
@@ -2496,7 +3028,9 @@
     },
     "/services": {
       "get": {
-        "tags": ["Services"],
+        "tags": [
+          "Services"
+        ],
         "summary": "List services with cursor pagination",
         "parameters": [
           {
@@ -2526,7 +3060,13 @@
             "in": "query",
             "schema": {
               "type": "string",
-              "enum": ["OPERATIONAL", "DEGRADED", "PARTIAL_OUTAGE", "MAJOR_OUTAGE", "MAINTENANCE"]
+              "enum": [
+                "OPERATIONAL",
+                "DEGRADED",
+                "PARTIAL_OUTAGE",
+                "MAJOR_OUTAGE",
+                "MAINTENANCE"
+              ]
             }
           },
           {
@@ -2562,7 +3102,11 @@
                       "format": "date-time"
                     }
                   },
-                  "required": ["data", "requestId", "timestamp"]
+                  "required": [
+                    "data",
+                    "requestId",
+                    "timestamp"
+                  ]
                 }
               }
             },
@@ -2605,7 +3149,9 @@
         "description": "Requires API scope `services:read` (Services read)."
       },
       "post": {
-        "tags": ["Services"],
+        "tags": [
+          "Services"
+        ],
         "summary": "Create a new service",
         "requestBody": {
           "required": true,
@@ -2613,13 +3159,20 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": ["name", "teamId", "escalationPolicyId"],
+                "required": [
+                  "name",
+                  "teamId",
+                  "escalationPolicyId"
+                ],
                 "properties": {
                   "name": {
                     "type": "string"
                   },
                   "description": {
-                    "type": ["string", "null"]
+                    "type": [
+                      "string",
+                      "null"
+                    ]
                   },
                   "teamId": {
                     "type": "string"
@@ -2669,7 +3222,11 @@
                       "format": "date-time"
                     }
                   },
-                  "required": ["data", "requestId", "timestamp"]
+                  "required": [
+                    "data",
+                    "requestId",
+                    "timestamp"
+                  ]
                 }
               }
             },
@@ -2735,7 +3292,9 @@
     },
     "/services/{id}": {
       "get": {
-        "tags": ["Services"],
+        "tags": [
+          "Services"
+        ],
         "summary": "Get service details",
         "parameters": [
           {
@@ -2766,7 +3325,11 @@
                       "format": "date-time"
                     }
                   },
-                  "required": ["data", "requestId", "timestamp"]
+                  "required": [
+                    "data",
+                    "requestId",
+                    "timestamp"
+                  ]
                 }
               }
             },
@@ -2818,7 +3381,9 @@
         "description": "Requires API scope `services:read` (Services read)."
       },
       "patch": {
-        "tags": ["Services"],
+        "tags": [
+          "Services"
+        ],
         "summary": "Update service details",
         "parameters": [
           {
@@ -2850,7 +3415,10 @@
                     "type": "string"
                   },
                   "description": {
-                    "type": ["string", "null"]
+                    "type": [
+                      "string",
+                      "null"
+                    ]
                   },
                   "teamId": {
                     "type": "string"
@@ -2896,7 +3464,11 @@
                       "format": "date-time"
                     }
                   },
-                  "required": ["data", "requestId", "timestamp"]
+                  "required": [
+                    "data",
+                    "requestId",
+                    "timestamp"
+                  ]
                 }
               }
             },
@@ -2956,7 +3528,9 @@
         "x-concurrency": "etag"
       },
       "delete": {
-        "tags": ["Services"],
+        "tags": [
+          "Services"
+        ],
         "summary": "Delete service (safely verifying no active incidents or objective history)",
         "parameters": [
           {
@@ -2987,7 +3561,11 @@
                       "format": "date-time"
                     }
                   },
-                  "required": ["data", "requestId", "timestamp"]
+                  "required": [
+                    "data",
+                    "requestId",
+                    "timestamp"
+                  ]
                 }
               }
             },
@@ -3040,7 +3618,9 @@
     },
     "/teams": {
       "get": {
-        "tags": ["Teams"],
+        "tags": [
+          "Teams"
+        ],
         "summary": "List teams with cursor pagination",
         "parameters": [
           {
@@ -3091,7 +3671,11 @@
                       "format": "date-time"
                     }
                   },
-                  "required": ["data", "requestId", "timestamp"]
+                  "required": [
+                    "data",
+                    "requestId",
+                    "timestamp"
+                  ]
                 }
               }
             },
@@ -3134,7 +3718,9 @@
         "description": "Requires API scope `teams:read` (Teams read)."
       },
       "post": {
-        "tags": ["Teams"],
+        "tags": [
+          "Teams"
+        ],
         "summary": "Create a new team",
         "requestBody": {
           "required": true,
@@ -3142,13 +3728,18 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": ["name"],
+                "required": [
+                  "name"
+                ],
                 "properties": {
                   "name": {
                     "type": "string"
                   },
                   "description": {
-                    "type": ["string", "null"]
+                    "type": [
+                      "string",
+                      "null"
+                    ]
                   }
                 }
               },
@@ -3178,7 +3769,11 @@
                       "format": "date-time"
                     }
                   },
-                  "required": ["data", "requestId", "timestamp"]
+                  "required": [
+                    "data",
+                    "requestId",
+                    "timestamp"
+                  ]
                 }
               }
             },
@@ -3244,7 +3839,9 @@
     },
     "/teams/{id}": {
       "get": {
-        "tags": ["Teams"],
+        "tags": [
+          "Teams"
+        ],
         "summary": "Get team details with member and service relations",
         "parameters": [
           {
@@ -3275,7 +3872,11 @@
                       "format": "date-time"
                     }
                   },
-                  "required": ["data", "requestId", "timestamp"]
+                  "required": [
+                    "data",
+                    "requestId",
+                    "timestamp"
+                  ]
                 }
               }
             },
@@ -3327,7 +3928,9 @@
         "description": "Requires API scope `teams:read` (Teams read)."
       },
       "patch": {
-        "tags": ["Teams"],
+        "tags": [
+          "Teams"
+        ],
         "summary": "Update team name or description",
         "parameters": [
           {
@@ -3359,7 +3962,10 @@
                     "type": "string"
                   },
                   "description": {
-                    "type": ["string", "null"]
+                    "type": [
+                      "string",
+                      "null"
+                    ]
                   }
                 }
               },
@@ -3389,7 +3995,11 @@
                       "format": "date-time"
                     }
                   },
-                  "required": ["data", "requestId", "timestamp"]
+                  "required": [
+                    "data",
+                    "requestId",
+                    "timestamp"
+                  ]
                 }
               }
             },
@@ -3449,7 +4059,9 @@
         "x-concurrency": "etag"
       },
       "delete": {
-        "tags": ["Teams"],
+        "tags": [
+          "Teams"
+        ],
         "summary": "Delete team (safely checking associated services and members)",
         "parameters": [
           {
@@ -3480,7 +4092,11 @@
                       "format": "date-time"
                     }
                   },
-                  "required": ["data", "requestId", "timestamp"]
+                  "required": [
+                    "data",
+                    "requestId",
+                    "timestamp"
+                  ]
                 }
               }
             },
@@ -3533,7 +4149,9 @@
     },
     "/users": {
       "get": {
-        "tags": ["Users"],
+        "tags": [
+          "Users"
+        ],
         "summary": "List users with cursor pagination and role filtering",
         "parameters": [
           {
@@ -3591,7 +4209,11 @@
                       "format": "date-time"
                     }
                   },
-                  "required": ["data", "requestId", "timestamp"]
+                  "required": [
+                    "data",
+                    "requestId",
+                    "timestamp"
+                  ]
                 }
               }
             },
@@ -3636,7 +4258,9 @@
     },
     "/users/{id}": {
       "get": {
-        "tags": ["Users"],
+        "tags": [
+          "Users"
+        ],
         "summary": "Get user details with safe profile fields",
         "parameters": [
           {
@@ -3667,7 +4291,11 @@
                       "format": "date-time"
                     }
                   },
-                  "required": ["data", "requestId", "timestamp"]
+                  "required": [
+                    "data",
+                    "requestId",
+                    "timestamp"
+                  ]
                 }
               }
             },
@@ -3715,7 +4343,9 @@
     },
     "/schedules": {
       "get": {
-        "tags": ["Schedules"],
+        "tags": [
+          "Schedules"
+        ],
         "summary": "List on-call schedules",
         "parameters": [
           {
@@ -3766,7 +4396,11 @@
                       "format": "date-time"
                     }
                   },
-                  "required": ["data", "requestId", "timestamp"]
+                  "required": [
+                    "data",
+                    "requestId",
+                    "timestamp"
+                  ]
                 }
               }
             },
@@ -3809,7 +4443,9 @@
         "description": "Requires API scope `schedules:read` (Schedules read)."
       },
       "post": {
-        "tags": ["Schedules"],
+        "tags": [
+          "Schedules"
+        ],
         "summary": "Create a new on-call schedule",
         "requestBody": {
           "required": true,
@@ -3817,7 +4453,9 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": ["name"],
+                "required": [
+                  "name"
+                ],
                 "properties": {
                   "name": {
                     "type": "string"
@@ -3827,7 +4465,10 @@
                     "default": "UTC"
                   },
                   "description": {
-                    "type": ["string", "null"]
+                    "type": [
+                      "string",
+                      "null"
+                    ]
                   }
                 }
               },
@@ -3858,7 +4499,11 @@
                       "format": "date-time"
                     }
                   },
-                  "required": ["data", "requestId", "timestamp"]
+                  "required": [
+                    "data",
+                    "requestId",
+                    "timestamp"
+                  ]
                 }
               }
             },
@@ -3924,7 +4569,9 @@
     },
     "/schedules/{id}": {
       "get": {
-        "tags": ["Schedules"],
+        "tags": [
+          "Schedules"
+        ],
         "summary": "Get schedule details with rotation layers",
         "parameters": [
           {
@@ -3955,7 +4602,11 @@
                       "format": "date-time"
                     }
                   },
-                  "required": ["data", "requestId", "timestamp"]
+                  "required": [
+                    "data",
+                    "requestId",
+                    "timestamp"
+                  ]
                 }
               }
             },
@@ -4007,7 +4658,9 @@
         "description": "Requires API scope `schedules:read` (Schedules read)."
       },
       "patch": {
-        "tags": ["Schedules"],
+        "tags": [
+          "Schedules"
+        ],
         "summary": "Update schedule name or timezone",
         "parameters": [
           {
@@ -4042,7 +4695,10 @@
                     "type": "string"
                   },
                   "description": {
-                    "type": ["string", "null"]
+                    "type": [
+                      "string",
+                      "null"
+                    ]
                   }
                 }
               },
@@ -4072,7 +4728,11 @@
                       "format": "date-time"
                     }
                   },
-                  "required": ["data", "requestId", "timestamp"]
+                  "required": [
+                    "data",
+                    "requestId",
+                    "timestamp"
+                  ]
                 }
               }
             },
@@ -4132,7 +4792,9 @@
         "x-concurrency": "etag"
       },
       "delete": {
-        "tags": ["Schedules"],
+        "tags": [
+          "Schedules"
+        ],
         "summary": "Delete schedule (safely checking escalation policy references)",
         "parameters": [
           {
@@ -4163,7 +4825,11 @@
                       "format": "date-time"
                     }
                   },
-                  "required": ["data", "requestId", "timestamp"]
+                  "required": [
+                    "data",
+                    "requestId",
+                    "timestamp"
+                  ]
                 }
               }
             },
@@ -4216,7 +4882,9 @@
     },
     "/schedules/{id}/on-call": {
       "get": {
-        "tags": ["Schedules"],
+        "tags": [
+          "Schedules"
+        ],
         "summary": "Calculate the effective on-call users at a point in time",
         "parameters": [
           {
@@ -4255,7 +4923,11 @@
                       "format": "date-time"
                     }
                   },
-                  "required": ["data", "requestId", "timestamp"]
+                  "required": [
+                    "data",
+                    "requestId",
+                    "timestamp"
+                  ]
                 }
               }
             },
@@ -4303,7 +4975,9 @@
     },
     "/schedules/{id}/overrides": {
       "get": {
-        "tags": ["Schedules"],
+        "tags": [
+          "Schedules"
+        ],
         "summary": "List overrides for a schedule",
         "parameters": [
           {
@@ -4337,7 +5011,11 @@
                       "format": "date-time"
                     }
                   },
-                  "required": ["data", "requestId", "timestamp"]
+                  "required": [
+                    "data",
+                    "requestId",
+                    "timestamp"
+                  ]
                 }
               }
             },
@@ -4383,7 +5061,9 @@
         "description": "Requires API scope `schedules:read` (Schedules read)."
       },
       "post": {
-        "tags": ["Schedules"],
+        "tags": [
+          "Schedules"
+        ],
         "summary": "Create schedule override with domain validation",
         "parameters": [
           {
@@ -4401,7 +5081,11 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": ["userId", "startDate", "endDate"],
+                "required": [
+                  "userId",
+                  "startDate",
+                  "endDate"
+                ],
                 "properties": {
                   "userId": {
                     "type": "string"
@@ -4415,7 +5099,10 @@
                     "format": "date-time"
                   },
                   "replacesUserId": {
-                    "type": ["string", "null"]
+                    "type": [
+                      "string",
+                      "null"
+                    ]
                   }
                 }
               },
@@ -4446,7 +5133,11 @@
                       "format": "date-time"
                     }
                   },
-                  "required": ["data", "requestId", "timestamp"]
+                  "required": [
+                    "data",
+                    "requestId",
+                    "timestamp"
+                  ]
                 }
               }
             },
@@ -4499,7 +5190,9 @@
     },
     "/escalation-policies": {
       "get": {
-        "tags": ["Escalation Policies"],
+        "tags": [
+          "Escalation Policies"
+        ],
         "summary": "List escalation policies",
         "parameters": [
           {
@@ -4550,7 +5243,11 @@
                       "format": "date-time"
                     }
                   },
-                  "required": ["data", "requestId", "timestamp"]
+                  "required": [
+                    "data",
+                    "requestId",
+                    "timestamp"
+                  ]
                 }
               }
             },
@@ -4593,7 +5290,9 @@
         "description": "Requires API scope `escalation-policies:read` (Escalation policies read)."
       },
       "post": {
-        "tags": ["Escalation Policies"],
+        "tags": [
+          "Escalation Policies"
+        ],
         "summary": "Create escalation policy",
         "requestBody": {
           "required": true,
@@ -4601,19 +5300,29 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": ["name", "steps"],
+                "required": [
+                  "name",
+                  "steps"
+                ],
                 "properties": {
                   "name": {
                     "type": "string"
                   },
                   "description": {
-                    "type": ["string", "null"]
+                    "type": [
+                      "string",
+                      "null"
+                    ]
                   },
                   "steps": {
                     "type": "array",
                     "items": {
                       "type": "object",
-                      "required": ["delayMinutes", "targetType", "targetId"],
+                      "required": [
+                        "delayMinutes",
+                        "targetType",
+                        "targetId"
+                      ],
                       "properties": {
                         "delayMinutes": {
                           "type": "integer",
@@ -4622,7 +5331,11 @@
                         },
                         "targetType": {
                           "type": "string",
-                          "enum": ["USER", "SCHEDULE", "TEAM"]
+                          "enum": [
+                            "USER",
+                            "SCHEDULE",
+                            "TEAM"
+                          ]
                         },
                         "targetId": {
                           "type": "string"
@@ -4655,7 +5368,11 @@
                     "delayMinutes": 5,
                     "targetType": "USER",
                     "targetId": "usr_789012",
-                    "notificationChannels": ["EMAIL", "SMS", "PUSH"]
+                    "notificationChannels": [
+                      "EMAIL",
+                      "SMS",
+                      "PUSH"
+                    ]
                   }
                 ]
               }
@@ -4681,7 +5398,11 @@
                       "format": "date-time"
                     }
                   },
-                  "required": ["data", "requestId", "timestamp"]
+                  "required": [
+                    "data",
+                    "requestId",
+                    "timestamp"
+                  ]
                 }
               }
             },
@@ -4731,7 +5452,9 @@
     },
     "/escalation-policies/{id}": {
       "get": {
-        "tags": ["Escalation Policies"],
+        "tags": [
+          "Escalation Policies"
+        ],
         "summary": "Get escalation policy details",
         "parameters": [
           {
@@ -4762,7 +5485,11 @@
                       "format": "date-time"
                     }
                   },
-                  "required": ["data", "requestId", "timestamp"]
+                  "required": [
+                    "data",
+                    "requestId",
+                    "timestamp"
+                  ]
                 }
               }
             },
@@ -4814,7 +5541,9 @@
         "description": "Requires API scope `escalation-policies:read` (Escalation policies read)."
       },
       "patch": {
-        "tags": ["Escalation Policies"],
+        "tags": [
+          "Escalation Policies"
+        ],
         "summary": "Update escalation policy rules or metadata",
         "parameters": [
           {
@@ -4846,7 +5575,10 @@
                     "type": "string"
                   },
                   "description": {
-                    "type": ["string", "null"]
+                    "type": [
+                      "string",
+                      "null"
+                    ]
                   },
                   "steps": {
                     "type": "array",
@@ -4882,7 +5614,11 @@
                       "format": "date-time"
                     }
                   },
-                  "required": ["data", "requestId", "timestamp"]
+                  "required": [
+                    "data",
+                    "requestId",
+                    "timestamp"
+                  ]
                 }
               }
             },
@@ -4942,7 +5678,9 @@
         "x-concurrency": "etag"
       },
       "delete": {
-        "tags": ["Escalation Policies"],
+        "tags": [
+          "Escalation Policies"
+        ],
         "summary": "Delete escalation policy (safely checking service usage)",
         "parameters": [
           {
@@ -4973,7 +5711,11 @@
                       "format": "date-time"
                     }
                   },
-                  "required": ["data", "requestId", "timestamp"]
+                  "required": [
+                    "data",
+                    "requestId",
+                    "timestamp"
+                  ]
                 }
               }
             },
@@ -5026,7 +5768,9 @@
     },
     "/integrations": {
       "get": {
-        "tags": ["Integrations"],
+        "tags": [
+          "Integrations"
+        ],
         "summary": "List incoming integrations scoped by accessible services",
         "parameters": [
           {
@@ -5077,7 +5821,11 @@
                       "format": "date-time"
                     }
                   },
-                  "required": ["data", "requestId", "timestamp"]
+                  "required": [
+                    "data",
+                    "requestId",
+                    "timestamp"
+                  ]
                 }
               }
             },
@@ -5122,7 +5870,9 @@
     },
     "/integrations/{id}": {
       "get": {
-        "tags": ["Integrations"],
+        "tags": [
+          "Integrations"
+        ],
         "summary": "Get integration details",
         "parameters": [
           {
@@ -5153,7 +5903,11 @@
                       "format": "date-time"
                     }
                   },
-                  "required": ["data", "requestId", "timestamp"]
+                  "required": [
+                    "data",
+                    "requestId",
+                    "timestamp"
+                  ]
                 }
               }
             },
@@ -5205,7 +5959,9 @@
         "description": "Requires API scope `integrations:read` (Integrations read)."
       },
       "patch": {
-        "tags": ["Integrations"],
+        "tags": [
+          "Integrations"
+        ],
         "summary": "Update integration name or enabled status",
         "parameters": [
           {
@@ -5267,7 +6023,11 @@
                       "format": "date-time"
                     }
                   },
-                  "required": ["data", "requestId", "timestamp"]
+                  "required": [
+                    "data",
+                    "requestId",
+                    "timestamp"
+                  ]
                 }
               }
             },
@@ -5329,7 +6089,9 @@
     },
     "/notifications": {
       "get": {
-        "tags": ["Notifications"],
+        "tags": [
+          "Notifications"
+        ],
         "summary": "List notification delivery audit records",
         "parameters": [
           {
@@ -5401,7 +6163,11 @@
                       "format": "date-time"
                     }
                   },
-                  "required": ["data", "requestId", "timestamp"]
+                  "required": [
+                    "data",
+                    "requestId",
+                    "timestamp"
+                  ]
                 }
               }
             },
@@ -5446,7 +6212,9 @@
     },
     "/notifications/{id}/retry": {
       "post": {
-        "tags": ["Notifications"],
+        "tags": [
+          "Notifications"
+        ],
         "summary": "Retry a failed notification delivery safely through central control plane",
         "parameters": [
           {
@@ -5477,7 +6245,11 @@
                       "format": "date-time"
                     }
                   },
-                  "required": ["data", "requestId", "timestamp"]
+                  "required": [
+                    "data",
+                    "requestId",
+                    "timestamp"
+                  ]
                 }
               }
             },
@@ -5530,7 +6302,9 @@
     },
     "/status-pages": {
       "get": {
-        "tags": ["Status Pages"],
+        "tags": [
+          "Status Pages"
+        ],
         "summary": "List status pages with cursor pagination",
         "parameters": [
           {
@@ -5581,7 +6355,11 @@
                       "format": "date-time"
                     }
                   },
-                  "required": ["data", "requestId", "timestamp"]
+                  "required": [
+                    "data",
+                    "requestId",
+                    "timestamp"
+                  ]
                 }
               }
             },
@@ -5624,7 +6402,9 @@
         "description": "Requires API scope `status-pages:read` (Status pages read)."
       },
       "post": {
-        "tags": ["Status Pages"],
+        "tags": [
+          "Status Pages"
+        ],
         "summary": "Create a new status page",
         "requestBody": {
           "required": true,
@@ -5632,7 +6412,10 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": ["name", "slug"],
+                "required": [
+                  "name",
+                  "slug"
+                ],
                 "properties": {
                   "name": {
                     "type": "string"
@@ -5673,7 +6456,11 @@
                       "format": "date-time"
                     }
                   },
-                  "required": ["data", "requestId", "timestamp"]
+                  "required": [
+                    "data",
+                    "requestId",
+                    "timestamp"
+                  ]
                 }
               }
             },
@@ -5726,7 +6513,9 @@
     },
     "/status-pages/{id}": {
       "get": {
-        "tags": ["Status Pages"],
+        "tags": [
+          "Status Pages"
+        ],
         "summary": "Get status page configuration",
         "parameters": [
           {
@@ -5757,7 +6546,11 @@
                       "format": "date-time"
                     }
                   },
-                  "required": ["data", "requestId", "timestamp"]
+                  "required": [
+                    "data",
+                    "requestId",
+                    "timestamp"
+                  ]
                 }
               }
             },
@@ -5803,7 +6596,9 @@
         "description": "Requires API scope `status-pages:read` (Status pages read)."
       },
       "patch": {
-        "tags": ["Status Pages"],
+        "tags": [
+          "Status Pages"
+        ],
         "summary": "Update status page settings with certified publication workflows",
         "parameters": [
           {
@@ -5862,7 +6657,11 @@
                       "format": "date-time"
                     }
                   },
-                  "required": ["data", "requestId", "timestamp"]
+                  "required": [
+                    "data",
+                    "requestId",
+                    "timestamp"
+                  ]
                 }
               }
             },
@@ -5915,7 +6714,9 @@
     },
     "/status-pages/{id}/announcements": {
       "get": {
-        "tags": ["Status Pages"],
+        "tags": [
+          "Status Pages"
+        ],
         "summary": "List status page incident announcements",
         "parameters": [
           {
@@ -5949,7 +6750,11 @@
                       "format": "date-time"
                     }
                   },
-                  "required": ["data", "requestId", "timestamp"]
+                  "required": [
+                    "data",
+                    "requestId",
+                    "timestamp"
+                  ]
                 }
               }
             },
@@ -5995,7 +6800,9 @@
         "description": "Requires API scope `status-pages:read` (Status pages read)."
       },
       "post": {
-        "tags": ["Status Pages"],
+        "tags": [
+          "Status Pages"
+        ],
         "summary": "Publish announcement on status page",
         "parameters": [
           {
@@ -6024,7 +6831,10 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": ["title", "message"],
+                "required": [
+                  "title",
+                  "message"
+                ],
                 "properties": {
                   "title": {
                     "type": "string"
@@ -6041,7 +6851,10 @@
                     "format": "date-time"
                   },
                   "endDate": {
-                    "type": ["string", "null"],
+                    "type": [
+                      "string",
+                      "null"
+                    ],
                     "format": "date-time"
                   },
                   "isActive": {
@@ -6084,7 +6897,11 @@
                       "format": "date-time"
                     }
                   },
-                  "required": ["data", "requestId", "timestamp"]
+                  "required": [
+                    "data",
+                    "requestId",
+                    "timestamp"
+                  ]
                 }
               }
             },
@@ -6140,7 +6957,9 @@
     },
     "/runbooks": {
       "get": {
-        "tags": ["Runbooks"],
+        "tags": [
+          "Runbooks"
+        ],
         "summary": "List available runbooks",
         "parameters": [
           {
@@ -6191,7 +7010,11 @@
                       "format": "date-time"
                     }
                   },
-                  "required": ["data", "requestId", "timestamp"]
+                  "required": [
+                    "data",
+                    "requestId",
+                    "timestamp"
+                  ]
                 }
               }
             },
@@ -6236,7 +7059,9 @@
     },
     "/runbooks/{id}": {
       "get": {
-        "tags": ["Runbooks"],
+        "tags": [
+          "Runbooks"
+        ],
         "summary": "Get runbook summary and step summaries (step configuration is never returned)",
         "parameters": [
           {
@@ -6267,7 +7092,11 @@
                       "format": "date-time"
                     }
                   },
-                  "required": ["data", "requestId", "timestamp"]
+                  "required": [
+                    "data",
+                    "requestId",
+                    "timestamp"
+                  ]
                 }
               }
             },
@@ -6315,7 +7144,9 @@
     },
     "/runbooks/{id}/execute": {
       "post": {
-        "tags": ["Runbooks"],
+        "tags": [
+          "Runbooks"
+        ],
         "summary": "Trigger safe runbook execution with idempotency",
         "parameters": [
           {
@@ -6343,13 +7174,22 @@
                 "type": "object",
                 "properties": {
                   "incidentId": {
-                    "type": ["string", "null"]
+                    "type": [
+                      "string",
+                      "null"
+                    ]
                   },
                   "serviceId": {
-                    "type": ["string", "null"]
+                    "type": [
+                      "string",
+                      "null"
+                    ]
                   },
                   "bindingId": {
-                    "type": ["string", "null"]
+                    "type": [
+                      "string",
+                      "null"
+                    ]
                   },
                   "parameters": {
                     "type": "object"
@@ -6385,7 +7225,11 @@
                       "format": "date-time"
                     }
                   },
-                  "required": ["data", "requestId", "timestamp"]
+                  "required": [
+                    "data",
+                    "requestId",
+                    "timestamp"
+                  ]
                 }
               }
             },
@@ -6441,7 +7285,9 @@
     },
     "/runbooks/executions/{id}": {
       "get": {
-        "tags": ["Runbooks"],
+        "tags": [
+          "Runbooks"
+        ],
         "summary": "Get runbook execution status and step results",
         "parameters": [
           {
@@ -6472,7 +7318,11 @@
                       "format": "date-time"
                     }
                   },
-                  "required": ["data", "requestId", "timestamp"]
+                  "required": [
+                    "data",
+                    "requestId",
+                    "timestamp"
+                  ]
                 }
               }
             },
@@ -6520,7 +7370,9 @@
     },
     "/service-accounts": {
       "get": {
-        "tags": ["Service Accounts"],
+        "tags": [
+          "Service Accounts"
+        ],
         "summary": "List automation service accounts",
         "parameters": [
           {
@@ -6564,7 +7416,11 @@
                       "format": "date-time"
                     }
                   },
-                  "required": ["data", "requestId", "timestamp"]
+                  "required": [
+                    "data",
+                    "requestId",
+                    "timestamp"
+                  ]
                 }
               }
             },
@@ -6607,7 +7463,9 @@
         "description": "Requires API scope `service-accounts:read` (Service accounts read)."
       },
       "post": {
-        "tags": ["Service Accounts"],
+        "tags": [
+          "Service Accounts"
+        ],
         "summary": "Create automation service account",
         "requestBody": {
           "required": true,
@@ -6615,7 +7473,9 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": ["name"],
+                "required": [
+                  "name"
+                ],
                 "properties": {
                   "name": {
                     "type": "string"
@@ -6639,7 +7499,9 @@
                 "name": "Terraform Automation",
                 "role": "RESPONDER",
                 "description": "Machine service account for CI/CD pipeline automation and infrastructure provisioning",
-                "teamIds": ["team_platform"]
+                "teamIds": [
+                  "team_platform"
+                ]
               }
             }
           }
@@ -6663,7 +7525,11 @@
                       "format": "date-time"
                     }
                   },
-                  "required": ["data", "requestId", "timestamp"]
+                  "required": [
+                    "data",
+                    "requestId",
+                    "timestamp"
+                  ]
                 }
               }
             },
@@ -6729,7 +7595,9 @@
     },
     "/service-accounts/{id}": {
       "get": {
-        "tags": ["Service Accounts"],
+        "tags": [
+          "Service Accounts"
+        ],
         "summary": "Get service account details",
         "parameters": [
           {
@@ -6760,7 +7628,11 @@
                       "format": "date-time"
                     }
                   },
-                  "required": ["data", "requestId", "timestamp"]
+                  "required": [
+                    "data",
+                    "requestId",
+                    "timestamp"
+                  ]
                 }
               }
             },
@@ -6806,7 +7678,9 @@
         "description": "Requires API scope `service-accounts:read` (Service accounts read)."
       },
       "delete": {
-        "tags": ["Service Accounts"],
+        "tags": [
+          "Service Accounts"
+        ],
         "summary": "Delete service account and revoke its tokens",
         "parameters": [
           {
@@ -6837,7 +7711,11 @@
                       "format": "date-time"
                     }
                   },
-                  "required": ["data", "requestId", "timestamp"]
+                  "required": [
+                    "data",
+                    "requestId",
+                    "timestamp"
+                  ]
                 }
               }
             },
@@ -6887,7 +7765,9 @@
     },
     "/service-accounts/{id}/tokens": {
       "post": {
-        "tags": ["Service Accounts"],
+        "tags": [
+          "Service Accounts"
+        ],
         "summary": "Issue a new fine-grained token for a service account",
         "parameters": [
           {
@@ -6905,7 +7785,10 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": ["name", "scopes"],
+                "required": [
+                  "name",
+                  "scopes"
+                ],
                 "properties": {
                   "name": {
                     "type": "string"
@@ -6925,7 +7808,11 @@
               },
               "example": {
                 "name": "Deploy Pipeline Token",
-                "scopes": ["incidents:read", "services:read", "events:write"],
+                "scopes": [
+                  "incidents:read",
+                  "services:read",
+                  "events:write"
+                ],
                 "expiresInDays": 90
               }
             }
@@ -6950,7 +7837,11 @@
                       "format": "date-time"
                     }
                   },
-                  "required": ["data", "requestId", "timestamp"]
+                  "required": [
+                    "data",
+                    "requestId",
+                    "timestamp"
+                  ]
                 }
               }
             },
@@ -7003,7 +7894,9 @@
     },
     "/service-accounts/{id}/tokens/{tokenId}": {
       "delete": {
-        "tags": ["Service Accounts"],
+        "tags": [
+          "Service Accounts"
+        ],
         "summary": "Revoke a specific service account token immediately",
         "parameters": [
           {
@@ -7042,7 +7935,11 @@
                       "format": "date-time"
                     }
                   },
-                  "required": ["data", "requestId", "timestamp"]
+                  "required": [
+                    "data",
+                    "requestId",
+                    "timestamp"
+                  ]
                 }
               }
             },
@@ -7092,7 +7989,9 @@
     },
     "/audit-logs": {
       "get": {
-        "tags": ["Audit Logs"],
+        "tags": [
+          "Audit Logs"
+        ],
         "summary": "List tamper-evident audit records with cursor pagination",
         "parameters": [
           {
@@ -7164,7 +8063,11 @@
                       "format": "date-time"
                     }
                   },
-                  "required": ["data", "requestId", "timestamp"]
+                  "required": [
+                    "data",
+                    "requestId",
+                    "timestamp"
+                  ]
                 }
               }
             },
@@ -7209,7 +8112,9 @@
     },
     "/reports/metrics": {
       "get": {
-        "tags": ["Reports"],
+        "tags": [
+          "Reports"
+        ],
         "summary": "Calculate actor-scoped SLA compliance and MTTA/MTTR metrics",
         "parameters": [
           {
@@ -7284,7 +8189,9 @@
     },
     "/postmortems": {
       "get": {
-        "tags": ["Postmortems"],
+        "tags": [
+          "Postmortems"
+        ],
         "summary": "List incident postmortems with cursor pagination",
         "parameters": [
           {
@@ -7314,7 +8221,12 @@
             "in": "query",
             "schema": {
               "type": "string",
-              "enum": ["DRAFT", "IN_REVIEW", "PUBLISHED", "ARCHIVED"]
+              "enum": [
+                "DRAFT",
+                "IN_REVIEW",
+                "PUBLISHED",
+                "ARCHIVED"
+              ]
             }
           },
           {
@@ -7322,7 +8234,10 @@
             "in": "query",
             "schema": {
               "type": "string",
-              "enum": ["true", "false"]
+              "enum": [
+                "true",
+                "false"
+              ]
             }
           },
           {
@@ -7358,7 +8273,11 @@
                       "format": "date-time"
                     }
                   },
-                  "required": ["data", "requestId", "timestamp"]
+                  "required": [
+                    "data",
+                    "requestId",
+                    "timestamp"
+                  ]
                 }
               }
             },
@@ -7401,7 +8320,9 @@
         "description": "Requires API scope `postmortems:read` (Postmortems read)."
       },
       "post": {
-        "tags": ["Postmortems"],
+        "tags": [
+          "Postmortems"
+        ],
         "summary": "Create incident postmortem",
         "requestBody": {
           "required": true,
@@ -7409,7 +8330,10 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": ["incidentId", "summary"],
+                "required": [
+                  "incidentId",
+                  "summary"
+                ],
                 "properties": {
                   "incidentId": {
                     "type": "string"
@@ -7434,7 +8358,11 @@
                   },
                   "status": {
                     "type": "string",
-                    "enum": ["DRAFT", "IN_REVIEW", "PUBLISHED"],
+                    "enum": [
+                      "DRAFT",
+                      "IN_REVIEW",
+                      "PUBLISHED"
+                    ],
                     "default": "DRAFT"
                   },
                   "isPublic": {
@@ -7473,7 +8401,11 @@
                       "format": "date-time"
                     }
                   },
-                  "required": ["data", "requestId", "timestamp"]
+                  "required": [
+                    "data",
+                    "requestId",
+                    "timestamp"
+                  ]
                 }
               }
             },
@@ -7539,7 +8471,9 @@
     },
     "/postmortems/{id}": {
       "get": {
-        "tags": ["Postmortems"],
+        "tags": [
+          "Postmortems"
+        ],
         "summary": "Get postmortem details",
         "parameters": [
           {
@@ -7570,7 +8504,11 @@
                       "format": "date-time"
                     }
                   },
-                  "required": ["data", "requestId", "timestamp"]
+                  "required": [
+                    "data",
+                    "requestId",
+                    "timestamp"
+                  ]
                 }
               }
             },
@@ -7616,7 +8554,9 @@
         "description": "Requires API scope `postmortems:read` (Postmortems read)."
       },
       "patch": {
-        "tags": ["Postmortems"],
+        "tags": [
+          "Postmortems"
+        ],
         "summary": "Update postmortem content or status",
         "parameters": [
           {
@@ -7655,7 +8595,12 @@
                   },
                   "status": {
                     "type": "string",
-                    "enum": ["DRAFT", "IN_REVIEW", "PUBLISHED", "ARCHIVED"]
+                    "enum": [
+                      "DRAFT",
+                      "IN_REVIEW",
+                      "PUBLISHED",
+                      "ARCHIVED"
+                    ]
                   },
                   "isPublic": {
                     "type": "boolean"
@@ -7690,7 +8635,11 @@
                       "format": "date-time"
                     }
                   },
-                  "required": ["data", "requestId", "timestamp"]
+                  "required": [
+                    "data",
+                    "requestId",
+                    "timestamp"
+                  ]
                 }
               }
             },
@@ -7741,7 +8690,9 @@
         "x-concurrency": "none"
       },
       "delete": {
-        "tags": ["Postmortems"],
+        "tags": [
+          "Postmortems"
+        ],
         "summary": "Delete postmortem",
         "parameters": [
           {

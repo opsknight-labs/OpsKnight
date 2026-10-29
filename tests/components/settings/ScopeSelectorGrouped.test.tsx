@@ -78,12 +78,8 @@ describe('ScopeSelectorGrouped Component', () => {
     render(<ControlledWrapper initialScopes={new Set()} />);
 
     // In Incidents category, there are multiple scopes (read and write)
-    const incidentsHeader = screen
-      .getByText('Incidents & Triage')
-      .closest('div.flex-col, div.sm\\:flex-row');
-    const toggleButton =
-      incidentsHeader?.parentElement?.querySelector('button') ??
-      screen.getAllByRole('button', { name: /select all/i })[0];
+    const incidentsHeader = screen.getByText('Incidents & Triage').closest('div.flex-col, div.sm\\:flex-row');
+    const toggleButton = incidentsHeader?.parentElement?.querySelector('button') ?? screen.getAllByRole('button', { name: /select all/i })[0];
     expect(toggleButton).toBeDefined();
 
     fireEvent.click(toggleButton);

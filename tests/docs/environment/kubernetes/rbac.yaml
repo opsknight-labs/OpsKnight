@@ -11,7 +11,7 @@ metadata:
   name: docs-observer
   namespace: opsknight-docs
 rules:
-  - apiGroups: ['']
+  - apiGroups: [""]
     resources: [pods, pods/log, services, endpoints, configmaps]
     verbs: [get, list, watch]
   - apiGroups: [apps]

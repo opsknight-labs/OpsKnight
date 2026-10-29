@@ -8,7 +8,10 @@ describe('announcement recipient reconciliation', () => {
     }));
     const alreadyAccepted = new Set(recipients.slice(0, 4_000).map(recipient => recipient.id));
 
-    const replacement = selectAnnouncementRecipientsNeedingReplacement(recipients, alreadyAccepted);
+    const replacement = selectAnnouncementRecipientsNeedingReplacement(
+      recipients,
+      alreadyAccepted
+    );
 
     expect(replacement).toHaveLength(6_000);
     expect(replacement[0]?.id).toBe('subscriber-4001');
@@ -20,14 +23,16 @@ describe('announcement recipient reconciliation', () => {
     const recipients = [{ id: 'subscriber-1' }, { id: 'subscriber-2' }];
     const alreadyAccepted = new Set(recipients.map(recipient => recipient.id));
 
-    expect(selectAnnouncementRecipientsNeedingReplacement(recipients, alreadyAccepted)).toEqual([]);
+    expect(
+      selectAnnouncementRecipientsNeedingReplacement(recipients, alreadyAccepted)
+    ).toEqual([]);
   });
 
   it('preserves all current recipients when no prior generation reached the provider', () => {
     const recipients = [{ id: 'subscriber-1' }, { id: 'subscriber-2' }];
 
-    expect(selectAnnouncementRecipientsNeedingReplacement(recipients, new Set())).toEqual(
-      recipients
-    );
+    expect(
+      selectAnnouncementRecipientsNeedingReplacement(recipients, new Set())
+    ).toEqual(recipients);
   });
 });

@@ -73,7 +73,8 @@ export function runSseSubscriberStream() {
   // Note: For long-lived SSE in k6 http.get, either status 200 or a client read timeout after headers
   // with status 200/0 after receiving event-stream chunks indicates active stream hold.
   const isConnected =
-    res.status === 200 || (res.error_code === 1050 && (!res.status || res.status === 200));
+    res.status === 200 ||
+    (res.error_code === 1050 && (!res.status || res.status === 200));
 
   opsknightMetrics.sseConnectLatencyMs.add(res.timings.connecting + res.timings.waiting);
   opsknightMetrics.sseConnectSuccessRate.add(isConnected);

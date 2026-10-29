@@ -2,7 +2,12 @@ import { describe, expect, it } from 'vitest';
 import { isSafeCallbackUrl, sanitizeCallbackUrl } from '@/lib/callback-url';
 
 describe('callback URL security contract', () => {
-  const accepted = ['/incidents/abc', '/services', '/action-items?status=OPEN', '/status#current'];
+  const accepted = [
+    '/incidents/abc',
+    '/services',
+    '/action-items?status=OPEN',
+    '/status#current',
+  ];
 
   const rejected = [
     '',

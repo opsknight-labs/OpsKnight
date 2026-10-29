@@ -56,16 +56,18 @@ const txIncidentUpdateMany = vi.fn().mockResolvedValue({ count: 1 });
 vi.mock('@/lib/db-utils', () => ({
   runReadCommittedTransaction: vi.fn(async fn =>
     fn({
-      $queryRaw: vi.fn().mockResolvedValue([
-        {
-          status: 'OPEN',
-          assigneeId: null,
-          teamId: null,
-          escalationStatus: 'ESCALATING',
-          escalationProcessingAt: new Date('2026-01-01T12:00:00.000Z'),
-          currentEscalationStep: 0,
-        },
-      ]),
+      $queryRaw: vi
+        .fn()
+        .mockResolvedValue([
+          {
+            status: 'OPEN',
+            assigneeId: null,
+            teamId: null,
+            escalationStatus: 'ESCALATING',
+            escalationProcessingAt: new Date('2026-01-01T12:00:00.000Z'),
+            currentEscalationStep: 0,
+          },
+        ]),
       incident: { update: txIncidentUpdate },
       incidentEvent: { create: vi.fn() },
       backgroundJob: { create: vi.fn().mockResolvedValue({ id: 'job-next' }) },

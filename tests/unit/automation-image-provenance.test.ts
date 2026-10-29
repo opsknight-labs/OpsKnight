@@ -17,13 +17,8 @@ it('requires every running application replica to match the built config digest'
 
 it('requires separately declared image provenance when the in-cluster client is selected', async () => {
   const environment: Awaited<ReturnType<typeof captureControlledEnvironment>> = {
-    capturedAt: '',
-    postgresVersion: '',
-    snapshotIdentity: '',
-    pods: [],
-    hostContainers: [],
-    cpuPlacement: [],
-    externalStateIsolation: '',
+    capturedAt: '', postgresVersion: '', snapshotIdentity: '', pods: [], hostContainers: [],
+    cpuPlacement: [], externalStateIsolation: '',
     hostPressure: { status: 'UNSUPPORTED', platform: 'linux', capturedAt: '' },
   };
   vi.stubEnv('AUTOMATION_K6_KUBERNETES_POD', 'k6-automation-cert');
@@ -31,12 +26,9 @@ it('requires separately declared image provenance when the in-cluster client is 
     await expect(verifyControlledImage('sha256:' + 'a'.repeat(64), environment)).rejects.toThrow(
       'provenance'
     );
-    await expect(
-      verifyControlledImage('sha256:' + 'a'.repeat(64), environment, {
-        pod: 'other-client',
-        imageConfigDigest: 'sha256:' + 'b'.repeat(64),
-      })
-    ).rejects.toThrow('provenance');
+    await expect(verifyControlledImage('sha256:' + 'a'.repeat(64), environment, {
+      pod: 'other-client', imageConfigDigest: 'sha256:' + 'b'.repeat(64),
+    })).rejects.toThrow('provenance');
   } finally {
     vi.unstubAllEnvs();
   }

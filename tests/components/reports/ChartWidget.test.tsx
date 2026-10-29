@@ -101,7 +101,11 @@ describe('ChartWidget', () => {
 
     it('renders native pie chart for urgencyMix', () => {
       const { container } = render(
-        <ChartWidget metricKey="urgencyMix" metrics={mockMetrics} config={{ chartType: 'pie' }} />
+        <ChartWidget
+          metricKey="urgencyMix"
+          metrics={mockMetrics}
+          config={{ chartType: 'pie' }}
+        />
       );
 
       expect(container.querySelector('.analytics-pie-chart')).toBeDefined();

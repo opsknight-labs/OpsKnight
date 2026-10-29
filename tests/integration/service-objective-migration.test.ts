@@ -172,10 +172,7 @@ describeIfRealDB('service objective PostgreSQL migration', () => {
             'immutable_delete',
             `DELETE FROM "ServiceObjective" WHERE "legacySlaDefinitionId" = 'legacy-v1'`
           );
-          await expectDatabaseRejection(
-            'service_scope_restrict',
-            `DELETE FROM "Service" WHERE "id" = 'service-1'`
-          );
+          await expectDatabaseRejection('service_scope_restrict', `DELETE FROM "Service" WHERE "id" = 'service-1'`);
 
           const [{ definitions, snapshots, incidentObjectives }] = await tx.$queryRawUnsafe<
             Array<{ definitions: bigint; snapshots: bigint; incidentObjectives: bigint }>

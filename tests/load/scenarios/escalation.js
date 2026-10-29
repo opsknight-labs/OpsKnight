@@ -152,13 +152,17 @@ export function runAckEscalationRace() {
   if (incidentId) {
     const apiKey = pickApiKey(manifest, __VU, __ITER);
     const nextStatus = __ITER % 2 === 0 ? 'ACKNOWLEDGED' : 'RESOLVED';
-    http.patch(`${baseUrl}/api/incidents/${incidentId}`, JSON.stringify({ status: nextStatus }), {
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${apiKey}`,
-      },
-      tags: { endpoint: 'incidents_race_ack' },
-    });
+    http.patch(
+      `${baseUrl}/api/incidents/${incidentId}`,
+      JSON.stringify({ status: nextStatus }),
+      {
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${apiKey}`,
+        },
+        tags: { endpoint: 'incidents_race_ack' },
+      }
+    );
   } else {
     postEventApi(
       baseUrl,

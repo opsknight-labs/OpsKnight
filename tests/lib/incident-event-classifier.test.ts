@@ -1,5 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { incidentEventWhereFor, incidentEventSqlPredicate } from '@/lib/incident-event-classifier';
+import {
+  incidentEventWhereFor,
+  incidentEventSqlPredicate,
+} from '@/lib/incident-event-classifier';
 
 describe('incidentEventWhereFor (Prisma fragment)', () => {
   it('matches both typed rows and untyped legacy rows', () => {
@@ -16,7 +19,10 @@ describe('incidentEventWhereFor (Prisma fragment)', () => {
 
     // Second branch: pre-backfill rows — type=null + message ILIKE legacy substring.
     expect(branches[1]).toMatchObject({
-      AND: [{ type: null }, { message: { contains: 'escalated to', mode: 'insensitive' } }],
+      AND: [
+        { type: null },
+        { message: { contains: 'escalated to', mode: 'insensitive' } },
+      ],
     });
   });
 

@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { classifyEscalationSteps, type EscalationJobRow } from '@/lib/escalation/execution-health';
+import {
+  classifyEscalationSteps,
+  type EscalationJobRow,
+} from '@/lib/escalation/execution-health';
 import EscalationExecutionHealth from '@/components/incident/detail/EscalationExecutionHealth';
 
 const at = (minute: number) => new Date(Date.UTC(2026, 9, 19, 4, minute));
@@ -9,8 +12,7 @@ const job = (stepIndex: number, status: string, extra: Partial<EscalationJobRow>
   status,
   attempts: status === 'FAILED' ? 3 : 1,
   maxAttempts: 3,
-  error:
-    status === 'FAILED' ? 'Job timed out in PROCESSING state after exceeding maxAttempts' : null,
+  error: status === 'FAILED' ? 'Job timed out in PROCESSING state after exceeding maxAttempts' : null,
   failedAt: status === 'FAILED' ? at(46) : null,
   completedAt: status === 'COMPLETED' ? at(36) : null,
   createdAt: at(30 + stepIndex),

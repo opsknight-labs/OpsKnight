@@ -45,9 +45,9 @@ describe('enterprise security regressions', () => {
     vi.mocked(getEncryptionKey).mockReturnValue('a'.repeat(64));
     vi.mocked(encrypt).mockRejectedValue(new Error('encryption failed'));
 
-    await expect(encryptProviderConfig('resend', { apiKey: 'plaintext-secret' })).rejects.toThrow(
-      'Failed to encrypt provider config field: apiKey'
-    );
+    await expect(
+      encryptProviderConfig('resend', { apiKey: 'plaintext-secret' })
+    ).rejects.toThrow('Failed to encrypt provider config field: apiKey');
   });
 
   it('does not publish a private incident even when caller data says it is public', async () => {

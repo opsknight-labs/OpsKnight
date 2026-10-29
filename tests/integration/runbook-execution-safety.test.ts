@@ -99,11 +99,9 @@ async function startRunbookExecution(input: RunbookExecutionRequest) {
         data: { unattendedWritesScopeHash: scopeHash },
       });
     }
-    const currentRevision = (
-      await testPrisma.serviceAutomationRule.findUniqueOrThrow({
-        where: { id: binding.id },
-      })
-    ).configurationRevision;
+    const currentRevision = (await testPrisma.serviceAutomationRule.findUniqueOrThrow({
+      where: { id: binding.id },
+    })).configurationRevision;
     const incidentId =
       input.incidentId ??
       (await createTestIncident('Automatic safety fixture', binding.serviceId)).id;

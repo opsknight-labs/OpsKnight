@@ -188,10 +188,7 @@ describe('Microsoft Teams destination immutable identity', () => {
         }),
         update: vi.fn(
           async ({ where, data }: { where: { id: string }; data: Record<string, unknown> }) => {
-            Object.assign(
-              rows.find(r => r.id === where.id)!,
-              data
-            );
+            Object.assign(rows.find(r => r.id === where.id)!, data);
             return { id: where.id };
           }
         ),
