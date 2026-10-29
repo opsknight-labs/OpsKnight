@@ -3,13 +3,12 @@ import { withMcpDatabase } from '@/lib/database-workload';
 import OAuth2Server from '@node-oauth/oauth2-server';
 import { z } from 'zod';
 import prisma from '@/lib/prisma';
-import { admitMcpOAuthRequest } from '@/lib/mcp/auth/admission';
+import { acquireMcpOAuthSlot, admitMcpOAuthRequest } from '@/lib/mcp/auth/admission';
 import { mcpOAuthServer } from '@/lib/mcp/auth/oauth-model';
 import { mcpResource, withMcpRuntime } from '@/lib/mcp/auth/config';
 import { assertMcpHost, mcpHttpError, uniqueQuery } from '@/lib/mcp/auth/http';
 import { requireMcp } from '@/lib/mcp/core/errors';
 import { readBoundedMcpText } from '@/lib/mcp/core/body';
-import { acquireMcpAuthenticationSlot } from '@/lib/mcp/core/budget';
 
 export const runtime = 'nodejs';
 const schema = z
@@ -37,7 +36,7 @@ async function handlePost(request: Request) {
   let release: (() => void) | undefined;
   try {
     assertMcpHost(request);
-    release = acquireMcpAuthenticationSlot();
+    release = acquireMcpOAuthSlot('token');
     const policy = await prisma.mcpPolicy.findUnique({ where: { id: 'default' } });
     requireMcp(policy?.enabled, 'MCP_DISABLED', 503);
     await admitMcpOAuthRequest(request, 'token');

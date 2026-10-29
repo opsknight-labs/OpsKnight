@@ -94,7 +94,8 @@ export async function resolveMcpGrant(
   };
 }
 
-export async function authenticateMcp(request: Request, cost: number) {
+/** Authentication can precede body parsing; charge the validated cost separately in that case. */
+export async function authenticateMcp(request: Request, cost: number | null) {
   const policy = await prisma.mcpPolicy.findUnique({ where: { id: 'default' } });
   requireMcp(policy?.enabled, 'MCP_DISABLED', 503);
   const header = request.headers.get('authorization') ?? '';
@@ -111,9 +112,7 @@ export async function authenticateMcp(request: Request, cost: number) {
   const effectiveScopes = auth.apiKey.scopes.filter(scope => token.scopes.includes(scope));
   auth.apiKey.scopes = effectiveScopes;
   auth.actor.apiKey = { id: auth.apiKey.id, scopes: effectiveScopes };
-  // Charge the declared bounded plan before executing it. This is shared across replicas.
-  const quota = await incrementSharedCounter(`mcp:${token.grantId}`, 60000, 'application', cost);
-  requireMcp(quota.count <= policy.requestsPerMinute, 'MCP_RATE_LIMITED', 429);
+  if (cost !== null) await chargeMcpRequest({ grantId: token.grantId, policy }, cost);
   return {
     auth,
     grantId: token.grantId,
@@ -121,4 +120,13 @@ export async function authenticateMcp(request: Request, cost: number) {
     tokenScopes: token.scopes,
     policy,
   };
+}
+
+/** Charge the declared bounded plan once, after authenticating and validating its body. */
+export async function chargeMcpRequest(
+  identity: { grantId: string; policy: { requestsPerMinute: number } },
+  cost: number
+) {
+  const quota = await incrementSharedCounter(`mcp:${identity.grantId}`, 60000, 'application', cost);
+  requireMcp(quota.count <= identity.policy.requestsPerMinute, 'MCP_RATE_LIMITED', 429);
 }

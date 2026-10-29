@@ -8,7 +8,7 @@ import {
 } from 'node:http';
 import { Readable } from 'node:stream';
 import type { RequestOptions } from 'node:https';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   CIMD_MAX_BYTES,
   createPinnedLookup,
@@ -97,11 +97,50 @@ describe('client metadata documents', () => {
         .redirect_uris
     ).toHaveLength(1);
   });
+  it('selects explicitly supported public authentication from modern ChatGPT-style metadata', () => {
+    const parsed = parseCimdDocument(
+      id,
+      json(
+        document({
+          token_endpoint_auth_method: 'private_key_jwt',
+          token_endpoint_auth_methods_supported: ['none', 'private_key_jwt'],
+          jwks_uri: 'https://client.example.com/oauth/jwks.json',
+        })
+      )
+    );
+    expect(parsed.token_endpoint_auth_method).toBe('none');
+  });
+  it('rejects duplicate, escaped duplicate and unsafe metadata keys before validation', () => {
+    for (const body of [
+      JSON.stringify(document()).replace(
+        '"client_name":"Example"',
+        '"client_name":"Example","client_name":"Forged"'
+      ),
+      JSON.stringify(document()).replace(
+        '"client_name":"Example"',
+        '"client_name":"Example","\\u0063lient_name":"Forged"'
+      ),
+      JSON.stringify(document()).replace(
+        '"client_name":"Example"',
+        '"client_name":"Example","__proto__":{}'
+      ),
+    ])
+      expect(() => parseCimdDocument(id, { ...json(document()), body })).toThrow('invalid_client');
+  });
   it('rejects identity mismatch, secrets, unsafe redirects and wrong types', () => {
     for (const bad of [
       json(document({ client_id: 'https://evil.example.net/m.json' })),
       json(document({ client_secret: 's' })),
-      json(document({ jwks_uri: 'https://client.example.com/jwks' })),
+      json(document({ jwks_uri: 'https://untrusted.example.com/jwks' })),
+      json(document({ token_endpoint_auth_method: 'private_key_jwt' })),
+      json(document({ token_endpoint_auth_methods_supported: ['private_key_jwt'] })),
+      json(document({ token_endpoint_auth_methods_supported: ['none', 'none'] })),
+      json(document({ token_endpoint_auth_methods_supported: [] })),
+      json(document({ jwks_uri: 'http://client.example.com/jwks' })),
+      json(document({ client_id: 'invalid', jwks_uri: 'https://client.example.com/jwks' })),
+      json(document({ jwks: { keys: [] } })),
+      json(document({ grant_types: ['refresh_token'] })),
+      json(document({ response_types: [] })),
       json(document({ token_endpoint_auth_method: 'client_secret_basic' })),
       json(document({ redirect_uris: [] })),
       json(document({ redirect_uris: ['javascript:alert(1)'] })),
@@ -207,6 +246,45 @@ describe('pinned metadata transport', () => {
     await expect(
       fetchPinnedMetadata(url, fakeTransport({ body: 'x'.repeat(CIMD_MAX_BYTES + 1) }).dependencies)
     ).rejects.toThrow('MCP_CLIENT_METADATA_TOO_LARGE');
+  });
+  it('enforces a total deadline even when an upstream keeps sending body bytes', async () => {
+    vi.useFakeTimers();
+    const response = new Readable({ read() {} }) as IncomingMessage;
+    response.statusCode = 200;
+    response.headers = { 'content-type': 'application/json' };
+    const request = new EventEmitter() as ClientRequest;
+    request.end = (() => {
+      queueMicrotask(() => onResponse(response));
+      return request;
+    }) as ClientRequest['end'];
+    request.destroy = vi.fn(() => request) as ClientRequest['destroy'];
+    let onResponse: (incoming: IncomingMessage) => void;
+    const dependencies: CimdTransportDependencies = {
+      resolve: async () => [{ address: '93.184.216.34' }],
+      request: (_options, callback) => {
+        onResponse = callback;
+        return request;
+      },
+    };
+    try {
+      const pending = fetchPinnedMetadata(url, dependencies);
+      const rejected = expect(pending).rejects.toMatchObject({
+        code: 'MCP_CLIENT_METADATA_TIMEOUT',
+        status: 504,
+      });
+      await vi.advanceTimersByTimeAsync(0);
+      response.emit('data', Buffer.from('{'));
+      await vi.advanceTimersByTimeAsync(2999);
+      response.emit('data', Buffer.from(' '));
+      await vi.advanceTimersByTimeAsync(1);
+      await rejected;
+      expect(request.destroy).toHaveBeenCalled();
+      expect(response.destroyed).toBe(true);
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      response.destroy();
+      vi.useRealTimers();
+    }
   });
   it('refuses non-HTTPS and IP-literal targets before resolving', async () => {
     const { dependencies } = fakeTransport({});

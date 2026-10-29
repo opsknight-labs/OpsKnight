@@ -160,6 +160,104 @@ describe('MCP PostgreSQL security and replay boundaries', () => {
     await db.mcpGrant.update({ where: { id: f.grant.id }, data: { expiresAt: new Date(0) } });
     await expect(resolveMcpGrant(f.grant.id)).rejects.toThrow('MCP_INVALID_GRANT');
   });
+  it('rejects unauthenticated slow bodies before reading them or holding work admission', async () => {
+    await fixture();
+    const requests = Array.from(
+      { length: 4 },
+      (_, index) =>
+        new Request('http://localhost:3000/mcp', {
+          method: 'POST',
+          headers: {
+            'content-type': 'application/json',
+            ...(index % 2 ? { authorization: `Bearer ${'x'.repeat(43)}` } : {}),
+          },
+          body: new ReadableStream({ start() {} }),
+          duplex: 'half',
+        } as RequestInit & { duplex: 'half' })
+    );
+    try {
+      const responses = await Promise.all(requests.map(request => mcpRequest(request)));
+      expect(responses.map(response => response.status)).toEqual([401, 401, 401, 401]);
+      expect(requests.every(request => !request.bodyUsed)).toBe(true);
+    } finally {
+      await Promise.all(requests.map(request => request.body?.cancel()));
+    }
+  });
+  it.each(['grant', 'client', 'scope', 'token', 'policy', 'role'] as const)(
+    'rechecks %s authority after an authenticated request pauses its upload',
+    async kind => {
+      const f = await fixture();
+      const token = await access(f);
+      let controller!: ReadableStreamDefaultController<Uint8Array>;
+      let started!: () => void;
+      const reading = new Promise<void>(resolve => {
+        started = resolve;
+      });
+      const body = new ReadableStream<Uint8Array>(
+        {
+          start(value) {
+            controller = value;
+          },
+          pull() {
+            started();
+          },
+        },
+        { highWaterMark: 0 }
+      );
+      const request = new Request(mcpResource(), {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          accept: 'application/json, text/event-stream',
+          authorization: `Bearer ${token.access_token}`,
+          'mcp-protocol-version': '2026-07-28',
+          'mcp-method': 'tools/list',
+        },
+        body,
+        duplex: 'half',
+      } as RequestInit & { duplex: 'half' });
+      const pending = mcpRequest(request);
+      await reading;
+      if (kind === 'grant')
+        await db.mcpGrant.update({ where: { id: f.grant.id }, data: { revokedAt: new Date() } });
+      if (kind === 'client')
+        await db.mcpClient.update({ where: { id: f.client.id }, data: { revokedAt: new Date() } });
+      if (kind === 'scope')
+        await db.mcpClient.update({ where: { id: f.client.id }, data: { scopes: [] } });
+      if (kind === 'token')
+        await db.mcpToken.updateMany({
+          where: { grantId: f.grant.id },
+          data: { accessExpiresAt: new Date(0) },
+        });
+      if (kind === 'policy')
+        await db.mcpPolicy.update({ where: { id: 'default' }, data: { enabled: false } });
+      if (kind === 'role')
+        await db.user.update({ where: { id: f.user.id }, data: { role: 'AUDITOR' } });
+      controller.enqueue(
+        new TextEncoder().encode(
+          JSON.stringify({
+            jsonrpc: '2.0',
+            id: 1,
+            method: 'tools/list',
+            params: {
+              _meta: {
+                'io.modelcontextprotocol/protocolVersion': '2026-07-28',
+                'io.modelcontextprotocol/clientCapabilities': {},
+                'io.modelcontextprotocol/clientInfo': { name: 'gated-security-test', version: '1' },
+              },
+            },
+          })
+        )
+      );
+      controller.close();
+      const response = await pending;
+      if (kind === 'scope' || kind === 'role') {
+        expect(response.status).toBe(200);
+        const result = await response.json();
+        expect(JSON.stringify(result)).not.toContain('incident_acknowledge');
+      } else expect(response.status).toBe(kind === 'policy' ? 503 : 401);
+    }
+  );
   it('does not let malformed requests from one known peer exhaust another peer’s token admission', async () => {
     const f = await fixture();
     const globalBefore = await db.rateLimit.aggregate({

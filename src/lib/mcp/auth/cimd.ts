@@ -4,6 +4,7 @@ import { isIP } from 'node:net';
 import type { McpClient, McpPolicy, PrismaClient } from '@prisma/client';
 import { McpBoundaryError, requireMcp } from '../core/errors';
 import { CIMD_MAX_BYTES, fetchPinnedMetadata, type CimdResponse } from './cimd-transport';
+import { rejectDuplicateJsonKeys } from '../protocol/input';
 
 const LOOPBACK = new Set(['localhost', '127.0.0.1', '[::1]']);
 
@@ -56,17 +57,49 @@ const metadataSchema = z
     client_id: z.string(),
     client_name: z.string().max(200).optional(),
     redirect_uris: z.array(z.string().max(2048).refine(redirectUri)).min(1).max(5),
-    token_endpoint_auth_method: z.literal('none').optional(),
+    token_endpoint_auth_method: z.string().min(1).max(64).optional(),
+    token_endpoint_auth_methods_supported: z
+      .array(z.string().min(1).max(64))
+      .min(1)
+      .max(8)
+      .refine(methods => new Set(methods).size === methods.length)
+      .optional(),
+    jwks_uri: z.string().url().max(2048).optional(),
     grant_types: z
       .array(z.enum(['authorization_code', 'refresh_token']))
+      .min(1)
       .max(2)
+      .refine(types => types.includes('authorization_code') && new Set(types).size === types.length)
       .optional(),
-    response_types: z.array(z.literal('code')).max(1).optional(),
+    response_types: z.array(z.literal('code')).length(1).optional(),
   })
   .passthrough()
   .superRefine((document, ctx) => {
-    // A public client never presents a secret; refuse documents that imply otherwise.
-    if (['client_secret', 'client_secret_expires_at', 'jwks', 'jwks_uri'].some(k => k in document))
+    // Never treat a signed-auth preference as permission to downgrade a private-only client.
+    const methods = document.token_endpoint_auth_methods_supported ?? [
+      document.token_endpoint_auth_method ?? 'none',
+    ];
+    if (!methods.includes('none'))
+      ctx.addIssue({ code: 'custom', message: 'Public-client authentication must be supported.' });
+    // Public key URLs are informational in this public-client flow, never fetched or persisted.
+    if (document.jwks_uri) {
+      try {
+        const keyUrl = new URL(document.jwks_uri);
+        const clientUrl = new URL(document.client_id);
+        if (
+          keyUrl.protocol !== 'https:' ||
+          keyUrl.origin !== clientUrl.origin ||
+          keyUrl.username ||
+          keyUrl.password ||
+          keyUrl.search ||
+          keyUrl.hash
+        )
+          ctx.addIssue({ code: 'custom', message: 'Invalid public key URL.' });
+      } catch {
+        ctx.addIssue({ code: 'custom', message: 'Invalid public key URL.' });
+      }
+    }
+    if (['client_secret', 'client_secret_expires_at', 'jwks'].some(k => k in document))
       ctx.addIssue({ code: 'custom', message: 'Secret-bearing client metadata is unsupported.' });
   });
 
@@ -85,13 +118,14 @@ export function parseCimdDocument(clientId: string, response: CimdResponse) {
   requireMcp(Buffer.byteLength(response.body) <= CIMD_MAX_BYTES, 'invalid_client');
   let json: unknown;
   try {
+    rejectDuplicateJsonKeys(response.body);
     json = JSON.parse(response.body);
   } catch {
     json = null;
   }
   const parsed = metadataSchema.safeParse(json);
   requireMcp(parsed.success && parsed.data.client_id === clientId, 'invalid_client');
-  return parsed.data;
+  return { ...parsed.data, token_endpoint_auth_method: 'none' as const };
 }
 
 /**

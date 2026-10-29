@@ -3,6 +3,7 @@ import { BlockList, isIP, type LookupFunction } from 'node:net';
 import type { LookupAddress } from 'node:dns';
 import { lookup as dnsLookup } from 'node:dns/promises';
 import { request as httpsRequest, type RequestOptions } from 'node:https';
+import type { ClientRequest, IncomingMessage } from 'node:http';
 import { McpBoundaryError, requireMcp } from '../core/errors';
 
 const blocked = new BlockList();
@@ -123,67 +124,82 @@ export async function fetchPinnedMetadata(
   const pinned = addresses[0].address;
   return new Promise<CimdResponse>((resolve, reject) => {
     let settled = false;
+    let clientRequest: ClientRequest | undefined;
+    let incoming: IncomingMessage | undefined;
     const finish = (action: () => void) => {
       if (!settled) {
         settled = true;
+        clearTimeout(deadline);
         action();
       }
     };
-    const fail = (code: string, status = 502) =>
+    const fail = (code: string, status = 502) => {
       finish(() => reject(new McpBoundaryError(code, status)));
-    const clientRequest = dependencies.request(
-      {
-        protocol: 'https:',
-        host: url.hostname,
-        port: 443,
-        method: 'GET',
-        path: `${url.pathname}`,
-        servername: url.hostname,
-        agent: false,
-        timeout: TIMEOUT_MS,
-        rejectUnauthorized: true,
-        headers: {
-          accept: 'application/json',
-          host: url.host,
-          'user-agent': 'OpsKnight-MCP-ClientMetadata/1',
+      incoming?.destroy();
+      clientRequest?.destroy();
+    };
+    // Socket timeouts measure inactivity and can be defeated by a slow-drip body.
+    // Bound the entire TLS/header/body exchange independently of network progress.
+    const deadline = setTimeout(() => fail('MCP_CLIENT_METADATA_TIMEOUT', 504), TIMEOUT_MS);
+    try {
+      clientRequest = dependencies.request(
+        {
+          protocol: 'https:',
+          host: url.hostname,
+          port: 443,
+          method: 'GET',
+          path: `${url.pathname}`,
+          servername: url.hostname,
+          agent: false,
+          timeout: TIMEOUT_MS,
+          rejectUnauthorized: true,
+          headers: {
+            accept: 'application/json',
+            host: url.host,
+            'user-agent': 'OpsKnight-MCP-ClientMetadata/1',
+          },
+          lookup: createPinnedLookup(pinned),
         },
-        lookup: createPinnedLookup(pinned),
-      },
-      response => {
-        if (response.statusCode !== 200) {
-          response.resume();
-          fail('MCP_CLIENT_METADATA_UNAVAILABLE');
-          return;
-        }
-        const contentType = String(response.headers['content-type'] ?? '');
-        const chunks: Buffer[] = [];
-        let size = 0;
-        response.on('data', (chunk: Buffer) => {
-          size += chunk.length;
-          if (size > CIMD_MAX_BYTES) {
+        response => {
+          incoming = response;
+          response.on('error', () => fail('MCP_CLIENT_METADATA_UNAVAILABLE'));
+          if (settled) {
             response.destroy();
-            fail('MCP_CLIENT_METADATA_TOO_LARGE', 413);
             return;
           }
-          chunks.push(chunk);
-        });
-        response.on('end', () =>
-          finish(() =>
-            resolve({
-              status: 200,
-              contentType,
-              body: Buffer.concat(chunks).toString('utf8'),
-            })
-          )
-        );
-        response.on('error', () => fail('MCP_CLIENT_METADATA_UNAVAILABLE'));
-      }
-    );
-    clientRequest.on('timeout', () => {
-      clientRequest.destroy();
-      fail('MCP_CLIENT_METADATA_TIMEOUT', 504);
-    });
-    clientRequest.on('error', () => fail('MCP_CLIENT_METADATA_UNAVAILABLE'));
-    clientRequest.end();
+          if (response.statusCode !== 200) {
+            fail('MCP_CLIENT_METADATA_UNAVAILABLE');
+            return;
+          }
+          const contentType = String(response.headers['content-type'] ?? '');
+          const chunks: Buffer[] = [];
+          let size = 0;
+          response.on('data', (chunk: Buffer) => {
+            size += chunk.length;
+            if (size > CIMD_MAX_BYTES) {
+              fail('MCP_CLIENT_METADATA_TOO_LARGE', 413);
+              return;
+            }
+            chunks.push(chunk);
+          });
+          response.on('end', () =>
+            finish(() =>
+              resolve({
+                status: 200,
+                contentType,
+                body: Buffer.concat(chunks).toString('utf8'),
+              })
+            )
+          );
+        }
+      );
+      clientRequest.on('timeout', () => {
+        fail('MCP_CLIENT_METADATA_TIMEOUT', 504);
+      });
+      clientRequest.on('error', () => fail('MCP_CLIENT_METADATA_UNAVAILABLE'));
+      clientRequest.end();
+    } catch {
+      fail('MCP_CLIENT_METADATA_UNAVAILABLE');
+    }
   });
 }

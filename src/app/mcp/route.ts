@@ -2,7 +2,7 @@ import { withMcpRuntime } from '@/lib/mcp/auth/config';
 import { randomUUID } from 'node:crypto';
 import { withMcpDatabase } from '@/lib/database-workload';
 import { createMcpHandler } from '@modelcontextprotocol/server';
-import { authenticateMcp, resolveMcpGrant } from '@/lib/mcp/auth/principal';
+import { authenticateMcp, chargeMcpRequest, resolveMcpGrant } from '@/lib/mcp/auth/principal';
 import { assertMcpHost, mcpHttpError } from '@/lib/mcp/auth/http';
 import { CostBudget, acquireMcpSlot, acquireMcpAuthenticationSlot } from '@/lib/mcp/core/budget';
 import { requireMcp, McpBoundaryError } from '@/lib/mcp/core/errors';
@@ -51,6 +51,12 @@ async function handlePost(request: Request) {
     assertMcpHost(request);
     releaseAuth = acquireMcpAuthenticationSlot();
     requireMcp(!request.headers.has('mcp-session-id'), 'MCP_SESSIONS_UNSUPPORTED');
+    // Verify bearer authority before accepting a potentially slow upload. Release the
+    // authentication slot before reading; only authenticated callers occupy work slots.
+    let identity = await authenticateMcp(request, null);
+    releaseAuth();
+    releaseAuth = undefined;
+    release = acquireMcpSlot(identity.policy.maxInFlight);
     let body;
     try {
       body = await readMcpBody(request);
@@ -73,6 +79,12 @@ async function handlePost(request: Request) {
         }
       );
     }
+    // A caller can pause its upload while permissions, credentials or policy change.
+    // Refresh the complete authority snapshot before even permission-filtered discovery.
+    identity = await authenticateMcp(request, null);
+    release();
+    release = undefined;
+    release = acquireMcpSlot(identity.policy.maxInFlight);
     rpcId = body.id;
     const steps =
       body.method === 'tools/call' && body.params?.name === 'execute_plan'
@@ -111,9 +123,7 @@ async function handlePost(request: Request) {
             ? 4
             : 1;
     requireMcp(cost <= 8, 'MCP_OPERATION_BUDGET_EXCEEDED');
-    const identity = await authenticateMcp(request, cost);
-    release = acquireMcpSlot(identity.policy.maxInFlight);
-    releaseAuth();
+    await chargeMcpRequest(identity, cost);
     budget = new CostBudget(identity.policy.maxOperations, 262144, request.signal);
     const context = {
       grantId: identity.grantId,

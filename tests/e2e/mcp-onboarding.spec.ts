@@ -17,7 +17,9 @@ test('add URL, automatically register, sign in and revoke without manual client 
   await page.waitForURL(
     url => !url.pathname.startsWith('/login') && !url.pathname.startsWith('/api/auth')
   );
-  await page.goto('/settings/integrations/mcp');
+  const settingsResponse = await page.goto('/settings/integrations/mcp');
+  expect(settingsResponse?.headers()['referrer-policy']).toBe('no-referrer');
+  expect(settingsResponse?.headers()['cache-control']).toContain('no-store');
   await page.getByRole('checkbox', { name: /Enable MCP/ }).check();
   await page.getByRole('checkbox', { name: /Allow reviewed routine mutations/ }).uncheck();
   await page

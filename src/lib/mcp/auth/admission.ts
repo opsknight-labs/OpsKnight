@@ -3,6 +3,21 @@ import { checkRateLimit } from '@/lib/rate-limit';
 import { digestMcpSecret } from './config';
 import { requireMcp } from '../core/errors';
 
+const oauthInFlight = new Map<'token' | 'revoke', number>();
+/** Slow token uploads cannot consume MCP authentication or revocation admission. */
+export function acquireMcpOAuthSlot(endpoint: 'token' | 'revoke') {
+  const active = oauthInFlight.get(endpoint) ?? 0;
+  requireMcp(active < 2, 'MCP_BUSY', 503);
+  oauthInFlight.set(endpoint, active + 1);
+  let released = false;
+  return () => {
+    if (!released) {
+      released = true;
+      oauthInFlight.set(endpoint, (oauthInFlight.get(endpoint) ?? 1) - 1);
+    }
+  };
+}
+
 /** Untrusted callers cannot spend another known peer's small OAuth quota. */
 export async function admitMcpOAuthRequest(
   request: Request,

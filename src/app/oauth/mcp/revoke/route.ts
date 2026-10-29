@@ -2,11 +2,10 @@ import { logAudit } from '@/lib/audit';
 import { withMcpDatabase } from '@/lib/database-workload';
 import { z } from 'zod';
 import prisma from '@/lib/prisma';
-import { admitMcpOAuthRequest } from '@/lib/mcp/auth/admission';
+import { acquireMcpOAuthSlot, admitMcpOAuthRequest } from '@/lib/mcp/auth/admission';
 import { digestMcpSecret, withMcpRuntime } from '@/lib/mcp/auth/config';
 import { assertMcpHost, mcpHttpError, uniqueQuery } from '@/lib/mcp/auth/http';
 import { readBoundedMcpText } from '@/lib/mcp/core/body';
-import { acquireMcpAuthenticationSlot } from '@/lib/mcp/core/budget';
 import { requireMcp } from '@/lib/mcp/core/errors';
 
 const schema = z
@@ -24,7 +23,7 @@ async function handlePost(request: Request) {
   let release: (() => void) | undefined;
   try {
     assertMcpHost(request);
-    release = acquireMcpAuthenticationSlot();
+    release = acquireMcpOAuthSlot('revoke');
     await admitMcpOAuthRequest(request, 'revoke');
     requireMcp(
       request.headers.get('content-type')?.split(';')[0] === 'application/x-www-form-urlencoded',
