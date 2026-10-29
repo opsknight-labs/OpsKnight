@@ -6,6 +6,10 @@ import { AppError } from '@/lib/errors';
 import { RESPONSE_LIMITS } from '../contract';
 import { enqueueWorkItems, WORK_KINDS } from '../jobs/work-queue';
 import { parseOrThrow } from '../settings/service';
+import { canonicalizeLabels } from '../normalization/labels';
+import { maskVolatileIdentifiers } from '../normalization/text';
+import { loadActiveEdges } from '../dependencies/service';
+import { upstreamDistances } from '../dependencies/graph';
 
 export const CHANGE_KINDS = ['DEPLOY', 'CONFIG', 'FEATURE_FLAG', 'INFRA'] as const;
 const MAX_FUTURE_SKEW_MS = 5 * 60_000;
@@ -41,6 +45,12 @@ export const changeInputSchema = z
     kind: z.enum(CHANGE_KINDS),
     summary: z.string().transform(stripControl).pipe(z.string().min(1).max(300)),
     version: z.string().transform(stripControl).pipe(z.string().max(100)).nullish(),
+    component: z.string().trim().min(1).max(128).transform(maskVolatileIdentifiers).nullish(),
+    labels: z
+      .record(z.string().min(1).max(64), z.union([z.string().max(128), z.number(), z.boolean()]))
+      .refine(value => Object.keys(value).length <= 32, 'At most 32 labels')
+      .transform(canonicalizeLabels)
+      .default({}),
     url: httpUrl.nullish(),
     dedupKey: z.string().trim().min(1).max(128).nullish(),
     // Numbers below 10^11 are Unix seconds (10^11 s is the year 5138); larger ones are milliseconds. Many
@@ -71,13 +81,27 @@ const LATE_CHANGE_REANALYSIS_LIMIT = 50;
  * queue is touched: nothing on the paging path. A change tied to no service affects every service, so it
  * re-signals the most recent incidents overall.
  */
-async function reanalyzeAfterLateChange(serviceId: string | null, occurredAt: Date): Promise<void> {
+async function reanalyzeAfterLateChange(
+  serviceId: string | null,
+  occurredAt: Date,
+  tx: Prisma.TransactionClient
+): Promise<void> {
   const until = new Date(occurredAt.getTime() + RESPONSE_LIMITS.causeLookbackMinutes * 60_000);
-  const rows = await prisma.incidentFingerprint.findMany({
+  const downstream = serviceId
+    ? upstreamDistances(
+        (await loadActiveEdges(tx)).map(edge => ({
+          upstreamServiceId: edge.downstreamServiceId,
+          downstreamServiceId: edge.upstreamServiceId,
+        })),
+        serviceId,
+        RESPONSE_LIMITS.maxUpstreamDepth
+      )
+    : new Map<string, number>();
+  const rows = await tx.incidentFingerprint.findMany({
     where: {
       incidentCreatedAt: { gte: occurredAt, lte: until },
       template: { not: '' },
-      ...(serviceId ? { serviceId } : {}),
+      ...(serviceId ? { serviceId: { in: [serviceId, ...downstream.keys()] } } : {}),
     },
     orderBy: { incidentCreatedAt: 'desc' },
     take: LATE_CHANGE_REANALYSIS_LIMIT,
@@ -85,7 +109,8 @@ async function reanalyzeAfterLateChange(serviceId: string | null, occurredAt: Da
   });
   if (rows.length === 0) return;
   await enqueueWorkItems(
-    rows.map(row => ({ kind: WORK_KINDS.ANALYZE_RESPONSE, subjectKey: row.incidentId }))
+    rows.map(row => ({ kind: WORK_KINDS.ANALYZE_RESPONSE, subjectKey: row.incidentId })),
+    tx
   );
 }
 
@@ -110,13 +135,18 @@ export async function recordChange(
     kind: parsed.kind,
     summary: parsed.summary,
     version: parsed.version || null,
+    component: parsed.component ?? null,
+    labels: parsed.labels,
     url: parsed.url ?? null,
     dedupKey: parsed.dedupKey ?? null,
     occurredAt: parsed.occurredAt,
   };
   try {
-    const row = await prisma.changeEvent.create({ data, select: { id: true } });
-    await reanalyzeAfterLateChange(data.serviceId, data.occurredAt).catch(() => undefined);
+    const row = await prisma.$transaction(async tx => {
+      const created = await tx.changeEvent.create({ data, select: { id: true } });
+      await reanalyzeAfterLateChange(data.serviceId, data.occurredAt, tx);
+      return created;
+    });
     return { status: 'created', id: row.id };
   } catch (error) {
     if (error instanceof Prisma.PrismaClientKnownRequestError) {

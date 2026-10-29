@@ -18,6 +18,7 @@ import { getActiveOnCallShifts } from '@/lib/oncall-shifts';
 import { resolveEmbeddingModel, type AiToolDefinition } from '../ai/port';
 import { maskVolatileText } from '../normalization/text';
 import { normalizeVector, dot } from '../semantic/vector';
+import { resolveEffectivePolicy } from '../settings/service';
 import { getResponseIntelligenceForActor } from '../response/view';
 import { getSimilarIncidentsForActor } from '../similarity/view';
 import { getRelatedIncidentsForActor } from '../correlation/view';
@@ -86,6 +87,85 @@ export function buildSquireTools(
   options: { personal: boolean }
 ): AiToolDefinition[] {
   const tools: AiToolDefinition[] = [
+    readTool(
+      'get_problem_outcomes',
+      'Read aggregate outcomes and the best observed runbook for this incident problem. Returns counts and resolution time, never hidden incident history.',
+      idOnly,
+      async input => {
+        const parsed = idInput.safeParse(input);
+        if (!parsed.success) return { error: 'Invalid input' };
+        if (!(await readIncidentForActor(actor, parsed.data.id))) return NOT_FOUND;
+        const fingerprint = await prisma.incidentFingerprint.findUnique({
+          where: { incidentId: parsed.data.id },
+          select: { serviceId: true, templateHash: true },
+        });
+        if (
+          !fingerprint?.templateHash ||
+          (await resolveEffectivePolicy(fingerprint.serviceId)).effectiveMode === 'OFF'
+        )
+          return [];
+        const [outcome, candidates] = await Promise.all([
+          prisma.intelligencePattern.findUnique({
+            where: {
+              scopeKey_kind_key: {
+                scopeKey: fingerprint.serviceId,
+                kind: 'PROBLEM_OUTCOME',
+                key: fingerprint.templateHash,
+              },
+            },
+          }),
+          prisma.intelligencePattern.findMany({
+            where: {
+              scopeKey: fingerprint.serviceId,
+              kind: 'RUNBOOK_OUTCOME',
+              stats: { path: ['templateHash'], equals: fingerprint.templateHash },
+            },
+            orderBy: { successes: 'desc' },
+            take: MAX_ROWS,
+          }),
+        ]);
+        const candidatesById = new Map(
+          candidates.flatMap(row => {
+            const parsed = z.object({ runbookId: z.string() }).safeParse(row.stats);
+            return parsed.success ? [[parsed.data.runbookId, row] as const] : [];
+          })
+        );
+        const readable = scoped(() => runbookReadWhere(actor));
+        const runbooks = readable
+          ? await prisma.runbook.findMany({
+              where: {
+                AND: [
+                  {
+                    id: { in: [...candidatesById.keys()] },
+                    archivedAt: null,
+                    publishedVersionId: { not: null },
+                  },
+                  readable,
+                ],
+              },
+              select: { id: true, name: true },
+            })
+          : [];
+        const best = runbooks
+          .map(row => ({ ...row, count: candidatesById.get(row.id)! }))
+          .sort((a, b) => b.count.successes - a.count.successes)[0];
+        return {
+          support: outcome?.support ?? 0,
+          resolved: outcome?.successes ?? 0,
+          meanResolutionMinutes: outcome?.successes
+            ? Math.round(outcome.resolutionTotalMs / outcome.successes / 60_000)
+            : null,
+          bestRunbook: best
+            ? {
+                id: best.id,
+                name: best.name,
+                succeeded: best.count.successes,
+                eligible: best.count.support,
+              }
+            : null,
+        };
+      }
+    ),
     readTool(
       'semantic_search_incidents',
       'Find incidents with a similar meaning using optional embeddings. Bounded to recent incidents you may read; returns no results when embeddings are disabled.',

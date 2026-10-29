@@ -5057,6 +5057,8 @@ model IncidentFingerprint {
   tokens            String[]
   labels            Json
   resolutionSummary String?
+  /// Whether this fingerprint has contributed to the rebuildable outcome aggregates.
+  patternVersion    Int       @default(0)
   engineVersion     String
   incidentCreatedAt DateTime
   resolvedAt        DateTime?
@@ -5065,6 +5067,7 @@ model IncidentFingerprint {
 
   @@index([serviceId, incidentCreatedAt(sort: Desc)], map: "idx_incident_fingerprint_service_recent")
   @@index([incidentCreatedAt], map: "idx_incident_fingerprint_retention")
+  @@index([serviceId, template, incidentCreatedAt], map: "idx_incident_fingerprint_problem")
 }
 
 // Aggregate counters only; never raw alert payloads. scopeKey is a service id or "global".
@@ -5076,6 +5079,8 @@ model IntelligencePattern {
   successes  Int      @default(0)
   failures   Int      @default(0)
   support    Int      @default(0)
+  resolutionTotalMs Float @default(0)
+  stats      Json     @default("{}")
   lastSeenAt DateTime @default(now())
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
@@ -5225,6 +5230,8 @@ model ChangeEvent {
   kind       ChangeKind
   summary    String
   version    String?
+  component  String?
+  labels     Json       @default("{}")
   url        String?
   dedupKey   String?
   occurredAt DateTime
@@ -5233,6 +5240,7 @@ model ChangeEvent {
   @@unique([source, dedupKey], map: "uq_change_event_source_dedup")
   @@index([serviceId, occurredAt(sort: Desc)], map: "idx_change_event_service_recent")
   @@index([occurredAt], map: "idx_change_event_retention")
+  @@index([source, occurredAt], map: "idx_change_event_source_recent")
 }
 
 // ---------------------------------------------------------------------------

@@ -84,6 +84,14 @@ function memoized<T>(key: string, client: Client, load: () => Promise<T>): Promi
   return pending;
 }
 
+export function memoizeIntelligenceRead<T>(
+  key: string,
+  client: Client,
+  load: () => Promise<T>
+): Promise<T> {
+  return memoized(key, client, load);
+}
+
 /** Reads never write: an absent singleton yields the safe defaults (disabled, revision 0). */
 export async function getIntelligenceSettings(
   client: Client = prisma
@@ -569,9 +577,7 @@ export async function listPolicyVersions(
 
 export function parseOrThrow<T>(
   schema: {
-    safeParse: (
-      value: unknown
-    ) =>
+    safeParse: (value: unknown) =>
       | { success: true; data: T }
       | {
           success: false;

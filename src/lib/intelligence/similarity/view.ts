@@ -20,6 +20,7 @@ export interface SimilarIncidentView {
   resolvedAt: Date | null;
   /** How long the precedent took to resolve, in minutes; null while it is open. */
   minutesToResolve: number | null;
+  resolutionSummary: string | null;
   /** The precedent's postmortem, when one exists and the viewer may read it: how it was fixed. */
   postmortem: { href: string; resolution: string | null } | null;
   /** Ranking signal in percent. It is NOT a calibrated probability. */
@@ -117,6 +118,7 @@ export async function getSimilarIncidentsForActor(
       status: true,
       createdAt: true,
       resolvedAt: true,
+      intelligenceFingerprint: { select: { resolutionSummary: true } },
       service: { select: { name: true } },
     },
   });
@@ -159,12 +161,21 @@ export async function getSimilarIncidentsForActor(
       serviceName: target.service.name,
       createdAt: target.createdAt,
       resolvedAt: target.resolvedAt,
-      minutesToResolve: target.resolvedAt
-        ? Math.max(
-            0,
-            Math.round((target.resolvedAt.getTime() - target.createdAt.getTime()) / 60_000)
-          )
-        : null,
+      minutesToResolve:
+        target.status === 'RESOLVED' && target.resolvedAt
+          ? Math.max(
+              0,
+              Math.round((target.resolvedAt.getTime() - target.createdAt.getTime()) / 60_000)
+            )
+          : null,
+      resolutionSummary:
+        target.status === 'RESOLVED'
+          ? shortText(
+              postmortems.get(target.id) ??
+                target.intelligenceFingerprint?.resolutionSummary ??
+                null
+            )
+          : null,
       postmortem: postmortems.has(target.id)
         ? {
             href: `/postmortems/${target.id}`,

@@ -4,7 +4,12 @@ import { logger } from '@/lib/logger';
 import { withDbBudget } from '../jobs/db-budget';
 import { semanticNeighbours } from '../semantic/search';
 import { detectCapabilities, type SimilarityTier } from './capabilities';
-import { scoreSimilarity, type SimilarityComponents, type SimilarityFingerprint } from './scoring';
+import {
+  scoreSimilarity,
+  type ScoringWeights,
+  type SimilarityComponents,
+  type SimilarityFingerprint,
+} from './scoring';
 import { inverseDocumentFrequency, selectQueryTerms, termFrequencies } from './term-stats';
 
 export interface SimilarityOptions {
@@ -17,6 +22,7 @@ export interface SimilarityOptions {
   now?: Date;
   /** The current embedding model; when set, semantic neighbours are added and scored. */
   semanticModel?: string | null;
+  weights?: ScoringWeights;
 }
 
 /** Most-recent vectors compared per search, as a multiple of the per-source candidate cap. */
@@ -198,7 +204,8 @@ export async function findSimilarIncidents(
           toFingerprint(candidate),
           now,
           cosines.get(candidate.incidentId),
-          idf
+          idf,
+          options.weights
         ),
       }))
       .filter(result => result.score >= options.minScore)

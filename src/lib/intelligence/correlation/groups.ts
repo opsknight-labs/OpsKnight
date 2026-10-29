@@ -2,6 +2,11 @@ import 'server-only';
 import { Prisma } from '@prisma/client';
 import { INTELLIGENCE_ENGINE_VERSION, type CorrelationRule } from '../contract';
 import { extendedWindowEnd, scopeHash, windowFor } from './rules';
+import {
+  combinedContent,
+  scoreSimilarity,
+  type SimilarityFingerprint,
+} from '../similarity/scoring';
 
 type Tx = Prisma.TransactionClient;
 
@@ -16,6 +21,8 @@ export interface JoinInput {
   incident: { id: string; createdAt: Date };
   /** SHADOW records only; SUGGESTED also proposes a reversible link to the group's anchor. */
   decision: CorrelationMode;
+  scopeServiceIds?: readonly string[];
+  match?: { fingerprint: SimilarityFingerprint; minScore: number };
 }
 
 export interface JoinResult {
@@ -25,6 +32,7 @@ export interface JoinResult {
   /** True when this call created the membership; false on an idempotent replay. */
   memberCreated: boolean;
   relationshipCreated: boolean;
+  matched?: boolean;
 }
 
 type GroupRow = {
@@ -44,7 +52,7 @@ type GroupRow = {
  */
 export async function joinCorrelationGroup(tx: Tx, input: JoinInput): Promise<JoinResult> {
   const { rule, incident } = input;
-  const scope = scopeHash([input.serviceId]);
+  const scope = scopeHash(input.scopeServiceIds ?? [input.serviceId]);
   const window = windowFor(incident.createdAt, rule);
 
   const findGroup = () =>
@@ -61,20 +69,13 @@ export async function joinCorrelationGroup(tx: Tx, input: JoinInput): Promise<Jo
       INSERT INTO "CorrelationGroup"
         ("id", "policyId", "policyVersion", "ruleId", "scopeKind", "scopeHash", "signatureHash",
          "windowStart", "windowEnd", "maxWindowEnd", "updatedAt")
-      VALUES (gen_random_uuid()::text, ${input.policyId}, ${input.policyVersion}, ${rule.id}, 'SERVICE', ${scope},
+      VALUES (gen_random_uuid()::text, ${input.policyId}, ${input.policyVersion}, ${rule.id}, ${rule.kind === 'TOPOLOGY' ? 'TOPOLOGY' : 'SERVICE'}, ${scope},
               ${input.signatureHash}, ${window.windowStart}, ${window.windowEnd}, ${window.maxWindowEnd}, now())
       ON CONFLICT ("policyId", "policyVersion", "ruleId", "scopeHash", "signatureHash", "windowStart") DO NOTHING`);
     // Either this call inserted the row or a concurrent worker did; both end up reading the same group.
     [group] = await findGroup();
   }
   if (!group) throw new Error('Correlation group could not be resolved');
-
-  const widened = extendedWindowEnd(group, incident.createdAt, rule.windowSeconds);
-  if (widened.getTime() > group.windowEnd.getTime()) {
-    await tx.$executeRaw(Prisma.sql`
-      UPDATE "CorrelationGroup" SET "windowEnd" = GREATEST("windowEnd", ${widened}), "updatedAt" = now()
-      WHERE "id" = ${group.id}`);
-  }
 
   // The earliest incident is the anchor. The group row lock serialises elections; an incident that is
   // processed late but opened first takes over, and the previous anchor becomes a member linked to it.
@@ -85,6 +86,42 @@ export async function joinCorrelationGroup(tx: Tx, input: JoinInput): Promise<Jo
     FROM "CorrelationGroup" g LEFT JOIN "Incident" a ON a."id" = g."anchorIncidentId"
     WHERE g."id" = ${group.id}
     FOR UPDATE OF g`);
+  let score = 1;
+  if (input.match && current?.anchor && current.anchor !== incident.id) {
+    const anchorFingerprint = await tx.incidentFingerprint.findUnique({
+      where: { incidentId: current.anchor },
+    });
+    if (anchorFingerprint) {
+      const labels =
+        anchorFingerprint.labels &&
+        typeof anchorFingerprint.labels === 'object' &&
+        !Array.isArray(anchorFingerprint.labels)
+          ? Object.fromEntries(
+              Object.entries(anchorFingerprint.labels).filter(
+                (entry): entry is [string, string] => typeof entry[1] === 'string'
+              )
+            )
+          : {};
+      score = combinedContent(
+        scoreSimilarity(input.match.fingerprint, { ...anchorFingerprint, labels }).components
+      );
+    } else score = 0;
+    if (score < input.match.minScore)
+      return {
+        groupId: group.id,
+        anchorIncidentId: current.anchor,
+        role: 'MEMBER',
+        memberCreated: false,
+        relationshipCreated: false,
+        matched: false,
+      };
+  }
+  const widened = extendedWindowEnd(group, incident.createdAt, rule.windowSeconds);
+  if (widened.getTime() > group.windowEnd.getTime()) {
+    await tx.$executeRaw(Prisma.sql`
+      UPDATE "CorrelationGroup" SET "windowEnd" = GREATEST("windowEnd", ${widened}), "updatedAt" = now()
+      WHERE "id" = ${group.id}`);
+  }
   const precedes =
     !current?.anchor ||
     !current.anchorCreatedAt ||
@@ -124,12 +161,13 @@ export async function joinCorrelationGroup(tx: Tx, input: JoinInput): Promise<Jo
     ruleKind: rule.kind,
     windowSeconds: rule.windowSeconds,
     role,
+    anchorIncidentId: anchor,
   });
   const inserted = await tx.$queryRaw<Array<{ id: string }>>(Prisma.sql`
     INSERT INTO "CorrelationMember"
       ("id", "groupId", "incidentId", "role", "decision", "score", "evidence", "policyVersion", "engineVersion", "updatedAt")
     VALUES (gen_random_uuid()::text, ${group.id}, ${incident.id}, ${role}::"CorrelationMemberRole",
-            ${input.decision}::"CorrelationDecision", 1, ${evidence}::jsonb, ${input.policyVersion},
+            ${input.decision}::"CorrelationDecision", ${score}, ${evidence}::jsonb, ${input.policyVersion},
             ${INTELLIGENCE_ENGINE_VERSION}, now())
     ON CONFLICT ("groupId", "incidentId") DO NOTHING RETURNING "id"`);
   const memberCreated = inserted.length === 1;

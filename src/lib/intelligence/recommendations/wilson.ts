@@ -23,6 +23,8 @@ export interface RunbookOutcomeCounts {
   bound: boolean;
   /** Runs on incidents with the same masked title as this one: the runbook's record on this exact problem. */
   sameProblem?: { succeeded: number; eligible: number };
+  /** Observed improvement versus this problem's mean MTTR, clamped to a small ranking bonus. */
+  mttrImprovement?: number;
 }
 
 export interface RankedRunbook extends RunbookOutcomeCounts {
@@ -39,15 +41,19 @@ export function rankRunbooks(
       ...candidate,
       // A runbook that has fixed this exact problem before is judged on that record when it is the stronger
       // evidence; it is never penalised for it.
-      confidence:
+      confidence: Math.min(
+        1,
         Math.round(
           Math.max(
             wilsonLowerBound(candidate.succeeded, candidate.eligible),
             candidate.sameProblem
               ? wilsonLowerBound(candidate.sameProblem.succeeded, candidate.sameProblem.eligible)
               : 0
-          ) * 1000
-        ) / 1000,
+          ) *
+            (1 + 0.1 * Math.max(0, Math.min(1, candidate.mttrImprovement ?? 0))) *
+            1000
+        ) / 1000
+      ),
     }))
     .sort(
       (a, b) =>

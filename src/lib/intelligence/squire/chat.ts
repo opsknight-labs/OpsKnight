@@ -50,6 +50,7 @@ const TOOL_LABELS: Record<string, string> = {
   find_people: 'Looking up people',
   semantic_search_incidents: 'Searching incidents by meaning',
   get_status_page: 'Reading the status page',
+  get_problem_outcomes: 'Checking past outcomes for this problem',
 };
 
 /**

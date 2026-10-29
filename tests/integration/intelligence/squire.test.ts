@@ -239,6 +239,7 @@ describe('AI mode', () => {
     expect(tools.filter(name => !name.startsWith('propose_')).sort()).toEqual([
       'get_incident',
       'get_intelligence',
+      'get_problem_outcomes',
       'get_recent_changes',
       'get_runbook',
       'get_service',

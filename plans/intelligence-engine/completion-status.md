@@ -12,8 +12,9 @@ The user requested continuation through all phases; a phase push is not the end 
 - [x] Phase 4: lazy client launcher; parallel preparation and deferred persistence; bounded request
       streaming; semantic and status-page tools; opt-in live-model evaluation suite. Existing confirmed
       actions, briefing, progress, citations and history remain in place.
-- [ ] Phase 5: finish topology grouping, change baselines, outcome patterns, seasonal/flapping
-      detection and manually published feedback-trained weights.
+- [x] Phase 5: topology grouping with configurable minimum scores, change baselines and component
+      matches, transactional downstream late-change re-analysis, idempotent outcome patterns, seasonal/flapping
+      detection, outcome/MTTR runbook ranking and manually published feedback-trained weights.
 - [ ] Phase 6: shadow quality, service certification gate, post-paging reversible AUTO grouping.
 - [ ] Phase 7: tabbed panel, skeletons, runbook and relationship controls, explanations, search fix,
       phone-width and axe coverage.
@@ -40,3 +41,24 @@ database ending in `_test`; the suite resets it. Model/base URL are configurable
 The first resumed push exposed build heap exhaustion at about 4 GB. Whole-repository local lint also
 reports 21 errors and 552 warnings in existing files. This is distinct from the zero-warning
 changed-source gate. Neither result is waived or represented as a passing release gate.
+
+## Phase 5 evidence
+
+The full intelligence database run exercised 304 cases: 301 passed initially. Follow-up suites for the
+three regressions (new read-tool allowlist, cross-service scoring, derived-pattern retention) passed
+49/49 after correction. The full final-head run remains part of final verification. Changed-source
+ESLint, schema validation and a nonincremental typecheck passed. Intelligence and dashboard regression
+unit tests passed 279/279. The dashboard catch-up test now allows for its existing bounded timer jitter.
+
+Migration `20261029001400_intelligence_quality` was applied to the dedicated test database. It adds
+pattern statistics, a fingerprint aggregation marker and change metadata/indexes without rewriting
+incidents. Outcome tests cover concurrent indexing, replay, reopening, retitling, OFF suppression and
+secret redaction. Scoring tests verify proposals remain inactive until an audited, revision-locked
+policy publication.
+
+The 1M-history/10k-storm run uses a separate disposable database. Its harness now stamps the current
+engine version and suppresses periodic sweeps on every cycle, so a longer run does not accidentally
+become a million-incident re-index benchmark. Results are pending, not certification evidence.
+
+Further audit items to close with the remaining work: atomic token reservations (existing admission
+checks are soft), action receipts after uncertain failures, and final CI/build memory settings.

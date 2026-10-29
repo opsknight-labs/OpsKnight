@@ -7,7 +7,7 @@
 import { z } from 'zod/v4';
 
 /** Bumped whenever normalization, scoring or rule semantics change; stamped on every decision. */
-export const INTELLIGENCE_ENGINE_VERSION = '1.1.0';
+export const INTELLIGENCE_ENGINE_VERSION = '1.2.0';
 
 export const INTELLIGENCE_MODES = ['OFF', 'SHADOW', 'SUGGEST', 'AUTO'] as const;
 export type IntelligenceModeValue = (typeof INTELLIGENCE_MODES)[number];
@@ -82,7 +82,12 @@ export type IntelligenceSettingsInput = z.infer<typeof intelligenceSettingsInput
  * Grouping rule kinds available to operators. Rules are deterministic and explainable. Learning
  * only proposes rules of these same kinds from people's link decisions; a person publishes them.
  */
-export const CORRELATION_RULE_KINDS = ['EXACT_FIELD', 'CONTENT_TEMPLATE', 'LABEL_SET'] as const;
+export const CORRELATION_RULE_KINDS = [
+  'EXACT_FIELD',
+  'CONTENT_TEMPLATE',
+  'LABEL_SET',
+  'TOPOLOGY',
+] as const;
 export type CorrelationRuleKind = (typeof CORRELATION_RULE_KINDS)[number];
 
 export const MAX_CORRELATION_RULES_PER_POLICY = 25;
@@ -120,11 +125,28 @@ export const correlationRuleSchema = z
     message: 'maxWindowSeconds must be at least windowSeconds',
     path: ['maxWindowSeconds'],
   })
-  .refine(rule => rule.kind === 'CONTENT_TEMPLATE' || rule.keys.length > 0, {
-    message: 'EXACT_FIELD and LABEL_SET rules need at least one key',
-    path: ['keys'],
-  });
+  .refine(
+    rule => rule.kind === 'CONTENT_TEMPLATE' || rule.kind === 'TOPOLOGY' || rule.keys.length > 0,
+    {
+      message: 'EXACT_FIELD and LABEL_SET rules need at least one key',
+      path: ['keys'],
+    }
+  );
 export type CorrelationRule = z.infer<typeof correlationRuleSchema>;
+
+export const scoringWeightsSchema = z
+  .object({
+    content: z.number().min(0.4).max(1),
+    labels: z.number().min(0).max(0.6),
+    sameService: z.number().min(0).max(0.6),
+    recency: z.number().min(0).max(0.6),
+    resolved: z.number().min(0).max(0.6),
+  })
+  .strict()
+  .refine(
+    weights => Math.abs(Object.values(weights).reduce((a, b) => a + b, 0) - 1) < 0.000001,
+    'Weights must sum to one'
+  );
 
 export const policyDefinitionSchema = z
   .object({
@@ -133,6 +155,8 @@ export const policyDefinitionSchema = z
       .object({
         enabled: z.boolean().default(true),
         minScore: z.number().min(0).max(1).default(0.35),
+        /** Offline-trained proposal, applied only by a person publishing an audited policy version. */
+        weights: scoringWeightsSchema.optional(),
       })
       .strict()
       .default({ enabled: true, minScore: 0.35 }),

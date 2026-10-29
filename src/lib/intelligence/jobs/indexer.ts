@@ -3,6 +3,8 @@ import { createHash } from 'node:crypto';
 import type { Prisma } from '@prisma/client';
 import { INTELLIGENCE_ENGINE_VERSION } from '../contract';
 import { buildIncidentFingerprint } from '../normalization';
+import { redactSecrets } from '../ai/redact';
+import { updateOutcomePattern } from '../learning/patterns';
 
 /** Same value the embedder stores as an embedding's source hash: sha256 of the template, 32 hex chars. */
 export function templateHash(template: string): string {
@@ -20,6 +22,8 @@ export async function indexIncident(
   tx: Prisma.TransactionClient,
   options: { suppressed?: boolean } = {}
 ): Promise<'indexed' | 'missing'> {
+  await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`intelligence-fingerprint:${incidentId}`}, 0))`;
+  const previous = await tx.incidentFingerprint.findUnique({ where: { incidentId } });
   const incident = await tx.incident.findUnique({
     where: { id: incidentId },
     select: {
@@ -29,6 +33,7 @@ export async function indexIncident(
       serviceId: true,
       createdAt: true,
       resolvedAt: true,
+      status: true,
     },
   });
   if (!incident) return 'missing';
@@ -43,7 +48,10 @@ export async function indexIncident(
       engineVersion: INTELLIGENCE_ENGINE_VERSION,
       incidentCreatedAt: incident.createdAt,
       resolvedAt: incident.resolvedAt,
+      resolutionSummary: null,
+      patternVersion: 0,
     };
+    await updateOutcomePattern(tx, previous, placeholder);
     await tx.incidentFingerprint.upsert({
       where: { incidentId },
       create: { incidentId, ...placeholder },
@@ -53,11 +61,23 @@ export async function indexIncident(
   }
 
   // The first alert carries the original monitoring labels; later alerts only repeat them.
-  const firstAlert = await tx.alert.findFirst({
-    where: { incidentId },
-    orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
-    select: { payload: true },
-  });
+  const [firstAlert, postmortem, resolution] = await Promise.all([
+    tx.alert.findFirst({
+      where: { incidentId },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+      select: { payload: true },
+    }),
+    incident.status === 'RESOLVED'
+      ? tx.postmortem.findUnique({ where: { incidentId }, select: { resolution: true } })
+      : Promise.resolve(null),
+    incident.status === 'RESOLVED'
+      ? tx.incidentEvent.findFirst({
+          where: { incidentId, type: { in: ['MANUAL_RESOLVED', 'AUTO_RESOLVED'] } },
+          orderBy: { createdAt: 'desc' },
+          select: { message: true },
+        })
+      : Promise.resolve(null),
+  ]);
   const payload = firstAlert?.payload as { custom_details?: unknown } | null | undefined;
   const fingerprint = buildIncidentFingerprint({
     title: incident.title,
@@ -74,8 +94,17 @@ export async function indexIncident(
     labels: fingerprint.labels,
     engineVersion: INTELLIGENCE_ENGINE_VERSION,
     incidentCreatedAt: incident.createdAt,
-    resolvedAt: incident.resolvedAt,
+    resolvedAt: incident.status === 'RESOLVED' ? incident.resolvedAt : null,
+    resolutionSummary:
+      incident.status === 'RESOLVED'
+        ? redactSecrets(postmortem?.resolution || resolution?.message || '')
+            .replace(/\s+/g, ' ')
+            .trim()
+            .slice(0, 512) || null
+        : null,
+    patternVersion: 1,
   };
+  await updateOutcomePattern(tx, previous, data);
   await tx.incidentFingerprint.upsert({
     where: { incidentId },
     create: { incidentId, ...data },

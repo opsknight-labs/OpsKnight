@@ -5,6 +5,8 @@ import type { ClaimedWorkItem } from '../jobs/work-queue';
 import { resolveEffectivePolicy, type IntelligenceSettingsView } from '../settings/service';
 import { joinCorrelationGroup, type CorrelationMode } from './groups';
 import { computeSignature, isCriticalIncident } from './rules';
+import { loadActiveEdges } from '../dependencies/service';
+import { topologyScope } from '../dependencies/graph';
 
 export type CorrelationOutcome =
   | 'incident_gone'
@@ -34,7 +36,11 @@ export async function correlateIncident(
     where: { id: incidentId },
     select: { id: true, serviceId: true, urgency: true, createdAt: true },
   });
-  const none = (outcome: CorrelationOutcome): CorrelationSummary => ({ outcome, groups: 0, suggestions: 0 });
+  const none = (outcome: CorrelationOutcome): CorrelationSummary => ({
+    outcome,
+    groups: 0,
+    suggestions: 0,
+  });
   if (!incident) return none('incident_gone');
 
   const policy = await resolveEffectivePolicy(incident.serviceId);
@@ -46,9 +52,13 @@ export async function correlateIncident(
   const fingerprint = await prisma.incidentFingerprint.findUnique({ where: { incidentId } });
   if (!fingerprint) throw new Error('Incident fingerprint is not ready yet');
   const labels =
-    fingerprint.labels && typeof fingerprint.labels === 'object' && !Array.isArray(fingerprint.labels)
+    fingerprint.labels &&
+    typeof fingerprint.labels === 'object' &&
+    !Array.isArray(fingerprint.labels)
       ? Object.fromEntries(
-          Object.entries(fingerprint.labels).filter((entry): entry is [string, string] => typeof entry[1] === 'string')
+          Object.entries(fingerprint.labels).filter(
+            (entry): entry is [string, string] => typeof entry[1] === 'string'
+          )
         )
       : {};
 
@@ -56,10 +66,13 @@ export async function correlateIncident(
   const decision: CorrelationMode = policy.effectiveMode === 'SUGGEST' ? 'SUGGESTED' : 'SHADOW';
   const policyId = policy.policyId;
 
+  const edges = rules.some(rule => rule.kind === 'TOPOLOGY') ? await loadActiveEdges() : [];
   return withDbBudget(settings, async tx => {
     let groups = 0;
     let suggestions = 0;
     for (const rule of rules) {
+      const scope = rule.kind === 'TOPOLOGY' ? topologyScope(edges, incident.serviceId) : null;
+      if (rule.kind === 'TOPOLOGY' && !scope) continue;
       const signatureHash = computeSignature(rule, {
         serviceId: fingerprint.serviceId,
         template: fingerprint.template,
@@ -74,11 +87,22 @@ export async function correlateIncident(
         signatureHash,
         incident: { id: incident.id, createdAt: incident.createdAt },
         decision,
+        ...(scope
+          ? {
+              scopeServiceIds: scope,
+              match: { fingerprint: { ...fingerprint, labels }, minScore: rule.minScore },
+            }
+          : {}),
       });
+      if (joined.matched === false) continue;
       groups += 1;
       if (joined.relationshipCreated) suggestions += 1;
     }
-    return { outcome: groups > 0 ? ('correlated' as const) : ('no_match' as const), groups, suggestions };
+    return {
+      outcome: groups > 0 ? ('correlated' as const) : ('no_match' as const),
+      groups,
+      suggestions,
+    };
   });
 }
 
@@ -94,7 +118,10 @@ export async function shouldCorrelate(incidentId: string): Promise<boolean> {
     });
     if (!fingerprint) return false;
     const policy = await resolveEffectivePolicy(fingerprint.serviceId);
-    return policy.effectiveMode !== 'OFF' && policy.definition.correlation.rules.some(rule => rule.enabled);
+    return (
+      policy.effectiveMode !== 'OFF' &&
+      policy.definition.correlation.rules.some(rule => rule.enabled)
+    );
   } catch {
     return false;
   }

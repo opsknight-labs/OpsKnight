@@ -17,6 +17,7 @@ import { performance } from 'node:perf_hooks';
 import prisma from '../../src/lib/prisma';
 import {
   DEFAULT_POLICY_DEFINITION,
+  INTELLIGENCE_ENGINE_VERSION,
   INTELLIGENCE_SETTINGS_DEFAULTS,
 } from '../../src/lib/intelligence/contract';
 import {
@@ -131,7 +132,7 @@ async function seed(options: Options) {
       SELECT i."id", i."serviceId", regexp_replace(lower(i."title"), '[0-9]+', '<num>', 'g'),
              left(encode(sha256(convert_to(regexp_replace(lower(i."title"), '[0-9]+', '<num>', 'g'), 'UTF8')), 'hex'), 32),
              regexp_split_to_array(regexp_replace(lower(i."title"), ' on node-[0-9]+', ''), ' '),
-             '{}'::jsonb, 'bench', i."createdAt", i."resolvedAt", now()
+             '{}'::jsonb, '${INTELLIGENCE_ENGINE_VERSION}', i."createdAt", i."resolvedAt", now()
       FROM "Incident" i WHERE i."id" LIKE 'hist-%'`);
       await bulk.$executeRawUnsafe(`ANALYZE "Incident"`);
       await bulk.$executeRawUnsafe(`ANALYZE "IncidentFingerprint"`);
@@ -241,6 +242,15 @@ async function main() {
   let cycles = 0;
   let failed = 0;
   for (;;) {
+    // A 1M-history run can exceed a sweep interval. Keep sweeps disabled on every cycle so
+    // this benchmark continues to measure the queued burst rather than a history backfill.
+    Object.assign(state, {
+      lastReconcileAt: Date.now(),
+      lastRetentionAt: Date.now(),
+      lastObserveAt: Date.now(),
+      lastEmbedAt: Date.now(),
+      lastDigestCheckAt: Date.now(),
+    });
     const result = await runIntelligenceCycle(state, { handlers, getCriticalLagMs: async () => 0 });
     cycles += 1;
     failed += result.failed;

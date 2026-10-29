@@ -6,12 +6,17 @@ import { computeRunbookFindings } from '../recommendations/ranker';
 import { computeCauseFindings } from '../root-cause/analyzer';
 import { resolveEffectivePolicy, type IntelligenceSettingsView } from '../settings/service';
 import { replaceFindings } from '../similarity/findings';
+import { loadActiveEdges } from '../dependencies/service';
 
-export type ResponseOutcome = 'analyzed' | 'skipped_off' | 'skipped_disabled_feature' | 'incident_gone' | 'stale';
+export type ResponseOutcome =
+  'analyzed' | 'skipped_off' | 'skipped_disabled_feature' | 'incident_gone' | 'stale';
 
 /** Cheap pre-check used by the indexer so no work item is created when response analysis is off. */
 export async function shouldAnalyzeResponse(incidentId: string): Promise<boolean> {
-  const incident = await prisma.incident.findUnique({ where: { id: incidentId }, select: { serviceId: true } });
+  const incident = await prisma.incident.findUnique({
+    where: { id: incidentId },
+    select: { serviceId: true },
+  });
   if (!incident) return false;
   const policy = await resolveEffectivePolicy(incident.serviceId);
   return policy.effectiveMode !== 'OFF' && policy.definition.response.enabled;
@@ -36,23 +41,31 @@ export async function analyzeResponse(
   const policy = await resolveEffectivePolicy(incident.serviceId);
   if (policy.effectiveMode === 'OFF') return 'skipped_off';
   if (!policy.definition.response.enabled) return 'skipped_disabled_feature';
+  const edges = await loadActiveEdges();
 
   return withDbBudget(settings, async tx => {
     // A newer analysis may already have written; fence all three kinds together so an older
     // run never leaves a mix of generations.
     const newest = await tx.intelligenceFinding.aggregate({
-      where: { incidentId, kind: { in: ['CHANGE_CORRELATION', 'PROBABLE_CAUSE', 'RUNBOOK_RECOMMENDATION'] } },
+      where: {
+        incidentId,
+        kind: { in: ['CHANGE_CORRELATION', 'PROBABLE_CAUSE', 'RUNBOOK_RECOMMENDATION'] },
+      },
       _max: { generation: true },
     });
     if ((newest._max.generation ?? 0) > item.generation) return 'stale' as const;
     const [causes, runbooks] = await Promise.all([
-      computeCauseFindings(tx, incident),
+      computeCauseFindings(tx, incident, edges),
       computeRunbookFindings(tx, incident),
     ]);
     const common = { incidentId, generation: item.generation, policyVersion: policy.version };
     const results = [
       await replaceFindings(tx, { ...common, kind: 'CHANGE_CORRELATION', rows: causes.changes }),
-      await replaceFindings(tx, { ...common, kind: 'PROBABLE_CAUSE', rows: causes.upstreamIncidents }),
+      await replaceFindings(tx, {
+        ...common,
+        kind: 'PROBABLE_CAUSE',
+        rows: causes.upstreamIncidents,
+      }),
       await replaceFindings(tx, { ...common, kind: 'RUNBOOK_RECOMMENDATION', rows: runbooks }),
     ];
     return results.every(result => result === 'stale') ? 'stale' : 'analyzed';

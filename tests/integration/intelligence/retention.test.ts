@@ -77,7 +77,7 @@ describe('retention sweep', () => {
       fingerprints: 1,
       findings: 1,
       feedback: 1,
-      patterns: 1,
+      patterns: 2, // the seeded old pattern and the old fingerprint's derived outcome aggregate
       more: false,
     });
     expect((await db.incidentFingerprint.findMany()).map(f => f.incidentId)).toEqual([
@@ -85,7 +85,14 @@ describe('retention sweep', () => {
     ]);
     expect(await db.intelligenceFinding.count()).toBe(1);
     expect((await db.intelligenceFeedback.findMany()).map(f => f.subjectId)).toEqual(['b']);
-    expect((await db.intelligencePattern.findMany()).map(p => p.key)).toEqual(['new']);
+    expect(
+      (await db.intelligencePattern.findMany({ where: { kind: 'k' } })).map(p => p.key)
+    ).toEqual(['new']);
+    expect(
+      await db.intelligencePattern.count({
+        where: { kind: 'PROBLEM_OUTCOME', scopeKey: service.id },
+      })
+    ).toBe(1);
     // The retained incidents themselves are never touched.
     expect(await db.incident.count()).toBe(2);
   });

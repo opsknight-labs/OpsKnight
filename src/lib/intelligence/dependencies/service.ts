@@ -4,7 +4,7 @@ import type { Prisma } from '@prisma/client';
 import prisma from '@/lib/prisma';
 import { logAudit } from '@/lib/audit';
 import { AppError } from '@/lib/errors';
-import { parseOrThrow, type IntelligenceActor } from '../settings/service';
+import { memoizeIntelligenceRead, parseOrThrow, type IntelligenceActor } from '../settings/service';
 
 export const MAX_DEPENDENCIES = 5000;
 
@@ -25,7 +25,10 @@ const auditSource = (actor: IntelligenceActor) => ({
 });
 
 function invalid(message: string): AppError {
-  return new AppError({ code: 'VALIDATION_FAILED', fields: [{ field: 'input', code: 'custom', message }] });
+  return new AppError({
+    code: 'VALIDATION_FAILED',
+    fields: [{ field: 'input', code: 'custom', message }],
+  });
 }
 
 export interface DependencyView {
@@ -67,11 +70,13 @@ export async function listDependencies(client: typeof prisma = prisma): Promise<
 
 /** Active edges only; suggested and rejected edges never influence analysis. */
 export async function loadActiveEdges(client: Prisma.TransactionClient | typeof prisma = prisma) {
-  return client.serviceDependency.findMany({
-    where: { status: 'ACTIVE' },
-    take: MAX_DEPENDENCIES,
-    select: { upstreamServiceId: true, downstreamServiceId: true },
-  });
+  return memoizeIntelligenceRead('dependency-edges', client, () =>
+    client.serviceDependency.findMany({
+      where: { status: 'ACTIVE' },
+      take: MAX_DEPENDENCIES,
+      select: { upstreamServiceId: true, downstreamServiceId: true },
+    })
+  );
 }
 
 /** Caller must authorize INTELLIGENCE_MANAGE. Declares (or re-activates) "downstream depends on upstream". */
@@ -79,7 +84,9 @@ export async function declareDependency(input: unknown, actor: IntelligenceActor
   const { upstreamServiceId, downstreamServiceId } = parseOrThrow(declareSchema, input);
   const key = { upstreamServiceId_downstreamServiceId: { upstreamServiceId, downstreamServiceId } };
   return prisma.$transaction(async tx => {
-    const services = await tx.service.count({ where: { id: { in: [upstreamServiceId, downstreamServiceId] } } });
+    const services = await tx.service.count({
+      where: { id: { in: [upstreamServiceId, downstreamServiceId] } },
+    });
     if (services !== 2) throw invalid('Unknown service');
     const existing = await tx.serviceDependency.findUnique({ where: key, select: { id: true } });
     if (!existing && (await tx.serviceDependency.count()) >= MAX_DEPENDENCIES) {
@@ -87,8 +94,20 @@ export async function declareDependency(input: unknown, actor: IntelligenceActor
     }
     const row = await tx.serviceDependency.upsert({
       where: key,
-      create: { upstreamServiceId, downstreamServiceId, origin: 'DECLARED', status: 'ACTIVE', confidence: 1, evidence: { type: 'declared' } },
-      update: { origin: 'DECLARED', status: 'ACTIVE', confidence: 1, evidence: { type: 'declared' } },
+      create: {
+        upstreamServiceId,
+        downstreamServiceId,
+        origin: 'DECLARED',
+        status: 'ACTIVE',
+        confidence: 1,
+        evidence: { type: 'declared' },
+      },
+      update: {
+        origin: 'DECLARED',
+        status: 'ACTIVE',
+        confidence: 1,
+        evidence: { type: 'declared' },
+      },
       select: { id: true },
     });
     await logAudit(
@@ -124,12 +143,18 @@ export async function reviewDependency(
     });
     await logAudit(
       {
-        action: decision === 'APPROVE' ? 'intelligence.dependency.approved' : 'intelligence.dependency.rejected',
+        action:
+          decision === 'APPROVE'
+            ? 'intelligence.dependency.approved'
+            : 'intelligence.dependency.rejected',
         entityType: 'SYSTEM_CONFIG',
         entityId: id,
         actorId: actor.actorId,
         ...auditSource(actor),
-        newValue: { upstreamServiceId: row.upstreamServiceId, downstreamServiceId: row.downstreamServiceId },
+        newValue: {
+          upstreamServiceId: row.upstreamServiceId,
+          downstreamServiceId: row.downstreamServiceId,
+        },
       },
       tx
     );
@@ -137,7 +162,10 @@ export async function reviewDependency(
   });
 }
 
-export async function removeDependency(id: string, actor: IntelligenceActor): Promise<'removed' | 'not_found'> {
+export async function removeDependency(
+  id: string,
+  actor: IntelligenceActor
+): Promise<'removed' | 'not_found'> {
   return prisma.$transaction(async tx => {
     const row = await tx.serviceDependency.findUnique({
       where: { id },

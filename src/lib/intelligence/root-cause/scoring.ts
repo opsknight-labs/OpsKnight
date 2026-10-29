@@ -20,6 +20,8 @@ export interface CauseScoreInput {
   /** Seconds the candidate preceded incident onset. Negative or beyond the window scores zero. */
   leadSeconds: number;
   kind: ChangeKindValue | 'INCIDENT';
+  chanceFactor?: number;
+  componentMatch?: number;
 }
 
 export interface CauseScore {
@@ -42,12 +44,27 @@ const round = (value: number) => Math.round(value * 1000) / 1000;
  */
 export function scoreCause(input: CauseScoreInput): CauseScore {
   const windowSeconds = RESPONSE_LIMITS.causeLookbackMinutes * 60;
-  if (!Number.isFinite(input.leadSeconds) || input.leadSeconds < 0 || input.leadSeconds > windowSeconds) {
+  if (
+    !Number.isFinite(input.leadSeconds) ||
+    input.leadSeconds < 0 ||
+    input.leadSeconds > windowSeconds
+  ) {
     return { confidence: 0, components: { proximity: 0, relation: 0, kind: 0 } };
   }
   const proximity = Math.exp(-input.leadSeconds / (RESPONSE_LIMITS.proximityTauMinutes * 60));
   const relation = relationWeight(input.relation, input.depth);
   const kind = input.kind === 'INCIDENT' ? 0.85 : KIND_WEIGHT[input.kind];
-  const confidence = Math.min(RESPONSE_LIMITS.maxCauseConfidence, proximity * relation * kind);
-  return { confidence: round(confidence), components: { proximity: round(proximity), relation: round(relation), kind } };
+  const chance = Math.max(0.1, Math.min(1, input.chanceFactor ?? 1));
+  const component =
+    input.componentMatch === undefined
+      ? 1
+      : 0.5 + 0.75 * Math.max(0, Math.min(1, input.componentMatch));
+  const confidence = Math.min(
+    RESPONSE_LIMITS.maxCauseConfidence,
+    proximity * relation * kind * chance * component
+  );
+  return {
+    confidence: round(confidence),
+    components: { proximity: round(proximity), relation: round(relation), kind },
+  };
 }

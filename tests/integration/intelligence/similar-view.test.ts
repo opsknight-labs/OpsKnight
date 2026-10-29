@@ -100,6 +100,7 @@ describe('similar incidents as seen by a viewer', () => {
       title: 'Database connection errors on db-primary-7',
       status: 'RESOLVED',
       minutesToResolve: 60,
+      resolutionSummary: 'Restarted the replica. Increased the pool limit.',
       postmortem: {
         href: `/postmortems/${precedent.id}`,
         resolution: 'Restarted the replica. Increased the pool limit.',

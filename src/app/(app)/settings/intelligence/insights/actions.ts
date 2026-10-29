@@ -12,10 +12,35 @@ import { DIGEST_DAYS } from '@/lib/intelligence/digest/contract';
 import { sendTestDigest, updateDigestSettings } from '@/lib/intelligence/digest/service';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { adoptRuleSuggestion, suggestCorrelationRules } from '@/lib/intelligence/learning/service';
+import { adoptScoringWeights } from '@/lib/intelligence/learning/weights-service';
 
 export type InsightsActionState = { message: string; ok: boolean };
 
 const PATH = '/settings/intelligence/insights';
+
+export async function adoptScoringWeightsAction(
+  _state: InsightsActionState,
+  form: FormData
+): Promise<InsightsActionState> {
+  try {
+    const actor = await assertCapability(CAPABILITIES.INTELLIGENCE_MANAGE);
+    const result = await adoptScoringWeights(
+      {
+        suggestionId: form.get('suggestionId'),
+        expectedHeadVersion: Number(form.get('expectedHeadVersion')),
+      },
+      { actorId: actor.id, source: 'UI' }
+    );
+    revalidatePath(PATH);
+    revalidatePath('/settings/intelligence');
+    return {
+      ok: true,
+      message: `Reviewed scoring weights published as policy version ${result.version}.`,
+    };
+  } catch (error) {
+    return failure(error);
+  }
+}
 
 function failure(error: unknown): InsightsActionState {
   if (error instanceof AppError) {
@@ -27,7 +52,9 @@ function failure(error: unknown): InsightsActionState {
       ok: false,
     };
   }
-  logger.error('[Intelligence] Applying a suggestion failed', { error: error instanceof Error ? error.message : String(error) });
+  logger.error('[Intelligence] Applying a suggestion failed', {
+    error: error instanceof Error ? error.message : String(error),
+  });
   return { message: 'Unable to apply. Refresh and try again.', ok: false };
 }
 
@@ -45,7 +72,10 @@ export async function applyMinScoreSuggestion(
     const shown = Number(form.get('suggested'));
     const calibration = await getFeedbackCalibration();
     if (!calibration.suggestion || Math.abs(calibration.suggestion.suggested - shown) > 1e-9) {
-      return { message: 'The suggestion changed as new feedback arrived. Refresh to review it.', ok: false };
+      return {
+        message: 'The suggestion changed as new feedback arrived. Refresh to review it.',
+        ok: false,
+      };
     }
     const current = await resolveEffectivePolicy(null);
     const definition: PolicyDefinition = {
@@ -64,14 +94,20 @@ export async function applyMinScoreSuggestion(
     );
     revalidatePath(PATH);
     revalidatePath('/settings/intelligence');
-    return { message: `Similarity threshold set to ${calibration.suggestion.suggested}. Policy version ${result.version} published.`, ok: true };
+    return {
+      message: `Similarity threshold set to ${calibration.suggestion.suggested}. Policy version ${result.version} published.`,
+      ok: true,
+    };
   } catch (error) {
     return failure(error);
   }
 }
 
 /** Saves the weekly digest schedule. Revision-locked, so two admins cannot silently overwrite each other. */
-export async function saveDigestSettingsAction(_state: InsightsActionState, form: FormData): Promise<InsightsActionState> {
+export async function saveDigestSettingsAction(
+  _state: InsightsActionState,
+  form: FormData
+): Promise<InsightsActionState> {
   try {
     const actor = await assertCapability(CAPABILITIES.INTELLIGENCE_MANAGE);
     const next = await updateDigestSettings(
@@ -92,22 +128,39 @@ export async function saveDigestSettingsAction(_state: InsightsActionState, form
     };
   } catch (error) {
     if (error instanceof AppError && error.code === 'PRECONDITION_FAILED') {
-      return { message: 'The digest settings changed since you opened the page. Refresh and try again.', ok: false };
+      return {
+        message: 'The digest settings changed since you opened the page. Refresh and try again.',
+        ok: false,
+      };
     }
     return failure(error);
   }
 }
 
 /** Emails the current digest to the signed-in admin only. Rate-limited so it cannot be used to spam. */
-export async function sendTestDigestAction(_state: InsightsActionState): Promise<InsightsActionState> {
+export async function sendTestDigestAction(
+  _state: InsightsActionState
+): Promise<InsightsActionState> {
   try {
     const actor = await assertCapability(CAPABILITIES.INTELLIGENCE_MANAGE);
     const limit = await checkRateLimit(`intelligence:digest-test:${actor.id}`, 3, 10 * 60_000);
-    if (!limit.allowed) return { message: 'You can send 3 test digests every 10 minutes. Try again shortly.', ok: false };
+    if (!limit.allowed)
+      return {
+        message: 'You can send 3 test digests every 10 minutes. Try again shortly.',
+        ok: false,
+      };
     const sent = await sendTestDigest(actor.id);
     return sent
-      ? { message: 'Queued. It should arrive within a minute or two; delivery shows under Notifications.', ok: true }
-      : { message: 'Could not send. Check that an email provider is configured under Notifications.', ok: false };
+      ? {
+          message:
+            'Queued. It should arrive within a minute or two; delivery shows under Notifications.',
+          ok: true,
+        }
+      : {
+          message:
+            'Could not send. Check that an email provider is configured under Notifications.',
+          ok: false,
+        };
   } catch (error) {
     return failure(error);
   }
@@ -123,12 +176,19 @@ export type RuleSuggestionView = {
   conflicts: number;
   precision: number;
   coverage: number;
-  replay: { incidentsEvaluated: number; groups: number; groupedIncidents: number; suggestedLinks: number };
+  replay: {
+    incidentsEvaluated: number;
+    groups: number;
+    groupedIncidents: number;
+    suggestedLinks: number;
+  };
 };
 export type RuleSuggestionsState = InsightsActionState & { suggestions?: RuleSuggestionView[] };
 
 /** Learns candidate grouping rules from people's link decisions. Read-only; nothing is changed. */
-export async function findRuleSuggestionsAction(_state: RuleSuggestionsState): Promise<RuleSuggestionsState> {
+export async function findRuleSuggestionsAction(
+  _state: RuleSuggestionsState
+): Promise<RuleSuggestionsState> {
   try {
     await assertCapability(CAPABILITIES.INTELLIGENCE_MANAGE);
     const suggestions = await suggestCorrelationRules();
@@ -157,16 +217,25 @@ export async function findRuleSuggestionsAction(_state: RuleSuggestionsState): P
 }
 
 /** Publishes one learned rule as a new global policy version, in the current mode. */
-export async function adoptRuleSuggestionAction(_state: InsightsActionState, form: FormData): Promise<InsightsActionState> {
+export async function adoptRuleSuggestionAction(
+  _state: InsightsActionState,
+  form: FormData
+): Promise<InsightsActionState> {
   try {
     const actor = await assertCapability(CAPABILITIES.INTELLIGENCE_MANAGE);
     const result = await adoptRuleSuggestion(
-      { ruleId: String(form.get('ruleId') ?? ''), expectedHeadVersion: Number(form.get('expectedHeadVersion')) },
+      {
+        ruleId: String(form.get('ruleId') ?? ''),
+        expectedHeadVersion: Number(form.get('expectedHeadVersion')),
+      },
       { actorId: actor.id, source: 'UI' }
     );
     revalidatePath(PATH);
     revalidatePath('/settings/intelligence');
-    return { ok: true, message: `Rule ${result.suggestion.rule.id} added. Policy version ${result.version} published.` };
+    return {
+      ok: true,
+      message: `Rule ${result.suggestion.rule.id} added. Policy version ${result.version} published.`,
+    };
   } catch (error) {
     return failure(error);
   }

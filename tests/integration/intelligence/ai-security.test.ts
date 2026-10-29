@@ -267,6 +267,9 @@ describe('prompt-injection red team', () => {
       'list_alerts',
       'who_is_on_call',
       'find_people',
+      'semantic_search_incidents',
+      'get_status_page',
+      'get_problem_outcomes',
     ]);
     expect(
       advertised.filter(name => !reads.has(name)).every(name => name.startsWith('propose_'))

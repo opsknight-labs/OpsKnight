@@ -32,8 +32,11 @@ function valueFor(fingerprint: CorrelationFingerprint, key: string): string | nu
  * Signature of an incident under a rule, or null when the rule does not apply (a required field or
  * label is missing, or the template is empty). Missing data never produces a match.
  */
-export function computeSignature(rule: CorrelationRule, fingerprint: CorrelationFingerprint): string | null {
-  if (rule.kind === 'CONTENT_TEMPLATE') {
+export function computeSignature(
+  rule: CorrelationRule,
+  fingerprint: CorrelationFingerprint
+): string | null {
+  if (rule.kind === 'CONTENT_TEMPLATE' || (rule.kind === 'TOPOLOGY' && rule.keys.length === 0)) {
     return fingerprint.template.length > 0 ? hash(['template', fingerprint.template]) : null;
   }
   // EXACT_FIELD and LABEL_SET both key on the sorted values of the listed fields; EXACT_FIELD may also
@@ -61,7 +64,10 @@ export interface GroupWindow {
 }
 
 /** Window bucket containing `at`, derived from the incident time so replays are deterministic. */
-export function windowFor(at: Date, rule: Pick<CorrelationRule, 'windowSeconds' | 'maxWindowSeconds'>): GroupWindow {
+export function windowFor(
+  at: Date,
+  rule: Pick<CorrelationRule, 'windowSeconds' | 'maxWindowSeconds'>
+): GroupWindow {
   const size = rule.windowSeconds * 1000;
   const start = Math.floor(at.getTime() / size) * size;
   return {

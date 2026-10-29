@@ -36,9 +36,9 @@ export interface SimilarityScore {
 }
 
 export const SIMILARITY_WEIGHTS = {
-  content: 0.5,
+  content: 0.55,
   labels: 0.2,
-  sameService: 0.15,
+  sameService: 0.1,
   recency: 0.05,
   resolved: 0.1,
 } as const;
@@ -57,6 +57,23 @@ export const FULL_CONTEXT_CONTENT = 0.5;
  * 0.3-0.7 depending on the model, so only the top of the range counts, and it is rescaled to 0-1.
  */
 export const SEMANTIC_FLOOR = 0.7;
+
+export interface ScoringWeights {
+  content: number;
+  labels: number;
+  sameService: number;
+  recency: number;
+  resolved: number;
+}
+
+/** Independent content signals contribute together; a single strong trigram no longer wins alone. */
+export function combinedContent(
+  components: Pick<SimilarityComponents, 'tokens' | 'template' | 'semantic'>
+): number {
+  const lexical = 0.65 * components.tokens + 0.35 * components.template;
+  const semantic = semanticContent(components.semantic);
+  return lexical + 0.7 * semantic * (1 - lexical);
+}
 
 /** The part of a raw embedding cosine that counts as content similarity (0 when absent). */
 export function semanticContent(cosine: number | undefined): number {
@@ -128,7 +145,8 @@ export function scoreSimilarity(
   now: Date = new Date(),
   semantic?: number,
   /** Weight per word, normally its inverse document frequency; every word weighs 1 when absent. */
-  tokenWeight: (token: string) => number = () => 1
+  tokenWeight: (token: string) => number = () => 1,
+  weights: ScoringWeights = SIMILARITY_WEIGHTS
 ): SimilarityScore {
   const tokens = weightedJaccard(new Set(query.tokens), new Set(candidate.tokens), tokenWeight);
   const template = trigramSimilarity(query.template, candidate.template);
@@ -145,11 +163,7 @@ export function scoreSimilarity(
   // Content similarity must be present for any match: service, recency and outcome only break ties
   // between genuinely similar incidents and can never manufacture a match on their own. Meaning from
   // embeddings can raise content similarity (different words, same problem) but never lower it.
-  const content = Math.max(
-    components.tokens,
-    components.template,
-    semanticContent(components.semantic)
-  );
+  const content = combinedContent(components);
   if (content < MIN_CONTENT_SIMILARITY)
     return { score: 0, components, matchedTokenCount: tokens.shared };
 
@@ -157,16 +171,17 @@ export function scoreSimilarity(
   // and the rest renormalized. Otherwise a perfect duplicate would cap at 0.8 and scores from
   // label-less and labelled sources would not be comparable.
   const hasLabels = Object.keys(query.labels).length + Object.keys(candidate.labels).length > 0;
-  const labelWeight = hasLabels ? SIMILARITY_WEIGHTS.labels : 0;
-  const totalWeight = 1 - SIMILARITY_WEIGHTS.labels + labelWeight;
+  const labelWeight = hasLabels ? weights.labels : 0;
+  const totalWeight =
+    weights.content + weights.sameService + weights.recency + weights.resolved + labelWeight;
   const contextStrength = Math.min(1, content / FULL_CONTEXT_CONTENT);
   const score =
-    (SIMILARITY_WEIGHTS.content * content +
+    (weights.content * content +
       labelWeight * components.labels +
       contextStrength *
-        (SIMILARITY_WEIGHTS.sameService * components.sameService +
-          SIMILARITY_WEIGHTS.recency * components.recency +
-          SIMILARITY_WEIGHTS.resolved * components.resolved)) /
+        (weights.sameService * components.sameService +
+          weights.recency * components.recency +
+          weights.resolved * components.resolved)) /
     totalWeight;
   return { score: round(Math.min(1, score)), components, matchedTokenCount: tokens.shared };
 }

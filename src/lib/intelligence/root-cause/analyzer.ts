@@ -2,9 +2,10 @@ import 'server-only';
 import type { Prisma } from '@prisma/client';
 import { RESPONSE_LIMITS } from '../contract';
 import { loadActiveEdges } from '../dependencies/service';
-import { upstreamDistances } from '../dependencies/graph';
+import { upstreamDistances, type DependencyEdge } from '../dependencies/graph';
 import type { FindingRow } from '../similarity/findings';
 import { scoreCause, type CauseRelation, type ChangeKindValue } from './scoring';
+import { loadChangeBaselines } from './baseline';
 
 export interface CauseFindings {
   changes: FindingRow[];
@@ -20,44 +21,65 @@ const MINUTE_MS = 60_000;
  */
 export async function computeCauseFindings(
   tx: Prisma.TransactionClient,
-  incident: { id: string; serviceId: string; createdAt: Date }
+  incident: { id: string; serviceId: string; createdAt: Date },
+  knownEdges?: readonly DependencyEdge[]
 ): Promise<CauseFindings> {
   const onset = incident.createdAt.getTime();
   const windowStart = new Date(onset - RESPONSE_LIMITS.causeLookbackMinutes * MINUTE_MS);
-  const edges = await loadActiveEdges(tx);
+  const edges = knownEdges ?? (await loadActiveEdges(tx));
   const upstream = upstreamDistances(edges, incident.serviceId, RESPONSE_LIMITS.maxUpstreamDepth);
   const serviceIds = [incident.serviceId, ...upstream.keys()];
 
   // Changes on the incident's own and upstream services and changes tied to no service are read as
   // separate capped sets, so a busy source of global changes can never crowd out a same-service deploy.
   const changeWindow = { gte: windowStart, lte: incident.createdAt };
-  const changeSelect = { id: true, serviceId: true, kind: true, occurredAt: true } as const;
-  const [scopedChanges, globalChanges, upstreamIncidents] = await Promise.all([
-    tx.changeEvent.findMany({
-      where: { occurredAt: changeWindow, serviceId: { in: serviceIds } },
-      orderBy: { occurredAt: 'desc' },
-      take: RESPONSE_LIMITS.maxCauseCandidates,
-      select: changeSelect,
-    }),
-    tx.changeEvent.findMany({
-      where: { occurredAt: changeWindow, serviceId: null },
-      orderBy: { occurredAt: 'desc' },
-      take: RESPONSE_LIMITS.maxCauseCandidates,
-      select: changeSelect,
-    }),
-    upstream.size === 0
-      ? Promise.resolve([])
-      : tx.incident.findMany({
-          where: {
-            id: { not: incident.id },
-            serviceId: { in: [...upstream.keys()] },
-            createdAt: { gte: windowStart, lte: incident.createdAt },
-          },
-          orderBy: { createdAt: 'desc' },
-          take: RESPONSE_LIMITS.maxCauseCandidates,
-          select: { id: true, serviceId: true, createdAt: true },
-        }),
-  ]);
+  const changeSelect = {
+    id: true,
+    serviceId: true,
+    source: true,
+    component: true,
+    labels: true,
+    kind: true,
+    occurredAt: true,
+  } as const;
+  const [scopedChanges, globalChanges, upstreamIncidents, baselines, fingerprint] =
+    await Promise.all([
+      tx.changeEvent.findMany({
+        where: { occurredAt: changeWindow, serviceId: { in: serviceIds } },
+        orderBy: { occurredAt: 'desc' },
+        take: 5000,
+        select: changeSelect,
+      }),
+      tx.changeEvent.findMany({
+        where: { occurredAt: changeWindow, serviceId: null },
+        orderBy: { occurredAt: 'desc' },
+        take: 5000,
+        select: changeSelect,
+      }),
+      upstream.size === 0
+        ? Promise.resolve([])
+        : tx.incident.findMany({
+            where: {
+              id: { not: incident.id },
+              serviceId: { in: [...upstream.keys()] },
+              createdAt: { gte: windowStart, lte: incident.createdAt },
+            },
+            orderBy: { createdAt: 'desc' },
+            take: RESPONSE_LIMITS.maxCauseCandidates,
+            select: { id: true, serviceId: true, createdAt: true },
+          }),
+      loadChangeBaselines(tx, serviceIds, incident.createdAt),
+      tx.incidentFingerprint.findUnique({
+        where: { incidentId: incident.id },
+        select: { labels: true, tokens: true },
+      }),
+    ]);
+  const labels =
+    fingerprint?.labels &&
+    typeof fingerprint.labels === 'object' &&
+    !Array.isArray(fingerprint.labels)
+      ? fingerprint.labels
+      : {};
 
   const changeRows = [...scopedChanges, ...globalChanges]
     .map(change => {
@@ -69,13 +91,34 @@ export async function computeCauseFindings(
         depth = upstream.get(change.serviceId) ?? 1;
       }
       const leadSeconds = Math.round((onset - change.occurredAt.getTime()) / 1000);
+      const baseline = baselines(change.source, change.serviceId);
+      const changeLabels =
+        change.labels && typeof change.labels === 'object' && !Array.isArray(change.labels)
+          ? change.labels
+          : {};
+      const comparisons = Object.entries(changeLabels).flatMap(([key, value]) => {
+        const found = Object.entries(labels).find(([label]) => label === key);
+        return found ? [Number(found[1] === value)] : [];
+      });
+      if (change.component) {
+        const named = Object.entries(labels).find(([key]) =>
+          ['component', 'app', 'application', 'workload'].includes(key)
+        );
+        if (named) comparisons.push(Number(named[1] === change.component));
+        else if (fingerprint?.tokens.includes(change.component)) comparisons.push(1);
+      }
+      const componentMatch = comparisons.length
+        ? comparisons.reduce((a, b) => a + b, 0) / comparisons.length
+        : undefined;
       const score = scoreCause({
         relation,
         depth,
         leadSeconds,
         kind: change.kind as ChangeKindValue,
+        chanceFactor: baseline.factor,
+        componentMatch,
       });
-      return { change, relation, depth, leadSeconds, score };
+      return { change, relation, depth, leadSeconds, score, baseline, componentMatch };
     })
     .filter(candidate => candidate.score.confidence > 0)
     .sort(
@@ -93,6 +136,11 @@ export async function computeCauseFindings(
         depth: candidate.depth,
         leadSeconds: candidate.leadSeconds,
         components: { ...candidate.score.components },
+        baselineChanges: candidate.baseline.count,
+        chanceFactor: candidate.baseline.factor,
+        ...(candidate.componentMatch !== undefined
+          ? { componentMatch: candidate.componentMatch }
+          : {}),
       },
     }));
 

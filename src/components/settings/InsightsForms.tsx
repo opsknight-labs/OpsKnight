@@ -3,6 +3,7 @@
 import { useActionState } from 'react';
 import {
   adoptRuleSuggestionAction,
+  adoptScoringWeightsAction,
   applyMinScoreSuggestion,
   findRuleSuggestionsAction,
   saveDigestSettingsAction,
@@ -16,7 +17,33 @@ import { DIGEST_DAYS } from '@/lib/intelligence/digest/contract';
 
 const initial: InsightsActionState = { message: '', ok: false };
 
-export function ApplySuggestionForm({ suggested, expectedHeadVersion }: { suggested: number; expectedHeadVersion: number }) {
+export function ScoringWeightsForm({
+  suggestionId,
+  expectedHeadVersion,
+}: {
+  suggestionId: string;
+  expectedHeadVersion: number;
+}) {
+  const [state, action, pending] = useActionState(adoptScoringWeightsAction, initial);
+  return (
+    <form action={action} className="space-y-2">
+      <input type="hidden" name="suggestionId" value={suggestionId} />
+      <input type="hidden" name="expectedHeadVersion" value={expectedHeadVersion} />
+      <Button type="submit" size="sm" disabled={pending}>
+        {pending ? 'Publishing…' : 'Publish reviewed scoring weights'}
+      </Button>
+      <Message state={state} />
+    </form>
+  );
+}
+
+export function ApplySuggestionForm({
+  suggested,
+  expectedHeadVersion,
+}: {
+  suggested: number;
+  expectedHeadVersion: number;
+}) {
   const [state, action, pending] = useActionState(applyMinScoreSuggestion, initial);
   return (
     <form action={action} className="flex flex-wrap items-center gap-3">
@@ -26,7 +53,10 @@ export function ApplySuggestionForm({ suggested, expectedHeadVersion }: { sugges
         {pending ? 'Applying…' : `Set threshold to ${suggested}`}
       </Button>
       {state.message && (
-        <p role={state.ok ? 'status' : 'alert'} className={state.ok ? 'text-sm text-emerald-600' : 'text-sm text-destructive'}>
+        <p
+          role={state.ok ? 'status' : 'alert'}
+          className={state.ok ? 'text-sm text-emerald-600' : 'text-sm text-destructive'}
+        >
           {state.message}
         </p>
       )}
@@ -37,7 +67,10 @@ export function ApplySuggestionForm({ suggested, expectedHeadVersion }: { sugges
 function Message({ state }: { state: InsightsActionState }) {
   if (!state.message) return null;
   return (
-    <p role={state.ok ? 'status' : 'alert'} className={state.ok ? 'text-sm text-emerald-600' : 'text-sm text-destructive'}>
+    <p
+      role={state.ok ? 'status' : 'alert'}
+      className={state.ok ? 'text-sm text-emerald-600' : 'text-sm text-destructive'}
+    >
       {state.message}
     </p>
   );
@@ -60,18 +93,30 @@ export function DigestSettingsForm({
     <form action={action} className="space-y-4 py-3">
       <input type="hidden" name="expectedRevision" value={settings.revision} />
       <label className="flex items-start gap-3 text-sm">
-        <input type="checkbox" name="enabled" defaultChecked={settings.enabled} disabled={disabled} className="mt-1 h-4 w-4" />
+        <input
+          type="checkbox"
+          name="enabled"
+          defaultChecked={settings.enabled}
+          disabled={disabled}
+          className="mt-1 h-4 w-4"
+        />
         <span>
           <span className="font-medium">Email a weekly digest</span>
           <span className="block text-muted-foreground">
-            Sent to active people who can manage intelligence. Each person only sees services they can already read.
+            Sent to active people who can manage intelligence. Each person only sees services they
+            can already read.
           </span>
         </span>
       </label>
       <div className="flex flex-wrap items-end gap-4">
         <label className="space-y-1 text-sm">
           <span className="block font-medium">Day</span>
-          <select name="dayOfWeek" defaultValue={settings.dayOfWeek} disabled={disabled} className={selectClass}>
+          <select
+            name="dayOfWeek"
+            defaultValue={settings.dayOfWeek}
+            disabled={disabled}
+            className={selectClass}
+          >
             {DIGEST_DAYS.map((day, index) => (
               <option key={day} value={index}>
                 {day}
@@ -81,7 +126,12 @@ export function DigestSettingsForm({
         </label>
         <label className="space-y-1 text-sm">
           <span className="block font-medium">Time (UTC)</span>
-          <select name="hourUtc" defaultValue={settings.hourUtc} disabled={disabled} className={selectClass}>
+          <select
+            name="hourUtc"
+            defaultValue={settings.hourUtc}
+            disabled={disabled}
+            className={selectClass}
+          >
             {HOURS.map(hour => (
               <option key={hour} value={hour}>
                 {String(hour).padStart(2, '0')}:00
@@ -123,7 +173,13 @@ function describeRule(suggestion: RuleSuggestionView): string {
     : `Incidents with the same ${suggestion.keys.map(key => `"${key}"`).join(', ')} label`;
 }
 
-function AdoptRuleForm({ ruleId, expectedHeadVersion }: { ruleId: string; expectedHeadVersion: number }) {
+function AdoptRuleForm({
+  ruleId,
+  expectedHeadVersion,
+}: {
+  ruleId: string;
+  expectedHeadVersion: number;
+}) {
   const [state, action, pending] = useActionState(adoptRuleSuggestionAction, initial);
   return (
     <form action={action} className="flex flex-wrap items-center gap-3">
@@ -139,7 +195,13 @@ function AdoptRuleForm({ ruleId, expectedHeadVersion }: { ruleId: string; expect
 
 const initialSuggestions: RuleSuggestionsState = { message: '', ok: false };
 
-export function RuleSuggestionsPanel({ expectedHeadVersion, mode }: { expectedHeadVersion: number; mode: string }) {
+export function RuleSuggestionsPanel({
+  expectedHeadVersion,
+  mode,
+}: {
+  expectedHeadVersion: number;
+  mode: string;
+}) {
   const [state, action, pending] = useActionState(findRuleSuggestionsAction, initialSuggestions);
   return (
     <div className="space-y-4 py-3">
@@ -160,12 +222,16 @@ export function RuleSuggestionsPanel({ expectedHeadVersion, mode }: { expectedHe
                 <code className="text-xs text-muted-foreground">{suggestion.ruleId}</code>
               </div>
               <p className="text-xs text-muted-foreground">
-                Reproduces {suggestion.support} confirmed {suggestion.support === 1 ? 'link' : 'links'} (
-                {Math.round(suggestion.coverage * 100)}% of all confirmed links) and would repeat {suggestion.conflicts} rejected{' '}
-                {suggestion.conflicts === 1 ? 'suggestion' : 'suggestions'}: {Math.round(suggestion.precision * 100)}% precision on
-                reviewed pairs. Over the last 30 days it would have formed {suggestion.replay.groups}{' '}
-                {suggestion.replay.groups === 1 ? 'group' : 'groups'} covering {suggestion.replay.groupedIncidents} of{' '}
-                {suggestion.replay.incidentsEvaluated} incidents.
+                Reproduces {suggestion.support} confirmed{' '}
+                {suggestion.support === 1 ? 'link' : 'links'} (
+                {Math.round(suggestion.coverage * 100)}% of all confirmed links) and would repeat{' '}
+                {suggestion.conflicts} rejected{' '}
+                {suggestion.conflicts === 1 ? 'suggestion' : 'suggestions'}:{' '}
+                {Math.round(suggestion.precision * 100)}% precision on reviewed pairs. Over the last
+                30 days it would have formed {suggestion.replay.groups}{' '}
+                {suggestion.replay.groups === 1 ? 'group' : 'groups'} covering{' '}
+                {suggestion.replay.groupedIncidents} of {suggestion.replay.incidentsEvaluated}{' '}
+                incidents.
               </p>
               <AdoptRuleForm ruleId={suggestion.ruleId} expectedHeadVersion={expectedHeadVersion} />
             </li>
@@ -173,9 +239,14 @@ export function RuleSuggestionsPanel({ expectedHeadVersion, mode }: { expectedHe
         </ul>
       )}
       <p className="text-xs text-muted-foreground">
-        Rules are learned only from links people made, accepted or rejected, and are never added automatically. An added rule
-        runs in the current mode ({mode === 'SUGGEST' ? 'suggestions shown to responders' : mode === 'SHADOW' ? 'recorded only, not shown' : 'off'}); it never
-        merges incidents or changes paging.
+        Rules are learned only from links people made, accepted or rejected, and are never added
+        automatically. An added rule runs in the current mode (
+        {mode === 'SUGGEST'
+          ? 'suggestions shown to responders'
+          : mode === 'SHADOW'
+            ? 'recorded only, not shown'
+            : 'off'}
+        ); it never merges incidents or changes paging.
       </p>
     </div>
   );

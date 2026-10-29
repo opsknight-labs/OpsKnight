@@ -4,6 +4,7 @@ import { INTELLIGENCE_ENGINE_VERSION, type CorrelationRule } from '../contract';
 import { withDbBudget } from '../jobs/db-budget';
 import type { IntelligenceSettingsView } from '../settings/service';
 import { simulateCorrelation, type ReplayIncident, type ReplayResult } from './simulate';
+import { loadActiveEdges } from '../dependencies/service';
 
 /** Hard cap on incidents read for a preview, independent of settings, so it can never become a scan. */
 export const REPLAY_MAX_INCIDENTS = 5000;
@@ -36,7 +37,14 @@ export async function replayPolicyRules(
   const windowStart = new Date(now.getTime() - days * 86_400_000);
 
   const run = await prisma.intelligenceEvaluationRun.create({
-    data: { kind: 'REPLAY', status: 'RUNNING', windowStart, windowEnd: now, createdById: request.createdById, startedAt: now },
+    data: {
+      kind: 'REPLAY',
+      status: 'RUNNING',
+      windowStart,
+      windowEnd: now,
+      createdById: request.createdById,
+      startedAt: now,
+    },
   });
   try {
     const rows = await withDbBudget({ maxDbMs: Math.max(settings.maxDbMs, 10_000) }, tx =>
@@ -48,6 +56,7 @@ export async function replayPolicyRules(
           incidentId: true,
           serviceId: true,
           template: true,
+          tokens: true,
           labels: true,
           incidentCreatedAt: true,
           incident: { select: { urgency: true } },
@@ -61,12 +70,17 @@ export async function replayPolicyRules(
       urgency: row.incident.urgency,
       createdAt: row.incidentCreatedAt,
       template: row.template,
+      tokens: row.tokens,
       labels:
         row.labels && typeof row.labels === 'object' && !Array.isArray(row.labels)
-          ? Object.fromEntries(Object.entries(row.labels).filter((e): e is [string, string] => typeof e[1] === 'string'))
+          ? Object.fromEntries(
+              Object.entries(row.labels).filter(
+                (e): e is [string, string] => typeof e[1] === 'string'
+              )
+            )
           : {},
     }));
-    const result = simulateCorrelation(incidents, request.rules);
+    const result = simulateCorrelation(incidents, request.rules, await loadActiveEdges());
     await prisma.intelligenceEvaluationRun.update({
       where: { id: run.id },
       data: {
@@ -89,7 +103,11 @@ export async function replayPolicyRules(
     await prisma.intelligenceEvaluationRun
       .update({
         where: { id: run.id },
-        data: { status: 'FAILED', completedAt: new Date(), error: (error instanceof Error ? error.message : String(error)).slice(0, 500) },
+        data: {
+          status: 'FAILED',
+          completedAt: new Date(),
+          error: (error instanceof Error ? error.message : String(error)).slice(0, 500),
+        },
       })
       .catch(() => undefined);
     throw error;

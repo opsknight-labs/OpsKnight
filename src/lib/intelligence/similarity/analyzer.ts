@@ -47,6 +47,7 @@ export async function analyzeIncident(
     limit: SIMILAR_RESULT_LIMIT,
     maxDbMs: settings.maxDbMs,
     semanticModel: await currentEmbeddingModel().catch(() => null),
+    weights: policy.definition.similarity.weights,
   });
   if (!similar) throw new Error('Incident fingerprint disappeared during analysis');
 

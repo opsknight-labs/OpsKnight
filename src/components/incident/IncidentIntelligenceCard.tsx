@@ -67,13 +67,11 @@ export default async function IncidentIntelligenceCard({ incidentId }: { inciden
                 {item.minutesToResolve !== null &&
                   ` · resolved in ${formatDuration(item.minutesToResolve)}`}
               </p>
+              {item.resolutionSummary && (
+                <p className="text-xs text-foreground/80">Fixed by: {item.resolutionSummary}</p>
+              )}
               {item.postmortem && (
                 <p className="text-xs">
-                  {item.postmortem.resolution && (
-                    <span className="text-foreground/80">
-                      Fixed by: {item.postmortem.resolution}{' '}
-                    </span>
-                  )}
                   <Link
                     href={item.postmortem.href}
                     className="font-medium underline-offset-2 hover:underline"

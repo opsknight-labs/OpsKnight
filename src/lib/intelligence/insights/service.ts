@@ -2,14 +2,15 @@ import 'server-only';
 import { Prisma } from '@prisma/client';
 import prisma from '@/lib/prisma';
 import { CAPABILITIES, hasCapability } from '@/lib/authorization';
-import { serviceReadWhere } from '@/lib/authorization-filters';
+import { serviceReadWhere, incidentReadWhere } from '@/lib/authorization-filters';
 import type { AuthorizationActor } from '@/lib/authorization-policy';
 import { MAX_WORK_ATTEMPTS } from '../jobs/work-queue';
+import { withDbBudget } from '../jobs/db-budget';
 import { resolveEffectivePolicy } from '../settings/service';
 import {
   ANOMALY_BASELINE_WEEKS,
   ANOMALY_RECENT_DAYS,
-  detectRateAnomaly,
+  detectSeasonalAnomaly,
   type RateAnomaly,
 } from './anomaly';
 import {
@@ -26,6 +27,8 @@ export const RECURRING_MIN_DISTINCT_DAYS = 2;
 const MAX_FEEDBACK_ROWS = 5_000;
 const MAX_SERVICES = 2_000;
 const MAX_LIST = 10;
+type Client = Prisma.TransactionClient | typeof prisma;
+const insightCache = new Map<string, { at: number; view: InsightsView }>();
 
 export interface RecurringProblem {
   serviceId: string;
@@ -68,9 +71,10 @@ export interface InsightsView {
   recurring: RecurringProblem[];
   anomalies: RateAnomalyRow[];
   calibration: FeedbackCalibration | null;
+  flapping: Array<{ serviceId: string; serviceName: string; incidentId: string; episodes: number }>;
 }
 
-async function visibleServices(actor: AuthorizationActor, client: typeof prisma) {
+async function visibleServices(actor: AuthorizationActor, client: Client) {
   let where: Prisma.ServiceWhereInput;
   try {
     where = serviceReadWhere(actor);
@@ -88,7 +92,7 @@ async function visibleServices(actor: AuthorizationActor, client: typeof prisma)
 async function recurringProblems(
   serviceIds: string[],
   now: Date,
-  client: typeof prisma
+  client: Client
 ): Promise<Omit<RecurringProblem, 'serviceName'>[]> {
   if (serviceIds.length === 0) return [];
   const since = new Date(now.getTime() - RECURRING_WINDOW_DAYS * DAY_MS);
@@ -140,32 +144,50 @@ async function recurringProblems(
 async function rateAnomalies(
   serviceIds: string[],
   now: Date,
-  client: typeof prisma
+  client: Client
 ): Promise<Array<RateAnomaly & { serviceId: string }>> {
   if (serviceIds.length === 0) return [];
   const recentStart = new Date(now.getTime() - ANOMALY_RECENT_DAYS * DAY_MS);
   const baselineStart = new Date(recentStart.getTime() - ANOMALY_BASELINE_WEEKS * 7 * DAY_MS);
   const rows = await client.$queryRaw<
-    Array<{ serviceId: string; recent: number; baseline: number }>
+    Array<{ serviceId: string; week: number; slot: number; count: number }>
   >(Prisma.sql`
-    SELECT "serviceId",
-           count(*) FILTER (WHERE "createdAt" >= ${recentStart})::int AS recent,
-           count(*) FILTER (WHERE "createdAt" < ${recentStart})::int AS baseline
+    SELECT "serviceId", floor(extract(epoch FROM (${now}::timestamptz - "createdAt")) / 604800)::int AS week,
+           (extract(dow FROM "createdAt" AT TIME ZONE 'UTC') * 24 + extract(hour FROM "createdAt" AT TIME ZONE 'UTC'))::int AS slot,
+           count(*)::int AS count
     FROM "Incident"
-    WHERE "createdAt" >= ${baselineStart} AND "serviceId" = ANY(${serviceIds})
-    GROUP BY "serviceId"
-    HAVING count(*) FILTER (WHERE "createdAt" >= ${recentStart}) > 0
+    WHERE "createdAt" >= ${baselineStart} AND "createdAt" <= ${now} AND "serviceId" = ANY(${serviceIds})
+    GROUP BY "serviceId", week, slot
   `);
-  const flagged: Array<RateAnomaly & { serviceId: string }> = [];
+  const counts = new Map<string, { weekly: number[]; slots: Map<number, number[]> }>();
   for (const row of rows) {
-    const anomaly = detectRateAnomaly(row.recent, row.baseline);
-    if (anomaly) flagged.push({ serviceId: row.serviceId, ...anomaly });
+    if (row.week < 0 || row.week > ANOMALY_BASELINE_WEEKS) continue;
+    const entry = counts.get(row.serviceId) ?? {
+      weekly: [0, 0, 0, 0, 0],
+      slots: new Map<number, number[]>(),
+    };
+    const slot = entry.slots.get(row.slot) ?? [0, 0, 0, 0, 0];
+    // Week is a database-produced integer checked against the fixed five-element arrays above.
+    entry.weekly[row.week] += row.count;
+    slot[row.week] += row.count;
+    entry.slots.set(row.slot, slot);
+    counts.set(row.serviceId, entry);
+  }
+  const flagged: Array<RateAnomaly & { serviceId: string }> = [];
+  for (const [serviceId, entry] of counts) {
+    const weekly = detectSeasonalAnomaly(entry.weekly[0], entry.weekly.slice(1));
+    const seasonal = [...entry.slots.values()]
+      .map(values => detectSeasonalAnomaly(values[0], values.slice(1)))
+      .filter((value): value is RateAnomaly => value !== null)
+      .sort((a, b) => b.ratio - a.ratio)[0];
+    const anomaly = weekly ?? seasonal;
+    if (anomaly) flagged.push({ serviceId, ...anomaly });
   }
   return flagged.sort((a, b) => b.ratio - a.ratio || b.recent - a.recent).slice(0, MAX_LIST);
 }
 
 export async function getFeedbackCalibration(
-  client: typeof prisma = prisma
+  client: Client = prisma
 ): Promise<FeedbackCalibration> {
   const rows = await client.$queryRaw<Array<{ confidence: number; verdict: string }>>(Prisma.sql`
     SELECT f."confidence", fb."verdict"::text AS verdict
@@ -193,7 +215,7 @@ export const WEEKLY_WINDOW_DAYS = 7;
 /** Aggregate counts only: no titles, no ids, nothing that names a service, so it is safe at any scope. */
 export async function getWeeklySummary(
   now: Date = new Date(),
-  client: typeof prisma = prisma
+  client: Client = prisma
 ): Promise<WeeklySummary> {
   const since = new Date(now.getTime() - WEEKLY_WINDOW_DAYS * DAY_MS);
   const [findings, analyzed, ratings, changes, dead] = await Promise.all([
@@ -235,12 +257,28 @@ export async function getWeeklySummary(
 export async function getInsights(
   actor: AuthorizationActor,
   now: Date = new Date(),
-  client: typeof prisma = prisma
+  client: Client = prisma
 ): Promise<InsightsView | null> {
-  if (!hasCapability(actor.role, CAPABILITIES.INTELLIGENCE_READ)) return null;
+  if (actor.status !== 'ACTIVE' || !hasCapability(actor.role, CAPABILITIES.INTELLIGENCE_READ))
+    return null;
+  return client === prisma
+    ? withDbBudget({ maxDbMs: 10_000 }, tx => loadInsights(actor, now, tx, true))
+    : loadInsights(actor, now, client, false);
+}
+
+async function loadInsights(
+  actor: AuthorizationActor,
+  now: Date,
+  client: Client,
+  allowCache: boolean
+): Promise<InsightsView> {
   const services = await visibleServices(actor, client);
   const ids = [...services.keys()];
-  const [weekly, recurring, anomalies, calibration] = await Promise.all([
+  // Re-read the actor's visible service set before every cache hit; access changes invalidate its key.
+  const key = JSON.stringify([actor.id, actor.role, [...ids].sort(), Math.floor(+now / 300_000)]);
+  const hit = allowCache ? insightCache.get(key) : null;
+  if (hit && Date.now() - hit.at < 300_000) return hit.view;
+  const [weekly, recurring, anomalies, calibration, flapping] = await Promise.all([
     hasCapability(actor.role, CAPABILITIES.INTELLIGENCE_MANAGE)
       ? getWeeklySummary(now, client)
       : Promise.resolve(null),
@@ -251,8 +289,9 @@ export async function getInsights(
     hasCapability(actor.role, CAPABILITIES.INTELLIGENCE_MANAGE)
       ? getFeedbackCalibration(client)
       : Promise.resolve(null),
+    flappingAlerts(actor, ids, now, client),
   ]);
-  return {
+  const view: InsightsView = {
     weekly,
     recurring: recurring.map(row => ({
       ...row,
@@ -263,5 +302,45 @@ export async function getInsights(
       serviceName: services.get(row.serviceId) ?? row.serviceId,
     })),
     calibration,
+    flapping: flapping.map(row => ({
+      ...row,
+      serviceName: services.get(row.serviceId) ?? row.serviceId,
+    })),
   };
+  if (allowCache) {
+    if (insightCache.size >= 100) insightCache.clear();
+    insightCache.set(key, { at: Date.now(), view });
+  }
+  return view;
+}
+
+async function flappingAlerts(
+  actor: AuthorizationActor,
+  serviceIds: string[],
+  now: Date,
+  client: Client
+) {
+  if (!serviceIds.length) return [];
+  const rows = await client.$queryRaw<
+    Array<{ serviceId: string; incidentId: string; episodes: number }>
+  >(Prisma.sql`
+    WITH episodes AS (
+      SELECT "id", "serviceId", "dedupKey", "createdAt", "resolvedAt",
+        lag(CASE WHEN "resolvedAt" >= "createdAt" AND "resolvedAt" <= "createdAt" + interval '10 minutes' THEN "resolvedAt" END)
+          OVER (PARTITION BY "serviceId", "dedupKey" ORDER BY "createdAt", "id") AS previous_end
+      FROM "Incident" WHERE "serviceId" = ANY(${serviceIds}) AND "dedupKey" IS NOT NULL
+        AND "createdAt" >= ${new Date(+now - DAY_MS)} AND "createdAt" <= ${now}
+    ), segments AS (
+      SELECT *, sum(CASE WHEN previous_end <= "createdAt" AND "createdAt" <= previous_end + interval '10 minutes'
+        THEN 0 ELSE 1 END) OVER (PARTITION BY "serviceId", "dedupKey" ORDER BY "createdAt", "id") AS segment
+      FROM episodes WHERE "resolvedAt" >= "createdAt" AND "resolvedAt" <= "createdAt" + interval '10 minutes'
+    ) SELECT "serviceId", (array_agg("id" ORDER BY "createdAt" DESC))[1] AS "incidentId", count(*)::int AS episodes
+      FROM segments GROUP BY "serviceId", "dedupKey", segment HAVING count(*) >= 3
+      ORDER BY count(*) DESC LIMIT ${MAX_LIST}`);
+  const visible = await client.incident.findMany({
+    where: { AND: [{ id: { in: rows.map(row => row.incidentId) } }, incidentReadWhere(actor)] },
+    select: { id: true },
+  });
+  const ids = new Set(visible.map(row => row.id));
+  return rows.filter(row => ids.has(row.incidentId));
 }
