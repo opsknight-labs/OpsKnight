@@ -159,6 +159,21 @@ describe('curated tool descriptions', () => {
   });
 });
 
+describe('server instructions', () => {
+  it('explain the workflow in 300 bytes or less through server/discover', async () => {
+    const body = await (await rpc('server/discover')).json();
+    const instructions = body.result.instructions as string;
+    expect(Buffer.byteLength(instructions)).toBeLessThanOrEqual(300);
+    for (const step of [
+      'search_capabilities',
+      'describe_operation',
+      'call_operation',
+      'operation_prepare',
+    ])
+      expect(instructions).toContain(step);
+  });
+});
+
 describe('wire projection', () => {
   it('lists tools without empty schema fragments', async () => {
     const body = await (await rpc('tools/list')).json();
