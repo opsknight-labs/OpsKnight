@@ -4798,6 +4798,9 @@ model McpPolicy {
   dcrScopes String[] @default([])
   // A connection stays signed in while it is used: each refresh extends it by this many idle days.
   sessionIdleDays Int @default(30)
+  // Capabilities an administrator never exposes through MCP: catalog operationIds, standalone tool
+  // and prompt names, and `domain:<name>` markers. Unknown entries are ignored when read.
+  disabledCapabilities String[] @default([])
   updatedAt DateTime @updatedAt
 }
 
