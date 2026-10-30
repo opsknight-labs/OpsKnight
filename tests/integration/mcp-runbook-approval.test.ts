@@ -253,19 +253,29 @@ describe('independently reviewed MCP runbook execution', () => {
     expect(reviewed.summary.versionId).toBe(f.version.id);
     expect(JSON.stringify(reviewed.summary)).not.toContain('private review input');
   });
-  it('requires approval from a different native actor before execution', async () => {
+  it('requires a native review before execution; an administrator may confirm their own', async () => {
     const f = await fixture();
     const p = await f.prepare();
     await expect(
       executeApprovedMcpRunbook(f.ctx(), { previewId: p.previewId, idempotencyKey: 'execute' })
     ).rejects.toThrow('MCP_APPROVAL_REQUIRED');
-    await expect(
+    const decide = (extra: Record<string, string> = {}) =>
       decideMcpRunbookReview(
-        { id: p.previewId, planDigest: p.planDigest, decision: 'approve' },
+        { id: p.previewId, planDigest: p.planDigest, decision: 'approve', ...extra },
         f.user
-      )
-    ).rejects.toThrow('PREVIEW_REVIEW_DISTINCT_ACTOR_REQUIRED');
+      );
+    await expect(decide()).rejects.toThrow('PREVIEW_REVIEW_SELF_APPROVAL_CONFIRMATION_REQUIRED');
+    // A requester who is not an administrator always needs a different reviewer.
+    await db.user.update({ where: { id: f.user.id }, data: { role: 'RESPONDER' } });
+    await expect(decide({ confirmSelfApproval: 'yes' })).rejects.toThrow(
+      'PREVIEW_REVIEW_DISTINCT_ACTOR_REQUIRED'
+    );
+    await db.user.update({ where: { id: f.user.id }, data: { role: 'ADMIN' } });
     expect(await db.runbookExecution.count({ where: { runbookId: f.runbook.id } })).toBe(0);
+    await decide({ confirmSelfApproval: 'yes' });
+    expect(
+      await db.runbookPreviewAuthorization.findUniqueOrThrow({ where: { id: p.previewId } })
+    ).toMatchObject({ reviewedById: f.user.id, selfApproved: true });
   });
   it('commits one canonical execution and replays the result after a lost response', async () => {
     const f = await fixture();

@@ -342,10 +342,14 @@ export async function loadMcpRunbookReview(
   digest.parse(id);
   return runSerializableTransaction(async tx => {
     const preview = await lockPreview(tx, id);
-    await assertPreviewReviewer(tx, preview, reviewer);
+    const { selfReview } = await assertPreviewReviewer(tx, preview, reviewer);
     requireMcp(preview.expiresAt > new Date() && !preview.consumedAt, 'MCP_APPROVAL_EXPIRED', 409);
     await requesterAuthority(tx, preview);
-    return { preview, summary: runbookReviewSummarySchema.parse(preview.reviewSummary) };
+    return {
+      preview,
+      selfReview,
+      summary: runbookReviewSummarySchema.parse(preview.reviewSummary),
+    };
   });
 }
 export async function decideMcpRunbookReview(
@@ -353,7 +357,12 @@ export async function decideMcpRunbookReview(
   reviewer: { id: string; tokenVersion: number }
 ) {
   const input = z
-    .object({ id: digest, planDigest: digest, decision: z.enum(['approve', 'reject']) })
+    .object({
+      id: digest,
+      planDigest: digest,
+      decision: z.enum(['approve', 'reject']),
+      confirmSelfApproval: z.literal('yes').optional(),
+    })
     .strict()
     .parse(raw);
   return runSerializableTransaction(async tx => {
