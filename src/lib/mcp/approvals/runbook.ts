@@ -101,7 +101,10 @@ async function requesterAuthority(
       tokenScopes: current?.tokenScopes ?? MCP_REVIEWED_RUNBOOK_SCOPES,
     },
     MCP_REVIEWED_RUNBOOK_SCOPES,
-    [AUTHORIZATION_ACTIONS.RUNBOOK_EXECUTE]
+    [AUTHORIZATION_ACTIONS.RUNBOOK_EXECUTE],
+    undefined,
+    // Only the requester's own execution is a capability use; reviewers may still decide.
+    current ? ['runbook_execute_approved'] : []
   );
   requireMcp(auth.actor.id === preview.actorId, 'MCP_APPROVAL_UNAVAILABLE', 404);
   if (preview.incidentId) {
@@ -143,7 +146,8 @@ export function prepareMcpRunbook(context: ExecutionContext, raw: unknown) {
           context,
           MCP_REVIEWED_RUNBOOK_SCOPES,
           [AUTHORIZATION_ACTIONS.RUNBOOK_EXECUTE],
-          initial.actor
+          initial.actor,
+          ['runbook_prepare_execution']
         );
         const prepared = await executeIdempotentOperation(tx, {
           scope: 'mcp:runbook:prepare',

@@ -3,6 +3,7 @@ import type { AuthorizationAction, AuthorizationActor } from '@/lib/authorizatio
 import { enforceV2Authorization } from '@/lib/api-v2/rbac';
 import { resolveMcpGrant } from '../auth/principal';
 import { requireMcp } from './errors';
+import { isMcpCapabilityDisabled } from '../catalog/capabilities';
 
 /** Shared transaction fence for reviewed commands and canonical REST mutations. */
 export async function lockMcpMutationAuthority(
@@ -10,7 +11,9 @@ export async function lockMcpMutationAuthority(
   context: { grantId: string; credentialId?: string; tokenScopes: readonly string[] },
   requiredScopes: readonly string[],
   actions: readonly AuthorizationAction[],
-  expected?: AuthorizationActor
+  expected?: AuthorizationActor,
+  /** Capability ids refused here, under the policy row lock, if an administrator disabled them. */
+  capabilities: readonly string[] = []
 ) {
   // Client before grant matches client revocation's update order.
   await tx.$queryRaw`SELECT id FROM "McpClient" WHERE id =
@@ -54,5 +57,10 @@ export async function lockMcpMutationAuthority(
   for (const action of actions) enforceV2Authorization(auth.actor, action);
   const policy = await tx.mcpPolicy.findUnique({ where: { id: 'default' } });
   requireMcp(policy?.enabled && policy.writesEnabled, 'MCP_OPERATION_DISABLED', 403);
+  requireMcp(
+    !isMcpCapabilityDisabled(policy.disabledCapabilities, ...capabilities),
+    'MCP_CAPABILITY_DISABLED',
+    403
+  );
   return auth;
 }

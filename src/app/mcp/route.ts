@@ -192,7 +192,8 @@ async function handlePost(request: Request) {
           context,
           identity.auth.actor,
           identity.policy.writesEnabled,
-          identity.policy.sensitiveReadsEnabled
+          identity.policy.sensitiveReadsEnabled,
+          identity.policy.disabledCapabilities
         ),
       {
         legacy: 'reject',
@@ -312,7 +313,8 @@ async function openListenStream(
         context,
         identity.auth.actor,
         identity.policy.writesEnabled,
-        identity.policy.sensitiveReadsEnabled
+        identity.policy.sensitiveReadsEnabled,
+        identity.policy.disabledCapabilities
       ),
     {
       legacy: 'reject',

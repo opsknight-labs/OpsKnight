@@ -24,6 +24,7 @@ import { CostBudget } from './budget';
 import { McpBoundaryError, requireMcp } from './errors';
 import { lockMcpMutationAuthority } from './mutation-authority';
 import { projectMcpData } from './projection';
+import { isMcpCapabilityDisabled } from '../catalog/capabilities';
 
 // Static: the reads that some approval-gated destructive operation declares as its preview.
 const MCP_CATALOG_PREVIEW_IDS = new Set(
@@ -90,6 +91,13 @@ export function hasOperationAuthority(
   );
 }
 
+function mcpCapabilityDisabled(
+  policy: { disabledCapabilities: readonly string[] } | null,
+  operation: (typeof MCP_CATALOG)[number]
+) {
+  return isMcpCapabilityDisabled(policy?.disabledCapabilities, operation.operationId);
+}
+
 export function canDiscover(actor: AuthorizationActor, operation: (typeof MCP_CATALOG)[number]) {
   return isMcpExecutable(operation) && hasOperationAuthority(actor, operation);
 }
@@ -149,8 +157,15 @@ async function executeMcpOperation(
   context.budget.consumeOperation();
   const operation = MCP_OPERATION_MAP.get(operationId);
   requireMcp(operation && availableIn(mode, operation), 'MCP_OPERATION_UNAVAILABLE', 403);
-  const args = validateOperationArgs(operationId, rawArgs, mode);
   const policy = await prisma.mcpPolicy.findUnique({ where: { id: 'default' } });
+  // Administrator capability controls, read fresh on every step whatever surface invoked it.
+  // Approval previews are internal reads of the workflow; their gated operation is checked instead.
+  requireMcp(
+    mode === 'preview' || !mcpCapabilityDisabled(policy, operation),
+    'MCP_CAPABILITY_DISABLED',
+    403
+  );
+  const args = validateOperationArgs(operationId, rawArgs, mode);
   requireMcp(
     policy?.enabled &&
       (mode === 'generic' && isMcpSensitiveRead(operation)
@@ -224,7 +239,8 @@ async function executeMcpOperation(
         context,
         operation.requiredScopes,
         operation.authorizationActions,
-        auth.actor
+        auth.actor,
+        mode === 'preview' ? [] : [operation.operationId]
       );
       if (guard) {
         await guard(tx, auth, phase);

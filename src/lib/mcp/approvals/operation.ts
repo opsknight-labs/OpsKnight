@@ -23,6 +23,7 @@ import {
   type ExecutionContext,
 } from '../core/execution';
 import { lockMcpMutationAuthority } from '../core/mutation-authority';
+import { isMcpCapabilityDisabled } from '../catalog/capabilities';
 import { projectMcpData } from '../core/projection';
 
 export const MCP_APPROVAL_TTL_MS = 15 * 60_000;
@@ -296,7 +297,8 @@ export function prepareMcpOperation(context: ExecutionContext, raw: unknown) {
           context,
           operation.requiredScopes,
           operation.authorizationActions,
-          initial.actor
+          initial.actor,
+          [input.operationId, 'operation_prepare']
         );
         return executeIdempotentOperation(tx, {
           scope: 'mcp:operation:prepare',
@@ -461,6 +463,22 @@ export function commitApprovedMcpOperation(context: ExecutionContext, raw: unkno
           409
         );
         const operation = operationFor(approval.operationId);
+        // An operation disabled after it was prepared must not run. The approval is left as it is,
+        // so it can still be committed before it expires if an administrator re-enables it.
+        await tx.$queryRaw`SELECT id FROM "McpPolicy" WHERE id = 'default' FOR SHARE`;
+        const policy = await tx.mcpPolicy.findUnique({
+          where: { id: 'default' },
+          select: { disabledCapabilities: true },
+        });
+        requireMcp(
+          !isMcpCapabilityDisabled(
+            policy?.disabledCapabilities,
+            approval.operationId,
+            'operation_commit_approved'
+          ),
+          'MCP_CAPABILITY_DISABLED',
+          403
+        );
         const frozen = frozenSchema.parse(JSON.parse(await decrypt(approval.envelope)));
         requireMcp(
           approval.contractDigest === operation.contractSha256 &&
