@@ -4,9 +4,10 @@ import { createOpsKnightMcpServer, operationPrepareSchema } from '@/lib/mcp/prot
 import { CostBudget } from '@/lib/mcp/core/budget';
 import { supportedMcpScopes } from '@/lib/mcp/auth/scopes';
 import { MCP_CATALOG, isMcpExecutable, mcpContractHash } from '@/lib/mcp/catalog';
+import type { AuthorizationActor } from '@/lib/authorization-policy';
 
 const scopes = [...supportedMcpScopes()].filter(scope => scope !== 'admin:manage');
-const actor = {
+const actor: AuthorizationActor = {
   id: 'user',
   role: 'ADMIN',
   status: 'ACTIVE',
