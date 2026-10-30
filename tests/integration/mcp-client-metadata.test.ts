@@ -258,4 +258,50 @@ describe('Client ID Metadata Documents', () => {
     await policy({ cimdEnabled: false, cimdAllowedHosts: [] });
     await expect(resolve()).rejects.toThrow('invalid_client');
   });
+
+  it('registers Claude from its real published document, with no host list', async () => {
+    await policy({ cimdAllowedHosts: [] });
+    const claudeId = 'https://claude.ai/oauth/mcp-oauth-client-metadata';
+    const callback = 'https://claude.ai/api/mcp/auth_callback';
+    const client = await resolve(
+      {
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          client_id: claudeId,
+          client_name: 'Claude',
+          client_uri: 'https://claude.ai',
+          redirect_uris: [callback],
+          grant_types: [
+            'authorization_code',
+            'refresh_token',
+            'urn:ietf:params:oauth:grant-type:jwt-bearer',
+          ],
+          response_types: ['code'],
+          token_endpoint_auth_method: 'none',
+        }),
+      },
+      callback,
+      claudeId
+    );
+    expect(client).toMatchObject({
+      id: claudeId,
+      name: 'Claude',
+      metadataUrl: claudeId,
+      redirectUris: [callback],
+      scopes: ['incidents:read'],
+    });
+    // It cannot be used with an address the document did not publish.
+    await expect(
+      resolve(
+        {
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({ client_id: claudeId, redirect_uris: [callback] }),
+        },
+        'https://evil.example/callback',
+        claudeId
+      )
+    ).rejects.toThrow('invalid_client');
+  });
 });

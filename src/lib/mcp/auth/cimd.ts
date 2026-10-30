@@ -5,7 +5,9 @@ import type { McpClient, McpPolicy, PrismaClient } from '@prisma/client';
 import { McpBoundaryError, requireMcp } from '../core/errors';
 import { CIMD_MAX_BYTES, fetchPinnedMetadata, type CimdResponse } from './cimd-transport';
 import { rejectDuplicateJsonKeys } from '../protocol/input';
+import { logger } from '@/lib/logger';
 
+const JWT_BEARER_GRANT = 'urn:ietf:params:oauth:grant-type:jwt-bearer';
 const LOOPBACK = new Set(['localhost', '127.0.0.1', '[::1]']);
 
 /** Client IDs that are URLs select the metadata-document path; anything else is a registered id. */
@@ -65,10 +67,13 @@ const metadataSchema = z
       .refine(methods => new Set(methods).size === methods.length)
       .optional(),
     jwks_uri: z.string().url().max(2048).optional(),
+    // Claude's published document also lists the JWT-bearer extension grant. It is only a statement
+    // about the client; this server issues authorization-code and refresh tokens and nothing else,
+    // so tolerating it grants no capability. Other grant types stay rejected.
     grant_types: z
-      .array(z.enum(['authorization_code', 'refresh_token']))
+      .array(z.enum(['authorization_code', 'refresh_token', JWT_BEARER_GRANT]))
       .min(1)
-      .max(2)
+      .max(3)
       .refine(types => types.includes('authorization_code') && new Set(types).size === types.length)
       .optional(),
     response_types: z.array(z.literal('code')).length(1).optional(),
@@ -115,20 +120,32 @@ export function isCimdHostAllowed(policy: Policy, host: string) {
 }
 
 export function parseCimdDocument(clientId: string, response: CimdResponse) {
-  requireMcp(
-    response.status === 200 && /^application\/json\s*(;|$)/i.test(response.contentType),
-    'invalid_client'
-  );
-  requireMcp(Buffer.byteLength(response.body) <= CIMD_MAX_BYTES, 'invalid_client');
+  // Administrators otherwise only see "invalid_client"; record why, without any document values.
+  const reject = (reason: string): never => {
+    logger.warn('mcp.cimd.document_rejected', { clientId, reason });
+    throw new McpBoundaryError('invalid_client');
+  };
+  if (response.status !== 200) reject(`http_status_${response.status}`);
+  if (!/^application\/json\s*(;|$)/i.test(response.contentType)) reject('content_type_not_json');
+  if (Buffer.byteLength(response.body) > CIMD_MAX_BYTES) reject('document_too_large');
   let json: unknown;
   try {
     rejectDuplicateJsonKeys(response.body);
     json = JSON.parse(response.body);
   } catch {
-    json = null;
+    return reject('invalid_json');
   }
   const parsed = metadataSchema.safeParse(json);
-  requireMcp(parsed.success && parsed.data.client_id === clientId, 'invalid_client');
+  if (!parsed.success)
+    // Field path and issue code only: Zod messages can echo the document's own values.
+    return reject(
+      `schema:${[
+        ...new Set(
+          parsed.error.issues.map(issue => `${issue.path.join('.') || 'document'}/${issue.code}`)
+        ),
+      ].join(',')}`
+    );
+  if (parsed.data.client_id !== clientId) reject('client_id_mismatch');
   return { ...parsed.data, token_endpoint_auth_method: 'none' as const };
 }
 
@@ -154,7 +171,19 @@ export async function resolveCimdClient(
     !existing || (existing.metadataUrl === clientId && !existing.revokedAt),
     'invalid_client'
   );
-  const document = parseCimdDocument(clientId, await fetchDocument(url));
+  let fetched: CimdResponse;
+  try {
+    fetched = await fetchDocument(url);
+  } catch (error) {
+    // The transport rejects before any response exists (non-200, timeout, oversized body, TLS,
+    // blocked address), so these never reach the parser. Record why and keep the same error.
+    logger.warn('mcp.cimd.fetch_failed', {
+      clientId,
+      reason: error instanceof McpBoundaryError ? error.code : 'unexpected_error',
+    });
+    throw error;
+  }
+  const document = parseCimdDocument(clientId, fetched);
   requireMcp(document.redirect_uris.includes(requestedRedirectUri), 'invalid_client');
   const name =
     (document.client_name ?? '')
