@@ -7,7 +7,7 @@ The user requested continuation through all phases; a phase push is not the end 
 - [x] Phase 1: queue generations, retries, transaction/indexing consistency, OFF policy, retention,
       singleton jobs, deterministic anchors and content score floor (existing implementation).
 - [x] Phase 2: stored FTS, GiST retrieval, optional ANN/fallback, read caching and storm harness
-      (existing implementation; final 1M-history measurement still pending below).
+      (existing implementation; final 1M-history evidence recorded below).
 - [x] Phase 3: gateway/Squire hardening, atomic reservations and single-use action receipts.
 - [x] Phase 4: lazy client launcher; parallel preparation and deferred persistence; bounded request
       streaming; semantic and status-page tools; opt-in live-model evaluation suite. Existing confirmed
@@ -150,3 +150,17 @@ evidence. Full-text retrieval now uses the two most informative terms as an AND-
 Six live-model evaluation cases skip without `SQUIRE_EVAL_API_KEY`. Production human-labelled service
 quality, independent security review, dedicated hardware, fault/rollback drills and live-provider/mail
 checks remain deployment gates, not unimplemented feature phases.
+
+## Final upstream integration and push verification
+
+Integrated main `a7f40f7c4` (MCP compatibility fixes) as feature merge `6917ffd5e`. The
+MCP suite passed **116/116**. The complete final push hook then passed **10,780 unit tests**,
+with seven skipped across 1,024 files, typecheck and the production build. That implementation
+was pushed to PR #928. The fresh-database and browser evidence above remains applicable; the
+last upstream changes affect MCP authentication and have their own regression suite.
+
+All four failures on the previous remote head were build/typecheck heap exhaustion. Workflows
+and the shared build action now allow 6 GB. The Swarm image uses a separate Docker build argument;
+its default is also raised from 4 GB to 6 GB. Docker's build check passed without warnings, and
+the local production build already passed with the same 6 GB heap. Final-head CI must validate
+the actual container build and integration workflows; no CI pass is inferred from local checks.

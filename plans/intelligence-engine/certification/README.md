@@ -54,10 +54,10 @@ verification. These checks are rerun for subsequent source edits. Whole-reposito
 debt (21 errors and 552 warnings at the resumed baseline); the existing CI reports it separately and
 blocks on changed-source lint. This PR does not waive that debt.
 
-Final Node 20 local verification: **10,771 unit tests passed, seven skipped; 317/317 intelligence
+Final Node 20 local verification: **10,780 unit tests passed, seven skipped; 317/317 intelligence
 database tests passed** on a fresh pgvector database. The production build, nonincremental typecheck,
 changed-source lint, API generation and docs contracts pass. All **8/8 production-browser workflows passed**, including confirmed mutation and replay protection,
-phone width and axe. MCP checks passed **107/107** and SDKs **13 TypeScript + 10 Python**.
+phone width and axe. MCP checks passed **116/116** and SDKs **13 TypeScript + 10 Python**.
 The completion ledger records final-head CI separately; local passes do not claim CI certification.
 
 The million-history/10k-storm run drained in **280.7 seconds**, zero failed items and zero dead letters;
