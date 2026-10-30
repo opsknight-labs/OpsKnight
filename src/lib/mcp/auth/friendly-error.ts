@@ -26,6 +26,10 @@ const MESSAGES = new Map<string, { title: string; body: string }>(
       title: 'This sign-in request expired',
       body: 'Return to your assistant and connect again. Requests are valid for five minutes.',
     },
+    MCP_CONSENT_NO_SCOPES: {
+      title: 'Choose at least one permission',
+      body: 'Go back, select what the assistant may do, then choose Allow. To stop connecting, choose Cancel.',
+    },
     MCP_CONSENT_REPLAY: {
       title: 'This request was already used',
       body: 'Return to your assistant. If it is not connected, start the connection again.',
