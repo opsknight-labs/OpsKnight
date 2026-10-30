@@ -5,8 +5,17 @@ import { Check, Copy } from 'lucide-react';
 import { Button } from '@/components/ui/shadcn/button';
 import { copyAuthenticationText } from '@/components/settings/authentication/clipboard';
 
-/** Read-only value with a copy button, used for the MCP endpoint. */
-export default function McpCopyField({ value, label }: { value: string; label: string }) {
+/** Read-only value with a copy button, used for the MCP endpoint and setup commands. */
+export default function McpCopyField({
+  value,
+  label,
+  multiline = false,
+}: {
+  value: string;
+  label: string;
+  /** Show the whole value as a code block (for config files) instead of one truncated line. */
+  multiline?: boolean;
+}) {
   const [status, setStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(
@@ -18,10 +27,19 @@ export default function McpCopyField({ value, label }: { value: string; label: s
   const copied = status === 'copied';
   return (
     <div className="min-w-0 space-y-1">
-      <div className="flex min-w-0 items-center gap-2">
-        <span className="min-w-0 flex-1 truncate rounded-md border border-border bg-muted/40 px-2.5 py-1.5 font-mono text-xs">
-          {value}
-        </span>
+      <div className={`flex min-w-0 gap-2 ${multiline ? 'items-start' : 'items-center'}`}>
+        {multiline ? (
+          <pre className="min-w-0 flex-1 overflow-x-auto whitespace-pre-wrap break-all rounded-md border border-border bg-muted/40 px-3 py-2.5 font-mono text-xs leading-relaxed">
+            {value}
+          </pre>
+        ) : (
+          <span
+            title={value}
+            className="min-w-0 flex-1 truncate rounded-md border border-border bg-muted/40 px-2.5 py-1.5 font-mono text-xs"
+          >
+            {value}
+          </span>
+        )}
         <Button
           type="button"
           variant="outline"
