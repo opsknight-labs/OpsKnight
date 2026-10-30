@@ -1,6 +1,10 @@
 name: Enterprise MCP PR validation
+# Runs on main for MCP-related changes; on a pull request only when labelled `ci:full`.
 on:
   pull_request:
+    types: [opened, synchronize, reopened, labeled]
+  push:
+    branches: [main]
   workflow_dispatch:
 permissions:
   contents: read
@@ -10,6 +14,7 @@ concurrency:
 jobs:
   detect-changes:
     name: Detect MCP-related changes
+    if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'ci:full')
     runs-on: ubuntu-latest
     outputs:
       mcp: ${{ steps.detect.outputs.mcp }}
@@ -19,11 +24,16 @@ jobs:
           fetch-depth: 2
       - id: detect
         env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
           EVENT_NAME: ${{ github.event_name }}
         run: |
           set -euo pipefail
-          if [ "$EVENT_NAME" != "pull_request" ]; then
+          if [ "$EVENT_NAME" != "pull_request" ] && [ "$EVENT_NAME" != "push" ]; then
+            echo "mcp=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # A new branch or force push has no usable before SHA; validate.
+          if [ -z "$BASE_SHA" ] || [ "$BASE_SHA" = "0000000000000000000000000000000000000000" ]; then
             echo "mcp=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi

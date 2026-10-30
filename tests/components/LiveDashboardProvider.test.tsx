@@ -358,8 +358,10 @@ describe('LiveDashboardProvider', () => {
       expect(fetchMock).toHaveBeenCalledTimes(1);
 
       // Signal for 45; the first answer (a 304 from a lagging replica) still reflects 40.
+      // The next read is spaced 1s after the first one started (75ms debounce + up to 150ms
+      // jitter), plus up to 150ms more jitter, so it can land as late as ~1,075ms from here.
       signal(view, 2, '45');
-      await flush(1_000);
+      await flush(1_200);
       expect(fetchMock.mock.calls.length).toBeGreaterThanOrEqual(2);
       if (fetchMock.mock.calls.length === 2) {
         expect(screen.getByTestId('ids').textContent).toBe('a');

@@ -1,6 +1,5 @@
 name: SBOM artifact validation
 on:
-  pull_request:
   push:
     branches: [main]
     tags: ['v*']

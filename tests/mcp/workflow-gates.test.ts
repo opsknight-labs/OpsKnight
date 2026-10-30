@@ -5,11 +5,21 @@ const prWorkflow = readFileSync('.github/workflows/mcp-certification.yml', 'utf8
 const releaseWorkflow = readFileSync('.github/workflows/mcp-release-certification.yml', 'utf8');
 
 describe('MCP CI/release gate separation', () => {
-  it('runs the PR workflow on every pull request so required checks are never path-filter pending', () => {
+  it('runs on main and on `ci:full` pull requests without path filters that leave checks pending', () => {
     expect(prWorkflow).toContain('name: Enterprise MCP PR validation');
-    expect(prWorkflow).toMatch(/on:\s*pull_request:\s*workflow_dispatch:/);
-    expect(prWorkflow).not.toMatch(/pull_request:\s*paths:/);
+    expect(prWorkflow).toMatch(
+      /on:\s*pull_request:\s*types: \[opened, synchronize, reopened, labeled\]\s*push:\s*branches: \[main\]\s*workflow_dispatch:/
+    );
+    expect(prWorkflow.split('\njobs:')[0]).not.toContain('paths:');
     expect(prWorkflow).toContain('name: Detect MCP-related changes');
+    expect(prWorkflow).toContain(
+      "if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'ci:full')"
+    );
+    // A push to main diffs against the previous main commit; an unusable base still validates.
+    expect(prWorkflow).toContain(
+      'BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}'
+    );
+    expect(prWorkflow).toContain('"$BASE_SHA" = "0000000000000000000000000000000000000000"');
     expect(prWorkflow).toContain('echo "mcp=false" >> "$GITHUB_OUTPUT"');
     expect(prWorkflow).toContain("if: needs.detect-changes.outputs.mcp == 'true'");
     // A missing base commit once made the diff fail and silently skip validation.

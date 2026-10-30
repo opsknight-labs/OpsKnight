@@ -17,6 +17,7 @@ on:
       - 'deploy/kubernetes/kustomize/**'
       - 'docker-entrypoint.sh'
   pull_request:
+    types: [opened, synchronize, reopened, labeled]
     branches:
       - main
     paths:
@@ -41,6 +42,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   multi-replica-failover-load:
+    if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'ci:full')
     runs-on: ubuntu-latest
     timeout-minutes: 35
     steps:

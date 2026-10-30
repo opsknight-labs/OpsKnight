@@ -34,3 +34,6 @@
 - name: 'high-priority'
   color: 'b60205'
   description: 'Needs urgent attention'
+- name: 'ci:full'
+  color: '5319e7'
+  description: 'Run heavy E2E, Docker and certification suites on this PR'

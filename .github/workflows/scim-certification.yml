@@ -1,9 +1,10 @@
 name: SCIM identity lifecycle certification
 on:
   push:
-    branches: ['feat/enterprise-scim-2.1']
+    branches: [main]
   workflow_dispatch:
   pull_request:
+    types: [opened, synchronize, reopened, labeled]
     paths:
       - 'src/lib/scim/**'
       - 'src/lib/scim.ts'
@@ -24,6 +25,7 @@ on:
       - '.github/workflows/scim-certification.yml'
 jobs:
   certify:
+    if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'ci:full')
     runs-on: ubuntu-latest
     timeout-minutes: 35
     services:

@@ -145,6 +145,23 @@ npx vitest run <relevant-tests>
 
 Zero errors and zero warnings are required before pushing.
 
+---
+
+## 8. CI Structure: Light Pull Requests, Full `main`
+
+Pull requests run only the fast required gate. Everything heavy runs after merge on `main`, or on a PR that opts in. Keep new work inside this structure. The full inventory is in [`docs/CI_TEST_INVENTORY.md`](docs/CI_TEST_INVENTORY.md).
+
+- **Every PR** runs `tests.yml` (static checks, unit tests, database integration in 4 shards, ingestion durability, database secret scripts, Next.js build, aggregated into the required `test` check) and `security.yml` (required `Security Summary`). The target is about 10 minutes.
+- **`main`, tags and `workflow_dispatch`** also run browser E2E (`e2e.yml`), the Docker image build and image checks, runbook, swarm, deployment, MCP, SSO, SCIM, Teams, automation, integration certification, and SBOM.
+- **`ci:full` label**: add it to a PR to run the heavy suites before merge. Add it when a PR touches deployment (`Dockerfile`, `deploy/**`, `agent/**`, `docker-entrypoint.sh`), runbooks, MCP, authentication/SSO/SCIM, `prisma/**`, or `package.json`/`package-lock.json`. Path filters still apply, so the label runs only the suites the diff affects.
+- **Adding tests**: unit tests go in the `vitest.unit.config.ts` include paths, and database tests go in `tests/integration/`. Both are picked up and sharded automatically by `tests.yml`. Do not add browser, Docker, load or multi-service suites to `tests.yml`.
+- **Adding a heavy workflow or job**: give it `push: branches: [main]` and `workflow_dispatch`. If it also needs a `pull_request` trigger, add `types: [opened, synchronize, reopened, labeled]` and guard the entry job with:
+  ```yaml
+  if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'ci:full')
+  ```
+  Do not add `push` triggers for `feat/**` or `fix/**` branches; they duplicate the PR run.
+- **Required checks**: the ruleset requires exactly `test` and `Security Summary`. Never rename these jobs. When a job is added to or removed from the PR gate, update the `needs:` and status variables of the `test` job in `tests.yml`. When the database shard count changes, update the matrix, `--shard=N/<total>` and `DB_SHARDS` together.
+
 <!-- BEGIN:nextjs-agent-rules -->
 
 ## This is NOT the Next.js you know
