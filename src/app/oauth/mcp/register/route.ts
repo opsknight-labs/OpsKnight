@@ -55,7 +55,7 @@ async function handlePost(request: Request) {
           // Full: make room by evicting the oldest registration that was never used to sign in
           // and has no sign-in in progress, so filling the table cannot block real assistants.
           const [stale] = await tx.$queryRaw<{ id: string }[]>`SELECT c.id FROM "McpClient" c
-            WHERE c."dynamicRegistration" AND c."firstAuthorizedAt" IS NULL
+            WHERE c."dynamicRegistration" AND c."revokedAt" IS NULL AND c."firstAuthorizedAt" IS NULL
               AND c."createdAt" < now() - interval '1 hour'
               AND NOT EXISTS (SELECT 1 FROM "McpGrant" g WHERE g."clientId" = c.id)
               AND NOT EXISTS (SELECT 1 FROM "McpConsentRequest" r

@@ -214,7 +214,7 @@ describe('automatic MCP client registration', () => {
     );
     expect(await db.mcpClient.count()).toBe(before);
   });
-  it('accepts what real assistants send: unknown fields, extra grants, a bare loopback URI', async () => {
+  it('accepts what real assistants send: extra known grants, a bare loopback URI', async () => {
     const response = await register(
       request({
         ...metadata,
@@ -225,7 +225,7 @@ describe('automatic MCP client registration', () => {
           'urn:ietf:params:oauth:grant-type:jwt-bearer',
         ],
         application_type: 'native',
-        software_statement_hint: 'ignored',
+        software_statement: 'eyJhbGciOiJub25lIn0.e30.',
       })
     );
     expect(response.status).toBe(201);
@@ -235,7 +235,18 @@ describe('automatic MCP client registration', () => {
       'http://127.0.0.1:33418',
       'https://vscode.dev/redirect',
     ]);
-    expect(registered).not.toHaveProperty('software_statement_hint');
+    expect(registered).not.toHaveProperty('software_statement');
+  });
+  it('refuses secrets, key material and unknown or misspelled metadata', async () => {
+    for (const extra of [
+      { client_secret: 'x' },
+      { jwks_uri: 'https://keys.example/jwks' },
+      { token_endpoint_auth_methd: 'none' },
+      { grant_types: ['authorization_code', 'password'] },
+    ]) {
+      const response = await register(request({ ...metadata, ...extra }));
+      expect(response.status).toBe(400);
+    }
   });
   it('narrows requested scopes to the policy ceiling instead of failing or escalating', async () => {
     for (const scope of ['admin:manage', 'incidents:write', 'openid offline_access']) {
@@ -375,10 +386,25 @@ describe('automatic MCP client registration', () => {
       where: { id: authorized.id },
       data: { createdAt: hoursAgo(4), firstAuthorizedAt: hoursAgo(4) },
     });
-    // Full, but an hour-old never-used entry exists: evict it, never a used one.
+    // A revoked entry is outside the counted population; evicting it would let the cap grow.
+    const revoked = await db.mcpClient.create({
+      data: {
+        name: 'Revoked registration',
+        dynamicRegistration: true,
+        scopes,
+        redirectUris: [callback],
+        createdAt: hoursAgo(5),
+        revokedAt: hoursAgo(5),
+      },
+    });
+    // Full, but an hour-old never-used entry exists: evict it, never a used or revoked one.
     expect((await register(request(metadata))).status).toBe(201);
     expect(await db.mcpClient.findUnique({ where: { id: oldest.id } })).toBeNull();
     expect(await db.mcpClient.findUnique({ where: { id: authorized.id } })).not.toBeNull();
+    expect(await db.mcpClient.findUnique({ where: { id: revoked.id } })).not.toBeNull();
+    expect(
+      await db.mcpClient.count({ where: { dynamicRegistration: true, revokedAt: null } })
+    ).toBe(5000);
     expect((await register(request(metadata))).status).toBe(503);
   });
 });

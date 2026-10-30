@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { redirectUriAllowed } from '@/lib/mcp/auth/redirect-uri';
+import { redirectUriAllowed, urlForLog } from '@/lib/mcp/auth/redirect-uri';
 
 const CLAUDE_CODE = ['http://localhost/callback', 'http://127.0.0.1/callback'];
 
@@ -31,5 +31,22 @@ describe('redirectUriAllowed', () => {
       false
     );
     expect(redirectUriAllowed(registered, 'https://claude.com/api/mcp/auth_callback')).toBe(false);
+  });
+});
+
+describe('urlForLog', () => {
+  it('drops query strings and fragments, which can carry credentials', () => {
+    expect(urlForLog('https://app.example/cb?api_key=secret')).toBe('https://app.example/cb?…');
+    expect(urlForLog('http://localhost:5000/callback#token=secret')).toBe(
+      'http://localhost:5000/callback?…'
+    );
+    expect(urlForLog('https://claude.ai/api/mcp/auth_callback')).toBe(
+      'https://claude.ai/api/mcp/auth_callback'
+    );
+  });
+
+  it('keeps a registered client id as it is, bounded', () => {
+    expect(urlForLog('cmvt5fuwj034tm9k62fcz9r4z')).toBe('cmvt5fuwj034tm9k62fcz9r4z');
+    expect(urlForLog('x'.repeat(400))).toHaveLength(256);
   });
 });

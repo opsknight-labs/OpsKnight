@@ -11,7 +11,7 @@ import { AppError } from '@/lib/errors';
 import { friendlyMcpError, mcpErrorPage, oauthErrorFor } from '@/lib/mcp/auth/friendly-error';
 import { effectiveMcpClientScopes } from '@/lib/mcp/auth/client-policy';
 import { logger } from '@/lib/logger';
-import { redirectUriAllowed } from '@/lib/mcp/auth/redirect-uri';
+import { redirectUriAllowed, urlForLog } from '@/lib/mcp/auth/redirect-uri';
 
 export function GET(request: Request) {
   return withMcpDatabase(() => withMcpRuntime(() => handleGet(request)));
@@ -53,7 +53,7 @@ async function handleGet(request: Request) {
     ) {
       // Administrators otherwise only see "invalid_client"; say which check failed.
       logger.warn('mcp.authorize.client_denied', {
-        clientId: query.client_id.slice(0, 256),
+        clientId: urlForLog(query.client_id),
         reason: !client
           ? 'unknown_client_id'
           : client.revokedAt
@@ -61,8 +61,8 @@ async function handleGet(request: Request) {
             : 'redirect_uri_not_registered',
         ...(client
           ? {
-              registeredRedirectUris: client.redirectUris,
-              requestedRedirectUri: query.redirect_uri.slice(0, 512),
+              registeredRedirectUris: client.redirectUris.map(urlForLog),
+              requestedRedirectUri: urlForLog(query.redirect_uri),
             }
           : {}),
       });

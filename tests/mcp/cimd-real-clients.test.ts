@@ -158,6 +158,23 @@ describe('denials say which check failed', () => {
     });
   });
 
+  it('never logs the query string of a rejected redirect URI or client id', async () => {
+    await expect(
+      run(base, null, 'https://claude.ai/api/mcp/auth_callback?api_key=do-not-log')
+    ).rejects.toMatchObject({ code: 'invalid_client' });
+    await expect(
+      resolveCimdClient(
+        dbWith(null),
+        base as never,
+        'https://claude.ai/meta?token=do-not-log',
+        'https://a.example/cb',
+        serve
+      )
+    ).rejects.toMatchObject({ code: 'invalid_client' });
+    expect(reasonLogged()).toEqual(['redirect_uri_not_in_document', 'not_canonical_https_url']);
+    expect(JSON.stringify(warn.mock.calls)).not.toContain('do-not-log');
+  });
+
   it('logs a client id that is not a canonical HTTPS URL', async () => {
     await expect(
       resolveCimdClient(

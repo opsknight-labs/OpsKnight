@@ -37,14 +37,15 @@ function validRedirect(value: string) {
     return false;
   }
 }
-const SERVER_ASSIGNED_OR_SECRET = [
-  'client_id',
-  'client_secret',
-  'client_secret_expires_at',
-  'registration_access_token',
-  'jwks',
-  'jwks_uri',
-];
+// Grant types assistants commonly declare. Registration records only the two this server issues;
+// the others are known names that are ignored rather than refused (RFC 7591 section 3.2.1).
+const KNOWN_GRANT_TYPES = [
+  'authorization_code',
+  'refresh_token',
+  'urn:ietf:params:oauth:grant-type:jwt-bearer',
+  'urn:ietf:params:oauth:grant-type:device_code',
+  'client_credentials',
+] as const;
 const informationalUrl = z.string().url().max(2048);
 // Informational URLs are accepted for standard client compatibility but never fetched,
 // rendered as trusted links, or persisted. Registration conveys no user authority.
@@ -63,12 +64,11 @@ export const registrationSchema = z
       .max(5)
       .refine(uris => new Set(uris).size === uris.length),
     token_endpoint_auth_method: z.literal('none').default('none'),
-    // RFC 7591 lets the server register a subset; grants it never issues are dropped, not refused.
     grant_types: z
-      .array(z.string().max(256))
+      .array(z.enum(KNOWN_GRANT_TYPES))
       .min(1)
-      .max(8)
-      .refine(types => types.includes('authorization_code'))
+      .max(KNOWN_GRANT_TYPES.length)
+      .refine(types => types.includes('authorization_code') && new Set(types).size === types.length)
       .default(['authorization_code', 'refresh_token']),
     response_types: z.array(z.literal('code')).length(1).default(['code']),
     scope: z.string().trim().min(1).max(2048).optional(),
@@ -79,12 +79,10 @@ export const registrationSchema = z
     contacts: z.array(z.string().email().max(254)).max(5).optional(),
     software_id: z.string().max(256).optional(),
     software_version: z.string().max(100).optional(),
-    application_type: z.string().max(32).optional(),
+    application_type: z.enum(['web', 'native']).optional(),
+    // Accepted for MCP SDK compatibility; never verified or used, since it confers nothing here.
+    software_statement: z.string().max(4096).optional(),
   })
-  // RFC 7591 section 2: ignore metadata this server does not understand, but never fields that
-  // claim an identity or a secret: this server only registers public clients.
-  .passthrough()
-  .superRefine((value, ctx) => {
-    for (const key of SERVER_ASSIGNED_OR_SECRET)
-      if (key in value) ctx.addIssue({ code: 'custom', path: [key], message: 'Not accepted.' });
-  });
+  // Every accepted field is modelled above. Secrets, key material and unknown or misspelled
+  // fields are refused: this server registers public clients only.
+  .strict();

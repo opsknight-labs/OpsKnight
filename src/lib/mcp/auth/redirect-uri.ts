@@ -31,3 +31,17 @@ export function redirectUriAllowed(registered: readonly string[], requested: str
     );
   });
 }
+
+/**
+ * A URL safe to write to logs: scheme, host, port and path only. Query strings and fragments can
+ * carry credentials, so they are dropped and only marked as present. Non-URL values (registered
+ * client ids) are returned bounded.
+ */
+export function urlForLog(value: string) {
+  try {
+    const url = new URL(value);
+    return `${url.origin}${url.pathname}${url.search || url.hash ? '?…' : ''}`.slice(0, 512);
+  } catch {
+    return value.slice(0, 256);
+  }
+}

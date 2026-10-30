@@ -6,7 +6,7 @@ import { McpBoundaryError } from '../core/errors';
 import { CIMD_MAX_BYTES, fetchPinnedMetadata, type CimdResponse } from './cimd-transport';
 import { rejectDuplicateJsonKeys } from '../protocol/input';
 import { logger } from '@/lib/logger';
-import { redirectUriAllowed } from './redirect-uri';
+import { redirectUriAllowed, urlForLog } from './redirect-uri';
 
 const JWT_BEARER_GRANT = 'urn:ietf:params:oauth:grant-type:jwt-bearer';
 const LOOPBACK = new Set(['localhost', '127.0.0.1', '[::1]']);
@@ -40,7 +40,7 @@ export function parseCimdClientId(raw: string) {
     raw.length <= 256;
   if (!canonical) {
     logger.warn('mcp.cimd.client_id_rejected', {
-      clientId: raw.slice(0, 256),
+      clientId: urlForLog(raw),
       reason: 'not_canonical_https_url',
     });
     throw new McpBoundaryError('invalid_client');
@@ -196,8 +196,8 @@ export async function resolveCimdClient(
   const document = parseCimdDocument(clientId, fetched);
   if (!redirectUriAllowed(document.redirect_uris, requestedRedirectUri))
     deny('redirect_uri_not_in_document', {
-      requestedRedirectUri: requestedRedirectUri.slice(0, 512),
-      documentRedirectUris: document.redirect_uris.map(uri => uri.slice(0, 512)),
+      requestedRedirectUri: urlForLog(requestedRedirectUri),
+      documentRedirectUris: document.redirect_uris.map(urlForLog),
     });
   const name =
     (document.client_name ?? '')
