@@ -34,7 +34,9 @@ const mutations = new Map(Object.entries(V2_MUTATION_CONTRACT));
 function resolveSchema(
   value: unknown,
   depth = 0,
-  definitions = new Map<string, JsonObject>()
+  definitions = new Map<string, JsonObject>(),
+  // Inputs are closed; a described result keeps the contract's own openness.
+  closed = true
 ): JsonObject {
   requireMcp(depth <= 24, 'MCP_SCHEMA_DEPTH');
   if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
@@ -46,7 +48,7 @@ function resolveSchema(
     requireMcp(resolved, 'MCP_SCHEMA_REFERENCE');
     if (!definitions.has(name)) {
       definitions.set(name, {});
-      definitions.set(name, resolveSchema(resolved, 0, definitions));
+      definitions.set(name, resolveSchema(resolved, 0, definitions, closed));
     }
     return { $ref: `#/$defs/${name}` };
   }
@@ -55,17 +57,17 @@ function resolveSchema(
     result.properties = Object.fromEntries(
       Object.entries(schema.properties).map(([key, child]) => [
         key,
-        resolveSchema(child, depth + 1, definitions),
+        resolveSchema(child, depth + 1, definitions, closed),
       ])
     );
-    result.additionalProperties = false;
+    if (closed) result.additionalProperties = false;
   }
-  if (schema.items) result.items = resolveSchema(schema.items, depth + 1, definitions);
+  if (schema.items) result.items = resolveSchema(schema.items, depth + 1, definitions, closed);
   for (const key of ['oneOf', 'anyOf', 'allOf']) {
     const children = new Map(Object.entries(schema)).get(key);
     if (Array.isArray(children))
       Object.assign(result, {
-        [key]: children.map(child => resolveSchema(child, depth + 1, definitions)),
+        [key]: children.map(child => resolveSchema(child, depth + 1, definitions, closed)),
       });
   }
   return result;
@@ -174,6 +176,29 @@ export function mcpContractHash(operation: (typeof MCP_CATALOG)[number]) {
       })
     )
     .digest('hex');
+}
+const responseSchemas = new WeakMap<object, JsonObject | null>();
+/**
+ * The success body an agent receives as `data`, with component references resolved into `$defs`.
+ * Error responses and rate-limit headers are transport detail an agent never sees. Not hashed:
+ * derived from `outputSchema`, which is.
+ */
+export function mcpResponseSchema(operation: (typeof MCP_CATALOG)[number]): JsonObject | null {
+  const cached = responseSchemas.get(operation);
+  if (cached !== undefined) return cached;
+  const responses = new Map(Object.entries((operation.outputSchema ?? {}) as JsonObject));
+  const success = [...responses.keys()].sort().find(status => /^2\d\d$/.test(status));
+  const content = (success ? responses.get(success) : undefined) as
+    { content?: Record<string, { schema?: JsonObject }> } | undefined;
+  const body = content?.content?.['application/json']?.schema;
+  let result: JsonObject | null = null;
+  if (body) {
+    const definitions = new Map<string, JsonObject>();
+    result = resolveSchema(body, 0, definitions, false);
+    if (definitions.size) result = { ...result, $defs: Object.fromEntries(definitions) };
+  }
+  responseSchemas.set(operation, result);
+  return result;
 }
 // Versioned static metadata only. Do not hash the whole OpenAPI projection per request.
 const reviewedContracts = new Set(

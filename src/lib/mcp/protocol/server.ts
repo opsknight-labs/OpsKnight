@@ -10,7 +10,7 @@ import {
 import { COMPLETION_SOURCES, completeAuthorizedIds, type CompletionSource } from './completion';
 import { z } from 'zod/v4';
 import type { AuthorizationActor } from '@/lib/authorization-policy';
-import { MCP_CATALOG, isMcpApprovalGated, isMcpSensitiveRead } from '../catalog';
+import { MCP_CATALOG, isMcpApprovalGated, isMcpSensitiveRead, mcpResponseSchema } from '../catalog';
 import {
   callMcpOperation,
   canDiscover,
@@ -24,10 +24,11 @@ import { POSTMORTEM_CONTEXT_OPERATIONS } from '../core/postmortem';
 import { resolveDisabledMcpCapabilities } from '../catalog/capabilities';
 import { friendlyMcpError } from '../auth/friendly-error';
 import { withholdDisabledRegistrations } from './capability-filter';
+import { wireInputSchema, wireSchema } from './wire';
 
 // Input view: a field with a default is optional to the caller, as promptArgs below already does.
 const sdkSchema = (schema: z.ZodType) =>
-  fromJsonSchema(z.toJSONSchema(schema, { io: 'input' }) as JsonSchemaType);
+  fromJsonSchema(wireSchema(z.toJSONSchema(schema, { io: 'input' })) as JsonSchemaType);
 
 /*
  * The SDK compiles each tool schema eagerly into a process-wide validator cache keyed by schema
@@ -151,11 +152,21 @@ function catalogToolDescription(operation: (typeof MCP_CATALOG)[number]) {
 }
 
 // Catalog schemas are static objects; their SDK wrappers are built once per operation.
+// The wire view drops empty fragments; the catalog object itself stays canonical (it is hashed).
 const catalogSchemas = new WeakMap<object, ReturnType<typeof fromJsonSchema>>();
+const wireInputs = new WeakMap<object, Record<string, unknown>>();
+function catalogWireInput(operation: (typeof MCP_CATALOG)[number]) {
+  let schema = wireInputs.get(operation);
+  if (!schema) {
+    schema = wireInputSchema(operation.inputSchema);
+    wireInputs.set(operation, schema);
+  }
+  return schema;
+}
 function catalogToolSchema(operation: (typeof MCP_CATALOG)[number]) {
   let schema = catalogSchemas.get(operation);
   if (!schema) {
-    schema = fromJsonSchema(operation.inputSchema as JsonSchemaType);
+    schema = fromJsonSchema(catalogWireInput(operation) as JsonSchemaType);
     catalogSchemas.set(operation, schema);
   }
   return schema;
@@ -465,9 +476,11 @@ export function createOpsKnightMcpServer(
             operation.status === 'APPROVAL_REQUIRED'
               ? 'operation_prepare with args (omit idempotencyKey), native approval, operation_commit_approved'
               : 'direct',
+          summary: operation.summary,
           requiredScopes: operation.requiredScopes,
-          inputSchema: operation.inputSchema,
-          outputSchema: operation.outputSchema,
+          inputSchema: catalogWireInput(operation),
+          // The success body only, references resolved; errors and headers never reach an agent.
+          outputSchema: wireSchema(mcpResponseSchema(operation)),
           risk: operation.risk,
           mutation: operation.mutation,
           reason: operation.reason,
