@@ -106,6 +106,8 @@ async function handleGet(request: Request) {
           clientId: client.id,
           redirectUri: query.redirect_uri,
           scopes,
+          // Consent pre-selects a change permission only when the assistant asked for it by name.
+          requestedScopes: narrowed,
           state: query.state,
           challenge: query.code_challenge,
           expiresAt: new Date(Date.now() + 300000),

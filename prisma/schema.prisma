@@ -4916,6 +4916,8 @@ model McpConsentRequest {
   clientId String
   redirectUri String
   scopes String[]
+  // The subset of `scopes` the assistant named explicitly; empty when it asked for the default.
+  requestedScopes String[] @default([])
   challenge String
   state String
   expiresAt DateTime
