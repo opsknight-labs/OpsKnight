@@ -113,10 +113,15 @@ test('add URL, automatically register, sign in and revoke without manual client 
   );
   // Scope is intentionally absent: the server uses the registered scope ceiling.
   await page.goto(`${metadata.authorization_endpoint}?${query}`);
-  // One focused page: who is asking, what they get in plain language, Allow or Cancel.
+  // One focused page: who is asking, the permissions to choose in plain language, Allow or Cancel.
   await expect(page).toHaveURL(/\/oauth\/mcp\/consent\?id=/);
   await expect(page.getByRole('heading', { name: `Connect ${name}?`, exact: true })).toBeVisible();
-  await expect(page.getByText('View incidents', { exact: true })).toBeVisible();
+  const incidents = page.getByRole('group', { name: 'Incidents', exact: true });
+  await expect(
+    incidents.getByRole('checkbox', { name: 'View incidents', exact: true })
+  ).toBeChecked();
+  await expect(page.getByText('1 of 1 selected', { exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Allow', exact: true })).toBeEnabled();
   await expect(page.getByRole('navigation')).toHaveCount(0);
   await shot('03-consent-desktop');
   await page.setViewportSize({ width: 390, height: 844 });
