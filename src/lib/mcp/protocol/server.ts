@@ -24,7 +24,7 @@ import { POSTMORTEM_CONTEXT_OPERATIONS } from '../core/postmortem';
 import { resolveDisabledMcpCapabilities } from '../catalog/capabilities';
 import { friendlyMcpError } from '../auth/friendly-error';
 import { withholdDisabledRegistrations } from './capability-filter';
-import { wireInputSchema, wireSchema } from './wire';
+import { compactResult, wireInputSchema, wireSchema } from './wire';
 
 // Input view: a field with a default is optional to the caller, as promptArgs below already does.
 const sdkSchema = (schema: z.ZodType) =>
@@ -262,6 +262,10 @@ async function safeTool(callback: () => Promise<unknown>) {
   }
 }
 
+/** Domain evidence results go out without null or empty members; see compactResult. */
+const evidenceTool = (callback: () => Promise<unknown>) =>
+  safeTool(async () => compactResult(await callback()));
+
 export function createOpsKnightMcpServer(
   context: ExecutionContext,
   actor: AuthorizationActor,
@@ -419,7 +423,7 @@ export function createOpsKnightMcpServer(
         },
       },
       async args =>
-        safeTool(async () => {
+        evidenceTool(async () => {
           const { getMcpPostmortemContext } = await import('../core/postmortem');
           return getMcpPostmortemContext(context, args);
         })
@@ -438,7 +442,7 @@ export function createOpsKnightMcpServer(
           openWorldHint: false,
         },
       },
-      async args => safeTool(() => callMcpOperation(context, operation.operationId, args))
+      async args => evidenceTool(() => callMcpOperation(context, operation.operationId, args))
     );
   }
   if (
@@ -455,7 +459,7 @@ export function createOpsKnightMcpServer(
         annotations: { readOnlyHint: true, openWorldHint: false },
       },
       async args =>
-        safeTool(async () => {
+        evidenceTool(async () => {
           const { id } = args as { id: string };
           const [incident, timeline, related] = await settleInOrder(
             [
@@ -558,7 +562,7 @@ export function createOpsKnightMcpServer(
     },
     async args => {
       const input = args as { operationId: string; args: Record<string, unknown> };
-      return safeTool(() => callMcpOperation(context, input.operationId, input.args));
+      return evidenceTool(() => callMcpOperation(context, input.operationId, input.args));
     }
   );
   server.registerTool(
@@ -569,7 +573,7 @@ export function createOpsKnightMcpServer(
       inputSchema: SCHEMAS.executePlan,
       annotations: { readOnlyHint: true, openWorldHint: false },
     },
-    async args => safeTool(() => executeMcpPlan(context, planSchema.parse(args)))
+    async args => evidenceTool(() => executeMcpPlan(context, planSchema.parse(args)))
   );
 
   const resourceOperations = new Map<CompletionSource, string>([

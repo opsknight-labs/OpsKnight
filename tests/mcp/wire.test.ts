@@ -101,4 +101,12 @@ describe('compactResult', () => {
     expect(compactResult({ data: [], evidence })).toEqual({ data: [], evidence });
     expect(compactResult({ data: null, evidence })).toEqual({ data: null, evidence });
   });
+
+  it('keeps a __proto__ key from domain JSON as an own member', () => {
+    const parsed = JSON.parse('{"data":{"__proto__":{"polluted":true},"x":1}}');
+    const compact = compactResult(parsed) as { data: Record<string, unknown> };
+    expect(Object.getPrototypeOf(compact.data)).toBe(Object.prototype);
+    expect(Object.keys(compact.data)).toEqual(['__proto__', 'x']);
+    expect(({} as Record<string, unknown>).polluted).toBeUndefined();
+  });
 });

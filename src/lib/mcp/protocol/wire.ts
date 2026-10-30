@@ -28,24 +28,28 @@ const SCHEMA_LISTS = new Set(['oneOf', 'anyOf', 'allOf', 'prefixItems']);
  */
 function stripSchema(schema: Json): Json {
   if (!isObject(schema)) return schema;
-  const result: JsonObject = {};
+  // Entries, not assignment: a key such as __proto__ stays an own property.
+  const entries: [string, unknown][] = [];
   for (const [key, value] of Object.entries(schema)) {
     if (key === '$schema') continue;
     if (key === 'required' && Array.isArray(value) && value.length === 0) continue;
     if (SCHEMA_MAPS.has(key) && isObject(value)) {
       if (key !== 'properties' && Object.keys(value).length === 0) continue;
-      result[key] = Object.fromEntries(
-        Object.entries(value).map(([name, child]) => [name, stripSchema(child)])
-      );
+      entries.push([
+        key,
+        Object.fromEntries(
+          Object.entries(value).map(([name, child]) => [name, stripSchema(child)])
+        ),
+      ]);
     } else if (SCHEMA_VALUES.has(key) && isObject(value)) {
-      result[key] = stripSchema(value);
+      entries.push([key, stripSchema(value)]);
     } else if (SCHEMA_LISTS.has(key) && Array.isArray(value)) {
-      result[key] = value.map(stripSchema);
+      entries.push([key, value.map(stripSchema)]);
     } else {
-      result[key] = value;
+      entries.push([key, value]);
     }
   }
-  return result;
+  return Object.fromEntries(entries);
 }
 
 /**
@@ -80,10 +84,10 @@ export function wireSchema<T extends Json>(schema: T): T {
 export function compactResult(value: Json): Json {
   if (Array.isArray(value)) return value.map(compactResult);
   if (!isObject(value)) return value;
-  const result: JsonObject = {};
+  const entries: [string, unknown][] = [];
   for (const [key, child] of Object.entries(value)) {
     if (key === 'evidence') {
-      result[key] = child;
+      entries.push([key, child]);
       continue;
     }
     const compact = compactResult(child);
@@ -93,7 +97,8 @@ export function compactResult(value: Json): Json {
       if (Array.isArray(compact) && compact.length === 0) continue;
       if (isObject(compact) && Object.keys(compact).length === 0) continue;
     }
-    result[key] = compact;
+    entries.push([key, compact]);
   }
-  return result;
+  // Entries, not assignment: a domain key such as __proto__ stays an own property.
+  return Object.fromEntries(entries);
 }

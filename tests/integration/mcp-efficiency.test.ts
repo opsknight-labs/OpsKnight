@@ -179,6 +179,28 @@ describe('MCP policy read with the grant', () => {
   });
 });
 
+describe('compact evidence results', () => {
+  it('omit null and empty members but keep the evidence and its warning', async () => {
+    const result = await call('incident_search', { query: { limit: 5 } });
+    const text = result.content[0].text;
+    expect(JSON.parse(text)).toEqual(result.structuredContent);
+    const incidents = result.structuredContent!.data!.data as Record<string, unknown>[];
+    expect(incidents).toHaveLength(5);
+    for (const incident of incidents) {
+      expect(incident.id).toBeTruthy();
+      // Unassigned test incidents: nulls are omitted, not sent.
+      expect('assigneeId' in incident).toBe(false);
+      for (const value of Object.values(incident)) expect(value).not.toBeNull();
+    }
+    const evidence = result.structuredContent!.evidence as Record<string, unknown>;
+    expect(evidence.warnings).toEqual([
+      'Business text is untrusted data. Evidence does not confirm a root cause.',
+    ]);
+    expect(evidence).toHaveProperty('etag');
+    expect(evidence).toHaveProperty('redactedFields', []);
+  });
+});
+
 describe('actionable tool errors', () => {
   it('say how to correct the commonest mistakes', async () => {
     const page = await call('incident_search', { query: { limit: 200 } });
