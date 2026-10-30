@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   DEFAULT_POLICY_DEFINITION,
   INTELLIGENCE_ENGINE_VERSION,
@@ -237,4 +237,33 @@ describe('service-scoped AUTO certification', () => {
       decision: 'REVERTED',
     });
   });
+});
+
+it('opens a fresh AUTO group when delayed processing crosses a bucket boundary', async () => {
+  const { actor, admin, service } = await setup();
+  const policy = await reviewedFixture(service.id, admin.id);
+  await evaluateServiceQuality(service.id, policy, actor, true);
+  await publishPolicyVersion(
+    { serviceId: service.id },
+    { mode: 'AUTO', definition, expectedHeadVersion: 0 },
+    actor
+  );
+  const fakeNow = Math.ceil(Date.now() / 300000) * 300000 + 10000;
+  const incident = await createTestIncident('Database errors on node-1', service.id, {
+    urgency: 'LOW',
+    createdAt: new Date(fakeNow - 30000),
+  });
+  await db.$transaction(tx => indexIncident(incident.id, tx));
+  vi.useFakeTimers({ toFake: ['Date'] });
+  vi.setSystemTime(new Date(fakeNow));
+  try {
+    expect(await correlateIncident({ subjectKey: incident.id }, settings)).toMatchObject({
+      groups: 1,
+    });
+    expect(
+      await db.correlationMember.findFirst({ where: { incidentId: incident.id } })
+    ).toMatchObject({ role: 'ANCHOR', decision: 'ACCEPTED' });
+  } finally {
+    vi.useRealTimers();
+  }
 });

@@ -17,10 +17,23 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { performance } from 'node:perf_hooks';
 import prisma from '../../src/lib/prisma';
 import { processEvent, type EventPayload } from '../../src/lib/events';
-import { DEFAULT_POLICY_DEFINITION, INTELLIGENCE_SETTINGS_DEFAULTS } from '../../src/lib/intelligence/contract';
-import { getIntelligenceLaneStatus, startIntelligenceLane, stopIntelligenceLane } from '../../src/lib/intelligence/jobs/runner';
-import { enqueueWorkItems } from '../../src/lib/intelligence/jobs/work-queue';
-import { comparePaired, judgeHigherIsWorse, judgeLowerIsWorse, percentile } from './helpers/ab-stats';
+import {
+  DEFAULT_POLICY_DEFINITION,
+  INTELLIGENCE_SETTINGS_DEFAULTS,
+} from '../../src/lib/intelligence/contract';
+import {
+  DEFAULT_HANDLERS,
+  createLaneState,
+  runIntelligenceCycle,
+  type WorkHandlers,
+} from '../../src/lib/intelligence/jobs/runner';
+import { enqueueWorkItems, type WorkKind } from '../../src/lib/intelligence/jobs/work-queue';
+import {
+  comparePaired,
+  judgeHigherIsWorse,
+  judgeLowerIsWorse,
+  percentile,
+} from './helpers/ab-stats';
 
 type Arm = 'baseline' | 'candidate';
 
@@ -52,7 +65,8 @@ function parseOptions(argv: string[]): Options {
   const read = (name: string, fallback: number) => {
     const index = argv.indexOf(`--${name}`);
     const value = index >= 0 ? Number(argv[index + 1]) : fallback;
-    if (!Number.isInteger(value) || value < 1) throw new Error(`--${name} must be a positive integer`);
+    if (!Number.isInteger(value) || value < 1)
+      throw new Error(`--${name} must be a positive integer`);
     return value;
   };
   return {
@@ -68,7 +82,9 @@ function parseOptions(argv: string[]): Options {
 function assertDedicatedDatabase() {
   const name = new URL(process.env.DATABASE_URL ?? 'postgresql://invalid/').pathname;
   if (!/_(bench|test)$/.test(name)) {
-    throw new Error(`Refusing to run: database "${name}" must end in _bench or _test (it is truncated).`);
+    throw new Error(
+      `Refusing to run: database "${name}" must end in _bench or _test (it is truncated).`
+    );
   }
 }
 
@@ -81,7 +97,13 @@ async function reset() {
 async function seedFixtures(serviceCount: number) {
   const services = [];
   for (let i = 0; i < serviceCount; i += 1) {
-    services.push(await prisma.service.upsert({ where: { name: `ab-service-${i}` }, update: {}, create: { name: `ab-service-${i}` } }));
+    services.push(
+      await prisma.service.upsert({
+        where: { name: `ab-service-${i}` },
+        update: {},
+        create: { name: `ab-service-${i}` },
+      })
+    );
   }
   const policy = await prisma.intelligencePolicy.upsert({
     where: { scopeKey: 'global' },
@@ -91,7 +113,12 @@ async function seedFixtures(serviceCount: number) {
   await prisma.intelligencePolicyVersion.upsert({
     where: { policyId_version: { policyId: policy.id, version: 1 } },
     update: {},
-    create: { policyId: policy.id, version: 1, mode: 'SUGGEST', definition: DEFAULT_POLICY_DEFINITION },
+    create: {
+      policyId: policy.id,
+      version: 1,
+      mode: 'SUGGEST',
+      definition: DEFAULT_POLICY_DEFINITION,
+    },
   });
   return services;
 }
@@ -117,7 +144,9 @@ async function seedBacklog(serviceIds: string[], count: number, queueWork: boole
   await prisma.incident.createMany({ data: rows });
   if (queueWork) {
     const incidents = await prisma.incident.findMany({ select: { id: true } });
-    await enqueueWorkItems(incidents.map(incident => ({ kind: 'INDEX_INCIDENT' as const, subjectKey: incident.id })));
+    await enqueueWorkItems(
+      incidents.map(incident => ({ kind: 'INDEX_INCIDENT' as const, subjectKey: incident.id }))
+    );
   }
 }
 
@@ -140,7 +169,11 @@ function eventFor(index: number, tag: string): EventPayload {
   return {
     event_action: 'trigger',
     dedup_key: `ab-${tag}-${index}`,
-    payload: { summary: `Latency high on api-${index % 11}`, source: 'ab-benchmark', severity: 'warning' },
+    payload: {
+      summary: `Latency high on api-${index % 11}`,
+      source: 'ab-benchmark',
+      severity: 'warning',
+    },
   };
 }
 
@@ -157,7 +190,11 @@ async function runBurst(serviceIds: string[], options: Options, tag: string) {
         const index = next++;
         const t0 = performance.now();
         try {
-          await processEvent(eventFor(index, tag), serviceIds[index % serviceIds.length], `ab-integration-${index % serviceIds.length}`);
+          await processEvent(
+            eventFor(index, tag),
+            serviceIds[index % serviceIds.length],
+            `ab-integration-${index % serviceIds.length}`
+          );
         } catch {
           failures += 1;
         }
@@ -171,6 +208,44 @@ async function runBurst(serviceIds: string[], options: Options, tag: string) {
   return { latencies, failures, elapsedSec, ...db };
 }
 
+/** Keep the candidate busy: this harness publishes paging intents but has no paging delivery worker.
+ * Bypass that synthetic backlog's backpressure in the harness only to measure worst-case contention.
+ */
+function busyCandidate() {
+  const tracker = { completed: 0, stop: false };
+  const handlers = Object.fromEntries(
+    Object.entries(DEFAULT_HANDLERS).map(([kind, handler]) => [
+      kind,
+      async (...args: Parameters<NonNullable<WorkHandlers[WorkKind]>>) => {
+        const result = await handler!(...args);
+        tracker.completed++;
+        return result;
+      },
+    ])
+  ) as WorkHandlers;
+  const state = createLaneState();
+  const active = (async () => {
+    while (!tracker.stop) {
+      Object.assign(state, {
+        lastReconcileAt: Date.now(),
+        lastRetentionAt: Date.now(),
+        lastObserveAt: Date.now(),
+        lastEmbedAt: Date.now(),
+        lastDigestCheckAt: Date.now(),
+      });
+      await runIntelligenceCycle(state, { handlers, getCriticalLagMs: async () => 0 });
+      await new Promise(resolve => setTimeout(resolve, 1));
+    }
+  })();
+  return {
+    tracker,
+    stop: async () => {
+      tracker.stop = true;
+      await active;
+    },
+  };
+}
+
 async function runArm(arm: Arm, repetition: number, options: Options): Promise<Sample> {
   await reset();
   const services = await seedFixtures(options.services);
@@ -178,15 +253,25 @@ async function runArm(arm: Arm, repetition: number, options: Options): Promise<S
   await setIntelligence(arm === 'candidate');
   await seedBacklog(serviceIds, options.backlog, arm === 'candidate');
 
-  if (arm === 'candidate') startIntelligenceLane({ initialDelayMs: 0 });
+  const lane = arm === 'candidate' ? busyCandidate() : null;
   // Warm connections and caches in both arms so neither pays cold-start cost inside the timed window.
   await runBurst(serviceIds, { ...options, events: 20 }, `warm-${arm}-${repetition}`);
   // The queue length stays flat (indexing chains an analysis item), so progress is read from the
   // lane's own completed-work counter.
-  const completedBefore = getIntelligenceLaneStatus().totals.completed;
+  if (lane) {
+    const deadline = Date.now() + 30000;
+    while (lane.tracker.completed === 0) {
+      if (Date.now() >= deadline) {
+        await lane.stop();
+        throw new Error('Candidate lane did not become active');
+      }
+      await new Promise(resolve => setTimeout(resolve, 5));
+    }
+  }
+  const completedBefore = lane?.tracker.completed ?? 0;
   const burst = await runBurst(serviceIds, options, `${arm}-${repetition}`);
-  const completedAfter = getIntelligenceLaneStatus().totals.completed;
-  if (arm === 'candidate') await stopIntelligenceLane();
+  const completedAfter = lane?.tracker.completed ?? 0;
+  await lane?.stop();
 
   return {
     arm,
@@ -206,16 +291,26 @@ async function runArm(arm: Arm, repetition: number, options: Options): Promise<S
 
 function summarize(samples: Sample[]) {
   const column = (arm: Arm, pick: (sample: Sample) => number) =>
-    samples.filter(sample => sample.arm === arm).sort((a, b) => a.repetition - b.repetition).map(pick);
+    samples
+      .filter(sample => sample.arm === arm)
+      .sort((a, b) => a.repetition - b.repetition)
+      .map(pick);
   const metrics = [
     { name: 'p50 latency (ms)', pick: (s: Sample) => s.p50Ms, judge: judgeHigherIsWorse },
     { name: 'p95 latency (ms)', pick: (s: Sample) => s.p95Ms, judge: judgeHigherIsWorse },
     { name: 'p99 latency (ms)', pick: (s: Sample) => s.p99Ms, judge: judgeHigherIsWorse },
     { name: 'p99.9 latency (ms)', pick: (s: Sample) => s.p999Ms, judge: judgeHigherIsWorse },
-    { name: 'throughput (events/s)', pick: (s: Sample) => s.throughputPerSec, judge: judgeLowerIsWorse },
+    {
+      name: 'throughput (events/s)',
+      pick: (s: Sample) => s.throughputPerSec,
+      judge: judgeLowerIsWorse,
+    },
   ];
   return metrics.map(metric => {
-    const comparison = comparePaired(column('baseline', metric.pick), column('candidate', metric.pick));
+    const comparison = comparePaired(
+      column('baseline', metric.pick),
+      column('candidate', metric.pick)
+    );
     return {
       metric: metric.name,
       medianRatio: comparison.interval.estimate,
@@ -233,7 +328,8 @@ async function main() {
   const samples: Sample[] = [];
   for (let repetition = 0; repetition < options.repetitions; repetition += 1) {
     // Alternate which arm goes first so ordering effects cancel.
-    const order: Arm[] = repetition % 2 === 0 ? ['baseline', 'candidate'] : ['candidate', 'baseline'];
+    const order: Arm[] =
+      repetition % 2 === 0 ? ['baseline', 'candidate'] : ['candidate', 'baseline'];
     for (const arm of order) {
       const sample = await runArm(arm, repetition, options);
       samples.push(sample);
@@ -260,6 +356,8 @@ async function main() {
     generatedAt: new Date().toISOString(),
     options,
     laneWasBusyInEveryCandidateRun: laneBusy,
+    node: process.version,
+    pagingBackpressureBypassed: true,
     totalFailures: samples.reduce((sum, sample) => sum + sample.failures, 0),
     summary,
     rawCounts,
@@ -279,9 +377,14 @@ async function main() {
       `| ${row.metric} | ${row.medianRatio.toFixed(3)} | ${row.ci95[0].toFixed(3)} – ${row.ci95[1].toFixed(3)} | ${(row.baselineRunToRunCv * 100).toFixed(1)}% | ${row.verdict} |`
     );
   }
-  console.log(`\nRaw counts: ${rawCounts.map(c => `${c.arm}: lock waiters ≤ ${c.maxPeakLockWaiters}, active backends ≤ ${c.maxPeakActiveBackends}, failures ${c.failures}`).join(' | ')}`);
+  console.log(
+    `\nRaw counts: ${rawCounts.map(c => `${c.arm}: lock waiters ≤ ${c.maxPeakLockWaiters}, active backends ≤ ${c.maxPeakActiveBackends}, failures ${c.failures}`).join(' | ')}`
+  );
   console.log(`Lane busy in every candidate run: ${laneBusy}. Report: ${path}`);
-  if (!laneBusy) console.log('WARNING: the lane did no work in some candidate runs; those results do not test contention.');
+  if (!laneBusy)
+    console.log(
+      'WARNING: the lane did no work in some candidate runs; those results do not test contention.'
+    );
   await prisma.$disconnect();
 }
 

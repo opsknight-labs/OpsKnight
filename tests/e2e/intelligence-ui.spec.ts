@@ -425,10 +425,10 @@ test.describe.serial('intelligence responder workflows', () => {
       },
     });
     await page.goto('/settings/intelligence/ai');
-    await page.getByRole('checkbox', { name: 'Enable AI', exact: true }).check();
+    await page.getByRole('checkbox', { name: /^Enable AI\b/ }).check();
     await page
-      .locator('form')
-      .filter({ has: page.getByRole('checkbox', { name: 'Enable AI', exact: true }) })
+      .locator('form:visible')
+      .filter({ has: page.getByRole('checkbox', { name: /^Enable AI\b/ }) })
       .getByRole('button', { name: 'Save', exact: true })
       .click();
     await expect(page.getByRole('status').filter({ hasText: /saved/i }).first()).toBeVisible();

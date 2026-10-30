@@ -303,6 +303,8 @@ async function main() {
   ]);
   const report = {
     measuredAt: new Date().toISOString(),
+    node: process.version,
+    engineVersion: INTELLIGENCE_ENGINE_VERSION,
     options,
     seedSeconds: Math.round(seedSeconds),
     drainSeconds: Math.round(drainSeconds * 10) / 10,

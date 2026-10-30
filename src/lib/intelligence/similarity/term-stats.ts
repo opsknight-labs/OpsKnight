@@ -53,7 +53,7 @@ export function selectQueryTerms(
     .map((token, order) => ({ token, order, frequency: frequencies.get(token) ?? 0 }))
     .sort((a, b) => a.frequency - b.frequency || a.order - b.order);
   const distinctive = ranked.filter(term => term.frequency <= COMMON_TERM_FREQUENCY);
-  return (distinctive.length > 0 ? distinctive : ranked.slice(0, 3))
+  return (distinctive.length >= 2 ? distinctive : ranked.slice(0, Math.max(2, distinctive.length)))
     .slice(0, MAX_QUERY_TERMS)
     .map(term => term.token);
 }

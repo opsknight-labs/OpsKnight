@@ -54,11 +54,16 @@ verification. These checks are rerun for subsequent source edits. Whole-reposito
 debt (21 errors and 552 warnings at the resumed baseline); the existing CI reports it separately and
 blocks on changed-source lint. This PR does not waive that debt.
 
-The final complete database, browser, pgvector and load results are recorded in
-`../completion-status.md` when complete. A first full database pass overlapped the local storm run and
-reported queue/discovery failures; those require an isolated rerun. The first development-server
-browser attempt stalled before Intelligence on login hydration; verification uses a production build.
-Neither failed attempt is counted as a pass.
+Final Node 20 local verification: **10,771 unit tests passed, seven skipped; 317/317 intelligence
+database tests passed** on a fresh pgvector database. The production build, nonincremental typecheck,
+changed-source lint, API generation and docs contracts pass. All **8/8 production-browser workflows passed**, including confirmed mutation and replay protection,
+phone width and axe. MCP checks passed **107/107** and SDKs **13 TypeScript + 10 Python**.
+The completion ledger records final-head CI separately; local passes do not claim CI certification.
+
+The million-history/10k-storm run drained in **280.7 seconds**, zero failed items and zero dead letters;
+similarity p50/p99 was **88.9/249.7 ms**. Active-lane ingestion A/B used eight paired repetitions and
+24,000 successful ingestion attempts. Raw evidence and measurement limits are in
+`2026-10-30-local/README.md`. Earlier oversubscribed/mixed-source runs are not counted as clean passes.
 
 Earlier checkpoint: 298 intelligence database tests, 71 MCP tests, 13 TypeScript and 10 Python SDK tests,
 API client generation, changed-source lint, typecheck and build passed before phases 4–7. Those results

@@ -1,3 +1,4 @@
+import { buildSquireTools } from '@/lib/intelligence/squire/tools';
 import { beforeEach, expect, it } from 'vitest';
 import { resolveUserActor } from '@/lib/authorization-actors';
 import { citationsFor } from '@/lib/intelligence/squire/chat';
@@ -70,4 +71,11 @@ it('renders change and alert sources only when the actor can open their scoped d
   expect(citations.map(c => c.id).sort()).toEqual([change.id, alert.id].sort());
   expect(citations.map(c => c.kind).sort()).toEqual(['alert', 'change']);
   expect(JSON.stringify(citations)).not.toContain('secret123456');
+  const admin = (await resolveUserActor((await createTestUser({ role: 'ADMIN' })).id))!;
+  expect(await readChangeReference(admin, change.id)).not.toBeNull();
+  expect(await readAlertReference(admin, alert.id)).not.toBeNull();
+  const changesTool = buildSquireTools(admin, { personal: false }).find(
+    tool => tool.name === 'get_recent_changes'
+  )!;
+  expect(JSON.stringify(await changesTool.execute!({}))).toContain('Checkout rollout');
 });

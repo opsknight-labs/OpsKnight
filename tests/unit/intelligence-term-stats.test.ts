@@ -24,6 +24,13 @@ describe('query term selection', () => {
     expect(selectQueryTerms(['error', 'service'], frequencies)).toEqual(['service', 'error']);
   });
 
+  it('keeps one contextual word when there is only one rare term', () => {
+    expect(selectQueryTerms(['error', 'checkout', 'service'], frequencies)).toEqual([
+      'checkout',
+      'service',
+    ]);
+  });
+
   it('bounds the query and ignores duplicates', () => {
     const tokens = Array.from({ length: 20 }, (_, i) => `term${String.fromCharCode(97 + i)}`);
     expect(selectQueryTerms([...tokens, ...tokens], new Map())).toHaveLength(MAX_QUERY_TERMS);

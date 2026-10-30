@@ -365,7 +365,8 @@ paging behaviour until that gate has passed.
 
 ## Quality and automatic grouping
 
-Engine version 1.3.0 combines IDF-weighted token and trigram signals, uses semantic evidence to raise
+Full-text retrieval ANDs the two most informative query terms before ranking; same-service and
+trigram tiers preserve recall. Engine version 1.3.0 combines IDF-weighted token and trigram signals, uses semantic evidence to raise
 lexical matches, and enforces a content floor before contextual weights. Weight training is offline;
 a person adopts a recomputed proposal through an audited, revision-locked policy publication.
 Topology rules follow active dependency components and enforce their content minimum. Change ranking

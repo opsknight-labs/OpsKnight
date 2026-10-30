@@ -9,7 +9,10 @@ export async function readChangeReference(actor: AuthorizationActor, id: string)
   if (!hasCapability(actor.role, CAPABILITIES.INTELLIGENCE_SUGGESTIONS_READ)) return null;
   const readable = serviceReadWhere(actor);
   return prisma.changeEvent.findFirst({
-    where: { id, OR: [{ serviceId: null }, { service: readable }] },
+    where: {
+      id,
+      ...(Object.keys(readable).length ? { OR: [{ serviceId: null }, { service: readable }] } : {}),
+    },
     select: {
       id: true,
       summary: true,
@@ -23,7 +26,7 @@ export async function readChangeReference(actor: AuthorizationActor, id: string)
 export async function readAlertReference(actor: AuthorizationActor, id: string) {
   if (!hasCapability(actor.role, CAPABILITIES.INTELLIGENCE_SUGGESTIONS_READ)) return null;
   const alert = await prisma.alert.findFirst({
-    where: { id, incident: incidentReadWhere(actor) },
+    where: { id, incidentId: { not: null }, incident: incidentReadWhere(actor) },
     select: { id: true, incidentId: true, status: true, createdAt: true, payload: true },
   });
   if (!alert) return null;

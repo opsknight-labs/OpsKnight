@@ -134,15 +134,16 @@ export async function findSimilarIncidents(
     // density ranking cost ~30x more per matching row.
     const terms = selectQueryTerms(source.tokens, frequencies);
     if (terms.length > 0) {
-      // Tokens are restricted to [a-z]{2,32} by normalization, so the OR query is always valid.
-      const tsQuery = terms.join(' | ');
+      // Two informative terms constrain broad history before ranking. Same-service and trigram
+      // tiers preserve recall when a candidate does not contain both words.
+      const tsQuery = terms.slice(0, 2).join(' ');
       collect(
         await tolerant(tx, 'fulltext', () =>
           tx.$queryRaw<Array<{ incidentId: string }>>(Prisma.sql`
             SELECT "incidentId" FROM "IncidentFingerprint"
-            WHERE "searchVector" @@ to_tsquery('simple', ${tsQuery})
+            WHERE "searchVector" @@ websearch_to_tsquery('simple', ${tsQuery})
               AND "incidentId" <> ${incidentId} AND "incidentCreatedAt" > ${lowerBound}
-            ORDER BY ts_rank("searchVector", to_tsquery('simple', ${tsQuery})) DESC, "incidentCreatedAt" DESC
+            ORDER BY ts_rank("searchVector", websearch_to_tsquery('simple', ${tsQuery})) DESC, "incidentCreatedAt" DESC
             LIMIT ${cap}`)
         )
       );

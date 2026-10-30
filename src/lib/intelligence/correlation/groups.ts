@@ -107,26 +107,37 @@ export async function joinCorrelationGroup(tx: Tx, input: JoinInput): Promise<Jo
     [group] = await findGroup();
   }
   if (!group) throw new Error('Correlation group could not be resolved');
-  if (input.decision === 'ACCEPTED' && (group.status !== 'OPEN' || +group.windowEnd < Date.now())) {
+
+  // The earliest incident is the anchor. The group row lock serialises elections; an incident that is
+  // processed late but opened first takes over, and the previous anchor becomes a member linked to it.
+  const [current] = await tx.$queryRaw<
+    Array<{
+      anchor: string | null;
+      anchorCreatedAt: Date | null;
+      status: string;
+      windowEnd: Date;
+      maxWindowEnd: Date;
+    }>
+  >(Prisma.sql`
+    SELECT g."anchorIncidentId" AS anchor, a."createdAt" AS "anchorCreatedAt", g."status", g."windowEnd", g."maxWindowEnd"
+    FROM "CorrelationGroup" g LEFT JOIN "Incident" a ON a."id" = g."anchorIncidentId"
+    WHERE g."id" = ${group.id}
+    FOR UPDATE OF g`);
+  // An empty group's bucket may have ended during paging. Its first member establishes the
+  // sliding end before expiry is evaluated; an existing expired/closed group cannot be revived.
+  const liveEnd = current.anchor
+    ? current.windowEnd
+    : extendedWindowEnd(current, incident.createdAt, rule.windowSeconds);
+  if (input.decision === 'ACCEPTED' && (current.status !== 'OPEN' || +liveEnd < Date.now())) {
     return {
       groupId: group.id,
-      anchorIncidentId: group.anchorIncidentId ?? incident.id,
+      anchorIncidentId: current.anchor ?? incident.id,
       role: 'MEMBER',
       memberCreated: false,
       relationshipCreated: false,
       matched: false,
     };
   }
-
-  // The earliest incident is the anchor. The group row lock serialises elections; an incident that is
-  // processed late but opened first takes over, and the previous anchor becomes a member linked to it.
-  const [current] = await tx.$queryRaw<
-    Array<{ anchor: string | null; anchorCreatedAt: Date | null }>
-  >(Prisma.sql`
-    SELECT g."anchorIncidentId" AS anchor, a."createdAt" AS "anchorCreatedAt"
-    FROM "CorrelationGroup" g LEFT JOIN "Incident" a ON a."id" = g."anchorIncidentId"
-    WHERE g."id" = ${group.id}
-    FOR UPDATE OF g`);
   let score = 1;
   if (input.match && current?.anchor && current.anchor !== incident.id) {
     const anchorFingerprint = await tx.incidentFingerprint.findUnique({

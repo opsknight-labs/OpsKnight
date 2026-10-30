@@ -476,7 +476,9 @@ export function buildSquireTools(
             occurredAt: { gte: since },
             ...(parsed.data.serviceId
               ? { service: { AND: [{ id: parsed.data.serviceId }, readable] } }
-              : { OR: [{ serviceId: null }, { service: readable }] }),
+              : Object.keys(readable).length
+                ? { OR: [{ serviceId: null }, { service: readable }] }
+                : {}),
           },
           orderBy: { occurredAt: 'desc' },
           take: MAX_ROWS,

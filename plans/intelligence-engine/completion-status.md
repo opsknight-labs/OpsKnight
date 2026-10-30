@@ -16,11 +16,12 @@ The user requested continuation through all phases; a phase push is not the end 
       matches, transactional downstream late-change re-analysis, idempotent outcome patterns, seasonal/flapping
       detection, outcome/MTTR runbook ranking and manually published feedback-trained weights.
 - [x] Phase 6: shadow quality, service certification gate, post-paging reversible AUTO grouping.
-- [ ] Phase 7: tabbed panel, skeletons, runbook and relationship controls, explanations, search fix,
+- [x] Phase 7: tabbed panel, skeletons, runbook and relationship controls, explanations, search fix,
       phone-width and axe coverage.
-- [ ] Final verification: nonincremental typecheck, changed-source lint, all intelligence suites,
+- [x] Final verification: nonincremental typecheck, changed-source lint, all intelligence suites,
       MCP/SDK checks, pgvector, browser workflows, 1M-history storm, A/B and EXPLAIN evidence.
-- [ ] Update architecture, responder/operator guides, certification ledger and PR description.
+- [x] Update architecture, responder/operator guides and certification ledger.
+- [ ] Update final PR description and CI results.
 - [ ] Push final implementation and inspect final-head CI.
 
 ## Phase 4 evidence
@@ -111,3 +112,41 @@ streamed confirmation/replay are still being finished. The browser tests now acc
 retained hidden route content using accessible-role selectors. No final browser pass is claimed yet.
 The build/typecheck workflows set a 6 GB Node heap, addressing observed 4 GB heap exhaustion without
 weakening checks. Latest-main integration and final validation follow this implementation checkpoint.
+
+## Final local evidence — 2026-10-30
+
+Integrated main `b5b6f3797` as feature-branch merge `2d0799f1b`, preserving the postmortem AI draft
+flow and upstream Zod 4 migration. The changes webhook retains the existing integration handler's
+Zod 3 contract. All 15 undeployed feature migrations now follow main's `20261030000100` migration,
+in their original relative order (`20261030000200` through `20261030001600`). A new disposable
+pgvector database applied the complete migration chain successfully.
+
+On Node 20.20.2, the complete unit suite passed 10,771 tests with seven skipped across 1,023 files,
+with forks bounded to two. The full fresh-database intelligence suite passed **317/317** across 29
+files, including pgvector and all final regressions. Before the bounded rerun, an oversubscribed
+unit run reported worker timeouts; it is not counted as a clean pass. The pre-push hook now bounds
+forks while retaining every test. Nonincremental typecheck, full changed-source lint, generated API
+clients, schema validation, documentation contracts and production build pass.
+
+Final regressions additionally cover: default enqueue/replay under a five-minute application clock
+skew; an empty AUTO group's sliding window when paging crosses a bucket boundary; globally readable
+service changes (Prisma must not receive an empty service filter inside OR); source-page visibility;
+Personal-only timeline prefetch; retained action receipts after uncertain failures; and ranking an
+older relevant change behind more than 5,000 newer changes.
+
+The full Node 20 production-browser run passed **8/8** in 25.1 seconds, including settings/quality,
+feedback, keyboard tabs, source pages, undo while OFF, streamed propose/confirm/replay, 390 px and axe.
+The last selector now accounts for the checkbox's accessible description. MCP checks after main
+integration passed **107/107**; SDK checks passed **13 TypeScript + 10 Python**. Documentation and API
+client generation checks passed. No real-model result is claimed: six evaluation cases skip without a key.
+
+The 1M-history/10k-storm run completed in **280.7 s**, with zero failures and zero dead letters.
+Similarity p50/p99 was **88.9/249.7 ms**. Eight paired ingestion A/B repetitions kept the candidate lane
+active throughout every measured arm and had zero ingestion failures. Raw reports and query plans:
+`certification/2026-10-30-local/`. These shared-host measurements are indicative, not deployment
+certification. The initial broad-OR storm and inactive-lane A/B attempts are not represented as final
+evidence. Full-text retrieval now uses the two most informative terms as an AND-style web search.
+
+Six live-model evaluation cases skip without `SQUIRE_EVAL_API_KEY`. Production human-labelled service
+quality, independent security review, dedicated hardware, fault/rollback drills and live-provider/mail
+checks remain deployment gates, not unimplemented feature phases.
