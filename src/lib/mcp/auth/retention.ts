@@ -1,6 +1,9 @@
 import prisma from '@/lib/prisma';
 import { Prisma } from '@prisma/client';
 
+/** Registrations never used to sign in are kept this long; registration evicts earlier when full. */
+export const UNUSED_REGISTRATION_TTL_MS = 30 * 86_400_000;
+
 /** Bounded maintenance on the existing scheduler; no new queue or worker. */
 export async function cleanupMcpCredentials() {
   const now = new Date();
@@ -28,8 +31,9 @@ export async function cleanupMcpCredentials() {
       where: { id: { in: grants.map(item => item.id) }, expiresAt: { lt: cutoff } },
     }),
   ]);
-  // Expire only unused registrations. Active/reusable client identities stay stable.
-  const unusedBefore = new Date(now.getTime() - 3600000);
+  // Expire only registrations never used to sign in. Assistants cache their client_id, so one
+  // removed too soon turns a single failed sign-in into a permanent "unknown client".
+  const unusedBefore = new Date(now.getTime() - UNUSED_REGISTRATION_TTL_MS);
   const clients = await prisma.mcpClient.findMany({
     where: {
       dynamicRegistration: true,

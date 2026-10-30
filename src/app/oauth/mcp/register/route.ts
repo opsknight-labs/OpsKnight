@@ -48,12 +48,22 @@ async function handlePost(request: Request) {
         const narrowed = asked.filter(scope => allowed.includes(scope));
         const scopes = narrowed.length ? narrowed : allowed;
         requireMcp(scopes.length, 'invalid_client_metadata');
-        requireMcp(
-          (await tx.mcpClient.count({ where: { dynamicRegistration: true, revokedAt: null } })) <
-            MAX_DYNAMIC_CLIENTS,
-          'MCP_REGISTRATION_CAPACITY',
-          503
-        );
+        if (
+          (await tx.mcpClient.count({ where: { dynamicRegistration: true, revokedAt: null } })) >=
+          MAX_DYNAMIC_CLIENTS
+        ) {
+          // Full: make room by evicting the oldest registration that was never used to sign in
+          // and has no sign-in in progress, so filling the table cannot block real assistants.
+          const [stale] = await tx.$queryRaw<{ id: string }[]>`SELECT c.id FROM "McpClient" c
+            WHERE c."dynamicRegistration" AND c."firstAuthorizedAt" IS NULL
+              AND c."createdAt" < now() - interval '1 hour'
+              AND NOT EXISTS (SELECT 1 FROM "McpGrant" g WHERE g."clientId" = c.id)
+              AND NOT EXISTS (SELECT 1 FROM "McpConsentRequest" r
+                WHERE r."clientId" = c.id AND r."consumedAt" IS NULL AND r."expiresAt" > now())
+            ORDER BY c."createdAt" ASC LIMIT 1 FOR UPDATE SKIP LOCKED`;
+          requireMcp(stale, 'MCP_REGISTRATION_CAPACITY', 503);
+          await tx.mcpClient.delete({ where: { id: stale.id } });
+        }
         return tx.mcpClient.create({
           data: {
             name: input.client_name,

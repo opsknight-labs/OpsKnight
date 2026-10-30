@@ -6,6 +6,7 @@ import { McpBoundaryError } from '../core/errors';
 import { CIMD_MAX_BYTES, fetchPinnedMetadata, type CimdResponse } from './cimd-transport';
 import { rejectDuplicateJsonKeys } from '../protocol/input';
 import { logger } from '@/lib/logger';
+import { redirectUriAllowed } from './redirect-uri';
 
 const JWT_BEARER_GRANT = 'urn:ietf:params:oauth:grant-type:jwt-bearer';
 const LOOPBACK = new Set(['localhost', '127.0.0.1', '[::1]']);
@@ -193,7 +194,7 @@ export async function resolveCimdClient(
     throw error;
   }
   const document = parseCimdDocument(clientId, fetched);
-  if (!document.redirect_uris.includes(requestedRedirectUri))
+  if (!redirectUriAllowed(document.redirect_uris, requestedRedirectUri))
     deny('redirect_uri_not_in_document', {
       requestedRedirectUri: requestedRedirectUri.slice(0, 512),
       documentRedirectUris: document.redirect_uris.map(uri => uri.slice(0, 512)),

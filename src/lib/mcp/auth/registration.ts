@@ -24,7 +24,9 @@ function validRedirect(value: string) {
   try {
     const url = new URL(value);
     return (
-      url.href === value &&
+      // Canonical form, allowing the empty path that native clients often register
+      // (http://127.0.0.1:33418 is stored and matched exactly as sent).
+      (url.href === value || url.href === `${value}/`) &&
       !url.username &&
       !url.password &&
       !url.hash &&
@@ -35,6 +37,14 @@ function validRedirect(value: string) {
     return false;
   }
 }
+const SERVER_ASSIGNED_OR_SECRET = [
+  'client_id',
+  'client_secret',
+  'client_secret_expires_at',
+  'registration_access_token',
+  'jwks',
+  'jwks_uri',
+];
 const informationalUrl = z.string().url().max(2048);
 // Informational URLs are accepted for standard client compatibility but never fetched,
 // rendered as trusted links, or persisted. Registration conveys no user authority.
@@ -53,11 +63,12 @@ export const registrationSchema = z
       .max(5)
       .refine(uris => new Set(uris).size === uris.length),
     token_endpoint_auth_method: z.literal('none').default('none'),
+    // RFC 7591 lets the server register a subset; grants it never issues are dropped, not refused.
     grant_types: z
-      .array(z.enum(['authorization_code', 'refresh_token']))
+      .array(z.string().max(256))
       .min(1)
-      .max(2)
-      .refine(types => types.includes('authorization_code') && new Set(types).size === types.length)
+      .max(8)
+      .refine(types => types.includes('authorization_code'))
       .default(['authorization_code', 'refresh_token']),
     response_types: z.array(z.literal('code')).length(1).default(['code']),
     scope: z.string().trim().min(1).max(2048).optional(),
@@ -68,6 +79,12 @@ export const registrationSchema = z
     contacts: z.array(z.string().email().max(254)).max(5).optional(),
     software_id: z.string().max(256).optional(),
     software_version: z.string().max(100).optional(),
-    application_type: z.enum(['web', 'native']).optional(),
+    application_type: z.string().max(32).optional(),
   })
-  .strict();
+  // RFC 7591 section 2: ignore metadata this server does not understand, but never fields that
+  // claim an identity or a secret: this server only registers public clients.
+  .passthrough()
+  .superRefine((value, ctx) => {
+    for (const key of SERVER_ASSIGNED_OR_SECRET)
+      if (key in value) ctx.addIssue({ code: 'custom', path: [key], message: 'Not accepted.' });
+  });

@@ -44,7 +44,11 @@ const MESSAGES = new Map<string, { title: string; body: string }>(
     },
     invalid_client: {
       title: 'This assistant is not allowed to connect',
-      body: 'OpsKnight could not verify this assistant, or automatic connections are turned off. Ask an administrator to check the MCP page and server log.',
+      body: 'OpsKnight could not verify this assistant. An administrator can find the exact reason in the server log by searching for mcp.authorize or mcp.cimd.',
+    },
+    MCP_CLIENT_UNKNOWN: {
+      title: 'This connection is out of date',
+      body: 'OpsKnight no longer recognises the sign-in details this assistant saved. Remove OpsKnight from your assistant, add it again with the same URL, and sign in.',
     },
     invalid_scope: {
       title: 'The requested access is not available',
@@ -76,6 +80,7 @@ export function oauthErrorFor(code: string) {
     case 'MCP_BUSY':
       return 'temporarily_unavailable';
     case 'invalid_client':
+    case 'MCP_CLIENT_UNKNOWN':
     case 'MCP_CLIENT_REVOKED':
       return 'unauthorized_client';
     case 'MCP_INACTIVE_PRINCIPAL':

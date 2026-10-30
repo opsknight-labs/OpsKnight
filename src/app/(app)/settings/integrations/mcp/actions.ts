@@ -1,5 +1,6 @@
 'use server';
 
+import { redirectUriAllowed } from '@/lib/mcp/auth/redirect-uri';
 import { logAudit } from '@/lib/audit';
 import OAuth2Server from '@node-oauth/oauth2-server';
 import { z } from 'zod/v3';
@@ -373,7 +374,9 @@ export async function decideMcpConsent(form: FormData) {
         );
         const client = await tx.mcpClient.findUnique({ where: { id: pending.clientId } });
         requireMcp(
-          client && !client.revokedAt && client.redirectUris.includes(pending.redirectUri),
+          client &&
+            !client.revokedAt &&
+            redirectUriAllowed(client.redirectUris, pending.redirectUri),
           'invalid_client'
         );
         // Bind consent to the current registration policy, not a stale pending form.
