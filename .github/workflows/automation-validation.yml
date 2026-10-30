@@ -3,8 +3,9 @@ name: Service automation validation
 on:
   workflow_dispatch:
   push:
-    branches: [feat/service-automation]
+    branches: [main]
   pull_request:
+    types: [opened, synchronize, reopened, labeled]
     paths:
       - 'src/lib/automation/**'
       - 'src/app/api/v2/services/*/automation/**'
@@ -45,6 +46,7 @@ concurrency:
 
 jobs:
   automation:
+    if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'ci:full')
     runs-on: ubuntu-latest
     timeout-minutes: 120
     services:

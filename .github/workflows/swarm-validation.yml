@@ -17,21 +17,6 @@ on:
       - 'package.json'
       - 'prisma/**'
       - '.github/workflows/swarm-validation.yml'
-  pull_request:
-    branches:
-      - main
-    paths:
-      - 'deploy/swarm/**'
-      - 'docker-entrypoint.sh'
-      - 'scripts/wait-for-runtime-database.cjs'
-      - 'scripts/wait-for-database-ready.cjs'
-      - 'deploy/images/pgbouncer/**'
-      - 'deploy/scripts/validate-runtime-capacity.cjs'
-      - 'Dockerfile'
-      - 'agent/**'
-      - 'package.json'
-      - 'prisma/**'
-      - '.github/workflows/swarm-validation.yml'
 
 concurrency:
   group: swarm-${{ github.workflow }}-${{ github.ref }}
