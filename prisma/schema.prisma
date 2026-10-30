@@ -4259,6 +4259,8 @@ model RunbookPreviewAuthorization {
   reviewerTokenVersion Int?
   reviewedAt DateTime?
   reviewedPlanDigest String?
+  /// An administrator approved their own request after explicit confirmation.
+  selfApproved Boolean @default(false)
   rejectedAt DateTime?
 
   @@index([expiresAt])
@@ -4876,6 +4878,8 @@ model McpOperationApproval {
   expiresAt DateTime
   reviewedById String?
   reviewerTokenVersion Int?
+  /// An administrator approved their own request after explicit confirmation.
+  selfApproved Boolean @default(false)
   reviewedAt DateTime?
   rejectedAt DateTime?
   executingAt DateTime?
