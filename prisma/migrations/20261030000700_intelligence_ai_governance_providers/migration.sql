@@ -1,12 +1,4 @@
--- OpsKnight Intelligence: more AI providers, residency tags, prompt guidance, and opt-in settings for
--- embeddings and saved assistant conversations. Additive; every new setting defaults to off or empty.
--- Enum values are added outside a transaction block, as PostgreSQL requires for ADD VALUE before use.
-ALTER TYPE "AiProviderKind" ADD VALUE IF NOT EXISTS 'AZURE_OPENAI';
-ALTER TYPE "AiProviderKind" ADD VALUE IF NOT EXISTS 'BEDROCK';
-ALTER TYPE "AiProviderKind" ADD VALUE IF NOT EXISTS 'VERTEX';
-ALTER TYPE "AiProviderKind" ADD VALUE IF NOT EXISTS 'MISTRAL';
-ALTER TYPE "AiProviderKind" ADD VALUE IF NOT EXISTS 'GROQ';
-
+-- Additive AI governance settings; all new settings default to off or empty.
 BEGIN;
 
 ALTER TABLE "AiSettings"

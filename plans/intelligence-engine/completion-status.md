@@ -164,3 +164,16 @@ and the shared build action now allow 6 GB. The Swarm image uses a separate Dock
 its default is also raised from 4 GB to 6 GB. Docker's build check passed without warnings, and
 the local production build already passed with the same 6 GB heap. Final-head CI must validate
 the actual container build and integration workflows; no CI pass is inferred from local checks.
+
+## Final-head CI follow-up
+
+The first complete phase 0–7 remote head (`6917ffd5e`) is mergeable, but CI is not green.
+The database jobs applied every migration, then the strict validator correctly rejected the
+provider migration mixing enum additions and table DDL. The undeployed migration is split into
+`20261030000650_intelligence_ai_provider_enum` and the existing governance migration; there are
+now 16 feature migrations. The auth browser job now provisions an explicitly `_test`-suffixed
+database, preserving the intelligence fixture's destructive-test guard. A WebKit MCP locator
+is scoped to the active main content after CI found duplicate retained route text.
+Docker build failures on this head still used the old 4 GB argument; the 6 GB fix is committed.
+Automation continues to report 75 authoring failures, a separately recorded baseline issue.
+Final follow-up push and rerun results remain pending.
