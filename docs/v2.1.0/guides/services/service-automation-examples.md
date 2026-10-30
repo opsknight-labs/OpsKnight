@@ -135,7 +135,9 @@ match or successful simulation is not evidence of an externally delivered messag
 
 Use a successful Live automation evaluation to capture fields such as
 `environment` for a service Runbook binding. The binding references
-`context.environment` using its own condition editor and operator names.
+`automation.environment` using its own condition editor and operator names.
+Input and approved-target mappings instead use the unprefixed `contextKey` value
+`environment`; do not use the condition field name as a mapping key.
 Runbook conditions are a separate contract: their `EXISTS` means a recognized
 value. Automation's `IS_SET` also includes unmapped values. Do not substitute one
 operator for the other.
