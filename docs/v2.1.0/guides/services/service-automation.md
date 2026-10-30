@@ -6,7 +6,7 @@ product_area: services
 audience: [administrator, responder, operator]
 verification:
   level: source
-  verified_at: 2026-10-28
+  verified_at: 2026-10-30
   evidence:
     - src/components/automation/workspace/constants.ts
     - src/components/automation/workspace/useAutomationDraft.ts
@@ -247,6 +247,16 @@ at `/m/services/{id}/automation`. Reading, editing, publication, and sensitive s
 access still follow the same permissions; a smaller screen grants no extra access.
 
 For a complete scripted setup, see [Author and operate automation through the API](./service-automation-api).
+
+## Continue with examples and operations
+
+- [Starter templates and worked examples](./service-automation-examples): priority,
+  customer/account routing, numeric/boolean fields, channels, and Runbook context.
+- [Production operations](../../operate/reliability/service-automation): comparison
+  counters, readiness policy, discovery bounds, privacy cleanup, and recovery.
+- [Troubleshooting](../../troubleshooting/service-automation): symptom-by-symptom
+  diagnosis and expected recovery checks.
+- [Every supported v2 endpoint](../../reference/service-automation#complete-v2-endpoint-checklist).
 
 ## Common problems
 
