@@ -1,3 +1,4 @@
+import { searchCapabilities } from './capability-search';
 import {
   McpServer,
   ResourceTemplate,
@@ -310,15 +311,15 @@ export function createOpsKnightMcpServer(
     async args => {
       const input = args as { query: string; domain?: string; intent?: string; cursor?: number };
       const cursor = input.cursor ?? 0;
-      const found = [...visible, ...approvalGated].filter(
-        operation =>
-          (!input.domain || operation.domain === input.domain) &&
-          (!input.intent ||
-            (input.intent === 'read') ===
-              (operation.risk === 'R0' || isMcpSensitiveRead(operation))) &&
-          `${operation.operationId} ${operation.tool ?? ''} ${operation.domain}`
-            .toLowerCase()
-            .includes(input.query.toLowerCase())
+      const found = searchCapabilities(
+        [...visible, ...approvalGated].filter(
+          operation =>
+            (!input.domain || operation.domain === input.domain) &&
+            (!input.intent ||
+              (input.intent === 'read') ===
+                (operation.risk === 'R0' || isMcpSensitiveRead(operation)))
+        ),
+        input.query
       );
       return toolResult({
         operations: found
