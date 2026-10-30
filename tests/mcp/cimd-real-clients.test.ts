@@ -3,7 +3,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock('server-only', () => ({}));
 const warn = vi.hoisted(() => vi.fn());
 vi.mock('@/lib/logger', () => ({ logger: { warn } }));
-import { parseCimdDocument } from '@/lib/mcp/auth/cimd';
+import { parseCimdDocument, resolveCimdClient } from '@/lib/mcp/auth/cimd';
+import { McpBoundaryError } from '@/lib/mcp/core/errors';
 
 // Published by Claude at https://claude.ai/oauth/mcp-oauth-client-metadata (fetched 2026-10-30).
 const CLAUDE_ID = 'https://claude.ai/oauth/mcp-oauth-client-metadata';
@@ -78,5 +79,44 @@ describe('client metadata documents from real assistants', () => {
         json(JSON.stringify({ ...JSON.parse(CLAUDE_DOCUMENT), client_id: 'https://x.test/a' }))
       )
     ).toBe('client_id_mismatch');
+  });
+});
+
+describe('fetch failures before a document exists', () => {
+  const policy = { cimdEnabled: true, cimdAllowedHosts: [], cimdScopes: ['incidents:read'] };
+  const db = {
+    mcpClient: { findUnique: async () => null, upsert: async () => ({}) },
+  } as unknown as Parameters<typeof resolveCimdClient>[0];
+  const attempt = (fetchDocument: () => Promise<never>) =>
+    resolveCimdClient(
+      db,
+      policy as never,
+      CLAUDE_ID,
+      'https://claude.ai/api/mcp/auth_callback',
+      fetchDocument
+    );
+
+  it.each([
+    ['MCP_CLIENT_METADATA_UNAVAILABLE', 502],
+    ['MCP_CLIENT_METADATA_TIMEOUT', 504],
+    ['MCP_CLIENT_METADATA_TOO_LARGE', 413],
+  ])('logs %s and keeps the same error', async (code, status) => {
+    await expect(
+      attempt(() => Promise.reject(new McpBoundaryError(code, status)))
+    ).rejects.toMatchObject({ code, status });
+    expect(warn).toHaveBeenCalledWith('mcp.cimd.fetch_failed', {
+      clientId: CLAUDE_ID,
+      reason: code,
+    });
+  });
+
+  it('logs an unexpected error without its message', async () => {
+    const error = new Error('internal detail do-not-log');
+    await expect(attempt(() => Promise.reject(error))).rejects.toBe(error);
+    expect(warn).toHaveBeenCalledWith('mcp.cimd.fetch_failed', {
+      clientId: CLAUDE_ID,
+      reason: 'unexpected_error',
+    });
+    expect(JSON.stringify(warn.mock.calls)).not.toContain('do-not-log');
   });
 });

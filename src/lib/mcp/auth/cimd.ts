@@ -171,7 +171,19 @@ export async function resolveCimdClient(
     !existing || (existing.metadataUrl === clientId && !existing.revokedAt),
     'invalid_client'
   );
-  const document = parseCimdDocument(clientId, await fetchDocument(url));
+  let fetched: CimdResponse;
+  try {
+    fetched = await fetchDocument(url);
+  } catch (error) {
+    // The transport rejects before any response exists (non-200, timeout, oversized body, TLS,
+    // blocked address), so these never reach the parser. Record why and keep the same error.
+    logger.warn('mcp.cimd.fetch_failed', {
+      clientId,
+      reason: error instanceof McpBoundaryError ? error.code : 'unexpected_error',
+    });
+    throw error;
+  }
+  const document = parseCimdDocument(clientId, fetched);
   requireMcp(document.redirect_uris.includes(requestedRedirectUri), 'invalid_client');
   const name =
     (document.client_name ?? '')

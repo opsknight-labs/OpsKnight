@@ -10,6 +10,18 @@ const MESSAGES = new Map<string, { title: string; body: string }>(
       title: 'Sign-in required',
       body: 'Connect OpsKnight again from your assistant to sign in.',
     },
+    MCP_CLIENT_METADATA_UNAVAILABLE: {
+      title: "We could not load this assistant's details",
+      body: 'OpsKnight could not fetch the details this assistant publishes about itself. Try again, and ask an administrator to check outbound network access from the server if it keeps failing.',
+    },
+    MCP_CLIENT_METADATA_TIMEOUT: {
+      title: "We could not load this assistant's details",
+      body: 'OpsKnight could not fetch the details this assistant publishes about itself in time. Try again, and ask an administrator to check outbound network access from the server if it keeps failing.',
+    },
+    MCP_CLIENT_METADATA_TOO_LARGE: {
+      title: "This assistant's details are not valid",
+      body: 'The details this assistant publishes about itself are larger than OpsKnight accepts. Ask the assistant vendor or an administrator.',
+    },
     MCP_CONSENT_EXPIRED: {
       title: 'This sign-in request expired',
       body: 'Return to your assistant and connect again. Requests are valid for five minutes.',

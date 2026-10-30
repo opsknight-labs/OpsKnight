@@ -29,6 +29,15 @@ describe('friendly MCP errors', () => {
     expect(describeMcpScope('constructor:read')).toBe('View constructor');
   });
 
+  it('explains metadata fetch failures instead of the generic message', () => {
+    for (const code of [
+      'MCP_CLIENT_METADATA_UNAVAILABLE',
+      'MCP_CLIENT_METADATA_TIMEOUT',
+      'MCP_CLIENT_METADATA_TOO_LARGE',
+    ])
+      expect(friendlyMcpError(code).known).toBe(true);
+  });
+
   it('falls back to a generic, actionable message for unknown failures', () => {
     expect(friendlyMcpError('something-new').title).toMatch(/could not connect/i);
     expect(mcpErrorPage(new Error('boom')).status).toBe(503);
