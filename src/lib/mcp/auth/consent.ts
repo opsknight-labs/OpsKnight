@@ -3,6 +3,7 @@ import { getCurrentUser } from '@/lib/rbac';
 import { requireMcp } from '../core/errors';
 import { mcpIssuer } from './config';
 import { friendlyMcpError } from './friendly-error';
+import { redirectUriAllowed } from './redirect-uri';
 
 /** Consent is a personal resource. An administrator cannot accept for another user. */
 export async function assertCanReviewMcpConsent(id: string) {
@@ -29,7 +30,7 @@ export async function expiredConsentReturn(id: string) {
   });
   if (!request) return null;
   const client = await prisma.mcpClient.findUnique({ where: { id: request.clientId } });
-  if (!client || client.revokedAt || !client.redirectUris.includes(request.redirectUri))
+  if (!client || client.revokedAt || !redirectUriAllowed(client.redirectUris, request.redirectUri))
     return null;
   const target = new URL(request.redirectUri);
   target.searchParams.set('error', 'temporarily_unavailable');

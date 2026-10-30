@@ -10,6 +10,8 @@ import { isCimdClientId, resolveCimdClient } from '@/lib/mcp/auth/cimd';
 import { AppError } from '@/lib/errors';
 import { friendlyMcpError, mcpErrorPage, oauthErrorFor } from '@/lib/mcp/auth/friendly-error';
 import { effectiveMcpClientScopes } from '@/lib/mcp/auth/client-policy';
+import { logger } from '@/lib/logger';
+import { redirectUriAllowed, urlForLog } from '@/lib/mcp/auth/redirect-uri';
 
 export function GET(request: Request) {
   return withMcpDatabase(() => withMcpRuntime(() => handleGet(request)));
@@ -44,13 +46,43 @@ async function handleGet(request: Request) {
     } else {
       client = await prisma.mcpClient.findUnique({ where: { id: query.client_id } });
     }
-    requireMcp(
-      client && !client.revokedAt && client.redirectUris.includes(query.redirect_uri),
-      'invalid_client'
-    );
+    if (
+      !client ||
+      client.revokedAt ||
+      !redirectUriAllowed(client.redirectUris, query.redirect_uri)
+    ) {
+      // Administrators otherwise only see "invalid_client"; say which check failed.
+      logger.warn('mcp.authorize.client_denied', {
+        clientId: urlForLog(query.client_id),
+        reason: !client
+          ? 'unknown_client_id'
+          : client.revokedAt
+            ? 'client_revoked'
+            : 'redirect_uri_not_registered',
+        ...(client
+          ? {
+              registeredRedirectUris: client.redirectUris.map(urlForLog),
+              requestedRedirectUri: urlForLog(query.redirect_uri),
+            }
+          : {}),
+      });
+      // A missing id is almost always one the assistant cached from an earlier registration.
+      throw new McpBoundaryError(client ? 'invalid_client' : 'MCP_CLIENT_UNKNOWN');
+    }
     trusted = { redirectUri: query.redirect_uri, state: query.state };
     const ceiling = effectiveMcpClientScopes(client, policy);
-    requireMcp(ceiling?.length, 'invalid_client');
+    if (!ceiling?.length) {
+      logger.warn('mcp.authorize.client_denied', {
+        clientId: client.id.slice(0, 256),
+        reason: 'no_scopes_allowed_for_this_client',
+        registration: client.metadataUrl
+          ? 'metadata_document'
+          : client.dynamicRegistration
+            ? 'automatic'
+            : 'manual',
+      });
+      throw new McpBoundaryError('invalid_client');
+    }
     // Assistants often ask for generic scopes (openid, offline_access) or more than policy allows;
     // grant what the policy permits instead of failing the whole connection.
     const asked = query.scope ? [...new Set(query.scope.split(' '))] : [];
@@ -63,7 +95,9 @@ async function handleGet(request: Request) {
       await tx.$queryRaw`SELECT id FROM "McpClient" WHERE id = ${client.id} FOR SHARE`;
       const current = await tx.mcpClient.findUnique({ where: { id: client.id } });
       requireMcp(
-        current && !current.revokedAt && current.redirectUris.includes(query.redirect_uri),
+        current &&
+          !current.revokedAt &&
+          redirectUriAllowed(current.redirectUris, query.redirect_uri),
         'invalid_client'
       );
       return tx.mcpConsentRequest.create({

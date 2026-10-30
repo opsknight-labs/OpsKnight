@@ -214,6 +214,40 @@ describe('automatic MCP client registration', () => {
     );
     expect(await db.mcpClient.count()).toBe(before);
   });
+  it('accepts what real assistants send: extra known grants, a bare loopback URI', async () => {
+    const response = await register(
+      request({
+        ...metadata,
+        redirect_uris: ['http://127.0.0.1:33418', 'https://vscode.dev/redirect'],
+        grant_types: [
+          'authorization_code',
+          'refresh_token',
+          'urn:ietf:params:oauth:grant-type:jwt-bearer',
+        ],
+        application_type: 'native',
+        software_statement: 'eyJhbGciOiJub25lIn0.e30.',
+      })
+    );
+    expect(response.status).toBe(201);
+    const registered = await response.json();
+    expect(registered.grant_types).toEqual(['authorization_code', 'refresh_token']);
+    expect(registered.redirect_uris).toEqual([
+      'http://127.0.0.1:33418',
+      'https://vscode.dev/redirect',
+    ]);
+    expect(registered).not.toHaveProperty('software_statement');
+  });
+  it('refuses secrets, key material and unknown or misspelled metadata', async () => {
+    for (const extra of [
+      { client_secret: 'x' },
+      { jwks_uri: 'https://keys.example/jwks' },
+      { token_endpoint_auth_methd: 'none' },
+      { grant_types: ['authorization_code', 'password'] },
+    ]) {
+      const response = await register(request({ ...metadata, ...extra }));
+      expect(response.status).toBe(400);
+    }
+  });
   it('narrows requested scopes to the policy ceiling instead of failing or escalating', async () => {
     for (const scope of ['admin:manage', 'incidents:write', 'openid offline_access']) {
       const response = await register(request({ ...metadata, scope }));
@@ -230,10 +264,16 @@ describe('automatic MCP client registration', () => {
     const unused = await client();
     const pending = await client();
     const used = await client();
-    const old = new Date(Date.now() - 7200000);
+    const recent = await client();
+    const old = new Date(Date.now() - 31 * 86_400_000);
     await db.mcpClient.updateMany({
       where: { id: { in: [unused.client_id, pending.client_id, used.client_id] } },
       data: { createdAt: old },
+    });
+    // A failed sign-in an hour ago must not strand the client_id the assistant has cached.
+    await db.mcpClient.update({
+      where: { id: recent.client_id },
+      data: { createdAt: new Date(Date.now() - 2 * 3_600_000) },
     });
     await db.mcpClient.update({ where: { id: used.client_id }, data: { firstAuthorizedAt: old } });
     const user = await createTestUser({ role: 'ADMIN' });
@@ -252,6 +292,7 @@ describe('automatic MCP client registration', () => {
     expect(await db.mcpClient.findUnique({ where: { id: unused.client_id } })).toBeNull();
     expect(await db.mcpClient.findUnique({ where: { id: pending.client_id } })).not.toBeNull();
     expect(await db.mcpClient.findUnique({ where: { id: used.client_id } })).not.toBeNull();
+    expect(await db.mcpClient.findUnique({ where: { id: recent.client_id } })).not.toBeNull();
   });
   it('keeps registrations disabled on existing installations until explicitly enabled', async () => {
     await db.mcpPolicy.update({ where: { id: 'default' }, data: { dcrEnabled: false } });
@@ -311,23 +352,59 @@ describe('automatic MCP client registration', () => {
       else process.env.TRUST_PROXY_HEADERS = previous;
     }
   });
-  it('caps anonymous client allocation and reclaims bounded expired, never-authorized entries', async () => {
+  it('caps anonymous client allocation and makes room by evicting the oldest unused entry', async () => {
     const existing = await db.mcpClient.count({
       where: { dynamicRegistration: true, revokedAt: null },
     });
+    // Entries left by earlier tests are made fresh, so only this test's ones can be evicted.
+    await db.mcpClient.updateMany({
+      where: { dynamicRegistration: true },
+      data: { createdAt: new Date() },
+    });
+    // A burst of fresh registrations fills the table: nothing is old enough to evict.
     await db.mcpClient.createMany({
-      data: Array.from({ length: 5000 - existing }, () => ({
+      data: Array.from({ length: 5000 - existing }, (_, index) => ({
         name: 'Unused registration',
         dynamicRegistration: true,
         scopes,
         redirectUris: [callback],
-        createdAt: new Date(Date.now() - 7200000),
+        createdAt: new Date(Date.now() - 60_000 - index),
       })),
     });
     expect((await register(request(metadata))).status).toBe(503);
-    const cleaned = await cleanupMcpCredentials();
-    expect(cleaned.registrations).toBeGreaterThan(0);
-    expect(cleaned.registrations).toBeLessThanOrEqual(500);
+    const oldest = await db.mcpClient.findFirstOrThrow({
+      where: { name: 'Unused registration' },
+      orderBy: { createdAt: 'asc' },
+    });
+    const authorized = await db.mcpClient.findFirstOrThrow({
+      where: { name: 'Unused registration', id: { not: oldest.id } },
+      orderBy: { createdAt: 'asc' },
+    });
+    const hoursAgo = (hours: number) => new Date(Date.now() - hours * 3_600_000);
+    await db.mcpClient.update({ where: { id: oldest.id }, data: { createdAt: hoursAgo(3) } });
+    await db.mcpClient.update({
+      where: { id: authorized.id },
+      data: { createdAt: hoursAgo(4), firstAuthorizedAt: hoursAgo(4) },
+    });
+    // A revoked entry is outside the counted population; evicting it would let the cap grow.
+    const revoked = await db.mcpClient.create({
+      data: {
+        name: 'Revoked registration',
+        dynamicRegistration: true,
+        scopes,
+        redirectUris: [callback],
+        createdAt: hoursAgo(5),
+        revokedAt: hoursAgo(5),
+      },
+    });
+    // Full, but an hour-old never-used entry exists: evict it, never a used or revoked one.
     expect((await register(request(metadata))).status).toBe(201);
+    expect(await db.mcpClient.findUnique({ where: { id: oldest.id } })).toBeNull();
+    expect(await db.mcpClient.findUnique({ where: { id: authorized.id } })).not.toBeNull();
+    expect(await db.mcpClient.findUnique({ where: { id: revoked.id } })).not.toBeNull();
+    expect(
+      await db.mcpClient.count({ where: { dynamicRegistration: true, revokedAt: null } })
+    ).toBe(5000);
+    expect((await register(request(metadata))).status).toBe(503);
   });
 });

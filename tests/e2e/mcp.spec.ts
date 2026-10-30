@@ -70,8 +70,10 @@ test('native MCP settings, PKCE consent, scoped call and revocation on desktop/m
   );
   await page.goto('/settings/integrations/mcp');
   await expect(page.getByRole('heading', { name: 'MCP integration', exact: true })).toBeVisible();
-  await expect(page.getByText('App URL (Settings → System)', { exact: true })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Copy MCP endpoint', exact: true })).toBeVisible();
+  // Scoped: WebKit can briefly hold a second copy of the page outside the main region.
+  const main = page.locator('#main-content');
+  await expect(main.getByText('App URL (Settings → System)', { exact: true })).toBeVisible();
+  await expect(main.getByRole('button', { name: 'Copy MCP endpoint', exact: true })).toBeVisible();
   await page.getByRole('checkbox', { name: /Enable MCP/ }).check();
   await page.locator('#main-content').getByText('Advanced', { exact: true }).click();
   await page.getByRole('checkbox', { name: /Allow reviewed routine mutations/ }).uncheck();

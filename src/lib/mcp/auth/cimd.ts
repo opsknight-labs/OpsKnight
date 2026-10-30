@@ -2,10 +2,11 @@ import 'server-only';
 import { z } from 'zod/v3';
 import { isIP } from 'node:net';
 import type { McpClient, McpPolicy, PrismaClient } from '@prisma/client';
-import { McpBoundaryError, requireMcp } from '../core/errors';
+import { McpBoundaryError } from '../core/errors';
 import { CIMD_MAX_BYTES, fetchPinnedMetadata, type CimdResponse } from './cimd-transport';
 import { rejectDuplicateJsonKeys } from '../protocol/input';
 import { logger } from '@/lib/logger';
+import { redirectUriAllowed, urlForLog } from './redirect-uri';
 
 const JWT_BEARER_GRANT = 'urn:ietf:params:oauth:grant-type:jwt-bearer';
 const LOOPBACK = new Set(['localhost', '127.0.0.1', '[::1]']);
@@ -37,7 +38,13 @@ export function parseCimdClientId(raw: string) {
     !isIP(url.hostname.replace(/^\[|\]$/g, '')) &&
     url.hostname === url.hostname.toLowerCase() &&
     raw.length <= 256;
-  requireMcp(canonical, 'invalid_client');
+  if (!canonical) {
+    logger.warn('mcp.cimd.client_id_rejected', {
+      clientId: urlForLog(raw),
+      reason: 'not_canonical_https_url',
+    });
+    throw new McpBoundaryError('invalid_client');
+  }
   return url;
 }
 function redirectUri(value: string) {
@@ -162,15 +169,18 @@ export async function resolveCimdClient(
   fetchDocument: (url: URL) => Promise<CimdResponse> = fetchPinnedMetadata
 ): Promise<McpClient> {
   const url = parseCimdClientId(clientId);
-  requireMcp(
-    isCimdHostAllowed(policy, url.hostname) && policy.cimdScopes.length > 0,
-    'invalid_client'
-  );
+  // Administrators otherwise only see "invalid_client"; say which check failed.
+  const deny = (reason: string, extra: Record<string, unknown> = {}): never => {
+    logger.warn('mcp.cimd.client_denied', { clientId, reason, ...extra });
+    throw new McpBoundaryError('invalid_client');
+  };
+  if (!policy.cimdEnabled) deny('automatic_connections_off');
+  if (!isCimdHostAllowed(policy, url.hostname))
+    deny('host_not_in_allowlist', { host: url.hostname });
+  if (policy.cimdScopes.length === 0) deny('no_scopes_allowed_for_automatic_connections');
   const existing = await db.mcpClient.findUnique({ where: { id: clientId } });
-  requireMcp(
-    !existing || (existing.metadataUrl === clientId && !existing.revokedAt),
-    'invalid_client'
-  );
+  if (existing?.revokedAt) deny('client_revoked');
+  if (existing && existing.metadataUrl !== clientId) deny('client_id_taken_by_other_registration');
   let fetched: CimdResponse;
   try {
     fetched = await fetchDocument(url);
@@ -184,7 +194,11 @@ export async function resolveCimdClient(
     throw error;
   }
   const document = parseCimdDocument(clientId, fetched);
-  requireMcp(document.redirect_uris.includes(requestedRedirectUri), 'invalid_client');
+  if (!redirectUriAllowed(document.redirect_uris, requestedRedirectUri))
+    deny('redirect_uri_not_in_document', {
+      requestedRedirectUri: urlForLog(requestedRedirectUri),
+      documentRedirectUris: document.redirect_uris.map(urlForLog),
+    });
   const name =
     (document.client_name ?? '')
       .replace(/[\u0000-\u001f\u007f]/g, ' ')
