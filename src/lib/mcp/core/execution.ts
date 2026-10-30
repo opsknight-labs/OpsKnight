@@ -19,7 +19,11 @@ import {
   isMcpSensitiveRead,
 } from '../catalog';
 import { MCP_APPROVAL_HANDLERS, MCP_HANDLERS, MCP_PREVIEW_HANDLERS } from '../operations/handlers';
-import { resolveMcpGrant } from '../auth/principal';
+import {
+  resolveMcpGrantWithPolicy,
+  type McpRuntimePolicy,
+  type resolveMcpGrant,
+} from '../auth/principal';
 import { CostBudget } from './budget';
 import { McpBoundaryError, requireMcp } from './errors';
 import { lockMcpMutationAuthority } from './mutation-authority';
@@ -185,25 +189,30 @@ async function executeMcpOperation(
   context.budget.consumeOperation();
   const operation = MCP_OPERATION_MAP.get(operationId);
   requireMcp(operation && availableIn(mode, operation), 'MCP_OPERATION_UNAVAILABLE', 403);
-  const policy = await prisma.mcpPolicy.findUnique({ where: { id: 'default' } });
-  // Administrator capability controls, read fresh on every step whatever surface invoked it.
-  // Approval previews are internal reads of the workflow; their gated operation is checked instead.
-  requireMcp(
-    mode === 'preview' || !mcpCapabilityDisabled(policy, operation),
-    'MCP_CAPABILITY_DISABLED',
-    403
-  );
   const args = validateOperationArgs(operationId, rawArgs, mode);
-  requireMcp(
+  // Administrator capability controls, judged by the same policy snapshot at every step whatever
+  // surface invoked it. Approval previews are internal reads; their gated operation is checked.
+  const exposed = (policy: McpRuntimePolicy | null) =>
+    mode === 'preview' || !mcpCapabilityDisabled(policy, operation);
+  const permitted = (policy: McpRuntimePolicy | null) =>
     policy?.enabled &&
-      (mode === 'generic' && isMcpSensitiveRead(operation)
-        ? policy.sensitiveReadsEnabled
-        : operation.risk === 'R0' || policy.writesEnabled),
-    'MCP_OPERATION_DISABLED',
-    403
-  );
-  // Membership, principal, client and grant changes take effect at every step.
-  const auth = await resolveMcpGrant(context.grantId, context.credentialId);
+    (mode === 'generic' && isMcpSensitiveRead(operation)
+      ? policy.sensitiveReadsEnabled
+      : operation.risk === 'R0' || policy.writesEnabled);
+  // Membership, principal, client, grant and policy changes take effect at every step, read in
+  // one statement. A disabled operation is still reported ahead of a grant failure.
+  let resolved: Awaited<ReturnType<typeof resolveMcpGrantWithPolicy>>;
+  try {
+    resolved = await resolveMcpGrantWithPolicy(context.grantId, context.credentialId);
+  } catch (error) {
+    const policy = await prisma.mcpPolicy.findUnique({ where: { id: 'default' } });
+    requireMcp(exposed(policy), 'MCP_CAPABILITY_DISABLED', 403);
+    requireMcp(permitted(policy), 'MCP_OPERATION_DISABLED', 403);
+    throw error;
+  }
+  requireMcp(exposed(resolved.policy), 'MCP_CAPABILITY_DISABLED', 403);
+  requireMcp(permitted(resolved.policy), 'MCP_OPERATION_DISABLED', 403);
+  const { auth } = resolved;
   auth.apiKey.scopes = auth.apiKey.scopes.filter(scope => context.tokenScopes.includes(scope));
   auth.actor.apiKey = { id: auth.apiKey.id, scopes: auth.apiKey.scopes };
   requireMcp(hasOperationAuthority(auth.actor, operation), 'MCP_OPERATION_FORBIDDEN', 403);

@@ -1,6 +1,8 @@
 import { randomBytes } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { disconnectPrisma } from '@/lib/prisma';
+import prisma, { disconnectPrisma } from '@/lib/prisma';
+import type { Prisma } from '@prisma/client';
+import { withMcpDatabase } from '@/lib/database-workload';
 import { digestMcpSecret, mcpResource } from '@/lib/mcp/auth/config';
 import { POST } from '@/app/mcp/route';
 import {
@@ -62,12 +64,12 @@ afterAll(async () => {
   await db.$disconnect();
 });
 
-async function call(name: string, args: Record<string, unknown>) {
-  const response = await POST(
+function post(name: string, args: Record<string, unknown>, token = accessToken) {
+  return POST(
     new Request(mcpResource(), {
       method: 'POST',
       headers: {
-        authorization: `Bearer ${accessToken}`,
+        authorization: `Bearer ${token}`,
         'content-type': 'application/json',
         accept: 'application/json, text/event-stream',
         'mcp-protocol-version': '2026-07-28',
@@ -90,6 +92,9 @@ async function call(name: string, args: Record<string, unknown>) {
       }),
     })
   );
+}
+async function call(name: string, args: Record<string, unknown>) {
+  const response = await post(name, args);
   expect(response.status).toBe(200);
   return (await response.json()).result as {
     isError?: boolean;
@@ -133,5 +138,43 @@ describe('incident_get_context', () => {
     const result = await call('incident_get_context', { id: 'missing-incident' });
     expect(result.isError).toBe(true);
     expect(result.content[0].text).toMatch(/^MCP_RESOURCE_UNAVAILABLE\b/);
+  });
+});
+
+describe('MCP policy read with the grant', () => {
+  it('reads no MCP policy row on its own for a successful call', async () => {
+    const statements: string[] = [];
+    let collecting = false;
+    await withMcpDatabase(() => prisma.$connect());
+    globalThis.prismaMcpGlobal!.$on('query', (event: Prisma.QueryEvent) => {
+      if (collecting) statements.push(event.query);
+    });
+    await call('incident_search', { query: { limit: 5 } });
+    collecting = true;
+    const result = await call('incident_search', { query: { limit: 5 } });
+    await new Promise(resolve => setTimeout(resolve, 25));
+    collecting = false;
+    expect(result.isError).not.toBe(true);
+    const policyOnly = statements.filter(
+      sql => sql.includes('"McpPolicy"') && !sql.includes('"McpGrant"')
+    );
+    expect(policyOnly).toEqual([]);
+    // Two authentications (before and after the body) and the execution-time re-check.
+    expect(statements.filter(sql => sql.includes('"McpGrant"'))).toHaveLength(3);
+  });
+
+  it('still answers MCP_DISABLED ahead of any credential error', async () => {
+    await db.mcpPolicy.update({ where: { id: 'default' }, data: { enabled: false } });
+    try {
+      for (const token of [accessToken, randomBytes(32).toString('base64url'), 'short']) {
+        const response = await post('incident_search', {}, token);
+        expect(response.status).toBe(503);
+        expect((await response.json()).error).toBe('MCP_DISABLED');
+      }
+    } finally {
+      await db.mcpPolicy.update({ where: { id: 'default' }, data: { enabled: true } });
+    }
+    const response = await post('incident_search', {}, randomBytes(32).toString('base64url'));
+    expect(response.status).toBe(401);
   });
 });
