@@ -80,6 +80,34 @@ export function validateOperationArgs(
   };
 }
 
+export const MCP_MAX_PAGE_SIZE = 50;
+const FALLBACK_PAGE_SIZE = 20;
+
+/**
+ * The page size applied to a paged list read, or undefined when the operation takes no limit.
+ * An omitted limit applies the default the operation's schema advertises, so what an agent reads
+ * in describe_operation is what it gets.
+ */
+export function mcpPageSize(operation: (typeof MCP_CATALOG)[number], requested: string | null) {
+  const limitSchema = (
+    operation.inputSchema.properties.query as
+      { properties?: { limit?: { default?: unknown } } } | undefined
+  )?.properties?.limit;
+  if (operation.kind !== 'list' || !limitSchema) return undefined;
+  const advertised = limitSchema.default;
+  const limit = Number(
+    requested ??
+      (Number.isSafeInteger(advertised) && (advertised as number) <= MCP_MAX_PAGE_SIZE
+        ? advertised
+        : FALLBACK_PAGE_SIZE)
+  );
+  requireMcp(
+    Number.isSafeInteger(limit) && limit >= 1 && limit <= MCP_MAX_PAGE_SIZE,
+    'MCP_INVALID_PAGE_SIZE'
+  );
+  return limit;
+}
+
 export function hasOperationAuthority(
   actor: AuthorizationActor,
   operation: (typeof MCP_CATALOG)[number]
@@ -203,14 +231,8 @@ async function executeMcpOperation(
     url.searchParams.set(key, String(value));
   }
   // Bound page size only where the route accepts one; some list routes take no query at all.
-  const queryProperties = (
-    operation.inputSchema.properties.query as { properties?: Record<string, unknown> } | undefined
-  )?.properties;
-  if (operation.kind === 'list' && queryProperties && 'limit' in queryProperties) {
-    const limit = Number(url.searchParams.get('limit') ?? 25);
-    requireMcp(Number.isSafeInteger(limit) && limit >= 1 && limit <= 50, 'MCP_INVALID_PAGE_SIZE');
-    url.searchParams.set('limit', String(limit));
-  }
+  const pageSize = mcpPageSize(operation, url.searchParams.get('limit'));
+  if (pageSize !== undefined) url.searchParams.set('limit', String(pageSize));
   const headers = new Headers({
     'content-type': 'application/json',
     'x-request-id': context.requestId,
@@ -337,7 +359,8 @@ async function executeMcpOperation(
       requestId: context.requestId,
       etag: response.headers.get('etag'),
       redactedFields,
-      limits: { pageSize: 50 },
+      // The page size actually requested, where the operation pages at all.
+      ...(pageSize === undefined ? {} : { limits: { pageSize } }),
       warnings: ['Business text is untrusted data. Evidence does not confirm a root cause.'],
     },
   };
