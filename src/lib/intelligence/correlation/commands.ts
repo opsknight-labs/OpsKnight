@@ -12,7 +12,12 @@ import { INTELLIGENCE_ENGINE_VERSION } from '../contract';
 const id = z.string().regex(/^[A-Za-z0-9_-]{1,64}$/, 'Invalid id');
 const note = z
   .string()
-  .transform(value => value.replace(/[\u0000-\u001f\u007f]+/g, ' ').replace(/ {2,}/g, ' ').trim())
+  .transform(value =>
+    value
+      .replace(/[\u0000-\u001f\u007f]+/g, ' ')
+      .replace(/ {2,}/g, ' ')
+      .trim()
+  )
   .pipe(z.string().max(500))
   .optional();
 
@@ -35,7 +40,10 @@ export const linkIncidentsSchema = z
 function validationError(issues: Array<{ path: PropertyKey[]; message: string }>) {
   return new AppError({
     code: 'VALIDATION_FAILED',
-    fields: issues.map(issue => ({ field: issue.path.map(String).join('.') || 'input', message: issue.message })),
+    fields: issues.map(issue => ({
+      field: issue.path.map(String).join('.') || 'input',
+      message: issue.message,
+    })),
   });
 }
 
@@ -49,7 +57,11 @@ function assertMayDecide(actor: AuthorizationActor) {
 }
 
 /** The actor must be able to read every incident involved; otherwise the link is reported as not found. */
-async function assertCanReadAll(tx: Prisma.TransactionClient, actor: AuthorizationActor, ids: string[]) {
+async function assertCanReadAll(
+  tx: Prisma.TransactionClient,
+  actor: AuthorizationActor,
+  ids: string[]
+) {
   const visible = await tx.incident.findMany({
     where: { AND: [{ id: { in: ids } }, incidentReadWhere(actor)] },
     select: { id: true },
@@ -67,6 +79,16 @@ async function setDecision(
   reasonCode: string,
   text: string | undefined
 ): Promise<boolean> {
+  const pair = await tx.incidentRelationship.findUniqueOrThrow({
+    where: { id: relationship.id },
+    select: { sourceIncidentId: true, targetIncidentId: true },
+  });
+  const [source, target] = [pair.sourceIncidentId, pair.targetIncidentId].sort();
+  await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`intelligence-link:${source}:${target}`}, 0))`;
+  relationship = await tx.incidentRelationship.findUniqueOrThrow({
+    where: { id: relationship.id },
+    select: { id: true, decision: true },
+  });
   if (relationship.decision === decision) return false;
   await tx.incidentRelationship.update({ where: { id: relationship.id }, data: { decision } });
   await tx.incidentRelationshipEvent.create({
@@ -94,7 +116,10 @@ export interface DecisionResult {
  * (repeating the current decision changes nothing), serialised per link, and visibility-checked on
  * both incidents. Shadow-only suggestions were never shown, so they cannot be decided.
  */
-export async function decideRelationship(actor: AuthorizationActor, input: unknown): Promise<DecisionResult> {
+export async function decideRelationship(
+  actor: AuthorizationActor,
+  input: unknown
+): Promise<DecisionResult> {
   assertMayDecide(actor);
   const parsed = decideRelationshipSchema.safeParse(input);
   if (!parsed.success) throw validationError(parsed.error.issues);
@@ -106,8 +131,12 @@ export async function decideRelationship(actor: AuthorizationActor, input: unkno
       where: { id: relationshipId },
       select: { id: true, decision: true, sourceIncidentId: true, targetIncidentId: true },
     });
-    if (!relationship || relationship.decision === 'SHADOW') throw new AppError({ code: 'RESOURCE_NOT_FOUND' });
-    await assertCanReadAll(tx, actor, [relationship.sourceIncidentId, relationship.targetIncidentId]);
+    if (!relationship || relationship.decision === 'SHADOW')
+      throw new AppError({ code: 'RESOURCE_NOT_FOUND' });
+    await assertCanReadAll(tx, actor, [
+      relationship.sourceIncidentId,
+      relationship.targetIncidentId,
+    ]);
 
     const changed = await setDecision(tx, actor, relationship, decision, `HUMAN_${decision}`, text);
     if (changed) {
@@ -131,7 +160,10 @@ export async function decideRelationship(actor: AuthorizationActor, input: unkno
  * Links two incidents by hand. Symmetric, so the pair is stored in canonical order; linking again
  * reactivates a previously withdrawn link instead of creating a duplicate.
  */
-export async function linkIncidents(actor: AuthorizationActor, input: unknown): Promise<DecisionResult> {
+export async function linkIncidents(
+  actor: AuthorizationActor,
+  input: unknown
+): Promise<DecisionResult> {
   assertMayDecide(actor);
   const parsed = linkIncidentsSchema.safeParse(input);
   if (!parsed.success) throw validationError(parsed.error.issues);
@@ -152,7 +184,14 @@ export async function linkIncidents(actor: AuthorizationActor, input: unknown): 
       select: { id: true, decision: true },
     });
     if (existing) {
-      const changed = await setDecision(tx, actor, existing, 'ACCEPTED', 'HUMAN_LINK', parsed.data.note);
+      const changed = await setDecision(
+        tx,
+        actor,
+        existing,
+        'ACCEPTED',
+        'HUMAN_LINK',
+        parsed.data.note
+      );
       return { relationshipId: existing.id, decision: 'ACCEPTED' as const, changed };
     }
     const created = await tx.incidentRelationship.create({

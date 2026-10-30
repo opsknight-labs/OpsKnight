@@ -1,5 +1,6 @@
 import 'server-only';
 import prisma from '@/lib/prisma';
+import { Prisma } from '@prisma/client';
 import { checkRateLimit } from '@/lib/rate-limit';
 import type { AiUsage } from './port';
 
@@ -13,8 +14,7 @@ const isPerson = (actorId: string) => !actorId.includes(':');
 
 /**
  * Per-user rate limit, the per-user daily token share and the global daily token budget, checked before
- * any model call. Budgets are soft ceilings: concurrent in-flight requests can overshoot them by at most
- * their own output caps. A failure to read them fails closed, because uncontrolled spend is the thing the
+ * any model call. Atomic reservations below include concurrent in-flight requests in both limits. A failure to read them fails closed, because uncontrolled spend is the thing the
  * budget exists to stop.
  */
 export async function admitAiRequest(
@@ -53,34 +53,101 @@ const MAX_TOKENS_PER_CALL = 2_000_000;
 const clampTokens = (value: number) =>
   Math.max(0, Math.min(MAX_TOKENS_PER_CALL, Math.trunc(Number.isFinite(value) ? value : 0)));
 
+export interface AiReservation {
+  id: string;
+  day: string;
+}
+
+/** Serialize admission and settlement by UTC day, including all active reservations. */
+export async function reserveAiTokens(
+  actorId: string,
+  limits: { dailyTokenBudget: number; userDailyTokenBudget?: number },
+  estimate: number,
+  ttlMs = 120_000,
+  now = new Date()
+): Promise<AiReservation | null> {
+  const day = utcDay(now);
+  const tokens = Math.max(1, clampTokens(estimate));
+  return prisma.$transaction(async tx => {
+    await tx.$executeRaw(
+      Prisma.sql`SELECT pg_advisory_xact_lock(hashtextextended(${`ai-budget:${day}`}, 0))`
+    );
+    const [usage, personal, reserved] = await Promise.all([
+      tx.aiUsageDay.findUnique({ where: { day } }),
+      isPerson(actorId)
+        ? tx.aiUsageUserDay.findUnique({ where: { day_userId: { day, userId: actorId } } })
+        : null,
+      tx.$queryRaw<Array<{ total: bigint; personal: bigint }>>(Prisma.sql`
+        SELECT coalesce(sum(tokens),0)::bigint AS total,
+          coalesce(sum(tokens) FILTER (WHERE "actorId" = ${actorId}),0)::bigint AS personal
+        FROM "AiTokenReservation" WHERE day = ${day} AND "settledAt" IS NULL AND "expiresAt" > ${now}`),
+    ]);
+    if (
+      (usage?.inputTokens ?? 0) + (usage?.outputTokens ?? 0) + Number(reserved[0].total) + tokens >
+        limits.dailyTokenBudget ||
+      (isPerson(actorId) &&
+        limits.userDailyTokenBudget &&
+        (personal?.tokens ?? 0) + Number(reserved[0].personal) + tokens >
+          limits.userDailyTokenBudget)
+    )
+      return null;
+    const row = await tx.aiTokenReservation.create({
+      data: {
+        day,
+        actorId,
+        tokens,
+        expiresAt: new Date(+now + Math.max(60_000, Math.min(ttlMs, 3_600_000))),
+      },
+      select: { id: true, day: true },
+    });
+    // Retain settled receipts for a day so retried accounting is idempotent; bound maintenance work.
+    await tx.$executeRaw(Prisma.sql`DELETE FROM "AiTokenReservation" WHERE id IN (
+      SELECT id FROM "AiTokenReservation" WHERE "expiresAt" < ${new Date(+now - 86_400_000)} LIMIT 500)`);
+    return row;
+  });
+}
+
 export async function recordAiUsage(
   usage: AiUsage,
   now: Date = new Date(),
-  actorId?: string
+  actorId?: string,
+  reservation?: AiReservation
 ): Promise<void> {
   const inputTokens = clampTokens(usage.inputTokens);
   const outputTokens = clampTokens(usage.outputTokens);
-  const day = utcDay(now);
-  await prisma.aiUsageDay.upsert({
-    where: { day },
-    create: { day, requests: 1, inputTokens, outputTokens },
-    update: {
-      requests: { increment: 1 },
-      inputTokens: { increment: inputTokens },
-      outputTokens: { increment: outputTokens },
-    },
+  const day = reservation?.day ?? utcDay(now);
+  await prisma.$transaction(async tx => {
+    await tx.$executeRaw(
+      Prisma.sql`SELECT pg_advisory_xact_lock(hashtextextended(${`ai-budget:${day}`}, 0))`
+    );
+    const held = reservation
+      ? await tx.aiTokenReservation.findUnique({ where: { id: reservation.id } })
+      : null;
+    if (reservation && (!held || held.settledAt)) return;
+    const person = held?.actorId ?? actorId;
+    await tx.aiUsageDay.upsert({
+      where: { day },
+      create: { day, requests: 1, inputTokens, outputTokens },
+      update: {
+        requests: { increment: 1 },
+        inputTokens: { increment: inputTokens },
+        outputTokens: { increment: outputTokens },
+      },
+    });
+    if (person && isPerson(person)) {
+      const users = await tx.$queryRaw<Array<{ id: string }>>(
+        Prisma.sql`SELECT id FROM "User" WHERE id = ${person} FOR KEY SHARE`
+      );
+      if (users.length)
+        await tx.aiUsageUserDay.upsert({
+          where: { day_userId: { day, userId: person } },
+          create: { day, userId: person, tokens: inputTokens + outputTokens },
+          update: { tokens: { increment: inputTokens + outputTokens } },
+        });
+    }
+    if (held)
+      await tx.aiTokenReservation.update({ where: { id: held.id }, data: { settledAt: now } });
   });
-  if (actorId && isPerson(actorId)) {
-    const tokens = inputTokens + outputTokens;
-    await prisma.aiUsageUserDay
-      .upsert({
-        where: { day_userId: { day, userId: actorId } },
-        create: { day, userId: actorId, tokens },
-        update: { tokens: { increment: tokens } },
-      })
-      // The person may have been deleted mid-request; the global count above is what matters then.
-      .catch(() => undefined);
-  }
 }
 
 /** Rough token count (about four characters per token) for work that ended before the provider reported usage. */

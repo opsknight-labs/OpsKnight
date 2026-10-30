@@ -8,6 +8,7 @@ import {
 } from '@/app/(app)/settings/intelligence/services/actions';
 import { Button } from '@/components/ui/shadcn/button';
 import type { IntelligenceModeValue } from '@/lib/intelligence/contract';
+import Link from 'next/link';
 
 const initial: ServicePolicyActionState = { message: '', ok: false };
 const fieldClass = 'w-full rounded-md border border-border bg-background p-2 text-sm';
@@ -15,7 +16,10 @@ const fieldClass = 'w-full rounded-md border border-border bg-background p-2 tex
 function Status({ state }: { state: ServicePolicyActionState }) {
   if (!state.message) return null;
   return (
-    <p role={state.ok ? 'status' : 'alert'} className={state.ok ? 'text-sm text-emerald-600' : 'text-sm text-destructive'}>
+    <p
+      role={state.ok ? 'status' : 'alert'}
+      className={state.ok ? 'text-sm text-emerald-600' : 'text-sm text-destructive'}
+    >
       {state.message}
     </p>
   );
@@ -29,9 +33,17 @@ export type ServicePolicyRow = {
   similarityEnabled: boolean;
   responseEnabled: boolean;
   headVersion: number;
+  autoAvailable?: boolean;
+  autoReason?: string;
 };
 
-export function ServicePolicyForm({ row, canManage }: { row: ServicePolicyRow; canManage: boolean }) {
+export function ServicePolicyForm({
+  row,
+  canManage,
+}: {
+  row: ServicePolicyRow;
+  canManage: boolean;
+}) {
   const [state, action, pending] = useActionState(saveServicePolicyAction, initial);
   const id = useId();
   const disabled = !canManage || pending;
@@ -43,28 +55,77 @@ export function ServicePolicyForm({ row, canManage }: { row: ServicePolicyRow; c
         <label htmlFor={`${id}-mode`} className="text-sm font-medium">
           Mode for this service
         </label>
-        <select id={`${id}-mode`} name="mode" defaultValue={row.mode} disabled={disabled} className={fieldClass}>
+        <select
+          id={`${id}-mode`}
+          name="mode"
+          defaultValue={row.mode}
+          disabled={disabled}
+          className={fieldClass}
+        >
           <option value="OFF">Off — no analysis</option>
           <option value="SHADOW">Shadow — analyze and record only</option>
           <option value="SUGGEST">Suggest — show suggestions to responders</option>
+          <option value="AUTO" disabled={!row.autoAvailable}>
+            Automatic grouping — certified services only
+          </option>
         </select>
+        <p className="text-xs text-muted-foreground">
+          {row.autoReason ?? 'Review quality certification before enabling automatic grouping.'}{' '}
+          <Link
+            href={`/settings/intelligence/quality?serviceId=${encodeURIComponent(row.serviceId)}`}
+            className="underline"
+          >
+            Review grouping quality
+          </Link>
+        </p>
       </div>
       <div className="flex items-start gap-3">
-        <input id={`${id}-sim`} name="similarityEnabled" type="checkbox" defaultChecked={row.similarityEnabled} disabled={disabled} className="mt-1 h-4 w-4" />
-        <label htmlFor={`${id}-sim`} className="text-sm font-medium">Find similar past incidents</label>
+        <input
+          id={`${id}-sim`}
+          name="similarityEnabled"
+          type="checkbox"
+          defaultChecked={row.similarityEnabled}
+          disabled={disabled}
+          className="mt-1 h-4 w-4"
+        />
+        <label htmlFor={`${id}-sim`} className="text-sm font-medium">
+          Find similar past incidents
+        </label>
       </div>
       <div className="flex items-start gap-3">
-        <input id={`${id}-resp`} name="responseEnabled" type="checkbox" defaultChecked={row.responseEnabled} disabled={disabled} className="mt-1 h-4 w-4" />
-        <label htmlFor={`${id}-resp`} className="text-sm font-medium">Suggest probable causes and runbooks</label>
+        <input
+          id={`${id}-resp`}
+          name="responseEnabled"
+          type="checkbox"
+          defaultChecked={row.responseEnabled}
+          disabled={disabled}
+          className="mt-1 h-4 w-4"
+        />
+        <label htmlFor={`${id}-resp`} className="text-sm font-medium">
+          Suggest probable causes and runbooks
+        </label>
       </div>
       <div className="space-y-1">
-        <label htmlFor={`${id}-reason`} className="text-sm font-medium">Reason (recorded in the audit log)</label>
-        <input id={`${id}-reason`} name="reason" type="text" maxLength={500} disabled={disabled} className={fieldClass} />
+        <label htmlFor={`${id}-reason`} className="text-sm font-medium">
+          Reason (recorded in the audit log)
+        </label>
+        <input
+          id={`${id}-reason`}
+          name="reason"
+          type="text"
+          maxLength={500}
+          disabled={disabled}
+          className={fieldClass}
+        />
       </div>
       <div className="flex items-center gap-3">
         {canManage && (
           <Button type="submit" disabled={pending}>
-            {pending ? 'Publishing…' : row.source === 'service' ? 'Publish new version' : 'Create override'}
+            {pending
+              ? 'Publishing…'
+              : row.source === 'service'
+                ? 'Publish new version'
+                : 'Create override'}
           </Button>
         )}
         <Status state={state} />
@@ -73,12 +134,24 @@ export function ServicePolicyForm({ row, canManage }: { row: ServicePolicyRow; c
   );
 }
 
-export function ClearOverrideButton({ serviceId, serviceName }: { serviceId: string; serviceName: string }) {
+export function ClearOverrideButton({
+  serviceId,
+  serviceName,
+}: {
+  serviceId: string;
+  serviceName: string;
+}) {
   const [state, action, pending] = useActionState(clearServiceOverrideAction, initial);
   return (
     <form action={action} className="inline-flex items-center gap-2">
       <input type="hidden" name="serviceId" value={serviceId} />
-      <Button type="submit" size="sm" variant="ghost" disabled={pending} aria-label={`Use the global policy for ${serviceName}`}>
+      <Button
+        type="submit"
+        size="sm"
+        variant="ghost"
+        disabled={pending}
+        aria-label={`Use the global policy for ${serviceName}`}
+      >
         Use global policy
       </Button>
       <Status state={state} />

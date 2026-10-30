@@ -1,6 +1,15 @@
 import 'server-only';
 import { Prisma } from '@prisma/client';
-import { INTELLIGENCE_ENGINE_VERSION, type CorrelationRule } from '../contract';
+import { logAudit } from '@/lib/audit';
+import {
+  INTELLIGENCE_ENGINE_VERSION,
+  policyDefinitionSchema,
+  type CorrelationRule,
+  type PolicyDefinition,
+} from '../contract';
+import { createHash } from 'node:crypto';
+import { resolveEffectivePolicy } from '../settings/service';
+import { getAutoGate } from '../evaluation/quality';
 import { extendedWindowEnd, scopeHash, windowFor } from './rules';
 import {
   combinedContent,
@@ -10,7 +19,7 @@ import {
 
 type Tx = Prisma.TransactionClient;
 
-export type CorrelationMode = 'SHADOW' | 'SUGGESTED';
+export type CorrelationMode = 'SHADOW' | 'SUGGESTED' | 'ACCEPTED';
 
 export interface JoinInput {
   policyId: string;
@@ -23,6 +32,8 @@ export interface JoinInput {
   decision: CorrelationMode;
   scopeServiceIds?: readonly string[];
   match?: { fingerprint: SimilarityFingerprint; minScore: number };
+  certificationRunId?: string;
+  scopeDefinition?: PolicyDefinition;
 }
 
 export interface JoinResult {
@@ -40,6 +51,7 @@ type GroupRow = {
   windowEnd: Date;
   maxWindowEnd: Date;
   anchorIncidentId: string | null;
+  status: string;
 };
 
 /**
@@ -51,13 +63,32 @@ type GroupRow = {
  * (by creation time, then id), so the outcome does not depend on the order incidents are processed in.
  */
 export async function joinCorrelationGroup(tx: Tx, input: JoinInput): Promise<JoinResult> {
+  if (input.decision === 'ACCEPTED' && !input.certificationRunId)
+    throw new Error('Automatic grouping requires certification evidence');
   const { rule, incident } = input;
   const scope = scopeHash(input.scopeServiceIds ?? [input.serviceId]);
   const window = windowFor(incident.createdAt, rule);
 
+  // Compatible per-service policies share topology groups. Serialize their identity even when their
+  // policy ids differ, so two services arriving together cannot create duplicate open groups.
+  if (rule.kind === 'TOPOLOGY' && input.scopeDefinition) {
+    const definitionKey = createHash('sha256')
+      .update(JSON.stringify(input.scopeDefinition))
+      .digest('hex');
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`intelligence-topology:${scope}:${rule.id}:${input.signatureHash}:${definitionKey}`}, 0))`;
+  }
+
   const findGroup = () =>
-    tx.$queryRaw<GroupRow[]>(Prisma.sql`
-      SELECT "id", "windowEnd", "maxWindowEnd", "anchorIncidentId" FROM "CorrelationGroup"
+    rule.kind === 'TOPOLOGY' && input.scopeDefinition
+      ? tx.$queryRaw<GroupRow[]>(Prisma.sql`
+      SELECT g."id", g."windowEnd", g."maxWindowEnd", g."anchorIncidentId", g."status"
+      FROM "CorrelationGroup" g JOIN "IntelligencePolicyVersion" v ON v."policyId" = g."policyId" AND v."version" = g."policyVersion"
+      WHERE v."definition" = ${JSON.stringify(input.scopeDefinition)}::jsonb AND g."ruleId" = ${rule.id}
+        AND g."scopeHash" = ${scope} AND g."signatureHash" = ${input.signatureHash}
+        AND g."windowStart" <= ${incident.createdAt} AND g."windowEnd" >= ${incident.createdAt}
+      ORDER BY g."windowStart" DESC LIMIT 1`)
+      : tx.$queryRaw<GroupRow[]>(Prisma.sql`
+      SELECT "id", "windowEnd", "maxWindowEnd", "anchorIncidentId", "status" FROM "CorrelationGroup"
       WHERE "policyId" = ${input.policyId} AND "policyVersion" = ${input.policyVersion}
         AND "ruleId" = ${rule.id} AND "scopeHash" = ${scope} AND "signatureHash" = ${input.signatureHash}
         AND "windowStart" <= ${incident.createdAt} AND "windowEnd" >= ${incident.createdAt}
@@ -76,6 +107,16 @@ export async function joinCorrelationGroup(tx: Tx, input: JoinInput): Promise<Jo
     [group] = await findGroup();
   }
   if (!group) throw new Error('Correlation group could not be resolved');
+  if (input.decision === 'ACCEPTED' && (group.status !== 'OPEN' || +group.windowEnd < Date.now())) {
+    return {
+      groupId: group.id,
+      anchorIncidentId: group.anchorIncidentId ?? incident.id,
+      role: 'MEMBER',
+      memberCreated: false,
+      relationshipCreated: false,
+      matched: false,
+    };
+  }
 
   // The earliest incident is the anchor. The group row lock serialises elections; an incident that is
   // processed late but opened first takes over, and the previous anchor becomes a member linked to it.
@@ -143,7 +184,47 @@ export async function joinCorrelationGroup(tx: Tx, input: JoinInput): Promise<Jo
           AND "decision" = 'SUGGESTED'::"CorrelationDecision" AND "evidence"->>'groupId' = ${group.id}
         RETURNING "sourceIncidentId" AS source`);
       for (const source of [previous, ...moved.map(row => row.source)]) {
-        if (source !== incident.id) await proposeLink(tx, source, incident.id, rule.id, group.id);
+        if (source !== incident.id)
+          await proposeLink(
+            tx,
+            source,
+            incident.id,
+            rule.id,
+            group.id,
+            undefined,
+            input.match?.minScore
+          );
+      }
+    } else if (input.decision === 'ACCEPTED') {
+      // Re-electing an earlier anchor appends reversals for unreviewed automatic links; human
+      // decisions are never rewritten or carried over to another target.
+      const moved = await tx.$queryRaw<Array<{ id: string; source: string }>>(Prisma.sql`
+        UPDATE "IncidentRelationship" r SET "decision" = 'REVERTED', "updatedAt" = now()
+        WHERE r."targetIncidentId" = ${previous} AND r."origin" = 'RULE' AND r."decision" = 'ACCEPTED'
+          AND r."evidence"->>'groupId' = ${group.id} AND r."evidence"->>'automatic' = 'true'
+          AND NOT EXISTS (SELECT 1 FROM "IncidentRelationshipEvent" e WHERE e."relationshipId" = r."id" AND e."actorType" = 'USER')
+        RETURNING r."id", r."sourceIncidentId" AS source`);
+      for (const row of moved)
+        await tx.incidentRelationshipEvent.create({
+          data: {
+            relationshipId: row.id,
+            fromDecision: 'ACCEPTED',
+            toDecision: 'REVERTED',
+            actorType: 'SYSTEM',
+            reasonCode: 'ANCHOR_REELECTED',
+          },
+        });
+      for (const source of [previous, ...moved.map(row => row.source)]) {
+        if (source !== incident.id)
+          await proposeLink(
+            tx,
+            source,
+            incident.id,
+            rule.id,
+            group.id,
+            input.certificationRunId,
+            input.match?.minScore
+          );
       }
     }
     anchor = incident.id;
@@ -162,6 +243,10 @@ export async function joinCorrelationGroup(tx: Tx, input: JoinInput): Promise<Jo
     windowSeconds: rule.windowSeconds,
     role,
     anchorIncidentId: anchor,
+    sourcePolicyId: input.policyId,
+    sourcePolicyVersion: input.policyVersion,
+    automatic: input.decision === 'ACCEPTED',
+    ...(input.certificationRunId ? { certificationRunId: input.certificationRunId } : {}),
   });
   const inserted = await tx.$queryRaw<Array<{ id: string }>>(Prisma.sql`
     INSERT INTO "CorrelationMember"
@@ -178,8 +263,16 @@ export async function joinCorrelationGroup(tx: Tx, input: JoinInput): Promise<Jo
   }
 
   const relationshipCreated =
-    role === 'MEMBER' && input.decision === 'SUGGESTED'
-      ? await proposeLink(tx, incident.id, anchor, rule.id, group.id)
+    role === 'MEMBER' && input.decision !== 'SHADOW'
+      ? await proposeLink(
+          tx,
+          incident.id,
+          anchor,
+          rule.id,
+          group.id,
+          input.certificationRunId,
+          input.match?.minScore
+        )
       : false;
 
   return { groupId: group.id, anchorIncidentId: anchor, role, memberCreated, relationshipCreated };
@@ -191,20 +284,122 @@ async function proposeLink(
   sourceId: string,
   targetId: string,
   ruleId: string,
-  groupId: string
+  groupId: string,
+  certificationRunId?: string,
+  minimumScore?: number
 ) {
-  const evidence = JSON.stringify({ type: 'correlation', ruleId, groupId });
+  const [pairSource, pairTarget] = [sourceId, targetId].sort();
+  await tx.$executeRaw(
+    Prisma.sql`SELECT pg_advisory_xact_lock(hashtextextended(${`intelligence-link:${pairSource}:${pairTarget}`}, 0))`
+  );
+  const automatic = Boolean(certificationRunId);
+  const decision = automatic ? 'ACCEPTED' : 'SUGGESTED';
+  let score = 1;
+  if (minimumScore !== undefined) {
+    const rows = await tx.incidentFingerprint.findMany({
+      where: { incidentId: { in: [sourceId, targetId] } },
+    });
+    const fingerprints = rows.map(row => ({
+      ...row,
+      labels:
+        row.labels && typeof row.labels === 'object' && !Array.isArray(row.labels)
+          ? Object.fromEntries(
+              Object.entries(row.labels).filter(
+                (entry): entry is [string, string] => typeof entry[1] === 'string'
+              )
+            )
+          : {},
+    }));
+    if (fingerprints.length !== 2) return false;
+    score = combinedContent(scoreSimilarity(fingerprints[0], fingerprints[1]).components);
+    if (score < minimumScore) return false;
+  }
+  if (automatic) {
+    const eligible = await tx.incident.findMany({
+      where: {
+        id: { in: [sourceId, targetId] },
+        urgency: { not: 'HIGH' },
+        status: { in: ['OPEN', 'ACKNOWLEDGED'] },
+      },
+      select: { id: true, serviceId: true },
+    });
+    if (eligible.length !== 2) return false;
+    const source = eligible.find(row => row.id === sourceId)!;
+    const target = eligible.find(row => row.id === targetId)!;
+    const [policy, targetPolicy, group] = await Promise.all([
+      resolveEffectivePolicy(source.serviceId, tx),
+      resolveEffectivePolicy(target.serviceId, tx),
+      tx.correlationGroup.findUnique({
+        where: { id: groupId },
+        select: { policyId: true, policyVersion: true },
+      }),
+    ]);
+    if (
+      policy.effectiveMode !== 'AUTO' ||
+      policy.source !== 'service' ||
+      targetPolicy.effectiveMode === 'OFF' ||
+      !group
+    )
+      return false;
+    const version = await tx.intelligencePolicyVersion.findUnique({
+      where: { policyId_version: { policyId: group.policyId, version: group.policyVersion } },
+      select: { definition: true },
+    });
+    const definition = policyDefinitionSchema.safeParse(version?.definition);
+    if (
+      !definition.success ||
+      JSON.stringify(definition.data) !== JSON.stringify(policy.definition)
+    )
+      return false;
+    const gate = await getAutoGate(source.serviceId, policy.definition, tx);
+    if (!gate.allowed || !gate.runId) return false;
+    certificationRunId = gate.runId;
+    const veto = await tx.incidentRelationship.findFirst({
+      where: {
+        OR: [
+          { sourceIncidentId: sourceId, targetIncidentId: targetId },
+          { sourceIncidentId: targetId, targetIncidentId: sourceId },
+          { sourceIncidentId: sourceId, evidence: { path: ['groupId'], equals: groupId } },
+        ],
+        decision: { in: ['REJECTED', 'REVERTED'] },
+      },
+      select: { id: true },
+    });
+    if (veto) return false;
+  }
+  const evidence = JSON.stringify({
+    type: 'correlation',
+    ruleId,
+    groupId,
+    anchorIncidentId: targetId,
+    automatic,
+    ...(certificationRunId ? { certificationRunId } : {}),
+  });
   const relationship = await tx.$queryRaw<Array<{ id: string }>>(Prisma.sql`
     INSERT INTO "IncidentRelationship"
       ("id", "sourceIncidentId", "targetIncidentId", "type", "origin", "decision", "score", "evidence", "engineVersion", "updatedAt")
-    VALUES (gen_random_uuid()::text, ${sourceId}, ${targetId}, 'RELATED'::"IncidentRelationshipType",
-            'RULE'::"IntelligenceOrigin", 'SUGGESTED'::"CorrelationDecision", 1, ${evidence}::jsonb,
-            ${INTELLIGENCE_ENGINE_VERSION}, now())
+    SELECT gen_random_uuid()::text, ${sourceId}, ${targetId}, 'RELATED'::"IncidentRelationshipType",
+            'RULE'::"IntelligenceOrigin", ${decision}::"CorrelationDecision", ${score}, ${evidence}::jsonb,
+            ${INTELLIGENCE_ENGINE_VERSION}, now()
+    WHERE NOT ${automatic} OR (
+      EXISTS (SELECT 1 FROM "Incident" WHERE "id" = ${sourceId} AND "urgency" <> 'HIGH' AND "status" IN ('OPEN', 'ACKNOWLEDGED'))
+      AND EXISTS (SELECT 1 FROM "Incident" WHERE "id" = ${targetId} AND "urgency" <> 'HIGH' AND "status" IN ('OPEN', 'ACKNOWLEDGED')))
     ON CONFLICT ("sourceIncidentId", "targetIncidentId", "type") DO NOTHING RETURNING "id"`);
   if (relationship.length !== 1) return false;
   await tx.$executeRaw(Prisma.sql`
     INSERT INTO "IncidentRelationshipEvent" ("id", "relationshipId", "toDecision", "actorType", "reasonCode")
-    VALUES (gen_random_uuid()::text, ${relationship[0].id}, 'SUGGESTED'::"CorrelationDecision", 'SYSTEM', 'RULE_MATCH')`);
+    VALUES (gen_random_uuid()::text, ${relationship[0].id}, ${decision}::"CorrelationDecision", 'SYSTEM', ${automatic ? 'AUTO_GROUP' : 'RULE_MATCH'})`);
+  if (automatic)
+    await logAudit(
+      {
+        action: 'intelligence.group.automatic',
+        entityType: 'SYSTEM_CONFIG',
+        entityId: `intelligence-group:${groupId}`,
+        source: 'SYSTEM',
+        details: { sourceId, anchorIncidentId: targetId, ruleId, certificationRunId },
+      },
+      tx
+    );
   return true;
 }
 

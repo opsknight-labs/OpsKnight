@@ -143,6 +143,8 @@ const TEST_MESSAGES = {
   REJECTED: 'The provider rejected the request. Check the key and model name.',
   TIMEOUT: 'The provider did not answer in time.',
   FAILED: 'The provider returned an error. Try again later.',
+  RATE_LIMITED: 'Too many requests. Try again shortly.',
+  BUDGET_EXHAUSTED: 'Daily AI budget reached.',
 } as const;
 
 export async function testAiProviderAction(
@@ -150,8 +152,8 @@ export async function testAiProviderAction(
   form: FormData
 ): Promise<AiActionState> {
   try {
-    await assertCapability(CAPABILITIES.INTELLIGENCE_MANAGE);
-    const result = await testProviderConnection(text(form, 'id'));
+    const actor = await assertCapability(CAPABILITIES.INTELLIGENCE_MANAGE);
+    const result = await testProviderConnection(text(form, 'id'), actor.id);
     return result.ok
       ? { message: `Connected in ${result.latencyMs} ms.`, ok: true }
       : { message: TEST_MESSAGES[result.reason], ok: false };

@@ -18,7 +18,13 @@ import { logger } from '@/lib/logger';
 import { failSpan, startSpan, withSpan } from '../telemetry';
 import { safeOutboundFetch } from '@/lib/network-security';
 import { assertNotMetadataEndpoint } from './egress';
-import { admitAiRequest, estimateTokens, recordAiUsage } from './budget';
+import {
+  admitAiRequest,
+  estimateTokens,
+  recordAiUsage,
+  reserveAiTokens,
+  type AiReservation,
+} from './budget';
 import { ProviderBreakers } from './breaker';
 import { AI_SETTINGS_BOUNDS } from './contract';
 import { selectProviderChain } from './policy';
@@ -323,6 +329,41 @@ class GatewayPort implements LanguageModelPort {
     }
   }
 
+  private async reserve(request: AiGenerateRequest, provider: GatewayProvider, structured = false) {
+    const steps = request.tools?.length ? clampSteps(request.maxSteps) : 1;
+    const output = structured
+      ? Math.min(
+          request.maxOutputTokens ?? this.data.settings.maxOutputTokens,
+          AI_SETTINGS_BOUNDS.maxOutputTokens.max
+        )
+      : Math.min(
+          request.maxOutputTokens ?? this.data.settings.maxOutputTokens,
+          this.data.settings.maxOutputTokens
+        );
+    const estimate =
+      (estimatedInput(request) +
+        estimateTokens(
+          JSON.stringify(
+            request.tools?.map(tool => ({ name: tool.name, description: tool.description })) ?? []
+          )
+        ) +
+        output) *
+      steps;
+    try {
+      const reservation = await reserveAiTokens(
+        request.context.actorId,
+        this.data.settings,
+        estimate,
+        this.data.settings.requestTimeoutMs * (this.data.chain.length + 1) + 60_000
+      );
+      if (!reservation) throw new AiGatewayError('BUDGET_EXHAUSTED', 'Daily AI budget reached');
+      return reservation;
+    } catch (error) {
+      breakers.release(provider.id);
+      throw error;
+    }
+  }
+
   private signalFor(request: AiGenerateRequest): AbortSignal {
     const timeout = AbortSignal.timeout(this.data.settings.requestTimeoutMs);
     return request.context.signal ? AbortSignal.any([request.context.signal, timeout]) : timeout;
@@ -338,12 +379,14 @@ class GatewayPort implements LanguageModelPort {
   private async finish(
     request: AiGenerateRequest,
     result: Pick<AiGenerateResult, 'usage' | 'served'>,
-    extra: Record<string, string | number | boolean> = {}
+    extra: Record<string, string | number | boolean> = {},
+    reservation?: AiReservation
   ): Promise<void> {
-    await recordAiUsage(result.usage, new Date(), request.context.actorId).catch(error =>
-      logger.warn('[AI] Could not record usage', {
-        error: error instanceof Error ? error.message : String(error),
-      })
+    await recordAiUsage(result.usage, new Date(), request.context.actorId, reservation).catch(
+      error =>
+        logger.warn('[AI] Could not record usage', {
+          error: error instanceof Error ? error.message : String(error),
+        })
     );
     await logAudit({
       action: 'intelligence.ai.interaction',
@@ -378,6 +421,8 @@ class GatewayPort implements LanguageModelPort {
     let invalidOutputs = 0;
     for (const [depth, provider] of this.candidates().entries()) {
       if (!breakers.canAttempt(provider.id)) continue;
+      const reservation = await this.reserve(request, provider, true);
+      let accounted = false;
       attempts += 1;
       try {
         const result = await withSpan(
@@ -425,10 +470,12 @@ class GatewayPort implements LanguageModelPort {
         breakers.recordSuccess(provider.id);
         if (!checked.success) {
           invalidOutputs += 1;
-          await this.finish(request, { usage, served }, { outputValid: false });
+          accounted = true;
+          await this.finish(request, { usage, served }, { outputValid: false }, reservation);
           continue;
         }
-        await this.finish(request, { usage, served }, { outputValid: true });
+        accounted = true;
+        await this.finish(request, { usage, served }, { outputValid: true }, reservation);
         return { object: checked.data, usage, served };
       } catch (error) {
         if (request.context.signal?.aborted) {
@@ -449,6 +496,17 @@ class GatewayPort implements LanguageModelPort {
           providerId: provider.id,
           error: error instanceof Error ? error.name : 'error',
         });
+      } finally {
+        if (!accounted)
+          await this.finish(
+            request,
+            {
+              usage: { inputTokens: estimatedInput(request), outputTokens: 0 },
+              served: { providerId: provider.id, model: provider.model, fallbackDepth: depth },
+            },
+            { usageEstimated: true },
+            reservation
+          );
       }
     }
     if (invalidOutputs > 0)
@@ -464,6 +522,8 @@ class GatewayPort implements LanguageModelPort {
     let attempts = 0;
     for (const [depth, provider] of this.candidates().entries()) {
       if (!breakers.canAttempt(provider.id)) continue;
+      const reservation = await this.reserve(request, provider);
+      let accounted = false;
       attempts += 1;
       try {
         const result = await withSpan(
@@ -501,7 +561,8 @@ class GatewayPort implements LanguageModelPort {
           },
           served: { providerId: provider.id, model: provider.model, fallbackDepth: depth },
         };
-        await this.finish(request, served);
+        accounted = true;
+        await this.finish(request, served, {}, reservation);
         return served;
       } catch (error) {
         if (request.context.signal?.aborted) {
@@ -513,6 +574,17 @@ class GatewayPort implements LanguageModelPort {
           providerId: provider.id,
           error: error instanceof Error ? error.name : 'error',
         });
+      } finally {
+        if (!accounted)
+          await this.finish(
+            request,
+            {
+              usage: { inputTokens: estimatedInput(request), outputTokens: 0 },
+              served: { providerId: provider.id, model: provider.model, fallbackDepth: depth },
+            },
+            { usageEstimated: true },
+            reservation
+          );
       }
     }
     throw new AiGatewayError('ALL_PROVIDERS_FAILED', `All ${attempts} AI provider attempts failed`);
@@ -542,6 +614,13 @@ class GatewayPort implements LanguageModelPort {
 
     for (const [depth, provider] of candidates.entries()) {
       if (!breakers.canAttempt(provider.id)) continue;
+      let reservation: AiReservation;
+      try {
+        reservation = await this.reserve(request, provider);
+      } catch {
+        yield { type: 'error', message: 'Daily AI budget reached', retryable: false };
+        return;
+      }
       let emitted = false;
       let text = '';
       // Set once this attempt's usage is accounted for (finished, or failed on the provider's side).
@@ -599,7 +678,7 @@ class GatewayPort implements LanguageModelPort {
         span.setAttribute('ai.tokens.input', result.usage.inputTokens);
         span.setAttribute('ai.tokens.output', result.usage.outputTokens);
         settled = true;
-        await this.finish(request, result);
+        await this.finish(request, result, {}, reservation);
         yield { type: 'finish', result };
         return;
       } catch (error) {
@@ -608,7 +687,6 @@ class GatewayPort implements LanguageModelPort {
           yield { type: 'error', message: 'Request cancelled', retryable: false };
           return;
         }
-        settled = true;
         breakers.recordFailure(provider.id);
         logger.warn('[AI] Provider stream failed', {
           providerId: provider.id,
@@ -630,7 +708,8 @@ class GatewayPort implements LanguageModelPort {
               usage: { inputTokens: estimatedInput(request), outputTokens: estimateTokens(text) },
               served: { providerId: provider.id, model: provider.model, fallbackDepth: depth },
             },
-            { cancelled: true, usageEstimated: true }
+            { cancelled: Boolean(request.context.signal?.aborted), usageEstimated: true },
+            reservation
           );
         }
         span.end();
@@ -658,6 +737,18 @@ class GatewayEmbeddingPort implements EmbeddingPort {
     if (!embeddingBreakers.canAttempt(this.provider.id)) {
       throw new AiGatewayError('NO_PROVIDER', 'Embedding provider unavailable');
     }
+    const estimate = estimateTokens(values.join('\n'));
+    const reservation = await reserveAiTokens(
+      context.actorId,
+      this.settings,
+      estimate,
+      this.settings.requestTimeoutMs * 2 + 60_000
+    );
+    if (!reservation) {
+      embeddingBreakers.release(this.provider.id);
+      throw new AiGatewayError('BUDGET_EXHAUSTED', 'Daily AI budget reached');
+    }
+    let accounted = false;
     const timeout = AbortSignal.timeout(this.settings.requestTimeoutMs);
     try {
       const result = await withSpan(
@@ -673,12 +764,26 @@ class GatewayEmbeddingPort implements EmbeddingPort {
       );
       embeddingBreakers.recordSuccess(this.provider.id);
       const tokens = result.usage?.tokens ?? 0;
-      await recordAiUsage({ inputTokens: tokens, outputTokens: 0 }).catch(() => undefined);
+      accounted = true;
+      await recordAiUsage(
+        { inputTokens: tokens, outputTokens: 0 },
+        new Date(),
+        context.actorId,
+        reservation
+      ).catch(() => undefined);
       return { vectors: result.embeddings, tokens };
     } catch (error) {
       if (context.signal?.aborted) embeddingBreakers.release(this.provider.id);
       else embeddingBreakers.recordFailure(this.provider.id);
       throw error;
+    } finally {
+      if (!accounted)
+        await recordAiUsage(
+          { inputTokens: estimate, outputTokens: 0 },
+          new Date(),
+          context.actorId,
+          reservation
+        ).catch(() => undefined);
     }
   }
 }
@@ -742,7 +847,15 @@ export type ProviderTestResult =
   | { ok: true; latencyMs: number }
   | {
       ok: false;
-      reason: 'NOT_FOUND' | 'MISSING_KEY' | 'UNREACHABLE' | 'REJECTED' | 'TIMEOUT' | 'FAILED';
+      reason:
+        | 'NOT_FOUND'
+        | 'MISSING_KEY'
+        | 'UNREACHABLE'
+        | 'REJECTED'
+        | 'TIMEOUT'
+        | 'FAILED'
+        | 'RATE_LIMITED'
+        | 'BUDGET_EXHAUSTED';
     };
 
 /**
@@ -750,7 +863,10 @@ export type ProviderTestResult =
  * and model before relying on it. It uses the same guarded fetch as real traffic. Only a fixed category
  * is returned: provider error bodies can echo request details, so they are never shown or stored.
  */
-export async function testProviderConnection(providerId: string): Promise<ProviderTestResult> {
+export async function testProviderConnection(
+  providerId: string,
+  actorId = 'system:provider-test'
+): Promise<ProviderTestResult> {
   const providers = await loadProvidersForGateway(undefined, { includeDisabled: true });
   const provider = providers.find(candidate => candidate.id === providerId);
   if (!provider) return { ok: false, reason: 'NOT_FOUND' };
@@ -759,6 +875,12 @@ export async function testProviderConnection(providerId: string): Promise<Provid
   if (provider.kind !== 'OPENAI_COMPATIBLE' && provider.credentials.type === 'none') {
     return { ok: false, reason: 'MISSING_KEY' };
   }
+  const settings = await getAiSettings();
+  const decision = await admitAiRequest(actorId, settings);
+  if (!decision.allowed) return { ok: false, reason: decision.reason };
+  const reservation = await reserveAiTokens(actorId, settings, 24, 90_000);
+  if (!reservation) return { ok: false, reason: 'BUDGET_EXHAUSTED' };
+  let accounted = false;
   const started = Date.now();
   try {
     const result = await generateText({
@@ -768,10 +890,16 @@ export async function testProviderConnection(providerId: string): Promise<Provid
       abortSignal: AbortSignal.timeout(15_000),
       maxRetries: 0,
     });
-    await recordAiUsage({
-      inputTokens: result.totalUsage.inputTokens ?? 0,
-      outputTokens: result.totalUsage.outputTokens ?? 0,
-    }).catch(() => undefined);
+    accounted = true;
+    await recordAiUsage(
+      {
+        inputTokens: result.totalUsage.inputTokens ?? 0,
+        outputTokens: result.totalUsage.outputTokens ?? 0,
+      },
+      new Date(),
+      actorId,
+      reservation
+    ).catch(() => undefined);
     return { ok: true, latencyMs: Date.now() - started };
   } catch (error) {
     const status = (error as { statusCode?: number }).statusCode;
@@ -781,5 +909,13 @@ export async function testProviderConnection(providerId: string): Promise<Provid
       return { ok: false, reason: 'REJECTED' };
     if (status === undefined) return { ok: false, reason: 'UNREACHABLE' };
     return { ok: false, reason: 'FAILED' };
+  } finally {
+    if (!accounted)
+      await recordAiUsage(
+        { inputTokens: 8, outputTokens: 0 },
+        new Date(),
+        actorId,
+        reservation
+      ).catch(() => undefined);
   }
 }

@@ -115,17 +115,22 @@ async function seed(options: Options) {
     (ARRAY[${QUALIFIERS.map(w => `'${w}'`).join(',')}])[1 + (hashint4(${alias} * 13) & 2147483647) % ${QUALIFIERS.length}] ||
     ' on node-' || (${alias} % 97)`;
 
-  // Bulk seeding runs without the application's statement timeout.
-  await prisma.$transaction(
-    async bulk => {
-      await bulk.$executeRawUnsafe(`SET LOCAL statement_timeout = 0`);
-      // History: incidents plus their fingerprints, as the indexer would have written them.
-      await bulk.$executeRawUnsafe(`
+  // Commit history in bounded batches. The production SLA trigger updates one daily counter per
+  // incident; a million updates of that row in one transaction makes fixture setup quadratic.
+  // Keep all production triggers enabled and measure seeding separately from queue processing.
+  for (let offset = 0; offset < options.history; offset += 2000) {
+    await prisma.$executeRawUnsafe(`
       INSERT INTO "Incident" ("id", "title", "serviceId", "status", "urgency", "createdAt", "updatedAt", "resolvedAt")
       SELECT 'hist-' || g, ${vocabulary('g')}, 'storm-' || (1 + g % ${options.services}), 'RESOLVED', 'LOW',
              now() - ((g % 259200) || ' minutes')::interval - interval '1 day', now(),
              now() - ((g % 259200) || ' minutes')::interval - interval '1 day' + interval '20 minutes'
-      FROM generate_series(1, ${options.history}) g`);
+      FROM generate_series(${offset + 1}, ${Math.min(offset + 2000, options.history)}) g`);
+    if (offset % 100000 === 0)
+      console.log(`Seeded ${Math.min(offset + 2000, options.history)} history incidents`);
+  }
+  await prisma.$transaction(
+    async bulk => {
+      await bulk.$executeRawUnsafe(`SET LOCAL statement_timeout = 0`);
       await bulk.$executeRawUnsafe(`
       INSERT INTO "IncidentFingerprint" ("incidentId", "serviceId", "template", "templateHash", "tokens", "labels",
                                          "engineVersion", "incidentCreatedAt", "resolvedAt", "updatedAt")

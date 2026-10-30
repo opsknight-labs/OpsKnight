@@ -5332,6 +5332,21 @@ model AiUsageDay {
   updatedAt    DateTime @updatedAt
 }
 
+// Bounded, expiring token holds. Settled receipts remain briefly so accounting retries are idempotent.
+model AiTokenReservation {
+  id        String   @id @default(cuid())
+  day       String
+  actorId   String
+  tokens    Int
+  expiresAt DateTime
+  settledAt DateTime?
+  createdAt DateTime @default(now())
+
+  @@index([day, expiresAt], map: "idx_ai_token_reservation_day")
+  @@index([day, actorId, expiresAt], map: "idx_ai_token_reservation_actor")
+  @@index([expiresAt], map: "idx_ai_token_reservation_retention")
+}
+
 // One confirmed assistant action. Proposals are sealed and expire after minutes; inserting this row first
 // makes each one execute at most once. Kept for a day, since the audit log is the lasting record.
 model SquireActionReceipt {

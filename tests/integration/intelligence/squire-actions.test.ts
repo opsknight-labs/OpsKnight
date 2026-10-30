@@ -1,3 +1,4 @@
+import { revalidatePath } from 'next/cache';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const session = vi.hoisted(() => ({ userId: '' }));
@@ -341,4 +342,26 @@ describe('answers', () => {
     expect(text).toContain('Checkout latency high');
     expect(events.some(e => e.type === 'tool')).toBe(true);
   });
+});
+
+it('keeps a confirmed mutation single-use when refreshing the page fails', async () => {
+  await setup();
+  const { responder, mine } = await world();
+  const actor = await actorOf(responder.id);
+  session.userId = responder.id;
+  const proposal = await buildProposal(actor, 'add_incident_note', {
+    incidentId: mine.id,
+    content: 'Only once',
+  });
+  vi.mocked(revalidatePath).mockImplementationOnce(() => {
+    throw new Error('Cache unavailable');
+  });
+  expect(await executeSquireAction(actor, proposal!.token)).toMatchObject({ ok: true });
+  expect(await executeSquireAction(actor, proposal!.token)).toMatchObject({
+    ok: false,
+    message: 'This has already been done.',
+  });
+  expect(
+    await db.incidentNote.count({ where: { incidentId: mine.id, content: 'Only once' } })
+  ).toBe(1);
 });

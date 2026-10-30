@@ -1,12 +1,13 @@
 import 'server-only';
 import prisma from '@/lib/prisma';
 import { withDbBudget } from '../jobs/db-budget';
-import type { ClaimedWorkItem } from '../jobs/work-queue';
+import { enqueueWorkItems, WORK_KINDS, type ClaimedWorkItem } from '../jobs/work-queue';
 import { resolveEffectivePolicy, type IntelligenceSettingsView } from '../settings/service';
 import { joinCorrelationGroup, type CorrelationMode } from './groups';
 import { computeSignature, isCriticalIncident } from './rules';
 import { loadActiveEdges } from '../dependencies/service';
 import { topologyScope } from '../dependencies/graph';
+import { getAutoGate } from '../evaluation/quality';
 
 export type CorrelationOutcome =
   | 'incident_gone'
@@ -34,7 +35,7 @@ export async function correlateIncident(
   const incidentId = item.subjectKey;
   const incident = await prisma.incident.findUnique({
     where: { id: incidentId },
-    select: { id: true, serviceId: true, urgency: true, createdAt: true },
+    select: { id: true, serviceId: true, urgency: true, status: true, createdAt: true },
   });
   const none = (outcome: CorrelationOutcome): CorrelationSummary => ({
     outcome,
@@ -62,12 +63,39 @@ export async function correlateIncident(
         )
       : {};
 
-  // SHADOW (and the unreachable-until-certified AUTO) record only; SUGGEST proposes links.
-  const decision: CorrelationMode = policy.effectiveMode === 'SUGGEST' ? 'SUGGESTED' : 'SHADOW';
+  // AUTO falls back to SHADOW whenever its service certification gate is closed.
+  const baseDecision: CorrelationMode = policy.effectiveMode === 'SUGGEST' ? 'SUGGESTED' : 'SHADOW';
   const policyId = policy.policyId;
 
   const edges = rules.some(rule => rule.kind === 'TOPOLOGY') ? await loadActiveEdges() : [];
   return withDbBudget(settings, async tx => {
+    const eligible =
+      policy.effectiveMode === 'AUTO' &&
+      policy.source === 'service' &&
+      ['OPEN', 'ACKNOWLEDGED'].includes(incident.status) &&
+      Date.now() - +incident.createdAt <= 5 * 60_000 &&
+      +incident.createdAt <= Date.now() + 60_000;
+    const gate = eligible ? await getAutoGate(incident.serviceId, policy.definition, tx) : null;
+    const decision: CorrelationMode = gate?.allowed ? 'ACCEPTED' : baseDecision;
+    if (decision === 'ACCEPTED') {
+      // Wait behind the existing initial-paging outbox; intelligence never adds a hold to it.
+      const [paging] = await tx.$queryRaw<Array<{ next: Date | null }>>`
+        SELECT min("scheduledAt") AS next FROM "BackgroundJob"
+        WHERE "status" IN ('PENDING', 'PROCESSING', 'PENDING_V2', 'PROCESSING_V2')
+          AND "payload"->>'incidentId' = ${incident.id}
+          AND (("type" = 'ESCALATION' AND "scheduledAt" <= now())
+            OR ("type" = 'SCHEDULED_TASK' AND "payload"->>'effect' = 'TRIGGER_ESCALATION_NOTIFICATIONS'))`;
+      if (paging?.next) {
+        const due = new Date(Math.max(+paging.next, Date.now() + 5000));
+        await enqueueWorkItems(
+          [{ kind: WORK_KINDS.CORRELATE_INCIDENT, subjectKey: incident.id, scheduledAt: due }],
+          tx
+        );
+        await tx.$executeRaw`UPDATE "IntelligenceWorkItem" SET "scheduledAt" = GREATEST("scheduledAt", ${due})
+          WHERE "kind" = ${WORK_KINDS.CORRELATE_INCIDENT} AND "subjectKey" = ${incident.id}`;
+        return none('no_match');
+      }
+    }
     let groups = 0;
     let suggestions = 0;
     for (const rule of rules) {
@@ -90,9 +118,11 @@ export async function correlateIncident(
         ...(scope
           ? {
               scopeServiceIds: scope,
+              scopeDefinition: policy.definition,
               match: { fingerprint: { ...fingerprint, labels }, minScore: rule.minScore },
             }
           : {}),
+        ...(decision === 'ACCEPTED' && gate?.runId ? { certificationRunId: gate.runId } : {}),
       });
       if (joined.matched === false) continue;
       groups += 1;

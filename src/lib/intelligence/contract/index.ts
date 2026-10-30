@@ -7,15 +7,14 @@
 import { z } from 'zod/v4';
 
 /** Bumped whenever normalization, scoring or rule semantics change; stamped on every decision. */
-export const INTELLIGENCE_ENGINE_VERSION = '1.2.0';
+export const INTELLIGENCE_ENGINE_VERSION = '1.3.0';
 
 export const INTELLIGENCE_MODES = ['OFF', 'SHADOW', 'SUGGEST', 'AUTO'] as const;
 export type IntelligenceModeValue = (typeof INTELLIGENCE_MODES)[number];
 
 /**
- * AUTO changes production behaviour, so it stays unavailable until the shadow-quality, fault-tolerance
- * and ingestion-performance gates are certified (plan stage 3). Flipping this is a code change that
- * must ship together with its certification evidence, never a runtime setting.
+ * Global AUTO remains unavailable. Service-specific AUTO is guarded by persisted, policy-pinned
+ * quality certification and is checked again on every automatic grouping decision.
  */
 export const AUTO_MODE_AVAILABLE = false;
 

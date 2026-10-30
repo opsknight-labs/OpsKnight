@@ -15,7 +15,7 @@ The user requested continuation through all phases; a phase push is not the end 
 - [x] Phase 5: topology grouping with configurable minimum scores, change baselines and component
       matches, transactional downstream late-change re-analysis, idempotent outcome patterns, seasonal/flapping
       detection, outcome/MTTR runbook ranking and manually published feedback-trained weights.
-- [ ] Phase 6: shadow quality, service certification gate, post-paging reversible AUTO grouping.
+- [x] Phase 6: shadow quality, service certification gate, post-paging reversible AUTO grouping.
 - [ ] Phase 7: tabbed panel, skeletons, runbook and relationship controls, explanations, search fix,
       phone-width and axe coverage.
 - [ ] Final verification: nonincremental typecheck, changed-source lint, all intelligence suites,
@@ -62,3 +62,28 @@ become a million-incident re-index benchmark. Results are pending, not certifica
 
 Further audit items to close with the remaining work: atomic token reservations (existing admission
 checks are soft), action receipts after uncertain failures, and final CI/build memory settings.
+
+## Phase 6 evidence
+
+AUTO is scoped to an explicitly published service override. Global AUTO stays unavailable. Certification
+uses only explicit human-reviewed pairs from the last 30 days, pins the engine, definition and active
+dependency graph, expires after seven days, and invalidates on new reviews. It requires 200 predictions,
+20 negative labels, 20 critical labels, 98% precision, a 95% Wilson lower bound, at most 1% false merges,
+at least 50% recall, zero critical false merges and passing coverage for every enabled rule. Topology
+rules additionally require reviewed cross-service predictions. A measurement never enables AUTO itself.
+
+The handler waits behind the initial paging outbox, excludes HIGH and historical incidents, records
+accepted RELATED children and immutable automatic decision events, and leaves incident and paging rows
+unchanged. Human undo invalidates certification and prevents automatic replay of the withdrawn link.
+Settings expose quality and the service gate. Synthetic reviewed fixtures verify these controls; they
+are test evidence, not production service certification.
+
+The existing gateway/policy/correlation/Squire suites passed 59/59. Reservation, confirmed-action and
+relationship suites passed 27/27; AUTO certification tests passed 3/3 and pure quality tests 4/4.
+Atomic daily reservations now include concurrent global and personal usage, settle once on the reserved
+UTC day, and cover chat, structured calls, streams, embeddings and provider tests. Failed/aborted calls
+are charged estimated usage. Single-use action receipts remain consumed after uncertain failures.
+
+The million-history fixture was restarted after identifying a production SLA trigger hot-row problem
+in one enormous fixture transaction. It now seeds in bounded committed batches with triggers enabled.
+Seeding time is separate from the measured queue-drain interval.

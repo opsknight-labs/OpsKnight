@@ -66,18 +66,24 @@ export async function executeSquireAction(
   try {
     const message = await run(actor, proposal.action as WriteAction, parsed.data as never);
     await audit('SUCCEEDED');
-    revalidatePath(`/incidents/${incidentId}`);
+    try {
+      revalidatePath(`/incidents/${incidentId}`);
+    } catch {
+      logger.warn('[Squire] Action succeeded; page refresh failed', { action: proposal.action });
+    }
     return { ok: true, message, href: `/incidents/${encodeURIComponent(incidentId)}` };
   } catch (error) {
     await audit('FAILED');
-    // The change did not happen, so the person may try again with the same suggestion.
-    await prisma.squireActionReceipt.delete({ where: { id: proposal.id } }).catch(() => undefined);
+    // A domain command can commit before a later step fails. Keep the single-use receipt:
+    // retrying an uncertain attempt must never repeat a mutation.
     if (error instanceof AppError) return failed(error.userMessage);
     logger.warn('[Squire] Confirmed action failed', {
       action: proposal.action,
       error: error instanceof Error ? error.name : 'error',
     });
-    return failed('That could not be done. Nothing was changed.');
+    return failed(
+      'The action could not be confirmed. Refresh the incident before requesting a new suggestion.'
+    );
   }
 }
 

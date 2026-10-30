@@ -9,11 +9,18 @@ import prisma from '@/lib/prisma';
  */
 export async function getCriticalBacklogLagMs(client: typeof prisma = prisma): Promise<number> {
   const [row] = await client.$queryRaw<Array<{ lag_ms: number | null }>>(Prisma.sql`
-    SELECT (EXTRACT(EPOCH FROM (now() - min("scheduledAt"))) * 1000)::float8 AS lag_ms
-    FROM "BackgroundJob"
-    WHERE "type" IN ('ESCALATION'::"JobType", 'NOTIFICATION'::"JobType")
-      AND "status" IN ('PENDING'::"JobStatus", 'PENDING_V2'::"JobStatus")
-      AND "scheduledAt" <= now()
+    WITH oldest AS (
+      (SELECT "scheduledAt" FROM "BackgroundJob"
+       WHERE "type" IN ('ESCALATION'::"JobType", 'NOTIFICATION'::"JobType")
+         AND "status" IN ('PENDING'::"JobStatus", 'PENDING_V2'::"JobStatus") AND "scheduledAt" <= now()
+       ORDER BY "scheduledAt" LIMIT 1)
+      UNION ALL
+      (SELECT "scheduledAt" FROM "BackgroundJob"
+       WHERE "type" = 'SCHEDULED_TASK' AND "status" IN ('PENDING', 'PENDING_V2')
+         AND "scheduledAt" <= now() AND "payload"->>'task' = 'EVENT_SIDE_EFFECT'
+         AND "payload"->>'lane' IN ('PERSONAL_NOTIFICATION', 'ORDINARY_DISPATCH')
+       ORDER BY "scheduledAt" LIMIT 1)
+    ) SELECT (EXTRACT(EPOCH FROM (now() - min("scheduledAt"))) * 1000)::float8 AS lag_ms FROM oldest
   `);
   return Math.max(0, row?.lag_ms ?? 0);
 }

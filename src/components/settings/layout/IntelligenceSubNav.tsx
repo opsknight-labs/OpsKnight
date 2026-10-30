@@ -7,9 +7,20 @@ import { cn } from '@/lib/utils';
 
 export const INTELLIGENCE_SECTIONS = [
   { id: 'overview', label: 'Overview', href: '/settings/intelligence', icon: Activity },
-  { id: 'services', label: 'Per-service policies', href: '/settings/intelligence/services', icon: Layers },
-  { id: 'response', label: 'Dependencies & changes', href: '/settings/intelligence/response', icon: GitBranch },
+  {
+    id: 'services',
+    label: 'Per-service policies',
+    href: '/settings/intelligence/services',
+    icon: Layers,
+  },
+  {
+    id: 'response',
+    label: 'Dependencies & changes',
+    href: '/settings/intelligence/response',
+    icon: GitBranch,
+  },
   { id: 'insights', label: 'Insights', href: '/settings/intelligence/insights', icon: BarChart3 },
+  { id: 'quality', label: 'Quality', href: '/settings/intelligence/quality', icon: BarChart3 },
   { id: 'ai', label: 'Assistant & AI', href: '/settings/intelligence/ai', icon: Bot },
 ] as const;
 
@@ -22,7 +33,10 @@ export function isSectionActive(pathname: string, href: string): boolean {
 export default function IntelligenceSubNav() {
   const pathname = usePathname() ?? '';
   return (
-    <nav aria-label="Intelligence sections" className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
+    <nav
+      aria-label="Intelligence sections"
+      className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none"
+    >
       {INTELLIGENCE_SECTIONS.map(item => {
         const active = isSectionActive(pathname, item.href);
         const Icon = item.icon;

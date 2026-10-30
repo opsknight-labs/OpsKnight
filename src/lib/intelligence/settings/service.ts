@@ -6,7 +6,6 @@ import prisma from '@/lib/prisma';
 import { logAudit } from '@/lib/audit';
 import { AppError } from '@/lib/errors';
 import {
-  AUTO_MODE_AVAILABLE,
   DEFAULT_POLICY_DEFINITION,
   GLOBAL_POLICY_SCOPE_KEY,
   INTELLIGENCE_SETTINGS_DEFAULTS,
@@ -19,6 +18,7 @@ import {
   type IntelligenceSettingsInput,
   type PolicyDefinition,
 } from '../contract';
+import { getAutoGate, getAutoGates } from '../evaluation/quality';
 
 export type IntelligenceActor = { actorId: string } & (
   { source: 'UI' } | { source: 'API'; apiClientId: string }
@@ -243,13 +243,25 @@ export const resolveEffectivePolicyForRequest = cache((serviceId: string | null)
   resolveEffectivePolicy(serviceId)
 );
 
-function assertModeAllowed(mode: IntelligenceModeValue) {
-  if (mode === 'AUTO' && !AUTO_MODE_AVAILABLE) {
+async function assertModeAllowed(
+  mode: IntelligenceModeValue,
+  serviceId: string | null | undefined,
+  definition: PolicyDefinition,
+  client: Client
+) {
+  if (mode !== 'AUTO') return;
+  const gate = serviceId ? await getAutoGate(serviceId, definition, client) : null;
+  if (!gate?.allowed) {
     throw new AppError({
       code: 'VALIDATION_FAILED',
-      userMessage:
-        'AUTO mode is not available yet. It is enabled only after shadow-quality, fault-tolerance and ingestion-performance certification.',
-      fields: [{ field: 'mode', code: 'auto_unavailable', message: 'AUTO mode is not available.' }],
+      userMessage: gate?.reason ?? 'AUTO is available only through a certified per-service policy.',
+      fields: [
+        {
+          field: 'mode',
+          code: 'auto_unavailable',
+          message: 'AUTO mode is not available for this service and policy.',
+        },
+      ],
     });
   }
 }
@@ -328,11 +340,11 @@ export async function publishPolicyVersion(
   externalTx?: Prisma.TransactionClient
 ): Promise<{ version: number; scopeKey: string }> {
   const parsed = parseOrThrow(publishPolicyInputSchema, input);
-  assertModeAllowed(parsed.mode);
   const scopeKey = resolvePolicyScopeKey(scope);
 
   const run = async (tx: Prisma.TransactionClient) => {
     await lockPolicyScope(tx, scopeKey);
+    await assertModeAllowed(parsed.mode, scope.serviceId, parsed.definition, tx);
     const policy = await ensurePolicy(tx, scope, scopeKey);
     const previous = await readHeadVersion(tx, scopeKey);
     const version = await appendVersion(tx, policy, parsed.expectedHeadVersion, {
@@ -395,8 +407,8 @@ export async function rollbackPolicy(
       select: { mode: true, definition: true },
     });
     if (!target) throw new AppError({ code: 'RESOURCE_NOT_FOUND' });
-    assertModeAllowed(target.mode);
     const definition = parseOrThrow(policyDefinitionSchema, target.definition);
+    await assertModeAllowed(target.mode, scope.serviceId, definition, tx);
     const previous = await readHeadVersion(tx, scopeKey);
     const version = await appendVersion(tx, policy, parsed.expectedHeadVersion, {
       mode: target.mode,
@@ -461,6 +473,8 @@ export interface ServicePolicyOverviewRow {
   ruleCount: number;
   /** Head of the service's own policy history (0 if it never had one), for optimistic locking. */
   headVersion: number;
+  autoAvailable: boolean;
+  autoReason: string;
 }
 
 /**
@@ -517,7 +531,7 @@ export async function listServicePolicyOverview(
       definition: definition.success ? definition.data : DEFAULT_POLICY_DEFINITION,
     });
   }
-  return services.map(service => {
+  const resolved = services.map(service => {
     const override = overrideByService.get(service.id);
     const chosen =
       override ??
@@ -533,7 +547,11 @@ export async function listServicePolicyOverview(
     return {
       serviceId: service.id,
       serviceName: service.name,
-      source: override ? 'service' : globalPolicy ? 'global' : 'default',
+      source: override
+        ? ('service' as const)
+        : globalPolicy
+          ? ('global' as const)
+          : ('default' as const),
       mode,
       effectiveMode: settings.enabled ? mode : 'OFF',
       version: chosen?.version ?? 0,
@@ -541,8 +559,15 @@ export async function listServicePolicyOverview(
       responseEnabled: definition.response.enabled,
       ruleCount: definition.correlation.rules.length,
       headVersion: headByService.get(service.id) ?? 0,
+      definition,
     };
   });
+  const gates = await getAutoGates(resolved, client);
+  return resolved.map(({ definition: _definition, ...row }) => ({
+    ...row,
+    autoAvailable: gates.get(row.serviceId)?.allowed ?? false,
+    autoReason: gates.get(row.serviceId)?.reason ?? 'No quality certification.',
+  }));
 }
 
 export async function listPolicyVersions(
