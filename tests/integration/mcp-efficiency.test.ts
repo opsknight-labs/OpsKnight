@@ -114,3 +114,24 @@ describe('MCP page size evidence', () => {
     expect(item.structuredContent!.evidence!.limits).toBeUndefined();
   });
 });
+
+describe('incident_get_context', () => {
+  it('returns the incident, timeline and related incidents read concurrently', async () => {
+    const result = await call('incident_get_context', { id: incidentId });
+    expect(result.isError, JSON.stringify(result)).not.toBe(true);
+    const context = result.structuredContent as Record<
+      string,
+      { evidence: { operationId: string } }
+    >;
+    expect(context.incident.evidence.operationId).toBe('getIncident');
+    expect(context.timeline.evidence.operationId).toBe('getIncidentTimeline');
+    expect(context.related.evidence.operationId).toBe('listRelatedIncidents');
+    expect(result.structuredContent!.rootCause).toEqual({ status: 'unknown', confirmed: false });
+  });
+
+  it('fails with the same error as before for a missing incident', async () => {
+    const result = await call('incident_get_context', { id: 'missing-incident' });
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toMatch(/^MCP_RESOURCE_UNAVAILABLE\b/);
+  });
+});

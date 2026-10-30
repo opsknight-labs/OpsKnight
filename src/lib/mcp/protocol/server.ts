@@ -185,6 +185,42 @@ function promptArgs(shape: Record<string, z.ZodType>): StandardSchemaWithJSON {
   }) as unknown as StandardSchemaWithJSON;
 }
 
+// Like execute_plan, at most two reads at once: the MCP pool defaults to two connections
+// (MCP_DATABASE_POOL_SIZE, 1-4) with a one-second pool timeout.
+const CONTEXT_READ_CONCURRENCY = 2;
+
+/**
+ * Runs independent reads with bounded concurrency and fails exactly as running them in order
+ * would: with the first failing read's error, by position, never by completion time.
+ */
+export async function settleInOrder<T>(reads: readonly (() => Promise<T>)[], concurrency: number) {
+  const settled = new Map<number, PromiseSettledResult<T>>();
+  let next = 0;
+  let failed = false;
+  // After a failure nothing new starts; every read before it has started, so the earliest
+  // failure by position is among the settled ones.
+  const worker = async () => {
+    while (!failed && next < reads.length) {
+      const index = next++;
+      const read = reads.at(index)!;
+      try {
+        settled.set(index, { status: 'fulfilled', value: await read() });
+      } catch (reason) {
+        failed = true;
+        settled.set(index, { status: 'rejected', reason });
+      }
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(concurrency, reads.length) }, worker));
+  const values: T[] = [];
+  for (let index = 0; index < reads.length; index++) {
+    const result = settled.get(index)!;
+    if (result.status === 'rejected') throw result.reason;
+    values.push(result.value);
+  }
+  return values;
+}
+
 function toolResult(value: unknown) {
   const object = value as Record<string, unknown>;
   return {
@@ -400,14 +436,18 @@ export function createOpsKnightMcpServer(
       async args =>
         safeTool(async () => {
           const { id } = args as { id: string };
-          const incident = await callMcpOperation(context, 'getIncident', { path: { id } });
-          const timeline = await callMcpOperation(context, 'getIncidentTimeline', {
-            path: { id },
-            query: { limit: 25 },
-          });
-          const related = await callMcpOperation(context, 'listRelatedIncidents', {
-            path: { id },
-          });
+          const [incident, timeline, related] = await settleInOrder(
+            [
+              () => callMcpOperation(context, 'getIncident', { path: { id } }),
+              () =>
+                callMcpOperation(context, 'getIncidentTimeline', {
+                  path: { id },
+                  query: { limit: 25 },
+                }),
+              () => callMcpOperation(context, 'listRelatedIncidents', { path: { id } }),
+            ],
+            CONTEXT_READ_CONCURRENCY
+          );
           return {
             incident,
             timeline,
