@@ -229,6 +229,25 @@ function toolResult(value: unknown) {
   };
 }
 
+// Static corrections for the commonest bare codes; an error's own hint takes precedence.
+const ERROR_HINTS = new Map([
+  [
+    'MCP_OPERATION_UNAVAILABLE',
+    'Unknown or unavailable operationId; use search_capabilities to find one.',
+  ],
+  ['MCP_INVALID_PAGE_SIZE', 'query.limit must be an integer from 1 to 50.'],
+  ['MCP_INVALID_ARGUMENTS', 'Arguments do not match the schema; see describe_operation.'],
+]);
+
+/** The error code, then an optional correction and the error's own retryability. */
+export function toolErrorText(error: unknown) {
+  if (!(error instanceof McpBoundaryError)) return 'MCP_UNAVAILABLE';
+  const hint = error.hint ?? ERROR_HINTS.get(error.code);
+  const retry =
+    error.retryable === undefined ? '' : error.retryable ? ' Retryable.' : ' Not retryable.';
+  return hint || retry ? `${error.code}:${hint ? ` ${hint}` : ''}${retry}` : error.code;
+}
+
 async function safeTool(callback: () => Promise<unknown>) {
   try {
     return toolResult(await callback());
@@ -236,7 +255,9 @@ async function safeTool(callback: () => Promise<unknown>) {
     const code = error instanceof McpBoundaryError ? error.code : 'MCP_UNAVAILABLE';
     // An administrator decision is not a transient fault; say so, so the assistant stops retrying.
     const text =
-      code === 'MCP_CAPABILITY_DISABLED' ? `${code}: ${friendlyMcpError(code).body}` : code;
+      code === 'MCP_CAPABILITY_DISABLED'
+        ? `${code}: ${friendlyMcpError(code).body}`
+        : toolErrorText(error);
     return { content: [{ type: 'text' as const, text }], isError: true };
   }
 }

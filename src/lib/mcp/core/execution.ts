@@ -1,4 +1,4 @@
-import Ajv2020 from 'ajv/dist/2020';
+import Ajv2020, { type ErrorObject } from 'ajv/dist/2020';
 import addFormats from 'ajv-formats';
 import { NextRequest } from 'next/server';
 import type { Prisma } from '@prisma/client';
@@ -74,7 +74,7 @@ export function validateOperationArgs(
     validate = validator.compile(operation.inputSchema);
     validators.set(operationId, validate);
   }
-  requireMcp(validate(args), 'MCP_INVALID_ARGUMENTS');
+  requireMcp(validate(args), 'MCP_INVALID_ARGUMENTS', 400, argumentHint(validate.errors));
   return args as {
     path?: Record<string, string>;
     query?: Record<string, string | number | boolean>;
@@ -107,9 +107,29 @@ export function mcpPageSize(operation: (typeof MCP_CATALOG)[number], requested: 
   );
   requireMcp(
     Number.isSafeInteger(limit) && limit >= 1 && limit <= MCP_MAX_PAGE_SIZE,
-    'MCP_INVALID_PAGE_SIZE'
+    'MCP_INVALID_PAGE_SIZE',
+    400,
+    `query.limit must be an integer from 1 to ${MCP_MAX_PAGE_SIZE}.`
   );
   return limit;
+}
+
+/**
+ * Where the arguments first fail the schema: the JSON pointer and the rule, plus the offending
+ * property name for an unknown property. Only the caller's own keys and schema rules appear;
+ * argument values never do.
+ */
+function argumentHint(errors: ErrorObject[] | null | undefined) {
+  const error = errors?.[0];
+  if (!error) return undefined;
+  const extra =
+    error.keyword === 'additionalProperties'
+      ? ` (${String((error.params as { additionalProperty?: unknown }).additionalProperty).slice(0, 64)})`
+      : '';
+  return `${error.instancePath || '/'} ${error.message ?? 'is invalid'}${extra}. See describe_operation.`.slice(
+    0,
+    240
+  );
 }
 
 export function hasOperationAuthority(

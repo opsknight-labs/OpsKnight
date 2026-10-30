@@ -178,3 +178,20 @@ describe('MCP policy read with the grant', () => {
     expect(response.status).toBe(401);
   });
 });
+
+describe('actionable tool errors', () => {
+  it('say how to correct the commonest mistakes', async () => {
+    const page = await call('incident_search', { query: { limit: 200 } });
+    expect(page.isError).toBe(true);
+    expect(page.content[0].text).toBe(
+      'MCP_INVALID_PAGE_SIZE: query.limit must be an integer from 1 to 50.'
+    );
+    const unknown = await call('call_operation', { operationId: 'listServicez', args: {} });
+    expect(unknown.content[0].text).toContain('use search_capabilities');
+    const invalid = await call('call_operation', {
+      operationId: 'listServices',
+      args: { query: { bogus: 1 } },
+    });
+    expect(invalid.content[0].text).toMatch(/^MCP_INVALID_ARGUMENTS: \/query .*\(bogus\)/);
+  });
+});
