@@ -60,6 +60,9 @@ documentation can help locate a topic, but it is never authoritative.
   [voice paging](./integrations/communication/voice), or
   [Jira](./integrations/issue-tracking/jira).
 
+- [Operate service automation](./operate/reliability/service-automation) and
+  [diagnose automation problems](./troubleshooting/service-automation).
+
 ## Run in production
 
 - [Choose a deployment topology](./operate/deploy/), then follow the complete
