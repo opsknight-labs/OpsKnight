@@ -1,3 +1,5 @@
+import MarkRelatedIncident from './MarkRelatedIncident';
+import IntelligenceEmptyState from './IntelligenceEmptyState';
 import Link from 'next/link';
 import { History } from 'lucide-react';
 import { logger } from '@/lib/logger';
@@ -36,7 +38,7 @@ export default async function IncidentIntelligenceCard({ incidentId }: { inciden
     });
     return null;
   }
-  if (!similar) return null;
+  if (!similar) return <IntelligenceEmptyState incidentId={incidentId} />;
 
   return (
     <section
@@ -80,13 +82,18 @@ export default async function IncidentIntelligenceCard({ incidentId }: { inciden
                   </Link>
                 </p>
               )}
-              <ul className="flex flex-wrap gap-1" aria-label="Why this matched">
-                {item.reasons.map(reason => (
-                  <li key={reason} className="rounded-full bg-muted px-2 py-0.5 text-xs">
-                    {reason}
-                  </li>
-                ))}
-              </ul>
+              <details className="text-xs">
+                <summary className="min-h-8 cursor-pointer py-2 font-medium">
+                  Why this matched
+                </summary>
+                <ul className="flex flex-wrap gap-1" aria-label="Why this matched">
+                  {item.reasons.map(reason => (
+                    <li key={reason} className="rounded-full bg-muted px-2 py-0.5 text-xs">
+                      {reason}
+                    </li>
+                  ))}
+                </ul>
+              </details>
             </div>
             <div className="flex flex-col items-end gap-1">
               <span
@@ -95,6 +102,9 @@ export default async function IncidentIntelligenceCard({ incidentId }: { inciden
               >
                 Match {item.matchPercent}%
               </span>
+              {canRate && (
+                <MarkRelatedIncident incidentId={incidentId} otherIncidentId={item.incidentId} />
+              )}
               {canRate && (
                 <SimilarIncidentFeedback
                   incidentId={incidentId}

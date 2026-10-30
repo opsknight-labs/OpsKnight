@@ -323,3 +323,46 @@ describe('scoring policy proposals', () => {
     ).rejects.toMatchObject({ code: 'PRECONDITION_FAILED' });
   });
 });
+
+it('ranks an older relevant deploy even behind more than 5000 newer changes', async () => {
+  const admin = await createTestUser({ role: 'ADMIN' });
+  await db.intelligenceSettings.create({
+    data: { ...INTELLIGENCE_SETTINGS_DEFAULTS, enabled: true },
+  });
+  await publishPolicyVersion(
+    {},
+    { mode: 'SUGGEST', definition: DEFAULT_POLICY_DEFINITION, expectedHeadVersion: 0 },
+    { actorId: admin.id, source: 'UI' }
+  );
+  const service = await createTestService('Checkout');
+  const onset = new Date();
+  const incident = await createTestIncident('Checkout latency', service.id, { createdAt: onset });
+  await db.$transaction(tx => indexIncident(incident.id, tx));
+  const relevant = await db.changeEvent.create({
+    data: {
+      serviceId: service.id,
+      source: 'deployment',
+      kind: 'DEPLOY',
+      summary: 'Relevant deploy',
+      occurredAt: new Date(+onset - 60000),
+    },
+  });
+  await db.changeEvent.createMany({
+    data: Array.from({ length: 5010 }, () => ({
+      serviceId: service.id,
+      source: 'noisy',
+      kind: 'INFRA' as const,
+      summary: 'Routine polling',
+      occurredAt: new Date(+onset - 10000),
+    })),
+  });
+  await analyzeResponse(
+    { subjectKey: incident.id, generation: 1 },
+    { ...settings, maxDbMs: 30000, maxJobMs: 60000 }
+  );
+  expect(
+    await db.intelligenceFinding.findFirst({
+      where: { incidentId: incident.id, kind: 'CHANGE_CORRELATION', subjectRef: relevant.id },
+    })
+  ).not.toBeNull();
+});

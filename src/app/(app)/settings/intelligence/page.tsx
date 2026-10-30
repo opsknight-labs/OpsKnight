@@ -75,9 +75,9 @@ export default async function IntelligenceSettingsPage() {
         <h1 className="text-2xl font-semibold">Intelligence</h1>
         <p className="text-sm text-muted-foreground">
           Learns from your incident history to suggest similar past incidents, related incidents,
-          possible causes and runbooks. It runs entirely off the paging path: it never delays escalation
-          or notifications, never changes an incident on its own, and turning it off restores exactly the
-          previous behaviour.
+          possible causes and runbooks. It runs entirely off the paging path: it never delays
+          escalation or notifications. Certified service AUTO adds reversible related links after
+          paging. Turning it off stops analysis; existing accepted links remain available to undo.
         </p>
       </header>
 
@@ -161,7 +161,9 @@ export default async function IntelligenceSettingsPage() {
                       {version.createdAt.toISOString().slice(0, 16).replace('T', ' ')} UTC
                     </span>
                   </div>
-                  {version.reason && <p className="text-xs text-muted-foreground">{version.reason}</p>}
+                  {version.reason && (
+                    <p className="text-xs text-muted-foreground">{version.reason}</p>
+                  )}
                   {canManage && version.version < headVersion && (
                     <RollbackForm targetVersion={version.version} headVersion={headVersion} />
                   )}
@@ -191,12 +193,17 @@ export default async function IntelligenceSettingsPage() {
         >
           <ul className="divide-y divide-border">
             {deadLetters.map(item => (
-              <li key={item.id} className="flex flex-wrap items-center justify-between gap-3 py-3 text-sm">
+              <li
+                key={item.id}
+                className="flex flex-wrap items-center justify-between gap-3 py-3 text-sm"
+              >
                 <div className="space-y-1">
                   <p className="font-medium">
                     {item.kind} · {item.attempts} attempts
                   </p>
-                  {item.lastError && <p className="text-xs text-muted-foreground">{item.lastError}</p>}
+                  {item.lastError && (
+                    <p className="text-xs text-muted-foreground">{item.lastError}</p>
+                  )}
                 </div>
                 {canManage && <ReplayForm id={item.id} />}
               </li>

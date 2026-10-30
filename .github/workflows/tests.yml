@@ -16,6 +16,9 @@ concurrency:
   group: tests-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  NODE_OPTIONS: --max-old-space-size=6144
+
 jobs:
   fast-validation:
     name: Fast validation (L0 lint/typecheck + L1 unit)

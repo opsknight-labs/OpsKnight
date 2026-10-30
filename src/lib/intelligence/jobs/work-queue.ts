@@ -87,7 +87,6 @@ export async function enqueueWorkItems(
   // One row per (kind, subject): ON CONFLICT cannot touch the same row twice in a single statement.
   const unique = new Map<string, WorkItemInput>();
   for (const item of items) unique.set(`${item.kind}\u0000${item.subjectKey}`, item);
-  const now = new Date();
   const revive = Prisma.sql`"IntelligenceWorkItem"."attempts" >= ${MAX_WORK_ATTEMPTS}
         AND "IntelligenceWorkItem"."failedAt" < now() - (${DEAD_LETTER_REVIVE_MS} * interval '1 millisecond')`;
   const values = [...unique.values()];
@@ -98,7 +97,7 @@ export async function enqueueWorkItems(
       .slice(start, start + ENQUEUE_CHUNK)
       .map(
         item =>
-          Prisma.sql`(gen_random_uuid()::text, ${item.kind}, ${item.subjectKey}, ${item.priority ?? WORK_PRIORITY[item.kind]}, ${item.scheduledAt ?? now}, nextval('"IntelligenceWorkItem_generation_seq"')::int, now())`
+          Prisma.sql`(gen_random_uuid()::text, ${item.kind}, ${item.subjectKey}, ${item.priority ?? WORK_PRIORITY[item.kind]}, ${item.scheduledAt ?? Prisma.sql`now()`}, nextval('"IntelligenceWorkItem_generation_seq"')::int, now())`
       );
     written += await client.$executeRaw(Prisma.sql`
       INSERT INTO "IntelligenceWorkItem" ("id", "kind", "subjectKey", "priority", "scheduledAt", "generation", "updatedAt")
@@ -277,18 +276,11 @@ export async function replayDeadLetter(
   options: { maxAttempts?: number } = {},
   client: Client = prisma
 ): Promise<boolean> {
-  const replayed = await client.intelligenceWorkItem.updateMany({
-    where: { id, attempts: { gte: options.maxAttempts ?? MAX_WORK_ATTEMPTS } },
-    data: {
-      attempts: 0,
-      scheduledAt: new Date(),
-      claimToken: null,
-      leaseUntil: null,
-      lastError: null,
-      failedAt: null,
-    },
-  });
-  return replayed.count === 1;
+  const replayed = await client.$executeRaw(Prisma.sql`
+    UPDATE "IntelligenceWorkItem" SET attempts = 0, "scheduledAt" = now(), "claimToken" = NULL,
+      "leaseUntil" = NULL, "lastError" = NULL, "failedAt" = NULL, "updatedAt" = now()
+    WHERE id = ${id} AND attempts >= ${options.maxAttempts ?? MAX_WORK_ATTEMPTS}`);
+  return replayed === 1;
 }
 
 /** Retention: dead letters nobody replayed are dropped after `olderThanMs`; the data is all rebuildable. */

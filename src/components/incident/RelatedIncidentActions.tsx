@@ -11,17 +11,20 @@ export default function RelatedIncidentActions({
   incidentId,
   relationshipId,
   decision,
+  automatic = false,
 }: {
   incidentId: string;
   relationshipId: string;
   decision: 'SUGGESTED' | 'ACCEPTED';
+  automatic?: boolean;
 }) {
   const [state, action, pending] = useActionState<RelatedDecisionState, FormData>(
     decideRelatedIncident.bind(null, incidentId),
     { ok: true, message: '', decision }
   );
   const current = state.decision;
-  const button = 'rounded-md border border-border px-2 py-1 text-xs hover:bg-muted disabled:opacity-50';
+  const button =
+    'rounded-md border border-border px-2 py-1 text-xs hover:bg-muted disabled:opacity-50';
 
   const form = (next: 'ACCEPTED' | 'REJECTED' | 'REVERTED', label: string) => (
     <form action={action}>
@@ -45,11 +48,11 @@ export default function RelatedIncidentActions({
       <div className="flex items-center gap-1">
         {current === 'SUGGESTED' ? (
           <>
-            {form('ACCEPTED', 'Related')}
+            {form('ACCEPTED', 'Group these')}
             {form('REJECTED', 'Not related')}
           </>
         ) : (
-          form('REVERTED', 'Unlink')
+          form('REVERTED', automatic ? 'Ungroup' : 'Unlink')
         )}
       </div>
       {!state.ok && state.message && (

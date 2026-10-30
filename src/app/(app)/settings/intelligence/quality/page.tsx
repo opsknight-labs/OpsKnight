@@ -97,8 +97,10 @@ export default async function QualityPage({
                 {AUTO_QUALITY_THRESHOLDS.negativeLabels} negative and{' '}
                 {AUTO_QUALITY_THRESHOLDS.criticalLabels} critical-alert labels,{' '}
                 {percent(AUTO_QUALITY_THRESHOLDS.precision)} precision and no critical false merges.
-                Evidence expires after seven days and changes to rules, dependencies or human
-                reviews require re-evaluation.
+                Each enabled rule also needs 100 passing predictions, including cross-service
+                examples for topology. The Wilson precision lower bound must reach 95%, recall 50%,
+                and false merges stay at most 1%. Evidence expires after seven days and changes to
+                rules, dependencies or human reviews require re-evaluation.
               </p>
               {hasCapability(actor.role, CAPABILITIES.INTELLIGENCE_MANAGE) && (
                 <QualityEvaluationForm serviceId={service.id} />

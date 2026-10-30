@@ -47,7 +47,7 @@ export type SquireRequest = z.infer<typeof squireRequestSchema>;
 
 /** A link the answer relied on, checked to be readable by the person before it is shown. */
 export interface SquireCitation {
-  kind: 'incident' | 'runbook';
+  kind: 'incident' | 'runbook' | 'change' | 'alert';
   id: string;
   label: string;
   href: string;

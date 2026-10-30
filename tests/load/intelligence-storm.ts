@@ -35,6 +35,7 @@ interface Options {
   services: number;
   batchSize: number;
   concurrency: number;
+  reuseHistory: boolean;
 }
 
 function parseOptions(argv: string[]): Options {
@@ -51,6 +52,7 @@ function parseOptions(argv: string[]): Options {
     services: read('services', 50),
     batchSize: read('batch-size', 50),
     concurrency: read('concurrency', 8),
+    reuseHistory: argv.includes('--reuse-history'),
   };
 }
 
@@ -97,17 +99,32 @@ async function seed(options: Options) {
   const url = new URL(process.env.DATABASE_URL ?? '');
   if (!/_(bench|test)$/.test(url.pathname))
     throw new Error('Refusing to run: database name must end in _bench or _test');
-  await prisma.$executeRawUnsafe(
-    `TRUNCATE "Incident", "IntelligenceWorkItem", "CorrelationGroup", "IntelligenceCursor" CASCADE`
-  );
+  if (options.reuseHistory) {
+    const count = await prisma.incident.count({ where: { id: { startsWith: 'hist-' } } });
+    const fingerprints = await prisma.incidentFingerprint.count({
+      where: { incidentId: { startsWith: 'hist-' }, engineVersion: INTELLIGENCE_ENGINE_VERSION },
+    });
+    if (count !== options.history || fingerprints !== options.history)
+      throw new Error('Reusable history must match size and engine version');
+    await prisma.incident.deleteMany({ where: { id: { startsWith: 'storm-' } } });
+    await prisma.$executeRawUnsafe(
+      `TRUNCATE "IntelligenceWorkItem", "CorrelationGroup", "IntelligenceCursor" CASCADE`
+    );
+  } else {
+    await prisma.$executeRawUnsafe(
+      `TRUNCATE "Incident", "IntelligenceWorkItem", "CorrelationGroup", "IntelligenceCursor" CASCADE`
+    );
+  }
   await prisma.$executeRawUnsafe(`DELETE FROM "IntelligencePolicyVersion"`);
   await prisma.$executeRawUnsafe(`DELETE FROM "IntelligencePolicy"`);
   await prisma.$executeRawUnsafe(`DELETE FROM "IntelligenceSettings"`);
-  await prisma.$executeRawUnsafe(`DELETE FROM "Service" WHERE "id" LIKE 'storm-%'`);
+  await prisma.intelligencePattern.deleteMany({});
+  if (!options.reuseHistory)
+    await prisma.$executeRawUnsafe(`DELETE FROM "Service" WHERE "id" LIKE 'storm-%'`);
 
   await prisma.$executeRaw`
     INSERT INTO "Service" ("id", "name", "updatedAt")
-    SELECT 'storm-' || g, 'Storm service ' || g, now() FROM generate_series(1, ${options.services}::int) g`;
+    SELECT 'storm-' || g, 'Storm service ' || g, now() FROM generate_series(1, ${options.services}::int) g ON CONFLICT (id) DO NOTHING`;
 
   const vocabulary = (alias: string) => `
     (ARRAY[${COMMON.map(w => `'${w}'`).join(',')}])[1 + (hashint4(${alias}) & 2147483647) % ${COMMON.length}] || ' ' ||
@@ -118,7 +135,7 @@ async function seed(options: Options) {
   // Commit history in bounded batches. The production SLA trigger updates one daily counter per
   // incident; a million updates of that row in one transaction makes fixture setup quadratic.
   // Keep all production triggers enabled and measure seeding separately from queue processing.
-  for (let offset = 0; offset < options.history; offset += 2000) {
+  for (let offset = 0; offset < (options.reuseHistory ? 0 : options.history); offset += 2000) {
     await prisma.$executeRawUnsafe(`
       INSERT INTO "Incident" ("id", "title", "serviceId", "status", "urgency", "createdAt", "updatedAt", "resolvedAt")
       SELECT 'hist-' || g, ${vocabulary('g')}, 'storm-' || (1 + g % ${options.services}), 'RESOLVED', 'LOW',
@@ -131,7 +148,8 @@ async function seed(options: Options) {
   await prisma.$transaction(
     async bulk => {
       await bulk.$executeRawUnsafe(`SET LOCAL statement_timeout = 0`);
-      await bulk.$executeRawUnsafe(`
+      if (!options.reuseHistory)
+        await bulk.$executeRawUnsafe(`
       INSERT INTO "IncidentFingerprint" ("incidentId", "serviceId", "template", "templateHash", "tokens", "labels",
                                          "engineVersion", "incidentCreatedAt", "resolvedAt", "updatedAt")
       SELECT i."id", i."serviceId", regexp_replace(lower(i."title"), '[0-9]+', '<num>', 'g'),

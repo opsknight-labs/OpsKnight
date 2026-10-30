@@ -34,6 +34,9 @@ concurrency:
   group: enterprise-sso-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  NODE_OPTIONS: --max-old-space-size=6144
+
 jobs:
   authentication:
     runs-on: ubuntu-latest

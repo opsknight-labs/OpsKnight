@@ -19,7 +19,12 @@ import SquireProposalCard, {
   type SquireProposalView,
 } from '@/components/squire/SquireProposalCard';
 
-type Citation = { kind: 'incident' | 'runbook'; id: string; label: string; href: string };
+type Citation = {
+  kind: 'incident' | 'runbook' | 'change' | 'alert';
+  id: string;
+  label: string;
+  href: string;
+};
 type Turn = {
   role: 'user' | 'assistant';
   content: string;

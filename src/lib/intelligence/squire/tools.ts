@@ -481,6 +481,7 @@ export function buildSquireTools(
           orderBy: { occurredAt: 'desc' },
           take: MAX_ROWS,
           select: {
+            id: true,
             kind: true,
             summary: true,
             source: true,
@@ -489,6 +490,8 @@ export function buildSquireTools(
           },
         });
         return rows.map(c => ({
+          id: c.id,
+          href: `/changes/${c.id}`,
           kind: c.kind,
           summary: short(c.summary, 200),
           source: c.source,
@@ -626,7 +629,7 @@ export function buildSquireTools(
             where: { incidentId: parsed.data.id },
             orderBy: { createdAt: 'desc' },
             take: MAX_ROWS,
-            select: { status: true, dedupKey: true, createdAt: true, payload: true },
+            select: { id: true, status: true, dedupKey: true, createdAt: true, payload: true },
           });
           return rows.map(alert => {
             const payload = (alert.payload ?? {}) as Record<string, unknown>;
@@ -637,6 +640,8 @@ export function buildSquireTools(
                   ? payload.title
                   : '';
             return {
+              id: alert.id,
+              href: `/alerts/${alert.id}`,
               status: alert.status,
               dedupKey: short(alert.dedupKey, 120),
               summary: short(summary, 200),

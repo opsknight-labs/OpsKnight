@@ -456,7 +456,13 @@ export default function SidebarSearch() {
   const assistantMatches = useMemo(() => {
     if (!assistantName || query.trim().length < 2) return false;
     const q = query.trim().toLowerCase();
-    return ['ask', 'assistant', 'ai', 'help', assistantName.toLowerCase()].some(word => word.includes(q) || q.includes(word));
+    return q
+      .split(/[^\p{L}\p{N}_]+/u)
+      .some(token =>
+        ['ask', 'assistant', 'ai', 'help', ...assistantName.toLowerCase().split(/\s+/)].includes(
+          token
+        )
+      );
   }, [assistantName, query]);
 
   const groupedResults = useMemo(() => {

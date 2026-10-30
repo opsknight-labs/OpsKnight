@@ -4,6 +4,7 @@ import {
   DEFAULT_POLICY_DEFINITION,
 } from '@/lib/intelligence/contract';
 import { DISCOVERY_SAFETY_LAG_MS } from '@/lib/intelligence/jobs/discovery';
+import { resetTermFrequencyCacheForTests } from '@/lib/intelligence/similarity/term-stats';
 import { indexIncident } from '@/lib/intelligence/jobs/indexer';
 import { createLaneState, runIntelligenceCycle } from '@/lib/intelligence/jobs/runner';
 import { enqueueWorkItems } from '@/lib/intelligence/jobs/work-queue';
@@ -29,6 +30,7 @@ beforeEach(async () => {
   }
   await resetDatabase();
   resetCapabilityCacheForTests();
+  resetTermFrequencyCacheForTests();
 });
 
 const settings = { ...INTELLIGENCE_SETTINGS_DEFAULTS, revision: 1 };
@@ -67,7 +69,7 @@ describe('similar incident retrieval', () => {
     const sameProblem = await indexed('Database connection errors on db-primary-7', checkout.id, {
       resolved: true,
     });
-    const otherService = await indexed('Database connection refused on db-replica-2', billing.id);
+    const otherService = await indexed('Database connection errors on db-primary-2', billing.id);
     await indexed('Disk space low on node-3', checkout.id);
 
     const result = await findSimilarIncidents(target.id, options);
@@ -117,6 +119,7 @@ describe('similar incident retrieval', () => {
 
     await db.$executeRawUnsafe('DROP INDEX IF EXISTS "idx_incident_fingerprint_trgm_gist"');
     resetCapabilityCacheForTests();
+    resetTermFrequencyCacheForTests();
     try {
       expect(await detectCapabilities()).toMatchObject({
         similarityTier: 'FTS_ONLY',
@@ -130,6 +133,7 @@ describe('similar incident retrieval', () => {
         'CREATE INDEX IF NOT EXISTS "idx_incident_fingerprint_trgm_gist" ON "IncidentFingerprint" USING GIST ("template" gist_trgm_ops)'
       );
       resetCapabilityCacheForTests();
+      resetTermFrequencyCacheForTests();
     }
   });
 });

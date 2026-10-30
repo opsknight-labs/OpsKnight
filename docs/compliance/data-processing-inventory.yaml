@@ -80,28 +80,101 @@ domains:
     deletion: { current: configuration-dependent, target: phase-2-or-3 }
 
   - domain: service-automation
-    data: [context-values, normalization, enrichment-writes, responder-policy-snapshots, observation-previews]
+    data:
+      [
+        context-values,
+        normalization,
+        enrichment-writes,
+        responder-policy-snapshots,
+        observation-previews,
+      ]
     purpose: [incident-routing-evidence, diagnostics, context-discovery]
     storage: [postgresql]
     recipients: [authorized-automation-readers-with-sensitive-context-permission]
-    retention: { current: incident-lifetime-for-decisions-and-ui-configured-retention-for-diagnostics, target: approved-minimization-with-routing-integrity-and-retention-holds }
+    retention:
+      {
+        current: incident-lifetime-for-decisions-and-ui-configured-retention-for-diagnostics,
+        target: approved-minimization-with-routing-integrity-and-retention-holds,
+      }
     exportable: manual-review-no-verified-subject-relation
-    deletion: { current: manual-review-preserve-immutable-routing-evidence, target: approved-subject-attribution-and-minimization }
+    deletion:
+      {
+        current: manual-review-preserve-immutable-routing-evidence,
+        target: approved-subject-attribution-and-minimization,
+      }
 
   - domain: intelligence
-    data: [masked-incident-titles, masked-title-embedding-vectors, content-tokens, credential-filtered-labels, numeric-match-evidence, feedback-notes, feedback-and-policy-authorship, work-item-errors, service-dependency-graph, operator-supplied-change-summaries, digest-recipient-ids]
-    purpose: [similar-incident-suggestions, optional-semantic-search, optional-weekly-digest-email, correlation-and-noise-analysis, suggestion-feedback, policy-history, probable-cause-and-runbook-recommendations]
+    data:
+      [
+        masked-incident-titles,
+        masked-title-embedding-vectors,
+        content-tokens,
+        credential-filtered-labels,
+        numeric-match-evidence,
+        feedback-notes,
+        feedback-and-policy-authorship,
+        work-item-errors,
+        service-dependency-graph,
+        operator-supplied-change-summaries,
+        digest-recipient-ids,
+      ]
+    purpose:
+      [
+        similar-incident-suggestions,
+        optional-semantic-search,
+        optional-weekly-digest-email,
+        correlation-and-noise-analysis,
+        suggestion-feedback,
+        policy-history,
+        probable-cause-and-runbook-recommendations,
+      ]
     storage: [postgresql]
-    recipients: [authorized-workspace-users-limited-to-incidents-they-can-read, administrator-configured-embedding-provider-when-semantic-search-is-on]
-    retention: { current: ui-configured-per-entity-with-incident-cascade-and-sweep-while-disabled, target: retention-holds-honoured-and-free-text-minimization }
+    recipients:
+      [
+        authorized-workspace-users-limited-to-incidents-they-can-read,
+        administrator-configured-embedding-provider-when-semantic-search-is-on,
+      ]
+    retention:
+      {
+        current: ui-configured-per-entity-with-incident-cascade-and-sweep-while-disabled,
+        target: retention-holds-honoured-and-free-text-minimization,
+      }
     exportable: partial
-    deletion: { current: authorship-cleared-on-user-erasure-and-rows-deleted-with-incident, target: free-text-feedback-manual-review }
+    deletion:
+      {
+        current: authorship-cleared-on-user-erasure-and-rows-deleted-with-incident,
+        target: free-text-feedback-manual-review,
+      }
 
   - domain: ai-assistant
-    data: [user-questions, recent-conversation-turns, opt-in-saved-conversations, incident-titles-and-lookup-results, incident-timelines-and-responder-notes-for-summaries-and-drafts, provider-credentials, token-usage-counters]
-    purpose: [answering-questions-about-incidents-the-user-can-read, incident-summaries-and-postmortem-drafts-for-review, token-budget-accounting]
+    data:
+      [
+        user-questions,
+        recent-conversation-turns,
+        opt-in-saved-conversations,
+        incident-titles-and-lookup-results,
+        incident-timelines-and-responder-notes-for-summaries-and-drafts,
+        provider-credentials,
+        token-usage-counters,
+        short-lived-actor-token-reservations,
+        single-use-confirmed-action-receipts,
+      ]
+    purpose:
+      [
+        answering-questions-about-incidents-the-user-can-read,
+        incident-summaries-and-postmortem-drafts-for-review,
+        token-budget-accounting,
+      ]
     storage: [postgresql, administrator-configured-language-model-provider]
     recipients: [administrator-configured-language-model-provider]
-    retention: { current: conversations-browser-only-unless-opt-in-history-encrypted-owner-only-ui-configured-retention-purged-when-disabled, target: audit-retention-policy }
+    retention:
+      {
+        current: conversations-browser-only-unless-opt-in-history-encrypted-owner-only-ui-configured-retention-purged-when-disabled,
+        target: audit-retention-policy,
+      }
     exportable: partial
-    deletion: { current: saved-conversations-deleted-by-owner-retention-or-user-erasure-audit-entries-follow-audit-retention, target: audit-retention-policy }
+    deletion:
+      {
+        current: saved-conversations-deleted-by-owner-retention-or-user-erasure-audit-entries-follow-audit-retention,
+        target: audit-retention-policy,
+      }

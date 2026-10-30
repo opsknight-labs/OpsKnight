@@ -26,6 +26,8 @@ export interface RetentionResult {
   supersededFindings: number;
   deadLetters: number;
   closedGroups: number;
+  aiReservations: number;
+  actionReceipts: number;
   /** True when any table hit the batch ceiling and more expired rows may remain. */
   more: boolean;
 }
@@ -73,6 +75,8 @@ export async function purgeExpiredIntelligenceData(
         supersededFindings: 0,
         deadLetters: 0,
         closedGroups: 0,
+        aiReservations: 0,
+        actionReceipts: 0,
         more: false,
       };
     }
@@ -132,6 +136,12 @@ export async function purgeExpiredIntelligenceData(
         SELECT "weekKey" FROM "IntelligenceDigestRun"
         WHERE "startedAt" < ${cutoff(settings.findingRetentionDays)} LIMIT ${limit})`);
 
+    const aiReservations = await tx.$executeRaw(Prisma.sql`
+      DELETE FROM "AiTokenReservation" WHERE id IN (
+        SELECT id FROM "AiTokenReservation" WHERE "expiresAt" < ${cutoff(1)} LIMIT ${limit})`);
+    const actionReceipts = await tx.$executeRaw(Prisma.sql`
+      DELETE FROM "SquireActionReceipt" WHERE id IN (
+        SELECT id FROM "SquireActionReceipt" WHERE "createdAt" < ${cutoff(1)} LIMIT ${limit})`);
     const counts = {
       fingerprints,
       embeddings,
@@ -146,6 +156,8 @@ export async function purgeExpiredIntelligenceData(
       supersededFindings,
       deadLetters,
       closedGroups,
+      aiReservations,
+      actionReceipts,
     };
     return { ...counts, more: Object.values(counts).some(count => count >= limit) };
   });

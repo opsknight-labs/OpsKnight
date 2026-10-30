@@ -15,6 +15,9 @@ concurrency:
   group: runbook-validation-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  NODE_OPTIONS: --max-old-space-size=6144
+
 jobs:
   changes:
     name: Detect validation changes
@@ -96,6 +99,8 @@ jobs:
         run: npx playwright install --with-deps chromium firefox webkit
       - name: Production build
         run: npm run build
+        env:
+          NODE_OPTIONS: --max-old-space-size=6144
       - name: Authoring, execution preview and responsive browser checks
         run: npx playwright test --config playwright.runbooks.config.ts
       - uses: actions/upload-artifact@v4
@@ -279,6 +284,8 @@ jobs:
         run: npx prisma migrate deploy
       - name: Build production candidate
         run: npm run build
+        env:
+          NODE_OPTIONS: --max-old-space-size=6144
       - name: Build local Agent candidate
         run: docker build -f agent/Dockerfile -t opsknight-agent:rbe-local .
       - name: Prepare disposable same-cluster Agent fleet certification

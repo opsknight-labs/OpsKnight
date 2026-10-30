@@ -1,122 +1,97 @@
 # Intelligence engine: certification status
 
-**Status: NOT CERTIFIED.** This is an honest ledger of what has evidence behind it and what still needs a
-gate. Nothing here authorises automatic grouping or any delay before paging; both are unimplemented and
-cannot be selected.
+**Status: NOT DEPLOYMENT-CERTIFIED.** Implementation covers phases 0–7 on
+`feat/intelligence-engine`, PR #928. Per-service AUTO has a runtime quality gate; passing synthetic
+tests does not certify a production service or a deployment. No pre-paging hold is implemented.
 
-## What the current build does (recommendations only)
+## Current implementation
 
-Similar incidents (lexical, plus optional semantic search), reversible shadow/suggest correlation, possible
-causes, runbook suggestions, insights with learned grouping-rule suggestions and an opt-in weekly digest, the
-AI gateway (nine provider kinds, residency tags, a versioned prompt registry, schema-validated structured
-output), incident summaries and postmortem drafts for people to review, and the Squire assistant
-with opt-in saved conversations and signed, expiring action proposals that execute only after the asking
-person confirms them. Every feature is off by default and is configured in the UI.
-See `docs/architecture/intelligence.md`.
+Intelligence is disabled by default and configured in Settings. It provides lexical and optional
+semantic precedents with resolution details, dependency-aware correlation, change-source baselines,
+component matching, transactional late-change analysis, outcome/MTTR runbook ranking, persistent
+outcome patterns, seasonal/flapping insights, manually adopted scoring proposals and an opt-in digest.
 
-## Implementation checkpoint — 2026-10-29
+Squire offers bounded, permission-checked read tools, preloaded incident context, progress events,
+validated source links, optional encrypted history and signed action proposals. Confirmed actions call
+existing application commands under the confirming person's permissions. The model cannot execute
+mutations. Single-use receipts survive uncertain failures. Runbooks retain their native preview and
+approval workflow. Chat, structured requests, streams, embeddings and connection tests use atomic
+global/personal token reservations with idempotent settlement and estimated accounting on failure.
 
-The existing `feat/intelligence-engine` worktree was resumed without recreating the branch. The engine
-correctness, retrieval performance, gateway and Squire proposal work is committed locally. This checkpoint
-also includes the first part of match quality: replica-aware labels, IDF-weighted token similarity,
-visibility-filtered precedent resolution and postmortem details, late-change re-analysis, and runbook ranking
-based on incident resolution within two hours of execution. Resolutions before execution or on reopened
-incidents, incomplete runs, and successful scripts without an incident do not count as fixes. Same-problem
-outcomes provide a separate ranking signal.
+The incident panel has keyboard-accessible tabs, skeletons, explanatory empty states, expandable
+match reasons, manual linking, group/ungroup controls and runbook launchers.
 
-Still pending from the completion plan: topology rules, change-source baselines, pattern aggregation,
-seasonal volume and flapping detection, feedback-trained scoring proposals, AUTO quality measurement and
-certification gates, and the final incident-panel UX work. Squire's live-model evaluation suite, lazy launcher
-and remaining pre-answer parallel reads are also pending. AUTO remains unavailable. This checkpoint does
-not certify those unfinished features or replace the historical CI evidence below.
+## Runtime service certification
 
-Local checkpoint verification: a full `tsc --noEmit --incremental false` passed; changed application and
-test files passed ESLint with zero warnings (the normally ignored generator was linted explicitly with
-`--no-ignore`). Intelligence unit/architecture tests passed **252/252**, database integration tests against
-the migrated `opsknight_intel_merge_test` database passed **298/298**, MCP tests passed **71/71**, and SDK
-tests passed **13 TypeScript + 10 Python**. `api:clients:check` passed after making generation use the same
-Prettier configuration as the commit hook; no generated SDK content changed. These are local checks,
-not a new browser, load, live-provider or CI certification.
+Settings → Intelligence → Quality measures explicit USER decision events over a 30-day window,
+limited to 2,000 reviewed pairs. It does not infer negative labels from missing reviews. Certification
+pins the immutable policy definition, engine version and active dependency graph. It expires in seven
+days and invalidates on later human decisions. Measuring or certifying never enables AUTO itself.
 
-## Evidence that exists
+The gate requires:
 
-| Claim                                                                       | Evidence                                                                                                                                                                                                                                                                                                                                       |
-| --------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Paging path is not modified                                                 | `tests/architecture/intelligence-boundaries.test.ts` forbids edits to `events.ts`, `incidents/creation.ts`, the outbox and the job queue; nothing is written at incident creation                                                                                                                                                              |
-| No incident/alert/note history is rewritten by intelligence                 | the same architecture test scans intelligence code for writes                                                                                                                                                                                                                                                                                  |
-| No suggestion reveals an incident, change or runbook the viewer cannot read | `similar-view`, `response`, `squire`, `api-v2-intelligence` integration tests use genuinely scoped `USER` actors                                                                                                                                                                                                                               |
-| Correlation is reversible and idempotent                                    | `correlation`, `correlation-commands` integration tests (append-only events, concurrent group creation, link/unlink)                                                                                                                                                                                                                           |
-| Worker faults are contained                                                 | `runner`, `work-queue` integration tests (lease expiry, poison work to dead letter, per-item timeout, isolation of a failing item)                                                                                                                                                                                                             |
-| Disabled means inert                                                        | `runner` test asserts no queue access while disabled; kill switch forces mode OFF                                                                                                                                                                                                                                                              |
-| AI egress is SSRF-safe                                                      | `ai-security` test (loopback, private, link-local, metadata, IPv6, decimal/hex IPv4, mapped IPv6, plain http, credentials); an architecture test requires every provider constructor to use the guarded fetch                                                                                                                                  |
-| A self-hosted model never falls back to an external one without consent     | `ai-gateway` integration test and `policy` unit tests                                                                                                                                                                                                                                                                                          |
-| Provider keys are encrypted and never returned or audited                   | `ai-gateway` test; `ai.provider-api-key` registered in the encryption registry                                                                                                                                                                                                                                                                 |
-| Assistant writes require a person's confirmation                            | `squire-actions` integration tests cover signed, user-bound, expiring, at-most-once proposals; the architecture test allows domain mutation only through the confirmation executor                                                                                                                                                             |
-| Prompt injection cannot widen access                                        | `ai-security` red-team test: a model that obeys planted instructions still receives "no access" for another team's incident; credentials in tool output are redacted                                                                                                                                                                           |
-| Secrets are redacted before egress                                          | `intelligence-ai-gateway-pure` unit tests including adversarial input timing                                                                                                                                                                                                                                                                   |
-| Spans never carry prompts, answers or error messages                        | `ai-gateway` tracing test                                                                                                                                                                                                                                                                                                                      |
-| UI renders and works in a real browser against a production build           | `tests/e2e/intelligence-ui.spec.ts` (all five settings sections, incident suggestions and feedback, assistant from the incident panel, launcher and global search, 390 px phone width), run in the PR's Chromium browser job                                                                                                                   |
-| UI meets WCAG 2.1 AA                                                        | axe scans in the same spec over every settings section, the incident cards and the assistant dialog. The first run found a real contrast failure in the assistant, which is fixed                                                                                                                                                              |
-| Operators are alerted when it degrades, without paging anyone               | warning-only `opsknight.intelligence` rules in `monitoring/prometheus/opsknight-alerts.yaml`, unit-tested with `promtool` in `monitoring/prometheus/intelligence.test.yml`                                                                                                                                                                     |
-| Summaries and drafts never leave a person's visibility or bypass validation | `ai-drafts` integration test: invisible incidents refused, PERSONAL ceiling enforced, invalid model output falls through to the next provider then fails closed, nothing saved; `merge-ai-draft` fills only empty fields                                                                                                                       |
-| Prompts are versioned and guidance cannot outrank the rules                 | `intelligence-ai-governance` unit tests (registry, hashing, guidance sanitising and ordering); `ai-drafts` asserts prompt id/version/hash in the audit entry and revision-locked guidance                                                                                                                                                      |
-| Residency and new provider kinds are enforced                               | `intelligence-ai-governance` unit tests (region filter, kind-specific validation for Azure, Bedrock, Vertex, Mistral, Groq); architecture test requires all nine constructors to use the guarded fetch                                                                                                                                         |
-| Semantic search is optional, bounded and fails soft                         | `semantic` integration test against the real AI SDK and a fake provider: paraphrase found only with vectors, masked text only, model-scoped vectors, unchanged titles not re-embedded, one batched call per pass, provider failure leaves lexical results intact, retention and cascade; `intelligence-semantic` unit tests for scoring floors |
-| The weekly digest is exactly-once and never competes with paging            | `digest` integration test through the real notification control plane: active managers only, BULK system mail, chunked and resumable, de-duplicated even when the run record is lost, stale weeks and disabled schedules ignored, revision-locked and audited                                                                                  |
-| Learned rules are suggestions only and evidence-backed                      | `intelligence-rule-mining` unit tests (support, precision, window choice, breadth limit, id safety); `rule-learning` integration test (pending suggestions ignored, nothing changes until adopted, adoption recomputed and revision-locked)                                                                                                    |
-| Saved conversations are private, bounded and erasable                       | `squire-history` integration test (encrypted at rest, owner-only reads, writes and endpoints, API keys and cross-site refused, caps, retention, delete-all on disable, cascade on user deletion); route unit tests (failed answers never saved, storage failure never breaks an answer); architecture test limits the store to its two tables  |
-| Authorization matrix and OpenAPI/SDK are in sync                            | `api-v2-authorization-matrix`, `api-v2-docs-sync`, `api:clients:check`                                                                                                                                                                                                                                                                         |
+- At least 200 predictions, 20 negative labels and 20 critical-alert labels.
+- Precision ≥98%, Wilson lower bound ≥95%, recall ≥50%, false merges ≤1% and zero critical false merges.
+- At least 100 passing reviewed predictions for every enabled rule; topology additionally needs passing
+  cross-service predictions.
 
-## CI evidence on the pull request
+Only a separately published service AUTO override can create accepted RELATED children. Global AUTO
+remains unavailable. HIGH, resolved, old and expired-group cases are excluded. Pending initial paging
+requeues intelligence without changing paging jobs. Automatic creation and anchor re-election append
+decision events. Human undo invalidates certification and vetoes automatic replay; accepted links stay
+visible for undo while OFF.
 
-Final state on PR #928 head `719a143e6` (base `66b9b3878`, #932): 53 checks pass, one fails (Service automation,
-identical on `main`). Earlier runs on `c7d656098`, `6502e56fb` and `32f217c2b` are noted where they explain a change.
+## Verification evidence
 
-| Check                                                                                                                                                                                                                                | Result                                                      | Assessment                                                                                                                                                                                                                                                                                                                                                                       |
-| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Changed-source ESLint gate                                                                                                                                                                                                           | Failed on `c7d656098`, **passes now**                       | One `security/detect-object-injection` warning in `tests/components/SimilarIncidentFeedback.test.tsx`. Ours; fixed. Earlier lint runs had covered only recently edited files; the whole branch diff is now linted                                                                                                                                                                |
-| Database integration, shards 1/2 and 2/2                                                                                                                                                                                             | Shard 1 failed on `c7d656098`, **both pass now**            | One test: `service-policies` compared ordering with JavaScript locale order while the product sorts in PostgreSQL, whose collation differs between CI and a local container. Ours; the test now compares with the database's own order                                                                                                                                           |
-| Auth browser E2E, which now includes `intelligence-ui.spec.ts`                                                                                                                                                                       | **Pass**                                                    | All five intelligence browser tests ran and passed; the navigation specs that run after them in the same job also passed, so the spec leaves no state behind                                                                                                                                                                                                                     |
-| Prometheus rules (`promtool check` and `promtool test`, including `intelligence.test.yml`)                                                                                                                                           | **Pass**                                                    | 25 rules valid; all three alert test files pass                                                                                                                                                                                                                                                                                                                                  |
-| Fast validation, application build, auth, mobile, live-dashboard and emergency-recovery browser E2E, ingestion durability, multi-replica failover, idle-fleet capacity, Swarm convergence, CodeQL, SCA, secret scan, ESLint security | **Pass**                                                    |                                                                                                                                                                                                                                                                                                                                                                                  |
-| Runbook authoring and browser matrix                                                                                                                                                                                                 | Failed twice on earlier commits, **passes now (both runs)** | The failing test was a different Firefox-only spec each time (`runbooks-ui` rule wizard, then `team-administration` `page.reload: NS_BINDING_ABORTED`). The `push` run of the same commit passed both times and `main` passes. Classified as a Firefox flake from that pattern; this PR does not touch Runbook or Teams UI                                                       |
-| Service automation validation (browser matrix)                                                                                                                                                                                       | **Fails: 75 failed / 21 passed**                            | **Pre-existing on `main`.** The same workflow on `main` commit `e86677e31`, which contains no intelligence code, fails with the _identical set of 75 tests_ (compared test by test, including the `automation-release-certification` specs). Re-checked on `719a143e6`: still identical. Not caused by this PR, not fixed by it, and still a blocker for that workflow on `main` |
+Phase 5 passed the full pre-push unit suite and production build. Its database regression corrections
+passed 49/49; final view/quality/Squire checks passed 24/24. Phase 6 passed 59 existing gateway, policy,
+correlation and Squire tests; 27 reservation/action/relationship checks; three AUTO certification tests;
+and four pure quality checks. The full phase 6 pre-push unit run passed **10,733 tests with seven skipped
+across 1,016 files**. Its production build and push are tracked in the completion ledger.
 
-The Service automation failure is open work on `main`. This ledger neither fixes nor waives it.
+The latest nonincremental typecheck and whole-branch changed-source ESLint check passed before final
+verification. These checks are rerun for subsequent source edits. Whole-repository lint has inherited
+debt (21 errors and 552 warnings at the resumed baseline); the existing CI reports it separately and
+blocks on changed-source lint. This PR does not waive that debt.
 
-## Operator documentation
+The final complete database, browser, pgvector and load results are recorded in
+`../completion-status.md` when complete. A first full database pass overlapped the local storm run and
+reported queue/discovery failures; those require an isolated rerun. The first development-server
+browser attempt stalled before Intelligence on login hydration; verification uses a production build.
+Neither failed attempt is counted as a pass.
 
-`docs/v2.2.0/operate/intelligence/production.md` (deploy, monitor, staged rollout, rollback) and
-`docs/v2.2.0/guides/intelligence/use-suggestions.md` (responders). Both pass the repository's frontmatter and link
-checks.
+Earlier checkpoint: 298 intelligence database tests, 71 MCP tests, 13 TypeScript and 10 Python SDK tests,
+API client generation, changed-source lint, typecheck and build passed before phases 4–7. Those results
+are historical and do not claim final-head certification or current CI status.
 
-## Gates that are NOT passed
+## Repeatable verification
 
-| Gate                                                      | State                                                                                                                                                                                                                                                                                                                                                                         |
-| --------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Ingestion performance** (needed before any inline code) | A/B harness exists (`tests/load/intelligence-ingestion-ab.ts`). Runs on a shared, noisy development host showed no detectable difference (baseline variation 24–45%). **Not certifying evidence**: needs dedicated hardware, repeated alternating runs and confidence-interval comparison. Intelligence is not inline, so this gates AUTO and any hold, not the current build |
-| **Shadow quality** (needed before AUTO)                   | Replay and a rules preview exist. Precision/recall, false-merge rate on a critical-alert suite and calibration curves have not been measured on labelled data. Similarity scores are explicitly marked uncalibrated                                                                                                                                                           |
-| **Fault tolerance at scale**                              | Unit/integration coverage only. Not run: DB failover, 10× burst ON vs OFF, rolling restart, clock-skew drills                                                                                                                                                                                                                                                                 |
-| **Rollback drill**                                        | Policy rollback and per-service override clearing are tested; a recorded operational drill is not                                                                                                                                                                                                                                                                             |
-| **Prompt-injection and AI evaluation**                    | A deterministic red-team test against a scripted model. No evaluation against real models, no labelled answer-quality set                                                                                                                                                                                                                                                     |
-| **Independent security review**                           | Not performed                                                                                                                                                                                                                                                                                                                                                                 |
-| **Usability with real responders**                        | Browser-tested and accessibility-scanned, but not yet used by responders on real incidents                                                                                                                                                                                                                                                                                    |
-| **Load of the assistant**                                 | Rate limits and budgets are tested for correctness, not under load                                                                                                                                                                                                                                                                                                            |
-| **Semantic quality and cost**                             | The 0.7 cosine floor is a conservative default, not tuned on labelled data or across embedding models; first-day indexing cost on a large history is not measured                                                                                                                                                                                                             |
-| **Native providers against live endpoints**               | Azure, Bedrock, Vertex, Mistral and Groq are covered by validation and request-shape tests, not by calls to the real services                                                                                                                                                                                                                                                 |
-| **Digest deliverability**                                 | Proven through the control plane with test providers; not observed with a real mail provider                                                                                                                                                                                                                                                                                  |
+Use isolated migrated databases ending in `_test`; the integration/browser/load fixtures delete data.
 
-## Explicit non-goals of this build
+- `npx tsc --noEmit --incremental false` and ESLint on the complete branch diff with zero warnings.
+- Full Vitest unit suite and `vitest.int.config.ts` intelligence integration directory.
+- Repeat semantic tests on PostgreSQL with pgvector installed and without it.
+- `tests/e2e/intelligence-ui.spec.ts` against a production build: settings/quality, feedback, tab keyboard
+  controls, scoped source pages, undo while OFF, streamed propose/confirm/replay, 390 px and axe.
+- MCP/SDK suites, `api:clients:check`, Prisma schema/migrations and documentation checks.
+- `tests/load/intelligence-storm.ts --history 1000000 --burst 10000 --services 50` records p50/p99 and
+  drain time. Seeding commits bounded batches with production triggers enabled. `--reuse-history`
+  validates history size/engine, replaces only the burst and keeps its seeding time separate.
+- Alternating ingestion A/B with at least eight repetitions, paired bootstrap comparison and recorded
+  query plans. Shared development hardware gives indicative evidence only.
 
-- Automatic grouping (AUTO) and any pre-paging hold: unimplemented and unselectable.
-- Unconfirmed assistant writes: the model may propose actions, but execution requires user confirmation.
-- Automatically adopted rules: learned rules are only suggested and a person publishes them.
-- A mandatory vector extension: pgvector/HNSW is optional; semantic search retains a `REAL[]` fallback.
-- MCP exposure: delivered by the native MCP work (PR #924), not this PR.
+`npm run test:squire:eval` discovers six labelled real-model cases and skips without
+`SQUIRE_EVAL_API_KEY`. It uses synthetic fixtures in a disposable database; the report contains scores
+and timing. No live-model result is claimed when the key is absent.
 
-## Before enabling anything beyond SUGGEST
+## Deployment gates still outstanding
 
-1. Run the ingestion A/B harness on dedicated hardware and record the comparison.
-2. Label a historical replay set per service and record precision, recall and false-merge rate.
-3. Run the fault-tolerance drills above and record results.
-4. Obtain an independent review. Keep every item above attached to the release.
+Production-labelled service quality, dedicated-hardware ingestion performance, fault/failover and
+rolling-restart drills, clock skew, operational rollback drill, independent security review, real
+responder usability, assistant load, semantic quality/cost, live native-provider endpoints and digest
+mail deliverability remain deployment evidence to collect. Real-model evaluation also requires an
+explicit evaluation key. Passing local tests does not waive any of these gates.
+
+Unconfirmed assistant writes, automatic rule adoption, a mandatory vector extension and a pre-paging
+hold are outside the implementation. Native MCP exposure from #924 is integrated; this branch registers
+its intelligence read tool in the classification catalog and validates generated API artifacts.

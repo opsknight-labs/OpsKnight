@@ -22,6 +22,9 @@ on:
       - 'prisma/**'
       - 'tests/**/scim*'
       - '.github/workflows/scim-certification.yml'
+env:
+  NODE_OPTIONS: --max-old-space-size=6144
+
 jobs:
   certify:
     runs-on: ubuntu-latest

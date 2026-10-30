@@ -10,12 +10,21 @@ async function available(): Promise<boolean> {
     if (!hasCapability(actor.role, CAPABILITIES.INTELLIGENCE_SUGGESTIONS_READ)) return false;
     return (await getAiSettings()).enabled;
   } catch (error) {
-    logger.debug('[Intelligence] AI summary not shown', { error: error instanceof Error ? error.name : 'error' });
+    logger.debug('[Intelligence] AI summary not shown', {
+      error: error instanceof Error ? error.name : 'error',
+    });
     return false;
   }
 }
 
 /** Shown only while AI is enabled. Renders nothing on any failure. */
 export default async function IncidentAiSummaryCard({ incidentId }: { incidentId: string }) {
-  return (await available()) ? <IncidentAiSummary incidentId={incidentId} /> : null;
+  return (await available()) ? (
+    <IncidentAiSummary incidentId={incidentId} />
+  ) : (
+    <p className="p-4 text-sm text-muted-foreground">
+      AI summaries are unavailable. An administrator can configure an AI provider in Intelligence
+      settings.
+    </p>
+  );
 }

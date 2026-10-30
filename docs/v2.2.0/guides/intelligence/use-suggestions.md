@@ -9,24 +9,30 @@ reader:
   task: Use the suggestions on an incident page and ask the assistant about an incident.
 verification:
   level: test
-  verified_at: 2026-10-28
+  verified_at: 2026-10-30
   evidence: [src/components/incident, src/components/squire, tests/e2e/intelligence-ui.spec.ts]
 ---
 
 # Use Intelligence suggestions and the assistant
 
-When an administrator has turned Intelligence on for a service, its incident pages can show:
+Open the **Intelligence** panel on an incident. Its tabs show Similar, Related, Causes & runbooks,
+Summary and Ask Squire. Tabs support arrow keys and scroll within the panel on phones. When enabled
+for the service, they can show:
 
 - **Similar past incidents**, with a match score and the reasons for the match. The score ranks suggestions;
   it is not a probability. "Similar meaning" means the titles describe the same problem in different words
   (shown only when your administrator has turned on semantic search).
-- **Related incidents**, linked by a grouping rule or by a responder. You can confirm, reject or unlink them.
+- **Related incidents**, linked by a grouping rule or by a responder. Use **Group these** to confirm a suggestion, reject it, or unlink it. Certified automatic groups
+  show **Ungroup**, which records an undo and prevents automatic replay.
 - **Possible causes**: recent changes on this service or a service it depends on, and incidents upstream.
   These are leads to check, not conclusions.
-- **Runbooks that have worked here**, with how often each succeeded. Opening one takes you to the runbook; nothing
-  runs from the suggestion.
+- **Runbooks that have worked here**, with how often each succeeded. **Run on this incident** opens the existing runbook preview with that runbook selected; inputs, targets
+  and native approvals still apply before execution.
 
 You only ever see suggestions about incidents, services and runbooks you can already open.
+
+Expand **Why this matched** to inspect match reasons. **Mark related** links a precedent through the
+normal visibility and feedback permissions. Empty tabs explain OFF, shadow mode or pending analysis.
 
 ## Rate a suggestion
 
@@ -44,8 +50,9 @@ The assistant (named by your administrator, Squire by default) opens from:
 On an incident page it knows which incident you mean. Ask things like "have we seen this before?", "what could
 have caused this?" or "which runbook fits?".
 
-- It can only read what you can read, and it **cannot change anything**. Use the incident page to acknowledge,
-  resolve or run a runbook.
+- It can only read what you can read. For changes such as acknowledge, resolve, add a note, reassign or
+  mark related, it proposes an action card. Read it and select **Confirm**; nothing happens before
+  confirmation. Runbook and postmortem cards open their normal review workflows.
 - "Basic answer from your incident data" means AI is off or unavailable, and the answer comes straight from the
   suggestions above.
 - Treat AI answers as a starting point and check them.

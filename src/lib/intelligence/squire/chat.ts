@@ -1,3 +1,4 @@
+import { readAlertReference, readChangeReference } from './references';
 import 'server-only';
 import prisma from '@/lib/prisma';
 import { logger } from '@/lib/logger';
@@ -100,7 +101,11 @@ export async function* streamSquire(
     if (port) {
       yield { type: 'meta', mode: 'ai', name: settings.squireName };
       const [briefing, guidance, history] = (await preparation) ?? [null, null, []];
-      const prompt = buildSystemPrompt(settings.squireName, briefing, guidance);
+      const prompt = buildSystemPrompt(
+        settings.squireName,
+        briefing && !personal ? { ...briefing, timeline: [] } : briefing,
+        guidance
+      );
       const messages: AiMessage[] = [
         { role: 'system', content: prompt.system },
         ...history,
@@ -199,12 +204,25 @@ async function brief(
   actor: AuthorizationActor,
   incident: ReadableIncident
 ): Promise<IncidentBriefing> {
-  const [similar, response] = await Promise.all([
+  const [similar, response, events] = await Promise.all([
     getSimilarIncidentsForActor(incident.id, actor).catch(() => null),
     getResponseIntelligenceForActor(incident.id, actor).catch(() => null),
+    prisma.incidentEvent
+      .findMany({
+        where: { incidentId: incident.id },
+        orderBy: { createdAt: 'desc' },
+        take: 8,
+        select: { type: true, createdAt: true, message: true },
+      })
+      .catch(() => []),
   ]);
   return {
     incident,
+    timeline: events.map(event => ({
+      type: event.type ?? 'EVENT',
+      at: event.createdAt.toISOString(),
+      summary: event.message.slice(0, 240),
+    })),
     similar: (similar ?? []).slice(0, 3).map(s => ({
       id: s.incidentId,
       title: s.title,
@@ -255,8 +273,10 @@ export async function citationsFor(
     [...new Set([...text.matchAll(pattern)].map(match => match[1]))].slice(0, MAX_CITATIONS);
   const incidentIds = ids(/\/incidents\/([A-Za-z0-9_-]{1,64})/g);
   const runbookIds = ids(/\/runbooks\/([A-Za-z0-9_-]{1,64})/g);
-  if (incidentIds.length + runbookIds.length === 0) return [];
-  const [incidents, runbooks] = await Promise.all([
+  const changeIds = ids(/\/changes\/([A-Za-z0-9_-]{1,64})/g);
+  const alertIds = ids(/\/alerts\/([A-Za-z0-9_-]{1,64})/g);
+  if (incidentIds.length + runbookIds.length + changeIds.length + alertIds.length === 0) return [];
+  const [incidents, runbooks, changes, alerts] = await Promise.all([
     incidentIds.length === 0
       ? Promise.resolve([])
       : prisma.incident
@@ -273,10 +293,22 @@ export async function citationsFor(
             select: { id: true, name: true },
           })
           .catch(() => []),
+    Promise.all(changeIds.map(id => readChangeReference(actor, id).catch(() => null))),
+    Promise.all(alertIds.map(id => readAlertReference(actor, id).catch(() => null))),
   ]);
   const byIncident = new Map(incidents.map(row => [row.id, row.title]));
   const byRunbook = new Map(runbooks.map(row => [row.id, row.name]));
   return [
+    ...changes.flatMap(row =>
+      row
+        ? [{ kind: 'change' as const, id: row.id, label: row.summary, href: `/changes/${row.id}` }]
+        : []
+    ),
+    ...alerts.flatMap(row =>
+      row
+        ? [{ kind: 'alert' as const, id: row.id, label: row.summary, href: `/alerts/${row.id}` }]
+        : []
+    ),
     ...incidentIds
       .filter(id => byIncident.has(id))
       .map(id => ({

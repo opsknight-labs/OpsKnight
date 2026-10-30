@@ -253,3 +253,22 @@ describe('retention in the lane cycle', () => {
     expect(await db.intelligenceFinding.count()).toBe(1);
   });
 });
+
+it('expires token reservations and action receipts while the master switch is off', async () => {
+  const user = await createTestUser();
+  const old = new Date(Date.now() - 3 * 86400000);
+  await db.aiTokenReservation.create({
+    data: { day: old.toISOString().slice(0, 10), actorId: user.id, tokens: 100, expiresAt: old },
+  });
+  await db.squireActionReceipt.create({
+    data: {
+      id: 'old-receipt',
+      userId: user.id,
+      incidentId: 'reference-only',
+      action: 'add_incident_note',
+      createdAt: old,
+    },
+  });
+  const result = await purgeExpiredIntelligenceData(retention, { batchSize: 100 });
+  expect(result).toMatchObject({ aiReservations: 1, actionReceipts: 1 });
+});

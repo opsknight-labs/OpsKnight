@@ -48,11 +48,18 @@ export default function SquireProposalCard({ proposal }: { proposal: SquirePropo
       } else {
         setState({
           phase: 'failed',
-          message: body?.message ?? body?.error ?? 'That could not be done. Nothing was changed.',
+          message:
+            body?.message ??
+            body?.error ??
+            'The action could not be confirmed. Refresh the incident before trying again.',
         });
       }
     } catch {
-      setState({ phase: 'failed', message: 'Could not reach the server. Nothing was changed.' });
+      setState({
+        phase: 'failed',
+        message:
+          'Could not confirm the result. Refresh the incident before requesting another action.',
+      });
     }
   };
 

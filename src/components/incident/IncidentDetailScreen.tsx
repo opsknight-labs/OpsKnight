@@ -1,3 +1,5 @@
+import IncidentIntelligencePanel from './IncidentIntelligencePanel';
+import IntelligenceSkeleton from './IntelligenceSkeleton';
 import prisma from '@/lib/prisma';
 import { Suspense } from 'react';
 import IncidentAutomationCard from '@/components/automation/IncidentAutomationCard';
@@ -630,21 +632,33 @@ export default async function IncidentDetailScreen({
             />
           )}
 
-          <Suspense fallback={null}>
-            <IncidentIntelligenceCard incidentId={incident.id} />
-          </Suspense>
-          <Suspense fallback={null}>
-            <IncidentRelatedCard incidentId={incident.id} />
-          </Suspense>
-          <Suspense fallback={null}>
-            <IncidentResponseCard incidentId={incident.id} />
-          </Suspense>
-          <Suspense fallback={null}>
-            <IncidentAiSummaryCard incidentId={incident.id} />
-          </Suspense>
-          <Suspense fallback={null}>
-            <IncidentAskSquireCard />
-          </Suspense>
+          <IncidentIntelligencePanel
+            similar={
+              <Suspense fallback={<IntelligenceSkeleton />}>
+                <IncidentIntelligenceCard incidentId={incident.id} />
+              </Suspense>
+            }
+            related={
+              <Suspense fallback={<IntelligenceSkeleton />}>
+                <IncidentRelatedCard incidentId={incident.id} />
+              </Suspense>
+            }
+            response={
+              <Suspense fallback={<IntelligenceSkeleton />}>
+                <IncidentResponseCard incidentId={incident.id} />
+              </Suspense>
+            }
+            summary={
+              <Suspense fallback={<IntelligenceSkeleton />}>
+                <IncidentAiSummaryCard incidentId={incident.id} />
+              </Suspense>
+            }
+            assistant={
+              <Suspense fallback={<IntelligenceSkeleton />}>
+                <IncidentAskSquireCard />
+              </Suspense>
+            }
+          />
 
           <IncidentDetailTabs
             defaultTab={initialTab || 'overview'}

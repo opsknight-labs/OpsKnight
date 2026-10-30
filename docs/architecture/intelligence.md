@@ -1,7 +1,7 @@
 # OpsKnight Intelligence (AIOps)
 
-OpsKnight Intelligence learns from incident history to help responders. The first release surfaces
-**similar past incidents**. It is disabled by default, configured entirely from
+OpsKnight Intelligence learns from incident history to help responders. It surfaces
+**similar past incidents, causes, runbooks and related incidents**. It is disabled by default, configured entirely from
 **Settings → Intelligence**, and runs entirely off the paging path.
 
 This document is the architecture and safety contract. Implementation lives in
@@ -14,11 +14,12 @@ This document is the architecture and safety contract. Implementation lives in
    `src/lib/events.ts` and `src/lib/incidents/creation.ts` do not import intelligence; an
    architecture test enforces this.
 2. **Intelligence never changes routing, paging, escalation or notifications.** Today it only
-   reads incidents and writes to its own tables. No incident, alert, note or timeline row is ever
-   modified (also enforced by an architecture test).
-3. **Off means off.** The master switch and per-policy mode (`OFF`, `SHADOW`, `SUGGEST`) gate every
-   query and write. `SHADOW` analyses and records but shows nothing. `AUTO` exists in the schema
-   but cannot be selected until it has passed its certification gates.
+   reads incidents and writes derived records and reversible relationships. Confirmed Squire actions
+   call existing permission-checked application commands; only the confirmation executor may do so.
+3. **Off means off.** The master switch and per-policy mode (`OFF`, `SHADOW`, `SUGGEST`, `AUTO`) gate analysis. `SHADOW` records
+   without surfacing suggestions. Service-scoped `AUTO` requires a recent passing quality certification;
+   it adds reversible relationships after initial paging. Global AUTO remains unavailable. Accepted
+   relationships remain visible for undo even after intelligence is disabled.
 4. **No environment variables.** All settings are database-backed, revision-locked and audited. An
    architecture test fails if the module reads `process.env`.
 5. **Fail safe.** Every cycle is contained: a failing handler, probe or database error degrades
@@ -66,7 +67,7 @@ create a match by themselves, and the match percentage is a ranking signal, **no
 ## Backpressure and budgets
 
 - **Paging first.** The lane pauses while the oldest due `ESCALATION` or `NOTIFICATION` job has
-  waited longer than the configured threshold, and resumes only below half of it.
+  waited longer than the configured threshold (including scheduled-task notification delivery), and resumes only below half of it.
 - **Time budgets.** Every work item has a wall-clock budget; every intelligence transaction sets a
   statement and lock timeout. Work that exceeds its budget is stopped and retried with backoff.
 - **Bounded concurrency, batch size and candidate counts** are all settings with enforced limits.
@@ -84,12 +85,12 @@ past decisions always reference the exact version that made them.
 
 ## Permissions
 
-| Capability | Granted to | Purpose |
-| :--- | :--- | :--- |
-| `intelligence.suggestions.read` | every role | See suggestions on incidents (visibility-filtered) |
-| `intelligence.read` | admin, responder, auditor | View the Settings → Intelligence page |
-| `intelligence.feedback` | every role except auditor | Rate suggestions (visibility-checked, rate-limited, one live verdict per person) |
-| `intelligence.manage` | admin | Change settings and policies |
+| Capability                      | Granted to                | Purpose                                                                          |
+| :------------------------------ | :------------------------ | :------------------------------------------------------------------------------- |
+| `intelligence.suggestions.read` | every role                | See suggestions on incidents (visibility-filtered)                               |
+| `intelligence.read`             | admin, responder, auditor | View the Settings → Intelligence page                                            |
+| `intelligence.feedback`         | every role except auditor | Rate suggestions (visibility-checked, rate-limited, one live verdict per person) |
+| `intelligence.manage`           | admin                     | Change settings and policies                                                     |
 
 ## Measuring the cost to ingestion
 
@@ -121,11 +122,12 @@ or probabilistic, and every match is explained by the rule that made it.
   alerts. It writes only to its own tables: a group, a member per incident, and (in `SUGGEST`) a
   `RELATED` link from each member to the group's anchor. Reversal is a new decision event.
 - **Scope-aware identity.** A group is unique on `(policy, policy version, rule, service scope,
-  signature, window start)` and is created with `INSERT … ON CONFLICT DO NOTHING`, so any number of
+signature, window start)` and is created with `INSERT … ON CONFLICT DO NOTHING`, so any number of
   concurrent workers produce exactly one group; the anchor is elected by compare-and-set. A new
-  policy version is a new identity space and never silently joins old groups.
+  policy definition creates a new identity space. Compatible service topology overrides may share a group
+  when their immutable definitions and active scope match.
 - **Windows.** A window is derived from the incident's own time (replays are deterministic), slides
-  while incidents keep arriving, and never passes its hard ceiling. Groups are scoped to one service.
+  while incidents keep arriving, and never passes its hard ceiling. Template and label rules are scoped to one service; topology rules use an active dependency component.
 - **Critical alerts are never grouped.** Highest-urgency incidents are skipped entirely.
 - **Modes.** `SHADOW` records only; `SUGGEST` also proposes links. Correlation work is chained only
   when the effective policy has enabled rules, so installs without rules pay nothing.
@@ -141,7 +143,7 @@ prediction equals what the engine then does. Overlapping rules that propose the 
 pair count as one link, because that is how the pair is stored. Publishing creates a new immutable
 policy version and keeps the current mode and similarity settings.
 
-Automatic grouping remains unimplemented and unavailable.
+Automatic grouping is available only through the service certification gate described below.
 
 ## Probable cause and runbook recommendations
 
@@ -191,11 +193,12 @@ not even shipped to the browser while it is off.
 **Assistant.** A small "Ask <name>" button opens a chat panel. The name is configurable (default
 Squire). On an incident page it knows which incident is open. It works with **no AI at all**: a
 deterministic router answers "what is on fire", similar incidents, likely causes and runbooks from the
-intelligence data. With AI enabled it answers free-form questions using a language model and three
-read-only tools (search incidents, get an incident, get its intelligence). Tools run under the asking
+intelligence data. With AI enabled it uses bounded read tools for incidents, timelines, alerts, on-call
+people, services, changes, runbooks, postmortems, status pages, outcomes and optional semantic search. Tools run under the asking
 user's own permissions through the same visibility rules as the rest of the application, so the model
-can never read more than the user can. **It has no write tools and cannot change anything**; an
-architecture test enforces that the assistant code performs no database writes. By default conversations
+can never read more than the user can. Write tools only emit typed proposals. A signed, expiring,
+actor-bound proposal becomes a change only after confirmation through existing domain commands.
+Single-use receipts remain consumed after uncertain failures to prevent duplicate execution. By default conversations
 live in the browser only and audit entries hold metadata (user, provider, model, token counts, prompt id,
 version and hash), never prompts or answers.
 
@@ -226,8 +229,9 @@ none produces valid output the call fails with a clear error.
 **Prompt-injection posture.** The browser can send only user and assistant turns (never a system turn),
 bounded in number and size. The system prompt tells the model that tool output and incident text are
 data, never instructions. That prompt is defence in depth only: authority never rests on it, because
-tools are read-only and permission-checked. Model output is rendered as plain text; only same-app
-`/incidents/…` and `/runbooks/…` paths become links.
+read tools are permission-checked and proposed writes require explicit confirmation. Model output is
+rendered as plain text. Citation chips for incidents, runbooks, changes and alerts are re-authorized
+against their source before rendering links; guessed or inaccessible ids are dropped.
 
 **Gateway.** Providers are added in the UI: OpenAI, Anthropic, Google Gemini, Azure OpenAI, Amazon
 Bedrock, Google Vertex AI, Mistral, Groq, and any OpenAI-compatible endpoint (Ollama, vLLM, LiteLLM,
@@ -255,9 +259,10 @@ port, so moving to a newer SDK later is a one-adapter change.
   30 seconds), bounded timeouts, and fallback only before the first token of a streamed answer so two
   answers are never spliced. When AI is unavailable, over budget or rate limited, the assistant answers
   in basic mode instead of failing.
-- **Cost controls.** Per-user requests per minute, a global daily token budget (UTC day), a cap on
+- **Cost controls.** Per-user requests per minute, global and personal daily token budgets (UTC day), a cap on
   answer length and on model/tool round trips. Credential-shaped text is redacted from everything sent
-  to a model, including tool results.
+  to a model, including tool results. Admission atomically reserves estimates across concurrent requests
+  and settles once per attempt, including estimated usage on cancellation/failure and provider tests.
 
 ## Semantic search (optional)
 
@@ -294,8 +299,8 @@ job to fall behind. Everything is flag-only and a person decides what to do.
 
 - **Recurring problems.** The same masked incident title at least three times on at least two days in
   30 days, per service, with a flag when the service has no runbook attached.
-- **Unusual volume.** A service with at least five incidents this week and three times its own recent
-  weekly norm (a floor of one per week keeps quiet services from flapping).
+- **Unusual volume.** Robust median/MAD weekly comparisons and same-weekday/hour seasonal baselines.
+  Short-lived repeated incidents with one dedup key are reported separately as flapping.
 - **Last 7 days.** Aggregate counts (incidents analyzed, findings by kind, ratings, changes recorded,
   stuck work items), visible to administrators only and naming no service or incident.
 - **Suggestion quality.** Responder thumbs on similar-incident suggestions, bucketed by match score.
@@ -357,3 +362,27 @@ future stages. The evidence and the open gates are tracked in
 `plans/intelligence-engine/certification/README.md`. MCP exposure is delivered by the
 native MCP work, not here. Each will be introduced behind its own certification gate and will not change
 paging behaviour until that gate has passed.
+
+## Quality and automatic grouping
+
+Engine version 1.3.0 combines IDF-weighted token and trigram signals, uses semantic evidence to raise
+lexical matches, and enforces a content floor before contextual weights. Weight training is offline;
+a person adopts a recomputed proposal through an audited, revision-locked policy publication.
+Topology rules follow active dependency components and enforce their content minimum. Change ranking
+scores the whole indexed six-hour window before taking top results, with source-frequency and component
+agreement adjustments. Outcome patterns are updated transactionally and idempotently on reindex,
+reopen, title change and suppression. Runbook ranking uses resolution after execution and per-template
+outcomes/MTTR. Insights use seasonal median/MAD comparisons and short-lived dedup-key flapping episodes.
+
+Settings → Intelligence → Quality measures explicit human-reviewed pairs over 30 days, capped at 2,000.
+Unreviewed pairs never become negative labels. A service certification requires at least 200 predictions,
+20 negative labels and 20 critical labels; precision ≥98%, its Wilson lower bound ≥95%, false merges ≤1%,
+recall ≥50% and zero critical false merges. Each enabled rule needs 100 passing predictions; topology
+additionally needs cross-service evidence. Certification pins the definition, engine and active graph,
+expires after seven days and invalidates on later human decisions. Measurement never switches mode.
+
+Only an explicitly published service AUTO override can create automatic accepted RELATED children of
+an open group. HIGH, resolved and old incidents are excluded. Pending initial paging defers intelligence
+work without changing the paging job. Creation, anchor re-election and undo retain decision history;
+a human rejection or reversal vetoes automatic reapplication. No paging hold or notification suppression
+is implemented. These runtime quality gates do not replace deployment/load/security certification.

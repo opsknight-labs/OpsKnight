@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   DEAD_LETTER_REVIVE_MS,
   MAX_WORK_ATTEMPTS,
@@ -286,4 +286,22 @@ describe('retry delay', () => {
     expect(highest(50)).toBeLessThanOrEqual(15 * 60_000);
     expect(lowest(50)).toBeGreaterThanOrEqual(7.5 * 60_000);
   });
+});
+
+it('makes default schedules and operator replay immediately due despite application clock skew', async () => {
+  vi.useFakeTimers({ toFake: ['Date'] });
+  vi.setSystemTime(new Date(Date.now() + 300000));
+  try {
+    await enqueueWorkItems([item('clock-skew')]);
+    const [claimed] = await claimWorkItems({ limit: 1 });
+    expect(claimed?.subjectKey).toBe('clock-skew');
+    await db.intelligenceWorkItem.update({
+      where: { id: claimed.id },
+      data: { attempts: MAX_WORK_ATTEMPTS },
+    });
+    expect(await replayDeadLetter(claimed.id)).toBe(true);
+    expect((await claimWorkItems({ limit: 1 }))[0]?.subjectKey).toBe('clock-skew');
+  } finally {
+    vi.useRealTimers();
+  }
 });

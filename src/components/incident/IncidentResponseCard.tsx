@@ -1,3 +1,6 @@
+import AdhocRunbookLauncher from './runbooks/AdhocRunbookLauncher';
+import { CAPABILITIES, hasCapability } from '@/lib/authorization';
+import IntelligenceEmptyState from './IntelligenceEmptyState';
 import Link from 'next/link';
 import { GitCommitHorizontal, BookOpen } from 'lucide-react';
 import { logger } from '@/lib/logger';
@@ -11,7 +14,11 @@ const RELATION_LABEL = {
 } as const;
 
 const formatLead = (minutes: number) =>
-  minutes < 1 ? 'moments before' : minutes < 90 ? `${minutes} min before` : `${Math.round(minutes / 60)} h before`;
+  minutes < 1
+    ? 'moments before'
+    : minutes < 90
+      ? `${minutes} min before`
+      : `${Math.round(minutes / 60)} h before`;
 
 /**
  * Likely contributing changes and proven runbooks. These are hypotheses to verify, not conclusions,
@@ -20,8 +27,10 @@ const formatLead = (minutes: number) =>
  */
 export default async function IncidentResponseCard({ incidentId }: { incidentId: string }) {
   let view;
+  let canExecute = false;
   try {
     const actor = await getCurrentAuthorizationActor();
+    canExecute = hasCapability(actor.role, CAPABILITIES.RUNBOOK_EXECUTE);
     view = await getResponseIntelligenceForActor(incidentId, actor);
   } catch (error) {
     logger.warn('[Intelligence] Response intelligence unavailable', {
@@ -30,10 +39,13 @@ export default async function IncidentResponseCard({ incidentId }: { incidentId:
     });
     return null;
   }
-  if (!view) return null;
+  if (!view) return <IntelligenceEmptyState incidentId={incidentId} />;
 
   return (
-    <section aria-labelledby="response-intelligence-heading" className="space-y-4 rounded-lg border border-border bg-card p-4">
+    <section
+      aria-labelledby="response-intelligence-heading"
+      className="space-y-4 rounded-lg border border-border bg-card p-4"
+    >
       <div className="space-y-1">
         <div className="flex items-center gap-2">
           <GitCommitHorizontal className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
@@ -52,7 +64,12 @@ export default async function IncidentResponseCard({ incidentId }: { incidentId:
             <li key={change.findingId} className="space-y-1 py-2">
               <p className="text-sm font-medium">
                 {change.url ? (
-                  <a href={change.url} target="_blank" rel="noopener noreferrer" className="hover:underline">
+                  <a
+                    href={change.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="hover:underline"
+                  >
                     {change.summary}
                   </a>
                 ) : (
@@ -60,8 +77,8 @@ export default async function IncidentResponseCard({ incidentId }: { incidentId:
                 )}
               </p>
               <p className="text-xs text-muted-foreground">
-                {change.kind.replace('_', ' ').toLowerCase()} · {formatLead(change.leadMinutes)} onset ·{' '}
-                {RELATION_LABEL[change.relation]}
+                {change.kind.replace('_', ' ').toLowerCase()} · {formatLead(change.leadMinutes)}{' '}
+                onset · {RELATION_LABEL[change.relation]}
                 {change.serviceName ? ` (${change.serviceName})` : ''} · {change.source}
                 {change.version ? ` · ${change.version}` : ''}
               </p>
@@ -72,15 +89,21 @@ export default async function IncidentResponseCard({ incidentId }: { incidentId:
 
       {view.upstreamIncidents.length > 0 && (
         <div className="space-y-1">
-          <h3 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Upstream incidents</h3>
+          <h3 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            Upstream incidents
+          </h3>
           <ul className="divide-y divide-border">
             {view.upstreamIncidents.map(item => (
               <li key={item.findingId} className="py-2">
-                <Link href={`/incidents/${item.incidentId}`} className="text-sm font-medium hover:underline">
+                <Link
+                  href={`/incidents/${item.incidentId}`}
+                  className="text-sm font-medium hover:underline"
+                >
                   {item.title}
                 </Link>
                 <p className="text-xs text-muted-foreground">
-                  {item.serviceName} · {formatLead(item.leadMinutes)} this one · {item.status.toLowerCase()}
+                  {item.serviceName} · {formatLead(item.leadMinutes)} this one ·{' '}
+                  {item.status.toLowerCase()}
                 </p>
               </li>
             ))}
@@ -92,12 +115,17 @@ export default async function IncidentResponseCard({ incidentId }: { incidentId:
         <div className="space-y-1">
           <div className="flex items-center gap-2">
             <BookOpen className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
-            <h3 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Runbooks that have worked here</h3>
+            <h3 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+              Runbooks that have worked here
+            </h3>
           </div>
           <ul className="divide-y divide-border">
             {view.runbooks.map(item => (
               <li key={item.findingId} className="py-2">
-                <Link href={`/runbooks/${item.runbookId}`} className="text-sm font-medium hover:underline">
+                <Link
+                  href={`/runbooks/${item.runbookId}`}
+                  className="text-sm font-medium hover:underline"
+                >
                   {item.name}
                 </Link>
                 <p className="text-xs text-muted-foreground">
@@ -105,6 +133,13 @@ export default async function IncidentResponseCard({ incidentId }: { incidentId:
                     ? `Succeeded ${item.succeeded} of ${item.eligible} completed runs on this service`
                     : 'Attached to this service, not run yet'}
                 </p>
+                {canExecute && (
+                  <AdhocRunbookLauncher
+                    incidentId={incidentId}
+                    initialRunbookId={item.runbookId}
+                    label="Run on this incident"
+                  />
+                )}
               </li>
             ))}
           </ul>

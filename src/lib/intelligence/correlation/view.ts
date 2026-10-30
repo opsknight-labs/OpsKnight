@@ -9,6 +9,7 @@ export interface RelatedIncidentView {
   relationshipId: string;
   decision: 'SUGGESTED' | 'ACCEPTED';
   origin: 'RULE' | 'LEARNED' | 'HUMAN';
+  automatic: boolean;
   /** Rule that proposed the link, for the "why" explanation. Absent for manual links. */
   ruleId: string | null;
   incidentId: string;
@@ -62,7 +63,9 @@ export async function getRelatedIncidentsForActor(
       OR: [{ sourceIncidentId: incidentId }, { targetIncidentId: incidentId }],
       decision: { in: ['SUGGESTED', 'ACCEPTED'] },
       // Rule suggestions need a visible mode; human links always show.
-      ...(surfaced ? {} : { origin: 'HUMAN' }),
+      ...(surfaced
+        ? {}
+        : { AND: [{ OR: [{ origin: 'HUMAN' as const }, { decision: 'ACCEPTED' as const }] }] }),
     },
     orderBy: [{ decision: 'asc' }, { createdAt: 'desc' }],
     take: MAX_VISIBLE * 3,
@@ -102,6 +105,12 @@ export async function getRelatedIncidentsForActor(
       relationshipId: link.id,
       decision: link.decision === 'ACCEPTED' ? 'ACCEPTED' : 'SUGGESTED',
       origin: link.origin,
+      automatic: Boolean(
+        link.evidence &&
+        typeof link.evidence === 'object' &&
+        !Array.isArray(link.evidence) &&
+        link.evidence.automatic === true
+      ),
       ruleId: ruleIdFrom(link.evidence),
       incidentId: other.id,
       title: other.title,

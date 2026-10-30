@@ -17,7 +17,7 @@ const MINUTE_MS = 60_000;
 /**
  * Candidate causes for one incident: recent changes on the same or an upstream service (or global
  * changes), and incidents that opened on an upstream service shortly before. Every read is bounded
- * by a time window, a service set and a row cap. Evidence is numeric/enum only.
+ * by a time window, a service set and the caller's transaction budget. Evidence is numeric/enum only.
  */
 export async function computeCauseFindings(
   tx: Prisma.TransactionClient,
@@ -30,8 +30,8 @@ export async function computeCauseFindings(
   const upstream = upstreamDistances(edges, incident.serviceId, RESPONSE_LIMITS.maxUpstreamDepth);
   const serviceIds = [incident.serviceId, ...upstream.keys()];
 
-  // Changes on the incident's own and upstream services and changes tied to no service are read as
-  // separate capped sets, so a busy source of global changes can never crowd out a same-service deploy.
+  // Score every indexed candidate in the six-hour service/global window before taking top-k.
+  // A recency limit here could hide an older, stronger cause behind a noisy change source.
   const changeWindow = { gte: windowStart, lte: incident.createdAt };
   const changeSelect = {
     id: true,
@@ -47,13 +47,11 @@ export async function computeCauseFindings(
       tx.changeEvent.findMany({
         where: { occurredAt: changeWindow, serviceId: { in: serviceIds } },
         orderBy: { occurredAt: 'desc' },
-        take: 5000,
         select: changeSelect,
       }),
       tx.changeEvent.findMany({
         where: { occurredAt: changeWindow, serviceId: null },
         orderBy: { occurredAt: 'desc' },
-        take: 5000,
         select: changeSelect,
       }),
       upstream.size === 0

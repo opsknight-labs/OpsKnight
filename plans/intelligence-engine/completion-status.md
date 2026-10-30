@@ -8,7 +8,7 @@ The user requested continuation through all phases; a phase push is not the end 
       singleton jobs, deterministic anchors and content score floor (existing implementation).
 - [x] Phase 2: stored FTS, GiST retrieval, optional ANN/fallback, read caching and storm harness
       (existing implementation; final 1M-history measurement still pending below).
-- [x] Phase 3: gateway/Squire hardening (existing implementation; reservation accounting audit pending).
+- [x] Phase 3: gateway/Squire hardening, atomic reservations and single-use action receipts.
 - [x] Phase 4: lazy client launcher; parallel preparation and deferred persistence; bounded request
       streaming; semantic and status-page tools; opt-in live-model evaluation suite. Existing confirmed
       actions, briefing, progress, citations and history remain in place.
@@ -60,8 +60,7 @@ The 1M-history/10k-storm run uses a separate disposable database. Its harness no
 engine version and suppresses periodic sweeps on every cycle, so a longer run does not accidentally
 become a million-incident re-index benchmark. Results are pending, not certification evidence.
 
-Further audit items to close with the remaining work: atomic token reservations (existing admission
-checks are soft), action receipts after uncertain failures, and final CI/build memory settings.
+The later phase 6/7 audit closes atomic reservations, uncertain-action receipt replay and CI heap settings.
 
 ## Phase 6 evidence
 
@@ -87,3 +86,28 @@ are charged estimated usage. Single-use action receipts remain consumed after un
 The million-history fixture was restarted after identifying a production SLA trigger hot-row problem
 in one enormous fixture transaction. It now seeds in bounded committed batches with triggers enabled.
 Seeding time is separate from the measured queue-drain interval.
+
+## Phase 7 implementation and verification in progress
+
+The incident page now uses one accessible tabbed panel with skeletons, explanatory empty states,
+expandable match reasons, Mark related, Group these/Ungroup and the native runbook launcher preselected
+for the suggested runbook. Accepted links remain visible for undo while OFF. Sidebar search matches AI
+as a word. Change/alert citations use visibility-checked detail pages. Recent timeline events are
+prefetched only into Personal-provider context; a regression verifies Internal providers receive none.
+
+Current unit/component/architecture checks passed 33/33, timeline/boundary checks 36/36 and Squire
+integration 14/14. The fresh pgvector database passed semantic 10/10 and new source/quality/retention
+checks 28/28. MCP passed 71/71, SDKs 13 TypeScript + 10 Python, generated API clients, Prisma validation,
+docs contracts and performance budgets passed. The live-model suite skipped six cases without a key.
+
+The first full database run passed 307/313 while source was still being completed. Isolated follow-up
+covered its failures: 50/51 initially passed; the remaining cross-service retrieval fixture was made
+unambiguous for the new IDF weighting and the following similarity/Squire run passed 38/38. Default
+queue scheduling and operator replay now use database time; a five-minute application-clock-skew test
+passes. The previous use of application time caused immediate claims to intermittently return empty.
+
+A 6 GB production build passed. Five browser workflows pass; source-page rendering, OFF undo and
+streamed confirmation/replay are still being finished. The browser tests now account for the app's
+retained hidden route content using accessible-role selectors. No final browser pass is claimed yet.
+The build/typecheck workflows set a 6 GB Node heap, addressing observed 4 GB heap exhaustion without
+weakening checks. Latest-main integration and final validation follow this implementation checkpoint.

@@ -367,3 +367,26 @@ describe('AI mode', () => {
     expect(events.some(e => e.type === 'delta' && e.text.includes('Traceback'))).toBe(false);
   });
 });
+
+it('prefetches recent timeline context only for providers allowed Personal data', async () => {
+  const admin = await setup({ ai: true, provider: true });
+  const service = await createTestService('Checkout');
+  const incident = await createTestIncident('Checkout latency', service.id);
+  await db.incidentEvent.create({
+    data: { incidentId: incident.id, message: 'Responder Alice reviewed the rollback' },
+  });
+  await db.aiProvider.updateMany({ data: { maxDataClass: 'PERSONAL' } });
+  invalidateGatewayCache();
+  model.script.push({ content: 'Review the rollback.' });
+  await turn(admin.id, 'What happened?', { incidentId: incident.id });
+  expect(JSON.stringify(model.requests.at(-1)!.body.messages)).toContain(
+    'Responder Alice reviewed the rollback'
+  );
+  await db.aiProvider.updateMany({ data: { maxDataClass: 'INTERNAL' } });
+  invalidateGatewayCache();
+  model.script.push({ content: 'Read the incident.' });
+  await turn(admin.id, 'What happened?', { incidentId: incident.id });
+  expect(JSON.stringify(model.requests.at(-1)!.body.messages)).not.toContain(
+    'Responder Alice reviewed the rollback'
+  );
+});

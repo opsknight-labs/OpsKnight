@@ -11,7 +11,9 @@ async function loadStatus() {
     const status = await getAiPublicStatus();
     return status.squireEnabled ? status : null;
   } catch (error) {
-    logger.debug('[Squire] Incident panel not shown', { error: error instanceof Error ? error.message : String(error) });
+    logger.debug('[Squire] Incident panel not shown', {
+      error: error instanceof Error ? error.message : String(error),
+    });
     return null;
   }
 }
@@ -19,5 +21,11 @@ async function loadStatus() {
 /** Incident-page entry point. Renders nothing while the assistant is off or on any failure. */
 export default async function IncidentAskSquireCard() {
   const status = await loadStatus();
-  return status ? <AskSquirePanel name={status.squireName} avatar={status.squireAvatar} /> : null;
+  return status ? (
+    <AskSquirePanel name={status.squireName} avatar={status.squireAvatar} />
+  ) : (
+    <p className="p-4 text-sm text-muted-foreground">
+      Squire is disabled. An administrator can enable the assistant in Intelligence settings.
+    </p>
+  );
 }
