@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server';
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import { assertCanModifyService, getCurrentUser } from '@/lib/rbac';
 import { jsonError, jsonOk } from '@/lib/api-response';
 import { AppError, isAppError } from '@/lib/errors';
@@ -37,26 +37,58 @@ export async function POST(request: NextRequest) {
     }
     const parsed = teamsTestSchema.safeParse((body ?? {}) as Record<string, unknown>);
     if (!parsed.success) {
-      return jsonError(new AppError({ code: 'VALIDATION_FAILED', userMessage: parsed.error.issues[0]?.message ?? 'Invalid request.' }));
+      return jsonError(
+        new AppError({
+          code: 'VALIDATION_FAILED',
+          userMessage: parsed.error.issues[0]?.message ?? 'Invalid request.',
+        })
+      );
     }
-    const { destinationId, serviceId } = parsed.data as { destinationId?: string; serviceId?: string };
+    const { destinationId, serviceId } = parsed.data as {
+      destinationId?: string;
+      serviceId?: string;
+    };
     if (serviceId) await assertCanModifyService(serviceId);
 
     const prismaAny = prisma as unknown as {
       microsoftTeamsDestination: {
-        findFirst: (a: unknown) => Promise<{ id: string; serviceId: string; tenantId: string; teamId: string; channelId: string } | null>;
+        findFirst: (a: unknown) => Promise<{
+          id: string;
+          serviceId: string;
+          tenantId: string;
+          teamId: string;
+          channelId: string;
+        } | null>;
       };
     };
-    let dest: { id: string; serviceId: string; tenantId: string; teamId: string; channelId: string } | null = null;
+    let dest: {
+      id: string;
+      serviceId: string;
+      tenantId: string;
+      teamId: string;
+      channelId: string;
+    } | null = null;
     if (destinationId) {
       dest = await prismaAny.microsoftTeamsDestination.findFirst({
-        where: { id: destinationId, ...(serviceId ? { serviceId } : {}), enabled: true, installation: { enabled: true } },
+        where: {
+          id: destinationId,
+          ...(serviceId ? { serviceId } : {}),
+          enabled: true,
+          installation: { enabled: true },
+        },
       });
     } else if (serviceId) {
-      dest = await prismaAny.microsoftTeamsDestination.findFirst({ where: { serviceId, enabled: true, installation: { enabled: true } } });
+      dest = await prismaAny.microsoftTeamsDestination.findFirst({
+        where: { serviceId, enabled: true, installation: { enabled: true } },
+      });
     }
     if (!dest) {
-      return jsonError(new AppError({ code: 'RESOURCE_NOT_FOUND', userMessage: 'Teams destination not found. Map a Service → Teams channel first.' }));
+      return jsonError(
+        new AppError({
+          code: 'RESOURCE_NOT_FOUND',
+          userMessage: 'Teams destination not found. Map a Service → Teams channel first.',
+        })
+      );
     }
     if (!serviceId) await assertCanModifyService(dest.serviceId);
 
@@ -68,7 +100,10 @@ export async function POST(request: NextRequest) {
     // Direct Bot Framework send — no Notification row, no lifecycle fencing.
     let serviceName = dest.serviceId;
     try {
-      const svc = await prisma.service.findUnique({ where: { id: dest.serviceId }, select: { name: true } });
+      const svc = await prisma.service.findUnique({
+        where: { id: dest.serviceId },
+        select: { name: true },
+      });
       if (svc?.name) serviceName = svc.name;
     } catch {}
     const { sendMicrosoftTeamsIncidentCard } = await import('@/lib/microsoft-teams/client');
@@ -113,7 +148,12 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    return jsonOk({ ok: true, destinationId: dest.id, providerMessageId: result.providerMessageId ?? null, conversationId: result.conversationId ?? null });
+    return jsonOk({
+      ok: true,
+      destinationId: dest.id,
+      providerMessageId: result.providerMessageId ?? null,
+      conversationId: result.conversationId ?? null,
+    });
   } catch (error) {
     if (isAppError(error)) return jsonError(error);
     return jsonError(error instanceof Error ? error.message : 'Failed to send Teams test', 500);

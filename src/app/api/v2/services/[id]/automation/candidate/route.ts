@@ -1,7 +1,7 @@
 import { readAutomationReadiness } from '@/lib/automation/readiness';
 import { requireAutomationService } from '@/lib/api-v2/automation-access';
 import { candidateEvidenceFreshness } from '@/lib/automation/evidence-freshness';
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import { defineV2Route } from '@/lib/api-v2/endpoint';
 import { AUTHORIZATION_ACTIONS } from '@/lib/authorization-policy';
 import { AppError } from '@/lib/errors';

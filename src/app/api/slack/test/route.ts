@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server';
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import { assertAdminOrResponder, assertCanModifyService } from '@/lib/rbac';
 import { logger } from '@/lib/logger';
 import { retryFetch } from '@/lib/retry';

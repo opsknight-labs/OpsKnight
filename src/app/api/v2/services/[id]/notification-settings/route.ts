@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import prisma from '@/lib/prisma';
 import { defineV2Route } from '@/lib/api-v2/endpoint';
 import { logV2Audit } from '@/lib/api-v2/audit';
@@ -10,13 +10,20 @@ import { SERVICE_NOTIFICATION_CHANNEL_VALUES } from '@/lib/service-notification-
 
 const paramsSchema = z.object({ id: z.string().trim().min(1).max(100) }).strict();
 const channelSchema = z.enum(SERVICE_NOTIFICATION_CHANNEL_VALUES);
-const settingsSchema = z.object({
-  serviceNotificationChannels: z.array(channelSchema).max(7).refine(channels => new Set(channels).size === channels.length, 'Channels must be unique').optional(),
-  serviceNotifyOnTriggered: z.boolean().optional(),
-  serviceNotifyOnAck: z.boolean().optional(),
-  serviceNotifyOnResolved: z.boolean().optional(),
-  serviceNotifyOnSlaBreach: z.boolean().optional(),
-}).strict().refine(value => Object.keys(value).length > 0, 'At least one setting is required');
+const settingsSchema = z
+  .object({
+    serviceNotificationChannels: z
+      .array(channelSchema)
+      .max(7)
+      .refine(channels => new Set(channels).size === channels.length, 'Channels must be unique')
+      .optional(),
+    serviceNotifyOnTriggered: z.boolean().optional(),
+    serviceNotifyOnAck: z.boolean().optional(),
+    serviceNotifyOnResolved: z.boolean().optional(),
+    serviceNotifyOnSlaBreach: z.boolean().optional(),
+  })
+  .strict()
+  .refine(value => Object.keys(value).length > 0, 'At least one setting is required');
 
 function settingsDto(service: {
   id: string;
@@ -47,9 +54,13 @@ export const GET = defineV2Route({
     const service = await prisma.service.findFirst({
       where: { AND: [{ id: params.id }, serviceReadWhere(actor)] },
       select: {
-        id: true, revision: true, serviceNotificationChannels: true,
-        serviceNotifyOnTriggered: true, serviceNotifyOnAck: true,
-        serviceNotifyOnResolved: true, serviceNotifyOnSlaBreach: true,
+        id: true,
+        revision: true,
+        serviceNotificationChannels: true,
+        serviceNotifyOnTriggered: true,
+        serviceNotifyOnAck: true,
+        serviceNotifyOnResolved: true,
+        serviceNotifyOnSlaBreach: true,
       },
     });
     if (!service) throw new AppError({ code: 'SERVICE_NOT_FOUND' });
@@ -71,7 +82,10 @@ export const PATCH = defineV2Route({
   },
   handler: async ({ req, params, body, actor, apiKey, tx }) => {
     const expected = requireRevisionIfMatch(req);
-    const current = await tx!.service.findUnique({ where: { id: params.id }, select: { id: true } });
+    const current = await tx!.service.findUnique({
+      where: { id: params.id },
+      select: { id: true },
+    });
     if (!current) throw new AppError({ code: 'SERVICE_NOT_FOUND' });
     const changed = await tx!.service.updateMany({
       where: { id: params.id, revision: expected },
@@ -87,9 +101,13 @@ export const PATCH = defineV2Route({
     const service = await tx!.service.findUniqueOrThrow({
       where: { id: params.id },
       select: {
-        id: true, revision: true, serviceNotificationChannels: true,
-        serviceNotifyOnTriggered: true, serviceNotifyOnAck: true,
-        serviceNotifyOnResolved: true, serviceNotifyOnSlaBreach: true,
+        id: true,
+        revision: true,
+        serviceNotificationChannels: true,
+        serviceNotifyOnTriggered: true,
+        serviceNotifyOnAck: true,
+        serviceNotifyOnResolved: true,
+        serviceNotifyOnSlaBreach: true,
       },
     });
     await logV2Audit({

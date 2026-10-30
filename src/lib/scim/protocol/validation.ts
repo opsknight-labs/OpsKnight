@@ -1,5 +1,5 @@
 /* eslint-disable security/detect-object-injection -- Attribute keys are restricted by strict SCIM schemas and explicit path allowlists. */
-import { z } from 'zod';
+import { z } from 'zod/v3';
 
 export class ScimFailure extends Error {
   constructor(

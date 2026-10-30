@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getToken, type JWT } from 'next-auth/jwt';
-import { z } from 'zod';
+import { z } from 'zod/v3';
 
 import { getRequestActorContext } from '@/lib/request-actor-context';
 import { getNextAuthSecret } from '@/lib/secret-manager';

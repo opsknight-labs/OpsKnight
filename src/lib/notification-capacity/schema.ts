@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import { HARD_LIMITS } from './hard-limits';
 
 export const capacityModeSchema = z.enum(['AUTO', 'CUSTOM']);

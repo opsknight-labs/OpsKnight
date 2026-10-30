@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import { normalizeOidcIssuer } from '@/lib/oidc/issuer-migration';
 
 export const roleRuleSchema = z

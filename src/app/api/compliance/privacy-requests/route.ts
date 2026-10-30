@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server';
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import type { PrivacyRequestStatus, PrivacyRequestType } from '@prisma/client';
 import { CAPABILITIES } from '@/lib/authorization';
 import { assertCapability } from '@/lib/rbac';

@@ -1,6 +1,8 @@
 # MCP development quickstart
 
-This feature is in development and disabled by default. It is not yet certified for production, external clients or multi-replica deployments. See [architecture and outstanding work](../../operate/mcp/architecture.md).
+For the complete domain-independent administrator, user, proxy and troubleshooting steps, see [Self-hosted setup](self-hosted-setup.md).
+
+MCP is disabled by default and is turned on by an administrator in one click. It is not yet certified for production capacity or against specific external clients; two-replica shared-state behavior is checked locally but is not a high-availability claim. See [architecture and outstanding work](../../operate/mcp/architecture.md).
 
 For a repeatable local check, install the locked dependencies on Node 20 (`npm ci --legacy-peer-deps`), start Docker, then run `npm run check:mcp:local`. The command creates its own PostgreSQL 16 container bound to loopback, installs all migrations into fresh test/browser databases, generates disposable secrets, runs typecheck, MCP unit/database/coverage checks, builds the production app and tests native consent/read/revoke in Chromium, Firefox and WebKit. It prints a private temporary evidence directory outside git and removes its own server/container on exit. Linux hosts need Playwright's system dependencies installed first. This local check does not satisfy final-SHA release certification.
 
@@ -10,11 +12,29 @@ Upgrading from the earlier `MCP_TOKEN_HASH_SECRET` implementation changes the cr
 
 The local evidence directory also contains `query-profile.json`: aggregate statement counts for discovery, single reads, joined incident context, a three-step plan and four concurrent searches against the owned small fixture. For an existing disposable local test database, set `MCP_QUERY_PROFILE_OUTPUT` to an absolute JSON path outside the repository and run `npm run test:mcp:db`. The query-profile test resets test data and accepts only a loopback PostgreSQL database whose name ends in `_test`; use a dedicated database. The profile does not record SQL text, parameters, credentials or business content, and does not certify production contention or capacity.
 
+## Add the server and sign in
+
+After the application and database migration are deployed, an administrator opens **Settings → Integrations & ChatOps → MCP (AI Assistants)**, enables MCP and **Allow assistants to register automatically**, reviews the maximum scopes, and saves the policy. Start with `incidents:read services:read schedules:read` and writes disabled. The page provides a copyable command using the configured App URL.
+
+Each Claude Code user can then run:
+
+```sh
+claude mcp add --scope user --transport http opsknight https://YOUR-OPSKNIGHT-HOST/mcp
+```
+
+Start Claude Code, enter `/mcp`, select OpsKnight and authenticate in the browser. No manual client ID, callback port or client secret is needed. The client registers its own exact redirect URI, creates a PKCE challenge and starts native OpsKnight login/consent. Each user receives an independent grant constrained by their current permissions and the scope ceiling. A registration is not a grant and does not authenticate the user or verify the assistant's claimed name.
+
+For ChatGPT, add the same remote URL as a custom MCP server with OAuth. Use dynamic client registration when offered a registration choice. Client ID metadata documents (CIMD) remain a separate opt-in trust policy; they are not required for this flow. Current [MCP client registration guidance](https://modelcontextprotocol.io/specification/2026-07-28/basic/authorization/client-registration) prefers CIMD, with DCR retained for compatibility. To use ChatGPT CIMD, explicitly allow its metadata host and review the scope ceiling in MCP settings. The server selects public `none` authentication only when the document explicitly supports it; `private_key_jwt`-only clients remain unsupported. The advertised JWKS URL is never fetched in this public-client flow. Finish native sign-in and consent before testing tools. Actual host compatibility remains subject to its declared protocol support; this server targets protocol revision 2026-07-28.
+
+If an older connection cached the missing-registration error, restart the client and reconnect after the deployment and policy change. The authorization-server discovery document should now contain `registration_endpoint` ending in `/oauth/mcp/register`. Disabling automatic connections removes that advertisement and blocks existing dynamically registered clients immediately. Manual registration is retained as an advanced option for clients that require a predefined identity.
+
+Existing installations retain automatic registration **off** after the additive migration. Roll out the new application to all replicas before enabling it. Before rolling back to application code that does not recognize dynamic-client policy, disable MCP and revoke the dynamically registered client records (`McpClient.dynamicRegistration = true`, setting their `revokedAt`) while the new schema/code is available. Only then roll back and re-enable supported connections. Older code recognizes client revocation but cannot enforce the new registration scope ceiling. Keep the additive columns during rollback.
+
 For manual development:
 
 1. Install the locked dependencies on Node 20 using `npm ci --legacy-peer-deps`; generate Prisma and deploy migrations using the existing safe migration process. Back up a populated database first.
 2. No MCP environment variables are needed. In **Settings → System**, set the **App URL** to the HTTPS address users open OpsKnight on (an origin without a path; plain HTTP is accepted only on localhost). MCP builds its endpoint, OAuth issuer and protected-resource metadata from it. MCP credentials are hashed with a key derived from the existing application encryption key, so there is no separate MCP secret: every replica that shares the encryption key accepts the same connections. Promoting a new active encryption key disconnects every MCP client (users reconnect); keeping an old key for decryption only does not. Administrators can also disconnect everyone at once with **Revoke all MCP connections** under **Credential security** on the MCP page. The MCP page lists any configuration problem and refuses to enable MCP until it is fixed.
-3. Sign in as an active administrator. Open **Settings → Integrations & ChatOps → MCP (AI Assistants)**, configure budgets, and register the exact client redirect URI and allowed scopes. Start with `incidents:read services:read schedules:read`; leave writes disabled until parity certification.
+3. Sign in as an active administrator. Open **Settings → Integrations & ChatOps → MCP (AI Assistants)**, configure budgets and automatic assistant connections. Use manual client registration only for clients that need it. Start with `incidents:read services:read schedules:read`; leave writes disabled until parity certification.
 4. Enable MCP for development. Discover the resource at `/.well-known/oauth-protected-resource/mcp` and its authorization server at `/.well-known/oauth-authorization-server/oauth/mcp`.
 5. Use Authorization Code with PKCE S256, a fresh state value and `resource=<canonical origin>/mcp`. Sign in and explicitly accept the displayed scopes. The client must validate `state` and `iss` on return. Exchange the code at `/oauth/mcp/token`, including the same resource, redirect URI and code verifier. Refresh rotates the credential; reuse revokes the grant.
 6. POST modern MCP requests to `/mcp`. Supply the protocol-version, method and applicable name headers, plus required per-request protocol version, client info and capabilities metadata. Use the official SDK to encode the complete envelope. There is no initialize handshake, session ID or GET event stream.
@@ -35,4 +55,4 @@ After approval, call `runbook_execute_approved` with only `previewId` and a stab
 
 The local checker now tests native two-user review as well as consent/read/revocation in three browsers. Its production build defaults to a 6 GB Node heap unless `NODE_OPTIONS` is explicitly set; run heavy builds and full unit suites sequentially on resource-constrained hosts.
 
-No ChatGPT, Claude, Cursor or VS Code compatibility is claimed yet. CIMD, external issuers, machine grants, stdio, approvals for other sensitive domains, Tasks and Apps are pending. Do not substitute REST tokens or disable resource validation to work around a host compatibility failure.
+No ChatGPT, Claude, Cursor or VS Code compatibility is claimed yet. CIMD (client metadata documents) and durable Tasks for approved runbook execution are implemented. External issuers, machine grants, stdio, approvals for other sensitive domains and Apps are pending. Do not substitute REST tokens or disable resource validation to work around a host compatibility failure.

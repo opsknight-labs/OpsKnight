@@ -233,14 +233,14 @@ describe('intelligence data model contracts', () => {
 
   it('adds no table partitioning until measurements justify it', () => {
     const migration = read(
-      join(root, 'prisma/migrations/20261029000100_intelligence_foundation/migration.sql')
+      join(root, 'prisma/migrations/20261030000200_intelligence_foundation/migration.sql')
     );
     expect(migration).not.toMatch(/PARTITION\s+BY/i);
   });
 
   it('makes policy versions and decision events append-only in the database', () => {
     const migration = read(
-      join(root, 'prisma/migrations/20261029000100_intelligence_foundation/migration.sql')
+      join(root, 'prisma/migrations/20261030000200_intelligence_foundation/migration.sql')
     );
     for (const table of [
       'IntelligencePolicyVersion',
@@ -255,7 +255,7 @@ describe('intelligence data model contracts', () => {
 
   it('never lets an unavailable extension fail a deployment', () => {
     const migration = read(
-      join(root, 'prisma/migrations/20261029000100_intelligence_foundation/migration.sql')
+      join(root, 'prisma/migrations/20261030000200_intelligence_foundation/migration.sql')
     );
     expect(migration).toMatch(/CREATE EXTENSION IF NOT EXISTS pg_trgm;\s*EXCEPTION WHEN OTHERS/);
     expect(migration).not.toMatch(/CREATE EXTENSION[^;]*\bvector\b/i);

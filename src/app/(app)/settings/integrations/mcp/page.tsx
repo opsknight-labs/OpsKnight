@@ -15,16 +15,26 @@ import { getUserPermissions } from '@/lib/rbac';
 import { getMcpConfigurationStatus } from '@/lib/mcp/auth/config';
 import { requireMcp } from '@/lib/mcp/core/errors';
 import DetailHeroBanner from '@/components/ui/DetailHeroBanner';
+import { InlineNotice } from '@/components/ui/InlineNotice';
 import { Badge } from '@/components/ui/shadcn/badge';
 import { Button } from '@/components/ui/shadcn/button';
 import { Input } from '@/components/ui/shadcn/input';
 import { Label } from '@/components/ui/shadcn/label';
 import { SettingsSection } from '@/components/settings/layout/SettingsSection';
 import McpCopyField from '@/components/settings/mcp/McpCopyField';
+import McpPolicyForm from '@/components/settings/mcp/McpPolicyForm';
+import McpAppUrlSetup from '@/components/settings/mcp/McpAppUrlSetup';
+import McpQuickSetup from '@/components/settings/mcp/McpQuickSetup';
+import McpConnectionTest from '@/components/settings/mcp/McpConnectionTest';
+import { DEFAULT_ASSISTANT_SCOPES } from '@/lib/mcp/auth/client-policy';
+import { describeMcpScope, supportedMcpScopes } from '@/lib/mcp/auth/scopes';
 import {
+  enableMcpQuickSetup,
   registerMcpClient,
+  restoreMcpClient,
   revokeAllMcpConnections,
   revokeMcpAccess,
+  testMcpConnection,
   updateMcpPolicy,
 } from './actions';
 
@@ -91,7 +101,7 @@ export default async function McpSettings({
   const { cursor, q = '' } = await searchParams;
   requireMcp(!cursor || /^[A-Za-z0-9_-]{1,128}$/.test(cursor), 'MCP_INVALID_CURSOR');
   requireMcp(q.length <= 100, 'MCP_INVALID_SEARCH');
-  const [configuration, policy, clients, grants, activeGrants] = await Promise.all([
+  const [configuration, policy, clients, grants, activeGrants, systemSettings] = await Promise.all([
     getMcpConfigurationStatus(),
     prisma.mcpPolicy.findUnique({ where: { id: 'default' } }),
     permissions.isAdmin
@@ -99,7 +109,14 @@ export default async function McpSettings({
           where: { name: { contains: q, mode: 'insensitive' } },
           take: 50,
           orderBy: { id: 'asc' },
-          select: { id: true, name: true, revokedAt: true, scopes: true, metadataUrl: true },
+          select: {
+            id: true,
+            name: true,
+            revokedAt: true,
+            scopes: true,
+            metadataUrl: true,
+            dynamicRegistration: true,
+          },
         })
       : Promise.resolve([]),
     prisma.mcpGrant.findMany({
@@ -116,6 +133,7 @@ export default async function McpSettings({
         scopes: true,
         revokedAt: true,
         expiresAt: true,
+        lastUsedAt: true,
         client: { select: { name: true } },
       },
     }),
@@ -126,10 +144,39 @@ export default async function McpSettings({
         ...(permissions.isAdmin ? {} : { userId: permissions.id }),
       },
     }),
+    permissions.isAdmin
+      ? prisma.systemSettings.findUnique({ where: { id: 'default' }, select: { updatedAt: true } })
+      : Promise.resolve(null),
   ]);
+  const people = new Map(
+    (
+      await prisma.user.findMany({
+        where: { id: { in: [...new Set(grants.map(grant => grant.userId))] } },
+        select: { id: true, name: true, email: true },
+      })
+    ).map(person => [person.id, person])
+  );
   const enabled = policy?.enabled ?? false;
   const ready = configuration.issues.length === 0;
+  const automaticReady = ready && enabled && Boolean(policy?.dcrEnabled && policy.dcrScopes.length);
   const endpoint = configuration.origin ? `${configuration.origin}/mcp` : null;
+  const cursorConfig = endpoint
+    ? JSON.stringify({ mcpServers: { opsknight: { url: endpoint } } }, null, 2)
+    : null;
+  const vscodeCommand = endpoint
+    ? `code --add-mcp '${JSON.stringify({ name: 'opsknight', type: 'http', url: endpoint }).replaceAll("'", "'\\''")}'`
+    : null;
+  const selectedScopes = new Set(
+    policy?.dcrScopes.length ? policy.dcrScopes : DEFAULT_ASSISTANT_SCOPES
+  );
+  const scopeChoices = [...supportedMcpScopes()].filter(scope => scope !== 'admin:manage').sort();
+  const claudeCommand = endpoint
+    ? `claude mcp add --scope user --transport http opsknight '${endpoint.replaceAll("'", "'\\''")}'`
+    : null;
+  const doctorCommand = endpoint
+    ? `node scripts/mcp/doctor.cjs '${endpoint.replaceAll("'", "'\\''")}'`
+    : null;
+  const needsSetup = permissions.isAdmin && !enabled;
   const grantsTitle = permissions.isAdmin ? 'Client grants' : 'Your grants';
 
   return (
@@ -224,189 +271,287 @@ export default async function McpSettings({
               <li key={issue}>{issue}</li>
             ))}
           </ul>
-          <Button asChild variant="outline" size="sm">
-            <Link href="/settings/system">Open System settings</Link>
-          </Button>
+          {!configuration.origin ? (
+            <McpAppUrlSetup revision={systemSettings?.updatedAt.toISOString() ?? null} />
+          ) : (
+            <Button asChild variant="outline" size="sm">
+              <Link href="/settings/system">Open System settings</Link>
+            </Button>
+          )}
         </section>
       )}
 
-      <section aria-label="Connection status">
+      {needsSetup && (
         <SettingsSection
-          title="Connection"
-          description="Give assistants this endpoint. They sign users in with OAuth (authorization code with PKCE) and receive only the scopes each user approves."
+          title="Turn on AI assistant access"
+          description="Let your team connect Claude, ChatGPT, Cursor and other assistants to OpsKnight."
         >
-          <dl className="divide-y divide-border">
-            <div className="grid gap-2 py-4 md:grid-cols-[40%_1fr] md:gap-6">
-              <dt className="text-sm font-medium">Status</dt>
-              <dd className="text-sm">
-                <strong>Status:</strong> {enabled ? 'Enabled' : 'Disabled'}
-              </dd>
-            </div>
-            <div className="grid gap-2 py-4 md:grid-cols-[40%_1fr] md:gap-6">
-              <dt className="space-y-1">
-                <span className="block text-sm font-medium">Remote endpoint</span>
-                <span className="block text-sm text-muted-foreground">
-                  Built from the App URL in{' '}
-                  <Link className="underline" href="/settings/system">
-                    Settings → System
-                  </Link>
-                  . No environment variables are needed.
-                </span>
-              </dt>
-              <dd className="min-w-0">
-                {endpoint ? (
-                  <McpCopyField value={endpoint} label="MCP endpoint" />
-                ) : (
-                  <span className="text-sm text-muted-foreground">Not configured</span>
-                )}
-              </dd>
-            </div>
-            <div className="grid gap-2 py-4 md:grid-cols-[40%_1fr] md:gap-6">
-              <dt className="text-sm font-medium">Protocol</dt>
-              <dd className="text-sm text-muted-foreground">
-                MCP 2026-07-28 over streamable HTTP. Credentials belong only in the assistant&apos;s
-                secure credential store. Compatibility with specific assistants is still being
-                certified.
-              </dd>
-            </div>
-          </dl>
+          <div className="space-y-4 py-4 text-sm">
+            <ul className="list-disc space-y-1 pl-6 text-muted-foreground">
+              <li>Read-only to start: incidents, services and on-call schedules.</li>
+              <li>
+                Each person adds the URL, signs in with their own account and approves once. Their
+                OpsKnight permissions always apply.
+              </li>
+              <li>
+                You can disconnect anyone, or everyone, at any time. No extra secrets to manage.
+              </li>
+            </ul>
+            <McpQuickSetup action={enableMcpQuickSetup} blocked={!ready} />
+            {!ready && (
+              <p className="text-muted-foreground">
+                Fix the problems above first. This button unlocks as soon as they are resolved.
+              </p>
+            )}
+          </div>
         </SettingsSection>
-      </section>
+      )}
+
+      {!permissions.isAdmin && !enabled && (
+        <InlineNotice tone="info" title="AI assistant access is not turned on yet">
+          <p>
+            Ask an OpsKnight administrator to enable it in Settings → Integrations & ChatOps → MCP
+            (AI Assistants).
+          </p>
+        </InlineNotice>
+      )}
+
+      {endpoint && (enabled || permissions.isAdmin) && (
+        <SettingsSection
+          title="Connect your assistant"
+          description="Add this URL to your assistant, sign in once and approve. That is all."
+        >
+          <div className="space-y-4 py-4 text-sm">
+            <div className="space-y-2">
+              <p className="font-medium">MCP server URL</p>
+              <McpCopyField value={endpoint} label="MCP endpoint" />
+            </div>
+            {enabled && !automaticReady && permissions.isAdmin && (
+              <InlineNotice tone="warning" title="Automatic connections are off">
+                <p>
+                  Assistants cannot connect by URL alone yet. Turn on Automatic connections below
+                  and save.
+                </p>
+              </InlineNotice>
+            )}
+            <div className="space-y-2">
+              <details className="rounded-md border border-border p-3" open>
+                <summary className="cursor-pointer font-medium">Claude Code</summary>
+                <div className="space-y-2 pt-3">
+                  <McpCopyField value={claudeCommand!} label="Claude Code setup command" />
+                  <p className="text-muted-foreground">
+                    Run it in your terminal, then use <code>/mcp</code> to sign in.
+                  </p>
+                </div>
+              </details>
+              <details className="rounded-md border border-border p-3">
+                <summary className="cursor-pointer font-medium">Claude and ChatGPT apps</summary>
+                <p className="pt-3 text-muted-foreground">
+                  Open the app&apos;s connectors or integrations settings, add a custom connector,
+                  paste the URL above and choose OAuth. Menu names vary by app version, and some
+                  plans require an administrator to allow custom connectors.
+                </p>
+              </details>
+              <details className="rounded-md border border-border p-3">
+                <summary className="cursor-pointer font-medium">Cursor</summary>
+                <div className="space-y-2 pt-3">
+                  <p className="text-muted-foreground">
+                    Add this to <code>~/.cursor/mcp.json</code>, then sign in when prompted.
+                  </p>
+                  <pre className="overflow-x-auto rounded-md border border-border bg-muted/40 p-3 text-xs">
+                    {cursorConfig}
+                  </pre>
+                </div>
+              </details>
+              <details className="rounded-md border border-border p-3">
+                <summary className="cursor-pointer font-medium">VS Code</summary>
+                <div className="space-y-2 pt-3">
+                  <McpCopyField value={vscodeCommand!} label="VS Code setup command" />
+                </div>
+              </details>
+            </div>
+            <p className="text-muted-foreground">
+              You stay signed in while you use the assistant
+              {policy ? ` (${policy.sessionIdleDays} days of inactivity signs you out)` : ''}.
+              Manage or disconnect access under{' '}
+              {permissions.isAdmin ? 'Client grants' : 'Your grants'} below.
+            </p>
+            {permissions.isAdmin && (
+              <div className="space-y-2 border-t border-border pt-4">
+                <p className="font-medium">Check your setup</p>
+                <McpConnectionTest action={testMcpConnection} />
+                <details className="pt-1 text-muted-foreground">
+                  <summary className="cursor-pointer">Test from another machine</summary>
+                  <div className="space-y-2 pt-2">
+                    <p>
+                      Run this read-only check anywhere that can reach your server, for example a
+                      laptop on the public internet. It creates no clients, tokens or grants.
+                    </p>
+                    <McpCopyField value={doctorCommand!} label="MCP setup check command" />
+                  </div>
+                </details>
+              </div>
+            )}
+          </div>
+        </SettingsSection>
+      )}
 
       {permissions.isAdmin && (
         <>
-          <form action={updateMcpPolicy}>
-            <SettingsSection
-              title="Access and workload policy"
-              description="What assistants may do. Every change an assistant proposes still needs a different administrator to approve it in OpsKnight."
-              footer={
-                <div className="flex justify-end">
-                  <Button type="submit" size="sm">
-                    Save policy
-                  </Button>
-                </div>
-              }
-            >
-              <ToggleRow
-                name="enabled"
-                label="Enable MCP"
-                description="Uncheck for an immediate MCP-only shutdown; the rest of OpsKnight is unaffected."
-                defaultChecked={enabled}
-              />
-              <ToggleRow
-                name="writesEnabled"
-                label="Allow reviewed routine mutations and approved runbook executions"
-                description="Assistants can prepare changes; each one waits for approval by a different administrator."
-                defaultChecked={policy?.writesEnabled ?? false}
-              />
-              <ToggleRow
-                name="sensitiveReadsEnabled"
-                label="Allow reviewed sensitive configuration reads"
-                description="Redacted, read-only, and limited to what the signed-in user can already see."
-                defaultChecked={policy?.sensitiveReadsEnabled ?? false}
-              />
-              <fieldset className="space-y-4 border-b border-border py-4">
-                <legend className="text-sm font-medium">Workload limits</legend>
-                <div className="grid gap-4 sm:grid-cols-3">
-                  <div className="space-y-1.5">
-                    <Label htmlFor="mcp-max-in-flight">Concurrent requests per process</Label>
-                    <Input
-                      id="mcp-max-in-flight"
-                      name="maxInFlight"
-                      type="number"
-                      min="1"
-                      max="16"
-                      defaultValue={policy?.maxInFlight ?? 4}
-                      required
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label htmlFor="mcp-max-operations">Operations per request</Label>
-                    <Input
-                      id="mcp-max-operations"
-                      name="maxOperations"
-                      type="number"
-                      min="1"
-                      max="16"
-                      defaultValue={policy?.maxOperations ?? 8}
-                      required
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label htmlFor="mcp-rpm">Weighted operations per minute per grant</Label>
-                    <Input
-                      id="mcp-rpm"
-                      name="requestsPerMinute"
-                      type="number"
-                      min="1"
-                      max="600"
-                      defaultValue={policy?.requestsPerMinute ?? 60}
-                      required
-                    />
-                  </div>
-                </div>
-              </fieldset>
-              <fieldset className="space-y-4 py-4">
-                <legend className="text-sm font-medium">Client ID metadata documents</legend>
-                <label className="flex cursor-pointer items-start gap-3">
-                  <input
-                    type="checkbox"
-                    name="cimdEnabled"
-                    defaultChecked={policy?.cimdEnabled ?? false}
-                    className={checkboxClass}
-                  />
-                  <span className="text-sm">
-                    Allow clients identified by an HTTPS metadata document URL
+          <McpPolicyForm action={updateMcpPolicy}>
+            <fieldset className="space-y-4 border-b border-border py-4">
+              <legend className="text-sm font-medium">Assistant access</legend>
+              <label className="flex cursor-pointer items-start gap-3">
+                <input
+                  type="checkbox"
+                  name="enabled"
+                  defaultChecked={enabled}
+                  className={checkboxClass}
+                />
+                <span className="space-y-1">
+                  <span className="block text-sm font-medium">Enable MCP</span>
+                  <span className="block text-sm text-muted-foreground">
+                    Uncheck for an immediate MCP-only shutdown; the rest of OpsKnight is unaffected.
                   </span>
-                </label>
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <div className="space-y-1.5">
-                    <Label htmlFor="mcp-cimd-hosts">
-                      Trusted hosts (one exact DNS name per line)
-                    </Label>
-                    <textarea
-                      id="mcp-cimd-hosts"
-                      className={textareaClass}
-                      name="cimdAllowedHosts"
-                      rows={3}
-                      maxLength={4096}
-                      defaultValue={(policy?.cimdAllowedHosts ?? []).join('\n')}
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label htmlFor="mcp-cimd-scopes">
-                      Maximum scopes for these clients (space separated)
-                    </Label>
-                    <Input
-                      id="mcp-cimd-scopes"
-                      name="cimdScopes"
-                      maxLength={2048}
-                      defaultValue={(policy?.cimdScopes ?? []).join(' ')}
-                    />
-                  </div>
+                </span>
+              </label>
+              <label className="flex cursor-pointer items-start gap-3">
+                <input
+                  type="checkbox"
+                  name="dcrEnabled"
+                  defaultChecked={policy?.dcrEnabled ?? false}
+                  className={checkboxClass}
+                />
+                <span className="space-y-1">
+                  <span className="block text-sm font-medium">Automatic connections</span>
+                  <span className="block text-sm text-muted-foreground">
+                    Assistants connect with just the URL: no client ID, secret or callback setup.
+                    Each person still signs in and approves, and their own permissions apply. Turn
+                    off to disconnect every automatically connected assistant immediately.
+                  </span>
+                </span>
+              </label>
+              <div className="space-y-2">
+                <p className="text-sm font-medium">What assistants may do</p>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {scopeChoices.map(scope => (
+                    <label key={scope} className="flex cursor-pointer items-start gap-2 text-sm">
+                      <input
+                        type="checkbox"
+                        name="dcrScopes"
+                        value={scope}
+                        defaultChecked={selectedScopes.has(scope)}
+                        className={checkboxClass}
+                      />
+                      <span>{describeMcpScope(scope)}</span>
+                    </label>
+                  ))}
                 </div>
-                <p className="text-sm text-muted-foreground">
-                  Documents are fetched only from listed hosts over HTTPS to public addresses,
-                  without redirects, and cannot request more than these scopes. Users still consent
-                  to each grant; removing a host revokes its clients immediately.
+              </div>
+              <div className="max-w-xs space-y-1.5">
+                <Label htmlFor="mcp-idle-days">Stay signed in for (days of inactivity)</Label>
+                <Input
+                  id="mcp-idle-days"
+                  name="sessionIdleDays"
+                  type="number"
+                  min="1"
+                  max="90"
+                  defaultValue={policy?.sessionIdleDays ?? 30}
+                  required
+                />
+                <p className="text-xs text-muted-foreground">
+                  Using the assistant keeps it signed in, up to 90 days in total. Changing a
+                  password or disconnecting always signs it out immediately.
                 </p>
-              </fieldset>
-            </SettingsSection>
-          </form>
-
-          <form action={registerMcpClient}>
-            <SettingsSection
-              title="Register a client"
-              description="Register each assistant with its exact OAuth redirect URI and the most scopes it may request."
-              footer={
-                <div className="flex justify-end">
-                  <Button type="submit" size="sm">
-                    Register client
-                  </Button>
+              </div>
+            </fieldset>
+            <details className="py-4">
+              <summary className="cursor-pointer text-sm font-medium">Advanced</summary>
+              <div className="space-y-2 pt-2">
+                <ToggleRow
+                  name="writesEnabled"
+                  label="Allow reviewed routine mutations and approved runbook executions"
+                  description="Assistants can prepare changes; each one waits for approval by a different administrator."
+                  defaultChecked={policy?.writesEnabled ?? false}
+                />
+                <ToggleRow
+                  name="sensitiveReadsEnabled"
+                  label="Allow reviewed sensitive configuration reads"
+                  description="Redacted, read-only, and limited to what the signed-in user can already see."
+                  defaultChecked={policy?.sensitiveReadsEnabled ?? false}
+                />
+                <div className="space-y-1.5 border-b border-border py-4">
+                  <Label htmlFor="mcp-cimd-hosts">
+                    Only trust these assistant hosts (optional, one DNS name per line)
+                  </Label>
+                  <textarea
+                    id="mcp-cimd-hosts"
+                    className={textareaClass}
+                    name="cimdAllowedHosts"
+                    rows={3}
+                    maxLength={4096}
+                    defaultValue={(policy?.cimdAllowedHosts ?? []).join('\n')}
+                  />
+                  <p className="text-sm text-muted-foreground">
+                    Leave empty to allow any assistant that identifies with an HTTPS metadata
+                    document. Documents are fetched without redirects from public addresses only.
+                  </p>
                 </div>
-              }
-            >
-              <div className="grid gap-4 py-4 sm:grid-cols-2">
+                <fieldset className="space-y-4 py-4">
+                  <legend className="text-sm font-medium">Workload limits</legend>
+                  <div className="grid gap-4 sm:grid-cols-3">
+                    <div className="space-y-1.5">
+                      <Label htmlFor="mcp-max-in-flight">Concurrent requests per process</Label>
+                      <Input
+                        id="mcp-max-in-flight"
+                        name="maxInFlight"
+                        type="number"
+                        min="1"
+                        max="16"
+                        defaultValue={policy?.maxInFlight ?? 4}
+                        required
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label htmlFor="mcp-max-operations">Operations per request</Label>
+                      <Input
+                        id="mcp-max-operations"
+                        name="maxOperations"
+                        type="number"
+                        min="1"
+                        max="16"
+                        defaultValue={policy?.maxOperations ?? 8}
+                        required
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label htmlFor="mcp-rpm">Weighted operations per minute per grant</Label>
+                      <Input
+                        id="mcp-rpm"
+                        name="requestsPerMinute"
+                        type="number"
+                        min="1"
+                        max="600"
+                        defaultValue={policy?.requestsPerMinute ?? 60}
+                        required
+                      />
+                    </div>
+                  </div>
+                </fieldset>
+              </div>
+            </details>
+          </McpPolicyForm>
+
+          <details className="rounded-xl border border-border p-4">
+            <summary className="cursor-pointer text-sm font-medium">
+              Manual client registration (advanced)
+            </summary>
+            <form action={registerMcpClient} className="space-y-4 pt-4">
+              <p className="text-sm text-muted-foreground">
+                Only for clients that require a preconfigured OAuth identity. Most assistants use
+                automatic connections.
+              </p>
+              <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-1.5">
                   <Label htmlFor="mcp-client-name">Display name</Label>
                   <Input id="mcp-client-name" name="name" required maxLength={100} />
@@ -421,18 +566,31 @@ export default async function McpSettings({
                     placeholder="http://127.0.0.1:8765/callback"
                   />
                 </div>
-                <div className="space-y-1.5 sm:col-span-2">
-                  <Label htmlFor="mcp-client-scopes">Allowed scopes (space separated)</Label>
-                  <Input
-                    id="mcp-client-scopes"
-                    name="scopes"
-                    required
-                    placeholder="incidents:read services:read schedules:read"
-                  />
-                </div>
+                <fieldset className="space-y-2 sm:col-span-2">
+                  <legend className="text-sm font-medium">Allowed scopes</legend>
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    {scopeChoices.map(scope => (
+                      <label key={scope} className="flex cursor-pointer items-start gap-2 text-sm">
+                        <input
+                          type="checkbox"
+                          name="scopes"
+                          value={scope}
+                          defaultChecked={DEFAULT_ASSISTANT_SCOPES.includes(scope)}
+                          className={checkboxClass}
+                        />
+                        <span>{describeMcpScope(scope)}</span>
+                      </label>
+                    ))}
+                  </div>
+                </fieldset>
               </div>
-            </SettingsSection>
-          </form>
+              <div className="flex justify-end">
+                <Button type="submit" size="sm">
+                  Register client
+                </Button>
+              </div>
+            </form>
+          </details>
         </>
       )}
 
@@ -457,10 +615,18 @@ export default async function McpSettings({
               {clients.length === 0 && (
                 <p className="text-sm text-muted-foreground">No clients registered.</p>
               )}
+              {clients.length === 50 && (
+                <p className="text-sm text-muted-foreground">
+                  Showing the first 50 clients. Use the search above to find a specific one.
+                </p>
+              )}
               {clients.map(client => (
                 <article key={client.id} className="space-y-2 rounded-lg border border-border p-3">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <h3 className="text-sm font-semibold">{client.name}</h3>
+                    {client.dynamicRegistration && (
+                      <Badge variant="outline">Automatically registered</Badge>
+                    )}
                     {client.revokedAt ? (
                       <Badge variant="outline">Revoked</Badge>
                     ) : client.metadataUrl ? (
@@ -471,6 +637,14 @@ export default async function McpSettings({
                     Client ID: <code className="font-mono text-foreground">{client.id}</code>
                   </p>
                   <ScopeBadges scopes={client.scopes} />
+                  {client.revokedAt && (
+                    <form action={restoreMcpClient}>
+                      <input type="hidden" name="id" value={client.id} />
+                      <Button type="submit" variant="outline" size="sm">
+                        Allow client again
+                      </Button>
+                    </form>
+                  )}
                   {!client.revokedAt && (
                     <form action={revokeMcpAccess}>
                       <input type="hidden" name="kind" value="client" />
@@ -497,13 +671,33 @@ export default async function McpSettings({
           title={grantsTitle}
           description="Each grant is one user's consent to one assistant. Revoking takes effect on the next request."
         >
+          {permissions.isAdmin && (
+            <p className="pt-4 text-sm text-muted-foreground">
+              Changes to MCP settings and connections are recorded in the{' '}
+              <Link className="underline" href="/audit">
+                audit log
+              </Link>
+              .
+            </p>
+          )}
           <div className="space-y-3 py-4">
             {grants.length === 0 && <p className="text-sm text-muted-foreground">No grants.</p>}
             {grants.slice(0, 25).map(grant => (
               <article key={grant.id} className="space-y-2 rounded-lg border border-border p-3">
                 <h3 className="text-sm font-semibold">{grant.client.name}</h3>
                 <p className="break-all text-xs text-muted-foreground">
-                  Principal ID: {grant.userId} · Expires {grant.expiresAt.toISOString()}
+                  {people.get(grant.userId)?.name ??
+                    people.get(grant.userId)?.email ??
+                    grant.userId}
+                  {people.get(grant.userId)?.name && people.get(grant.userId)?.email
+                    ? ` (${people.get(grant.userId)!.email})`
+                    : ''}
+                  {' · '}
+                  {grant.lastUsedAt
+                    ? `Last used ${grant.lastUsedAt.toLocaleDateString('en-US', { dateStyle: 'medium' })}`
+                    : 'Not used yet'}
+                  {' · '}Signed in until{' '}
+                  {grant.expiresAt.toLocaleDateString('en-US', { dateStyle: 'medium' })}
                 </p>
                 <ScopeBadges scopes={grant.scopes} />
                 {grant.revokedAt ? (

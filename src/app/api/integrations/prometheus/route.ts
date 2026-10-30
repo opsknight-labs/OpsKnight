@@ -1,6 +1,6 @@
 import { ingestionErrorResponse } from '@/lib/ingestion/http';
 import { NextRequest } from 'next/server';
-import { ZodError } from 'zod';
+import { ZodError } from 'zod/v3';
 import prisma from '@/lib/prisma';
 import { processIntegrationBatch } from '@/lib/events';
 import { transformPrometheusToEvent, PrometheusAlert } from '@/lib/integrations/prometheus';

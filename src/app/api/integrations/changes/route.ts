@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import { createIntegrationHandler } from '@/lib/integrations/handler';
 import { recordChange } from '@/lib/intelligence/changes/service';
 
@@ -38,7 +38,8 @@ export const POST = createIntegrationHandler<z.infer<typeof bodySchema>>(
       version: payload.version,
       url: payload.url,
       dedupKey: payload.dedupKey,
-      occurredAt: payload.occurredAt === undefined ? new Date() : (payload.occurredAt as string | number),
+      occurredAt:
+        payload.occurredAt === undefined ? new Date() : (payload.occurredAt as string | number),
     });
     return { action: result.status === 'created' ? 'change_recorded' : 'change_duplicate' };
   }

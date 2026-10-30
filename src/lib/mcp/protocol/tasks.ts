@@ -1,6 +1,6 @@
 import 'server-only';
 import { randomBytes } from 'node:crypto';
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import prisma from '@/lib/prisma';
 import { withMcpDatabase } from '@/lib/database-workload';
 import { runSerializableTransaction } from '@/lib/db-utils';

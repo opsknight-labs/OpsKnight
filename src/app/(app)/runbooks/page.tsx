@@ -28,7 +28,7 @@ import { runbookLibraryFilterSchema } from '@/lib/runbooks/schemas';
 import { buildRunbookLibraryWhere } from '@/lib/runbooks/lifecycle';
 import { isValidRunbookTag } from '@/lib/runbooks/metadata-form';
 import { getUserTimeZone } from '@/lib/timezone';
-import { z } from 'zod';
+import { z } from 'zod/v3';
 
 export const revalidate = 0;
 

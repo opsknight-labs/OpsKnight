@@ -3,7 +3,7 @@ import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/shadcn/button';
 import { Input } from '@/components/ui/shadcn/input';
 import { FormSelect } from './RunbookControls';
-import { z } from 'zod';
+import { z } from 'zod/v3';
 
 export const RUNBOOK_PAGE_SIZE = 20;
 export function runbookPageQuery(params: Record<string, string | string[] | undefined>) {

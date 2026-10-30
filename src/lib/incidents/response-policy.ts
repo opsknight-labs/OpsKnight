@@ -1,6 +1,6 @@
 import 'server-only';
 import type { IncidentUrgency, Prisma } from '@prisma/client';
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import { resolveNewIncidentSlaContract } from '@/lib/incident-sla/contract';
 import { resolveIncidentClassification, type AlertSeverity } from './classification';
 import { resolveSupportHours } from './support-hours';

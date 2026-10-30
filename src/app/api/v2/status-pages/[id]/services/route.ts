@@ -10,7 +10,7 @@ import {
   StatusPageServiceSet,
   requireStatusPageSettings,
 } from '@/lib/api-v2/status-page-settings';
-import { z } from 'zod';
+import { z } from 'zod/v3';
 export const GET = defineV2Route({
   action: AUTHORIZATION_ACTIONS.STATUS_PAGE_READ,
   paramsSchema: StatusPageParams,
@@ -57,7 +57,11 @@ export const PUT = defineV2Route({
     );
     return {
       data: result,
-      headers: { ...etagHeaders(result.revision), 'Cache-Control': 'no-store', ...(result.replayed ? { 'Idempotency-Replayed': 'true' } : {}) },
+      headers: {
+        ...etagHeaders(result.revision),
+        'Cache-Control': 'no-store',
+        ...(result.replayed ? { 'Idempotency-Replayed': 'true' } : {}),
+      },
     };
   },
 });

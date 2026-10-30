@@ -1,10 +1,7 @@
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import { IncidentStatus, Prisma } from '@prisma/client';
 import { runReadCommittedTransaction } from './db-utils';
-import {
-  getEventSideEffectLane,
-  type EventSideEffect,
-} from './event-outbox';
+import { getEventSideEffectLane, type EventSideEffect } from './event-outbox';
 import { listWarRoomProviders } from './war-room/registry';
 
 const dispatchSchema = z

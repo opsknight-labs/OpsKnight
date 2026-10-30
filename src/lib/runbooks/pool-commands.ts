@@ -1,5 +1,5 @@
 import 'server-only';
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import type { Prisma } from '@prisma/client';
 import { AppError } from '@/lib/errors';
 import { preconditionFailed } from '@/lib/api-v2/concurrency';

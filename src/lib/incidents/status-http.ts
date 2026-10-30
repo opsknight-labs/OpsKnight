@@ -2,7 +2,7 @@ import 'server-only';
 
 import type { NextRequest } from 'next/server';
 import { getServerSession } from 'next-auth';
-import { z } from 'zod';
+import { z } from 'zod/v3';
 
 import { getAuthOptions } from '@/lib/auth';
 import { jsonError, jsonOk } from '@/lib/api-response';
@@ -11,13 +11,7 @@ import { logger, withRequestContext } from '@/lib/logger';
 import { updateIncidentStatus } from '@/lib/incidents/operator-lifecycle';
 import type { IncidentLifecycleSource } from '@/lib/incidents/lifecycle';
 
-const IncidentStatusSchema = z.enum([
-  'OPEN',
-  'ACKNOWLEDGED',
-  'RESOLVED',
-  'SNOOZED',
-  'SUPPRESSED',
-]);
+const IncidentStatusSchema = z.enum(['OPEN', 'ACKNOWLEDGED', 'RESOLVED', 'SNOOZED', 'SUPPRESSED']);
 
 const StatusMutationSchema = z
   .object({

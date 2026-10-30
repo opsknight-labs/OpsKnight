@@ -1,7 +1,7 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import { parseAgentSelector } from '@/lib/runbooks/selector-input';
 import { RunbookDefinitionError, RunbookError } from '@/lib/runbooks/errors';
 import type { RunbookInput } from '@prisma/client';

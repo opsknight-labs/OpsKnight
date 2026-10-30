@@ -1,3 +1,4 @@
+import { logger } from '@/lib/logger';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { getCurrentAuthorizationActor } from '@/lib/rbac';
@@ -8,7 +9,15 @@ export const revalidate = 0;
 
 export default async function ChangeReferencePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const change = await readChangeReference(await getCurrentAuthorizationActor(), id);
+  let change;
+  try {
+    change = await readChangeReference(await getCurrentAuthorizationActor(), id);
+  } catch (error) {
+    logger.error('[Intelligence] Change source unavailable', {
+      error: error instanceof Error ? error.message : 'unknown',
+    });
+    throw error;
+  }
   if (!change) notFound();
   return (
     <article className="mx-auto max-w-3xl space-y-4 p-4 sm:p-6">

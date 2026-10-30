@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import { MCP_OPERATION_MAP } from '../catalog';
 import { callMcpOperation, type ExecutionContext } from './execution';
 import { McpBoundaryError, requireMcp } from './errors';

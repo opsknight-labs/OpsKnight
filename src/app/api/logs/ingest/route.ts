@@ -6,7 +6,7 @@ import {
   IntegrationBodyTooLargeError,
   readIntegrationBody,
 } from '@/lib/integrations/request-security';
-import { z } from 'zod';
+import { z } from 'zod/v3';
 
 const MAX_BODY_SIZE = 50 * 1024; // 50KB
 const RATE_LIMIT_WINDOW_MS = 60_000; // 1 minute
@@ -41,7 +41,8 @@ export async function POST(req: NextRequest) {
     }
 
     const parsed = ClientLogSchema.safeParse(body);
-    if (!parsed.success) return NextResponse.json({ error: 'Invalid log payload' }, { status: 400 });
+    if (!parsed.success)
+      return NextResponse.json({ error: 'Invalid log payload' }, { status: 400 });
 
     const { level, message, context } = parsed.data;
 

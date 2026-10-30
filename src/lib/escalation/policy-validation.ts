@@ -11,7 +11,7 @@
  * that needs a transaction.
  */
 import type { EscalationTargetType, Prisma } from '@prisma/client';
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import { NOTIFICATION_CHANNELS, type NotificationDeliveryChannel } from '../notification-delivery';
 
 /** A week. Long enough for any real policy, short enough to catch a typo. */
@@ -49,8 +49,7 @@ export interface ValidatedEscalationStep {
 }
 
 export type EscalationStepValidation =
-  | { valid: true; step: ValidatedEscalationStep }
-  | { valid: false; issues: EscalationStepIssue[] };
+  { valid: true; step: ValidatedEscalationStep } | { valid: false; issues: EscalationStepIssue[] };
 
 const TARGET_TYPES: readonly EscalationTargetType[] = ['USER', 'TEAM', 'SCHEDULE'];
 const conditionOperator = z.enum(['IN', 'NOT_IN', 'EQUALS', 'NOT_EQUALS']);

@@ -1,9 +1,10 @@
 import OAuth2Server from '@node-oauth/oauth2-server';
 import { randomBytes } from 'node:crypto';
-import type { Prisma } from '@prisma/client';
+import type { Prisma, McpClient } from '@prisma/client';
 import { digestMcpSecret, mcpResource } from './config';
 import { requireMcp } from '../core/errors';
-import { isCimdHostAllowed } from './cimd';
+import { effectiveMcpClientScopes } from './client-policy';
+import { MCP_ABSOLUTE_SESSION_DAYS, slideMcpExpiry } from './session-lifetime';
 
 type Database = Prisma.TransactionClient;
 type Model = OAuth2Server.AuthorizationCodeModel & OAuth2Server.RefreshTokenModel;
@@ -11,11 +12,10 @@ type Model = OAuth2Server.AuthorizationCodeModel & OAuth2Server.RefreshTokenMode
 export function createMcpOAuthModel(db: Database, onReuse: (grantId: string) => void): Model {
   // A metadata client is only as trusted as the current policy: its host must still be listed and
   // its scopes can never exceed the current ceiling, whatever copy was stored at registration.
-  const effectiveScopes = async (client: { metadataUrl: string | null; scopes: string[] }) => {
-    if (!client.metadataUrl) return client.scopes;
+  const effectiveScopes = async (client: McpClient) => {
+    if (!client.metadataUrl && !client.dynamicRegistration) return client.scopes;
     const policy = await db.mcpPolicy.findUnique({ where: { id: 'default' } });
-    if (!policy || !isCimdHostAllowed(policy, new URL(client.metadataUrl).hostname)) return null;
-    return client.scopes.filter(scope => policy.cimdScopes.includes(scope));
+    return effectiveMcpClientScopes(client, policy);
   };
   const getClient = async (id: string) => {
     const client = await db.mcpClient.findUnique({ where: { id } });
@@ -141,6 +141,21 @@ export function createMcpOAuthModel(db: Database, onReuse: (grantId: string) => 
           refreshExpiresAt: token.refreshTokenExpiresAt,
         },
       });
+      // Using a connection keeps it signed in, up to the absolute cap.
+      const now = new Date();
+      const policy = await db.mcpPolicy.findUnique({ where: { id: 'default' } });
+      await db.mcpGrant.update({
+        where: { id: grant.id },
+        data: {
+          lastUsedAt: now,
+          expiresAt: slideMcpExpiry(
+            now,
+            policy?.sessionIdleDays,
+            grant.expiresAt,
+            grant.absoluteExpiresAt
+          ),
+        },
+      });
       return { ...token, scope: scopes, accessToken: String(token.accessToken), client, user };
     },
     getRefreshToken: async refreshToken => {
@@ -177,6 +192,7 @@ export function mcpOAuthServer(db: Database, onReuse: (id: string) => void) {
   return new OAuth2Server({
     model: createMcpOAuthModel(db, onReuse),
     accessTokenLifetime: 300,
-    refreshTokenLifetime: 86400,
+    // The grant expiry is authoritative; refresh tokens only need to outlive the idle window.
+    refreshTokenLifetime: MCP_ABSOLUTE_SESSION_DAYS * 86400,
   });
 }

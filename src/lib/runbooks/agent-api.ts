@@ -2,7 +2,7 @@ import 'server-only';
 
 import { jsonError } from '@/lib/api-response';
 import { AppError, isAppErrorCode } from '@/lib/errors';
-import { ZodError } from 'zod';
+import { ZodError } from 'zod/v3';
 import { authenticateAgentRequest } from './agent-auth';
 import {
   RunbookPreExecutionFenceError,

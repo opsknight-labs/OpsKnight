@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import ts from 'typescript';
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import { V2_OPERATIONS } from '../../src/lib/api-v2/openapi-registry';
 import { V2_MUTATION_CONTRACT } from '../../src/lib/api-v2/mutation-contract';
 import { API_CAPABILITY_CATALOG } from '../../src/lib/api-v2/capability-catalog';

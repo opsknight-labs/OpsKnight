@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
-import { CostBudget, acquireMcpSlot } from '@/lib/mcp/core/budget';
+import { CostBudget, acquireMcpAuthenticationSlot, acquireMcpSlot } from '@/lib/mcp/core/budget';
+import { acquireMcpOAuthSlot } from '@/lib/mcp/auth/admission';
 import { rejectDuplicateJsonKeys, readMcpBody } from '@/lib/mcp/protocol/input';
 import { projectMcpData } from '@/lib/mcp/core/projection';
 import { MCP_CATALOG, isMcpExecutable } from '@/lib/mcp/catalog';
@@ -14,6 +15,23 @@ import {
 } from '@/lib/api-v2/internal-context';
 
 describe('MCP boundary', () => {
+  it('isolates OAuth token and revocation admission from MCP authentication and releases slots once', () => {
+    const tokenSlots = [acquireMcpOAuthSlot('token'), acquireMcpOAuthSlot('token')];
+    const revokeSlots: (() => void)[] = [];
+    const authSlots: (() => void)[] = [];
+    try {
+      expect(() => acquireMcpOAuthSlot('token')).toThrow('MCP_BUSY');
+      revokeSlots.push(acquireMcpOAuthSlot('revoke'), acquireMcpOAuthSlot('revoke'));
+      for (let i = 0; i < 4; i++) authSlots.push(acquireMcpAuthenticationSlot());
+      expect(() => acquireMcpAuthenticationSlot()).toThrow('MCP_BUSY');
+      tokenSlots[0]();
+      tokenSlots[0]();
+      tokenSlots.push(acquireMcpOAuthSlot('token'));
+      expect(() => acquireMcpOAuthSlot('token')).toThrow('MCP_BUSY');
+    } finally {
+      [...tokenSlots, ...revokeSlots, ...authSlots].forEach(release => release());
+    }
+  });
   it('classifies exactly the live registry and denies R3', () => {
     expect(MCP_CATALOG.map(item => item.operationId).sort()).toEqual(
       V2_OPERATIONS.map(item => item.operationId).sort()

@@ -1,3 +1,4 @@
+import { logger } from '@/lib/logger';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { getCurrentAuthorizationActor } from '@/lib/rbac';
@@ -8,7 +9,15 @@ export const revalidate = 0;
 
 export default async function AlertReferencePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const alert = await readAlertReference(await getCurrentAuthorizationActor(), id);
+  let alert;
+  try {
+    alert = await readAlertReference(await getCurrentAuthorizationActor(), id);
+  } catch (error) {
+    logger.error('[Intelligence] Alert source unavailable', {
+      error: error instanceof Error ? error.message : 'unknown',
+    });
+    throw error;
+  }
   if (!alert) notFound();
   return (
     <article className="mx-auto max-w-3xl space-y-4 p-4 sm:p-6">

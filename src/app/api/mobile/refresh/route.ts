@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import { getRequestActorContext } from '@/lib/request-actor-context';
 import { getResponderDashboardSnapshot } from '@/lib/dashboard/responder-dashboard-snapshot';
 import { getResponderAnalyticsSnapshot } from '@/lib/dashboard/responder-analytics-snapshot';
@@ -9,7 +9,11 @@ import { READ_MODEL_POLICY } from '@/lib/read-model-policy';
 
 const RefreshRequestSchema = z
   .object({
-    pathname: z.string().min(1).max(512).refine(value => value === '/m' || value.startsWith('/m/')),
+    pathname: z
+      .string()
+      .min(1)
+      .max(512)
+      .refine(value => value === '/m' || value.startsWith('/m/')),
     search: z.string().max(2048).optional().default(''),
   })
   .strict();
@@ -47,10 +51,7 @@ export async function POST(request: NextRequest) {
       READ_MODEL_POLICY.REQUIRE_FRESH
     );
   } else if (pathname === '/m/status') {
-    await getInternalOperationalStatusSnapshot(
-      context.actor,
-      READ_MODEL_POLICY.REQUIRE_FRESH
-    );
+    await getInternalOperationalStatusSnapshot(context.actor, READ_MODEL_POLICY.REQUIRE_FRESH);
   }
 
   const generation = await getRealtimeChangeGeneration().catch(() => null);

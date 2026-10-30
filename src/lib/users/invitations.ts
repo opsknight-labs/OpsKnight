@@ -1,6 +1,6 @@
 import 'server-only';
 import type { Prisma } from '@prisma/client';
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import { AppError } from '@/lib/errors';
 import { runSerializableTransaction } from '@/lib/db-utils';
 import { approveInvitedUserForSso } from '@/lib/auth-control/sso-onboarding';

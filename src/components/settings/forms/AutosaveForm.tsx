@@ -2,13 +2,14 @@
 
 import {
   useForm,
+  useWatch,
   FormProvider,
   type DefaultValues,
   type FieldValues,
   type UseFormReturn,
 } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import type { z } from 'zod';
+import type { z } from 'zod/v3';
 import { useEffect } from 'react';
 import { useAutosave } from '@/lib/hooks/use-autosave';
 import { SaveIndicator } from '../feedback/SaveIndicator';
@@ -44,8 +45,8 @@ export function AutosaveForm<T extends FieldValues>({
     mode: 'onChange',
   });
 
-  const { watch, formState } = form;
-  const watchedData = watch();
+  const { formState } = form;
+  const watchedData = useWatch({ control: form.control }) as T;
 
   const { status, error, retry } = useAutosave({
     data: watchedData,
@@ -60,11 +61,11 @@ export function AutosaveForm<T extends FieldValues>({
     }
   }, [status, error]);
 
-  const indicatorClasses = {
-    'top-right': 'absolute top-4 right-4',
-    'bottom-right': 'absolute bottom-4 right-4',
-    inline: 'mt-2',
-  };
+  const indicatorClasses = new Map([
+    ['top-right', 'absolute top-4 right-4'],
+    ['bottom-right', 'absolute bottom-4 right-4'],
+    ['inline', 'mt-2'],
+  ]);
 
   return (
     <FormProvider {...form}>
@@ -74,7 +75,7 @@ export function AutosaveForm<T extends FieldValues>({
             status={status}
             error={error}
             onRetry={retry}
-            className={indicatorClasses[saveIndicatorPosition]}
+            className={indicatorClasses.get(saveIndicatorPosition)}
           />
         )}
         <form

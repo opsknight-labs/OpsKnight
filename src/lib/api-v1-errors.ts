@@ -1,5 +1,5 @@
 import 'server-only';
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import { jsonError } from '@/lib/api-response';
 import { isAppError, normalizeError } from '@/lib/errors';
 import { logger } from '@/lib/logger';

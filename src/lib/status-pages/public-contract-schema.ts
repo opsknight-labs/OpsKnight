@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import type { Prisma } from '@prisma/client';
 import type { PublicStatusPageSnapshot } from './public-contract';
 import { aggregatePublicRegions } from './history';

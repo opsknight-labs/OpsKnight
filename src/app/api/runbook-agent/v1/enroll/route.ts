@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import { jsonOk } from '@/lib/api-response';
 import { consumeEnrollmentToken } from '@/lib/runbooks/agent-auth';
 import { agentApiError, readBoundedRequestBody } from '@/lib/runbooks/agent-api';

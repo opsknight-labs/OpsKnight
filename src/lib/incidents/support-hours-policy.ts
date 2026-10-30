@@ -1,5 +1,5 @@
 import 'server-only';
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import prisma from '@/lib/prisma';
 import { assertCanModifyService, getUserPermissions } from '@/lib/rbac';
 import { emitAuditEvent } from '@/lib/audit';

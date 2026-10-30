@@ -1,5 +1,5 @@
 import type { Prisma } from '@prisma/client';
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import { AppError } from '@/lib/errors';
 export const StatusSubscriberPageParams = z.object({ id: z.string().cuid() }).strict();
 export const StatusSubscriberParams = StatusSubscriberPageParams.extend({

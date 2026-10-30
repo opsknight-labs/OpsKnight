@@ -6,7 +6,7 @@ import {
   statusPageSectionFields,
 } from '@/lib/status-pages/settings-sections';
 import { POST } from '@/app/api/settings/status-page/route';
-import { z } from 'zod';
+import { z } from 'zod/v3';
 
 export async function PATCH(
   request: NextRequest,

@@ -3,7 +3,7 @@
 import { timingSafeEqual } from 'crypto';
 import bcrypt from 'bcryptjs';
 import { Prisma } from '@prisma/client';
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import { headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 import prisma from '@/lib/prisma';
@@ -71,7 +71,10 @@ export async function bootstrapAdmin(formData: FormData) {
     try {
       customAppUrl = normalizePublicOrigin(parsed.data.appUrl);
     } catch {
-      return { error: 'Application URL must be an HTTP or HTTPS origin without credentials, a path, query, or fragment.' };
+      return {
+        error:
+          'Application URL must be an HTTP or HTTPS origin without credentials, a path, query, or fragment.',
+      };
     }
   }
 
@@ -113,9 +116,9 @@ export async function bootstrapAdmin(formData: FormData) {
             const submittedHash = hashBootstrapCode(submittedSecret);
             const authorized = Boolean(
               authorization &&
-                !authorization.usedAt &&
-                new Date(authorization.expiresAt) > new Date() &&
-                constantTimeUtf8Equal(submittedHash, authorization.tokenHash)
+              !authorization.usedAt &&
+              new Date(authorization.expiresAt) > new Date() &&
+              constantTimeUtf8Equal(submittedHash, authorization.tokenHash)
             );
             if (!authorized || !authorization) throw new Error('BOOTSTRAP_AUTHORIZATION_INVALID');
             await tx.systemConfig.update({

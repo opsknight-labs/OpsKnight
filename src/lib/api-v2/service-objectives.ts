@@ -1,5 +1,5 @@
 import type { Prisma, ServiceObjective } from '@prisma/client';
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import type { AuthorizationActor } from '@/lib/authorization-policy';
 import { AppError } from '@/lib/errors';
 import { serviceObjectiveReadWhere } from '@/lib/slo/authorization';

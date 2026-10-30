@@ -1,7 +1,7 @@
 import prisma from '@/lib/prisma';
 import { assertCanViewPolicy } from '@/lib/rbac';
 import PolicyArchiveControl from './PolicyArchiveControl';
-import { z } from 'zod';
+import { z } from 'zod/v3';
 
 export default async function PolicyDependencies({
   policyId,

@@ -14,7 +14,7 @@ import {
   getOpenApiV2Spec,
 } from '@/lib/api-v2';
 import { AppError } from '@/lib/errors';
-import { z } from 'zod';
+import { z } from 'zod/v3';
 
 describe('API v2 Foundation', () => {
   describe('MemoryLruCache', () => {

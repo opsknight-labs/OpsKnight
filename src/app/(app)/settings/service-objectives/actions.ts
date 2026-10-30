@@ -1,7 +1,7 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import { assertAdmin } from '@/lib/rbac';
 import { AppError } from '@/lib/errors';
 import { runSerializableTransaction } from '@/lib/db-utils';

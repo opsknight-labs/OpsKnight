@@ -17,7 +17,7 @@ async function approvedLead(f: Fixture) {
   return prepared;
 }
 
-function startChild(f: Fixture, approvalId: string) {
+function startChild(f: Fixture, approvalId: string, holdAfterCommit = false) {
   const child = spawn(
     process.execPath,
     [
@@ -33,6 +33,7 @@ function startChild(f: Fixture, approvalId: string) {
       env: {
         ...process.env,
         MCP_FAULT_CHILD: '1',
+        MCP_FAULT_HOLD_AFTER_COMMIT: holdAfterCommit ? '1' : '0',
         MCP_FAULT_GRANT: f.grant.id,
         MCP_FAULT_CREDENTIAL: f.token.id,
         MCP_FAULT_SCOPES: JSON.stringify(scopes),
@@ -141,7 +142,7 @@ describe('approval commit under real process and connection faults', () => {
   it('keeps an effect that committed just before the process was killed, and never repeats it', async () => {
     const f = await fixture();
     const prepared = await approvedLead(f);
-    const run = startChild(f, prepared.approvalId);
+    const run = startChild(f, prepared.approvalId, true);
     await until(async () => ((await lead(f)) === f.lead.id ? true : undefined));
     kill(run.child);
     await run.exited;

@@ -92,7 +92,7 @@ jobs:
           MCP_QUERY_PROFILE_OUTPUT: ${{ runner.temp }}/mcp-evidence/query-profile.json
         run: |
           mkdir -p "$RUNNER_TEMP/mcp-evidence"
-          npx vitest run -c vitest.int.config.ts --no-file-parallelism --maxWorkers=1 tests/integration/mcp-security-database.test.ts tests/integration/mcp-database-isolation.test.ts tests/integration/mcp-query-profile.test.ts tests/integration/mcp-runbook-approval.test.ts tests/integration/mcp-postmortem-context.test.ts tests/integration/mcp-operation-approval.test.ts tests/integration/mcp-approval-crash-safety.test.ts tests/integration/mcp-approval-teams-policies.test.ts tests/integration/mcp-approval-automation.test.ts tests/integration/mcp-approval-runbook-rules.test.ts tests/integration/mcp-approval-incidents.test.ts tests/integration/mcp-approval-settings.test.ts tests/integration/mcp-approval-reporting.test.ts tests/integration/mcp-approval-postmortems.test.ts tests/integration/mcp-approval-runbooks.test.ts tests/integration/mcp-approval-schedules.test.ts tests/integration/mcp-approval-services.test.ts tests/integration/mcp-approval-status-pages.test.ts tests/integration/mcp-protocol-features.test.ts tests/integration/mcp-tasks.test.ts tests/integration/mcp-client-metadata.test.ts tests/integration/mcp-managed-config.test.ts tests/integration/mcp-approval-destructive.test.ts tests/integration/mcp-approval-destructive-safety.test.ts tests/integration/mcp-approval-natural.test.ts tests/integration/mcp-approval-destructive-items.test.ts tests/integration/mcp-item-previews.test.ts tests/integration/mcp-sensitive-reads.test.ts tests/integration/mcp-sensitive-reads-config.test.ts tests/integration/mcp-sensitive-reads-post.test.ts tests/integration/mcp-fault-injection.test.ts tests/integration/mcp-fault-child.test.ts tests/integration/mcp-load-worker.test.ts
+          npx vitest run -c vitest.int.config.ts --no-file-parallelism --maxWorkers=1 tests/integration/mcp-security-database.test.ts tests/integration/mcp-database-isolation.test.ts tests/integration/mcp-query-profile.test.ts tests/integration/mcp-runbook-approval.test.ts tests/integration/mcp-postmortem-context.test.ts tests/integration/mcp-operation-approval.test.ts tests/integration/mcp-approval-crash-safety.test.ts tests/integration/mcp-approval-teams-policies.test.ts tests/integration/mcp-approval-automation.test.ts tests/integration/mcp-approval-runbook-rules.test.ts tests/integration/mcp-approval-incidents.test.ts tests/integration/mcp-approval-settings.test.ts tests/integration/mcp-approval-reporting.test.ts tests/integration/mcp-approval-postmortems.test.ts tests/integration/mcp-approval-runbooks.test.ts tests/integration/mcp-approval-schedules.test.ts tests/integration/mcp-approval-services.test.ts tests/integration/mcp-approval-status-pages.test.ts tests/integration/mcp-protocol-features.test.ts tests/integration/mcp-tasks.test.ts tests/integration/mcp-client-metadata.test.ts tests/integration/mcp-managed-config.test.ts tests/integration/mcp-registration.test.ts tests/integration/mcp-approval-destructive.test.ts tests/integration/mcp-approval-destructive-safety.test.ts tests/integration/mcp-approval-natural.test.ts tests/integration/mcp-approval-destructive-items.test.ts tests/integration/mcp-item-previews.test.ts tests/integration/mcp-sensitive-reads.test.ts tests/integration/mcp-sensitive-reads-config.test.ts tests/integration/mcp-sensitive-reads-post.test.ts tests/integration/mcp-fault-injection.test.ts tests/integration/mcp-fault-child.test.ts tests/integration/mcp-load-worker.test.ts
       - name: Source-labelled canonical coverage
         run: |
           mkdir -p "$RUNNER_TEMP/mcp-evidence"
@@ -118,7 +118,9 @@ jobs:
           DATABASE_URL: postgresql://postgres:isolated-mcp-ci@localhost:5432/opsknight_mcp_browser_test
           HOSTNAME: localhost
           PORT: '3042'
-          # No MCP environment variables: the origin comes from the seeded App URL and the
+          MCP_E2E_REPLICA_URL: http://localhost:3043
+          # No MCP product configuration variables: MCP_E2E_* only configure the test harness.
+          # The origin comes from the seeded App URL and the
           # credential-hash key is derived from the existing application encryption key.
           MCP_E2E_OUTPUT: ${{ runner.temp }}/mcp-evidence/browser
         run: |
@@ -127,11 +129,13 @@ jobs:
           cp -R .next/static .next/standalone/.next/static
           node .next/standalone/server.js > "$RUNNER_TEMP/mcp-evidence/server.log" 2>&1 &
           appPid=$!
-          trap 'kill "$appPid"' EXIT
+          PORT=3043 node .next/standalone/server.js > "$RUNNER_TEMP/mcp-evidence/replica.log" 2>&1 &
+          replicaPid=$!
+          trap 'kill "$appPid" "$replicaPid"' EXIT
           node <<'JS'
           (async()=>{
             for(let attempt=0;attempt<60;attempt++){
-              try{if((await fetch('http://localhost:3042/api/health',{signal:AbortSignal.timeout(1000)})).ok)return;}catch{}
+              try{if((await fetch('http://localhost:3042/api/health',{signal:AbortSignal.timeout(1000)})).ok && (await fetch('http://localhost:3043/api/health',{signal:AbortSignal.timeout(1000)})).ok)return;}catch{}
               await new Promise(resolve=>setTimeout(resolve,500));
             }
             throw new Error('Local production server did not become healthy');

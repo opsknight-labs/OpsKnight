@@ -1,6 +1,6 @@
 import 'server-only';
 
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import prisma from '@/lib/prisma';
 import { dashboardReadWhere } from './dashboards';
 import { calculateActorSLAMetrics } from '@/lib/actor-metrics';
@@ -9,10 +9,12 @@ import { AppError } from '@/lib/errors';
 import { AUTHORIZATION_ACTIONS, type AuthorizationActor } from '@/lib/authorization-policy';
 import { enforceV2Authorization } from '@/lib/api-v2/rbac';
 
-export const DashboardDataQueryV2Schema = z.object({
-  days: z.coerce.number().int().min(1).max(90).optional(),
-  serviceId: z.string().trim().min(1).max(100).optional(),
-}).strict();
+export const DashboardDataQueryV2Schema = z
+  .object({
+    days: z.coerce.number().int().min(1).max(90).optional(),
+    serviceId: z.string().trim().min(1).max(100).optional(),
+  })
+  .strict();
 
 export async function readDashboardData(
   actor: AuthorizationActor,
@@ -29,7 +31,8 @@ export async function readDashboardData(
     dashboard.config && typeof dashboard.config === 'object' && !Array.isArray(dashboard.config)
       ? (dashboard.config as Record<string, unknown>).timeRange
       : undefined;
-  const days = query.days ??
+  const days =
+    query.days ??
     (typeof configuredDays === 'number' && Number.isInteger(configuredDays)
       ? Math.max(1, Math.min(configuredDays, 90))
       : 7);

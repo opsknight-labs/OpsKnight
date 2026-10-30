@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDatabaseLocalAuthPolicy } from '@/lib/authentication-policy';
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import { completePasswordReset } from '@/lib/password-reset';
 import { PASSWORD_TRANSPORT_MAX_CODE_UNITS } from '@/lib/passwords';
 import { logger } from '@/lib/logger';

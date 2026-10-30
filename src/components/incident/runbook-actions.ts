@@ -1,7 +1,7 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import type { RunbookInput } from '@prisma/client';
 import prisma from '@/lib/prisma';
 import { CAPABILITIES } from '@/lib/authorization';

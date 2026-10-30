@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any -- arbitrary JSON documents / erased generic route plumbing */
 import type { NextRequest } from 'next/server';
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import { authenticateV2Request, type V2ApiKeyIdentity } from './auth';
 import { enforceV2RateLimit, type V2OperationClass } from './rate-limit';
 import { enforceV2Authorization, enforceV2ResourceAuthorization } from './rbac';

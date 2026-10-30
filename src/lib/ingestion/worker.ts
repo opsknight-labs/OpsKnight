@@ -1,4 +1,4 @@
-import { ZodError } from 'zod';
+import { ZodError } from 'zod/v3';
 import { updateIngestionWorkerHealth } from './worker-health';
 import { randomUUID } from 'node:crypto';
 import { processEvent } from '@/lib/events';

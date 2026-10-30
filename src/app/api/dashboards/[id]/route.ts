@@ -4,7 +4,7 @@ import { getServerSession } from 'next-auth';
 import { getAuthOptions } from '@/lib/auth';
 import { logger } from '@/lib/logger';
 import { Prisma } from '@prisma/client';
-import { z } from 'zod';
+import { z } from 'zod/v3';
 
 const UpdateDashboardSchema = z.object({
   name: z.string().min(1).max(200).trim().optional(),
@@ -13,19 +13,26 @@ const UpdateDashboardSchema = z.object({
   teamId: z.string().nullish(),
   layout: z.record(z.unknown()).optional(),
   config: z.record(z.unknown()).optional(),
-  widgets: z.array(z.object({
-    widgetType: z.string().min(1),
-    metricKey: z.string().min(1),
-    widgetDefinitionId: z.string().max(100).nullish(),
-    title: z.string().max(200).nullish(),
-    position: z.object({
-      x: z.number().int().min(0),
-      y: z.number().int().min(0),
-      w: z.number().int().min(1).max(4),
-      h: z.number().int().min(1).max(4),
-    }).default({ x: 0, y: 0, w: 1, h: 1 }),
-    config: z.record(z.unknown()).default({}),
-  })).max(50, 'Maximum 50 widgets per dashboard').optional(),
+  widgets: z
+    .array(
+      z.object({
+        widgetType: z.string().min(1),
+        metricKey: z.string().min(1),
+        widgetDefinitionId: z.string().max(100).nullish(),
+        title: z.string().max(200).nullish(),
+        position: z
+          .object({
+            x: z.number().int().min(0),
+            y: z.number().int().min(0),
+            w: z.number().int().min(1).max(4),
+            h: z.number().int().min(1).max(4),
+          })
+          .default({ x: 0, y: 0, w: 1, h: 1 }),
+        config: z.record(z.unknown()).default({}),
+      })
+    )
+    .max(50, 'Maximum 50 widgets per dashboard')
+    .optional(),
 });
 
 export const dynamic = 'force-dynamic';
@@ -131,22 +138,28 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     const parseResult = UpdateDashboardSchema.safeParse(body);
     if (!parseResult.success) {
       return NextResponse.json(
-        { error: 'Invalid dashboard configuration', details: parseResult.error.flatten().fieldErrors },
+        {
+          error: 'Invalid dashboard configuration',
+          details: parseResult.error.flatten().fieldErrors,
+        },
         { status: 400 }
       );
     }
     const { name, description, layout, config, visibility, teamId, widgets } = parseResult.data;
-    
+
     const effectiveVisibility = visibility ?? existing.visibility;
     const effectiveTeamId = teamId ?? existing.teamId;
-    
+
     const teamIds = new Set(user.teamMemberships.map(membership => membership.teamId));
     if (effectiveVisibility === 'TEAM') {
       if (typeof effectiveTeamId !== 'string' || !teamIds.has(effectiveTeamId)) {
         return NextResponse.json({ error: 'Team dashboard access denied' }, { status: 403 });
       }
     } else if (teamId !== undefined && teamId !== null) {
-      return NextResponse.json({ error: 'Only team dashboards can specify a team' }, { status: 400 });
+      return NextResponse.json(
+        { error: 'Only team dashboards can specify a team' },
+        { status: 400 }
+      );
     }
 
     // Transaction: Update dashboard and replace widgets

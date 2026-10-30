@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import { RUNBOOK_CONDITION_OPERATORS } from './types';
 import { isAutomationConditionField } from './automation-binding';
 
@@ -32,7 +32,8 @@ export const isAutomationOnlyOperator = (operator: string) =>
 export const triggerConditionFieldSchema = z
   .string()
   .refine(
-    field => conditionContextFieldSchema.safeParse(field).success || isAutomationConditionField(field),
+    field =>
+      conditionContextFieldSchema.safeParse(field).success || isAutomationConditionField(field),
     'Unsupported trigger condition field'
   );
 export const workflowConditionSchema = z.object({

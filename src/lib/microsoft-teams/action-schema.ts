@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { z } from 'zod/v3';
 
 export const TEAMS_CHATOPS_VERBS = {
   REFRESH: 'opsknight.incident.refresh',

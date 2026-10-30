@@ -2,7 +2,7 @@ import 'server-only';
 import { MAX_AUTOMATIC_POLICY_TARGETS, POLICY_CERTIFICATION_BATCH_SIZE } from './agent-deployment';
 import { hasUnverifiablePolicyInput } from '../../../agent/src/policy-inputs';
 import type { Prisma } from '@prisma/client';
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import prisma from '@/lib/prisma';
 import {
   runRunbookCommand,

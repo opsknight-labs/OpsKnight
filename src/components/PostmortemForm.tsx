@@ -49,7 +49,7 @@ import { formatDateTime } from '@/lib/timezone';
 import { AlertCircle, AlertTriangle, Loader2, Wand2, Sparkles } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import * as z from 'zod';
+import * as z from 'zod/v3';
 import { POSTMORTEM_STATUS_CONFIG } from './postmortem/shared';
 import { draftPostmortemWithAiAction } from '@/app/(app)/postmortems/ai-actions';
 import { mergeAiDraft } from './postmortem/merge-ai-draft';
@@ -371,7 +371,9 @@ export default function PostmortemForm({
 
       toast.success('Draft generated successfully');
     } catch (err: unknown) {
-      toast.error('Failed to generate draft: ' + ((err instanceof Error && err.message) || 'Unknown error'));
+      toast.error(
+        'Failed to generate draft: ' + ((err instanceof Error && err.message) || 'Unknown error')
+      );
     } finally {
       setIsDrafting(false);
     }
@@ -394,13 +396,21 @@ export default function PostmortemForm({
       }
       const values = form.getValues();
       const merged = mergeAiDraft(
-        { summary: values.summary ?? '', rootCause: values.rootCause ?? '', resolution: values.resolution ?? '', lessons: values.lessons ?? '' },
+        {
+          summary: values.summary ?? '',
+          rootCause: values.rootCause ?? '',
+          resolution: values.resolution ?? '',
+          lessons: values.lessons ?? '',
+        },
         actionItems,
         result.draft,
         index => `ai-action-${Date.now()}-${index}`
       );
       for (const [key, value] of Object.entries(merged.fields)) {
-        if (value) form.setValue(key as 'summary' | 'rootCause' | 'resolution' | 'lessons', value, { shouldDirty: true });
+        if (value)
+          form.setValue(key as 'summary' | 'rootCause' | 'resolution' | 'lessons', value, {
+            shouldDirty: true,
+          });
       }
       if (merged.addedItems.length) setActionItems(current => [...current, ...merged.addedItems]);
       toast.success(
@@ -469,7 +479,9 @@ export default function PostmortemForm({
         {incidentId && effectiveIncidentJiraIssues.length > 0 && (
           <Card className="border-blue-200/80 bg-blue-50/40 shadow-sm">
             <CardContent className="p-4 flex flex-col gap-1.5">
-              <div className="text-xs font-semibold text-foreground">Inherited incident context</div>
+              <div className="text-xs font-semibold text-foreground">
+                Inherited incident context
+              </div>
               <p className="text-xs text-muted-foreground">
                 These Jira issues belong to the incident and are shown read-only throughout this
                 postmortem. Action items can still have their own Jira tracking issues.

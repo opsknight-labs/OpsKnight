@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import {
   authorize,
   AUTHORIZATION_ACTIONS,

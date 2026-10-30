@@ -4,11 +4,11 @@ import * as React from 'react';
 import { useActionState, useCallback, useEffect, useRef, useState, useMemo } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as DialogPrimitive from '@radix-ui/react-dialog';
-import { useForm, type FieldErrors } from 'react-hook-form';
+import { useForm, useWatch, type FieldErrors } from 'react-hook-form';
 import { useRouter } from 'next/navigation';
 import { notify as toast } from '@/lib/toast';
 import Link from 'next/link';
-import * as z from 'zod';
+import * as z from 'zod/v3';
 import {
   Activity,
   AlertCircle,
@@ -306,9 +306,7 @@ function renderMarkdown(content: string): React.ReactNode {
   let inCodeBlock = false;
   let codeBlockLines: string[] = [];
 
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-
+  for (const [i, line] of lines.entries()) {
     if (line.startsWith('```')) {
       if (inCodeBlock) {
         elements.push(
@@ -417,12 +415,17 @@ function CreateIncidentModalContent({
     },
   });
 
-  const watchedTitle = form.watch('title');
-  const watchedServiceId = form.watch('serviceId');
-  const watchedUrgency = form.watch('urgency');
-  const watchedPriority = form.watch('priority');
-  const watchedAssigneeId = form.watch('assigneeId');
-  const watchedVisibility = form.watch('visibility');
+  const [
+    watchedTitle,
+    watchedServiceId,
+    watchedUrgency,
+    watchedPriority,
+    watchedAssigneeId,
+    watchedVisibility,
+  ] = useWatch({
+    control: form.control,
+    name: ['title', 'serviceId', 'urgency', 'priority', 'assigneeId', 'visibility'],
+  });
 
   const resetForm = useCallback(() => {
     userOverrodeVisibility.current = false;
@@ -764,7 +767,9 @@ function CreateIncidentModalContent({
         <Form {...form}>
           <form
             noValidate
-            onSubmit={form.handleSubmit(onSubmit, onInvalid)}
+            onSubmit={event => {
+              void form.handleSubmit(onSubmit, onInvalid)(event);
+            }}
             className="flex min-h-0 flex-1 flex-col"
           >
             <div className="flex-1 space-y-5 overflow-y-auto px-5 sm:px-6 py-5">

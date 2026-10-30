@@ -8,12 +8,25 @@ export function GET() {
     const issuer = mcpIssuer();
     const policy = await prisma.mcpPolicy.findUnique({
       where: { id: 'default' },
-      select: { cimdEnabled: true, cimdAllowedHosts: true, cimdScopes: true },
+      select: {
+        enabled: true,
+        cimdEnabled: true,
+        cimdAllowedHosts: true,
+        cimdScopes: true,
+        dcrEnabled: true,
+        dcrScopes: true,
+      },
     });
     // Advertise only what is enabled and usable in this deployment.
-    const cimd = Boolean(
-      policy?.cimdEnabled && policy.cimdAllowedHosts.length && policy.cimdScopes.length
-    );
+    const cimd = Boolean(policy?.enabled && policy.cimdEnabled && policy.cimdScopes.length);
+    const scopes = policy?.enabled
+      ? [
+          ...new Set([
+            ...(policy.dcrEnabled ? policy.dcrScopes : []),
+            ...(cimd ? policy.cimdScopes : []),
+          ]),
+        ]
+      : [];
     return Response.json(
       {
         issuer,
@@ -26,8 +39,12 @@ export function GET() {
         code_challenge_methods_supported: ['S256'],
         authorization_response_iss_parameter_supported: true,
         client_id_metadata_document_supported: cimd,
+        ...(policy?.enabled && policy.dcrEnabled && policy.dcrScopes.length
+          ? { registration_endpoint: `${issuer}/register` }
+          : {}),
+        ...(scopes.length ? { scopes_supported: scopes } : {}),
       },
-      { headers: { 'Cache-Control': cimd ? 'public, max-age=60' : 'public, max-age=300' } }
+      { headers: { 'Cache-Control': 'no-store' } }
     );
   });
 }

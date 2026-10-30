@@ -11,7 +11,7 @@ import {
 
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import { RunbookError, RunbookDefinitionError } from '@/lib/runbooks/errors';
 import { assertAuthoringDefinition } from '@/lib/runbooks/authoring-validation';
 import { RUNBOOK_TEMPLATES, runbookTemplate, runbookTemplateInputs } from '@/lib/runbooks/builder';

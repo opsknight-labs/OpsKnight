@@ -23,14 +23,21 @@ test('remote request requires a different native reviewer and commits one recove
   await login(page, 'mcp-admin@example.test');
   await page.goto('/settings/integrations/mcp');
   await page.getByRole('checkbox', { name: /Enable MCP/ }).check();
+  await page.locator('#main-content').getByText('Advanced', { exact: true }).click();
   await page.getByRole('checkbox', { name: /Allow reviewed routine mutations/ }).check();
   await page.getByRole('button', { name: 'Save policy' }).click();
+  await expect(page.getByText('MCP configuration saved', { exact: true })).toBeVisible();
+  await page.getByText('Manual client registration (advanced)', { exact: true }).click();
   const name = `Reviewed ${browserName} ${Date.now()}`;
   const scopes = 'runbooks:execute runbooks:read incidents:read services:read';
   const redirectUri = 'http://127.0.0.1:8799/review-callback';
   await page.getByLabel('Display name', { exact: true }).fill(name);
   await page.getByLabel('Exact redirect URI').fill(redirectUri);
-  await page.getByLabel(/Allowed scopes/).fill(scopes);
+  for (const label of ['Run runbooks after administrator approval', 'View runbooks'])
+    await page
+      .getByRole('group', { name: 'Allowed scopes' })
+      .getByRole('checkbox', { name: label, exact: true })
+      .check();
   await page.getByRole('button', { name: 'Register client', exact: true }).click();
   const client = page
     .locator('article')
@@ -53,7 +60,7 @@ test('remote request requires a different native reviewer and commits one recove
     route.fulfill({ status: 200, contentType: 'text/plain', body: 'Local callback.' })
   );
   await page.goto(authorize.href);
-  await page.getByRole('button', { name: 'Allow requested scopes', exact: true }).click();
+  await page.getByRole('button', { name: 'Allow', exact: true }).click();
   await page.waitForURL(url => url.origin === new URL(redirectUri).origin);
   const callback = new URL(page.url());
   expect(callback.searchParams.get('state')).toBe(state);
