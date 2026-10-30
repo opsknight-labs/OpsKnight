@@ -115,6 +115,11 @@ async function connectLikeClaude(clientId: string, callback: string) {
   const form = new FormData();
   form.set('id', consent.searchParams.get('id')!);
   form.set('decision', 'allow');
+  // An administrator keeps every offered permission selected.
+  const pending = await db.mcpConsentRequest.findUniqueOrThrow({
+    where: { id: consent.searchParams.get('id')! },
+  });
+  for (const scope of pending.scopes) form.append('scope', scope);
   actor.location = '';
   await decideMcpConsent(form);
   const back = new URL(actor.location);

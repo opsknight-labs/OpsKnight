@@ -1,0 +1,42 @@
+/*
+ * Shield the consent dialog from page-wide element rules. topbar.css forces compact `button`, `h1`
+ * and `li` sizes with !important at 1024–1600px, and globals.css gives every button and checkbox a
+ * 44px minimum plus padding on touch screens. An id selector outranks both, so the dialog keeps one
+ * size everywhere. Touch targets are the full-width label rows and the 44px buttons below.
+ */
+#mcp-consent h1 {
+  font-size: 1.375rem !important;
+  line-height: 1.3 !important;
+}
+
+#mcp-consent li {
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
+}
+
+#mcp-consent button {
+  min-height: 44px !important;
+  min-width: 0 !important;
+  margin-left: 0 !important;
+  padding: 0.625rem 1.25rem !important;
+  font-size: 0.875rem !important;
+}
+
+#mcp-consent input[type='checkbox'] {
+  min-height: 0;
+  min-width: 0;
+  padding: 0;
+  margin: 0;
+}
+
+@media (min-width: 640px) {
+  #mcp-consent button {
+    min-width: 7.5rem !important;
+  }
+}
+
+@media (min-width: 1440px) {
+  #mcp-consent h1 {
+    font-size: 1.5rem !important;
+  }
+}

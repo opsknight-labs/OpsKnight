@@ -85,6 +85,9 @@ async function connect(
   const form = new FormData();
   form.set('id', pendingId);
   form.set('decision', 'allow');
+  // Select everything the consent page offers this user.
+  const pending = await db.mcpConsentRequest.findUniqueOrThrow({ where: { id: pendingId } });
+  for (const scope of pending.scopes) form.append('scope', scope);
   await decideMcpConsent(form);
   const result = new URL(actor.location);
   expect(result.searchParams.get('iss')).toBe(`${origin}/oauth/mcp`);

@@ -22,6 +22,8 @@ import { DEFAULT_ASSISTANT_SCOPES, effectiveMcpClientScopes } from '@/lib/mcp/au
 import { runMcpSetupCheck } from '@/lib/mcp/auth/setup-check';
 import { supportedMcpScopes } from '@/lib/mcp/auth/scopes';
 import { mcpSessionDates } from '@/lib/mcp/auth/session-lifetime';
+import { partitionScopesForRole } from '@/lib/mcp/auth/role-scopes';
+import { isAppRole } from '@/lib/authorization';
 
 const settingsPath = '/settings/integrations/mcp';
 const supportedScopes = supportedMcpScopes;
@@ -355,9 +357,25 @@ export async function decideMcpConsent(form: FormData) {
   await loadMcpRuntime();
   const actor = await getCurrentUser();
   const input = z
-    .object({ id: z.string().min(1).max(128), decision: z.enum(['allow', 'deny']) })
+    .object({
+      id: z.string().min(1).max(128),
+      decision: z.enum(['allow', 'deny']),
+      // One checkbox per scope. Only shape is checked here; membership is decided in the transaction.
+      scopes: z
+        .array(
+          z
+            .string()
+            .max(128)
+            .regex(/^[a-z][a-z0-9:_-]*$/)
+        )
+        .max(256),
+    })
     .strict()
-    .parse({ id: form.get('id'), decision: form.get('decision') });
+    .parse({
+      id: form.get('id'),
+      decision: form.get('decision'),
+      scopes: form.getAll('scope').map(String),
+    });
   let location: string;
   try {
     location = await prisma.$transaction(
@@ -389,20 +407,34 @@ export async function decideMcpConsent(form: FormData) {
           ceiling && pending.scopes.every(scope => ceiling.includes(scope)),
           'invalid_scope'
         );
+        const user = await tx.user.findUnique({
+          where: { id: actor.id },
+          select: { status: true, tokenVersion: true, role: true },
+        });
+        requireMcp(
+          user?.status === 'ACTIVE' &&
+            user.tokenVersion === actor.tokenVersion &&
+            isAppRole(user.role),
+          'MCP_INACTIVE_PRINCIPAL',
+          403
+        );
+        // Recompute exactly what the page offered from the pending request and the current role;
+        // the submitted form only chooses among those and is never trusted to add to them.
+        const { offered } = partitionScopesForRole(pending.scopes, user.role);
+        const chosen = new Set(input.scopes);
+        const selected = offered.filter(scope => chosen.has(scope));
+        if (input.decision === 'allow') {
+          requireMcp(
+            input.scopes.every(scope => offered.includes(scope)),
+            'invalid_scope'
+          );
+          requireMcp(selected.length > 0, 'MCP_CONSENT_NO_SCOPES');
+        }
         const consumed = await tx.mcpConsentRequest.updateMany({
           where: { id: pending.id, consumedAt: null },
           data: { consumedAt: new Date() },
         });
         requireMcp(consumed.count === 1, 'MCP_CONSENT_REPLAY');
-        const user = await tx.user.findUnique({
-          where: { id: actor.id },
-          select: { status: true, tokenVersion: true },
-        });
-        requireMcp(
-          user?.status === 'ACTIVE' && user.tokenVersion === actor.tokenVersion,
-          'MCP_INACTIVE_PRINCIPAL',
-          403
-        );
         const target = new URL(pending.redirectUri);
         target.searchParams.set('state', pending.state);
         target.searchParams.set('iss', mcpIssuer());
@@ -420,7 +452,7 @@ export async function decideMcpConsent(form: FormData) {
             userId: actor.id,
             userTokenVersion: user.tokenVersion,
             clientId: client.id,
-            scopes: pending.scopes,
+            scopes: selected,
             resource: mcpResource(),
             ...mcpSessionDates(new Date(), currentPolicy?.sessionIdleDays),
           },
@@ -436,7 +468,7 @@ export async function decideMcpConsent(form: FormData) {
               redirect_uri: pending.redirectUri,
               response_type: 'code',
               state: pending.state,
-              scope: pending.scopes.join(' '),
+              scope: selected.join(' '),
               code_challenge: pending.challenge,
               code_challenge_method: 'S256',
             },
@@ -460,7 +492,14 @@ export async function decideMcpConsent(form: FormData) {
             entityType: 'SYSTEM_CONFIG',
             entityId: grant.id,
             actorId: actor.id,
-            details: { scopes: grant.scopes, clientId: client.id },
+            details: {
+              scopes: grant.scopes,
+              clientId: client.id,
+              selectedScopeCount: selected.length,
+              selectedScopes: selected,
+              offeredScopeCount: offered.length,
+              role: user.role,
+            },
           },
           tx
         );
