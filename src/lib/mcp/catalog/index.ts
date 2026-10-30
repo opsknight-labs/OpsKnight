@@ -135,6 +135,8 @@ export const MCP_CATALOG = V2_OPERATIONS.map(operation => {
     properties.ifMatch = { type: 'string', maxLength: 128 };
   return {
     ...operation,
+    // Descriptive only: not a contract hash input, so rewording a summary never unreviews an operation.
+    summary: typeof contract.summary === 'string' ? contract.summary : undefined,
     authorizationActions,
     requiredScopes,
     ...review,

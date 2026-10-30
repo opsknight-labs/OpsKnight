@@ -3,6 +3,7 @@ import { McpServer, createMcpHandler, type McpHttpHandler } from '@modelcontextp
 import { createOpsKnightMcpServer, operationPrepareSchema } from '@/lib/mcp/protocol/server';
 import { CostBudget } from '@/lib/mcp/core/budget';
 import { supportedMcpScopes } from '@/lib/mcp/auth/scopes';
+import { MCP_CATALOG, isMcpExecutable, mcpContractHash } from '@/lib/mcp/catalog';
 
 const scopes = [...supportedMcpScopes()].filter(scope => scope !== 'admin:manage');
 const actor = {
@@ -117,5 +118,41 @@ describe('defaulted tool fields', () => {
     expect(schema['~standard'].validate(args).issues).toBeUndefined();
     const body = await (await call('runbook_prepare_execution', args)).json();
     expect(JSON.stringify(body)).not.toContain('Input validation error');
+  });
+});
+
+describe('curated tool descriptions', () => {
+  it('use the contract summary and a safety clause, not the shared review reason', () => {
+    const spy = vi.spyOn(McpServer.prototype, 'registerTool');
+    try {
+      createOpsKnightMcpServer(context(), actor, true, true);
+      const descriptions = new Map(
+        spy.mock.calls.map(([name, config]) => [
+          name,
+          String((config as { description?: string }).description),
+        ])
+      );
+      const curated = MCP_CATALOG.filter(operation => operation.tool && isMcpExecutable(operation));
+      expect(curated.length).toBeGreaterThan(15);
+      for (const operation of curated) {
+        const description = descriptions.get(operation.tool!);
+        expect(operation.summary, operation.operationId).toBeTruthy();
+        expect(description).toContain(operation.summary);
+        expect(description).not.toContain('Candidate in-process');
+        expect(description).toMatch(operation.risk === 'R0' ? /Read-only/ : /idempotencyKey/);
+        expect(description!.length).toBeLessThan(220);
+      }
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it('keep summaries out of the reviewed contract hash', () => {
+    for (const operation of MCP_CATALOG.filter(item => item.tool)) {
+      expect(mcpContractHash({ ...operation, summary: 'changed' })).toBe(
+        mcpContractHash(operation)
+      );
+      expect(mcpContractHash(operation), operation.operationId).toBe(operation.contractSha256);
+    }
   });
 });
