@@ -31,3 +31,4 @@ Choose the symptom area:
 - [Database and PgBouncer](./database/)
 - [Kubernetes](./kubernetes/)
 - [Upgrades and migrations](./upgrades/)
+- [Service automation](./service-automation)

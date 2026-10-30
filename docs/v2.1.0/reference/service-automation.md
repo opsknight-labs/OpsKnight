@@ -6,7 +6,7 @@ product_area: services
 audience: [administrator, responder, operator, developer]
 verification:
   level: source
-  verified_at: 2026-10-28
+  verified_at: 2026-10-30
   evidence:
     - src/lib/automation/contract.ts
     - src/lib/automation/compiler.ts
@@ -21,6 +21,13 @@ verification:
     - src/app/api/v2/services/[id]/automation/draft/route.ts
     - src/app/(app)/services/[id]/automation/actions.ts
     - src/lib/automation/jobs.ts
+    - src/lib/automation/history.ts
+    - src/lib/automation/observation-history.ts
+    - src/app/api/v2/services/[id]/automation
+    - src/app/api/v2/settings/automation/route.ts
+    - src/app/api/services/[id]/automation/route.ts
+    - src/components/automation/AutomationTest.tsx
+    - src/lib/automation/golden.ts
     - src/lib/authorization.ts
     - src/lib/metrics/operational/registry.ts
     - src/app/api/v2/services/[id]/automation/candidate/route.ts
@@ -257,6 +264,75 @@ the Teams delivery pipeline. A committed automation route is not proof of provid
 delivery. A missing/disabled destination at enqueue time can skip the supplemental
 notification, and delivery has its own retry and failure records. The global routing
 switch does not recall a notification intent already committed for delivery.
+
+## Complete v2 endpoint checklist
+
+These paths are relative to `/api/v2/services/{id}/automation`. Path IDs must be
+valid service/version IDs, not names. Read endpoints use `automation:read` unless
+stated otherwise; normal actor/resource authorization also applies.
+
+- `GET /`: effective configuration, revision ETag, active/candidate summaries, and
+  seven-day health. Global state and counters are related data, not part of the
+  configuration revision's write precondition.
+- `GET /draft`: current snapshot and draft ETag; an absent draft returns revision
+  zero and the empty snapshot.
+- `PUT /draft`: complete `{ snapshot }` replacement; `automation:write`, draft
+  `If-Match`, and `Idempotency-Key` required.
+- `POST /validate`: `{ snapshot }`; returns validity/issues and an activation-review
+  reminder. It does not publish and does not waive activation gates.
+- `POST /simulate`: `{ snapshot, event, integrationType }`, with optional
+  service-owned `integrationId`, `providerPayload`, and ISO `evaluationAt`;
+  returns redacted outcomes. Validation/simulation use the SEARCH_EXPORT rate-limit
+  tier and do not require write scope or an idempotency key.
+- `POST /publish`: `{ expectedActiveVersionId, expectedCandidateVersionId? }`;
+  administrator `automation:publish`, draft `If-Match`, and `Idempotency-Key`
+  required. Existing-candidate replacement requires its expected identity.
+- `PATCH /mode`: `{ mode, expectedActiveVersionId, acknowledgeNoShadow?,
+  acknowledgeShadowErrors? }`; administrator publication scope, configuration
+  `If-Match`, and `Idempotency-Key` required.
+- `GET /versions`: immutable history summaries in descending version-number order.
+- `GET /versions/{versionId}`: service-owned historical snapshot and lint report.
+- `POST /restore`: `{ sourceVersionId }`; write scope, draft `If-Match`, and
+  `Idempotency-Key` required. Returns the new draft and its ETag.
+- `GET /candidate`: candidate snapshot, aggregates, readiness, and evidence-freshness
+  summary; no candidate returns not found rather than an empty candidate.
+- `POST /candidates/activate`: expected candidate ID plus optional expected active
+  ID, policy revision, and acknowledgement flags; administrator publication scope
+  and `Idempotency-Key` required; no `If-Match` requirement.
+- `DELETE /candidate`: `{ expectedCandidateVersionId }`; administrator publication
+  scope and `Idempotency-Key` required; no `If-Match` requirement.
+- `GET /decisions`: incident decision metadata; additionally requires
+  `incidents:read` and incident visibility. It omits stored summaries/source values.
+- `GET /observations`: discovery metadata/frequencies; optional `unmapped=true`
+  or `unmapped=false`. It omits previews and value hashes.
+
+Versions, decisions, and observations accept `limit` (1–100) and `cursor`; follow
+`pagination.nextCursor` while `pagination.hasMore` is true. Cursors are validated
+against their service and ordering boundary. Do not reuse an observation cursor
+with a different unmapped filter. Observation order uses first-seen time and ID,
+so a frequency refresh does not move an existing row between pages. Configuration,
+draft, candidate, and single-version reads are not paginated lists.
+
+Global `GET`/`PATCH /api/v2/settings/automation` use separate administrator
+`automation-settings:read` / `automation-settings:write` scopes. PATCH requires
+its settings ETag and an idempotency key; send `automationEnabled` and
+`automationTraceRetentionDays`, plus optional preview/readiness settings. Omitted
+optional settings preserve their previous values. This is not the service mode API.
+
+## Browser workspace and sample-test boundaries
+
+Desktop and mobile use the same workspace and session-authorized domain actions.
+The browser endpoint `/api/services/{id}/automation` is separate from the v2
+Bearer API: GET loads an authorized workspace area and page; POST forwards an
+allowlisted automation action and requires a matching request Origin. Its POST
+body is bounded to 256 KiB. Use the v2 endpoints for API-key integrations instead
+of assuming the browser endpoint shares their authorization or response contract.
+
+The Test panel reports semantic fixture results alongside the chosen sample's
+trace. Passing the built-in fixtures verifies those fixed normalization/operator
+cases, not that your service's mappings, rule coverage, live payloads, or external
+notifications are correct. Inspect the sample-specific result, then verify actual
+ingestion and delivery during rollout.
 
 ## Failures and operator diagnosis
 

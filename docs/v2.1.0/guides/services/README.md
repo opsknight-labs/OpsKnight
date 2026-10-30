@@ -19,5 +19,8 @@ Configure alert context, enrichment, and escalation routing with
 [Configure and roll out service automation](./service-automation), or follow the
 [API authoring walkthrough](./service-automation-api).
 
+Explore [starter templates and worked examples](./service-automation-examples),
+then use the [production operations guide](../../operate/reliability/service-automation).
+
 To attach remediation workflows and configure incident-created triggers, follow
 [Bind Runbooks and respond to incidents](../runbooks/respond).
