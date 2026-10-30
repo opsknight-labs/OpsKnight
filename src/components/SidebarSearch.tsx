@@ -29,6 +29,7 @@ import {
   PieChart,
   BarChart,
   ListTodo,
+  Sparkles,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/shadcn/badge';
 import { DirectUserAvatar } from '@/components/UserAvatar';
@@ -402,8 +403,24 @@ export default function SidebarSearch() {
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [open]);
 
+  // The assistant announces itself when mounted, so the entry only exists while it is switched on.
+  const [assistantName, setAssistantName] = useState<string | null>(null);
+  useEffect(() => {
+    const read = () => setAssistantName(document.documentElement.dataset.squireName ?? null);
+    read();
+    window.addEventListener('squire:ready', read);
+    return () => window.removeEventListener('squire:ready', read);
+  }, []);
+
   const handleSelect = useCallback(
     (_value: string, item?: { href?: string; id?: string; query?: string }) => {
+      if (item?.id === 'ask-assistant') {
+        window.dispatchEvent(new Event('squire:open'));
+        setOpen(false);
+        setQuery('');
+        inputRef.current?.blur();
+        return;
+      }
       if (item?.href) {
         if (item.href === '/incidents/create' || item.id === 'qa-create') {
           openCreateIncident();
@@ -435,6 +452,18 @@ export default function SidebarSearch() {
         page.keywords.some(k => k.toLowerCase().includes(q))
     );
   }, [query]);
+
+  const assistantMatches = useMemo(() => {
+    if (!assistantName || query.trim().length < 2) return false;
+    const q = query.trim().toLowerCase();
+    return q
+      .split(/[^\p{L}\p{N}_]+/u)
+      .some(token =>
+        ['ask', 'assistant', 'ai', 'help', ...assistantName.toLowerCase().split(/\s+/)].includes(
+          token
+        )
+      );
+  }, [assistantName, query]);
 
   const groupedResults = useMemo(() => {
     const groups = new Map<string, SearchResult[]>();
@@ -608,6 +637,25 @@ export default function SidebarSearch() {
 
             {query.length > 0 && (
               <>
+                {assistantMatches && assistantName && (
+                  <CommandGroup heading="Assistant">
+                    <CommandItem
+                      value={`ask-${assistantName}`}
+                      onSelect={() => handleSelect('', { id: 'ask-assistant' })}
+                      className="aria-selected:bg-accent aria-selected:text-accent-foreground cursor-pointer"
+                    >
+                      <div className="flex items-center justify-center h-7 w-7 rounded-sm bg-muted/70 mr-3 shrink-0">
+                        <Sparkles className="h-3.5 w-3.5 opacity-70" />
+                      </div>
+                      <div className="flex flex-1 flex-col gap-0.5 overflow-hidden">
+                        <span className="font-medium text-sm">Ask {assistantName}</span>
+                        <span className="text-[10px] text-muted-foreground truncate">
+                          Questions about incidents you can access
+                        </span>
+                      </div>
+                    </CommandItem>
+                  </CommandGroup>
+                )}
                 {matchingNavigation.length > 0 && (
                   <CommandGroup heading="Navigation">
                     {matchingNavigation.map(page => {

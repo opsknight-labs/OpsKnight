@@ -160,3 +160,39 @@ groups:
           severity: critical
         annotations:
           summary: Durable ingestion queue evidence is unavailable
+  # Intelligence is optional and advisory: it never pages. These are warnings for the people who run it.
+  # The lane gauges exist only on instances running the lane, so a disabled install raises nothing.
+  - name: opsknight.intelligence
+    rules:
+      - alert: OpsKnightIntelligenceLaneStalled
+        expr: max(opsknight_intelligence_lane_last_cycle_age_seconds) > 300
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: The intelligence lane has not completed a cycle for five minutes
+          description: Suggestions are going stale. Paging is unaffected. Check the worker or intelligence-worker logs and database health, then restart the worker if it is wedged.
+      - alert: OpsKnightIntelligencePausedForPaging
+        expr: max(opsknight_intelligence_lane_paused) == 1
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: Intelligence has yielded to a paging backlog for fifteen minutes
+          description: The lane pauses itself while escalation or notification work is behind. Investigate the paging backlog first; intelligence resumes on its own when it clears.
+      - alert: OpsKnightIntelligenceBacklogStale
+        expr: max(opsknight_intelligence_queue_oldest_ready_age_seconds) > 900
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: Intelligence work has waited more than fifteen minutes
+          description: Raise the batch size or concurrency in Settings, Intelligence, or run a dedicated intelligence-worker. Paging is unaffected.
+      - alert: OpsKnightIntelligenceDeadLetters
+        expr: max(opsknight_intelligence_dead_letters) > 0
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: Some intelligence work exhausted its retries
+          description: Review and replay the quarantined items in Settings, Intelligence. Affected incidents only lack suggestions; paging is unaffected.

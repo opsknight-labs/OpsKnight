@@ -359,7 +359,9 @@ describe('LiveDashboardProvider', () => {
 
       // Signal for 45; the first answer (a 304 from a lagging replica) still reflects 40.
       signal(view, 2, '45');
-      await flush(1_000);
+      // The one-second minimum read gap also includes up to 150ms of jitter. Advancing only
+      // one second races that timer when the first read happened late in the initial 300ms.
+      await flush(1_250);
       expect(fetchMock.mock.calls.length).toBeGreaterThanOrEqual(2);
       if (fetchMock.mock.calls.length === 2) {
         expect(screen.getByTestId('ids').textContent).toBe('a');

@@ -2255,6 +2255,17 @@
     "contractSha256": "774a209c9632f1fa82391cef7756de4688d753cd5675e6a6569f94870b169f05",
     "actions": ["incident.read"]
   },
+  "getIncidentIntelligence": {
+    "status": "DISCOVERABLE",
+    "risk": "R0",
+    "reason": "Advisory, read-only intelligence for one incident; current role, scopes and the same actor-scoped views as the UI.",
+    "tool": null,
+    "routeSha256": "daddc46cc904ad2b0617a734b7f560fe0d1be1a94e1213a6e9aa183455adea24",
+    "resourceFilter": "existing REST route authorization and scoped projection",
+    "evidence": "tests/integration/intelligence/api-v2-intelligence.test.ts",
+    "contractSha256": "e5fa8cf66cb9cb64433312a4378da2f83f7924cdf82dcbdb25dfa708de13e2f4",
+    "actions": ["incident.read"]
+  },
   "listIncidents": {
     "status": "CURATED",
     "risk": "R0",

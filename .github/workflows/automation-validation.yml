@@ -43,6 +43,9 @@ concurrency:
   group: automation-validation-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  NODE_OPTIONS: --max-old-space-size=6144
+
 jobs:
   automation:
     runs-on: ubuntu-latest
@@ -81,6 +84,8 @@ jobs:
         run: npx vitest run -c vitest.int.config.ts tests/integration/automation-certification.test.ts tests/integration/automation-settings.test.ts tests/integration/automation-load-certification.test.ts tests/integration/notification-claim-race.test.ts tests/integration/notification-claim-recovery.test.ts tests/integration/escalation-job-lookup.test.ts tests/integration/escalation-commit-concurrency.test.ts tests/integration/provider-quota-reservation.test.ts tests/integration/automation-operational-recovery.test.ts tests/integration/automation-policy-mutations.test.ts tests/integration/automation-service-policy.test.ts tests/integration/automation-policy-archive.test.ts tests/integration/automation-policy-dependencies.test.tsx tests/integration/automation-incident-presentation.test.tsx tests/integration/automation-concurrency.test.ts tests/integration/automation-history-guard.test.ts tests/integration/job-queue.test.ts tests/integration/runbook-resolve-race.test.ts tests/integration/runbook-monitoring-trigger.test.ts tests/integration/runbook-automation-safety.test.ts tests/integration/runbook-automation-context.test.ts tests/integration/runbook-automation-e2e.test.ts tests/integration/runbook-legacy-compat.test.ts tests/integration/runbook-recovery.test.ts tests/integration/automation-response-context.test.ts tests/integration/incident-response-timeline.test.ts --no-file-parallelism --maxWorkers=1
       - name: Production build
         run: npm run build
+        env:
+          NODE_OPTIONS: --max-old-space-size=6144
       - name: Live TypeScript and Python SDK workflows
         run: |
           npx tsc --project sdk/typescript/tsconfig.json

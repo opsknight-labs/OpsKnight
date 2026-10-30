@@ -1,10 +1,16 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 
-const { queryRaw, schedulerFindUnique } = vi.hoisted(() => ({
+const { queryRaw, schedulerFindUnique, intelligenceCheck, controlPlane } = vi.hoisted(() => ({
   queryRaw: vi.fn(),
   schedulerFindUnique: vi.fn(),
+  intelligenceCheck: vi.fn(),
+  controlPlane: vi.fn(),
 }));
+
+vi.mock('@/lib/provider-admission', () => ({ certifyNotificationControlPlane: controlPlane }));
+
+vi.mock('@/lib/intelligence/metrics', () => ({ getIntelligenceHealthCheck: intelligenceCheck }));
 
 vi.mock('@/lib/prisma', () => ({
   default: {
@@ -28,6 +34,19 @@ describe('public readiness response', () => {
       lastSuccessAt: null,
     });
     queryRaw.mockResolvedValue([{ '?column?': 1 }]);
+    intelligenceCheck.mockReturnValue({ status: 'disabled' });
+    controlPlane.mockRejectedValue(new Error('unavailable in unit tests'));
+  });
+
+  it('reports a paused intelligence lane without degrading an otherwise healthy replica', async () => {
+    process.env.OPSKNIGHT_PROCESS_ROLE = 'http';
+    controlPlane.mockResolvedValue(undefined);
+    intelligenceCheck.mockReturnValue({ status: 'degraded', error: 'Paused to protect paging' });
+    const response = await GET(new NextRequest('http://localhost/api/health?mode=readiness'));
+    const body = await response.json();
+    expect(response.status).toBe(200);
+    expect(body.checks.intelligence.status).toBe('degraded');
+    expect(body.status).toBe('healthy');
   });
 
   it('requires a live ingestion consumer only on its configured role', async () => {

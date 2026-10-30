@@ -1,5 +1,13 @@
+import IncidentIntelligencePanel from './IncidentIntelligencePanel';
+import IntelligenceSkeleton from './IntelligenceSkeleton';
 import prisma from '@/lib/prisma';
+import { Suspense } from 'react';
 import IncidentAutomationCard from '@/components/automation/IncidentAutomationCard';
+import IncidentIntelligenceCard from '@/components/incident/IncidentIntelligenceCard';
+import IncidentRelatedCard from '@/components/incident/IncidentRelatedCard';
+import IncidentResponseCard from '@/components/incident/IncidentResponseCard';
+import IncidentAskSquireCard from '@/components/squire/IncidentAskSquireCard';
+import IncidentAiSummaryCard from '@/components/incident/IncidentAiSummaryCard';
 import EscalationExecutionHealth from '@/components/incident/detail/EscalationExecutionHealth';
 import { getEscalationExecutionHealth } from '@/lib/escalation/execution-health';
 import { visibleIncidentSource } from '@/lib/automation/presentation/source-visibility';
@@ -623,6 +631,34 @@ export default async function IncidentDetailScreen({
               canManage={canManageIncident}
             />
           )}
+
+          <IncidentIntelligencePanel
+            similar={
+              <Suspense fallback={<IntelligenceSkeleton />}>
+                <IncidentIntelligenceCard incidentId={incident.id} />
+              </Suspense>
+            }
+            related={
+              <Suspense fallback={<IntelligenceSkeleton />}>
+                <IncidentRelatedCard incidentId={incident.id} />
+              </Suspense>
+            }
+            response={
+              <Suspense fallback={<IntelligenceSkeleton />}>
+                <IncidentResponseCard incidentId={incident.id} />
+              </Suspense>
+            }
+            summary={
+              <Suspense fallback={<IntelligenceSkeleton />}>
+                <IncidentAiSummaryCard incidentId={incident.id} />
+              </Suspense>
+            }
+            assistant={
+              <Suspense fallback={<IntelligenceSkeleton />}>
+                <IncidentAskSquireCard />
+              </Suspense>
+            }
+          />
 
           <IncidentDetailTabs
             defaultTab={initialTab || 'overview'}

@@ -7,6 +7,9 @@ permissions:
 concurrency:
   group: mcp-${{ github.ref }}
   cancel-in-progress: true
+env:
+  NODE_OPTIONS: --max-old-space-size=6144
+
 jobs:
   detect-changes:
     name: Detect MCP-related changes

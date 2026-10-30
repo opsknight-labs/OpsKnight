@@ -1,0 +1,46 @@
+{
+  "measuredAt": "2026-10-30T04:20:00.597Z",
+  "options": {
+    "history": 1000000,
+    "burst": 10000,
+    "services": 50,
+    "batchSize": 50,
+    "concurrency": 8,
+    "reuseHistory": true
+  },
+  "seedSeconds": 11,
+  "drainSeconds": 2123,
+  "incidentsPerSecond": 4.7,
+  "cycles": 802,
+  "failedItems": 8,
+  "deadLetters": 0,
+  "activeFindings": 100000,
+  "correlationGroups": 9219,
+  "perKind": {
+    "INDEX_INCIDENT": {
+      "count": 10000,
+      "p50Ms": 12,
+      "p95Ms": 16.6,
+      "p99Ms": 20.5
+    },
+    "ANALYZE_INCIDENT": {
+      "count": 10008,
+      "p50Ms": 691.3,
+      "p95Ms": 1905.5,
+      "p99Ms": 2428.1
+    },
+    "CORRELATE_INCIDENT": {
+      "count": 10000,
+      "p50Ms": 20.4,
+      "p95Ms": 57.5,
+      "p99Ms": 86.4
+    },
+    "ANALYZE_RESPONSE": {
+      "count": 10000,
+      "p50Ms": 26.6,
+      "p95Ms": 45,
+      "p99Ms": 66.9
+    }
+  },
+  "note": "Single process, local PostgreSQL. Indicative only; certification needs dedicated hardware."
+}
