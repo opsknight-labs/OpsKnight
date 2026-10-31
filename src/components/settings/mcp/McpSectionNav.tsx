@@ -56,14 +56,17 @@ export default function McpSectionNav({
                 {item.count !== undefined && (
                   <span
                     className={cn(
-                      'rounded-full px-1.5 py-px text-[10px] font-semibold tabular-nums',
+                      'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold tabular-nums',
                       item.attention && item.count > 0
-                        ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300'
+                        ? 'border border-amber-300 bg-amber-100 text-amber-900 dark:border-amber-800/60 dark:bg-amber-950/70 dark:text-amber-300'
                         : active
                           ? 'bg-primary/10 text-primary'
                           : 'bg-muted-foreground/10 text-muted-foreground'
                     )}
                   >
+                    {item.attention && item.count > 0 && (
+                      <span className="inline-block h-1.5 w-1.5 rounded-full bg-amber-500 animate-pulse" />
+                    )}
                     {item.count}
                     {item.attention && item.count > 0 && <span className="sr-only"> pending</span>}
                   </span>

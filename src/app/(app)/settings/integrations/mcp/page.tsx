@@ -1,5 +1,7 @@
 import Link from 'next/link';
 import {
+  AlertTriangle,
+  ArrowUpRight,
   Bot,
   CheckCircle2,
   ClipboardCheck,
@@ -11,14 +13,17 @@ import {
   Shield,
   ShieldAlert,
   SlidersHorizontal,
+  Sparkles,
   Users,
   XCircle,
 } from 'lucide-react';
 import prisma from '@/lib/prisma';
+import { getUserPermissions } from '@/lib/rbac';
 import { getMcpConfigurationStatus } from '@/lib/mcp/auth/config';
 import DetailHeroBanner from '@/components/ui/DetailHeroBanner';
 import { Badge } from '@/components/ui/shadcn/badge';
 import { Button } from '@/components/ui/shadcn/button';
+import { McpLogo } from '@/components/common/BrandLogos';
 import McpAppUrlSetup from '@/components/settings/mcp/McpAppUrlSetup';
 import McpSectionNav, { type McpNavItem } from '@/components/settings/mcp/McpSectionNav';
 import McpOverviewSection from '@/components/settings/mcp/sections/McpOverviewSection';
@@ -82,17 +87,19 @@ export default async function McpSettings({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  const viewer = await loadMcpViewer();
-  const isAdmin = viewer.isAdmin;
+  const permissions = await getUserPermissions();
+  const isAdmin = permissions.isAdmin;
+  const viewer = await loadMcpViewer(permissions);
   const params = parseMcpListParams(await searchParams, isAdmin);
   const { section } = params;
   const now = new Date();
 
-  const [configuration, policy, activeConnections, pending] = await Promise.all([
+  const [configuration, policy, activeConnections, pending, activeClients] = await Promise.all([
     getMcpConfigurationStatus(),
     prisma.mcpPolicy.findUnique({ where: { id: 'default' } }),
     countActiveConnections(viewer, now),
     isAdmin ? countPendingApprovals(viewer, now) : Promise.resolve(null),
+    isAdmin && section === 'overview' ? countActiveClients(viewer) : Promise.resolve(null),
   ]);
   const systemSettings =
     isAdmin && !configuration.origin
@@ -154,75 +161,99 @@ export default async function McpSettings({
   ];
 
   return (
-    // Matches the product's large-screen content widths: 1080px, and 1180px on 4K displays.
-    <div className="w-full max-w-[1080px] space-y-6 min-[1920px]:max-w-[1180px]">
+    <div className="space-y-6">
       <DetailHeroBanner
-        tag="AI ASSISTANT INTEGRATION"
-        title="MCP integration"
-        subtitle="Let AI assistants read OpsKnight and propose changes, with explicit user consent, each user's current permissions, and administrator approval for every change."
+        tag="AI AGENT PROTOCOL & INTEGRATION"
+        title="Model Context Protocol (MCP) Integration"
+        subtitle="Connect Anthropic Claude, ChatGPT, Cursor, and agentic assistants to OpsKnight with explicit user consent, fine-grained RBAC, and administrator approval gates."
+        icon={
+          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500/20 via-primary/15 to-violet-500/20 border border-primary/30 shadow-inner">
+            <McpLogo className="h-7 w-7 text-white" />
+          </div>
+        }
         badges={
           <div className="flex flex-wrap items-center gap-1.5">
             <Badge
               variant="outline"
-              className="border-white/20 bg-white/10 text-[10px] font-semibold text-slate-100"
+              className="border-primary-foreground/30 bg-primary-foreground/10 text-primary-foreground text-[10px] font-semibold"
             >
               <Shield className="mr-1 h-3 w-3" aria-hidden="true" />
-              {isAdmin ? 'Admin managed' : 'Your access'}
+              {isAdmin ? 'Admin Only' : 'Your Access'}
             </Badge>
             <Badge
               variant="outline"
               className={`text-[10px] font-semibold ${
                 enabled && ready
                   ? 'border-emerald-400/60 bg-emerald-400/15 text-emerald-100'
-                  : 'border-white/20 bg-white/10 text-slate-200'
+                  : ready
+                    ? 'border-blue-400/60 bg-blue-400/15 text-blue-100'
+                    : 'border-amber-400/60 bg-amber-400/15 text-amber-100'
               }`}
             >
               {enabled && ready ? (
                 <>
                   <CheckCircle2 className="mr-1 h-3 w-3" aria-hidden="true" />
-                  Enabled
+                  Protocol Active & Ready
+                </>
+              ) : ready ? (
+                <>
+                  <ArrowUpRight className="mr-1 h-3 w-3" aria-hidden="true" />
+                  Ready to Connect
                 </>
               ) : (
                 <>
-                  <XCircle className="mr-1 h-3 w-3" aria-hidden="true" />
-                  {enabled ? 'Needs attention' : 'Disabled'}
+                  <AlertTriangle className="mr-1 h-3 w-3" aria-hidden="true" />
+                  {enabled ? 'Configuration Needed' : 'Setup Required'}
                 </>
               )}
             </Badge>
+            {automaticReady && (
+              <Badge
+                variant="outline"
+                className="border-primary-foreground/20 bg-primary-foreground/10 text-primary-foreground text-[10px] font-semibold"
+              >
+                <Sparkles className="mr-1 h-3 w-3 text-sky-300" aria-hidden="true" />
+                Zero-Config DCR
+              </Badge>
+            )}
           </div>
         }
         statsPlacement="bottom"
         stats={[
           {
-            label: 'Endpoint',
+            label: 'Server Endpoint',
             value: endpoint ?? 'Not configured',
             icon: <Globe className="h-4 w-4" />,
             tooltip: endpoint ?? undefined,
             valueClassName: endpoint
-              ? 'text-white font-semibold text-xs sm:text-sm font-mono truncate max-w-full'
-              : 'text-amber-300',
-            subtext: originSource ?? 'Set the App URL',
+              ? 'text-primary-foreground font-semibold text-xs sm:text-sm font-mono truncate max-w-full'
+              : 'text-amber-300 font-semibold text-xs sm:text-sm',
+            subtext: originSource ?? 'Set App URL in System settings',
           },
           {
-            label: 'Changes',
-            value: policy?.writesEnabled ? 'Approval required' : 'Read only',
+            label: 'Change Safety',
+            value: policy?.writesEnabled ? 'Approval Required' : 'Read Only',
             icon: <PencilLine className="h-4 w-4" />,
-            valueClassName: policy?.writesEnabled ? 'text-amber-300' : 'text-emerald-300',
-            subtext: 'Approved by an administrator',
+            valueClassName: policy?.writesEnabled
+              ? 'text-amber-300 font-semibold text-sm sm:text-base'
+              : 'text-emerald-300 font-semibold text-sm sm:text-base',
+            subtext: policy?.writesEnabled ? 'Admin approval before run' : 'Mutations blocked',
           },
           {
-            label: 'Sensitive reads',
-            value: policy?.sensitiveReadsEnabled ? 'Allowed' : 'Off',
+            label: 'Sensitive Reads',
+            value: policy?.sensitiveReadsEnabled ? 'Permitted' : 'Enforced Off',
             icon: <ShieldAlert className="h-4 w-4" />,
-            valueClassName: policy?.sensitiveReadsEnabled ? 'text-amber-300' : 'text-slate-200',
-            subtext: 'Redacted configuration',
+            valueClassName: policy?.sensitiveReadsEnabled
+              ? 'text-amber-300 font-semibold text-sm sm:text-base'
+              : 'text-emerald-300 font-semibold text-sm sm:text-base',
+            subtext: 'Configuration redaction',
           },
           {
-            label: isAdmin ? 'Active connections' : 'Your connections',
-            value: String(activeConnections),
+            label: isAdmin ? 'Active Connections' : 'Your Connections',
+            value: activeConnections === 1 ? '1 Connection' : `${activeConnections} Connections`,
             icon: <Bot className="h-4 w-4" />,
-            valueClassName: 'text-white font-semibold',
-            subtext: 'Consented grants',
+            valueClassName: 'text-primary-foreground font-semibold text-sm sm:text-base',
+            subtext: 'Consented agent grants',
           },
         ]}
       />
@@ -278,7 +309,7 @@ export default async function McpSettings({
             writesEnabled={policy?.writesEnabled ?? false}
             counts={{
               activeConnections,
-              activeClients: isAdmin ? await countActiveClients(viewer) : null,
+              activeClients,
               pendingApprovals: pending?.total ?? null,
             }}
             hrefs={hrefs}
@@ -299,9 +330,21 @@ export default async function McpSettings({
         );
       case 'connections': {
         const input = { status: params.grantStatus, q: params.q, clientId: params.clientId };
-        let result = await listMcpGrants(viewer, { ...input, page: params.page }, now);
-        const page = clampPage(params.page, result.total);
-        if (page !== params.page) result = await listMcpGrants(viewer, { ...input, page }, now);
+        const [initialResult, availableClients] = await Promise.all([
+          listMcpGrants(viewer, { ...input, page: params.page }, now),
+          isAdmin
+            ? prisma.mcpClient.findMany({
+                select: { id: true, name: true },
+                orderBy: { name: 'asc' },
+                take: 100,
+              })
+            : Promise.resolve([]),
+        ]);
+        const page = clampPage(params.page, initialResult.total);
+        const result =
+          page !== params.page
+            ? await listMcpGrants(viewer, { ...input, page }, now)
+            : initialResult;
         return (
           <McpConnectionsSection
             isAdmin={isAdmin}
@@ -312,6 +355,7 @@ export default async function McpSettings({
             status={params.grantStatus}
             q={params.q}
             client={result.client}
+            availableClients={availableClients}
             now={now}
             timeZone={viewer.timeZone}
             describeScope={describeMcpScope}
@@ -322,9 +366,12 @@ export default async function McpSettings({
       }
       case 'assistants': {
         const input = { status: params.clientStatus, type: params.clientType, q: params.q };
-        let result = await listMcpClients(viewer, { ...input, page: params.page }, now);
-        const page = clampPage(params.page, result.total);
-        if (page !== params.page) result = await listMcpClients(viewer, { ...input, page }, now);
+        const initialResult = await listMcpClients(viewer, { ...input, page: params.page }, now);
+        const page = clampPage(params.page, initialResult.total);
+        const result =
+          page !== params.page
+            ? await listMcpClients(viewer, { ...input, page }, now)
+            : initialResult;
         return (
           <McpAssistantsSection
             rows={result.rows}
@@ -347,9 +394,12 @@ export default async function McpSettings({
       }
       case 'approvals': {
         const input = { kind: params.approvalKind, state: params.approvalState };
-        let result = await listMcpApprovals(viewer, { ...input, page: params.page }, now);
-        const page = clampPage(params.page, result.total);
-        if (page !== params.page) result = await listMcpApprovals(viewer, { ...input, page }, now);
+        const initialResult = await listMcpApprovals(viewer, { ...input, page: params.page }, now);
+        const page = clampPage(params.page, initialResult.total);
+        const result =
+          page !== params.page
+            ? await listMcpApprovals(viewer, { ...input, page }, now)
+            : initialResult;
         return (
           <McpApprovalsSection
             rows={result.rows}
