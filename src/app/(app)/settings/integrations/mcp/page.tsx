@@ -89,16 +89,17 @@ export default async function McpSettings({
 }) {
   const permissions = await getUserPermissions();
   const isAdmin = permissions.isAdmin;
-  const viewer = await loadMcpViewer();
+  const viewer = await loadMcpViewer(permissions);
   const params = parseMcpListParams(await searchParams, isAdmin);
   const { section } = params;
   const now = new Date();
 
-  const [configuration, policy, activeConnections, pending] = await Promise.all([
+  const [configuration, policy, activeConnections, pending, activeClients] = await Promise.all([
     getMcpConfigurationStatus(),
     prisma.mcpPolicy.findUnique({ where: { id: 'default' } }),
     countActiveConnections(viewer, now),
     isAdmin ? countPendingApprovals(viewer, now) : Promise.resolve(null),
+    isAdmin && section === 'overview' ? countActiveClients(viewer) : Promise.resolve(null),
   ]);
   const systemSettings =
     isAdmin && !configuration.origin
@@ -308,7 +309,7 @@ export default async function McpSettings({
             writesEnabled={policy?.writesEnabled ?? false}
             counts={{
               activeConnections,
-              activeClients: isAdmin ? await countActiveClients(viewer) : null,
+              activeClients,
               pendingApprovals: pending?.total ?? null,
             }}
             hrefs={hrefs}
@@ -329,16 +330,21 @@ export default async function McpSettings({
         );
       case 'connections': {
         const input = { status: params.grantStatus, q: params.q, clientId: params.clientId };
-        let result = await listMcpGrants(viewer, { ...input, page: params.page }, now);
-        const page = clampPage(params.page, result.total);
-        if (page !== params.page) result = await listMcpGrants(viewer, { ...input, page }, now);
-        const availableClients = isAdmin
-          ? await prisma.mcpClient.findMany({
-              select: { id: true, name: true },
-              orderBy: { name: 'asc' },
-              take: 100,
-            })
-          : [];
+        const [initialResult, availableClients] = await Promise.all([
+          listMcpGrants(viewer, { ...input, page: params.page }, now),
+          isAdmin
+            ? prisma.mcpClient.findMany({
+                select: { id: true, name: true },
+                orderBy: { name: 'asc' },
+                take: 100,
+              })
+            : Promise.resolve([]),
+        ]);
+        const page = clampPage(params.page, initialResult.total);
+        const result =
+          page !== params.page
+            ? await listMcpGrants(viewer, { ...input, page }, now)
+            : initialResult;
         return (
           <McpConnectionsSection
             isAdmin={isAdmin}
@@ -360,9 +366,12 @@ export default async function McpSettings({
       }
       case 'assistants': {
         const input = { status: params.clientStatus, type: params.clientType, q: params.q };
-        let result = await listMcpClients(viewer, { ...input, page: params.page }, now);
-        const page = clampPage(params.page, result.total);
-        if (page !== params.page) result = await listMcpClients(viewer, { ...input, page }, now);
+        const initialResult = await listMcpClients(viewer, { ...input, page: params.page }, now);
+        const page = clampPage(params.page, initialResult.total);
+        const result =
+          page !== params.page
+            ? await listMcpClients(viewer, { ...input, page }, now)
+            : initialResult;
         return (
           <McpAssistantsSection
             rows={result.rows}
@@ -385,9 +394,12 @@ export default async function McpSettings({
       }
       case 'approvals': {
         const input = { kind: params.approvalKind, state: params.approvalState };
-        let result = await listMcpApprovals(viewer, { ...input, page: params.page }, now);
-        const page = clampPage(params.page, result.total);
-        if (page !== params.page) result = await listMcpApprovals(viewer, { ...input, page }, now);
+        const initialResult = await listMcpApprovals(viewer, { ...input, page: params.page }, now);
+        const page = clampPage(params.page, initialResult.total);
+        const result =
+          page !== params.page
+            ? await listMcpApprovals(viewer, { ...input, page }, now)
+            : initialResult;
         return (
           <McpApprovalsSection
             rows={result.rows}

@@ -1,6 +1,6 @@
 'use client';
 
-import type { ReactNode } from 'react';
+import { useMemo, type ReactNode } from 'react';
 import { Code2 } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/shadcn/tabs';
 import { ClaudeLogo, CursorLogo, ChatGptLogo } from '@/components/common/BrandLogos';
@@ -33,8 +33,11 @@ const ASSISTANTS = [
 
 /** Per-assistant setup steps with the endpoint already filled in. */
 export default function McpConnectGuide({ endpoint }: { endpoint: string }) {
-  const commands = mcpSetupCommands(endpoint);
-  const endpointField = <McpCopyField value={endpoint} label="MCP server URL" />;
+  const commands = useMemo(() => mcpSetupCommands(endpoint), [endpoint]);
+  const endpointField = useMemo(
+    () => <McpCopyField value={endpoint} label="MCP server URL" />,
+    [endpoint]
+  );
   return (
     <Tabs defaultValue="claude-code" className="space-y-5">
       <div className="-mx-1 overflow-x-auto px-1 pb-1 scrollbar-none">

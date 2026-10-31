@@ -1,5 +1,6 @@
 'use client';
 
+import React, { useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { Bot } from 'lucide-react';
 import {
@@ -15,7 +16,7 @@ import { mcpHref, type GrantStatus } from '@/app/(app)/settings/integrations/mcp
 
 export { AssistantIcon, getAssistantIcon };
 
-export default function AssistantFilterSelect({
+function AssistantFilterSelect({
   clients,
   selectedClientId,
   status,
@@ -28,6 +29,20 @@ export default function AssistantFilterSelect({
 }) {
   const router = useRouter();
 
+  const handleValueChange = useCallback(
+    (value: string) => {
+      const nextClientId = value === 'all' ? null : value;
+      const nextHref = mcpHref({
+        tab: 'connections',
+        status: status === 'active' ? null : status,
+        q: q || null,
+        client: nextClientId,
+      });
+      router.push(nextHref);
+    },
+    [router, status, q]
+  );
+
   if (clients.length === 0) return null;
 
   return (
@@ -35,19 +50,7 @@ export default function AssistantFilterSelect({
       <label htmlFor="mcp-assistant-select" className="sr-only">
         Filter by Assistant
       </label>
-      <Select
-        value={selectedClientId ?? 'all'}
-        onValueChange={value => {
-          const nextClientId = value === 'all' ? null : value;
-          const nextHref = mcpHref({
-            tab: 'connections',
-            status: status === 'active' ? null : status,
-            q: q || null,
-            client: nextClientId,
-          });
-          router.push(nextHref);
-        }}
-      >
+      <Select value={selectedClientId ?? 'all'} onValueChange={handleValueChange}>
         <SelectTrigger
           id="mcp-assistant-select"
           className="h-8 min-w-[170px] max-w-[240px] gap-2 rounded-lg border-border/80 bg-background text-xs font-medium hover:border-primary/40 focus:ring-1 focus:ring-primary"
@@ -104,3 +107,5 @@ export default function AssistantFilterSelect({
     </div>
   );
 }
+
+export default React.memo(AssistantFilterSelect);

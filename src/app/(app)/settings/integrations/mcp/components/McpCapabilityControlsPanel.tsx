@@ -1,6 +1,14 @@
 'use client';
 
-import { useId, useMemo, useRef, useState, useTransition } from 'react';
+import {
+  useCallback,
+  useDeferredValue,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+  useTransition,
+} from 'react';
 import {
   ChevronDown,
   ChevronLeft,
@@ -131,11 +139,15 @@ export default function McpCapabilityControlsPanel({
   const [pending, startTransition] = useTransition();
   const saving = useRef(false);
 
+  type GroupItem = McpCapability & { searchText: string };
+
   const groups = useMemo(() => {
-    const byDomain = new Map<string, McpCapability[]>();
+    const byDomain = new Map<string, GroupItem[]>();
     for (const capability of capabilities) {
       const list = byDomain.get(capability.domain) ?? [];
-      list.push(capability);
+      const searchText =
+        `${capability.id} ${capability.tool ?? ''} ${capability.domain} ${domainLabel(capability.domain)} ${capability.summary}`.toLowerCase();
+      list.push({ ...capability, searchText });
       byDomain.set(capability.domain, list);
     }
     // Generic surfaces first: they gate everything else; then domains alphabetically.
@@ -157,77 +169,99 @@ export default function McpCapabilityControlsPanel({
       });
   }, [capabilities]);
 
-  const isDisabled = (capability: McpCapability) =>
-    entries.has(capability.id) || entries.has(DOMAIN_PREFIX + capability.domain);
-  const exposedCount = capabilities.filter(capability => !isDisabled(capability)).length;
+  const isDisabled = useCallback(
+    (capability: McpCapability) =>
+      entries.has(capability.id) || entries.has(DOMAIN_PREFIX + capability.domain),
+    [entries]
+  );
 
-  const sortedEntries = [...entries].sort();
-  const dirty =
-    sortedEntries.length !== baseline.length ||
-    sortedEntries.some((entry, i) => entry !== baseline.at(i));
+  const exposedCount = useMemo(
+    () => capabilities.filter(capability => !isDisabled(capability)).length,
+    [capabilities, isDisabled]
+  );
 
-  const update = (mutate: (next: Set<string>) => void) => {
+  const sortedEntries = useMemo(() => [...entries].sort(), [entries]);
+  const dirty = useMemo(
+    () =>
+      sortedEntries.length !== baseline.length ||
+      sortedEntries.some((entry, i) => entry !== baseline.at(i)),
+    [sortedEntries, baseline]
+  );
+
+  const update = useCallback((mutate: (next: Set<string>) => void) => {
     setEntries(previous => {
       const next = new Set(previous);
       mutate(next);
       return next;
     });
     setStatus('idle');
-  };
+  }, []);
 
-  const setItem = (capability: McpCapability, exposed: boolean, members: McpCapability[]) =>
-    update(next => {
-      const marker = DOMAIN_PREFIX + capability.domain;
-      if (exposed) {
-        // Re-enabling one item of a fully disabled group keeps the rest of the group disabled.
-        if (next.delete(marker))
-          for (const member of members) if (member.id !== capability.id) next.add(member.id);
-        next.delete(capability.id);
-      } else next.add(capability.id);
-    });
+  const setItem = useCallback(
+    (capability: McpCapability, exposed: boolean, members: McpCapability[]) =>
+      update(next => {
+        const marker = DOMAIN_PREFIX + capability.domain;
+        if (exposed) {
+          // Re-enabling one item of a fully disabled group keeps the rest of the group disabled.
+          if (next.delete(marker))
+            for (const member of members) if (member.id !== capability.id) next.add(member.id);
+          next.delete(capability.id);
+        } else next.add(capability.id);
+      }),
+    [update]
+  );
 
-  const setGroup = (domain: string, members: McpCapability[], exposed: boolean) =>
-    update(next => {
-      for (const member of members) next.delete(member.id);
-      if (exposed) next.delete(DOMAIN_PREFIX + domain);
-      else next.add(DOMAIN_PREFIX + domain);
-    });
+  const setGroup = useCallback(
+    (domain: string, members: McpCapability[], exposed: boolean) =>
+      update(next => {
+        for (const member of members) next.delete(member.id);
+        if (exposed) next.delete(DOMAIN_PREFIX + domain);
+        else next.add(DOMAIN_PREFIX + domain);
+      }),
+    [update]
+  );
 
-  const toggleExpanded = (domain: string) =>
+  const toggleExpanded = useCallback((domain: string) => {
     setExpanded(previous => {
       const next = new Set(previous);
       if (!next.delete(domain)) next.add(domain);
       return next;
     });
+  }, []);
 
-  const needle = query.trim().toLowerCase();
+  const deferredQuery = useDeferredValue(query);
+  const needle = useMemo(() => deferredQuery.trim().toLowerCase(), [deferredQuery]);
   const filtering =
     needle.length > 0 || onlyDisabled || selectedDomain !== 'all' || selectedRisk !== 'all';
-  const visibleGroups = groups
-    .filter(group => selectedDomain === 'all' || group.domain === selectedDomain)
-    .map(group => ({
-      ...group,
-      matches: group.items.filter(
-        capability =>
-          (!onlyDisabled || isDisabled(capability)) &&
-          (selectedRisk === 'all' || capability.risk === selectedRisk) &&
-          (!needle ||
-            `${capability.id} ${capability.tool ?? ''} ${capability.domain} ${domainLabel(capability.domain)} ${capability.summary}`
-              .toLowerCase()
-              .includes(needle))
-      ),
-    }))
-    .filter(group => !filtering || group.matches.length > 0);
-  const matchCount = visibleGroups.reduce((sum, group) => sum + group.matches.length, 0);
+
+  const visibleGroups = useMemo(() => {
+    return groups
+      .filter(group => selectedDomain === 'all' || group.domain === selectedDomain)
+      .map(group => ({
+        ...group,
+        matches: group.items.filter(
+          capability =>
+            (!onlyDisabled || isDisabled(capability)) &&
+            (selectedRisk === 'all' || capability.risk === selectedRisk) &&
+            (!needle || capability.searchText.includes(needle))
+        ),
+      }))
+      .filter(group => !filtering || group.matches.length > 0);
+  }, [groups, selectedDomain, selectedRisk, onlyDisabled, needle, filtering, isDisabled]);
+
+  const matchCount = useMemo(
+    () => visibleGroups.reduce((sum, group) => sum + group.matches.length, 0),
+    [visibleGroups]
+  );
 
   const allExpanded = groups.length > 0 && expanded.size === groups.length;
-  const toggleAllExpanded = () => {
+  const toggleAllExpanded = useCallback(() => {
     if (allExpanded) {
       setExpanded(new Set());
     } else {
       setExpanded(new Set(groups.map(g => g.domain)));
     }
-  };
+  }, [allExpanded, groups]);
 
   function save() {
     if (saving.current) return;

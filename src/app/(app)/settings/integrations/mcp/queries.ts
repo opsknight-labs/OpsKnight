@@ -29,8 +29,10 @@ export type McpViewer = {
   readonly [viewerBrand]: true;
 };
 
-export async function loadMcpViewer(): Promise<McpViewer> {
-  const permissions = await getUserPermissions();
+export async function loadMcpViewer(
+  preloadedPermissions?: Awaited<ReturnType<typeof getUserPermissions>>
+): Promise<McpViewer> {
+  const permissions = preloadedPermissions ?? (await getUserPermissions());
   requireMcp(permissions.authenticated, 'MCP_LOGIN_REQUIRED', 401);
   const user = await getCurrentUser();
   return {

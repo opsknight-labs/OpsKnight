@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import { Clock } from 'lucide-react';
 import {
   Select,
@@ -21,7 +21,7 @@ const PRESETS = [
   { value: 'custom', label: 'Custom duration…' },
 ];
 
-export default function SessionIdleSelect({ defaultValue = 30 }: { defaultValue?: number }) {
+function SessionIdleSelect({ defaultValue = 30 }: { defaultValue?: number }) {
   const initialIsPreset = PRESETS.some(
     p => p.value !== 'custom' && Number(p.value) === defaultValue
   );
@@ -29,6 +29,17 @@ export default function SessionIdleSelect({ defaultValue = 30 }: { defaultValue?
     initialIsPreset ? String(defaultValue) : 'custom'
   );
   const [customDays, setCustomDays] = useState<number>(defaultValue);
+
+  const handleSelectChange = useCallback((val: string) => {
+    setSelected(val);
+    if (val !== 'custom') {
+      setCustomDays(Number(val));
+    }
+  }, []);
+
+  const handleCustomChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    setCustomDays(Math.max(1, Math.min(90, Number(e.target.value) || 1)));
+  }, []);
 
   const effectiveDays = selected === 'custom' ? customDays : Number(selected);
 
@@ -39,15 +50,7 @@ export default function SessionIdleSelect({ defaultValue = 30 }: { defaultValue?
 
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
         <div className="w-full sm:w-72">
-          <Select
-            value={selected}
-            onValueChange={val => {
-              setSelected(val);
-              if (val !== 'custom') {
-                setCustomDays(Number(val));
-              }
-            }}
-          >
+          <Select value={selected} onValueChange={handleSelectChange}>
             <SelectTrigger
               id="mcp-session-idle-select"
               className="h-9 w-full rounded-lg border-border/80 bg-background text-xs font-medium focus:ring-1 focus:ring-primary"
@@ -82,7 +85,7 @@ export default function SessionIdleSelect({ defaultValue = 30 }: { defaultValue?
               min="1"
               max="90"
               value={customDays}
-              onChange={e => setCustomDays(Math.max(1, Math.min(90, Number(e.target.value) || 1)))}
+              onChange={handleCustomChange}
               className="h-9 w-24 text-xs tabular-nums"
               required
             />
@@ -98,3 +101,5 @@ export default function SessionIdleSelect({ defaultValue = 30 }: { defaultValue?
     </div>
   );
 }
+
+export default React.memo(SessionIdleSelect);

@@ -125,7 +125,10 @@ export function JiraLogo({ className = 'h-4 w-4', size }: BrandLogoProps) {
   );
 }
 
-export function McpLogo({ className = 'h-4 w-4', size }: BrandLogoProps) {
+export const McpLogo = React.memo(function McpLogo({
+  className = 'h-4 w-4',
+  size,
+}: BrandLogoProps) {
   const id = useId().replace(/:/g, '');
   const grad = `mcp-grad-${id}`;
   return (
@@ -153,9 +156,12 @@ export function McpLogo({ className = 'h-4 w-4', size }: BrandLogoProps) {
       <circle cx="15" cy="8" r="1.25" fill="#f43f5e" />
     </svg>
   );
-}
+});
 
-export function ClaudeLogo({ className = 'h-4 w-4', size }: BrandLogoProps) {
+export const ClaudeLogo = React.memo(function ClaudeLogo({
+  className = 'h-4 w-4',
+  size,
+}: BrandLogoProps) {
   return (
     <svg
       width={size}
@@ -172,9 +178,12 @@ export function ClaudeLogo({ className = 'h-4 w-4', size }: BrandLogoProps) {
       />
     </svg>
   );
-}
+});
 
-export function CursorLogo({ className = 'h-4 w-4', size }: BrandLogoProps) {
+export const CursorLogo = React.memo(function CursorLogo({
+  className = 'h-4 w-4',
+  size,
+}: BrandLogoProps) {
   return (
     <svg
       width={size}
@@ -194,9 +203,12 @@ export function CursorLogo({ className = 'h-4 w-4', size }: BrandLogoProps) {
       />
     </svg>
   );
-}
+});
 
-export function ChatGptLogo({ className = 'h-4 w-4', size }: BrandLogoProps) {
+export const ChatGptLogo = React.memo(function ChatGptLogo({
+  className = 'h-4 w-4',
+  size,
+}: BrandLogoProps) {
   return (
     <svg
       width={size}
@@ -216,9 +228,9 @@ export function ChatGptLogo({ className = 'h-4 w-4', size }: BrandLogoProps) {
       />
     </svg>
   );
-}
+});
 
-export function AssistantIcon({
+export const AssistantIcon = React.memo(function AssistantIcon({
   name,
   className = 'h-3.5 w-3.5',
 }: {
@@ -236,7 +248,7 @@ export function AssistantIcon({
     return <ChatGptLogo className={className} />;
   }
   return <Bot className={cn(className, 'text-primary')} />;
-}
+});
 
 export function getAssistantIcon(name: string, className = 'h-3.5 w-3.5') {
   return <AssistantIcon name={name} className={className} />;

@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import React, { useDeferredValue, useMemo, useState } from 'react';
 import { ChevronDown, Search, Shield, X } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/shadcn/popover';
 import { Input } from '@/components/ui/shadcn/input';
@@ -11,7 +11,7 @@ import { cn } from '@/lib/utils';
  * A compact "3 scopes" chip that opens an accessible, search-filtered, and scrollable
  * popover dropdown. Designed for clear visibility of granular permissions.
  */
-export default function McpScopeSummary({
+function McpScopeSummary({
   scopes,
   context,
 }: {
@@ -21,21 +21,22 @@ export default function McpScopeSummary({
   context: string;
 }) {
   const [search, setSearch] = useState('');
+  const deferredSearch = useDeferredValue(search);
 
   const filteredScopes = useMemo(() => {
-    if (!search.trim()) return scopes;
-    const q = search.toLowerCase();
+    const q = deferredSearch.trim().toLowerCase();
+    if (!q) return scopes;
     return scopes.filter(
       s => s.scope.toLowerCase().includes(q) || s.label.toLowerCase().includes(q)
     );
-  }, [scopes, search]);
+  }, [scopes, deferredSearch]);
+
+  const noun = scopes.length === 1 ? 'scope' : 'scopes';
+  const hasActions = useMemo(() => scopes.some(s => !s.scope.endsWith(':read')), [scopes]);
 
   if (scopes.length === 0) {
     return <span className="text-xs text-muted-foreground">No scopes</span>;
   }
-
-  const noun = scopes.length === 1 ? 'scope' : 'scopes';
-  const hasActions = scopes.some(s => !s.scope.endsWith(':read'));
 
   return (
     <Popover onOpenChange={open => !open && setSearch('')}>
@@ -161,3 +162,5 @@ export default function McpScopeSummary({
     </Popover>
   );
 }
+
+export default React.memo(McpScopeSummary);
