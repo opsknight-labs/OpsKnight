@@ -37,6 +37,7 @@ import {
   testMcpConnection,
   updateMcpPolicy,
 } from './actions';
+import McpCapabilityControls from './components/McpCapabilityControls';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -541,6 +542,9 @@ export default async function McpSettings({
               </div>
             </details>
           </McpPolicyForm>
+
+          {/* Exposed capabilities: self-contained section (data, action and audit in its own files). */}
+          <McpCapabilityControls />
 
           <details className="rounded-xl border border-border p-4">
             <summary className="cursor-pointer text-sm font-medium">

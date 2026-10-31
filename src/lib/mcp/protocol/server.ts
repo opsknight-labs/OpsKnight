@@ -21,6 +21,9 @@ import { executeMcpPlan, planSchema } from '../core/plan';
 import { McpBoundaryError, requireMcp } from '../core/errors';
 import { canUseReviewedRunbooks } from '../approvals/policy';
 import { POSTMORTEM_CONTEXT_OPERATIONS } from '../core/postmortem';
+import { resolveDisabledMcpCapabilities } from '../catalog/capabilities';
+import { friendlyMcpError } from '../auth/friendly-error';
+import { withholdDisabledRegistrations } from './capability-filter';
 
 const sdkSchema = (schema: z.ZodType) => fromJsonSchema(z.toJSONSchema(schema) as JsonSchemaType);
 
@@ -50,7 +53,10 @@ async function safeTool(callback: () => Promise<unknown>) {
     return toolResult(await callback());
   } catch (error) {
     const code = error instanceof McpBoundaryError ? error.code : 'MCP_UNAVAILABLE';
-    return { content: [{ type: 'text' as const, text: code }], isError: true };
+    // An administrator decision is not a transient fault; say so, so the assistant stops retrying.
+    const text =
+      code === 'MCP_CAPABILITY_DISABLED' ? `${code}: ${friendlyMcpError(code).body}` : code;
+    return { content: [{ type: 'text' as const, text }], isError: true };
   }
 }
 
@@ -58,8 +64,12 @@ export function createOpsKnightMcpServer(
   context: ExecutionContext,
   actor: AuthorizationActor,
   writesEnabled: boolean,
-  sensitiveReadsEnabled = false
+  sensitiveReadsEnabled = false,
+  /** McpPolicy.disabledCapabilities as stored; unknown entries are ignored. */
+  disabledCapabilities: readonly string[] = []
 ) {
+  // Administrator controls apply to every session whatever its role or consent; execution rechecks.
+  const disabled = resolveDisabledMcpCapabilities(disabledCapabilities);
   const server = new McpServer(
     { name: 'opsknight', version: '2.2.0' },
     {
@@ -72,6 +82,7 @@ export function createOpsKnightMcpServer(
       },
     }
   );
+  withholdDisabledRegistrations(server, disabled);
   if (writesEnabled && canUseReviewedRunbooks(actor)) {
     server.registerTool(
       'runbook_prepare_execution',
@@ -136,6 +147,7 @@ export function createOpsKnightMcpServer(
   }
   const visible = MCP_CATALOG.filter(
     operation =>
+      !disabled.has(operation.operationId) &&
       canDiscover(actor, operation) &&
       (isMcpSensitiveRead(operation)
         ? sensitiveReadsEnabled
@@ -144,7 +156,10 @@ export function createOpsKnightMcpServer(
   // Discovery only; every prepare and commit rechecks authority and independent review.
   const approvalGated = writesEnabled
     ? MCP_CATALOG.filter(
-        operation => isMcpApprovalGated(operation) && hasOperationAuthority(actor, operation)
+        operation =>
+          !disabled.has(operation.operationId) &&
+          isMcpApprovalGated(operation) &&
+          hasOperationAuthority(actor, operation)
       )
     : [];
   if (approvalGated.length) {
@@ -260,7 +275,11 @@ export function createOpsKnightMcpServer(
       async args => safeTool(() => callMcpOperation(context, operation.operationId, args))
     );
   }
-  if (visible.some(operation => operation.operationId === 'getIncident')) {
+  if (
+    ['getIncident', 'getIncidentTimeline', 'listRelatedIncidents'].every(id =>
+      visible.some(operation => operation.operationId === id)
+    )
+  ) {
     server.registerTool(
       'incident_get_context',
       {
