@@ -3,6 +3,7 @@ import { ChevronDown } from 'lucide-react';
 import { Input } from '@/components/ui/shadcn/input';
 import { Label } from '@/components/ui/shadcn/label';
 import McpPolicyForm from '@/components/settings/mcp/McpPolicyForm';
+import McpPolicyScopeSelector from '@/components/settings/mcp/McpPolicyScopeSelector';
 import SessionIdleSelect from '@/components/settings/mcp/SessionIdleSelect';
 
 const checkboxClass = 'mt-0.5 h-4 w-4 shrink-0 accent-primary';
@@ -78,34 +79,15 @@ export default function McpPolicySection({
   policy,
   scopeChoices,
   selectedScopes,
-  describeScope,
+  describeScope: _describeScope,
   action,
 }: {
   policy: McpPolicyValues;
   scopeChoices: string[];
   selectedScopes: string[];
-  describeScope: (scope: string) => string;
+  describeScope?: (scope: string) => string;
   action: (form: FormData) => Promise<void>;
 }) {
-  const readScopes = scopeChoices.filter(scope => scope.endsWith(':read'));
-  const actScopes = scopeChoices.filter(scope => !scope.endsWith(':read'));
-  const scopeList = (scopes: string[]) => (
-    <div className="grid gap-x-6 gap-y-2 sm:grid-cols-2">
-      {scopes.map(scope => (
-        <label key={scope} className="flex cursor-pointer items-start gap-2 text-sm">
-          <input
-            type="checkbox"
-            name="dcrScopes"
-            value={scope}
-            defaultChecked={selectedScopes.includes(scope)}
-            className={checkboxClass}
-          />
-          <span>{describeScope(scope)}</span>
-        </label>
-      ))}
-    </div>
-  );
-
   return (
     <McpPolicyForm action={action}>
       <PolicyGroup
@@ -130,20 +112,7 @@ export default function McpPolicySection({
         title="What assistants may do"
         description="The most an automatically connected assistant may request. People can approve less, and their own OpsKnight permissions always apply on top."
       >
-        <div className="space-y-2">
-          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-            Read
-          </p>
-          {scopeList(readScopes)}
-        </div>
-        {actScopes.length > 0 && (
-          <div className="space-y-2 border-t border-border pt-4">
-            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              Propose or run (needs approval)
-            </p>
-            {scopeList(actScopes)}
-          </div>
-        )}
+        <McpPolicyScopeSelector scopeChoices={scopeChoices} selectedScopes={selectedScopes} />
       </PolicyGroup>
 
       <PolicyGroup

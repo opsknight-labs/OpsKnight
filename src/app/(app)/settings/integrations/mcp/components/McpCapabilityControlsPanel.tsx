@@ -3,6 +3,7 @@
 import {
   useCallback,
   useDeferredValue,
+  useEffect,
   useId,
   useMemo,
   useRef,
@@ -263,6 +264,30 @@ export default function McpCapabilityControlsPanel({
     }
   }, [allExpanded, groups]);
 
+  const allExposed = exposedCount === capabilities.length;
+  const noneExposed = exposedCount === 0;
+  const isCapabilitiesIndeterminate = !allExposed && !noneExposed;
+
+  const capabilitiesMasterRef = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (capabilitiesMasterRef.current) {
+      capabilitiesMasterRef.current.indeterminate = isCapabilitiesIndeterminate;
+    }
+  }, [isCapabilitiesIndeterminate]);
+
+  const setAll = useCallback(
+    (exposed: boolean) =>
+      update(next => {
+        next.clear();
+        if (!exposed) {
+          for (const group of groups) {
+            next.add(DOMAIN_PREFIX + group.domain);
+          }
+        }
+      }),
+    [update, groups]
+  );
+
   function save() {
     if (saving.current) return;
     saving.current = true;
@@ -517,7 +542,53 @@ export default function McpCapabilityControlsPanel({
               </Select>
             </div>
 
-            <div className="flex items-center gap-4 sm:pb-1">
+            <div className="flex flex-wrap items-center gap-3 sm:pb-1">
+              <label
+                htmlFor={`${idPrefix}-capabilities-master-select`}
+                className="flex cursor-pointer items-center gap-2 text-xs font-semibold text-foreground select-none"
+              >
+                <input
+                  ref={capabilitiesMasterRef}
+                  id={`${idPrefix}-capabilities-master-select`}
+                  type="checkbox"
+                  checked={allExposed}
+                  onChange={e => setAll(e.target.checked)}
+                  className="h-3.5 w-3.5 rounded border-border text-primary focus:ring-1 focus:ring-primary accent-primary cursor-pointer"
+                />
+                <span className="hidden sm:inline">
+                  {allExposed ? 'All exposed' : noneExposed ? 'All disabled' : 'Select all'}
+                </span>
+                <span className="sm:hidden">All</span>
+              </label>
+
+              <div className="flex items-center gap-1 text-xs">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setAll(true)}
+                  disabled={allExposed}
+                  className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground disabled:opacity-30"
+                >
+                  Select all
+                </Button>
+                <span className="text-border" aria-hidden="true">
+                  •
+                </span>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setAll(false)}
+                  disabled={noneExposed}
+                  className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground disabled:opacity-30"
+                >
+                  Uncheck all
+                </Button>
+              </div>
+
+              <div className="h-4 w-px bg-border/80 hidden lg:block" />
+
               <label
                 htmlFor={`${idPrefix}-only-disabled`}
                 className="flex cursor-pointer items-center gap-2 text-xs font-medium"
@@ -616,26 +687,49 @@ export default function McpCapabilityControlsPanel({
                           </span>
                         </span>
                       </button>
-                      <label
-                        htmlFor={groupSwitchId}
-                        className="flex shrink-0 cursor-pointer items-center gap-2 text-xs text-muted-foreground"
-                      >
-                        <span className="hidden sm:inline">
-                          {exposed === group.items.length
-                            ? 'All on'
-                            : exposed === 0
-                              ? 'All off'
-                              : 'Some off'}
-                        </span>
-                        <Switch
-                          id={groupSwitchId}
-                          data-icon-button
-                          className={COMPACT_CONTROL}
-                          checked={exposed === group.items.length}
-                          aria-label={`Expose all ${label} capabilities`}
-                          onCheckedChange={checked => setGroup(group.domain, group.items, checked)}
-                        />
-                      </label>
+                      <div className="flex shrink-0 items-center gap-2">
+                        <div className="hidden sm:flex items-center gap-1 text-[11px] text-muted-foreground mr-1">
+                          <button
+                            type="button"
+                            onClick={() => setGroup(group.domain, group.items, true)}
+                            disabled={exposed === group.items.length}
+                            className="hover:text-foreground disabled:opacity-30 disabled:pointer-events-none"
+                          >
+                            Select all
+                          </button>
+                          <span className="text-border">/</span>
+                          <button
+                            type="button"
+                            onClick={() => setGroup(group.domain, group.items, false)}
+                            disabled={exposed === 0}
+                            className="hover:text-foreground disabled:opacity-30 disabled:pointer-events-none"
+                          >
+                            Uncheck all
+                          </button>
+                        </div>
+                        <label
+                          htmlFor={groupSwitchId}
+                          className="flex shrink-0 cursor-pointer items-center gap-2 text-xs text-muted-foreground"
+                        >
+                          <span className="hidden md:inline">
+                            {exposed === group.items.length
+                              ? 'All on'
+                              : exposed === 0
+                                ? 'All off'
+                                : 'Some off'}
+                          </span>
+                          <Switch
+                            id={groupSwitchId}
+                            data-icon-button
+                            className={COMPACT_CONTROL}
+                            checked={exposed === group.items.length}
+                            aria-label={`Expose all ${label} capabilities`}
+                            onCheckedChange={checked =>
+                              setGroup(group.domain, group.items, checked)
+                            }
+                          />
+                        </label>
+                      </div>
                     </div>
                     {open && (
                       <div id={regionId}>

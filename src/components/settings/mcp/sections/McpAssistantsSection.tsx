@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/shadcn/button';
 import { Input } from '@/components/ui/shadcn/input';
 import { Label } from '@/components/ui/shadcn/label';
 import { SettingsSection } from '@/components/settings/layout/SettingsSection';
+import McpClientScopeSelector from '@/components/settings/mcp/McpClientScopeSelector';
 import McpConfirmAction from '@/components/settings/mcp/McpConfirmAction';
 import McpScopeSummary from '@/components/settings/mcp/McpScopeSummary';
 import { getAssistantIcon } from '@/components/common/BrandLogos';
@@ -353,23 +354,7 @@ export default function McpAssistantsSection({
               </p>
             </div>
           </div>
-          <fieldset className="space-y-2">
-            <legend className="text-sm font-medium">Allowed scopes</legend>
-            <div className="grid gap-x-6 gap-y-2 sm:grid-cols-2">
-              {scopeChoices.map(scope => (
-                <label key={scope} className="flex cursor-pointer items-start gap-2 text-sm">
-                  <input
-                    type="checkbox"
-                    name="scopes"
-                    value={scope}
-                    defaultChecked={defaultScopes.includes(scope)}
-                    className="mt-0.5 h-4 w-4 shrink-0 accent-primary"
-                  />
-                  <span>{describeScope(scope)}</span>
-                </label>
-              ))}
-            </div>
-          </fieldset>
+          <McpClientScopeSelector scopeChoices={scopeChoices} defaultScopes={defaultScopes} />
           <div className="flex justify-end">
             <Button type="submit" size="sm">
               Register client
