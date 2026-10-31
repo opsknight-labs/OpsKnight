@@ -36,4 +36,16 @@ describe('searchCapabilities', () => {
     expect(ids('')).toHaveLength(catalog.length);
     expect(ids('all the')).toHaveLength(catalog.length);
   });
+
+  it('matches contract summaries, ranking a name match above a summary-only match', () => {
+    const described = [
+      { operationId: 'getScheduleOnCall', domain: 'schedules', summary: 'Effective on-call users' },
+      { operationId: 'listUsers', domain: 'users', summary: 'List users' },
+      { operationId: 'listTeams', domain: 'teams', summary: 'List teams and their users' },
+    ];
+    const found = (query: string) => searchCapabilities(described, query).map(op => op.operationId);
+    expect(found('effective on-call')).toEqual(['getScheduleOnCall']);
+    expect(found('users')).toEqual(['listUsers']);
+    expect(found('list users')).toEqual(['listUsers']);
+  });
 });

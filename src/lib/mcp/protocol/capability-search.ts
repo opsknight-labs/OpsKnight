@@ -23,7 +23,12 @@ const FILLER = new Set([
   'with',
 ]);
 
-type Searchable = { operationId: string; tool?: string | null; domain: string };
+type Searchable = {
+  operationId: string;
+  tool?: string | null;
+  domain: string;
+  summary?: string | null;
+};
 
 function words(value: string) {
   return value
@@ -33,26 +38,32 @@ function words(value: string) {
     .filter(Boolean);
 }
 
+const matches = (text: string, term: string) =>
+  text.includes(term) ||
+  (term.length > 3 && term.endsWith('s') && text.includes(term.slice(0, -1)));
+
 /**
  * Natural-language operation search. Each query word matches the operation id (as words and as
- * written), tool and domain, tolerating plurals. Operations matching the most words are returned,
- * in catalog order; a query of only filler words matches everything.
+ * written), tool and domain, or else the contract summary, tolerating plurals. A name match
+ * counts double a summary-only match, so words that name an operation outrank words that merely
+ * appear in its description. Operations with the best score are returned, in catalog order; a
+ * query of only filler words matches everything.
  */
 export function searchCapabilities<T extends Searchable>(operations: readonly T[], query: string) {
   const terms = [...new Set(words(query))].filter(term => !FILLER.has(term));
   if (!terms.length) return [...operations];
   const scored = operations.map(operation => {
-    const text = [
+    const name = [
       operation.operationId.toLowerCase(),
       ...words(operation.operationId),
       operation.tool ?? '',
       operation.domain.toLowerCase(),
     ].join(' ');
-    const score = terms.filter(
-      term =>
-        text.includes(term) ||
-        (term.length > 3 && term.endsWith('s') && text.includes(term.slice(0, -1)))
-    ).length;
+    const summary = words(operation.summary ?? '').join(' ');
+    const score = terms.reduce(
+      (total, term) => total + (matches(name, term) ? 2 : matches(summary, term) ? 1 : 0),
+      0
+    );
     return { operation, score };
   });
   const best = Math.max(0, ...scored.map(entry => entry.score));

@@ -20,13 +20,58 @@ interface GrantAuthoritySnapshot {
   status: string | null;
   tokenVersion: number | null;
   teamIds: string[];
+  policyEnabled: boolean | null;
+  writesEnabled: boolean | null;
+  sensitiveReadsEnabled: boolean | null;
+  maxInFlight: number | null;
+  maxOperations: number | null;
+  requestsPerMinute: number | null;
+  disabledCapabilities: string[] | null;
 }
+
+/** The runtime switches and bounds of the MCP policy, read with the grant in one statement. */
+export interface McpRuntimePolicy {
+  enabled: boolean;
+  writesEnabled: boolean;
+  sensitiveReadsEnabled: boolean;
+  maxInFlight: number;
+  maxOperations: number;
+  requestsPerMinute: number;
+  disabledCapabilities: string[];
+}
+
+const loadRuntimePolicy = async (): Promise<McpRuntimePolicy | null> =>
+  prisma.mcpPolicy.findUnique({
+    where: { id: 'default' },
+    select: {
+      enabled: true,
+      writesEnabled: true,
+      sensitiveReadsEnabled: true,
+      maxInFlight: true,
+      maxOperations: true,
+      requestsPerMinute: true,
+      disabledCapabilities: true,
+    },
+  });
 
 export async function resolveMcpGrant(
   grantId: string,
   credentialId?: string,
   db: Prisma.TransactionClient = prisma
 ): Promise<V2AuthContext> {
+  return (await resolveMcpGrantWithPolicy(grantId, credentialId, db)).auth;
+}
+
+/**
+ * The grant's current authority and the MCP policy as of the same statement. The policy is null
+ * when no policy row exists. Callers that must report a disabled policy ahead of a grant failure
+ * read the policy separately on that failure path only.
+ */
+export async function resolveMcpGrantWithPolicy(
+  grantId: string,
+  credentialId?: string,
+  db: Prisma.TransactionClient = prisma
+): Promise<{ auth: V2AuthContext; policy: McpRuntimePolicy | null }> {
   const now = new Date();
   // One current-statement snapshot avoids four ORM round trips per domain step.
   // No values are interpolated into SQL syntax and no authority is cached.
@@ -41,7 +86,10 @@ export async function resolveMcpGrant(
         AS "clientScopes",
       g."revokedAt", c."revokedAt" AS "clientRevokedAt", g."expiresAt",
       u.role::text AS role, u.status::text AS status, u."tokenVersion",
-      ARRAY(SELECT tm."teamId" FROM "TeamMember" tm WHERE tm."userId" = u.id) AS "teamIds"
+      ARRAY(SELECT tm."teamId" FROM "TeamMember" tm WHERE tm."userId" = u.id) AS "teamIds",
+      -- The policy row this request is judged by; already joined for the client ceilings.
+      p.enabled AS "policyEnabled", p."writesEnabled", p."sensitiveReadsEnabled",
+      p."maxInFlight", p."maxOperations", p."requestsPerMinute", p."disabledCapabilities"
     FROM "McpGrant" g JOIN "McpClient" c ON c.id = g."clientId"
     LEFT JOIN "User" u ON u.id = g."userId"
     LEFT JOIN "McpPolicy" p ON p.id = 'default'
@@ -82,34 +130,58 @@ export async function resolveMcpGrant(
   requireMcp(!scopes.includes('admin:manage'), 'MCP_INVALID_SCOPE', 403);
   const id = `mcp:${grant.grantId}`;
   return {
-    actor: { ...base, apiKey: { id, scopes } },
-    apiKey: {
-      id,
-      name: 'MCP',
-      prefix: 'mcp',
-      tokenHash: '',
-      userId: grant.userId,
-      scopes,
-      isServiceAccount: false,
+    auth: {
+      actor: { ...base, apiKey: { id, scopes } },
+      apiKey: {
+        id,
+        name: 'MCP',
+        prefix: 'mcp',
+        tokenHash: '',
+        userId: grant.userId,
+        scopes,
+        isServiceAccount: false,
+      },
     },
+    policy:
+      grant.policyEnabled === null
+        ? null
+        : {
+            enabled: grant.policyEnabled,
+            writesEnabled: grant.writesEnabled!,
+            sensitiveReadsEnabled: grant.sensitiveReadsEnabled!,
+            maxInFlight: grant.maxInFlight!,
+            maxOperations: grant.maxOperations!,
+            requestsPerMinute: grant.requestsPerMinute!,
+            disabledCapabilities: grant.disabledCapabilities ?? [],
+          },
   };
 }
 
 /** Authentication can precede body parsing; charge the validated cost separately in that case. */
 export async function authenticateMcp(request: Request, cost: number | null) {
-  const policy = await prisma.mcpPolicy.findUnique({ where: { id: 'default' } });
+  // The policy is read with the grant. A disabled MCP still answers MCP_DISABLED ahead of any
+  // credential error, so a failure reads the policy on its own before reporting the cause.
+  let resolved: Awaited<ReturnType<typeof resolveMcpGrantWithPolicy>>;
+  let token: { id: string; grantId: string; scopes: string[] };
+  try {
+    const header = request.headers.get('authorization') ?? '';
+    requireMcp(/^Bearer [A-Za-z0-9_-]{32,256}$/.test(header), 'MCP_INVALID_TOKEN', 401);
+    const found = await prisma.mcpToken.findUnique({
+      where: { accessHash: digestMcpSecret(header.slice(7)) },
+    });
+    requireMcp(
+      found && !found.rotatedAt && found.accessExpiresAt > new Date(),
+      'MCP_INVALID_TOKEN',
+      401
+    );
+    token = found;
+    resolved = await resolveMcpGrantWithPolicy(token.grantId, token.id);
+  } catch (error) {
+    requireMcp((await loadRuntimePolicy())?.enabled, 'MCP_DISABLED', 503);
+    throw error;
+  }
+  const { auth, policy } = resolved;
   requireMcp(policy?.enabled, 'MCP_DISABLED', 503);
-  const header = request.headers.get('authorization') ?? '';
-  requireMcp(/^Bearer [A-Za-z0-9_-]{32,256}$/.test(header), 'MCP_INVALID_TOKEN', 401);
-  const token = await prisma.mcpToken.findUnique({
-    where: { accessHash: digestMcpSecret(header.slice(7)) },
-  });
-  requireMcp(
-    token && !token.rotatedAt && token.accessExpiresAt > new Date(),
-    'MCP_INVALID_TOKEN',
-    401
-  );
-  const auth = await resolveMcpGrant(token.grantId, token.id);
   const effectiveScopes = auth.apiKey.scopes.filter(scope => token.scopes.includes(scope));
   auth.apiKey.scopes = effectiveScopes;
   auth.actor.apiKey = { id: auth.apiKey.id, scopes: effectiveScopes };
