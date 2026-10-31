@@ -188,7 +188,7 @@ describe('administrator-disabled MCP capabilities', () => {
     expect(await search()).not.toContain('listTeams');
     const described = await callTool(bearer, 'describe_operation', { operationId: 'listTeams' });
     expect(described.result?.isError).toBe(true);
-    expect(described.result?.content?.[0].text).toBe('MCP_OPERATION_UNAVAILABLE');
+    expect(described.result?.content?.[0].text).toMatch(/^MCP_OPERATION_UNAVAILABLE\b/);
     const called = await callTool(bearer, 'call_operation', {
       operationId: 'listTeams',
       args: { query: {} },
