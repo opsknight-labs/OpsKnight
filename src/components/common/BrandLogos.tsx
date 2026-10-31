@@ -1,4 +1,6 @@
 import React, { useId } from 'react';
+import { Bot } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 type BrandLogoProps = {
   className?: string;
@@ -121,4 +123,121 @@ export function JiraLogo({ className = 'h-4 w-4', size }: BrandLogoProps) {
       />
     </svg>
   );
+}
+
+export function McpLogo({ className = 'h-4 w-4', size }: BrandLogoProps) {
+  const id = useId().replace(/:/g, '');
+  const grad = `mcp-grad-${id}`;
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      className={className}
+      fill="none"
+      aria-label="Model Context Protocol logo"
+    >
+      <defs>
+        <linearGradient id={grad} x1="2" y1="2" x2="22" y2="22" gradientUnits="userSpaceOnUse">
+          <stop stopColor="#818cf8" />
+          <stop offset="0.5" stopColor="#6366f1" />
+          <stop offset="1" stopColor="#4f46e5" />
+        </linearGradient>
+      </defs>
+      {/* Outer hexagonal node ring */}
+      <rect x="2" y="2" width="20" height="20" rx="5" fill={`url(#${grad})`} />
+      {/* Central connection nodes and protocol bus */}
+      <path d="M7 8h10M7 12h10M7 16h6" stroke="#FFFFFF" strokeWidth="1.75" strokeLinecap="round" />
+      <circle cx="17" cy="16" r="1.5" fill="#38bdf8" />
+      <circle cx="14" cy="12" r="1.25" fill="#a78bfa" />
+      <circle cx="15" cy="8" r="1.25" fill="#f43f5e" />
+    </svg>
+  );
+}
+
+export function ClaudeLogo({ className = 'h-4 w-4', size }: BrandLogoProps) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      className={className}
+      fill="none"
+      aria-label="Anthropic Claude logo"
+    >
+      <rect width="24" height="24" rx="5" fill="#D97757" />
+      <path
+        d="M13.8 6.5h-3.6l-4.7 11h3.4l.9-2.3h4.4l.9 2.3h3.4l-4.7-11zm-3.1 6.5 1.3-3.4 1.3 3.4h-2.6z"
+        fill="#FFFFFF"
+      />
+    </svg>
+  );
+}
+
+export function CursorLogo({ className = 'h-4 w-4', size }: BrandLogoProps) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      className={className}
+      fill="none"
+      aria-label="Cursor logo"
+    >
+      <rect width="24" height="24" rx="5" fill="#0A0A0C" />
+      <path
+        d="M6 6l12 6-6 2-2 6L6 6z"
+        fill="#FFFFFF"
+        stroke="#FFFFFF"
+        strokeWidth="1"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+export function ChatGptLogo({ className = 'h-4 w-4', size }: BrandLogoProps) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      className={className}
+      fill="none"
+      aria-label="ChatGPT logo"
+    >
+      <rect width="24" height="24" rx="5" fill="#10A37F" />
+      <path
+        d="M12 7a2.5 2.5 0 0 0-2.3 1.5 2.5 2.5 0 0 0-1.7 2.2 2.5 2.5 0 0 0 .5 2.4 2.5 2.5 0 0 0 2.3 1.4h2.4a2.5 2.5 0 0 0 2.3-1.4 2.5 2.5 0 0 0 .5-2.4 2.5 2.5 0 0 0-1.7-2.2A2.5 2.5 0 0 0 12 7z"
+        stroke="#FFFFFF"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+export function AssistantIcon({
+  name,
+  className = 'h-3.5 w-3.5',
+}: {
+  name: string;
+  className?: string;
+}) {
+  const lower = name.toLowerCase();
+  if (lower.includes('claude')) {
+    return <ClaudeLogo className={className} />;
+  }
+  if (lower.includes('cursor')) {
+    return <CursorLogo className={className} />;
+  }
+  if (lower.includes('chatgpt') || lower.includes('gpt') || lower.includes('openai')) {
+    return <ChatGptLogo className={className} />;
+  }
+  return <Bot className={cn(className, 'text-primary')} />;
+}
+
+export function getAssistantIcon(name: string, className = 'h-3.5 w-3.5') {
+  return <AssistantIcon name={name} className={className} />;
 }

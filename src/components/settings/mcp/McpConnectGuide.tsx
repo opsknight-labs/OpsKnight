@@ -1,7 +1,9 @@
 'use client';
 
 import type { ReactNode } from 'react';
+import { Code2 } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/shadcn/tabs';
+import { ClaudeLogo, CursorLogo, ChatGptLogo } from '@/components/common/BrandLogos';
 import McpCopyField from '@/components/settings/mcp/McpCopyField';
 import { mcpSetupCommands } from '@/components/settings/mcp/setup-commands';
 
@@ -18,11 +20,15 @@ function Step({ children }: { children: ReactNode }) {
 }
 
 const ASSISTANTS = [
-  { id: 'claude-code', label: 'Claude Code' },
-  { id: 'claude', label: 'Claude' },
-  { id: 'chatgpt', label: 'ChatGPT' },
-  { id: 'cursor', label: 'Cursor' },
-  { id: 'vscode', label: 'VS Code' },
+  {
+    id: 'claude-code',
+    label: 'Claude Code',
+    icon: <ClaudeLogo className="h-3.5 w-3.5 shrink-0" />,
+  },
+  { id: 'claude', label: 'Claude', icon: <ClaudeLogo className="h-3.5 w-3.5 shrink-0" /> },
+  { id: 'chatgpt', label: 'ChatGPT', icon: <ChatGptLogo className="h-3.5 w-3.5 shrink-0" /> },
+  { id: 'cursor', label: 'Cursor', icon: <CursorLogo className="h-3.5 w-3.5 shrink-0" /> },
+  { id: 'vscode', label: 'VS Code', icon: <Code2 className="h-3.5 w-3.5 shrink-0 text-sky-500" /> },
 ] as const;
 
 /** Per-assistant setup steps with the endpoint already filled in. */
@@ -40,9 +46,10 @@ export default function McpConnectGuide({ endpoint }: { endpoint: string }) {
             <TabsTrigger
               key={assistant.id}
               value={assistant.id}
-              className="h-7 rounded-md px-3 text-xs data-[state=active]:font-semibold data-[state=active]:ring-1 data-[state=active]:ring-border"
+              className="h-8 gap-1.5 rounded-md px-3 text-xs data-[state=active]:font-semibold data-[state=active]:ring-1 data-[state=active]:ring-border"
             >
-              {assistant.label}
+              {assistant.icon}
+              <span>{assistant.label}</span>
             </TabsTrigger>
           ))}
         </TabsList>

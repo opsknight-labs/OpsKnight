@@ -1,12 +1,29 @@
 'use client';
 
 import { useId, useMemo, useRef, useState, useTransition } from 'react';
-import { ChevronDown, ChevronLeft, ChevronRight, Search } from 'lucide-react';
+import {
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsUpDown,
+  Layers,
+  Search,
+  ShieldAlert,
+  X,
+} from 'lucide-react';
 import { notify } from '@/lib/toast';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/shadcn/button';
 import { Input } from '@/components/ui/shadcn/input';
 import { Switch } from '@/components/ui/shadcn/switch';
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectTrigger,
+} from '@/components/ui/shadcn/select';
 import { SettingsSection } from '@/components/settings/layout/SettingsSection';
 import { SaveIndicator } from '@/components/settings/feedback/SaveIndicator';
 import type { McpCapability, McpRisk } from '@/lib/mcp/catalog/capabilities';
@@ -106,6 +123,8 @@ export default function McpCapabilityControlsPanel({
   const [entries, setEntries] = useState<Set<string>>(() => new Set(initialDisabled));
   const [query, setQuery] = useState('');
   const [onlyDisabled, setOnlyDisabled] = useState(false);
+  const [selectedDomain, setSelectedDomain] = useState<string>('all');
+  const [selectedRisk, setSelectedRisk] = useState<string>('all');
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
   const [pages, setPages] = useState<Record<string, number>>({});
   const [status, setStatus] = useState<'idle' | 'saved' | 'error'>('idle');
@@ -182,13 +201,16 @@ export default function McpCapabilityControlsPanel({
     });
 
   const needle = query.trim().toLowerCase();
-  const filtering = needle.length > 0 || onlyDisabled;
+  const filtering =
+    needle.length > 0 || onlyDisabled || selectedDomain !== 'all' || selectedRisk !== 'all';
   const visibleGroups = groups
+    .filter(group => selectedDomain === 'all' || group.domain === selectedDomain)
     .map(group => ({
       ...group,
       matches: group.items.filter(
         capability =>
           (!onlyDisabled || isDisabled(capability)) &&
+          (selectedRisk === 'all' || capability.risk === selectedRisk) &&
           (!needle ||
             `${capability.id} ${capability.tool ?? ''} ${capability.domain} ${domainLabel(capability.domain)} ${capability.summary}`
               .toLowerCase()
@@ -197,6 +219,15 @@ export default function McpCapabilityControlsPanel({
     }))
     .filter(group => !filtering || group.matches.length > 0);
   const matchCount = visibleGroups.reduce((sum, group) => sum + group.matches.length, 0);
+
+  const allExpanded = groups.length > 0 && expanded.size === groups.length;
+  const toggleAllExpanded = () => {
+    if (allExpanded) {
+      setExpanded(new Set());
+    } else {
+      setExpanded(new Set(groups.map(g => g.domain)));
+    }
+  };
 
   function save() {
     if (saving.current) return;
@@ -288,7 +319,7 @@ export default function McpCapabilityControlsPanel({
         }
       >
         <div className="space-y-4 py-4">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-end">
             <div className="min-w-0 grow space-y-1.5">
               <label htmlFor={`${idPrefix}-search`} className="text-sm font-medium">
                 Filter capabilities
@@ -303,36 +334,208 @@ export default function McpCapabilityControlsPanel({
                   type="search"
                   value={query}
                   maxLength={100}
-                  placeholder="Operation, tool or domain, e.g. runbook or incident_resolve"
-                  className="pl-9"
+                  placeholder="Search tool, operation, or domain..."
+                  className="pl-9 pr-8 h-9 text-xs"
                   onChange={event => {
                     setQuery(event.target.value);
                     setPages({});
                   }}
                 />
+                {query && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setQuery('');
+                      setPages({});
+                    }}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                    aria-label="Clear search"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                )}
               </div>
             </div>
-            <label
-              htmlFor={`${idPrefix}-only-disabled`}
-              className="flex cursor-pointer items-center gap-2 text-sm sm:pb-2"
-            >
-              <Switch
-                id={`${idPrefix}-only-disabled`}
-                data-icon-button
-                className={COMPACT_CONTROL}
-                checked={onlyDisabled}
-                onCheckedChange={checked => {
-                  setOnlyDisabled(checked);
+
+            {/* Domain Dropdown Filter with scrollable menu */}
+            <div className="space-y-1.5 w-full sm:w-56">
+              <label htmlFor={`${idPrefix}-domain-filter`} className="text-sm font-medium">
+                Domain
+              </label>
+              <Select
+                value={selectedDomain}
+                onValueChange={val => {
+                  setSelectedDomain(val);
                   setPages({});
                 }}
-              />
-              Show disabled only
-            </label>
+              >
+                <SelectTrigger
+                  id={`${idPrefix}-domain-filter`}
+                  className="h-9 w-full rounded-lg border-border/80 bg-background text-xs font-medium focus:ring-1 focus:ring-primary"
+                >
+                  <div className="flex items-center gap-1.5 truncate">
+                    <Layers className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                    <span className="truncate">
+                      {selectedDomain === 'all'
+                        ? `All Domains (${groups.length})`
+                        : domainLabel(selectedDomain)}
+                    </span>
+                  </div>
+                </SelectTrigger>
+                <SelectContent
+                  position="popper"
+                  className="max-h-60 w-64 overflow-y-auto overscroll-contain rounded-xl border-border/80 shadow-xl"
+                >
+                  <SelectGroup>
+                    <SelectLabel className="px-2 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                      Capability Domains
+                    </SelectLabel>
+                    <SelectItem
+                      value="all"
+                      className="rounded-lg text-xs font-medium cursor-pointer"
+                    >
+                      All Domains ({capabilities.length})
+                    </SelectItem>
+                    {groups.map(g => (
+                      <SelectItem
+                        key={g.domain}
+                        value={g.domain}
+                        className="rounded-lg text-xs font-medium cursor-pointer"
+                      >
+                        <div className="flex items-center justify-between gap-2 w-full">
+                          <span>{domainLabel(g.domain)}</span>
+                          <span className="text-[10px] tabular-nums text-muted-foreground">
+                            {g.items.length}
+                          </span>
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Risk Level Dropdown Filter */}
+            <div className="space-y-1.5 w-full sm:w-48">
+              <label htmlFor={`${idPrefix}-risk-filter`} className="text-sm font-medium">
+                Risk level
+              </label>
+              <Select
+                value={selectedRisk}
+                onValueChange={val => {
+                  setSelectedRisk(val);
+                  setPages({});
+                }}
+              >
+                <SelectTrigger
+                  id={`${idPrefix}-risk-filter`}
+                  className="h-9 w-full rounded-lg border-border/80 bg-background text-xs font-medium focus:ring-1 focus:ring-primary"
+                >
+                  <div className="flex items-center gap-1.5 truncate">
+                    <ShieldAlert className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                    <span className="truncate">
+                      {selectedRisk === 'all'
+                        ? 'All Risk Levels'
+                        : `${selectedRisk} · ${RISK[selectedRisk as McpRisk]?.title ?? selectedRisk}`}
+                    </span>
+                  </div>
+                </SelectTrigger>
+                <SelectContent
+                  position="popper"
+                  className="max-h-60 w-60 overflow-y-auto overscroll-contain rounded-xl border-border/80 shadow-xl"
+                >
+                  <SelectGroup>
+                    <SelectLabel className="px-2 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                      Risk Classification
+                    </SelectLabel>
+                    <SelectItem
+                      value="all"
+                      className="rounded-lg text-xs font-medium cursor-pointer"
+                    >
+                      All Risk Levels
+                    </SelectItem>
+                    <SelectItem
+                      value="R0"
+                      className="rounded-lg text-xs font-medium cursor-pointer"
+                    >
+                      R0 · Read only
+                    </SelectItem>
+                    <SelectItem
+                      value="R1"
+                      className="rounded-lg text-xs font-medium cursor-pointer"
+                    >
+                      R1 · Routine change
+                    </SelectItem>
+                    <SelectItem
+                      value="R2"
+                      className="rounded-lg text-xs font-medium cursor-pointer"
+                    >
+                      R2 · Sensitive change
+                    </SelectItem>
+                    <SelectItem
+                      value="R3"
+                      className="rounded-lg text-xs font-medium cursor-pointer"
+                    >
+                      R3 · Destructive or high-impact
+                    </SelectItem>
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="flex items-center gap-4 sm:pb-1">
+              <label
+                htmlFor={`${idPrefix}-only-disabled`}
+                className="flex cursor-pointer items-center gap-2 text-xs font-medium"
+              >
+                <Switch
+                  id={`${idPrefix}-only-disabled`}
+                  data-icon-button
+                  className={COMPACT_CONTROL}
+                  checked={onlyDisabled}
+                  onCheckedChange={checked => {
+                    setOnlyDisabled(checked);
+                    setPages({});
+                  }}
+                />
+                Show disabled only
+              </label>
+
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={toggleAllExpanded}
+                className="h-8 px-2.5 text-xs text-muted-foreground hover:text-foreground"
+              >
+                <ChevronsUpDown className="h-3.5 w-3.5 mr-1" />
+                {allExpanded ? 'Collapse all' : 'Expand all'}
+              </Button>
+            </div>
           </div>
+
           {filtering && (
-            <p className="text-sm text-muted-foreground" role="status" aria-live="polite">
-              {matchCount} matching {matchCount === 1 ? 'capability' : 'capabilities'}
-            </p>
+            <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border/60 pt-3 text-xs text-muted-foreground">
+              <p role="status" aria-live="polite">
+                Showing <span className="font-semibold text-foreground">{matchCount}</span> of{' '}
+                {capabilities.length} capabilities
+              </p>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-6 px-2 text-xs text-primary"
+                onClick={() => {
+                  setQuery('');
+                  setSelectedDomain('all');
+                  setSelectedRisk('all');
+                  setOnlyDisabled(false);
+                  setPages({});
+                }}
+              >
+                Reset all filters
+              </Button>
+            </div>
           )}
 
           {visibleGroups.length === 0 ? (

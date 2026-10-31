@@ -7,12 +7,16 @@ import {
   ClipboardCheck,
   Plug,
   ShieldCheck,
+  SlidersHorizontal,
   Sparkles,
   Users,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { InlineNotice } from '@/components/ui/InlineNotice';
 import { Card } from '@/components/ui/shadcn/card';
+import { Badge } from '@/components/ui/shadcn/badge';
+import { Button } from '@/components/ui/shadcn/button';
+import { McpLogo } from '@/components/common/BrandLogos';
 import { SettingsSection } from '@/components/settings/layout/SettingsSection';
 import McpCopyField from '@/components/settings/mcp/McpCopyField';
 import McpQuickSetup from '@/components/settings/mcp/McpQuickSetup';
@@ -166,6 +170,109 @@ export default function McpOverviewSection({
                   are resolved.
                 </p>
               )}
+            </div>
+          </div>
+        </Card>
+      )}
+
+      {/* MCP Protocol & Identity Card (Matching Teams / Slack Header Card Style) */}
+      {enabled && (
+        <Card className="overflow-hidden border-border/80 shadow-2xs">
+          <div className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between bg-card">
+            <div className="flex items-start sm:items-center gap-3.5">
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500/15 via-primary/10 to-violet-500/15 border border-primary/25 shadow-inner">
+                <McpLogo className="h-6 w-6" />
+              </div>
+              <div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <h2 className="text-base font-bold text-foreground tracking-tight">
+                    Model Context Protocol Server
+                  </h2>
+                  <Badge
+                    variant="outline"
+                    className={cn(
+                      'text-[10px] font-semibold',
+                      live
+                        ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+                        : 'border-amber-500/40 bg-amber-500/10 text-amber-600 dark:text-amber-400'
+                    )}
+                  >
+                    <span className="mr-1 h-1.5 w-1.5 rounded-full bg-current" aria-hidden="true" />
+                    {live ? 'Active & Ready' : 'Needs Attention'}
+                  </Badge>
+                  {automaticReady && (
+                    <Badge
+                      variant="outline"
+                      className="text-[10px] font-semibold border-sky-500/30 bg-sky-500/10 text-sky-600 dark:text-sky-400"
+                    >
+                      <Sparkles className="mr-1 h-3 w-3" />
+                      DCR Enabled
+                    </Badge>
+                  )}
+                </div>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  Official Anthropic Model Context Protocol · Streamable HTTP / SSE transport ·
+                  OAuth 2.0 PKCE Dynamic Registration
+                </p>
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center gap-2 self-end sm:self-auto">
+              {endpoint && (
+                <Button
+                  asChild
+                  variant="outline"
+                  size="sm"
+                  className="h-8 gap-1.5 text-xs font-semibold"
+                >
+                  <Link href={hrefs.connect}>
+                    <Plug className="h-3.5 w-3.5" />
+                    Connect Guide
+                  </Link>
+                </Button>
+              )}
+              {isAdmin && (
+                <Button
+                  asChild
+                  variant="outline"
+                  size="sm"
+                  className="h-8 gap-1.5 text-xs font-semibold"
+                >
+                  <Link href={hrefs.policy}>
+                    <SlidersHorizontal className="h-3.5 w-3.5" />
+                    Configure Policy
+                  </Link>
+                </Button>
+              )}
+            </div>
+          </div>
+          <div className="grid grid-cols-2 divide-x divide-y sm:divide-y-0 sm:grid-cols-4 border-t border-border/70 bg-muted/20 px-4 py-3 text-xs">
+            <div className="px-3 py-1">
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground block">
+                Protocol Spec
+              </span>
+              <span className="font-medium text-foreground">MCP 2024-11-05</span>
+            </div>
+            <div className="px-3 py-1">
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground block">
+                Auth Method
+              </span>
+              <span className="font-medium text-foreground">OAuth 2.0 PKCE / DCR</span>
+            </div>
+            <div className="px-3 py-1">
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground block">
+                Session Security
+              </span>
+              <span className="font-medium text-foreground">{sessionIdleDays} Days Sliding</span>
+            </div>
+            <div className="px-3 py-1">
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground block">
+                Mutations
+              </span>
+              <span
+                className={cn('font-medium', writesEnabled ? 'text-amber-500' : 'text-emerald-500')}
+              >
+                {writesEnabled ? 'Approval Gate' : 'Read-Only'}
+              </span>
             </div>
           </div>
         </Card>

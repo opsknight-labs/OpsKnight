@@ -3,6 +3,7 @@ import { ChevronDown } from 'lucide-react';
 import { Input } from '@/components/ui/shadcn/input';
 import { Label } from '@/components/ui/shadcn/label';
 import McpPolicyForm from '@/components/settings/mcp/McpPolicyForm';
+import SessionIdleSelect from '@/components/settings/mcp/SessionIdleSelect';
 
 const checkboxClass = 'mt-0.5 h-4 w-4 shrink-0 accent-primary';
 const textareaClass =
@@ -149,22 +150,7 @@ export default function McpPolicySection({
         title="Sign-in sessions"
         description="How long an unused connection stays signed in."
       >
-        <div className="max-w-xs space-y-1.5">
-          <Label htmlFor="mcp-idle-days">Stay signed in for (days of inactivity)</Label>
-          <Input
-            id="mcp-idle-days"
-            name="sessionIdleDays"
-            type="number"
-            min="1"
-            max="90"
-            defaultValue={policy.sessionIdleDays}
-            required
-          />
-        </div>
-        <p className="text-xs leading-relaxed text-muted-foreground">
-          Using the assistant keeps it signed in, up to 90 days in total. Changing a password or
-          disconnecting always signs it out immediately.
-        </p>
+        <SessionIdleSelect defaultValue={policy.sessionIdleDays} />
       </PolicyGroup>
 
       <details className="group border-t border-border">

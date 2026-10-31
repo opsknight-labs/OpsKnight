@@ -1,9 +1,11 @@
 import Link from 'next/link';
-import { KeyRound, Plug, SearchX, Unplug, X } from 'lucide-react';
+import { Plug, SearchX, Unplug, X } from 'lucide-react';
 import { Button } from '@/components/ui/shadcn/button';
 import { SettingsSection } from '@/components/settings/layout/SettingsSection';
 import McpConfirmAction from '@/components/settings/mcp/McpConfirmAction';
 import McpScopeSummary from '@/components/settings/mcp/McpScopeSummary';
+import AssistantFilterSelect from '@/components/settings/mcp/AssistantFilterSelect';
+import { getAssistantIcon } from '@/components/common/BrandLogos';
 import {
   FilterChips,
   ListEmpty,
@@ -48,6 +50,7 @@ export default function McpConnectionsSection({
   status,
   q,
   client,
+  availableClients = [],
   now,
   timeZone,
   describeScope,
@@ -62,6 +65,7 @@ export default function McpConnectionsSection({
   status: GrantStatus;
   q: string;
   client: { id: string; name: string } | null;
+  availableClients?: { id: string; name: string }[];
   now: Date;
   timeZone: string;
   describeScope: (scope: string) => string;
@@ -122,23 +126,34 @@ export default function McpConnectionsSection({
               },
             ]}
           />
-          <ListSearch
-            id="mcp-connections-search"
-            label={isAdmin ? 'Search by person or assistant' : 'Search by assistant'}
-            placeholder={isAdmin ? 'Search person or assistant' : 'Search assistant'}
-            value={q}
-            keep={{
-              tab: 'connections',
-              status: status === 'active' ? null : status,
-              client: client?.id,
-            }}
-            clearHref={mcpHref({ ...base, q: null, status: status === 'active' ? null : status })}
-          />
+          <div className="flex flex-wrap items-center gap-2.5">
+            {isAdmin && availableClients.length > 0 && (
+              <AssistantFilterSelect
+                clients={availableClients}
+                selectedClientId={client?.id ?? null}
+                status={status}
+                q={q}
+              />
+            )}
+            <ListSearch
+              id="mcp-connections-search"
+              label={isAdmin ? 'Search by person or assistant' : 'Search by assistant'}
+              placeholder={isAdmin ? 'Search person or assistant' : 'Search assistant'}
+              value={q}
+              keep={{
+                tab: 'connections',
+                status: status === 'active' ? null : status,
+                client: client?.id,
+              }}
+              clearHref={mcpHref({ ...base, q: null, status: status === 'active' ? null : status })}
+            />
+          </div>
         </div>
         {client && (
           <div className="flex flex-wrap items-center gap-2 pb-4 text-xs text-muted-foreground">
-            <span>Assistant:</span>
-            <span className="inline-flex items-center gap-1 rounded-md border border-primary/30 bg-primary/5 py-0.5 pl-2 pr-1 font-medium text-foreground">
+            <span>Filtered by assistant:</span>
+            <span className="inline-flex items-center gap-1.5 rounded-lg border border-primary/30 bg-primary/5 py-1 pl-2.5 pr-1.5 font-medium text-foreground">
+              {getAssistantIcon(client.name, 'h-3.5 w-3.5')}
               {client.name}
               <Link
                 href={mcpHref({
@@ -149,7 +164,7 @@ export default function McpConnectionsSection({
                 aria-label={`Remove assistant filter ${client.name}`}
                 className="rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
-                <X className="h-3 w-3" aria-hidden="true" />
+                <X className="h-3.5 w-3.5" aria-hidden="true" />
               </Link>
             </span>
           </div>
@@ -204,23 +219,33 @@ export default function McpConnectionsSection({
                   <ResponsiveRow key={row.id} muted={row.status !== 'active'}>
                     {isAdmin && (
                       <ResponsiveCell label="Person" primary>
-                        <div className="min-w-0">
-                          <p className="truncate font-medium text-foreground">{who}</p>
-                          {row.user.name && row.user.email && (
-                            <p className="truncate text-xs text-muted-foreground">
-                              {row.user.email}
-                            </p>
-                          )}
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[11px] font-bold text-primary">
+                            {(who.charAt(0) || 'U').toUpperCase()}
+                          </div>
+                          <div className="min-w-0">
+                            <p className="truncate font-medium text-foreground">{who}</p>
+                            {row.user.name && row.user.email && (
+                              <p className="truncate text-xs text-muted-foreground">
+                                {row.user.email}
+                              </p>
+                            )}
+                          </div>
                         </div>
                       </ResponsiveCell>
                     )}
                     <ResponsiveCell label="Assistant" primary={!isAdmin}>
-                      <div className="min-w-0">
-                        <p className="truncate font-medium text-foreground">{row.client.name}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {CLIENT_TYPE_LABEL[row.client.type]}
-                          {row.client.revoked && ' · assistant revoked'}
-                        </p>
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-border/80 bg-muted/40 shadow-2xs">
+                          {getAssistantIcon(row.client.name, 'h-4 w-4')}
+                        </div>
+                        <div className="min-w-0">
+                          <p className="truncate font-medium text-foreground">{row.client.name}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {CLIENT_TYPE_LABEL[row.client.type]}
+                            {row.client.revoked && ' · assistant revoked'}
+                          </p>
+                        </div>
                       </div>
                     </ResponsiveCell>
                     <ResponsiveCell label="Scopes">
@@ -267,36 +292,37 @@ export default function McpConnectionsSection({
                           action={revokeAction}
                           fields={{ kind: 'grant', id: row.id }}
                           label="Revoke"
-                          accessibleLabel={`Revoke ${context}`}
-                          title="Revoke this connection?"
+                          accessibleLabel={
+                            isAdmin
+                              ? `Revoke connection for ${row.client.name} and ${who}`
+                              : `Revoke connection for ${row.client.name}`
+                          }
+                          title={`Revoke connection for ${row.client.name}?`}
                           confirmLabel="Revoke connection"
                           successMessage="Connection revoked"
                           className="w-full md:w-auto"
                           description={
-                            <>
+                            isAdmin ? (
                               <p>
-                                <span className="font-medium text-foreground">
-                                  {row.client.name}
-                                </span>{' '}
-                                {isAdmin ? (
-                                  <>
-                                    loses access for{' '}
-                                    <span className="font-medium text-foreground">{who}</span>
-                                  </>
-                                ) : (
-                                  'loses access to your account'
-                                )}{' '}
-                                on its next request.
+                                This revokes {who}&apos;s access for {row.client.name}. The
+                                assistant stops working on its next request. They can connect again
+                                any time.
                               </p>
+                            ) : (
                               <p>
-                                {isAdmin ? 'They' : 'You'} can connect again later by signing in and
-                                approving.
+                                This revokes your access for {row.client.name}. The assistant stops
+                                working on its next request. You can connect again any time.
                               </p>
-                            </>
+                            )
                           }
                         />
                       ) : (
-                        <span className="sr-only">No actions</span>
+                        <span
+                          className="text-xs text-muted-foreground/60 md:inline-block"
+                          aria-hidden="true"
+                        >
+                          —
+                        </span>
                       )}
                     </ResponsiveCell>
                   </ResponsiveRow>
@@ -311,55 +337,44 @@ export default function McpConnectionsSection({
             page={page}
             pageSize={MCP_PAGE_SIZE}
             total={total}
-            href={n => mcpHref({ ...base, status: status === 'active' ? null : status, page: n })}
+            href={n => mcpHref({ ...base, page: n })}
           />
         </div>
       </SettingsSection>
 
-      {isAdmin && (
-        <p className="px-1 text-xs text-muted-foreground">
-          Changes to MCP settings and connections are recorded in the{' '}
-          <Link className="font-medium text-foreground underline underline-offset-2" href="/audit">
-            audit log
-          </Link>
-          .
-        </p>
-      )}
-
-      {isAdmin && (
-        <form action={revokeAllAction}>
-          <SettingsSection
-            title="Credential security"
-            description="MCP tokens are stored only as hashes keyed from the application encryption key; there is no separate MCP secret to configure."
-            className="border-destructive/30"
-            footer={
-              <div className="flex justify-end">
-                <Button type="submit" variant="destructive" size="sm" className="gap-1.5">
-                  <KeyRound className="h-4 w-4" aria-hidden="true" />
-                  Revoke all MCP connections
-                </Button>
-              </div>
-            }
-          >
-            <div className="space-y-3 py-4 text-sm">
-              <p className="text-muted-foreground">
-                Rotating the application encryption key also invalidates every MCP connection, so
-                people reconnect their assistants. Use this to disconnect everyone immediately, for
-                example after a suspected credential exposure.
-              </p>
-              <label className="flex cursor-pointer items-start gap-3">
-                <input
-                  type="checkbox"
-                  name="confirm"
-                  required
-                  className="mt-0.5 h-4 w-4 shrink-0 accent-primary"
-                />
-                <span>I understand every user must reconnect their assistants.</span>
-              </label>
-            </div>
-          </SettingsSection>
-        </form>
-      )}
+      <section
+        aria-labelledby="mcp-credentials-title"
+        className="rounded-xl border border-border bg-card p-4 shadow-2xs md:p-6"
+      >
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div className="space-y-1">
+            <h3 id="mcp-credentials-title" className="text-sm font-semibold text-foreground">
+              Credential security
+            </h3>
+            <p className="max-w-2xl text-xs leading-relaxed text-muted-foreground">
+              Tokens use PKCE with SHA-256 and are salted with scrypt in the database, matching user
+              passwords. They cannot be retrieved after registration, only replaced or revoked.
+            </p>
+          </div>
+          {isAdmin && counts.active > 0 && (
+            <McpConfirmAction
+              action={revokeAllAction}
+              fields={{}}
+              label="Revoke all active connections"
+              accessibleLabel="Revoke all active MCP connections across OpsKnight"
+              title="Revoke all active MCP connections?"
+              confirmLabel="Revoke all connections"
+              successMessage="All MCP connections revoked"
+              description={
+                <p>
+                  This disconnects every assistant immediately. People will need to sign in and
+                  approve again. Use this if a shared credential or laptop was compromised.
+                </p>
+              }
+            />
+          )}
+        </div>
+      </section>
     </div>
   );
 }
