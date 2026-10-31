@@ -4,7 +4,7 @@ import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from 
 import { Badge } from '@/components/ui/shadcn/badge';
 import { Button } from '@/components/ui/shadcn/button';
 import { cn } from '@/lib/utils';
-import { describeMcpScope } from '@/lib/mcp/auth/scopes';
+import { describeMcpScope } from '@/lib/mcp/auth/scope-labels';
 
 type Props = {
   scopeChoices: string[];
