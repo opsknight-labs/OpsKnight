@@ -25,7 +25,8 @@ const schema = z
     scope: z.string().max(2048).optional(),
     resource: z.string().url().optional(),
   })
-  .strict();
+  // RFC 6749 section 3.2: unrecognized parameters are ignored, never refused.
+  .strip();
 
 export function POST(request: Request) {
   return withMcpDatabase(() => withMcpRuntime(() => handlePost(request)));

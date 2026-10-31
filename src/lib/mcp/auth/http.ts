@@ -62,7 +62,9 @@ export const authorizationQuerySchema = z
     // RFC 8707 is optional here: the audience is always this server's MCP URL.
     resource: z.string().url().optional(),
   })
-  .strict();
+  // RFC 6749 section 3.1: unrecognized parameters (prompt, login_hint, nonce, extensions) are
+  // ignored, never refused. Duplicates are still refused by uniqueQuery.
+  .strip();
 
 export function uniqueQuery(search: URLSearchParams) {
   requireMcp(

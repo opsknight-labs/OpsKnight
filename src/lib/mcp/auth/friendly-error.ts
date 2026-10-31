@@ -52,7 +52,11 @@ const MESSAGES = new Map<string, { title: string; body: string }>(
     },
     invalid_client: {
       title: 'This assistant is not allowed to connect',
-      body: 'OpsKnight could not verify this assistant. An administrator can find the exact reason in the server log by searching for mcp.authorize or mcp.cimd.',
+      body: 'OpsKnight could not verify this assistant, or an administrator has turned off automatic connections. An administrator can find the exact reason in the server log by searching for client_denied.',
+    },
+    invalid_request: {
+      title: 'The assistant sent an incomplete sign-in request',
+      body: 'Return to your assistant and connect again. If it keeps happening, remove OpsKnight from the assistant and add it again.',
     },
     MCP_CLIENT_UNKNOWN: {
       title: 'This connection is out of date',
