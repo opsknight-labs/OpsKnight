@@ -21,12 +21,13 @@ test('remote request requires a different native reviewer and commits one recove
   const origin = baseURL!;
   expect(['localhost', '127.0.0.1']).toContain(new URL(origin).hostname);
   await login(page, 'mcp-admin@example.test');
-  await page.goto('/settings/integrations/mcp');
+  await page.goto('/settings/integrations/mcp?tab=policy');
   await page.getByRole('checkbox', { name: /Enable MCP/ }).check();
   await page.locator('#main-content').getByText('Advanced', { exact: true }).click();
   await page.getByRole('checkbox', { name: /Allow reviewed routine mutations/ }).check();
   await page.getByRole('button', { name: 'Save policy' }).click();
   await expect(page.getByText('MCP configuration saved', { exact: true })).toBeVisible();
+  await page.goto('/settings/integrations/mcp?tab=assistants');
   await page.getByText('Manual client registration (advanced)', { exact: true }).click();
   const name = `Reviewed ${browserName} ${Date.now()}`;
   const scopes = 'runbooks:execute runbooks:read incidents:read services:read';
@@ -39,9 +40,8 @@ test('remote request requires a different native reviewer and commits one recove
       .getByRole('checkbox', { name: label, exact: true })
       .check();
   await page.getByRole('button', { name: 'Register client', exact: true }).click();
-  const client = page
-    .locator('article')
-    .filter({ has: page.getByRole('heading', { name, exact: true }) });
+  const client = page.locator('#main-content').getByRole('row').filter({ hasText: name });
+  await expect(client).toHaveCount(1);
   const clientId = await client.locator('code').innerText();
   const verifier = randomBytes(32).toString('base64url');
   const state = randomBytes(16).toString('base64url');
