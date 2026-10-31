@@ -1,3 +1,4 @@
+import { getUserPermissions } from '@/lib/rbac';
 import Link from 'next/link';
 import {
   Bot,
@@ -82,8 +83,10 @@ export default async function McpSettings({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  const viewer = await loadMcpViewer();
-  const isAdmin = viewer.isAdmin;
+  // Signed-in users see their own MCP access; every admin-only read below is gated on isAdmin.
+  const permissions = await getUserPermissions();
+  const viewer = await loadMcpViewer(permissions);
+  const isAdmin = permissions.isAdmin;
   const params = parseMcpListParams(await searchParams, isAdmin);
   const { section } = params;
   const now = new Date();
