@@ -64,7 +64,7 @@ export const WorkspaceHeader = memo(function WorkspaceHeader({
               </h2>
               <Badge
                 variant="secondary"
-                className="px-1.5 py-0 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground"
+                className="px-1.5 py-0 text-[10px] font-semibold uppercase tracking-wider text-foreground/80"
               >
                 Beta
               </Badge>

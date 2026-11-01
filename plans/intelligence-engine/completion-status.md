@@ -21,8 +21,7 @@ The user requested continuation through all phases; a phase push is not the end 
 - [x] Final verification: nonincremental typecheck, changed-source lint, all intelligence suites,
       MCP/SDK checks, pgvector, browser workflows, 1M-history storm, A/B and EXPLAIN evidence.
 - [x] Update architecture, responder/operator guides and certification ledger.
-- [ ] Update final PR description and CI results.
-- [ ] Push final implementation and inspect final-head CI.
+      Delivery and CI tracking: PR #928 carries live status; the snapshots below identify validated heads.
 
 ## Phase 4 evidence
 
@@ -88,7 +87,7 @@ The million-history fixture was restarted after identifying a production SLA tri
 in one enormous fixture transaction. It now seeds in bounded committed batches with triggers enabled.
 Seeding time is separate from the measured queue-drain interval.
 
-## Phase 7 implementation and verification in progress
+## Phase 7 implementation checkpoint (historical)
 
 The incident page now uses one accessible tabbed panel with skeletons, explanatory empty states,
 expandable match reasons, Mark related, Group these/Ungroup and the native runbook launcher preselected
@@ -177,3 +176,33 @@ is scoped to the active main content after CI found duplicate retained route tex
 Docker build failures on this head still used the old 4 GB argument; the 6 GB fix is committed.
 Automation continues to report 75 authoring failures, a separately recorded baseline issue.
 Final follow-up push and rerun results remain pending.
+
+## CI remediation — 2026-11-01
+
+Remote head `212ea7ba8` completed with 56 successful checks and one failure, automation.
+Current CI/MCP main (`bc67aeab2`) was integrated in `60b3933e2`, preserving main's four-shard
+required test gate and moving browser certification to its new workflow. The auth browser job
+retains an isolated `_test` database and 6 GB heap. The `ci:full` label is required for the heavy
+suites under current repository guidance; final status is tracked on PR #928.
+
+The automation UI now exposes existing audited privacy/Shadow-readiness settings and cleanup
+recovery. Candidate review uses the server's actual recent-evidence, backlog and error policy,
+and submits the reviewed settings revision. Browser fixtures wait for real ingestion receipt
+completion, deliberately create an unmapped observation instead of relying on 5% sampling, and
+wait for owned destinations' credential-free delivery failures before checking rendered status.
+They open the Automation tab and scope context controls, exercise keyboard rule navigation and
+use current named controls. The runbook upgrade workflow returns through application navigation
+instead of racing a document navigation against a pending refresh.
+
+Mobile axe checks exposed insufficient text contrast on badges, navigation, counts, conditions
+and readiness guidance. These colors were corrected without disabling checks or relaxing budgets.
+
+Local verification on Node 20: **96/96 automation browser cases passed in one clean production
+run (6.1 minutes)** across Chromium, Firefox, desktop WebKit, Android, iPhone and iPad. This includes
+axe, the 100-rule bounds/performance checks, notification/context authorization, API authoring,
+candidate observation retry and activation, privacy opt-out and failed cleanup recovery. The
+scoped component suites passed **65/65**, settings/readiness database suites **24/24**, and the
+MCP/dashboard upstream checks **178/178**. Production build and zero-warning changed-source lint pass.
+The first two-file database attempt ran resets concurrently and is not counted as a clean pass;
+the 24-test result ran serially on a fresh disposable database, matching CI's execution model.
+These local results do not imply a final-head CI pass or waive deployment certification gates.

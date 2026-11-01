@@ -10,6 +10,7 @@ import {
   updateAutomationSettings,
 } from '@/lib/automation/settings-command';
 import { AppError } from '@/lib/errors';
+import { automationReadinessPolicySchema } from '@/lib/automation/readiness-policy';
 
 export type SaveAutomationSettingsResult =
   | {
@@ -18,6 +19,8 @@ export type SaveAutomationSettingsResult =
         automationEnabled: boolean;
         automationTraceRetentionDays: number;
         automationSettingsRevision: number;
+        automationStoreObservationPreviews: boolean;
+        automationReadinessPolicy: ReturnType<typeof automationReadinessPolicySchema.parse>;
       };
     }
   | {
@@ -74,6 +77,10 @@ export async function saveAutomationSettings(
         automationEnabled: settings.automationEnabled,
         automationTraceRetentionDays: settings.automationTraceRetentionDays,
         automationSettingsRevision: settings.automationSettingsRevision,
+        automationStoreObservationPreviews: settings.automationStoreObservationPreviews,
+        automationReadinessPolicy: automationReadinessPolicySchema.parse(
+          settings.automationReadinessPolicy
+        ),
       },
     };
   } catch (error) {

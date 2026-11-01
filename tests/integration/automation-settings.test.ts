@@ -86,6 +86,8 @@ it('persists audited settings and immediately exposes disable to independent rea
       automationEnabled: true,
       automationTraceRetentionDays: 120,
       automationSettingsRevision: 1,
+      automationStoreObservationPreviews: false,
+      automationReadinessPolicy: DEFAULT_AUTOMATION_READINESS_POLICY,
     },
   });
   expect(await automationEnabled()).toBe(true);

@@ -56,7 +56,7 @@ const PHASES = {
     title: 'Routing · first match wins',
     noun: 'routing',
     explanation:
-      'Enabled rules are checked top to bottom. The first rule whose conditions all match chooses the responder route; later routing rules are skipped.',
+      'Enabled rules are checked top to bottom. The first rule whose conditions all match chooses the responder route; later routing rules are skipped. Fallback: service default escalation when no routing rule matches.',
   },
 } as const;
 
@@ -191,7 +191,7 @@ const RuleRow = memo(
           className="flex min-h-10 w-full items-center gap-2.5 px-3 py-2 text-left hover:bg-muted/30 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary"
           onClick={() => onToggle(rule.id)}
         >
-          <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded border border-border/60 bg-muted/60 font-mono text-[10.5px] font-semibold text-muted-foreground">
+          <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded border border-border/60 bg-muted/60 font-mono text-[10.5px] font-semibold text-foreground/80">
             {position}
           </span>
 
@@ -717,10 +717,10 @@ export function AutomationRules({
               'rounded-md px-2 py-1 text-xs font-medium transition-all',
               ruleStateFilter === 'all'
                 ? 'bg-background text-foreground shadow-2xs font-semibold'
-                : 'text-muted-foreground hover:text-foreground'
+                : 'text-foreground/80 hover:text-foreground'
             )}
           >
-            All <span className="opacity-70 font-mono">({ruleCounts.all})</span>
+            All <span className="font-mono">({ruleCounts.all})</span>
           </button>
           <button
             type="button"
@@ -729,10 +729,10 @@ export function AutomationRules({
               'rounded-md px-2 py-1 text-xs font-medium transition-all',
               ruleStateFilter === 'enabled'
                 ? 'bg-background text-emerald-700 dark:text-emerald-400 shadow-2xs font-semibold'
-                : 'text-muted-foreground hover:text-foreground'
+                : 'text-foreground/80 hover:text-foreground'
             )}
           >
-            Enabled <span className="opacity-70 font-mono">({ruleCounts.enabled})</span>
+            Enabled <span className="font-mono">({ruleCounts.enabled})</span>
           </button>
           <button
             type="button"
@@ -741,10 +741,10 @@ export function AutomationRules({
               'rounded-md px-2 py-1 text-xs font-medium transition-all',
               ruleStateFilter === 'disabled'
                 ? 'bg-background text-foreground shadow-2xs font-semibold'
-                : 'text-muted-foreground hover:text-foreground'
+                : 'text-foreground/80 hover:text-foreground'
             )}
           >
-            Disabled <span className="opacity-70 font-mono">({ruleCounts.disabled})</span>
+            Disabled <span className="font-mono">({ruleCounts.disabled})</span>
           </button>
         </div>
 
