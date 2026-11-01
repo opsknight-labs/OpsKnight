@@ -206,3 +206,10 @@ MCP/dashboard upstream checks **178/178**. Production build and zero-warning cha
 The first two-file database attempt ran resets concurrently and is not counted as a clean pass;
 the 24-test result ran serially on a fresh disposable database, matching CI's execution model.
 These local results do not imply a final-head CI pass or waive deployment certification gates.
+
+Latest main `031bf0b96` adds MCP request-memory/query improvements and tolerant OAuth parameter
+handling. After integrating those MCP-only changes, **185/185 MCP unit/protocol tests** and
+**22/22 scoped MCP database tests** passed, along with typecheck and changed-source lint.
+The 96-case automation browser result above exercised the final automation code; no automation
+source changed in this subsequent upstream integration. The mandatory push hook checks the
+complete combined source again. Final remote status remains authoritative on PR #928.

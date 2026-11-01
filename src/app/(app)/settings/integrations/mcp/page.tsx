@@ -87,6 +87,7 @@ export default async function McpSettings({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
+  // Signed-in users see their own MCP access; every admin-only read below is gated on isAdmin.
   const permissions = await getUserPermissions();
   const isAdmin = permissions.isAdmin;
   const viewer = await loadMcpViewer(permissions);
