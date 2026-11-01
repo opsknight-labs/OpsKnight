@@ -11,6 +11,7 @@ import { mcpResource } from '@/lib/mcp/auth/config';
 import { callMcpOperation } from '@/lib/mcp/core/execution';
 import {
   commitApprovedMcpOperation,
+  decideMcpOperationReview,
   getMcpOperationApproval,
   loadMcpOperationReview,
   prepareMcpOperation,
@@ -146,32 +147,26 @@ describe('independently approved sensitive MCP operations', () => {
     );
   });
 
-  it('never lets the requester or an unauthorized user approve', async () => {
+  it('lets only an administrator approve their own request, and only after confirming', async () => {
     const f = await fixture();
     const prepared = await prepareMcpOperation(f.ctx(), await f.leadArgs());
-    await expect(f.review(prepared, 'approve', f.user)).rejects.toThrow(
-      'MCP_DISTINCT_REVIEWER_REQUIRED'
-    );
-    const ordinary = await createTestUser({ role: 'USER' });
-    await expect(f.review(prepared, 'approve', ordinary)).rejects.toThrow(
-      'MCP_REVIEWER_NOT_AUTHORIZED'
-    );
-    await expect(
-      f.review(prepared, 'approve', {
-        id: f.reviewer.id,
-        tokenVersion: f.reviewer.tokenVersion + 1,
-      })
-    ).rejects.toThrow('MCP_REVIEWER_CHANGED');
-    await expect(
-      loadMcpOperationReview(prepared.approvalId, {
-        id: f.user.id,
-        tokenVersion: f.user.tokenVersion,
-      })
-    ).rejects.toThrow('MCP_DISTINCT_REVIEWER_REQUIRED');
-    expect(
-      (await db.mcpOperationApproval.findUniqueOrThrow({ where: { id: prepared.approvalId } }))
-        .status
-    ).toBe('PENDING');
+    const self = { id: f.user.id, tokenVersion: f.user.tokenVersion };
+    const decide = (extra: Record<string, string> = {}) =>
+      decideMcpOperationReview(
+        {
+          id: prepared.approvalId,
+          operationDigest: prepared.operationDigest,
+          decision: 'approve',
+          ...extra,
+        },
+        { ...self, authenticatedAt: Date.now() - 60_000 }
+      );
+    // The requester (an administrator) sees the review page, marked as their own request.
+    await expect(loadMcpOperationReview(prepared.approvalId, self)).resolves.toMatchObject({
+      selfReview: true,
+    });
+    await expect(decide()).rejects.toThrow('MCP_SELF_APPROVAL_CONFIRMATION_REQUIRED');
+    // The database refuses an unflagged self-review even if application checks were bypassed.
     await expect(
       db.mcpOperationApproval.update({
         where: { id: prepared.approvalId },
@@ -183,6 +178,48 @@ describe('independently approved sensitive MCP operations', () => {
         },
       })
     ).rejects.toThrow();
+    // A requester who is no longer an administrator needs a different reviewer.
+    await db.user.update({ where: { id: f.user.id }, data: { role: 'USER' } });
+    await expect(decide({ confirmSelfApproval: 'yes' })).rejects.toThrow(
+      'MCP_DISTINCT_REVIEWER_REQUIRED'
+    );
+    await db.user.update({ where: { id: f.user.id }, data: { role: 'ADMIN' } });
+    expect(
+      (await db.mcpOperationApproval.findUniqueOrThrow({ where: { id: prepared.approvalId } }))
+        .status
+    ).toBe('PENDING');
+
+    await decide({ confirmSelfApproval: 'yes' });
+    const committed = await commitApprovedMcpOperation(f.ctx(), {
+      approvalId: prepared.approvalId,
+    });
+    expect(committed).toMatchObject({ status: 'COMMITTED' });
+    expect(
+      await db.mcpOperationApproval.findUniqueOrThrow({ where: { id: prepared.approvalId } })
+    ).toMatchObject({ reviewedById: f.user.id, actorId: f.user.id, selfApproved: true });
+    const audit = await db.auditLog.findFirstOrThrow({
+      where: { entityId: prepared.approvalId, action: 'mcp.operation.approved' },
+    });
+    expect(audit.details).toMatchObject({ metadata: { selfApproved: true } });
+  });
+
+  it('never lets an unauthorized or changed user approve', async () => {
+    const f = await fixture();
+    const prepared = await prepareMcpOperation(f.ctx(), await f.leadArgs());
+    const ordinary = await createTestUser({ role: 'USER' });
+    await expect(f.review(prepared, 'approve', ordinary)).rejects.toThrow(
+      'MCP_REVIEWER_NOT_AUTHORIZED'
+    );
+    await expect(
+      f.review(prepared, 'approve', {
+        id: f.reviewer.id,
+        tokenVersion: f.reviewer.tokenVersion + 1,
+      })
+    ).rejects.toThrow('MCP_REVIEWER_CHANGED');
+    expect(
+      (await db.mcpOperationApproval.findUniqueOrThrow({ where: { id: prepared.approvalId } }))
+        .status
+    ).toBe('PENDING');
   });
 
   it('rejects a mismatched digest and a rejected or expired plan', async () => {

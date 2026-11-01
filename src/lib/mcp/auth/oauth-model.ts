@@ -4,6 +4,7 @@ import type { Prisma, McpClient } from '@prisma/client';
 import { digestMcpSecret, mcpResource } from './config';
 import { requireMcp } from '../core/errors';
 import { effectiveMcpClientScopes } from './client-policy';
+import { redirectUriAllowed } from './redirect-uri';
 import { MCP_ABSOLUTE_SESSION_DAYS, slideMcpExpiry } from './session-lifetime';
 
 type Database = Prisma.TransactionClient;
@@ -54,6 +55,11 @@ export function createMcpOAuthModel(db: Database, onReuse: (grantId: string) => 
   const secret = async () => randomBytes(32).toString('base64url');
   return {
     getClient,
+    // The library's default is an exact match, which refuses native clients on a new loopback port.
+    validateRedirectUri: async (
+      redirectUri: string,
+      client: { redirectUris?: string | string[] }
+    ) => redirectUriAllowed([client.redirectUris ?? []].flat(), redirectUri),
     generateAccessToken: secret,
     generateRefreshToken: secret,
     generateAuthorizationCode: secret,

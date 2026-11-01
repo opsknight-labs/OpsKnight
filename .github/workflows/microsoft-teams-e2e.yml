@@ -2,6 +2,7 @@ name: Microsoft Teams Contract + DB Integration
 
 on:
   pull_request:
+    types: [opened, synchronize, reopened, labeled]
     branches: [main]
     paths:
       - 'src/lib/microsoft-teams/**'
@@ -56,6 +57,7 @@ concurrency:
 
 jobs:
   teams-contract-and-delivery:
+    if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'ci:full')
     runs-on: ubuntu-latest
     timeout-minutes: 20
     services:

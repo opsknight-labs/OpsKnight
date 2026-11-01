@@ -475,7 +475,7 @@ describe('step decisions keep native separation and control rules', () => {
     }
   );
 
-  it('never lets the requester who started the run review their own step decision', async () => {
+  it('makes the administrator who started the run confirm before reviewing their own step decision', async () => {
     const f = await fixture();
     const s = await waitingExecution(f, f.user.id);
     for (const operationId of ['approveRunbookExecutionStep', 'rejectRunbookExecutionStep']) {
@@ -491,7 +491,7 @@ describe('step decisions keep native separation and control rules', () => {
         idempotencyKey: prepareKey(),
       });
       await expect(f.review(prepared, 'approve', f.user)).rejects.toThrow(
-        'MCP_DISTINCT_REVIEWER_REQUIRED'
+        'MCP_SELF_APPROVAL_CONFIRMATION_REQUIRED'
       );
       await expect(commit(f, prepared)).rejects.toThrow('MCP_APPROVAL_REQUIRED');
     }

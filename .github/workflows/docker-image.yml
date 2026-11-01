@@ -1,8 +1,10 @@
 name: Docker Image (build + push)
 
 on:
+  # Pull requests build the image only when labelled `ci:full`; main always does.
   pull_request:
     branches: [main]
+    types: [opened, synchronize, reopened, labeled]
   push:
     branches: [main]
     tags:
@@ -238,6 +240,7 @@ jobs:
     needs: [release-quality, integration-certification]
     if: >-
       !cancelled() && !inputs.certification_archive &&
+      (github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'ci:full')) &&
       (!startsWith(github.ref, 'refs/tags/v') ||
         (needs.release-quality.result == 'success' && needs.integration-certification.result == 'success'))
     runs-on: ubuntu-22.04
@@ -304,8 +307,8 @@ jobs:
           tags: |
             type=raw,value=rc-${{ github.sha }}
 
-      - name: Build (PR validation - no push)
-        if: github.event_name == 'pull_request'
+      - name: Build (PR & main validation - no push)
+        if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main'
         uses: docker/build-push-action@v7
         with:
           context: .
@@ -325,7 +328,7 @@ jobs:
           sbom: false
 
       - name: Prove first-admin bootstrap CLI in production image
-        if: github.event_name == 'pull_request'
+        if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main'
         shell: bash
         run: |
           set -euo pipefail
@@ -352,8 +355,8 @@ jobs:
             exit 1
           fi
 
-      - name: Build Agent image (PR validation - no push)
-        if: github.event_name == 'pull_request'
+      - name: Build Agent image (PR & main validation - no push)
+        if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main'
         uses: docker/build-push-action@v7
         with:
           context: .
@@ -369,7 +372,7 @@ jobs:
           sbom: false
 
       - name: Verify Agent container image lifecycle, zombie reaping, and Podman socket integration
-        if: github.event_name == 'pull_request'
+        if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main'
         shell: bash
         run: |
           set -euo pipefail
@@ -480,7 +483,7 @@ jobs:
             '
 
       - name: Verify Compose split runtime and PgBouncer live stack
-        if: github.event_name == 'pull_request'
+        if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main'
         shell: bash
         run: |
           set -euo pipefail
@@ -566,7 +569,7 @@ jobs:
           echo "Live Docker Compose split runtime + PgBouncer validation passed successfully!"
 
       - name: Verify Compose split runtime with PgBouncer and external PostgreSQL
-        if: github.event_name == 'pull_request'
+        if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main'
         shell: bash
         run: |
           set -euo pipefail

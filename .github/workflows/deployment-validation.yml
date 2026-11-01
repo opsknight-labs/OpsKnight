@@ -2,27 +2,6 @@ name: Deployment manifests
 
 on:
   workflow_call:
-  pull_request:
-    branches: [main]
-    paths:
-      - 'Dockerfile'
-      - 'agent/**'
-      - 'docker-entrypoint.sh'
-      - 'scripts/auto-recover-migrations.ts'
-      - 'scripts/validate-release-tag.cjs'
-      - 'deploy/**'
-      - 'src/lib/runtime-capacity.ts'
-      - 'env.example'
-      - 'docs/v1.5/deployment/**'
-      - 'docs/v2.0.0/operate/deploy/**'
-      - 'docs/v2.0.0/operate/data/**'
-      - 'docs/v2.0.0/operate/upgrades/**'
-      - 'docs/v2.0.0/troubleshooting/**'
-      - 'tests/lib/deployment-config-unit.test.ts'
-      - 'tests/lib/deployment-csi.test.ts'
-      - 'tests/lib/deployment-csi-kustomize.test.ts'
-      - '.github/workflows/docker-image.yml'
-      - '.github/workflows/deployment-validation.yml'
   push:
     branches: [main]
     paths:

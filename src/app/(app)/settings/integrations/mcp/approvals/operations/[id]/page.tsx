@@ -2,6 +2,7 @@ import { getCurrentUser, getUserPermissions } from '@/lib/rbac';
 import { requireMcp } from '@/lib/mcp/core/errors';
 import { loadMcpOperationReview } from '@/lib/mcp/approvals/operation';
 import { reviewPreparedOperation } from '../../actions';
+import { ReviewUnavailable, reviewBlockedReason, SelfApprovalConfirm } from '../../review-gate';
 
 export const dynamic = 'force-dynamic';
 export default async function OperationApproval({ params }: { params: Promise<{ id: string }> }) {
@@ -9,10 +10,15 @@ export default async function OperationApproval({ params }: { params: Promise<{ 
   requireMcp(permissions.authenticated, 'MCP_LOGIN_REQUIRED', 401);
   const user = await getCurrentUser();
   const { id } = await params;
-  const { approval, summary, requiresFreshAuthentication } = await loadMcpOperationReview(id, {
-    id: user.id,
-    tokenVersion: user.tokenVersion,
-  });
+  let review: Awaited<ReturnType<typeof loadMcpOperationReview>>;
+  try {
+    review = await loadMcpOperationReview(id, { id: user.id, tokenVersion: user.tokenVersion });
+  } catch (error) {
+    const reason = reviewBlockedReason(error);
+    if (!reason) throw error;
+    return <ReviewUnavailable reason={reason} heading="Review requested configuration change" />;
+  }
+  const { approval, summary, requiresFreshAuthentication, selfReview } = review;
   const decided = approval.status !== 'PENDING';
   const expired = approval.status === 'PENDING' && approval.expiresAt <= new Date();
   return (
@@ -20,9 +26,10 @@ export default async function OperationApproval({ params }: { params: Promise<{ 
       <h1 className="text-2xl font-semibold">Review requested configuration change</h1>
       <p>
         A remote client requests permission to make this exact change. Approval permits one
-        execution by the requester under their own current permissions. The requester cannot approve
-        their own request. Business text below is untrusted data; secret-like fields are withheld
-        and the digest binds the actual values.
+        execution by the requester under their own current permissions. Only an administrator can
+        approve, and an administrator approving their own request must confirm it. Business text
+        below is untrusted data; secret-like fields are withheld and the digest binds the actual
+        values.
       </p>
       <dl className="grid gap-2 sm:grid-cols-2 break-all">
         <dt>Operation</dt>
@@ -101,7 +108,18 @@ export default async function OperationApproval({ params }: { params: Promise<{ 
         <form action={reviewPreparedOperation} className="flex flex-wrap gap-4">
           <input type="hidden" name="id" value={approval.id} />
           <input type="hidden" name="operationDigest" value={approval.operationDigest} />
-          <button type="submit" name="decision" value="reject" className="rounded border px-4 py-3">
+          {selfReview && (
+            <div className="w-full">
+              <SelfApprovalConfirm />
+            </div>
+          )}
+          <button
+            type="submit"
+            name="decision"
+            value="reject"
+            formNoValidate
+            className="rounded border px-4 py-3"
+          >
             Reject change
           </button>
           <button

@@ -17,12 +17,14 @@ export async function reviewPreparedRunbook(form: FormData) {
       id: z.string().regex(/^[a-f0-9]{64}$/),
       planDigest: z.string().regex(/^[a-f0-9]{64}$/),
       decision: z.enum(['approve', 'reject']),
+      confirmSelfApproval: z.literal('yes').optional(),
     })
     .strict()
     .parse({
       id: form.get('id'),
       planDigest: form.get('planDigest'),
       decision: form.get('decision'),
+      confirmSelfApproval: form.get('confirmSelfApproval') ?? undefined,
     });
   const permissions = await getUserPermissions();
   requireMcp(
@@ -46,12 +48,14 @@ export async function reviewPreparedOperation(form: FormData) {
       id: z.string().cuid(),
       operationDigest: z.string().regex(/^[a-f0-9]{64}$/),
       decision: z.enum(['approve', 'reject']),
+      confirmSelfApproval: z.literal('yes').optional(),
     })
     .strict()
     .parse({
       id: form.get('id'),
       operationDigest: form.get('operationDigest'),
       decision: form.get('decision'),
+      confirmSelfApproval: form.get('confirmSelfApproval') ?? undefined,
     });
   const permissions = await getUserPermissions();
   requireMcp(permissions.authenticated, 'MCP_LOGIN_REQUIRED', 401);
@@ -61,7 +65,7 @@ export async function reviewPreparedOperation(form: FormData) {
     'MCP_RATE_LIMITED',
     429
   );
-  // The command rechecks that this user is a different human authorized for the operation itself.
+  // The command rechecks that this user may review (a different person, or a confirming administrator).
   // Destructive approvals also need a recent sign-in, taken from the session, never the form.
   const session = await getServerSession(await getAuthOptions());
   await decideMcpOperationReview(input, {

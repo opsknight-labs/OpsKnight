@@ -120,3 +120,71 @@ describe('fetch failures before a document exists', () => {
     expect(JSON.stringify(warn.mock.calls)).not.toContain('do-not-log');
   });
 });
+
+describe('denials say which check failed', () => {
+  const base = { cimdEnabled: true, cimdAllowedHosts: [], cimdScopes: ['incidents:read'] };
+  const dbWith = (row: unknown) =>
+    ({
+      mcpClient: { findUnique: async () => row, upsert: async () => ({}) },
+    }) as unknown as Parameters<typeof resolveCimdClient>[0];
+  const serve = async () => json(CLAUDE_DOCUMENT);
+  const run = (
+    policy: Record<string, unknown>,
+    row: unknown = null,
+    redirect = 'https://claude.ai/api/mcp/auth_callback'
+  ) => resolveCimdClient(dbWith(row), policy as never, CLAUDE_ID, redirect, serve);
+  const reasonLogged = () => warn.mock.calls.map(call => call[1]?.reason);
+
+  it.each([
+    ['automatic_connections_off', { ...base, cimdEnabled: false }, null],
+    ['host_not_in_allowlist', { ...base, cimdAllowedHosts: ['other.example'] }, null],
+    ['no_scopes_allowed_for_automatic_connections', { ...base, cimdScopes: [] }, null],
+    ['client_revoked', base, { metadataUrl: CLAUDE_ID, revokedAt: new Date() }],
+    ['client_id_taken_by_other_registration', base, { metadataUrl: null, revokedAt: null }],
+  ])('logs %s', async (reason, policy, row) => {
+    await expect(run(policy, row)).rejects.toMatchObject({ code: 'invalid_client' });
+    expect(reasonLogged()).toEqual([reason]);
+  });
+
+  it('logs both redirect URIs when the assistant uses one its document does not list', async () => {
+    await expect(run(base, null, 'https://claude.com/api/mcp/auth_callback')).rejects.toMatchObject(
+      { code: 'invalid_client' }
+    );
+    expect(warn).toHaveBeenCalledWith('mcp.cimd.client_denied', {
+      clientId: CLAUDE_ID,
+      reason: 'redirect_uri_not_in_document',
+      requestedRedirectUri: 'https://claude.com/api/mcp/auth_callback',
+      documentRedirectUris: ['https://claude.ai/api/mcp/auth_callback'],
+    });
+  });
+
+  it('never logs the query string of a rejected redirect URI or client id', async () => {
+    await expect(
+      run(base, null, 'https://claude.ai/api/mcp/auth_callback?api_key=do-not-log')
+    ).rejects.toMatchObject({ code: 'invalid_client' });
+    await expect(
+      resolveCimdClient(
+        dbWith(null),
+        base as never,
+        'https://claude.ai/meta?token=do-not-log',
+        'https://a.example/cb',
+        serve
+      )
+    ).rejects.toMatchObject({ code: 'invalid_client' });
+    expect(reasonLogged()).toEqual(['redirect_uri_not_in_document', 'not_canonical_https_url']);
+    expect(JSON.stringify(warn.mock.calls)).not.toContain('do-not-log');
+  });
+
+  it('logs a client id that is not a canonical HTTPS URL', async () => {
+    await expect(
+      resolveCimdClient(
+        dbWith(null),
+        base as never,
+        'https://claude.ai:8443/x',
+        'https://a.example/cb',
+        serve
+      )
+    ).rejects.toMatchObject({ code: 'invalid_client' });
+    expect(reasonLogged()).toEqual(['not_canonical_https_url']);
+  });
+});

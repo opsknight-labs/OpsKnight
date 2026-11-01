@@ -358,6 +358,8 @@ describe('LiveDashboardProvider', () => {
       expect(fetchMock).toHaveBeenCalledTimes(1);
 
       // Signal for 45; the first answer (a 304 from a lagging replica) still reflects 40.
+      // The next read is spaced 1s after the first one started (75ms debounce + up to 150ms
+      // jitter), plus up to 150ms more jitter, so it can land as late as ~1,075ms from here.
       signal(view, 2, '45');
       // The one-second minimum read gap also includes up to 150ms of jitter. Advancing only
       // one second races that timer when the first read happened late in the initial 300ms.

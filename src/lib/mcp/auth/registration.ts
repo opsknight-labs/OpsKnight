@@ -24,7 +24,9 @@ function validRedirect(value: string) {
   try {
     const url = new URL(value);
     return (
-      url.href === value &&
+      // Canonical form, allowing the empty path that native clients often register
+      // (http://127.0.0.1:33418 is stored and matched exactly as sent).
+      (url.href === value || url.href === `${value}/`) &&
       !url.username &&
       !url.password &&
       !url.hash &&
@@ -35,6 +37,15 @@ function validRedirect(value: string) {
     return false;
   }
 }
+// Grant types assistants commonly declare. Registration records only the two this server issues;
+// the others are known names that are ignored rather than refused (RFC 7591 section 3.2.1).
+const KNOWN_GRANT_TYPES = [
+  'authorization_code',
+  'refresh_token',
+  'urn:ietf:params:oauth:grant-type:jwt-bearer',
+  'urn:ietf:params:oauth:grant-type:device_code',
+  'client_credentials',
+] as const;
 const informationalUrl = z.string().url().max(2048);
 // Informational URLs are accepted for standard client compatibility but never fetched,
 // rendered as trusted links, or persisted. Registration conveys no user authority.
@@ -54,9 +65,9 @@ export const registrationSchema = z
       .refine(uris => new Set(uris).size === uris.length),
     token_endpoint_auth_method: z.literal('none').default('none'),
     grant_types: z
-      .array(z.enum(['authorization_code', 'refresh_token']))
+      .array(z.enum(KNOWN_GRANT_TYPES))
       .min(1)
-      .max(2)
+      .max(KNOWN_GRANT_TYPES.length)
       .refine(types => types.includes('authorization_code') && new Set(types).size === types.length)
       .default(['authorization_code', 'refresh_token']),
     response_types: z.array(z.literal('code')).length(1).default(['code']),
@@ -69,5 +80,9 @@ export const registrationSchema = z
     software_id: z.string().max(256).optional(),
     software_version: z.string().max(100).optional(),
     application_type: z.enum(['web', 'native']).optional(),
+    // Accepted for MCP SDK compatibility; never verified or used, since it confers nothing here.
+    software_statement: z.string().max(4096).optional(),
   })
+  // Every accepted field is modelled above. Secrets, key material and unknown or misspelled
+  // fields are refused: this server registers public clients only.
   .strict();

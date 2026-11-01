@@ -100,6 +100,9 @@ async function connectWithoutResource(
   const form = new FormData();
   form.set('id', pendingId);
   form.set('decision', 'allow');
+  // An administrator keeps every offered permission selected.
+  const pending = await db.mcpConsentRequest.findUniqueOrThrow({ where: { id: pendingId } });
+  for (const scope of pending.scopes) form.append('scope', scope);
   actor.location = '';
   await decideMcpConsent(form);
   const code = new URL(actor.location).searchParams.get('code')!;

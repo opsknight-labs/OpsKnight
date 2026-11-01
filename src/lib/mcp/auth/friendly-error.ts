@@ -6,6 +6,10 @@ const MESSAGES = new Map<string, { title: string; body: string }>(
       title: 'AI assistant access is turned off',
       body: 'An OpsKnight administrator needs to enable it in Settings → Integrations & ChatOps → MCP (AI Assistants).',
     },
+    MCP_CAPABILITY_DISABLED: {
+      title: 'This capability is turned off',
+      body: 'An OpsKnight administrator disabled this capability for AI assistants in Settings → Integrations & ChatOps → MCP (AI Assistants) → Exposed capabilities. Do not retry; ask an administrator if you need it.',
+    },
     MCP_INVALID_TOKEN: {
       title: 'Sign-in required',
       body: 'Connect OpsKnight again from your assistant to sign in.',
@@ -26,6 +30,10 @@ const MESSAGES = new Map<string, { title: string; body: string }>(
       title: 'This sign-in request expired',
       body: 'Return to your assistant and connect again. Requests are valid for five minutes.',
     },
+    MCP_CONSENT_NO_SCOPES: {
+      title: 'Choose at least one permission',
+      body: 'Go back, select what the assistant may do, then choose Allow. To stop connecting, choose Cancel.',
+    },
     MCP_CONSENT_REPLAY: {
       title: 'This request was already used',
       body: 'Return to your assistant. If it is not connected, start the connection again.',
@@ -44,7 +52,11 @@ const MESSAGES = new Map<string, { title: string; body: string }>(
     },
     invalid_client: {
       title: 'This assistant is not allowed to connect',
-      body: 'OpsKnight could not verify this assistant, or automatic connections are turned off. Ask an administrator to check the MCP page and server log.',
+      body: 'OpsKnight could not verify this assistant. An administrator can find the exact reason in the server log by searching for mcp.authorize or mcp.cimd.',
+    },
+    MCP_CLIENT_UNKNOWN: {
+      title: 'This connection is out of date',
+      body: 'OpsKnight no longer recognises the sign-in details this assistant saved. Remove OpsKnight from your assistant, add it again with the same URL, and sign in.',
     },
     invalid_scope: {
       title: 'The requested access is not available',
@@ -76,6 +88,7 @@ export function oauthErrorFor(code: string) {
     case 'MCP_BUSY':
       return 'temporarily_unavailable';
     case 'invalid_client':
+    case 'MCP_CLIENT_UNKNOWN':
     case 'MCP_CLIENT_REVOKED':
       return 'unauthorized_client';
     case 'MCP_INACTIVE_PRINCIPAL':

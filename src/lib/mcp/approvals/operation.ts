@@ -23,6 +23,7 @@ import {
   type ExecutionContext,
 } from '../core/execution';
 import { lockMcpMutationAuthority } from '../core/mutation-authority';
+import { isMcpCapabilityDisabled } from '../catalog/capabilities';
 import { projectMcpData } from '../core/projection';
 
 export const MCP_APPROVAL_TTL_MS = 15 * 60_000;
@@ -246,7 +247,11 @@ async function assertOperationReviewer(
     403
   );
   const actor = authorizationActorFromUser(user);
-  requireMcp(actor && actor.id !== approval.actorId, 'MCP_DISTINCT_REVIEWER_REQUIRED', 403);
+  requireMcp(actor, 'MCP_REVIEWER_CHANGED', 403);
+  // An administrator may approve their own request; the decision itself demands an explicit
+  // confirmation. Anyone else needs a second person.
+  const selfReview = actor.id === approval.actorId;
+  requireMcp(!selfReview || actor.role === 'ADMIN', 'MCP_DISTINCT_REVIEWER_REQUIRED', 403);
   // Several actions are allowed without a resource (resource checks happen later), so a
   // resource-less authorize() is not enough for a sensitive R2 change: require an administrator.
   requireMcp(
@@ -256,6 +261,7 @@ async function assertOperationReviewer(
     'MCP_REVIEWER_NOT_AUTHORIZED',
     403
   );
+  return { selfReview };
 }
 
 export function prepareMcpOperation(context: ExecutionContext, raw: unknown) {
@@ -291,7 +297,8 @@ export function prepareMcpOperation(context: ExecutionContext, raw: unknown) {
           context,
           operation.requiredScopes,
           operation.authorizationActions,
-          initial.actor
+          initial.actor,
+          [input.operationId, 'operation_prepare']
         );
         return executeIdempotentOperation(tx, {
           scope: 'mcp:operation:prepare',
@@ -456,6 +463,22 @@ export function commitApprovedMcpOperation(context: ExecutionContext, raw: unkno
           409
         );
         const operation = operationFor(approval.operationId);
+        // An operation disabled after it was prepared must not run. The approval is left as it is,
+        // so it can still be committed before it expires if an administrator re-enables it.
+        await tx.$queryRaw`SELECT id FROM "McpPolicy" WHERE id = 'default' FOR SHARE`;
+        const policy = await tx.mcpPolicy.findUnique({
+          where: { id: 'default' },
+          select: { disabledCapabilities: true },
+        });
+        requireMcp(
+          !isMcpCapabilityDisabled(
+            policy?.disabledCapabilities,
+            approval.operationId,
+            'operation_commit_approved'
+          ),
+          'MCP_CAPABILITY_DISABLED',
+          403
+        );
         const frozen = frozenSchema.parse(JSON.parse(await decrypt(approval.envelope)));
         requireMcp(
           approval.contractDigest === operation.contractSha256 &&
@@ -751,9 +774,10 @@ export async function loadMcpOperationReview(
   return runSerializableTransaction(async tx => {
     const approval = await lockApproval(tx, id);
     requireMcp(approval, 'MCP_APPROVAL_UNAVAILABLE', 404);
-    await assertOperationReviewer(tx, approval, reviewer);
+    const { selfReview } = await assertOperationReviewer(tx, approval, reviewer);
     return {
       approval,
+      selfReview,
       summary: operationReviewSummarySchema.parse(approval.summary),
       requiresFreshAuthentication: approval.riskClass === 'R3',
     };
@@ -769,6 +793,7 @@ export async function decideMcpOperationReview(
       id: approvalId,
       operationDigest: digestSchema,
       decision: z.enum(['approve', 'reject']),
+      confirmSelfApproval: z.literal('yes').optional(),
     })
     .strict()
     .parse(raw);
@@ -785,7 +810,12 @@ export async function decideMcpOperationReview(
       'MCP_APPROVAL_PLAN_CHANGED',
       409
     );
-    await assertOperationReviewer(tx, approval, reviewer);
+    const { selfReview } = await assertOperationReviewer(tx, approval, reviewer);
+    requireMcp(
+      !selfReview || input.decision === 'reject' || input.confirmSelfApproval === 'yes',
+      'MCP_SELF_APPROVAL_CONFIRMATION_REQUIRED',
+      400
+    );
     const operation = operationFor(approval.operationId);
     // The requesting grant must still be able to perform the change at review time.
     await lockMcpMutationAuthority(
@@ -812,6 +842,7 @@ export async function decideMcpOperationReview(
               reviewedById: reviewer.id,
               reviewerTokenVersion: reviewer.tokenVersion,
               reviewedAt: now,
+              selfApproved: selfReview,
               ...(destructive
                 ? { reviewerAuthenticatedAt: new Date(reviewer.authenticatedAt!) }
                 : {}),
@@ -830,6 +861,7 @@ export async function decideMcpOperationReview(
           operationId: approval.operationId,
           operationDigest: approval.operationDigest,
           requesterGrantId: approval.requesterGrantId,
+          selfApproved: selfReview && input.decision === 'approve',
         },
       },
       tx

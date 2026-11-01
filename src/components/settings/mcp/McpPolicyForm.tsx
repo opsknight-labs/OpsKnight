@@ -40,7 +40,7 @@ export default function McpPolicyForm({
     <form action={action} onSubmit={submit} onChange={() => setStatus('idle')} aria-busy={pending}>
       <SettingsSection
         title="Access and workload policy"
-        description="What assistants may do. Every change an assistant proposes still needs a different administrator to approve it in OpsKnight."
+        description="What assistants may do. Every change an assistant proposes still needs an administrator to approve it in OpsKnight; administrators confirm their own."
         footer={
           <div className="flex flex-wrap items-center justify-end gap-3">
             <SaveIndicator

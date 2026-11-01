@@ -34,10 +34,11 @@ export async function assertPreviewReviewer(
     'PREVIEW_REVIEW_APPROVER_CHANGED'
   );
   const reviewer = authorizationActorFromUser(user);
-  requireReview(
-    reviewer && reviewer.id !== preview.actorId,
-    'PREVIEW_REVIEW_DISTINCT_ACTOR_REQUIRED'
-  );
+  requireReview(reviewer, 'PREVIEW_REVIEW_APPROVER_CHANGED');
+  // An administrator may approve their own request; the decision itself demands an explicit
+  // confirmation. Anyone else needs a second person.
+  const selfReview = reviewer.id === preview.actorId;
+  requireReview(!selfReview || reviewer.role === 'ADMIN', 'PREVIEW_REVIEW_DISTINCT_ACTOR_REQUIRED');
   enforceV2Authorization(reviewer, AUTHORIZATION_ACTIONS.RUNBOOK_APPROVE);
   enforceV2Authorization(reviewer, AUTHORIZATION_ACTIONS.RUNBOOK_READ);
   if (preview.incidentId) {
@@ -62,6 +63,7 @@ export async function assertPreviewReviewer(
       'PREVIEW_REVIEW_RESOURCE_UNAVAILABLE'
     );
   }
+  return { selfReview };
 }
 
 /** Called by the existing execution command before consuming its preview capability. */
@@ -107,7 +109,12 @@ export async function assertIndependentPreviewReview(
 /** Caller authenticates a native session; no MCP or REST approval endpoint exists. */
 export async function reviewRunbookPreview(
   tx: Prisma.TransactionClient,
-  input: { id: string; planDigest: string; decision: 'approve' | 'reject' },
+  input: {
+    id: string;
+    planDigest: string;
+    decision: 'approve' | 'reject';
+    confirmSelfApproval?: 'yes';
+  },
   actor: { id: string; tokenVersion: number }
 ) {
   await tx.$queryRaw`SELECT id FROM "RunbookPreviewAuthorization" WHERE id = ${input.id} FOR UPDATE`;
@@ -118,7 +125,11 @@ export async function reviewRunbookPreview(
   );
   requireReview(preview.planDigest === input.planDigest, 'PREVIEW_REVIEW_PLAN_CHANGED');
   requireReview(!preview.reviewedAt && !preview.rejectedAt, 'PREVIEW_ALREADY_REVIEWED');
-  await assertPreviewReviewer(tx, preview, actor);
+  const { selfReview } = await assertPreviewReviewer(tx, preview, actor);
+  requireReview(
+    !selfReview || input.decision === 'reject' || input.confirmSelfApproval === 'yes',
+    'PREVIEW_REVIEW_SELF_APPROVAL_CONFIRMATION_REQUIRED'
+  );
   const changed = await tx.runbookPreviewAuthorization.updateMany({
     where: {
       id: preview.id,
@@ -135,6 +146,7 @@ export async function reviewRunbookPreview(
             reviewerTokenVersion: actor.tokenVersion,
             reviewedAt: new Date(),
             reviewedPlanDigest: preview.planDigest,
+            selfApproved: selfReview,
           }
         : { rejectedAt: new Date(), requestEnvelope: null },
   });
@@ -150,6 +162,7 @@ export async function reviewRunbookPreview(
         previewId: preview.id,
         planDigest: preview.planDigest,
         requesterGrantId: preview.requesterGrantId,
+        selfApproved: selfReview && input.decision === 'approve',
       },
     },
     tx

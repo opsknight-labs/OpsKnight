@@ -101,7 +101,10 @@ async function requesterAuthority(
       tokenScopes: current?.tokenScopes ?? MCP_REVIEWED_RUNBOOK_SCOPES,
     },
     MCP_REVIEWED_RUNBOOK_SCOPES,
-    [AUTHORIZATION_ACTIONS.RUNBOOK_EXECUTE]
+    [AUTHORIZATION_ACTIONS.RUNBOOK_EXECUTE],
+    undefined,
+    // Only the requester's own execution is a capability use; reviewers may still decide.
+    current ? ['runbook_execute_approved'] : []
   );
   requireMcp(auth.actor.id === preview.actorId, 'MCP_APPROVAL_UNAVAILABLE', 404);
   if (preview.incidentId) {
@@ -143,7 +146,8 @@ export function prepareMcpRunbook(context: ExecutionContext, raw: unknown) {
           context,
           MCP_REVIEWED_RUNBOOK_SCOPES,
           [AUTHORIZATION_ACTIONS.RUNBOOK_EXECUTE],
-          initial.actor
+          initial.actor,
+          ['runbook_prepare_execution']
         );
         const prepared = await executeIdempotentOperation(tx, {
           scope: 'mcp:runbook:prepare',
@@ -342,10 +346,14 @@ export async function loadMcpRunbookReview(
   digest.parse(id);
   return runSerializableTransaction(async tx => {
     const preview = await lockPreview(tx, id);
-    await assertPreviewReviewer(tx, preview, reviewer);
+    const { selfReview } = await assertPreviewReviewer(tx, preview, reviewer);
     requireMcp(preview.expiresAt > new Date() && !preview.consumedAt, 'MCP_APPROVAL_EXPIRED', 409);
     await requesterAuthority(tx, preview);
-    return { preview, summary: runbookReviewSummarySchema.parse(preview.reviewSummary) };
+    return {
+      preview,
+      selfReview,
+      summary: runbookReviewSummarySchema.parse(preview.reviewSummary),
+    };
   });
 }
 export async function decideMcpRunbookReview(
@@ -353,7 +361,12 @@ export async function decideMcpRunbookReview(
   reviewer: { id: string; tokenVersion: number }
 ) {
   const input = z
-    .object({ id: digest, planDigest: digest, decision: z.enum(['approve', 'reject']) })
+    .object({
+      id: digest,
+      planDigest: digest,
+      decision: z.enum(['approve', 'reject']),
+      confirmSelfApproval: z.literal('yes').optional(),
+    })
     .strict()
     .parse(raw);
   return runSerializableTransaction(async tx => {

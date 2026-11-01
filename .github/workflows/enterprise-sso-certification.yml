@@ -2,8 +2,9 @@ name: Enterprise SSO certification
 
 on:
   push:
-    branches: [main, 'feat/enterprise-sso-*', 'feat/enterprise-authentication-*']
+    branches: [main]
   pull_request:
+    types: [opened, synchronize, reopened, labeled]
     paths:
       - 'src/lib/notification-provider-feedback.ts'
       - 'src/lib/notification-control-plane.ts'
@@ -39,6 +40,7 @@ env:
 
 jobs:
   authentication:
+    if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'ci:full')
     runs-on: ubuntu-latest
     timeout-minutes: 20
     services:
@@ -90,6 +92,7 @@ jobs:
           if-no-files-found: ignore
 
   published-release-upgrade:
+    if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'ci:full')
     runs-on: ubuntu-latest
     timeout-minutes: 20
     services:
@@ -127,6 +130,7 @@ jobs:
 
   browser:
     name: Emergency recovery browser certification
+    if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'ci:full')
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:

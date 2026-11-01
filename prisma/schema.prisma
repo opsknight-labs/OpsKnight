@@ -4277,6 +4277,8 @@ model RunbookPreviewAuthorization {
   reviewerTokenVersion Int?
   reviewedAt DateTime?
   reviewedPlanDigest String?
+  /// An administrator approved their own request after explicit confirmation.
+  selfApproved Boolean @default(false)
   rejectedAt DateTime?
 
   @@index([expiresAt])
@@ -5476,6 +5478,9 @@ model McpPolicy {
   dcrScopes String[] @default([])
   // A connection stays signed in while it is used: each refresh extends it by this many idle days.
   sessionIdleDays Int @default(30)
+  // Capabilities an administrator never exposes through MCP: catalog operationIds, standalone tool
+  // and prompt names, and `domain:<name>` markers. Unknown entries are ignored when read.
+  disabledCapabilities String[] @default([])
   updatedAt DateTime @updatedAt
 }
 
@@ -5556,6 +5561,8 @@ model McpOperationApproval {
   expiresAt DateTime
   reviewedById String?
   reviewerTokenVersion Int?
+  /// An administrator approved their own request after explicit confirmation.
+  selfApproved Boolean @default(false)
   reviewedAt DateTime?
   rejectedAt DateTime?
   executingAt DateTime?
@@ -5592,6 +5599,8 @@ model McpConsentRequest {
   clientId String
   redirectUri String
   scopes String[]
+  // The subset of `scopes` the assistant named explicitly; empty when it asked for the default.
+  requestedScopes String[] @default([])
   challenge String
   state String
   expiresAt DateTime
