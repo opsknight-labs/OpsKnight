@@ -12,6 +12,7 @@ import { friendlyMcpError, mcpErrorPage, oauthErrorFor } from '@/lib/mcp/auth/fr
 import { effectiveMcpClientScopes } from '@/lib/mcp/auth/client-policy';
 import { logger } from '@/lib/logger';
 import { redirectUriAllowed, urlForLog } from '@/lib/mcp/auth/redirect-uri';
+import { z } from 'zod/v3';
 
 export function GET(request: Request) {
   return withMcpDatabase(() => withMcpRuntime(() => handleGet(request)));
@@ -135,6 +136,17 @@ async function handleGet(request: Request) {
       target.searchParams.set('iss', mcpIssuer());
       return NextResponse.redirect(target);
     }
+    // Only parameter names are logged: values can carry state, challenges or hints.
+    if (error instanceof z.ZodError) {
+      logger.warn('mcp.authorize.invalid_request', {
+        fields: [...new Set(error.issues.map(issue => issue.path.join('.') || 'query'))],
+      });
+      return mcpErrorPage(new McpBoundaryError('invalid_request', 400));
+    }
+    if (!(error instanceof McpBoundaryError))
+      logger.warn('mcp.authorize.unexpected_error', {
+        name: error instanceof Error ? error.name : typeof error,
+      });
     return mcpErrorPage(error);
   }
 }

@@ -29,6 +29,7 @@ export type McpViewer = {
   readonly [viewerBrand]: true;
 };
 
+/** Pass the caller's permissions when it already loaded them, so they are read once. */
 export async function loadMcpViewer(
   preloadedPermissions?: Awaited<ReturnType<typeof getUserPermissions>>
 ): Promise<McpViewer> {
