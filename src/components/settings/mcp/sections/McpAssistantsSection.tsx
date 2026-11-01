@@ -4,8 +4,10 @@ import { Button } from '@/components/ui/shadcn/button';
 import { Input } from '@/components/ui/shadcn/input';
 import { Label } from '@/components/ui/shadcn/label';
 import { SettingsSection } from '@/components/settings/layout/SettingsSection';
+import McpClientScopeSelector from '@/components/settings/mcp/McpClientScopeSelector';
 import McpConfirmAction from '@/components/settings/mcp/McpConfirmAction';
 import McpScopeSummary from '@/components/settings/mcp/McpScopeSummary';
+import { getAssistantIcon } from '@/components/common/BrandLogos';
 import {
   FilterChips,
   ListEmpty,
@@ -178,18 +180,23 @@ export default function McpAssistantsSection({
             >
               {rows.map(row => (
                 <ResponsiveRow key={row.id} muted={Boolean(row.revokedAt)}>
-                  <ResponsiveCell label="Assistant" primary className="md:max-w-[18rem]">
-                    <div className="min-w-0">
-                      <p className="truncate font-medium text-foreground">{row.name}</p>
-                      <p className="flex min-w-0 items-center gap-1 text-xs text-muted-foreground">
-                        <span className="shrink-0">ID</span>
-                        <code
-                          className="min-w-0 truncate font-mono text-[11px] text-foreground/80"
-                          title={row.id}
-                        >
-                          {row.id}
-                        </code>
-                      </p>
+                  <ResponsiveCell label="Assistant" primary className="md:max-w-[20rem]">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-border/80 bg-muted/40 shadow-2xs">
+                        {getAssistantIcon(row.name, 'h-4 w-4')}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="truncate font-medium text-foreground">{row.name}</p>
+                        <p className="flex min-w-0 items-center gap-1 text-xs text-muted-foreground">
+                          <span className="shrink-0">ID</span>
+                          <code
+                            className="min-w-0 truncate font-mono text-[11px] text-foreground/80"
+                            title={row.id}
+                          >
+                            {row.id}
+                          </code>
+                        </p>
+                      </div>
                     </div>
                   </ResponsiveCell>
                   <ResponsiveCell label="Type">
@@ -347,23 +354,7 @@ export default function McpAssistantsSection({
               </p>
             </div>
           </div>
-          <fieldset className="space-y-2">
-            <legend className="text-sm font-medium">Allowed scopes</legend>
-            <div className="grid gap-x-6 gap-y-2 sm:grid-cols-2">
-              {scopeChoices.map(scope => (
-                <label key={scope} className="flex cursor-pointer items-start gap-2 text-sm">
-                  <input
-                    type="checkbox"
-                    name="scopes"
-                    value={scope}
-                    defaultChecked={defaultScopes.includes(scope)}
-                    className="mt-0.5 h-4 w-4 shrink-0 accent-primary"
-                  />
-                  <span>{describeScope(scope)}</span>
-                </label>
-              ))}
-            </div>
-          </fieldset>
+          <McpClientScopeSelector scopeChoices={scopeChoices} defaultScopes={defaultScopes} />
           <div className="flex justify-end">
             <Button type="submit" size="sm">
               Register client

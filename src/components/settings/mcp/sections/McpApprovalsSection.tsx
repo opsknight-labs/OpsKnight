@@ -13,6 +13,7 @@ import {
   type PillTone,
 } from '@/components/settings/mcp/McpListKit';
 import { personLabel } from '@/components/settings/mcp/sections/McpConnectionsSection';
+import { getAssistantIcon } from '@/components/common/BrandLogos';
 import type {
   McpApprovalRow,
   McpApprovalStatus,
@@ -171,10 +172,14 @@ export default function McpApprovalsSection({
                   )}
                   <ResponsiveCell label="Requested by">
                     <div className="min-w-0">
-                      <p className="truncate text-foreground">{who}</p>
+                      <p className="truncate font-medium text-foreground">{who}</p>
                       {row.assistant && (
-                        <p className="truncate text-xs text-muted-foreground">
-                          via {row.assistant}
+                        <p className="flex items-center gap-1.5 truncate text-xs text-muted-foreground">
+                          <span>via</span>
+                          <span className="inline-flex items-center gap-1 font-medium text-foreground/90">
+                            {getAssistantIcon(row.assistant, 'h-3 w-3')}
+                            {row.assistant}
+                          </span>
                         </p>
                       )}
                     </div>
