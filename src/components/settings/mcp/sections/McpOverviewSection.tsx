@@ -103,6 +103,7 @@ export default function McpOverviewSection({
   hrefs,
   enableAction,
   testAction,
+  previous = null,
 }: {
   isAdmin: boolean;
   enabled: boolean;
@@ -126,6 +127,13 @@ export default function McpOverviewSection({
   };
   enableAction: () => Promise<void>;
   testAction: () => Promise<SetupReport>;
+  /** The configuration turning MCP back on restores; null on a first run. */
+  previous?: {
+    scopes: number;
+    automatic: boolean;
+    writesEnabled: boolean;
+    sensitiveReadsEnabled: boolean;
+  } | null;
 }) {
   const needsSetup = isAdmin && !enabled;
   const live = enabled && ready;
@@ -140,18 +148,42 @@ export default function McpOverviewSection({
                   <Sparkles className="h-4 w-4" />
                 </span>
                 <h2 className="font-display text-lg font-bold tracking-tight">
-                  Turn on AI assistant access
+                  {previous ? 'Turn AI assistant access back on' : 'Turn on AI assistant access'}
                 </h2>
               </div>
               <p className="text-sm text-muted-foreground">
-                Let your team connect Claude, ChatGPT, Cursor and other assistants to OpsKnight.
+                {previous ? (
+                  <>
+                    This restores the settings you had before MCP was turned off.{' '}
+                    <Link
+                      href={hrefs.policy}
+                      className="font-medium text-foreground underline underline-offset-2"
+                    >
+                      Review the access policy
+                    </Link>{' '}
+                    first if you want to change them.
+                  </>
+                ) : (
+                  'Let your team connect Claude, ChatGPT, Cursor and other assistants to OpsKnight.'
+                )}
               </p>
               <ul className="grid gap-2 text-sm sm:grid-cols-3">
-                {[
-                  'Read-only to start: incidents, services and on-call schedules.',
-                  'Each person signs in and approves once. Their OpsKnight permissions always apply.',
-                  'Disconnect anyone, or everyone, at any time. No extra secrets to manage.',
-                ].map(point => (
+                {(previous
+                  ? [
+                      `${previous.scopes} permission${previous.scopes === 1 ? '' : 's'} for automatic connections${previous.automatic ? '' : ' (automatic connections stay off)'}.`,
+                      previous.writesEnabled
+                        ? 'Assistants can propose changes again; each change still needs administrator approval.'
+                        : 'Read-only: assistants cannot propose changes.',
+                      previous.sensitiveReadsEnabled
+                        ? 'Sensitive configuration reads are turned back on (secrets stay redacted).'
+                        : 'Sensitive configuration reads stay off.',
+                    ]
+                  : [
+                      'Read-only to start: incidents, services and on-call schedules.',
+                      'Each person signs in and approves once. Their OpsKnight permissions always apply.',
+                      'Disconnect anyone, or everyone, at any time. No extra secrets to manage.',
+                    ]
+                ).map(point => (
                   <li key={point} className="flex gap-2 py-0 pl-0 text-muted-foreground">
                     <Check
                       className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600"

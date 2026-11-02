@@ -384,6 +384,55 @@ describe('one-click setup', () => {
     );
   });
 
+  it('turning MCP back on keeps the administrator configuration instead of resetting it', async () => {
+    const admin = await createTestUser({ role: 'ADMIN' });
+    actor.id = admin.id;
+    actor.tokenVersion = admin.tokenVersion;
+    const configured = ['incidents:read', 'incidents:write', 'runbooks:read', 'teams:read'];
+    await db.mcpPolicy.create({
+      data: {
+        enabled: false,
+        dcrEnabled: true,
+        dcrScopes: configured,
+        cimdEnabled: true,
+        cimdAllowedHosts: ['claude.ai'],
+        cimdScopes: configured,
+        writesEnabled: true,
+        sensitiveReadsEnabled: true,
+        sessionIdleDays: 14,
+      },
+    });
+    const { enableMcpQuickSetup } = await import('@/app/(app)/settings/integrations/mcp/actions');
+    await enableMcpQuickSetup();
+    expect(await db.mcpPolicy.findUniqueOrThrow({ where: { id: 'default' } })).toMatchObject({
+      enabled: true,
+      dcrScopes: configured,
+      cimdScopes: configured,
+      cimdAllowedHosts: ['claude.ai'],
+      writesEnabled: true,
+      sensitiveReadsEnabled: true,
+      sessionIdleDays: 14,
+    });
+    const audit = await db.auditLog.findFirstOrThrow({
+      where: { action: 'mcp.policy.updated' },
+      orderBy: { createdAt: 'desc' },
+    });
+    expect(audit.details).toMatchObject({ metadata: { quickSetup: true, reenabled: true } });
+  });
+
+  it('fills empty scope lists with defaults when turning MCP back on', async () => {
+    const admin = await createTestUser({ role: 'ADMIN' });
+    actor.id = admin.id;
+    actor.tokenVersion = admin.tokenVersion;
+    await db.mcpPolicy.create({ data: { enabled: false, dcrScopes: [], cimdScopes: [] } });
+    const { enableMcpQuickSetup } = await import('@/app/(app)/settings/integrations/mcp/actions');
+    await enableMcpQuickSetup();
+    const policy = await db.mcpPolicy.findUniqueOrThrow({ where: { id: 'default' } });
+    expect(policy.enabled).toBe(true);
+    expect(policy.dcrScopes).toEqual(scopes);
+    expect(policy.cimdScopes).toEqual(scopes);
+  });
+
   it('is refused for non-administrators', async () => {
     const user = await createTestUser({ role: 'USER' });
     actor.id = user.id;
