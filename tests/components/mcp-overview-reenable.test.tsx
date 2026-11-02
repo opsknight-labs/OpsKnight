@@ -5,6 +5,7 @@ import McpOverviewSection from '@/components/settings/mcp/sections/McpOverviewSe
 vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
 afterEach(cleanup);
 
+type Props = Parameters<typeof McpOverviewSection>[0];
 const base = {
   isAdmin: true,
   enabled: false,
@@ -24,10 +25,10 @@ const base = {
   },
   enableAction: vi.fn(async () => {}),
   testAction: vi.fn(),
-};
+} as unknown as Props;
 
 it('promises read-only defaults only on a first run', () => {
-  render(<McpOverviewSection {...(base as never)} />);
+  render(<McpOverviewSection {...base} />);
   expect(screen.getByRole('heading', { name: 'Turn on AI assistant access' })).toBeTruthy();
   expect(screen.getByText(/Read-only to start/)).toBeTruthy();
 });
@@ -35,7 +36,7 @@ it('promises read-only defaults only on a first run', () => {
 it('discloses the write and sensitive access that turning MCP back on restores', () => {
   render(
     <McpOverviewSection
-      {...(base as never)}
+      {...base}
       previous={{ scopes: 48, automatic: true, writesEnabled: true, sensitiveReadsEnabled: true }}
     />
   );
@@ -52,7 +53,7 @@ it('discloses the write and sensitive access that turning MCP back on restores',
 it('says when a restored policy stays read-only with automatic connections off', () => {
   render(
     <McpOverviewSection
-      {...(base as never)}
+      {...base}
       previous={{ scopes: 1, automatic: false, writesEnabled: false, sensitiveReadsEnabled: false }}
     />
   );
