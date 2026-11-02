@@ -84,7 +84,11 @@ test('native MCP settings, PKCE consent, scoped call and revocation on desktop/m
   await page.getByRole('checkbox', { name: /Allow reviewed routine mutations/ }).uncheck();
   await page.getByRole('button', { name: 'Save policy' }).click();
   await expect(page.getByText('MCP configuration saved', { exact: true })).toBeVisible();
-  await page.goto('/settings/integrations/mcp?tab=assistants');
+  await page
+    .locator('#main-content')
+    .getByRole('navigation', { name: 'MCP settings sections' })
+    .getByRole('link', { name: 'Assistants', exact: true })
+    .click();
   await main.getByText('Manual client registration (advanced)', { exact: true }).click();
 
   const name = `Local ${browserName} ${Date.now()}`;
@@ -163,7 +167,10 @@ test('native MCP settings, PKCE consent, scoped call and revocation on desktop/m
   await expect(page.getByText('Connection revoked', { exact: true })).toBeVisible();
   // The default view lists active connections; the revoked one moves to the Revoked filter.
   await expect(grant).toHaveCount(0);
-  await page.goto('/settings/integrations/mcp?tab=connections&status=revoked');
+  await main
+    .getByRole('navigation', { name: 'Filter connections by status' })
+    .getByRole('link', { name: /^Revoked/ })
+    .click();
   await expect(
     main.getByRole('row').filter({ hasText: name }).first().getByText('Revoked', { exact: true })
   ).toBeVisible();

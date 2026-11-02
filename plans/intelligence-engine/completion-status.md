@@ -233,3 +233,12 @@ A fresh isolated MCP database and two production servers passed **9/9 browser ca
 automatic onboarding, PKCE consent, scoped calls and individual/bulk revocation. Scope-selector
 and confirmation component tests passed **9/9**; typecheck, production build and zero-warning
 changed-source lint passed. Final remote CI after the follow-up push remains authoritative.
+
+The first follow-up CI head `de9f58541` passed eight of nine MCP browser cases. WebKit
+interrupted the test's hard navigation to revoked connections with a pending application
+refresh after revocation. A local repetition also exposed this timing race after quick setup.
+The affected tests now navigate through the actual settings links and status filter instead
+of starting a competing document navigation after a server action. The complete browser matrix
+passed **9/9** again (51.8 seconds), followed by **6/6** additional WebKit onboarding/native
+connection repetitions (three repetitions each, 33.8 seconds). Typecheck and zero-warning
+changed-test lint passed. No product gate, assertion or browser coverage was removed.

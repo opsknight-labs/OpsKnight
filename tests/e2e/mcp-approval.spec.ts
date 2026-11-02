@@ -27,8 +27,15 @@ test('remote request requires a different native reviewer and commits one recove
   await page.getByRole('checkbox', { name: /Allow reviewed routine mutations/ }).check();
   await page.getByRole('button', { name: 'Save policy' }).click();
   await expect(page.getByText('MCP configuration saved', { exact: true })).toBeVisible();
-  await page.goto('/settings/integrations/mcp?tab=assistants');
-  await page.getByText('Manual client registration (advanced)', { exact: true }).click();
+  await page
+    .locator('#main-content')
+    .getByRole('navigation', { name: 'MCP settings sections' })
+    .getByRole('link', { name: 'Assistants', exact: true })
+    .click();
+  await page
+    .locator('#main-content')
+    .getByText('Manual client registration (advanced)', { exact: true })
+    .click();
   const name = `Reviewed ${browserName} ${Date.now()}`;
   const scopes = 'runbooks:execute runbooks:read incidents:read services:read';
   const redirectUri = 'http://127.0.0.1:8799/review-callback';
