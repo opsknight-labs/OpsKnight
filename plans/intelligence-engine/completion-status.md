@@ -250,3 +250,19 @@ before testing field removal and affected-rule navigation. The failing case pass
 Firefox repetitions** (50.7 seconds) and **6/6 desktop/mobile profiles** (25.3 seconds).
 Typecheck and zero-warning changed-test lint passed. The pending push was stopped before
 transmission so both observed browser timing fixes can ship together.
+
+Remote head `5af33838c` passed automation, Swarm, both required gates and all other
+certifications. MCP's initial attempt timed out downloading Ubuntu browser dependencies;
+the retry passed **9/9 native browser cases** (1.9 minutes), then correctly failed its
+production dependency audit. Newly reported minimatch and follow-redirects advisories were
+blocking under the existing empty-baseline policy.
+
+Dependency overrides now use patched follow-redirects and a compatible modern glob/minimatch
+chain. Workbox build/webpack, archiver and unzipper are updated together because injecting
+minimatch 11 into legacy glob breaks its private regex assumptions. Real regression tests
+exercise Workbox file matching, filelist and archive globs, and an Excel XLSX write/read
+round-trip. Those and the existing audit-gate cases pass **9/9**; typecheck and zero-warning
+changed-source lint pass. The unchanged production audit gate passes with **zero moderate,
+high or critical findings** and 11 low findings, which the existing policy does not block.
+No advisory exception or severity-policy change was added. The next push still requires
+the full unit suite, production Workbox build and final-head remote certification.

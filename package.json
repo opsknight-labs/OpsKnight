@@ -273,7 +273,19 @@
     "uuid": "^11.1.1",
     "eslint": "$eslint",
     "fast-uri": "^3.1.9",
-    "vite": "^7.3.7"
+    "vite": "^7.3.7",
+    "follow-redirects": "^1.16.2",
+    "glob": "^14.0.3",
+    "readdir-glob": {
+      "minimatch": "^11.0.1"
+    },
+    "workbox-build": "^7.4.1",
+    "workbox-webpack-plugin": "^7.4.1",
+    "archiver": "^7.0.1",
+    "unzipper": "^0.12.3",
+    "filelist": {
+      "minimatch": "^11.0.1"
+    }
   },
   "engines": {
     "node": ">=20 <21"
