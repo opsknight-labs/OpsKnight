@@ -266,3 +266,10 @@ changed-source lint pass. The unchanged production audit gate passes with **zero
 high or critical findings** and 11 low findings, which the existing policy does not block.
 No advisory exception or severity-policy change was added. The next push still requires
 the full unit suite, production Workbox build and final-head remote certification.
+
+The patched dependency set passed **10,868 unit tests**, seven skipped across 1,037 files.
+The first build exposed unzipper's lazy optional S3 adapter being statically resolved by webpack.
+ExcelJS now uses Next.js native server external loading, preserving that optional adapter's
+lazy behavior. Production build and typecheck pass; zero-warning lint explicitly checks the
+normally ignored Next config. The generated standalone artifact's own packaged ExcelJS also
+successfully wrote and read an XLSX workbook, verifying archive dependencies are traced.
