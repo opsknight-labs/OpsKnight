@@ -316,6 +316,16 @@ export default async function McpSettings({
             hrefs={hrefs}
             enableAction={enableMcpQuickSetup}
             testAction={testMcpConnection}
+            previous={
+              policy && !policy.enabled
+                ? {
+                    scopes: new Set([...policy.dcrScopes, ...policy.cimdScopes]).size,
+                    automatic: policy.dcrEnabled || policy.cimdEnabled,
+                    writesEnabled: policy.writesEnabled,
+                    sensitiveReadsEnabled: policy.sensitiveReadsEnabled,
+                  }
+                : null
+            }
           />
         );
       case 'connect':
