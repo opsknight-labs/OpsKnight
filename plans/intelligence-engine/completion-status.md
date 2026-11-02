@@ -213,3 +213,23 @@ handling. After integrating those MCP-only changes, **185/185 MCP unit/protocol 
 The 96-case automation browser result above exercised the final automation code; no automation
 source changed in this subsequent upstream integration. The mandatory push hook checks the
 complete combined source again. Final remote status remains authoritative on PR #928.
+
+## MCP CI remediation — 2026-11-02
+
+Remote head `d29dac93a` finished with 46 successful checks and one failure, MCP browser
+validation. Automation, Swarm and the rerun of the transient Docker Hub emergency-recovery
+failure passed. The remaining browser failure exposed unnamed scope controls, stale selectors
+after the MCP settings redesign, and an omitted bulk-revocation confirmation field.
+
+Manual-client scope groups and scope checkboxes now have stable plain-language accessible
+names. Policy narrowing selects by the submitted scope value. Native connection tests use the
+current heading and confirmation dialogs and scope retained-route text to the active content.
+Bulk revocation submits the required confirmation only after the destructive dialog is confirmed;
+server validation remains strict. The browser test proves cancellation preserves access and
+confirmation revokes it.
+
+A fresh isolated MCP database and two production servers passed **9/9 browser cases** in
+54 seconds across Chromium, Firefox and WebKit, covering separate-user runbook approval,
+automatic onboarding, PKCE consent, scoped calls and individual/bulk revocation. Scope-selector
+and confirmation component tests passed **9/9**; typecheck, production build and zero-warning
+changed-source lint passed. Final remote CI after the follow-up push remains authoritative.

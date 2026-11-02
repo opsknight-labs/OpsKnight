@@ -303,6 +303,7 @@ function ScopeGroup({
               <input
                 id={inputId}
                 type="checkbox"
+                aria-label={describeScope(scope)}
                 name="dcrScopes"
                 value={scope}
                 checked={isChecked}

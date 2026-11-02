@@ -51,8 +51,7 @@ test('add URL, automatically register, sign in and revoke without manual client 
   await page.getByRole('checkbox', { name: /Enable MCP/ }).check();
   await page.getByRole('checkbox', { name: 'Automatic connections' }).check();
   for (const scope of await page.getByRole('checkbox', { name: /^View / }).all()) {
-    if ((await scope.locator('xpath=..').innerText()).trim() === 'View incidents')
-      await scope.check();
+    if ((await scope.getAttribute('value')) === 'incidents:read') await scope.check();
     else await scope.uncheck();
   }
   await page.getByRole('button', { name: 'Save policy', exact: true }).click();

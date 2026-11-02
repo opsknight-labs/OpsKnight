@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
 import McpPolicyScopeSelector from '@/components/settings/mcp/McpPolicyScopeSelector';
 import McpClientScopeSelector from '@/components/settings/mcp/McpClientScopeSelector';
@@ -160,4 +160,30 @@ describe('McpClientScopeSelector', () => {
       expect((screen.getByDisplayValue(val) as HTMLInputElement).checked).toBe(false);
     }
   });
+});
+
+it('names the manual-client scope group and its controls without decorative label text', () => {
+  render(
+    <McpClientScopeSelector
+      scopeChoices={['runbooks:read', 'runbooks:execute']}
+      defaultScopes={['runbooks:read']}
+    />
+  );
+  const group = screen.getByRole('group', { name: 'Allowed scopes' });
+  expect(within(group).getByRole('checkbox', { name: 'View runbooks' })).toBeChecked();
+  const execute = within(group).getByRole('checkbox', {
+    name: 'Run runbooks after administrator approval',
+  });
+  expect(execute).not.toBeChecked();
+  fireEvent.click(execute);
+  expect(execute).toBeChecked();
+});
+
+it('gives a policy scope its plain-language accessible name and preserves its submitted value', () => {
+  render(<McpPolicyScopeSelector scopeChoices={['incidents:read']} selectedScopes={[]} />);
+  const scope = screen.getByRole('checkbox', { name: 'View incidents' });
+  expect(scope).toHaveAttribute('name', 'dcrScopes');
+  expect(scope).toHaveAttribute('value', 'incidents:read');
+  fireEvent.click(scope);
+  expect(scope).toBeChecked();
 });
