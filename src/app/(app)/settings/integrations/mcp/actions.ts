@@ -79,17 +79,29 @@ export async function enableMcpQuickSetup() {
   };
   await prisma.$transaction(async tx => {
     await assertCurrentAdmin(tx, actor);
-    // Never overwrite an existing configuration: this is only the first-run shortcut.
     const existing = await tx.mcpPolicy.findUnique({ where: { id: 'default' } });
     requireMcp(!existing?.enabled, 'MCP_ALREADY_CONFIGURED');
-    await tx.mcpPolicy.upsert({ where: { id: 'default' }, create: policy, update: policy });
+    // First run gets the defaults. Turning MCP back on keeps the administrator's configuration
+    // (scopes, hosts, switches, limits) and only fills scope lists that are empty.
+    const update = existing
+      ? {
+          enabled: true,
+          ...(existing.dcrScopes.length ? {} : { dcrScopes: scopes }),
+          ...(existing.cimdScopes.length ? {} : { cimdScopes: scopes }),
+        }
+      : policy;
+    await tx.mcpPolicy.upsert({ where: { id: 'default' }, create: policy, update });
     await logAudit(
       {
         source: 'UI',
         action: 'mcp.policy.updated',
         entityType: 'SYSTEM_CONFIG',
         actorId: actor.id,
-        details: { ...policy, quickSetup: true },
+        details: {
+          ...(existing ? update : policy),
+          quickSetup: true,
+          reenabled: Boolean(existing),
+        },
       },
       tx
     );
