@@ -242,3 +242,11 @@ of starting a competing document navigation after a server action. The complete 
 passed **9/9** again (51.8 seconds), followed by **6/6** additional WebKit onboarding/native
 connection repetitions (three repetitions each, 33.8 seconds). Typecheck and zero-warning
 changed-test lint passed. No product gate, assertion or browser coverage was removed.
+
+The same CI head passed **95/96 automation browser cases**, with one Firefox field-removal
+journey clicking Context while the initial overview load was still changing page layout. The
+test now waits for the loaded readiness panel, clicks Context and verifies its selected state
+before testing field removal and affected-rule navigation. The failing case passed **10/10
+Firefox repetitions** (50.7 seconds) and **6/6 desktop/mobile profiles** (25.3 seconds).
+Typecheck and zero-warning changed-test lint passed. The pending push was stopped before
+transmission so both observed browser timing fixes can ship together.
