@@ -1,6 +1,6 @@
 import { startFakeModel, type FakeServer } from '../helpers/fake-model-server';
 import AxeBuilder from '@axe-core/playwright';
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type BrowserContext, type Page } from '@playwright/test';
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 
@@ -19,6 +19,7 @@ let incidentId = '';
 let precedentId = '';
 let changeId = '';
 let alertId = '';
+let sessionCookies: Awaited<ReturnType<BrowserContext['cookies']>> = [];
 let fake: FakeServer;
 
 async function cleanup() {
@@ -189,6 +190,9 @@ async function seed() {
 }
 
 async function login(page: Page) {
+  // Authenticate normally once, then reuse only this fixture account's session across scenarios.
+  // Repeated successful sign-ins otherwise exhaust production abuse limits in the combined CI suite.
+  if (sessionCookies.length) await page.context().addCookies(sessionCookies);
   await page.goto('/login');
   if (new URL(page.url()).pathname === '/login') {
     await page.locator('input[type="email"]').fill(email);
@@ -196,6 +200,9 @@ async function login(page: Page) {
     await page.locator('form button[type="submit"]').click();
   }
   await expect(page).not.toHaveURL(/\/login/, { timeout: 30_000 });
+  sessionCookies = (await page.context().cookies()).filter(cookie =>
+    cookie.name.includes('next-auth.session-token')
+  );
 }
 
 /** The assistant marks the document once its client code is live; wait for it before interacting. */

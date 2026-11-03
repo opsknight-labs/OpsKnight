@@ -329,3 +329,9 @@ Still open: typed classification/envelopes, durable action lifecycle/reconciliat
 UX and permission-revocation replay policy, shared retrieval/evidence, freshness, evaluations/feedback,
 onboarding, communications drafts, operator recovery and opt-in handoff briefings. Existing independent
 release gates remain unchanged.
+
+The expanded responder browser group also exposed successful-login rate-limit exhaustion in the combined
+CI job. Its fixture now signs in normally once and reuses only its own in-memory session cookies across
+responder scenarios. Production authentication/rate limits and the separate authentication scenarios are
+unchanged. A clean combined CI-mode production-browser run passed 38 cases with four skipped, including
+all 11 Intelligence workflows.
