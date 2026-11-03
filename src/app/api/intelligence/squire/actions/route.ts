@@ -33,6 +33,7 @@ export async function POST(request: NextRequest) {
   } catch {
     return deny(401, 'Sign in to use the assistant');
   }
+  if (actor.apiKey) return deny(403, 'Actions are only available in the app');
   const rate = await checkRateLimit(`squire:action:${actor.id}`, 30, 60_000);
   if (!rate.allowed) return deny(429, 'Too many requests. Try again in a minute.');
 

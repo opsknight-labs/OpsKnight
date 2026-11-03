@@ -1771,9 +1771,9 @@ test('service objectives retain immutable versions through UI create edit and ar
   ).toBeVisible();
   const name = `Response objective ${crypto.randomUUID()}`;
   const createSection = page
-    .locator('details')
-    .filter({ has: page.locator('summary', { hasText: /^Create objective$/ }) });
-  await createSection.locator('summary').click();
+    .locator('#main-content details:visible')
+    .filter({ has: page.locator(':scope > summary', { hasText: /^Create objective$/ }) });
+  await createSection.locator(':scope > summary').click();
   await createSection.getByLabel('Measurement', { exact: true }).selectOption('MTTA');
   await createSection.getByLabel('Name', { exact: true }).fill(name);
   await createSection

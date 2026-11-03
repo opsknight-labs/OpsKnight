@@ -202,7 +202,13 @@ Conversation turns require a provider permitted to receive Personal data, includ
 history. With only Internal providers, Squire explains the restriction and answers in basic mode without
 sending the question or history to a model. New gateway resolutions read current persisted provider
 policy; concurrent reads may be shared, but policy decisions are never retained in a TTL cache.
-Single-use receipts remain consumed after uncertain failures to prevent duplicate execution. By default conversations
+Versioned receipts record reserved, running, succeeded, failed or unknown outcomes. Each of the five
+current write actions commits its encrypted success result and audit entry in the same transaction as
+the native domain mutation. Lifecycle commands also carry stable idempotency keys. Signed preconditions
+reject changed lifecycle generations, assignments and relationship decisions rather than overwriting
+newer work. Duplicate confirmations return the recorded outcome; uncertain attempts are never resumed
+automatically. Owner-only, permission-checked result lookup remains available after proposal expiry for
+one day, and cards recover outcomes when reopened. Legacy consumed receipts remain unknown. By default conversations
 live in the browser only and audit entries hold metadata (user, provider, model, token counts, prompt id,
 version and hash), never prompts or answers.
 

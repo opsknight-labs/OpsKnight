@@ -459,24 +459,35 @@ test.describe.serial('intelligence responder workflows', () => {
     expect(
       await prisma.incidentNote.count({ where: { incidentId, content: 'Browser confirmed note' } })
     ).toBe(0);
+    await page.route('**/api/intelligence/squire/actions', async route => {
+      await route.fetch(); // Let the real domain transaction commit, then lose its response.
+      await route.abort('failed');
+    });
     const sent = page.waitForRequest(
       request =>
         request.url().endsWith('/api/intelligence/squire/actions') && request.method() === 'POST'
     );
     await proposal.getByRole('button', { name: 'Confirm', exact: true }).click();
     const request = await sent;
+    await expect(proposal.getByRole('status')).toContainText('Could not confirm the result');
+    await proposal.getByRole('button', { name: 'Check result', exact: true }).click();
     await expect(proposal.getByRole('status')).toHaveText('Note added.');
+    await page.unroute('**/api/intelligence/squire/actions');
     const replay = await page.request.post('/api/intelligence/squire/actions', {
       data: request.postDataJSON(),
       headers: { Origin: new URL(page.url()).origin },
     });
     expect(await replay.json()).toMatchObject({
-      ok: false,
-      message: 'This has already been done.',
+      ok: true,
+      message: 'Note added.',
     });
     expect(
       await prisma.incidentNote.count({ where: { incidentId, content: 'Browser confirmed note' } })
     ).toBe(1);
+    await page.getByRole('button', { name: 'Close Pip', exact: true }).click();
+    await page.getByRole('button', { name: /Ask Pip/ }).click();
+    await expect(proposal.getByRole('status')).toHaveText('Note added.');
+    await expect(proposal.getByRole('button', { name: 'Confirm', exact: true })).toHaveCount(0);
     await expectAccessible(page, 'section[role="dialog"]');
   });
   test('stopping a streamed answer preserves evidence and releases its token reservation on mobile', async ({

@@ -162,14 +162,15 @@ export async function decideRelationship(
  */
 export async function linkIncidents(
   actor: AuthorizationActor,
-  input: unknown
+  input: unknown,
+  externalTx?: Prisma.TransactionClient
 ): Promise<DecisionResult> {
   assertMayDecide(actor);
   const parsed = linkIncidentsSchema.safeParse(input);
   if (!parsed.success) throw validationError(parsed.error.issues);
   const [source, target] = [parsed.data.incidentId, parsed.data.otherIncidentId].sort();
 
-  return prisma.$transaction(async tx => {
+  const runner = async (tx: Prisma.TransactionClient): Promise<DecisionResult> => {
     await assertCanReadAll(tx, actor, [source, target]);
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`intelligence-link:${source}:${target}`}, 0))`;
     // A suggestion may already exist in either direction.
@@ -227,5 +228,6 @@ export async function linkIncidents(
       tx
     );
     return { relationshipId: created.id, decision: 'ACCEPTED' as const, changed: true };
-  });
+  };
+  return externalTx ? runner(externalTx) : prisma.$transaction(runner);
 }

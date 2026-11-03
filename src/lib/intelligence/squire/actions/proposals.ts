@@ -1,5 +1,6 @@
 import 'server-only';
 import { randomUUID } from 'node:crypto';
+import { z } from 'zod/v4';
 import prisma from '@/lib/prisma';
 import { decrypt, encrypt } from '@/lib/encryption';
 import { incidentReadWhere, runbookReadWhere } from '@/lib/authorization-filters';
@@ -16,6 +17,26 @@ import {
 /** A proposal must be confirmed soon after it was made, while the situation it describes still holds. */
 export const PROPOSAL_TTL_MS = 10 * 60_000;
 
+const preconditionsSchema = z
+  .object({
+    incident: z
+      .object({
+        status: z.enum(['OPEN', 'ACKNOWLEDGED', 'RESOLVED', 'SNOOZED', 'SUPPRESSED']),
+        escalationGeneration: z.number().int().nonnegative(),
+        assigneeId: z.string().nullable(),
+        teamId: z.string().nullable(),
+        updatedAt: z.string().datetime(),
+      })
+      .strict(),
+    relationship: z
+      .object({ id: z.string(), updatedAt: z.string().datetime() })
+      .strict()
+      .nullable()
+      .optional(),
+  })
+  .strict();
+export type SquireProposalPreconditions = z.infer<typeof preconditionsSchema>;
+
 interface SealedProposal {
   v: 1;
   id: string;
@@ -23,6 +44,7 @@ interface SealedProposal {
   input: unknown;
   actorId: string;
   exp: number;
+  preconditions?: SquireProposalPreconditions;
 }
 
 const short = (text: string, max = 120) =>
@@ -51,6 +73,39 @@ export async function buildProposal(
   const described = await describe(actor, name, input, incident);
   if (!described) return null;
 
+  let preconditions: SquireProposalPreconditions | undefined;
+  // eslint-disable-next-line security/detect-object-injection -- name was checked against the closed action union
+  if (SQUIRE_ACTION_KIND[name] === 'WRITE' && name !== 'add_incident_note') {
+    const snapshot = await prisma.incident.findFirst({
+      where: { AND: [{ id: incident.id }, incidentReadWhere(actor)] },
+      select: {
+        status: true,
+        escalationGeneration: true,
+        assigneeId: true,
+        teamId: true,
+        updatedAt: true,
+      },
+    });
+    if (!snapshot || snapshot.status !== incident.status) return null;
+    preconditions = { incident: { ...snapshot, updatedAt: snapshot.updatedAt.toISOString() } };
+    if (name === 'link_related_incident') {
+      const other = String(input.otherIncidentId);
+      const relationship = await prisma.incidentRelationship.findFirst({
+        where: {
+          type: 'RELATED',
+          OR: [
+            { sourceIncidentId: incident.id, targetIncidentId: other },
+            { sourceIncidentId: other, targetIncidentId: incident.id },
+          ],
+        },
+        select: { id: true, updatedAt: true },
+      });
+      preconditions.relationship = relationship
+        ? { id: relationship.id, updatedAt: relationship.updatedAt.toISOString() }
+        : null;
+    }
+  }
+
   const sealed: SealedProposal = {
     v: 1,
     id: randomUUID(),
@@ -58,9 +113,11 @@ export async function buildProposal(
     input,
     actorId: actor.id,
     exp: now.getTime() + PROPOSAL_TTL_MS,
+    ...(preconditions ? { preconditions } : {}),
   };
   return {
     token: await encrypt(JSON.stringify(sealed)),
+    receiptId: sealed.id,
     action: name,
     // eslint-disable-next-line security/detect-object-injection -- name is a member of the closed action union
     kind: SQUIRE_ACTION_KIND[name],
@@ -147,7 +204,12 @@ async function describe(
   }
 }
 
-export type OpenedProposal = { id: string; action: SquireActionName; input: unknown };
+export type OpenedProposal = {
+  id: string;
+  action: SquireActionName;
+  input: unknown;
+  preconditions?: SquireProposalPreconditions;
+};
 
 /** Opens a sealed proposal for the person confirming it; null if it is malformed, someone else's or expired. */
 export async function openProposal(
@@ -162,9 +224,28 @@ export async function openProposal(
   } catch {
     return null;
   }
-  if (sealed?.v !== 1 || typeof sealed.id !== 'string' || !isSquireActionName(sealed.action))
+  if (
+    sealed?.v !== 1 ||
+    !z.string().uuid().safeParse(sealed.id).success ||
+    !isSquireActionName(sealed.action)
+  )
     return null;
-  if (sealed.actorId !== actorId || typeof sealed.exp !== 'number' || sealed.exp < now.getTime())
+  if (
+    sealed.actorId !== actorId ||
+    typeof sealed.exp !== 'number' ||
+    !Number.isFinite(sealed.exp) ||
+    sealed.exp <= now.getTime()
+  )
     return null;
-  return { id: sealed.id, action: sealed.action, input: sealed.input };
+  const preconditions =
+    sealed.preconditions === undefined
+      ? undefined
+      : preconditionsSchema.safeParse(sealed.preconditions);
+  if (preconditions && !preconditions.success) return null;
+  return {
+    id: sealed.id,
+    action: sealed.action,
+    input: sealed.input,
+    ...(preconditions?.success ? { preconditions: preconditions.data } : {}),
+  };
 }

@@ -67,7 +67,26 @@ export const ENCRYPTION_TARGETS: EncryptionTargetDefinition[] = [
     storageType: 'SCALAR',
     plaintextLegacyAllowed: false,
     label: 'AI Provider API Key',
-    description: 'Credentials for a language-model provider configured in Intelligence settings: an API key, an AWS access key pair, or a Google service-account key',
+    description:
+      'Credentials for a language-model provider configured in Intelligence settings: an API key, an AWS access key pair, or a Google service-account key',
+  },
+  {
+    id: 'squire.action-intent',
+    model: 'SquireActionReceipt',
+    field: 'intentEncrypted',
+    storageType: 'SCALAR',
+    plaintextLegacyAllowed: false,
+    label: 'Confirmed Assistant Action Intent',
+    description: 'Immutable confirmed intent, retained briefly for owner-scoped action recovery',
+  },
+  {
+    id: 'squire.action-result',
+    model: 'SquireActionReceipt',
+    field: 'resultEncrypted',
+    storageType: 'SCALAR',
+    plaintextLegacyAllowed: false,
+    label: 'Assistant Action Outcome',
+    description: 'Encrypted result of a confirmed action, visible only to its authorized owner',
   },
   {
     id: 'squire.conversation-title',
@@ -85,7 +104,8 @@ export const ENCRYPTION_TARGETS: EncryptionTargetDefinition[] = [
     storageType: 'SCALAR',
     plaintextLegacyAllowed: false,
     label: 'Saved Assistant Message',
-    description: 'A question or answer in an opt-in saved assistant conversation, visible only to its owner',
+    description:
+      'A question or answer in an opt-in saved assistant conversation, visible only to its owner',
   },
   {
     id: 'jira.webhook-secret',

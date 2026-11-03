@@ -5350,14 +5350,22 @@ model AiTokenReservation {
 }
 
 // One confirmed assistant action. Proposals are sealed and expire after minutes; inserting this row first
-// makes each one execute at most once. Kept for a day, since the audit log is the lasting record.
+// prevents automatic replay. Versioned states and encrypted outcomes support read-only recovery for a day.
 model SquireActionReceipt {
-  id         String   @id
-  userId     String
-  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  action     String
-  incidentId String?
-  createdAt  DateTime @default(now())
+  id              String   @id
+  userId          String
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  action          String
+  incidentId      String?
+  version         Int      @default(1)
+  status          String   @default("UNKNOWN")
+  intentEncrypted String?
+  resultEncrypted String?
+  failureCode     String?
+  startedAt       DateTime?
+  completedAt     DateTime?
+  updatedAt       DateTime @default(now()) @updatedAt
+  createdAt       DateTime @default(now())
 
   @@index([createdAt], map: "idx_squire_action_receipt_retention")
 }

@@ -1,7 +1,7 @@
 import 'server-only';
 
 import { revalidatePath } from 'next/cache';
-import type { IncidentStatus } from '@prisma/client';
+import type { IncidentStatus, Prisma } from '@prisma/client';
 
 import { assertCanAcknowledgeIncident, assertResponderOrAbove, getCurrentUser } from '@/lib/rbac';
 import { AppError } from '@/lib/errors';
@@ -11,6 +11,11 @@ import {
   executeIdempotentIncidentLifecycleCommand,
   transitionIncidentToStatusIdempotent,
 } from '@/lib/incidents/idempotent-commands';
+
+export interface OperatorLifecycleHooks {
+  beforeTx?: (tx: Prisma.TransactionClient) => Promise<void>;
+  inTx?: (tx: Prisma.TransactionClient) => Promise<void>;
+}
 
 type OperatorLifecycleSource = Extract<IncidentLifecycleSource, 'WEB' | 'MOBILE'>;
 
@@ -31,7 +36,8 @@ export async function updateIncidentStatus(
   status: IncidentStatus,
   expectedStatus: IncidentStatus | undefined,
   source: OperatorLifecycleSource,
-  idempotency?: IdempotencyContext
+  idempotency?: IdempotencyContext,
+  hooks?: OperatorLifecycleHooks
 ): Promise<{ replayed: boolean }> {
   if (status === 'RESOLVED') {
     throw new AppError({
@@ -58,7 +64,9 @@ export async function updateIncidentStatus(
       expectedStatus,
       source,
     },
-    idempotency
+    idempotency,
+    hooks?.inTx,
+    hooks?.beforeTx
   );
 
   if (result.value.changed && !result.replayed) revalidateIncident(id);
@@ -69,7 +77,8 @@ export async function resolveIncidentWithNote(
   id: string,
   resolution: string,
   source: OperatorLifecycleSource = 'WEB',
-  idempotency?: IdempotencyContext
+  idempotency?: IdempotencyContext,
+  hooks?: OperatorLifecycleHooks
 ): Promise<{ replayed: boolean }> {
   await assertResponderOrAbove();
 
@@ -114,7 +123,9 @@ export async function resolveIncidentWithNote(
       actor: { id: user.id, name: user.name ?? undefined },
       resolutionNote: trimmedResolution,
     },
-    idempotency
+    idempotency,
+    hooks?.inTx,
+    hooks?.beforeTx
   );
 
   if (result.value.changed && !result.replayed) revalidateIncident(id);

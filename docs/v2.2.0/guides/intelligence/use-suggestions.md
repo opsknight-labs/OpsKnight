@@ -53,7 +53,12 @@ have caused this?" or "which runbook fits?".
 - It can only read what you can read. For changes such as acknowledge, resolve, add a note, reassign or
   mark related, it proposes an action card. Read it and select **Confirm**; nothing happens before
   confirmation. Each card links to the affected incident and shows its confirmation deadline; expired
-  suggestions need to be requested again. Runbook and postmortem cards open their normal review workflows.
+  suggestions need to be requested again. Changed assignments, incident generations or relationship
+  decisions also require fresh review. Runbook and postmortem cards open their normal review workflows.
+- If confirmation loses its response, choose **Check result**. This only reads the existing result; it
+  never repeats the action. Completed outcomes survive closing and reopening the panel, including after
+  the suggestion expires. If the result is unknown, inspect the incident before requesting another
+  action. Result lookup is available for one day and still requires access to the incident.
 - "Basic answer from your incident data" means AI is off or unavailable, and the answer comes straight from the
   suggestions above. AI chat also requires a provider approved for Personal data; when none is available,
   the assistant explains the restriction and keeps your conversation out of the model.

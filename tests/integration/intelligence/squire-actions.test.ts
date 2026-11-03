@@ -19,6 +19,7 @@ import { breakers, invalidateGatewayCache } from '@/lib/intelligence/ai/gateway'
 import { saveAiProvider, updateAiSettings } from '@/lib/intelligence/ai/settings';
 import { executeSquireAction } from '@/lib/intelligence/squire/actions/execute';
 import { buildProposal } from '@/lib/intelligence/squire/actions/proposals';
+import { readSquireActionOutcome } from '@/lib/intelligence/squire/actions/outcomes';
 import { streamSquire } from '@/lib/intelligence/squire/chat';
 import type { SquireEvent } from '@/lib/intelligence/squire/contract';
 import { publishPolicyVersion } from '@/lib/intelligence/settings/service';
@@ -186,9 +187,9 @@ describe('proposed actions', () => {
     ).toBe(1);
 
     // A double click or a replayed request does nothing more.
-    expect(await executeSquireAction(await actorOf(responder.id), proposal.token)).toEqual({
-      ok: false,
-      message: 'This has already been done.',
+    expect(await executeSquireAction(await actorOf(responder.id), proposal.token)).toMatchObject({
+      ok: true,
+      message: 'Incident acknowledged.',
     });
   });
 
@@ -358,10 +359,380 @@ it('keeps a confirmed mutation single-use when refreshing the page fails', async
   });
   expect(await executeSquireAction(actor, proposal!.token)).toMatchObject({ ok: true });
   expect(await executeSquireAction(actor, proposal!.token)).toMatchObject({
-    ok: false,
-    message: 'This has already been done.',
+    ok: true,
+    message: 'Note added.',
   });
   expect(
     await db.incidentNote.count({ where: { incidentId: mine.id, content: 'Only once' } })
   ).toBe(1);
+});
+
+it('commits an encrypted note outcome atomically and recovers it after the proposal deadline', async () => {
+  await setup();
+  const { responder, mine } = await world();
+  const actor = await actorOf(responder.id);
+  session.userId = responder.id;
+  const proposal = await buildProposal(actor, 'add_incident_note', {
+    incidentId: mine.id,
+    content: 'recovery-private-canary-41',
+  });
+  expect(await executeSquireAction(actor, proposal!.token)).toMatchObject({ ok: true });
+  const receipt = await db.squireActionReceipt.findUniqueOrThrow({
+    where: { id: proposal!.receiptId! },
+  });
+  expect(receipt.status).toBe('SUCCEEDED');
+  expect(receipt.intentEncrypted).not.toContain('recovery-private-canary-41');
+  expect(receipt.resultEncrypted).not.toContain('Note added.');
+  const future = new Date(Date.now() + 20 * 60_000);
+  expect(await readSquireActionOutcome(actor, receipt.id, future)).toMatchObject({
+    status: 'SUCCEEDED',
+    result: { ok: true, message: 'Note added.' },
+  });
+  expect(
+    await readSquireActionOutcome(actor, receipt.id, new Date(Date.now() + 25 * 60 * 60_000))
+  ).toBeNull();
+  const outsider = await actorOf((await createTestUser({ role: 'ADMIN' })).id);
+  expect(await readSquireActionOutcome(outsider, receipt.id)).toBeNull();
+});
+
+it('concurrent note confirmations produce only one native note and one completed receipt', async () => {
+  await setup();
+  const { responder, mine } = await world();
+  const actor = await actorOf(responder.id);
+  session.userId = responder.id;
+  const proposal = await buildProposal(actor, 'add_incident_note', {
+    incidentId: mine.id,
+    content: 'Concurrent once',
+  });
+  const results = await Promise.all([
+    executeSquireAction(actor, proposal!.token),
+    executeSquireAction(actor, proposal!.token),
+  ]);
+  expect(results.some(result => result.ok)).toBe(true);
+  expect(
+    await db.incidentNote.count({ where: { incidentId: mine.id, content: 'Concurrent once' } })
+  ).toBe(1);
+  expect(await readSquireActionOutcome(actor, proposal!.receiptId!)).toMatchObject({
+    status: 'SUCCEEDED',
+  });
+});
+
+it('rolls back a note when the executor fails before the transaction commits and never repeats the attempt', async () => {
+  await setup();
+  const { responder, mine } = await world();
+  const actor = await actorOf(responder.id);
+  session.userId = responder.id;
+  const proposal = await buildProposal(actor, 'add_incident_note', {
+    incidentId: mine.id,
+    content: 'Rollback canary',
+  });
+  const notes = await import('@/lib/incidents/notes');
+  const original = notes.addIncidentNoteDomainCommand;
+  const fault = vi
+    .spyOn(notes, 'addIncidentNoteDomainCommand')
+    .mockImplementationOnce(async (input, tx) => {
+      await original(input, tx);
+      throw new Error('Injected failure before transaction commit');
+    });
+  try {
+    expect(await executeSquireAction(actor, proposal!.token)).toMatchObject({ ok: false });
+  } finally {
+    fault.mockRestore();
+  }
+  expect(
+    await db.incidentNote.count({ where: { incidentId: mine.id, content: 'Rollback canary' } })
+  ).toBe(0);
+  expect(await readSquireActionOutcome(actor, proposal!.receiptId!)).toMatchObject({
+    status: 'UNKNOWN',
+  });
+  expect(await executeSquireAction(actor, proposal!.token)).toMatchObject({
+    ok: false,
+    message: expect.stringContaining('unknown'),
+  });
+  expect(
+    await db.incidentNote.count({ where: { incidentId: mine.id, content: 'Rollback canary' } })
+  ).toBe(0);
+});
+
+it('does not interpret a legacy consumed receipt or abandoned reservation as success', async () => {
+  await setup();
+  const { responder, mine } = await world();
+  const actor = await actorOf(responder.id);
+  session.userId = responder.id;
+  for (const status of ['UNKNOWN', 'RESERVED', 'RUNNING']) {
+    const proposal = await buildProposal(actor, 'add_incident_note', {
+      incidentId: mine.id,
+      content: 'Never resume automatically',
+    });
+    await db.squireActionReceipt.create({
+      data: {
+        id: proposal!.receiptId!,
+        userId: actor.id,
+        incidentId: mine.id,
+        action: 'add_incident_note',
+        status,
+        createdAt: new Date(Date.now() - 180_000),
+      },
+    });
+    expect(await readSquireActionOutcome(actor, proposal!.receiptId!)).toMatchObject({
+      status: 'UNKNOWN',
+    });
+    expect(await executeSquireAction(actor, proposal!.token)).toMatchObject({
+      ok: false,
+      message: expect.stringContaining('unknown'),
+    });
+  }
+  expect(await db.incidentNote.count({ where: { incidentId: mine.id } })).toBe(0);
+});
+
+it('rechecks incident access before returning a previous action outcome', async () => {
+  await setup();
+  const { responder, mine } = await world();
+  const actor = await actorOf(responder.id);
+  session.userId = responder.id;
+  const proposal = await buildProposal(actor, 'add_incident_note', {
+    incidentId: mine.id,
+    content: 'Private result',
+  });
+  expect(await executeSquireAction(actor, proposal!.token)).toMatchObject({ ok: true });
+  await db.incident.update({ where: { id: mine.id }, data: { visibility: 'PRIVATE' } });
+  await db.teamMember.deleteMany({ where: { userId: responder.id } });
+  await db.user.update({ where: { id: responder.id }, data: { role: 'USER' } });
+  expect(
+    await readSquireActionOutcome(await actorOf(responder.id), proposal!.receiptId!)
+  ).toBeNull();
+});
+
+it.each(['resolve_incident', 'reassign_incident', 'link_related_incident'] as const)(
+  'commits the %s outcome with its native mutation and replays only the result',
+  async action => {
+    await setup();
+    const { responder, outsider, mine, theirs } = await world();
+    const actor = await actorOf(responder.id);
+    session.userId = responder.id;
+    const input =
+      action === 'resolve_incident'
+        ? { incidentId: mine.id, resolution: 'Restored the database pool and verified recovery.' }
+        : action === 'reassign_incident'
+          ? { incidentId: mine.id, assigneeId: outsider.id }
+          : { incidentId: mine.id, otherIncidentId: theirs.id };
+    const proposal = await buildProposal(actor, action, input);
+    expect(proposal).not.toBeNull();
+    const first = await executeSquireAction(actor, proposal!.token);
+    expect(first.ok).toBe(true);
+    expect(await readSquireActionOutcome(actor, proposal!.receiptId!)).toMatchObject({
+      status: 'SUCCEEDED',
+      result: first,
+    });
+    expect(await executeSquireAction(actor, proposal!.token)).toEqual(first);
+    expect(
+      await db.auditLog.count({
+        where: { action: 'intelligence.squire.action', entityId: mine.id },
+      })
+    ).toBe(1);
+    const incident = await db.incident.findUniqueOrThrow({ where: { id: mine.id } });
+    if (action === 'resolve_incident') expect(incident.status).toBe('RESOLVED');
+    if (action === 'reassign_incident') expect(incident.assigneeId).toBe(outsider.id);
+    if (action === 'link_related_incident')
+      expect(await db.incidentRelationship.count({ where: { type: 'RELATED' } })).toBe(1);
+  }
+);
+
+it('refuses a stale reassignment rather than overwriting a newer human assignment', async () => {
+  await setup();
+  const { responder, outsider, mine } = await world();
+  const actor = await actorOf(responder.id);
+  session.userId = responder.id;
+  const proposal = await buildProposal(actor, 'reassign_incident', {
+    incidentId: mine.id,
+    assigneeId: outsider.id,
+  });
+  const { assignIncidentDomainCommand } = await import('@/lib/incidents/assignment');
+  await assignIncidentDomainCommand({
+    incidentId: mine.id,
+    assigneeId: responder.id,
+    actor: { id: responder.id, name: responder.name },
+  });
+  expect(await executeSquireAction(actor, proposal!.token)).toMatchObject({
+    ok: false,
+    message: expect.stringContaining('changed'),
+  });
+  expect((await db.incident.findUniqueOrThrow({ where: { id: mine.id } })).assigneeId).toBe(
+    responder.id
+  );
+  expect(await readSquireActionOutcome(actor, proposal!.receiptId!)).toMatchObject({
+    status: 'FAILED',
+  });
+});
+
+it('requires fresh lifecycle review after the escalation generation changes', async () => {
+  await setup();
+  const { responder, mine } = await world();
+  const actor = await actorOf(responder.id);
+  session.userId = responder.id;
+  const proposal = await buildProposal(actor, 'resolve_incident', {
+    incidentId: mine.id,
+    resolution: 'The service recovered after rollback.',
+  });
+  await db.incident.update({
+    where: { id: mine.id },
+    data: { escalationGeneration: { increment: 1 } },
+  });
+  expect(await executeSquireAction(actor, proposal!.token)).toMatchObject({
+    ok: false,
+    message: expect.stringContaining('changed'),
+  });
+  expect((await db.incident.findUniqueOrThrow({ where: { id: mine.id } })).status).toBe('OPEN');
+  expect(await readSquireActionOutcome(actor, proposal!.receiptId!)).toMatchObject({
+    status: 'FAILED',
+  });
+});
+
+it('does not overwrite a relationship decision made after proposal review', async () => {
+  await setup();
+  const { responder, mine, theirs } = await world();
+  const actor = await actorOf(responder.id);
+  session.userId = responder.id;
+  const { linkIncidents } = await import('@/lib/intelligence/correlation/commands');
+  const linked = await linkIncidents(actor, { incidentId: mine.id, otherIncidentId: theirs.id });
+  const proposal = await buildProposal(actor, 'link_related_incident', {
+    incidentId: mine.id,
+    otherIncidentId: theirs.id,
+  });
+  await db.incidentRelationship.update({
+    where: { id: linked.relationshipId },
+    data: { decision: 'REJECTED' },
+  });
+  expect(await executeSquireAction(actor, proposal!.token)).toMatchObject({
+    ok: false,
+    message: expect.stringContaining('changed'),
+  });
+  expect(
+    (await db.incidentRelationship.findUniqueOrThrow({ where: { id: linked.relationshipId } }))
+      .decision
+  ).toBe('REJECTED');
+  expect(await readSquireActionOutcome(actor, proposal!.receiptId!)).toMatchObject({
+    status: 'FAILED',
+  });
+});
+
+it('keeps a lifecycle success recoverable when its native post-commit refresh throws', async () => {
+  await setup();
+  const { responder, mine } = await world();
+  const actor = await actorOf(responder.id);
+  session.userId = responder.id;
+  const proposal = await buildProposal(actor, 'resolve_incident', {
+    incidentId: mine.id,
+    resolution: 'Recovered after database failover.',
+  });
+  vi.mocked(revalidatePath).mockImplementationOnce(() => {
+    throw new Error('Lost return after native commit');
+  });
+  expect(await executeSquireAction(actor, proposal!.token)).toMatchObject({
+    ok: true,
+    message: 'Incident resolved.',
+  });
+  expect(await readSquireActionOutcome(actor, proposal!.receiptId!)).toMatchObject({
+    status: 'SUCCEEDED',
+  });
+  expect(
+    await db.auditLog.count({ where: { action: 'intelligence.squire.action', entityId: mine.id } })
+  ).toBe(1);
+});
+
+it.each([
+  'acknowledge_incident',
+  'resolve_incident',
+  'reassign_incident',
+  'link_related_incident',
+] as const)(
+  'rolls back %s and its success receipt together when final audit persistence fails',
+  async action => {
+    await setup();
+    const { responder, outsider, mine, theirs } = await world();
+    const actor = await actorOf(responder.id);
+    session.userId = responder.id;
+    const input =
+      action === 'resolve_incident'
+        ? { incidentId: mine.id, resolution: 'Recovered after rollback and verified the service.' }
+        : action === 'reassign_incident'
+          ? { incidentId: mine.id, assigneeId: outsider.id }
+          : action === 'link_related_incident'
+            ? { incidentId: mine.id, otherIncidentId: theirs.id }
+            : { incidentId: mine.id };
+    const proposal = await buildProposal(actor, action, input);
+    const audit = await import('@/lib/audit');
+    const original = audit.logAudit;
+    const fault = vi.spyOn(audit, 'logAudit').mockImplementation(async (...args) => {
+      if (args[0].action === 'intelligence.squire.action' && args[1])
+        throw new Error('Injected failure at final atomic persistence');
+      return original(...args);
+    });
+    try {
+      expect(await executeSquireAction(actor, proposal!.token)).toMatchObject({ ok: false });
+    } finally {
+      fault.mockRestore();
+    }
+    const current = await db.incident.findUniqueOrThrow({ where: { id: mine.id } });
+    expect(current.status).toBe('OPEN');
+    expect(current.assigneeId).toBeNull();
+    expect(await db.incidentRelationship.count({ where: { type: 'RELATED' } })).toBe(0);
+    expect(await readSquireActionOutcome(actor, proposal!.receiptId!)).toMatchObject({
+      status: 'UNKNOWN',
+    });
+    expect(await executeSquireAction(actor, proposal!.token)).toMatchObject({
+      ok: false,
+      message: expect.stringContaining('unknown'),
+    });
+  }
+);
+
+it('does not begin a command when receipt reservation fails', async () => {
+  await setup();
+  const { responder, mine } = await world();
+  const actor = await actorOf(responder.id);
+  session.userId = responder.id;
+  const proposal = await buildProposal(actor, 'add_incident_note', {
+    incidentId: mine.id,
+    content: 'Never started',
+  });
+  const appDb = (await import('@/lib/prisma')).default;
+  const fault = vi
+    .spyOn(appDb.squireActionReceipt, 'create')
+    .mockRejectedValueOnce(new Error('Reservation unavailable'));
+  try {
+    await expect(executeSquireAction(actor, proposal!.token)).rejects.toThrow(
+      'Reservation unavailable'
+    );
+  } finally {
+    fault.mockRestore();
+  }
+  expect(await db.incidentNote.count({ where: { incidentId: mine.id } })).toBe(0);
+  expect(await db.squireActionReceipt.count({ where: { id: proposal!.receiptId! } })).toBe(0);
+});
+
+it('marks an attempt uncertain if it crashes immediately after reservation and never runs its command', async () => {
+  await setup();
+  const { responder, mine } = await world();
+  const actor = await actorOf(responder.id);
+  session.userId = responder.id;
+  const proposal = await buildProposal(actor, 'add_incident_note', {
+    incidentId: mine.id,
+    content: 'Reserved only',
+  });
+  const appDb = (await import('@/lib/prisma')).default;
+  const fault = vi
+    .spyOn(appDb.squireActionReceipt, 'update')
+    .mockRejectedValueOnce(new Error('Executor unavailable'));
+  try {
+    expect(await executeSquireAction(actor, proposal!.token)).toMatchObject({ ok: false });
+  } finally {
+    fault.mockRestore();
+  }
+  expect(await db.incidentNote.count({ where: { incidentId: mine.id } })).toBe(0);
+  expect(await readSquireActionOutcome(actor, proposal!.receiptId!)).toMatchObject({
+    status: 'UNKNOWN',
+  });
+  expect(await executeSquireAction(actor, proposal!.token)).toMatchObject({ ok: false });
+  expect(await db.incidentNote.count({ where: { incidentId: mine.id } })).toBe(0);
 });

@@ -82,11 +82,14 @@ describe('intelligence architecture boundaries', () => {
     const executorSource = read(executor);
     const delegates = [
       ...executorSource.matchAll(
-        /\bprisma\.(\w+)\.(?:create|createMany|update|updateMany|upsert|delete|deleteMany)\(/g
+        /\b(?:prisma|tx)\.(\w+)\.(?:create|createMany|update|updateMany|upsert|delete|deleteMany)\(/g
       ),
     ].map(match => match[1]);
     expect([...new Set(delegates)]).toEqual(['squireActionReceipt']);
-    expect(executorSource).not.toMatch(/\$executeRaw|\$transaction/);
+    // A transaction may join the native command to its receipt, but raw SQL and direct
+    // incident-table mutations remain forbidden (including through a transaction client).
+    expect(executorSource).not.toMatch(/\$executeRaw/);
+    expect(executorSource).toContain("isolationLevel: 'Serializable'");
     expect(executorSource).toMatch(/openProposal\(token, actor\.id\)/);
 
     // Proposal tools are declared in one place and never carry an executor of their own.

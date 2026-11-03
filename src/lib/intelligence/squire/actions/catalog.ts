@@ -26,7 +26,7 @@ const userId = z.string().trim().min(1).max(64);
 export const SQUIRE_ACTION_INPUTS = {
   acknowledge_incident: z.object({ incidentId }).strict(),
   resolve_incident: z
-    .object({ incidentId, resolution: z.string().trim().min(10).max(2_000) })
+    .object({ incidentId, resolution: z.string().trim().min(10).max(1_000) })
     .strict(),
   add_incident_note: z
     .object({ incidentId, content: z.string().trim().min(1).max(2_000) })
@@ -77,7 +77,7 @@ export const SQUIRE_ACTION_DESCRIPTIONS: Record<SquireActionName, string> = {
 export const SQUIRE_ACTION_JSON_SCHEMAS: Record<SquireActionName, Record<string, unknown>> = {
   acknowledge_incident: objectSchema({ incidentId: idSchema() }, ['incidentId']),
   resolve_incident: objectSchema(
-    { incidentId: idSchema(), resolution: { type: 'string', minLength: 10, maxLength: 2000 } },
+    { incidentId: idSchema(), resolution: { type: 'string', minLength: 10, maxLength: 1000 } },
     ['incidentId', 'resolution']
   ),
   add_incident_note: objectSchema(
@@ -119,6 +119,8 @@ export function isSquireActionName(value: string): value is SquireActionName {
 export interface SquireProposal {
   /** Sealed, single-use and short-lived; the only thing the confirm request sends back. */
   token: string;
+  /** Opaque identifier for owner-only, read-only outcome lookup; never authorizes a mutation. */
+  receiptId?: string;
   action: SquireActionName;
   kind: 'WRITE' | 'NAVIGATE';
   title: string;

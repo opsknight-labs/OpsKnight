@@ -335,3 +335,30 @@ CI job. Its fixture now signs in normally once and reuses only its own in-memory
 responder scenarios. Production authentication/rate limits and the separate authentication scenarios are
 unchanged. A clean combined CI-mode production-browser run passed 38 cases with four skipped, including
 all 11 Intelligence workflows.
+
+## Durable action outcomes — 2026-11-03
+
+Added a versioned receipt lifecycle with encrypted immutable intent/result, safe failure category and
+execution timestamps. Legacy consumed receipts default to UNKNOWN. All five current write actions now
+commit their success receipt and Squire audit inside the native mutation transaction; lifecycle commands
+also use stable proposal-scoped idempotency keys. Transaction-bound preconditions reject changed lifecycle
+generations, assignments and relationship decisions. Unknown attempts remain consumed and are never
+resumed automatically. Native domain commands retain their existing authorization and outbox boundaries.
+
+A bounded owner-only result endpoint rechecks current incident visibility, rejects API keys and cross-site
+requests, and remains usable after proposal expiry for one day. Action cards restore results after remount,
+block uncertain reconfirmation and offer read-only Check result. The browser test deliberately loses the
+response after the real note transaction commits, then recovers it and reopens the panel without a second
+mutation. New encrypted columns are registered for privacy and key rotation.
+
+Local evidence: 42 action/correlation database cases plus the native event-lifecycle integration case
+(including fault injection at reservation and native commit boundaries), 91 scoped unit/component/architecture
+and native API cases and all 11 production-browser Intelligence
+workflows passed. The full follow-on roadmap remains incomplete; saved-history outcome references depend
+on structured memory in P1-03.
+
+The preceding remote head 1e7b2243e passed 46 checks (including both required gates and authentication)
+with 12 skipped and one runbook browser failure. Its exact failing selector matched more than one
+Create objective section. Scoping to visible main-content details and the direct summary preserved the
+entire objective-version/archive assertion; six repeated Chromium/Firefox/WebKit cases passed locally.
+This is a repaired observed CI failure, not a reason to weaken a check or skip the scenario.

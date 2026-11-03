@@ -48,6 +48,8 @@ Do not rebuild these under new names. The roadmap extends their weakest boundari
 
 ## P0-02 — Recover the result of an uncertain confirmed action
 
+**Implementation progress (2026-11-03):** versioned encrypted receipts, owner-only read-only recovery, atomic success/audit commits for all five current write actions, native lifecycle idempotency keys and transaction-bound stale-intent checks are implemented. Browser fault injection proves recovery after a lost commit response and close/reopen; concurrency and transaction-failure tests cover the domain boundaries. Saved-conversation outcome references remain part of P1-03; independent review is still a release gate.
+
 **Finding: observed recovery gap.** `executeSquireAction()` inserts a single-use receipt before calling the domain command. A duplicate returns “This has already been done.” The receipt model stores identity/action/incident/time, not execution status or result. A crash after reservation but before execution, an action failure and a committed mutation whose response was lost cannot be distinguished through that response. Keeping the receipt is the correct duplicate-prevention choice; deleting it or blindly retrying would be unsafe. Audit writes are best effort and are not a reliable recovery ledger.
 
 **Build:**

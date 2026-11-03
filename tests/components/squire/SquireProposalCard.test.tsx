@@ -104,3 +104,117 @@ describe('Squire proposal review', () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 });
+
+it('restores a completed outcome after remount and expiry using only a read request', async () => {
+  fetchMock.mockResolvedValue({
+    ok: true,
+    status: 200,
+    json: async () => ({ data: { outcome: { status: 'SUCCEEDED', message: 'Note added.' } } }),
+  });
+  render(
+    <SquireProposalCard
+      proposal={proposal({
+        receiptId: 'receipt-1',
+        expiresAt: new Date(now.getTime() - 1).toISOString(),
+      })}
+    />
+  );
+  await act(async () => {
+    await Promise.resolve();
+  });
+  expect(screen.getByRole('status')).toHaveTextContent('Note added.');
+  expect(screen.queryByRole('button', { name: 'Confirm' })).not.toBeInTheDocument();
+  expect(fetchMock).toHaveBeenCalledTimes(1);
+  expect(fetchMock.mock.calls[0][1].method).toBeUndefined();
+});
+
+it('recovers a lost confirmation response without sending another mutation', async () => {
+  fetchMock.mockResolvedValueOnce({ ok: false, status: 404 });
+  fetchMock.mockRejectedValueOnce(new Error('Lost response'));
+  fetchMock.mockResolvedValueOnce({
+    ok: true,
+    status: 200,
+    json: async () => ({ data: { outcome: { status: 'SUCCEEDED', message: 'Note added.' } } }),
+  });
+  render(<SquireProposalCard proposal={proposal({ receiptId: 'receipt-1' })} />);
+  await act(async () => {
+    await Promise.resolve();
+  });
+  await act(async () => {
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm' }));
+  });
+  expect(screen.getByRole('status')).toHaveTextContent('Could not confirm the result');
+  await act(async () => {
+    fireEvent.click(screen.getByRole('button', { name: 'Check result' }));
+  });
+  expect(screen.getByRole('status')).toHaveTextContent('Note added.');
+  expect(fetchMock.mock.calls.map(([, options]) => options.method ?? 'GET')).toEqual([
+    'GET',
+    'POST',
+    'GET',
+  ]);
+});
+
+it('blocks reconfirmation of an uncertain action even after its proposal expires', async () => {
+  fetchMock.mockResolvedValue({
+    ok: true,
+    status: 200,
+    json: async () => ({
+      data: {
+        outcome: { status: 'UNKNOWN', message: 'The result is unknown. Check the incident.' },
+      },
+    }),
+  });
+  render(
+    <SquireProposalCard
+      proposal={proposal({
+        receiptId: 'receipt-1',
+        expiresAt: new Date(now.getTime() - 1).toISOString(),
+      })}
+    />
+  );
+  await act(async () => {
+    await Promise.resolve();
+  });
+  expect(screen.getByRole('status')).toHaveTextContent('unknown');
+  expect(screen.getByRole('button', { name: 'Check result' })).toBeEnabled();
+  expect(screen.queryByRole('button', { name: 'Confirm' })).not.toBeInTheDocument();
+  expect(fetchMock.mock.calls.every(([, options]) => !options.method)).toBe(true);
+});
+
+it('never offers another confirmation when a lost response is followed by a missing result', async () => {
+  fetchMock.mockResolvedValueOnce({ ok: false, status: 404 });
+  fetchMock.mockRejectedValueOnce(new Error('Lost confirmation response'));
+  fetchMock.mockResolvedValueOnce({ ok: false, status: 404 });
+  render(<SquireProposalCard proposal={proposal({ receiptId: 'receipt-1' })} />);
+  await act(async () => {
+    await Promise.resolve();
+  });
+  await act(async () => {
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm' }));
+  });
+  await act(async () => {
+    fireEvent.click(screen.getByRole('button', { name: 'Check result' }));
+  });
+  expect(screen.getByRole('status')).toHaveTextContent('not available');
+  expect(screen.queryByRole('button', { name: 'Confirm' })).not.toBeInTheDocument();
+  expect(fetchMock.mock.calls.map(([, options]) => options.method ?? 'GET')).toEqual([
+    'GET',
+    'POST',
+    'GET',
+  ]);
+});
+
+it('can review an unconfirmed proposal after its initial result lookup recovers', async () => {
+  fetchMock.mockRejectedValueOnce(new Error('Temporary lookup failure'));
+  fetchMock.mockResolvedValueOnce({ ok: false, status: 404 });
+  render(<SquireProposalCard proposal={proposal({ receiptId: 'receipt-1' })} />);
+  await act(async () => {
+    await Promise.resolve();
+  });
+  await act(async () => {
+    fireEvent.click(screen.getByRole('button', { name: 'Check result' }));
+  });
+  expect(screen.getByRole('button', { name: 'Confirm' })).toBeEnabled();
+  expect(fetchMock.mock.calls.every(([, options]) => !options.method)).toBe(true);
+});
