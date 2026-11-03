@@ -332,3 +332,98 @@ describe('SquireLauncher', () => {
     expect(screen.getByRole('button', { name: 'Send' })).toBeDisabled();
   });
 });
+
+describe('Squire stream recovery', () => {
+  async function ask() {
+    render(<SquireLauncher name="Pip" />);
+    fireEvent.click(screen.getByRole('button', { name: /Ask Pip/ }));
+    fireEvent.change(screen.getByLabelText('Message Pip'), { target: { value: 'help' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+  }
+
+  it('preserves partial text and reports a transport interruption', async () => {
+    const encoder = new TextEncoder();
+    let reads = 0;
+    fetchMock.mockResolvedValue({
+      ok: true,
+      body: {
+        getReader: () => ({
+          read: async () => {
+            if (reads++ === 0)
+              return {
+                done: false,
+                value: encoder.encode('{"type":"delta","text":"Partial evidence"}\n'),
+              };
+            throw new Error('connection reset');
+          },
+          releaseLock: vi.fn(),
+        }),
+      },
+    });
+    await ask();
+    expect(await screen.findByText('Partial evidence')).toBeInTheDocument();
+    expect(await screen.findByRole('alert')).toHaveTextContent(/interrupted/i);
+  });
+
+  it('reports an incomplete stream instead of leaving an empty answer', async () => {
+    fetchMock.mockResolvedValue(streamOf([{ type: 'meta', mode: 'ai' }]));
+    await ask();
+    expect(await screen.findByText(/response was interrupted/i)).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('Message Pip'), { target: { value: 'try again' } });
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Send' })).toBeEnabled());
+  });
+
+  it('reads the final event without a trailing newline and releases the reader', async () => {
+    const releaseLock = vi.fn();
+    const chunks = [
+      new TextEncoder().encode('{"type":"delta","text":"Complete answer"}\n{"type":"done"}'),
+    ];
+    fetchMock.mockResolvedValue({
+      ok: true,
+      body: {
+        getReader: () => ({
+          read: async () =>
+            chunks.length ? { done: false, value: chunks.shift() } : { done: true },
+          releaseLock,
+        }),
+      },
+    });
+    await ask();
+    expect(await screen.findByText('Complete answer')).toBeInTheDocument();
+    await waitFor(() => expect(releaseLock).toHaveBeenCalledOnce());
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+});
+
+it('stops an active response, aborts its request and retains the partial answer for follow-up', async () => {
+  let signal: AbortSignal | undefined;
+  fetchMock.mockImplementation(async (_url: string, init: RequestInit) => {
+    signal = init.signal as AbortSignal;
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode('{"type":"delta","text":"Evidence so far"}\n'));
+        signal!.addEventListener(
+          'abort',
+          () => controller.error(new DOMException('Stopped', 'AbortError')),
+          { once: true }
+        );
+      },
+    });
+    return { ok: true, body };
+  });
+  render(<SquireLauncher name="Pip" />);
+  fireEvent.click(screen.getByRole('button', { name: /Ask Pip/ }));
+  fireEvent.change(screen.getByLabelText('Message Pip'), { target: { value: 'investigate' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+  expect(await screen.findByText('Evidence so far')).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Stop response' }));
+  expect(signal?.aborted).toBe(true);
+  expect(screen.getByText('Evidence so far')).toBeInTheDocument();
+  expect(screen.getByText(/Response stopped/)).toBeInTheDocument();
+  expect(screen.getByLabelText('Message Pip')).toHaveFocus();
+  fireEvent.change(screen.getByLabelText('Message Pip'), {
+    target: { value: 'continue with timeline' },
+  });
+  expect(screen.getByRole('button', { name: 'Send' })).toBeEnabled();
+  expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+});

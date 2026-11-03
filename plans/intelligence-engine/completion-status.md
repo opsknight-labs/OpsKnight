@@ -273,3 +273,31 @@ ExcelJS now uses Next.js native server external loading, preserving that optiona
 lazy behavior. Production build and typecheck pass; zero-warning lint explicitly checks the
 normally ignored Next config. The generated standalone artifact's own packaged ExcelJS also
 successfully wrote and read an XLSX workbook, verifying archive dependencies are traced.
+
+## Feature review and responder improvements — 2026-11-03
+
+Reviewed the phase plan, queue/policy and similarity boundaries, actor-scoped views, Squire
+stream contract, signed action execution and responder UI. The concrete gaps repaired in this
+batch are interrupted-answer visibility, cancellation, proposal-expiry feedback and bounded
+confirmation bodies. Existing server authorization, single-use receipts and expiry checks remain
+mandatory; the UI adds no independent write path.
+
+- Squire preserves partial answers when transport fails and explicitly marks incomplete streams.
+  Final NDJSON events without a trailing newline are consumed, and readers release their locks.
+- Responders can stop a running answer. Already received text stays available, late chunks are
+  fenced out and focus returns to the composer for a follow-up.
+- Action cards link to the affected incident, display the confirmation deadline and stop offering
+  expired write suggestions. An action already in flight keeps its result when the deadline passes.
+- The confirmation route uses the existing streaming JSON byte limit, cancelling oversized chunked
+  bodies before executing an action, including bodies without Content-Length.
+- The remaining auth CI failure was a synthetic two-minute clock jump expiring webpack's pending
+  chunk timeout. Sequential timer progression retains the heartbeat contract and route assertions.
+
+The scoped Squire/body suites passed **49/49**; the broader Intelligence unit pass was **292/292**.
+Production build, typecheck and zero-warning changed-source lint passed. The final combined
+production-browser run passed **36 cases, four skipped**, including **9/9 Intelligence workflows**
+and the complete navigation suite. Its new real-provider-stream mobile case proves cancellation
+preserves the answer and settles the token reservation before the delayed provider finishes, with
+axe and 390-pixel overflow checks. The mobile screenshot was visually inspected. An earlier
+mixed-fixture run is not counted; final browser evidence uses a dedicated freshly migrated database
+and the same application-origin environment as CI. Final-head remote checks remain authoritative.

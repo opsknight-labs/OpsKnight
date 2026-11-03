@@ -471,4 +471,36 @@ test.describe.serial('intelligence responder workflows', () => {
     ).toBe(1);
     await expectAccessible(page, 'section[role="dialog"]');
   });
+  test('stopping a streamed answer preserves evidence and releases its token reservation on mobile', async ({
+    page,
+  }, testInfo) => {
+    fake.script.push({ content: 'Evidence collected so far.', finishDelayMs: 30_000 });
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto(`/incidents/${incidentId}`);
+    await assistantReady(page);
+    await page.getByRole('button', { name: /Ask Pip/ }).click();
+    await page.getByLabel('Message Pip').fill('Summarise the available evidence');
+    await page.getByRole('button', { name: 'Send', exact: true }).click();
+    await expect(page.getByText('Evidence collected so far.', { exact: true })).toBeVisible();
+    const actor = await prisma.user.findUniqueOrThrow({ where: { email }, select: { id: true } });
+    expect(
+      await prisma.aiTokenReservation.count({ where: { actorId: actor.id, settledAt: null } })
+    ).toBeGreaterThan(0);
+    await page.getByRole('button', { name: 'Stop response', exact: true }).click();
+    await expect(page.getByRole('dialog')).toContainText('Evidence collected so far.');
+    await expect(page.getByText(/Response stopped/)).toBeVisible();
+    await expect(page.getByLabel('Message Pip')).toBeFocused();
+    await expect
+      .poll(
+        () => prisma.aiTokenReservation.count({ where: { actorId: actor.id, settledAt: null } }),
+        { timeout: 10_000 }
+      )
+      .toBe(0);
+    await noHorizontalOverflow(page);
+    await expectAccessible(page, 'section[role="dialog"]');
+    await page.screenshot({
+      path: testInfo.outputPath('squire-stopped-mobile.png'),
+      fullPage: true,
+    });
+  });
 });

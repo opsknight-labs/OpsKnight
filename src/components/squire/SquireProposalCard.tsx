@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Check, ExternalLink, X } from 'lucide-react';
 
 export type SquireProposalView = {
@@ -26,10 +26,24 @@ type State =
 export default function SquireProposalCard({ proposal }: { proposal: SquireProposalView }) {
   const router = useRouter();
   const [state, setState] = useState<State>({ phase: 'idle' });
+  const expiresAt = Date.parse(proposal.expiresAt);
+  const [clock, setClock] = useState(() => Date.now());
+  const expired = !Number.isFinite(expiresAt) || expiresAt <= clock;
+
+  useEffect(() => {
+    const remaining = Date.parse(proposal.expiresAt) - Date.now();
+    const delay = Number.isFinite(remaining) ? Math.max(0, Math.min(remaining, 2_147_483_647)) : 0;
+    const timer = window.setTimeout(() => setClock(Date.now()), delay);
+    return () => window.clearTimeout(timer);
+  }, [proposal.expiresAt]);
 
   if (state.phase === 'dismissed') return null;
 
   const confirm = async () => {
+    if (state.phase !== 'idle' || !Number.isFinite(expiresAt) || expiresAt <= Date.now()) {
+      setClock(Date.now());
+      return;
+    }
     setState({ phase: 'running' });
     try {
       const response = await fetch('/api/intelligence/squire/actions', {
@@ -76,6 +90,12 @@ export default function SquireProposalCard({ proposal }: { proposal: SquirePropo
       <p className="mt-1 whitespace-pre-wrap break-words text-xs text-foreground/80">
         {proposal.detail}
       </p>
+      <Link
+        href={`/incidents/${encodeURIComponent(proposal.incidentId)}`}
+        className="mt-2 inline-block text-xs font-medium text-primary underline underline-offset-2"
+      >
+        View incident
+      </Link>
       {state.phase === 'done' || state.phase === 'failed' ? (
         <p
           role="status"
@@ -100,8 +120,21 @@ export default function SquireProposalCard({ proposal }: { proposal: SquirePropo
             Dismiss
           </button>
         </div>
+      ) : expired && state.phase !== 'running' ? (
+        <div className="mt-2 space-y-2">
+          <p role="status" className="text-xs text-foreground/80">
+            This suggestion has expired. Ask Squire for a fresh one.
+          </p>
+          <button
+            type="button"
+            onClick={() => setState({ phase: 'dismissed' })}
+            className="rounded-md px-3 py-1.5 text-xs hover:bg-accent"
+          >
+            Dismiss
+          </button>
+        </div>
       ) : (
-        <div className="mt-2 flex items-center gap-2">
+        <div className="mt-2 flex flex-wrap items-center gap-2">
           <button
             type="button"
             onClick={() => void confirm()}
@@ -120,6 +153,10 @@ export default function SquireProposalCard({ proposal }: { proposal: SquirePropo
             <X className="h-3.5 w-3.5" aria-hidden="true" />
             Dismiss
           </button>
+          <time dateTime={proposal.expiresAt} className="w-full text-xs text-muted-foreground">
+            Confirm before{' '}
+            {new Date(expiresAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+          </time>
         </div>
       )}
     </div>

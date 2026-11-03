@@ -1,6 +1,7 @@
 import type { NextRequest } from 'next/server';
 import { z } from 'zod/v4';
 import { jsonError, jsonOk } from '@/lib/api-response';
+import { readJsonBodyWithLimit, RequestBodyTooLargeError } from '@/lib/request-body';
 import { getCurrentAuthorizationActor } from '@/lib/rbac';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { executeSquireAction } from '@/lib/intelligence/squire/actions/execute';
@@ -35,12 +36,11 @@ export async function POST(request: NextRequest) {
   const rate = await checkRateLimit(`squire:action:${actor.id}`, 30, 60_000);
   if (!rate.allowed) return deny(429, 'Too many requests. Try again in a minute.');
 
-  const raw = await request.text();
-  if (Buffer.byteLength(raw, 'utf8') > MAX_BODY_BYTES) return deny(413, 'Request is too large');
   let body: unknown;
   try {
-    body = JSON.parse(raw);
-  } catch {
+    body = await readJsonBodyWithLimit(request, MAX_BODY_BYTES);
+  } catch (error) {
+    if (error instanceof RequestBodyTooLargeError) return deny(413, 'Request is too large');
     return deny(400, 'Invalid JSON');
   }
   const parsed = bodySchema.safeParse(body);

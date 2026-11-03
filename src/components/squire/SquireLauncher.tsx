@@ -13,7 +13,7 @@ import {
   type FormEvent,
   type KeyboardEvent,
 } from 'react';
-import { ArrowLeftRight, History, Send, Trash2, X } from 'lucide-react';
+import { ArrowLeftRight, History, Send, Square, Trash2, X } from 'lucide-react';
 import SquireAvatar, { type SquireAvatarKind } from '@/components/squire/SquireAvatar';
 import SquireProposalCard, {
   type SquireProposalView,
@@ -255,78 +255,104 @@ export default function SquireLauncher({
         const reader = response.body.getReader();
         const decoder = new TextDecoder();
         let buffer = '';
-        for (;;) {
-          const { value, done } = await reader.read();
-          if (done) break;
-          buffer += decoder.decode(value, { stream: true });
-          let newline = buffer.indexOf('\n');
-          while (newline >= 0) {
-            const line = buffer.slice(0, newline).trim();
-            buffer = buffer.slice(newline + 1);
-            newline = buffer.indexOf('\n');
-            if (!line) continue;
-            let event: {
-              type: string;
-              text?: string;
-              message?: string;
-              label?: string;
-              mode?: 'ai' | 'basic';
-              id?: string;
-              proposal?: SquireProposalView;
-              items?: unknown[];
-            };
-            try {
-              event = JSON.parse(line);
-            } catch {
-              continue;
-            }
-            if (event.type === 'delta' && event.text)
-              patch(turn => ({ ...turn, content: turn.content + event.text, activity: undefined }));
-            else if (event.type === 'meta' && event.mode)
-              patch(turn => ({ ...turn, mode: event.mode }));
-            else if (event.type === 'tool' && event.label)
-              patch(turn => ({ ...turn, activity: event.label }));
-            else if (event.type === 'proposal' && event.proposal)
-              patch(turn => ({
-                ...turn,
-                activity: undefined,
-                proposals: [...(turn.proposals ?? []), event.proposal!],
-              }));
-            else if (event.type === 'citations' && Array.isArray(event.items))
-              patch(turn => ({ ...turn, citations: event.items as Citation[] }));
-            else if (event.type === 'suggestions' && Array.isArray(event.items))
-              patch(turn => ({
-                ...turn,
-                suggestions: (event.items as unknown[]).filter(
-                  (item): item is string => typeof item === 'string'
-                ),
-              }));
-            else if (event.type === 'notice' && event.text)
-              patch(turn => ({ ...turn, notice: event.text }));
-            else if (event.type === 'conversation' && event.id) {
-              if (seq === requestSeq.current) setConversationId(event.id);
-            } else if (event.type === 'error')
-              // Keep what already arrived and say it was cut off, rather than hiding the failure.
-              patch(turn =>
-                turn.content
-                  ? {
-                      ...turn,
-                      activity: undefined,
-                      error: event.message || 'The response was interrupted.',
-                    }
-                  : {
-                      ...turn,
-                      activity: undefined,
-                      content: event.message || 'Something went wrong.',
-                    }
-              );
+        let completed = false;
+        let reportedError = false;
+        const processLine = (raw: string) => {
+          const line = raw.trim();
+          if (!line) return;
+          let event: {
+            type: string;
+            text?: string;
+            message?: string;
+            label?: string;
+            mode?: 'ai' | 'basic';
+            id?: string;
+            proposal?: SquireProposalView;
+            items?: unknown[];
+          };
+          try {
+            event = JSON.parse(line);
+          } catch {
+            return;
           }
+          if (event.type === 'done') {
+            completed = true;
+            return;
+          }
+          if (event.type === 'error') reportedError = true;
+          if (event.type === 'delta' && event.text)
+            patch(turn => ({ ...turn, content: turn.content + event.text, activity: undefined }));
+          else if (event.type === 'meta' && event.mode)
+            patch(turn => ({ ...turn, mode: event.mode }));
+          else if (event.type === 'tool' && event.label)
+            patch(turn => ({ ...turn, activity: event.label }));
+          else if (event.type === 'proposal' && event.proposal)
+            patch(turn => ({
+              ...turn,
+              activity: undefined,
+              proposals: [...(turn.proposals ?? []), event.proposal!],
+            }));
+          else if (event.type === 'citations' && Array.isArray(event.items))
+            patch(turn => ({ ...turn, citations: event.items as Citation[] }));
+          else if (event.type === 'suggestions' && Array.isArray(event.items))
+            patch(turn => ({
+              ...turn,
+              suggestions: (event.items as unknown[]).filter(
+                (item): item is string => typeof item === 'string'
+              ),
+            }));
+          else if (event.type === 'notice' && event.text)
+            patch(turn => ({ ...turn, notice: event.text }));
+          else if (event.type === 'conversation' && event.id) {
+            if (seq === requestSeq.current) setConversationId(event.id);
+          } else if (event.type === 'error')
+            // Keep what already arrived and say it was cut off, rather than hiding the failure.
+            patch(turn =>
+              turn.content
+                ? {
+                    ...turn,
+                    activity: undefined,
+                    error: event.message || 'The response was interrupted.',
+                  }
+                : {
+                    ...turn,
+                    activity: undefined,
+                    content: event.message || 'Something went wrong.',
+                  }
+            );
+        };
+        try {
+          for (;;) {
+            const { value, done } = await reader.read();
+            if (done) break;
+            buffer += decoder.decode(value, { stream: true });
+            let newline = buffer.indexOf('\n');
+            while (newline >= 0) {
+              processLine(buffer.slice(0, newline));
+              buffer = buffer.slice(newline + 1);
+              newline = buffer.indexOf('\n');
+            }
+          }
+          buffer += decoder.decode();
+          processLine(buffer);
+          if (!completed && !reportedError) {
+            patch(turn =>
+              turn.content
+                ? { ...turn, error: 'The response was interrupted. Please ask again to continue.' }
+                : { ...turn, content: 'The response was interrupted. Please try again.' }
+            );
+          }
+        } finally {
+          reader.releaseLock?.();
         }
       } catch (error) {
         if ((error as { name?: string }).name !== 'AbortError') {
           patch(turn => ({
             ...turn,
             content: turn.content || 'I could not reach the server. Please try again.',
+            ...(turn.content
+              ? { error: 'The response was interrupted. Please ask again to continue.' }
+              : {}),
           }));
         }
       } finally {
@@ -336,6 +362,28 @@ export default function SquireLauncher({
     },
     [busy, conversationId, incidentId, turns]
   );
+
+  const stopResponse = () => {
+    // Fence late chunks before aborting so they cannot replace the retained answer.
+    requestSeq.current += 1;
+    abortRef.current?.abort();
+    abortRef.current = null;
+    setTurns(current =>
+      current.map((turn, index) =>
+        index === current.length - 1 && turn.role === 'assistant'
+          ? {
+              ...turn,
+              activity: undefined,
+              notice: [turn.notice, 'Response stopped. You can ask a follow-up.']
+                .filter(Boolean)
+                .join(' '),
+            }
+          : turn
+      )
+    );
+    setBusy(false);
+    inputRef.current?.focus();
+  };
 
   // A question asked while busy goes out as soon as the current answer is complete.
   useEffect(() => {
@@ -707,6 +755,17 @@ export default function SquireLauncher({
               placeholder={incidentId ? 'Ask about this incident…' : 'Ask a question…'}
               className="max-h-28 min-h-9 flex-1 resize-none rounded-md border border-border bg-background px-3 py-2 text-sm"
             />
+            {busy && (
+              <button
+                type="button"
+                onClick={stopResponse}
+                aria-label="Stop response"
+                title="Stop response"
+                className="rounded-md border border-border p-2 text-foreground hover:bg-accent"
+              >
+                <Square className="h-4 w-4" aria-hidden="true" />
+              </button>
+            )}
             <button
               type="submit"
               disabled={busy || input.trim().length === 0}

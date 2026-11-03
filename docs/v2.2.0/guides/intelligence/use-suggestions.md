@@ -9,7 +9,7 @@ reader:
   task: Use the suggestions on an incident page and ask the assistant about an incident.
 verification:
   level: test
-  verified_at: 2026-10-30
+  verified_at: 2026-11-03
   evidence: [src/components/incident, src/components/squire, tests/e2e/intelligence-ui.spec.ts]
 ---
 
@@ -52,9 +52,12 @@ have caused this?" or "which runbook fits?".
 
 - It can only read what you can read. For changes such as acknowledge, resolve, add a note, reassign or
   mark related, it proposes an action card. Read it and select **Confirm**; nothing happens before
-  confirmation. Runbook and postmortem cards open their normal review workflows.
+  confirmation. Each card links to the affected incident and shows its confirmation deadline; expired
+  suggestions need to be requested again. Runbook and postmortem cards open their normal review workflows.
 - "Basic answer from your incident data" means AI is off or unavailable, and the answer comes straight from the
   suggestions above.
+- Select **Stop response** to stop a long answer. Text already received stays available for a follow-up.
+  If a response is interrupted, the assistant keeps the partial answer and tells you it is incomplete.
 - Treat AI answers as a starting point and check them.
 - Conversations are not saved unless your administrator has turned saved conversations on. Then the clock
   button lists yours: only you can see them, you can reopen or delete any of them, and they are deleted
