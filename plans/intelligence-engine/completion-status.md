@@ -318,10 +318,12 @@ A mismatched stream is rejected before provider egress; appending in another con
 conversation. Opening saved history from another incident shows an explanation instead of silently
 retagging its messages. History loading no longer performs network work inside a React state updater.
 
-Local foundation verification: 52 database cases and 98 gateway/Squire/API/architecture unit cases
+Local foundation verification: 80 database cases (including 28 security/red-team cases) and 98 gateway/Squire/API/architecture unit cases
 passed. Typecheck, zero-warning changed-source lint and production compilation passed.
 All 11 production-browser responder workflows passed, including both new regressions, axe and the
-existing 390 px checks. Remote CI evidence for this batch must be recorded after its run finishes.
+existing 390 px checks. Remote CI evidence for this batch must be recorded after its run finishes. The first remote pass found
+three red-team fixtures still using Internal-only clearance; their AI scenarios now explicitly use
+Personal clearance, preserving all authorization, secret-redaction and proposal-only write assertions.
 
 Still open: typed classification/envelopes, durable action lifecycle/reconciliation, full context-switch
 UX and permission-revocation replay policy, shared retrieval/evidence, freshness, evaluations/feedback,

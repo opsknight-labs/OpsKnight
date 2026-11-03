@@ -71,7 +71,7 @@ const actorOf = async (userId: string) => {
   return actor;
 };
 
-async function setup() {
+async function setup(maxDataClass: 'INTERNAL' | 'PERSONAL' = 'INTERNAL') {
   const admin = await createTestUser({ role: 'ADMIN' });
   const ctx = { actorId: admin.id, source: 'UI' as const };
   await publishPolicyVersion(
@@ -106,7 +106,7 @@ async function setup() {
       apiKey: 'k',
       enabled: true,
       isExternal: false,
-      maxDataClass: 'INTERNAL',
+      maxDataClass,
       allowPrivateNetwork: true,
       priority: 1,
     },
@@ -190,7 +190,7 @@ describe('SSRF: provider endpoints', () => {
 
 describe('prompt-injection red team', () => {
   async function world() {
-    const base = await setup();
+    const base = await setup('PERSONAL');
     const teamA = await createTestTeam('A');
     const teamB = await createTestTeam('B');
     const serviceA = await createTestService('Service A', teamA.id);
