@@ -98,8 +98,10 @@ incidents.
 5. **Assistant without AI.** In **Assistant & AI**, turn on the assistant and leave AI off. It answers from
    your incident data only.
 6. **Assistant with AI.** Add a provider and use **Test connection**. Start with a self-hosted model or a
-   provider your data-processing agreement covers, set its data ceiling to **Internal**, and set a daily token
-   budget. Leave **Allow fallback from self-hosted to external providers** off unless you have decided
+   provider your data-processing agreement covers. AI conversations require a data ceiling of **Personal**
+   because questions, browser history and saved history may identify people. Approve that data boundary
+   explicitly and set a daily token budget; with only **Internal** providers the assistant explains the
+   restriction and uses basic mode without sending conversation text to a model. Leave **Allow fallback from self-hosted to external providers** off unless you have decided
    otherwise. If data must stay in a region, tag each provider with its region and set **Allowed data
    regions**; untagged providers are then never used.
 7. **Summaries and drafts.** Incident summaries and postmortem drafts send timelines and responder notes,

@@ -71,7 +71,6 @@ export class AiGatewayError extends Error {
 const DEFAULT_MAX_STEPS = 4;
 const MAX_STEPS_CEILING = 6;
 const TOOL_OUTPUT_LIMIT = 8_000;
-const CACHE_TTL_MS = 5_000;
 
 export const breakers = new ProviderBreakers();
 /** Embedding health is tracked separately: a broken embedding endpoint must not take chat down, or the reverse. */
@@ -806,18 +805,27 @@ export async function resolveGatewayEmbedding(
   return chosen ? new GatewayEmbeddingPort(chosen, settings) : null;
 }
 
-let cache: { at: number; data: { settings: AiSettingsView; providers: GatewayProvider[] } } | null =
-  null;
+type GatewayData = { settings: AiSettingsView; providers: GatewayProvider[] };
+let pendingGatewayData: Promise<GatewayData> | null = null;
 
 export function invalidateGatewayCache(): void {
-  cache = null;
+  pendingGatewayData = null;
 }
 
-async function loadGatewayData() {
-  if (cache && Date.now() - cache.at < CACHE_TTL_MS) return cache.data;
-  const [settings, providers] = await Promise.all([getAiSettings(), loadProvidersForGateway()]);
-  cache = { at: Date.now(), data: { settings, providers } };
-  return cache.data;
+async function loadGatewayData(): Promise<GatewayData> {
+  // Provider clearance and disable switches are authorization decisions. A TTL snapshot can outlive
+  // a policy change in another route bundle or process. Share concurrent reads only; every subsequent
+  // resolution must observe current persisted policy rather than relying on local invalidation.
+  if (pendingGatewayData) return pendingGatewayData;
+  const reading = Promise.all([getAiSettings(), loadProvidersForGateway()]).then(
+    ([settings, providers]) => ({ settings, providers })
+  );
+  pendingGatewayData = reading;
+  try {
+    return await reading;
+  } finally {
+    if (pendingGatewayData === reading) pendingGatewayData = null;
+  }
 }
 
 /** Null whenever AI is off, unconfigured, or no provider may receive this data class. */

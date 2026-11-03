@@ -280,7 +280,7 @@ describe('proposed actions', () => {
 });
 
 describe('answers', () => {
-  it('offers people and timeline tools only when the provider may receive Personal data', async () => {
+  it('uses basic mode without sending any tools to an Internal-only provider', async () => {
     await setup('INTERNAL');
     const { responder, mine } = await world();
     model.script.push({ content: 'ok' });
@@ -288,7 +288,7 @@ describe('answers', () => {
     expect(toolNamesSent()).not.toEqual(expect.arrayContaining(['get_timeline']));
     expect(toolNamesSent()).not.toContain('who_is_on_call');
     expect(toolNamesSent()).not.toContain('propose_reassign_incident');
-    expect(toolNamesSent()).toContain('propose_acknowledge_incident');
+    expect(model.requests).toHaveLength(0);
   });
 
   it('includes them for a Personal-data provider, and briefs the model on the incident up front', async () => {

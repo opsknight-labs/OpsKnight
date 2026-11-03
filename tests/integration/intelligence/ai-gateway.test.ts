@@ -1,7 +1,19 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { AiGatewayError, breakers, guardedFetchFor, invalidateGatewayCache, resolveGatewayPort } from '@/lib/intelligence/ai/gateway';
+import {
+  AiGatewayError,
+  breakers,
+  guardedFetchFor,
+  invalidateGatewayCache,
+  resolveGatewayPort,
+} from '@/lib/intelligence/ai/gateway';
 import { getTodayUsage, getUsageHistory, recordAiUsage } from '@/lib/intelligence/ai/budget';
-import { getAiPublicStatus, getAiSettings, listAiProviders, saveAiProvider, updateAiSettings } from '@/lib/intelligence/ai/settings';
+import {
+  getAiPublicStatus,
+  getAiSettings,
+  listAiProviders,
+  saveAiProvider,
+  updateAiSettings,
+} from '@/lib/intelligence/ai/settings';
 import type { AiGenerateRequest, AiStreamEvent } from '@/lib/intelligence/ai/port';
 import { startFakeModel, type FakeServer } from '../../helpers/fake-model-server';
 import { trace } from '@opentelemetry/api';
@@ -33,7 +45,9 @@ beforeEach(async () => {
   for (const id of ['p', 's']) breakers.recordSuccess(id);
 });
 
-async function configure(options: { allowExternalFallback?: boolean; budget?: number; rate?: number } = {}) {
+async function configure(
+  options: { allowExternalFallback?: boolean; budget?: number; rate?: number } = {}
+) {
   const admin = await createTestUser({ role: 'ADMIN' });
   const actor = { actorId: admin.id, source: 'UI' as const };
   await updateAiSettings(
@@ -89,37 +103,77 @@ describe('settings and providers', () => {
 
     // Updating without a key keeps the stored one.
     await saveAiProvider(row.id, { ...provider('Local', primary.url), apiKey: '' }, actor);
-    expect((await db.aiProvider.findUniqueOrThrow({ where: { id: row.id } })).apiKeyEncrypted).toBe(row.apiKeyEncrypted);
+    expect((await db.aiProvider.findUniqueOrThrow({ where: { id: row.id } })).apiKeyEncrypted).toBe(
+      row.apiKeyEncrypted
+    );
     expect((await listAiProviders())[0].hasApiKey).toBe(true);
   });
 
   it('rejects unsafe or inconsistent endpoints at save time', async () => {
     const { actor } = await configure();
-    const bad = (overrides: Record<string, unknown>) => saveAiProvider(null, provider('X', primary.url, overrides), actor);
-    await expect(bad({ allowPrivateNetwork: false })).rejects.toMatchObject({ code: 'VALIDATION_FAILED' }); // loopback needs consent
-    await expect(bad({ allowPrivateNetwork: false, baseUrl: 'http://api.example.com/v1' })).rejects.toMatchObject({ code: 'VALIDATION_FAILED' });
-    await expect(bad({ baseUrl: 'https://user:pass@example.com/v1' })).rejects.toMatchObject({ code: 'VALIDATION_FAILED' });
-    await expect(bad({ baseUrl: 'ftp://example.com' })).rejects.toMatchObject({ code: 'VALIDATION_FAILED' });
-    await expect(bad({ baseUrl: 'not a url' })).rejects.toMatchObject({ code: 'VALIDATION_FAILED' });
+    const bad = (overrides: Record<string, unknown>) =>
+      saveAiProvider(null, provider('X', primary.url, overrides), actor);
+    await expect(bad({ allowPrivateNetwork: false })).rejects.toMatchObject({
+      code: 'VALIDATION_FAILED',
+    }); // loopback needs consent
+    await expect(
+      bad({ allowPrivateNetwork: false, baseUrl: 'http://api.example.com/v1' })
+    ).rejects.toMatchObject({ code: 'VALIDATION_FAILED' });
+    await expect(bad({ baseUrl: 'https://user:pass@example.com/v1' })).rejects.toMatchObject({
+      code: 'VALIDATION_FAILED',
+    });
+    await expect(bad({ baseUrl: 'ftp://example.com' })).rejects.toMatchObject({
+      code: 'VALIDATION_FAILED',
+    });
+    await expect(bad({ baseUrl: 'not a url' })).rejects.toMatchObject({
+      code: 'VALIDATION_FAILED',
+    });
     await expect(bad({ isExternal: true })).rejects.toMatchObject({ code: 'VALIDATION_FAILED' }); // private network is not external
     await expect(bad({ baseUrl: null })).rejects.toMatchObject({ code: 'VALIDATION_FAILED' }); // compatible needs a URL
     expect(await db.aiProvider.count()).toBe(0);
     await saveAiProvider(null, provider('Dup', primary.url), actor);
-    await expect(saveAiProvider(null, provider('Dup', secondary.url), actor)).rejects.toMatchObject({ code: 'VALIDATION_FAILED' });
+    await expect(saveAiProvider(null, provider('Dup', secondary.url), actor)).rejects.toMatchObject(
+      { code: 'VALIDATION_FAILED' }
+    );
   });
 
   it('is off by default and uses a revision lock', async () => {
-    expect(await getAiSettings()).toMatchObject({ enabled: false, squireEnabled: false, squireName: 'Squire', revision: 0 });
+    expect(await getAiSettings()).toMatchObject({
+      enabled: false,
+      squireEnabled: false,
+      squireName: 'Squire',
+      revision: 0,
+    });
     const { actor } = await configure();
     await expect(
       updateAiSettings(
-        { enabled: false, squireEnabled: false, squireName: 'Pip', allowExternalFallback: false, requestsPerMinutePerUser: 5, dailyTokenBudget: 5000, maxOutputTokens: 256, requestTimeoutMs: 5000, expectedRevision: 0 },
+        {
+          enabled: false,
+          squireEnabled: false,
+          squireName: 'Pip',
+          allowExternalFallback: false,
+          requestsPerMinutePerUser: 5,
+          dailyTokenBudget: 5000,
+          maxOutputTokens: 256,
+          requestTimeoutMs: 5000,
+          expectedRevision: 0,
+        },
         actor
       )
     ).rejects.toMatchObject({ code: 'PRECONDITION_FAILED' });
     await expect(
       updateAiSettings(
-        { enabled: true, squireEnabled: true, squireName: '<script>', allowExternalFallback: false, requestsPerMinutePerUser: 5, dailyTokenBudget: 5000, maxOutputTokens: 256, requestTimeoutMs: 5000, expectedRevision: 1 },
+        {
+          enabled: true,
+          squireEnabled: true,
+          squireName: '<script>',
+          allowExternalFallback: false,
+          requestsPerMinutePerUser: 5,
+          dailyTokenBudget: 5000,
+          maxOutputTokens: 256,
+          requestTimeoutMs: 5000,
+          expectedRevision: 1,
+        },
         actor
       )
     ).rejects.toMatchObject({ code: 'VALIDATION_FAILED' });
@@ -127,22 +181,59 @@ describe('settings and providers', () => {
 });
 
 describe('assistant personalisation and usage history', () => {
-  const base = { enabled: false, squireEnabled: true, squireName: 'Pip', allowExternalFallback: false, requestsPerMinutePerUser: 5, dailyTokenBudget: 5000, maxOutputTokens: 256, requestTimeoutMs: 5000 };
+  const base = {
+    enabled: false,
+    squireEnabled: true,
+    squireName: 'Pip',
+    allowExternalFallback: false,
+    requestsPerMinutePerUser: 5,
+    dailyTokenBudget: 5000,
+    maxOutputTokens: 256,
+    requestTimeoutMs: 5000,
+  };
 
   it('defaults to a plain icon, floating button and no motion, and round-trips every option', async () => {
     const admin = await createTestUser({ role: 'ADMIN' });
     const actor = { actorId: admin.id, source: 'UI' as const };
-    expect(await getAiSettings()).toMatchObject({ squireAvatar: 'ICON', squireLauncher: 'FLOATING', squireAnimations: false });
+    expect(await getAiSettings()).toMatchObject({
+      squireAvatar: 'ICON',
+      squireLauncher: 'FLOATING',
+      squireAnimations: false,
+    });
     await updateAiSettings({ ...base, expectedRevision: 0 }, actor);
-    expect(await getAiSettings()).toMatchObject({ squireAvatar: 'ICON', squireLauncher: 'FLOATING', squireAnimations: false });
-    await updateAiSettings({ ...base, squireAvatar: 'KNIGHT', squireLauncher: 'SEARCH_ONLY', squireAnimations: true, expectedRevision: 1 }, actor);
-    expect(await getAiPublicStatus()).toMatchObject({ squireName: 'Pip', squireAvatar: 'KNIGHT', squireLauncher: 'SEARCH_ONLY', squireAnimations: true });
-    await expect(updateAiSettings({ ...base, squireAvatar: 'DRAGON', expectedRevision: 2 }, actor)).rejects.toMatchObject({ code: 'VALIDATION_FAILED' });
-    await expect(updateAiSettings({ ...base, squireLauncher: 'POPUP', expectedRevision: 2 }, actor)).rejects.toMatchObject({ code: 'VALIDATION_FAILED' });
+    expect(await getAiSettings()).toMatchObject({
+      squireAvatar: 'ICON',
+      squireLauncher: 'FLOATING',
+      squireAnimations: false,
+    });
+    await updateAiSettings(
+      {
+        ...base,
+        squireAvatar: 'KNIGHT',
+        squireLauncher: 'SEARCH_ONLY',
+        squireAnimations: true,
+        expectedRevision: 1,
+      },
+      actor
+    );
+    expect(await getAiPublicStatus()).toMatchObject({
+      squireName: 'Pip',
+      squireAvatar: 'KNIGHT',
+      squireLauncher: 'SEARCH_ONLY',
+      squireAnimations: true,
+    });
+    await expect(
+      updateAiSettings({ ...base, squireAvatar: 'DRAGON', expectedRevision: 2 }, actor)
+    ).rejects.toMatchObject({ code: 'VALIDATION_FAILED' });
+    await expect(
+      updateAiSettings({ ...base, squireLauncher: 'POPUP', expectedRevision: 2 }, actor)
+    ).rejects.toMatchObject({ code: 'VALIDATION_FAILED' });
   });
 
   it('is constrained in the database too', async () => {
-    await expect(db.$executeRaw`INSERT INTO "AiSettings" ("id", "squireAvatar", "updatedAt") VALUES ('default', 'DRAGON', now())`).rejects.toThrow();
+    await expect(
+      db.$executeRaw`INSERT INTO "AiSettings" ("id", "squireAvatar", "updatedAt") VALUES ('default', 'DRAGON', now())`
+    ).rejects.toThrow();
   });
 
   it('returns a zero-filled, oldest-first daily history', async () => {
@@ -162,6 +253,25 @@ describe('assistant personalisation and usage history', () => {
 });
 
 describe('gateway', () => {
+  it('observes clearance reductions and disable switches without process-local invalidation', async () => {
+    const { actor } = await configure();
+    const saved = await saveAiProvider(
+      null,
+      provider('Mutable policy', primary.url, { maxDataClass: 'PERSONAL' }),
+      actor
+    );
+    expect(await resolveGatewayPort('PERSONAL')).not.toBeNull();
+    await db.aiProvider.update({ where: { id: saved.id }, data: { maxDataClass: 'INTERNAL' } });
+    expect(await resolveGatewayPort('PERSONAL')).toBeNull();
+    expect(await resolveGatewayPort('INTERNAL')).not.toBeNull();
+    await db.aiProvider.update({ where: { id: saved.id }, data: { enabled: false } });
+    expect(await resolveGatewayPort('INTERNAL')).toBeNull();
+    await db.aiProvider.update({ where: { id: saved.id }, data: { enabled: true } });
+    await db.aiSettings.update({ where: { id: 'default' }, data: { enabled: false } });
+    expect(await resolveGatewayPort('PUBLIC')).toBeNull();
+    expect(primary.requests).toHaveLength(0);
+  });
+
   it('returns nothing while AI is off, unconfigured, or no provider may receive the data class', async () => {
     expect(await resolveGatewayPort('INTERNAL')).toBeNull();
     const { actor } = await configure();
@@ -179,7 +289,14 @@ describe('gateway', () => {
     primary.script.push({ content: 'Looks like a bad deploy.', usage: [20, 9] });
     const port = (await resolveGatewayPort('INTERNAL'))!;
     const result = await port.generate(
-      request(admin.id, { messages: [{ role: 'user', content: 'why? password=hunter2hunter2 and Bearer abcdefghijklmnopqrstuvwxyz0123456789' }] })
+      request(admin.id, {
+        messages: [
+          {
+            role: 'user',
+            content: 'why? password=hunter2hunter2 and Bearer abcdefghijklmnopqrstuvwxyz0123456789',
+          },
+        ],
+      })
     );
     expect(result.text).toBe('Looks like a bad deploy.');
     expect(result.usage).toEqual({ inputTokens: 20, outputTokens: 9 });
@@ -192,7 +309,9 @@ describe('gateway', () => {
     expect(sent).not.toContain('abcdefghijklmnopqrstuvwxyz');
     expect(sent).toContain('[redacted]');
     expect(await getTodayUsage()).toEqual({ requests: 1, inputTokens: 20, outputTokens: 9 });
-    const audit = await db.auditLog.findFirstOrThrow({ where: { action: 'intelligence.ai.interaction' } });
+    const audit = await db.auditLog.findFirstOrThrow({
+      where: { action: 'intelligence.ai.interaction' },
+    });
     expect(JSON.stringify(audit)).not.toContain('bad deploy');
   });
 
@@ -203,14 +322,30 @@ describe('gateway', () => {
     trace.disable();
     const spans = installFakeTracer();
     try {
-      primary.script.push({ content: 'The secret answer is 42.', usage: [10, 4] }, { content: 'streamed secret answer', usage: [6, 3] });
+      primary.script.push(
+        { content: 'The secret answer is 42.', usage: [10, 4] },
+        { content: 'streamed secret answer', usage: [6, 3] }
+      );
       const port = (await resolveGatewayPort('INTERNAL'))!;
-      await port.generate(request(admin.id, { messages: [{ role: 'user', content: 'private prompt text' }] }));
-      for await (const event of port.stream(request(admin.id, { messages: [{ role: 'user', content: 'private prompt text' }] }))) void event;
+      await port.generate(
+        request(admin.id, { messages: [{ role: 'user', content: 'private prompt text' }] })
+      );
+      for await (const event of port.stream(
+        request(admin.id, { messages: [{ role: 'user', content: 'private prompt text' }] })
+      ))
+        void event;
       const named = spans.filter(span => span.name.startsWith('intelligence.ai.'));
-      expect(named.map(span => span.name)).toEqual(['intelligence.ai.generate', 'intelligence.ai.stream']);
+      expect(named.map(span => span.name)).toEqual([
+        'intelligence.ai.generate',
+        'intelligence.ai.stream',
+      ]);
       expect(named.every(span => span.ended)).toBe(true);
-      expect(named[0].attributes).toMatchObject({ 'ai.capability': 'SQUIRE_CHAT', 'ai.provider.kind': 'OPENAI_COMPATIBLE', 'ai.tokens.input': 10, 'ai.tokens.output': 4 });
+      expect(named[0].attributes).toMatchObject({
+        'ai.capability': 'SQUIRE_CHAT',
+        'ai.provider.kind': 'OPENAI_COMPATIBLE',
+        'ai.tokens.input': 10,
+        'ai.tokens.output': 4,
+      });
       expect(named[1].attributes).toMatchObject({ 'ai.tokens.input': 6, 'ai.tokens.output': 3 });
       expect(JSON.stringify(spans)).not.toMatch(/secret|private prompt|sk-test/);
     } finally {
@@ -220,11 +355,20 @@ describe('gateway', () => {
 
   it('falls back to the next eligible provider and opens the breaker on a failing one', async () => {
     const { admin, actor } = await configure();
-    const first = await saveAiProvider(null, provider('Primary', primary.url, { priority: 1 }), actor);
+    const first = await saveAiProvider(
+      null,
+      provider('Primary', primary.url, { priority: 1 }),
+      actor
+    );
     await saveAiProvider(null, provider('Secondary', secondary.url, { priority: 2 }), actor);
     invalidateGatewayCache();
     for (let i = 0; i < 8; i += 1) primary.script.push({ status: 500 });
-    secondary.script.push({ content: 'from secondary' }, { content: 'again' }, { content: 'again' }, { content: 'again' });
+    secondary.script.push(
+      { content: 'from secondary' },
+      { content: 'again' },
+      { content: 'again' },
+      { content: 'again' }
+    );
     const port = (await resolveGatewayPort('INTERNAL'))!;
     const result = await port.generate(request(admin.id));
     expect(result).toMatchObject({ text: 'from secondary', served: { fallbackDepth: 1 } });
@@ -241,30 +385,58 @@ describe('gateway', () => {
     await saveAiProvider(null, provider('Internal', primary.url, { priority: 1 }), actor);
     // Inserted directly: saving an external endpoint would resolve public DNS.
     await db.aiProvider.create({
-      data: { name: 'External2', kind: 'OPENAI_COMPATIBLE', model: 'x', baseUrl: secondary.url, enabled: true, isExternal: true, maxDataClass: 'INTERNAL', allowPrivateNetwork: false, priority: 2 },
+      data: {
+        name: 'External2',
+        kind: 'OPENAI_COMPATIBLE',
+        model: 'x',
+        baseUrl: secondary.url,
+        enabled: true,
+        isExternal: true,
+        maxDataClass: 'INTERNAL',
+        allowPrivateNetwork: false,
+        priority: 2,
+      },
     });
     invalidateGatewayCache();
     for (let i = 0; i < 4; i += 1) primary.script.push({ status: 500 });
     const port = (await resolveGatewayPort('INTERNAL'))!;
-    await expect(port.generate(request(admin.id))).rejects.toMatchObject({ code: 'ALL_PROVIDERS_FAILED' });
+    await expect(port.generate(request(admin.id))).rejects.toMatchObject({
+      code: 'ALL_PROVIDERS_FAILED',
+    });
     expect(secondary.requests).toHaveLength(0);
   }, 60_000);
 
   it('blocks private addresses for providers without private-network consent (SSRF)', async () => {
     const { admin } = await configure();
     await db.aiProvider.create({
-      data: { name: 'Sneaky', kind: 'OPENAI_COMPATIBLE', model: 'x', baseUrl: primary.url, enabled: true, isExternal: true, maxDataClass: 'INTERNAL', allowPrivateNetwork: false, priority: 1 },
+      data: {
+        name: 'Sneaky',
+        kind: 'OPENAI_COMPATIBLE',
+        model: 'x',
+        baseUrl: primary.url,
+        enabled: true,
+        isExternal: true,
+        maxDataClass: 'INTERNAL',
+        allowPrivateNetwork: false,
+        priority: 1,
+      },
     });
     invalidateGatewayCache();
     const port = (await resolveGatewayPort('INTERNAL'))!;
-    await expect(port.generate(request(admin.id))).rejects.toMatchObject({ code: 'ALL_PROVIDERS_FAILED' });
+    await expect(port.generate(request(admin.id))).rejects.toMatchObject({
+      code: 'ALL_PROVIDERS_FAILED',
+    });
     expect(primary.requests).toHaveLength(0);
   });
 
   it('pins private-network providers to the approved origin', async () => {
     const guarded = guardedFetchFor({ allowPrivateNetwork: true, baseUrl: primary.url });
-    await expect(guarded(secondary.url + '/chat/completions', { method: 'POST' })).rejects.toThrow(/approved provider origin/);
-    await expect(guarded('http://169.254.169.254/latest/meta-data')).rejects.toThrow(/approved provider origin/);
+    await expect(guarded(secondary.url + '/chat/completions', { method: 'POST' })).rejects.toThrow(
+      /approved provider origin/
+    );
+    await expect(guarded('http://169.254.169.254/latest/meta-data')).rejects.toThrow(
+      /approved provider origin/
+    );
   });
 
   it('enforces the per-user rate limit and the daily token budget before calling the model', async () => {
@@ -279,7 +451,9 @@ describe('gateway', () => {
     await recordAiUsage({ inputTokens: 900, outputTokens: 200 });
     const calls = primary.requests.length;
     await expect(port.generate(request(other.id))).rejects.toBeInstanceOf(AiGatewayError);
-    await expect(port.generate(request(other.id))).rejects.toMatchObject({ code: 'BUDGET_EXHAUSTED' });
+    await expect(port.generate(request(other.id))).rejects.toMatchObject({
+      code: 'BUDGET_EXHAUSTED',
+    });
     expect(primary.requests.length).toBe(calls);
   });
 
@@ -291,10 +465,16 @@ describe('gateway', () => {
     const port = (await resolveGatewayPort('INTERNAL'))!;
     const events: AiStreamEvent[] = [];
     for await (const event of port.stream(request(admin.id))) events.push(event);
-    const text = events.filter(e => e.type === 'text-delta').map(e => (e as { delta: string }).delta).join('');
+    const text = events
+      .filter(e => e.type === 'text-delta')
+      .map(e => (e as { delta: string }).delta)
+      .join('');
     expect(text).toBe('Roll back the deploy now');
     const finish = events.at(-1);
-    expect(finish).toMatchObject({ type: 'finish', result: { usage: { inputTokens: 30, outputTokens: 5 } } });
+    expect(finish).toMatchObject({
+      type: 'finish',
+      result: { usage: { inputTokens: 30, outputTokens: 5 } },
+    });
     expect(await getTodayUsage()).toMatchObject({ requests: 1, inputTokens: 30 });
   });
 
@@ -306,7 +486,9 @@ describe('gateway', () => {
     const port = (await resolveGatewayPort('INTERNAL'))!;
     const events: AiStreamEvent[] = [];
     for await (const event of port.stream(request(admin.id))) events.push(event);
-    expect(events).toEqual([{ type: 'error', message: 'AI is temporarily unavailable', retryable: true }]);
+    expect(events).toEqual([
+      { type: 'error', message: 'AI is temporarily unavailable', retryable: true },
+    ]);
   });
 
   it('runs read tools under the caller, treats results as data, and returns write proposals without running them', async () => {
@@ -314,7 +496,10 @@ describe('gateway', () => {
     await saveAiProvider(null, provider('Local', primary.url), actor);
     invalidateGatewayCache();
     const executed: unknown[] = [];
-    primary.script.push({ toolCall: { name: 'lookup', args: '{"q":"db"}' } }, { content: 'Found it.' });
+    primary.script.push(
+      { toolCall: { name: 'lookup', args: '{"q":"db"}' } },
+      { content: 'Found it.' }
+    );
     const port = (await resolveGatewayPort('INTERNAL'))!;
     const result = await port.generate(
       request(admin.id, {
@@ -339,11 +524,21 @@ describe('gateway', () => {
     expect(second).toContain('hit');
     expect(second).not.toContain('abcdef123456');
 
-    primary.script.push({ toolCall: { name: 'resolve_incident', args: '{"id":"x"}' } }, { content: 'unused' });
+    primary.script.push(
+      { toolCall: { name: 'resolve_incident', args: '{"id":"x"}' } },
+      { content: 'unused' }
+    );
     const proposal = await port.generate(
       request(admin.id, {
         maxSteps: 1,
-        tools: [{ name: 'resolve_incident', description: 'resolve', kind: 'PROPOSE_WRITE', inputSchema: { type: 'object', properties: { id: { type: 'string' } } } }],
+        tools: [
+          {
+            name: 'resolve_incident',
+            description: 'resolve',
+            kind: 'PROPOSE_WRITE',
+            inputSchema: { type: 'object', properties: { id: { type: 'string' } } },
+          },
+        ],
       })
     );
     expect(proposal.toolCalls).toEqual([{ name: 'resolve_incident', input: { id: 'x' } }]);

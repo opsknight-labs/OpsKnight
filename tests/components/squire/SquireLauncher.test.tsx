@@ -427,3 +427,41 @@ it('stops an active response, aborts its request and retains the partial answer 
   expect(screen.getByRole('button', { name: 'Send' })).toBeEnabled();
   expect(screen.queryByRole('alert')).not.toBeInTheDocument();
 });
+
+it('keeps a saved incident conversation in its original context', async () => {
+  nav.pathname = '/incidents/incident-b';
+  fetchMock.mockResolvedValueOnce({
+    ok: true,
+    json: async () => ({
+      data: {
+        conversations: [
+          {
+            id: 'saved-a',
+            title: 'Incident A conversation',
+            incidentId: 'incident-a',
+            messageCount: 2,
+            updatedAt: new Date().toISOString(),
+          },
+        ],
+      },
+    }),
+  });
+  fetchMock.mockResolvedValueOnce({
+    ok: true,
+    json: async () => ({
+      data: {
+        conversation: {
+          id: 'saved-a',
+          incidentId: 'incident-a',
+          messages: [{ role: 'assistant', content: 'Wrong context canary' }],
+        },
+      },
+    }),
+  });
+  render(<SquireLauncher name="Pip" history={{ retentionDays: 30 }} />);
+  fireEvent.click(screen.getByRole('button', { name: /Ask Pip/ }));
+  fireEvent.click(screen.getByRole('button', { name: 'Saved conversations' }));
+  fireEvent.click(await screen.findByRole('button', { name: /^Incident A conversation/ }));
+  expect(await screen.findByRole('alert')).toHaveTextContent('another incident');
+  expect(screen.queryByText('Wrong context canary')).not.toBeInTheDocument();
+});

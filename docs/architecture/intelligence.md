@@ -198,6 +198,10 @@ people, services, changes, runbooks, postmortems, status pages, outcomes and opt
 user's own permissions through the same visibility rules as the rest of the application, so the model
 can never read more than the user can. Write tools only emit typed proposals. A signed, expiring,
 actor-bound proposal becomes a change only after confirmation through existing domain commands.
+Conversation turns require a provider permitted to receive Personal data, including browser and saved
+history. With only Internal providers, Squire explains the restriction and answers in basic mode without
+sending the question or history to a model. New gateway resolutions read current persisted provider
+policy; concurrent reads may be shared, but policy decisions are never retained in a TTL cache.
 Single-use receipts remain consumed after uncertain failures to prevent duplicate execution. By default conversations
 live in the browser only and audit entries hold metadata (user, provider, model, token counts, prompt id,
 version and hash), never prompts or answers.
@@ -209,6 +213,7 @@ so someone else's conversation is indistinguishable from one that does not exist
 signed-in, same-origin browsers only, never API keys. Storage is bounded (50 conversations per person,
 100 messages each), idle conversations are deleted after the configured retention (1–365 days), turning
 history off deletes all of them within one sweep, and deleting a person deletes theirs. The storage code
+rejects continuation in a different incident/global context and
 lives outside the assistant module, and an architecture test limits it to those two tables.
 
 **Incident summaries and postmortem drafts.** On an incident, "Summarise" produces a short structured

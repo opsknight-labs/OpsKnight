@@ -59,7 +59,9 @@ async function readable(value: string): Promise<string> {
 
 const titleFrom = (question: string) => {
   const flat = question.replace(/\s+/g, ' ').trim();
-  return flat.length > CONVERSATION_LIMITS.titleLength ? `${flat.slice(0, CONVERSATION_LIMITS.titleLength - 1)}…` : flat;
+  return flat.length > CONVERSATION_LIMITS.titleLength
+    ? `${flat.slice(0, CONVERSATION_LIMITS.titleLength - 1)}…`
+    : flat;
 };
 
 /**
@@ -85,6 +87,7 @@ export async function recordExchange(input: {
         where: {
           id: input.conversationId,
           userId: input.userId,
+          incidentId: input.incidentId ?? null,
           messageCount: { lte: CONVERSATION_LIMITS.messagesPerConversation - 2 },
         },
         data: { messageCount: { increment: 2 } },
@@ -108,13 +111,19 @@ export async function recordExchange(input: {
         skip: CONVERSATION_LIMITS.perUser,
         select: { id: true },
       });
-      if (stale.length > 0) await tx.squireConversation.deleteMany({ where: { id: { in: stale.map(row => row.id) } } });
+      if (stale.length > 0)
+        await tx.squireConversation.deleteMany({ where: { id: { in: stale.map(row => row.id) } } });
     }
     const now = Date.now();
     await tx.squireMessage.createMany({
       data: [
         { conversationId, role: 'user', contentEncrypted: question, createdAt: new Date(now) },
-        { conversationId, role: 'assistant', contentEncrypted: answer, createdAt: new Date(now + 1) },
+        {
+          conversationId,
+          role: 'assistant',
+          contentEncrypted: answer,
+          createdAt: new Date(now + 1),
+        },
       ],
     });
     return conversationId;
@@ -126,7 +135,13 @@ export async function listConversations(userId: string): Promise<ConversationSum
     where: { userId },
     orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
     take: CONVERSATION_LIMITS.perUser,
-    select: { id: true, titleEncrypted: true, incidentId: true, messageCount: true, updatedAt: true },
+    select: {
+      id: true,
+      titleEncrypted: true,
+      incidentId: true,
+      messageCount: true,
+      updatedAt: true,
+    },
   });
   return Promise.all(
     rows.map(async row => ({
@@ -139,7 +154,10 @@ export async function listConversations(userId: string): Promise<ConversationSum
   );
 }
 
-export async function getConversation(userId: string, id: string): Promise<ConversationDetail | null> {
+export async function getConversation(
+  userId: string,
+  id: string
+): Promise<ConversationDetail | null> {
   const row = await prisma.squireConversation.findFirst({
     where: { id, userId },
     select: {
@@ -185,9 +203,13 @@ export async function deleteAllConversations(userId: string): Promise<number> {
  * Retention sweep, bounded per call. With history off every saved conversation is removed; otherwise
  * conversations idle longer than the configured retention are. Returns true when more may remain.
  */
-export async function purgeConversations(now: Date = new Date()): Promise<{ deleted: number; more: boolean }> {
+export async function purgeConversations(
+  now: Date = new Date()
+): Promise<{ deleted: number; more: boolean }> {
   const status = await getHistoryStatus();
-  const where = status.enabled ? { updatedAt: { lt: new Date(now.getTime() - status.retentionDays * 86_400_000) } } : {};
+  const where = status.enabled
+    ? { updatedAt: { lt: new Date(now.getTime() - status.retentionDays * 86_400_000) } }
+    : {};
   const batch = await prisma.squireConversation.findMany({
     where,
     orderBy: { updatedAt: 'asc' },
@@ -195,6 +217,8 @@ export async function purgeConversations(now: Date = new Date()): Promise<{ dele
     select: { id: true },
   });
   if (batch.length === 0) return { deleted: 0, more: false };
-  const { count } = await prisma.squireConversation.deleteMany({ where: { id: { in: batch.map(row => row.id) } } });
+  const { count } = await prisma.squireConversation.deleteMany({
+    where: { id: { in: batch.map(row => row.id) } },
+  });
   return { deleted: count, more: batch.length === CONVERSATION_LIMITS.purgeBatch };
 }

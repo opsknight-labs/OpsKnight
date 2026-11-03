@@ -22,6 +22,7 @@ let alertId = '';
 let fake: FakeServer;
 
 async function cleanup() {
+  await prisma.squireConversation.deleteMany({ where: { user: { email } } });
   await prisma.aiProvider.deleteMany({ where: { name: 'e2e-intel-model' } });
   await prisma.aiSettings.deleteMany({});
   // Switching intelligence off first stops the worker picking up anything else from this spec.
@@ -502,5 +503,56 @@ test.describe.serial('intelligence responder workflows', () => {
       path: testInfo.outputPath('squire-stopped-mobile.png'),
       fullPage: true,
     });
+  });
+  test('an Internal-only provider receives no browser question or history', async ({ page }) => {
+    await prisma.aiProvider.updateMany({
+      where: { name: 'e2e-intel-model' },
+      data: { maxDataClass: 'INTERNAL' },
+    });
+    // Saving through the native settings command refreshes the running gateway policy cache.
+    await page.goto('/settings/intelligence/ai');
+    await page
+      .locator('form:visible')
+      .filter({ has: page.getByRole('checkbox', { name: /^Enable AI\b/ }) })
+      .getByRole('button', { name: 'Save', exact: true })
+      .click();
+    await expect(page.getByRole('status').filter({ hasText: /saved/i }).first()).toBeVisible();
+    const requestsBefore = fake.requests.length;
+    await page.goto(`/incidents/${incidentId}`);
+    await assistantReady(page);
+    await page.getByRole('button', { name: /Ask Pip/ }).click();
+    await page
+      .getByLabel('Message Pip')
+      .fill('Responder Alice privacy-canary-browser-73 needs help');
+    await page.getByRole('button', { name: 'Send', exact: true }).click();
+    await expect(page.getByRole('dialog')).toContainText(
+      'provider permitted to receive Personal data'
+    );
+    await expect(page.getByText(/Basic answer from your incident data/)).toBeVisible();
+    expect(fake.requests).toHaveLength(requestsBefore);
+    await expectAccessible(page, 'section[role="dialog"]');
+  });
+  test('saved history cannot silently switch to another incident', async ({ page }) => {
+    await prisma.aiSettings.update({
+      where: { id: 'default' },
+      data: { squireHistoryEnabled: true },
+    });
+    await page.goto(`/incidents/${incidentId}`);
+    await assistantReady(page);
+    await page.getByRole('button', { name: /Ask Pip/ }).click();
+    await page.getByLabel('Message Pip').fill('Help with original incident context');
+    await page.getByRole('button', { name: 'Send', exact: true }).click();
+    const owner = await prisma.user.findUniqueOrThrow({ where: { email }, select: { id: true } });
+    await expect
+      .poll(() => prisma.squireConversation.count({ where: { userId: owner.id, incidentId } }))
+      .toBe(1);
+    await page.goto(`/incidents/${precedentId}`);
+    await assistantReady(page);
+    await page.getByRole('button', { name: /Ask Pip/ }).click();
+    await page.getByRole('button', { name: 'Saved conversations', exact: true }).click();
+    await page.getByRole('button', { name: /^Help with original incident context/ }).click();
+    await expect(page.getByRole('dialog').getByRole('alert')).toContainText('another incident');
+    await expect(page.getByRole('button', { name: 'New chat', exact: true })).toBeVisible();
+    await expectAccessible(page, 'section[role="dialog"]');
   });
 });

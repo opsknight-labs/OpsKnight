@@ -301,3 +301,29 @@ preserves the answer and settles the token reservation before the delayed provid
 axe and 390-pixel overflow checks. The mobile screenshot was visually inspected. An earlier
 mixed-fixture run is not counted; final browser evidence uses a dedicated freshly migrated database
 and the same application-origin environment as CI. Final-head remote checks remain authoritative.
+
+## Roadmap foundation — 2026-11-03
+
+The follow-on roadmap is tracked separately in `next-capabilities-plan.md`; its eleven work packages
+are not complete. This first implementation batch reproduces and closes the Internal-only provider
+fallback for free-text conversation turns. Browser and legacy saved messages require Personal clearance;
+without an eligible provider, Squire explains the policy and uses basic mode with no model request.
+The browser regression also reproduced stale provider clearance across route bundles. Gateway resolutions
+now share concurrent reads only and reload policy for subsequent requests, eliminating the five-second
+TTL window without relying on process-local invalidation.
+Synthetic canaries verify both browser history and saved history after a provider policy change.
+
+Saved conversations now retain their incident/global binding across storage writes and streaming.
+A mismatched stream is rejected before provider egress; appending in another context creates a separate
+conversation. Opening saved history from another incident shows an explanation instead of silently
+retagging its messages. History loading no longer performs network work inside a React state updater.
+
+Local foundation verification: 52 database cases and 98 gateway/Squire/API/architecture unit cases
+passed. Typecheck, zero-warning changed-source lint and production compilation passed.
+All 11 production-browser responder workflows passed, including both new regressions, axe and the
+existing 390 px checks. Remote CI evidence for this batch must be recorded after its run finishes.
+
+Still open: typed classification/envelopes, durable action lifecycle/reconciliation, full context-switch
+UX and permission-revocation replay policy, shared retrieval/evidence, freshness, evaluations/feedback,
+onboarding, communications drafts, operator recovery and opt-in handoff briefings. Existing independent
+release gates remain unchanged.

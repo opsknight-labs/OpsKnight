@@ -8,8 +8,14 @@ import {
   purgeConversations,
   recordExchange,
 } from '@/lib/intelligence/conversations/store';
-import { DELETE as deleteAll, GET as list } from '@/app/api/intelligence/squire/conversations/route';
-import { DELETE as deleteOne, GET as getOne } from '@/app/api/intelligence/squire/conversations/[id]/route';
+import {
+  DELETE as deleteAll,
+  GET as list,
+} from '@/app/api/intelligence/squire/conversations/route';
+import {
+  DELETE as deleteOne,
+  GET as getOne,
+} from '@/app/api/intelligence/squire/conversations/[id]/route';
 import { createTestUser, resetDatabase, testPrisma as db } from '../../helpers/test-db';
 
 const actor = vi.hoisted(() => ({ get: vi.fn() }));
@@ -17,7 +23,8 @@ vi.mock('@/lib/rbac', () => ({ getCurrentAuthorizationActor: actor.get }));
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }));
 
 beforeEach(async () => {
-  if (!new URL(process.env.DATABASE_URL ?? '').pathname.endsWith('_test')) throw new Error('Dedicated test DB required');
+  if (!new URL(process.env.DATABASE_URL ?? '').pathname.endsWith('_test'))
+    throw new Error('Dedicated test DB required');
   await resetDatabase();
   actor.get.mockReset();
 });
@@ -26,9 +33,17 @@ async function configure(adminId: string, history: { enabled: boolean; retention
   const current = await db.aiSettings.findUnique({ where: { id: 'default' } });
   await updateAiSettings(
     {
-      enabled: true, squireEnabled: true, squireName: 'Pip', allowExternalFallback: false,
-      requestsPerMinutePerUser: 100, dailyTokenBudget: 500_000, maxOutputTokens: 1024, requestTimeoutMs: 10_000,
-      allowedDataRegions: [], squireHistoryEnabled: history.enabled, squireHistoryRetentionDays: history.retentionDays ?? 30,
+      enabled: true,
+      squireEnabled: true,
+      squireName: 'Pip',
+      allowExternalFallback: false,
+      requestsPerMinutePerUser: 100,
+      dailyTokenBudget: 500_000,
+      maxOutputTokens: 1024,
+      requestTimeoutMs: 10_000,
+      allowedDataRegions: [],
+      squireHistoryEnabled: history.enabled,
+      squireHistoryRetentionDays: history.retentionDays ?? 30,
       expectedRevision: current?.revision ?? 0,
     },
     { actorId: adminId, source: 'UI' }
@@ -39,7 +54,8 @@ const URL_ = 'http://localhost:3000/api/intelligence/squire/conversations';
 const request = (path = '', method = 'GET', headers: Record<string, string> = {}) =>
   new NextRequest(`${URL_}${path}`, { method, headers });
 const params = (id: string) => ({ params: Promise.resolve({ id }) });
-const json = async (response: Response) => (await response.json()) as { data: Record<string, unknown> };
+const json = async (response: Response) =>
+  (await response.json()) as { data: Record<string, unknown> };
 
 describe('saved assistant conversations', () => {
   it('stores exchanges encrypted, continues a conversation, and shows it only to its owner', async () => {
@@ -47,8 +63,19 @@ describe('saved assistant conversations', () => {
     const other = await createTestUser({ role: 'RESPONDER' });
     await configure(admin.id, { enabled: true });
 
-    const id = await recordExchange({ userId: admin.id, question: 'Why is checkout failing?', answer: 'Look at INC-1.', incidentId: 'inc-1' });
-    const same = await recordExchange({ userId: admin.id, conversationId: id, question: 'And payments?', answer: 'Also INC-2.' });
+    const id = await recordExchange({
+      userId: admin.id,
+      question: 'Why is checkout failing?',
+      answer: 'Look at INC-1.',
+      incidentId: 'inc-1',
+    });
+    const same = await recordExchange({
+      userId: admin.id,
+      conversationId: id,
+      incidentId: 'inc-1',
+      question: 'And payments?',
+      answer: 'Also INC-2.',
+    });
     expect(same).toBe(id);
 
     // Encrypted at rest: no plaintext in the database.
@@ -60,14 +87,52 @@ describe('saved assistant conversations', () => {
 
     const detail = await getConversation(admin.id, id);
     expect(detail?.title).toBe('Why is checkout failing?');
-    expect(detail?.messages.map(message => message.content)).toEqual(['Why is checkout failing?', 'Look at INC-1.', 'And payments?', 'Also INC-2.']);
+    expect(detail?.messages.map(message => message.content)).toEqual([
+      'Why is checkout failing?',
+      'Look at INC-1.',
+      'And payments?',
+      'Also INC-2.',
+    ]);
     expect(detail?.incidentId).toBe('inc-1');
 
     // Someone else can neither read nor continue it: their message starts a conversation of their own.
     expect(await getConversation(other.id, id)).toBeNull();
-    const theirs = await recordExchange({ userId: other.id, conversationId: id, question: 'hi', answer: 'hello' });
+    const theirs = await recordExchange({
+      userId: other.id,
+      conversationId: id,
+      question: 'hi',
+      answer: 'hello',
+    });
     expect(theirs).not.toBe(id);
     expect((await getConversation(admin.id, id))?.messages).toHaveLength(4);
+  });
+
+  it('starts a separate conversation when the requested context changes', async () => {
+    const admin = await createTestUser({ role: 'ADMIN' });
+    await configure(admin.id, { enabled: true });
+    const first = await recordExchange({
+      userId: admin.id,
+      incidentId: 'inc-a',
+      question: 'A?',
+      answer: 'A.',
+    });
+    const second = await recordExchange({
+      userId: admin.id,
+      conversationId: first,
+      incidentId: 'inc-b',
+      question: 'B?',
+      answer: 'B.',
+    });
+    const global = await recordExchange({
+      userId: admin.id,
+      conversationId: first,
+      question: 'Global?',
+      answer: 'Global.',
+    });
+    expect(new Set([first, second, global]).size).toBe(3);
+    expect((await getConversation(admin.id, first))?.messages).toHaveLength(2);
+    expect((await getConversation(admin.id, second))?.incidentId).toBe('inc-b');
+    expect((await getConversation(admin.id, global))?.incidentId).toBeNull();
   });
 
   it('serves owner-only HTTP endpoints, refuses cross-site and API-key callers, and deletes on request', async () => {
@@ -79,12 +144,21 @@ describe('saved assistant conversations', () => {
 
     actor.get.mockResolvedValue({ id: admin.id, role: 'ADMIN', status: 'ACTIVE', teamIds: [] });
     const listed = await json(await list(request()));
-    expect((listed.data.conversations as Array<{ title: string }>).map(c => c.title)).toEqual(['q2', 'q1']);
+    expect((listed.data.conversations as Array<{ title: string }>).map(c => c.title)).toEqual([
+      'q2',
+      'q1',
+    ]);
     expect((await getOne(request(`/${id}`), params(id))).status).toBe(200);
     expect((await list(request('', 'GET', { 'sec-fetch-site': 'cross-site' }))).status).toBe(403);
     expect((await getOne(request('/bad id'), params('bad id'))).status).toBe(404);
 
-    actor.get.mockResolvedValue({ id: admin.id, role: 'ADMIN', status: 'ACTIVE', teamIds: [], apiKey: { id: 'k', scopes: [] } });
+    actor.get.mockResolvedValue({
+      id: admin.id,
+      role: 'ADMIN',
+      status: 'ACTIVE',
+      teamIds: [],
+      apiKey: { id: 'k', scopes: [] },
+    });
     expect((await list(request())).status).toBe(403);
 
     actor.get.mockResolvedValue({ id: other.id, role: 'ADMIN', status: 'ACTIVE', teamIds: [] });
@@ -115,8 +189,16 @@ describe('saved assistant conversations', () => {
     expect(conversations.map(c => c.id)).not.toContain(first);
 
     const latest = conversations[0].id;
-    await db.squireConversation.update({ where: { id: latest }, data: { messageCount: CONVERSATION_LIMITS.messagesPerConversation } });
-    const next = await recordExchange({ userId: admin.id, conversationId: latest, question: 'more', answer: 'a' });
+    await db.squireConversation.update({
+      where: { id: latest },
+      data: { messageCount: CONVERSATION_LIMITS.messagesPerConversation },
+    });
+    const next = await recordExchange({
+      userId: admin.id,
+      conversationId: latest,
+      question: 'more',
+      answer: 'a',
+    });
     expect(next).not.toBe(latest);
   });
 

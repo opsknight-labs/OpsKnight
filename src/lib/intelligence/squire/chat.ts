@@ -78,6 +78,18 @@ export async function* streamSquire(
       return;
     }
 
+    if (request.conversationId && (await getHistoryStatus()).enabled) {
+      const saved = await getConversation(actor.id, request.conversationId);
+      if (saved && saved.incidentId !== (incident?.id ?? null)) {
+        yield {
+          type: 'error',
+          message:
+            'This conversation belongs to a different context. Open its incident or start a new conversation.',
+        };
+        return;
+      }
+    }
+
     registerAiGateway();
     // These reads depend only on the authenticated actor and readable incident, not provider selection.
     // Start them together so provider discovery does not add serial database round trips.
@@ -88,24 +100,18 @@ export async function* streamSquire(
           priorTurns(actor, request).catch(() => [] as AiMessage[]),
         ])
       : Promise.resolve(null);
-    // Prefer a provider allowed to receive Personal data (timelines and on-call answers name people); fall
-    // back to one allowed Internal data, which then gets no tools that return people's details.
+    // Free-text questions and history may identify people, even without personal-data tools.
+    // Legacy and browser messages have no trusted classification: require Personal clearance
+    // for the entire turn rather than silently downgrading their classification on fallback.
     let port: LanguageModelPort | null = null;
-    let personal = false;
     if (settings.enabled) {
       port = await resolveLanguageModel('SQUIRE_CHAT', 'PERSONAL');
-      personal = port !== null;
-      port ??= await resolveLanguageModel('SQUIRE_CHAT', 'INTERNAL');
     }
 
     if (port) {
       yield { type: 'meta', mode: 'ai', name: settings.squireName };
       const [briefing, guidance, history] = (await preparation) ?? [null, null, []];
-      const prompt = buildSystemPrompt(
-        settings.squireName,
-        briefing && !personal ? { ...briefing, timeline: [] } : briefing,
-        guidance
-      );
+      const prompt = buildSystemPrompt(settings.squireName, briefing, guidance);
       const messages: AiMessage[] = [
         { role: 'system', content: prompt.system },
         ...history,
@@ -119,13 +125,13 @@ export async function* streamSquire(
         context: {
           actorId: actor.id,
           capability: 'SQUIRE_CHAT',
-          dataClass: personal ? 'PERSONAL' : 'INTERNAL',
+          dataClass: 'PERSONAL',
           incidentId: incident?.id,
           signal,
           prompt: prompt.meta,
         },
         messages,
-        tools: buildSquireTools(actor, { personal }),
+        tools: buildSquireTools(actor, { personal: true }),
         maxSteps: SQUIRE_LIMITS.maxSteps,
       })) {
         if (event.type === 'text-delta') {
@@ -174,6 +180,12 @@ export async function* streamSquire(
     }
 
     await preparation;
+    if (settings.enabled) {
+      yield {
+        type: 'notice',
+        text: 'AI conversation requires a provider permitted to receive Personal data. Showing a basic answer.',
+      };
+    }
     yield* basicAnswer(actor, request, incident, settings.squireName);
   } catch (error) {
     if (signal?.aborted) return;

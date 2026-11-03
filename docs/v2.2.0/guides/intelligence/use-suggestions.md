@@ -55,13 +55,16 @@ have caused this?" or "which runbook fits?".
   confirmation. Each card links to the affected incident and shows its confirmation deadline; expired
   suggestions need to be requested again. Runbook and postmortem cards open their normal review workflows.
 - "Basic answer from your incident data" means AI is off or unavailable, and the answer comes straight from the
-  suggestions above.
+  suggestions above. AI chat also requires a provider approved for Personal data; when none is available,
+  the assistant explains the restriction and keeps your conversation out of the model.
 - Select **Stop response** to stop a long answer. Text already received stays available for a follow-up.
   If a response is interrupted, the assistant keeps the partial answer and tells you it is incomplete.
 - Treat AI answers as a starting point and check them.
 - Conversations are not saved unless your administrator has turned saved conversations on. Then the clock
   button lists yours: only you can see them, you can reopen or delete any of them, and they are deleted
-  automatically after a period without use. Otherwise **New chat** or reloading the page clears them.
+  automatically after a period without use. An incident conversation must be continued on its original
+  incident; a global conversation must be continued outside an incident. Opening one from another context
+  explains this instead of relabeling its history. Otherwise **New chat** or reloading the page clears them.
 - Press **Escape** to close it. The arrows button moves it to the other side of the screen; your choice is
   remembered in this browser.
 

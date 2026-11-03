@@ -420,11 +420,9 @@ export default function SquireLauncher({
   }, []);
 
   const toggleHistory = useCallback(() => {
-    setShowHistory(current => {
-      if (!current) void loadSaved();
-      return !current;
-    });
-  }, [loadSaved]);
+    if (!showHistory) void loadSaved();
+    setShowHistory(!showHistory);
+  }, [loadSaved, showHistory]);
 
   const openSaved = useCallback(
     async (id: string) => {
@@ -438,12 +436,21 @@ export default function SquireLauncher({
           data?: {
             conversation?: {
               id: string;
+              incidentId: string | null;
               messages: Array<{ role: 'user' | 'assistant'; content: string }>;
             };
           };
         };
         const conversation = body.data?.conversation;
         if (!conversation) throw new Error('missing');
+        if ((conversation.incidentId ?? null) !== (incidentId ?? null)) {
+          setHistoryError(
+            conversation.incidentId
+              ? 'This conversation belongs to another incident. Open that incident to continue it, or start a new conversation here.'
+              : 'This is a global conversation. Open Squire outside an incident to continue it.'
+          );
+          return;
+        }
         stopCurrent();
         setTurns(conversation.messages.map(({ role, content }) => ({ role, content, incidentId })));
         setConversationId(conversation.id);
