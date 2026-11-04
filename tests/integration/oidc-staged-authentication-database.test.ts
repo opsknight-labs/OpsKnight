@@ -26,6 +26,7 @@ import { evaluateAuthenticationPolicy } from '@/lib/authentication-policy-evalua
 import { searchAuthenticationUsers, identityClaimsPreview } from '@/lib/auth-control/dashboard';
 import { digest, secret } from '@/lib/auth-control/emergency';
 import { inviteSsoUser } from '@/lib/auth-control/sso-onboarding';
+import { oidcTrustFingerprint } from '@/lib/oidc/trust-fingerprint';
 import type { ControlActor } from '@/lib/auth-control/actor';
 
 const entraIssuer = 'https://login.microsoftonline.com/11111111-2222-3333-4444-555555555555/v2.0';
@@ -571,6 +572,11 @@ suite('staged OIDC authentication with HTTPS and signed ID tokens', () => {
       ).userId
     ).toBe(actor.id);
     expect((await prisma.user.findUniqueOrThrow({ where: { id: actor.id } })).role).toBe('ADMIN');
+    // The administrator who turned SSO on is linked to the current provider, not 'provider changed'.
+    const linked = await prisma.oidcIdentity.findUniqueOrThrow({
+      where: { issuer_subject: { issuer: runtime.issuer, subject: 'existing-admin-subject' } },
+    });
+    expect(linked.issuerFingerprint).toBe(oidcTrustFingerprint(runtime.issuer, 'test-client'));
     expect((await enforcementPreview(revisionId)).adminVerified).toBe(false); // proof tied to old production version
   });
   it('enforces the tested active revision with two current independent recovery drills', async () => {

@@ -1080,6 +1080,11 @@ export async function activateOidcRevision(
             issuer: proof.issuer,
             subject: proof.subject,
             email: proof.email,
+            emailAtLink: proof.email,
+            providerConfigId: 'default',
+            // Without the fingerprint, the directory showed the administrator who just turned
+            // SSO on as "not linked to the current provider".
+            issuerFingerprint: oidcTrustFingerprint(proof.issuer, data.config.clientId),
           },
         });
       }

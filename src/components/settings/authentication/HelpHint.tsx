@@ -22,10 +22,12 @@ export default function HelpHint({
     <Popover>
       <PopoverTrigger
         type="button"
+        // Opts out of the page-wide compact button padding that would squash the icon.
+        data-icon-button
         aria-label={label}
         className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
-        <Info className="h-3.5 w-3.5" aria-hidden />
+        <Info className="h-3.5 w-3.5 shrink-0" aria-hidden />
       </PopoverTrigger>
       <PopoverContent className="w-80 max-w-[calc(100vw-2rem)] space-y-2 text-xs leading-relaxed">
         <div className="text-foreground">{children}</div>
