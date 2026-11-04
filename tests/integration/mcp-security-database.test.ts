@@ -139,8 +139,15 @@ describe('MCP PostgreSQL security and replay boundaries', () => {
     expect(after.apiKey.scopes).toEqual(['incidents:read']);
     await db.teamMember.deleteMany({ where: { userId: f.user.id } });
     expect((await resolveMcpGrant(f.grant.id)).actor.teamIds).toEqual([]);
+    // A browser-session bump (team or role edit) no longer signs the assistant out; only the
+    // MCP revocation version, bumped on security events, does.
     await db.user.update({ where: { id: f.user.id }, data: { tokenVersion: { increment: 1 } } });
-    await expect(resolveMcpGrant(f.grant.id)).rejects.toThrow('MCP_INACTIVE_PRINCIPAL');
+    await expect(resolveMcpGrant(f.grant.id)).resolves.toBeTruthy();
+    await db.user.update({
+      where: { id: f.user.id },
+      data: { mcpRevocationVersion: { increment: 1 } },
+    });
+    await expect(resolveMcpGrant(f.grant.id)).rejects.toThrow('MCP_ACCESS_CHANGED');
   });
   it('binds parameterized authority snapshots to the exact grant and live credential', async () => {
     const f = await fixture();
@@ -498,6 +505,13 @@ describe('MCP PostgreSQL security and replay boundaries', () => {
     expect(refreshed.status).toBe(200);
     const newTokens = await refreshed.json();
     expect(newTokens.scope).toBe('incidents:read');
+    // Once the successor has been used, a replay is theft even inside the grace window.
+    await authenticateMcp(
+      new Request(mcpResource(), {
+        headers: { authorization: `Bearer ${newTokens.access_token}` },
+      }),
+      null
+    );
     expect((await exchange(request)).status).toBe(400);
     expect(
       (await db.mcpGrant.findUniqueOrThrow({ where: { id: f.grant.id } })).revokedAt
@@ -575,7 +589,7 @@ describe('MCP PostgreSQL security and replay boundaries', () => {
       callMcpOperation(ctx, 'getIncident', { path: { id: incident.id } })
     ).rejects.toThrow('MCP_RESOURCE_UNAVAILABLE');
     await expect(callMcpOperation(ctx, 'getService', { path: { id: service.id } })).rejects.toThrow(
-      'MCP_OPERATION_FORBIDDEN'
+      'MCP_SCOPE_NOT_GRANTED'
     );
   });
   it('runs the canonical mutation once with one timeline/audit result across retries', async () => {

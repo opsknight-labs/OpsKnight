@@ -183,7 +183,7 @@ export default function McpAssistantsSection({
                   <ResponsiveCell label="Assistant" primary className="md:max-w-[20rem]">
                     <div className="flex items-center gap-2.5 min-w-0">
                       <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-border/80 bg-muted/40 shadow-2xs">
-                        {getAssistantIcon(row.name, 'h-4 w-4')}
+                        {getAssistantIcon(row.name, 'h-4 w-4', row.metadataHost)}
                       </div>
                       <div className="min-w-0">
                         <p className="truncate font-medium text-foreground">{row.name}</p>

@@ -177,7 +177,7 @@ export default function McpApprovalsSection({
                         <p className="flex items-center gap-1.5 truncate text-xs text-muted-foreground">
                           <span>via</span>
                           <span className="inline-flex items-center gap-1 font-medium text-foreground/90">
-                            {getAssistantIcon(row.assistant, 'h-3 w-3')}
+                            {getAssistantIcon(row.assistant, 'h-3 w-3', row.assistantHost)}
                             {row.assistant}
                           </span>
                         </p>

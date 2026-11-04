@@ -64,8 +64,8 @@ export default function McpConnectionsSection({
   page: number;
   status: GrantStatus;
   q: string;
-  client: { id: string; name: string } | null;
-  availableClients?: { id: string; name: string }[];
+  client: { id: string; name: string; metadataHost?: string | null } | null;
+  availableClients?: { id: string; name: string; metadataHost?: string | null }[];
   now: Date;
   timeZone: string;
   describeScope: (scope: string) => string;
@@ -153,7 +153,7 @@ export default function McpConnectionsSection({
           <div className="flex flex-wrap items-center gap-2 pb-4 text-xs text-muted-foreground">
             <span>Filtered by assistant:</span>
             <span className="inline-flex items-center gap-1.5 rounded-lg border border-primary/30 bg-primary/5 py-1 pl-2.5 pr-1.5 font-medium text-foreground">
-              {getAssistantIcon(client.name, 'h-3.5 w-3.5')}
+              {getAssistantIcon(client.name, 'h-3.5 w-3.5', client.metadataHost)}
               {client.name}
               <Link
                 href={mcpHref({
@@ -237,7 +237,7 @@ export default function McpConnectionsSection({
                     <ResponsiveCell label="Assistant" primary={!isAdmin}>
                       <div className="flex items-center gap-2.5 min-w-0">
                         <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-border/80 bg-muted/40 shadow-2xs">
-                          {getAssistantIcon(row.client.name, 'h-4 w-4')}
+                          {getAssistantIcon(row.client.name, 'h-4 w-4', row.client.metadataHost)}
                         </div>
                         <div className="min-w-0">
                           <p className="truncate font-medium text-foreground">{row.client.name}</p>

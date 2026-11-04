@@ -288,7 +288,9 @@ export async function users(request: NextRequest, id?: string) {
       id,
       {
         status,
-        ...(revoke ? { tokenVersion: { increment: 1 } } : {}),
+        ...(revoke
+          ? { tokenVersion: { increment: 1 }, mcpRevocationVersion: { increment: 1 } }
+          : {}),
       },
       request.method === 'DELETE' ? {} : nextProfile,
       undefined,

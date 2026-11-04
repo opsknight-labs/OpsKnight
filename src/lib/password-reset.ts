@@ -474,7 +474,11 @@ export async function completePasswordReset(
       } else {
         const updated = await tx.user.updateMany({
           where: { id: user.id, status: 'ACTIVE' },
-          data: { passwordHash, tokenVersion: { increment: 1 } },
+          data: {
+            passwordHash,
+            tokenVersion: { increment: 1 },
+            mcpRevocationVersion: { increment: 1 },
+          },
         });
         if (updated.count !== 1) throw new Error('RESET_USER_STATE_CHANGED');
       }

@@ -96,6 +96,8 @@ export async function administerUser(
             : {};
     const additionalData: Prisma.UserUpdateInput = {
       tokenVersion: { increment: 1 },
+      // Signing someone out everywhere also signs out their assistants.
+      ...(input.operation === 'revoke-sessions' ? { mcpRevocationVersion: { increment: 1 } } : {}),
       ...(input.operation === 'deactivate'
         ? { deactivatedAt: new Date(), invitationGeneration: { increment: 1 } }
         : {}),

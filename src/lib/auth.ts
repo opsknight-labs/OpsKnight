@@ -1207,7 +1207,7 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
 export async function revokeUserSessions(userId: string) {
   await prisma.user.update({
     where: { id: userId },
-    data: { tokenVersion: { increment: 1 } },
+    data: { tokenVersion: { increment: 1 }, mcpRevocationVersion: { increment: 1 } },
   });
   invalidateSessionSecurityProjection(userId);
 }

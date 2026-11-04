@@ -24,6 +24,7 @@ import { supportedMcpScopes } from '@/lib/mcp/auth/scopes';
 import { mcpSessionDates } from '@/lib/mcp/auth/session-lifetime';
 import { partitionScopesForRole } from '@/lib/mcp/auth/role-scopes';
 import { isAppRole } from '@/lib/authorization';
+import { supersededMcpGrantsWhere } from '@/lib/mcp/auth/consent';
 
 const settingsPath = '/settings/integrations/mcp';
 const supportedScopes = supportedMcpScopes;
@@ -421,7 +422,7 @@ export async function decideMcpConsent(form: FormData) {
         );
         const user = await tx.user.findUnique({
           where: { id: actor.id },
-          select: { status: true, tokenVersion: true, role: true },
+          select: { status: true, tokenVersion: true, mcpRevocationVersion: true, role: true },
         });
         requireMcp(
           user?.status === 'ACTIVE' &&
@@ -459,10 +460,16 @@ export async function decideMcpConsent(form: FormData) {
             where: { id: client.id },
             data: { firstAuthorizedAt: new Date() },
           });
+        // Earlier connections for this assistant are found before the new grant exists.
+        const superseded = await tx.mcpGrant.findMany({
+          where: supersededMcpGrantsWhere(actor.id, currentClient),
+          select: { id: true },
+        });
         const grant = await tx.mcpGrant.create({
           data: {
             userId: actor.id,
             userTokenVersion: user.tokenVersion,
+            userRevocationVersion: user.mcpRevocationVersion,
             clientId: client.id,
             scopes: selected,
             resource: mcpResource(),
@@ -479,7 +486,7 @@ export async function decideMcpConsent(form: FormData) {
               client_id: client.id,
               redirect_uri: pending.redirectUri,
               response_type: 'code',
-              state: pending.state,
+              ...(pending.state ? { state: pending.state } : {}),
               scope: selected.join(' '),
               code_challenge: pending.challenge,
               code_challenge_method: 'S256',
@@ -487,7 +494,8 @@ export async function decideMcpConsent(form: FormData) {
           }),
           response,
           {
-            allowEmptyState: false,
+            // OAuth makes state optional; PKCE is what binds the code to this request.
+            allowEmptyState: true,
             requirePKCE: true,
             authorizationCodeLifetime: 60,
             authenticateHandler: { handle: async () => ({ id: actor.id, grantId: grant.id }) },
@@ -515,6 +523,25 @@ export async function decideMcpConsent(form: FormData) {
           },
           tx
         );
+        // Reconnecting replaces the old connection rather than leaving a second live credential.
+        if (superseded.length) {
+          const ids = superseded.map(item => item.id);
+          await tx.mcpGrant.updateMany({
+            where: { id: { in: ids }, revokedAt: null },
+            data: { revokedAt: new Date() },
+          });
+          await logAudit(
+            {
+              source: 'UI',
+              action: 'mcp.grant.superseded',
+              entityType: 'SYSTEM_CONFIG',
+              entityId: grant.id,
+              actorId: actor.id,
+              details: { clientId: client.id, supersededGrantIds: ids },
+            },
+            tx
+          );
+        }
         return authorized.href;
       },
       { isolationLevel: 'Serializable', timeout: 5000 }

@@ -46,9 +46,17 @@ const MESSAGES = new Map<string, { title: string; body: string }>(
       title: 'Too many attempts',
       body: 'Wait a minute, then connect again from your assistant.',
     },
+    temporarily_unavailable: {
+      title: 'OpsKnight is busy',
+      body: 'Too many sign-in requests arrived at once. Your connection is still valid; retry in a few seconds.',
+    },
     MCP_INACTIVE_PRINCIPAL: {
       title: 'Your account cannot connect assistants',
       body: 'Your OpsKnight account is inactive or was signed out. Sign in again and retry.',
+    },
+    MCP_ACCESS_CHANGED: {
+      title: 'Your access changed',
+      body: 'Your password, email, account status or administrator role changed, or you signed out everywhere. Reconnect OpsKnight from your assistant to sign in again.',
     },
     invalid_client: {
       title: 'This assistant is not allowed to connect',
@@ -90,12 +98,14 @@ export function oauthErrorFor(code: string) {
     case 'MCP_RATE_LIMITED':
     case 'MCP_DISABLED':
     case 'MCP_BUSY':
+    case 'temporarily_unavailable':
       return 'temporarily_unavailable';
     case 'invalid_client':
     case 'MCP_CLIENT_UNKNOWN':
     case 'MCP_CLIENT_REVOKED':
       return 'unauthorized_client';
     case 'MCP_INACTIVE_PRINCIPAL':
+    case 'MCP_ACCESS_CHANGED':
       return 'access_denied';
     case 'invalid_request':
     case 'invalid_target':

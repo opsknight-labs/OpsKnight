@@ -49,6 +49,7 @@ import {
   countActiveClients,
   countActiveConnections,
   countPendingApprovals,
+  hostOf,
   listMcpApprovals,
   listMcpClients,
   listMcpGrants,
@@ -344,11 +345,18 @@ export default async function McpSettings({
         const [initialResult, availableClients] = await Promise.all([
           listMcpGrants(viewer, { ...input, page: params.page }, now),
           isAdmin
-            ? prisma.mcpClient.findMany({
-                select: { id: true, name: true },
-                orderBy: { name: 'asc' },
-                take: 100,
-              })
+            ? prisma.mcpClient
+                .findMany({
+                  select: { id: true, name: true, metadataUrl: true },
+                  orderBy: { name: 'asc' },
+                  take: 100,
+                })
+                .then(clients =>
+                  clients.map(({ metadataUrl, ...rest }) => ({
+                    ...rest,
+                    metadataHost: hostOf(metadataUrl),
+                  }))
+                )
             : Promise.resolve([]),
         ]);
         const page = clampPage(params.page, initialResult.total);

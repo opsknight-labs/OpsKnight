@@ -136,6 +136,8 @@ export type McpGrantRow = {
     id: string;
     name: string;
     type: Exclude<ClientType, 'all'>;
+    /** Host of the client's metadata document; the only basis for showing a brand logo. */
+    metadataHost: string | null;
     revoked: boolean;
   };
 };
@@ -209,7 +211,7 @@ export async function listMcpGrants(
     input.clientId
       ? prisma.mcpClient.findUnique({
           where: { id: input.clientId },
-          select: { id: true, name: true },
+          select: { id: true, name: true, metadataUrl: true },
         })
       : Promise.resolve(null),
   ]);
@@ -229,12 +231,15 @@ export async function listMcpGrants(
         id: row.client.id,
         name: row.client.name,
         type: clientTypeOf(row.client),
+        metadataHost: hostOf(row.client.metadataUrl),
         revoked: Boolean(row.client.revokedAt),
       },
     })),
     counts,
     total: counts[input.status],
-    client,
+    client: client
+      ? { id: client.id, name: client.name, metadataHost: hostOf(client.metadataUrl) }
+      : null,
   };
 }
 
@@ -336,7 +341,7 @@ export async function listMcpClients(
   };
 }
 
-function hostOf(url: string | null) {
+export function hostOf(url: string | null) {
   if (!url) return null;
   try {
     return new URL(url).host;
@@ -365,6 +370,8 @@ export type McpApprovalRow = {
   requester: McpPerson;
   reviewer: McpPerson | null;
   assistant: string | null;
+  /** Host of the assistant's metadata document, when it has one. */
+  assistantHost: string | null;
   /** Detail page, when it can still be opened. */
   href: string | null;
 };
@@ -381,12 +388,17 @@ const OPERATION_STATUS: Record<string, McpApprovalStatus> = {
 
 async function assistantsByGrant(grantIds: Iterable<string | null>) {
   const ids = [...new Set([...grantIds].filter((id): id is string => Boolean(id)))];
-  if (!ids.length) return new Map<string, string>();
+  if (!ids.length) return new Map<string, { name: string; metadataHost: string | null }>();
   const grants = await prisma.mcpGrant.findMany({
     where: { id: { in: ids } },
-    select: { id: true, client: { select: { name: true } } },
+    select: { id: true, client: { select: { name: true, metadataUrl: true } } },
   });
-  return new Map(grants.map(grant => [grant.id, grant.client.name]));
+  return new Map(
+    grants.map(grant => [
+      grant.id,
+      { name: grant.client.name, metadataHost: hostOf(grant.client.metadataUrl) },
+    ])
+  );
 }
 
 export async function listMcpApprovals(
@@ -451,7 +463,8 @@ export async function listMcpApprovals(
           decidedAt: row.reviewedAt ?? row.rejectedAt,
           requester: people.get(row.actorId) ?? { id: row.actorId, name: null, email: null },
           reviewer: row.reviewedById ? (people.get(row.reviewedById) ?? null) : null,
-          assistant: assistants.get(row.requesterGrantId) ?? null,
+          assistant: assistants.get(row.requesterGrantId)?.name ?? null,
+          assistantHost: assistants.get(row.requesterGrantId)?.metadataHost ?? null,
           href: `/settings/integrations/mcp/approvals/operations/${row.id}`,
         };
       }),
@@ -524,7 +537,12 @@ export async function listMcpApprovals(
         decidedAt: row.reviewedAt ?? row.rejectedAt,
         requester: people.get(row.actorId) ?? { id: row.actorId, name: null, email: null },
         reviewer: row.reviewedById ? (people.get(row.reviewedById) ?? null) : null,
-        assistant: row.requesterGrantId ? (assistants.get(row.requesterGrantId) ?? null) : null,
+        assistant: row.requesterGrantId
+          ? (assistants.get(row.requesterGrantId)?.name ?? null)
+          : null,
+        assistantHost: row.requesterGrantId
+          ? (assistants.get(row.requesterGrantId)?.metadataHost ?? null)
+          : null,
         href: open ? `/settings/integrations/mcp/approvals/${row.id}` : null,
       };
     }),

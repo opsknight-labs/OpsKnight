@@ -145,7 +145,7 @@ describe('MCP settings list queries', () => {
     expect((await list({ q: 'cursor' })).total).toBe(2);
     const byClient = await list({ clientId: cursor.id });
     expect(byClient.total).toBe(2);
-    expect(byClient.client).toEqual({ id: cursor.id, name: 'Cursor' });
+    expect(byClient.client).toEqual({ id: cursor.id, name: 'Cursor', metadataHost: null });
   });
 
   it('limits everyone else to their own connections and blocks admin lists', async () => {

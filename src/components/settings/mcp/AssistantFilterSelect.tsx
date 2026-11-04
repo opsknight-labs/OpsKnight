@@ -22,7 +22,7 @@ function AssistantFilterSelect({
   status,
   q,
 }: {
-  clients: { id: string; name: string }[];
+  clients: { id: string; name: string; metadataHost?: string | null }[];
   selectedClientId: string | null;
   status?: GrantStatus;
   q?: string;
@@ -60,7 +60,8 @@ function AssistantFilterSelect({
               <>
                 {getAssistantIcon(
                   clients.find(c => c.id === selectedClientId)?.name ?? '',
-                  'h-3.5 w-3.5 shrink-0'
+                  'h-3.5 w-3.5 shrink-0',
+                  clients.find(c => c.id === selectedClientId)?.metadataHost
                 )}
                 <span className="truncate">
                   {clients.find(c => c.id === selectedClientId)?.name ?? 'Selected'}
@@ -96,7 +97,7 @@ function AssistantFilterSelect({
                 className="rounded-lg text-xs font-medium cursor-pointer"
               >
                 <div className="flex items-center gap-2 truncate">
-                  {getAssistantIcon(client.name, 'h-3.5 w-3.5 shrink-0')}
+                  {getAssistantIcon(client.name, 'h-3.5 w-3.5 shrink-0', client.metadataHost)}
                   <span className="truncate">{client.name}</span>
                 </div>
               </SelectItem>

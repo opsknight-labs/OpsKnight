@@ -162,6 +162,42 @@ export function hasOperationAuthority(
   );
 }
 
+/**
+ * Scopes this connection would need for an operation the person's role already allows; empty
+ * when nothing is missing or when the role itself forbids the operation.
+ */
+export function missingConsentScopes(
+  actor: AuthorizationActor,
+  operation: (typeof MCP_CATALOG)[number]
+) {
+  const granted = actor.apiKey?.scopes ?? [];
+  const missing = operation.requiredScopes.filter(scope => !granted.includes(scope));
+  if (!missing.length || !operation.authorizationActions.length) return [];
+  // Judge the role alone: the same person without the connection's scope narrowing.
+  const person = { ...actor, apiKey: undefined };
+  return operation.authorizationActions.every(
+    action => authorize({ actor: person, action }).allowed
+  )
+    ? missing
+    : [];
+}
+
+/** Tell a missing consent apart from a missing role, so the assistant can explain the fix. */
+export function requireOperationAuthority(
+  actor: AuthorizationActor,
+  operation: (typeof MCP_CATALOG)[number]
+) {
+  if (hasOperationAuthority(actor, operation)) return;
+  const missing = missingConsentScopes(actor, operation);
+  requireMcp(
+    !missing.length,
+    'MCP_SCOPE_NOT_GRANTED',
+    403,
+    `This connection was not granted ${missing.join(', ')}. Reconnect OpsKnight from your assistant and allow ${missing.length === 1 ? 'that permission' : 'those permissions'}.`
+  );
+  requireMcp(false, 'MCP_OPERATION_FORBIDDEN', 403);
+}
+
 function mcpCapabilityDisabled(
   policy: { disabledCapabilities: readonly string[] } | null,
   operation: (typeof MCP_CATALOG)[number]
@@ -254,7 +290,7 @@ async function executeMcpOperation(
   const { auth } = resolved;
   auth.apiKey.scopes = auth.apiKey.scopes.filter(scope => context.tokenScopes.includes(scope));
   auth.actor.apiKey = { id: auth.apiKey.id, scopes: auth.apiKey.scopes };
-  requireMcp(hasOperationAuthority(auth.actor, operation), 'MCP_OPERATION_FORBIDDEN', 403);
+  requireOperationAuthority(auth.actor, operation);
   const loadHandler = (
     mode === 'approved'
       ? MCP_APPROVAL_HANDLERS

@@ -10,11 +10,18 @@ import {
 import { COMPLETION_SOURCES, completeAuthorizedIds, type CompletionSource } from './completion';
 import { z } from 'zod/v4';
 import type { AuthorizationActor } from '@/lib/authorization-policy';
-import { MCP_CATALOG, isMcpApprovalGated, isMcpSensitiveRead, mcpResponseSchema } from '../catalog';
+import {
+  MCP_CATALOG,
+  isMcpApprovalGated,
+  isMcpExecutable,
+  isMcpSensitiveRead,
+  mcpResponseSchema,
+} from '../catalog';
 import {
   callMcpOperation,
   canDiscover,
   hasOperationAuthority,
+  missingConsentScopes,
   type ExecutionContext,
 } from '../core/execution';
 import { executeMcpPlan, planSchema } from '../core/plan';
@@ -351,6 +358,17 @@ export function createOpsKnightMcpServer(
           hasOperationAuthority(actor, operation)
       )
     : [];
+  // The role allows these but this connection was not granted their scopes. Search lists them so
+  // an assistant can explain the fix; describe and call still refuse them.
+  const needsConsent = MCP_CATALOG.filter(
+    operation =>
+      !disabled.has(operation.operationId) &&
+      (isMcpExecutable(operation) || isMcpApprovalGated(operation)) &&
+      (isMcpSensitiveRead(operation)
+        ? sensitiveReadsEnabled
+        : operation.risk === 'R0' || writesEnabled) &&
+      missingConsentScopes(actor, operation).length > 0
+  );
   if (approvalGated.length) {
     const operationIds = approvalGated.map(operation => operation.operationId) as [
       string,
@@ -499,7 +517,7 @@ export function createOpsKnightMcpServer(
       const input = args as { query: string; domain?: string; intent?: string; cursor?: number };
       const cursor = input.cursor ?? 0;
       const found = searchCapabilities(
-        [...visible, ...approvalGated].filter(
+        [...visible, ...approvalGated, ...needsConsent].filter(
           operation =>
             (!input.domain || operation.domain === input.domain) &&
             (!input.intent ||
@@ -509,19 +527,25 @@ export function createOpsKnightMcpServer(
         input.query
       );
       return toolResult({
-        operations: found
-          .slice(cursor, cursor + 25)
-          .map(({ operationId, summary, tool, domain, risk, status }) => ({
+        operations: found.slice(cursor, cursor + 25).map(operation => {
+          const { operationId, summary, tool, domain, risk, status } = operation;
+          const missing = needsConsent.includes(operation)
+            ? missingConsentScopes(actor, operation)
+            : [];
+          return {
             operationId,
             summary,
             tool,
             domain,
             risk,
-            workflow:
-              status === 'APPROVAL_REQUIRED'
+            workflow: missing.length
+              ? 'reconnect OpsKnight and allow the listed permissions first'
+              : status === 'APPROVAL_REQUIRED'
                 ? 'operation_prepare, native approval, operation_commit_approved'
                 : 'direct',
-          })),
+            ...(missing.length ? { requiresAdditionalConsent: missing } : {}),
+          };
+        }),
         nextCursor: found.length > cursor + 25 ? cursor + 25 : null,
       });
     }

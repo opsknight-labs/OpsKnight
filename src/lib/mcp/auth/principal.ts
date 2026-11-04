@@ -4,12 +4,13 @@ import { authorizationActorFromUser } from '@/lib/authorization-actors';
 import { incrementSharedCounter } from '@/lib/rate-limit';
 import type { V2AuthContext } from '@/lib/api-v2/auth';
 import { digestMcpSecret, mcpResource } from './config';
-import { requireMcp } from '../core/errors';
+import { McpBoundaryError, requireMcp } from '../core/errors';
+import { admitMcpBearer, recordMcpBearerFailure } from './admission';
 
 interface GrantAuthoritySnapshot {
   grantId: string;
   userId: string;
-  userTokenVersion: number;
+  userRevocationVersion: number;
   grantScopes: string[];
   clientScopes: string[];
   resource: string;
@@ -18,7 +19,7 @@ interface GrantAuthoritySnapshot {
   expiresAt: Date;
   role: string | null;
   status: string | null;
-  tokenVersion: number | null;
+  mcpRevocationVersion: number | null;
   teamIds: string[];
   policyEnabled: boolean | null;
   writesEnabled: boolean | null;
@@ -54,6 +55,13 @@ const loadRuntimePolicy = async (): Promise<McpRuntimePolicy | null> =>
     },
   });
 
+const CREDENTIAL_FAILURES = new Set([
+  'MCP_INVALID_TOKEN',
+  'MCP_INVALID_GRANT',
+  'MCP_INACTIVE_PRINCIPAL',
+  'MCP_ACCESS_CHANGED',
+]);
+
 export async function resolveMcpGrant(
   grantId: string,
   credentialId?: string,
@@ -76,7 +84,7 @@ export async function resolveMcpGrantWithPolicy(
   // One current-statement snapshot avoids four ORM round trips per domain step.
   // No values are interpolated into SQL syntax and no authority is cached.
   const [grant] = await db.$queryRaw<GrantAuthoritySnapshot[]>`
-    SELECT g.id AS "grantId", g."userId", g."userTokenVersion",
+    SELECT g.id AS "grantId", g."userId", g."userRevocationVersion",
       g.scopes AS "grantScopes", g.resource,
       -- A metadata client's effective ceiling is always the current policy, never its stored copy.
       CASE WHEN c."dynamicRegistration" THEN
@@ -85,7 +93,7 @@ export async function resolveMcpGrantWithPolicy(
         ELSE ARRAY(SELECT s FROM unnest(c.scopes) AS s WHERE s = ANY(p."cimdScopes")) END
         AS "clientScopes",
       g."revokedAt", c."revokedAt" AS "clientRevokedAt", g."expiresAt",
-      u.role::text AS role, u.status::text AS status, u."tokenVersion",
+      u.role::text AS role, u.status::text AS status, u."mcpRevocationVersion",
       ARRAY(SELECT tm."teamId" FROM "TeamMember" tm WHERE tm."userId" = u.id) AS "teamIds",
       -- The policy row this request is judged by; already joined for the client ceilings.
       p.enabled AS "policyEnabled", p."writesEnabled", p."sensitiveReadsEnabled",
@@ -113,11 +121,10 @@ export async function resolveMcpGrantWithPolicy(
     'MCP_INVALID_GRANT',
     401
   );
-  requireMcp(
-    grant.status === 'ACTIVE' && grant.tokenVersion === grant.userTokenVersion,
-    'MCP_INACTIVE_PRINCIPAL',
-    401
-  );
+  requireMcp(grant.status === 'ACTIVE', 'MCP_INACTIVE_PRINCIPAL', 401);
+  // Only security events (password, email, deactivation, sign-out everywhere, demotion from ADMIN)
+  // end a connection; other role and team edits narrow access live through authorize().
+  requireMcp(grant.mcpRevocationVersion === grant.userRevocationVersion, 'MCP_ACCESS_CHANGED', 401);
   const base = authorizationActorFromUser({
     id: grant.userId,
     role: grant.role ?? '',
@@ -162,7 +169,8 @@ export async function authenticateMcp(request: Request, cost: number | null) {
   // The policy is read with the grant. A disabled MCP still answers MCP_DISABLED ahead of any
   // credential error, so a failure reads the policy on its own before reporting the cause.
   let resolved: Awaited<ReturnType<typeof resolveMcpGrantWithPolicy>>;
-  let token: { id: string; grantId: string; scopes: string[] };
+  let token: { id: string; grantId: string; scopes: string[]; lastUsedAt: Date | null };
+  admitMcpBearer(request);
   try {
     const header = request.headers.get('authorization') ?? '';
     requireMcp(/^Bearer [A-Za-z0-9_-]{32,256}$/.test(header), 'MCP_INVALID_TOKEN', 401);
@@ -177,11 +185,24 @@ export async function authenticateMcp(request: Request, cost: number | null) {
     token = found;
     resolved = await resolveMcpGrantWithPolicy(token.grantId, token.id);
   } catch (error) {
+    if (error instanceof McpBoundaryError && CREDENTIAL_FAILURES.has(error.code))
+      recordMcpBearerFailure(request);
     requireMcp((await loadRuntimePolicy())?.enabled, 'MCP_DISABLED', 503);
     throw error;
   }
   const { auth, policy } = resolved;
   requireMcp(policy?.enabled, 'MCP_DISABLED', 503);
+  // A used access token ends the refresh grace window for its predecessor. Written at most once
+  // a minute per token, and never on a failed authentication.
+  const now = Date.now();
+  if (!token.lastUsedAt || now - token.lastUsedAt.getTime() > 60000)
+    await prisma.mcpToken.updateMany({
+      where: {
+        id: token.id,
+        OR: [{ lastUsedAt: null }, { lastUsedAt: { lt: new Date(now - 60000) } }],
+      },
+      data: { lastUsedAt: new Date(now) },
+    });
   const effectiveScopes = auth.apiKey.scopes.filter(scope => token.scopes.includes(scope));
   auth.apiKey.scopes = effectiveScopes;
   auth.actor.apiKey = { id: auth.apiKey.id, scopes: effectiveScopes };

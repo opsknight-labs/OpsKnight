@@ -18,7 +18,7 @@ import { isAuthenticationFresh } from '@/lib/auth-control/actor';
 import {
   callApprovedMcpOperation,
   callPreviewMcpOperation,
-  hasOperationAuthority,
+  requireOperationAuthority,
   validateOperationArgs,
   type ExecutionContext,
 } from '../core/execution';
@@ -284,7 +284,7 @@ export function prepareMcpOperation(context: ExecutionContext, raw: unknown) {
       });
       const digest = mcpOperationDigest(input.operationId, frozen);
       const initial = await admit(context);
-      requireMcp(hasOperationAuthority(initial.actor, operation), 'MCP_OPERATION_FORBIDDEN', 403);
+      requireOperationAuthority(initial.actor, operation);
       // A destructive change is reviewed against the target's current state.
       const preview = isDestructive(operation)
         ? await readPreview(context, operation, frozen)

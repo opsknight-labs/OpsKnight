@@ -76,7 +76,11 @@ export async function restorePasswordAccess(
     });
     await tx.user.update({
       where: { id: current.id },
-      data: { passwordHash, tokenVersion: { increment: 1 } },
+      data: {
+        passwordHash,
+        tokenVersion: { increment: 1 },
+        mcpRevocationVersion: { increment: 1 },
+      },
     });
     await tx.userToken.updateMany({
       where: {

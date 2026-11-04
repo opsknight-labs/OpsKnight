@@ -14,6 +14,8 @@ type Props = {
   /** Shown once, muted, when some requested permissions are not available to this role. */
   unavailableNote: string | null;
   wide: boolean;
+  /** False while an administrator has turned changes off: change permissions grant nothing yet. */
+  writesEnabled?: boolean;
 };
 
 const checkboxClass =
@@ -26,6 +28,7 @@ export default function ConsentForm({
   groups,
   unavailableNote,
   wide,
+  writesEnabled = true,
 }: Props) {
   const all = useMemo(() => groups.flatMap(group => [...group.view, ...group.change]), [groups]);
   const [selected, setSelected] = useState(
@@ -65,7 +68,13 @@ export default function ConsentForm({
           </div>
           <div className={cn('grid gap-3', wide && 'lg:grid-cols-2 lg:gap-4')}>
             {groups.map(group => (
-              <ScopeGroup key={group.id} group={group} selected={selected} onToggle={toggle} />
+              <ScopeGroup
+                key={group.id}
+                group={group}
+                selected={selected}
+                onToggle={toggle}
+                writesEnabled={writesEnabled}
+              />
             ))}
           </div>
         </>
@@ -121,10 +130,12 @@ function ScopeGroup({
   group,
   selected,
   onToggle,
+  writesEnabled,
 }: {
   group: McpConsentGroup;
   selected: Set<string>;
   onToggle: (scopes: string[], on: boolean) => void;
+  writesEnabled: boolean;
 }) {
   const scopes = [...group.view, ...group.change].map(item => item.scope);
   const chosen = scopes.filter(scope => selected.has(scope)).length;
@@ -166,6 +177,7 @@ function ScopeGroup({
             selected={selected}
             onToggle={onToggle}
             changes
+            writesEnabled={writesEnabled}
           />
         )}
       </div>
@@ -179,12 +191,14 @@ function ScopeList({
   selected,
   onToggle,
   changes = false,
+  writesEnabled = true,
 }: {
   title: string;
   items: McpConsentScope[];
   selected: Set<string>;
   onToggle: (scopes: string[], on: boolean) => void;
   changes?: boolean;
+  writesEnabled?: boolean;
 }) {
   return (
     <fieldset className="min-w-0">
@@ -216,10 +230,15 @@ function ScopeList({
                 <span className="min-w-0 flex-1 text-slate-800 dark:text-slate-100">
                   {item.label}
                   {/* Mark exactly the selected permissions that let the assistant change things. */}
-                  {changes && on && (
+                  {changes && on && writesEnabled && (
                     <span className="ml-2 inline-flex items-center gap-1 whitespace-nowrap rounded-full border border-amber-300 bg-amber-50 px-1.5 py-px align-middle text-[11px] font-medium text-amber-800 dark:border-amber-700/60 dark:bg-amber-950/40 dark:text-amber-200">
                       <PencilLine className="h-3 w-3" aria-hidden="true" />
                       Can make changes
+                    </span>
+                  )}
+                  {changes && on && !writesEnabled && (
+                    <span className="ml-2 inline-flex items-center gap-1 whitespace-nowrap rounded-full border border-slate-300 bg-slate-50 px-1.5 py-px align-middle text-[11px] font-medium text-slate-600 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-300">
+                      Changes off
                     </span>
                   )}
                 </span>

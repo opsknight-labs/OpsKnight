@@ -230,26 +230,49 @@ export const ChatGptLogo = React.memo(function ChatGptLogo({
   );
 });
 
+/** Domains whose metadata documents identify each brand. A self-chosen name never counts. */
+const ASSISTANT_BRANDS = [
+  { brand: 'claude', domains: ['claude.ai', 'anthropic.com', 'claude.com'] },
+  { brand: 'chatgpt', domains: ['chatgpt.com', 'openai.com'] },
+  { brand: 'cursor', domains: ['cursor.com', 'cursor.sh'] },
+] as const;
+
+/** The brand a verified client-metadata host belongs to, if any. */
+export function assistantBrandFor(verifiedHost: string | null | undefined) {
+  const host = verifiedHost?.toLowerCase().replace(/:\d+$/, '');
+  if (!host) return null;
+  return (
+    ASSISTANT_BRANDS.find(({ domains }) =>
+      domains.some(domain => host === domain || host.endsWith(`.${domain}`))
+    )?.brand ?? null
+  );
+}
+
+/**
+ * A brand logo only for an assistant identified by its metadata-document host. Any client can
+ * call itself "Claude", so the name alone always gets the generic assistant icon.
+ */
 export const AssistantIcon = React.memo(function AssistantIcon({
-  name,
+  verifiedHost,
   className = 'h-3.5 w-3.5',
 }: {
-  name: string;
+  /** Display name; never used to pick a brand logo. */
+  name?: string;
+  /** Host of the client's metadata document (CIMD), when there is one. */
+  verifiedHost?: string | null;
   className?: string;
 }) {
-  const lower = name.toLowerCase();
-  if (lower.includes('claude')) {
-    return <ClaudeLogo className={className} />;
-  }
-  if (lower.includes('cursor')) {
-    return <CursorLogo className={className} />;
-  }
-  if (lower.includes('chatgpt') || lower.includes('gpt') || lower.includes('openai')) {
-    return <ChatGptLogo className={className} />;
-  }
+  const brand = assistantBrandFor(verifiedHost);
+  if (brand === 'claude') return <ClaudeLogo className={className} />;
+  if (brand === 'cursor') return <CursorLogo className={className} />;
+  if (brand === 'chatgpt') return <ChatGptLogo className={className} />;
   return <Bot className={cn(className, 'text-primary')} />;
 });
 
-export function getAssistantIcon(name: string, className = 'h-3.5 w-3.5') {
-  return <AssistantIcon name={name} className={className} />;
+export function getAssistantIcon(
+  name: string,
+  className = 'h-3.5 w-3.5',
+  verifiedHost?: string | null
+) {
+  return <AssistantIcon name={name} verifiedHost={verifiedHost} className={className} />;
 }

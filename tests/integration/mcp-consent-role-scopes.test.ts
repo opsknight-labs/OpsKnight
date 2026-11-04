@@ -304,8 +304,9 @@ describe('role-aware MCP consent', () => {
       budget: new CostBudget(),
     };
     await expect(callMcpOperation(context, 'listServices', {})).resolves.toBeTruthy();
+    // The role could list incidents; this connection was not granted incidents:read.
     await expect(callMcpOperation(context, 'listIncidents', {})).rejects.toThrow(
-      'MCP_OPERATION_FORBIDDEN'
+      'MCP_SCOPE_NOT_GRANTED'
     );
     // Through the real transport the incident tool is neither listed nor callable.
     const output = await searchIncidents(tokens.access_token);

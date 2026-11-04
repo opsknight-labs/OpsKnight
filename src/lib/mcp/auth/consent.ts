@@ -1,3 +1,4 @@
+import type { Prisma } from '@prisma/client';
 import prisma from '@/lib/prisma';
 import { getCurrentUser } from '@/lib/rbac';
 import { requireMcp } from '../core/errors';
@@ -38,4 +39,24 @@ export async function expiredConsentReturn(id: string) {
   if (request.state) target.searchParams.set('state', request.state);
   target.searchParams.set('iss', mcpIssuer());
   return target.href;
+}
+
+/**
+ * The person's earlier live connections that a new consent for this assistant replaces: the same
+ * client, or another registration of the same metadata document (assistants re-register).
+ */
+export function supersededMcpGrantsWhere(
+  userId: string,
+  client: { id: string; metadataUrl: string | null },
+  now = new Date()
+): Prisma.McpGrantWhereInput {
+  return {
+    userId,
+    revokedAt: null,
+    expiresAt: { gt: now },
+    OR: [
+      { clientId: client.id },
+      ...(client.metadataUrl ? [{ client: { metadataUrl: client.metadataUrl } }] : []),
+    ],
+  };
 }
