@@ -102,6 +102,14 @@ async function fixtures() {
     securityEvent: await grant('Security event', {}, { mcpRevocationVersion: 1 }),
     clientRevoked: await grant('Revoked client', { revokedAt: new Date() }),
     expired: await grant('Expired', {}, {}, { expiresAt: new Date(Date.now() - 1000) }),
+    otherServer: await grant('Other server', {}, {}, { resource: 'https://elsewhere.example/mcp' }),
+    adminScope: await (async () => {
+      // A manual ceiling and a consent that both carry admin:manage: MCP never honours it.
+      const created = await grant('Admin scope');
+      const withAdmin = [...both, 'admin:manage'];
+      await db.mcpClient.update({ where: { id: created.clientId }, data: { scopes: withAdmin } });
+      return db.mcpGrant.update({ where: { id: created.id }, data: { scopes: withAdmin } });
+    })(),
   };
 }
 
@@ -188,6 +196,8 @@ describe('D3 effective access: the admin list shows what the request path enforc
     expect(a.rows.get(f.securityEvent.id)?.blockedReason).toBe('access_changed');
     expect(a.rows.get(f.clientRevoked.id)?.blockedReason).toBe('client_revoked');
     expect(a.rows.get(f.expired.id)).toMatchObject({ status: 'expired', blockedReason: null });
+    expect(a.rows.get(f.otherServer.id)?.blockedReason).toBe('ended');
+    expect(a.rows.get(f.adminScope.id)?.blockedReason).toBe('admin_scope');
 
     // Automatic connections off: the self-registered assistant is blocked by policy.
     await setPolicy({ ...narrowed, dcrEnabled: false });
@@ -303,6 +313,28 @@ describe('D4 policy save is optimistic', () => {
     // A capabilities save does not move the policy revision, so it causes no false conflict.
     await updateMcpDisabledCapabilities({ disabled: ['domain:incidents'], baseline: [] });
     expect(await actions.updateMcpPolicy(policyForm(start + 1))).toMatchObject({ ok: true });
+  });
+
+  it('treats one-click setup as a policy change, including the very first one', async () => {
+    // The policy page rendered before any policy existed sends revision 0.
+    expect(await db.mcpPolicy.findUnique({ where: { id: 'default' } })).toBeNull();
+    await actions.enableMcpQuickSetup();
+    expect(await actions.updateMcpPolicy(policyForm(0, { writesEnabled: 'on' }))).toEqual({
+      ok: false,
+      code: 'MCP_POLICY_CONFLICT',
+      revision: 1,
+    });
+    // Turning MCP back on from an existing policy also moves the revision.
+    await setPolicy({ enabled: false });
+    await actions.enableMcpQuickSetup();
+    expect(await actions.updateMcpPolicy(policyForm(1))).toMatchObject({
+      ok: false,
+      code: 'MCP_POLICY_CONFLICT',
+      revision: 2,
+    });
+    expect((await db.mcpPolicy.findUniqueOrThrow({ where: { id: 'default' } })).writesEnabled).toBe(
+      false
+    );
   });
 });
 

@@ -93,8 +93,9 @@ export async function enableMcpQuickSetup() {
       : policy;
     await tx.mcpPolicy.upsert({
       where: { id: 'default' },
-      create: policy,
-      // Any policy write moves the revision, so an open policy form sees it as a conflict.
+      // Any policy write moves the revision, so an open policy form sees it as a conflict. A page
+      // rendered before any policy existed carries revision 0, so the first write is revision 1.
+      create: { ...policy, policyRevision: 1 },
       update: { ...update, policyRevision: { increment: 1 } },
     });
     await logAudit(
