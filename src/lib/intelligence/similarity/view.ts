@@ -99,6 +99,7 @@ export async function getSimilarIncidentsForActor(
       ? await resolveEffectivePolicyForRequest(source.serviceId)
       : await resolveEffectivePolicy(source.serviceId, client);
   if (policy.effectiveMode !== 'SUGGEST' && policy.effectiveMode !== 'AUTO') return null;
+  if (!policy.definition.similarity.enabled) return null;
 
   const findings = await client.intelligenceFinding.findMany({
     where: { incidentId, kind: 'SIMILAR_INCIDENT', status: 'ACTIVE', subjectRef: { not: null } },

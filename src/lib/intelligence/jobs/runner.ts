@@ -394,8 +394,13 @@ async function runCycle(state: LaneState, dependencies: CycleDependencies): Prom
           limit: settings.batchSize,
           lookbackDays: Math.min(settings.lookbackDays, RECONCILE_LOOKBACK_DAYS),
           now: new Date(now()),
+          maxDbMs: settings.maxDbMs,
         });
-        discovered += repaired.missing + repaired.staleResolution + repaired.suppressed;
+        discovered +=
+          repaired.missing +
+          repaired.staleResolution +
+          repaired.suppressed +
+          (repaired.staleSource ?? 0);
       }
     } catch (error) {
       logger.warn('[Intelligence] Discovery failed; continuing with queued work', {

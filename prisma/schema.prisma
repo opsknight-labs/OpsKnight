@@ -1444,6 +1444,7 @@ model Incident {
   relationshipsAsSource               IncidentRelationship[]       @relation("IncidentRelationshipSource")
   relationshipsAsTarget               IncidentRelationship[]       @relation("IncidentRelationshipTarget")
   intelligenceFindings                IntelligenceFinding[]
+  intelligenceAnalyses                IntelligenceAnalysisSnapshot[]
   externalIssueLinks                  ExternalIssueLink[]
   pinnedMessages                      SlackPinnedMessage[]
   microsoftTeamsMessages              MicrosoftTeamsIncidentMessage[]
@@ -5044,9 +5045,11 @@ model IncidentRelationshipEvent {
   @@index([relationshipId, createdAt])
 }
 
-// Written once at creation and once at resolution (two writes per incident). The full-text and
-// trigram indexes are expression indexes created in SQL so no generated column is needed.
+// Rebuildable masked text, refreshed by bounded background work after creation, source edits or
+// resolution. Full-text and trigram indexes are SQL expression indexes.
 model IncidentFingerprint {
+  /// Incident version actually consumed by the indexer; independent of later aggregate updates.
+  sourceUpdatedAt DateTime?
   incidentId        String    @id
   incident          Incident  @relation(fields: [incidentId], references: [id], onDelete: Cascade)
   serviceId         String
@@ -5616,4 +5619,21 @@ model McpConsentRequest {
   expiresAt DateTime
   consumedAt DateTime?
   @@index([expiresAt])
+}
+
+// One bounded success marker per recommendation kind, including analyses with zero findings.
+model IntelligenceAnalysisSnapshot {
+  incidentId String
+  incident Incident @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+  kind IntelligenceFindingKind
+  generation Int
+  policyVersion Int?
+  policyHash String?
+  sourceUpdatedAt DateTime?
+  fingerprintUpdatedAt DateTime?
+  completedAt DateTime @default(now())
+  engineVersion String
+  rowCount Int @default(0)
+  @@id([incidentId, kind])
+  @@index([completedAt], map: "idx_intelligence_analysis_snapshot_retention")
 }

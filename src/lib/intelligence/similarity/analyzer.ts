@@ -1,4 +1,5 @@
 import 'server-only';
+import { analysisPolicyHash } from '../analysis/contract';
 import prisma from '@/lib/prisma';
 import { withDbBudget } from '../jobs/db-budget';
 import { resolveEffectivePolicy, type IntelligenceSettingsView } from '../settings/service';
@@ -24,7 +25,7 @@ export async function analyzeIncident(
   const incidentId = item.subjectKey;
   const fingerprint = await prisma.incidentFingerprint.findUnique({
     where: { incidentId },
-    select: { serviceId: true },
+    select: { serviceId: true, updatedAt: true, sourceUpdatedAt: true },
   });
   if (!fingerprint) {
     const exists = await prisma.incident.findUnique({
@@ -56,6 +57,9 @@ export async function analyzeIncident(
       incidentId,
       generation: item.generation,
       policyVersion: policy.version,
+      policyHash: analysisPolicyHash(policy),
+      sourceUpdatedAt: fingerprint.sourceUpdatedAt ?? undefined,
+      fingerprintUpdatedAt: fingerprint.updatedAt,
       tier: similar.tier,
       results: similar.results,
     })

@@ -24,6 +24,9 @@ export async function replaceFindings(
     kind: IntelligenceFindingKind;
     generation: number;
     policyVersion: number | null;
+    policyHash?: string;
+    sourceUpdatedAt?: Date;
+    fingerprintUpdatedAt?: Date;
     rows: FindingRow[];
   }
 ): Promise<'written' | 'stale'> {
@@ -33,7 +36,12 @@ export async function replaceFindings(
     where: { incidentId: input.incidentId, kind: input.kind },
     _max: { generation: true },
   });
-  if ((newest._max.generation ?? 0) > input.generation) return 'stale';
+  const snapshot = await tx.intelligenceAnalysisSnapshot.findUnique({
+    where: { incidentId_kind: { incidentId: input.incidentId, kind: input.kind } },
+    select: { generation: true },
+  });
+  if (Math.max(newest._max.generation ?? 0, snapshot?.generation ?? 0) > input.generation)
+    return 'stale';
 
   await tx.intelligenceFinding.updateMany({
     where: { incidentId: input.incidentId, kind: input.kind, status: 'ACTIVE' },
@@ -54,6 +62,21 @@ export async function replaceFindings(
       })),
     });
   }
+  const success = {
+    generation: input.generation,
+    policyVersion: input.policyVersion,
+    policyHash: input.policyHash ?? null,
+    sourceUpdatedAt: input.sourceUpdatedAt ?? null,
+    fingerprintUpdatedAt: input.fingerprintUpdatedAt ?? null,
+    completedAt: new Date(),
+    engineVersion: INTELLIGENCE_ENGINE_VERSION,
+    rowCount: input.rows.length,
+  };
+  await tx.intelligenceAnalysisSnapshot.upsert({
+    where: { incidentId_kind: { incidentId: input.incidentId, kind: input.kind } },
+    create: { incidentId: input.incidentId, kind: input.kind, ...success },
+    update: success,
+  });
   return 'written';
 }
 
@@ -64,6 +87,9 @@ export async function replaceSimilarFindings(
     incidentId: string;
     generation: number;
     policyVersion: number | null;
+    policyHash?: string;
+    sourceUpdatedAt?: Date;
+    fingerprintUpdatedAt?: Date;
     tier: SimilarityTier;
     results: SimilarIncident[];
   }
@@ -73,6 +99,9 @@ export async function replaceSimilarFindings(
     kind: 'SIMILAR_INCIDENT',
     generation: input.generation,
     policyVersion: input.policyVersion,
+    policyHash: input.policyHash,
+    sourceUpdatedAt: input.sourceUpdatedAt,
+    fingerprintUpdatedAt: input.fingerprintUpdatedAt,
     rows: input.results.map(result => ({
       confidence: result.score,
       subjectRef: result.incidentId,

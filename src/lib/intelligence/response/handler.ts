@@ -1,4 +1,5 @@
 import 'server-only';
+import { analysisPolicyHash } from '../analysis/contract';
 import prisma from '@/lib/prisma';
 import { withDbBudget } from '../jobs/db-budget';
 import type { ClaimedWorkItem } from '../jobs/work-queue';
@@ -34,7 +35,13 @@ export async function analyzeResponse(
   const incidentId = item.subjectKey;
   const incident = await prisma.incident.findUnique({
     where: { id: incidentId },
-    select: { id: true, serviceId: true, createdAt: true },
+    select: {
+      id: true,
+      serviceId: true,
+      createdAt: true,
+      updatedAt: true,
+      intelligenceFingerprint: { select: { updatedAt: true, sourceUpdatedAt: true } },
+    },
   });
   if (!incident) return 'incident_gone';
 
@@ -53,12 +60,27 @@ export async function analyzeResponse(
       },
       _max: { generation: true },
     });
-    if ((newest._max.generation ?? 0) > item.generation) return 'stale' as const;
+    const completed = await tx.intelligenceAnalysisSnapshot.aggregate({
+      where: {
+        incidentId,
+        kind: { in: ['CHANGE_CORRELATION', 'PROBABLE_CAUSE', 'RUNBOOK_RECOMMENDATION'] },
+      },
+      _max: { generation: true },
+    });
+    if (Math.max(newest._max.generation ?? 0, completed._max.generation ?? 0) > item.generation)
+      return 'stale' as const;
     const [causes, runbooks] = await Promise.all([
       computeCauseFindings(tx, incident, edges),
       computeRunbookFindings(tx, incident),
     ]);
-    const common = { incidentId, generation: item.generation, policyVersion: policy.version };
+    const common = {
+      incidentId,
+      generation: item.generation,
+      policyVersion: policy.version,
+      policyHash: analysisPolicyHash(policy),
+      sourceUpdatedAt: incident.intelligenceFingerprint?.sourceUpdatedAt ?? undefined,
+      fingerprintUpdatedAt: incident.intelligenceFingerprint?.updatedAt,
+    };
     const results = [
       await replaceFindings(tx, { ...common, kind: 'CHANGE_CORRELATION', rows: causes.changes }),
       await replaceFindings(tx, {

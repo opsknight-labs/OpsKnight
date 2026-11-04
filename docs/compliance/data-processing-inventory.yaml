@@ -111,6 +111,8 @@ domains:
         content-tokens,
         credential-filtered-labels,
         numeric-match-evidence,
+        incident-source-version-timestamps,
+        recommendation-success-markers,
         feedback-notes,
         feedback-and-policy-authorship,
         work-item-errors,
@@ -121,6 +123,7 @@ domains:
     purpose:
       [
         similar-incident-suggestions,
+        recommendation-freshness,
         optional-semantic-search,
         optional-weekly-digest-email,
         correlation-and-noise-analysis,

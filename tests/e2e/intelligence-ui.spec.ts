@@ -573,4 +573,59 @@ test.describe.serial('intelligence responder workflows', () => {
     await expect(page.getByRole('button', { name: 'New chat', exact: true })).toBeVisible();
     await expectAccessible(page, 'section[role="dialog"]');
   });
+  test('freshness explains unfinished analysis and operator refresh uses the native queue', async ({
+    page,
+  }) => {
+    const source = await prisma.incident.findUniqueOrThrow({
+      where: { id: incidentId },
+      select: { serviceId: true },
+    });
+    const pending = await prisma.incident.create({
+      data: { title: 'Freshness browser source', serviceId: source.serviceId, urgency: 'LOW' },
+    });
+    // Hold a synthetic in-flight lease so the background worker cannot finish before the UI assertion.
+    await prisma.intelligenceWorkItem.upsert({
+      where: { kind_subjectKey: { kind: 'INDEX_INCIDENT', subjectKey: pending.id } },
+      create: {
+        kind: 'INDEX_INCIDENT',
+        subjectKey: pending.id,
+        claimToken: 'freshness-browser-lease',
+        claimedAt: new Date(),
+        leaseUntil: new Date(Date.now() + 600_000),
+      },
+      update: {
+        claimToken: 'freshness-browser-lease',
+        claimedAt: new Date(),
+        leaseUntil: new Date(Date.now() + 600_000),
+      },
+    });
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto(`/incidents/${pending.id}`);
+    await expect(
+      page.getByRole('status').filter({ hasText: 'Waiting for recommendation analysis.' })
+    ).toBeVisible();
+    const requested = page.waitForResponse(
+      response =>
+        response.url().endsWith(`/api/intelligence/incidents/${pending.id}/analysis`) &&
+        response.request().method() === 'POST'
+    );
+    await page.getByRole('button', { name: 'Refresh recommendations', exact: true }).click();
+    expect((await requested).status()).toBe(202);
+    await expect
+      .poll(() =>
+        prisma.auditLog.count({
+          where: { action: 'intelligence.analysis.requested', entityId: pending.id },
+        })
+      )
+      .toBe(1);
+    expect(
+      await prisma.intelligenceWorkItem.count({
+        where: { kind: 'INDEX_INCIDENT', subjectKey: pending.id },
+      })
+    ).toBe(1);
+    await expectAccessible(page, '#main-content');
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)
+    ).toBe(true);
+  });
 });

@@ -75,18 +75,20 @@ const SUPPRESSED_RECHECK_MS = 60 * 60_000;
  * missed row heals on the next sweep. One replica sweeps at a time; the others skip.
  */
 export async function reconcileFingerprints(
-  options: { limit: number; lookbackDays: number; now?: Date; lagMs?: number },
+  options: { limit: number; lookbackDays: number; now?: Date; lagMs?: number; maxDbMs?: number },
   client: typeof prisma = prisma
-): Promise<{ missing: number; staleResolution: number; suppressed: number }> {
+): Promise<{ missing: number; staleResolution: number; suppressed: number; staleSource: number }> {
   const now = options.now ?? new Date();
   const upperBound = new Date(now.getTime() - (options.lagMs ?? DISCOVERY_SAFETY_LAG_MS));
   const lowerBound = new Date(now.getTime() - options.lookbackDays * 86_400_000);
   const recheckBefore = new Date(now.getTime() - SUPPRESSED_RECHECK_MS);
 
+  const maxDbMs = Math.max(50, Math.min(2000, Math.floor(options.maxDbMs ?? 1000)));
   return client.$transaction(async tx => {
+    await tx.$executeRaw`SELECT set_config('statement_timeout', ${String(maxDbMs)}, true), set_config('lock_timeout', ${String(Math.min(maxDbMs, 1000))}, true)`;
     const [{ locked }] = await tx.$queryRaw<Array<{ locked: boolean }>>`
       SELECT pg_try_advisory_xact_lock(hashtextextended('intelligence-reconcile', 0)) AS locked`;
-    if (!locked) return { missing: 0, staleResolution: 0, suppressed: 0 };
+    if (!locked) return { missing: 0, staleResolution: 0, suppressed: 0, staleSource: 0 };
 
     const missing = await tx.$queryRaw<Array<{ id: string }>>(Prisma.sql`
       SELECT i."id" FROM "Incident" i
@@ -103,6 +105,13 @@ export async function reconcileFingerprints(
       ORDER BY i."createdAt" DESC
       LIMIT ${options.limit}
     `);
+    const staleSource = await tx.$queryRaw<Array<{ id: string }>>(Prisma.sql`
+      SELECT i."id" FROM "Incident" i JOIN "IncidentFingerprint" f ON f."incidentId" = i."id"
+      WHERE i."createdAt" > ${lowerBound} AND i."createdAt" <= ${upperBound}
+        AND f."template" <> '' AND i."updatedAt" IS DISTINCT FROM f."sourceUpdatedAt"
+        AND (i."resolvedAt" IS NULL) = (f."resolvedAt" IS NULL)
+      ORDER BY i."createdAt" DESC LIMIT ${options.limit}
+    `);
     const suppressed = await tx.$queryRaw<Array<{ id: string }>>(Prisma.sql`
       SELECT f."incidentId" AS id FROM "IncidentFingerprint" f
       WHERE f."incidentCreatedAt" > ${lowerBound} AND f."template" = '' AND f."updatedAt" < ${recheckBefore}
@@ -111,7 +120,7 @@ export async function reconcileFingerprints(
     `);
 
     await enqueueWorkItems(
-      [...missing, ...staleResolution, ...suppressed].map(row => ({
+      [...missing, ...staleResolution, ...staleSource, ...suppressed].map(row => ({
         kind: WORK_KINDS.INDEX_INCIDENT,
         subjectKey: row.id,
       })),
@@ -121,6 +130,7 @@ export async function reconcileFingerprints(
       missing: missing.length,
       staleResolution: staleResolution.length,
       suppressed: suppressed.length,
+      staleSource: staleSource.length,
     };
   });
 }

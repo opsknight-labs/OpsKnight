@@ -1,4 +1,5 @@
 import IncidentIntelligencePanel from './IncidentIntelligencePanel';
+import IncidentAnalysisStatus from './IncidentAnalysisStatus';
 import IntelligenceSkeleton from './IntelligenceSkeleton';
 import prisma from '@/lib/prisma';
 import { Suspense } from 'react';
@@ -633,6 +634,11 @@ export default async function IncidentDetailScreen({
           )}
 
           <IncidentIntelligencePanel
+            analysisStatus={
+              <Suspense fallback={null}>
+                <IncidentAnalysisStatus incidentId={incident.id} />
+              </Suspense>
+            }
             similar={
               <Suspense fallback={<IntelligenceSkeleton />}>
                 <IncidentIntelligenceCard incidentId={incident.id} />

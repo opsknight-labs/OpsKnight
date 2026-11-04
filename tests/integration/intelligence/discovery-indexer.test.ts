@@ -84,7 +84,7 @@ describe('fingerprint reconciliation (anti-entropy)', () => {
     await db.$transaction(tx => indexIncident(indexed.id, tx));
 
     const result = await reconcileFingerprints({ limit: 10, lookbackDays: 7 });
-    expect(result).toEqual({ missing: 1, staleResolution: 0, suppressed: 0 });
+    expect(result).toEqual({ missing: 1, staleResolution: 0, suppressed: 0, staleSource: 0 });
     expect((await db.intelligenceWorkItem.findMany()).map(i => i.subjectKey)).toEqual([lost.id]);
   });
 
@@ -101,6 +101,7 @@ describe('fingerprint reconciliation (anti-entropy)', () => {
       missing: 0,
       staleResolution: 1,
       suppressed: 0,
+      staleSource: 0,
     });
   });
 
@@ -121,6 +122,7 @@ describe('fingerprint reconciliation (anti-entropy)', () => {
       missing: 0,
       staleResolution: 1,
       suppressed: 0,
+      staleSource: 0,
     });
   });
 
@@ -136,6 +138,7 @@ describe('fingerprint reconciliation (anti-entropy)', () => {
       missing: 0,
       staleResolution: 0,
       suppressed: 1,
+      staleSource: 0,
     });
     expect((await db.intelligenceWorkItem.findMany()).map(i => i.subjectKey)).toEqual([old.id]);
   });
@@ -158,6 +161,7 @@ describe('fingerprint reconciliation (anti-entropy)', () => {
       missing: 0,
       staleResolution: 0,
       suppressed: 0,
+      staleSource: 0,
     });
   });
 });
@@ -231,4 +235,29 @@ describe('incident indexer', () => {
     await db.$transaction(tx => indexIncident(created.id, tx));
     expect(await db.incident.findUniqueOrThrow({ where: { id: created.id } })).toEqual(before);
   });
+});
+
+it('repairs an edited source even when unrelated fingerprint metadata was touched later', async () => {
+  const service = await createTestService('Source version repair');
+  const source = await createTestIncident('Original wording', service.id, {
+    createdAt: ago(600_000),
+  });
+  await db.$transaction(tx => indexIncident(source.id, tx));
+  const edited = await db.incident.update({
+    where: { id: source.id },
+    data: { title: 'Changed wording' },
+  });
+  const fingerprint = await db.incidentFingerprint.update({
+    where: { incidentId: source.id },
+    data: { patternVersion: 2 },
+  });
+  expect(fingerprint.updatedAt.getTime()).toBeGreaterThanOrEqual(edited.updatedAt.getTime());
+  expect((await reconcileFingerprints({ limit: 10, lookbackDays: 7 })).staleSource).toBe(1);
+  expect(
+    await db.intelligenceWorkItem.findUnique({
+      where: { kind_subjectKey: { kind: 'INDEX_INCIDENT', subjectKey: source.id } },
+    })
+  ).not.toBeNull();
+  await db.$transaction(tx => indexIncident(source.id, tx));
+  expect((await reconcileFingerprints({ limit: 10, lookbackDays: 7 })).staleSource).toBe(0);
 });

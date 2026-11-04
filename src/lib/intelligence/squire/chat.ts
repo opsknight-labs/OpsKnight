@@ -1,3 +1,4 @@
+import { readIncidentAnalysisState } from '../analysis/view';
 import { SquireEvidenceRegistry, type EvidenceSnapshot } from './evidence';
 import { mintContextProof, readBrowserContext, authorizationContextHash } from './context-proof';
 import type { SourceReference } from '../conversations/contract';
@@ -311,7 +312,7 @@ async function brief(
   actor: AuthorizationActor,
   incident: ReadableIncident
 ): Promise<IncidentBriefing> {
-  const [similar, response, events] = await Promise.all([
+  const [similar, response, events, analysis] = await Promise.all([
     getSimilarIncidentsForActor(incident.id, actor).catch(() => null),
     getResponseIntelligenceForActor(incident.id, actor).catch(() => null),
     prisma.incidentEvent
@@ -322,9 +323,17 @@ async function brief(
         select: { type: true, createdAt: true, message: true },
       })
       .catch(() => []),
+    readIncidentAnalysisState(actor, incident.id).catch(() => null),
   ]);
   return {
     incident,
+    analysis: analysis
+      ? {
+          status: analysis.status,
+          message: analysis.message,
+          lastSuccessfulAt: analysis.lastSuccessfulAt,
+        }
+      : { status: 'UNAVAILABLE', message: 'Recommendation freshness could not be verified.' },
     timeline: events.map(event => ({
       type: event.type ?? 'EVENT',
       at: event.createdAt.toISOString(),

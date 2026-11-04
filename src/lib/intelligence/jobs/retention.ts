@@ -18,6 +18,7 @@ export interface RetentionResult {
   correlationGroups: number;
   relationships: number;
   findings: number;
+  analysisSnapshots: number;
   feedback: number;
   evaluationRuns: number;
   patterns: number;
@@ -67,6 +68,7 @@ export async function purgeExpiredIntelligenceData(
         correlationGroups: 0,
         relationships: 0,
         findings: 0,
+        analysisSnapshots: 0,
         feedback: 0,
         evaluationRuns: 0,
         patterns: 0,
@@ -103,6 +105,10 @@ export async function purgeExpiredIntelligenceData(
       DELETE FROM "IntelligenceFinding" WHERE "id" IN (
         SELECT "id" FROM "IntelligenceFinding"
         WHERE "createdAt" < ${cutoff(settings.findingRetentionDays)} LIMIT ${limit})`);
+    const analysisSnapshots = await tx.$executeRaw(Prisma.sql`
+      DELETE FROM "IntelligenceAnalysisSnapshot" WHERE ("incidentId", "kind") IN (
+        SELECT "incidentId", "kind" FROM "IntelligenceAnalysisSnapshot"
+        WHERE "completedAt" < ${cutoff(settings.findingRetentionDays)} LIMIT ${limit})`);
     const supersededFindings = await tx.$executeRaw(Prisma.sql`
       DELETE FROM "IntelligenceFinding" WHERE "id" IN (
         SELECT "id" FROM "IntelligenceFinding"
@@ -148,6 +154,7 @@ export async function purgeExpiredIntelligenceData(
       correlationGroups,
       relationships,
       findings,
+      analysisSnapshots,
       feedback,
       evaluationRuns,
       patterns,

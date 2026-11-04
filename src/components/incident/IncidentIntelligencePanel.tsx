@@ -10,12 +10,14 @@ export default function IncidentIntelligencePanel({
   response,
   summary,
   assistant,
+  analysisStatus,
 }: {
   similar: ReactNode;
   related: ReactNode;
   response: ReactNode;
   summary: ReactNode;
   assistant: ReactNode;
+  analysisStatus?: ReactNode;
 }) {
   const sections = [
     ['similar', 'Similar', similar],
@@ -32,6 +34,7 @@ export default function IncidentIntelligencePanel({
       <h2 id="incident-intelligence-heading" className="mb-3 text-base font-semibold">
         Intelligence
       </h2>
+      {analysisStatus}
       <Tabs defaultValue="similar">
         <div className="max-w-full overflow-x-auto pb-1">
           <TabsList aria-label="Incident intelligence" className="h-auto min-w-max justify-start">

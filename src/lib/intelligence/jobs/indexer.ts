@@ -32,6 +32,7 @@ export async function indexIncident(
       description: true,
       serviceId: true,
       createdAt: true,
+      updatedAt: true,
       resolvedAt: true,
       status: true,
     },
@@ -41,6 +42,7 @@ export async function indexIncident(
   if (options.suppressed) {
     const placeholder = {
       serviceId: incident.serviceId,
+      sourceUpdatedAt: incident.updatedAt,
       template: '',
       tokens: [],
       labels: {},
@@ -88,6 +90,7 @@ export async function indexIncident(
 
   const data = {
     serviceId: incident.serviceId,
+    sourceUpdatedAt: incident.updatedAt,
     template: fingerprint.template,
     templateHash: fingerprint.template ? templateHash(fingerprint.template) : null,
     tokens: fingerprint.tokens,
