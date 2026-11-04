@@ -208,15 +208,7 @@ export function AvatarPicker({
                 </DialogDescription>
               </div>
               {onUploadClick && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="shrink-0 gap-1.5"
-                  onClick={() => {
-                    onUploadClick();
-                    setOpen(false);
-                  }}
-                >
+                <Button variant="outline" size="sm" className="shrink-0 gap-1.5" onClick={() => { onUploadClick(); setOpen(false); }}>
                   <Upload className="h-3.5 w-3.5" />
                   Upload Photo
                 </Button>

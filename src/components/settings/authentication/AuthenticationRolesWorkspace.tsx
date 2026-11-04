@@ -58,7 +58,9 @@ export default function AuthenticationRolesWorkspace() {
   } = useAuthenticationWorkspace();
   const profile = readProfile(profileJson);
   const setProfileField = (key: keyof ProfileFields, value: string) => {
-    const next = { ...profile, [key]: value.trim() || undefined };
+    const next: ProfileFields = { ...profile };
+    // eslint-disable-next-line security/detect-object-injection -- key is a ProfileFields literal union.
+    next[key] = value.trim() || undefined;
     setProfileJson(JSON.stringify(next, null, 2));
     setDraftDirty(true);
   };
@@ -245,7 +247,13 @@ export default function AuthenticationRolesWorkspace() {
               <input
                 className={inputClass}
                 disabled={pending}
-                value={profile[key] ?? ''}
+                value={
+                  (key === 'department'
+                    ? profile.department
+                    : key === 'jobTitle'
+                      ? profile.jobTitle
+                      : profile.avatarUrl) ?? ''
+                }
                 placeholder={placeholder}
                 maxLength={128}
                 onChange={event => setProfileField(key, event.target.value)}

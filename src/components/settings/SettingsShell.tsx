@@ -12,11 +12,7 @@ type Props = {
 export default function SettingsShell({ children, isAdmin, isResponderOrAbove, isAuditor }: Props) {
   return (
     <div className="w-full max-w-[1600px] mx-auto p-4 sm:p-6 lg:p-8 min-h-[calc(100vh-4rem)]">
-      <CommandPalette
-        isAdmin={isAdmin}
-        isResponderOrAbove={isResponderOrAbove}
-        isAuditor={isAuditor}
-      />
+      <CommandPalette isAdmin={isAdmin} isResponderOrAbove={isResponderOrAbove} isAuditor={isAuditor} />
       <SettingsSubpageNav />
       <main className="w-full">{children}</main>
     </div>

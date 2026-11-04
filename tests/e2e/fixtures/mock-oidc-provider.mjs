@@ -18,6 +18,7 @@ const jwk = { ...(await exportJWK(publicKey)), kid: 'k1', alg: 'RS256', use: 'si
 let nextUser = { sub: 'sub-admin', email: 'admin@acme-sso.test', groups: ['ops-admins'] };
 const codes = new Map();
 const json = (res, body, status = 200) => { res.writeHead(status, { 'content-type': 'application/json' }); res.end(JSON.stringify(body)); };
+// eslint-disable-next-line security/detect-non-literal-fs-filename -- Test-only fixture reading its own certificate directory.
 createServer({ key: readFileSync(certDir + '/key.pem'), cert: readFileSync(certDir + '/cert.pem') }, async (req, res) => {
   const url = new URL(req.url, issuer);
   if (url.pathname === '/.well-known/openid-configuration')

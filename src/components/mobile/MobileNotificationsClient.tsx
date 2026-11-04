@@ -150,10 +150,13 @@ export default function MobileNotificationsClient() {
         if (showLoading) setLoading(false);
       }
     },
+    // The App Router instance is stable, so it is not a dependency.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [activeFilter, cacheKey]
   );
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Loads data from the server on mount and filter change.
     void fetchNotifications(true);
   }, [fetchNotifications]);
 

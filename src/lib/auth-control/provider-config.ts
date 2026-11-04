@@ -8,7 +8,12 @@ const claimPathSchema = z
   .trim()
   .min(1)
   .max(128)
-  .regex(/^[^.\s]+(\.[^.\s]+)*$/, 'Use a claim name or a dotted path such as realm_access.roles.');
+  // Each dot-separated part must be non-empty and contain no spaces (checked without a
+  // backtracking-prone regular expression).
+  .refine(
+    value => value.split('.').every(part => part.length > 0 && !/\s/.test(part)),
+    'Use a claim name or a dotted path such as realm_access.roles.'
+  );
 const claimValueSchema = z
   .string()
   .trim()

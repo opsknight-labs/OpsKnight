@@ -2,7 +2,7 @@
 
 import { useHydrated } from '@/hooks/useHydrated';
 
-import { useEffect, useState, useSyncExternalStore } from 'react';
+import { useState, useSyncExternalStore } from 'react';
 import { signIn } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -101,15 +101,6 @@ export default function LoginClient({
 
   // Email validation
   const isEmailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-
-  useEffect(() => {
-    if (errorCode) setError(signInMessageFor(errorCode, { administratorsNotified }));
-  }, [errorCode, administratorsNotified]);
-
-  // Surface SSO availability problems passed from the server component
-  useEffect(() => {
-    if (ssoError) setError(signInMessage(ssoError));
-  }, [ssoError]);
 
   const dismissError = () => {
     setError(null);

@@ -26,6 +26,11 @@ export const AUTH_TAB_NAMES: Record<AuthenticationSection, string> = {
   diagnostics: 'Diagnostics',
 };
 
+const tabNames = new Map(Object.entries(AUTH_TAB_NAMES));
+export function authTabName(tab: AuthenticationSection): string {
+  return tabNames.get(tab) ?? tab;
+}
+
 export const SETUP_TABS: AuthenticationSection[] = ['connection', 'access', 'roles', 'policy'];
 
 export const IDENTITY_GUIDE = 'https://opsknight.com/docs/latest/guides/identity';

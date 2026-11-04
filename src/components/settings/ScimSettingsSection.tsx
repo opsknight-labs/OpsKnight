@@ -1,5 +1,4 @@
 'use client';
-/* eslint-disable no-alert -- Native confirmations provide blocking, keyboard-accessible decisions for security-changing actions. */
 
 import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/shadcn/button';

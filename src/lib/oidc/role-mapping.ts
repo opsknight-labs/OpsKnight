@@ -42,14 +42,22 @@ export const OIDC_ROLE_RANK: Record<OidcRole, number> = {
  * contain dots), then as a dotted path into nested objects (Keycloak "realm_access.roles").
  */
 export function readOidcClaim(claims: OidcClaims, path: string): unknown {
-  if (Object.prototype.hasOwnProperty.call(claims, path)) return claims[path];
+  const whole = ownValue(claims, path);
+  if (whole.found) return whole.value;
   let current: unknown = claims;
   for (const key of path.split('.')) {
     if (!current || typeof current !== 'object' || Array.isArray(current)) return undefined;
-    if (!Object.prototype.hasOwnProperty.call(current, key)) return undefined;
-    current = (current as Record<string, unknown>)[key];
+    const next = ownValue(current as Record<string, unknown>, key);
+    if (!next.found) return undefined;
+    current = next.value;
   }
   return current;
+}
+
+/** Own properties only, so names such as "constructor" never reach the prototype. */
+function ownValue(object: Record<string, unknown>, key: string) {
+  const descriptor = Object.getOwnPropertyDescriptor(object, key);
+  return descriptor ? { found: true as const, value: descriptor.value as unknown } : { found: false as const };
 }
 
 /** The string values a claim holds, whether it is a single value or a list. */
@@ -165,13 +173,16 @@ export function oidcClaimSnapshot(
   claims: OidcClaims,
   rules: Array<{ claim: string }>
 ): Record<string, string[]> | null {
-  const snapshot: Record<string, string[]> = {};
+  const snapshot = new Map<string, string[]>();
   for (const claim of new Set(rules.map(rule => rule.claim))) {
     const raw = readOidcClaim(claims, claim);
     if (raw === undefined) continue;
-    snapshot[claim] = oidcClaimValues(raw)
-      .slice(0, MAX_SNAPSHOT_VALUES_PER_CLAIM)
-      .map(value => value.slice(0, 256));
+    snapshot.set(
+      claim,
+      oidcClaimValues(raw)
+        .slice(0, MAX_SNAPSHOT_VALUES_PER_CLAIM)
+        .map(value => value.slice(0, 256))
+    );
   }
-  return Object.keys(snapshot).length > 0 ? snapshot : null;
+  return snapshot.size > 0 ? Object.fromEntries(snapshot) : null;
 }

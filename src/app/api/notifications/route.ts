@@ -61,13 +61,13 @@ export async function GET(req: NextRequest) {
         const formattedNotifications = notifications.map((notification) => {
             const timeAgo = formatDateTime(notification.createdAt, userTimeZone, { format: 'relative' });
             const typeKey = notification.type.toLowerCase();
-            const typeMap: Record<string, 'incident' | 'service' | 'schedule'> = {
-                incident: 'incident',
-                schedule: 'schedule',
-                service: 'service',
-                team: 'service'
-            };
-            const type = typeMap[typeKey] || 'incident';
+            const typeMap = new Map<string, 'incident' | 'service' | 'schedule'>([
+                ['incident', 'incident'],
+                ['schedule', 'schedule'],
+                ['service', 'service'],
+                ['team', 'service'],
+            ]);
+            const type = typeMap.get(typeKey) ?? 'incident';
             const incidentId = notification.entityType === 'INCIDENT'
                 ? notification.entityId
                 : null;

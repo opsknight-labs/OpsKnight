@@ -16,6 +16,7 @@ import { getOidcProviderPolicy } from '@/lib/oidc/provider-policy';
 import {
   evaluateOidcRoleClaims,
   oidcRuleMatches,
+  readOidcClaim,
   resolveSignInRole,
 } from '@/lib/oidc/role-mapping';
 import { validateOidcCustomScopes } from '@/lib/oidc/scopes';
@@ -91,13 +92,6 @@ function diagnosticValue(value: unknown): string | boolean | string[] | null {
   return null;
 }
 
-function readClaimPath(claims: Record<string, unknown>, path: string): unknown {
-  if (path in claims) return claims[path];
-  return path.split('.').reduce<unknown>((current, key) => {
-    if (!current || typeof current !== 'object' || Array.isArray(current)) return undefined;
-    return (current as Record<string, unknown>)[key];
-  }, claims);
-}
 
 /** Masks an email for display: the domain is useful for diagnosis, the mailbox is not. */
 export function maskEmail(email: string | null | undefined): string | undefined {
@@ -116,7 +110,7 @@ export function claimDiagnostics(
     .sort();
   const selected = new Map<string, string | boolean | string[] | null>();
   for (const name of [...DIAGNOSTIC_CLAIMS, ...ruleClaims]) {
-    const value = readClaimPath(claims, name);
+    const value = readOidcClaim(claims, name);
     if (value !== undefined)
       selected.set(
         name,

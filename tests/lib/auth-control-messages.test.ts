@@ -23,7 +23,7 @@ describe('authentication message catalog', () => {
     ]) {
       const code = signInCodeForOidcFailure(reason);
       expect(code).not.toBe('SSO_INTERNAL_ERROR');
-      expect(SIGN_IN_MESSAGES[code]).toBeDefined();
+      expect(new Map(Object.entries(SIGN_IN_MESSAGES)).has(code)).toBe(true);
     }
     expect(signInCodeForOidcFailure('SOMETHING_NEW')).toBe('SSO_INTERNAL_ERROR');
   });

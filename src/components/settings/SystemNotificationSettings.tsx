@@ -287,9 +287,11 @@ export default function SystemNotificationSettings({ providers }: SystemNotifica
 
   const whatsappConfig = twilioProvider?.config as Record<string, unknown> | undefined;
   const whatsappAccountSid = (whatsappConfig?.whatsappAccountSid || twilioConfig?.accountSid) as
-    string | undefined;
+    | string
+    | undefined;
   const whatsappAuthToken = (whatsappConfig?.whatsappAuthToken || twilioConfig?.authToken) as
-    string | undefined;
+    | string
+    | undefined;
   const isWhatsappConfigured = Boolean(
     whatsappConfig?.whatsappNumber &&
     whatsappAccountSid &&

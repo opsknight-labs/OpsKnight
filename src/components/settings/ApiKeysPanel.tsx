@@ -139,7 +139,10 @@ const SCOPES_CONFIG = ALL_API_SCOPE_DEFINITIONS.filter(
   write: definition.write,
 }));
 
-function keysHref(inventory: { q: string; status: string }, cursor?: string | null): string {
+function keysHref(
+  inventory: { q: string; status: string },
+  cursor?: string | null
+): string {
   const params = new URLSearchParams({ tab: 'api-keys' });
   if (inventory.q) params.set('kq', inventory.q);
   if (inventory.status !== 'ALL') params.set('kstatus', inventory.status);
@@ -198,7 +201,9 @@ export default function ApiKeysPanel({
   });
 
   const [selectedKeyScopes, setSelectedKeyScopes] = useState<Set<string>>(
-    canCreateWriteKeys ? new Set(['events:write', 'incidents:read']) : new Set(['incidents:read'])
+    canCreateWriteKeys
+      ? new Set(['events:write', 'incidents:read'])
+      : new Set(['incidents:read'])
   );
 
   const handleRevoke = async (keyId: string) => {
@@ -237,10 +242,7 @@ export default function ApiKeysPanel({
             <>
               Copy this key now and store it in a password manager or CI/CD secret vault. For
               security reasons,{' '}
-              <strong className="text-foreground">
-                you will not be able to view this token again
-              </strong>
-              .
+              <strong className="text-foreground">you will not be able to view this token again</strong>.
             </>
           }
         />

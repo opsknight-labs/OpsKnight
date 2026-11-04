@@ -147,20 +147,11 @@ export default function AppUrlSettings({ appUrl, fallback, updatedAt }: Props) {
             <div>
               <p className="font-semibold">Settings changed elsewhere</p>
               <p>{conflict}</p>
-              <p className="text-xs mt-1 opacity-80">
-                Your local URL edit has not been overwritten.
-              </p>
+              <p className="text-xs mt-1 opacity-80">Your local URL edit has not been overwritten.</p>
             </div>
           </div>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => window.location.reload()}
-            className="shrink-0 gap-1.5"
-          >
-            <RefreshCw className="h-3.5 w-3.5" />
-            Reload latest
+          <Button type="button" variant="outline" size="sm" onClick={() => window.location.reload()} className="shrink-0 gap-1.5">
+            <RefreshCw className="h-3.5 w-3.5" />Reload latest
           </Button>
         </div>
       )}

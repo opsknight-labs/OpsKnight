@@ -1,7 +1,7 @@
 'use client';
 
 import { cloneElement, useId, type ReactElement } from 'react';
-import { AUTH_TAB_NAMES } from './setup-steps';
+import { authTabName } from './setup-steps';
 import { Button, type ButtonProps } from '@/components/ui/shadcn/button';
 import { AlertCircle, ArrowRight, ChevronDown } from 'lucide-react';
 import type { AuthenticationSection } from '@/lib/auth-control/dashboard';
@@ -24,7 +24,7 @@ export function actionAvailability(
 }
 
 function getDefaultResolutionLabel(target: AuthenticationSection): string {
-  return `Go to ${AUTH_TAB_NAMES[target]}`;
+  return `Go to ${authTabName(target)}`;
 }
 
 /**

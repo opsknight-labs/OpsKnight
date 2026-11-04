@@ -118,6 +118,8 @@ export default async function LoginPage({
 
   return (
     <LoginClient
+      // A new error in the URL remounts the client so its message state starts fresh.
+      key={`${errorCode ?? ''}:${ssoError ?? ''}:${reference ?? ''}`}
       callbackUrl={callbackUrl}
       defaultCallbackUrl={fallback}
       errorCode={errorCode}

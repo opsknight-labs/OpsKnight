@@ -186,7 +186,7 @@ describeIfRealDB('Authentication Logic (Real DB)', () => {
 
       const password = 'password123';
       const passwordHash = await bcrypt.hash(password, 10);
-      const user = await createTestUser({
+      await createTestUser({
         email: 'invited@example.com',
         passwordHash,
         status: 'INVITED' as UserStatus,

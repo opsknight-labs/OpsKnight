@@ -303,7 +303,10 @@ export default function AuthenticationPolicyWorkspace() {
                       teamRemovals: 0,
                       evaluated: -1,
                     };
-                    const blockers = impact.blockersByMode?.[mode] ?? impact.blockers;
+                    const blockers =
+                      (mode === 'SSO_REQUIRED'
+                        ? impact.blockersByMode?.SSO_REQUIRED
+                        : impact.blockersByMode?.SSO_OPTIONAL) ?? impact.blockers;
                     return (
                       <div
                         className="space-y-3 rounded-xl border border-primary/20 bg-primary/5 p-4 text-sm"

@@ -97,6 +97,8 @@ const providerConfig: Record<
   },
 };
 
+const providerConfigs = new Map(Object.entries(providerConfig));
+
 export default function SsoButton({
   providerType,
   providerLabel,
@@ -104,8 +106,8 @@ export default function SsoButton({
   loading,
   disabled,
 }: Props) {
-  const providerKey = providerType && providerConfig[providerType] ? providerType : 'custom';
-  const config = providerConfig[providerKey];
+  const providerKey = providerType && providerConfigs.has(providerType) ? providerType : 'custom';
+  const config = providerConfigs.get(providerKey) ?? providerConfig.custom;
   const label = providerLabel || config.defaultLabel;
   const isGoogle = providerKey === 'google';
 
