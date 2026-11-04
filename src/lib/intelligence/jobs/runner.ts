@@ -1,4 +1,5 @@
 import 'server-only';
+import { encodeWorkFailure } from './failures';
 import { logger } from '@/lib/logger';
 import { withSpan } from '../telemetry';
 import {
@@ -231,7 +232,7 @@ async function processItem(
     await failWorkItem(item, error, undefined, undefined, minDelayMs).catch(releaseError =>
       logger.warn('[Intelligence] Failed to release work item after error', {
         id: item.id,
-        error: releaseError instanceof Error ? releaseError.message : String(releaseError),
+        failure: encodeWorkFailure(releaseError),
       })
     );
     return 'failed';

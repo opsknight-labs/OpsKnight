@@ -181,3 +181,16 @@ from this per-service runtime gate; synthetic test fixtures do not certify a pro
 AI requests reserve estimated tokens atomically against global and personal UTC-day budgets before
 calling a provider. Usage settles per attempt, including failed/aborted requests and connection tests.
 Expired reservations and confirmed-action receipts are purged in bounded sweeps, including while OFF.
+
+### Finding services and reviewing failed work
+
+On **Grouping quality**, search for a service by name, use **More services** to browse additional
+matches, then choose **View quality**. Search is case-insensitive and treats `%` and `_` literally.
+The selected service stays available while you browse. If a service is removed or access changes,
+restart the search; hidden services are never used as pagination anchors.
+
+The Intelligence overview lists failed work with fixed diagnostic summaries for processing budgets,
+database contention, AI usage limits, provider availability, invalid input and cancellation. Unknown
+or legacy failures show a generic summary; raw exception bodies are withheld. New failures store only
+a diagnostic code. Older queue text follows the existing retention sweep. Operators retain the native
+**Retry** action; these summaries do not automatically replay work or change service policy.

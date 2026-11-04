@@ -147,6 +147,8 @@ Do not rebuild these under new names. The roadmap extends their weakest boundari
 
 ## P2-08 — Add a practical quality-review and onboarding workflow
 
+**Implementation progress (2026-11-04):** quality review now has case-insensitive literal service search and 25-result keyset pages, within the existing DB statement budget. Scope is applied before cursor resolution and LIMIT; a readable selection survives search/page changes. Invalid, deleted or inaccessible cursors offer the same restart flow. A 120-readable/30-hidden fixture covers complete paging, an item beyond the former 100-item cap, retained selection, revocation/invalid input and literal pattern characters. This closes the service-discovery slice only; onboarding, representative review queues, holdouts and drift acceptance remain open.
+
 **Finding: extension of existing gates.** Quality metrics, evaluation, service policies and audited weight publication already exist. The opportunity is helping an operator gather representative labels and understand why a service is not ready. Service selection on the quality page currently takes the first 100 readable services.
 
 **Build:** an onboarding checklist for source coverage, data boundaries, provider readiness and baseline replay; searchable/paginated service selection; a review queue with representative positives, negatives, critical examples and topology cases; reasoned corrections and reviewer provenance. Use time- and service-aware held-out evaluation rather than relying only on every fifth pair as a split. Add data freshness and drift review. Explain each existing AUTO requirement and next step; never manufacture labels or lower thresholds to make a service appear ready.
@@ -170,6 +172,8 @@ Do not rebuild these under new names. The roadmap extends their weakest boundari
 **Dependencies / effort:** P0-01/02, P1-05; approximately 5–8 days for draft-to-native-review, with direct publication estimated separately.
 
 ## P2-10 — Extend operator diagnostics and recovery
+
+**Implementation progress (2026-11-04):** reproduced raw exception retention with a synthetic private-text canary. New work failures now persist an allowlisted diagnostic code; dead-letter DTOs expose fixed summaries and withhold all legacy error text. Claim-release logging uses the same safe code. Existing retries, lease fencing and operator replay are preserved; old queue text remains subject to existing retention rather than being silently erased. Queue/runner database tests (37), service/settings/freshness tests (33), pure failure/architecture tests (25), typecheck and zero-warning lint passed. Browser/full-suite verification follows. Filtering, bulk previews, quarantine and ANN diagnostics remain open.
 
 **Finding: extension, not a missing retry system.** Queue health, dead-letter listing and single-item replay already exist. The page shows a bounded list of ten failed items, with limited investigation/filtering.
 

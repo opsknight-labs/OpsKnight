@@ -1,8 +1,7 @@
 import Link from 'next/link';
-import prisma from '@/lib/prisma';
 import { assertCapability, getCurrentAuthorizationActor } from '@/lib/rbac';
 import { CAPABILITIES, hasCapability } from '@/lib/authorization';
-import { serviceReadWhere } from '@/lib/authorization-filters';
+import { listReadableServiceOptions } from '@/lib/intelligence/settings/service-options';
 import { resolveEffectivePolicy } from '@/lib/intelligence/settings/service';
 import { getAutoGate, getLatestQualityMeasurement } from '@/lib/intelligence/evaluation/quality';
 import { AUTO_QUALITY_THRESHOLDS } from '@/lib/intelligence/evaluation/quality-metrics';
@@ -15,25 +14,30 @@ const percent = (value: number) => `${(value * 100).toFixed(1)}%`;
 export default async function QualityPage({
   searchParams,
 }: {
-  searchParams?: Promise<{ serviceId?: string }>;
+  searchParams?: Promise<{
+    serviceId?: string | string[];
+    q?: string | string[];
+    after?: string | string[];
+  }>;
 }) {
   await assertCapability(CAPABILITIES.INTELLIGENCE_READ);
   const actor = await getCurrentAuthorizationActor();
-  const requested = (await searchParams)?.serviceId?.slice(0, 64);
-  const readable = serviceReadWhere(actor);
-  const services = await prisma.service.findMany({
-    where: readable,
-    orderBy: { name: 'asc' },
-    take: 100,
-    select: { id: true, name: true },
+  const params = await searchParams;
+  const options = await listReadableServiceOptions(actor, {
+    q: params?.q,
+    after: params?.after,
+    serviceId: params?.serviceId,
   });
-  const service = requested
-    ? await prisma.service.findFirst({
-        where: { AND: [{ id: requested }, readable] },
-        select: { id: true, name: true },
-      })
-    : services[0];
-  if (service && !services.some(row => row.id === service.id)) services.push(service);
+  const services = [...options.services];
+  const service = options.selected;
+  if (service && !services.some(row => row.id === service.id)) services.unshift(service);
+  const pageHref = (after?: string) => {
+    const query = new URLSearchParams();
+    if (options.q) query.set('q', options.q);
+    if (service) query.set('serviceId', service.id);
+    if (after) query.set('after', after);
+    return `/settings/intelligence/quality?${query}`;
+  };
   const policy = service ? await resolveEffectivePolicy(service.id) : null;
   const [gate, measurement] =
     service && policy
@@ -52,8 +56,58 @@ export default async function QualityPage({
           never counted as negatives.
         </p>
       </header>
-      <form method="get" className="flex flex-wrap items-end gap-3">
-        <div className="space-y-1">
+      <form method="get" className="flex flex-wrap items-end gap-3" aria-label="Search services">
+        {service && <input type="hidden" name="serviceId" value={service.id} />}
+        <div className="min-w-0 space-y-1">
+          <label htmlFor="quality-search" className="block text-sm font-medium">
+            Search services
+          </label>
+          <input
+            id="quality-search"
+            name="q"
+            type="search"
+            maxLength={80}
+            defaultValue={options.q}
+            className="w-full rounded-md border border-border bg-background p-2 text-sm"
+          />
+        </div>
+        <button
+          type="submit"
+          className="min-h-10 rounded-md border border-border px-3 py-2 text-sm"
+        >
+          Search
+        </button>
+      </form>
+      {options.error && (
+        <p role="status" className="text-sm text-muted-foreground">
+          {options.error}
+        </p>
+      )}
+      {options.services.length === 0 && !options.error && (
+        <p role="status" className="text-sm text-muted-foreground">
+          No readable services match this search.
+        </p>
+      )}
+      <nav aria-label="Service search pages" className="flex flex-wrap gap-4 text-sm">
+        {options.after && (
+          <Link href={pageHref()} className="underline">
+            First page
+          </Link>
+        )}
+        {options.next && (
+          <Link href={pageHref(options.next)} className="underline">
+            More services
+          </Link>
+        )}
+      </nav>
+      <form
+        method="get"
+        className="flex flex-wrap items-end gap-3"
+        aria-label="View service quality"
+      >
+        <input type="hidden" name="q" value={options.q} />
+        {options.after && <input type="hidden" name="after" value={options.after} />}
+        <div className="min-w-0 max-w-full space-y-1">
           <label htmlFor="quality-service" className="block text-sm font-medium">
             Service
           </label>
@@ -61,17 +115,21 @@ export default async function QualityPage({
             id="quality-service"
             name="serviceId"
             defaultValue={service?.id ?? ''}
-            className="max-w-full rounded-md border border-border bg-background p-2 text-sm"
+            className="min-h-10 w-full min-w-0 max-w-full rounded-md border border-border bg-background p-2 text-sm"
           >
             {!service && <option value="">Choose a service</option>}
             {services.map(row => (
               <option key={row.id} value={row.id}>
                 {row.name}
+                {!options.services.some(match => match.id === row.id) ? ' (current selection)' : ''}
               </option>
             ))}
           </select>
         </div>
-        <button type="submit" className="rounded-md border border-border px-3 py-2 text-sm">
+        <button
+          type="submit"
+          className="min-h-10 rounded-md border border-border px-3 py-2 text-sm"
+        >
           View quality
         </button>
       </form>

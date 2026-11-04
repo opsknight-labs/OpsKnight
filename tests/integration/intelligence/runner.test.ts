@@ -260,7 +260,7 @@ describe('intelligence cycle', () => {
     expect(result).toMatchObject({ claimed: 3, completed: 2, failed: 1 });
     expect(seen.sort()).toEqual(['good-1', 'good-2']);
     const remaining = await db.intelligenceWorkItem.findFirstOrThrow();
-    expect(remaining).toMatchObject({ subjectKey: 'bad', lastError: 'handler exploded' });
+    expect(remaining).toMatchObject({ subjectKey: 'bad', lastError: 'work:v1:UNKNOWN' });
     expect(remaining.scheduledAt.getTime()).toBeGreaterThan(Date.now());
   });
 
@@ -282,8 +282,8 @@ describe('intelligence cycle', () => {
     expect(Date.now() - started).toBeLessThan(900);
     expect(result).toMatchObject({ failed: 1, completed: 0 });
     expect(aborted).toBe(true);
-    expect((await db.intelligenceWorkItem.findFirstOrThrow()).lastError).toMatch(
-      /exceeded its 100ms budget/
+    expect((await db.intelligenceWorkItem.findFirstOrThrow()).lastError).toBe(
+      'work:v1:WORK_BUDGET'
     );
   });
 
@@ -295,9 +295,7 @@ describe('intelligence cycle', () => {
       handlers: DEFAULT_HANDLERS,
     });
     expect(result.failed).toBe(1);
-    expect((await db.intelligenceWorkItem.findFirstOrThrow()).lastError).toMatch(
-      /No handler registered/
-    );
+    expect((await db.intelligenceWorkItem.findFirstOrThrow()).lastError).toBe('work:v1:UNKNOWN');
   });
 
   it('never exceeds the configured concurrency', async () => {

@@ -201,9 +201,7 @@ export default async function IntelligenceSettingsPage() {
                   <p className="font-medium">
                     {item.kind} · {item.attempts} attempts
                   </p>
-                  {item.lastError && (
-                    <p className="text-xs text-muted-foreground">{item.lastError}</p>
-                  )}
+                  <p className="text-xs text-muted-foreground">{item.failureSummary}</p>
                 </div>
                 {canManage && <ReplayForm id={item.id} />}
               </li>

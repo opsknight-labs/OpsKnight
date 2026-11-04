@@ -157,7 +157,7 @@ describe('failure handling and dead letters', () => {
     expect(await failWorkItem(claimed, new Error('boom'))).toBe(true);
     expect(await claimWorkItems({ limit: 1 })).toHaveLength(0);
     const row = await db.intelligenceWorkItem.findFirstOrThrow();
-    expect(row.lastError).toBe('boom');
+    expect(row.lastError).toBe('work:v1:UNKNOWN');
     expect(row.scheduledAt.getTime()).toBeGreaterThan(Date.now());
   });
 
@@ -182,7 +182,7 @@ describe('failure handling and dead letters', () => {
     expect(dead).toMatchObject({
       subjectKey: 'poison',
       attempts: MAX_WORK_ATTEMPTS,
-      lastError: 'always fails',
+      failureCode: 'UNKNOWN',
     });
 
     expect(await replayDeadLetter(dead.id)).toBe(true);
@@ -253,11 +253,11 @@ describe('failure handling and dead letters', () => {
     );
   });
 
-  it('truncates very long error messages', async () => {
+  it('stores a fixed diagnostic code instead of very long error messages', async () => {
     await enqueueWorkItems([item('a')]);
     const [claimed] = await claimWorkItems({ limit: 1 });
     await failWorkItem(claimed, new Error('x'.repeat(10_000)));
-    expect((await db.intelligenceWorkItem.findFirstOrThrow()).lastError?.length).toBe(1000);
+    expect((await db.intelligenceWorkItem.findFirstOrThrow()).lastError).toBe('work:v1:UNKNOWN');
   });
 });
 
@@ -304,4 +304,18 @@ it('makes default schedules and operator replay immediately due despite applicat
   } finally {
     vi.useRealTimers();
   }
+});
+
+it('keeps raw exception canaries out of stored failures and legacy diagnostic results', async () => {
+  const canary = 'private-provider-body Alice password=canary-secret-731';
+  await enqueueWorkItems([item('private-failure')]);
+  const [claimed] = await claimWorkItems({ limit: 1 });
+  await failWorkItem(claimed, new Error(canary));
+  expect((await db.intelligenceWorkItem.findFirstOrThrow()).lastError).not.toContain(canary);
+  await db.intelligenceWorkItem.updateMany({
+    data: { attempts: MAX_WORK_ATTEMPTS, lastError: canary },
+  });
+  const diagnostic = await listDeadLetters();
+  expect(JSON.stringify(diagnostic)).not.toContain(canary);
+  expect(diagnostic[0]).not.toHaveProperty('lastError');
 });

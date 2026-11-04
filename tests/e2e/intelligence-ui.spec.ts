@@ -573,6 +573,73 @@ test.describe.serial('intelligence responder workflows', () => {
     await expect(page.getByRole('button', { name: 'New chat', exact: true })).toBeVisible();
     await expectAccessible(page, 'section[role="dialog"]');
   });
+  test('quality service search reaches beyond the first hundred services on mobile', async ({
+    page,
+  }, testInfo) => {
+    const prefix = `${tag}-fleet-`;
+    await prisma.service.createMany({
+      data: Array.from({ length: 120 }, (_, i) => ({
+        name: `${prefix}${String(i).padStart(3, '0')}`,
+      })),
+    });
+    try {
+      await page.setViewportSize({ width: 390, height: 844 });
+      await page.goto(`/settings/intelligence/quality?q=${encodeURIComponent(prefix)}`);
+      const choose = page.getByRole('combobox', { name: 'Service', exact: true });
+      await expect(choose.locator('option')).toHaveCount(25);
+      await page.getByRole('link', { name: 'More services', exact: true }).click();
+      await expect(choose.locator('option')).toHaveCount(26); // 25 matches plus the retained selection.
+      await expect(page.getByRole('link', { name: 'First page', exact: true })).toBeVisible();
+      await page
+        .getByRole('searchbox', { name: 'Search services', exact: true })
+        .fill(`${prefix}119`);
+      await page.getByRole('button', { name: 'Search', exact: true }).click();
+      await choose.selectOption({ label: `${prefix}119` });
+      await page.getByRole('button', { name: 'View quality', exact: true }).click();
+      await expect(page.getByRole('heading', { name: `${prefix}119`, exact: true })).toBeVisible();
+      await expect(page.getByRole('button', { name: 'Search', exact: true })).toBeVisible();
+      await noHorizontalOverflow(page);
+      await expectAccessible(page, '#main-content');
+      await page.screenshot({
+        path: testInfo.outputPath('quality-service-search-mobile.png'),
+        fullPage: true,
+      });
+    } finally {
+      await prisma.service.deleteMany({ where: { name: { startsWith: prefix } } });
+    }
+  });
+
+  test('operator diagnostics withhold legacy error payloads and retain reviewed replay controls', async ({
+    page,
+  }) => {
+    const raw = 'legacy-private-provider-body Alice password=browser-canary';
+    const work = await prisma.intelligenceWorkItem.create({
+      data: {
+        kind: 'ANALYZE_INCIDENT',
+        subjectKey: 'diagnostic-test-source',
+        attempts: 8,
+        failedAt: new Date(),
+        lastError: raw,
+      },
+    });
+    try {
+      await page.goto('/settings/intelligence');
+      const failed = page.getByRole('heading', { name: 'Failed work', exact: true }).locator('..');
+      await expect(
+        page.getByText('The work could not be completed. Detailed exception text is withheld.', {
+          exact: true,
+        })
+      ).toBeVisible();
+      expect(await page.locator('body').textContent()).not.toContain(raw);
+      expect(await page.content()).not.toContain(raw);
+      await expect(failed).toBeVisible();
+      await expect(page.getByRole('button', { name: 'Retry', exact: true })).toBeVisible();
+      await expectAccessible(page, '#main-content');
+    } finally {
+      await prisma.intelligenceWorkItem.deleteMany({ where: { id: work.id } });
+    }
+  });
+
   test('freshness explains unfinished analysis and operator refresh uses the native queue', async ({
     page,
   }, testInfo) => {

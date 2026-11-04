@@ -1,6 +1,7 @@
 import 'server-only';
 import { Prisma } from '@prisma/client';
 import prisma from '@/lib/prisma';
+import { encodeWorkFailure, describeWorkFailure } from './failures';
 
 /**
  * Coalesced, durable work queue for the intelligence lane.
@@ -42,7 +43,6 @@ export const WORK_PRIORITY: Record<WorkKind, number> = {
 
 export const MAX_WORK_ATTEMPTS = 8;
 export const DEFAULT_LEASE_MS = 60_000;
-const MAX_ERROR_LENGTH = 1000;
 const BACKOFF_BASE_MS = 5_000;
 const BACKOFF_MAX_MS = 15 * 60_000;
 /** A dead letter signalled again after this long gets a fresh set of attempts (the outage is likely over). */
@@ -204,10 +204,7 @@ export async function failWorkItem(
   random: () => number = Math.random,
   minDelayMs = 0
 ): Promise<boolean> {
-  const message = (error instanceof Error ? error.message : String(error)).slice(
-    0,
-    MAX_ERROR_LENGTH
-  );
+  const message = encodeWorkFailure(error);
   const delayMs = Math.max(minDelayMs, computeRetryDelayMs(item.attempts, random));
   const updated = await client.$executeRaw(Prisma.sql`
     UPDATE "IntelligenceWorkItem"
@@ -255,7 +252,7 @@ export async function listDeadLetters(
   options: { limit?: number; maxAttempts?: number } = {},
   client: Client = prisma
 ) {
-  return client.intelligenceWorkItem.findMany({
+  const rows = await client.intelligenceWorkItem.findMany({
     where: { attempts: { gte: options.maxAttempts ?? MAX_WORK_ATTEMPTS } },
     orderBy: { updatedAt: 'desc' },
     take: Math.min(Math.max(options.limit ?? 50, 1), 200),
@@ -266,8 +263,11 @@ export async function listDeadLetters(
       attempts: true,
       lastError: true,
       updatedAt: true,
+      scheduledAt: true,
+      failedAt: true,
     },
   });
+  return rows.map(({ lastError, ...row }) => ({ ...row, ...describeWorkFailure(lastError) }));
 }
 
 /** Operator action: gives a dead letter a fresh set of attempts. */
