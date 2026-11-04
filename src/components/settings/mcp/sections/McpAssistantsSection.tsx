@@ -1,10 +1,11 @@
 import Link from 'next/link';
-import { Bot, RotateCcw, SearchX } from 'lucide-react';
+import { Bot, SearchX } from 'lucide-react';
 import { Button } from '@/components/ui/shadcn/button';
-import { Input } from '@/components/ui/shadcn/input';
-import { Label } from '@/components/ui/shadcn/label';
 import { SettingsSection } from '@/components/settings/layout/SettingsSection';
-import McpClientScopeSelector from '@/components/settings/mcp/McpClientScopeSelector';
+import {
+  McpRegisterClientForm,
+  McpRestoreClientButton,
+} from '@/components/settings/mcp/McpClientForms';
 import McpConfirmAction from '@/components/settings/mcp/McpConfirmAction';
 import McpScopeSummary from '@/components/settings/mcp/McpScopeSummary';
 import { getAssistantIcon } from '@/components/common/BrandLogos';
@@ -22,6 +23,7 @@ import {
 } from '@/components/settings/mcp/McpListKit';
 import { CLIENT_TYPE_LABEL } from '@/components/settings/mcp/sections/McpConnectionsSection';
 import type { McpClientRow } from '@/app/(app)/settings/integrations/mcp/queries';
+import type { McpClientFormResult } from '@/app/(app)/settings/integrations/mcp/actions';
 import {
   MCP_PAGE_SIZE,
   mcpHref,
@@ -33,6 +35,12 @@ const TYPE_TONE: Record<McpClientRow['type'], PillTone> = {
   automatic: 'info',
   metadata: 'violet',
   manual: 'neutral',
+};
+
+const CLIENT_BLOCK_HINT: Record<NonNullable<McpClientRow['blockedReason']>, string> = {
+  mcp_disabled: 'MCP is turned off, so no assistant can connect.',
+  client_untrusted:
+    'The access policy no longer trusts this assistant: automatic connections are off, or its metadata host is not in the trusted list.',
 };
 
 const TYPE_HINT: Record<McpClientRow['type'], string> = {
@@ -71,8 +79,8 @@ export default function McpAssistantsSection({
   defaultScopes: string[];
   describeScope: (scope: string) => string;
   revokeAction: (form: FormData) => Promise<void>;
-  restoreAction: (form: FormData) => Promise<void>;
-  registerAction: (form: FormData) => Promise<void>;
+  restoreAction: (form: FormData) => Promise<McpClientFormResult>;
+  registerAction: (form: FormData) => Promise<McpClientFormResult>;
 }) {
   const statusParam = status === 'all' ? null : status;
   const typeParam = type === 'all' ? null : type;
@@ -172,7 +180,7 @@ export default function McpAssistantsSection({
                 { label: 'Type' },
                 { label: 'Scope ceiling' },
                 { label: 'Connections' },
-                { label: 'Last used' },
+                { label: 'Last call' },
                 { label: 'Registered' },
                 { label: 'Status' },
                 { label: 'Actions', srOnly: true, className: 'text-right' },
@@ -215,6 +223,7 @@ export default function McpAssistantsSection({
                     <McpScopeSummary
                       context={row.name}
                       scopes={row.scopes.map(scope => ({ scope, label: describeScope(scope) }))}
+                      usable={row.revokedAt ? undefined : row.effectiveScopes}
                     />
                   </ResponsiveCell>
                   <ResponsiveCell label="Connections">
@@ -230,12 +239,12 @@ export default function McpAssistantsSection({
                       <span className="text-muted-foreground">None active</span>
                     )}
                   </ResponsiveCell>
-                  <ResponsiveCell label="Last used">
+                  <ResponsiveCell label="Last call">
                     <RelativeTime
-                      value={row.lastUsedAt}
+                      value={row.lastCallAt}
                       now={now}
                       timeZone={timeZone}
-                      empty="Not used yet"
+                      empty="No calls yet"
                     />
                   </ResponsiveCell>
                   <ResponsiveCell label="Registered">
@@ -246,6 +255,13 @@ export default function McpAssistantsSection({
                       <StatusPill tone="danger" dot>
                         Revoked
                       </StatusPill>
+                    ) : row.blockedReason ? (
+                      <span title={CLIENT_BLOCK_HINT[row.blockedReason]}>
+                        <StatusPill tone="warning" dot>
+                          Blocked by policy
+                        </StatusPill>
+                        <span className="sr-only">. {CLIENT_BLOCK_HINT[row.blockedReason]}</span>
+                      </span>
                     ) : (
                       <StatusPill tone="success" dot>
                         Allowed
@@ -254,19 +270,7 @@ export default function McpAssistantsSection({
                   </ResponsiveCell>
                   <ResponsiveCell label="Actions" primary align="end">
                     {row.revokedAt ? (
-                      <form action={restoreAction}>
-                        <input type="hidden" name="id" value={row.id} />
-                        <Button
-                          type="submit"
-                          variant="outline"
-                          size="sm"
-                          aria-label={`Allow ${row.name} again`}
-                          className="h-8 w-full gap-1.5 px-2.5 text-xs md:w-auto"
-                        >
-                          <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />
-                          Allow again
-                        </Button>
-                      </form>
+                      <McpRestoreClientButton action={restoreAction} id={row.id} name={row.name} />
                     ) : (
                       <McpConfirmAction
                         action={revokeAction}
@@ -331,36 +335,11 @@ export default function McpAssistantsSection({
             </span>
           </span>
         </summary>
-        <form
+        <McpRegisterClientForm
           action={registerAction}
-          className="space-y-5 border-t border-border px-4 py-5 md:px-6"
-        >
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="space-y-1.5">
-              <Label htmlFor="mcp-client-name">Display name</Label>
-              <Input id="mcp-client-name" name="name" required maxLength={100} />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="mcp-client-redirect">Exact redirect URI</Label>
-              <Input
-                id="mcp-client-redirect"
-                name="redirectUri"
-                type="url"
-                required
-                placeholder="http://127.0.0.1:8765/callback"
-              />
-              <p className="text-xs text-muted-foreground">
-                HTTPS, or http on 127.0.0.1, localhost or [::1].
-              </p>
-            </div>
-          </div>
-          <McpClientScopeSelector scopeChoices={scopeChoices} defaultScopes={defaultScopes} />
-          <div className="flex justify-end">
-            <Button type="submit" size="sm">
-              Register client
-            </Button>
-          </div>
-        </form>
+          scopeChoices={scopeChoices}
+          defaultScopes={defaultScopes}
+        />
       </details>
     </div>
   );

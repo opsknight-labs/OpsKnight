@@ -1,5 +1,6 @@
 import { getMcpConfigurationStatus } from './config';
 import prisma from '@/lib/prisma';
+import { MCP_PROTOCOL_REVISION } from '../protocol/revision';
 
 export type McpSetupCheck = {
   id: string;
@@ -123,7 +124,7 @@ export async function runMcpSetupCheck(fetcher: typeof fetch = fetch): Promise<M
       headers: {
         'content-type': 'application/json',
         accept: 'application/json, text/event-stream',
-        'mcp-protocol-version': '2026-07-28',
+        'mcp-protocol-version': MCP_PROTOCOL_REVISION,
         'mcp-method': 'tools/list',
       },
       body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list', params: {} }),

@@ -21,9 +21,13 @@ function AssistantFilterSelect({
   selectedClientId,
   status,
   q,
+  truncated = false,
 }: {
-  clients: { id: string; name: string; metadataHost?: string | null }[];
+  /** `label` tells apart assistants that share a name (e.g. "Claude Code · a1b2"). */
+  clients: { id: string; name: string; label?: string; metadataHost?: string | null }[];
   selectedClientId: string | null;
+  /** More assistants exist than are listed. */
+  truncated?: boolean;
   status?: GrantStatus;
   q?: string;
 }) {
@@ -64,7 +68,10 @@ function AssistantFilterSelect({
                   clients.find(c => c.id === selectedClientId)?.metadataHost
                 )}
                 <span className="truncate">
-                  {clients.find(c => c.id === selectedClientId)?.name ?? 'Selected'}
+                  {(() => {
+                    const selected = clients.find(c => c.id === selectedClientId);
+                    return selected ? (selected.label ?? selected.name) : 'Selected';
+                  })()}
                 </span>
               </>
             ) : (
@@ -98,10 +105,15 @@ function AssistantFilterSelect({
               >
                 <div className="flex items-center gap-2 truncate">
                   {getAssistantIcon(client.name, 'h-3.5 w-3.5 shrink-0', client.metadataHost)}
-                  <span className="truncate">{client.name}</span>
+                  <span className="truncate">{client.label ?? client.name}</span>
                 </div>
               </SelectItem>
             ))}
+            {truncated && (
+              <SelectLabel className="px-2 py-1.5 text-[10px] font-normal text-muted-foreground">
+                Showing the first {clients.length}. Search by name to find others.
+              </SelectLabel>
+            )}
           </SelectGroup>
         </SelectContent>
       </Select>

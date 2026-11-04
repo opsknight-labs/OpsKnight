@@ -46,6 +46,8 @@ import {
   observeOperationalHistogram,
 } from '@/lib/metrics/operational/registry';
 import { logger, runWithContext } from '@/lib/logger';
+import { recordMcpGrantCall } from '@/lib/mcp/core/usage';
+import { MCP_PROTOCOL_REVISION } from '@/lib/mcp/protocol/revision';
 import {
   mcpErrorOutcome,
   mcpMetricTool,
@@ -127,7 +129,7 @@ async function handlePost(request: Request, requestId: string) {
     });
     rpcId = body.id;
     // 2025-revision clients are served statelessly by the SDK; tasks and listen are 2026-07-28 only.
-    const modern = request.headers.get('mcp-protocol-version') === '2026-07-28';
+    const modern = request.headers.get('mcp-protocol-version') === MCP_PROTOCOL_REVISION;
     const steps =
       body.method === 'tools/call' && body.params?.name === 'execute_plan'
         ? (body.params.arguments as { steps?: unknown[] } | undefined)?.steps
@@ -181,7 +183,7 @@ async function handlePost(request: Request, requestId: string) {
       // with the same authentication, admission and budget as every other request.
       requireMcp(
         request.headers.get('mcp-method') === body.method &&
-          request.headers.get('mcp-protocol-version') === '2026-07-28',
+          request.headers.get('mcp-protocol-version') === MCP_PROTOCOL_REVISION,
         'MCP_INVALID_HEADERS'
       );
       const taskId = (body.params as { taskId?: unknown } | undefined)?.taskId;
@@ -273,6 +275,8 @@ async function handlePost(request: Request, requestId: string) {
       return response;
     } finally {
       await handler.close();
+      // "Last call" for the admin lists: any answered tool call, throttled per grant.
+      if (body.method === 'tools/call') await recordMcpGrantCall(identity.grantId, tool);
     }
   } catch (error) {
     outcome = mcpErrorOutcome(error);

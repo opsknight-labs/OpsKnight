@@ -1,15 +1,18 @@
 'use client';
+
+import { InlineNotice } from '@/components/ui/InlineNotice';
+import { Button } from '@/components/ui/shadcn/button';
+
 export default function McpSettingsError({ reset }: { reset: () => void }) {
   return (
-    <div role="alert" className="rounded border p-6 space-y-3">
+    <InlineNotice tone="error" title="This MCP page could not load">
       <p>
-        Something went wrong while loading or saving this MCP page. Nothing was changed by the
-        failed request. Try again; if it keeps failing, reload the page or ask an administrator to
-        check the server logs.
+        Nothing was changed by the failed request. Try again; if it keeps failing, reload the page
+        or ask an administrator to check the server logs.
       </p>
-      <button onClick={reset} className="rounded border px-4 py-2">
+      <Button type="button" size="sm" variant="outline" className="mt-2" onClick={reset}>
         Try again
-      </button>
-    </div>
+      </Button>
+    </InlineNotice>
   );
 }

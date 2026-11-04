@@ -1,11 +1,24 @@
 'use client';
 
 import { useMemo, type ReactNode } from 'react';
-import { Code2 } from 'lucide-react';
+import { Code2, ExternalLink } from 'lucide-react';
+import { Button } from '@/components/ui/shadcn/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/shadcn/tabs';
 import { ClaudeLogo, CursorLogo, ChatGptLogo } from '@/components/common/BrandLogos';
 import McpCopyField from '@/components/settings/mcp/McpCopyField';
 import { mcpSetupCommands } from '@/components/settings/mcp/setup-commands';
+
+/** Opens the assistant's own install prompt; the person still confirms there. */
+function InstallLink({ href, label }: { href: string; label: string }) {
+  return (
+    <Button asChild size="sm" variant="outline" className="h-8 gap-1.5 text-xs">
+      <a href={href}>
+        <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
+        {label}
+      </a>
+    </Button>
+  );
+}
 
 function Steps({ children }: { children: ReactNode }) {
   return <ol className="list-none space-y-3 p-0 text-sm [counter-reset:step]">{children}</ol>;
@@ -117,16 +130,20 @@ export default function McpConnectGuide({ endpoint }: { endpoint: string }) {
           </Step>
         </Steps>
         <p className="mt-4 text-xs text-muted-foreground">
-          Custom connectors depend on your ChatGPT plan, and some workspaces require an
-          administrator to allow them.
+          Menu names vary by app version. Custom connectors depend on your ChatGPT plan, and some
+          workspaces require an administrator to allow them.
         </p>
       </TabsContent>
 
       <TabsContent value="cursor" className="mt-0">
         <Steps>
           <Step>
+            <p>Install with one click (Cursor asks you to confirm):</p>
+            <InstallLink href={commands.cursorInstall} label="Add to Cursor" />
+          </Step>
+          <Step>
             <p>
-              Add this to{' '}
+              Or add this to{' '}
               <code className="rounded bg-muted px-1 font-mono text-xs">~/.cursor/mcp.json</code>{' '}
               (or the project&apos;s{' '}
               <code className="rounded bg-muted px-1 font-mono text-xs">.cursor/mcp.json</code>):
@@ -142,8 +159,16 @@ export default function McpConnectGuide({ endpoint }: { endpoint: string }) {
       <TabsContent value="vscode" className="mt-0">
         <Steps>
           <Step>
-            <p>Run this in your terminal:</p>
+            <p>Install with one click (VS Code asks you to confirm):</p>
+            <InstallLink href={commands.vscodeInstall} label="Add to VS Code" />
+          </Step>
+          <Step>
+            <p>Or run this in your terminal:</p>
             <McpCopyField value={commands.vscode} label="VS Code setup command" multiline />
+            <p className="text-xs text-muted-foreground">
+              For macOS and Linux shells. On Windows, use the one-click link or the Command Palette
+              route below; PowerShell and cmd quote the JSON differently.
+            </p>
           </Step>
           <Step>
             <p>

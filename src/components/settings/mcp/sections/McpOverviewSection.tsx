@@ -23,6 +23,8 @@ import McpQuickSetup from '@/components/settings/mcp/McpQuickSetup';
 import McpConnectionTest from '@/components/settings/mcp/McpConnectionTest';
 import { StatusPill } from '@/components/settings/mcp/McpListKit';
 import { mcpSetupCommands } from '@/components/settings/mcp/setup-commands';
+import { MCP_PROTOCOL_REVISION } from '@/lib/mcp/protocol/revision';
+import { MCP_ABSOLUTE_SESSION_DAYS } from '@/lib/mcp/auth/session-lifetime';
 
 type SetupReport = Awaited<ReturnType<Parameters<typeof McpConnectionTest>[0]['action']>>;
 
@@ -282,8 +284,7 @@ export default function McpOverviewSection({
               <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground block">
                 Protocol Spec
               </span>
-              {/* The revision src/app/mcp/route.ts serves (see mcp-protocol-version handling). */}
-              <span className="font-medium text-foreground">MCP 2026-07-28</span>
+              <span className="font-medium text-foreground">MCP {MCP_PROTOCOL_REVISION}</span>
             </div>
             <div className="px-3 py-1">
               <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground block">
@@ -295,7 +296,9 @@ export default function McpOverviewSection({
               <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground block">
                 Session Security
               </span>
-              <span className="font-medium text-foreground">{sessionIdleDays} Days Sliding</span>
+              <span className="font-medium text-foreground">
+                {sessionIdleDays}-day idle · {MCP_ABSOLUTE_SESSION_DAYS}-day max
+              </span>
             </div>
             <div className="px-3 py-1">
               <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground block">
@@ -314,8 +317,8 @@ export default function McpOverviewSection({
       {!isAdmin && !enabled && (
         <InlineNotice tone="info" title="AI assistant access is not turned on yet">
           <p>
-            Ask an OpsKnight administrator to enable it in Settings → Integrations → MCP (AI
-            Assistants).
+            Ask an OpsKnight administrator to enable it in Settings → Integrations &amp; ChatOps →
+            MCP (AI Assistants).
           </p>
         </InlineNotice>
       )}
@@ -395,7 +398,8 @@ export default function McpOverviewSection({
               <dl className="grid grid-cols-1 gap-4 border-t border-border pt-4 sm:grid-cols-2">
                 <Fact label="Address from">{originSource ?? 'Not configured'}</Fact>
                 <Fact label="Stay signed in">
-                  {sessionIdleDays} {sessionIdleDays === 1 ? 'day' : 'days'} of inactivity
+                  Until {sessionIdleDays} {sessionIdleDays === 1 ? 'day' : 'days'} without use, and
+                  at most {MCP_ABSOLUTE_SESSION_DAYS} days
                 </Fact>
               </dl>
             </div>
@@ -430,9 +434,15 @@ export default function McpOverviewSection({
                       Run this read-only check anywhere that can reach your server, for example a
                       laptop on the public internet. It creates no clients, tokens or grants.
                     </p>
+                    <p>From an OpsKnight source checkout:</p>
                     <McpCopyField
                       value={mcpSetupCommands(endpoint).doctor}
                       label="MCP setup check command"
+                    />
+                    <p>Or on the server, inside the OpsKnight container:</p>
+                    <McpCopyField
+                      value={mcpSetupCommands(endpoint).doctorDocker}
+                      label="MCP setup check command for the container"
                     />
                   </div>
                 </details>

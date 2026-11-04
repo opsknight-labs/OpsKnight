@@ -6,23 +6,15 @@ import type { V2AuthContext } from '@/lib/api-v2/auth';
 import { digestMcpSecret, mcpResource } from './config';
 import { McpBoundaryError, requireMcp } from '../core/errors';
 import { admitMcpBearer, recordMcpBearerFailure } from './admission';
+import {
+  GRANT_ACCESS_COLUMNS,
+  grantAccessVerdict,
+  mcpGrantBlockError,
+  type GrantAccessSnapshot,
+} from './effective-access';
 
-interface GrantAuthoritySnapshot {
-  grantId: string;
-  userId: string;
-  userRevocationVersion: number;
-  grantScopes: string[];
-  clientScopes: string[];
-  resource: string;
-  revokedAt: Date | null;
-  clientRevokedAt: Date | null;
-  expiresAt: Date;
-  role: string | null;
-  status: string | null;
-  mcpRevocationVersion: number | null;
+interface GrantAuthoritySnapshot extends GrantAccessSnapshot {
   teamIds: string[];
-  clientTrusted: boolean;
-  policyEnabled: boolean | null;
   writesEnabled: boolean | null;
   sensitiveReadsEnabled: boolean | null;
   maxInFlight: number | null;
@@ -64,28 +56,13 @@ export async function resolveMcpGrant(
   return (await resolveMcpGrantWithPolicy(grantId, credentialId, db)).auth;
 }
 
-// The authority columns shared by both lookups. "clientTrusted" folds in what used to be WHERE
-// conditions so a token whose client is no longer trusted is told apart from an unknown token.
+// The authority columns shared by both lookups. The access columns are the same ones the
+// settings lists read (effective-access.ts), so the admin page shows what is enforced here.
 const AUTHORITY_COLUMNS = Prisma.sql`
-  g.id AS "grantId", g."userId", g."userRevocationVersion",
-  g.scopes AS "grantScopes", g.resource,
-  -- A metadata client's effective ceiling is always the current policy, never its stored copy.
-  CASE WHEN c."dynamicRegistration" THEN
-    ARRAY(SELECT s FROM unnest(c.scopes) AS s WHERE s = ANY(p."dcrScopes"))
-    WHEN c."metadataUrl" IS NULL THEN c.scopes
-    ELSE ARRAY(SELECT s FROM unnest(c.scopes) AS s WHERE s = ANY(p."cimdScopes")) END
-    AS "clientScopes",
-  COALESCE((NOT c."dynamicRegistration" OR p."dcrEnabled")
-    -- A metadata-document client stays valid only while its host remains trusted (substr skips https://).
-    AND (c."metadataUrl" IS NULL OR (p."cimdEnabled"
-      AND (cardinality(p."cimdAllowedHosts") = 0
-        OR split_part(substr(c."metadataUrl", 9), '/', 1) = ANY(p."cimdAllowedHosts")))), false)
-    AS "clientTrusted",
-  g."revokedAt", c."revokedAt" AS "clientRevokedAt", g."expiresAt",
-  u.role::text AS role, u.status::text AS status, u."mcpRevocationVersion",
+  ${GRANT_ACCESS_COLUMNS},
   ARRAY(SELECT tm."teamId" FROM "TeamMember" tm WHERE tm."userId" = u.id) AS "teamIds",
   -- The policy row this request is judged by; already joined for the client ceilings.
-  p.enabled AS "policyEnabled", p."writesEnabled", p."sensitiveReadsEnabled",
+  p."writesEnabled", p."sensitiveReadsEnabled",
   p."maxInFlight", p."maxOperations", p."requestsPerMinute", p."disabledCapabilities"`;
 
 /**
@@ -119,20 +96,12 @@ function authorityFrom(
   grant: GrantAuthoritySnapshot | undefined,
   now: Date
 ): { auth: V2AuthContext; policy: McpRuntimePolicy | null } {
-  requireMcp(
-    grant &&
-      grant.clientTrusted &&
-      !grant.revokedAt &&
-      !grant.clientRevokedAt &&
-      grant.expiresAt > now &&
-      grant.resource === mcpResource(),
-    'MCP_INVALID_GRANT',
-    401
-  );
-  requireMcp(grant.status === 'ACTIVE', 'MCP_INACTIVE_PRINCIPAL', 401);
+  requireMcp(grant, 'MCP_INVALID_GRANT', 401);
   // Only security events (password, email, deactivation, sign-out everywhere, demotion from ADMIN)
   // end a connection; other role and team edits narrow access live through authorize().
-  requireMcp(grant.mcpRevocationVersion === grant.userRevocationVersion, 'MCP_ACCESS_CHANGED', 401);
+  const { block, effectiveScopes: scopes } = grantAccessVerdict(grant, now, mcpResource());
+  if (block)
+    throw new McpBoundaryError(mcpGrantBlockError(block), block === 'admin_scope' ? 403 : 401);
   const base = authorizationActorFromUser({
     id: grant.userId,
     role: grant.role ?? '',
@@ -140,9 +109,6 @@ function authorityFrom(
     teamMemberships: grant.teamIds.map(teamId => ({ teamId })),
   });
   requireMcp(base, 'MCP_INACTIVE_PRINCIPAL', 401);
-  const scopes = grant.grantScopes.filter(scope => grant.clientScopes.includes(scope));
-  // Never inherit REST's admin:manage wildcard from an MCP consent grant.
-  requireMcp(!scopes.includes('admin:manage'), 'MCP_INVALID_SCOPE', 403);
   const id = `mcp:${grant.grantId}`;
   return {
     auth: {

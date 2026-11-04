@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
+import { useFormStatus } from 'react-dom';
 import { Info, PencilLine } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { McpConsentGroup, McpConsentScope } from '@/lib/mcp/auth/consent-offer';
@@ -93,36 +94,60 @@ export default function ConsentForm({
           <span>{unavailableNote}</span>
         </p>
       )}
-      {/* On phones a long list keeps the decision in reach. */}
-      <div className="sticky bottom-0 -mx-5 flex flex-col-reverse gap-3 border-t border-slate-200 bg-white/95 px-5 py-3 backdrop-blur sm:static sm:mx-0 sm:flex-row sm:justify-end sm:border-0 sm:bg-transparent sm:p-0 sm:backdrop-blur-none dark:border-slate-800 dark:bg-slate-900/95 sm:dark:bg-transparent">
-        <button
-          name="decision"
-          value="deny"
-          type="submit"
-          formNoValidate
-          className="inline-flex items-center justify-center rounded-xl border border-slate-300 bg-white font-semibold text-slate-800 transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 focus-visible:ring-offset-2 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800 dark:focus-visible:ring-white"
-        >
-          Cancel
-        </button>
-        {total > 0 && (
-          <button
-            name="decision"
-            value="allow"
-            type="submit"
-            disabled={count === 0}
-            aria-describedby={count === 0 ? hintId : undefined}
-            className="inline-flex items-center justify-center rounded-xl bg-slate-950 font-semibold text-white transition-colors hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-white dark:text-slate-950 dark:hover:bg-slate-100 dark:focus-visible:ring-white"
-          >
-            Allow
-          </button>
-        )}
-      </div>
+      <DecisionButtons canAllow={total > 0} count={count} hintId={hintId} />
       {total > 0 && count === 0 && (
         <p id={hintId} className="text-right text-xs text-slate-500 dark:text-slate-400">
           Select at least one permission to allow this connection.
         </p>
       )}
     </form>
+  );
+}
+
+/**
+ * Cancel and Allow. Both lock while the decision is being recorded, so a second click cannot
+ * replay the consent (which would end on "expired" although the connection was made).
+ */
+function DecisionButtons({
+  canAllow,
+  count,
+  hintId,
+}: {
+  canAllow: boolean;
+  count: number;
+  hintId: string;
+}) {
+  const { pending, data } = useFormStatus();
+  const allowing = pending && data?.get('decision') === 'allow';
+  return (
+    // On phones a long list keeps the decision in reach.
+    <div
+      aria-busy={pending}
+      className="sticky bottom-0 -mx-5 flex flex-col-reverse gap-3 border-t border-slate-200 bg-white/95 px-5 py-3 backdrop-blur sm:static sm:mx-0 sm:flex-row sm:justify-end sm:border-0 sm:bg-transparent sm:p-0 sm:backdrop-blur-none dark:border-slate-800 dark:bg-slate-900/95 sm:dark:bg-transparent"
+    >
+      <button
+        name="decision"
+        value="deny"
+        type="submit"
+        formNoValidate
+        disabled={pending}
+        className="inline-flex items-center justify-center rounded-xl border border-slate-300 bg-white font-semibold text-slate-800 transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800 dark:focus-visible:ring-white"
+      >
+        {pending && !allowing ? 'Cancelling…' : 'Cancel'}
+      </button>
+      {canAllow && (
+        <button
+          name="decision"
+          value="allow"
+          type="submit"
+          disabled={count === 0 || pending}
+          aria-describedby={count === 0 ? hintId : undefined}
+          className="inline-flex items-center justify-center rounded-xl bg-slate-950 font-semibold text-white transition-colors hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-white dark:text-slate-950 dark:hover:bg-slate-100 dark:focus-visible:ring-white"
+        >
+          {allowing ? 'Connecting…' : 'Allow'}
+        </button>
+      )}
+    </div>
   );
 }
 

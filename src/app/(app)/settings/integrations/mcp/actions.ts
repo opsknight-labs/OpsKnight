@@ -25,10 +25,6 @@ import { mcpSessionDates } from '@/lib/mcp/auth/session-lifetime';
 import { partitionScopesForRole } from '@/lib/mcp/auth/role-scopes';
 import { isAppRole } from '@/lib/authorization';
 import { supersededMcpGrantsWhere } from '@/lib/mcp/auth/consent';
-import {
-  MCP_APPROVAL_COMMIT_WINDOW_DEFAULT_MINUTES,
-  MCP_APPROVAL_TTL_DEFAULT_MINUTES,
-} from '@/lib/mcp/approvals/timing';
 
 const settingsPath = '/settings/integrations/mcp';
 const supportedScopes = supportedMcpScopes;
@@ -95,7 +91,12 @@ export async function enableMcpQuickSetup() {
           ...(existing.cimdScopes.length ? {} : { cimdScopes: scopes }),
         }
       : policy;
-    await tx.mcpPolicy.upsert({ where: { id: 'default' }, create: policy, update });
+    await tx.mcpPolicy.upsert({
+      where: { id: 'default' },
+      create: policy,
+      // Any policy write moves the revision, so an open policy form sees it as a conflict.
+      update: { ...update, policyRevision: { increment: 1 } },
+    });
     await logAudit(
       {
         source: 'UI',
@@ -121,17 +122,20 @@ export async function testMcpConnection() {
 }
 
 /** Re-allow a revoked client. Its old grants stay revoked, so users sign in again. */
-export async function restoreMcpClient(form: FormData) {
+export async function restoreMcpClient(form: FormData): Promise<McpClientFormResult> {
   const actor = await admin();
-  const id = z.string().min(1).max(256).parse(form.get('id'));
-  await prisma.$transaction(async tx => {
+  const parsed = z.string().min(1).max(256).safeParse(form.get('id'));
+  if (!parsed.success) return { ok: false, code: 'MCP_CLIENT_NOT_FOUND' };
+  const id = parsed.data;
+  const restored = await prisma.$transaction(async tx => {
     await assertCurrentAdmin(tx, actor);
     // Anything still live from before the client was revoked must not come back with it.
     await tx.mcpGrant.updateMany({
       where: { clientId: id, revokedAt: null },
       data: { revokedAt: new Date() },
     });
-    await tx.mcpClient.update({ where: { id }, data: { revokedAt: null } });
+    const updated = await tx.mcpClient.updateMany({ where: { id }, data: { revokedAt: null } });
+    if (!updated.count) return false;
     await logAudit(
       {
         source: 'UI',
@@ -142,11 +146,23 @@ export async function restoreMcpClient(form: FormData) {
       },
       tx
     );
+    return true;
   });
+  if (!restored) return { ok: false, code: 'MCP_CLIENT_NOT_FOUND' };
   revalidatePath(settingsPath);
+  return { ok: true, clientId: id };
 }
 
-export async function updateMcpPolicy(form: FormData) {
+export type UpdateMcpPolicyResult =
+  { ok: true; revision: number } | { ok: false; code: 'MCP_POLICY_CONFLICT'; revision: number };
+
+/**
+ * Save the access policy. Optimistic against concurrent administrators: the form carries the
+ * policyRevision it was rendered from, and a save from a stale page is refused with
+ * MCP_POLICY_CONFLICT instead of silently undoing someone else's change. The capabilities
+ * editor has its own check and does not move this revision.
+ */
+export async function updateMcpPolicy(form: FormData): Promise<UpdateMcpPolicyResult> {
   const actor = await admin();
   const input = z
     .object({
@@ -162,6 +178,7 @@ export async function updateMcpPolicy(form: FormData) {
       sessionIdleDays: z.coerce.number().int().min(1).max(90),
       approvalTtlMinutes: z.coerce.number().int().min(15).max(1440).optional(),
       approvalCommitWindowMinutes: z.coerce.number().int().min(1).max(1440).optional(),
+      policyRevision: z.coerce.number().int().min(0).optional(),
     })
     .strict()
     .parse({
@@ -179,6 +196,8 @@ export async function updateMcpPolicy(form: FormData) {
       // A form without these fields keeps the stored windows (or the defaults on first save).
       approvalTtlMinutes: form.get('approvalTtlMinutes') ?? undefined,
       approvalCommitWindowMinutes: form.get('approvalCommitWindowMinutes') ?? undefined,
+      // Absent only for callers that predate the revision; the settings form always sends it.
+      policyRevision: form.get('policyRevision') ?? undefined,
     });
   const cimdAllowedHosts = [
     ...new Set(
@@ -210,79 +229,113 @@ export async function updateMcpPolicy(form: FormData) {
   );
   const dcrScopes = parseScopes(input.dcrScopes);
   requireMcp(!input.dcrEnabled || dcrScopes.length > 0, 'MCP_DCR_REQUIRES_SCOPES');
-  // "Automatic connections" is one switch: assistants may register themselves (DCR) or identify with
-  // a metadata document (CIMD) under the same scope ceiling. An optional host list narrows CIMD.
-  // A pre-existing host-restricted metadata-document setup keeps working when registration is off.
-  const existing = await prisma.mcpPolicy.findUnique({ where: { id: 'default' } });
-  const keepsRestrictedCimd = Boolean(
-    !input.dcrEnabled && existing?.cimdEnabled && existing.cimdAllowedHosts.length > 0
-  );
-  const cimdEnabled = input.dcrEnabled || keepsRestrictedCimd;
-  const cimdScopes = keepsRestrictedCimd ? existing!.cimdScopes : dcrScopes;
-  const policy = {
-    enabled: input.enabled,
-    writesEnabled: input.writesEnabled,
-    sensitiveReadsEnabled: input.sensitiveReadsEnabled,
-    maxInFlight: input.maxInFlight,
-    maxOperations: input.maxOperations,
-    requestsPerMinute: input.requestsPerMinute,
-    cimdEnabled,
-    cimdAllowedHosts,
-    cimdScopes,
-    dcrEnabled: input.dcrEnabled,
-    dcrScopes,
-    sessionIdleDays: input.sessionIdleDays,
-    approvalTtlMinutes:
-      input.approvalTtlMinutes ?? existing?.approvalTtlMinutes ?? MCP_APPROVAL_TTL_DEFAULT_MINUTES,
-    approvalCommitWindowMinutes:
-      input.approvalCommitWindowMinutes ??
-      existing?.approvalCommitWindowMinutes ??
-      MCP_APPROVAL_COMMIT_WINDOW_DEFAULT_MINUTES,
-  };
-  await prisma.$transaction(async tx => {
+  const result = await prisma.$transaction(async (tx): Promise<UpdateMcpPolicyResult> => {
     await assertCurrentAdmin(tx, actor);
-    await tx.mcpPolicy.upsert({ where: { id: 'default' }, create: policy, update: policy });
+    // Serialise with other policy writers (the capabilities editor uses the same lock), then
+    // judge the submitted revision and the derived settings against the locked row.
+    await tx.$executeRaw`INSERT INTO "McpPolicy" (id, "updatedAt") VALUES ('default', NOW())
+      ON CONFLICT (id) DO NOTHING`;
+    await tx.$queryRaw`SELECT id FROM "McpPolicy" WHERE id = 'default' FOR UPDATE`;
+    const existing = await tx.mcpPolicy.findUniqueOrThrow({ where: { id: 'default' } });
+    if (input.policyRevision !== undefined && input.policyRevision !== existing.policyRevision)
+      return { ok: false, code: 'MCP_POLICY_CONFLICT', revision: existing.policyRevision };
+    // "Automatic connections" is one switch: assistants may register themselves (DCR) or identify
+    // with a metadata document (CIMD) under the same scope ceiling. An optional host list narrows
+    // CIMD. A pre-existing host-restricted metadata-document setup keeps working when
+    // registration is off.
+    const keepsRestrictedCimd = Boolean(
+      !input.dcrEnabled && existing.cimdEnabled && existing.cimdAllowedHosts.length > 0
+    );
+    const policy = {
+      enabled: input.enabled,
+      writesEnabled: input.writesEnabled,
+      sensitiveReadsEnabled: input.sensitiveReadsEnabled,
+      maxInFlight: input.maxInFlight,
+      maxOperations: input.maxOperations,
+      requestsPerMinute: input.requestsPerMinute,
+      cimdEnabled: input.dcrEnabled || keepsRestrictedCimd,
+      cimdAllowedHosts,
+      cimdScopes: keepsRestrictedCimd ? existing.cimdScopes : dcrScopes,
+      dcrEnabled: input.dcrEnabled,
+      dcrScopes,
+      sessionIdleDays: input.sessionIdleDays,
+      approvalTtlMinutes: input.approvalTtlMinutes ?? existing.approvalTtlMinutes,
+      approvalCommitWindowMinutes:
+        input.approvalCommitWindowMinutes ?? existing.approvalCommitWindowMinutes,
+    };
+    const saved = await tx.mcpPolicy.update({
+      where: { id: 'default' },
+      data: { ...policy, policyRevision: { increment: 1 } },
+      select: { policyRevision: true },
+    });
     await logAudit(
       {
         source: 'UI',
         action: 'mcp.policy.updated',
         entityType: 'SYSTEM_CONFIG',
         actorId: actor.id,
-        details: policy,
+        details: { ...policy, policyRevision: saved.policyRevision },
       },
       tx
     );
+    return { ok: true, revision: saved.policyRevision };
   });
-  revalidatePath(settingsPath);
+  if (result.ok) revalidatePath(settingsPath);
+  return result;
 }
 
-export async function registerMcpClient(form: FormData) {
+export type McpClientFormResult =
+  | { ok: true; clientId: string }
+  | { ok: false; code: string; field?: 'name' | 'redirectUri' | 'scopes' };
+
+/**
+ * Register a manual client. Expected input problems come back as a typed result for the form to
+ * show inline (the typed values stay in place); anything else still throws.
+ */
+export async function registerMcpClient(form: FormData): Promise<McpClientFormResult> {
   const actor = await admin();
-  const input = z
+  const parsed = z
     .object({
       name: z.string().trim().min(1).max(100),
       redirectUri: z.string().url().max(2048),
       scopes: z.string().max(2048),
     })
     .strict()
-    .parse({
+    .safeParse({
       name: form.get('name'),
       redirectUri: form.get('redirectUri'),
       // Scope checkboxes submit one value each.
       scopes: form.getAll('scopes').map(String).join(' '),
     });
+  if (!parsed.success) {
+    const field = parsed.error.issues[0]?.path[0];
+    return field === 'name'
+      ? { ok: false, code: 'MCP_INVALID_NAME', field: 'name' }
+      : field === 'redirectUri'
+        ? { ok: false, code: 'MCP_INVALID_REDIRECT', field: 'redirectUri' }
+        : { ok: false, code: 'MCP_INVALID_SCOPE', field: 'scopes' };
+  }
+  const input = parsed.data;
   const url = new URL(input.redirectUri);
-  requireMcp(
-    !url.username &&
-      !url.password &&
-      !url.hash &&
-      (url.protocol === 'https:' ||
-        (url.protocol === 'http:' && ['127.0.0.1', 'localhost', '[::1]'].includes(url.hostname))),
-    'MCP_INVALID_REDIRECT'
-  );
-  const scopes = parseScopes(input.scopes);
-  requireMcp(scopes.length, 'MCP_INVALID_SCOPE');
-  await prisma.$transaction(async tx => {
+  if (
+    url.username ||
+    url.password ||
+    url.hash ||
+    !(
+      url.protocol === 'https:' ||
+      (url.protocol === 'http:' && ['127.0.0.1', 'localhost', '[::1]'].includes(url.hostname))
+    )
+  )
+    return { ok: false, code: 'MCP_INVALID_REDIRECT', field: 'redirectUri' };
+  let scopes: string[];
+  try {
+    scopes = parseScopes(input.scopes);
+  } catch (error) {
+    if (error instanceof McpBoundaryError) return { ok: false, code: error.code, field: 'scopes' };
+    throw error;
+  }
+  if (!scopes.length) return { ok: false, code: 'MCP_INVALID_SCOPE', field: 'scopes' };
+  const clientId = await prisma.$transaction(async tx => {
     await assertCurrentAdmin(tx, actor);
     const client = await tx.mcpClient.create({
       data: { name: input.name, redirectUris: [url.href], scopes },
@@ -297,8 +350,10 @@ export async function registerMcpClient(form: FormData) {
       },
       tx
     );
+    return client.id;
   });
   revalidatePath(settingsPath);
+  return { ok: true, clientId };
 }
 
 export async function revokeMcpAccess(form: FormData) {

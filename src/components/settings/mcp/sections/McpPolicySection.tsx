@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 import { ChevronDown } from 'lucide-react';
 import { Input } from '@/components/ui/shadcn/input';
 import { Label } from '@/components/ui/shadcn/label';
-import McpPolicyForm from '@/components/settings/mcp/McpPolicyForm';
+import McpPolicyForm, { type McpPolicyAction } from '@/components/settings/mcp/McpPolicyForm';
 import McpPolicyScopeSelector from '@/components/settings/mcp/McpPolicyScopeSelector';
 import SessionIdleSelect from '@/components/settings/mcp/SessionIdleSelect';
 
@@ -27,7 +27,8 @@ export type McpPolicyValues = {
 
 /**
  * One policy group: title and explanation on the left, controls on the right (stacked on small
- * screens). The fieldset keeps the group name for assistive technology.
+ * screens). The legend names the group once for assistive technology and the explanation is
+ * read when focus enters it.
  */
 function PolicyGroup({
   title,
@@ -38,12 +39,22 @@ function PolicyGroup({
   description: ReactNode;
   children: ReactNode;
 }) {
+  const descriptionId = `mcp-policy-${title.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-description`;
   return (
-    <fieldset className="grid min-w-0 gap-4 border-b border-border py-6 last:border-0 md:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] md:gap-8">
+    <fieldset
+      aria-describedby={descriptionId}
+      className="grid min-w-0 gap-4 border-b border-border py-6 last:border-0 md:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] md:gap-8"
+    >
+      {/* The legend must be the fieldset's first child to name it; the visible title is a
+          presentational copy so the name is announced once. */}
       <legend className="sr-only">{title}</legend>
-      <div className="space-y-1" aria-hidden="true">
-        <p className="text-sm font-semibold text-foreground">{title}</p>
-        <div className="text-sm leading-relaxed text-muted-foreground">{description}</div>
+      <div className="space-y-1">
+        <p className="text-sm font-semibold text-foreground" aria-hidden="true">
+          {title}
+        </p>
+        <div id={descriptionId} className="text-sm leading-relaxed text-muted-foreground">
+          {description}
+        </div>
       </div>
       <div className="min-w-0 space-y-4">{children}</div>
     </fieldset>
@@ -79,19 +90,20 @@ function CheckRow({
 
 export default function McpPolicySection({
   policy,
+  revision,
   scopeChoices,
   selectedScopes,
-  describeScope: _describeScope,
   action,
 }: {
   policy: McpPolicyValues;
+  /** The policyRevision this page was rendered from; a stale save is refused. */
+  revision: number;
   scopeChoices: string[];
   selectedScopes: string[];
-  describeScope?: (scope: string) => string;
-  action: (form: FormData) => Promise<void>;
+  action: McpPolicyAction;
 }) {
   return (
-    <McpPolicyForm action={action}>
+    <McpPolicyForm action={action} revision={revision}>
       <PolicyGroup
         title="Assistant access"
         description="The master switch and how assistants identify themselves."

@@ -1,10 +1,20 @@
 import 'server-only';
-import type { Prisma } from '@prisma/client';
+import { cache } from 'react';
+import { Prisma } from '@prisma/client';
 import prisma from '@/lib/prisma';
 import { getCurrentUser, getUserPermissions } from '@/lib/rbac';
 import { getUserTimeZone } from '@/lib/timezone';
 import { requireMcp } from '@/lib/mcp/core/errors';
 import { CAPABILITIES } from '@/lib/authorization';
+import { loadMcpRuntime } from '@/lib/mcp/auth/config';
+import {
+  CLIENT_ACCESS_COLUMNS,
+  GRANT_ACCESS_COLUMNS,
+  grantAccessVerdict,
+  usableGrantSql,
+  type GrantAccessSnapshot,
+  type McpGrantBlock,
+} from '@/lib/mcp/auth/effective-access';
 import { operationReviewSummarySchema } from '@/lib/mcp/approvals/operation';
 import {
   MCP_PAGE_SIZE,
@@ -34,13 +44,20 @@ export type McpViewer = {
   readonly [viewerBrand]: true;
 };
 
+/**
+ * The signed-in user and their permissions, read once per page render however many sections,
+ * queries and server components ask (React request cache; outside a render it simply runs).
+ */
+export const loadMcpPagePermissions = cache(getUserPermissions);
+const loadMcpPageUser = cache(getCurrentUser);
+
 /** Pass the caller's permissions when it already loaded them, so they are read once. */
 export async function loadMcpViewer(
   preloadedPermissions?: Awaited<ReturnType<typeof getUserPermissions>>
 ): Promise<McpViewer> {
-  const permissions = preloadedPermissions ?? (await getUserPermissions());
+  const permissions = preloadedPermissions ?? (await loadMcpPagePermissions());
   requireMcp(permissions.authenticated, 'MCP_LOGIN_REQUIRED', 401);
-  const user = await getCurrentUser();
+  const user = await loadMcpPageUser();
   const capabilities: readonly string[] = permissions.capabilities ?? [];
   return {
     id: permissions.id,
@@ -79,7 +96,7 @@ async function peopleById(ids: Iterable<string>) {
 // Summary counts
 // ---------------------------------------------------------------------------------------------
 
-export function activeGrantWhere(now: Date): Prisma.McpGrantWhereInput {
+function activeGrantWhere(now: Date): Prisma.McpGrantWhereInput {
   return { revokedAt: null, expiresAt: { gt: now } };
 }
 
@@ -111,10 +128,27 @@ function pendingRunbookWhere(now: Date): Prisma.RunbookPreviewAuthorizationWhere
   };
 }
 
+/** This server's MCP address, or null before one is configured (the check is then skipped). */
+async function currentMcpResource() {
+  const runtime = await loadMcpRuntime();
+  return runtime.origin ? `${runtime.origin}/mcp` : null;
+}
+
+const GRANT_ACCESS_FROM = Prisma.sql`"McpGrant" g JOIN "McpClient" c ON c.id = g."clientId"
+  LEFT JOIN "User" u ON u.id = g."userId"
+  LEFT JOIN "McpPolicy" p ON p.id = 'default'`;
+
+/**
+ * Connections that work right now: the same predicate the MCP request path enforces
+ * (effective-access.ts), so a connection blocked by policy or a security event is not counted.
+ */
 export async function countActiveConnections(viewer: McpViewer, now = new Date()) {
-  return prisma.mcpGrant.count({
-    where: { ...activeGrantWhere(now), ...(viewer.isAdmin ? {} : { userId: viewer.id }) },
-  });
+  const resource = await currentMcpResource();
+  const [row] = await prisma.$queryRaw<{ usable: number }[]>`
+    SELECT COUNT(*)::int AS usable FROM ${GRANT_ACCESS_FROM}
+    WHERE ${usableGrantSql(now, resource)}
+      AND (${viewer.isAdmin} OR g."userId" = ${viewer.id})`;
+  return row?.usable ?? 0;
 }
 
 export async function countPendingApprovals(viewer: McpViewer, now = new Date()) {
@@ -138,28 +172,42 @@ export async function countActiveClients(viewer: McpViewer) {
 // Connections (grants)
 // ---------------------------------------------------------------------------------------------
 
-function grantStatusWhere(status: GrantStatus, now: Date): Prisma.McpGrantWhereInput {
+function grantStatusSql(status: GrantStatus, now: Date) {
   switch (status) {
     case 'active':
-      return activeGrantWhere(now);
+      return Prisma.sql`g."revokedAt" IS NULL AND g."expiresAt" > ${now}`;
     case 'expired':
-      return { revokedAt: null, expiresAt: { lte: now } };
+      return Prisma.sql`g."revokedAt" IS NULL AND g."expiresAt" <= ${now}`;
     case 'revoked':
-      return { revokedAt: { not: null } };
+      return Prisma.sql`g."revokedAt" IS NOT NULL`;
     default:
-      return {};
+      return Prisma.sql`TRUE`;
   }
 }
 
 // A search that matches more people than this is too broad to be useful as a filter.
 const PEOPLE_SEARCH_LIMIT = 200;
 
+/**
+ * Why a live connection gives no access right now. `mcp_disabled` is the master switch; the rest
+ * are the request path's own reasons (effective-access.ts).
+ */
+export type McpConnectionBlock = McpGrantBlock | 'mcp_disabled';
+
 export type McpGrantRow = {
   id: string;
+  /** What the person approved. */
   scopes: string[];
+  /** What the server honours today: approved scopes within the assistant's current ceiling. */
+  effectiveScopes: string[];
+  /** Set while the connection is active by date but the server would refuse it. */
+  blockedReason: McpConnectionBlock | null;
   status: Exclude<GrantStatus, 'all'>;
   createdAt: Date;
   lastUsedAt: Date | null;
+  /** The last tool call, written at most once a minute. */
+  lastCallAt: Date | null;
+  lastTool: string | null;
   expiresAt: Date;
   revokedAt: Date | null;
   user: McpPerson;
@@ -181,64 +229,79 @@ export function clientTypeOf(client: {
   return client.dynamicRegistration ? 'automatic' : 'manual';
 }
 
+/** The connection-level verdict: the request path's verdict, then the master switch. */
+export function connectionAccess(row: GrantAccessSnapshot, now: Date, resource: string | null) {
+  const verdict = grantAccessVerdict(row, now, resource);
+  const blockedReason: McpConnectionBlock | null =
+    verdict.block ?? (row.policyEnabled ? null : 'mcp_disabled');
+  return { blockedReason, effectiveScopes: blockedReason ? [] : verdict.effectiveScopes };
+}
+
+type GrantListRow = GrantAccessSnapshot & {
+  createdAt: Date;
+  lastUsedAt: Date | null;
+  lastCallAt: Date | null;
+  lastTool: string | null;
+  clientId: string;
+  clientName: string;
+  dynamicRegistration: boolean;
+  metadataUrl: string | null;
+};
+
+type GrantCounts = {
+  active: number;
+  expired: number;
+  revoked: number;
+  all: number;
+  usable: number;
+  revocable: number;
+};
+
 export async function listMcpGrants(
   viewer: McpViewer,
   input: { status: GrantStatus; q: string; clientId: string | null; page: number },
   now = new Date()
 ) {
-  const base: Prisma.McpGrantWhereInput[] = [];
-  if (!viewer.isAdmin) base.push({ userId: viewer.id });
-  if (input.clientId) {
-    requireAdmin(viewer);
-    base.push({ clientId: input.clientId });
-  }
-  if (input.q) {
-    const people = viewer.isAdmin
-      ? await prisma.user.findMany({
+  if (input.clientId) requireAdmin(viewer);
+  const [people, resource] = await Promise.all([
+    input.q && viewer.isAdmin
+      ? prisma.user.findMany({
           where: { OR: [{ name: contains(input.q) }, { email: contains(input.q) }] },
           select: { id: true },
           take: PEOPLE_SEARCH_LIMIT,
         })
-      : [];
-    base.push({
-      OR: [
-        { client: { name: contains(input.q) } },
-        ...(people.length ? [{ userId: { in: people.map(person => person.id) } }] : []),
-      ],
-    });
-  }
-  const where = (status: GrantStatus): Prisma.McpGrantWhereInput => ({
-    AND: [...base, grantStatusWhere(status, now)],
-  });
-  const [rows, active, expired, revoked, all, client] = await Promise.all([
-    prisma.mcpGrant.findMany({
-      where: where(input.status),
-      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
-      skip: (input.page - 1) * MCP_PAGE_SIZE,
-      take: MCP_PAGE_SIZE,
-      select: {
-        id: true,
-        userId: true,
-        scopes: true,
-        createdAt: true,
-        lastUsedAt: true,
-        expiresAt: true,
-        revokedAt: true,
-        client: {
-          select: {
-            id: true,
-            name: true,
-            revokedAt: true,
-            dynamicRegistration: true,
-            metadataUrl: true,
-          },
-        },
-      },
-    }),
-    prisma.mcpGrant.count({ where: where('active') }),
-    prisma.mcpGrant.count({ where: where('expired') }),
-    prisma.mcpGrant.count({ where: where('revoked') }),
-    prisma.mcpGrant.count({ where: where('all') }),
+      : Promise.resolve([]),
+    currentMcpResource(),
+  ]);
+  const personIds = people.map(person => person.id);
+  // The same ILIKE pattern Prisma's insensitive `contains` sends, so search behaves as before.
+  const pattern = `%${input.q}%`;
+  const scope = viewer.isAdmin ? Prisma.sql`TRUE` : Prisma.sql`g."userId" = ${viewer.id}`;
+  const base = Prisma.sql`${scope}
+    AND (${input.clientId}::text IS NULL OR g."clientId" = ${input.clientId})
+    AND (${input.q} = '' OR c.name ILIKE ${pattern}
+      OR g."userId" = ANY(${personIds}::text[]))`;
+  const [rows, [counts], client] = await Promise.all([
+    // One statement for the page and what each connection may do right now.
+    prisma.$queryRaw<GrantListRow[]>`
+      SELECT ${GRANT_ACCESS_COLUMNS}, g."createdAt", g."lastUsedAt", g."lastCallAt", g."lastTool",
+        c.id AS "clientId", c.name AS "clientName", c."dynamicRegistration", c."metadataUrl"
+      FROM ${GRANT_ACCESS_FROM}
+      WHERE ${base} AND ${grantStatusSql(input.status, now)}
+      ORDER BY g."createdAt" DESC, g.id DESC
+      OFFSET ${(input.page - 1) * MCP_PAGE_SIZE} LIMIT ${MCP_PAGE_SIZE}`,
+    // Every status count in one pass. "usable" is the enforced predicate; "revocable" is what
+    // "Revoke all" acts on, whatever filter is showing.
+    prisma.$queryRaw<GrantCounts[]>`
+      SELECT
+        COUNT(*) FILTER (WHERE ${base} AND ${grantStatusSql('active', now)})::int AS active,
+        COUNT(*) FILTER (WHERE ${base} AND ${grantStatusSql('expired', now)})::int AS expired,
+        COUNT(*) FILTER (WHERE ${base} AND ${grantStatusSql('revoked', now)})::int AS revoked,
+        COUNT(*) FILTER (WHERE ${base})::int AS "all",
+        COUNT(*) FILTER (WHERE ${base} AND ${usableGrantSql(now, resource)})::int AS usable,
+        COUNT(*) FILTER (WHERE g."revokedAt" IS NULL)::int AS revocable
+      FROM ${GRANT_ACCESS_FROM}
+      WHERE ${scope}`,
     input.clientId
       ? prisma.mcpClient.findUnique({
           where: { id: input.clientId },
@@ -246,28 +309,47 @@ export async function listMcpGrants(
         })
       : Promise.resolve(null),
   ]);
-  const people = await peopleById(rows.map(row => row.userId));
-  const counts = { active, expired, revoked, all };
+  const owners = await peopleById(rows.map(row => row.userId));
+  const { usable, revocable, ...statusCounts } = counts ?? {
+    active: 0,
+    expired: 0,
+    revoked: 0,
+    all: 0,
+    usable: 0,
+    revocable: 0,
+  };
   return {
-    rows: rows.map((row): McpGrantRow => ({
-      id: row.id,
-      scopes: row.scopes,
-      status: row.revokedAt ? 'revoked' : row.expiresAt <= now ? 'expired' : 'active',
-      createdAt: row.createdAt,
-      lastUsedAt: row.lastUsedAt,
-      expiresAt: row.expiresAt,
-      revokedAt: row.revokedAt,
-      user: people.get(row.userId) ?? { id: row.userId, name: null, email: null },
-      client: {
-        id: row.client.id,
-        name: row.client.name,
-        type: clientTypeOf(row.client),
-        metadataHost: hostOf(row.client.metadataUrl),
-        revoked: Boolean(row.client.revokedAt),
-      },
-    })),
-    counts,
-    total: counts[input.status],
+    rows: rows.map((row): McpGrantRow => {
+      const status = row.revokedAt ? 'revoked' : row.expiresAt <= now ? 'expired' : 'active';
+      const access = connectionAccess(row, now, resource);
+      return {
+        id: row.grantId,
+        scopes: row.grantScopes,
+        effectiveScopes: access.effectiveScopes,
+        blockedReason: status === 'active' ? access.blockedReason : null,
+        status,
+        createdAt: row.createdAt,
+        lastUsedAt: row.lastUsedAt,
+        lastCallAt: row.lastCallAt,
+        lastTool: row.lastTool,
+        expiresAt: row.expiresAt,
+        revokedAt: row.revokedAt,
+        user: owners.get(row.userId) ?? { id: row.userId, name: null, email: null },
+        client: {
+          id: row.clientId,
+          name: row.clientName,
+          type: clientTypeOf(row),
+          metadataHost: hostOf(row.metadataUrl),
+          revoked: Boolean(row.clientRevokedAt),
+        },
+      };
+    }),
+    counts: statusCounts,
+    /** Active connections the server would honour now, within the current filter. */
+    usable,
+    /** Every connection "Revoke all" revokes, ignoring the filter (administrators only). */
+    revocable: viewer.isAdmin ? revocable : 0,
+    total: statusCounts[input.status],
     client: client
       ? { id: client.id, name: client.name, metadataHost: hostOf(client.metadataUrl) }
       : null,
@@ -297,17 +379,39 @@ function clientStatusWhere(status: ClientStatus): Prisma.McpClientWhereInput {
   return {};
 }
 
+function clientTypeSql(type: ClientType) {
+  switch (type) {
+    case 'automatic':
+      return Prisma.sql`c."dynamicRegistration" AND c."metadataUrl" IS NULL`;
+    case 'metadata':
+      return Prisma.sql`c."metadataUrl" IS NOT NULL`;
+    case 'manual':
+      return Prisma.sql`NOT c."dynamicRegistration" AND c."metadataUrl" IS NULL`;
+    default:
+      return Prisma.sql`TRUE`;
+  }
+}
+
+/** Why the policy refuses an allowed assistant today. */
+export type McpClientBlock = 'mcp_disabled' | 'client_untrusted';
+
 export type McpClientRow = {
   id: string;
   name: string;
   type: Exclude<ClientType, 'all'>;
   metadataHost: string | null;
   redirectUris: string[];
+  /** The stored ceiling. */
   scopes: string[];
+  /** The ceiling the server applies today (stored ceiling within the current policy). */
+  effectiveScopes: string[];
+  /** Set for an allowed (not revoked) assistant the policy currently refuses. */
+  blockedReason: McpClientBlock | null;
   createdAt: Date;
   revokedAt: Date | null;
   activeConnections: number;
   lastUsedAt: Date | null;
+  lastCallAt: Date | null;
 };
 
 export async function listMcpClients(
@@ -323,7 +427,9 @@ export async function listMcpClients(
       input.q ? { name: contains(input.q) } : {},
     ],
   });
-  const [rows, active, revoked, all] = await Promise.all([
+  const filter = Prisma.sql`${clientTypeSql(input.type)}
+    AND (${input.q} = '' OR c.name ILIKE ${`%${input.q}%`})`;
+  const [rows, [counts]] = await Promise.all([
     prisma.mcpClient.findMany({
       where: where(input.status),
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
@@ -341,34 +447,97 @@ export async function listMcpClients(
         _count: { select: { grants: { where: activeGrantWhere(now) } } },
       },
     }),
-    prisma.mcpClient.count({ where: where('active') }),
-    prisma.mcpClient.count({ where: where('revoked') }),
-    prisma.mcpClient.count({ where: where('all') }),
+    prisma.$queryRaw<{ active: number; revoked: number; all: number }[]>`
+      SELECT COUNT(*) FILTER (WHERE c."revokedAt" IS NULL)::int AS active,
+        COUNT(*) FILTER (WHERE c."revokedAt" IS NOT NULL)::int AS revoked,
+        COUNT(*)::int AS "all"
+      FROM "McpClient" c WHERE ${filter}`,
   ]);
-  const usage = rows.length
-    ? await prisma.mcpGrant.groupBy({
-        by: ['clientId'],
-        where: { clientId: { in: rows.map(row => row.id) } },
-        _max: { lastUsedAt: true },
-      })
-    : [];
-  const lastUsed = new Map(usage.map(entry => [entry.clientId, entry._max.lastUsedAt]));
-  const counts = { active, revoked, all };
+  const ids = rows.map(row => row.id);
+  const [usage, access] = ids.length
+    ? await Promise.all([
+        prisma.mcpGrant.groupBy({
+          by: ['clientId'],
+          where: { clientId: { in: ids } },
+          _max: { lastUsedAt: true, lastCallAt: true },
+        }),
+        // The same ceiling and trust columns the MCP request path reads.
+        prisma.$queryRaw<
+          {
+            id: string;
+            clientScopes: string[];
+            clientTrusted: boolean;
+            policyEnabled: boolean | null;
+          }[]
+        >`SELECT c.id, ${CLIENT_ACCESS_COLUMNS}
+          FROM "McpClient" c LEFT JOIN "McpPolicy" p ON p.id = 'default'
+          WHERE c.id = ANY(${ids}::text[])`,
+      ])
+    : [[], []];
+  const lastUsed = new Map(usage.map(entry => [entry.clientId, entry._max]));
+  const ceilings = new Map(access.map(entry => [entry.id, entry]));
+  const statusCounts = counts ?? { active: 0, revoked: 0, all: 0 };
   return {
-    rows: rows.map((row): McpClientRow => ({
-      id: row.id,
-      name: row.name,
-      type: clientTypeOf(row),
-      metadataHost: hostOf(row.metadataUrl),
-      redirectUris: row.redirectUris,
-      scopes: row.scopes,
-      createdAt: row.createdAt,
-      revokedAt: row.revokedAt,
-      activeConnections: row._count.grants,
-      lastUsedAt: lastUsed.get(row.id) ?? null,
-    })),
-    counts,
-    total: counts[input.status],
+    rows: rows.map((row): McpClientRow => {
+      const ceiling = ceilings.get(row.id);
+      const blockedReason: McpClientBlock | null =
+        row.revokedAt || !ceiling
+          ? null
+          : !ceiling.policyEnabled
+            ? 'mcp_disabled'
+            : !ceiling.clientTrusted
+              ? 'client_untrusted'
+              : null;
+      return {
+        id: row.id,
+        name: row.name,
+        type: clientTypeOf(row),
+        metadataHost: hostOf(row.metadataUrl),
+        redirectUris: row.redirectUris,
+        scopes: row.scopes,
+        effectiveScopes: blockedReason || row.revokedAt ? [] : (ceiling?.clientScopes ?? []),
+        blockedReason,
+        createdAt: row.createdAt,
+        revokedAt: row.revokedAt,
+        activeConnections: row._count.grants,
+        lastUsedAt: lastUsed.get(row.id)?.lastUsedAt ?? null,
+        lastCallAt: lastUsed.get(row.id)?.lastCallAt ?? null,
+      };
+    }),
+    counts: statusCounts,
+    total: statusCounts[input.status],
+  };
+}
+
+/**
+ * Assistants for the connections filter: allowed ones that have been used, with a short id
+ * suffix on names that repeat (many "Claude Code" registrations look identical otherwise).
+ */
+export const ASSISTANT_FILTER_LIMIT = 100;
+export async function listMcpAssistantFilter(viewer: McpViewer) {
+  requireAdmin(viewer);
+  const clients = await prisma.mcpClient.findMany({
+    where: { revokedAt: null, grants: { some: {} } },
+    select: { id: true, name: true, metadataUrl: true },
+    orderBy: [{ name: 'asc' }, { createdAt: 'asc' }],
+    take: ASSISTANT_FILTER_LIMIT + 1,
+  });
+  const listed = clients.slice(0, ASSISTANT_FILTER_LIMIT);
+  const names = new Map<string, number>();
+  for (const client of listed) names.set(client.name, (names.get(client.name) ?? 0) + 1);
+  return {
+    truncated: clients.length > ASSISTANT_FILTER_LIMIT,
+    clients: listed.map(({ metadataUrl, ...client }) => {
+      const host = hostOf(metadataUrl);
+      return {
+        ...client,
+        metadataHost: host,
+        label:
+          (names.get(client.name) ?? 0) > 1
+            ? `${client.name} · ${host ?? client.id.slice(-4)}`
+            : client.name,
+      };
+    }),
   };
 }
 
