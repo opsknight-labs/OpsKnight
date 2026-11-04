@@ -641,6 +641,7 @@ model Team {
 
 model TeamMember {
   scimGrant ScimTeamGrant?
+  oidcGrant OidcTeamGrant?
   id                       String   @id @default(cuid())
   userId                   String
   teamId                   String
@@ -2198,6 +2199,20 @@ model OidcLinkingApproval {
   user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([approvedById])
+}
+
+/// A team membership created by a single sign-on group rule. Only these may be removed by
+/// sign-in reconciliation; changing the member's team role releases it (database trigger).
+model OidcTeamGrant {
+  id           String     @id @default(cuid())
+  teamMemberId String     @unique
+  teamMember   TeamMember @relation(fields: [teamMemberId], references: [id], onDelete: Cascade)
+  userId       String
+  teamId       String
+  createdAt    DateTime   @default(now())
+
+  @@unique([userId, teamId])
+  @@index([teamId])
 }
 
 /// Raised automatically when an existing account's first SSO sign-in needs an administrator's

@@ -1317,6 +1317,33 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
             });
           }
 
+          // Group-to-team rules. Runs after the role write, which pins the token version.
+          // With no rules, this also removes grants left by rules that were deleted.
+          {
+            try {
+              const { reconcileOidcTeams } = await import('@/lib/oidc/team-mapping');
+              const teams = await reconcileOidcTeams(
+                targetUser.id,
+                claims,
+                activeConfig.teamMapping ?? []
+              );
+              if (teams.added.length || teams.removed.length)
+                logger.info('[Auth] OIDC team memberships reconciled', {
+                  component: 'auth:signIn',
+                  userId: targetUser.id,
+                  added: teams.added,
+                  removed: teams.removed,
+                  event: 'OIDC_TEAMS_RECONCILED',
+                });
+            } catch (error) {
+              logger.error('[Auth] OIDC team reconciliation failed; memberships unchanged', {
+                component: 'auth:signIn',
+                userId: targetUser.id,
+                error,
+              });
+            }
+          }
+
           // Remember the mapped claim values (not the token) for rule-impact previews.
           const snapshot = oidcClaimSnapshot(claims, [
             ...(activeConfig.roleMapping ?? []),

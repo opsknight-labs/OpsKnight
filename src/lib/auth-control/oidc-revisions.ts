@@ -13,7 +13,11 @@ import {
 } from '@/lib/oidc-validation';
 import { safeOutboundLookup } from '@/lib/network-security';
 import { getOidcProviderPolicy } from '@/lib/oidc/provider-policy';
-import { evaluateOidcRoleClaims, resolveSignInRole } from '@/lib/oidc/role-mapping';
+import {
+  evaluateOidcRoleClaims,
+  oidcRuleMatches,
+  resolveSignInRole,
+} from '@/lib/oidc/role-mapping';
 import { validateOidcCustomScopes } from '@/lib/oidc/scopes';
 import { resetAuthOptionsCache } from '@/lib/auth';
 import { normalizeOidcProviderType } from '@/lib/oidc-provider';
@@ -300,6 +304,14 @@ export async function stageOidcRevision(
     );
   if (!config.enabled)
     throw new Error('Staged providers must be enabled. Use Password Only policy to disable SSO.');
+  if (config.teamMapping.length) {
+    const teamIds = [...new Set(config.teamMapping.map(rule => rule.teamId))];
+    const found = await prisma.team.count({ where: { id: { in: teamIds } } });
+    if (found !== teamIds.length)
+      throw new Error('A team rule points at a team that no longer exists. Choose the team again.');
+  }
+  if (config.domainTrustedLinking && config.allowedDomains.length === 0)
+    throw new Error('Domain-trusted linking needs at least one allowed domain.');
   const current = await prisma.oidcConfig.findUnique({ where: { id: 'default' } });
   if (
     expectedConfigVersion !== undefined &&
@@ -832,13 +844,49 @@ async function roleChangeImpact(tx: Prisma.TransactionClient, config: ProviderCo
         to: resolved.role,
       });
   }
+  const teamChanges = await teamChangeImpact(tx, config, identities);
   return {
     evaluated: identities.length,
     changed,
     denied,
     changes,
+    teamAdditions: teamChanges.additions,
+    teamRemovals: teamChanges.removals,
     truncated: identities.length === ROLE_IMPACT_SCAN_LIMIT,
   };
+}
+
+/** Memberships team rules would add or remove at people's next sign-in, from snapshots. */
+async function teamChangeImpact(
+  tx: Prisma.TransactionClient,
+  config: ProviderConfiguration,
+  identities: Array<{ claimSnapshot: Prisma.JsonValue; user: { id: string; status: string } }>
+) {
+  const active = identities.filter(identity => identity.user.status !== 'DISABLED');
+  const userIds = active.map(identity => identity.user.id);
+  if (userIds.length === 0) return { additions: 0, removals: 0 };
+  const memberships = await tx.teamMember.findMany({
+    where: { userId: { in: userIds } },
+    select: { userId: true, teamId: true, role: true, oidcGrant: { select: { id: true } } },
+  });
+  const byUser = new Map<string, typeof memberships>();
+  for (const member of memberships)
+    byUser.set(member.userId, [...(byUser.get(member.userId) ?? []), member]);
+  let additions = 0;
+  let removals = 0;
+  for (const identity of active) {
+    const claims = snapshotAsClaims(identity.claimSnapshot);
+    const wanted = new Set(
+      config.teamMapping.filter(rule => oidcRuleMatches(claims, rule)).map(rule => rule.teamId)
+    );
+    const current = byUser.get(identity.user.id) ?? [];
+    const currentTeams = new Set(current.map(member => member.teamId));
+    additions += [...wanted].filter(teamId => !currentTeams.has(teamId)).length;
+    removals += current.filter(
+      member => member.oidcGrant && member.role === 'MEMBER' && !wanted.has(member.teamId)
+    ).length;
+  }
+  return { additions, removals };
 }
 
 /** Snapshots store values by claim path; rebuild an object the rule engine can read. */
