@@ -84,8 +84,8 @@ export default function ConnectedChatOpsAccounts({
                   <AlertDialogTitle>Disconnect ChatOps account?</AlertDialogTitle>
                   <AlertDialogDescription>
                     This will remove the link between your OpsKnight identity and your{' '}
-                    {link.provider === 'MICROSOFT_TEAMS' ? 'Microsoft Teams' : 'Slack'} account
-                    ({link.displayName ?? link.providerTenantId}). You can reconnect at any time.
+                    {link.provider === 'MICROSOFT_TEAMS' ? 'Microsoft Teams' : 'Slack'} account (
+                    {link.displayName ?? link.providerTenantId}). You can reconnect at any time.
                   </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>

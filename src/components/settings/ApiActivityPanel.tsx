@@ -1,5 +1,11 @@
 import Link from 'next/link';
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/shadcn/card';
+import {
+  Card,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+  CardContent,
+} from '@/components/ui/shadcn/card';
 import { Input } from '@/components/ui/shadcn/input';
 import { Button } from '@/components/ui/shadcn/button';
 import { Badge } from '@/components/ui/shadcn/badge';
@@ -121,11 +127,21 @@ export default function ApiActivityPanel({
         <div className="flex flex-wrap items-end gap-3">
           <label className="text-[11px] text-muted-foreground flex flex-col gap-1">
             From
-            <Input type="date" name="from" defaultValue={filters.from} className="h-9 text-xs bg-background" />
+            <Input
+              type="date"
+              name="from"
+              defaultValue={filters.from}
+              className="h-9 text-xs bg-background"
+            />
           </label>
           <label className="text-[11px] text-muted-foreground flex flex-col gap-1">
             To
-            <Input type="date" name="to" defaultValue={filters.to} className="h-9 text-xs bg-background" />
+            <Input
+              type="date"
+              name="to"
+              defaultValue={filters.to}
+              className="h-9 text-xs bg-background"
+            />
           </label>
           <Button type="submit" size="sm" className="h-9">
             Apply filters
@@ -178,7 +194,9 @@ export default function ApiActivityPanel({
                     <TableHead className="text-xs py-3 font-semibold">Resource</TableHead>
                     <TableHead className="text-xs py-3 font-semibold">Actor / Identity</TableHead>
                     <TableHead className="text-xs py-3 font-semibold">Details</TableHead>
-                    <TableHead className="text-xs py-3 font-semibold text-right">Timestamp</TableHead>
+                    <TableHead className="text-xs py-3 font-semibold text-right">
+                      Timestamp
+                    </TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -192,7 +210,10 @@ export default function ApiActivityPanel({
                       </TableCell>
                       <TableCell className="py-3">
                         <div className="space-y-0.5">
-                          <Badge variant="outline" className="text-[10px] bg-muted text-muted-foreground">
+                          <Badge
+                            variant="outline"
+                            className="text-[10px] bg-muted text-muted-foreground"
+                          >
                             {act.entityType}
                           </Badge>
                           {act.entityId && (
@@ -235,14 +256,21 @@ export default function ApiActivityPanel({
           <div className="flex flex-col sm:flex-row items-center justify-between gap-3 border-t border-border/60 px-4 py-3 text-xs text-muted-foreground">
             <div className="flex items-center gap-2 flex-wrap">
               <span>
-                Showing <strong className="text-foreground font-semibold">{activities.length}</strong>
+                Showing{' '}
+                <strong className="text-foreground font-semibold">{activities.length}</strong>
                 {typeof total === 'number' ? (
-                  <> of <strong className="text-foreground font-semibold">{total}</strong></>
+                  <>
+                    {' '}
+                    of <strong className="text-foreground font-semibold">{total}</strong>
+                  </>
                 ) : null}{' '}
                 events
               </span>
               {filters.hasCursor && (
-                <Badge variant="outline" className="text-[10px] bg-muted/60 text-muted-foreground font-medium">
+                <Badge
+                  variant="outline"
+                  className="text-[10px] bg-muted/60 text-muted-foreground font-medium"
+                >
                   Older results
                 </Badge>
               )}

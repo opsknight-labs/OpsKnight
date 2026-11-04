@@ -10,8 +10,10 @@ import {
   DialogDescription,
   DialogHeader,
 } from '@/components/ui/shadcn/dialog';
+import { authDocs } from './setup-steps';
 import {
   providerDefinitions,
+  providerSetupChecklists,
   switchProviderDraft,
   entraTenant,
   type ProviderType,
@@ -52,6 +54,8 @@ export default function AuthenticationProviderForm() {
     data,
     callbackUrl,
     testCallbackUrl,
+    providerChosen,
+    setProviderChosen,
   } = useAuthenticationWorkspace();
   const [nextProvider, setNextProvider] = useState<ProviderType | null>(null);
   const [advancedIssuer, setAdvancedIssuer] = useState(false);
@@ -65,10 +69,28 @@ export default function AuthenticationProviderForm() {
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const definition = providerDefinitions[configuration.providerType];
 
+  // A fresh install has no provider yet: nothing is preselected and nothing is lost by picking.
+  const chosen = providerChosen || Boolean(configuration.clientId || configuration.clientSecret);
+  const setChosen = setProviderChosen;
+  const applyProvider = (type: ProviderType) => {
+    setConfiguration(switchProviderDraft(configuration, type));
+    setProfileJson('{}');
+    setRevisionId('');
+    setImpact(null);
+    setConfirmation(false);
+    setClaimResult(null);
+    setLinkApproved(false);
+    setBroadAcknowledged(false);
+    setDraftBaseConfigVersion(data.providerConfigVersion);
+    setAdvancedIssuer(false);
+  };
   const handleProviderSelect = (type: ProviderType) => {
-    if (type !== configuration.providerType) {
-      setNextProvider(type);
+    if (!chosen) {
+      setChosen(true);
+      if (type !== configuration.providerType) applyProvider(type);
+      return;
     }
+    if (type !== configuration.providerType) setNextProvider(type);
   };
 
   const field = (
@@ -155,26 +177,34 @@ export default function AuthenticationProviderForm() {
           <div className="flex items-center justify-between gap-2">
             <h3 className="text-sm font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
               <Globe className="h-4 w-4 text-primary" />
-              Supported Identity Providers
+              {chosen ? 'Identity provider' : 'Which identity provider do you use?'}
             </h3>
             <Badge variant="outline" className="text-xs">
-              OIDC 1.0 Compliant
+              OpenID Connect
             </Badge>
           </div>
           <p className="text-xs text-muted-foreground">
-            Select an enterprise directory or federated OIDC provider. Switching providers resets
-            candidate draft values.
+            {chosen
+              ? 'Switching providers clears this provider’s credentials and rules in your draft.'
+              : 'Pick one to see exactly what to set up. You can change it before turning SSO on.'}
           </p>
         </div>
 
         {/* Visual Provider Cards Grid */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5 pt-1">
+        <div
+          id="auth-field-providerType"
+          role="radiogroup"
+          aria-label="Identity provider"
+          className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5 pt-1"
+        >
           {Object.entries(providerDefinitions).map(([id, provider]) => {
-            const isSelected = configuration.providerType === id;
+            const isSelected = chosen && configuration.providerType === id;
             return (
               <button
                 key={id}
                 type="button"
+                role="radio"
+                aria-checked={isSelected}
                 onClick={() => handleProviderSelect(id as ProviderType)}
                 disabled={pending}
                 className={`group relative flex flex-col items-start p-3.5 rounded-xl border text-left transition-all duration-150 cursor-pointer ${
@@ -212,297 +242,321 @@ export default function AuthenticationProviderForm() {
           })}
         </div>
 
-        {/* Semantic Select element for accessible keyboard navigation and testing */}
-        <label className="block space-y-1 text-sm pt-1">
-          <span className="font-medium text-xs text-muted-foreground">Identity provider</span>
-          <select
-            id="auth-field-providerType"
-            className={inputClass}
-            value={configuration.providerType}
-            disabled={pending}
-            onChange={event => {
-              if (event.target.value !== configuration.providerType)
-                setNextProvider(event.target.value as ProviderType);
-            }}
-          >
-            {Object.entries(providerDefinitions).map(([id, provider]) => (
-              <option key={id} value={id}>
-                {provider.label}
-              </option>
-            ))}
-          </select>
-        </label>
-        <p className="text-xs text-muted-foreground">{definition.help}</p>
+        {chosen && <p className="text-xs text-muted-foreground">{definition.help}</p>}
       </div>
 
-      {/* 2. Provider Credentials Card */}
-      <div className="rounded-xl border bg-card p-5 space-y-4 shadow-xs">
-        <div className="flex items-center gap-2 pb-2 border-b">
-          <Key className="h-4 w-4 text-primary" />
-          <h3 className="text-sm font-bold text-foreground">
-            Provider Credentials &amp; Discovery
-          </h3>
-        </div>
-
-        {definition.tenant && !showExactIssuer && (
-          <label className="block space-y-1.5 text-sm">
-            <span className="font-semibold text-foreground text-xs uppercase tracking-wider flex items-center gap-1">
-              Directory (tenant) ID
-              <span className="text-destructive font-bold">*</span>
-            </span>
-            <input
-              id="auth-field-issuer"
-              className={`${inputClass} font-mono text-xs`}
-              value={entraTenant(configuration.issuer)}
-              disabled={pending}
-              placeholder="00000000-0000-0000-0000-000000000000"
-              onChange={event =>
-                update(
-                  'issuer',
-                  event.target.value
-                    ? `https://login.microsoftonline.com/${event.target.value.trim()}/v2.0`
-                    : ''
-                )
-              }
-              aria-describedby="entra-tenant-help"
-              aria-invalid={Boolean(fieldErrors.issuer)}
-            />
-            <span
-              id="entra-tenant-help"
-              className={`block text-xs leading-relaxed ${fieldErrors.issuer ? 'text-destructive font-medium flex items-center gap-1' : 'text-muted-foreground'}`}
-            >
-              {fieldErrors.issuer ? (
-                <>
-                  <AlertCircle className="h-3 w-3 shrink-0 inline" />
-                  {fieldErrors.issuer}
-                </>
-              ) : configuration.issuer ? (
-                `Issuer generated from this tenant: ${configuration.issuer}`
-              ) : (
-                'Find this directory ID in Microsoft Entra Admin Center → App registrations → Overview.'
-              )}
-            </span>
-          </label>
-        )}
-
-        {!definition.tenant &&
-          configuration.providerType !== 'google' &&
-          field(
-            'Issuer',
-            'issuer',
-            'Use the exact HTTPS issuer URL from your provider discovery document (.well-known/openid-configuration).',
-            true
-          )}
-
-        <div className="grid min-w-0 gap-4 sm:grid-cols-2">
-          {field(
-            'Client ID',
-            'clientId',
-            'The application identifier assigned by your identity provider.',
-            true
-          )}
-          {field(
-            'Client secret',
-            'clientSecret',
-            hasSavedSecret
-              ? 'Leave blank to retain the saved secret for this same issuer and Client ID.'
-              : 'Enter the client secret generated by your provider. It is encrypted at rest using AES-256.',
-            !hasSavedSecret
-          )}
-        </div>
-
-        {field(
-          'Provider display name',
-          'providerLabel',
-          'Optional friendly brand name shown on the login button (e.g. "Acme Corp Okta").'
-        )}
-      </div>
-
-      {/* 3. Callback URLs Registration Card */}
-      <section
-        className="rounded-xl border bg-muted/20 p-5 space-y-4 shadow-xs"
-        aria-labelledby="authentication-callback-title"
-      >
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b">
-          <div className="flex items-center gap-2">
-            <Link2 className="h-4 w-4 text-primary" />
-            <h3 id="authentication-callback-title" className="text-sm font-bold text-foreground">
-              Register both callback URLs
-            </h3>
-          </div>
-          <Badge variant="outline" className="text-[10px] w-fit">
-            Required in IdP Redirect URIs
-          </Badge>
-        </div>
-        <p className="text-xs text-muted-foreground leading-relaxed">
-          The test callback verifies your administrator against a staged draft. The production
-          callback handles normal sign-in after activation. Register both exact URLs as Web redirect
-          URIs in your provider’s console.
+      {!chosen && (
+        <p className="rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground">
+          Choose your provider above to continue.
         </p>
+      )}
+      {chosen && (
+        <>
+          {/* 2. Provider Credentials Card */}
+          <div className="rounded-xl border bg-card p-5 space-y-4 shadow-xs">
+            <div className="flex items-center gap-2 pb-2 border-b">
+              <Key className="h-4 w-4 text-primary" />
+              <h3 className="text-sm font-bold text-foreground">
+                Provider Credentials &amp; Discovery
+              </h3>
+            </div>
 
-        <div className="space-y-3 pt-1">
-          {[
-            ['Production callback', callbackUrl, 'production'],
-            ['Administrator test callback', testCallbackUrl, 'test'],
-          ].map(([label, value, key]) => {
-            const isCopied = copiedKey === key;
-            return (
-              <label key={label} className="block space-y-1.5">
-                <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                  {label}
+            {definition.tenant && !showExactIssuer && (
+              <label className="block space-y-1.5 text-sm">
+                <span className="font-semibold text-foreground text-xs uppercase tracking-wider flex items-center gap-1">
+                  Directory (tenant) ID
+                  <span className="text-destructive font-bold">*</span>
                 </span>
-                <div className="flex min-w-0 items-center gap-2">
-                  <input
-                    aria-label={label}
-                    readOnly
-                    value={value}
-                    className={`${inputClass} font-mono text-xs bg-muted/40 select-all`}
-                    onFocus={event => event.target.select()}
-                  />
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="h-9 px-3 text-xs gap-1.5 shrink-0"
-                    onClick={() => {
-                      void copyAuthenticationText(value).then(copied => {
-                        if (copied) {
-                          setCopiedKey(key);
-                          setCopyMessage(`${label} copied.`);
-                          setTimeout(() => setCopiedKey(null), 2000);
-                        } else {
-                          setCopyMessage(
-                            'Clipboard unavailable. Select the URL field and copy it manually.'
-                          );
-                        }
-                      });
-                    }}
-                    aria-label={`Copy ${label.toLowerCase()}`}
-                  >
-                    {isCopied ? (
-                      <Check className="h-3.5 w-3.5 text-emerald-500" />
-                    ) : (
-                      <Copy className="h-3.5 w-3.5" />
-                    )}
-                    <span>{isCopied ? 'Copied' : 'Copy'}</span>
-                  </Button>
-                </div>
+                <input
+                  id="auth-field-issuer"
+                  className={`${inputClass} font-mono text-xs`}
+                  value={entraTenant(configuration.issuer)}
+                  disabled={pending}
+                  placeholder="00000000-0000-0000-0000-000000000000"
+                  onChange={event =>
+                    update(
+                      'issuer',
+                      event.target.value
+                        ? `https://login.microsoftonline.com/${event.target.value.trim()}/v2.0`
+                        : ''
+                    )
+                  }
+                  aria-describedby="entra-tenant-help"
+                  aria-invalid={Boolean(fieldErrors.issuer)}
+                />
+                <span
+                  id="entra-tenant-help"
+                  className={`block text-xs leading-relaxed ${fieldErrors.issuer ? 'text-destructive font-medium flex items-center gap-1' : 'text-muted-foreground'}`}
+                >
+                  {fieldErrors.issuer ? (
+                    <>
+                      <AlertCircle className="h-3 w-3 shrink-0 inline" />
+                      {fieldErrors.issuer}
+                    </>
+                  ) : configuration.issuer ? (
+                    `Issuer generated from this tenant: ${configuration.issuer}`
+                  ) : (
+                    'Find this directory ID in Microsoft Entra Admin Center → App registrations → Overview.'
+                  )}
+                </span>
               </label>
-            );
-          })}
-        </div>
+            )}
 
-        {/* Provider-Specific Setup Tip */}
-        <div className="rounded-lg border border-primary/20 bg-primary/5 p-3 text-xs text-foreground/90 space-y-1">
-          <p className="font-semibold text-primary flex items-center gap-1.5">
-            <Sparkles className="h-3.5 w-3.5" />
-            Where to paste these in {definition.label}:
-          </p>
-          <p className="text-muted-foreground leading-relaxed">
-            {configuration.providerType === 'google'
-              ? 'Google Cloud Console → APIs & Services → Credentials → OAuth 2.0 Client ID → Under "Authorized redirect URIs", paste both URLs above.'
-              : configuration.providerType === 'azure'
-                ? 'Microsoft Entra Admin Center → App registrations → Authentication → Add a platform (Web) → Paste both URLs under "Redirect URIs".'
-                : configuration.providerType === 'okta'
-                  ? 'Okta Admin Console → Applications → Your App → General Settings → Paste both URLs under "Sign-in redirect URIs".'
-                  : configuration.providerType === 'auth0'
-                    ? 'Auth0 Dashboard → Applications → Your App → Settings → Paste both URLs under "Allowed Callback URLs" (separated by comma).'
-                    : 'Paste both URLs under the allowed redirect URIs or callback URLs configuration in your OpenID Connect provider console.'}
-          </p>
-        </div>
+            {configuration.providerType === 'google' && (
+              <p className="text-xs text-muted-foreground">
+                Issuer: <code className="font-mono">https://accounts.google.com</code> (set for you)
+              </p>
+            )}
 
-        {copyMessage && (
-          <p role="status" className="text-xs text-muted-foreground flex items-center gap-1.5 pt-1">
-            <Check className="h-3.5 w-3.5 text-emerald-500" />
-            {copyMessage}
-          </p>
-        )}
-      </section>
+            {!definition.tenant &&
+              configuration.providerType !== 'google' &&
+              field(
+                'Issuer',
+                'issuer',
+                'Use the exact HTTPS issuer URL from your provider discovery document (.well-known/openid-configuration).',
+                true
+              )}
 
-      {/* 4. Advanced Settings Collapsible Card */}
-      <details
-        key={String(requiresExactIssuer)}
-        open={requiresExactIssuer || undefined}
-        className="group rounded-xl border bg-card p-4 space-y-4 shadow-xs transition-all duration-200"
-      >
-        <summary className="flex items-center justify-between cursor-pointer text-sm font-semibold text-foreground select-none list-none">
-          <div className="flex items-center gap-2">
-            <Sparkles className="h-4 w-4 text-muted-foreground" />
-            <span>Advanced provider settings</span>
+            <div className="grid min-w-0 gap-4 sm:grid-cols-2">
+              {field(
+                'Client ID',
+                'clientId',
+                'The application identifier assigned by your identity provider.',
+                true
+              )}
+              {field(
+                'Client secret',
+                'clientSecret',
+                hasSavedSecret
+                  ? 'Leave blank to retain the saved secret for this same issuer and Client ID.'
+                  : 'Enter the client secret generated by your provider. It is encrypted at rest using AES-256.',
+                !hasSavedSecret
+              )}
+            </div>
+
+            {field(
+              'Provider display name',
+              'providerLabel',
+              'Optional friendly brand name shown on the login button (e.g. "Acme Corp Okta").'
+            )}
           </div>
-          <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform duration-200 group-open:rotate-180" />
-        </summary>
-        <p className="text-xs text-muted-foreground leading-relaxed">
-          Change these only when required by your provider. The server validates the exact issuer
-          and discovery metadata before staging.
-        </p>
 
-        <div className="space-y-4 pt-2 border-t">
-          {definition.tenant && (
-            <label className="flex items-start gap-2.5 text-sm p-3 rounded-lg border bg-muted/20">
-              <input
-                type="checkbox"
-                className="mt-0.5 rounded border-input"
-                checked={showExactIssuer}
-                disabled={requiresExactIssuer}
-                onChange={event => setAdvancedIssuer(event.target.checked)}
-              />
-              <span className="text-xs leading-relaxed text-foreground">
-                Edit the exact issuer, including supported sovereign-cloud authorities (US
-                Government, China, or custom private clouds).
-              </span>
-            </label>
-          )}
+          {/* 3. Callback URLs Registration Card */}
+          <section
+            className="rounded-xl border bg-muted/20 p-5 space-y-4 shadow-xs"
+            aria-labelledby="authentication-callback-title"
+          >
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b">
+              <div className="flex items-center gap-2">
+                <Link2 className="h-4 w-4 text-primary" />
+                <h3
+                  id="authentication-callback-title"
+                  className="text-sm font-bold text-foreground"
+                >
+                  Register both callback URLs
+                </h3>
+              </div>
+              <Badge variant="outline" className="text-[10px] w-fit">
+                Required in IdP Redirect URIs
+              </Badge>
+            </div>
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              The test callback verifies your administrator against a staged draft. The production
+              callback handles normal sign-in after activation. Register both exact URLs as Web
+              redirect URIs in your provider’s console.
+            </p>
 
-          {(showExactIssuer || configuration.providerType === 'google') &&
-            field(
-              'Exact issuer',
-              'issuer',
-              'Google normally uses https://accounts.google.com. Microsoft authorities must be tenant-specific.'
+            <div className="space-y-3 pt-1">
+              {[
+                ['Production callback', callbackUrl, 'production'],
+                ['Administrator test callback', testCallbackUrl, 'test'],
+              ].map(([label, value, key]) => {
+                const isCopied = copiedKey === key;
+                return (
+                  <label key={label} className="block space-y-1.5">
+                    <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                      {label}
+                    </span>
+                    <div className="flex min-w-0 items-center gap-2">
+                      <input
+                        aria-label={label}
+                        readOnly
+                        value={value}
+                        className={`${inputClass} font-mono text-xs bg-muted/40 select-all`}
+                        onFocus={event => event.target.select()}
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="h-9 px-3 text-xs gap-1.5 shrink-0"
+                        onClick={() => {
+                          void copyAuthenticationText(value).then(copied => {
+                            if (copied) {
+                              setCopiedKey(key);
+                              setCopyMessage(`${label} copied.`);
+                              setTimeout(() => setCopiedKey(null), 2000);
+                            } else {
+                              setCopyMessage(
+                                'Clipboard unavailable. Select the URL field and copy it manually.'
+                              );
+                            }
+                          });
+                        }}
+                        aria-label={`Copy ${label.toLowerCase()}`}
+                      >
+                        {isCopied ? (
+                          <Check className="h-3.5 w-3.5 text-emerald-500" />
+                        ) : (
+                          <Copy className="h-3.5 w-3.5" />
+                        )}
+                        <span>{isCopied ? 'Copied' : 'Copy'}</span>
+                      </Button>
+                    </div>
+                  </label>
+                );
+              })}
+            </div>
+
+            {/* Provider-Specific Setup Tip */}
+            <div className="rounded-lg border border-primary/20 bg-primary/5 p-3 text-xs text-foreground/90 space-y-1">
+              <p className="font-semibold text-primary flex items-center gap-1.5">
+                <Sparkles className="h-3.5 w-3.5" />
+                Where to paste these in {definition.label}:
+              </p>
+              <p className="text-muted-foreground leading-relaxed">
+                {configuration.providerType === 'google'
+                  ? 'Google Cloud Console → APIs & Services → Credentials → OAuth 2.0 Client ID → Under "Authorized redirect URIs", paste both URLs above.'
+                  : configuration.providerType === 'azure'
+                    ? 'Microsoft Entra Admin Center → App registrations → Authentication → Add a platform (Web) → Paste both URLs under "Redirect URIs".'
+                    : configuration.providerType === 'okta'
+                      ? 'Okta Admin Console → Applications → Your App → General Settings → Paste both URLs under "Sign-in redirect URIs".'
+                      : configuration.providerType === 'auth0'
+                        ? 'Auth0 Dashboard → Applications → Your App → Settings → Paste both URLs under "Allowed Callback URLs" (separated by comma).'
+                        : 'Paste both URLs under the allowed redirect URIs or callback URLs configuration in your OpenID Connect provider console.'}
+              </p>
+            </div>
+
+            {copyMessage && (
+              <p
+                role="status"
+                className="text-xs text-muted-foreground flex items-center gap-1.5 pt-1"
+              >
+                <Check className="h-3.5 w-3.5 text-emerald-500" />
+                {copyMessage}
+              </p>
             )}
+          </section>
 
-          {definition.organization &&
-            field(
-              'Auth0 organization ID',
-              'organizationId',
-              'Optional Auth0 Organization ID. It is never sent for another provider.'
-            )}
-
-          <label className="block space-y-1.5 text-sm">
-            <span className="font-semibold text-foreground text-xs uppercase tracking-wider">
-              Client authentication at the token endpoint
-            </span>
-            <select
-              className={inputClass}
-              value={configuration.tokenEndpointAuthMethod}
-              disabled={pending}
-              onChange={event =>
-                update(
-                  'tokenEndpointAuthMethod',
-                  event.target.value as 'client_secret_basic' | 'client_secret_post'
-                )
-              }
+          <section
+            className="rounded-xl border bg-card p-5 space-y-3 shadow-xs"
+            aria-labelledby="authentication-checklist-title"
+          >
+            <h3 id="authentication-checklist-title" className="text-sm font-bold text-foreground">
+              Set up {definition.label}
+            </h3>
+            <ol className="list-decimal space-y-1.5 pl-5 text-xs leading-relaxed text-muted-foreground">
+              {providerSetupChecklists[configuration.providerType].map(item => (
+                <li key={item}>{item}</li>
+              ))}
+            </ol>
+            <a
+              href={authDocs.configure}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-block text-xs font-semibold text-primary hover:underline"
             >
-              <option value="client_secret_basic">HTTP Basic · client_secret_basic</option>
-              <option value="client_secret_post">Request body · client_secret_post</option>
-            </select>
-            <span className="text-xs text-muted-foreground block">
-              Choose the method your provider advertises. Discovery checks support before staging.
-            </span>
-          </label>
+              Step-by-step guide with screenshots
+            </a>
+          </section>
 
-          {field(
-            'Additional scopes',
-            'customScopes',
-            'openid, email and profile are already included. Separate additional scopes with spaces.'
-          )}
+          {/* 4. Advanced Settings Collapsible Card */}
+          <details
+            key={String(requiresExactIssuer)}
+            open={requiresExactIssuer || undefined}
+            className="group rounded-xl border bg-card p-4 space-y-4 shadow-xs transition-all duration-200"
+          >
+            <summary className="flex items-center justify-between cursor-pointer text-sm font-semibold text-foreground select-none list-none">
+              <div className="flex items-center gap-2">
+                <Sparkles className="h-4 w-4 text-muted-foreground" />
+                <span>Advanced provider settings</span>
+              </div>
+              <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform duration-200 group-open:rotate-180" />
+            </summary>
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              Change these only when required by your provider. The server validates the exact
+              issuer and discovery metadata before staging.
+            </p>
 
-          <p className="text-xs text-muted-foreground">
-            Profile claims and role mapping are managed in Access &amp; Provisioning and share this
-            draft.
-          </p>
-        </div>
-      </details>
+            <div className="space-y-4 pt-2 border-t">
+              {definition.tenant && (
+                <label className="flex items-start gap-2.5 text-sm p-3 rounded-lg border bg-muted/20">
+                  <input
+                    type="checkbox"
+                    className="mt-0.5 rounded border-input"
+                    checked={showExactIssuer}
+                    disabled={requiresExactIssuer}
+                    onChange={event => setAdvancedIssuer(event.target.checked)}
+                  />
+                  <span className="text-xs leading-relaxed text-foreground">
+                    Edit the exact issuer, for example for Microsoft US Government
+                    (login.microsoftonline.us) or China (login.partner.microsoftonline.cn).
+                  </span>
+                </label>
+              )}
+
+              {showExactIssuer &&
+                field(
+                  'Exact issuer',
+                  'issuer',
+                  'Microsoft authorities must be tenant-specific (login.microsoftonline.com, login.microsoftonline.us or login.partner.microsoftonline.cn).'
+                )}
+
+              {definition.organization &&
+                field(
+                  'Auth0 organization ID',
+                  'organizationId',
+                  'Optional Auth0 Organization ID. It is never sent for another provider.'
+                )}
+
+              <label className="block space-y-1.5 text-sm">
+                <span className="font-semibold text-foreground text-xs uppercase tracking-wider">
+                  Client authentication at the token endpoint
+                </span>
+                <select
+                  className={inputClass}
+                  value={configuration.tokenEndpointAuthMethod}
+                  disabled={pending}
+                  onChange={event =>
+                    update(
+                      'tokenEndpointAuthMethod',
+                      event.target.value as 'client_secret_basic' | 'client_secret_post'
+                    )
+                  }
+                >
+                  <option value="client_secret_basic">HTTP Basic · client_secret_basic</option>
+                  <option value="client_secret_post">Request body · client_secret_post</option>
+                </select>
+                <span className="text-xs text-muted-foreground block">
+                  Choose the method your provider advertises. Discovery checks support before
+                  staging.
+                </span>
+              </label>
+
+              {field(
+                'Additional scopes',
+                'customScopes',
+                'openid, email and profile are already included. Separate additional scopes with spaces.'
+              )}
+
+              <p className="text-xs text-muted-foreground">
+                Roles, teams and profile details are set in Roles &amp; teams and saved together
+                with this connection.
+              </p>
+            </div>
+          </details>
+        </>
+      )}
 
       {/* Confirmation Dialog on Provider Change */}
       <Dialog
@@ -525,16 +579,7 @@ export default function AuthenticationProviderForm() {
             <Button
               onClick={() => {
                 if (!nextProvider) return;
-                setConfiguration(switchProviderDraft(configuration, nextProvider));
-                setProfileJson('{}');
-                setRevisionId('');
-                setImpact(null);
-                setConfirmation(false);
-                setClaimResult(null);
-                setLinkApproved(false);
-                setBroadAcknowledged(false);
-                setDraftBaseConfigVersion(data.providerConfigVersion);
-                setAdvancedIssuer(false);
+                applyProvider(nextProvider);
                 setNextProvider(null);
               }}
             >

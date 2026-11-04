@@ -66,7 +66,7 @@ export default function AuthenticationRevisionWorkflow() {
     draftDirty && {
       code: 'draft',
       message: 'Stage your latest changes before testing or previewing.',
-      resolutionLabel: 'Stage changes in Connection',
+      resolutionLabel: 'Save changes in Connect provider',
       resolutionTarget: 'connection' as const,
     },
     !revisionId && {
@@ -84,7 +84,7 @@ export default function AuthenticationRevisionWorkflow() {
       message:
         'This saved configuration predates the active provider. Stage a current draft instead.',
       resolutionTarget: 'connection' as const,
-      resolutionLabel: 'Review in Connection',
+      resolutionLabel: 'Review in Connect provider',
     },
     data.freshAuthenticationRequired && {
       code: 'fresh',

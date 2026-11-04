@@ -1,6 +1,7 @@
 'use client';
 
 import { cloneElement, useId, type ReactElement } from 'react';
+import { AUTH_TAB_NAMES } from './setup-steps';
 import { Button, type ButtonProps } from '@/components/ui/shadcn/button';
 import { AlertCircle, ArrowRight, ChevronDown } from 'lucide-react';
 import type { AuthenticationSection } from '@/lib/auth-control/dashboard';
@@ -23,20 +24,7 @@ export function actionAvailability(
 }
 
 function getDefaultResolutionLabel(target: AuthenticationSection): string {
-  switch (target) {
-    case 'connection':
-      return 'Go to Provider Connection';
-    case 'access':
-      return 'Go to Access & Users';
-    case 'policy':
-      return 'Go to Sessions & Policies';
-    case 'emergency':
-      return 'Go to Emergency Recovery';
-    case 'diagnostics':
-      return 'Go to Diagnostics';
-    default:
-      return 'Open Section';
-  }
+  return `Go to ${AUTH_TAB_NAMES[target]}`;
 }
 
 /**

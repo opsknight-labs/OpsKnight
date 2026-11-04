@@ -1,7 +1,6 @@
 'use client';
 
 import { AlertTriangle, ExternalLink, Link2, RefreshCw } from 'lucide-react';
-import AuthenticationFreshnessNotice from './AuthenticationFreshnessNotice';
 import { Button } from '@/components/ui/shadcn/button';
 import { normalizeOidcIssuer } from '@/lib/oidc/issuer-migration';
 import AuthenticationAdminPicker from '../AuthenticationAdminPicker';
@@ -13,7 +12,7 @@ import { authenticationRequest } from './request';
 type LinkRequirement = 'not-needed' | 'required' | 'unknown';
 
 /**
- * One administrator sign-in test for both the Identity Provider and Sessions & Policies tabs, so
+ * One administrator sign-in test for both the Connect provider and Test & activate steps, so
  * status, consent and blockers can never disagree between the two entry points.
  *
  * Linking consent is always an explicit, per-test choice. A previous successful test never
@@ -31,6 +30,8 @@ export default function AuthenticationAdminTestPanel() {
     pending,
     perform,
     setActiveTab,
+    stageDraft,
+    configuration,
   } = useAuthenticationWorkspace();
   const revision = data.revisions.find(item => item.id === revisionId);
   const admin = data.users.find(user => user.id === adminId);
@@ -52,8 +53,9 @@ export default function AuthenticationAdminTestPanel() {
 
   // Predictable failures, said before the administrator leaves for the identity provider.
   const preflight: string[] = (() => {
-    if (!revision || !admin) return [];
-    const config = revision.configuration;
+    if (!admin) return [];
+    // The draft is what will be tested: it is saved first when it has changes.
+    const config = configuration;
     const warnings: string[] = [];
     const domain = admin.email.split('@')[1]?.toLowerCase() ?? '';
     if (linkRequirement === 'required') {
@@ -71,7 +73,7 @@ export default function AuthenticationAdminTestPanel() {
         !config.allowedDomains.includes(domain)
       )
         warnings.push(
-          `${domain} is not in the allowed domains (${config.allowedDomains.join(', ')}). Add it under Access & provisioning or the test will fail.`
+          `${domain} is not in the allowed domains (${config.allowedDomains.join(', ')}). Add it under Who can sign in, or the test will fail.`
         );
       if (config.providerType === 'azure')
         warnings.push(
@@ -91,19 +93,15 @@ export default function AuthenticationAdminTestPanel() {
     isRetest ? 'Retest sign-in' : 'Test administrator sign-in',
     [
       pending && { code: 'busy', message: 'Wait for the current operation to finish.' },
-      draftDirty && {
-        code: 'draft',
-        message: 'Stage your draft changes before testing sign-in.',
-        resolutionTarget: 'connection',
-        resolutionLabel: 'Review draft',
-      },
-      !revision && {
-        code: 'revision',
-        message: 'Select a saved configuration, or stage the current draft.',
-        resolutionTarget: 'connection',
-        resolutionLabel: 'Open Identity Provider',
-      },
+      !draftDirty &&
+        !revision && {
+          code: 'revision',
+          message: 'Select a saved configuration, or stage the current draft.',
+          resolutionTarget: 'connection',
+          resolutionLabel: 'Go to Connect provider',
+        },
       Boolean(
+        !draftDirty &&
         revision &&
         revision.id !== data.activeRevisionId &&
         revision.baseConfigVersion !== data.providerConfigVersion
@@ -112,7 +110,7 @@ export default function AuthenticationAdminTestPanel() {
         message:
           'The active provider changed after this configuration was saved. Stage a current draft.',
         resolutionTarget: 'connection',
-        resolutionLabel: 'Review in Connection',
+        resolutionLabel: 'Review in Connect provider',
       },
       !adminId && { code: 'admin', message: 'Choose the administrator to verify.' },
       data.freshAuthenticationRequired && {
@@ -198,31 +196,36 @@ export default function AuthenticationAdminTestPanel() {
         </div>
       )}
 
-      <AuthenticationFreshnessNotice />
-
       <AuthenticationActionGuard availability={availability} onResolve={setActiveTab}>
         <Button
           className="gap-2"
           variant={isRetest && revision?.verification.state === 'valid' ? 'outline' : 'default'}
-          onClick={() =>
+          onClick={async () => {
+            // Unsaved changes are saved first, so testing is one step, not two.
+            const testedRevisionId = draftDirty ? await stageDraft() : revisionId;
+            if (!testedRevisionId) return;
             void perform(async () => {
               const result = await authenticationRequest<{ url: string }>({
                 action: 'test',
-                revisionId,
+                revisionId: testedRevisionId,
                 adminUserId: adminId,
                 // Consent is exactly what the administrator selected for this test.
                 linkApproved: linkRequirement !== 'not-needed' && linkApproved,
               });
               window.location.assign(result.url);
-            })
-          }
+            });
+          }}
         >
           {isRetest ? (
             <RefreshCw className="h-4 w-4" aria-hidden />
           ) : (
             <ExternalLink className="h-4 w-4" aria-hidden />
           )}
-          {isRetest ? 'Retest administrator sign-in' : 'Test administrator sign-in'}
+          {draftDirty
+            ? 'Save and test sign-in'
+            : isRetest
+              ? 'Test sign-in again'
+              : 'Test my sign-in'}
         </Button>
       </AuthenticationActionGuard>
     </div>

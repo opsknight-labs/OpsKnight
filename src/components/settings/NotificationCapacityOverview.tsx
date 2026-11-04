@@ -1,14 +1,28 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { AlertTriangle, Gauge, Loader2, PauseCircle, PlayCircle, ServerCog, Users } from 'lucide-react';
+import {
+  AlertTriangle,
+  Gauge,
+  Loader2,
+  PauseCircle,
+  PlayCircle,
+  ServerCog,
+  Users,
+} from 'lucide-react';
 import { Badge } from '@/components/ui/shadcn/badge';
 import { Button } from '@/components/ui/shadcn/button';
 import { Input } from '@/components/ui/shadcn/input';
 import { Label } from '@/components/ui/shadcn/label';
 import { Switch } from '@/components/ui/shadcn/switch';
 import { Alert, AlertDescription } from '@/components/ui/shadcn/alert';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/shadcn/card';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/shadcn/card';
 
 type Capacity = {
   provider?: string;
@@ -87,11 +101,25 @@ export default function NotificationCapacityOverview({
   const effectiveAdaptive = watermarks?.adaptiveBackpressure ?? true;
   // Lossless ENV takeover: prefill global runtime form from current effective (ENV) so first save
   // persists effective bulkShare/adaptive rather than the hard-coded 80/true defaults.
-  const [low, setLow] = useState<string>(runtime ? String(runtime.bulkQueueLowWatermark) : watermarks ? String(watermarks.low) : '5000');
-  const [high, setHigh] = useState<string>(runtime ? String(runtime.bulkQueueHighWatermark) : watermarks ? String(watermarks.high) : '25000');
-  const [defaultShare, setDefaultShare] = useState<number>(runtime?.defaultBulkSharePercent ?? effectiveShare);
-  const [adaptive, setAdaptive] = useState<boolean>(runtime?.adaptiveBackpressure ?? effectiveAdaptive);
-  const [currentRevision, setCurrentRevision] = useState<number | null>(runtime?.revision ?? watermarks?.revision ?? null);
+  const [low, setLow] = useState<string>(
+    runtime ? String(runtime.bulkQueueLowWatermark) : watermarks ? String(watermarks.low) : '5000'
+  );
+  const [high, setHigh] = useState<string>(
+    runtime
+      ? String(runtime.bulkQueueHighWatermark)
+      : watermarks
+        ? String(watermarks.high)
+        : '25000'
+  );
+  const [defaultShare, setDefaultShare] = useState<number>(
+    runtime?.defaultBulkSharePercent ?? effectiveShare
+  );
+  const [adaptive, setAdaptive] = useState<boolean>(
+    runtime?.adaptiveBackpressure ?? effectiveAdaptive
+  );
+  const [currentRevision, setCurrentRevision] = useState<number | null>(
+    runtime?.revision ?? watermarks?.revision ?? null
+  );
   const [runtimeSaving, setRuntimeSaving] = useState(false);
   const [runtimeError, setRuntimeError] = useState<string | null>(null);
   const [runtimeSuccess, setRuntimeSuccess] = useState(false);
@@ -163,7 +191,10 @@ export default function NotificationCapacityOverview({
           ...(currentRevision != null ? { revision: currentRevision } : {}),
         }),
       });
-      const body = (await res.json().catch(() => ({}))) as { error?: string; data?: { revision?: number; updatedAt?: string } } & {
+      const body = (await res.json().catch(() => ({}))) as {
+        error?: string;
+        data?: { revision?: number; updatedAt?: string };
+      } & {
         revision?: number;
         updatedAt?: string;
       };
@@ -182,14 +213,19 @@ export default function NotificationCapacityOverview({
   const effectiveNote = useMemo(() => {
     const dbCount = capacities.filter(c => c.source === 'DATABASE').length;
     const envCount = capacities.filter(c => c.source === 'ENV').length;
-    if (dbCount > 0) return `${dbCount} DB-managed · ${envCount} legacy env · workers refresh within ~5s`;
+    if (dbCount > 0)
+      return `${dbCount} DB-managed · ${envCount} legacy env · workers refresh within ~5s`;
     if (envCount > 0) return `Legacy environment — save in OpsKnight to take ownership`;
     return 'Safe defaults — configure per-provider capacity when ready';
   }, [capacities]);
 
   return (
     <div className="space-y-4">
-      {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
+      {error && (
+        <p role="alert" className="text-sm text-destructive">
+          {error}
+        </p>
+      )}
       <div className="grid gap-3 md:grid-cols-3">
         <Card className="border-border/80 shadow-xs">
           <CardHeader className="pb-2">
@@ -200,10 +236,21 @@ export default function NotificationCapacityOverview({
             </CardTitle>
           </CardHeader>
           <CardContent className="flex items-center justify-between">
-            <Badge variant={paused ? 'destructive' : 'secondary'}>{paused ? 'Paused' : 'Running'}</Badge>
+            <Badge variant={paused ? 'destructive' : 'secondary'}>
+              {paused ? 'Paused' : 'Running'}
+            </Badge>
             {canManage && (
-              <Button size="sm" variant="outline" disabled={saving} onClick={() => void togglePause()}>
-                {paused ? <PlayCircle className="mr-1.5 h-4 w-4" /> : <PauseCircle className="mr-1.5 h-4 w-4" />}
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={saving}
+                onClick={() => void togglePause()}
+              >
+                {paused ? (
+                  <PlayCircle className="mr-1.5 h-4 w-4" />
+                ) : (
+                  <PauseCircle className="mr-1.5 h-4 w-4" />
+                )}
                 {paused ? 'Resume bulk' : 'Pause bulk'}
               </Button>
             )}
@@ -217,7 +264,9 @@ export default function NotificationCapacityOverview({
               {workerCount}
             </CardTitle>
           </CardHeader>
-          <CardContent className="text-xs text-muted-foreground">Expiring distributed provider reservations</CardContent>
+          <CardContent className="text-xs text-muted-foreground">
+            Expiring distributed provider reservations
+          </CardContent>
         </Card>
         <Card className="border-border/80 shadow-xs">
           <CardHeader className="pb-2">
@@ -227,7 +276,9 @@ export default function NotificationCapacityOverview({
               {campaigns.length}
             </CardTitle>
           </CardHeader>
-          <CardContent className="text-xs text-muted-foreground">Resumable status subscriber fanouts</CardContent>
+          <CardContent className="text-xs text-muted-foreground">
+            Resumable status subscriber fanouts
+          </CardContent>
         </Card>
       </div>
 
@@ -235,45 +286,86 @@ export default function NotificationCapacityOverview({
         <CardHeader>
           <CardTitle className="text-sm">Queue & backpressure</CardTitle>
           <CardDescription>
-            Watermarks gate new bulk fanout while critical/transactional delivery continues. DB wins over legacy env; no restart required.
+            Watermarks gate new bulk fanout while critical/transactional delivery continues. DB wins
+            over legacy env; no restart required.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
           {queueHealth && (
-            <div className={`rounded-lg border p-2.5 text-xs flex items-center justify-between gap-2 ${queueHealth.state === 'PAUSED' ? 'border-amber-300 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/30' : queueHealth.depth >= queueHealth.high * 0.8 ? 'border-amber-200 bg-amber-50/60 dark:border-amber-900 dark:bg-amber-950/20' : 'border-border/60 bg-muted/20'}`}>
+            <div
+              className={`rounded-lg border p-2.5 text-xs flex items-center justify-between gap-2 ${queueHealth.state === 'PAUSED' ? 'border-amber-300 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/30' : queueHealth.depth >= queueHealth.high * 0.8 ? 'border-amber-200 bg-amber-50/60 dark:border-amber-900 dark:bg-amber-950/20' : 'border-border/60 bg-muted/20'}`}
+            >
               <div>
                 <span className="font-bold">{queueHealth.depth.toLocaleString()}</span>
                 <span className="text-muted-foreground"> pending bulk</span>
-                <span className="text-muted-foreground"> · {queueHealth.low.toLocaleString()} low / {queueHealth.high.toLocaleString()} high</span>
+                <span className="text-muted-foreground">
+                  {' '}
+                  · {queueHealth.low.toLocaleString()} low / {queueHealth.high.toLocaleString()}{' '}
+                  high
+                </span>
               </div>
               <div className="flex items-center gap-1.5">
-                <Badge variant={queueHealth.state === 'PAUSED' ? 'destructive' : queueHealth.hasCapacity ? 'secondary' : 'outline'} className="text-[10px] font-bold uppercase">
-                  {queueHealth.state === 'PAUSED' ? 'Backpressure — paused' : queueHealth.hasCapacity ? 'Healthy' : 'Throttled'}
+                <Badge
+                  variant={
+                    queueHealth.state === 'PAUSED'
+                      ? 'destructive'
+                      : queueHealth.hasCapacity
+                        ? 'secondary'
+                        : 'outline'
+                  }
+                  className="text-[10px] font-bold uppercase"
+                >
+                  {queueHealth.state === 'PAUSED'
+                    ? 'Backpressure — paused'
+                    : queueHealth.hasCapacity
+                      ? 'Healthy'
+                      : 'Throttled'}
                 </Badge>
-                <span className="text-[11px] text-muted-foreground">{queueHealth.hasCapacity ? 'allow' : 'pause new bulk'} · {queueHealth.state === 'PAUSED' ? `resumes < ${queueHealth.low.toLocaleString()}` : `pauses ≥ ${queueHealth.high.toLocaleString()}`}</span>
+                <span className="text-[11px] text-muted-foreground">
+                  {queueHealth.hasCapacity ? 'allow' : 'pause new bulk'} ·{' '}
+                  {queueHealth.state === 'PAUSED'
+                    ? `resumes < ${queueHealth.low.toLocaleString()}`
+                    : `pauses ≥ ${queueHealth.high.toLocaleString()}`}
+                </span>
               </div>
             </div>
           )}
 
           <div className="grid gap-3 sm:grid-cols-3 text-xs">
             <div className="rounded-lg border border-border/60 bg-muted/20 p-3">
-              <div className="text-muted-foreground text-[11px] font-semibold uppercase tracking-wider">Low watermark</div>
+              <div className="text-muted-foreground text-[11px] font-semibold uppercase tracking-wider">
+                Low watermark
+              </div>
               <div className="text-lg font-bold">{Number(low).toLocaleString()}</div>
-              <div className="text-[11px] text-muted-foreground">Queue must drain below this to resume</div>
+              <div className="text-[11px] text-muted-foreground">
+                Queue must drain below this to resume
+              </div>
             </div>
             <div className="rounded-lg border border-border/60 bg-muted/20 p-3">
-              <div className="text-muted-foreground text-[11px] font-semibold uppercase tracking-wider">High watermark</div>
+              <div className="text-muted-foreground text-[11px] font-semibold uppercase tracking-wider">
+                High watermark
+              </div>
               <div className="text-lg font-bold">{Number(high).toLocaleString()}</div>
-              <div className="text-[11px] text-muted-foreground">Hit high → pause; hysteresis prevents flap</div>
+              <div className="text-[11px] text-muted-foreground">
+                Hit high → pause; hysteresis prevents flap
+              </div>
             </div>
             <div className="rounded-lg border border-border/60 bg-muted/20 p-3">
-              <div className="text-muted-foreground text-[11px] font-semibold uppercase tracking-wider">Source</div>
+              <div className="text-muted-foreground text-[11px] font-semibold uppercase tracking-wider">
+                Source
+              </div>
               <div className="mt-1 flex gap-1.5 flex-wrap">
                 {watermarks ? sourceBadge(watermarks.source) : null}
-                <Badge variant="outline" className="text-[10px]">rev {currentRevision ?? runtime?.revision ?? watermarks?.revision ?? '—'}</Badge>
+                <Badge variant="outline" className="text-[10px]">
+                  rev {currentRevision ?? runtime?.revision ?? watermarks?.revision ?? '—'}
+                </Badge>
               </div>
               <div className="text-[11px] text-muted-foreground mt-1">
-                {runtime ? 'DB-managed' : watermarks?.source === 'ENV' ? `Legacy env — save to own · ${effectiveShare}% bulk · ${effectiveAdaptive ? 'Adaptive' : 'Fixed'}` : 'Defaults'}
+                {runtime
+                  ? 'DB-managed'
+                  : watermarks?.source === 'ENV'
+                    ? `Legacy env — save to own · ${effectiveShare}% bulk · ${effectiveAdaptive ? 'Adaptive' : 'Fixed'}`
+                    : 'Defaults'}
               </div>
             </div>
           </div>
@@ -282,17 +374,46 @@ export default function NotificationCapacityOverview({
             <div className="rounded-xl border border-border/60 bg-muted/20 p-3 space-y-3">
               <div className="grid gap-3 sm:grid-cols-3">
                 <div className="space-y-1.5">
-                  <Label htmlFor="wm-low" className="text-xs font-semibold">Low watermark</Label>
-                  <Input id="wm-low" inputMode="numeric" value={low} onChange={e => setLow(e.target.value)} className="h-8 text-xs font-mono" />
+                  <Label htmlFor="wm-low" className="text-xs font-semibold">
+                    Low watermark
+                  </Label>
+                  <Input
+                    id="wm-low"
+                    inputMode="numeric"
+                    value={low}
+                    onChange={e => setLow(e.target.value)}
+                    className="h-8 text-xs font-mono"
+                  />
                 </div>
                 <div className="space-y-1.5">
-                  <Label htmlFor="wm-high" className="text-xs font-semibold">High watermark</Label>
-                  <Input id="wm-high" inputMode="numeric" value={high} onChange={e => setHigh(e.target.value)} className="h-8 text-xs font-mono" />
+                  <Label htmlFor="wm-high" className="text-xs font-semibold">
+                    High watermark
+                  </Label>
+                  <Input
+                    id="wm-high"
+                    inputMode="numeric"
+                    value={high}
+                    onChange={e => setHigh(e.target.value)}
+                    className="h-8 text-xs font-mono"
+                  />
                 </div>
                 <div className="space-y-1.5">
-                  <Label htmlFor="wm-share" className="text-xs font-semibold">Default bulk share — {defaultShare}%</Label>
-                  <input id="wm-share" type="range" min={5} max={95} value={defaultShare} onChange={e => setDefaultShare(Number(e.target.value))} className="w-full accent-primary" />
-                  <div className="flex justify-between text-[10px] text-muted-foreground"><span>5% bulk</span><span>95% bulk</span></div>
+                  <Label htmlFor="wm-share" className="text-xs font-semibold">
+                    Default bulk share — {defaultShare}%
+                  </Label>
+                  <input
+                    id="wm-share"
+                    type="range"
+                    min={5}
+                    max={95}
+                    value={defaultShare}
+                    onChange={e => setDefaultShare(Number(e.target.value))}
+                    className="w-full accent-primary"
+                  />
+                  <div className="flex justify-between text-[10px] text-muted-foreground">
+                    <span>5% bulk</span>
+                    <span>95% bulk</span>
+                  </div>
                 </div>
               </div>
               <div className="flex items-center justify-between gap-3">
@@ -301,11 +422,18 @@ export default function NotificationCapacityOverview({
                   <span className="font-semibold">Adaptive backpressure</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <Button size="sm" onClick={() => void saveRuntime()} disabled={runtimeSaving} className="h-8 text-xs font-semibold">
+                  <Button
+                    size="sm"
+                    onClick={() => void saveRuntime()}
+                    disabled={runtimeSaving}
+                    className="h-8 text-xs font-semibold"
+                  >
                     {runtimeSaving ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : null}
                     {runtimeSaving ? 'Saving…' : 'Save queue settings'}
                   </Button>
-                  {runtimeSuccess && <span className="text-xs font-medium text-emerald-600">Saved</span>}
+                  {runtimeSuccess && (
+                    <span className="text-xs font-medium text-emerald-600">Saved</span>
+                  )}
                 </div>
               </div>
               {runtimeError && (
@@ -325,41 +453,65 @@ export default function NotificationCapacityOverview({
         <CardHeader>
           <CardTitle className="text-sm">Provider capacity</CardTitle>
           <CardDescription>
-            Configured vs effective rate, bulk share, and in-flight. Effective halves on 429/Retry-After and recovers gradually. {effectiveNote}
+            Configured vs effective rate, bulk share, and in-flight. Effective halves on
+            429/Retry-After and recovers gradually. {effectiveNote}
           </CardDescription>
         </CardHeader>
         <CardContent className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {capacities.map(item => (
-            <div key={`${item.channel}:${item.provider ?? 'default'}`} className="rounded-lg border border-border/70 bg-muted/20 p-3">
+            <div
+              key={`${item.channel}:${item.provider ?? 'default'}`}
+              className="rounded-lg border border-border/70 bg-muted/20 p-3"
+            >
               <div className="flex items-center justify-between gap-2">
                 <strong className="text-sm">
-                  {!item.provider || item.provider === 'default' ? item.channel : `${item.provider} · ${item.channel}`}
+                  {!item.provider || item.provider === 'default'
+                    ? item.channel
+                    : `${item.provider} · ${item.channel}`}
                 </strong>
                 <div className="flex items-center gap-1.5 flex-wrap">
-                  {item.mode ? <Badge variant="outline" className="text-[10px] font-bold uppercase tracking-wider">{item.mode}</Badge> : null}
+                  {item.mode ? (
+                    <Badge
+                      variant="outline"
+                      className="text-[10px] font-bold uppercase tracking-wider"
+                    >
+                      {item.mode}
+                    </Badge>
+                  ) : null}
                   {sourceBadge(item.source)}
-                  <Badge variant="outline" className="text-[10px]">{item.adaptiveBackpressure ? 'Adaptive' : 'Fixed'}</Badge>
+                  <Badge variant="outline" className="text-[10px]">
+                    {item.adaptiveBackpressure ? 'Adaptive' : 'Fixed'}
+                  </Badge>
                 </div>
               </div>
               <div className="mt-3 grid grid-cols-3 gap-2 text-xs">
                 <div>
                   <span className="text-muted-foreground">Configured</span>
                   <div className="font-bold font-mono">{item.configuredRatePerSecond}/s</div>
-                  <span className="text-[11px] text-muted-foreground">effective {item.effectiveRatePerSecond}/s</span>
+                  <span className="text-[11px] text-muted-foreground">
+                    effective {item.effectiveRatePerSecond}/s
+                  </span>
                 </div>
                 <div>
                   <span className="text-muted-foreground">Bulk max</span>
                   <div className="font-bold font-mono">{item.bulkRatePerSecond}/s</div>
-                  <span className="text-[11px] text-muted-foreground">{item.bulkShare != null ? `${Math.round(item.bulkShare * 100)}% bulk` : '80% bulk'}</span>
+                  <span className="text-[11px] text-muted-foreground">
+                    {item.bulkShare != null
+                      ? `${Math.round(item.bulkShare * 100)}% bulk`
+                      : '80% bulk'}
+                  </span>
                 </div>
                 <div>
                   <span className="text-muted-foreground">In flight</span>
                   <div className="font-bold font-mono">{item.maxInFlight}</div>
-                  <span className="text-[11px] text-muted-foreground">bulk {item.bulkMaxInFlight ?? '—'}</span>
+                  <span className="text-[11px] text-muted-foreground">
+                    bulk {item.bulkMaxInFlight ?? '—'}
+                  </span>
                 </div>
               </div>
               <div className="mt-2 text-[11px] text-muted-foreground">
-                Per-provider overrides live on the Providers page (Capacity section in each card). Use CUSTOM only when provider quota demands it.
+                Per-provider overrides live on the Providers page (Capacity section in each card).
+                Use CUSTOM only when provider quota demands it.
               </div>
             </div>
           ))}
@@ -375,7 +527,8 @@ export default function NotificationCapacityOverview({
           <CardContent className="space-y-3">
             {campaigns.map(campaign => {
               const attempted = campaign.materializedTargets + campaign.failedTargets;
-              const percent = attempted === 0 ? 0 : Math.round((campaign.completedTargets / attempted) * 100);
+              const percent =
+                attempted === 0 ? 0 : Math.round((campaign.completedTargets / attempted) * 100);
               return (
                 <div key={campaign.id} className="rounded-lg border border-border/70 p-3">
                   <div className="flex justify-between text-sm">
@@ -383,10 +536,14 @@ export default function NotificationCapacityOverview({
                     <Badge variant="outline">{campaign.status}</Badge>
                   </div>
                   <div className="mt-2 h-2 overflow-hidden rounded-full bg-muted">
-                    <div className="h-full bg-primary" style={{ width: `${Math.min(100, percent)}%` }} />
+                    <div
+                      className="h-full bg-primary"
+                      style={{ width: `${Math.min(100, percent)}%` }}
+                    />
                   </div>
                   <div className="mt-1 text-xs text-muted-foreground">
-                    {campaign.materializedTargets} queued · {campaign.completedTargets} delivered · {campaign.failedTargets} failed
+                    {campaign.materializedTargets} queued · {campaign.completedTargets} delivered ·{' '}
+                    {campaign.failedTargets} failed
                   </div>
                 </div>
               );

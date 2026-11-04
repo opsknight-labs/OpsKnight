@@ -74,7 +74,7 @@ export default function AuthenticationPolicyWorkspace() {
                 id="auth-policy-title"
                 className="text-lg font-semibold tracking-tight text-foreground"
               >
-                Sessions &amp; Policies
+                Test &amp; activate
               </h2>
               <Badge
                 variant={data.mode === 'SSO_REQUIRED' ? 'success' : 'neutral'}
@@ -84,26 +84,38 @@ export default function AuthenticationPolicyWorkspace() {
               </Badge>
             </div>
             <p className="mt-1 text-xs text-muted-foreground leading-relaxed">
-              Current mode: {data.mode.replaceAll('_', ' ')}. Validate administrator sign-in and
-              review enforcement impact before activating SSO.
+              Sign in once yourself to prove the setup works, review what will change, then turn
+              single sign-on on. Until then, everyone keeps signing in as they do today.
             </p>
           </div>
         </div>
       </div>
 
-      {/* Session Policies Form */}
-      <AuthenticationSessionPolicyForm key={revisionId} />
+      {/* Session limits rarely change; they no longer require a new sign-in test. */}
+      <details className="group rounded-xl border bg-card shadow-xs">
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-2 p-4 text-sm font-semibold text-foreground">
+          <span>
+            Session limits{' '}
+            <span className="font-normal text-muted-foreground">
+              (optional · changing them keeps your sign-in test)
+            </span>
+          </span>
+          <span className="text-xs text-muted-foreground group-open:hidden">Show</span>
+        </summary>
+        <div className="border-t p-4">
+          <AuthenticationSessionPolicyForm key={revisionId} />
+        </div>
+      </details>
 
       {/* Clubbed: Validate Administrator Access & Sign-in Policy Activation Card */}
       <div className="space-y-6 rounded-xl border border-border/80 bg-card p-4 sm:p-6 shadow-xs">
         <div>
           <h3 className="text-base font-semibold text-foreground flex items-center gap-2">
             <Lock className="h-5 w-5 text-primary" />
-            Validate Administrator Access &amp; Sign-in Policy Activation
+            Turn on single sign-on
           </h3>
           <p className="mt-1 text-xs text-muted-foreground">
-            Complete the real administrator sign-in test, preview user impact, and activate your
-            staged single sign-on policy.
+            Two short steps. You can repeat the test as often as you like.
           </p>
         </div>
 
@@ -115,7 +127,7 @@ export default function AuthenticationPolicyWorkspace() {
                 <UserCheck className="h-4 w-4" />
               </div>
               <h4 className="text-sm font-semibold text-foreground">
-                Step 1: Administrator sign-in verification
+                Step 1: Test your own sign-in
               </h4>
             </div>
             {verification && (
@@ -133,7 +145,7 @@ export default function AuthenticationPolicyWorkspace() {
               <Lock className="h-4 w-4" />
             </div>
             <h4 className="text-sm font-semibold text-foreground">
-              Step 2: Sign-in Policy &amp; Activation
+              Step 2: Choose how people sign in, then turn it on
             </h4>
           </div>
 
@@ -156,8 +168,8 @@ export default function AuthenticationPolicyWorkspace() {
             </select>
             <span className="block text-xs font-normal text-muted-foreground pt-0.5">
               {mode === 'SSO_REQUIRED'
-                ? 'SSO Required enforces authentication via external IdP for all non-emergency users.'
-                : 'SSO Optional permits local password fallbacks and progressive onboarding.'}
+                ? 'Everyone must use single sign-on. Passwords stop working and password sessions end. Needs two emergency recovery identities so you can never be locked out.'
+                : 'People can use single sign-on or their password. The safest way to start; switch to Required once everyone has signed in with SSO.'}
             </span>
           </label>
           {data.mode === 'SSO_REQUIRED' && (
@@ -198,17 +210,15 @@ export default function AuthenticationPolicyWorkspace() {
                 },
                 draftDirty && {
                   code: 'draft',
-                  message:
-                    'Stage your draft in Connection before previewing its enforcement impact.',
+                  message: 'Save your changes before previewing what will change.',
                   resolutionTarget: 'connection',
-                  resolutionLabel: 'Stage draft in Connection',
+                  resolutionLabel: 'Save in Connect provider',
                 },
                 !revisionId && {
                   code: 'revision',
-                  message:
-                    'Select a saved configuration from the selector above, or stage a new draft.',
+                  message: 'Choose a saved configuration above, or save your changes first.',
                   resolutionTarget: 'connection',
-                  resolutionLabel: 'Stage in Connection',
+                  resolutionLabel: 'Go to Connect provider',
                 },
               ])}
               onResolve={setActiveTab}
@@ -226,69 +236,147 @@ export default function AuthenticationPolicyWorkspace() {
                 }
               >
                 <Info className="h-4 w-4" />
-                Preview enforcement impact
+                Preview what will change
               </Button>
             </AuthenticationActionGuard>
 
-            {impact && (
-              <div
-                className="space-y-3 rounded-xl border border-primary/20 bg-primary/5 p-4 text-sm"
-                aria-live="polite"
-              >
-                <div className="flex items-center gap-2 font-semibold text-foreground">
-                  <CheckCircle2 className="h-4 w-4 text-primary" />
-                  <span>Enforcement impact summary</span>
-                </div>
-                <dl className="grid gap-2 text-xs sm:grid-cols-2 lg:grid-cols-4">
-                  {[
-                    {
-                      label: 'Password sessions',
-                      value: impact.passwordSessionCount,
-                      note:
-                        mode === 'SSO_REQUIRED' ? 'Revoked on activation' : 'Kept (SSO Optional)',
-                    },
-                    {
-                      label: 'Users to link',
-                      value: impact.usersRequiringLinking,
-                      note: 'Need first-time SSO linking',
-                    },
-                    {
-                      label: 'Recovery identities',
-                      value: impact.verifiedEmergencyAccounts,
-                      note:
-                        impact.verifiedEmergencyAccounts >= 2
-                          ? 'Emergency access ready'
-                          : 'Two required for SSO Required',
-                    },
-                  ].map(item => (
-                    <div key={item.label} className="rounded-lg border bg-background/70 p-2.5">
-                      <dt className="text-muted-foreground">{item.label}</dt>
-                      <dd className="text-lg font-semibold text-foreground">{item.value}</dd>
-                      <dd className="text-[11px] text-muted-foreground">{item.note}</dd>
+            {impact &&
+              (() => {
+                // Tolerate a preview from a server that predates these fields (rolling upgrade).
+                const linking = impact.linking ?? {
+                  needApproval: impact.usersRequiringLinking,
+                  approved: 0,
+                  domainTrusted: 0,
+                  approvalsCarriedOver: 0,
+                  approvalsRevoked: 0,
+                };
+                const roleImpact = impact.roleImpact ?? {
+                  changed: 0,
+                  denied: 0,
+                  changes: [],
+                  teamAdditions: 0,
+                  teamRemovals: 0,
+                  evaluated: -1,
+                };
+                const blockers = impact.blockersByMode?.[mode] ?? impact.blockers;
+                return (
+                  <div
+                    className="space-y-3 rounded-xl border border-primary/20 bg-primary/5 p-4 text-sm"
+                    aria-live="polite"
+                  >
+                    <div className="flex items-center gap-2 font-semibold text-foreground">
+                      <CheckCircle2 className="h-4 w-4 text-primary" />
+                      <span>What happens when you turn it on</span>
                     </div>
-                  ))}
-                  <div className="rounded-lg border bg-background/70 p-2.5">
-                    <dt className="text-muted-foreground">Administrator proof</dt>
-                    <dd className="mt-1">
-                      <AuthenticationVerificationBadge verification={impact.verification} />
-                    </dd>
-                  </div>
-                </dl>
-                {impact.blockers.length > 0 && (
-                  <div className="mt-2 space-y-1.5 rounded-lg border border-destructive/20 bg-destructive/10 p-3 text-xs text-destructive">
-                    <p className="font-semibold flex items-center gap-1.5">
-                      <AlertTriangle className="h-3.5 w-3.5" />
-                      Blockers preventing activation:
-                    </p>
-                    <ul className="list-disc pl-5 space-y-0.5">
-                      {impact.blockers.map(blocker => (
-                        <li key={blocker}>{blocker}</li>
+                    <dl className="grid gap-2 text-xs sm:grid-cols-2 lg:grid-cols-4">
+                      {[
+                        {
+                          label: 'Password sessions',
+                          value: impact.passwordSessionCount,
+                          note:
+                            mode === 'SSO_REQUIRED'
+                              ? 'Revoked on activation'
+                              : 'Kept (SSO Optional)',
+                        },
+                        {
+                          label: 'Still need approval',
+                          value: linking.needApproval,
+                          note: `${linking.approved} approved · ${linking.domainTrusted} connect automatically`,
+                        },
+                        {
+                          label: 'Recovery identities',
+                          value: impact.verifiedEmergencyAccounts,
+                          note:
+                            impact.verifiedEmergencyAccounts >= 2
+                              ? 'Emergency access ready'
+                              : 'Two required for SSO Required',
+                        },
+                      ].map(item => (
+                        <div key={item.label} className="rounded-lg border bg-background/70 p-2.5">
+                          <dt className="text-muted-foreground">{item.label}</dt>
+                          <dd className="text-lg font-semibold text-foreground">{item.value}</dd>
+                          <dd className="text-[11px] text-muted-foreground">{item.note}</dd>
+                        </div>
                       ))}
+                      <div className="rounded-lg border bg-background/70 p-2.5">
+                        <dt className="text-muted-foreground">Administrator proof</dt>
+                        <dd className="mt-1">
+                          <AuthenticationVerificationBadge verification={impact.verification} />
+                        </dd>
+                      </div>
+                    </dl>
+                    <ul className="space-y-1 text-xs text-foreground/90">
+                      {linking.needApproval > 0 && (
+                        <li>
+                          {linking.needApproval} existing{' '}
+                          {linking.needApproval === 1 ? 'account needs' : 'accounts need'} approval
+                          before SSO works for them.{' '}
+                          <button
+                            type="button"
+                            className="font-semibold underline underline-offset-2"
+                            onClick={() => setActiveTab('access')}
+                          >
+                            Approve them in Who can sign in
+                          </button>
+                        </li>
+                      )}
+                      {linking.approvalsCarriedOver > 0 && (
+                        <li>{linking.approvalsCarriedOver} pending approvals stay valid.</li>
+                      )}
+                      {linking.approvalsRevoked > 0 && (
+                        <li>
+                          {linking.approvalsRevoked} approvals for a previous provider will be
+                          cancelled.
+                        </li>
+                      )}
+                      {roleImpact.changed > 0 && (
+                        <li>
+                          {roleImpact.changed}{' '}
+                          {roleImpact.changed === 1 ? 'person gets' : 'people get'} a new role at
+                          their next sign-in
+                          {roleImpact.changes.length > 0 &&
+                            `: ${roleImpact.changes
+                              .slice(0, 5)
+                              .map(change => `${change.name} (${change.from} → ${change.to})`)
+                              .join(', ')}`}
+                          .
+                        </li>
+                      )}
+                      {roleImpact.denied > 0 && (
+                        <li className="text-amber-700 dark:text-amber-300">
+                          {roleImpact.denied} {roleImpact.denied === 1 ? 'person' : 'people'} would
+                          be refused because no rule matches them.
+                        </li>
+                      )}
+                      {(roleImpact.teamAdditions > 0 || roleImpact.teamRemovals > 0) && (
+                        <li>
+                          Team rules add {roleImpact.teamAdditions} and remove{' '}
+                          {roleImpact.teamRemovals} memberships at next sign-in.
+                        </li>
+                      )}
+                      {roleImpact.evaluated === 0 && (
+                        <li className="text-muted-foreground">
+                          Role and team changes are estimated from people&apos;s last SSO sign-in;
+                          nobody has signed in with this provider yet.
+                        </li>
+                      )}
                     </ul>
+                    {blockers.length > 0 && (
+                      <div className="mt-2 space-y-1.5 rounded-lg border border-destructive/20 bg-destructive/10 p-3 text-xs text-destructive">
+                        <p className="font-semibold flex items-center gap-1.5">
+                          <AlertTriangle className="h-3.5 w-3.5" />
+                          Before you can turn on {mode === 'SSO_REQUIRED' ? 'SSO Required' : 'SSO'}:
+                        </p>
+                        <ul className="list-disc pl-5 space-y-0.5">
+                          {blockers.map(blocker => (
+                            <li key={blocker}>{blocker}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
                   </div>
-                )}
-              </div>
-            )}
+                );
+              })()}
           </div>
 
           {/* Activation Review Confirmation */}
@@ -301,8 +389,7 @@ export default function AuthenticationPolicyWorkspace() {
                 onChange={event => setConfirmation(event.target.checked)}
               />
               <span className="text-xs sm:text-sm font-medium text-foreground leading-snug">
-                I reviewed the impact and confirm activation of this verified revision and sign-in
-                policy.
+                I reviewed what will change and want to turn on single sign-on now.
               </span>
             </label>
 
@@ -314,9 +401,9 @@ export default function AuthenticationPolicyWorkspace() {
                 },
                 draftDirty && {
                   code: 'draft',
-                  message: 'Stage draft changes and repeat the administrator sign-in test.',
+                  message: 'Save your changes and test your sign-in again.',
                   resolutionTarget: 'connection',
-                  resolutionLabel: 'Stage in Connection',
+                  resolutionLabel: 'Go to Connect provider',
                 },
                 Boolean(verification && verification.state !== 'valid') && {
                   code: 'test',
@@ -331,13 +418,12 @@ export default function AuthenticationPolicyWorkspace() {
                 },
                 data.originConflict && {
                   code: 'origin',
-                  message: 'Repair conflicting deployment URLs before activation.',
-                  resolutionTarget: 'diagnostics',
-                  resolutionLabel: 'View Origin Diagnostics',
+                  message:
+                    'OpsKnight is reachable at more than one address. Set NEXTAUTH_URL, NEXT_PUBLIC_APP_URL and the App URL in System settings to the same HTTPS address, then reload.',
                 },
                 !impact && {
                   code: 'preview',
-                  message: 'Preview enforcement impact before activation.',
+                  message: 'Preview what will change first.',
                 },
                 ...(mode === 'SSO_REQUIRED'
                   ? (impact?.blockers ?? [])
@@ -359,7 +445,7 @@ export default function AuthenticationPolicyWorkspace() {
                 Boolean(impact) &&
                   !confirmation && {
                     code: 'confirm',
-                    message: 'Confirm that you reviewed the impact.',
+                    message: 'Tick the confirmation above.',
                   },
               ])}
               onResolve={setActiveTab}
@@ -381,14 +467,14 @@ export default function AuthenticationPolicyWorkspace() {
                     setConfirmation(false);
                     setImpact(null);
                     setMessage(
-                      'Verified SSO activated. Disallowed sessions are revoked; complete a new sign-in if this provider changed.'
+                      'Single sign-on is on. People can now use the SSO button on the sign-in page.'
                     );
                     await refresh(revisionId);
                   })
                 }
               >
                 <ShieldCheck className="h-4 w-4" />
-                Activate verified SSO
+                Turn on single sign-on
               </Button>
             </AuthenticationActionGuard>
           </div>

@@ -230,7 +230,10 @@ export default function ProfileHeroBanner({ user, stats, localTime }: ProfileHer
         open={pickerOpen}
         onOpenChange={setPickerOpen}
         trigger={null}
-        onUploadClick={() => { setPickerOpen(false); setTimeout(() => fileInputRef.current?.click(), 100); }}
+        onUploadClick={() => {
+          setPickerOpen(false);
+          setTimeout(() => fileInputRef.current?.click(), 100);
+        }}
       />
     </>
   );

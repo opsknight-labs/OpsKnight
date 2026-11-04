@@ -3,6 +3,7 @@
 import { Check, Lock, AlertTriangle } from 'lucide-react';
 import type { AuthenticationSection } from '@/lib/auth-control/dashboard';
 import { useAuthenticationWorkspace } from './useAuthenticationController';
+import { AUTH_TAB_NAMES, SETUP_TABS } from './setup-steps';
 
 type StepState = 'done' | 'current' | 'blocked' | 'upcoming';
 type Step = {
@@ -14,21 +15,21 @@ type Step = {
 };
 
 /**
- * Compact, always-visible progress for the SSO change workflow. It reflects server-derived
- * state (saved configuration, administrator proof, emergency readiness, activation) and never
- * hides routine settings behind a wizard: every step simply links to its section.
+ * Compact, always-visible progress for setting up single sign-on. It reflects server-derived
+ * state (saved configuration, administrator test, emergency readiness, activation) and links
+ * each step to the part of the console where it is done.
  */
 export default function AuthenticationWorkflowSteps() {
-  const { data, revisionId, draftDirty, configuration, impact, mode, activeTab, setActiveTab } =
+  const { data, revisionId, draftDirty, configuration, mode, activeTab, setActiveTab } =
     useAuthenticationWorkspace();
-  if (!['connection', 'access', 'policy'].includes(activeTab)) return null;
+  if (!SETUP_TABS.includes(activeTab)) return null;
 
   const selected = data.revisions.find(revision => revision.id === revisionId);
   const configured = Boolean(configuration.issuer && configuration.clientId);
-  const saved = Boolean(selected?.discoveryVerifiedAt) && !draftDirty;
+  const saved = configured && Boolean(selected?.discoveryVerifiedAt) && !draftDirty;
   const verified = saved && selected?.verification.state === 'valid';
   const recoveryReady = data.verifiedEmergencyAccounts >= 2;
-  const reviewed = verified && Boolean(impact) && (mode !== 'SSO_REQUIRED' || recoveryReady);
+  const needsRecovery = mode === 'SSO_REQUIRED' && !recoveryReady;
   const activated =
     !draftDirty &&
     Boolean(selected) &&
@@ -37,40 +38,44 @@ export default function AuthenticationWorkflowSteps() {
 
   const raw: Array<Omit<Step, 'state'> & { done: boolean; blocked?: boolean }> = [
     {
-      id: 'configure',
-      label: 'Configure provider',
-      hint: 'Issuer, client and access settings',
-      target: 'connection',
-      done: configured,
-    },
-    {
-      id: 'save',
-      label: 'Save & validate',
-      hint: draftDirty ? 'Unsaved draft changes' : 'Stage to validate discovery',
+      id: 'connect',
+      label: AUTH_TAB_NAMES.connection,
+      hint: draftDirty ? 'Unsaved changes' : 'Provider, client and callbacks',
       target: 'connection',
       done: saved,
     },
     {
+      id: 'access',
+      label: AUTH_TAB_NAMES.access,
+      hint: 'New and existing accounts',
+      target: 'access',
+      done: saved,
+    },
+    {
+      id: 'roles',
+      label: AUTH_TAB_NAMES.roles,
+      hint: configuration.roleMapping.length
+        ? `${configuration.roleMapping.length} role rule${configuration.roleMapping.length === 1 ? '' : 's'}`
+        : 'Optional',
+      target: 'roles',
+      done: saved,
+    },
+    {
       id: 'test',
-      label: 'Test admin sign-in',
-      hint: 'Real sign-in, valid for 7 days',
+      label: 'Test your sign-in',
+      hint: 'A real sign-in, valid 7 days',
       target: 'policy',
       done: verified,
     },
     {
-      id: 'review',
-      label: 'Review impact',
-      hint: recoveryReady ? 'Sessions, linking and recovery' : 'Two recovery identities needed',
-      target: mode === 'SSO_REQUIRED' && !recoveryReady ? 'emergency' : 'policy',
-      done: reviewed,
-      blocked: mode === 'SSO_REQUIRED' && !recoveryReady,
-    },
-    {
       id: 'activate',
-      label: 'Activate SSO',
-      hint: 'Active sign-in changes only here',
-      target: 'policy',
+      label: 'Turn on SSO',
+      hint: needsRecovery
+        ? 'Required mode needs 2 recovery identities'
+        : 'Nothing changes before this',
+      target: needsRecovery ? 'emergency' : 'policy',
       done: activated,
+      blocked: needsRecovery,
     },
   ];
   // Activation completes the whole journey; otherwise steps complete in order.

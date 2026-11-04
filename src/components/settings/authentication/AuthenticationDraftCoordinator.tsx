@@ -1,5 +1,6 @@
 'use client';
 import { useState } from 'react';
+import { SETUP_TABS } from './setup-steps';
 import { Button } from '@/components/ui/shadcn/button';
 import { Badge } from '@/components/ui/shadcn/badge';
 import {
@@ -38,9 +39,9 @@ export default function AuthenticationDraftCoordinator() {
     setConfirmation,
   } = useAuthenticationWorkspace();
   const [reloadRequested, setReloadRequested] = useState(false);
-  if (!['connection', 'access', 'policy'].includes(activeTab)) return null;
+  if (!SETUP_TABS.includes(activeTab)) return null;
   const stale = data.providerConfigVersion !== draftBaseConfigVersion;
-  const availability = actionAvailability('Stage configuration', [
+  const availability = actionAvailability('Save changes', [
     pending && {
       code: 'busy',
       message: 'Wait for the current operation or section to finish loading.',
@@ -48,7 +49,7 @@ export default function AuthenticationDraftCoordinator() {
     stale && {
       code: 'stale',
       message:
-        'Another administrator changed the active provider. Reload and review it before staging.',
+        'Another administrator changed the active provider. Reload and review it before saving.',
       resolutionLabel: 'Review provider',
       resolutionTarget: 'connection',
     },
@@ -93,7 +94,7 @@ export default function AuthenticationDraftCoordinator() {
                   />
                 </div>
                 <span>
-                  {draftDirty ? 'Changes not staged' : 'Provider draft'} ·{' '}
+                  {draftDirty ? 'Unsaved changes' : 'Your configuration'} ·{' '}
                   {providerDefinitions[configuration.providerType]?.label ??
                     (configuration.providerType === 'azure'
                       ? 'Microsoft Entra ID'
@@ -105,7 +106,7 @@ export default function AuthenticationDraftCoordinator() {
                   variant="outline"
                   className="border-amber-500/40 bg-amber-500/15 text-amber-700 dark:text-amber-300 text-[10px] font-semibold"
                 >
-                  Unstaged Edits
+                  Not saved
                 </Badge>
               ) : data.revisions.length > 0 ? (
                 <Badge
@@ -113,20 +114,20 @@ export default function AuthenticationDraftCoordinator() {
                   className="border-emerald-500/40 bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 text-[10px] font-semibold"
                 >
                   <CheckCircle2 className="h-3 w-3 mr-1" />
-                  Configuration Staged
+                  Saved
                 </Badge>
               ) : (
                 <Badge
                   variant="outline"
                   className="border-blue-500/40 bg-blue-500/15 text-blue-700 dark:text-blue-300 text-[10px] font-semibold"
                 >
-                  Ready to Stage
+                  Not saved yet
                 </Badge>
               )}
             </div>
             <p className="text-xs text-muted-foreground leading-relaxed">
-              Provider, access and session changes share this draft. Staging does not change active
-              sign-in.
+              Steps 1–4 are saved together. Saving checks your provider connection; nothing changes
+              for your team until you turn single sign-on on.
             </p>
           </div>
         </div>
@@ -134,7 +135,7 @@ export default function AuthenticationDraftCoordinator() {
           {draftDirty || data.revisions.length === 0 ? (
             <AuthenticationActionGuard availability={availability} onResolve={setActiveTab}>
               <Button size="sm" onClick={() => void stageDraft()}>
-                Stage configuration
+                Save changes
               </Button>
             </AuthenticationActionGuard>
           ) : (

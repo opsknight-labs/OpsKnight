@@ -30,16 +30,22 @@ const renderConsole = (
   data: Awaited<ReturnType<typeof authenticationDashboard>> = fixtureDashboard
 ) => {
   window.history.replaceState(null, '', `/settings/system?section=sso&authTab=${tab}`);
-  return render(
+  const view = render(
     <AuthenticationConsole
       initialData={{ ...data, section: tab as typeof data.section }}
       callbackUrl="https://instance.example.test/api/auth/callback/oidc"
       testCallbackUrl="https://instance.example.test/api/auth/oidc/test/callback"
     />
   );
+  // A fresh install preselects nothing; administrators pick their provider first.
+  const unchosen = screen.queryByRole('radio', { name: /Google Workspace/, checked: false });
+  if (tab === 'connection' && !data.activeProvider && !data.revisions.length && unchosen)
+    fireEvent.click(unchosen);
+  return view;
 };
 beforeEach(() => {
   vi.clearAllMocks();
+  window.sessionStorage.clear();
   vi.stubGlobal(
     'fetch',
     vi.fn(async (url: RequestInfo | URL) =>
@@ -75,47 +81,60 @@ describe('enterprise authentication experience', () => {
     fireEvent.change(screen.getByLabelText('Client ID', { exact: true }), {
       target: { value: 'cross-tab-client' },
     });
-    fireEvent.mouseDown(screen.getByRole('tab', { name: 'Access & provisioning' }), {
+    fireEvent.mouseDown(screen.getByRole('tab', { name: '2 · Who can sign in' }), {
       button: 0,
       ctrlKey: false,
     });
-    fireEvent.change(screen.getByLabelText(/Allowed domains/), {
+    fireEvent.change(screen.getByLabelText(/Allowed email domains/), {
       target: { value: 'example.test, ' },
     });
     await waitFor(() =>
-      expect(screen.getByRole('button', { name: 'Stage configuration' })).toBeEnabled()
+      expect(screen.getByRole('button', { name: 'Save changes' })).toBeEnabled()
     );
-    expect(screen.getByLabelText(/Allowed domains/)).toHaveValue('example.test, ');
-    fireEvent.change(screen.getByLabelText(/Allowed domains/), {
+    expect(screen.getByLabelText(/Allowed email domains/)).toHaveValue('example.test, ');
+    fireEvent.change(screen.getByLabelText(/Allowed email domains/), {
       target: { value: 'example.test, second.test' },
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Stage configuration' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
     expect(screen.getByText('Resolve these fields before staging:')).toBeInTheDocument();
     expect(
       screen.getByRole('button', { name: 'Enter a client secret for this provider and client.' })
     ).toBeInTheDocument();
-    fireEvent.mouseDown(screen.getByRole('tab', { name: 'Identity Provider' }), {
+    fireEvent.mouseDown(screen.getByRole('tab', { name: '1 · Connect provider' }), {
       button: 0,
       ctrlKey: false,
     });
     expect(screen.getByLabelText('Client ID', { exact: true })).toHaveValue('cross-tab-client');
     expect(new URLSearchParams(window.location.search).get('section')).toBe('sso');
   });
+  it('preselects no provider on a fresh install and shows its setup checklist once chosen', () => {
+    window.history.replaceState(null, '', '/settings/system?section=sso&authTab=connection');
+    render(
+      <AuthenticationConsole
+        initialData={{ ...fixtureDashboard, section: 'connection' }}
+        callbackUrl="https://instance.example.test/api/auth/callback/oidc"
+        testCallbackUrl="https://instance.example.test/api/auth/oidc/test/callback"
+      />
+    );
+    expect(screen.getByText('Choose your provider above to continue.')).toBeInTheDocument();
+    expect(screen.queryByLabelText('Client ID', { exact: true })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('radio', { name: /Okta/ }));
+    expect(screen.getByRole('radio', { name: /Okta/ })).toHaveAttribute('aria-checked', 'true');
+    expect(screen.getByText('Set up Okta')).toBeInTheDocument();
+    expect(screen.getByText(/ends in \/oauth2\/default/)).toBeInTheDocument();
+    expect(screen.getByLabelText('Client ID', { exact: true })).toBeInTheDocument();
+  });
   it('confirms a provider switch, clears incompatible fields and only shows Auth0 organization for Auth0', () => {
     renderConsole();
     fireEvent.change(screen.getByLabelText('Client ID', { exact: true }), {
       target: { value: 'google-client' },
     });
-    fireEvent.change(screen.getByLabelText('Identity provider', { exact: true }), {
-      target: { value: 'auth0' },
-    });
+    fireEvent.click(screen.getByRole('radio', { name: /Auth0/ }));
     fireEvent.click(screen.getByRole('button', { name: /Change provider/ }));
     expect(screen.getByLabelText('Client ID', { exact: true })).toHaveValue('');
     fireEvent.click(screen.getByText('Advanced provider settings'));
     expect(screen.getByLabelText(/Auth0 Organization ID/)).toBeInTheDocument();
-    fireEvent.change(screen.getByLabelText('Identity provider', { exact: true }), {
-      target: { value: 'azure' },
-    });
+    fireEvent.click(screen.getByRole('radio', { name: /Microsoft Entra ID/ }));
     fireEvent.click(screen.getByRole('button', { name: /Change provider/ }));
     expect(screen.queryByLabelText(/Auth0 Organization ID/)).not.toBeInTheDocument();
     expect(screen.getByLabelText(/Directory \(tenant\) ID/)).toBeInTheDocument();
@@ -171,17 +190,17 @@ describe('enterprise authentication experience', () => {
     );
     renderConsole('connection', original);
     fireEvent.change(screen.getByLabelText('Client ID'), { target: { value: 'local-change' } });
-    fireEvent.mouseDown(screen.getByRole('tab', { name: 'Access & provisioning' }), {
+    fireEvent.mouseDown(screen.getByRole('tab', { name: '2 · Who can sign in' }), {
       button: 0,
       ctrlKey: false,
     });
     await screen.findByRole('button', { name: 'Reload active configuration' });
-    expect(screen.getByRole('button', { name: 'Stage configuration' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Save changes' })).toBeDisabled();
     fireEvent.click(screen.getByRole('button', { name: 'Reload active configuration' }));
     fireEvent.click(
       screen.getByRole('button', { name: 'Replace draft with active configuration' })
     );
-    fireEvent.mouseDown(screen.getByRole('tab', { name: 'Identity Provider' }), {
+    fireEvent.mouseDown(screen.getByRole('tab', { name: '1 · Connect provider' }), {
       button: 0,
       ctrlKey: false,
     });
@@ -266,19 +285,19 @@ describe('enterprise authentication experience', () => {
     fireEvent.change(screen.getByLabelText('Provider display name'), {
       target: { value: 'First draft' },
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Stage configuration' }));
-    await screen.findByText(/Changes staged and discovery verified/);
-    fireEvent.mouseDown(screen.getByRole('tab', { name: 'Sessions & Policies' }), { button: 0 });
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
+    await screen.findByText(/Saved, and your provider responded correctly/);
+    fireEvent.mouseDown(screen.getByRole('tab', { name: '4 · Test & activate' }), { button: 0 });
     await waitFor(() =>
-      expect(screen.getByRole('button', { name: 'Preview enforcement impact' })).toBeEnabled()
+      expect(screen.getByRole('button', { name: 'Preview what will change' })).toBeEnabled()
     );
-    fireEvent.click(screen.getByRole('button', { name: 'Preview enforcement impact' }));
-    await screen.findByText('Enforcement impact summary');
+    fireEvent.click(screen.getByRole('button', { name: 'Preview what will change' }));
+    await screen.findByText('What happens when you turn it on');
     expect(screen.getAllByText(/Verified — expires/).length).toBeGreaterThan(0);
-    fireEvent.click(screen.getByRole('checkbox', { name: /I reviewed the impact/ }));
-    fireEvent.click(screen.getByRole('button', { name: 'Activate verified SSO' }));
-    await screen.findByText(/Verified SSO activated/);
-    fireEvent.mouseDown(screen.getByRole('tab', { name: 'Identity Provider' }), { button: 0 });
+    fireEvent.click(screen.getByRole('checkbox', { name: /I reviewed what will change/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Turn on single sign-on' }));
+    await screen.findByText(/Single sign-on is on/);
+    fireEvent.mouseDown(screen.getByRole('tab', { name: '1 · Connect provider' }), { button: 0 });
     await waitFor(() => expect(screen.getByLabelText('Provider display name')).toBeEnabled());
     expect(screen.getByLabelText('Provider display name')).toHaveValue('First draft');
     fireEvent.change(screen.getByLabelText('Provider display name'), {
@@ -287,7 +306,7 @@ describe('enterprise authentication experience', () => {
     expect(
       screen.queryByRole('button', { name: 'Reload active configuration' })
     ).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Stage configuration' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
     await waitFor(() => expect(calls.filter(call => call.action === 'stage')).toHaveLength(2));
     expect(
       calls.filter(call => call.action === 'stage').map(call => call.expectedConfigVersion)
@@ -397,7 +416,7 @@ describe('enterprise authentication experience', () => {
     fireEvent.change(screen.getByLabelText('Maximum session lifetime custom value'), {
       target: { value: '5' },
     });
-    fireEvent.mouseDown(screen.getByRole('tab', { name: 'Identity Provider' }), { button: 0 });
+    fireEvent.mouseDown(screen.getByRole('tab', { name: '1 · Connect provider' }), { button: 0 });
     await waitFor(() =>
       expect(screen.getByLabelText('Saved provider configuration')).toBeEnabled()
     );
@@ -405,7 +424,7 @@ describe('enterprise authentication experience', () => {
       target: { value: 'saved-defaults' },
     });
     fireEvent.click(screen.getByRole('button', { name: 'Load saved configuration' }));
-    fireEvent.mouseDown(screen.getByRole('tab', { name: 'Sessions & Policies' }), { button: 0 });
+    fireEvent.mouseDown(screen.getByRole('tab', { name: '4 · Test & activate' }), { button: 0 });
     await waitFor(() =>
       expect(screen.getByLabelText('Maximum session lifetime', { exact: true })).toHaveValue(
         'default'
@@ -473,7 +492,7 @@ describe('enterprise authentication experience', () => {
       window.dispatchEvent(event);
     });
     expect(event.defaultPrevented).toBe(true);
-    expect(screen.getByRole('dialog')).toHaveAccessibleName('Leave with unstaged changes?');
+    expect(screen.getByRole('dialog')).toHaveAccessibleName('Leave with unsaved changes?');
     fireEvent.click(screen.getByRole('button', { name: 'Keep editing' }));
     expect(screen.getByLabelText('Client ID')).toHaveValue('unsaved');
   });
@@ -670,19 +689,19 @@ describe('enterprise authentication experience', () => {
     fireEvent.change(secretInput, { target: { value: 'super-secret' } });
 
     // Click Stage configuration
-    const stageButton = screen.getByRole('button', { name: 'Stage configuration' });
+    const stageButton = screen.getByRole('button', { name: 'Save changes' });
     fireEvent.click(stageButton);
 
     await waitFor(() => {
       expect(toast.success).toHaveBeenCalledWith('Authentication update', {
         description:
-          'Changes staged and discovery verified. Test administrator sign-in before activation.',
+          'Saved, and your provider responded correctly. Next, test your own sign-in in Test & activate.',
       });
     });
 
     // Inline status remains visible as well
     expect(screen.getByRole('status')).toHaveTextContent(
-      'Changes staged and discovery verified. Test administrator sign-in before activation.'
+      'Saved, and your provider responded correctly. Next, test your own sign-in in Test & activate.'
     );
   });
 });

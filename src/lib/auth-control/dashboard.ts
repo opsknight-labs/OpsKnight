@@ -2,6 +2,7 @@ import 'server-only';
 import { z } from 'zod/v3';
 import { coerceBooleanClaim, normalizeOidcBoundaryClaims } from '@/lib/oidc/claims';
 import prisma from '@/lib/prisma';
+import { Prisma } from '@prisma/client';
 import { getAuthenticationPolicy } from '@/lib/authentication-policy';
 import { getEnterpriseSessionPolicy } from '@/lib/local-auth-policy';
 import { providerConfigSchema } from './provider-config';
@@ -21,7 +22,45 @@ import { getActiveLinkingProvider, resolveOidcLinkingStatuses } from '@/lib/oidc
 import { evaluateOidcProof } from './proof-status';
 
 export type AuthenticationSection =
-  'overview' | 'connection' | 'access' | 'policy' | 'emergency' | 'diagnostics';
+  'overview' | 'connection' | 'access' | 'roles' | 'policy' | 'emergency' | 'diagnostics';
+
+const SUGGESTION_IDENTITY_SAMPLE = 500;
+const SUGGESTIONS_PER_CLAIM = 200;
+
+/**
+ * Group and role values people actually sent at recent sign-ins, per claim, so rule editors
+ * can pick a real value instead of guessing its spelling or case.
+ */
+async function claimValueSuggestions(issuer: string | null) {
+  if (!issuer) return {};
+  const identities = await prisma.oidcIdentity.findMany({
+    where: { issuer, claimSnapshot: { not: Prisma.DbNull } },
+    select: { claimSnapshot: true },
+    orderBy: { lastLoginAt: 'desc' },
+    take: SUGGESTION_IDENTITY_SAMPLE,
+  });
+  const counts = new Map<string, Map<string, number>>();
+  for (const identity of identities) {
+    const snapshot = identity.claimSnapshot;
+    if (!snapshot || typeof snapshot !== 'object' || Array.isArray(snapshot)) continue;
+    for (const [claim, values] of Object.entries(snapshot)) {
+      if (!Array.isArray(values)) continue;
+      const perClaim = counts.get(claim) ?? new Map<string, number>();
+      for (const value of values)
+        if (typeof value === 'string') perClaim.set(value, (perClaim.get(value) ?? 0) + 1);
+      counts.set(claim, perClaim);
+    }
+  }
+  return Object.fromEntries(
+    [...counts].map(([claim, values]) => [
+      claim,
+      [...values]
+        .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+        .slice(0, SUGGESTIONS_PER_CLAIM)
+        .map(([value, people]) => ({ value, people })),
+    ])
+  ) as Record<string, Array<{ value: string; people: number }>>;
+}
 export async function authenticationDashboard(
   actor: ControlActor,
   section: AuthenticationSection = 'overview'
@@ -155,6 +194,32 @@ export async function authenticationDashboard(
         lastActive: string;
       }>
     ),
+  ]);
+  const [teams, linkingRequests, linkingRequestCount, suggestions] = await Promise.all([
+    section === 'roles' || section === 'access'
+      ? prisma.team.findMany({
+          select: { id: true, name: true },
+          orderBy: { name: 'asc' },
+          take: 500,
+        })
+      : Promise.resolve([]),
+    section === 'access' || section === 'overview'
+      ? prisma.oidcLinkingRequest.findMany({
+          orderBy: { lastAttemptAt: 'desc' },
+          take: 50,
+          select: {
+            userId: true,
+            email: true,
+            reason: true,
+            attempts: true,
+            requestedAt: true,
+            lastAttemptAt: true,
+            user: { select: { name: true, role: true } },
+          },
+        })
+      : Promise.resolve([]),
+    prisma.oidcLinkingRequest.count(),
+    section === 'roles' ? claimValueSuggestions(active?.issuer ?? null) : Promise.resolve({}),
   ]);
   const [canonical, pinnedOrigin] = await Promise.all([
     authenticationOrigin()
@@ -309,6 +374,19 @@ export async function authenticationDashboard(
     acceptedEmailAlertCount: acceptedAlertCount,
     cancelledEmailAlertCount: cancelledAlertCount,
     failedEmailAlertCount: failedAlertCount,
+    teams,
+    linkingRequests: linkingRequests.map(request => ({
+      userId: request.userId,
+      email: request.email,
+      name: request.user.name,
+      role: request.user.role,
+      reason: request.reason,
+      attempts: request.attempts,
+      requestedAt: request.requestedAt.toISOString(),
+      lastAttemptAt: request.lastAttemptAt.toISOString(),
+    })),
+    linkingRequestCount,
+    claimSuggestions: suggestions as Record<string, Array<{ value: string; people: number }>>,
   };
 }
 

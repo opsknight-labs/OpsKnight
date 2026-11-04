@@ -172,7 +172,7 @@ export async function GET(request: NextRequest) {
     const params = z
       .object({
         section: z
-          .enum(['overview', 'connection', 'access', 'policy', 'emergency', 'diagnostics'])
+          .enum(['overview', 'connection', 'access', 'roles', 'policy', 'emergency', 'diagnostics'])
           .default('overview'),
         view: z.enum(['dashboard', 'admins', 'users', 'alerts']).default('dashboard'),
         q: z.string().max(100).default(''),

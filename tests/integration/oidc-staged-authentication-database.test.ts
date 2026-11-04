@@ -530,6 +530,26 @@ suite('staged OIDC authentication with HTTPS and signed ID tokens', () => {
     expect(await prisma.oidcIdentity.count({ where: { userId: actor.id } })).toBe(0);
     expect(await prisma.userDevice.count({ where: { userId: actor.id } })).toBe(0);
   });
+  it('keeps the administrator test across session-limit edits but not role-rule edits', async () => {
+    const base = { issuer: runtime.issuer, clientId: 'test-client', clientSecret: '' };
+    const sessionsOnly = await stageOidcRevision(
+      actor,
+      { ...base, sessionMaxAgeSeconds: 7200, providerLabel: 'Company SSO' },
+      false,
+      revisionId
+    );
+    expect((await enforcementPreview(sessionsOnly.revisionId)).adminVerified).toBe(true);
+    const rolesChanged = await stageOidcRevision(
+      actor,
+      { ...base, roleMapping: [{ claim: 'groups', value: 'ops', role: 'RESPONDER' }] },
+      false,
+      revisionId
+    );
+    expect((await enforcementPreview(rolesChanged.revisionId)).adminVerified).toBe(false);
+    await prisma.oidcRevision.deleteMany({
+      where: { id: { in: [sessionsOnly.revisionId, rolesChanged.revisionId] } },
+    });
+  });
   it('refuses Required without independent recovery, then activates Optional preserving the original User ID', async () => {
     await expect(
       activateOidcRevision(actor, revisionId, 900, 'SSO_REQUIRED', 'ACTIVATE VERIFIED SSO')

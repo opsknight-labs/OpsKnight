@@ -191,7 +191,10 @@ export default function AuthenticationDiagnostics({
             <Activity className="h-5 w-5" />
           </div>
           <div>
-            <h2 id="auth-diagnostics-title" className="text-lg font-semibold tracking-tight text-foreground">
+            <h2
+              id="auth-diagnostics-title"
+              className="text-lg font-semibold tracking-tight text-foreground"
+            >
               Authentication diagnostics
             </h2>
             <p className="mt-0.5 text-xs text-muted-foreground leading-relaxed">
@@ -201,7 +204,10 @@ export default function AuthenticationDiagnostics({
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {refreshError && (
-            <span role="alert" className="text-xs font-medium text-destructive flex items-center gap-1">
+            <span
+              role="alert"
+              className="text-xs font-medium text-destructive flex items-center gap-1"
+            >
               <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
               {refreshError}
             </span>

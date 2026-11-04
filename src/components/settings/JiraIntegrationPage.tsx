@@ -247,7 +247,6 @@ export default function JiraIntegrationPage({
         </div>
       )}
 
-
       <section className="rounded-xl border bg-card p-5 sm:p-6 shadow-sm space-y-5">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-start gap-3">

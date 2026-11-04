@@ -259,7 +259,7 @@ test('enterprise console supports desktop/mobile layout and keyboard navigation'
     // Saved revision selection must load its own sanitized configuration, not production.
     const saved = await context.request.get(`${origin}/api/auth/control?section=connection`);
     const dashboard = (await saved.json()).data;
-    await page.getByRole('tab', { name: 'Identity Provider', exact: true }).click();
+    await page.getByRole('tab', { name: '1 · Connect provider', exact: true }).click();
     await expect(
       page.getByRole('combobox', { name: 'Saved provider configuration', exact: true })
     ).toBeEnabled();
@@ -276,7 +276,7 @@ test('enterprise console supports desktop/mobile layout and keyboard navigation'
       await page
         .getByRole('combobox', { name: 'Saved provider configuration', exact: true })
         .selectOption('browser-overage-preview');
-      await page.getByRole('tab', { name: 'Access & provisioning', exact: true }).click();
+      await page.getByRole('tab', { name: '2 · Who can sign in', exact: true }).click();
       const sample = page.getByLabel(
         'Sample claims for identity and role preview (never paste tokens)'
       );
@@ -320,7 +320,7 @@ test('enterprise console supports desktop/mobile layout and keyboard navigation'
         await page.getByRole('button', { name: 'Apply filters' }).click();
         await expect(page.getByText('Loading security notifications…')).toBeHidden();
       }
-      await page.getByRole('tab', { name: 'Identity Provider', exact: true }).click();
+      await page.getByRole('tab', { name: '1 · Connect provider', exact: true }).click();
     }
     // Local presentation walkthrough: no live tenant or discovery request is required.
     await page
@@ -370,7 +370,7 @@ test('enterprise console supports desktop/mobile layout and keyboard navigation'
       ).toBeVisible();
       await expect(page.getByText(/Unable to load|Request timed out/)).toHaveCount(0);
     }
-    await page.getByRole('tab', { name: 'Identity Provider', exact: true }).click();
+    await page.getByRole('tab', { name: '1 · Connect provider', exact: true }).click();
     for (const width of [320, 390, 768, 1366, 1920]) {
       await page.setViewportSize({ width, height: 1000 });
       const closeNavigation = page.getByRole('button', {
@@ -381,11 +381,11 @@ test('enterprise console supports desktop/mobile layout and keyboard navigation'
         await closeNavigation.click();
         await expect(closeNavigation).toBeHidden();
       }
-      const connection = page.getByRole('tab', { name: 'Identity Provider', exact: true });
+      const connection = page.getByRole('tab', { name: '1 · Connect provider', exact: true });
       await connection.focus();
       await page.keyboard.press('Enter');
       await expect(
-        page.getByRole('heading', { name: 'Identity Provider', exact: true })
+        page.getByRole('heading', { name: '1 · Connect provider', exact: true })
       ).toBeVisible();
       await page.getByLabel('Client ID', { exact: true }).fill('preview-client');
       await page.getByLabel('Client ID', { exact: true }).fill('');
@@ -426,7 +426,7 @@ test('enterprise console supports desktop/mobile layout and keyboard navigation'
       expect(
         await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)
       ).toBe(true);
-      await page.getByRole('button', { name: 'Stage configuration', exact: true }).click();
+      await page.getByRole('button', { name: 'Save changes', exact: true }).click();
       await expect(
         page.getByRole('alert').filter({ hasText: 'Check the highlighted draft fields' })
       ).toBeVisible();

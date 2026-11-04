@@ -227,7 +227,10 @@ export default function NotificationHistory() {
       let hasMore = true;
 
       while (hasMore) {
-        const params = new URLSearchParams({ limit: String(PAGE_LIMIT), offset: String(currentOffset) });
+        const params = new URLSearchParams({
+          limit: String(PAGE_LIMIT),
+          offset: String(currentOffset),
+        });
         if (filterChannel && filterChannel !== 'all') params.set('channel', filterChannel);
         if (filterStatus && filterStatus !== 'all') params.set('status', filterStatus);
         if (debouncedQuery) params.set('q', debouncedQuery);

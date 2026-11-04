@@ -93,12 +93,18 @@ export default function ProviderCapacitySettings({
 
   const row = useMemo(() => {
     if (!snapshot) return null;
-    return snapshot.providerCapacities.find(r => r.provider === provider && r.channel === channel) ?? null;
+    return (
+      snapshot.providerCapacities.find(r => r.provider === provider && r.channel === channel) ??
+      null
+    );
   }, [snapshot, provider, channel]);
 
   const effective = useMemo(() => {
     if (!snapshot?.effectiveCapacities) return null;
-    return snapshot.effectiveCapacities.find(r => r.provider === provider && r.channel === channel) ?? null;
+    return (
+      snapshot.effectiveCapacities.find(r => r.provider === provider && r.channel === channel) ??
+      null
+    );
   }, [snapshot, provider, channel]);
 
   const isEnvTakeover = !row && effective?.source === 'ENV';
@@ -130,9 +136,14 @@ export default function ProviderCapacitySettings({
       setLoadError(null);
       try {
         const res = await fetch('/api/admin/notifications/capacity', { cache: 'no-store' });
-        const body = (await res.json()) as { data?: CapacitySnapshot; error?: string } & CapacitySnapshot;
-        if (!res.ok) throw new Error((body as { error?: string }).error || 'Unable to load capacity');
-        const data: CapacitySnapshot = (body as { data?: CapacitySnapshot }).data ?? (body as CapacitySnapshot);
+        const body = (await res.json()) as {
+          data?: CapacitySnapshot;
+          error?: string;
+        } & CapacitySnapshot;
+        if (!res.ok)
+          throw new Error((body as { error?: string }).error || 'Unable to load capacity');
+        const data: CapacitySnapshot =
+          (body as { data?: CapacitySnapshot }).data ?? (body as CapacitySnapshot);
         if (cancelled) return;
         setSnapshot(data);
       } catch (e) {
@@ -150,8 +161,12 @@ export default function ProviderCapacitySettings({
 
   useEffect(() => {
     if (!snapshot) return;
-    const current = snapshot.providerCapacities.find(r => r.provider === provider && r.channel === channel);
-    const eff = snapshot.effectiveCapacities?.find(r => r.provider === provider && r.channel === channel);
+    const current = snapshot.providerCapacities.find(
+      r => r.provider === provider && r.channel === channel
+    );
+    const eff = snapshot.effectiveCapacities?.find(
+      r => r.provider === provider && r.channel === channel
+    );
     if (current) {
       setMode(current.mode);
       setRatePerSecond(current.ratePerSecond != null ? String(current.ratePerSecond) : '');
@@ -223,7 +238,11 @@ export default function ProviderCapacitySettings({
   const validate = (): string | null => {
     const bulkMin = limits?.bulkSharePercent.min ?? 5;
     const bulkMax = limits?.bulkSharePercent.max ?? 95;
-    if (!Number.isInteger(bulkSharePercent) || bulkSharePercent < bulkMin || bulkSharePercent > bulkMax) {
+    if (
+      !Number.isInteger(bulkSharePercent) ||
+      bulkSharePercent < bulkMin ||
+      bulkSharePercent > bulkMax
+    ) {
       return `Bulk share must be ${bulkMin}–${bulkMax}%`;
     }
     if (mode === 'CUSTOM') {
@@ -236,7 +255,11 @@ export default function ProviderCapacitySettings({
       if (!Number.isSafeInteger(parsedRate) || parsedRate < rateMin || parsedRate > rateMax) {
         return `Rate must be ${rateMin}–${rateMax} / sec`;
       }
-      if (!Number.isSafeInteger(parsedInflight) || parsedInflight < inflightMin || parsedInflight > inflightMax) {
+      if (
+        !Number.isSafeInteger(parsedInflight) ||
+        parsedInflight < inflightMin ||
+        parsedInflight > inflightMax
+      ) {
         return `Max in-flight must be ${inflightMin}–${inflightMax}`;
       }
     }
@@ -269,7 +292,10 @@ export default function ProviderCapacitySettings({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
-      const body = (await res.json().catch(() => ({}))) as { error?: string; data?: SnapshotRow } & SnapshotRow;
+      const body = (await res.json().catch(() => ({}))) as {
+        error?: string;
+        data?: SnapshotRow;
+      } & SnapshotRow;
       if (!res.ok) {
         const msg = (body as { error?: string }).error || 'Capacity update failed';
         // 409 -> stale revision
@@ -281,7 +307,8 @@ export default function ProviderCapacitySettings({
       // Refresh snapshot so effective values and revision converge without reload.
       const refresh = await fetch('/api/admin/notifications/capacity', { cache: 'no-store' });
       const refreshed = (await refresh.json()) as { data?: CapacitySnapshot } & CapacitySnapshot;
-      const nextSnapshot: CapacitySnapshot = (refreshed as { data?: CapacitySnapshot }).data ?? (refreshed as CapacitySnapshot);
+      const nextSnapshot: CapacitySnapshot =
+        (refreshed as { data?: CapacitySnapshot }).data ?? (refreshed as CapacitySnapshot);
       if (refresh.ok) setSnapshot(nextSnapshot);
       window.setTimeout(() => setSaveSuccess(false), 2500);
     } catch (e) {
@@ -326,7 +353,9 @@ export default function ProviderCapacitySettings({
   }
 
   return (
-    <div className={`rounded-xl border border-border/60 bg-muted/20 ${compact ? 'p-3' : 'p-4'} space-y-3`}>
+    <div
+      className={`rounded-xl border border-border/60 bg-muted/20 ${compact ? 'p-3' : 'p-4'} space-y-3`}
+    >
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Gauge className="h-4 w-4 text-primary" />
@@ -350,7 +379,8 @@ export default function ProviderCapacitySettings({
         >
           <div className="text-xs font-bold">Automatic — Recommended</div>
           <div className="text-[11px] text-muted-foreground leading-snug mt-1">
-            OpsKnight uses safe defaults and automatically throttles when provider pressure is detected.
+            OpsKnight uses safe defaults and automatically throttles when provider pressure is
+            detected.
           </div>
         </button>
         <button
@@ -376,7 +406,9 @@ export default function ProviderCapacitySettings({
               inputMode="numeric"
               value={ratePerSecond}
               onChange={e => setRatePerSecond(e.target.value)}
-              placeholder={limits ? `${limits.ratePerSecond.min}–${limits.ratePerSecond.max}` : 'e.g. 1000'}
+              placeholder={
+                limits ? `${limits.ratePerSecond.min}–${limits.ratePerSecond.max}` : 'e.g. 1000'
+              }
               className="h-8 text-xs font-mono"
             />
           </div>
@@ -389,7 +421,9 @@ export default function ProviderCapacitySettings({
               inputMode="numeric"
               value={maxInFlight}
               onChange={e => setMaxInFlight(e.target.value)}
-              placeholder={limits ? `${limits.maxInFlight.min}–${limits.maxInFlight.max}` : 'e.g. 300'}
+              placeholder={
+                limits ? `${limits.maxInFlight.min}–${limits.maxInFlight.max}` : 'e.g. 300'
+              }
               className="h-8 text-xs font-mono"
             />
           </div>
@@ -399,7 +433,10 @@ export default function ProviderCapacitySettings({
       {mode === 'AUTO' && (
         <div className="flex items-start gap-2 rounded-lg border border-primary/20 bg-primary/5 px-3 py-2 text-[11px] text-muted-foreground">
           <Info className="h-3.5 w-3.5 mt-0.5 text-primary shrink-0" />
-          <span>When pressure (429 / Retry-After / latency) is detected, effective rate halves and recovers gradually. No restart required.</span>
+          <span>
+            When pressure (429 / Retry-After / latency) is detected, effective rate halves and
+            recovers gradually. No restart required.
+          </span>
         </div>
       )}
 
@@ -432,32 +469,55 @@ export default function ProviderCapacitySettings({
       </div>
 
       {(isEnvTakeover || takeoverHint) && (
-        <div className={`rounded-lg border p-2.5 text-xs ${isEnvTakeover ? 'border-amber-300 bg-amber-50 text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100' : 'border-border/60 bg-muted/30 text-muted-foreground'}`}>
+        <div
+          className={`rounded-lg border p-2.5 text-xs ${isEnvTakeover ? 'border-amber-300 bg-amber-50 text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100' : 'border-border/60 bg-muted/30 text-muted-foreground'}`}
+        >
           <div className="flex items-center justify-between gap-2">
-            <span className="font-semibold">{isEnvTakeover ? 'Legacy environment — take ownership' : takeoverHint}</span>
+            <span className="font-semibold">
+              {isEnvTakeover ? 'Legacy environment — take ownership' : takeoverHint}
+            </span>
             {isEnvTakeover && (
-              <Badge variant="outline" className="text-[10px] shrink-0">ENV → DB</Badge>
+              <Badge variant="outline" className="text-[10px] shrink-0">
+                ENV → DB
+              </Badge>
             )}
           </div>
           {isEnvTakeover && (
-            <div className="mt-1 leading-snug">Saving will persist the current effective values to the database. Workers will use the DB on the next ~5s refresh.</div>
+            <div className="mt-1 leading-snug">
+              Saving will persist the current effective values to the database. Workers will use the
+              DB on the next ~5s refresh.
+            </div>
           )}
         </div>
       )}
 
       <div className="flex items-center gap-2">
-        <Button type="button" size="sm" onClick={() => void onSave()} disabled={saving || (!isDirty && !isEnvTakeover)} className="h-8 text-xs font-semibold">
+        <Button
+          type="button"
+          size="sm"
+          onClick={() => void onSave()}
+          disabled={saving || (!isDirty && !isEnvTakeover)}
+          className="h-8 text-xs font-semibold"
+        >
           {saving ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : null}
           {saving ? 'Saving…' : isEnvTakeover ? 'Take ownership in OpsKnight' : 'Save capacity'}
         </Button>
-        {saveSuccess && <span className="text-xs font-medium text-emerald-600">Saved — workers adapt within ~5s</span>}
-        {!isDirty && !isEnvTakeover && !saveSuccess && <span className="text-xs text-muted-foreground">No changes</span>}
+        {saveSuccess && (
+          <span className="text-xs font-medium text-emerald-600">
+            Saved — workers adapt within ~5s
+          </span>
+        )}
+        {!isDirty && !isEnvTakeover && !saveSuccess && (
+          <span className="text-xs text-muted-foreground">No changes</span>
+        )}
       </div>
 
       {saveError && (
         <Alert variant="destructive" className="py-2">
           <AlertTriangle className="h-4 w-4" />
-          <AlertDescription className="text-xs">{saveError} {saveError.includes('changed elsewhere') ? '— reload and retry.' : ''}</AlertDescription>
+          <AlertDescription className="text-xs">
+            {saveError} {saveError.includes('changed elsewhere') ? '— reload and retry.' : ''}
+          </AlertDescription>
         </Alert>
       )}
 
@@ -466,15 +526,42 @@ export default function ProviderCapacitySettings({
           <div className="flex items-start gap-2">
             <AlertTriangle className="h-4 w-4 text-amber-600 mt-0.5" />
             <div>
-              <div className="text-xs font-bold text-amber-900 dark:text-amber-200">Confirm large capacity increase</div>
+              <div className="text-xs font-bold text-amber-900 dark:text-amber-200">
+                Confirm large capacity increase
+              </div>
               <div className="text-xs text-amber-900/80 dark:text-amber-200/80">
-                You are increasing {provider} {channel} from {row?.ratePerSecond ?? '—'}/sec to {String((pendingPayload as Record<string, unknown>).ratePerSecond)}/sec. Ensure your provider account permits this rate.
+                You are increasing {provider} {channel} from {row?.ratePerSecond ?? '—'}/sec to{' '}
+                {String((pendingPayload as Record<string, unknown>).ratePerSecond)}/sec. Ensure your
+                provider account permits this rate.
               </div>
             </div>
           </div>
           <div className="flex gap-2 justify-end">
-            <Button type="button" variant="outline" size="sm" onClick={() => { setConfirmOpen(false); setPendingPayload(null); }} className="h-8 text-xs" disabled={saving}>Cancel</Button>
-            <Button type="button" size="sm" onClick={() => void executeSave({ ...(pendingPayload as Record<string, unknown>), acknowledgeRisk: true })} className="h-8 text-xs" disabled={saving}>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setConfirmOpen(false);
+                setPendingPayload(null);
+              }}
+              className="h-8 text-xs"
+              disabled={saving}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              onClick={() =>
+                void executeSave({
+                  ...(pendingPayload as Record<string, unknown>),
+                  acknowledgeRisk: true,
+                })
+              }
+              className="h-8 text-xs"
+              disabled={saving}
+            >
               {saving ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : null}
               Confirm
             </Button>
@@ -483,7 +570,8 @@ export default function ProviderCapacitySettings({
       )}
 
       <div className="text-[11px] text-muted-foreground">
-        Hard ceilings ({limits?.ratePerSecond.max ?? 10000}/sec, {limits?.maxInFlight.max ?? 5000} in-flight) always apply. DB wins over legacy env; fresh replicas refresh within ~5s via TTL.
+        Hard ceilings ({limits?.ratePerSecond.max ?? 10000}/sec, {limits?.maxInFlight.max ?? 5000}{' '}
+        in-flight) always apply. DB wins over legacy env; fresh replicas refresh within ~5s via TTL.
       </div>
     </div>
   );

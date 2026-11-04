@@ -6,7 +6,36 @@ type Draft = { configuration: ProviderConfiguration; profileJson: string; domain
 const signature = (value: Draft) =>
   JSON.stringify([value.configuration, value.profileJson, value.domainText]);
 
-/** One in-memory draft shared by all sections. Secrets are never persisted in browser storage. */
+const STORAGE_KEY = 'opsknight:sso-draft';
+type StoredDraft = Draft & { savedAt: number };
+
+/** Unsaved work survives a reload of this tab. The client secret is never stored. */
+function readStoredDraft(): StoredDraft | null {
+  try {
+    const raw = window.sessionStorage.getItem(STORAGE_KEY);
+    return raw ? (JSON.parse(raw) as StoredDraft) : null;
+  } catch {
+    return null;
+  }
+}
+function writeStoredDraft(draft: Draft | null) {
+  try {
+    if (!draft) window.sessionStorage.removeItem(STORAGE_KEY);
+    else
+      window.sessionStorage.setItem(
+        STORAGE_KEY,
+        JSON.stringify({
+          ...draft,
+          configuration: { ...draft.configuration, clientSecret: '' },
+          savedAt: Date.now(),
+        } satisfies StoredDraft)
+      );
+  } catch {
+    // Storage can be unavailable (private mode, quota); the draft still works in memory.
+  }
+}
+
+/** One draft shared by all sections. Secrets are never persisted in browser storage. */
 export function useAuthenticationDraft(initial: ProviderConfiguration) {
   const [draftGeneration, setDraftGeneration] = useState(0);
   const [configuration, setConfigurationState] = useState(initial);
@@ -40,6 +69,28 @@ export function useAuthenticationDraft(initial: ProviderConfiguration) {
     setDomainState(value);
   };
   const draftDirty = signature({ configuration, profileJson, domainText }) !== baseline;
+  // Read once, on first render: the console only renders in the browser, after its data loads.
+  const [restorable, setRestorable] = useState<StoredDraft | null>(() => {
+    if (typeof window === 'undefined') return null;
+    const stored = readStoredDraft();
+    return stored && signature(stored) !== signature(initialDraft) ? stored : null;
+  });
+  useEffect(() => {
+    // Keep the earlier draft in storage until the administrator restores or discards it.
+    if (restorable) return;
+    writeStoredDraft(draftDirty ? { configuration, profileJson, domainText } : null);
+  }, [configuration, profileJson, domainText, draftDirty, restorable]);
+  const restore = () => {
+    if (!restorable) return;
+    setConfiguration(restorable.configuration);
+    setProfileJson(restorable.profileJson);
+    setDomainText(restorable.domainText);
+    setRestorable(null);
+  };
+  const dismissRestorable = () => {
+    setRestorable(null);
+    writeStoredDraft(null);
+  };
   const setDraftDirty = (dirty: boolean) => {
     if (!dirty) {
       setDraftGeneration(value => value + 1);
@@ -73,5 +124,8 @@ export function useAuthenticationDraft(initial: ProviderConfiguration) {
     draftDirty,
     setDraftDirty,
     discard,
+    restorable,
+    restore,
+    dismissRestorable,
   };
 }

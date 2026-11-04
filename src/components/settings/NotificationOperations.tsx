@@ -346,7 +346,9 @@ export default function NotificationOperations({
         if (to) params.set('to', new Date(`${to}T23:59:59.999`).toISOString());
         params.set('cursor', nextPageCursor);
 
-        const response = await fetch(`/api/admin/notifications/operations?${params}`, { cache: 'no-store' });
+        const response = await fetch(`/api/admin/notifications/operations?${params}`, {
+          cache: 'no-store',
+        });
         if (!response.ok) {
           throw new Error(`Export fetch failed with status ${response.status}`);
         }

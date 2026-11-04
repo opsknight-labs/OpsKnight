@@ -184,7 +184,9 @@ export default function ScopeSelectorGrouped({
   };
 
   // Preset Handlers
-  const handleApplyPreset = (type: 'ADMIN' | 'RESPONDER' | 'READ_ONLY' | 'INGEST_ONLY' | 'CLEAR') => {
+  const handleApplyPreset = (
+    type: 'ADMIN' | 'RESPONDER' | 'READ_ONLY' | 'INGEST_ONLY' | 'CLEAR'
+  ) => {
     if (type === 'CLEAR') {
       onChange(new Set());
     } else if (type === 'ADMIN') {
@@ -214,9 +216,12 @@ export default function ScopeSelectorGrouped({
   };
 
   // Active preset check
-  const activePreset = useMemo<'ADMIN' | 'RESPONDER' | 'READ_ONLY' | 'INGEST_ONLY' | 'CLEAR' | null>(() => {
+  const activePreset = useMemo<
+    'ADMIN' | 'RESPONDER' | 'READ_ONLY' | 'INGEST_ONLY' | 'CLEAR' | null
+  >(() => {
     if (selectedScopes.size === 0) return 'CLEAR';
-    if (availableScopes.length > 0 && selectedScopes.size === availableScopes.length) return 'ADMIN';
+    if (availableScopes.length > 0 && selectedScopes.size === availableScopes.length)
+      return 'ADMIN';
 
     const ingest = ['events:write', 'incidents:read'].filter(s =>
       availableScopes.some(v => v.value === s)
@@ -363,7 +368,8 @@ export default function ScopeSelectorGrouped({
             </Badge>
           </div>
           <p className="text-xs text-muted-foreground">
-            Selected: {selectedScopes.size} of {availableScopes.length} scopes (least privilege principle).
+            Selected: {selectedScopes.size} of {availableScopes.length} scopes (least privilege
+            principle).
           </p>
         </div>
 
@@ -487,7 +493,9 @@ export default function ScopeSelectorGrouped({
         {groupedCategories.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-10 text-center rounded-xl border border-dashed border-border/80 bg-background/50">
             <Search className="h-8 w-8 text-muted-foreground/60 mb-2" />
-            <p className="text-xs font-semibold text-foreground">No permission scopes match your query</p>
+            <p className="text-xs font-semibold text-foreground">
+              No permission scopes match your query
+            </p>
             <p className="text-[11px] text-muted-foreground mt-0.5 max-w-xs">
               Try adjusting your search terms or clearing the active filters.
             </p>
@@ -507,7 +515,9 @@ export default function ScopeSelectorGrouped({
         ) : (
           groupedCategories.map(({ category, meta, scopes, totalCategoryScopes }) => {
             const CategoryIcon = meta.icon;
-            const selectedInCategory = totalCategoryScopes.filter(s => selectedScopes.has(s.value)).length;
+            const selectedInCategory = totalCategoryScopes.filter(s =>
+              selectedScopes.has(s.value)
+            ).length;
             const isAllCategorySelected =
               totalCategoryScopes.length > 0 && selectedInCategory === totalCategoryScopes.length;
 
@@ -533,8 +543,8 @@ export default function ScopeSelectorGrouped({
                             isAllCategorySelected
                               ? 'border-emerald-500/40 text-emerald-600 dark:text-emerald-400 bg-emerald-500/10'
                               : selectedInCategory > 0
-                              ? 'border-primary/40 text-primary bg-primary/10'
-                              : 'text-muted-foreground border-border/60'
+                                ? 'border-primary/40 text-primary bg-primary/10'
+                                : 'text-muted-foreground border-border/60'
                           }`}
                         >
                           {selectedInCategory} of {totalCategoryScopes.length} selected

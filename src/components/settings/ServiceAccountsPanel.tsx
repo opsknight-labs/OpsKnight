@@ -177,15 +177,13 @@ export default function ServiceAccountsPanel({
   );
   // Reveal Token Banner: the only place the secret lives. The action state never keeps it.
   const [revealedToken, setRevealedToken] = useState<string | null>(null);
-  const [issueTokenState, issueTokenAction] = useSecretSafeAction<Awaited<ReturnType<typeof issueServiceAccountTokenAction>>>(
-    issueServiceAccountTokenAction,
-    { error: null, success: false, token: null },
-    secret => {
-      setIssueTokenTargetId(null);
-      setRevealedToken(secret);
-      router.refresh();
-    }
-  );
+  const [issueTokenState, issueTokenAction] = useSecretSafeAction<
+    Awaited<ReturnType<typeof issueServiceAccountTokenAction>>
+  >(issueServiceAccountTokenAction, { error: null, success: false, token: null }, secret => {
+    setIssueTokenTargetId(null);
+    setRevealedToken(secret);
+    router.refresh();
+  });
 
   // Delete SA Confirmation
   const [deleteAccountId, setDeleteAccountId] = useState<string | null>(null);
@@ -389,8 +387,8 @@ export default function ServiceAccountsPanel({
                             sa.role === 'ADMIN'
                               ? 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20 text-[10px]'
                               : sa.role === 'RESPONDER'
-                              ? 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20 text-[10px]'
-                              : 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20 text-[10px]'
+                                ? 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20 text-[10px]'
+                                : 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20 text-[10px]'
                           }
                         >
                           {sa.role}
@@ -407,12 +405,17 @@ export default function ServiceAccountsPanel({
                         </Badge>
                       </div>
 
-                      <p className="text-xs font-mono text-muted-foreground truncate">Account ID: {sa.id}</p>
+                      <p className="text-xs font-mono text-muted-foreground truncate">
+                        Account ID: {sa.id}
+                      </p>
 
                       <div className="flex items-center gap-2 text-[11px] text-muted-foreground flex-wrap pt-0.5">
                         <span>Created {sa.createdAt}</span>
                         <span>•</span>
-                        <span>{sa.activeTokensCount} active {sa.activeTokensCount === 1 ? 'token' : 'tokens'}</span>
+                        <span>
+                          {sa.activeTokensCount} active{' '}
+                          {sa.activeTokensCount === 1 ? 'token' : 'tokens'}
+                        </span>
                         {sa.teams.length > 0 && (
                           <>
                             <span>•</span>
@@ -479,7 +482,11 @@ export default function ServiceAccountsPanel({
                   <div className="border-t border-border/60 bg-muted/20 p-4">
                     <div className="mb-2.5 flex items-center justify-between">
                       <span className="text-xs font-semibold text-foreground uppercase tracking-wider">
-                        Machine Tokens ({sa.tokensTruncated ? `newest ${sa.tokens.length} of ${sa.tokensTotal}` : sa.tokens.length})
+                        Machine Tokens (
+                        {sa.tokensTruncated
+                          ? `newest ${sa.tokens.length} of ${sa.tokensTotal}`
+                          : sa.tokens.length}
+                        )
                       </span>
                       {isAdmin && (
                         <Button
@@ -499,7 +506,8 @@ export default function ServiceAccountsPanel({
 
                     {sa.tokens.length === 0 ? (
                       <p className="text-xs text-muted-foreground italic py-2">
-                        No active tokens issued for this service account. Click &apos;Issue Token&apos; to generate one.
+                        No active tokens issued for this service account. Click &apos;Issue
+                        Token&apos; to generate one.
                       </p>
                     ) : (
                       <div className="overflow-x-auto rounded-xl border border-border/70 bg-background">
@@ -620,7 +628,8 @@ export default function ServiceAccountsPanel({
               <div>
                 <DialogTitle className="text-base font-bold">Create Service Account</DialogTitle>
                 <DialogDescription className="text-xs">
-                  Create a dedicated machine identity for automation, Terraform, and CI/CD pipelines.
+                  Create a dedicated machine identity for automation, Terraform, and CI/CD
+                  pipelines.
                 </DialogDescription>
               </div>
             </div>
@@ -729,7 +738,9 @@ export default function ServiceAccountsPanel({
                 <Key className="h-5 w-5" />
               </div>
               <div>
-                <DialogTitle className="text-base font-bold">Issue Service Account Token</DialogTitle>
+                <DialogTitle className="text-base font-bold">
+                  Issue Service Account Token
+                </DialogTitle>
                 <DialogDescription className="text-xs">
                   Generate a scoped Bearer token for automated API calls.
                 </DialogDescription>
@@ -808,7 +819,9 @@ export default function ServiceAccountsPanel({
                 <div>
                   <Label className="text-xs font-semibold">Granular Permission Scopes</Label>
                   <p className="text-[11px] text-muted-foreground">
-                    Selected: {offeredScopes.filter(scope => selectedScopes.has(scope.value)).length} of {offeredScopes.length} scopes
+                    Selected:{' '}
+                    {offeredScopes.filter(scope => selectedScopes.has(scope.value)).length} of{' '}
+                    {offeredScopes.length} scopes
                   </p>
                 </div>
 
@@ -926,7 +939,8 @@ export default function ServiceAccountsPanel({
           <AlertDialogHeader>
             <AlertDialogTitle>Delete Service Account?</AlertDialogTitle>
             <AlertDialogDescription>
-              This will deactivate the service account and permanently revoke all of its issued tokens. Any running automation using these credentials will immediately fail.
+              This will deactivate the service account and permanently revoke all of its issued
+              tokens. Any running automation using these credentials will immediately fail.
             </AlertDialogDescription>
           </AlertDialogHeader>
 
@@ -964,7 +978,8 @@ export default function ServiceAccountsPanel({
           <AlertDialogHeader>
             <AlertDialogTitle>Revoke Access Token?</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to revoke &apos;{revokeTokenData?.tokenName}&apos;? Applications using this Bearer token will immediately lose access.
+              Are you sure you want to revoke &apos;{revokeTokenData?.tokenName}&apos;? Applications
+              using this Bearer token will immediately lose access.
             </AlertDialogDescription>
           </AlertDialogHeader>
 

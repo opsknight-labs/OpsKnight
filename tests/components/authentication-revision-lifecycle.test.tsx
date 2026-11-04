@@ -170,12 +170,12 @@ describe('revision lifecycle in the console', () => {
       expect(screen.getByLabelText('Saved configuration to activate')).toHaveValue('')
     );
     expect(new URLSearchParams(window.location.search).get('revisionId')).toBeNull();
-    fireEvent.mouseDown(screen.getByRole('tab', { name: 'Identity Provider' }), { button: 0 });
+    fireEvent.mouseDown(screen.getByRole('tab', { name: '1 · Connect provider' }), { button: 0 });
     fireEvent.change(await screen.findByLabelText('Client ID', { exact: true }), {
       target: { value: 'replacement-client' },
     });
     fireEvent.change(screen.getByLabelText(/Client secret/), { target: { value: 'secret' } });
-    fireEvent.click(screen.getAllByRole('button', { name: 'Stage configuration' })[0]);
+    fireEvent.click(screen.getAllByRole('button', { name: 'Save changes' })[0]);
     await waitFor(() => expect(requests.some(body => body.action === 'stage')).toBe(true));
     expect(requests.find(body => body.action === 'stage')?.sourceRevisionId).toBeUndefined();
   });
@@ -184,7 +184,7 @@ describe('revision lifecycle in the console', () => {
     renderConsole(dashboard(), 'connection', 'draft-1');
     // Another administrator deletes the selected draft; the next refresh must recover.
     server = { ...server, revisions: [revision('draft-2')] };
-    fireEvent.mouseDown(screen.getByRole('tab', { name: 'Sessions & Policies' }), { button: 0 });
+    fireEvent.mouseDown(screen.getByRole('tab', { name: '4 · Test & activate' }), { button: 0 });
     await waitFor(() =>
       expect(screen.getByLabelText('Saved configuration to activate')).toHaveValue('draft-2')
     );
@@ -224,7 +224,7 @@ describe('administrator retest consent', () => {
       'policy',
       'draft-1'
     );
-    const retest = screen.getByRole('button', { name: 'Retest administrator sign-in' });
+    const retest = screen.getByRole('button', { name: 'Test sign-in again' });
     // A previous successful test never implies consent for the next one.
     expect(retest).toBeDisabled();
     expect(retest).toHaveAccessibleDescription(/Allow linking below to test/);
@@ -251,7 +251,7 @@ describe('administrator retest consent', () => {
     expect(
       screen.queryByRole('checkbox', { name: /Allow this SSO identity to link/ })
     ).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Test administrator sign-in' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Test my sign-in' }));
     await waitFor(() => expect(requests.some(body => body.action === 'test')).toBe(true));
     expect(requests.find(body => body.action === 'test')).toMatchObject({ linkApproved: false });
   });

@@ -277,6 +277,21 @@ async function validate(config: ProviderConfiguration) {
   return result.metadata;
 }
 
+/** Every setting that can change who signs in, as whom, or with what role. */
+function identityFingerprint(config: ProviderConfiguration) {
+  const {
+    clientSecret: _secret,
+    sessionMaxAgeSeconds: _maxAge,
+    sessionIdleTimeoutSeconds: _idle,
+    providerLabel: _label,
+    profileMapping: _profile,
+    teamMapping: _teams,
+    autoProvision: _jit,
+    ...identity
+  } = config;
+  return JSON.stringify(identity);
+}
+
 export async function stageOidcRevision(
   actor: ControlActor,
   input: unknown,
@@ -351,7 +366,25 @@ export async function stageOidcRevision(
         discoveryVerifiedAt: new Date(),
       },
     });
+    // Changing only settings that cannot affect who signs in or with what role (session
+    // limits, button label, profile fields, team rules, JIT) keeps the administrator test.
+    const carriedProof =
+      sourceRevision &&
+      source &&
+      sourceRevision.baseConfigVersion === (current?.configVersion ?? 0) &&
+      encryptedSecret === source.clientSecret &&
+      identityFingerprint(source) === identityFingerprint(config)
+        ? await tx.oidcRevisionTest.findFirst({
+            where: { revisionId: sourceRevision.id },
+            orderBy: { verifiedAt: 'desc' },
+          })
+        : null;
+    if (carriedProof) {
+      const { id: _id, revisionId: _revisionId, ...proof } = carriedProof;
+      await tx.oidcRevisionTest.create({ data: { ...proof, revisionId: revision.id } });
+    }
     await securityEvent(tx, 'auth.oidc.revision.staged', actor.id, {
+      carriedAdministratorTest: Boolean(carriedProof),
       revisionId: revision.id,
       issuer: config.issuer,
       clientId: config.clientId,

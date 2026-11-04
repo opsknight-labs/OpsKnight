@@ -14,7 +14,16 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/shadcn/dropdown-menu';
-import { Search, Users, Loader2, AlertCircle, ExternalLink, MoreHorizontal } from 'lucide-react';
+import {
+  Search,
+  Users,
+  Loader2,
+  AlertCircle,
+  ExternalLink,
+  MoreHorizontal,
+  RotateCcw,
+} from 'lucide-react';
+import { returnRoleToDirectory } from '@/app/(app)/users/oidc-actions';
 import OidcLinkingApprovalButton from '@/components/users/OidcLinkingApprovalButton';
 import type { OidcLinkingState } from '@/lib/oidc-linking-approval';
 
@@ -101,14 +110,13 @@ export default function AuthenticationUserDirectory() {
           <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
           <div className="flex-1 text-xs space-y-1">
             <p className="font-semibold text-amber-900 dark:text-amber-200">
-              First-Link Approval for Existing Accounts
+              Connecting existing accounts
             </p>
             <p className="leading-relaxed text-amber-800 dark:text-amber-300">
-              Existing accounts require administrator approval before signing in with SSO for the
-              first time. Linking status below is checked against the{' '}
-              <strong>currently active provider</strong>; an identity from a previous issuer or app
-              registration does not count. Approve first-time linking with the button on each
-              account, or manage approvals from the{' '}
+              An existing account connects to single sign-on on its first SSO sign-in, once you
+              approve it (one by one here, or in bulk above) or through domain-trusted linking.
+              Status is checked against the provider you are setting up. You can also manage people
+              from the{' '}
               <Link
                 href="/users"
                 className="font-semibold underline underline-offset-2 hover:text-amber-950 dark:hover:text-amber-100 inline-flex items-center gap-0.5"
@@ -149,7 +157,16 @@ export default function AuthenticationUserDirectory() {
               </div>
               <div className="flex flex-wrap items-center gap-2">
                 <Badge variant="outline">{user.role}</Badge>
-                <Badge variant="neutral">{user.roleSource}</Badge>
+                <Badge
+                  variant="neutral"
+                  title={
+                    user.roleSource === 'MANUAL'
+                      ? 'Set by an administrator; single sign-on never changes it.'
+                      : 'Managed by your identity provider through role rules.'
+                  }
+                >
+                  {user.roleSource === 'MANUAL' ? 'Role set by hand' : 'Role from SSO'}
+                </Badge>
 
                 {/* Direct inline first-link action / status */}
                 <OidcLinkingApprovalButton
@@ -206,6 +223,30 @@ export default function AuthenticationUserDirectory() {
                       <ExternalLink className="h-4 w-4 text-muted-foreground" />
                       <span>Manage in Users directory</span>
                     </DropdownMenuItem>
+                    {user.roleSource === 'MANUAL' && user.issuers.length > 0 && (
+                      <DropdownMenuItem
+                        onClick={() =>
+                          void returnRoleToDirectory(user.id).then(result => {
+                            if (result.error) setError(result.error);
+                            else
+                              setUsers(previous =>
+                                previous.map(row =>
+                                  row.id === user.id ? { ...row, roleSource: 'OIDC' } : row
+                                )
+                              );
+                          })
+                        }
+                        className="flex items-start gap-2.5 py-2 px-2 rounded-lg cursor-pointer text-xs font-medium"
+                      >
+                        <RotateCcw className="h-4 w-4 text-muted-foreground" />
+                        <span>
+                          Let role rules manage this role
+                          <span className="block font-normal text-muted-foreground">
+                            Applies at their next SSO sign-in
+                          </span>
+                        </span>
+                      </DropdownMenuItem>
+                    )}
                   </DropdownMenuContent>
                 </DropdownMenu>
               </div>
