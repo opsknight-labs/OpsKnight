@@ -15,6 +15,11 @@ import {
 } from 'react';
 import { ArrowLeftRight, History, Send, Square, Trash2, X } from 'lucide-react';
 import SquireAvatar, { type SquireAvatarKind } from '@/components/squire/SquireAvatar';
+import SquireSavedAction from './SquireSavedAction';
+import type {
+  StoredTurnEnvelope,
+  SavedActionReference,
+} from '@/lib/intelligence/conversations/contract';
 import SquireProposalCard, {
   type SquireProposalView,
 } from '@/components/squire/SquireProposalCard';
@@ -24,10 +29,13 @@ type Citation = {
   id: string;
   label: string;
   href: string;
+  observedAt?: string;
+  why?: string;
 };
 type Turn = {
   role: 'user' | 'assistant';
   content: string;
+  contextProof?: string;
   notice?: string;
   mode?: 'ai' | 'basic';
   /** What the assistant is looking up right now. */
@@ -35,12 +43,19 @@ type Turn = {
   /** Shown after partial text when the answer was cut off. */
   error?: string;
   proposals?: SquireProposalView[];
+  savedActions?: SavedActionReference[];
   citations?: Citation[];
   suggestions?: string[];
   /** The incident page the turn was asked on; history only carries turns from the same page. */
   incidentId?: string;
 };
-type SavedConversation = { id: string; title: string; updatedAt: string; messageCount: number };
+type SavedConversation = {
+  id: string;
+  title: string;
+  updatedAt: string;
+  messageCount: number;
+  incidentId?: string | null;
+};
 const CONVERSATIONS_URL = '/api/intelligence/squire/conversations';
 
 const HISTORY_TURNS = 10;
@@ -88,11 +103,11 @@ export function openSquire(message?: string) {
 }
 
 /** Only same-app paths become links; everything else stays inert text. */
-function RichText({ text }: { text: string }) {
+function RichText({ text, allowed }: { text: string; allowed?: string[] }) {
   return (
     <>
       {text.split(INTERNAL_LINK).map((part, index) =>
-        index % 2 === 1 ? (
+        index % 2 === 1 && (!allowed || allowed.includes(part)) ? (
           <Link key={index} href={part} className="underline underline-offset-2">
             {part}
           </Link>
@@ -131,6 +146,8 @@ export default function SquireLauncher({
   const [turns, setTurns] = useState<Turn[]>([]);
   const [input, setInput] = useState('');
   const [busy, setBusy] = useState(false);
+  const [activeScope, setActiveScope] = useState<string | null | undefined>(undefined);
+  const contextMismatch = activeScope !== undefined && activeScope !== (incidentId ?? null);
   const [conversationId, setConversationId] = useState<string | undefined>(undefined);
   const [showHistory, setShowHistory] = useState(false);
   const [saved, setSaved] = useState<SavedConversation[] | null>(null);
@@ -205,15 +222,24 @@ export default function SquireLauncher({
     async (raw: string) => {
       const message = raw.trim().slice(0, MAX_LENGTH);
       if (!message) return;
+      if (activeScope !== undefined && activeScope !== (incidentId ?? null)) {
+        setInput(message);
+        return;
+      }
       if (busy) {
         // Asked while an answer is still arriving (for example from another part of the page): send it next.
         pendingRef.current = message;
         return;
       }
+      if (activeScope === undefined) setActiveScope(incidentId ?? null);
       const history = turns
         .filter(turn => turn.content && turn.incidentId === incidentId)
         .slice(-HISTORY_TURNS)
-        .map(({ role, content }) => ({ role, content: content.slice(0, HISTORY_TURN_LENGTH) }));
+        .map(({ role, content, contextProof }) => ({
+          role,
+          content: content.slice(0, HISTORY_TURN_LENGTH),
+          ...(contextProof ? { contextProof } : {}),
+        }));
       setTurns(current => [
         ...current,
         { role: 'user', content: message, incidentId },
@@ -231,15 +257,22 @@ export default function SquireLauncher({
         );
       };
       try {
+        const payload = {
+          message,
+          history,
+          ...(incidentId ? { incidentId } : {}),
+          ...(conversationId ? { conversationId } : {}),
+        };
+        // Bound the serialized UTF-8 request, including integrity proofs and multibyte text.
+        while (
+          payload.history.length &&
+          new TextEncoder().encode(JSON.stringify(payload)).byteLength > 60_000
+        )
+          payload.history.shift();
         const response = await fetch('/api/intelligence/squire', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            message,
-            history,
-            ...(incidentId ? { incidentId } : {}),
-            ...(conversationId ? { conversationId } : {}),
-          }),
+          body: JSON.stringify(payload),
           signal: controller.signal,
         });
         if (!response.ok || !response.body) {
@@ -267,6 +300,8 @@ export default function SquireLauncher({
             label?: string;
             mode?: 'ai' | 'basic';
             id?: string;
+            userProof?: string;
+            assistantProof?: string;
             proposal?: SquireProposalView;
             items?: unknown[];
           };
@@ -277,6 +312,19 @@ export default function SquireLauncher({
           }
           if (event.type === 'done') {
             completed = true;
+            return;
+          }
+          if (event.type === 'context') {
+            if (seq === requestSeq.current)
+              setTurns(current =>
+                current.map((turn, index) =>
+                  index === current.length - 1 && event.assistantProof
+                    ? { ...turn, contextProof: event.assistantProof }
+                    : index === current.length - 2 && event.userProof
+                      ? { ...turn, contextProof: event.userProof }
+                      : turn
+                )
+              );
             return;
           }
           if (event.type === 'error') reportedError = true;
@@ -360,7 +408,7 @@ export default function SquireLauncher({
         if (seq === requestSeq.current) setBusy(false);
       }
     },
-    [busy, conversationId, incidentId, turns]
+    [busy, conversationId, incidentId, turns, activeScope]
   );
 
   const stopResponse = () => {
@@ -404,7 +452,9 @@ export default function SquireLauncher({
     stopCurrent();
     setTurns([]);
     setConversationId(undefined);
+    setActiveScope(undefined);
     setShowHistory(false);
+    inputRef.current?.focus();
   }, [stopCurrent]);
 
   const loadSaved = useCallback(async () => {
@@ -437,7 +487,13 @@ export default function SquireLauncher({
             conversation?: {
               id: string;
               incidentId: string | null;
-              messages: Array<{ role: 'user' | 'assistant'; content: string }>;
+              messages: Array<{
+                role: 'user' | 'assistant';
+                content: string;
+                contextProof?: string;
+                notice?: string;
+                envelope?: StoredTurnEnvelope;
+              }>;
             };
           };
         };
@@ -452,7 +508,23 @@ export default function SquireLauncher({
           return;
         }
         stopCurrent();
-        setTurns(conversation.messages.map(({ role, content }) => ({ role, content, incidentId })));
+        setTurns(
+          conversation.messages.map(({ role, content, contextProof, notice, envelope }) => ({
+            role,
+            content,
+            incidentId: conversation.incidentId ?? undefined,
+            contextProof,
+            ...(envelope?.mode === 'ai' || envelope?.mode === 'basic'
+              ? { mode: envelope.mode }
+              : {}),
+            citations: envelope?.citations,
+            savedActions: envelope?.actions,
+            notice:
+              [...new Set([...(envelope?.notices ?? []), ...(notice ? [notice] : [])])].join(' ') ||
+              undefined,
+          }))
+        );
+        setActiveScope(conversation.incidentId ?? null);
         setConversationId(conversation.id);
         setShowHistory(false);
       } catch {
@@ -471,14 +543,20 @@ export default function SquireLauncher({
           { method: 'DELETE' }
         );
         if (!response.ok && response.status !== 404) throw new Error(String(response.status));
-        if (!id || id === conversationId) setConversationId(undefined);
+        if (!id || id === conversationId) {
+          stopCurrent();
+          setConversationId(undefined);
+          setActiveScope(undefined);
+          setTurns([]);
+          setInput('');
+        }
         setConfirmDeleteAll(false);
         await loadSaved();
       } catch {
         setHistoryError('Could not delete. Please try again.');
       }
     },
-    [conversationId, loadSaved]
+    [conversationId, loadSaved, stopCurrent]
   );
 
   useEffect(() => {
@@ -571,6 +649,36 @@ export default function SquireLauncher({
             </div>
           </header>
 
+          {!showHistory && contextMismatch && (
+            <div
+              role="status"
+              className="border-b border-border bg-amber-50 px-4 py-3 text-xs text-amber-950 dark:bg-amber-950/30 dark:text-amber-100"
+            >
+              <p>This chat keeps its original context. Choose where to continue.</p>
+              <div className="mt-2 flex flex-wrap items-center gap-3">
+                <Link
+                  href={
+                    activeScope ? `/incidents/${encodeURIComponent(activeScope)}` : '/incidents'
+                  }
+                  className="underline underline-offset-2"
+                >
+                  Return to original context
+                </Link>
+                <button
+                  type="button"
+                  onClick={newChat}
+                  className="min-h-8 rounded border border-current px-2 py-1"
+                >
+                  New chat here
+                </button>
+              </div>
+            </div>
+          )}
+          {!showHistory && !contextMismatch && (
+            <p className="border-b border-border px-4 py-1.5 text-xs text-muted-foreground">
+              {incidentId ? 'Discussing this incident' : 'General conversation'}
+            </p>
+          )}
           {showHistory && history ? (
             <div className="flex-1 space-y-3 overflow-y-auto px-4 py-3 text-sm">
               <p className="text-xs text-muted-foreground">
@@ -688,7 +796,14 @@ export default function SquireLauncher({
                       <p className="mb-1 text-xs font-medium text-foreground/80">{turn.notice}</p>
                     )}
                     {turn.content ? (
-                      <RichText text={turn.content} />
+                      <RichText
+                        text={turn.content}
+                        allowed={
+                          turn.role === 'assistant'
+                            ? (turn.citations ?? []).map(citation => citation.href)
+                            : undefined
+                        }
+                      />
                     ) : busy && index === turns.length - 1 ? (
                       <span className="text-foreground/80">
                         {turn.activity ? `${turn.activity}…` : 'Thinking…'}
@@ -703,7 +818,14 @@ export default function SquireLauncher({
                       </p>
                     )}
                     {turn.proposals?.map(proposal => (
-                      <SquireProposalCard key={proposal.token} proposal={proposal} />
+                      <SquireProposalCard
+                        key={proposal.token}
+                        proposal={proposal}
+                        reviewContextValid={!contextMismatch}
+                      />
+                    ))}
+                    {turn.savedActions?.map(action => (
+                      <SquireSavedAction key={action.receiptId} action={action} />
                     ))}
                     {turn.citations && turn.citations.length > 0 && (
                       <ul aria-label="Sources" className="mt-2 flex flex-wrap gap-1">
@@ -712,7 +834,13 @@ export default function SquireLauncher({
                             <Link
                               href={citation.href}
                               className="inline-block max-w-[14rem] truncate rounded-full border border-border bg-card px-2 py-0.5 text-xs hover:bg-accent"
-                              title={citation.label}
+                              title={[
+                                citation.label,
+                                citation.observedAt ? `Read ${citation.observedAt}` : '',
+                                citation.why ?? '',
+                              ]
+                                .filter(Boolean)
+                                .join(' · ')}
                             >
                               {citation.kind === 'runbook' ? 'Runbook: ' : ''}
                               {citation.label}
@@ -759,7 +887,13 @@ export default function SquireLauncher({
               onKeyDown={onKeyDown}
               maxLength={MAX_LENGTH}
               rows={1}
-              placeholder={incidentId ? 'Ask about this incident…' : 'Ask a question…'}
+              placeholder={
+                contextMismatch
+                  ? 'Choose where to continue…'
+                  : incidentId
+                    ? 'Ask about this incident…'
+                    : 'Ask a question…'
+              }
               className="max-h-28 min-h-9 flex-1 resize-none rounded-md border border-border bg-background px-3 py-2 text-sm"
             />
             {busy && (
@@ -775,7 +909,7 @@ export default function SquireLauncher({
             )}
             <button
               type="submit"
-              disabled={busy || input.trim().length === 0}
+              disabled={busy || contextMismatch || input.trim().length === 0}
               aria-label="Send"
               className="rounded-md bg-primary p-2 text-primary-foreground disabled:opacity-50"
             >

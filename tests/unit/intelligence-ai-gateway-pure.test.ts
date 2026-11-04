@@ -6,6 +6,7 @@ import {
   selectProviderChain,
   type PolicyProvider,
 } from '@/lib/intelligence/ai/policy';
+import { highestDataClass, type AiDataClass } from '@/lib/intelligence/ai/port';
 import { redactSecrets } from '@/lib/intelligence/ai/redact';
 
 const p = (id: string, overrides: Partial<PolicyProvider> = {}): PolicyProvider => ({
@@ -253,4 +254,11 @@ describe('AI input schemas', () => {
     ).toBe(false);
     expect(aiProviderInputSchema.safeParse({ ...base, kind: 'OPENAI' }).success).toBe(true);
   });
+});
+
+it('carries the highest declared conversation classification and fails closed for invalid runtime metadata', () => {
+  expect(highestDataClass(['INTERNAL', 'PERSONAL'])).toBe('PERSONAL');
+  expect(highestDataClass(['PERSONAL', 'SENSITIVE', undefined])).toBe('SENSITIVE');
+  expect(highestDataClass(['PUBLIC'])).toBe('PUBLIC');
+  expect(highestDataClass(['invalid' as AiDataClass])).toBe('SENSITIVE');
 });

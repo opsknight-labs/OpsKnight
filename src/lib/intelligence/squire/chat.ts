@@ -1,3 +1,6 @@
+import { SquireEvidenceRegistry, type EvidenceSnapshot } from './evidence';
+import { mintContextProof, readBrowserContext, authorizationContextHash } from './context-proof';
+import type { SourceReference } from '../conversations/contract';
 import { readAlertReference, readChangeReference } from './references';
 import 'server-only';
 import prisma from '@/lib/prisma';
@@ -6,10 +9,17 @@ import { CAPABILITIES, hasCapability } from '@/lib/authorization';
 import { incidentReadWhere, runbookReadWhere } from '@/lib/authorization-filters';
 import type { AuthorizationActor } from '@/lib/authorization-policy';
 import { registerAiGateway } from '../ai/gateway';
-import { resolveLanguageModel, type AiMessage, type LanguageModelPort } from '../ai/port';
+import {
+  resolveLanguageModel,
+  highestDataClass,
+  type AiMessage,
+  type LanguageModelPort,
+  type AiDataClass,
+} from '../ai/port';
 import { getAiSettings } from '../ai/settings';
 import { getGuidance } from '../ai/prompts';
-import { getConversation, getHistoryStatus } from '../conversations/store';
+import { getHistoryStatus, type ConversationDetail } from '../conversations/store';
+import { getConversationForActor } from '../conversations/view';
 import { getResponseIntelligenceForActor } from '../response/view';
 import { getSimilarIncidentsForActor } from '../similarity/view';
 import { buildProposal } from './actions/proposals';
@@ -73,13 +83,26 @@ export async function* streamSquire(
       yield { type: 'error', message: 'The assistant is turned off.' };
       return;
     }
-    if (!hasCapability(actor.role, CAPABILITIES.INTELLIGENCE_SUGGESTIONS_READ)) {
+    if (
+      actor.apiKey ||
+      actor.status !== 'ACTIVE' ||
+      !hasCapability(actor.role, CAPABILITIES.INTELLIGENCE_SUGGESTIONS_READ)
+    ) {
       yield { type: 'error', message: 'You do not have access to the assistant.' };
       return;
     }
 
+    let savedConversation: ConversationDetail | null = null;
     if (request.conversationId && (await getHistoryStatus()).enabled) {
-      const saved = await getConversation(actor.id, request.conversationId);
+      const saved = await getConversationForActor(actor, request.conversationId);
+      savedConversation = saved;
+      if (!saved) {
+        yield {
+          type: 'error',
+          message: 'That conversation is not available. Start a new conversation to continue.',
+        };
+        return;
+      }
       if (saved && saved.incidentId !== (incident?.id ?? null)) {
         yield {
           type: 'error',
@@ -97,25 +120,38 @@ export async function* streamSquire(
       ? Promise.all([
           incident ? brief(actor, incident) : Promise.resolve(null),
           getGuidance('squire.system').catch(() => null),
-          priorTurns(actor, request).catch(() => [] as AiMessage[]),
+          priorTurns(actor, request, savedConversation, incident?.id ?? null),
         ])
       : Promise.resolve(null);
     // Free-text questions and history may identify people, even without personal-data tools.
     // Legacy and browser messages have no trusted classification: require Personal clearance
     // for the entire turn rather than silently downgrading their classification on fallback.
+    const [briefing, guidance, context] = (await preparation) ?? [
+      null,
+      null,
+      { messages: [] as AiMessage[], omitted: false },
+    ];
+    const history = context.messages;
+    if (context.omitted)
+      yield {
+        type: 'notice',
+        text: 'Some earlier answers were omitted because their context could not be verified. Ask about the current evidence again if needed.',
+      };
+    const dataClass = highestDataClass(['PERSONAL', ...history.map(message => message.dataClass)]);
     let port: LanguageModelPort | null = null;
     if (settings.enabled) {
-      port = await resolveLanguageModel('SQUIRE_CHAT', 'PERSONAL');
+      port = await resolveLanguageModel('SQUIRE_CHAT', dataClass);
     }
 
     if (port) {
       yield { type: 'meta', mode: 'ai', name: settings.squireName };
-      const [briefing, guidance, history] = (await preparation) ?? [null, null, []];
-      const prompt = buildSystemPrompt(settings.squireName, briefing, guidance);
+      const evidence = new SquireEvidenceRegistry(actor, dataClass);
+      const prepared = briefing ? await evidence.briefing(briefing) : null;
+      const prompt = buildSystemPrompt(settings.squireName, prepared, guidance);
       const messages: AiMessage[] = [
-        { role: 'system', content: prompt.system },
+        { role: 'system', content: prompt.system, dataClass: 'PERSONAL' },
         ...history,
-        { role: 'user', content: request.message },
+        { role: 'user', content: request.message, dataClass: 'PERSONAL' },
       ];
 
       let answer = '';
@@ -125,13 +161,17 @@ export async function* streamSquire(
         context: {
           actorId: actor.id,
           capability: 'SQUIRE_CHAT',
-          dataClass: 'PERSONAL',
+          dataClass,
           incidentId: incident?.id,
           signal,
           prompt: prompt.meta,
         },
         messages,
-        tools: buildSquireTools(actor, { personal: true }),
+        tools: buildSquireTools(actor, {
+          personal: true,
+          dataClass,
+          observe: (name, input, result) => evidence.observe(name, input, result),
+        }),
         maxSteps: SQUIRE_LIMITS.maxSteps,
       })) {
         if (event.type === 'text-delta') {
@@ -162,7 +202,7 @@ export async function* streamSquire(
                 ? `${event.message}. Showing a basic answer.`
                 : 'AI is unavailable right now. Showing a basic answer.',
           };
-          yield* basicAnswer(actor, request, incident, settings.squireName);
+          yield* basicAnswer(actor, request, incident, settings.squireName, dataClass);
           return;
         }
       }
@@ -170,27 +210,46 @@ export async function* streamSquire(
       // The model can spend its whole step budget on tools and end without a word; never answer with nothing.
       if (!answer.trim() && proposals === 0) {
         yield { type: 'notice', text: 'I could not finish that answer. Here is what I know.' };
-        yield* typed(await answerDeterministically(actor, request.message, incident));
+        yield* basicAnswer(actor, request, incident, settings.squireName, dataClass);
+        return;
       }
-      const citations = await citationsFor(actor, answer);
+      const citations = evidence.citations(answer);
       if (citations.length > 0) yield { type: 'citations', items: citations };
       yield { type: 'suggestions', items: followUps(incident, true) };
+      yield {
+        type: 'memory',
+        turn: {
+          mode: 'ai',
+          dataClass,
+          completion: 'COMPLETED',
+          sources: evidence.sources(),
+          verified: evidence.verified,
+          authorizationHash: authorizationContextHash(actor),
+        },
+      };
+      yield await contextProofs(
+        actor,
+        { ...request, incidentId: incident?.id },
+        answer,
+        dataClass,
+        evidence.sources(),
+        evidence.verified
+      );
       yield { type: 'done' };
       return;
     }
 
-    await preparation;
     if (settings.enabled) {
       yield {
         type: 'notice',
-        text: 'AI conversation requires a provider permitted to receive Personal data. Showing a basic answer.',
+        text: `AI conversation requires a provider permitted to receive ${dataClass === 'SENSITIVE' ? 'Sensitive' : 'Personal'} data. Showing a basic answer.`,
       };
     }
-    yield* basicAnswer(actor, request, incident, settings.squireName);
+    yield* basicAnswer(actor, request, incident, settings.squireName, dataClass);
   } catch (error) {
     if (signal?.aborted) return;
     logger.error('[Squire] Turn failed', {
-      error: error instanceof Error ? error.message : String(error),
+      errorName: error instanceof Error ? error.name : 'UnknownError',
     });
     yield { type: 'error', message: 'Something went wrong. Please try again.' };
   }
@@ -200,14 +259,42 @@ async function* basicAnswer(
   actor: AuthorizationActor,
   request: SquireRequest,
   incident: ReadableIncident | null,
-  name: string
+  name: string,
+  dataClass: AiDataClass = 'PERSONAL'
 ): AsyncGenerator<SquireEvent> {
   yield { type: 'meta', mode: 'basic', name };
-  const text = await answerDeterministically(actor, request.message, incident);
+  const evidence = new SquireEvidenceRegistry(actor, dataClass);
+  const snapshots: EvidenceSnapshot[] = [];
+  const answer = await answerDeterministically(actor, request.message, incident, source =>
+    snapshots.push(source)
+  );
+  const readable = await evidence.capture(snapshots);
+  const text = readable
+    ? answer
+    : 'The source changed or became unavailable. Please ask for a fresh answer.';
   yield* typed(text);
-  const citations = await citationsFor(actor, text);
+  const citations = evidence.citations(text);
   if (citations.length > 0) yield { type: 'citations', items: citations };
   yield { type: 'suggestions', items: followUps(incident, false) };
+  yield {
+    type: 'memory',
+    turn: {
+      mode: 'basic',
+      dataClass,
+      completion: 'COMPLETED',
+      sources: evidence.sources(),
+      verified: evidence.verified,
+      authorizationHash: authorizationContextHash(actor),
+    },
+  };
+  yield await contextProofs(
+    actor,
+    { ...request, incidentId: incident?.id },
+    text,
+    dataClass,
+    evidence.sources(),
+    evidence.verified
+  );
   yield { type: 'done' };
 }
 
@@ -241,9 +328,12 @@ async function brief(
       matchPercent: s.matchPercent,
       status: s.status,
     })),
-    changes: (response?.changes ?? [])
-      .slice(0, 3)
-      .map(c => ({ summary: c.summary, kind: c.kind, minutesBeforeOnset: c.leadMinutes })),
+    changes: (response?.changes ?? []).slice(0, 3).map(c => ({
+      id: c.changeId,
+      summary: c.summary,
+      kind: c.kind,
+      minutesBeforeOnset: c.leadMinutes,
+    })),
     runbooks: (response?.runbooks ?? []).slice(0, 3).map(r => ({
       id: r.runbookId,
       name: r.name,
@@ -257,20 +347,68 @@ async function brief(
  * Earlier turns. A saved conversation is the source of truth when history is on (the person's own, read
  * on the server); otherwise the browser's copy is used, already trimmed by the request schema.
  */
-async function priorTurns(actor: AuthorizationActor, request: SquireRequest): Promise<AiMessage[]> {
-  if (request.conversationId) {
-    const status = await getHistoryStatus().catch(() => ({ enabled: false }));
-    if (status.enabled) {
-      const saved = await getConversation(actor.id, request.conversationId).catch(() => null);
-      if (saved) {
-        return saved.messages.slice(-SQUIRE_LIMITS.historyMax).map(message => ({
-          role: message.role,
-          content: message.content.slice(0, SQUIRE_LIMITS.historyTurnMax),
-        }));
-      }
-    }
+async function priorTurns(
+  actor: AuthorizationActor,
+  request: SquireRequest,
+  saved: ConversationDetail | null,
+  incidentId: string | null
+): Promise<{ messages: AiMessage[]; omitted: boolean }> {
+  if (saved) {
+    const turns = saved.messages.slice(-SQUIRE_LIMITS.historyMax);
+    const replayable = turns.filter(
+      message =>
+        message.role === 'user' ||
+        (message.replayable !== false &&
+          message.envelope?.verified &&
+          message.envelope.completion === 'COMPLETED')
+    );
+    return {
+      messages: replayable.map(message => ({
+        role: message.role,
+        content:
+          message.role === 'assistant'
+            ? `[Saved answer recorded ${message.createdAt.toISOString()}; verify current facts with tools.]\n${message.content.slice(0, SQUIRE_LIMITS.historyTurnMax)}`
+            : message.content.slice(0, SQUIRE_LIMITS.historyTurnMax),
+        dataClass: message.dataClass,
+      })),
+      omitted: replayable.length !== turns.length,
+    };
   }
-  return request.history.map(turn => ({ role: turn.role, content: turn.content }));
+  return readBrowserContext(actor, incidentId, request.history);
+}
+
+async function contextProofs(
+  actor: AuthorizationActor,
+  request: SquireRequest,
+  answer: string,
+  dataClass: AiDataClass,
+  sources?: SourceReference[],
+  verified = false
+): Promise<Extract<SquireEvent, { type: 'context' }>> {
+  const [userProof, assistantProof] = await Promise.all([
+    mintContextProof({
+      actor,
+      incidentId: request.incidentId,
+      role: 'user',
+      text: request.message,
+      dataClass,
+    }).catch(() => undefined),
+    verified
+      ? mintContextProof({
+          actor,
+          incidentId: request.incidentId,
+          role: 'assistant',
+          text: answer,
+          dataClass,
+          sources,
+        }).catch(() => undefined)
+      : undefined,
+  ]);
+  return {
+    type: 'context',
+    ...(userProof ? { userProof } : {}),
+    ...(assistantProof ? { assistantProof } : {}),
+  };
 }
 
 /**

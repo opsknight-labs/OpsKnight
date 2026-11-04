@@ -30,6 +30,7 @@ import { AI_SETTINGS_BOUNDS } from './contract';
 import { selectProviderChain } from './policy';
 import { redactSecrets } from './redact';
 import {
+  highestDataClass,
   registerEmbeddingResolver,
   registerLanguageModelResolver,
   type AiDataClass,
@@ -368,8 +369,22 @@ class GatewayPort implements LanguageModelPort {
     return request.context.signal ? AbortSignal.any([request.context.signal, timeout]) : timeout;
   }
 
-  private candidates(): GatewayProvider[] {
-    const open = this.data.chain.filter(provider => breakers.available(provider.id));
+  private candidates(request: AiGenerateRequest): GatewayProvider[] {
+    const required = highestDataClass([
+      request.context.dataClass,
+      ...request.messages.map(message => message.dataClass),
+      ...(request.tools ?? []).map(tool => tool.dataClass),
+    ]);
+    if (required !== request.context.dataClass)
+      throw new AiGatewayError(
+        'NO_PROVIDER',
+        'Request classification does not cover its conversation context'
+      );
+    const allowed = selectProviderChain(this.data.chain, required, {
+      allowExternalFallback: this.data.settings.allowExternalFallback,
+      allowedRegions: this.data.settings.allowedDataRegions,
+    });
+    const open = allowed.filter(provider => breakers.available(provider.id));
     if (open.length === 0)
       throw new AiGatewayError('NO_PROVIDER', 'No AI provider is currently available');
     return open;
@@ -418,7 +433,7 @@ class GatewayPort implements LanguageModelPort {
     await this.admit(request);
     let attempts = 0;
     let invalidOutputs = 0;
-    for (const [depth, provider] of this.candidates().entries()) {
+    for (const [depth, provider] of this.candidates(request).entries()) {
       if (!breakers.canAttempt(provider.id)) continue;
       const reservation = await this.reserve(request, provider, true);
       let accounted = false;
@@ -519,7 +534,7 @@ class GatewayPort implements LanguageModelPort {
   async generate(request: AiGenerateRequest): Promise<AiGenerateResult> {
     await this.admit(request);
     let attempts = 0;
-    for (const [depth, provider] of this.candidates().entries()) {
+    for (const [depth, provider] of this.candidates(request).entries()) {
       if (!breakers.canAttempt(provider.id)) continue;
       const reservation = await this.reserve(request, provider);
       let accounted = false;
@@ -601,7 +616,7 @@ class GatewayPort implements LanguageModelPort {
     }
     let candidates: GatewayProvider[];
     try {
-      candidates = this.candidates();
+      candidates = this.candidates(request);
     } catch (error) {
       yield {
         type: 'error',
@@ -631,6 +646,9 @@ class GatewayPort implements LanguageModelPort {
       });
       try {
         const run = streamText({
+          // The SDK default logs the complete provider error, including request bodies. Our stream
+          // handler below records bounded error categories and preserves fallback/cancellation instead.
+          onError: () => undefined,
           model: await buildModel(provider),
           messages: toMessages(request, provider.kind),
           tools: toToolSet(request.tools),

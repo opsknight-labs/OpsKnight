@@ -354,6 +354,8 @@ export const personalDataRegistry = [
       'SquireConversation.titleEncrypted',
       'SquireConversation.incidentId',
       'SquireMessage.contentEncrypted',
+      'SquireMessage.envelopeEncrypted',
+      'SquireMessage.dataClass',
       'SquireActionReceipt.intentEncrypted',
       'SquireActionReceipt.resultEncrypted',
     ],

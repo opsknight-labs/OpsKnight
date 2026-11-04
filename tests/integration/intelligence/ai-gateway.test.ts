@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   AiGatewayError,
   breakers,
@@ -543,4 +543,48 @@ describe('gateway', () => {
     );
     expect(proposal.toolCalls).toEqual([{ name: 'resolve_incident', input: { id: 'x' } }]);
   });
+});
+
+it('cannot reuse a lower-clearance port for a higher-class request or silently downgrade typed history', async () => {
+  const { admin, actor } = await configure();
+  await saveAiProvider(null, provider('Internal only', primary.url), actor);
+  const port = (await resolveGatewayPort('INTERNAL'))!;
+  const sensitive = request(admin.id, {
+    context: { actorId: admin.id, capability: 'SQUIRE_CHAT', dataClass: 'SENSITIVE' },
+  });
+  await expect(port.generate(sensitive)).rejects.toMatchObject({ code: 'NO_PROVIDER' });
+  const mismatched = request(admin.id, {
+    messages: [{ role: 'user', content: 'sensitive-history-canary', dataClass: 'SENSITIVE' }],
+  });
+  await expect(port.generate(mismatched)).rejects.toMatchObject({ code: 'NO_PROVIDER' });
+  await expect(
+    port.generateStructured({
+      ...mismatched,
+      schemaName: 'safe',
+      schema: { safeParse: () => ({ success: true as const, data: {} }) },
+    })
+  ).rejects.toMatchObject({ code: 'NO_PROVIDER' });
+  const events: AiStreamEvent[] = [];
+  for await (const event of port.stream(mismatched)) events.push(event);
+  expect(events).toContainEqual(expect.objectContaining({ type: 'error' }));
+  expect(primary.requests).toHaveLength(0);
+});
+
+it('reports a provider stream failure without letting the SDK log request bodies', async () => {
+  const { admin, actor } = await configure();
+  await saveAiProvider(null, provider('Failing stream', primary.url), actor);
+  primary.script.push({ status: 500 });
+  const port = (await resolveGatewayPort('INTERNAL'))!;
+  const rawLog = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+  const events: AiStreamEvent[] = [];
+  try {
+    for await (const event of port.stream(
+      request(admin.id, { messages: [{ role: 'user', content: 'private-request-body-canary-77' }] })
+    ))
+      events.push(event);
+    expect(events.some(event => event.type === 'error')).toBe(true);
+    expect(rawLog).not.toHaveBeenCalled();
+  } finally {
+    rawLog.mockRestore();
+  }
 });

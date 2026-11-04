@@ -216,10 +216,17 @@ describe('AI mode', () => {
   it('streams a model answer with a hardened prompt, read tools, proposal-only write tools and sanitized history', async () => {
     const admin = await setup({ ai: true, provider: true, name: 'Pip' });
     model.script.push({ content: 'Check the latest deploy first.' });
+    const { mintContextProof } = await import('@/lib/intelligence/squire/context-proof');
+    const helloProof = await mintContextProof({
+      actor: (await resolveUserActor(admin.id))!,
+      role: 'assistant',
+      text: 'hello',
+      dataClass: 'PERSONAL',
+    });
     const events = await turn(admin.id, 'why is checkout slow?', {
       history: [
         { role: 'user', content: 'hi' },
-        { role: 'assistant', content: 'hello' },
+        { role: 'assistant', content: 'hello', contextProof: helloProof },
       ],
     });
     expect(events[0]).toEqual({ type: 'meta', mode: 'ai', name: 'Pip' });
@@ -330,11 +337,12 @@ describe('AI mode', () => {
     const admin = await setup({ ai: true, provider: true });
     model.script.push({ status: 500 }, { status: 500 });
     const events = await turn(admin.id, 'help');
-    expect(events.map(e => e.type)).toEqual([
+    const publicEvents = events.filter(e => e.type !== 'memory' && e.type !== 'context');
+    expect(publicEvents.map(e => e.type)).toEqual([
       'meta',
       'notice',
       'meta',
-      ...events.slice(3, -2).map(() => 'delta'),
+      ...publicEvents.slice(3, -2).map(() => 'delta'),
       'suggestions',
       'done',
     ]);
@@ -424,9 +432,11 @@ it('rejects saved incident history in a global conversation before provider egre
   const admin = await setup({ ai: true, provider: true });
   const { recordExchange } = await import('@/lib/intelligence/conversations/store');
   await db.aiSettings.update({ where: { id: 'default' }, data: { squireHistoryEnabled: true } });
+  const historyService = await createTestService('History context service');
+  const historyIncident = await createTestIncident('History context incident', historyService.id);
   const conversationId = await recordExchange({
     userId: admin.id,
-    incidentId: 'another-incident',
+    incidentId: historyIncident.id,
     question: 'Old context',
     answer: 'context-canary-42',
   });
@@ -438,4 +448,49 @@ it('rejects saved incident history in a global conversation before provider egre
       message: expect.stringContaining('different context'),
     })
   );
+});
+
+it('never downgrades trusted Sensitive saved turns to a Personal-only provider', async () => {
+  const admin = await setup({ ai: true, provider: true });
+  const { recordExchange } = await import('@/lib/intelligence/conversations/store');
+  await db.aiSettings.update({ where: { id: 'default' }, data: { squireHistoryEnabled: true } });
+  const conversationId = await recordExchange({
+    userId: admin.id,
+    dataClass: 'SENSITIVE',
+    question: 'classified-canary-91',
+    answer: 'Sensitive operational context',
+    turn: { verified: true },
+  });
+  const events = await turn(admin.id, 'Continue safely', { conversationId });
+  expect(model.requests).toHaveLength(0);
+  expect(events).toContainEqual(expect.objectContaining({ type: 'meta', mode: 'basic' }));
+  expect(events).toContainEqual(
+    expect.objectContaining({ type: 'notice', text: expect.stringContaining('Sensitive') })
+  );
+});
+
+it('preserves trusted Sensitive browser context and omits unproved assistant history before egress', async () => {
+  const admin = await setup({ ai: true, provider: true });
+  await db.aiProvider.updateMany({ data: { maxDataClass: 'PERSONAL' } });
+  const { mintContextProof } = await import('@/lib/intelligence/squire/context-proof');
+  const content = 'browser-sensitive-canary-67';
+  const proof = await mintContextProof({
+    actor: await actorOf(admin.id),
+    role: 'assistant',
+    text: content,
+    dataClass: 'SENSITIVE',
+  });
+  const events = await turn(admin.id, 'Continue', {
+    history: [{ role: 'assistant', content, contextProof: proof }],
+  });
+  expect(model.requests).toHaveLength(0);
+  expect(events).toContainEqual(
+    expect.objectContaining({ type: 'notice', text: expect.stringContaining('Sensitive') })
+  );
+  model.script.push({ content: 'Fresh answer' });
+  await turn(admin.id, 'Check current facts', {
+    history: [{ role: 'assistant', content: 'unproved-assistant-canary-67' }],
+  });
+  expect(model.requests).toHaveLength(1);
+  expect(JSON.stringify(model.requests[0].body)).not.toContain('unproved-assistant-canary-67');
 });

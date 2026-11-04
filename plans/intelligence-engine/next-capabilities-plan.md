@@ -29,7 +29,9 @@ Do not rebuild these under new names. The roadmap extends their weakest boundari
 
 ## P0-01 — Carry data classification through conversation history
 
-**Implementation progress (2026-11-03):** synthetic provider-payload tests reproduced the fallback. Conversation turns now require Personal clearance and otherwise remain in basic mode. A production-browser regression also reproduced the gateway's stale-clearance TTL; subsequent resolutions now reload persisted policy. Typed per-turn classification/envelopes and independent security review remain open.
+**Implementation progress (2026-11-04):** encrypted per-turn envelopes now carry classification, source references, completion, scope and read-only outcome references. Browser context uses expiring, actor/role/team/scope/text-bound integrity proofs; unproved assistant history is omitted. Saved context rechecks current source visibility and excludes changed sources from replay. The gateway rejects inconsistent classification across generate/structured/stream paths and suppresses SDK request-body error logging. Independent security review remains open.
+
+**Earlier implementation progress (2026-11-03):** synthetic provider-payload tests reproduced the fallback. Conversation turns now require Personal clearance and otherwise remain in basic mode. A production-browser regression also reproduced the gateway's stale-clearance TTL; subsequent resolutions now reload persisted policy. Typed per-turn classification/envelopes and independent security review remain open.
 
 **Finding: observed data flow; privacy impact needs a reproducer.** `squire/chat.ts` prepares history independently of provider selection. It first tries a Personal-capable provider, falls back to Internal, removes prefetched timeline and Personal tools, but still spreads `history` into the outgoing messages. `priorTurns()` returns saved or client-supplied text without per-turn classification. Gateway `toMessages()` redacts secrets; that does not establish that text is free of Personal data. The existing integration test covers prefetched timeline exclusion, not history carried over from a previous Personal turn.
 
@@ -69,6 +71,8 @@ Do not rebuild these under new names. The roadmap extends their weakest boundari
 
 ## P1-03 — Make conversation context explicit and retain structured memory
 
+**Implementation progress (2026-11-04):** explicit global/incident scope, encrypted versioned turn envelopes, conservative legacy reads, source/access revalidation, dated replay, read-only saved action outcomes and navigation-bound confirmation are implemented locally. Known revoked sources hide derived text; changed sources keep a dated record without replay. Saved references contain no confirmation tokens. Production-browser verification and independent review remain gates.
+
 **Implementation progress (2026-11-03):** storage and streaming now enforce incident/global context binding, and the saved-history UI explains mismatches instead of retagging messages. Structured envelopes, source-permission replay policy and richer context-switch navigation remain open.
 
 **Finding: observed UX/data-model gap.** Saved conversations have a single optional `incidentId` and text-only messages. `openSaved()` loads their text and tags it with the incident currently being viewed. Server `priorTurns()` looks up an owned conversation without comparing its context to the requested incident. This can mix topics and loses citations, action outcomes and notices. It is not, by itself, proof of unauthorized access: ownership and scoped tools already exist.
@@ -94,6 +98,8 @@ Do not rebuild these under new names. The roadmap extends their weakest boundari
 **Dependencies / effort:** context/evidence contracts agreed; approximately 4–7 days. Set performance budgets from measurements, not a guessed target.
 
 ## P1-05 — Ground claims in retrieved evidence, not just readable links
+
+**Implementation progress (2026-11-04):** a bounded turn-local evidence registry now records actual tool and briefing reads with handles, snapshot digests and observation times. Current visibility is rechecked before returning tool data. Citation chips and inline assistant links require captured sources; readable-but-unretrieved URLs remain inert. Basic answers use the same registry. This establishes provenance, not semantic entailment or proof of causality; reviewed claim-quality evaluation remains open.
 
 **Finding: observed limitation.** `citationsFor()` extracts incident/runbook/change/alert ids from answer text and checks visibility. This prevents unreadable citation links, but a readable link can still be unrelated to a claim or never have been used by the model. Suggested follow-ups are currently deterministic context templates, not answer-specific suggestions.
 

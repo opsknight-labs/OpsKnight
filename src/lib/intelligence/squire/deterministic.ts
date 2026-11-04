@@ -1,4 +1,6 @@
 import 'server-only';
+import type { EvidenceSnapshot } from './evidence';
+type Collect = (source: EvidenceSnapshot) => void;
 import prisma from '@/lib/prisma';
 import { incidentReadWhere, scheduleReadWhere } from '@/lib/authorization-filters';
 import { getActiveOnCallShifts } from '@/lib/oncall-shifts';
@@ -17,6 +19,7 @@ export interface ReadableIncident {
   urgency: string;
   serviceName: string;
   createdAt: Date;
+  updatedAt?: Date;
 }
 
 /** The incident, only if the actor may read it. */
@@ -39,6 +42,7 @@ export async function readIncidentForActor(
       status: true,
       urgency: true,
       createdAt: true,
+      updatedAt: true,
       service: { select: { name: true } },
     },
   });
@@ -50,6 +54,7 @@ export async function readIncidentForActor(
         urgency: row.urgency,
         serviceName: row.service.name,
         createdAt: row.createdAt,
+        updatedAt: row.updatedAt,
       }
     : null;
 }
@@ -61,7 +66,7 @@ const minutes = (value: number) =>
       ? `${value} min before`
       : `${Math.round(value / 60)} h before`;
 
-async function activeIncidents(actor: AuthorizationActor): Promise<string> {
+async function activeIncidents(actor: AuthorizationActor, collect?: Collect): Promise<string> {
   let readable;
   try {
     readable = incidentReadWhere(actor);
@@ -76,11 +81,18 @@ async function activeIncidents(actor: AuthorizationActor): Promise<string> {
       where,
       orderBy: { createdAt: 'desc' },
       take: MAX_LIST,
-      select: { id: true, title: true, status: true, service: { select: { name: true } } },
+      select: {
+        id: true,
+        title: true,
+        status: true,
+        updatedAt: true,
+        service: { select: { name: true } },
+      },
     }),
   ]);
   if (open + acknowledged === 0)
     return 'Nothing is on fire right now: no open or acknowledged incidents that you can see.';
+  top.forEach(data => collect?.({ kind: 'incident', id: data.id, label: data.title, data }));
   const lines = top.map(
     incident =>
       `• ${incident.title} (${incident.service.name}, ${incident.status.toLowerCase()})\n  /incidents/${incident.id}`
@@ -93,14 +105,19 @@ async function activeIncidents(actor: AuthorizationActor): Promise<string> {
 async function describeIncident(
   actor: AuthorizationActor,
   incident: ReadableIncident,
-  intent: SquireIntent
+  intent: SquireIntent,
+  collect?: Collect
 ): Promise<string> {
+  collect?.({ kind: 'incident', id: incident.id, label: incident.title, data: incident });
   const head = `${incident.title}\n${incident.serviceName} · ${incident.status.toLowerCase()} · ${incident.urgency.toLowerCase()} urgency`;
   if (intent === 'SIMILAR') {
     const [similar, related] = await Promise.all([
       getSimilarIncidentsForActor(incident.id, actor),
       getRelatedIncidentsForActor(incident.id, actor),
     ]);
+    [...(similar ?? []), ...(related ?? [])].forEach(data =>
+      collect?.({ kind: 'incident', id: data.incidentId, label: data.title, data })
+    );
     const lines = [
       ...(similar ?? []).map(
         item =>
@@ -114,6 +131,12 @@ async function describeIncident(
   }
   const response = await getResponseIntelligenceForActor(incident.id, actor);
   if (intent === 'CAUSES') {
+    response?.changes.forEach(data =>
+      collect?.({ kind: 'change', id: data.changeId, label: data.summary, data })
+    );
+    response?.upstreamIncidents.forEach(data =>
+      collect?.({ kind: 'incident', id: data.incidentId, label: data.title, data })
+    );
     if (!response || (response.changes.length === 0 && response.upstreamIncidents.length === 0)) {
       return 'I have no likely causes for this incident. Recording deploys and declaring service dependencies improves this.';
     }
@@ -133,6 +156,9 @@ async function describeIncident(
     ].join('\n');
   }
   if (intent === 'RUNBOOKS') {
+    response?.runbooks.forEach(data =>
+      collect?.({ kind: 'runbook', id: data.runbookId, label: data.name, data })
+    );
     if (!response || response.runbooks.length === 0)
       return 'I have no runbook recommendations for this incident.';
     const lines = response.runbooks.map(
@@ -143,6 +169,14 @@ async function describeIncident(
       'Runbooks that fit this service (I can only suggest them; nothing is run for you):',
       ...lines,
     ].join('\n');
+  }
+  if (response?.changes[0]) {
+    const data = response.changes[0];
+    collect?.({ kind: 'change', id: data.changeId, label: data.summary, data });
+  }
+  if (response?.runbooks[0]) {
+    const data = response.runbooks[0];
+    collect?.({ kind: 'runbook', id: data.runbookId, label: data.name, data });
   }
   const extras = response
     ? [
@@ -158,7 +192,8 @@ async function describeIncident(
 /** Who is on call now: the schedules the incident's service escalates to, or every schedule the person can see. */
 async function onCall(
   actor: AuthorizationActor,
-  incident: ReadableIncident | null
+  incident: ReadableIncident | null,
+  collect?: Collect
 ): Promise<string> {
   let readable;
   try {
@@ -187,6 +222,18 @@ async function onCall(
         : readable,
   });
   if (shifts.length === 0) return 'Nobody is on call in the schedules you can see right now.';
+  shifts.slice(0, MAX_LIST * 2).forEach(data =>
+    collect?.({
+      kind: 'schedule',
+      id: data.schedule.id,
+      label: data.schedule.name,
+      data: {
+        schedule: data.schedule.name,
+        person: data.user.name ?? data.user.email,
+        until: data.end,
+      },
+    })
+  );
   const lines = shifts
     .slice(0, MAX_LIST * 2)
     .map(
@@ -215,21 +262,22 @@ const HELP = [
 export async function answerDeterministically(
   actor: AuthorizationActor,
   message: string,
-  incident: ReadableIncident | null
+  incident: ReadableIncident | null,
+  collect?: Collect
 ): Promise<string> {
   const intent = routeIntent(message, incident !== null);
   switch (intent) {
     case 'HELP':
       return HELP;
     case 'ACTIVE_INCIDENTS':
-      return activeIncidents(actor);
+      return activeIncidents(actor, collect);
     case 'ON_CALL':
-      return onCall(actor, incident);
+      return onCall(actor, incident, collect);
     case 'SIMILAR':
     case 'CAUSES':
     case 'RUNBOOKS':
     case 'INCIDENT_SUMMARY':
-      return incident ? describeIncident(actor, incident, intent) : HELP;
+      return incident ? describeIncident(actor, incident, intent, collect) : HELP;
     default:
       return `I did not catch that. ${HELP}`;
   }

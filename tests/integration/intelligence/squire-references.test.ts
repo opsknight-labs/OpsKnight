@@ -1,5 +1,5 @@
 import { buildSquireTools } from '@/lib/intelligence/squire/tools';
-import { beforeEach, expect, it } from 'vitest';
+import { beforeEach, expect, it, vi } from 'vitest';
 import { resolveUserActor } from '@/lib/authorization-actors';
 import { citationsFor } from '@/lib/intelligence/squire/chat';
 import { readAlertReference, readChangeReference } from '@/lib/intelligence/squire/references';
@@ -79,3 +79,59 @@ it('renders change and alert sources only when the actor can open their scoped d
   )!;
   expect(JSON.stringify(await changesTool.execute!({}))).toContain('Checkout rollout');
 });
+
+it('does not reveal a hidden service through the dependencies of a readable service', async () => {
+  const mine = await createTestTeam('Readable topology');
+  const hidden = await createTestTeam('Hidden topology');
+  const user = await createTestUser({ role: 'USER' });
+  await db.teamMember.create({ data: { userId: user.id, teamId: mine.id } });
+  const visible = await createTestService('Readable service', mine.id);
+  const secret = await createTestService('hidden-dependency-canary-47', hidden.id);
+  await db.serviceDependency.create({
+    data: {
+      upstreamServiceId: secret.id,
+      downstreamServiceId: visible.id,
+      status: 'ACTIVE',
+      origin: 'DECLARED',
+      evidence: { type: 'manual' },
+    },
+  });
+  const permitted = await createTestService('Permitted upstream', mine.id);
+  await db.serviceDependency.create({
+    data: {
+      upstreamServiceId: permitted.id,
+      downstreamServiceId: visible.id,
+      status: 'ACTIVE',
+      origin: 'DECLARED',
+      evidence: { type: 'manual' },
+    },
+  });
+  const actor = (await resolveUserActor(user.id))!;
+  const tool = buildSquireTools(actor, { personal: true }).find(
+    tool => tool.name === 'get_service'
+  )!;
+  const result = JSON.stringify(await tool.execute!({ id: visible.id }));
+  expect(result).not.toContain('hidden-dependency-canary-47');
+  expect(result).not.toContain(secret.id);
+  expect(result).toContain(permitted.name);
+});
+
+it.each(['PERSONAL', 'SENSITIVE'] as const)(
+  'keeps free-text semantic queries at their declared %s boundary',
+  async dataClass => {
+    const admin = await createTestUser({ role: 'ADMIN' });
+    const actor = (await resolveUserActor(admin.id))!;
+    const port = await import('@/lib/intelligence/ai/port');
+    const resolve = vi.spyOn(port, 'resolveEmbeddingModel').mockResolvedValueOnce(null);
+    try {
+      const tool = buildSquireTools(actor, { personal: true, dataClass }).find(
+        tool => tool.name === 'semantic_search_incidents'
+      )!;
+      await tool.execute!({ query: 'Alice operational query canary' });
+      expect(resolve).toHaveBeenCalledWith(dataClass);
+      expect(tool.dataClass).toBe(dataClass);
+    } finally {
+      resolve.mockRestore();
+    }
+  }
+);

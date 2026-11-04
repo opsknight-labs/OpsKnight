@@ -1,4 +1,8 @@
 import type { NextRequest } from 'next/server';
+import type {
+  SavedTurnInput,
+  SavedActionReference,
+} from '@/lib/intelligence/conversations/contract';
 import { jsonError } from '@/lib/api-response';
 import { getCurrentAuthorizationActor } from '@/lib/rbac';
 import { streamSquire } from '@/lib/intelligence/squire/chat';
@@ -37,6 +41,7 @@ export async function POST(request: NextRequest) {
     return deny(401, 'Sign in to use the assistant');
   }
 
+  if (actor.apiKey) return deny(403, 'The assistant is only available in the app');
   const declared = Number(request.headers.get('content-length') ?? 0);
   if (declared > MAX_BODY_BYTES) return deny(413, 'Request is too large');
   const reader = request.body?.getReader();
@@ -76,10 +81,21 @@ export async function POST(request: NextRequest) {
   const events = streamSquire(actor, parsed.data, controller.signal);
   let answer = '';
   let failed = false;
+  let completed = false;
+  let memory: SavedTurnInput | undefined;
+  const notices: string[] = [];
+  const actions: SavedActionReference[] = [];
+  let citations: Extract<SquireEvent, { type: 'citations' }>['items'] = [];
 
   /** Saving is best effort: the person already has the answer, so a storage failure only loses history. */
   const save = async (): Promise<SquireEvent | null> => {
-    if (failed || controller.signal.aborted || !answer.trim()) return null;
+    if (
+      failed ||
+      !completed ||
+      controller.signal.aborted ||
+      (!answer.trim() && actions.length === 0)
+    )
+      return null;
     // Persistence lookups do not delay the first answer token.
     const [history, savedIncident] = await Promise.all([
       getHistoryStatus().catch(() => ({ enabled: false, retentionDays: 0 })),
@@ -94,12 +110,20 @@ export async function POST(request: NextRequest) {
         conversationId: parsed.data.conversationId,
         incidentId: savedIncident?.id,
         question: parsed.data.message,
-        answer,
+        answer: answer.trim() ? answer : 'Review the suggested action.',
+        dataClass: memory?.dataClass,
+        turn: {
+          ...memory,
+          completion: 'COMPLETED',
+          citations,
+          actions,
+          notices: [...new Set([...(memory?.notices ?? []), ...notices])].slice(0, 4),
+        },
       });
       return { type: 'conversation', id };
     } catch (error) {
       logger.warn('[Squire] Could not save the conversation', {
-        error: error instanceof Error ? error.message : String(error),
+        error: error instanceof Error ? error.name : 'error',
       });
       return null;
     }
@@ -107,16 +131,40 @@ export async function POST(request: NextRequest) {
 
   const stream = new ReadableStream<Uint8Array>({
     async pull(streamController) {
-      const next = await events.next();
-      if (next.done) {
-        const saved = await save();
-        if (saved) streamController.enqueue(encoder.encode(`${JSON.stringify(saved)}\n`));
-        streamController.close();
+      for (;;) {
+        const next = await events.next();
+        if (next.done) {
+          const saved = await save();
+          if (saved) streamController.enqueue(encoder.encode(`${JSON.stringify(saved)}\n`));
+          streamController.close();
+          return;
+        }
+        const event = next.value;
+        if (event.type === 'memory') {
+          memory = event.turn;
+          continue;
+        }
+        if (event.type === 'delta') answer += event.text;
+        else if (event.type === 'error') failed = true;
+        else if (event.type === 'done') completed = true;
+        else if (event.type === 'notice' && notices.length < 4)
+          notices.push(event.text.slice(0, 1_000));
+        else if (event.type === 'citations') citations = event.items.slice(0, 8);
+        else if (
+          event.type === 'proposal' &&
+          event.proposal.kind === 'WRITE' &&
+          event.proposal.receiptId &&
+          actions.length < 2
+        )
+          actions.push({
+            receiptId: event.proposal.receiptId,
+            action: event.proposal.action,
+            title: event.proposal.title,
+            incidentId: event.proposal.incidentId,
+          });
+        streamController.enqueue(encoder.encode(`${JSON.stringify(event)}\n`));
         return;
       }
-      if (next.value.type === 'delta') answer += next.value.text;
-      else if (next.value.type === 'error') failed = true;
-      streamController.enqueue(encoder.encode(`${JSON.stringify(next.value)}\n`));
     },
     async cancel() {
       controller.abort();

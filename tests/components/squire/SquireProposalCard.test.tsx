@@ -218,3 +218,11 @@ it('can review an unconfirmed proposal after its initial result lookup recovers'
   expect(screen.getByRole('button', { name: 'Confirm' })).toBeEnabled();
   expect(fetchMock.mock.calls.every(([, options]) => !options.method)).toBe(true);
 });
+
+it('requires returning to the proposal context before confirmation', () => {
+  const view = render(<SquireProposalCard proposal={proposal()} reviewContextValid={false} />);
+  expect(screen.queryByRole('button', { name: 'Confirm' })).not.toBeInTheDocument();
+  expect(fetchMock).not.toHaveBeenCalled();
+  view.rerender(<SquireProposalCard proposal={proposal()} reviewContextValid />);
+  expect(screen.getByRole('button', { name: 'Confirm' })).toBeEnabled();
+});

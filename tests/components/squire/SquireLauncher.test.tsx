@@ -71,6 +71,13 @@ describe('SquireLauncher', () => {
         { type: 'meta', mode: 'basic', name: 'Pip' },
         { type: 'delta', text: 'See /incidents/abc123 and https://evil.example/incidents/x ' },
         { type: 'delta', text: 'and /runbooks/rb_1' },
+        {
+          type: 'citations',
+          items: [
+            { kind: 'incident', id: 'abc123', href: '/incidents/abc123', label: 'Read incident' },
+            { kind: 'runbook', id: 'rb_1', href: '/runbooks/rb_1', label: 'Read runbook' },
+          ],
+        },
         { type: 'done' },
       ])
     );
@@ -464,4 +471,62 @@ it('keeps a saved incident conversation in its original context', async () => {
   fireEvent.click(await screen.findByRole('button', { name: /^Incident A conversation/ }));
   expect(await screen.findByRole('alert')).toHaveTextContent('another incident');
   expect(screen.queryByText('Wrong context canary')).not.toBeInTheDocument();
+});
+
+it('keeps the original incident scope across navigation until the user starts a new chat', async () => {
+  nav.pathname = '/incidents/incident-a';
+  fetchMock.mockResolvedValue(
+    streamOf([{ type: 'delta', text: 'Earlier answer' }, { type: 'done' }])
+  );
+  const view = render(<SquireLauncher name="Pip" />);
+  fireEvent.click(screen.getByRole('button', { name: /Ask Pip/ }));
+  fireEvent.change(screen.getByLabelText('Message Pip'), { target: { value: 'Summarise this' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+  await screen.findByText('Earlier answer');
+  await waitFor(() => expect(screen.getByLabelText('Message Pip')).toBeEnabled());
+  nav.pathname = '/incidents/incident-b';
+  view.rerender(<SquireLauncher name="Pip" />);
+  expect(screen.getByRole('link', { name: 'Return to original context' })).toHaveAttribute(
+    'href',
+    '/incidents/incident-a'
+  );
+  expect(screen.getByRole('button', { name: 'Send' })).toBeDisabled();
+  fireEvent.click(screen.getByRole('button', { name: 'New chat here' }));
+  fireEvent.change(screen.getByLabelText('Message Pip'), {
+    target: { value: 'Summarise new incident' },
+  });
+  fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+  await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+  expect(JSON.parse(fetchMock.mock.calls[1][1].body)).toMatchObject({
+    incidentId: 'incident-b',
+    history: [],
+  });
+});
+
+it('passes server context proofs on the next question and leaves unretrieved links inert', async () => {
+  fetchMock.mockResolvedValue(
+    streamOf([
+      { type: 'delta', text: 'Unverified link /incidents/unread' },
+      { type: 'context', userProof: 'user-proof', assistantProof: 'answer-proof' },
+      { type: 'done' },
+    ])
+  );
+  render(<SquireLauncher name="Pip" />);
+  fireEvent.click(screen.getByRole('button', { name: /Ask Pip/ }));
+  fireEvent.change(screen.getByLabelText('Message Pip'), { target: { value: 'Question' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+  await screen.findByText('Unverified link /incidents/unread');
+  await waitFor(() => expect(screen.getByLabelText('Message Pip')).toBeEnabled());
+  expect(screen.queryByRole('link', { name: '/incidents/unread' })).not.toBeInTheDocument();
+  fireEvent.change(screen.getByLabelText('Message Pip'), { target: { value: 'Follow up' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+  await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+  expect(JSON.parse(fetchMock.mock.calls[1][1].body).history).toEqual([
+    { role: 'user', content: 'Question', contextProof: 'user-proof' },
+    {
+      role: 'assistant',
+      content: 'Unverified link /incidents/unread',
+      contextProof: 'answer-proof',
+    },
+  ]);
 });

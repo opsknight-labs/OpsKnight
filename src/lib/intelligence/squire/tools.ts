@@ -15,7 +15,12 @@ import {
   type AuthorizationActor,
 } from '@/lib/authorization-policy';
 import { getActiveOnCallShifts } from '@/lib/oncall-shifts';
-import { resolveEmbeddingModel, type AiToolDefinition } from '../ai/port';
+import {
+  resolveEmbeddingModel,
+  highestDataClass,
+  type AiDataClass,
+  type AiToolDefinition,
+} from '../ai/port';
 import { maskVolatileText } from '../normalization/text';
 import { normalizeVector, dot } from '../semantic/vector';
 import { resolveEffectivePolicy } from '../settings/service';
@@ -84,7 +89,11 @@ function words(query: string): string[] {
  */
 export function buildSquireTools(
   actor: AuthorizationActor,
-  options: { personal: boolean }
+  options: {
+    personal: boolean;
+    dataClass?: AiDataClass;
+    observe?: (name: string, input: unknown, result: unknown) => Promise<unknown>;
+  }
 ): AiToolDefinition[] {
   const tools: AiToolDefinition[] = [
     readTool(
@@ -183,7 +192,7 @@ export function buildSquireTools(
         if (!parsed.success) return { error: 'Invalid input' };
         const readable = scoped(() => incidentReadWhere(actor));
         if (!readable) return NOT_FOUND;
-        const port = await resolveEmbeddingModel('INTERNAL');
+        const port = await resolveEmbeddingModel(highestDataClass(['PERSONAL', options.dataClass]));
         if (!port) return [];
         const { vectors } = await port.embed([maskVolatileText(parsed.data.query)], {
           actorId: actor.id,
@@ -202,13 +211,14 @@ export function buildSquireTools(
           select: {
             incidentId: true,
             vector: true,
-            incident: { select: { title: true, status: true } },
+            incident: { select: { title: true, status: true, updatedAt: true } },
           },
         });
         return rows
           .map(row => ({
             id: row.incidentId,
             title: short(row.incident.title, 160),
+            updatedAt: row.incident.updatedAt.toISOString(),
             status: row.incident.status,
             score: dot(vector, row.vector),
             href: `/incidents/${row.incidentId}`,
@@ -286,6 +296,7 @@ export function buildSquireTools(
             urgency: true,
             createdAt: true,
             resolvedAt: true,
+            updatedAt: true,
             service: { select: { name: true } },
           },
         });
@@ -297,6 +308,7 @@ export function buildSquireTools(
           service: row.service.name,
           createdAt: row.createdAt.toISOString(),
           resolvedAt: row.resolvedAt?.toISOString() ?? null,
+          updatedAt: row.updatedAt.toISOString(),
         }));
       }
     ),
@@ -321,6 +333,7 @@ export function buildSquireTools(
             acknowledgedAt: true,
             resolvedAt: true,
             serviceId: true,
+            updatedAt: true,
             service: { select: { name: true } },
             _count: { select: { alerts: true } },
           },
@@ -338,6 +351,7 @@ export function buildSquireTools(
           createdAt: row.createdAt.toISOString(),
           acknowledgedAt: row.acknowledgedAt?.toISOString() ?? null,
           resolvedAt: row.resolvedAt?.toISOString() ?? null,
+          updatedAt: row.updatedAt.toISOString(),
         };
       }
     ),
@@ -366,6 +380,7 @@ export function buildSquireTools(
             .slice(0, 5)
             .map(item => ({ id: item.incidentId, title: short(item.title, 160) })),
           possibleChanges: (response?.changes ?? []).slice(0, 5).map(c => ({
+            id: c.changeId,
             summary: short(c.summary, 200),
             kind: c.kind,
             minutesBeforeOnset: c.leadMinutes,
@@ -396,7 +411,7 @@ export function buildSquireTools(
         if (!readable || !incidents) return NOT_FOUND;
         const service = await prisma.service.findFirst({
           where: { AND: [{ id: parsed.data.id }, readable] },
-          select: { id: true, name: true, description: true },
+          select: { id: true, name: true, description: true, updatedAt: true },
         });
         if (!service) return NOT_FOUND;
         const since = new Date(Date.now() - 86_400_000);
@@ -404,13 +419,15 @@ export function buildSquireTools(
           prisma.serviceDependency.findMany({
             where: {
               status: 'ACTIVE',
+              upstream: readable,
+              downstream: readable,
               OR: [{ upstreamServiceId: service.id }, { downstreamServiceId: service.id }],
             },
             take: 20,
             select: {
               upstreamServiceId: true,
-              upstream: { select: { name: true } },
-              downstream: { select: { name: true } },
+              upstream: { select: { id: true, name: true, updatedAt: true } },
+              downstream: { select: { id: true, name: true, updatedAt: true } },
             },
           }),
           prisma.incident.findMany({
@@ -425,13 +442,15 @@ export function buildSquireTools(
             where: { serviceId: service.id, occurredAt: { gte: since } },
             orderBy: { occurredAt: 'desc' },
             take: MAX_ROWS,
-            select: { kind: true, summary: true, occurredAt: true },
+            select: { id: true, kind: true, summary: true, occurredAt: true },
           }),
         ]);
         return {
           id: service.id,
           name: service.name,
+          updatedAt: service.updatedAt.toISOString(),
           description: short(service.description, 400),
+          dependencySources: edges.flatMap(edge => [edge.upstream, edge.downstream]),
           dependsOn: edges
             .filter(e => e.upstreamServiceId !== service.id)
             .map(e => e.upstream.name),
@@ -444,6 +463,7 @@ export function buildSquireTools(
             status: i.status,
           })),
           changesLast24h: changes.map(c => ({
+            id: c.id,
             kind: c.kind,
             summary: short(c.summary, 200),
             at: c.occurredAt.toISOString(),
@@ -513,12 +533,19 @@ export function buildSquireTools(
         if (!readable) return NOT_FOUND;
         const runbook = await prisma.runbook.findFirst({
           where: { AND: [{ id: parsed.data.id, archivedAt: null }, readable] },
-          select: { id: true, name: true, description: true, publishedVersionId: true },
+          select: {
+            id: true,
+            name: true,
+            description: true,
+            publishedVersionId: true,
+            updatedAt: true,
+          },
         });
         if (!runbook) return NOT_FOUND;
         return {
           id: runbook.id,
           name: runbook.name,
+          updatedAt: runbook.updatedAt.toISOString(),
           description: short(runbook.description, 800),
           published: Boolean(runbook.publishedVersionId),
         };
@@ -561,6 +588,7 @@ export function buildSquireTools(
             incidentId: true,
             title: true,
             summary: true,
+            updatedAt: true,
             rootCause: true,
             resolution: true,
             status: true,
@@ -568,6 +596,7 @@ export function buildSquireTools(
         });
         return rows.map(p => ({
           incidentId: p.incidentId,
+          updatedAt: p.updatedAt.toISOString(),
           title: short(p.title, 160),
           summary: short(p.summary, 300),
           rootCause: short(p.rootCause, 300),
@@ -685,6 +714,7 @@ export function buildSquireTools(
             where: scheduleIds ? { AND: [{ id: { in: scheduleIds } }, readable] } : readable,
           });
           return shifts.slice(0, MAX_ROWS).map(shift => ({
+            scheduleId: shift.schedule.id,
             schedule: shift.schedule.name,
             personId: shift.user.id,
             name: shift.user.name ?? shift.user.email ?? 'Unknown',
@@ -723,9 +753,14 @@ export function buildSquireTools(
               ],
             },
             take: 5,
-            select: { id: true, name: true, email: true },
+            select: { id: true, name: true, email: true, updatedAt: true },
           });
-          return rows.map(user => ({ personId: user.id, name: user.name, email: user.email }));
+          return rows.map(user => ({
+            personId: user.id,
+            name: user.name,
+            email: user.email,
+            updatedAt: user.updatedAt.toISOString(),
+          }));
         }
       )
     );
@@ -735,7 +770,16 @@ export function buildSquireTools(
     if (!options.personal && name === 'reassign_incident') continue;
     tools.push(proposalTool(name));
   }
-  return tools;
+  return tools.map(tool => ({
+    ...tool,
+    dataClass: highestDataClass(['PERSONAL', options.dataClass, tool.dataClass]),
+    ...(options.observe && tool.kind === 'READ'
+      ? {
+          execute: async (input: unknown) =>
+            options.observe!(tool.name, input, await tool.execute!(input)),
+        }
+      : {}),
+  }));
 }
 
 function proposalTool(name: SquireActionName): AiToolDefinition {

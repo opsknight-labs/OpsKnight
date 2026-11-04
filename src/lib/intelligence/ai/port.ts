@@ -15,6 +15,15 @@
 export const AI_DATA_CLASSES = ['PUBLIC', 'INTERNAL', 'PERSONAL', 'SENSITIVE'] as const;
 export type AiDataClass = (typeof AI_DATA_CLASSES)[number];
 
+/** Highest trusted declaration; an unrecognized runtime value fails closed. */
+export function highestDataClass(values: readonly (AiDataClass | undefined)[]): AiDataClass {
+  if (values.some(value => value !== undefined && !AI_DATA_CLASSES.includes(value)))
+    return 'SENSITIVE';
+  let highest: AiDataClass = 'PUBLIC';
+  for (const candidate of AI_DATA_CLASSES) if (values.includes(candidate)) highest = candidate;
+  return highest;
+}
+
 export const AI_CAPABILITIES = [
   'SQUIRE_CHAT',
   'SUMMARIZE',
@@ -28,6 +37,8 @@ export type AiCapability = (typeof AI_CAPABILITIES)[number];
 export interface AiMessage {
   role: 'system' | 'user' | 'assistant';
   content: string;
+  /** Trusted server-side classification, never accepted from browser history. */
+  dataClass?: AiDataClass;
 }
 
 /** Who is asking and for what; used for budgets, audit and data-policy checks. */
@@ -44,6 +55,8 @@ export interface AiRequestContext {
 }
 
 export interface AiToolDefinition {
+  /** Highest class a read may return; checked before a provider can invoke it. */
+  dataClass?: AiDataClass;
   name: string;
   description: string;
   /** JSON-schema-shaped description of the input; validated again by the tool itself. */

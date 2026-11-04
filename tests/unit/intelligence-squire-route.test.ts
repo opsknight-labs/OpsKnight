@@ -179,6 +179,8 @@ describe('POST /api/intelligence/squire', () => {
       incidentId: 'inc1',
       question: 'hello',
       answer: 'hi',
+      dataClass: undefined,
+      turn: { completion: 'COMPLETED', citations: [], actions: [], notices: [] },
     });
   });
 
@@ -209,4 +211,61 @@ describe('POST /api/intelligence/squire', () => {
   it('rejects malformed conversation ids', async () => {
     expect((await POST(make({ message: 'x', conversationId: '../../etc' }))).status).toBe(400);
   });
+});
+
+it('keeps internal memory off the wire and saves action references without confirmation tokens', async () => {
+  store.status.mockResolvedValue({ enabled: true, retentionDays: 30 });
+  turns.run.mockImplementation(async function* () {
+    yield { type: 'delta', text: 'Review this action.' };
+    yield {
+      type: 'proposal',
+      proposal: {
+        kind: 'WRITE',
+        receiptId: '37c680f0-124a-4530-841a-a6110f79f7c6',
+        action: 'add_note',
+        title: 'Add note',
+        incidentId: 'inc1',
+        token: 'sealed-confirmation-canary',
+      },
+    };
+    yield {
+      type: 'memory',
+      turn: {
+        dataClass: 'SENSITIVE',
+        verified: true,
+        authorizationHash: 'a'.repeat(64),
+        sources: [],
+      },
+    };
+    yield { type: 'done' };
+  });
+  const response = await POST(make({ message: 'Review' }));
+  const lines = (await response.text())
+    .trim()
+    .split('\n')
+    .map(line => JSON.parse(line));
+  expect(lines.some(line => line.type === 'memory')).toBe(false);
+  expect(store.record).toHaveBeenCalledWith(
+    expect.objectContaining({
+      dataClass: 'SENSITIVE',
+      turn: expect.objectContaining({
+        verified: true,
+        actions: [
+          {
+            receiptId: '37c680f0-124a-4530-841a-a6110f79f7c6',
+            action: 'add_note',
+            title: 'Add note',
+            incidentId: 'inc1',
+          },
+        ],
+      }),
+    })
+  );
+  expect(JSON.stringify(store.record.mock.calls)).not.toContain('sealed-confirmation-canary');
+});
+
+it('refuses API-key callers before starting a conversation', async () => {
+  actor.get.mockResolvedValue({ id: 'u1', role: 'ADMIN', apiKey: { id: 'key-1' } });
+  expect((await POST(make({ message: 'hello' }))).status).toBe(403);
+  expect(turns.run).not.toHaveBeenCalled();
 });

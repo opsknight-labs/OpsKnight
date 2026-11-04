@@ -230,3 +230,74 @@ describe('saved assistant conversations', () => {
     expect(await db.squireMessage.count()).toBe(0);
   });
 });
+
+it('stores encrypted versioned turn metadata without losing scope, classification or safe outcome references', async () => {
+  const admin = await createTestUser({ role: 'ADMIN' });
+  await configure(admin.id, { enabled: true });
+  const receiptId = 'e3b63f6e-5135-4d2d-b875-fb1daf5ca968';
+  const id = await recordExchange({
+    userId: admin.id,
+    scope: { kind: 'GLOBAL' },
+    dataClass: 'SENSITIVE',
+    question: 'q',
+    answer: 'a',
+    turn: {
+      mode: 'ai',
+      verified: true,
+      notices: ['Private notice canary'],
+      actions: [
+        { receiptId, action: 'add_incident_note', title: 'Add a note', incidentId: 'incident-1' },
+      ],
+    },
+  });
+  const raw = await db.squireMessage.findMany({
+    where: { conversationId: id },
+    orderBy: { createdAt: 'asc' },
+  });
+  expect(raw.every(message => message.dataClass === 'SENSITIVE')).toBe(true);
+  expect(JSON.stringify(raw)).not.toContain('Private notice canary');
+  expect(JSON.stringify(raw)).not.toContain(receiptId);
+  const saved = await getConversation(admin.id, id);
+  expect(saved?.scope).toEqual({ kind: 'GLOBAL' });
+  expect(saved?.messages[1].envelope).toMatchObject({
+    v: 1,
+    dataClass: 'SENSITIVE',
+    mode: 'ai',
+    completion: 'COMPLETED',
+    actions: [{ receiptId }],
+  });
+});
+
+it('refuses contradictory explicit conversation scopes before creating history', async () => {
+  const admin = await createTestUser({ role: 'ADMIN' });
+  await configure(admin.id, { enabled: true });
+  await expect(
+    recordExchange({
+      userId: admin.id,
+      incidentId: 'incident-a',
+      scope: { kind: 'GLOBAL' },
+      question: 'q',
+      answer: 'a',
+    })
+  ).rejects.toThrow('scope');
+  expect(await db.squireConversation.count({ where: { userId: admin.id } })).toBe(0);
+});
+
+it('does not attach an envelope to different text after a legacy writer changes the encrypted content', async () => {
+  const admin = await createTestUser({ role: 'ADMIN' });
+  await configure(admin.id, { enabled: true });
+  const id = await recordExchange({
+    userId: admin.id,
+    question: 'q',
+    answer: 'original',
+    turn: { verified: true },
+  });
+  const { encrypt } = await import('@/lib/encryption');
+  await db.squireMessage.updateMany({
+    where: { conversationId: id, role: 'assistant' },
+    data: { contentEncrypted: await encrypt('replacement') },
+  });
+  const saved = await getConversation(admin.id, id);
+  expect(saved?.messages[1].content).toBe('replacement');
+  expect(saved?.messages[1].envelope).toBeUndefined();
+});

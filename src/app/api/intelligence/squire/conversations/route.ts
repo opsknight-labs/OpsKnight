@@ -1,6 +1,7 @@
 import { jsonOk } from '@/lib/api-response';
 import { conversationActor, NO_STORE } from '@/lib/intelligence/conversations/http';
-import { deleteAllConversations, listConversations } from '@/lib/intelligence/conversations/store';
+import { listConversationsForActor } from '@/lib/intelligence/conversations/view';
+import { deleteAllConversations } from '@/lib/intelligence/conversations/store';
 
 export const dynamic = 'force-dynamic';
 
@@ -8,7 +9,7 @@ export const dynamic = 'force-dynamic';
 export async function GET(request: Request) {
   const actor = await conversationActor(request);
   if (actor instanceof Response) return actor;
-  return jsonOk({ conversations: await listConversations(actor.id) }, 200, NO_STORE);
+  return jsonOk({ conversations: await listConversationsForActor(actor) }, 200, NO_STORE);
 }
 
 /** DELETE: removes all of the signed-in person's saved conversations. */

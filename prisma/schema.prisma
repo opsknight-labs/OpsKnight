@@ -5462,6 +5462,8 @@ model SquireMessage {
   conversation     SquireConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   role             String
   contentEncrypted String
+  envelopeEncrypted String?
+  dataClass        AiDataClass @default(PERSONAL)
   createdAt        DateTime           @default(now())
 
   @@index([conversationId, createdAt], map: "idx_squire_message_conversation")

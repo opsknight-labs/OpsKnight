@@ -1,4 +1,5 @@
 import { z } from 'zod/v4';
+import type { SavedTurnInput } from '../conversations/contract';
 import type { SquireProposal } from './actions/catalog';
 
 export const SQUIRE_LIMITS = {
@@ -22,6 +23,7 @@ export const squireRequestSchema = z
         z
           .object({
             role: z.enum(['user', 'assistant']),
+            contextProof: z.string().min(1).max(8_192).optional(),
             content: z
               .string()
               .max(HISTORY_TURN_ACCEPTED)
@@ -51,6 +53,10 @@ export interface SquireCitation {
   id: string;
   label: string;
   href: string;
+  handle?: string;
+  observedAt?: string;
+  version?: string;
+  why?: string;
 }
 
 export type SquireEvent =
@@ -63,6 +69,10 @@ export type SquireEvent =
   | { type: 'citations'; items: SquireCitation[] }
   | { type: 'suggestions'; items: string[] }
   | { type: 'notice'; text: string }
+  /** Trusted internal persistence metadata; the HTTP stream never forwards this event to the browser. */
+  | { type: 'memory'; turn: SavedTurnInput }
+  /** Read-only integrity proofs for browser-held turns; these never authorize an action. */
+  | { type: 'context'; userProof?: string; assistantProof?: string }
   | { type: 'done' }
   /** Sent after `done` when the exchange was saved, so the next question continues the same conversation. */
   | { type: 'conversation'; id: string }

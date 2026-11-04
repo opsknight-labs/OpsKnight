@@ -6,7 +6,7 @@ export interface IncidentBriefing {
   incident: ReadableIncident;
   timeline?: Array<{ type: string; at: string; summary: string }>;
   similar: Array<{ id: string; title: string; matchPercent: number; status: string }>;
-  changes: Array<{ summary: string; kind: string; minutesBeforeOnset: number }>;
+  changes: Array<{ id?: string; summary: string; kind: string; minutesBeforeOnset: number }>;
   runbooks: Array<{ id: string; name: string; succeeded: number; completedRuns: number }>;
 }
 
@@ -27,7 +27,10 @@ export function buildSystemPrompt(
   briefing: IncidentBriefing | null,
   guidance: { text: string; revision: number } | null = null
 ): RenderedPrompt {
-  const context: string[] = [];
+  const context: string[] = [
+    'Cite only sources returned in this turn. Evidence handles identify reads, not proof of a causal claim.',
+    'Keep suspected causes qualified. Earlier answers are dated history; use tools to verify current facts.',
+  ];
   if (briefing) {
     const { incident } = briefing;
     context.push(

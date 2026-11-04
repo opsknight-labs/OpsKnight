@@ -98,6 +98,16 @@ export const ENCRYPTION_TARGETS: EncryptionTargetDefinition[] = [
     description: 'Title of an opt-in saved assistant conversation, taken from the first question',
   },
   {
+    id: 'squire.turn-envelope',
+    model: 'SquireMessage',
+    field: 'envelopeEncrypted',
+    storageType: 'SCALAR',
+    plaintextLegacyAllowed: false,
+    label: 'Saved Assistant Turn Metadata',
+    description:
+      'Versioned evidence, classification, notices and read-only outcome references bound to encrypted conversation text',
+  },
+  {
     id: 'squire.conversation-message',
     model: 'SquireMessage',
     field: 'contentEncrypted',

@@ -25,7 +25,13 @@ type State =
  * One suggested action. Nothing has happened until the person presses Confirm; then the server runs it under
  * their own permissions and reports back. Navigation suggestions are plain links into the existing pages.
  */
-export default function SquireProposalCard({ proposal }: { proposal: SquireProposalView }) {
+export default function SquireProposalCard({
+  proposal,
+  reviewContextValid = true,
+}: {
+  proposal: SquireProposalView;
+  reviewContextValid?: boolean;
+}) {
   const { refresh } = useRouter();
   const attempted = useRef(false);
   const [state, setState] = useState<State>(() => ({
@@ -107,7 +113,12 @@ export default function SquireProposalCard({ proposal }: { proposal: SquirePropo
   if (state.phase === 'dismissed') return null;
 
   const confirm = async () => {
-    if (state.phase !== 'idle' || !Number.isFinite(expiresAt) || expiresAt <= Date.now()) {
+    if (
+      !reviewContextValid ||
+      state.phase !== 'idle' ||
+      !Number.isFinite(expiresAt) ||
+      expiresAt <= Date.now()
+    ) {
       setClock(Date.now());
       return;
     }
@@ -202,6 +213,10 @@ export default function SquireProposalCard({ proposal }: { proposal: SquirePropo
             Dismiss
           </button>
         </div>
+      ) : !reviewContextValid && state.phase === 'idle' ? (
+        <p role="status" className="mt-2 text-xs text-foreground/80">
+          Return to the original conversation context before confirming this suggestion.
+        </p>
       ) : expired && state.phase === 'idle' ? (
         <div className="mt-2 space-y-2">
           <p role="status" className="text-xs text-foreground/80">
