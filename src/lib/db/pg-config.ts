@@ -27,6 +27,11 @@ export interface PgConnectionPlan {
   warnings: string[];
   /** host:port for diagnostics; never includes credentials. */
   target: string;
+  /**
+   * Prisma connect_timeout: bound on opening one server connection (0 = none). The pool's
+   * connectionTimeoutMillis is Prisma pool_timeout: bound on waiting for a pooled connection.
+   */
+  connectTimeoutMillis: number;
 }
 
 export interface TlsPlan {
@@ -260,17 +265,13 @@ export function planPgConnection(
     throw new DatabaseUrlError('Database URL parameter schema is not a valid schema name.');
   }
 
-  const poolTimeout = nonNegativeSeconds('pool_timeout', params.get('pool_timeout'));
-  const connectTimeout = nonNegativeSeconds('connect_timeout', params.get('connect_timeout'));
-  // node-postgres has one deadline for acquiring a pooled connection, including opening a new
-  // one. 0 disables it (as in Prisma); otherwise the larger configured bound applies.
-  const acquireSeconds =
-    poolTimeout === 0 || connectTimeout === 0
-      ? 0
-      : Math.max(
-          poolTimeout ?? DEFAULT_POOL_TIMEOUT_SECONDS,
-          connectTimeout ?? DEFAULT_CONNECT_TIMEOUT_SECONDS
-        );
+  // Prisma 5 semantics: pool_timeout bounds the wait for a pooled connection (including opening
+  // a new one); connect_timeout separately bounds opening a single server connection.
+  const poolTimeoutSeconds =
+    nonNegativeSeconds('pool_timeout', params.get('pool_timeout')) ?? DEFAULT_POOL_TIMEOUT_SECONDS;
+  const connectTimeoutSeconds =
+    nonNegativeSeconds('connect_timeout', params.get('connect_timeout')) ??
+    DEFAULT_CONNECT_TIMEOUT_SECONDS;
   const idleSeconds =
     nonNegativeSeconds(
       'max_idle_connection_lifetime',
@@ -289,12 +290,17 @@ export function planPgConnection(
     password: url.password ? decodeURIComponent(url.password) : undefined,
     database: decodeURIComponent(url.pathname.replace(/^\//, '')) || undefined,
     max: positiveInteger('connection_limit', params.get('connection_limit')) ?? defaultPoolSize(),
-    connectionTimeoutMillis: Math.round(acquireSeconds * 1000),
+    connectionTimeoutMillis: Math.round(poolTimeoutSeconds * 1000),
     idleTimeoutMillis: Math.round(idleSeconds * 1000),
     maxLifetimeSeconds: lifetimeSeconds ?? 0,
     keepAlive: true,
     options: buildStartupOptions(params, schema),
-    application_name: params.get('application_name') ?? settings.applicationName,
+    // An application_name set through `options` (e.g. the MCP pool) must not be overridden.
+    application_name:
+      params.get('application_name') ??
+      (hasSetting(params.get('options') ?? undefined, 'application_name')
+        ? undefined
+        : settings.applicationName),
   };
   if (socketTimeout) pool.query_timeout = Math.round(socketTimeout * 1000);
 
@@ -313,5 +319,12 @@ export function planPgConnection(
         'use sslmode=verify-full with sslrootcert to prevent impersonation.'
     );
   }
-  return { pool, schema, tls, warnings, target };
+  return {
+    pool,
+    schema,
+    tls,
+    warnings,
+    target,
+    connectTimeoutMillis: Math.round(connectTimeoutSeconds * 1000),
+  };
 }

@@ -220,7 +220,23 @@ class OpsKnightPgAdapterFactory implements SqlMigrationAwareDriverAdapterFactory
   constructor(private readonly plan: PgConnectionPlan) {}
 
   #create(ssl: pg.PoolConfig['ssl']): PrismaPg {
-    const pool = new OpsKnightPgPool({ ...this.plan.pool, ssl });
+    const connectTimeoutMillis = this.plan.connectTimeoutMillis;
+    // Each new server connection is bounded by connect_timeout; the pool bounds the overall wait.
+    class ConnectTimeoutClient extends pg.Client {
+      constructor(config: pg.ClientConfig) {
+        // pg-pool stores the password as a non-enumerable property; a spread would drop it.
+        super({
+          ...config,
+          password: config.password,
+          connectionTimeoutMillis: connectTimeoutMillis,
+        });
+      }
+    }
+    const pool = new OpsKnightPgPool({
+      ...this.plan.pool,
+      ssl,
+      Client: ConnectTimeoutClient as unknown as pg.PoolConfig['Client'],
+    });
     return new PrismaPg(pool, {
       schema: this.plan.schema,
       disposeExternalPool: true,
@@ -244,7 +260,7 @@ class OpsKnightPgAdapterFactory implements SqlMigrationAwareDriverAdapterFactory
     const port = Number(pool.port);
     try {
       if (tls.mode === 'prefer') {
-        const encrypted = await probeServerTls(host, port, pool.connectionTimeoutMillis ?? 10_000);
+        const encrypted = await probeServerTls(host, port, this.plan.connectTimeoutMillis);
         if (encrypted && !tls.verifiesCertificate && !host.startsWith('/')) {
           emit('info', 'db.tls.negotiated', {
             target,
@@ -256,7 +272,11 @@ class OpsKnightPgAdapterFactory implements SqlMigrationAwareDriverAdapterFactory
         return encrypted ? tls.options : false;
       }
       // allow: libpq tries plaintext first and upgrades only if the server rejects it.
-      const probe = new pg.Client({ ...pool, ssl: false });
+      const probe = new pg.Client({
+        ...pool,
+        connectionTimeoutMillis: this.plan.connectTimeoutMillis,
+        ssl: false,
+      });
       try {
         await probe.connect();
         return false;

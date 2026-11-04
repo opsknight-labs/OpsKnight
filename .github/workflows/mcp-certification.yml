@@ -123,7 +123,7 @@ jobs:
       - name: Fresh local browser database
         run: |
           node <<'JS'
-          const {PrismaClient}=require('@prisma/client');const p=new PrismaClient();
+          const {createPrismaClient}=require('./scripts/lib/db-runtime.cjs');const p=createPrismaClient();
           p.$executeRawUnsafe('CREATE DATABASE opsknight_mcp_browser_test').finally(()=>p.$disconnect());
           JS
           export DATABASE_URL=postgresql://postgres:isolated-mcp-ci@localhost:5432/opsknight_mcp_browser_test

@@ -53,12 +53,19 @@ describe('database URL translation to node-postgres', () => {
     expect(warnings).toEqual([]);
   });
 
+  it('keeps pool_timeout (pool wait) and connect_timeout (one connection) independent', () => {
+    const defaults = plan('postgresql://u:p@db/app');
+    expect(defaults.pool.connectionTimeoutMillis).toBe(10_000);
+    expect(defaults.connectTimeoutMillis).toBe(5_000);
+    // MCP sheds after 1 s in the pool even though opening a connection may take 3 s.
+    const mcp = plan('postgresql://u:p@db/app?pool_timeout=1&connect_timeout=3');
+    expect(mcp.pool.connectionTimeoutMillis).toBe(1_000);
+    expect(mcp.connectTimeoutMillis).toBe(3_000);
+  });
+
   it('treats a zero timeout as unbounded, as Prisma did', () => {
     expect(plan('postgresql://u:p@db/app?pool_timeout=0').pool.connectionTimeoutMillis).toBe(0);
-    expect(plan('postgresql://u:p@db/app?connect_timeout=0').pool.connectionTimeoutMillis).toBe(0);
-    expect(plan('postgresql://u:p@db/app?connect_timeout=20').pool.connectionTimeoutMillis).toBe(
-      20_000
-    );
+    expect(plan('postgresql://u:p@db/app?connect_timeout=0').connectTimeoutMillis).toBe(0);
   });
 
   it('rejects malformed pool parameters instead of silently using defaults', () => {
@@ -96,6 +103,16 @@ describe('database URL translation to node-postgres', () => {
     const result = plan('postgresql://u:p@localhost/app?host=/cloudsql/project:region:db');
     expect(result.pool.host).toBe('/cloudsql/project:region:db');
     expect(result.tls).toMatchObject({ mode: 'disable', socket: true, options: undefined });
+  });
+
+  it('sets application_name unless the URL or its options already choose one', () => {
+    const named = (url: string) =>
+      planPgConnection(url, { applicationName: 'opsknight-web' }).pool.application_name;
+    expect(named('postgresql://u:p@db/app')).toBe('opsknight-web');
+    expect(named('postgresql://u:p@db/app?application_name=custom')).toBe('custom');
+    expect(
+      named('postgresql://u:p@db/app?options=-c%20application_name%3Dopsknight-mcp')
+    ).toBeUndefined();
   });
 
   it('warns about unknown parameters without echoing their values', () => {
