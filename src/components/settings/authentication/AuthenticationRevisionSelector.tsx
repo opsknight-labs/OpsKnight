@@ -190,7 +190,7 @@ export default function AuthenticationRevisionSelector({
       >
         {data.revisions.length === 0 && (
           <option value="" disabled>
-            No saved configurations yet — stage the draft first
+            No saved configurations yet — save your provider connection first
           </option>
         )}
         {activeRevisions.length > 0 && (

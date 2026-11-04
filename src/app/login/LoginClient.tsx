@@ -301,7 +301,14 @@ export default function LoginClient({
               isShaking && 'animate-shake'
             )}
           >
-            <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-red-100 dark:bg-red-500/20 text-red-600 dark:text-red-400 mt-0.5">
+            <div
+              className={cn(
+                'flex h-5 w-5 shrink-0 items-center justify-center rounded-md mt-0.5',
+                error.tone === 'notice'
+                  ? 'bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-300'
+                  : 'bg-red-100 dark:bg-red-500/20 text-red-600 dark:text-red-400'
+              )}
+            >
               <AlertCircle className="h-3.5 w-3.5" />
             </div>
             <div className="flex-1 min-w-0">
@@ -349,7 +356,12 @@ export default function LoginClient({
               type="button"
               data-icon-button
               onClick={dismissError}
-              className="relative shrink-0 flex h-6 w-6 min-h-0 min-w-0 p-0 after:absolute after:-inset-2.5 after:content-[''] items-center justify-center rounded-full border border-red-300/80 bg-red-100 hover:bg-red-200 text-red-700 hover:text-red-950 dark:border-red-500/50 dark:bg-red-900/60 dark:hover:bg-red-800/80 dark:text-red-100 dark:hover:text-white transition-all cursor-pointer shadow-2xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500/50"
+              className={cn(
+                "relative shrink-0 flex h-6 w-6 min-h-0 min-w-0 p-0 after:absolute after:-inset-2.5 after:content-[''] items-center justify-center rounded-full border transition-all cursor-pointer shadow-2xs focus-visible:outline-none focus-visible:ring-2",
+                error.tone === 'notice'
+                  ? 'border-amber-300/80 bg-amber-100 hover:bg-amber-200 text-amber-800 hover:text-amber-950 dark:border-amber-500/50 dark:bg-amber-900/60 dark:hover:bg-amber-800/80 dark:text-amber-100 dark:hover:text-white focus-visible:ring-amber-500/50'
+                  : 'border-red-300/80 bg-red-100 hover:bg-red-200 text-red-700 hover:text-red-950 dark:border-red-500/50 dark:bg-red-900/60 dark:hover:bg-red-800/80 dark:text-red-100 dark:hover:text-white focus-visible:ring-red-500/50'
+              )}
               aria-label="Dismiss error"
               title="Dismiss"
             >

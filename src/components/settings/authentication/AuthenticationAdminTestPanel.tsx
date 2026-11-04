@@ -96,7 +96,7 @@ export default function AuthenticationAdminTestPanel() {
       !draftDirty &&
         !revision && {
           code: 'revision',
-          message: 'Select a saved configuration, or stage the current draft.',
+          message: 'Save your provider connection first.',
           resolutionTarget: 'connection',
           resolutionLabel: 'Go to Connect provider',
         },
@@ -108,7 +108,7 @@ export default function AuthenticationAdminTestPanel() {
       ) && {
         code: 'stale',
         message:
-          'The active provider changed after this configuration was saved. Stage a current draft.',
+          'The active provider changed after this configuration was saved. Save your changes again.',
         resolutionTarget: 'connection',
         resolutionLabel: 'Review in Connect provider',
       },

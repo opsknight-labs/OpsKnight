@@ -113,10 +113,8 @@ export default function AuthenticationUserDirectory() {
               Connecting existing accounts
             </p>
             <p className="leading-relaxed text-amber-800 dark:text-amber-300">
-              An existing account connects to single sign-on on its first SSO sign-in, once you
-              approve it (one by one here, or in bulk above) or through domain-trusted linking.
-              Status is checked against the provider you are setting up. You can also manage people
-              from the{' '}
+              Approve people here or in bulk above so their first SSO sign-in connects their
+              account. Also available in the{' '}
               <Link
                 href="/users"
                 className="font-semibold underline underline-offset-2 hover:text-amber-950 dark:hover:text-amber-100 inline-flex items-center gap-0.5"

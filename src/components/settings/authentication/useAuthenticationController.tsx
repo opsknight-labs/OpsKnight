@@ -228,7 +228,7 @@ export function useAuthenticationController({
       ? data.actor.id
       : (data.users.find(user => user.role === 'ADMIN' && user.status === 'ACTIVE')?.id ?? '')
   );
-  const [claims, setClaims] = useState('{}');
+  const [claims, setClaims] = useState('');
   const [claimResult, setClaimResult] = useState<Awaited<
     ReturnType<typeof import('@/lib/auth-control/dashboard').identityClaimsPreview>
   > | null>(null);

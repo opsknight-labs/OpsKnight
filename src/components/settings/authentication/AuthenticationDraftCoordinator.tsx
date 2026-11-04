@@ -37,9 +37,12 @@ export default function AuthenticationDraftCoordinator() {
     setDraftDirty,
     setImpact,
     setConfirmation,
+    providerChosen,
   } = useAuthenticationWorkspace();
   const [reloadRequested, setReloadRequested] = useState(false);
   if (!SETUP_TABS.includes(activeTab)) return null;
+  // Before a provider is chosen there is nothing to save.
+  if (!providerChosen && !draftDirty) return null;
   const stale = data.providerConfigVersion !== draftBaseConfigVersion;
   const availability = actionAvailability('Save changes', [
     pending && {
@@ -149,11 +152,7 @@ export default function AuthenticationDraftCoordinator() {
             size="sm"
             disabled={!draftDirty || pending}
             onClick={() => setDraftDiscardRequested(true)}
-            title={
-              !draftDirty
-                ? 'There are no edits to discard. You may stage the current configuration to validate discovery.'
-                : undefined
-            }
+            title={!draftDirty ? 'Nothing to discard.' : undefined}
           >
             Discard changes
           </Button>

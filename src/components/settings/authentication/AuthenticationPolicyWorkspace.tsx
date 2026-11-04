@@ -58,6 +58,11 @@ export default function AuthenticationPolicyWorkspace() {
   const selectedRevision = data.revisions.find(rev => rev.id === revisionId);
   // Emergency recovery may only step SSO Required back to SSO Optional from this panel.
   const recoverySession = data.actor.kind === 'emergency';
+  const nothingSaved =
+    data.mode === 'PASSWORD_ONLY' &&
+    data.revisions.length === 0 &&
+    !draftDirty &&
+    !data.activeProvider;
   const verification = selectedRevision?.verification;
 
   return (
@@ -91,522 +96,546 @@ export default function AuthenticationPolicyWorkspace() {
         </div>
       </div>
 
-      {/* Session limits rarely change; they no longer require a new sign-in test. */}
-      <details className="group rounded-xl border bg-card shadow-xs">
-        <summary className="flex cursor-pointer list-none items-center justify-between gap-2 p-4 text-sm font-semibold text-foreground">
-          <span>
-            Session limits{' '}
-            <span className="font-normal text-muted-foreground">
-              (optional · changing them keeps your sign-in test)
-            </span>
-          </span>
-          <span className="text-xs text-muted-foreground group-open:hidden">Show</span>
-        </summary>
-        <div className="border-t p-4">
-          <AuthenticationSessionPolicyForm key={revisionId} />
-        </div>
-      </details>
-
-      {/* Clubbed: Validate Administrator Access & Sign-in Policy Activation Card */}
-      <div className="space-y-6 rounded-xl border border-border/80 bg-card p-4 sm:p-6 shadow-xs">
-        <div>
-          <h3 className="text-base font-semibold text-foreground flex items-center gap-2">
-            <Lock className="h-5 w-5 text-primary" />
-            Turn on single sign-on
-          </h3>
-          <p className="mt-1 text-xs text-muted-foreground">
-            Two short steps. You can repeat the test as often as you like.
+      {nothingSaved && (
+        <div className="rounded-xl border border-dashed p-8 text-center space-y-3">
+          <p className="text-sm font-semibold text-foreground">Connect your provider first</p>
+          <p className="text-xs text-muted-foreground">
+            Once your provider connection is saved, you test your sign-in and turn single sign-on on
+            here.
           </p>
+          <Button size="sm" onClick={() => setActiveTab('connection')}>
+            Go to Connect provider
+          </Button>
         </div>
-
-        {/* Step 1: Configuration & Administrator Verification */}
-        <div className="space-y-4 rounded-xl border border-border/60 bg-muted/15 p-4 sm:p-5">
-          <div className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-border/50">
-            <div className="flex items-center gap-2">
-              <div className="p-1.5 rounded-lg bg-primary/10 text-primary">
-                <UserCheck className="h-4 w-4" />
-              </div>
-              <h4 className="text-sm font-semibold text-foreground">
-                Step 1: Test your own sign-in
-              </h4>
-            </div>
-            {verification && (
-              <AuthenticationVerificationBadge verification={verification} compact />
-            )}
-          </div>
-          <AuthenticationRevisionSelector label="Saved configuration to activate" />
-          <AuthenticationAdminTestPanel />
-        </div>
-
-        {/* Step 2: Policy Mode & Activation */}
-        <div className="space-y-4 pt-1">
-          <div className="flex items-center gap-2 pb-1">
-            <div className="p-1.5 rounded-lg bg-primary/10 text-primary">
-              <Lock className="h-4 w-4" />
-            </div>
-            <h4 className="text-sm font-semibold text-foreground">
-              Step 2: Choose how people sign in, then turn it on
-            </h4>
-          </div>
-
-          <label className="block space-y-1.5 text-sm font-medium">
-            <span className="text-foreground">Activation mode</span>
-            <select
-              className={inputClass}
-              value={mode}
-              onChange={event => {
-                setMode(event.target.value as typeof mode);
-                setConfirmation(false);
-              }}
-            >
-              <option value="SSO_OPTIONAL" disabled={data.mode === 'SSO_REQUIRED'}>
-                {data.mode === 'SSO_REQUIRED'
-                  ? 'SSO Optional — use “Change to Password Only or SSO Optional” below'
-                  : 'SSO Optional'}
-              </option>
-              <option value="SSO_REQUIRED">SSO Required</option>
-            </select>
-            <span className="block text-xs font-normal text-muted-foreground pt-0.5">
-              {mode === 'SSO_REQUIRED'
-                ? 'Everyone must use single sign-on. Passwords stop working and password sessions end. Needs two emergency recovery identities so you can never be locked out.'
-                : 'People can use single sign-on or their password. The safest way to start; switch to Required once everyone has signed in with SSO.'}
-            </span>
-          </label>
-          {data.mode === 'SSO_REQUIRED' && (
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+      )}
+      {!nothingSaved && (
+        <>
+          {/* Session limits rarely change; they no longer require a new sign-in test. */}
+          <details className="group rounded-xl border bg-card shadow-xs">
+            <summary className="flex cursor-pointer list-none items-center justify-between gap-2 p-4 text-sm font-semibold text-foreground">
               <span>
-                SSO Required is active. Activation never relaxes it; moving back to SSO Optional is
-                a separate, deliberate policy change.
+                Session limits{' '}
+                <span className="font-normal text-muted-foreground">
+                  (optional · changing them keeps your sign-in test)
+                </span>
               </span>
-              {data.actor.kind !== 'legacy' ? (
-                <Button
-                  type="button"
-                  variant="link"
-                  size="sm"
-                  className="h-auto p-0 text-xs font-semibold"
-                  onClick={() => {
-                    const panel = document.getElementById('auth-policy-mode-change');
-                    if (panel instanceof HTMLDetailsElement) panel.open = true;
-                    panel?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+              <span className="text-xs text-muted-foreground group-open:hidden">Show</span>
+            </summary>
+            <div className="border-t p-4">
+              <AuthenticationSessionPolicyForm key={revisionId} />
+            </div>
+          </details>
+
+          {/* Clubbed: Validate Administrator Access & Sign-in Policy Activation Card */}
+          <div className="space-y-6 rounded-xl border border-border/80 bg-card p-4 sm:p-6 shadow-xs">
+            <div>
+              <h3 className="text-base font-semibold text-foreground flex items-center gap-2">
+                <Lock className="h-5 w-5 text-primary" />
+                Turn on single sign-on
+              </h3>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Two short steps. You can repeat the test as often as you like.
+              </p>
+            </div>
+
+            {/* Step 1: Configuration & Administrator Verification */}
+            <div className="space-y-4 rounded-xl border border-border/60 bg-muted/15 p-4 sm:p-5">
+              <div className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-border/50">
+                <div className="flex items-center gap-2">
+                  <div className="p-1.5 rounded-lg bg-primary/10 text-primary">
+                    <UserCheck className="h-4 w-4" />
+                  </div>
+                  <h4 className="text-sm font-semibold text-foreground">
+                    Step 1: Test your own sign-in
+                  </h4>
+                </div>
+                {verification && (
+                  <AuthenticationVerificationBadge verification={verification} compact />
+                )}
+              </div>
+              <AuthenticationRevisionSelector label="Saved configuration to activate" />
+              <AuthenticationAdminTestPanel />
+            </div>
+
+            {/* Step 2: Policy Mode & Activation */}
+            <div className="space-y-4 pt-1">
+              <div className="flex items-center gap-2 pb-1">
+                <div className="p-1.5 rounded-lg bg-primary/10 text-primary">
+                  <Lock className="h-4 w-4" />
+                </div>
+                <h4 className="text-sm font-semibold text-foreground">
+                  Step 2: Choose how people sign in, then turn it on
+                </h4>
+              </div>
+
+              <label className="block space-y-1.5 text-sm font-medium">
+                <span className="text-foreground">How people sign in</span>
+                <select
+                  className={inputClass}
+                  value={mode}
+                  onChange={event => {
+                    setMode(event.target.value as typeof mode);
+                    setConfirmation(false);
                   }}
                 >
-                  Switch to SSO Optional
-                </Button>
-              ) : (
-                <span>
-                  Use an independent recovery identity or sign in as an administrator to change it.
+                  <option value="SSO_OPTIONAL" disabled={data.mode === 'SSO_REQUIRED'}>
+                    {data.mode === 'SSO_REQUIRED'
+                      ? 'SSO Optional — use “Change to Password Only or SSO Optional” below'
+                      : 'SSO Optional'}
+                  </option>
+                  <option value="SSO_REQUIRED">SSO Required</option>
+                </select>
+                <span className="block text-xs font-normal text-muted-foreground pt-0.5">
+                  {mode === 'SSO_REQUIRED'
+                    ? 'Everyone must use single sign-on. Passwords stop working and password sessions end. Needs two emergency recovery identities so you can never be locked out.'
+                    : 'People can use single sign-on or their password. The safest way to start; switch to Required once everyone has signed in with SSO.'}
                 </span>
-              )}
-            </div>
-          )}
-
-          {/* Enforcement Impact Preview */}
-          <div className="space-y-3 pt-1">
-            <AuthenticationActionGuard
-              availability={actionAvailability('Preview impact', [
-                pending && {
-                  code: 'busy',
-                  message: 'Wait for the current operation or section to finish loading.',
-                },
-                draftDirty && {
-                  code: 'draft',
-                  message: 'Save your changes before previewing what will change.',
-                  resolutionTarget: 'connection',
-                  resolutionLabel: 'Save in Connect provider',
-                },
-                !revisionId && {
-                  code: 'revision',
-                  message: 'Choose a saved configuration above, or save your changes first.',
-                  resolutionTarget: 'connection',
-                  resolutionLabel: 'Go to Connect provider',
-                },
-              ])}
-              onResolve={setActiveTab}
-            >
-              <Button
-                variant="outline"
-                className="gap-2"
-                onClick={() =>
-                  void perform(async () => {
-                    setImpact(
-                      await authenticationRequest<Preview>({ action: 'preview', revisionId })
-                    );
-                    setConfirmation(false);
-                  })
-                }
-              >
-                <Info className="h-4 w-4" />
-                Preview what will change
-              </Button>
-            </AuthenticationActionGuard>
-
-            {impact &&
-              (() => {
-                // Tolerate a preview from a server that predates these fields (rolling upgrade).
-                const linking = impact.linking ?? {
-                  needApproval: impact.usersRequiringLinking,
-                  approved: 0,
-                  domainTrusted: 0,
-                  approvalsCarriedOver: 0,
-                  approvalsRevoked: 0,
-                };
-                const roleImpact = impact.roleImpact ?? {
-                  changed: 0,
-                  denied: 0,
-                  changes: [],
-                  teamAdditions: 0,
-                  teamRemovals: 0,
-                  evaluated: -1,
-                };
-                const blockers = impact.blockersByMode?.[mode] ?? impact.blockers;
-                return (
-                  <div
-                    className="space-y-3 rounded-xl border border-primary/20 bg-primary/5 p-4 text-sm"
-                    aria-live="polite"
-                  >
-                    <div className="flex items-center gap-2 font-semibold text-foreground">
-                      <CheckCircle2 className="h-4 w-4 text-primary" />
-                      <span>What happens when you turn it on</span>
-                    </div>
-                    <dl className="grid gap-2 text-xs sm:grid-cols-2 lg:grid-cols-4">
-                      {[
-                        {
-                          label: 'Password sessions',
-                          value: impact.passwordSessionCount,
-                          note:
-                            mode === 'SSO_REQUIRED'
-                              ? 'Revoked on activation'
-                              : 'Kept (SSO Optional)',
-                        },
-                        {
-                          label: 'Still need approval',
-                          value: linking.needApproval,
-                          note: `${linking.approved} approved · ${linking.domainTrusted} connect automatically`,
-                        },
-                        {
-                          label: 'Recovery identities',
-                          value: impact.verifiedEmergencyAccounts,
-                          note:
-                            impact.verifiedEmergencyAccounts >= 2
-                              ? 'Emergency access ready'
-                              : 'Two required for SSO Required',
-                        },
-                      ].map(item => (
-                        <div key={item.label} className="rounded-lg border bg-background/70 p-2.5">
-                          <dt className="text-muted-foreground">{item.label}</dt>
-                          <dd className="text-lg font-semibold text-foreground">{item.value}</dd>
-                          <dd className="text-[11px] text-muted-foreground">{item.note}</dd>
-                        </div>
-                      ))}
-                      <div className="rounded-lg border bg-background/70 p-2.5">
-                        <dt className="text-muted-foreground">Administrator proof</dt>
-                        <dd className="mt-1">
-                          <AuthenticationVerificationBadge verification={impact.verification} />
-                        </dd>
-                      </div>
-                    </dl>
-                    <ul className="space-y-1 text-xs text-foreground/90">
-                      {linking.needApproval > 0 && (
-                        <li>
-                          {linking.needApproval} existing{' '}
-                          {linking.needApproval === 1 ? 'account needs' : 'accounts need'} approval
-                          before SSO works for them.{' '}
-                          <button
-                            type="button"
-                            className="font-semibold underline underline-offset-2"
-                            onClick={() => setActiveTab('access')}
-                          >
-                            Approve them in Who can sign in
-                          </button>
-                        </li>
-                      )}
-                      {linking.approvalsCarriedOver > 0 && (
-                        <li>{linking.approvalsCarriedOver} pending approvals stay valid.</li>
-                      )}
-                      {linking.approvalsRevoked > 0 && (
-                        <li>
-                          {linking.approvalsRevoked} approvals for a previous provider will be
-                          cancelled.
-                        </li>
-                      )}
-                      {roleImpact.changed > 0 && (
-                        <li>
-                          {roleImpact.changed}{' '}
-                          {roleImpact.changed === 1 ? 'person gets' : 'people get'} a new role at
-                          their next sign-in
-                          {roleImpact.changes.length > 0 &&
-                            `: ${roleImpact.changes
-                              .slice(0, 5)
-                              .map(change => `${change.name} (${change.from} → ${change.to})`)
-                              .join(', ')}`}
-                          .
-                        </li>
-                      )}
-                      {roleImpact.denied > 0 && (
-                        <li className="text-amber-700 dark:text-amber-300">
-                          {roleImpact.denied} {roleImpact.denied === 1 ? 'person' : 'people'} would
-                          be refused because no rule matches them.
-                        </li>
-                      )}
-                      {(roleImpact.teamAdditions > 0 || roleImpact.teamRemovals > 0) && (
-                        <li>
-                          Team rules add {roleImpact.teamAdditions} and remove{' '}
-                          {roleImpact.teamRemovals} memberships at next sign-in.
-                        </li>
-                      )}
-                      {roleImpact.evaluated === 0 && (
-                        <li className="text-muted-foreground">
-                          Role and team changes are estimated from people&apos;s last SSO sign-in;
-                          nobody has signed in with this provider yet.
-                        </li>
-                      )}
-                    </ul>
-                    {blockers.length > 0 && (
-                      <div className="mt-2 space-y-1.5 rounded-lg border border-destructive/20 bg-destructive/10 p-3 text-xs text-destructive">
-                        <p className="font-semibold flex items-center gap-1.5">
-                          <AlertTriangle className="h-3.5 w-3.5" />
-                          Before you can turn on {mode === 'SSO_REQUIRED' ? 'SSO Required' : 'SSO'}:
-                        </p>
-                        <ul className="list-disc pl-5 space-y-0.5">
-                          {blockers.map(blocker => (
-                            <li key={blocker}>{blocker}</li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
-                  </div>
-                );
-              })()}
-          </div>
-
-          {/* Activation Review Confirmation */}
-          <div className="border-t border-border/70 pt-4 space-y-3">
-            <label className="flex items-start gap-2.5 text-sm cursor-pointer select-none">
-              <input
-                type="checkbox"
-                className="mt-0.5 rounded border-border text-primary focus:ring-ring"
-                checked={confirmation}
-                onChange={event => setConfirmation(event.target.checked)}
-              />
-              <span className="text-xs sm:text-sm font-medium text-foreground leading-snug">
-                I reviewed what will change and want to turn on single sign-on now.
-              </span>
-            </label>
-
-            <AuthenticationActionGuard
-              availability={actionAvailability('Activate SSO', [
-                pending && {
-                  code: 'busy',
-                  message: 'Wait for the current operation or section to finish loading.',
-                },
-                draftDirty && {
-                  code: 'draft',
-                  message: 'Save your changes and test your sign-in again.',
-                  resolutionTarget: 'connection',
-                  resolutionLabel: 'Go to Connect provider',
-                },
-                Boolean(verification && verification.state !== 'valid') && {
-                  code: 'test',
-                  message: oidcProofLabel(verification!.state).detail,
-                },
-                data.freshAuthenticationRequired && {
-                  code: 'fresh',
-                  message:
-                    data.actor.kind === 'admin'
-                      ? 'Your last sign-in was more than two hours ago. Sign out and sign in again to continue.'
-                      : 'Verify your recovery credential again before activating.',
-                },
-                data.originConflict && {
-                  code: 'origin',
-                  message:
-                    'OpsKnight is reachable at more than one address. Set NEXTAUTH_URL, NEXT_PUBLIC_APP_URL and the App URL in System settings to the same HTTPS address, then reload.',
-                },
-                !impact && {
-                  code: 'preview',
-                  message: 'Preview what will change first.',
-                },
-                ...(mode === 'SSO_REQUIRED'
-                  ? (impact?.blockers ?? [])
-                      .filter(
-                        message =>
-                          message !== oidcProofLabel(verification?.state ?? 'required').detail
-                      )
-                      .map((message, index) => ({
-                        code: `server-${index}`,
-                        message,
-                        ...(message.includes('emergency')
-                          ? {
-                              resolutionTarget: 'emergency' as const,
-                              resolutionLabel: 'Set up recovery',
-                            }
-                          : {}),
-                      }))
-                  : []),
-                Boolean(impact) &&
-                  !confirmation && {
-                    code: 'confirm',
-                    message: 'Tick the confirmation above.',
-                  },
-              ])}
-              onResolve={setActiveTab}
-            >
-              <Button
-                className="gap-2 shadow-xs"
-                onClick={() =>
-                  void perform(async () => {
-                    const activated = await authenticationRequest<{
-                      providerConfigVersion: number;
-                    }>({
-                      action: 'activate',
-                      revisionId,
-                      expectedVersion: impact!.policyVersion,
-                      mode,
-                      confirmation: 'ACTIVATE VERIFIED SSO',
-                    });
-                    setDraftBaseConfigVersion(activated.providerConfigVersion);
-                    setConfirmation(false);
-                    setImpact(null);
-                    setMessage(
-                      'Single sign-on is on. People can now use the SSO button on the sign-in page.'
-                    );
-                    await refresh(revisionId);
-                  })
-                }
-              >
-                <ShieldCheck className="h-4 w-4" />
-                Turn on single sign-on
-              </Button>
-            </AuthenticationActionGuard>
-          </div>
-        </div>
-      </div>
-
-      {/* Emergency Rollback or Manual Policy Change Accordion */}
-      {(data.actor.kind === 'admin' ||
-        (data.actor.kind === 'emergency' && data.mode === 'SSO_REQUIRED')) && (
-        <details
-          id="auth-policy-mode-change"
-          className="group scroll-mt-24 rounded-xl border border-border/80 bg-card p-4 sm:p-5 shadow-xs transition-all open:ring-1 open:ring-border"
-        >
-          <summary className="flex cursor-pointer items-center justify-between font-semibold text-sm text-foreground list-none select-none">
-            <span className="flex items-center gap-2">
-              <ShieldAlert className="h-4 w-4 text-amber-500" />
-              {recoverySession
-                ? 'Change to SSO Optional'
-                : 'Change to Password Only or SSO Optional'}
-            </span>
-            <ChevronRight className="h-4 w-4 text-muted-foreground transition-transform duration-200 group-open:rotate-90" />
-          </summary>
-          <div className="mt-4 space-y-4 border-t border-border/60 pt-4 text-sm">
-            <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 p-3 text-xs text-amber-800 dark:text-amber-300">
-              <p className="font-semibold flex items-center gap-1.5">
-                <AlertTriangle className="h-3.5 w-3.5" />
-                Administrative Policy Override
-              </p>
-              <p className="mt-1 leading-relaxed">
-                {recoverySession
-                  ? 'SSO Optional keeps SSO sign-in working and allows local password sign-in again. To switch the whole instance to Password Only, use password access recovery on the Emergency Recovery tab.'
-                  : 'Reverting to Password Only or SSO Optional allows local password logins. Use this if your external identity provider experiences an extended outage.'}
-              </p>
-            </div>
-
-            <label className="block space-y-1.5">
-              <span className="font-medium text-foreground">New authentication mode</span>
-              <select
-                className={inputClass}
-                value={normalMode}
-                onChange={event => setNormalMode(event.target.value as typeof normalMode)}
-              >
-                <option value="SSO_OPTIONAL">SSO Optional</option>
-                {!recoverySession && <option value="PASSWORD_ONLY">Password Only</option>}
-              </select>
-            </label>
-
-            {!recoverySession && (
-              <label className="block space-y-1.5">
-                <span className="font-medium text-foreground">
-                  Current password (required for Password Only)
-                </span>
-                <div className="relative">
-                  <input
-                    type={showPassword ? 'text' : 'password'}
-                    autoComplete="current-password"
-                    value={password}
-                    onChange={event => setPassword(event.target.value)}
-                    className={`${inputClass} pr-10`}
-                    placeholder="Enter your current administrator password"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(prev => !prev)}
-                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors p-1 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                    aria-label={showPassword ? 'Hide password' : 'Show password'}
-                  >
-                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                  </button>
-                </div>
               </label>
-            )}
+              {data.mode === 'SSO_REQUIRED' && (
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+                  <span>
+                    SSO Required is active. Activation never relaxes it; moving back to SSO Optional
+                    is a separate, deliberate policy change.
+                  </span>
+                  {data.actor.kind !== 'legacy' ? (
+                    <Button
+                      type="button"
+                      variant="link"
+                      size="sm"
+                      className="h-auto p-0 text-xs font-semibold"
+                      onClick={() => {
+                        const panel = document.getElementById('auth-policy-mode-change');
+                        if (panel instanceof HTMLDetailsElement) panel.open = true;
+                        panel?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                      }}
+                    >
+                      Switch to SSO Optional
+                    </Button>
+                  ) : (
+                    <span>
+                      Use an independent recovery identity or sign in as an administrator to change
+                      it.
+                    </span>
+                  )}
+                </div>
+              )}
 
-            <label className="flex items-start gap-2.5 cursor-pointer">
-              <input
-                type="checkbox"
-                className="mt-0.5 rounded border-border text-primary focus:ring-ring"
-                checked={modeConfirmed}
-                onChange={event => setModeConfirmed(event.target.checked)}
-              />
-              <span className="text-xs text-muted-foreground">
-                I confirm this deliberate sign-in policy change and its session effects.
-              </span>
-            </label>
+              {/* Enforcement Impact Preview */}
+              <div className="space-y-3 pt-1">
+                <AuthenticationActionGuard
+                  availability={actionAvailability('Preview impact', [
+                    pending && {
+                      code: 'busy',
+                      message: 'Wait for the current operation or section to finish loading.',
+                    },
+                    draftDirty && {
+                      code: 'draft',
+                      message: 'Save your changes before previewing what will change.',
+                      resolutionTarget: 'connection',
+                      resolutionLabel: 'Save in Connect provider',
+                    },
+                    !revisionId && {
+                      code: 'revision',
+                      message: 'Choose a saved configuration above, or save your changes first.',
+                      resolutionTarget: 'connection',
+                      resolutionLabel: 'Go to Connect provider',
+                    },
+                  ])}
+                  onResolve={setActiveTab}
+                >
+                  <Button
+                    variant="outline"
+                    className="gap-2"
+                    onClick={() =>
+                      void perform(async () => {
+                        setImpact(
+                          await authenticationRequest<Preview>({ action: 'preview', revisionId })
+                        );
+                        setConfirmation(false);
+                      })
+                    }
+                  >
+                    <Info className="h-4 w-4" />
+                    Preview what will change
+                  </Button>
+                </AuthenticationActionGuard>
 
-            <AuthenticationActionGuard
-              availability={actionAvailability('Change mode', [
-                pending && { code: 'busy', message: 'Wait for the current operation.' },
-                !modeConfirmed && {
-                  code: 'confirm',
-                  message: 'Confirm the deliberate policy change.',
-                },
-                normalMode === 'PASSWORD_ONLY' &&
-                  !password && {
-                    code: 'password',
-                    message: 'Enter your current password to verify local access.',
-                  },
-                data.freshAuthenticationRequired && {
-                  code: 'fresh',
-                  message: recoverySession
-                    ? 'Verify your recovery credential again on the Emergency Recovery tab to change the policy.'
-                    : 'Your last sign-in was more than two hours ago. Sign out and sign in again to change the policy.',
-                },
-              ])}
-            >
-              <Button
-                variant="outline"
-                className="gap-2"
-                onClick={() =>
-                  void perform(async () => {
-                    await authenticationRequest({
-                      action: 'mode',
-                      mode: recoverySession ? 'SSO_OPTIONAL' : normalMode,
-                      expectedVersion: data.policyVersion,
-                      currentPassword: password,
-                      confirmation: 'CHANGE AUTHENTICATION POLICY',
-                    });
-                    setPassword('');
-                    await refresh();
-                    setMessage(
-                      'Authentication mode updated. Disallowed sessions will be rejected on their next protected request.'
+                {impact &&
+                  (() => {
+                    // Tolerate a preview from a server that predates these fields (rolling upgrade).
+                    const linking = impact.linking ?? {
+                      needApproval: impact.usersRequiringLinking,
+                      approved: 0,
+                      domainTrusted: 0,
+                      approvalsCarriedOver: 0,
+                      approvalsRevoked: 0,
+                    };
+                    const roleImpact = impact.roleImpact ?? {
+                      changed: 0,
+                      denied: 0,
+                      changes: [],
+                      teamAdditions: 0,
+                      teamRemovals: 0,
+                      evaluated: -1,
+                    };
+                    const blockers = impact.blockersByMode?.[mode] ?? impact.blockers;
+                    return (
+                      <div
+                        className="space-y-3 rounded-xl border border-primary/20 bg-primary/5 p-4 text-sm"
+                        aria-live="polite"
+                      >
+                        <div className="flex items-center gap-2 font-semibold text-foreground">
+                          <CheckCircle2 className="h-4 w-4 text-primary" />
+                          <span>What happens when you turn it on</span>
+                        </div>
+                        <dl className="grid gap-2 text-xs sm:grid-cols-2 lg:grid-cols-4">
+                          {[
+                            {
+                              label: 'Password sessions',
+                              value: impact.passwordSessionCount,
+                              note:
+                                mode === 'SSO_REQUIRED'
+                                  ? 'Revoked on activation'
+                                  : 'Kept (SSO Optional)',
+                            },
+                            {
+                              label: 'Still need approval',
+                              value: linking.needApproval,
+                              note: `${linking.approved} approved · ${linking.domainTrusted} connect automatically`,
+                            },
+                            {
+                              label: 'Recovery identities',
+                              value: impact.verifiedEmergencyAccounts,
+                              note:
+                                impact.verifiedEmergencyAccounts >= 2
+                                  ? 'Emergency access ready'
+                                  : 'Two required for SSO Required',
+                            },
+                          ].map(item => (
+                            <div
+                              key={item.label}
+                              className="rounded-lg border bg-background/70 p-2.5"
+                            >
+                              <dt className="text-muted-foreground">{item.label}</dt>
+                              <dd className="text-lg font-semibold text-foreground">
+                                {item.value}
+                              </dd>
+                              <dd className="text-[11px] text-muted-foreground">{item.note}</dd>
+                            </div>
+                          ))}
+                          <div className="rounded-lg border bg-background/70 p-2.5">
+                            <dt className="text-muted-foreground">Administrator proof</dt>
+                            <dd className="mt-1">
+                              <AuthenticationVerificationBadge verification={impact.verification} />
+                            </dd>
+                          </div>
+                        </dl>
+                        <ul className="space-y-1 text-xs text-foreground/90">
+                          {linking.needApproval > 0 && (
+                            <li>
+                              {linking.needApproval} existing{' '}
+                              {linking.needApproval === 1 ? 'account needs' : 'accounts need'}{' '}
+                              approval before SSO works for them.{' '}
+                              <button
+                                type="button"
+                                className="font-semibold underline underline-offset-2"
+                                onClick={() => setActiveTab('access')}
+                              >
+                                Approve them in Who can sign in
+                              </button>
+                            </li>
+                          )}
+                          {linking.approvalsCarriedOver > 0 && (
+                            <li>{linking.approvalsCarriedOver} pending approvals stay valid.</li>
+                          )}
+                          {linking.approvalsRevoked > 0 && (
+                            <li>
+                              {linking.approvalsRevoked} approvals for a previous provider will be
+                              cancelled.
+                            </li>
+                          )}
+                          {roleImpact.changed > 0 && (
+                            <li>
+                              {roleImpact.changed}{' '}
+                              {roleImpact.changed === 1 ? 'person gets' : 'people get'} a new role
+                              at their next sign-in
+                              {roleImpact.changes.length > 0 &&
+                                `: ${roleImpact.changes
+                                  .slice(0, 5)
+                                  .map(change => `${change.name} (${change.from} → ${change.to})`)
+                                  .join(', ')}`}
+                              .
+                            </li>
+                          )}
+                          {roleImpact.denied > 0 && (
+                            <li className="text-amber-700 dark:text-amber-300">
+                              {roleImpact.denied} {roleImpact.denied === 1 ? 'person' : 'people'}{' '}
+                              would be refused because no rule matches them.
+                            </li>
+                          )}
+                          {(roleImpact.teamAdditions > 0 || roleImpact.teamRemovals > 0) && (
+                            <li>
+                              Team rules add {roleImpact.teamAdditions} and remove{' '}
+                              {roleImpact.teamRemovals} memberships at next sign-in.
+                            </li>
+                          )}
+                          {roleImpact.evaluated === 0 && (
+                            <li className="text-muted-foreground">
+                              Role and team changes are estimated from people&apos;s last SSO
+                              sign-in; nobody has signed in with this provider yet.
+                            </li>
+                          )}
+                        </ul>
+                        {blockers.length > 0 && (
+                          <div className="mt-2 space-y-1.5 rounded-lg border border-destructive/20 bg-destructive/10 p-3 text-xs text-destructive">
+                            <p className="font-semibold flex items-center gap-1.5">
+                              <AlertTriangle className="h-3.5 w-3.5" />
+                              Before you can turn on{' '}
+                              {mode === 'SSO_REQUIRED' ? 'SSO Required' : 'SSO'}:
+                            </p>
+                            <ul className="list-disc pl-5 space-y-0.5">
+                              {blockers.map(blocker => (
+                                <li key={blocker}>{blocker}</li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+                      </div>
                     );
-                  })
-                }
-              >
-                <KeyRound className="h-4 w-4" />
-                Change authentication mode
-              </Button>
-            </AuthenticationActionGuard>
+                  })()}
+              </div>
+
+              {/* Activation Review Confirmation */}
+              <div className="border-t border-border/70 pt-4 space-y-3">
+                <label className="flex items-start gap-2.5 text-sm cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    className="mt-0.5 rounded border-border text-primary focus:ring-ring"
+                    checked={confirmation}
+                    onChange={event => setConfirmation(event.target.checked)}
+                  />
+                  <span className="text-xs sm:text-sm font-medium text-foreground leading-snug">
+                    I reviewed what will change and want to turn on single sign-on now.
+                  </span>
+                </label>
+
+                <AuthenticationActionGuard
+                  availability={actionAvailability('Activate SSO', [
+                    pending && {
+                      code: 'busy',
+                      message: 'Wait for the current operation or section to finish loading.',
+                    },
+                    draftDirty && {
+                      code: 'draft',
+                      message: 'Save your changes and test your sign-in again.',
+                      resolutionTarget: 'connection',
+                      resolutionLabel: 'Go to Connect provider',
+                    },
+                    Boolean(verification && verification.state !== 'valid') && {
+                      code: 'test',
+                      message: oidcProofLabel(verification!.state).detail,
+                    },
+                    data.freshAuthenticationRequired && {
+                      code: 'fresh',
+                      message:
+                        data.actor.kind === 'admin'
+                          ? 'Your last sign-in was more than two hours ago. Sign out and sign in again to continue.'
+                          : 'Verify your recovery credential again before activating.',
+                    },
+                    data.originConflict && {
+                      code: 'origin',
+                      message:
+                        'OpsKnight is reachable at more than one address. Set NEXTAUTH_URL, NEXT_PUBLIC_APP_URL and the App URL in System settings to the same HTTPS address, then reload.',
+                    },
+                    !impact && {
+                      code: 'preview',
+                      message: 'Preview what will change first.',
+                    },
+                    ...(mode === 'SSO_REQUIRED'
+                      ? (impact?.blockers ?? [])
+                          .filter(
+                            message =>
+                              message !== oidcProofLabel(verification?.state ?? 'required').detail
+                          )
+                          .map((message, index) => ({
+                            code: `server-${index}`,
+                            message,
+                            ...(message.includes('emergency')
+                              ? {
+                                  resolutionTarget: 'emergency' as const,
+                                  resolutionLabel: 'Set up recovery',
+                                }
+                              : {}),
+                          }))
+                      : []),
+                    Boolean(impact) &&
+                      !confirmation && {
+                        code: 'confirm',
+                        message: 'Tick the confirmation above.',
+                      },
+                  ])}
+                  onResolve={setActiveTab}
+                >
+                  <Button
+                    className="gap-2 shadow-xs"
+                    onClick={() =>
+                      void perform(async () => {
+                        const activated = await authenticationRequest<{
+                          providerConfigVersion: number;
+                        }>({
+                          action: 'activate',
+                          revisionId,
+                          expectedVersion: impact!.policyVersion,
+                          mode,
+                          confirmation: 'ACTIVATE VERIFIED SSO',
+                        });
+                        setDraftBaseConfigVersion(activated.providerConfigVersion);
+                        setConfirmation(false);
+                        setImpact(null);
+                        setMessage(
+                          'Single sign-on is on. People can now use the SSO button on the sign-in page.'
+                        );
+                        await refresh(revisionId);
+                      })
+                    }
+                  >
+                    <ShieldCheck className="h-4 w-4" />
+                    Turn on single sign-on
+                  </Button>
+                </AuthenticationActionGuard>
+              </div>
+            </div>
           </div>
-        </details>
+        </>
       )}
+
+      {/* Changing back to passwords only matters once single sign-on is on. */}
+      {data.mode !== 'PASSWORD_ONLY' &&
+        (data.actor.kind === 'admin' ||
+          (data.actor.kind === 'emergency' && data.mode === 'SSO_REQUIRED')) && (
+          <details
+            id="auth-policy-mode-change"
+            className="group scroll-mt-24 rounded-xl border border-border/80 bg-card p-4 sm:p-5 shadow-xs transition-all open:ring-1 open:ring-border"
+          >
+            <summary className="flex cursor-pointer items-center justify-between font-semibold text-sm text-foreground list-none select-none">
+              <span className="flex items-center gap-2">
+                <ShieldAlert className="h-4 w-4 text-amber-500" />
+                {recoverySession
+                  ? 'Change to SSO Optional'
+                  : 'Change to Password Only or SSO Optional'}
+              </span>
+              <ChevronRight className="h-4 w-4 text-muted-foreground transition-transform duration-200 group-open:rotate-90" />
+            </summary>
+            <div className="mt-4 space-y-4 border-t border-border/60 pt-4 text-sm">
+              <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 p-3 text-xs text-amber-800 dark:text-amber-300">
+                <p className="font-semibold flex items-center gap-1.5">
+                  <AlertTriangle className="h-3.5 w-3.5" />
+                  Administrative Policy Override
+                </p>
+                <p className="mt-1 leading-relaxed">
+                  {recoverySession
+                    ? 'SSO Optional keeps SSO sign-in working and allows local password sign-in again. To switch the whole instance to Password Only, use password access recovery on the Emergency Recovery tab.'
+                    : 'Reverting to Password Only or SSO Optional allows local password logins. Use this if your external identity provider experiences an extended outage.'}
+                </p>
+              </div>
+
+              <label className="block space-y-1.5">
+                <span className="font-medium text-foreground">New authentication mode</span>
+                <select
+                  className={inputClass}
+                  value={normalMode}
+                  onChange={event => setNormalMode(event.target.value as typeof normalMode)}
+                >
+                  <option value="SSO_OPTIONAL">SSO Optional</option>
+                  {!recoverySession && <option value="PASSWORD_ONLY">Password Only</option>}
+                </select>
+              </label>
+
+              {!recoverySession && (
+                <label className="block space-y-1.5">
+                  <span className="font-medium text-foreground">
+                    Current password (required for Password Only)
+                  </span>
+                  <div className="relative">
+                    <input
+                      type={showPassword ? 'text' : 'password'}
+                      autoComplete="current-password"
+                      value={password}
+                      onChange={event => setPassword(event.target.value)}
+                      className={`${inputClass} pr-10`}
+                      placeholder="Enter your current administrator password"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(prev => !prev)}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors p-1 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      aria-label={showPassword ? 'Hide password' : 'Show password'}
+                    >
+                      {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
+                  </div>
+                </label>
+              )}
+
+              <label className="flex items-start gap-2.5 cursor-pointer">
+                <input
+                  type="checkbox"
+                  className="mt-0.5 rounded border-border text-primary focus:ring-ring"
+                  checked={modeConfirmed}
+                  onChange={event => setModeConfirmed(event.target.checked)}
+                />
+                <span className="text-xs text-muted-foreground">
+                  I confirm this deliberate sign-in policy change and its session effects.
+                </span>
+              </label>
+
+              <AuthenticationActionGuard
+                availability={actionAvailability('Change mode', [
+                  pending && { code: 'busy', message: 'Wait for the current operation.' },
+                  !modeConfirmed && {
+                    code: 'confirm',
+                    message: 'Confirm the deliberate policy change.',
+                  },
+                  normalMode === 'PASSWORD_ONLY' &&
+                    !password && {
+                      code: 'password',
+                      message: 'Enter your current password to verify local access.',
+                    },
+                  data.freshAuthenticationRequired && {
+                    code: 'fresh',
+                    message: recoverySession
+                      ? 'Verify your recovery credential again on the Emergency Recovery tab to change the policy.'
+                      : 'Your last sign-in was more than two hours ago. Sign out and sign in again to change the policy.',
+                  },
+                ])}
+              >
+                <Button
+                  variant="outline"
+                  className="gap-2"
+                  onClick={() =>
+                    void perform(async () => {
+                      await authenticationRequest({
+                        action: 'mode',
+                        mode: recoverySession ? 'SSO_OPTIONAL' : normalMode,
+                        expectedVersion: data.policyVersion,
+                        currentPassword: password,
+                        confirmation: 'CHANGE AUTHENTICATION POLICY',
+                      });
+                      setPassword('');
+                      await refresh();
+                      setMessage(
+                        'Authentication mode updated. Disallowed sessions will be rejected on their next protected request.'
+                      );
+                    })
+                  }
+                >
+                  <KeyRound className="h-4 w-4" />
+                  Change authentication mode
+                </Button>
+              </AuthenticationActionGuard>
+            </div>
+          </details>
+        )}
     </section>
   );
 }

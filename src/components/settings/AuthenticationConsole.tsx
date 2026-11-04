@@ -105,20 +105,23 @@ function AuthenticationWorkspace() {
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-2 shrink-0 self-start sm:self-center">
-            <Badge
-              variant="outline"
-              className={
-                data.verifiedEmergencyAccounts >= 2
-                  ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-xs'
-                  : 'border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400 text-xs'
-              }
-            >
-              <KeyRound className="h-3 w-3 mr-1" />
-              {data.verifiedEmergencyAccounts} Recovery{' '}
-              {data.verifiedEmergencyAccounts === 1 ? 'Drill' : 'Drills'}
-            </Badge>
-          </div>
+          {(data.mode === 'SSO_REQUIRED' || data.verifiedEmergencyAccounts > 0) && (
+            <div className="flex items-center gap-2 shrink-0 self-start sm:self-center">
+              <Badge
+                variant="outline"
+                className={
+                  data.verifiedEmergencyAccounts >= 2
+                    ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-xs'
+                    : 'border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400 text-xs'
+                }
+              >
+                <KeyRound className="h-3 w-3 mr-1" />
+                {data.verifiedEmergencyAccounts >= 2
+                  ? 'Emergency recovery ready'
+                  : `${data.verifiedEmergencyAccounts} of 2 recovery identities`}
+              </Badge>
+            </div>
+          )}
         </div>
       </div>
       {data.originConflict && (
@@ -258,12 +261,12 @@ function AuthenticationWorkspace() {
             label: AUTH_TAB_LABELS.emergency,
             icon: <KeyRound className="h-4 w-4" />,
             badge:
-              data.verifiedEmergencyAccounts < 2 ? (
+              data.mode === 'SSO_REQUIRED' && data.verifiedEmergencyAccounts < 2 ? (
                 <span
                   aria-hidden="true"
                   className="rounded-full border border-amber-500/30 bg-amber-500/15 px-1.5 py-0.5 text-[9px] font-semibold text-amber-700 dark:text-amber-400"
                 >
-                  {data.mode === 'SSO_REQUIRED' ? 'Needs drill' : 'For Required mode'}
+                  Needs attention
                 </span>
               ) : undefined,
           },

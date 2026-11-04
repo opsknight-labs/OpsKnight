@@ -166,9 +166,8 @@ describe('revision lifecycle in the console', () => {
     fireEvent.click(screen.getByRole('button', { name: /Delete draft/ }));
     const dialog = await screen.findByRole('dialog');
     fireEvent.click(within(dialog).getByRole('button', { name: 'Delete draft' }));
-    await waitFor(() =>
-      expect(screen.getByLabelText('Saved configuration to activate')).toHaveValue('')
-    );
+    // With nothing saved any more, the step shows one clear way forward.
+    await screen.findByText('Connect your provider first');
     expect(new URLSearchParams(window.location.search).get('revisionId')).toBeNull();
     fireEvent.mouseDown(screen.getByRole('tab', { name: '1 · Connect provider' }), { button: 0 });
     fireEvent.change(await screen.findByLabelText('Client ID', { exact: true }), {

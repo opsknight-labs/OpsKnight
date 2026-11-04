@@ -77,7 +77,7 @@ export default function AuthenticationRoleRules({
       </div>
       {!rules.length && (
         <div className="p-6 text-center text-sm text-muted-foreground">
-          No role rules yet. Everyone who signs in gets the default role below. Roles that an
+          No role rules yet. Everyone who signs in gets the default role above. Roles that an
           administrator set by hand are never changed.
         </div>
       )}

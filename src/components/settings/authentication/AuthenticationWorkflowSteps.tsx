@@ -104,7 +104,9 @@ export default function AuthenticationWorkflowSteps() {
               : 'Ready to activate'}
         </p>
         <p className="text-[11px] text-muted-foreground">
-          The active configuration stays unchanged until activation.
+          {data.mode === 'PASSWORD_ONLY'
+            ? 'Everyone keeps using passwords until the last step.'
+            : 'Your current sign-in settings keep working while you edit.'}
         </p>
       </div>
       <ol className="grid grid-cols-5 gap-1.5 sm:gap-2">

@@ -88,9 +88,7 @@ describe('enterprise authentication experience', () => {
     fireEvent.change(screen.getByLabelText(/Allowed email domains/), {
       target: { value: 'example.test, ' },
     });
-    await waitFor(() =>
-      expect(screen.getByRole('button', { name: 'Save changes' })).toBeEnabled()
-    );
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Save changes' })).toBeEnabled());
     expect(screen.getByLabelText(/Allowed email domains/)).toHaveValue('example.test, ');
     fireEvent.change(screen.getByLabelText(/Allowed email domains/), {
       target: { value: 'example.test, second.test' },
@@ -139,8 +137,26 @@ describe('enterprise authentication experience', () => {
     expect(screen.queryByLabelText(/Auth0 Organization ID/)).not.toBeInTheDocument();
     expect(screen.getByLabelText(/Directory \(tenant\) ID/)).toBeInTheDocument();
   });
-  it('offers inherited session defaults and corrects a shorter maximum without hidden overrides', () => {
+  it('shows one clear next step on Test & activate before anything is saved', () => {
     renderConsole('policy');
+    expect(screen.getByText('Connect your provider first')).toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'Turn on single sign-on' })
+    ).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Go to Connect provider' }));
+    expect(new URLSearchParams(window.location.search).get('authTab')).toBe('connection');
+  });
+  it('offers inherited session defaults and corrects a shorter maximum without hidden overrides', () => {
+    const configuration = providerConfigSchema.parse({
+      providerType: 'google',
+      issuer: 'https://accounts.google.com',
+      clientId: 'google-client',
+      clientSecret: '',
+    });
+    renderConsole('policy', {
+      ...fixtureDashboard,
+      activeProvider: { ...configuration, hasClientSecret: true },
+    });
     fireEvent.change(screen.getByLabelText('Maximum session lifetime', { exact: true }), {
       target: { value: '3600' },
     });
