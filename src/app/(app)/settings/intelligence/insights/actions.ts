@@ -12,6 +12,7 @@ import { DIGEST_DAYS } from '@/lib/intelligence/digest/contract';
 import { sendTestDigest, updateDigestSettings } from '@/lib/intelligence/digest/service';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { adoptRuleSuggestion, suggestCorrelationRules } from '@/lib/intelligence/learning/service';
+import { MINING_LIMITS } from '@/lib/intelligence/learning/rule-mining';
 import { adoptScoringWeights } from '@/lib/intelligence/learning/weights-service';
 
 export type InsightsActionState = { message: string; ok: boolean };
@@ -195,9 +196,10 @@ export async function findRuleSuggestionsAction(
     return {
       ok: true,
       message:
-        suggestions.length === 0
-          ? 'No rule is well supported yet. Suggestions appear once people have confirmed at least 3 similar links.'
-          : `${suggestions.length} ${suggestions.length === 1 ? 'rule' : 'rules'} found. Nothing has been changed.`,
+        (suggestions.length === 0
+          ? `No supported rule was found in the bounded sample. Suggestions require at least ${MINING_LIMITS.minSupport} confirmed similar links.`
+          : `${suggestions.length} ${suggestions.length === 1 ? 'rule' : 'rules'} found in the bounded sample. Nothing has been changed.`) +
+        ` Search is limited to ${MINING_LIMITS.maxPairs} reviewed pairs, ${MINING_LIMITS.maxCandidates} candidate patterns and ${MINING_LIMITS.maxReplayIncidents} recent incidents; other patterns may be omitted.`,
       suggestions: suggestions.map(({ rule, support, conflicts, precision, coverage, replay }) => ({
         ruleId: rule.id,
         kind: rule.kind,

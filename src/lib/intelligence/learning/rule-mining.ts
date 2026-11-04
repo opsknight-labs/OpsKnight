@@ -37,7 +37,12 @@ export interface RuleSuggestion {
   /** Share of all confirmed same-service links the rule reproduces. */
   coverage: number;
   /** Replay over recent incidents: how much the rule would group on its own. */
-  replay: { incidentsEvaluated: number; groups: number; groupedIncidents: number; suggestedLinks: number };
+  replay: {
+    incidentsEvaluated: number;
+    groups: number;
+    groupedIncidents: number;
+    suggestedLinks: number;
+  };
 }
 
 export const MINING_LIMITS = {
@@ -48,6 +53,10 @@ export const MINING_LIMITS = {
   /** A rule grouping more than this share of recent incidents is too broad to be useful. */
   maxGroupedShare: 0.3,
   maxSuggestions: 5,
+  maxPairs: 2000,
+  maxReplayIncidents: 5000,
+  /** Expensive evidence scoring and replay only run for this many nominated patterns. */
+  maxCandidates: 16,
 } as const;
 
 /** Standard windows, smallest first: the narrowest one that explains the evidence is chosen. */
@@ -56,7 +65,8 @@ const MAX_WINDOW_SECONDS = 24 * 3600;
 
 type Candidate = Pick<CorrelationRule, 'kind' | 'keys'>;
 
-const candidateKey = (candidate: Candidate) => `${candidate.kind}:${[...candidate.keys].sort().join(',')}`;
+const candidateKey = (candidate: Candidate) =>
+  `${candidate.kind}:${[...candidate.keys].sort().join(',')}`;
 
 function sharedLabelKeys(a: MiningIncident, b: MiningIncident): string[] {
   const other = new Map(Object.entries(b.labels));
@@ -92,7 +102,8 @@ function asRule(candidate: Candidate, windowSeconds: number, id: string): Correl
   };
 }
 
-const gapSeconds = (pair: JudgedPair) => Math.abs(pair.a.createdAt.getTime() - pair.b.createdAt.getTime()) / 1000;
+const gapSeconds = (pair: JudgedPair) =>
+  Math.abs(pair.a.createdAt.getTime() - pair.b.createdAt.getTime()) / 1000;
 
 function signaturesMatch(candidate: Candidate, pair: JudgedPair): boolean {
   if (pair.a.serviceId !== pair.b.serviceId) return false;
@@ -117,35 +128,51 @@ export function mineRuleSuggestions(
   existingRules: readonly CorrelationRule[]
 ): RuleSuggestion[] {
   // Rules only ever group within one service, so only same-service links are evidence for them.
-  const positives = pairs.filter(pair => pair.linked && pair.a.serviceId === pair.b.serviceId);
-  const negatives = pairs.filter(pair => !pair.linked);
+  const reviewed = pairs.slice(0, MINING_LIMITS.maxPairs);
+  const positives = reviewed.filter(pair => pair.linked && pair.a.serviceId === pair.b.serviceId);
+  const negatives = reviewed.filter(pair => !pair.linked);
   if (positives.length < MINING_LIMITS.minSupport) return [];
 
   const existing = new Set(existingRules.filter(rule => rule.enabled).map(candidateKey));
-  const candidates = new Map<string, Candidate>();
+  const candidates = new Map<string, { key: string; candidate: Candidate; nominations: number }>();
   const add = (candidate: Candidate) => {
     const key = candidateKey(candidate);
-    if (!existing.has(key)) candidates.set(key, candidate);
+    if (existing.has(key)) return;
+    const prior = candidates.get(key);
+    if (prior) prior.nominations += 1;
+    else candidates.set(key, { key, candidate, nominations: 1 });
   };
-  add({ kind: 'CONTENT_TEMPLATE', keys: [] });
+  // One cheap nomination pass; never perform a full replay for every distinct Kubernetes label.
   for (const pair of positives) {
-    for (const key of sharedLabelKeys(pair.a, pair.b)) add({ kind: 'LABEL_SET', keys: [key] });
+    if (pair.a.template.length > 0 && pair.a.template === pair.b.template)
+      add({ kind: 'CONTENT_TEMPLATE', keys: [] });
+    for (const key of sharedLabelKeys(pair.a, pair.b)) {
+      if (key && key.length <= 128 && key !== 'service' && key !== 'template')
+        add({ kind: 'LABEL_SET', keys: [key] });
+    }
   }
+  const shortlisted = [...candidates.values()]
+    .filter(entry => entry.nominations >= MINING_LIMITS.minSupport)
+    .sort((a, b) => b.nominations - a.nominations || (a.key < b.key ? -1 : a.key > b.key ? 1 : 0))
+    .slice(0, MINING_LIMITS.maxCandidates);
+  const replaySample = recent.slice(0, MINING_LIMITS.maxReplayIncidents);
 
   const taken = new Set(existingRules.map(rule => rule.id));
   const suggestions: RuleSuggestion[] = [];
-  for (const candidate of candidates.values()) {
+  for (const { candidate } of shortlisted) {
     const matched = positives.filter(pair => signaturesMatch(candidate, pair));
     const windowSeconds = chooseWindow(matched.map(gapSeconds));
     if (windowSeconds === null) continue;
     const support = matched.filter(pair => gapSeconds(pair) <= windowSeconds).length;
     if (support < MINING_LIMITS.minSupport) continue;
-    const conflicts = negatives.filter(pair => signaturesMatch(candidate, pair) && gapSeconds(pair) <= windowSeconds).length;
+    const conflicts = negatives.filter(
+      pair => signaturesMatch(candidate, pair) && gapSeconds(pair) <= windowSeconds
+    ).length;
     const precision = support / (support + conflicts);
     if (precision < MINING_LIMITS.minPrecision) continue;
 
     const rule = asRule(candidate, windowSeconds, ruleId(candidate, taken));
-    const replay = simulateCorrelation(recent, [rule]);
+    const replay = simulateCorrelation(replaySample, [rule]);
     const evaluated = Math.max(1, replay.incidentsEvaluated);
     if (replay.groupedIncidents / evaluated > MINING_LIMITS.maxGroupedShare) continue;
 

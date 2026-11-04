@@ -224,8 +224,8 @@ export function RuleSuggestionsPanel({
               <p className="text-xs text-muted-foreground">
                 Reproduces {suggestion.support} confirmed{' '}
                 {suggestion.support === 1 ? 'link' : 'links'} (
-                {Math.round(suggestion.coverage * 100)}% of all confirmed links) and would repeat{' '}
-                {suggestion.conflicts} rejected{' '}
+                {Math.round(suggestion.coverage * 100)}% of confirmed links in this sample) and
+                would repeat {suggestion.conflicts} rejected{' '}
                 {suggestion.conflicts === 1 ? 'suggestion' : 'suggestions'}:{' '}
                 {Math.round(suggestion.precision * 100)}% precision on reviewed pairs. Over the last
                 30 days it would have formed {suggestion.replay.groups}{' '}

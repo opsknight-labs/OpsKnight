@@ -243,3 +243,28 @@ attempts for the earlier embedding-clearance commit were rejected server-side du
 Git operations incident. Subsequent follow-ups are committed locally and are not yet published.
 No full-roadmap completion, live-model usefulness, deployment certification or fresh performance
 certification is claimed. The P1-07 and P2-08 through P2-11 acceptance criteria remain open.
+
+## Review follow-up: three reproduced defects — 2026-11-04
+
+- A paused AI master switch or hidden assistant caused cleanup to delete fresh saved histories.
+  Cleanup now uses the dedicated history-consent setting for full deletion and applies normal retention
+  while availability is paused. Ownership and disabled-history read gates remain in place.
+- Opening the primary embedding circuit selected a different vector space. Resolution now stays on
+  the first policy-eligible deployment; its breaker gates outgoing calls rather than changing cache
+  identity. Compatible stored vectors survive outages and recovery without re-embedding. Explicit
+  configuration or data-boundary changes still take effect.
+- A 200-label fixture caused 200 full rule replays. Mining now shortlists at most 16 patterns using
+  cheap nomination counts and deterministic ties before expensive scoring/replay. Pair and replay
+  inputs are bounded at 2,000/5,000 even for direct callers. The action status explains the sampling
+  limit; unchanged support, precision, breadth and explicit-publication gates remain authoritative.
+
+The three regressions failed before their fixes. Focused verification passed 82 database/security
+cases and 67 unit/architecture cases, plus typecheck and zero-warning changed-source lint. Full push
+and browser checks are recorded in the PR validation after they finish.
+
+The pasted review's remaining proposals are not marked complete: separate embedding spend allocation,
+input-aware freshness fan-out, feature metrics/alerts, a reviewable PR-scope decision and external
+certification evidence remain open. Freshness optimization must preserve status, urgency, service and
+resolution/outcome changes that affect grouping eligibility and recommendations; restricting it to
+only title/description/labels would omit correctness-relevant changes. Historical shared-machine load
+results do not certify this later revision.

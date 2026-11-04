@@ -218,7 +218,9 @@ encrypted at rest and registered in the encryption registry. Every read and writ
 so someone else's conversation is indistinguishable from one that does not exist; the endpoints accept
 signed-in, same-origin browsers only, never API keys. Storage is bounded (50 conversations per person,
 100 messages each), idle conversations are deleted after the configured retention (1–365 days), turning
-history off deletes all of them within one sweep, and deleting a person deletes theirs. The storage code
+the dedicated history setting off deletes saved conversations in bounded batches, and deleting a person
+deletes theirs. Pausing AI or hiding the assistant preserves unexpired conversations; normal retention
+continues while access is unavailable. The storage code
 rejects continuation in a different incident/global context and
 lives outside the assistant module, and an architecture test limits it to those two tables.
 
@@ -290,7 +292,10 @@ Background embedding checks the current service policy before reading title text
   Credentials, display name and priority are excluded. The provider request still uses the actual model
   alias. Legacy model-only keys are not considered compatible: recent vectors rebuild through the
   existing opt-in, budgeted embedding lane, while older rows age out normally. Pin model revisions;
-  changes behind an unchanged upstream alias cannot be inferred.
+  changes behind an unchanged upstream alias cannot be inferred. Embedding selection stays on the first
+  policy-eligible deployment during a circuit-breaker outage. New embedding calls wait for its recovery;
+  existing compatible vectors remain usable. Chat fallback is unchanged. Administrative provider,
+  priority, clearance or residency changes can still select another eligible deployment.
 - **Never in the paging path or in front of analysis.** Incidents are analysed lexically as soon as they
   are indexed. A single coalesced `EMBED_PENDING` work item then embeds up to 32 pending incidents per
   provider call and re-queues their analysis, so a storm costs one call per batch, and a slow or failing
@@ -334,7 +339,10 @@ job to fall behind. Everything is flag-only and a person decides what to do.
   `LABEL_SET` or `CONTENT_TEMPLATE` rules. The narrowest standard window covering 90% of confirmed gaps is
   chosen; a rule is offered only with at least three supporting links and 80% precision on reviewed
   pairs, and is dropped if a replay over the last 30 days would group more than 30% of incidents. It runs
-  on request, read-only and bounded (2,000 decisions, 5,000 replayed incidents). Adopting one publishes a
+  on request, read-only and bounded (2,000 decisions, at most 16 candidate patterns, and 5,000 replayed
+  incidents per candidate). Cheap evidence nominations rank the shortlist before full scoring and
+  replay, with deterministic ties; candidates below three nominations are excluded. The UI explains
+  that this sample can omit other patterns. Adopting one publishes a
   new audited global policy version in the current mode; the suggestion is recomputed on the server and
   must still be offered.
 - **Weekly digest (opt-in).** Administrators choose a day and UTC hour. Once per ISO week the lane queues

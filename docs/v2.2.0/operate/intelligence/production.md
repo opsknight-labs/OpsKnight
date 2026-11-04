@@ -114,10 +114,13 @@ incidents.
      any of those starts a bounded rebuild of recent incidents within the existing opt-in token budget;
      older incompatible vectors are excluded and age out normally. Upgrading from the legacy model-only
      cache key also requires that rebuild. Display-name, priority and credential rotation alone do not
-     invalidate vectors. Use pinned model revisions where available: an upstream model changing behind
+     invalidate vectors. Temporary provider outages do not switch the embedding deployment or rebuild
+     vectors with a backup model; new embeddings wait for recovery and existing compatible vectors
+     remain usable. Chat fallback settings still apply to chat. Use pinned model revisions where available: an upstream model changing behind
      an unchanged alias cannot be detected automatically.
-   - **Saved conversations**: choose a retention period first. Turning it off later deletes all saved
-     conversations.
+   - **Saved conversations**: choose a retention period first. Turning this specific setting off later
+     deletes saved conversations in batches. Turning AI off or hiding the assistant pauses access while
+     keeping unexpired history; normal retention still runs.
    - **Weekly digest**: in **Insights**, pick a day and hour, then use **Send me a test**.
    - **Suggested grouping rules**: in **Insights**, once responders have confirmed links, use **Find rule
      suggestions** and add any that look right. Each one becomes a new policy version that you can roll
@@ -194,3 +197,8 @@ database contention, AI usage limits, provider availability, invalid input and c
 or legacy failures show a generic summary; raw exception bodies are withheld. New failures store only
 a diagnostic code. Older queue text follows the existing retention sweep. Operators retain the native
 **Retry** action; these summaries do not automatically replay work or change service policy.
+
+Rule suggestions use a bounded sample: up to 2,000 reviewed pairs, 16 candidate patterns, and 5,000
+recent incidents per replay. Stronger cheap evidence nominations reach the shortlist first, with
+stable ties. Other patterns may be omitted. Every proposed rule still passes the existing precision,
+support and replay-breadth checks and requires explicit audited publication.
