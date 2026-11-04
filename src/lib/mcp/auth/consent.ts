@@ -42,8 +42,9 @@ export async function expiredConsentReturn(id: string) {
 }
 
 /**
- * The person's earlier live connections that a new consent for this assistant replaces: the same
- * client, or another registration of the same metadata document (assistants re-register).
+ * The person's earlier live connections for this assistant: the same client, or another
+ * registration of the same metadata document (assistants re-register). Their permissions start
+ * selected again on the consent page.
  */
 export function supersededMcpGrantsWhere(
   userId: string,
@@ -59,4 +60,17 @@ export function supersededMcpGrantsWhere(
       ...(client.metadataUrl ? [{ client: { metadataUrl: client.metadataUrl } }] : []),
     ],
   };
+}
+
+/**
+ * The earlier connections a new consent replaces: only those never exchanged for a token
+ * (abandoned sign-ins). A connection in use, such as the same assistant on another device,
+ * stays signed in.
+ */
+export function supersededUnusedMcpGrantsWhere(
+  userId: string,
+  client: { id: string; metadataUrl: string | null },
+  now = new Date()
+): Prisma.McpGrantWhereInput {
+  return { ...supersededMcpGrantsWhere(userId, client, now), tokens: { none: {} } };
 }

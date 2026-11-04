@@ -75,7 +75,7 @@ Your browser opens one OpsKnight page. Sign in if needed (including your SSO), t
 - When changes are turned off, a banner says so and change permissions show **Changes off**.
 - The page expires after five minutes.
 
-What the assistant can then do is your selection, capped by the administrator ceiling as it is now and by your current role and teams. Connecting the same assistant again replaces your earlier connection to it. Never enter the encryption key or a password in client-ID or client-secret fields.
+What the assistant can then do is your selection, capped by the administrator ceiling as it is now and by your current role and teams. Connecting the same assistant again starts with your earlier permissions selected and cleans up any earlier sign-in that was never completed; a connection already in use, such as the same assistant on another device, stays signed in. Never enter the encryption key or a password in client-ID or client-secret fields.
 
 ### How long a connection lasts
 

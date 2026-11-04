@@ -24,7 +24,7 @@ import { supportedMcpScopes } from '@/lib/mcp/auth/scopes';
 import { mcpSessionDates } from '@/lib/mcp/auth/session-lifetime';
 import { partitionScopesForRole } from '@/lib/mcp/auth/role-scopes';
 import { isAppRole } from '@/lib/authorization';
-import { supersededMcpGrantsWhere } from '@/lib/mcp/auth/consent';
+import { supersededUnusedMcpGrantsWhere } from '@/lib/mcp/auth/consent';
 
 const settingsPath = '/settings/integrations/mcp';
 const supportedScopes = supportedMcpScopes;
@@ -531,9 +531,10 @@ export async function decideMcpConsent(form: FormData) {
             where: { id: client.id },
             data: { firstAuthorizedAt: new Date() },
           });
-        // Earlier connections for this assistant are found before the new grant exists.
+        // Abandoned earlier sign-ins for this assistant are found before the new grant exists.
+        // Connections in use (e.g. the same assistant on another device) stay signed in.
         const superseded = await tx.mcpGrant.findMany({
-          where: supersededMcpGrantsWhere(actor.id, currentClient),
+          where: supersededUnusedMcpGrantsWhere(actor.id, currentClient),
           select: { id: true },
         });
         const grant = await tx.mcpGrant.create({

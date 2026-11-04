@@ -54,7 +54,7 @@ export default async function McpConsent({
   // ∩ what the person's current role can use. Nothing else is ever shown or grantable.
   const [policy, previous] = await Promise.all([
     prisma.mcpPolicy.findUnique({ where: { id: 'default' }, select: { writesEnabled: true } }),
-    // The live connection this consent will replace; its permissions start selected again.
+    // The latest live connection for this assistant; its permissions start selected again.
     prisma.mcpGrant.findFirst({
       where: supersededMcpGrantsWhere(who.id, client),
       orderBy: { createdAt: 'desc' },

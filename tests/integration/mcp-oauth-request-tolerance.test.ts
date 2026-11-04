@@ -201,7 +201,7 @@ describe('OAuth requests from real assistants', () => {
     expect((await consent(authorizeQuery({ state: 'abc' }))).searchParams.get('state')).toBe('abc');
   });
 
-  it('replaces the earlier connection when the same person reconnects the same assistant', async () => {
+  it('replaces an abandoned earlier sign-in but keeps a connection in use on another device', async () => {
     await consent(authorizeQuery(), ['incidents:read']);
     const first = await db.mcpGrant.findFirstOrThrow({ where: { userId: actor.id } });
     await consent(authorizeQuery({ scope: 'incidents:read services:read' }), ['services:read']);
@@ -216,6 +216,22 @@ describe('OAuth requests from real assistants', () => {
       where: { action: 'mcp.grant.superseded', entityId: live[0].id },
     });
     expect(audit.details).toMatchObject({ metadata: { supersededGrantIds: [first.id] } });
+    // A connection in use (the same assistant on another device) stays signed in.
+    await db.mcpToken.create({
+      data: {
+        grantId: live[0].id,
+        accessHash: `a-${live[0].id}`,
+        refreshHash: `r-${live[0].id}`,
+        scopes: live[0].scopes,
+        accessExpiresAt: new Date(Date.now() + 300000),
+        refreshExpiresAt: new Date(Date.now() + 3600000),
+      },
+    });
+    await consent(authorizeQuery(), ['incidents:read']);
+    expect(
+      (await db.mcpGrant.findUniqueOrThrow({ where: { id: live[0].id } })).revokedAt
+    ).toBeNull();
+    expect(await db.mcpGrant.count({ where: { userId: actor.id, revokedAt: null } })).toBe(2);
     // Another person's connection to the same assistant is untouched.
     const other = await createTestUser({ role: 'ADMIN' });
     const otherGrant = await db.mcpGrant.create({
