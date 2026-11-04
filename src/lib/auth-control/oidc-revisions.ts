@@ -92,7 +92,6 @@ function diagnosticValue(value: unknown): string | boolean | string[] | null {
   return null;
 }
 
-
 /** Masks an email for display: the domain is useful for diagnosis, the mailbox is not. */
 export function maskEmail(email: string | null | undefined): string | undefined {
   if (!email) return undefined;
@@ -271,7 +270,11 @@ async function validate(config: ProviderConfiguration) {
   return result.metadata;
 }
 
-/** Every setting that can change who signs in, as whom, or with what role. */
+/**
+ * Every setting that can change who signs in, as whom, or with what role, including whether new
+ * accounts are created. Left out: session limits, the button label, profile fields and team
+ * rules, which never decide admission or role. The secret is compared separately, by ciphertext.
+ */
 function identityFingerprint(config: ProviderConfiguration) {
   const {
     clientSecret: _secret,
@@ -280,7 +283,6 @@ function identityFingerprint(config: ProviderConfiguration) {
     providerLabel: _label,
     profileMapping: _profile,
     teamMapping: _teams,
-    autoProvision: _jit,
     ...identity
   } = config;
   return JSON.stringify(identity);

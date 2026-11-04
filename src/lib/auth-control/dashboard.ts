@@ -533,11 +533,14 @@ export async function identityClaimsPreview(
         { role: user.role, roleSource: user.roleSource },
         { firstLink: !identity }
       )
-    : role.outcome === 'INCOMPLETE'
-      ? { role: config.defaultRole, roleSource: 'OIDC' as const, changed: true }
-      : { role: role.role, roleSource: 'OIDC' as const, changed: true };
+    : // New accounts start with the default role; incomplete claims leave it unchanged.
+      { role: role.role, roleSource: 'OIDC' as const, changed: true };
   const denied = role.deny && resolved.roleSource !== 'MANUAL';
   if (denied) return reject('No role rule matches and unmatched people are denied access.');
+  if (!user && role.outcome === 'INCOMPLETE' && config.unmatchedPolicy === 'DENY')
+    return reject(
+      'The group list is incomplete and unmatched people are denied access, so no account is created.'
+    );
   const effectiveRole = resolved.role;
   return {
     outcome: identity

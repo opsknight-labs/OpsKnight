@@ -1,4 +1,5 @@
 import { preserveScimOwnedOidcFields } from '@/lib/scim/lifecycle/oidc-profile';
+import { LastAdministratorError } from '@/lib/users/last-administrator-error';
 import { coerceBooleanClaim } from '@/lib/oidc/claims';
 import {
   assertCurrentOidcRegistration,
@@ -179,12 +180,7 @@ async function rejectOidcSignIn(
 }
 
 function isLastAdministratorConflict(error: unknown) {
-  return (
-    error instanceof Error &&
-    /no active administrators/i.test(
-      `${error.message} ${(error as { userMessage?: string }).userMessage ?? ''}`
-    )
-  );
+  return error instanceof LastAdministratorError;
 }
 
 function clearSessionToken(token: AugmentedJWT, reason: string) {
@@ -1073,7 +1069,10 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
               clientId: activeConfig.clientId,
               configVersion: activeConfig.configVersion,
               organizationId: activeConfig.organizationId,
-              denyNewUnmatched: roleEvaluation.deny,
+              denyUnmatched: roleEvaluation.deny,
+              denyNewIncomplete:
+                roleEvaluation.outcome === 'INCOMPLETE' && activeConfig.unmatchedPolicy === 'DENY',
+              initialRole: activeConfig.defaultRole,
               domainTrustedLinking: activeConfig.domainTrustedLinking === true,
             });
           } catch (error) {

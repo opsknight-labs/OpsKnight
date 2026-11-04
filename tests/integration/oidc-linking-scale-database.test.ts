@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { randomUUID } from 'node:crypto';
 import prisma from '@/lib/prisma';
 import { approveBulkLinking, previewBulkLinking } from '@/lib/oidc-linking-bulk';
@@ -176,6 +176,23 @@ suite('linking existing accounts at scale', () => {
     });
     expect(notifications).toHaveLength(1);
     expect(notifications[0].message).toContain('needs your approval');
+
+    // Still trying the next day: administrators are reminded again, even though every attempt
+    // moved lastAttemptAt forward.
+    vi.useFakeTimers({ toFake: ['Date'] });
+    try {
+      vi.setSystemTime(new Date(Date.now() + 25 * 60 * 60 * 1000));
+      expect(await recordOidcLinkingRequest(email('requester'), 'OIDC_LINK_NOT_APPROVED')).toBe(
+        true
+      );
+    } finally {
+      vi.useRealTimers();
+    }
+    expect(
+      await prisma.inAppNotification.count({
+        where: { userId: admin.id, entityType: 'SSO_LINK_REQUEST', entityId: requester.id },
+      })
+    ).toBe(2);
 
     await approveBulkLinking({ scope: 'selected', userIds: [requester.id] }, admin.id);
     expect(await prisma.oidcLinkingRequest.count({ where: { userId: requester.id } })).toBe(0);

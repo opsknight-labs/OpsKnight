@@ -53,14 +53,38 @@ function impactSentence(details: Details): { sentence: string; attention: boolea
   return { sentence: `Review coverage: ${parts.join(', ')}.`, attention: true };
 }
 
+const MAX_SUMMARY_FIELDS = 4;
+const MAX_SUMMARY_VALUE = 80;
+
+/** Simple top-level fields (errors, names, counts) for events without a tailored sentence. */
+function detailSummary(details: Details): string {
+  if (!details) return '';
+  const parts: string[] = [];
+  for (const [key, value] of Object.entries(details)) {
+    if (key === 'operationalImpact') continue;
+    if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+      const text = String(value);
+      parts.push(
+        `${key}: ${text.length > MAX_SUMMARY_VALUE ? `${text.slice(0, MAX_SUMMARY_VALUE)}…` : text}`
+      );
+    } else if (Array.isArray(value)) {
+      parts.push(`${key}: ${plural(value.length, 'item')}`);
+    }
+    if (parts.length === MAX_SUMMARY_FIELDS) break;
+  }
+  return parts.join(' · ');
+}
+
 export function describeScimEvent(
   action: string,
   details: Details,
-  subjectName: string | null
+  subjectName: string | null,
+  resourceId: string | null = null
 ): { label: string; detail: string; attention: boolean } {
   const label = labels.get(action) ?? action;
   const who = subjectName ? `${subjectName}. ` : '';
   const impact = impactSentence(details);
   if (impact) return { label, detail: `${who}${impact.sentence}`, attention: impact.attention };
-  return { label, detail: subjectName ?? '', attention: false };
+  const detail = [subjectName ?? resourceId, detailSummary(details)].filter(Boolean).join(' · ');
+  return { label, detail, attention: false };
 }

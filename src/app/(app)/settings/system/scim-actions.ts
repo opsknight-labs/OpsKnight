@@ -218,7 +218,8 @@ export async function scimDirectoryAction(input: unknown) {
         const described = describeScimEvent(
           r.action,
           r.details as Record<string, unknown> | null,
-          r.resourceId ? (names.get(r.resourceId) ?? null) : null
+          r.resourceId ? (names.get(r.resourceId) ?? null) : null,
+          r.resourceId
         );
         return {
           id: r.id,

@@ -1,6 +1,7 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
+import { z } from 'zod/v3';
 import prisma from '@/lib/prisma';
 import { assertAdmin } from '@/lib/rbac';
 import { logAudit } from '@/lib/audit';
@@ -19,6 +20,8 @@ import {
 } from '@/lib/oidc-linking-status';
 
 export type { OidcLinkingState };
+
+const userIdSchema = z.string().trim().min(1).max(128);
 
 export type OidcLinkingApprovalResult = {
   success?: boolean;
@@ -232,7 +235,7 @@ export async function revokeOidcLinking(userId: string): Promise<OidcLinkingAppr
  * identity provider, which applies the role rules at the person's next SSO sign-in.
  */
 export async function returnRoleToDirectory(
-  userId: string
+  input: string
 ): Promise<{ success?: boolean; error?: string }> {
   let admin: { id: string; email: string };
   try {
@@ -240,6 +243,9 @@ export async function returnRoleToDirectory(
   } catch {
     return { error: 'Unauthorized. Admin access required.' };
   }
+  const parsed = userIdSchema.safeParse(input);
+  if (!parsed.success) return { error: 'User not found.' };
+  const userId = parsed.data;
   const user = await prisma.user.findUnique({
     where: { id: userId },
     select: { id: true, role: true, roleSource: true, oidcIdentities: { select: { id: true } } },
@@ -318,13 +324,16 @@ export async function approveOidcLinkingBulk(input: BulkLinkingInput) {
   }
 }
 
-export async function dismissOidcLinkingRequest(userId: string) {
+export async function dismissOidcLinkingRequest(input: string) {
   let admin: { id: string; email: string };
   try {
     admin = await assertAdmin();
   } catch {
     return { error: 'Unauthorized. Admin access required.' };
   }
+  const parsed = userIdSchema.safeParse(input);
+  if (!parsed.success) return { error: 'Request not found.' };
+  const userId = parsed.data;
   const removed = await prisma.oidcLinkingRequest.deleteMany({ where: { userId } });
   if (removed.count > 0)
     await logAudit({

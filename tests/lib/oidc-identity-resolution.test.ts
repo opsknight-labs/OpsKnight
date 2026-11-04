@@ -442,6 +442,52 @@ describe('resolveOidcIdentityForSignIn', () => {
     expect(tx.user.create).not.toHaveBeenCalled();
   });
 
+  it('refuses an unmatched person before consuming an approval or linking the account', async () => {
+    tx.user.findUnique.mockResolvedValue({ ...linkedUser, roleSource: 'OIDC' });
+    tx.oidcLinkingApproval.findUnique.mockResolvedValue({
+      id: 'approval-1',
+      generation: 1,
+      revokedAt: null,
+      expiresAt: null,
+    });
+
+    const result = await resolveOidcIdentityForSignIn({ ...baseInput, denyUnmatched: true });
+
+    expect(result).toEqual({ ok: false, reason: 'OIDC_ROLE_UNMATCHED_DENIED' });
+    expect(tx.oidcLinkingApproval.findUnique).not.toHaveBeenCalled();
+    expect(tx.oidcLinkingApproval.updateMany).not.toHaveBeenCalled();
+    expect(tx.oidcIdentity.create).not.toHaveBeenCalled();
+  });
+
+  it('still links an account whose role an administrator set by hand when unmatched', async () => {
+    tx.user.findUnique.mockResolvedValue({ ...linkedUser, roleSource: 'MANUAL' });
+    tx.oidcLinkingApproval.findUnique.mockResolvedValue({
+      id: 'approval-1',
+      generation: 1,
+      revokedAt: null,
+      expiresAt: null,
+    });
+
+    const result = await resolveOidcIdentityForSignIn({ ...baseInput, denyUnmatched: true });
+
+    expect(result).toMatchObject({ ok: true, linkMethod: 'APPROVAL' });
+  });
+
+  it('does not create a new account from an incomplete group list under the deny policy', async () => {
+    const result = await resolveOidcIdentityForSignIn({ ...baseInput, denyNewIncomplete: true });
+
+    expect(result).toEqual({ ok: false, reason: 'OIDC_GROUP_CLAIMS_INCOMPLETE' });
+    expect(tx.user.create).not.toHaveBeenCalled();
+  });
+
+  it('creates new accounts with the workspace default role', async () => {
+    await resolveOidcIdentityForSignIn({ ...baseInput, initialRole: 'RESPONDER' });
+
+    expect(tx.user.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ role: 'RESPONDER' }) })
+    );
+  });
+
   it('refuses to link when two accounts differ only by email letter case', async () => {
     tx.user.findMany.mockResolvedValueOnce([
       { ...linkedUser, id: 'user-1', email: 'alice@example.com' },

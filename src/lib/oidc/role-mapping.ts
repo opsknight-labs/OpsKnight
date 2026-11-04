@@ -57,7 +57,9 @@ export function readOidcClaim(claims: OidcClaims, path: string): unknown {
 /** Own properties only, so names such as "constructor" never reach the prototype. */
 function ownValue(object: Record<string, unknown>, key: string) {
   const descriptor = Object.getOwnPropertyDescriptor(object, key);
-  return descriptor ? { found: true as const, value: descriptor.value as unknown } : { found: false as const };
+  return descriptor
+    ? { found: true as const, value: descriptor.value as unknown }
+    : { found: false as const };
 }
 
 /** The string values a claim holds, whether it is a single value or a list. */
@@ -143,6 +145,8 @@ export function evaluateOidcRoleClaims(
  * - Manual roles are an explicit administrator decision and are never overwritten by the
  *   identity provider, except on an account's very first SSO link when a rule matches: that is
  *   the moment an existing account moves under directory control.
+ * - A matching rule also takes over a role SCIM assigned, as before v2.2. Falling back to the
+ *   default role only applies to roles single sign-on already owns.
  * - Incomplete claims never change a role.
  */
 export function resolveSignInRole(
@@ -151,10 +155,12 @@ export function resolveSignInRole(
   options: { firstLink?: boolean } = {}
 ): { role: OidcRole; roleSource: 'MANUAL' | 'OIDC' | 'SCIM'; changed: boolean } {
   if (evaluation.outcome === 'INCOMPLETE') return { ...current, changed: false };
-  // Anything not explicitly directory-managed is treated as an administrator's decision.
-  const directoryManaged = current.roleSource === 'OIDC' || current.roleSource === 'SCIM';
-  if (!directoryManaged && !(options.firstLink && evaluation.outcome === 'MATCHED'))
-    return { ...current, changed: false };
+  const matched = evaluation.outcome === 'MATCHED';
+  const applies =
+    current.roleSource === 'OIDC' ||
+    (current.roleSource === 'SCIM' && matched) ||
+    (options.firstLink === true && matched);
+  if (!applies) return { ...current, changed: false };
   const role = evaluation.role;
   return {
     role,

@@ -142,6 +142,25 @@ describe('resolving the role a person ends up with', () => {
     });
   });
 
+  it('lets a matching rule take over a SCIM role but never falls back over one', () => {
+    expect(resolveSignInRole(matched, { role: 'USER', roleSource: 'SCIM' })).toEqual({
+      role: 'ADMIN',
+      roleSource: 'OIDC',
+      changed: true,
+    });
+    expect(resolveSignInRole(unmatched, { role: 'ADMIN', roleSource: 'SCIM' })).toEqual({
+      role: 'ADMIN',
+      roleSource: 'SCIM',
+      changed: false,
+    });
+    const noRules = evaluateOidcRoleClaims({ groups: ['anything'] }, []);
+    expect(resolveSignInRole(noRules, { role: 'RESPONDER', roleSource: 'SCIM' })).toMatchObject({
+      role: 'RESPONDER',
+      roleSource: 'SCIM',
+      changed: false,
+    });
+  });
+
   it('keeps the current role when claims are incomplete', () => {
     expect(resolveSignInRole(incomplete, { role: 'ADMIN', roleSource: 'OIDC' })).toEqual({
       role: 'ADMIN',

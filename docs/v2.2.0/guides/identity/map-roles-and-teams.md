@@ -68,20 +68,22 @@ your provider has two groups that differ only by case.
 
 ### When no rule matches
 
-- **Default role** — the role for people whose groups match no rule. Most teams choose User or
-  Responder.
+- **Default role** — the role for people whose groups match no rule, and the role new accounts
+  start with. Most teams choose User or Responder. Administrator cannot be the default; give it
+  with a rule.
 - **When no rule matches** — *Let them in with the default role*, or *Refuse sign-in*. Refusing
   shows the person "Your account is not assigned to OpsKnight". People whose role an
   administrator set by hand are never refused this way.
 
 ### Who owns a role
 
-Every account's role is either **set by an administrator** or **from SSO**. The people
-directory and the console show which.
+Every account's role is **set by an administrator**, **from SSO**, or **from SCIM**. The
+people directory and the console show which.
 
 - A role you set by hand stays as you set it. Single sign-on never changes it.
 - New accounts created by single sign-on get their role from the rules.
 - An existing account moves under SSO control on its **first** SSO sign-in if a rule matches.
+- A role from SCIM changes only when a rule matches. If no rule matches, the SCIM role stays.
 - To hand a role back to the rules, open the account's menu in **2 · Who can sign in** and
   choose **Let role rules manage this role**. It applies at their next SSO sign-in.
 
@@ -90,7 +92,9 @@ directory and the console show which.
 - **Incomplete group lists.** Microsoft Entra replaces the `groups` claim with a "too many
   groups" marker for people in more than 200 groups. OpsKnight then cannot tell which groups
   they are in, so their role does not change, and administrators get one alert per person per
-  day. Switch to App roles to fix it.
+  day. If you refuse people no rule matches, a *new* person with an incomplete list is refused
+  too ("OpsKnight could not read your groups"), because they cannot be evaluated. Switch to App
+  roles to fix it.
 - **The last administrator.** If a rule would take Administrator away from the only active
   administrator, OpsKnight keeps their role, lets them sign in and alerts you, rather than
   locking everyone out.

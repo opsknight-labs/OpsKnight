@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { LastAdministratorError } from '@/lib/users/last-administrator-error';
 import type { NextAuthOptions } from 'next-auth';
 
 vi.mock('@/lib/oidc-config', () => ({
@@ -973,7 +974,7 @@ describe('provider activation across auth option caches', () => {
       const result = await signInWith({ groups: ['other'] });
       expect(result).toMatch(/^\/login\?error=SSO_ROLE_UNMATCHED_DENIED&ref=/);
       expect(vi.mocked(resolveOidcIdentityForSignIn).mock.calls.at(-1)?.[0]).toMatchObject({
-        denyNewUnmatched: true,
+        denyUnmatched: true,
       });
     });
 
@@ -1016,9 +1017,7 @@ describe('provider activation across auth option caches', () => {
       );
       vi.mocked(updateUserSecurityState)
         .mockReset()
-        .mockRejectedValueOnce(
-          new Error('Operation would leave the system with no active administrators.')
-        )
+        .mockRejectedValueOnce(new LastAdministratorError())
         .mockResolvedValue(undefined as never);
       expect(await signInWith({ groups: ['everyone'] })).toBe(true);
       expect(updateUserSecurityState).toHaveBeenLastCalledWith(

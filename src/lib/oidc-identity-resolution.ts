@@ -36,7 +36,8 @@ export type OidcIdentityResolutionFailure =
   | 'OIDC_LINK_APPROVAL_EXPIRED'
   | 'OIDC_AMBIGUOUS_IDENTITY_CONFLICT'
   | 'OIDC_TARGET_NOT_OPERATIONAL'
-  | 'OIDC_ROLE_UNMATCHED_DENIED';
+  | 'OIDC_ROLE_UNMATCHED_DENIED'
+  | 'OIDC_GROUP_CLAIMS_INCOMPLETE';
 
 export type OidcIdentityResolutionResult =
   | {
@@ -69,8 +70,18 @@ type ResolveOidcIdentityInput = {
   configVersion?: number;
   requireCurrentRegistration?: boolean;
   organizationId?: string | null;
-  /** No role rule matched and the workspace denies unmatched people: never create an account. */
-  denyNewUnmatched?: boolean;
+  /**
+   * No role rule matched and the workspace denies unmatched people. Refused before any account
+   * is created or linked, unless an administrator set the existing account's role by hand.
+   */
+  denyUnmatched?: boolean;
+  /**
+   * The provider sent an incomplete group list and the workspace denies unmatched people. A new
+   * person cannot be evaluated, so no account is created; existing accounts keep their role.
+   */
+  denyNewIncomplete?: boolean;
+  /** The role a newly created account starts with (the workspace default role). */
+  initialRole?: 'ADMIN' | 'RESPONDER' | 'AUDITOR' | 'USER';
   /**
    * Existing non-administrator accounts in the allowed domains link on first sign-in without a
    * per-user approval, when the provider proves the email domain.
@@ -362,6 +373,12 @@ export async function resolveOidcIdentityForSignIn(
             claims: input.claims,
           });
 
+        // Checked before any approval is consumed or identity created, so a refused sign-in
+        // leaves the account exactly as it was.
+        if (input.denyUnmatched && emailUser.roleSource !== 'MANUAL') {
+          throw new Error('OIDC_ROLE_UNMATCHED_DENIED');
+        }
+
         if (!trustedIdentity && !domainTrusted) {
           const approval = await tx.oidcLinkingApproval.findUnique({
             where: { userId: emailUser.id },
@@ -448,8 +465,11 @@ export async function resolveOidcIdentityForSignIn(
       if (!input.autoProvision) {
         throw new Error('OIDC_AUTO_PROVISION_DISABLED');
       }
-      if (input.denyNewUnmatched) {
+      if (input.denyUnmatched) {
         throw new Error('OIDC_ROLE_UNMATCHED_DENIED');
+      }
+      if (input.denyNewIncomplete) {
+        throw new Error('OIDC_GROUP_CLAIMS_INCOMPLETE');
       }
 
       // JIT user and immutable identity are one atomic unit. If identity
@@ -458,7 +478,7 @@ export async function resolveOidcIdentityForSignIn(
         data: {
           email,
           name: input.displayName || email.split('@')[0],
-          role: 'USER',
+          role: input.initialRole ?? 'USER',
           roleSource: 'OIDC',
           status: 'ACTIVE',
         },
@@ -509,6 +529,7 @@ export async function resolveOidcIdentityForSignIn(
       'OIDC_AMBIGUOUS_IDENTITY_CONFLICT',
       'OIDC_TARGET_NOT_OPERATIONAL',
       'OIDC_ROLE_UNMATCHED_DENIED',
+      'OIDC_GROUP_CLAIMS_INCOMPLETE',
     ]);
     if (knownReasons.has(reason as OidcIdentityResolutionFailure)) {
       return { ok: false, reason: reason as OidcIdentityResolutionFailure };
