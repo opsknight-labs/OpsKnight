@@ -34,6 +34,9 @@ type TeamMember = {
   userId: string;
   role: string;
   receiveTeamNotifications: boolean;
+  /** Present when a directory group (SCIM) or an SSO team rule added this member. */
+  scimGrant?: { teamMemberId: string } | null;
+  oidcGrant?: { id: string } | null;
   user: {
     id: string;
     name: string;
@@ -270,6 +273,18 @@ export default function TeamMemberRosterTable({
                         {member.user.name}
                       </span>
                       {getRoleBadge(member.role)}
+                      {(member.scimGrant || member.oidcGrant) && (
+                        <span
+                          className="inline-flex items-center rounded px-1 text-[9px] font-semibold uppercase tracking-wider text-sky-700 bg-sky-500/10 ring-1 ring-inset ring-sky-500/20 dark:text-sky-300"
+                          title={
+                            member.scimGrant
+                              ? 'Added by a directory group. Removed automatically when they leave the group. Changing their team role makes the membership yours to manage.'
+                              : 'Added by a single sign-on team rule. Removed automatically when they leave the group. Changing their team role makes the membership yours to manage.'
+                          }
+                        >
+                          {member.scimGrant ? 'Directory' : 'SSO group'}
+                        </span>
+                      )}
                       {isLead && (
                         <span className="inline-flex items-center gap-0.5 text-[9px] font-bold uppercase tracking-wider text-primary bg-primary/10 px-1 py-0.2 rounded ring-1 ring-inset ring-primary/20">
                           <Crown className="h-2.5 w-2.5" />
