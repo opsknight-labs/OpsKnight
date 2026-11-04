@@ -10,7 +10,7 @@ import { candidatePolicyModeSql } from '../settings/mode-sql';
 import { withDbBudget } from '../jobs/db-budget';
 import { enqueueWorkItems, WORK_KINDS } from '../jobs/work-queue';
 import { registerAiGateway } from '../ai/gateway';
-import { resolveEmbeddingModel } from '../ai/port';
+import { resolveEmbeddingModel, type EmbeddingPort } from '../ai/port';
 import { templateHash } from '../jobs/indexer';
 import { ensureAnnIndex } from './search';
 import { MIN_DIMENSIONS, normalizeVector } from './vector';
@@ -31,9 +31,13 @@ const sourceHash = templateHash;
 
 /** The configured embedding model, or null when semantic search is off or unavailable. */
 export async function currentEmbeddingModel(): Promise<string | null> {
+  return (await currentEmbeddingPort())?.model ?? null;
+}
+
+async function currentEmbeddingPort(): Promise<EmbeddingPort | null> {
   if (!(await withIntelligenceReadMemo(() => getIntelligenceSettings())).enabled) return null;
   registerAiGateway();
-  return (await resolveEmbeddingModel('PERSONAL'))?.model ?? null;
+  return resolveEmbeddingModel('PERSONAL');
 }
 
 /**
@@ -231,6 +235,7 @@ export async function findIncidentsToEmbed(
 export interface SemanticIndexStatus {
   /** The model in use, or null when semantic search is off or no provider can embed. */
   model: string | null;
+  modelLabel?: string;
   /** Incidents with a vector for the current model. */
   indexed: number;
   /** Recent incidents still waiting for a vector (capped for cheap counting). */
@@ -241,7 +246,8 @@ const PENDING_COUNT_CAP = 1000;
 
 /** For the settings page: cheap, bounded counts. */
 export async function getSemanticIndexStatus(now: Date = new Date()): Promise<SemanticIndexStatus> {
-  const model = await currentEmbeddingModel();
+  const port = await currentEmbeddingPort();
+  const model = port?.model;
   if (!model) return { model: null, indexed: 0, pending: 0 };
   const lowerBound = new Date(now.getTime() - EMBED_LOOKBACK_DAYS * 86_400_000);
   const activeMode = candidatePolicyModeSql(Prisma.sql`s.id`);
@@ -261,7 +267,12 @@ export async function getSemanticIndexStatus(now: Date = new Date()): Promise<Se
         WHERE f."incidentCreatedAt" > ${lowerBound} AND length(f."template") > 0 AND (e."incidentId" IS NULL OR e."sourceHash" <> f."templateHash" OR e."serviceId" <> i."serviceId" OR f."sourceUpdatedAt" IS DISTINCT FROM i."updatedAt")
         LIMIT ${PENDING_COUNT_CAP}) pending`,
     ]);
-    return { model, indexed, pending: Number(pending[0]?.count ?? 0) };
+    return {
+      model,
+      modelLabel: port?.displayModel ?? model,
+      indexed,
+      pending: Number(pending[0]?.count ?? 0),
+    };
   });
 }
 

@@ -26,6 +26,7 @@ import {
   type AiReservation,
 } from './budget';
 import { ProviderBreakers } from './breaker';
+import { embeddingSpaceIdentity } from '../semantic/identity';
 import { AI_SETTINGS_BOUNDS } from './contract';
 import { selectProviderChain } from './policy';
 import { redactSecrets } from './redact';
@@ -738,13 +739,15 @@ class GatewayPort implements LanguageModelPort {
 
 class GatewayEmbeddingPort implements EmbeddingPort {
   readonly model: string;
+  readonly displayModel: string;
   readonly providerId: string;
 
   constructor(
     private readonly provider: GatewayProvider,
     private readonly settings: AiSettingsView
   ) {
-    this.model = `${provider.kind}:${provider.embeddingModel}`;
+    this.model = embeddingSpaceIdentity(provider);
+    this.displayModel = provider.embeddingModel ?? '';
     this.providerId = provider.id;
   }
 

@@ -99,13 +99,15 @@ export default async function IntelligenceAiPage() {
       {settings.embeddingsEnabled && (
         <SettingsSection
           title="Semantic search"
-          description="Similar incidents are found by meaning as well as wording. New incidents are indexed in the background within about a minute; matching never waits for it."
+          description="Similar incidents are found by meaning as well as wording. New incidents are indexed in the background; matching never waits for it. Changing the embedding provider, endpoint or model rebuilds recent vectors within your token budget."
         >
           {semantic?.model ? (
             <dl className="grid gap-4 py-3 sm:grid-cols-3">
               <div>
                 <dt className="text-xs uppercase tracking-wide text-muted-foreground">Model</dt>
-                <dd className="break-all text-sm font-medium">{semantic.model}</dd>
+                <dd className="break-all text-sm font-medium">
+                  {semantic.modelLabel ?? semantic.model}
+                </dd>
               </div>
               <div>
                 <dt className="text-xs uppercase tracking-wide text-muted-foreground">

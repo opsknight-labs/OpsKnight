@@ -134,7 +134,10 @@ export interface LanguageModelPort {
 
 /** Turns text into vectors for semantic search. Resolved separately because few providers offer it. */
 export interface EmbeddingPort {
+  /** Opaque compatibility identity; never sent as the provider's model argument. */
   readonly model: string;
+  /** Human-readable model alias for operator settings. */
+  readonly displayModel?: string;
   readonly providerId: string;
   embed(
     values: string[],

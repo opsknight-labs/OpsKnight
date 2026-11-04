@@ -110,6 +110,12 @@ incidents.
 8. **Optional extras.** Each is off until you turn it on:
    - **Semantic search**: give a provider an embedding model, explicitly permit Personal data, and turn on semantic search. Masked titles can still contain names; an Internal-only provider is not eligible. The AI page shows
      indexing progress. Watch the token budget for the first day while recent incidents are indexed.
+     Vectors are specific to the provider, endpoint, deployment options and embedding model. Changing
+     any of those starts a bounded rebuild of recent incidents within the existing opt-in token budget;
+     older incompatible vectors are excluded and age out normally. Upgrading from the legacy model-only
+     cache key also requires that rebuild. Display-name, priority and credential rotation alone do not
+     invalidate vectors. Use pinned model revisions where available: an upstream model changing behind
+     an unchanged alias cannot be detected automatically.
    - **Saved conversations**: choose a retention period first. Turning it off later deletes all saved
      conversations.
    - **Weekly digest**: in **Insights**, pick a day and hour, then use **Send me a test**.

@@ -129,6 +129,48 @@ async function indexed(
 }
 
 describe('semantic similar-incident search', () => {
+  it('re-embeds after an endpoint change even when the provider and model alias are unchanged', async () => {
+    const { provider } = await setup();
+    const service = await createTestService('Embedding identity');
+    const incident = await indexed('Checkout unavailable', service.id);
+    const original = await currentEmbeddingModel();
+    await embedIncidents([incident.id]);
+    expect(await findIncidentsToEmbed(original!)).toEqual([]);
+
+    await db.aiProvider.update({
+      where: { id: provider.id },
+      data: { baseUrl: `${model.url}/alternate` },
+    });
+    invalidateGatewayCache();
+    const replacement = await currentEmbeddingModel();
+    expect(replacement).not.toBe(original);
+    expect(await findIncidentsToEmbed(replacement!)).toEqual([incident.id]);
+    expect(await getSemanticIndexStatus()).toMatchObject({ indexed: 0, pending: 1 });
+    await embedIncidents([incident.id]);
+    expect(embeddingCalls()).toHaveLength(2);
+    expect(embeddingCalls()[1].path).toContain('/alternate/');
+    expect(embeddingCalls()[1].body.model).toBe('emb-1');
+    expect(await getSemanticIndexStatus()).toMatchObject({ indexed: 1, pending: 0 });
+  });
+
+  it('does not invalidate vectors for display-only edits, but separates another provider', async () => {
+    const { provider } = await setup();
+    const original = await currentEmbeddingModel();
+    await db.aiProvider.update({
+      where: { id: provider.id },
+      data: { name: 'Renamed', priority: 2 },
+    });
+    invalidateGatewayCache();
+    expect(await currentEmbeddingModel()).toBe(original);
+    await db.aiProvider.update({ where: { id: provider.id }, data: { enabled: false } });
+    const row = await db.aiProvider.findUniqueOrThrow({ where: { id: provider.id } });
+    await db.aiProvider.create({
+      data: { ...row, id: undefined, options: {}, name: 'Replacement', enabled: true },
+    });
+    invalidateGatewayCache();
+    expect(await currentEmbeddingModel()).not.toBe(original);
+  });
+
   it('finds a paraphrase that wording alone misses, and explains it as a meaning match', async () => {
     await setup();
     const shop = await createTestService('Shop');
@@ -141,11 +183,11 @@ describe('semantic similar-incident search', () => {
     expect(lexicalOnly!.results.map(r => r.incidentId)).not.toContain(paraphrase.id);
 
     const semanticModel = await currentEmbeddingModel();
-    expect(semanticModel).toBe('OPENAI_COMPATIBLE:emb-1');
+    expect(semanticModel).toMatch(/^embedding:v1:[a-f0-9]{64}$/);
     const outcome = await embedIncidents([target.id, paraphrase.id, unrelated.id]);
     expect(outcome).toMatchObject({ status: 'done', model: semanticModel });
     expect(embeddingCalls()).toHaveLength(1);
-    // Only masked templates leave the system: numbers and identifiers never reach the provider.
+    // Numeric identifiers are masked; remaining text still requires Personal clearance.
     const sent = JSON.stringify(embeddingCalls()[0].body.input);
     expect(sent).toContain('checkout payments failing for customers');
     expect(sent).not.toContain('4815162342');
@@ -185,7 +227,7 @@ describe('semantic similar-incident search', () => {
     const shop = await createTestService('Shop');
     const incident = await indexed('Checkout payments failing', shop.id);
     await embedIncidents([incident.id]);
-    expect(await findIncidentsToEmbed('OPENAI_COMPATIBLE:emb-1')).toEqual([]);
+    expect(await findIncidentsToEmbed((await currentEmbeddingModel())!)).toEqual([]);
     expect(await embedIncidents([incident.id])).toMatchObject({ embedded: [] });
     expect(embeddingCalls()).toHaveLength(1);
 
@@ -194,7 +236,7 @@ describe('semantic similar-incident search', () => {
       data: { title: 'Checkout payment latency high' },
     });
     await db.$transaction(tx => indexIncident(incident.id, tx));
-    expect(await findIncidentsToEmbed('OPENAI_COMPATIBLE:emb-1')).toEqual([incident.id]);
+    expect(await findIncidentsToEmbed((await currentEmbeddingModel())!)).toEqual([incident.id]);
     expect(await embedIncidents([incident.id])).toMatchObject({ embedded: [incident.id] });
   });
 
@@ -225,7 +267,12 @@ describe('semantic similar-incident search', () => {
     });
     expect(queued.map(item => item.subjectKey).sort()).toEqual(incidents.map(i => i.id).sort());
     const status = await getSemanticIndexStatus();
-    expect(status).toEqual({ model: 'OPENAI_COMPATIBLE:emb-1', indexed: 3, pending: 0 });
+    expect(status).toEqual({
+      model: (await currentEmbeddingModel())!,
+      modelLabel: 'emb-1',
+      indexed: 3,
+      pending: 0,
+    });
   });
 
   it('records text the provider cannot embed without a vector, so it never blocks newer incidents', async () => {
@@ -244,11 +291,11 @@ describe('semantic similar-incident search', () => {
     const marker = await db.$queryRaw<Array<{ vector: number[] | null }>>`
       SELECT "vector" FROM "IncidentEmbedding" WHERE "incidentId" = ${older.id}`;
     expect(marker[0].vector).toBeNull();
-    expect(await findIncidentsToEmbed('OPENAI_COMPATIBLE:emb-1')).toEqual([]);
+    expect(await findIncidentsToEmbed((await currentEmbeddingModel())!)).toEqual([]);
     expect(
       (
         await semanticNeighbours(older.id, {
-          model: 'OPENAI_COMPATIBLE:emb-1',
+          model: (await currentEmbeddingModel())!,
           lowerBound: new Date(0),
           limit: 5,
           scanLimit: 50,
@@ -276,7 +323,7 @@ describe('semantic similar-incident search', () => {
     await embedIncidents([precedent.id, target.id, ...noise.map(n => n.id)]);
 
     const scores = await semanticNeighbours(target.id, {
-      model: 'OPENAI_COMPATIBLE:emb-1',
+      model: (await currentEmbeddingModel())!,
       lowerBound: new Date(Date.now() - 30 * 86_400_000),
       limit: 3,
       scanLimit: 3,
@@ -302,7 +349,7 @@ describe('semantic similar-incident search', () => {
     expect(index[0]?.valid).toBe(true);
 
     const scores = await semanticNeighbours(target.id, {
-      model: 'OPENAI_COMPATIBLE:emb-1',
+      model: (await currentEmbeddingModel())!,
       lowerBound: new Date(0),
       limit: 1,
       scanLimit: 1,
@@ -499,4 +546,32 @@ it('uses current service ownership instead of a cached fingerprint service when 
   expect(await findIncidentsToEmbed((await currentEmbeddingModel())!)).not.toContain(incident.id);
   expect(embeddingCalls()).toHaveLength(0);
   expect(await db.intelligenceWorkItem.count()).toBe(0);
+});
+
+it('discards an in-flight vector if the embedding endpoint changes before storage', async () => {
+  const { provider } = await setup();
+  const service = await createTestService('Embedding deployment race');
+  const incident = await indexed('Checkout provider race', service.id);
+  await currentEmbeddingModel();
+  const ports = await import('@/lib/intelligence/ai/port');
+  const original = await ports.resolveEmbeddingModel('PERSONAL');
+  if (!original) throw new Error('Expected eligible embedding provider');
+  const send = vi.fn(async () => {
+    await db.aiProvider.update({
+      where: { id: provider.id },
+      data: { baseUrl: `${model.url}/changed` },
+    });
+    invalidateGatewayCache();
+    return { vectors: [[1, 0, 0, 0, 0, 0, 0, 0]], tokens: 1 };
+  });
+  const resolve = vi
+    .spyOn(ports, 'resolveEmbeddingModel')
+    .mockResolvedValueOnce({ ...original, embed: send });
+  try {
+    expect(await embedIncidents([incident.id])).toMatchObject({ embedded: [] });
+    expect(send).toHaveBeenCalledTimes(1);
+    expect(await db.incidentEmbedding.count()).toBe(0);
+  } finally {
+    resolve.mockRestore();
+  }
 });

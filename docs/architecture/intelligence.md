@@ -285,7 +285,12 @@ Background embedding checks the current service policy before reading title text
 
 - **No extension.** Vectors are unit-normalised `REAL[]` rows in `IncidentEmbedding`; similarity is a dot
   product computed in the database over a bounded number of the most recent vectors of the same model.
-  Vectors from different models are never compared.
+  Vectors from different models are never compared. The gateway uses a versioned opaque compatibility
+  key over provider ID, endpoint, model alias and the cloud deployment selectors it actually uses.
+  Credentials, display name and priority are excluded. The provider request still uses the actual model
+  alias. Legacy model-only keys are not considered compatible: recent vectors rebuild through the
+  existing opt-in, budgeted embedding lane, while older rows age out normally. Pin model revisions;
+  changes behind an unchanged upstream alias cannot be inferred.
 - **Never in the paging path or in front of analysis.** Incidents are analysed lexically as soon as they
   are indexed. A single coalesced `EMBED_PENDING` work item then embeds up to 32 pending incidents per
   provider call and re-queues their analysis, so a storm costs one call per batch, and a slow or failing
