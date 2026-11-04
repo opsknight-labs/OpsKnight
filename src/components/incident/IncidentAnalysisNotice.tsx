@@ -1,7 +1,9 @@
 'use client';
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { useTimezone } from '@/contexts/TimezoneContext';
+import { formatDateTime } from '@/lib/timezone';
 import type { IncidentAnalysisState } from '@/lib/intelligence/analysis/contract';
 
 const POLLING = new Set(['WAITING', 'STALE', 'PAUSED']);
@@ -17,6 +19,18 @@ export default function IncidentAnalysisNotice({
   initial: IncidentAnalysisState;
 }) {
   const { refresh } = useRouter();
+  const { userTimeZone } = useTimezone();
+  const element = useRef<HTMLDivElement>(null);
+  const inViewport = useRef(true);
+  useEffect(() => {
+    if (!element.current || typeof IntersectionObserver === 'undefined') return;
+    inViewport.current = false;
+    const observer = new IntersectionObserver(entries => {
+      inViewport.current = entries.some(entry => entry.isIntersecting);
+    });
+    observer.observe(element.current);
+    return () => observer.disconnect();
+  }, []);
   const [state, setState] = useState(initial);
   const [epoch, setEpoch] = useState(0);
   const [checking, setChecking] = useState(false);
@@ -30,7 +44,10 @@ export default function IncidentAnalysisNotice({
     let controller: AbortController | undefined;
     const check = async () => {
       if (stopped || attempts >= MAX_CHECKS) return;
-      if (document.visibilityState === 'hidden') {
+      if (
+        document.visibilityState === 'hidden' ||
+        (!inViewport.current && !(epoch > 0 && attempts === 0))
+      ) {
         timer = setTimeout(check, INTERVAL_MS);
         return;
       }
@@ -98,13 +115,13 @@ export default function IncidentAnalysisNotice({
       }));
       setEpoch(value => value + 1);
     } catch {
-      setError('Analysis could not be requested. Try again later.');
+      setError('The request could not be confirmed. Check its status before trying again.');
     } finally {
       setRefreshing(false);
     }
   };
   const tone =
-    state.status === 'CURRENT'
+    state.status === 'CURRENT' && state.lastSuccessfulAt
       ? 'border-emerald-600/30 bg-emerald-500/5'
       : state.status === 'FAILED'
         ? 'border-red-600/30 bg-red-500/5'
@@ -112,7 +129,12 @@ export default function IncidentAnalysisNotice({
           ? 'border-amber-600/30 bg-amber-500/5'
           : 'border-border bg-muted/30';
   return (
-    <div className={`mb-3 rounded-lg border p-3 text-sm ${tone}`}>
+    <div
+      ref={element}
+      role="group"
+      aria-label="Recommendation freshness"
+      className={`mb-3 rounded-lg border p-3 text-sm ${tone}`}
+    >
       <p role="status" aria-live="polite" aria-atomic="true">
         {state.message}
       </p>
@@ -120,7 +142,7 @@ export default function IncidentAnalysisNotice({
         <p className="mt-1 text-xs text-muted-foreground">
           Last completed{' '}
           <time dateTime={state.lastSuccessfulAt}>
-            {new Date(state.lastSuccessfulAt).toISOString().slice(0, 16).replace('T', ' ')} UTC
+            {formatDateTime(state.lastSuccessfulAt, userTimeZone, { includeTimeZone: true })}
           </time>
         </p>
       )}

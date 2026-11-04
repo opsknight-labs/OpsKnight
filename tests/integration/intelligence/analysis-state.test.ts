@@ -269,5 +269,6 @@ it('hides retained similarity results when that recommendation feature is disabl
   expect(await readIncidentAnalysisState(actor, incident.id)).toMatchObject({
     status: 'CURRENT',
     message: expect.stringContaining('features are disabled'),
+    canRefresh: false,
   });
 });

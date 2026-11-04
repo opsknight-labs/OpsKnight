@@ -26,7 +26,7 @@ export default async function IncidentRelatedCard({ incidentId }: { incidentId: 
     });
     return null;
   }
-  if (!related) return <IntelligenceEmptyState incidentId={incidentId} />;
+  if (!related) return <IntelligenceEmptyState incidentId={incidentId} kind="related" />;
 
   return (
     <section

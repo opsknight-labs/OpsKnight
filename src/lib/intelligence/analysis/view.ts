@@ -80,6 +80,7 @@ export async function readIncidentAnalysisState(
     return {
       ...base,
       status: 'CURRENT',
+      canRefresh: false,
       message: 'Recommendation features are disabled in this service policy.',
     };
   const relevant = snapshots.filter(snapshot => expected.includes(snapshot.kind));
@@ -142,7 +143,7 @@ export async function readIncidentAnalysisState(
     ...dated,
     status: 'CURRENT',
     message: expected.length
-      ? 'Recommendations checked against the current incident and policy. No suggestions means no qualifying findings from that analysis.'
+      ? 'Recommendations checked against the current incident and policy.'
       : 'Recommendation features are disabled in this service policy.',
   };
 }

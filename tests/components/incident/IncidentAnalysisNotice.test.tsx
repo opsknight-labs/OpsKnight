@@ -1,5 +1,6 @@
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import { TimezoneProvider } from '@/contexts/TimezoneContext';
 import IncidentAnalysisNotice from '@/components/incident/IncidentAnalysisNotice';
 import type { IncidentAnalysisState } from '@/lib/intelligence/analysis/contract';
 const refresh = vi.hoisted(() => vi.fn());
@@ -120,4 +121,51 @@ it('stops polling and refreshes source authorization after access is revoked', a
   });
   expect(fetchMock).toHaveBeenCalledTimes(1);
   expect(refresh).toHaveBeenCalledTimes(1);
+});
+
+it('makes no automatic requests while the panel is outside the viewport', async () => {
+  let intersect!: (entries: Array<{ isIntersecting: boolean }>) => void;
+  const disconnect = vi.fn();
+  vi.stubGlobal(
+    'IntersectionObserver',
+    class {
+      constructor(callback: typeof intersect) {
+        intersect = callback;
+      }
+      observe = vi.fn();
+      disconnect = disconnect;
+    }
+  );
+  const view = render(<IncidentAnalysisNotice incidentId="incident-1" initial={waiting} />);
+  act(() => intersect([{ isIntersecting: false }]));
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(60_000);
+  });
+  expect(fetchMock).not.toHaveBeenCalled();
+  act(() => intersect([{ isIntersecting: true }]));
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(15_000);
+  });
+  expect(fetchMock).toHaveBeenCalledTimes(1);
+  view.unmount();
+  expect(disconnect).toHaveBeenCalledTimes(1);
+});
+
+it('shows the completion time in the responder’s preferred timezone', () => {
+  render(
+    <TimezoneProvider initialTimeZone="Asia/Kolkata">
+      <IncidentAnalysisNotice
+        incidentId="incident-1"
+        initial={{
+          ...waiting,
+          status: 'CURRENT',
+          lastSuccessfulAt: '2026-11-04T05:00:00.000Z',
+        }}
+      />
+    </TimezoneProvider>
+  );
+  const notice = screen.getByRole('group', { name: 'Recommendation freshness' });
+  const time = notice.querySelector('time');
+  expect(time).toHaveAttribute('datetime', '2026-11-04T05:00:00.000Z');
+  expect(time?.textContent).toContain('10:30');
 });

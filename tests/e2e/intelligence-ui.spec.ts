@@ -604,6 +604,11 @@ test.describe.serial('intelligence responder workflows', () => {
     await expect(
       page.getByRole('status').filter({ hasText: 'Waiting for recommendation analysis.' })
     ).toBeVisible();
+    await expect(page.getByRole('group', { name: 'Recommendation freshness' })).toHaveCount(1);
+    await page.getByRole('tab', { name: 'Related', exact: true }).click();
+    await expect(page.getByRole('group', { name: 'Recommendation freshness' })).toHaveCount(0);
+    await page.getByRole('tab', { name: 'Causes & runbooks', exact: true }).click();
+    await expect(page.getByRole('group', { name: 'Recommendation freshness' })).toHaveCount(1);
     const requested = page.waitForResponse(
       response =>
         response.url().endsWith(`/api/intelligence/incidents/${pending.id}/analysis`) &&
