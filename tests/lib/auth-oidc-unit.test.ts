@@ -227,6 +227,25 @@ describe('Auth JWT + OIDC callback contract', () => {
     expect(result).toBe(false);
   });
 
+  it('returns a fixed error code instead of throwing raw errors into the redirect URL', async () => {
+    const signIn = await getSignInCallback();
+    vi.mocked(getOidcConfig).mockRejectedValue(
+      new Error(
+        "Invalid `prisma.oidcConfig.findFirst()` invocation: column 'x' https://db.internal/"
+      )
+    );
+
+    const result = await signIn({
+      user: { email: 'user@example.com', name: 'User', id: 'oidc-sub' },
+      account: { provider: 'oidc', providerAccountId: 'oidc-sub', type: 'oauth' },
+      profile: { email_verified: true, sub: 'oidc-sub' } as never,
+      email: undefined,
+      credentials: undefined,
+    });
+
+    expect(result).toBe('/login?error=OAuthCallback');
+  });
+
   it('de-provisions an elevated role when no role mapping matches', async () => {
     vi.mocked(getOidcConfig).mockResolvedValue({
       enabled: true,

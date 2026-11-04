@@ -499,6 +499,8 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
       pages: {
         signIn: '/login',
         signOut: '/auth/signout',
+        // Branded page instead of NextAuth's built-in one; only fixed error codes reach it.
+        error: '/login',
       },
       callbacks: {
         async jwt({ token, user, account, trigger, session }) {
@@ -896,296 +898,308 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
           return session;
         },
         async signIn({ user, account, profile }) {
-          if (account?.provider !== 'oidc') {
-            if (!user?.email) {
-              logger.warn('[Auth] Sign-in rejected: missing email', {
+          try {
+            if (account?.provider !== 'oidc') {
+              if (!user?.email) {
+                logger.warn('[Auth] Sign-in rejected: missing email', {
+                  component: 'auth:signIn',
+                  provider: account?.provider ?? 'unknown',
+                });
+                return false;
+              }
+              return true;
+            }
+
+            if (!(await checkAuthenticationPolicy('OIDC_LOGIN')).allowed) return false;
+            const activeConfig = await getOidcConfig();
+            if (!activeConfig) {
+              logger.warn('[Auth] OIDC sign-in rejected: configuration missing or invalid', {
                 component: 'auth:signIn',
-                provider: account?.provider ?? 'unknown',
               });
               return false;
             }
+
+            if (
+              createHash('sha256').update(JSON.stringify(activeConfig)).digest('hex') !==
+              registrationKey
+            )
+              return '/login?error=OIDC_CONFIGURATION_CHANGED';
+            const claims = profileClaims(profile);
+            const email =
+              typeof user.email === 'string' && user.email.trim()
+                ? user.email.trim().toLowerCase()
+                : null;
+            const emailVerifiedClaim = coerceBooleanClaim(claims.email_verified);
+
+            if (emailVerifiedClaim === false) {
+              logger.warn('[Auth] OIDC sign-in rejected: IdP explicitly reports unverified email', {
+                component: 'auth:signIn',
+                providerType: activeConfig.providerType,
+              });
+              return false;
+            }
+
+            const issuer = normalizeIssuer(activeConfig.issuer);
+            const subject = account.providerAccountId || stringClaim(claims, 'sub');
+            if (!subject) {
+              logger.warn('[Auth] OIDC sign-in rejected: stable subject claim missing', {
+                component: 'auth:signIn',
+                issuer,
+              });
+              return false;
+            }
+
+            const roleEvaluation = evaluateOidcRoleClaims(claims, activeConfig.roleMapping ?? []);
+            if (!roleEvaluation.ok) {
+              logger.warn('[Auth] OIDC role claims rejected', {
+                component: 'auth:signIn',
+                reasonCode: roleEvaluation.reason,
+                providerType: activeConfig.providerType,
+              });
+              return false;
+            }
+            logger.info('[Auth] OIDC role mapping evaluated', {
+              component: 'auth:signIn',
+              event: roleEvaluation.matched
+                ? 'OIDC_ROLE_MAPPING_MATCHED'
+                : 'OIDC_ROLE_MAPPING_DEFAULTED',
+              mappedRole: roleEvaluation.role,
+              reason: roleEvaluation.matched ? 'mapping_match' : 'no_mapping_match',
+            });
+            if (roleEvaluation.groupsOverage) {
+              logger.warn('[Auth] OIDC group overage denied mapped elevation; continuing sign-in', {
+                component: 'auth:signIn',
+                reasonCode: 'OIDC_GROUPS_OVERAGE',
+                providerType: activeConfig.providerType,
+              });
+            }
+
+            let resolution;
+            try {
+              resolution = await resolveOidcIdentityForSignIn({
+                issuer,
+                subject,
+                email,
+                displayName: user.name ?? null,
+                providerType: activeConfig.providerType,
+                emailVerifiedClaim,
+                requireEmailVerifiedClaim: requiresOidcEmailVerifiedClaim(
+                  activeConfig.providerType,
+                  isOidcEmailVerifiedStrict()
+                ),
+                autoProvision: activeConfig.autoProvision,
+                allowedDomains: activeConfig.allowedDomains,
+                claims,
+                providerConfigId: 'default',
+                requireCurrentRegistration: true,
+                clientId: activeConfig.clientId,
+                configVersion: activeConfig.configVersion,
+                organizationId: activeConfig.organizationId,
+              });
+            } catch (error) {
+              logger.error('[Auth] OIDC identity transaction failed', {
+                component: 'auth:signIn',
+                issuer,
+                subject,
+                error,
+              });
+              return false;
+            }
+
+            if (!resolution.ok) {
+              if (resolution.reason === 'OIDC_CONFIGURATION_CHANGED')
+                return '/login?error=OIDC_CONFIGURATION_CHANGED';
+              logger.warn('[Auth] OIDC sign-in rejected by identity policy', {
+                component: 'auth:signIn',
+                issuer,
+                subject,
+                reasonCode: resolution.reason,
+                providerType: activeConfig.providerType,
+              });
+              return false;
+            }
+
+            const targetUser = resolution.user;
+            user.id = targetUser.id;
+            user.email = targetUser.email;
+            user.name = targetUser.name ?? user.name;
+
+            if (resolution.userCreated) {
+              logger.info('[Auth] OIDC user provisioned atomically with identity', {
+                component: 'auth:signIn',
+                issuer,
+                subject,
+                userId: targetUser.id,
+                event: 'OIDC_USER_PROVISIONED',
+              });
+            } else if (resolution.identityCreated) {
+              logger.info('[Auth] OIDC identity linked to existing user', {
+                component: 'auth:signIn',
+                issuer,
+                subject,
+                userId: targetUser.id,
+                approvalConsumed: resolution.approvalConsumed,
+                event: 'OIDC_IDENTITY_LINKED',
+              });
+            }
+
+            const updateData: Record<string, unknown> = {};
+
+            if (targetUser.status === 'INVITED') {
+              updateData.status = 'ACTIVE';
+              updateData.invitedAt = null;
+              updateData.deactivatedAt = null;
+              logger.info('[Auth] Activating invited user via OIDC', {
+                component: 'auth:signIn',
+                userId: targetUser.id,
+                previousStatus: targetUser.status,
+              });
+            }
+
+            if (roleEvaluation.matched) {
+              const desiredRole = roleEvaluation.role;
+              if (targetUser.role !== desiredRole || targetUser.roleSource !== 'OIDC') {
+                updateData.role = desiredRole;
+                updateData.roleSource = 'OIDC';
+                logger.info('[Auth] OIDC role changed from mapping evaluation', {
+                  component: 'auth:signIn',
+                  userId: targetUser.id,
+                  previousRole: targetUser.role,
+                  newRole: desiredRole,
+                  event: 'OIDC_ROLE_CHANGED',
+                });
+              }
+            } else if (targetUser.roleSource === 'OIDC') {
+              const desiredRole = roleEvaluation.role;
+              if (targetUser.role !== desiredRole) {
+                updateData.role = desiredRole;
+                logger.info('[Auth] OIDC role changed from mapping evaluation', {
+                  component: 'auth:signIn',
+                  userId: targetUser.id,
+                  previousRole: targetUser.role,
+                  newRole: desiredRole,
+                  event: 'OIDC_ROLE_CHANGED',
+                });
+              }
+            }
+
+            if (activeConfig.profileMapping) {
+              const mapping = activeConfig.profileMapping;
+
+              if (mapping.department && typeof claims[mapping.department] === 'string') {
+                const department = (claims[mapping.department] as string).trim().slice(0, 128);
+                if (department && department !== targetUser.department) {
+                  updateData.department = department;
+                }
+              }
+
+              if (mapping.jobTitle && typeof claims[mapping.jobTitle] === 'string') {
+                const jobTitle = (claims[mapping.jobTitle] as string).trim().slice(0, 256);
+                if (jobTitle && jobTitle !== targetUser.jobTitle) {
+                  updateData.jobTitle = jobTitle;
+                }
+              }
+
+              if (mapping.avatarUrl && typeof claims[mapping.avatarUrl] === 'string') {
+                const avatar = claims[mapping.avatarUrl] as string;
+                let safeAvatar: string | null = null;
+                try {
+                  const parsedAvatar = new URL(avatar);
+                  if (parsedAvatar.protocol === 'https:' && avatar.length <= 2048) {
+                    safeAvatar = parsedAvatar.toString();
+                  }
+                } catch {
+                  safeAvatar = null;
+                }
+                const isLocalUpload =
+                  targetUser.avatarUrl?.startsWith('/api/users/') ||
+                  targetUser.avatarUrl?.startsWith('/uploads/');
+
+                if (safeAvatar && safeAvatar !== targetUser.avatarUrl && !isLocalUpload) {
+                  updateData.avatarUrl = safeAvatar;
+                }
+              }
+
+              if (updateData.department || updateData.jobTitle || updateData.avatarUrl) {
+                updateData.lastOidcSync = new Date();
+              }
+            }
+
+            if (updateData.role && updateData.role !== targetUser.role) {
+              updateData.tokenVersion = { increment: 1 };
+            }
+
+            if (Object.keys(updateData).length > 0) {
+              try {
+                const { updateUserSecurityState } = await import('@/lib/users/admin-invariants');
+                const mappedRole = updateData.role as
+                  'ADMIN' | 'RESPONDER' | 'AUDITOR' | 'USER' | undefined;
+                const mappedRoleSource = updateData.roleSource as 'OIDC' | undefined;
+                const mappedStatus = updateData.status as 'ACTIVE' | undefined;
+                delete updateData.role;
+                delete updateData.roleSource;
+                delete updateData.status;
+                await updateUserSecurityState(
+                  targetUser.id,
+                  {
+                    ...(mappedRole ? { role: mappedRole } : {}),
+                    ...(mappedRoleSource ? { roleSource: mappedRoleSource } : {}),
+                    ...(mappedStatus ? { status: mappedStatus } : {}),
+                  },
+                  updateData,
+                  undefined,
+                  async tx => {
+                    await assertCurrentOidcRegistration(tx, activeConfig);
+                    await preserveScimOwnedOidcFields(tx, targetUser.id, updateData);
+                  },
+                  targetUser.tokenVersion
+                );
+              } catch (error) {
+                if (error instanceof OidcRegistrationChangedError)
+                  return '/login?error=OIDC_CONFIGURATION_CHANGED';
+                if (error instanceof Error && error.message === 'USER_SECURITY_CHANGED')
+                  return '/login?error=SessionExpired';
+                throw error;
+              }
+              logger.info('[Auth] Updated user from OIDC data', {
+                component: 'auth:signIn',
+                userId: targetUser.id,
+                updatedFields: Object.keys(updateData),
+              });
+            }
+
+            logger.info('[Auth] OIDC sign-in successful', {
+              component: 'auth:signIn',
+              issuer,
+              subject,
+              userId: targetUser.id,
+              event: 'OIDC_LOGIN_SUCCESS',
+            });
+
+            try {
+              const { logLoginSuccess } = await import('@/lib/login-audit');
+              const { headers } = await import('next/headers');
+              const h = await headers();
+              const ua = h.get('user-agent') || 'Unknown';
+              const ip =
+                h.get('x-forwarded-for')?.split(',')[0].trim() || h.get('x-real-ip') || 'Unknown';
+              await logLoginSuccess(targetUser.email, targetUser.id, ip, ua, 'oidc');
+            } catch {
+              // Non-critical audit logging failure.
+            }
+
             return true;
-          }
-
-          if (!(await checkAuthenticationPolicy('OIDC_LOGIN')).allowed) return false;
-          const activeConfig = await getOidcConfig();
-          if (!activeConfig) {
-            logger.warn('[Auth] OIDC sign-in rejected: configuration missing or invalid', {
-              component: 'auth:signIn',
-            });
-            return false;
-          }
-
-          if (
-            createHash('sha256').update(JSON.stringify(activeConfig)).digest('hex') !==
-            registrationKey
-          )
-            return '/login?error=OIDC_CONFIGURATION_CHANGED';
-          const claims = profileClaims(profile);
-          const email =
-            typeof user.email === 'string' && user.email.trim()
-              ? user.email.trim().toLowerCase()
-              : null;
-          const emailVerifiedClaim = coerceBooleanClaim(claims.email_verified);
-
-          if (emailVerifiedClaim === false) {
-            logger.warn('[Auth] OIDC sign-in rejected: IdP explicitly reports unverified email', {
-              component: 'auth:signIn',
-              providerType: activeConfig.providerType,
-            });
-            return false;
-          }
-
-          const issuer = normalizeIssuer(activeConfig.issuer);
-          const subject = account.providerAccountId || stringClaim(claims, 'sub');
-          if (!subject) {
-            logger.warn('[Auth] OIDC sign-in rejected: stable subject claim missing', {
-              component: 'auth:signIn',
-              issuer,
-            });
-            return false;
-          }
-
-          const roleEvaluation = evaluateOidcRoleClaims(claims, activeConfig.roleMapping ?? []);
-          if (!roleEvaluation.ok) {
-            logger.warn('[Auth] OIDC role claims rejected', {
-              component: 'auth:signIn',
-              reasonCode: roleEvaluation.reason,
-              providerType: activeConfig.providerType,
-            });
-            return false;
-          }
-          logger.info('[Auth] OIDC role mapping evaluated', {
-            component: 'auth:signIn',
-            event: roleEvaluation.matched
-              ? 'OIDC_ROLE_MAPPING_MATCHED'
-              : 'OIDC_ROLE_MAPPING_DEFAULTED',
-            mappedRole: roleEvaluation.role,
-            reason: roleEvaluation.matched ? 'mapping_match' : 'no_mapping_match',
-          });
-          if (roleEvaluation.groupsOverage) {
-            logger.warn('[Auth] OIDC group overage denied mapped elevation; continuing sign-in', {
-              component: 'auth:signIn',
-              reasonCode: 'OIDC_GROUPS_OVERAGE',
-              providerType: activeConfig.providerType,
-            });
-          }
-
-          let resolution;
-          try {
-            resolution = await resolveOidcIdentityForSignIn({
-              issuer,
-              subject,
-              email,
-              displayName: user.name ?? null,
-              providerType: activeConfig.providerType,
-              emailVerifiedClaim,
-              requireEmailVerifiedClaim: requiresOidcEmailVerifiedClaim(
-                activeConfig.providerType,
-                isOidcEmailVerifiedStrict()
-              ),
-              autoProvision: activeConfig.autoProvision,
-              allowedDomains: activeConfig.allowedDomains,
-              claims,
-              providerConfigId: 'default',
-              requireCurrentRegistration: true,
-              clientId: activeConfig.clientId,
-              configVersion: activeConfig.configVersion,
-              organizationId: activeConfig.organizationId,
-            });
           } catch (error) {
-            logger.error('[Auth] OIDC identity transaction failed', {
+            // NextAuth turns a thrown error into /api/auth/error?error=<raw message>.
+            // Database and IdP messages carry quotes and URLs that WAF SQLi/XSS
+            // rules block, and the raw text should not reach the address bar.
+            logger.error('[Auth] Sign-in callback failed', {
               component: 'auth:signIn',
-              issuer,
-              subject,
+              provider: account?.provider ?? 'unknown',
               error,
             });
-            return false;
+            return account?.provider === 'oidc' ? '/login?error=OAuthCallback' : false;
           }
-
-          if (!resolution.ok) {
-            if (resolution.reason === 'OIDC_CONFIGURATION_CHANGED')
-              return '/login?error=OIDC_CONFIGURATION_CHANGED';
-            logger.warn('[Auth] OIDC sign-in rejected by identity policy', {
-              component: 'auth:signIn',
-              issuer,
-              subject,
-              reasonCode: resolution.reason,
-              providerType: activeConfig.providerType,
-            });
-            return false;
-          }
-
-          const targetUser = resolution.user;
-          user.id = targetUser.id;
-          user.email = targetUser.email;
-          user.name = targetUser.name ?? user.name;
-
-          if (resolution.userCreated) {
-            logger.info('[Auth] OIDC user provisioned atomically with identity', {
-              component: 'auth:signIn',
-              issuer,
-              subject,
-              userId: targetUser.id,
-              event: 'OIDC_USER_PROVISIONED',
-            });
-          } else if (resolution.identityCreated) {
-            logger.info('[Auth] OIDC identity linked to existing user', {
-              component: 'auth:signIn',
-              issuer,
-              subject,
-              userId: targetUser.id,
-              approvalConsumed: resolution.approvalConsumed,
-              event: 'OIDC_IDENTITY_LINKED',
-            });
-          }
-
-          const updateData: Record<string, unknown> = {};
-
-          if (targetUser.status === 'INVITED') {
-            updateData.status = 'ACTIVE';
-            updateData.invitedAt = null;
-            updateData.deactivatedAt = null;
-            logger.info('[Auth] Activating invited user via OIDC', {
-              component: 'auth:signIn',
-              userId: targetUser.id,
-              previousStatus: targetUser.status,
-            });
-          }
-
-          if (roleEvaluation.matched) {
-            const desiredRole = roleEvaluation.role;
-            if (targetUser.role !== desiredRole || targetUser.roleSource !== 'OIDC') {
-              updateData.role = desiredRole;
-              updateData.roleSource = 'OIDC';
-              logger.info('[Auth] OIDC role changed from mapping evaluation', {
-                component: 'auth:signIn',
-                userId: targetUser.id,
-                previousRole: targetUser.role,
-                newRole: desiredRole,
-                event: 'OIDC_ROLE_CHANGED',
-              });
-            }
-          } else if (targetUser.roleSource === 'OIDC') {
-            const desiredRole = roleEvaluation.role;
-            if (targetUser.role !== desiredRole) {
-              updateData.role = desiredRole;
-              logger.info('[Auth] OIDC role changed from mapping evaluation', {
-                component: 'auth:signIn',
-                userId: targetUser.id,
-                previousRole: targetUser.role,
-                newRole: desiredRole,
-                event: 'OIDC_ROLE_CHANGED',
-              });
-            }
-          }
-
-          if (activeConfig.profileMapping) {
-            const mapping = activeConfig.profileMapping;
-
-            if (mapping.department && typeof claims[mapping.department] === 'string') {
-              const department = (claims[mapping.department] as string).trim().slice(0, 128);
-              if (department && department !== targetUser.department) {
-                updateData.department = department;
-              }
-            }
-
-            if (mapping.jobTitle && typeof claims[mapping.jobTitle] === 'string') {
-              const jobTitle = (claims[mapping.jobTitle] as string).trim().slice(0, 256);
-              if (jobTitle && jobTitle !== targetUser.jobTitle) {
-                updateData.jobTitle = jobTitle;
-              }
-            }
-
-            if (mapping.avatarUrl && typeof claims[mapping.avatarUrl] === 'string') {
-              const avatar = claims[mapping.avatarUrl] as string;
-              let safeAvatar: string | null = null;
-              try {
-                const parsedAvatar = new URL(avatar);
-                if (parsedAvatar.protocol === 'https:' && avatar.length <= 2048) {
-                  safeAvatar = parsedAvatar.toString();
-                }
-              } catch {
-                safeAvatar = null;
-              }
-              const isLocalUpload =
-                targetUser.avatarUrl?.startsWith('/api/users/') ||
-                targetUser.avatarUrl?.startsWith('/uploads/');
-
-              if (safeAvatar && safeAvatar !== targetUser.avatarUrl && !isLocalUpload) {
-                updateData.avatarUrl = safeAvatar;
-              }
-            }
-
-            if (updateData.department || updateData.jobTitle || updateData.avatarUrl) {
-              updateData.lastOidcSync = new Date();
-            }
-          }
-
-          if (updateData.role && updateData.role !== targetUser.role) {
-            updateData.tokenVersion = { increment: 1 };
-          }
-
-          if (Object.keys(updateData).length > 0) {
-            try {
-              const { updateUserSecurityState } = await import('@/lib/users/admin-invariants');
-              const mappedRole = updateData.role as
-                'ADMIN' | 'RESPONDER' | 'AUDITOR' | 'USER' | undefined;
-              const mappedRoleSource = updateData.roleSource as 'OIDC' | undefined;
-              const mappedStatus = updateData.status as 'ACTIVE' | undefined;
-              delete updateData.role;
-              delete updateData.roleSource;
-              delete updateData.status;
-              await updateUserSecurityState(
-                targetUser.id,
-                {
-                  ...(mappedRole ? { role: mappedRole } : {}),
-                  ...(mappedRoleSource ? { roleSource: mappedRoleSource } : {}),
-                  ...(mappedStatus ? { status: mappedStatus } : {}),
-                },
-                updateData,
-                undefined,
-                async tx => {
-                  await assertCurrentOidcRegistration(tx, activeConfig);
-                  await preserveScimOwnedOidcFields(tx, targetUser.id, updateData);
-                },
-                targetUser.tokenVersion
-              );
-            } catch (error) {
-              if (error instanceof OidcRegistrationChangedError)
-                return '/login?error=OIDC_CONFIGURATION_CHANGED';
-              if (error instanceof Error && error.message === 'USER_SECURITY_CHANGED')
-                return '/login?error=SessionExpired';
-              throw error;
-            }
-            logger.info('[Auth] Updated user from OIDC data', {
-              component: 'auth:signIn',
-              userId: targetUser.id,
-              updatedFields: Object.keys(updateData),
-            });
-          }
-
-          logger.info('[Auth] OIDC sign-in successful', {
-            component: 'auth:signIn',
-            issuer,
-            subject,
-            userId: targetUser.id,
-            event: 'OIDC_LOGIN_SUCCESS',
-          });
-
-          try {
-            const { logLoginSuccess } = await import('@/lib/login-audit');
-            const { headers } = await import('next/headers');
-            const h = await headers();
-            const ua = h.get('user-agent') || 'Unknown';
-            const ip =
-              h.get('x-forwarded-for')?.split(',')[0].trim() || h.get('x-real-ip') || 'Unknown';
-            await logLoginSuccess(targetUser.email, targetUser.id, ip, ua, 'oidc');
-          } catch {
-            // Non-critical audit logging failure.
-          }
-
-          return true;
         },
       },
     };

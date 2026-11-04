@@ -15,6 +15,7 @@ verification:
     - src/lib/status-pages/status-auth-return.ts
     - src/lib/app-routes.ts
     - src/lib/auth-redirect.ts
+    - src/lib/auth.ts
     - src/middleware.ts
     - agent/src/client.ts
     - next.config.ts
@@ -39,6 +40,8 @@ Releases after 2.1.0 no longer send these request shapes:
 - **Leaving the set-password page** used to post the full page URL, including the reset token, as `callbackUrl`. It now posts `/login?password=1`.
 - **The Runbook Agent** sends `User-Agent: OpsKnight-Agent/<version>`. The middleware status-domain lookup sends `User-Agent: OpsKnight-Internal/1.0`. Both used the runtime default `node`.
 - **Login** keeps a deep link when NextAuth turns `callbackUrl` into an absolute URL on the application's own origin, instead of dropping it.
+- **SSO errors** no longer travel as `/api/auth/error?error=<raw exception text>`. The sign-in callback returns a fixed code (`OAuthCallback`) and NextAuth's error page is the OpsKnight login page. Raw database or IdP messages carry quotes, backticks and URLs that SQL-injection and XSS rules block.
+- **The SSO retry hop** (`GET /api/auth/signin`, reached after every SSO error) now redirects to `/login` with a relative `callbackUrl`. NextAuth itself would send `callbackUrl=https%3A%2F%2F<app>%2F…`.
 
 On 2.1.0 and earlier, also add the status-page and sign-out exclusions in [Requests that still need exclusions](#requests-that-still-need-exclusions).
 
@@ -49,7 +52,9 @@ These requests come from the identity provider, the Next.js framework, or the wo
 | Request | Why a WAF flags it | Typical rule |
 |---|---|---|
 | `GET /api/auth/callback/oidc` and `GET /api/auth/oidc/test/callback` | Microsoft Entra ID and some other IdPs send an authorization `code` over 1,000 characters. Some IdPs add `iss=https://…`. Errors arrive as `error_description` with quotes and URLs. | AWS `SizeRestrictions_QUERYSTRING`, `GenericRFI_QUERYARGUMENTS`; CRS 931130, 942xxx |
-| `/login`, `/m/login`, `/api/auth/signin/*` | NextAuth can put an absolute `callbackUrl` on the application's own origin in the query. Deep links carry the user's original query string. | CRS 931120/931130 at paranoia level 2; AWS `GenericRFI_QUERYARGUMENTS` when the public URL is an IP address |
+| `/login`, `/m/login` | Deep links carry the user's original query string, URL-encoded once, inside `callbackUrl`. | CRS 942xxx/941xxx when the original query held quotes or `<` |
+| `POST /api/auth/signin/oidc` and the IdP round trip | The SSO button posts the CSRF token and a relative `callbackUrl`. The response sets NextAuth's state, PKCE and nonce cookies, about 1 KB together, for the 15-minute round trip. | AWS `SizeRestrictions_Cookie_HEADER` only alongside other large cookies |
+| `POST /api/auth/control` (**Settings → Authentication**, SSO setup and **Test SSO**) | The JSON body holds the issuer URL, the client secret (random punctuation), scopes and up to 100 role-mapping rules. | CRS 931130, 942xxx; AWS `GenericRFI_BODY` (IP issuer), `SizeRestrictions_BODY` |
 | `next-auth.callback-url` cookie | Holds an absolute, URL-encoded callback on the application's origin. | CRS 931xxx on `REQUEST_COOKIES`; AWS `CrossSiteScripting_COOKIE` when the deep link had `<` or quotes |
 | Any page navigation or Server Action (requests with the `RSC`, `Next-Router-State-Tree` or `Next-Action` header) | `Next-Router-State-Tree` is URL-encoded JSON. Server Action bodies are JSON arrays and are capped at 2 MB. | CRS 920xxx, 942xxx; AWS `SizeRestrictions_BODY` (8 KB) |
 | Runbook import, draft and publish (Server Actions on `/runbooks/*`), `/api/runbook-agent/v1/*` | Runbook steps hold shell, Docker, Kubernetes and HTTP commands. Agent results hold command output. | CRS 932xxx (remote code execution), 930xxx (local file inclusion); AWS `UNIXShellCommandsVariables_BODY`, `SizeRestrictions_BODY` |
@@ -90,7 +95,8 @@ Keep `AWSManagedRulesCommonRuleSet` and override the rules that fire to **Count*
 The last statement uses `EXACTLY ""` on a header that is present but empty. To match "the header is present" instead, use a `SizeConstraintStatement` on `SingleHeader: next-action` with `GT 0`. Apply the same Count-then-label pattern to these rules:
 
 - `SizeRestrictions_QUERYSTRING` on `/api/auth/callback/oidc` and `/api/auth/oidc/test/callback`.
-- `GenericRFI_QUERYARGUMENTS` on `/login`, `/m/login` and `/api/auth/`.
+- `GenericRFI_QUERYARGUMENTS` on `/api/auth/callback/oidc` (IP-addressed IdPs in `iss`).
+- `GenericRFI_BODY`, `SizeRestrictions_BODY` and `SQLi_BODY` on `/api/auth/control`.
 - `GenericRFI_BODY` on `/api/integrations/` and `/api/events`.
 - `CrossSiteScripting_BODY` on Server Actions and `/api/settings/status-page`.
 - `UNIXShellCommandsVariables_BODY` from the Linux and POSIX rule groups, on runbook Server Actions and `/api/runbook-agent/v1/`.
@@ -102,7 +108,7 @@ If Bot Control is enabled, allow `OpsKnight-Agent/` and the provider webhook pat
 Create a WAF **exception** (skip) rule above the managed rulesets. Skip only the matching rules, not the whole ruleset, and limit the rule to OpsKnight's paths:
 
 ```text
-(http.request.uri.path in {"/api/auth/callback/oidc" "/api/auth/oidc/test/callback"})
+(http.request.uri.path in {"/api/auth/callback/oidc" "/api/auth/oidc/test/callback" "/api/auth/control"})
 or (starts_with(http.request.uri.path, "/api/integrations/"))
 or (starts_with(http.request.uri.path, "/api/runbook-agent/v1/"))
 or (any(http.request.headers.names[*] == "next-action"))
@@ -129,6 +135,12 @@ SecRule REQUEST_FILENAME "@rx ^/(m/)?login$|^/api/auth/" \
    ctl:ruleRemoveTargetById=931130;ARGS:callbackUrl,\
    ctl:ruleRemoveTargetById=931130;REQUEST_COOKIES:__Secure-next-auth.callback-url,\
    ctl:ruleRemoveTargetById=931130;REQUEST_COOKIES:next-auth.callback-url"
+
+# SSO settings: issuer URL and client secret in the JSON body
+SecRule REQUEST_FILENAME "@streq /api/auth/control" \
+  "id:1000104,phase:1,pass,nolog,\
+   ctl:ruleRemoveTargetById=931130;ARGS:json.configuration.issuer,\
+   ctl:ruleRemoveTargetByTag=attack-sqli;ARGS:json.configuration.clientSecret"
 
 # Next.js router state header on navigations and Server Actions
 SecRule &REQUEST_HEADERS:Next-Router-State-Tree "@gt 0" \
@@ -167,6 +179,7 @@ With the WAF in blocking mode, confirm that each of these works and that no rule
 ## Troubleshooting
 
 - **403 from the WAF right after the IdP redirects back:** the OIDC callback query is too long or contains `iss`. Add the callback exclusion.
+- **403 when saving or testing SSO settings:** a rule matched the issuer URL or client secret in the `/api/auth/control` body. Add the SSO settings exclusion.
 - **Status pages answer 421 for every custom domain:** the middleware status-domain lookup is going through the WAF. Point `INTERNAL_API_URL` at loopback or the in-cluster Service.
 - **Saving a runbook fails but loading it works:** a remote-code-execution or body-size rule is blocking the Server Action. Exclude it for requests with the `Next-Action` header.
 - **The Runbook Agent goes offline after the WAF is enabled:** a bot or user-agent rule is blocking it. Allow `OpsKnight-Agent/` on `/api/runbook-agent/v1/`.
