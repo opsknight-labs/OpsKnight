@@ -63,7 +63,16 @@ function observe(event: Prisma.QueryEvent) {
   if (read) collecting.reads++;
   if (write) collecting.writes++;
   if (/^\s*(BEGIN|COMMIT|ROLLBACK|SET)\b/i.test(sql)) collecting.transactionStatements++;
-  if (read && tables(sql, ['McpToken', 'McpGrant', 'McpClient', 'User', 'TeamMember']))
+  // Prisma 7 loads an optional to-one relation even when its foreign key is NULL (for example
+  // an unassigned incident's assignee: `"User"."id" IN ($1)` with a null key). It is still a
+  // statement, but not an authentication read.
+  const emptyRelationLoad =
+    / IN \(\$1\) OFFSET \$2$/.test(sql) && (JSON.parse(event.params) as unknown[])[0] === null;
+  if (
+    read &&
+    !emptyRelationLoad &&
+    tables(sql, ['McpToken', 'McpGrant', 'McpClient', 'User', 'TeamMember'])
+  )
     collecting.authenticationReads++;
   else if (read && tables(sql, ['McpPolicy'])) collecting.policyReads++;
   else if (read) collecting.domainReads++;

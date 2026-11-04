@@ -451,24 +451,69 @@ function withOpsKnightBehaviour<T extends object>(
       ] as const;
     }),
   ]);
-  return new Proxy(client, {
-    get(target, property) {
-      if (wrapped.has(property)) return wrapped.get(property);
-      const value = Reflect.get(target, property, target);
-      return typeof value === 'function' ? value.bind(target) : value;
-    },
-  });
+  return overlayView(client, wrapped);
 }
 
 function trackRawSqlInTransaction<T extends object>(tx: T): T {
-  return new Proxy(tx, {
-    get(target, property) {
-      const value = Reflect.get(target, property, target);
-      if (!RAW_METHODS.includes(property)) return value;
-      return (...args: unknown[]) => {
-        registerRawCall(property, args);
-        return (value as (...a: unknown[]) => unknown).apply(target, args);
-      };
+  const wrapped = new Map<PropertyKey, unknown>(
+    RAW_METHODS.map(method => {
+      const original = Reflect.get(tx, method, tx) as (...args: unknown[]) => unknown;
+      return [
+        method,
+        (...args: unknown[]) => {
+          registerRawCall(method, args);
+          return original.apply(tx, args);
+        },
+      ] as const;
+    })
+  );
+  return overlayView(tx, wrapped);
+}
+
+/**
+ * A view of `target` that serves `wrapped` members first. Properties assigned or defined on the
+ * view (for example vi.spyOn in tests) are kept on the view itself and take precedence: they
+ * must never be written through to Prisma's clients, whose interactive-transaction objects
+ * forward definitions to the shared base client.
+ */
+function overlayView<T extends object>(target: T, wrapped: ReadonlyMap<PropertyKey, unknown>): T {
+  const overrides = new Map<PropertyKey, PropertyDescriptor>();
+  return new Proxy(target, {
+    get(object, property, receiver) {
+      const override = overrides.get(property);
+      if (override) return override.get ? override.get.call(receiver) : override.value;
+      if (wrapped.has(property)) return wrapped.get(property);
+      const value = Reflect.get(object, property, object);
+      return typeof value === 'function' ? value.bind(object) : value;
+    },
+    set(_object, property, value) {
+      overrides.set(property, { value, writable: true, enumerable: true, configurable: true });
+      return true;
+    },
+    defineProperty(_object, property, descriptor) {
+      overrides.set(property, { ...descriptor, configurable: true });
+      return true;
+    },
+    deleteProperty(_object, property) {
+      overrides.delete(property);
+      return true;
+    },
+    has(object, property) {
+      return overrides.has(property) || wrapped.has(property) || Reflect.has(object, property);
+    },
+    getOwnPropertyDescriptor(object, property) {
+      const override = overrides.get(property);
+      if (override) return override;
+      if (wrapped.has(property)) {
+        return {
+          value: wrapped.get(property),
+          writable: true,
+          enumerable: false,
+          configurable: true,
+        };
+      }
+      const own = Reflect.getOwnPropertyDescriptor(object, property);
+      return own ? { ...own, configurable: true } : undefined;
     },
   });
 }

@@ -1,3 +1,4 @@
+import { isRetryableTransactionError } from '@/lib/db-utils';
 import { beforeEach, expect, it } from 'vitest';
 import { Prisma } from '@prisma/client';
 import { NextRequest } from 'next/server';
@@ -88,7 +89,11 @@ it('maps the actual nested-write Prisma error from a deliberately recreated shar
     (result): result is PromiseRejectedResult => result.status === 'rejected'
   );
   expect(failed).toHaveLength(1);
-  expect(failed[0].reason).toBeInstanceOf(Prisma.PrismaClientUnknownRequestError);
+  // Prisma 5.22 surfaced this deadlock as an uncoded PrismaClientUnknownRequestError; driver
+  // adapters report it with its SQLSTATE. Either way it must be classified as a retryable
+  // write conflict and never leak driver internals.
+  expect(failed[0].reason).toBeInstanceOf(Prisma.PrismaClientKnownRequestError);
+  expect(isRetryableTransactionError(failed[0].reason)).toBe(true);
   const response = apiV2Error(
     failed[0].reason,
     new NextRequest('http://localhost/api/v2/runbooks/agents')

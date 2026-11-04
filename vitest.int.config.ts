@@ -10,7 +10,9 @@ export default mergeConfig(baseConfig, defineConfig({
         env: {
             VITEST_USE_REAL_DB: '1',
         },
-        environment: 'jsdom',
+        // Database tests run in Node so Prisma's Uint8Array/Buffer checks share one realm.
+        // Component-rendering suites opt into jsdom per file.
+        environment: 'node',
         setupFiles: ['./tests/setup.ts'],
     },
 }));

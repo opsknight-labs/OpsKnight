@@ -198,6 +198,8 @@ suite('bounded operational backlog handling', () => {
     // parameters bind as timestamptz. Preserve the ORM parameter types when replaying.
     let replaySql = query.query;
     const replayParams = (JSON.parse(query.params) as unknown[]).map((value, index) => {
+      // Prisma 7 query events report integer parameters (LIMIT/OFFSET, counters) as strings.
+      if (typeof value === 'string' && /^-?\d+$/.test(value)) return Number(value);
       if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}[T ]/.test(value)) return value;
       replaySql = replaySql.replace(/\$(\d+)\b/g, (placeholder, ordinal: string) =>
         Number(ordinal) === index + 1 ? `${placeholder}::timestamp` : placeholder
@@ -340,7 +342,10 @@ suite('bounded operational backlog handling', () => {
           // SQL is emitted by Prisma, parameters stay bound; no user-authored SQL.
           const plan = await measured.$queryRawUnsafe(
             `EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) ${query.query}`,
-            ...JSON.parse(query.params)
+            // Prisma 7 query events report integer parameters (LIMIT/OFFSET) as strings.
+            ...(JSON.parse(query.params) as unknown[]).map(value =>
+              typeof value === 'string' && /^-?\d+$/.test(value) ? Number(value) : value
+            )
           );
           results.push({ state, search, latenciesMs: latencies, queryPlan: plan });
         }

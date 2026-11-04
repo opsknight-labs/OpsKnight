@@ -1,4 +1,3 @@
-/* eslint-disable security/detect-object-injection -- keys are fixed scenario names, never external input */
 import { afterAll, beforeAll, describe, it } from 'vitest';
 import { Prisma, type PrismaClient } from '@prisma/client';
 import { createContractClient, disconnectContractClients, requireEnv } from './support/client';

@@ -81,15 +81,15 @@ const KIND_TO_PRISMA_CODE: Record<string, string> = {
  */
 export function toPrismaClientError<T>(error: T): T | Prisma.PrismaClientKnownRequestError {
   if (!isDriverAdapterError(error)) return error;
-  const cause = error.cause;
+  const cause = error.cause as DriverAdapterCause & { originalMessage?: string; message?: string };
   const code = KIND_TO_PRISMA_CODE[cause.kind] ?? 'P2039';
-  const detail = cause.originalCode ? ` (SQLSTATE ${cause.originalCode})` : '';
-  const known = new Prisma.PrismaClientKnownRequestError(`Database error: ${cause.kind}${detail}`, {
-    code,
-    clientVersion: Prisma.prismaVersion.client,
-    meta: { driverAdapterError: error },
-  });
-  return known;
+  // Same wording Prisma uses for generic database errors, so the server message (for example a
+  // trigger's RAISE EXCEPTION text) stays visible to callers and logs.
+  const message = cause.originalMessage ?? cause.message ?? cause.kind;
+  return new Prisma.PrismaClientKnownRequestError(
+    `Database error. Code: \`${cause.originalCode ?? 'N/A'}\`. Message: \`${message}\``,
+    { code, clientVersion: Prisma.prismaVersion.client, meta: { driverAdapterError: error } }
+  );
 }
 
 /** Errors that mean the database cannot currently serve requests (connectivity, capacity, config). */

@@ -205,6 +205,8 @@ function buildTls(
 }
 
 function hasSetting(options: string | undefined, setting: string): boolean {
+  // `setting` is always an internal constant name, never configuration input.
+  // eslint-disable-next-line security/detect-non-literal-regexp
   return new RegExp(`(^|\\s)(-c\\s*|--)${setting}=`, 'i').test(options ?? '');
 }
 

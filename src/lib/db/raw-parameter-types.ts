@@ -1,3 +1,5 @@
+/* eslint-disable security/detect-object-injection -- indexes are positions in SQL text and Prisma argument arrays */
+/* eslint-disable security/detect-unsafe-regex -- anchored dollar-quote tag pattern without nested quantifiers */
 import { Prisma } from '@prisma/client';
 import type { ArgType, SqlQuery } from '@prisma/driver-adapter-utils';
 

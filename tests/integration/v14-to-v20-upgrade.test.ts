@@ -1,3 +1,5 @@
+/* eslint-disable security/detect-object-injection -- keys are fixed environment variable names */
+/* eslint-disable security/detect-non-literal-fs-filename -- writes tagged schema files into a private scratch directory */
 import { execFileSync } from 'child_process';
 import crypto, { scryptSync } from 'crypto';
 import fs from 'fs';

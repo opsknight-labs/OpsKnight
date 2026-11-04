@@ -1,3 +1,4 @@
+/* eslint-disable security/detect-non-literal-fs-filename -- certificate fixtures in a private temporary directory */
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
