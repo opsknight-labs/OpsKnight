@@ -17,7 +17,7 @@ import { getOidcProviderPolicy } from '@/lib/oidc/provider-policy';
 import { type ControlActor, freshAuthenticationMaxAge, isAuthenticationFresh } from './actor';
 import { emergencyReadiness } from './emergency-management';
 import { findRevisionIdentity } from './identity';
-import { authenticationOrigin, recoveryOrigin } from './origin';
+import { AuthenticationOriginError, authenticationOrigin, recoveryOrigin } from './origin';
 import { getActiveLinkingProvider, resolveOidcLinkingStatuses } from '@/lib/oidc-linking-status';
 import { evaluateOidcProof } from './proof-status';
 
@@ -156,7 +156,7 @@ export async function authenticationDashboard(
       orderBy: { email: 'asc' },
     }),
     emergencyReadiness(prisma).catch(error => {
-      if (error instanceof Error && error.message.includes('conflicting canonical')) return [];
+      if (error instanceof AuthenticationOriginError) return [];
       throw error;
     }),
     Promise.resolve([] as Array<{ id: string; lastSeenAt: Date; differs: boolean }>),

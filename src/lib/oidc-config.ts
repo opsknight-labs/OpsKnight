@@ -404,8 +404,9 @@ export async function getOidcConfig(): Promise<OidcConfig | null> {
   }
 }
 
-export async function getOidcPublicConfig(): Promise<OidcPublicConfig | null> {
-  const config = await getOidcConfigRecord();
+/** `fresh` skips the short record cache, for pages that must reflect a change immediately. */
+export async function getOidcPublicConfig(fresh = false): Promise<OidcPublicConfig | null> {
+  const config = await getOidcConfigRecord(fresh);
   if (!config) {
     return null;
   }

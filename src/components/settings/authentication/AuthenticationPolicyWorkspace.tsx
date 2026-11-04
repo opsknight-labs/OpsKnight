@@ -64,6 +64,12 @@ export default function AuthenticationPolicyWorkspace() {
     !draftDirty &&
     !data.activeProvider;
   const verification = selectedRevision?.verification;
+  // The configuration on screen is the one people already sign in with.
+  const showingActive =
+    !draftDirty &&
+    Boolean(selectedRevision) &&
+    selectedRevision?.id === data.activeRevisionId &&
+    data.mode !== 'PASSWORD_ONLY';
 
   return (
     <section id="authentication-3" className={sectionClass} aria-labelledby="auth-policy-title">
@@ -158,6 +164,25 @@ export default function AuthenticationPolicyWorkspace() {
             </div>
 
             {/* Step 2: Policy Mode & Activation */}
+            {showingActive && (
+              <div
+                role="status"
+                className="flex items-start gap-3 rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-4 text-sm"
+              >
+                <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-600" aria-hidden />
+                <div className="space-y-1">
+                  <p className="font-semibold text-foreground">
+                    Single sign-on is on (
+                    {data.mode === 'SSO_REQUIRED' ? 'SSO Required' : 'SSO Optional'})
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {data.mode === 'SSO_REQUIRED'
+                      ? 'Everyone signs in with single sign-on. There is nothing else to do here.'
+                      : 'People can sign in with single sign-on or their password. When everyone has signed in with SSO, you can require it: set up two emergency recovery identities, test your sign-in again, then choose SSO Required below.'}
+                  </p>
+                </div>
+              </div>
+            )}
             <div className="space-y-4 pt-1">
               <div className="flex items-center gap-2 pb-1">
                 <div className="p-1.5 rounded-lg bg-primary/10 text-primary">
@@ -433,7 +458,9 @@ export default function AuthenticationPolicyWorkspace() {
                     },
                     Boolean(verification && verification.state !== 'valid') && {
                       code: 'test',
-                      message: oidcProofLabel(verification!.state).detail,
+                      message: showingActive
+                        ? 'To change how people sign in, test your sign-in again first (Step 1).'
+                        : oidcProofLabel(verification!.state).detail,
                     },
                     data.freshAuthenticationRequired && {
                       code: 'fresh',
