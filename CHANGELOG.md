@@ -12,6 +12,32 @@ External-secrets support is an **implementation candidate, not certified support
 ### Added
 
 - Optional Secrets Store CSI mounts for integrated/split application workloads and migration Jobs, preserving existing Kubernetes Secret mappings. Includes Helm and Kustomize support, AWS/Azure SecretProviderClass examples, OpenShift application security profiles, rotation guidance, and rendering regression tests. Cluster driver/provider installation remains external; live cloud/OpenShift certification is required before production rollout.
+- **Single sign-on setup in four guided steps** (Connect provider, Who can sign in, Roles & teams, Test & activate) with per-provider checklists, plain-language help, one-click "save and test", draft recovery after a reload, and a warning before the two-hour fresh sign-in window closes. Emergency recovery is required only for SSO Required.
+- **Specific sign-in messages** instead of "Access denied", each with a reference ID tied to the server log and login audit; people are told why a session ended.
+- **Administrator test diagnostics**: a failed test names the cause, shows the claims received (never tokens) and links to the fix; provider errors such as `access_denied` are explained.
+- **Role rules v2**: case-insensitive values, nested and namespaced claim paths, highest-role or first-match precedence, a default role, and an option to refuse people no rule matches. Rule values are suggested from real sign-ins and a sandbox checks unsaved rules.
+- **Group-to-team rules** for single sign-on, which only ever remove memberships they created.
+- **Linking at scale**: bulk approval (before or after turning SSO on), automatic connection for verified company emails (Entra needs `xms_edov`; never for administrators), and access requests that notify administrators.
+- Activation preview of whose role and teams change, who still needs approval, and approvals carried over or cancelled.
+- A repeatable end-to-end SSO journey test with a local mock OpenID Connect provider (`playwright.sso-journey.config.ts`).
+
+### Changed
+
+- Roles set by an administrator are never overwritten by single sign-on; use **Let role rules manage this role** to hand one back. Existing role rules keep their case-sensitive, first-match behaviour.
+- Incomplete Entra group claims keep a person's current role instead of demoting them, and a rule never demotes the last active administrator; both alert administrators.
+- Pending linking approvals survive activating a configuration for the same issuer and client.
+- Changing only session limits, the button label, profile fields or team rules keeps the administrator test.
+- SCIM opens a real connection by default, uses in-app confirmations, describes activity in sentences and flags offboarding that leaves on-call gaps. Profile fields managed by the directory are read-only.
+- The sign-in page reflects SSO being turned on immediately; deployment address problems are shown to administrators as a specific fix.
+
+### Fixed
+
+- The administrator who turned on SSO appeared as "not linked to the current provider".
+- The SSO button's accessible name now matches its visible text.
+
+### Removed
+
+- The unused legacy SSO settings form and its always-failing direct-write action.
 
 ## [2.1.2] - 2026-10-27
 
