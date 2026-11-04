@@ -15,6 +15,14 @@ import { friendlyMcpError } from '@/lib/mcp/auth/friendly-error';
 import { mcpScopesUsableByRole } from '@/lib/mcp/auth/role-scopes';
 import { MCP_DOCS_LINKS, MCP_DOCS_PATHS } from '@/lib/mcp/docs-links';
 import { mcpSetupCommands } from '@/components/settings/mcp/setup-commands';
+import {
+  MCP_APPROVAL_ABSOLUTE_MAX_MS,
+  MCP_APPROVAL_COMMIT_WINDOW_DEFAULT_MINUTES,
+  MCP_APPROVAL_TTL_DEFAULT_MINUTES,
+  MCP_APPROVAL_TTL_MAX_MINUTES,
+  MCP_APPROVAL_TTL_MIN_MINUTES,
+} from '@/lib/mcp/approvals/timing';
+import { MCP_ABSOLUTE_SESSION_DAYS, MCP_DEFAULT_IDLE_DAYS } from '@/lib/mcp/auth/session-lifetime';
 
 describe('F3: generated MCP reference pages', () => {
   it.each(MCP_GENERATED_PAGES.map(page => [page.path, page] as const))(
@@ -247,6 +255,48 @@ describe('F1/F2: the guides describe current behaviour', () => {
     expect(quickstart).not.toContain('There is no initialize handshake');
     expect(quickstart).not.toContain('The preview expires after five minutes');
     expect(quickstart).not.toContain('separate opt-in trust policy');
+  });
+
+  it('quotes the numbers the code enforces, so a changed limit fails until the guide follows', () => {
+    // Read from the enforcing source, not restated here: the guide is the thing under test.
+    const constant = (file: string, pattern: RegExp) => {
+      const match = readFileSync(file, 'utf8').match(pattern);
+      expect(match, `${file} ${pattern}`).not.toBeNull();
+      return Number(match![1]);
+    };
+    const notifyLimit = constant(
+      'src/lib/mcp/approvals/notify.ts',
+      /MCP_APPROVAL_NOTIFY_LIMIT = (\d+);/
+    );
+    const reasonMax = constant(
+      'src/lib/mcp/approvals/operation.ts',
+      /decisionReasonSchema = z\.string\(\)\.trim\(\)\.max\((\d+)\)/
+    );
+    const freshHours = constant(
+      'src/lib/auth-control/actor.ts',
+      /FRESH_AUTHENTICATION_MAX_AGE_MS = (\d+) \* 60 \* 60 \* 1000;/
+    );
+    const consentMs = constant(
+      'src/app/oauth/mcp/authorize/route.ts',
+      /expiresAt: new Date\(Date\.now\(\) \+ (\d+)\)/
+    );
+    expect(guide).toContain(
+      `(default ${MCP_APPROVAL_TTL_DEFAULT_MINUTES} minutes, ${MCP_APPROVAL_TTL_MIN_MINUTES} to ${MCP_APPROVAL_TTL_MAX_MINUTES})`
+    );
+    expect(guide).toContain(
+      `(default ${MCP_APPROVAL_COMMIT_WINDOW_DEFAULT_MINUTES} minutes), never later than ${MCP_APPROVAL_ABSOLUTE_MAX_MS / 3_600_000} hours after the request`
+    );
+    expect(guide).toContain(`At most ${notifyLimit} people are notified`);
+    expect(guide).toContain(`(up to ${reasonMax} characters)`);
+    expect(guide).toContain(
+      `a sign-in within the last ${freshHours === 2 ? 'two' : freshHours} hours`
+    );
+    expect(consentMs).toBe(5 * 60_000);
+    expect(guide).toContain('The page expires after five minutes.');
+    expect(guide).toContain(
+      `(1 to ${MCP_ABSOLUTE_SESSION_DAYS} days, default ${MCP_DEFAULT_IDLE_DAYS})`
+    );
+    expect(guide).toContain(`always after ${MCP_ABSOLUTE_SESSION_DAYS} days in total`);
   });
 });
 
