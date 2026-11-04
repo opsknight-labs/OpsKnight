@@ -197,6 +197,64 @@ describeIfRealDB('MCP best-in-class migration', () => {
     }
   });
 
+  it('lets the real approval table hold EXPIRED rows without weakening its other checks', async () => {
+    const insert = (id: string, extra: string, values: string) => `
+      INSERT INTO "McpOperationApproval" ("id", "operationId", "riskClass", "operationDigest",
+        "contractDigest", "actorId", "requesterGrantId", "requesterCredentialId", "summary",
+        "expiresAt"${extra})
+      VALUES ('${id}', 'op', 'R2', 'd', 'c', 'actor', 'grant', 'cred', '{}'::jsonb,
+        NOW() + interval '1 hour'${values})`;
+    try {
+      await testPrisma.$transaction(async tx => {
+        // A pending request that lapsed, and an approved one whose commit window lapsed.
+        expect(
+          await rejects(tx, 'pending_expired', insert('exp-pending', `, "status"`, `, 'EXPIRED'`))
+        ).toBe(false);
+        expect(
+          await rejects(
+            tx,
+            'approved_expired',
+            insert(
+              'exp-approved',
+              `, "status", "reviewedById", "reviewedAt", "reviewerTokenVersion", "commitDeadline"`,
+              `, 'EXPIRED', 'reviewer', NOW(), 0, NOW()`
+            )
+          )
+        ).toBe(false);
+        // A rejected request stays REJECTED; it cannot be relabelled EXPIRED.
+        expect(
+          await rejects(
+            tx,
+            'rejected_expired',
+            insert('exp-rejected', `, "status", "rejectedAt"`, `, 'EXPIRED', NOW()`)
+          )
+        ).toBe(true);
+        // The reviewer checks from earlier migrations survive the constraint rewrite.
+        expect(
+          await rejects(
+            tx,
+            'self_review',
+            insert(
+              'self-review',
+              `, "status", "reviewedById", "reviewedAt", "reviewerTokenVersion"`,
+              `, 'APPROVED', 'actor', NOW(), 0`
+            )
+          )
+        ).toBe(true);
+        expect(
+          await rejects(
+            tx,
+            'reason_long',
+            insert('reason-long', `, "decisionReason"`, `, repeat('x', 501)`)
+          )
+        ).toBe(true);
+        throw new Error('rollback');
+      });
+    } catch (error) {
+      if (!(error instanceof Error) || error.message !== 'rollback') throw error;
+    }
+  });
+
   it('stores SYSTEM in-app notifications on the migrated database', async () => {
     const user = await testPrisma.user.create({
       data: { name: 'Reviewer', email: `mcp-system-${Date.now()}@example.com` },
