@@ -1,5 +1,5 @@
 // Words assistants add to natural queries ("list all the services", "who is on call") that
-// say nothing about which operation is wanted.
+// say nothing about which operation is wanted. "me" and "my" are not filler: they point to whoami.
 const FILLER = new Set([
   'a',
   'all',
@@ -12,8 +12,6 @@ const FILLER = new Set([
   'i',
   'in',
   'is',
-  'me',
-  'my',
   'of',
   'the',
   'to',

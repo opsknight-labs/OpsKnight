@@ -28,7 +28,9 @@ export async function getMcpPostmortemContext(context: ExecutionContext, raw: un
     path: { id },
     query: { limit: 1 },
   });
-  const result = {
+  // Each read above already counted its own result toward the budget; counting the aggregate
+  // again would refuse a context half the real limit.
+  return {
     postmortem,
     actionItems,
     contributors,
@@ -45,6 +47,4 @@ export async function getMcpPostmortemContext(context: ExecutionContext, raw: un
       ],
     },
   };
-  context.budget.consumeResult(result);
-  return result;
 }

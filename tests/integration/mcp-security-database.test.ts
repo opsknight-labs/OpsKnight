@@ -389,10 +389,16 @@ describe('MCP PostgreSQL security and replay boundaries', () => {
         }),
       })
     );
-    expect(response.status).toBe(413);
+    // Still capped on the real wire size, but as a tool error the assistant can act on (a smaller
+    // page), not a transport failure.
+    expect(response.status).toBe(200);
     const text = await response.text();
     expect(Buffer.byteLength(text)).toBeLessThan(262144);
-    expect(JSON.parse(text).error.message).toBe('MCP_RESULT_BUDGET_EXCEEDED');
+    const { result } = JSON.parse(text);
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toMatch(/^MCP_RESULT_BUDGET_EXCEEDED: .*lower query\.limit/);
+    expect(result.structuredContent.error.code).toBe('MCP_RESULT_BUDGET_EXCEEDED');
+    expect(text).not.toContain('x'.repeat(100));
   });
   it('returns incident context through the actual MCP transport with canonical child arguments', async () => {
     const f = await fixture('ADMIN', ['incidents:read']);

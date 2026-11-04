@@ -38,13 +38,13 @@ const profiles: {
 }[] = [];
 const statementBudgets = new Map([
   // Verify authority before accepting a body and refresh it after body completion.
-  // The two extra reads preserve immediate revocation across slow uploads. The MCP policy is
-  // read in the grant statement, never on its own.
-  ['tools/list', 5],
-  ['incident_search', 10],
-  ['incident_get_context', 22],
-  ['execute_plan:3', 22],
-  ['incident_search:4-concurrent-same-grant', 40],
+  // Each authentication reads the token, grant, client, user and MCP policy in one statement
+  // (two before E4), so revocation stays immediate across slow uploads at half the reads.
+  ['tools/list', 3],
+  ['incident_search', 8],
+  ['incident_get_context', 20],
+  ['execute_plan:3', 20],
+  ['incident_search:4-concurrent-same-grant', 32],
 ]);
 let collecting: Sample | undefined;
 let accessToken: string;
@@ -221,7 +221,8 @@ async function measured(
   }
   expect(sample.statements).toBeGreaterThan(0);
   expect(sample.statements).toBeLessThanOrEqual(statementBudgets.get(scenario)!);
-  expect(sample.authenticationReads).toBeLessThanOrEqual(requests * 4 + chargedOperations);
+  // Two single-statement authentications per request, plus one authority read per domain step.
+  expect(sample.authenticationReads).toBeLessThanOrEqual(requests * 2 + chargedOperations);
   expect(sample.quotaWrites).toBe(requests + protectedQuotaWrites);
   expect(sample.policyReads).toBe(0);
   // Read-only investigations must not introduce any other write-side effects.

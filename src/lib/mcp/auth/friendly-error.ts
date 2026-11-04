@@ -44,7 +44,7 @@ const MESSAGES = new Map<string, { title: string; body: string }>(
     },
     MCP_RATE_LIMITED: {
       title: 'Too many attempts',
-      body: 'Wait a minute, then connect again from your assistant.',
+      body: 'Too many requests in the last minute. Wait a moment, then try again.',
     },
     temporarily_unavailable: {
       title: 'OpsKnight is busy',

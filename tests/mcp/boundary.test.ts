@@ -139,12 +139,14 @@ describe('MCP boundary', () => {
     controller.abort();
     expect(() => new CostBudget(8, 100, controller.signal).check()).toThrow();
   });
-  it('releases load-shedding slots exactly once', () => {
-    const release = acquireMcpSlot(1);
-    expect(() => acquireMcpSlot(1)).toThrow('MCP_BUSY');
+  it('releases load-shedding slots exactly once', async () => {
+    const release = await acquireMcpSlot(1);
+    await expect(acquireMcpSlot(1, { waitMs: 0 })).rejects.toThrow('MCP_BUSY');
     release();
     release();
-    const second = acquireMcpSlot(1);
+    const second = await acquireMcpSlot(1, { waitMs: 0 });
+    const third = acquireMcpSlot(1, { waitMs: 0 });
+    await expect(third).rejects.toThrow('MCP_BUSY');
     second();
   });
   it('redacts nested credentials, PII, bearer strings and capability URLs', () => {

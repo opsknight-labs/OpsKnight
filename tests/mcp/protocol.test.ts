@@ -114,7 +114,7 @@ describe('official SDK modern protocol adapter', () => {
     const pending = new Promise<void>(resolve => {
       finish = resolve;
     });
-    const release = acquireMcpSlot(1);
+    const release = await acquireMcpSlot(1);
     const server = createMcpHandler(
       () => {
         const instance = new McpServer({ name: 'abort-regression', version: '1' });
@@ -158,10 +158,10 @@ describe('official SDK modern protocol adapter', () => {
       });
       await Promise.resolve();
       expect(drained).toBe(false);
-      expect(() => acquireMcpSlot(1)).toThrow('MCP_BUSY');
+      await expect(acquireMcpSlot(1, { waitMs: 0 })).rejects.toThrow('MCP_BUSY');
       finish();
       await cleanup;
-      const next = acquireMcpSlot(1);
+      const next = await acquireMcpSlot(1, { waitMs: 0 });
       next();
     } finally {
       finish();
@@ -175,7 +175,8 @@ describe('official SDK modern protocol adapter', () => {
     const investigate = prompts.result.prompts.find(
       (prompt: { name: string }) => prompt.name === 'investigate_incident'
     );
-    expect(investigate.description).toContain('(v2)');
+    expect(investigate.title).toBe('Investigate an incident');
+    expect(investigate.description).not.toContain('(v2)');
     expect(investigate.arguments).toEqual([
       expect.objectContaining({ name: 'incidentId', required: false }),
     ]);

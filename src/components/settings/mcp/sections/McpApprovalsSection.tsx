@@ -72,7 +72,7 @@ export default function McpApprovalsSection({
   return (
     <SettingsSection
       title="Approvals"
-      description="Changes and runbook runs that assistants proposed. Each one waits for a different person than the requester to review the exact, frozen request."
+      description="Changes and runbook runs that assistants proposed. Each one waits for an authorized reviewer to approve the exact, frozen request; an administrator may approve their own after confirming."
     >
       <div className="flex flex-col gap-2 py-4 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
         <FilterChips

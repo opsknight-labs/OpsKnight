@@ -452,7 +452,8 @@ describe('B7: bad-token limiter on /mcp', () => {
     const junk = 'x'.repeat(43);
     for (let i = 0; i < MCP_BAD_TOKEN_LIMIT; i++)
       await expect(authenticateMcp(bearer(junk, peer), null)).rejects.toThrow('MCP_INVALID_TOKEN');
-    const lookups = vi.spyOn(prisma.mcpToken, 'findUnique');
+    // The bearer, its grant and the policy are read in one raw statement (E4).
+    const lookups = vi.spyOn(prisma, '$queryRaw');
     await expect(authenticateMcp(bearer(junk, peer), null)).rejects.toThrow('MCP_RATE_LIMITED');
     expect(lookups).not.toHaveBeenCalled();
     // Another peer, and a caller whose address is unknown, are unaffected.

@@ -45,7 +45,14 @@ export function mcpHttpError(error: unknown) {
       status,
       headers: {
         'Cache-Control': 'private, no-store',
-        ...(status === 429 || status === 503 ? { 'Retry-After': '5' } : {}),
+        // The real wait when the error knows it (a quota window, a busy queue); else a short one.
+        ...(status === 429 || status === 503
+          ? {
+              'Retry-After': String(
+                (error instanceof McpBoundaryError && error.retryAfterSeconds) || 5
+              ),
+            }
+          : {}),
         ...(status === 401
           ? {
               // RFC 6750 section 3: invalid_token tells clients to refresh or sign in again.

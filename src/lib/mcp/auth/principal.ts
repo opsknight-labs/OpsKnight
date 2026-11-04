@@ -1,5 +1,5 @@
 import prisma from '@/lib/prisma';
-import type { Prisma } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 import { authorizationActorFromUser } from '@/lib/authorization-actors';
 import { incrementSharedCounter } from '@/lib/rate-limit';
 import type { V2AuthContext } from '@/lib/api-v2/auth';
@@ -21,6 +21,7 @@ interface GrantAuthoritySnapshot {
   status: string | null;
   mcpRevocationVersion: number | null;
   teamIds: string[];
+  clientTrusted: boolean;
   policyEnabled: boolean | null;
   writesEnabled: boolean | null;
   sensitiveReadsEnabled: boolean | null;
@@ -63,6 +64,30 @@ export async function resolveMcpGrant(
   return (await resolveMcpGrantWithPolicy(grantId, credentialId, db)).auth;
 }
 
+// The authority columns shared by both lookups. "clientTrusted" folds in what used to be WHERE
+// conditions so a token whose client is no longer trusted is told apart from an unknown token.
+const AUTHORITY_COLUMNS = Prisma.sql`
+  g.id AS "grantId", g."userId", g."userRevocationVersion",
+  g.scopes AS "grantScopes", g.resource,
+  -- A metadata client's effective ceiling is always the current policy, never its stored copy.
+  CASE WHEN c."dynamicRegistration" THEN
+    ARRAY(SELECT s FROM unnest(c.scopes) AS s WHERE s = ANY(p."dcrScopes"))
+    WHEN c."metadataUrl" IS NULL THEN c.scopes
+    ELSE ARRAY(SELECT s FROM unnest(c.scopes) AS s WHERE s = ANY(p."cimdScopes")) END
+    AS "clientScopes",
+  COALESCE((NOT c."dynamicRegistration" OR p."dcrEnabled")
+    -- A metadata-document client stays valid only while its host remains trusted (substr skips https://).
+    AND (c."metadataUrl" IS NULL OR (p."cimdEnabled"
+      AND (cardinality(p."cimdAllowedHosts") = 0
+        OR split_part(substr(c."metadataUrl", 9), '/', 1) = ANY(p."cimdAllowedHosts")))), false)
+    AS "clientTrusted",
+  g."revokedAt", c."revokedAt" AS "clientRevokedAt", g."expiresAt",
+  u.role::text AS role, u.status::text AS status, u."mcpRevocationVersion",
+  ARRAY(SELECT tm."teamId" FROM "TeamMember" tm WHERE tm."userId" = u.id) AS "teamIds",
+  -- The policy row this request is judged by; already joined for the client ceilings.
+  p.enabled AS "policyEnabled", p."writesEnabled", p."sensitiveReadsEnabled",
+  p."maxInFlight", p."maxOperations", p."requestsPerMinute", p."disabledCapabilities"`;
+
 /**
  * The grant's current authority and the MCP policy as of the same statement. The policy is null
  * when no policy row exists. Callers that must report a disabled policy ahead of a grant failure
@@ -77,36 +102,26 @@ export async function resolveMcpGrantWithPolicy(
   // One current-statement snapshot avoids four ORM round trips per domain step.
   // No values are interpolated into SQL syntax and no authority is cached.
   const [grant] = await db.$queryRaw<GrantAuthoritySnapshot[]>`
-    SELECT g.id AS "grantId", g."userId", g."userRevocationVersion",
-      g.scopes AS "grantScopes", g.resource,
-      -- A metadata client's effective ceiling is always the current policy, never its stored copy.
-      CASE WHEN c."dynamicRegistration" THEN
-        ARRAY(SELECT s FROM unnest(c.scopes) AS s WHERE s = ANY(p."dcrScopes"))
-        WHEN c."metadataUrl" IS NULL THEN c.scopes
-        ELSE ARRAY(SELECT s FROM unnest(c.scopes) AS s WHERE s = ANY(p."cimdScopes")) END
-        AS "clientScopes",
-      g."revokedAt", c."revokedAt" AS "clientRevokedAt", g."expiresAt",
-      u.role::text AS role, u.status::text AS status, u."mcpRevocationVersion",
-      ARRAY(SELECT tm."teamId" FROM "TeamMember" tm WHERE tm."userId" = u.id) AS "teamIds",
-      -- The policy row this request is judged by; already joined for the client ceilings.
-      p.enabled AS "policyEnabled", p."writesEnabled", p."sensitiveReadsEnabled",
-      p."maxInFlight", p."maxOperations", p."requestsPerMinute", p."disabledCapabilities"
+    SELECT ${AUTHORITY_COLUMNS}
     FROM "McpGrant" g JOIN "McpClient" c ON c.id = g."clientId"
     LEFT JOIN "User" u ON u.id = g."userId"
     LEFT JOIN "McpPolicy" p ON p.id = 'default'
     WHERE g.id = ${grantId}
-      AND (NOT c."dynamicRegistration" OR p."dcrEnabled")
-      -- A metadata-document client stays valid only while its host remains trusted (substr skips https://).
-      AND (c."metadataUrl" IS NULL OR (p."cimdEnabled"
-        AND (cardinality(p."cimdAllowedHosts") = 0
-          OR split_part(substr(c."metadataUrl", 9), '/', 1) = ANY(p."cimdAllowedHosts"))))
       AND (${credentialId ?? null}::text IS NULL OR EXISTS (
         SELECT 1 FROM "McpToken" t WHERE t.id = ${credentialId ?? null}
           AND t."grantId" = g.id AND t."rotatedAt" IS NULL AND t."accessExpiresAt" > ${now}
       ))
   `;
+  return authorityFrom(grant, now);
+}
+
+function authorityFrom(
+  grant: GrantAuthoritySnapshot | undefined,
+  now: Date
+): { auth: V2AuthContext; policy: McpRuntimePolicy | null } {
   requireMcp(
     grant &&
+      grant.clientTrusted &&
       !grant.revokedAt &&
       !grant.clientRevokedAt &&
       grant.expiresAt > now &&
@@ -157,6 +172,33 @@ export async function resolveMcpGrantWithPolicy(
   };
 }
 
+interface BearerSnapshot extends Partial<GrantAuthoritySnapshot> {
+  tokenId: string;
+  tokenGrantId: string;
+  tokenScopes: string[];
+  rotatedAt: Date | null;
+  accessExpiresAt: Date;
+  lastUsedAt: Date | null;
+}
+
+/**
+ * The bearer's token, its grant's authority and the policy in one statement. The grant side is
+ * outer-joined so a known token with a failing grant is still told apart from an unknown one.
+ */
+async function resolveBearer(accessHash: string) {
+  const [row] = await prisma.$queryRaw<BearerSnapshot[]>`
+    SELECT t.id AS "tokenId", t."grantId" AS "tokenGrantId", t.scopes AS "tokenScopes",
+      t."rotatedAt", t."accessExpiresAt", t."lastUsedAt", ${AUTHORITY_COLUMNS}
+    FROM "McpToken" t
+    LEFT JOIN "McpGrant" g ON g.id = t."grantId"
+    LEFT JOIN "McpClient" c ON c.id = g."clientId"
+    LEFT JOIN "User" u ON u.id = g."userId"
+    LEFT JOIN "McpPolicy" p ON p.id = 'default'
+    WHERE t."accessHash" = ${accessHash}
+  `;
+  return row;
+}
+
 /** Authentication can precede body parsing; charge the validated cost separately in that case. */
 export async function authenticateMcp(request: Request, cost: number | null) {
   // The policy is read with the grant. A disabled MCP still answers MCP_DISABLED ahead of any
@@ -171,17 +213,18 @@ export async function authenticateMcp(request: Request, cost: number | null) {
   try {
     const header = request.headers.get('authorization') ?? '';
     requireMcp(/^Bearer [A-Za-z0-9_-]{32,256}$/.test(header), 'MCP_INVALID_TOKEN', 401);
-    const found = await prisma.mcpToken.findUnique({
-      where: { accessHash: digestMcpSecret(header.slice(7)) },
-    });
-    unknownCredential = !found;
-    requireMcp(
-      found && !found.rotatedAt && found.accessExpiresAt > new Date(),
-      'MCP_INVALID_TOKEN',
-      401
-    );
-    token = found;
-    resolved = await resolveMcpGrantWithPolicy(token.grantId, token.id);
+    const row = await resolveBearer(digestMcpSecret(header.slice(7)));
+    unknownCredential = !row;
+    const now = new Date();
+    requireMcp(row && !row.rotatedAt && row.accessExpiresAt > now, 'MCP_INVALID_TOKEN', 401);
+    token = {
+      id: row.tokenId,
+      grantId: row.tokenGrantId,
+      scopes: row.tokenScopes,
+      lastUsedAt: row.lastUsedAt,
+    };
+    // The same checks as resolveMcpGrantWithPolicy, judged on the row read with the token.
+    resolved = authorityFrom(row.grantId ? (row as GrantAuthoritySnapshot) : undefined, now);
   } catch (error) {
     if (
       unknownCredential &&
@@ -224,5 +267,9 @@ export async function chargeMcpRequest(
   cost: number
 ) {
   const quota = await incrementSharedCounter(`mcp:${identity.grantId}`, 60000, 'application', cost);
-  requireMcp(quota.count <= identity.policy.requestsPerMinute, 'MCP_RATE_LIMITED', 429);
+  if (quota.count > identity.policy.requestsPerMinute)
+    // The quota is a fixed one-minute window: tell the client when it actually reopens.
+    throw new McpBoundaryError('MCP_RATE_LIMITED', 429, true, undefined, {
+      retryAfterSeconds: Math.min(60, Math.max(1, Math.ceil((quota.resetAt - Date.now()) / 1000))),
+    });
 }

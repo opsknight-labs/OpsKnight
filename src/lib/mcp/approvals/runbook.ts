@@ -226,7 +226,7 @@ export function prepareMcpRunbook(context: ExecutionContext, raw: unknown) {
               status: 'REQUIRES_NATIVE_APPROVAL',
               reviewUrl: `${mcpOrigin()}/settings/integrations/mcp/approvals/${previewId}`,
               warnings: [
-                'Only a different authorized user in the native UI can approve this frozen plan.',
+                'A user allowed to approve runbooks must approve this frozen plan in the native OpsKnight UI; an administrator may approve their own request after confirming.',
               ],
             };
           },

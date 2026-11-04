@@ -222,7 +222,10 @@ async function lockApproval(tx: Prisma.TransactionClient, id: string) {
   return tx.mcpOperationApproval.findUnique({ where: { id } });
 }
 
-/** A different, currently authorized human must be able to perform the same operation. */
+/**
+ * A currently authorized administrator must be able to perform the same operation; the requester
+ * may review their own request only if they are an administrator.
+ */
 async function assertOperationReviewer(
   tx: Prisma.TransactionClient,
   approval: McpOperationApproval,
@@ -363,7 +366,7 @@ export function prepareMcpOperation(context: ExecutionContext, raw: unknown) {
                 preview: summary.preview === null ? null : '[shown to reviewer]',
               },
               warnings: [
-                'Nothing has been changed. A different authorized human must approve this exact change in the native OpsKnight UI. Approval permits one execution and current permissions are checked again.',
+                'Nothing has been changed. An OpsKnight administrator must approve this exact change in the native OpsKnight UI; an administrator may approve their own request after confirming. Approval permits one execution and current permissions are checked again.',
               ],
             };
           },
