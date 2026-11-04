@@ -575,3 +575,54 @@ it('discards an in-flight vector if the embedding endpoint changes before storag
     resolve.mockRestore();
   }
 });
+
+it('keeps the embedding space pinned across a circuit outage and recovery', async () => {
+  const { provider, ctx } = await setup();
+  const backup = await saveAiProvider(
+    null,
+    {
+      name: 'Standby',
+      kind: 'OPENAI_COMPATIBLE',
+      model: 'm',
+      baseUrl: `${model.url}/backup`,
+      apiKey: 'k',
+      enabled: true,
+      isExternal: false,
+      maxDataClass: 'PERSONAL',
+      allowPrivateNetwork: true,
+      priority: 2,
+      embeddingModel: 'backup-space',
+    },
+    ctx
+  );
+  const shop = await createTestService('Pinned embedding space');
+  const original = await indexed('Checkout failing', shop.id);
+  const precedent = await indexed('Payment transactions declined', shop.id);
+  const pending = await indexed('Checkout newly failing', shop.id);
+  await embedIncidents([original.id, precedent.id]);
+  const space = await currentEmbeddingModel();
+  const before = await db.incidentEmbedding.findMany({ orderBy: { incidentId: 'asc' } });
+  const requests = embeddingCalls().length;
+  for (let failure = 0; failure < 3; failure++) embeddingBreakers.recordFailure(provider.id);
+  try {
+    expect(embeddingBreakers.isOpen(provider.id)).toBe(true);
+    expect(await currentEmbeddingModel()).toBe(space);
+    await expect(embedIncidents([pending.id])).rejects.toThrow('Embedding provider unavailable');
+    expect(embeddingCalls()).toHaveLength(requests);
+    expect(await db.incidentEmbedding.findMany({ orderBy: { incidentId: 'asc' } })).toEqual(before);
+    expect(await getSemanticIndexStatus()).toMatchObject({ indexed: 2, pending: 1 });
+    const cached = await findSimilarIncidents(original.id, { ...options, semanticModel: space });
+    expect(
+      cached?.results.find(row => row.incidentId === precedent.id)?.components.semantic
+    ).toBeGreaterThan(0.99);
+    embeddingBreakers.recordSuccess(provider.id);
+    expect(await embedIncidents([original.id, precedent.id])).toMatchObject({ embedded: [] });
+    expect(embeddingCalls()).toHaveLength(requests);
+    expect(await embedIncidents([pending.id])).toMatchObject({ embedded: [pending.id] });
+    expect(embeddingCalls().at(-1)?.body.model).toBe('emb-1');
+    expect(embeddingCalls().some(call => call.path.includes('/backup/'))).toBe(false);
+  } finally {
+    embeddingBreakers.recordSuccess(provider.id);
+    embeddingBreakers.recordSuccess(backup.id);
+  }
+});

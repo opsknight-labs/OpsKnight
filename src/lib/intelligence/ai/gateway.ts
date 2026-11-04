@@ -808,7 +808,11 @@ class GatewayEmbeddingPort implements EmbeddingPort {
   }
 }
 
-/** The first eligible provider with an embedding model, under the same data-class and residency rules. */
+/**
+ * Pin to the configured first eligible embedding deployment. Breaker state gates calls, not model
+ * identity: transient failover would overwrite the single vector per incident and churn the corpus.
+ * Administrative provider/clearance/residency changes still take effect on each fresh resolution.
+ */
 export async function resolveGatewayEmbedding(
   dataClass: AiDataClass
 ): Promise<EmbeddingPort | null> {
@@ -822,7 +826,7 @@ export async function resolveGatewayEmbedding(
       allowedRegions: settings.allowedDataRegions,
     }
   );
-  const chosen = candidates.find(provider => embeddingBreakers.available(provider.id));
+  const chosen = candidates[0];
   return chosen ? new GatewayEmbeddingPort(chosen, settings) : null;
 }
 
