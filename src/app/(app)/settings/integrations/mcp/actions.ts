@@ -25,6 +25,10 @@ import { mcpSessionDates } from '@/lib/mcp/auth/session-lifetime';
 import { partitionScopesForRole } from '@/lib/mcp/auth/role-scopes';
 import { isAppRole } from '@/lib/authorization';
 import { supersededMcpGrantsWhere } from '@/lib/mcp/auth/consent';
+import {
+  MCP_APPROVAL_COMMIT_WINDOW_DEFAULT_MINUTES,
+  MCP_APPROVAL_TTL_DEFAULT_MINUTES,
+} from '@/lib/mcp/approvals/timing';
 
 const settingsPath = '/settings/integrations/mcp';
 const supportedScopes = supportedMcpScopes;
@@ -156,8 +160,8 @@ export async function updateMcpPolicy(form: FormData) {
       dcrEnabled: z.boolean(),
       dcrScopes: z.string().max(2048),
       sessionIdleDays: z.coerce.number().int().min(1).max(90),
-      approvalTtlMinutes: z.coerce.number().int().min(15).max(1440),
-      approvalCommitWindowMinutes: z.coerce.number().int().min(1).max(1440),
+      approvalTtlMinutes: z.coerce.number().int().min(15).max(1440).optional(),
+      approvalCommitWindowMinutes: z.coerce.number().int().min(1).max(1440).optional(),
     })
     .strict()
     .parse({
@@ -172,9 +176,9 @@ export async function updateMcpPolicy(form: FormData) {
       // Scope checkboxes submit one value each; a plain text field submits a space-separated list.
       dcrScopes: form.getAll('dcrScopes').map(String).join(' '),
       sessionIdleDays: form.get('sessionIdleDays') ?? 30,
-      // Older forms without these fields keep the defaults.
-      approvalTtlMinutes: form.get('approvalTtlMinutes') ?? 240,
-      approvalCommitWindowMinutes: form.get('approvalCommitWindowMinutes') ?? 30,
+      // A form without these fields keeps the stored windows (or the defaults on first save).
+      approvalTtlMinutes: form.get('approvalTtlMinutes') ?? undefined,
+      approvalCommitWindowMinutes: form.get('approvalCommitWindowMinutes') ?? undefined,
     });
   const cimdAllowedHosts = [
     ...new Set(
@@ -228,8 +232,12 @@ export async function updateMcpPolicy(form: FormData) {
     dcrEnabled: input.dcrEnabled,
     dcrScopes,
     sessionIdleDays: input.sessionIdleDays,
-    approvalTtlMinutes: input.approvalTtlMinutes,
-    approvalCommitWindowMinutes: input.approvalCommitWindowMinutes,
+    approvalTtlMinutes:
+      input.approvalTtlMinutes ?? existing?.approvalTtlMinutes ?? MCP_APPROVAL_TTL_DEFAULT_MINUTES,
+    approvalCommitWindowMinutes:
+      input.approvalCommitWindowMinutes ??
+      existing?.approvalCommitWindowMinutes ??
+      MCP_APPROVAL_COMMIT_WINDOW_DEFAULT_MINUTES,
   };
   await prisma.$transaction(async tx => {
     await assertCurrentAdmin(tx, actor);

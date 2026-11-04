@@ -101,6 +101,10 @@ describe('review outcomes', () => {
     expect(expectedReviewCode(new Error('database exploded'))).toBeNull();
     expect(reviewMessage('MCP_REAUTHENTICATION_REQUIRED')).toContain("Confirm it's you");
     expect(reviewMessage('SOMETHING_NEW')).toContain('could not be recorded');
+    // Inherited object keys are not expected refusals: they must still surface as real errors.
+    expect(expectedReviewCode(new Error('constructor'))).toBeNull();
+    expect(expectedReviewCode(Object.assign(new Error('x'), { code: 'toString' }))).toBeNull();
+    expect(reviewMessage('constructor')).toContain('could not be recorded');
   });
 
   it('completes the loader reasons a reviewer can be blocked for', () => {

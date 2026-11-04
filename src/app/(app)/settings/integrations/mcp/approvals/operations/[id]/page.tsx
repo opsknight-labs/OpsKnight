@@ -172,6 +172,7 @@ export default async function OperationApproval({ params }: { params: Promise<{ 
           rejectLabel="Reject change"
           freshSignInRequired={freshSignInRequired}
           reviewPath={reviewPath}
+          selfReview={selfReview}
         >
           {selfReview && <SelfApprovalConfirm />}
         </ReviewForm>

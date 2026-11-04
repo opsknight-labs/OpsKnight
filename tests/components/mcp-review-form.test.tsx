@@ -47,6 +47,24 @@ describe('review form', () => {
     expect(form.get('reason')).toBe('Wrong service');
   });
 
+  it('does not claim the requester was notified when they reviewed their own request', async () => {
+    const approve = async (_previous: unknown, _form: FormData) => ({
+      ok: true as const,
+      decision: 'approve' as const,
+    });
+    render(<ReviewForm {...base} action={vi.fn(approve)} selfReview />);
+    fireEvent.click(screen.getByRole('button', { name: /Approve frozen change/ }));
+    const own = await screen.findByRole('status');
+    expect(own).not.toHaveTextContent('notified');
+    expect(own).toHaveTextContent('Your assistant can now apply it once.');
+    cleanup();
+    render(<ReviewForm {...base} action={vi.fn(approve)} />);
+    fireEvent.click(screen.getByRole('button', { name: /Approve frozen change/ }));
+    expect(await screen.findByRole('status')).toHaveTextContent(
+      'The requester was notified in OpsKnight. Their assistant can now apply it once.'
+    );
+  });
+
   it('replaces Approve with a re-sign-in that returns to the review page when sign-in is stale', async () => {
     render(<ReviewForm {...base} action={vi.fn()} freshSignInRequired />);
     expect(screen.queryByRole('button', { name: /Approve frozen change/ })).toBeNull();

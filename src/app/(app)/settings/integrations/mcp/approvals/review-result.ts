@@ -53,10 +53,13 @@ export const REVIEW_MESSAGES: Readonly<Record<string, string>> = {
     "The requester's assistant connection is no longer valid, so this request cannot be approved.",
 };
 
+/** Own keys only: an inherited name such as "constructor" is not an expected refusal. */
+const isReviewCode = (code: string) => Object.hasOwn(REVIEW_MESSAGES, code);
+
 export function reviewMessage(code: string) {
-  return (
-    REVIEW_MESSAGES[code] ?? 'This decision could not be recorded. Reload the page and try again.'
-  );
+  return isReviewCode(code)
+    ? REVIEW_MESSAGES[code]
+    : 'This decision could not be recorded. Reload the page and try again.';
 }
 
 /** The code of an expected refusal, or null for anything that should surface as a real error. */
@@ -65,8 +68,8 @@ export function expectedReviewCode(error: unknown): string | null {
     error && typeof error === 'object' && 'code' in error && typeof error.code === 'string'
       ? error.code
       : '';
-  if (code in REVIEW_MESSAGES) return code;
+  if (code && isReviewCode(code)) return code;
   // Runbook review errors carry their code as the message.
   const message = error instanceof Error ? error.message : '';
-  return message in REVIEW_MESSAGES ? message : null;
+  return message && isReviewCode(message) ? message : null;
 }

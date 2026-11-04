@@ -205,6 +205,61 @@ describe('C1 reviewers and requesters are notified in-app', () => {
   });
 });
 
+describe('C1 notifications never leave OpsKnight', () => {
+  it('rolls the reviewer notices back when the prepare fails after writing them', async () => {
+    const f = await fixture();
+    // Fails the audit write that follows the notices inside the same prepare transaction.
+    await db.$executeRawUnsafe(`
+      CREATE OR REPLACE FUNCTION mcp_test_fail_prepare_audit() RETURNS trigger AS $$
+      BEGIN RAISE EXCEPTION 'audit unavailable'; END $$ LANGUAGE plpgsql`);
+    await db.$executeRawUnsafe(`
+      CREATE TRIGGER mcp_test_fail_prepare_audit BEFORE INSERT ON "AuditLog"
+      FOR EACH ROW WHEN (NEW.action = 'mcp.operation.prepared')
+      EXECUTE FUNCTION mcp_test_fail_prepare_audit()`);
+    try {
+      const before = await db.inAppNotification.count();
+      await expect(
+        prepareMcpOperation(f.ctx(), f.announcementArgs('Rolled back'))
+      ).rejects.toThrow();
+      expect(await db.inAppNotification.count()).toBe(before);
+      expect(await db.mcpOperationApproval.count({ where: { actorId: f.user.id } })).toBe(0);
+    } finally {
+      await db.$executeRawUnsafe(
+        'DROP TRIGGER IF EXISTS mcp_test_fail_prepare_audit ON "AuditLog"'
+      );
+      await db.$executeRawUnsafe('DROP FUNCTION IF EXISTS mcp_test_fail_prepare_audit()');
+    }
+    // The same request goes through, with its notice, once the failure is gone.
+    const prepared = await prepareMcpOperation(f.ctx(), f.announcementArgs('Rolled back'));
+    expect(await notificationsFor(prepared.approvalId)).toHaveLength(1);
+  });
+
+  it('queues no email or other outbound delivery for requests or decisions', async () => {
+    // Owner decision: email would reach every administrator, so approvals are in-app only.
+    const f = await fixture();
+    await createTestUser({ role: 'ADMIN' });
+    const outbound = () => db.notification.count();
+    const before = await outbound();
+    const change = await prepareMcpOperation(f.ctx(), f.announcementArgs('No email'));
+    await f.review(change, 'approve');
+    const rejected = await prepareMcpOperation(f.ctx(), f.announcementArgs('No email either'));
+    await f.review(rejected, 'reject');
+    const r = await runbookFixture();
+    const plan = await r.prepare();
+    await decideMcpRunbookReview(
+      { id: plan.previewId, planDigest: plan.planDigest, decision: 'reject', reason: 'No' },
+      r.reviewer
+    );
+    expect(await outbound()).toBe(before);
+    // The in-app notices were written: reviewers for each request, requesters for each decision.
+    expect(
+      await db.inAppNotification.count({
+        where: { entityId: { in: [change.approvalId, rejected.approvalId, plan.previewId] } },
+      })
+    ).toBeGreaterThanOrEqual(5);
+  });
+});
+
 describe('C2 review and commit windows come from the policy', () => {
   it('waits the policy TTL for review, and approval opens a fresh commit window', async () => {
     const f = await fixture();

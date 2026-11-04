@@ -164,6 +164,7 @@ export default async function RunbookApproval({ params }: { params: Promise<{ id
           approveLabel="Approve frozen plan"
           rejectLabel="Reject plan"
           reviewPath={`/settings/integrations/mcp/approvals/${preview.id}`}
+          selfReview={selfReview}
         >
           {selfReview && <SelfApprovalConfirm />}
         </ReviewForm>

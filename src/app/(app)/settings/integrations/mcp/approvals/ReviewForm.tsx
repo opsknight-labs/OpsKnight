@@ -70,6 +70,7 @@ export default function ReviewForm({
   approveLabel,
   rejectLabel,
   freshSignInRequired = false,
+  selfReview = false,
   reviewPath,
   children,
 }: {
@@ -79,6 +80,8 @@ export default function ReviewForm({
   approveLabel: string;
   rejectLabel: string;
   freshSignInRequired?: boolean;
+  /** The reviewer is the requester, who is not sent a notice about their own decision. */
+  selfReview?: boolean;
   reviewPath: string;
   children?: ReactNode;
 }) {
@@ -95,9 +98,10 @@ export default function ReviewForm({
             : `You rejected this ${noun}.`}
         </p>
         <p className="mt-1 text-sm">
+          {selfReview ? '' : 'The requester was notified in OpsKnight. '}
           {result.decision === 'approve'
-            ? 'The requester was notified. Their assistant can now apply it once.'
-            : 'The requester was notified. Nothing was changed.'}
+            ? `${selfReview ? 'Your' : 'Their'} assistant can now apply it once.`
+            : 'Nothing was changed.'}
         </p>
       </div>
     );
