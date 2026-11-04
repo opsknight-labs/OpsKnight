@@ -14,7 +14,7 @@ import { POST as mcpRequest } from '@/app/mcp/route';
 import { callMcpOperation, type ExecutionContext } from '@/lib/mcp/core/execution';
 import { CostBudget } from '@/lib/mcp/core/budget';
 import { administerUser } from '@/lib/users/administration';
-import { bulkUpdateUserSecurityState } from '@/lib/users/admin-invariants';
+import { bulkUpdateUserSecurityState, updateUserSecurityState } from '@/lib/users/admin-invariants';
 import { setTeamMembership } from '@/lib/teams/administration';
 import { revokeUserSessions } from '@/lib/auth';
 
@@ -233,6 +233,12 @@ describe('B1: only security events sign assistants out', () => {
     await administerUser(deactivated.user.id, { operation: 'deactivate' }, { id: owner.id });
     await administerUser(deactivated.user.id, { operation: 'reactivate' }, { id: owner.id });
     await expect(resolveMcpGrant(deactivated.grant.id)).rejects.toThrow('MCP_ACCESS_CHANGED');
+
+    // Any departure from ACTIVE signs out, not only DISABLED.
+    const invited = await fixture('USER', ['incidents:read']);
+    await updateUserSecurityState(invited.user.id, { status: 'INVITED' });
+    await updateUserSecurityState(invited.user.id, { status: 'ACTIVE' });
+    await expect(resolveMcpGrant(invited.grant.id)).rejects.toThrow('MCP_ACCESS_CHANGED');
 
     const adminSignOut = await fixture('USER', ['incidents:read']);
     await administerUser(adminSignOut.user.id, { operation: 'revoke-sessions' }, { id: owner.id });
@@ -454,5 +460,33 @@ describe('B7: bad-token limiter on /mcp', () => {
       'MCP_INVALID_TOKEN'
     );
     await expect(authenticateMcp(bearer(junk), null)).rejects.toThrow('MCP_INVALID_TOKEN');
+  });
+
+  it('never counts an expired or revoked token OpsKnight issued, so a shared address keeps working', async () => {
+    const peer = '203.0.113.90';
+    const f = await fixture('USER', ['incidents:read']);
+    const stale = await access(f);
+    await db.mcpToken.updateMany({
+      where: { grantId: f.grant.id },
+      data: { accessExpiresAt: new Date(Date.now() - 1000) },
+    });
+    for (let i = 0; i <= MCP_BAD_TOKEN_LIMIT; i++)
+      await expect(authenticateMcp(bearer(stale.access_token, peer), null)).rejects.toThrow(
+        'MCP_INVALID_TOKEN'
+      );
+    // A revoked connection retried from the same address is not junk either.
+    const revoked = await fixture('USER', ['incidents:read']);
+    const revokedTokens = await access(revoked);
+    await revokeUserSessions(revoked.user.id);
+    for (let i = 0; i <= MCP_BAD_TOKEN_LIMIT; i++)
+      await expect(authenticateMcp(bearer(revokedTokens.access_token, peer), null)).rejects.toThrow(
+        'MCP_ACCESS_CHANGED'
+      );
+    // Someone else behind the same address still connects.
+    const live = await fixture('USER', ['incidents:read']);
+    const liveTokens = await access(live);
+    await expect(
+      authenticateMcp(bearer(liveTokens.access_token, peer), null)
+    ).resolves.toBeTruthy();
   });
 });

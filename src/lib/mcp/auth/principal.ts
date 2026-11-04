@@ -55,13 +55,6 @@ const loadRuntimePolicy = async (): Promise<McpRuntimePolicy | null> =>
     },
   });
 
-const CREDENTIAL_FAILURES = new Set([
-  'MCP_INVALID_TOKEN',
-  'MCP_INVALID_GRANT',
-  'MCP_INACTIVE_PRINCIPAL',
-  'MCP_ACCESS_CHANGED',
-]);
-
 export async function resolveMcpGrant(
   grantId: string,
   credentialId?: string,
@@ -171,12 +164,17 @@ export async function authenticateMcp(request: Request, cost: number | null) {
   let resolved: Awaited<ReturnType<typeof resolveMcpGrantWithPolicy>>;
   let token: { id: string; grantId: string; scopes: string[]; lastUsedAt: Date | null };
   admitMcpBearer(request);
+  // Only a credential OpsKnight never issued counts against the peer. An expired or revoked token
+  // is a normal refresh, and many users can share one egress address (claude.ai), so counting it
+  // would lock everyone behind that address out.
+  let unknownCredential = true;
   try {
     const header = request.headers.get('authorization') ?? '';
     requireMcp(/^Bearer [A-Za-z0-9_-]{32,256}$/.test(header), 'MCP_INVALID_TOKEN', 401);
     const found = await prisma.mcpToken.findUnique({
       where: { accessHash: digestMcpSecret(header.slice(7)) },
     });
+    unknownCredential = !found;
     requireMcp(
       found && !found.rotatedAt && found.accessExpiresAt > new Date(),
       'MCP_INVALID_TOKEN',
@@ -185,7 +183,11 @@ export async function authenticateMcp(request: Request, cost: number | null) {
     token = found;
     resolved = await resolveMcpGrantWithPolicy(token.grantId, token.id);
   } catch (error) {
-    if (error instanceof McpBoundaryError && CREDENTIAL_FAILURES.has(error.code))
+    if (
+      unknownCredential &&
+      error instanceof McpBoundaryError &&
+      error.code === 'MCP_INVALID_TOKEN'
+    )
       recordMcpBearerFailure(request);
     requireMcp((await loadRuntimePolicy())?.enabled, 'MCP_DISABLED', 503);
     throw error;

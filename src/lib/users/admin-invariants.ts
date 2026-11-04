@@ -18,8 +18,9 @@ type UserSecurityMutation = {
 };
 
 /**
- * Deactivation and demotion from ADMIN are security events that sign assistants out (MCP grants
- * pin `mcpRevocationVersion`). Other role and team edits narrow access live through authorize().
+ * Leaving ACTIVE (deactivation) and demotion from ADMIN are security events that sign assistants
+ * out (MCP grants pin `mcpRevocationVersion`). Other role and team edits narrow access live
+ * through authorize().
  */
 function revokesMcpGrants(
   target: { role: Role; status: UserStatus },
@@ -28,6 +29,8 @@ function revokesMcpGrants(
 ) {
   return (
     (target.role === 'ADMIN' && nextRole !== 'ADMIN') ||
+    // Any departure from ACTIVE, so a later reactivation never revives an old connection.
+    (target.status === 'ACTIVE' && nextStatus !== 'ACTIVE') ||
     (target.status !== 'DISABLED' && nextStatus === 'DISABLED')
   );
 }
