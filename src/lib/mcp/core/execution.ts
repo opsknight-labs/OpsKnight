@@ -75,13 +75,32 @@ export function validateOperationArgs(
     validators.set(operationId, validate);
   }
   requireMcp(validate(args), 'MCP_INVALID_ARGUMENTS', 400, argumentHint(validate.errors));
-  return args as {
+  const parsed = args as {
     path?: Record<string, string>;
     query?: Record<string, string | number | boolean>;
     body?: unknown;
     idempotencyKey?: string;
     ifMatch?: string;
   };
+  if (parsed.ifMatch === undefined) return parsed;
+  return { ...parsed, ifMatch: mcpIfMatch(parsed.ifMatch) };
+}
+
+/**
+ * Assistants read a target's revision as a number (`3`), but the API compares strong ETags
+ * (`"3"`). Normalise before anything is frozen for approval, so a reviewed plan never fails
+ * afterwards on quoting; anything else is refused up front with a usable hint.
+ */
+export function mcpIfMatch(value: string) {
+  const raw = value.trim();
+  const tag = /^"\d{1,10}"$/.test(raw) ? raw : /^\d{1,10}$/.test(raw) ? `"${raw}"` : null;
+  requireMcp(
+    tag,
+    'MCP_INVALID_ARGUMENTS',
+    400,
+    '/ifMatch must be the target revision, e.g. 3 or "3" (the ETag from its last read).'
+  );
+  return tag;
 }
 
 export const MCP_MAX_PAGE_SIZE = 50;

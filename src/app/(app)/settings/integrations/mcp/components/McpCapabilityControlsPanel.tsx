@@ -34,6 +34,16 @@ import {
   SelectTrigger,
 } from '@/components/ui/shadcn/select';
 import { SettingsSection } from '@/components/settings/layout/SettingsSection';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/shadcn/alert-dialog';
 import { SaveIndicator } from '@/components/settings/feedback/SaveIndicator';
 import type { McpCapability, McpRisk } from '@/lib/mcp/catalog/capabilities';
 import type { UpdateMcpCapabilitiesResult } from '../capability-actions';
@@ -133,6 +143,8 @@ export default function McpCapabilityControlsPanel({
   const [query, setQuery] = useState('');
   const [onlyDisabled, setOnlyDisabled] = useState(false);
   const [selectedDomain, setSelectedDomain] = useState<string>('all');
+  // Disabling every capability at once cuts off all assistants; it asks first.
+  const [confirmDisableAll, setConfirmDisableAll] = useState(false);
   const [selectedRisk, setSelectedRisk] = useState<string>('all');
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
   const [pages, setPages] = useState<Record<string, number>>({});
@@ -331,6 +343,21 @@ export default function McpCapabilityControlsPanel({
 
   return (
     <div className={BODY_FONT} aria-busy={pending}>
+      <AlertDialog open={confirmDisableAll} onOpenChange={setConfirmDisableAll}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Disable all {capabilities.length} capabilities?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Every connected assistant loses access to all OpsKnight tools until you expose them
+              again. Nothing changes until you save.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Keep current selection</AlertDialogCancel>
+            <AlertDialogAction onClick={() => setAll(false)}>Disable all</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
       <SettingsSection
         title="Exposed capabilities"
         description="Turn off anything assistants must never reach through MCP. This applies to every connection, whatever a user's role or consent allows, and takes effect on their next request."
@@ -552,7 +579,7 @@ export default function McpCapabilityControlsPanel({
                   id={`${idPrefix}-capabilities-master-select`}
                   type="checkbox"
                   checked={allExposed}
-                  onChange={e => setAll(e.target.checked)}
+                  onChange={e => (e.target.checked ? setAll(true) : setConfirmDisableAll(true))}
                   className="h-3.5 w-3.5 rounded border-border text-primary focus:ring-1 focus:ring-primary accent-primary cursor-pointer"
                 />
                 <span className="hidden sm:inline">
@@ -568,6 +595,7 @@ export default function McpCapabilityControlsPanel({
                   size="sm"
                   onClick={() => setAll(true)}
                   disabled={allExposed}
+                  aria-label="Select all capabilities"
                   className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground disabled:opacity-30"
                 >
                   Select all
@@ -579,8 +607,9 @@ export default function McpCapabilityControlsPanel({
                   type="button"
                   variant="ghost"
                   size="sm"
-                  onClick={() => setAll(false)}
+                  onClick={() => setConfirmDisableAll(true)}
                   disabled={noneExposed}
+                  aria-label="Uncheck all capabilities"
                   className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground disabled:opacity-30"
                 >
                   Uncheck all
@@ -693,6 +722,7 @@ export default function McpCapabilityControlsPanel({
                             type="button"
                             onClick={() => setGroup(group.domain, group.items, true)}
                             disabled={exposed === group.items.length}
+                            aria-label={`Select all in ${label}`}
                             className="hover:text-foreground disabled:opacity-30 disabled:pointer-events-none"
                           >
                             Select all
@@ -702,6 +732,7 @@ export default function McpCapabilityControlsPanel({
                             type="button"
                             onClick={() => setGroup(group.domain, group.items, false)}
                             disabled={exposed === 0}
+                            aria-label={`Uncheck all in ${label}`}
                             className="hover:text-foreground disabled:opacity-30 disabled:pointer-events-none"
                           >
                             Uncheck all

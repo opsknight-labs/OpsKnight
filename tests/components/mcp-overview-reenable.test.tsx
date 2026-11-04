@@ -63,3 +63,10 @@ it('says when a restored policy stays read-only with automatic connections off',
   expect(screen.getByText(/Read-only: assistants cannot propose changes/)).toBeTruthy();
   expect(screen.getByText(/Sensitive configuration reads stay off/)).toBeTruthy();
 });
+
+it('states the protocol revision this server implements', () => {
+  render(<McpOverviewSection {...base} enabled />);
+  expect(screen.getByText('MCP 2026-07-28')).toBeTruthy();
+  expect(screen.queryByText(/2024-11-05/)).toBeNull();
+  expect(screen.queryByText(/Official Anthropic/)).toBeNull();
+});

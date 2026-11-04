@@ -243,8 +243,8 @@ export default function McpOverviewSection({
                   )}
                 </div>
                 <p className="mt-0.5 text-xs text-muted-foreground">
-                  Official Anthropic Model Context Protocol · Streamable HTTP / SSE transport ·
-                  OAuth 2.0 PKCE Dynamic Registration
+                  Model Context Protocol over Streamable HTTP · OAuth with PKCE · client metadata
+                  documents and dynamic registration
                 </p>
               </div>
             </div>
@@ -282,13 +282,14 @@ export default function McpOverviewSection({
               <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground block">
                 Protocol Spec
               </span>
-              <span className="font-medium text-foreground">MCP 2024-11-05</span>
+              {/* The revision src/app/mcp/route.ts serves (see mcp-protocol-version handling). */}
+              <span className="font-medium text-foreground">MCP 2026-07-28</span>
             </div>
             <div className="px-3 py-1">
               <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground block">
                 Auth Method
               </span>
-              <span className="font-medium text-foreground">OAuth 2.0 PKCE / DCR</span>
+              <span className="font-medium text-foreground">OAuth PKCE · CIMD / DCR</span>
             </div>
             <div className="px-3 py-1">
               <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground block">

@@ -222,6 +222,36 @@ describe('independently approved sensitive MCP operations', () => {
     ).toBe('PENDING');
   });
 
+  it('accepts the bare revision an assistant reads, so an approved plan commits', async () => {
+    const f = await fixture();
+    const args = await f.leadArgs();
+    // Assistants see `revision: 1` in a read and pass it as-is; the API needs the ETag "1".
+    const bare = { ...args, args: { ...args.args, ifMatch: String(await f.teamRevision()) } };
+    const prepared = await prepareMcpOperation(f.ctx(), bare);
+    const stored = await db.mcpOperationApproval.findUniqueOrThrow({
+      where: { id: prepared.approvalId },
+    });
+    expect((stored.summary as { ifMatch?: string }).ifMatch).toBe(`"${await f.teamRevision()}"`);
+    await f.review(prepared);
+    expect(
+      await commitApprovedMcpOperation(f.ctx(), { approvalId: prepared.approvalId })
+    ).toMatchObject({ status: 'COMMITTED' });
+    expect(await db.team.findUnique({ where: { id: f.team.id } })).toMatchObject({
+      teamLeadId: f.lead.id,
+    });
+  });
+
+  it('refuses a malformed revision when the change is prepared, not after approval', async () => {
+    const f = await fixture();
+    const args = await f.leadArgs();
+    await expect(
+      prepareMcpOperation(f.ctx(), { ...args, args: { ...args.args, ifMatch: 'latest' } })
+    ).rejects.toMatchObject({ code: 'MCP_INVALID_ARGUMENTS' });
+    expect(
+      await db.mcpOperationApproval.count({ where: { requesterGrantId: f.ctx().grantId } })
+    ).toBe(0);
+  });
+
   it('rejects a mismatched digest and a rejected or expired plan', async () => {
     const f = await fixture();
     const prepared = await prepareMcpOperation(f.ctx(), await f.leadArgs());
