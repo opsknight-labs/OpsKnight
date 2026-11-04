@@ -1,6 +1,7 @@
 'use client';
 
-import { ExternalLink, Link2, RefreshCw } from 'lucide-react';
+import { AlertTriangle, ExternalLink, Link2, RefreshCw } from 'lucide-react';
+import AuthenticationFreshnessNotice from './AuthenticationFreshnessNotice';
 import { Button } from '@/components/ui/shadcn/button';
 import { normalizeOidcIssuer } from '@/lib/oidc/issuer-migration';
 import AuthenticationAdminPicker from '../AuthenticationAdminPicker';
@@ -47,6 +48,41 @@ export default function AuthenticationAdminTestPanel() {
       data.activeProvider.clientId !== revision.configuration.clientId
     );
     return hasIssuerIdentity && !registrationChanged ? 'not-needed' : 'required';
+  })();
+
+  // Predictable failures, said before the administrator leaves for the identity provider.
+  const preflight: string[] = (() => {
+    if (!revision || !admin) return [];
+    const config = revision.configuration;
+    const warnings: string[] = [];
+    const domain = admin.email.split('@')[1]?.toLowerCase() ?? '';
+    if (linkRequirement === 'required') {
+      if (!domain.includes('.') || domain === 'localhost')
+        warnings.push(
+          `${admin.email} is not a real mailbox. The identity provider must send exactly this email, so change your OpsKnight email in Profile to your work address first.`
+        );
+      else
+        warnings.push(
+          `Sign in at the identity provider as ${admin.email}. The verified email must match exactly.`
+        );
+      if (
+        config.providerType !== 'azure' &&
+        config.allowedDomains.length > 0 &&
+        !config.allowedDomains.includes(domain)
+      )
+        warnings.push(
+          `${domain} is not in the allowed domains (${config.allowedDomains.join(', ')}). Add it under Access & provisioning or the test will fail.`
+        );
+      if (config.providerType === 'azure')
+        warnings.push(
+          'Microsoft Entra sends the email only when the optional "email" claim is added in App registration → Token configuration.'
+        );
+    }
+    if (config.roleMapping.length > 0 && !config.roleMapping.some(rule => rule.role === 'ADMIN'))
+      warnings.push(
+        'No role rule grants Administrator. If your role is managed by single sign-on, the test will fail to protect your access.'
+      );
+    return warnings;
   })();
 
   const isRetest =
@@ -144,6 +180,25 @@ export default function AuthenticationAdminTestPanel() {
           </span>
         </label>
       )}
+
+      {preflight.length > 0 && (
+        <div
+          role="note"
+          className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 text-xs leading-relaxed"
+        >
+          <p className="mb-1.5 flex items-center gap-1.5 font-semibold text-foreground">
+            <AlertTriangle className="h-3.5 w-3.5 text-amber-600" aria-hidden />
+            Before you test
+          </p>
+          <ul className="list-disc space-y-1 pl-5 text-muted-foreground">
+            {preflight.map(item => (
+              <li key={item}>{item}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      <AuthenticationFreshnessNotice />
 
       <AuthenticationActionGuard availability={availability} onResolve={setActiveTab}>
         <Button

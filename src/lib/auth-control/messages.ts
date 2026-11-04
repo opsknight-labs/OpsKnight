@@ -242,3 +242,198 @@ export function sessionEndMessage(reason: string | null | undefined): AuthMessag
 
 /** Reference IDs are short, unguessable-enough strings that tie a screen to a log entry. */
 export const SIGN_IN_REFERENCE_PATTERN = /^[A-Za-z0-9]{6,16}$/;
+
+export const ADMIN_TEST_DOCS =
+  'https://opsknight.com/docs/latest/troubleshooting/login/admin-test-failures/';
+
+export type AdminTestFailureCode =
+  | 'ORIGIN_CHANGED'
+  | 'ORGANIZATION_REJECTED'
+  | 'DOMAIN_NOT_ALLOWED'
+  | 'EMAIL_UNVERIFIED'
+  | 'EMAIL_MISSING'
+  | 'EMAIL_MISMATCH'
+  | 'SUBJECT_MISSING'
+  | 'GROUP_CLAIMS_INCOMPLETE'
+  | 'CONFIG_CHANGED'
+  | 'ADMIN_STATE_CHANGED'
+  | 'IDENTITY_OWNED_BY_OTHER_USER'
+  | 'LINK_NOT_ALLOWED'
+  | 'ROLE_WOULD_DROP_ADMIN'
+  | 'PROVIDER_ACCESS_DENIED'
+  | 'PROVIDER_INVALID_SCOPE'
+  | 'PROVIDER_CLIENT_REJECTED'
+  | 'PROVIDER_ERROR'
+  | 'TOKEN_EXCHANGE_FAILED'
+  | 'FLOW_EXPIRED'
+  | 'REVISION_DELETED'
+  | 'UNKNOWN';
+
+export type AuthSetupStep = 'connection' | 'access' | 'policy' | 'emergency';
+
+export type AdminTestMessage = AuthMessage & {
+  /** Where in the setup console the administrator fixes this. */
+  fix: { step: AuthSetupStep; label: string };
+};
+
+export const ADMIN_TEST_MESSAGES: Record<AdminTestFailureCode, AdminTestMessage> = {
+  ORIGIN_CHANGED: {
+    title: 'The OpsKnight address changed during the test',
+    detail: 'The test started on one application URL and finished on another.',
+    action: 'Make sure everyone uses the same canonical URL, then run the test again.',
+    fix: { step: 'connection', label: 'Review the application URL' },
+  },
+  ORGANIZATION_REJECTED: {
+    title: 'Your identity provider account is outside the allowed organization',
+    detail: 'The organization ID in your sign-in does not match the one configured for OpsKnight.',
+    action:
+      'Sign in with an account from the configured organization, or correct the organization ID.',
+    fix: { step: 'connection', label: 'Check the organization ID' },
+  },
+  DOMAIN_NOT_ALLOWED: {
+    title: 'Your email domain is not in the allowed domains',
+    detail: 'OpsKnight checked your sign-in against the allowed domains list and it did not match.',
+    action: 'Add your domain to the allowed domains, or test with an account in an allowed domain.',
+    fix: { step: 'access', label: 'Edit allowed domains' },
+  },
+  EMAIL_UNVERIFIED: {
+    title: 'Your identity provider says your email is not verified',
+    detail:
+      'Allowed domains and account linking rely on a verified email, and this sign-in reported email_verified=false or did not send it.',
+    action:
+      'Verify the email in your identity provider, or ask it to release the email_verified claim.',
+    fix: { step: 'connection', label: 'Review provider claims' },
+  },
+  EMAIL_MISSING: {
+    title: 'Your identity provider did not send an email address',
+    detail:
+      'OpsKnight needs the email claim to link the test sign-in to your administrator account.',
+    action:
+      'Release the email claim to OpsKnight. For Microsoft Entra, add the optional "email" claim to the ID token in Token configuration.',
+    fix: { step: 'connection', label: 'Review provider claims' },
+  },
+  EMAIL_MISMATCH: {
+    title: 'The email from your identity provider does not match your OpsKnight account',
+    detail:
+      'The first SSO sign-in links to your administrator account only when the verified email is identical.',
+    action:
+      'Sign in at the identity provider with the same email as your OpsKnight account, or change your OpsKnight email in Profile first.',
+    fix: { step: 'connection', label: 'Back to the test' },
+  },
+  SUBJECT_MISSING: {
+    title: 'The sign-in did not include a stable account identifier',
+    detail: 'Every OpenID Connect sign-in must include a "sub" claim.',
+    action: 'Check the provider application type is OpenID Connect, not plain OAuth.',
+    fix: { step: 'connection', label: 'Review provider settings' },
+  },
+  GROUP_CLAIMS_INCOMPLETE: {
+    title: 'Your group claims were incomplete',
+    detail:
+      'A role rule uses a claim that was missing from your sign-in, or your provider sent a "too many groups" marker instead of the list.',
+    action:
+      'Make the provider send the claim used by your role rules. For Microsoft Entra with many groups, use App roles (the "roles" claim) or emit only groups assigned to the application.',
+    fix: { step: 'access', label: 'Review role rules' },
+  },
+  CONFIG_CHANGED: {
+    title: 'Single sign-on settings changed during the test',
+    detail: 'Another administrator activated a configuration while you were signing in.',
+    action: 'Reload the console and run the test again.',
+    tone: 'notice',
+    fix: { step: 'connection', label: 'Run the test again' },
+  },
+  ADMIN_STATE_CHANGED: {
+    title: 'Your administrator account changed during the test',
+    detail: 'Your role, status or sessions changed between starting and finishing the test.',
+    action: 'Sign in again and run the test again.',
+    tone: 'notice',
+    fix: { step: 'connection', label: 'Run the test again' },
+  },
+  IDENTITY_OWNED_BY_OTHER_USER: {
+    title: 'This identity is already linked to another OpsKnight user',
+    detail: 'The account you used at the identity provider belongs to someone else in OpsKnight.',
+    action:
+      'Sign in at the identity provider as yourself (try a private window), then run the test again.',
+    fix: { step: 'connection', label: 'Run the test again' },
+  },
+  LINK_NOT_ALLOWED: {
+    title: 'Linking was not allowed for this test',
+    detail:
+      'This is your first SSO sign-in, so OpsKnight needs your permission to link it to your account.',
+    action: 'Tick “Allow this SSO identity to link…” and run the test again.',
+    fix: { step: 'connection', label: 'Allow linking and retest' },
+  },
+  ROLE_WOULD_DROP_ADMIN: {
+    title: 'These role rules would remove your administrator access',
+    detail:
+      'After applying the role rules to your sign-in, your role would no longer be Administrator, so activation would lock you out.',
+    action:
+      'Add a rule that grants Administrator to a group you belong to (see the claims below), or change the default role.',
+    fix: { step: 'access', label: 'Fix role rules' },
+  },
+  PROVIDER_ACCESS_DENIED: {
+    title: 'Your identity provider refused the sign-in',
+    detail:
+      'Either the sign-in was cancelled, or your account is not assigned to the OpsKnight application at the identity provider.',
+    action:
+      'Assign yourself (or your group) to the OpsKnight application, then run the test again.',
+    fix: { step: 'connection', label: 'Run the test again' },
+  },
+  PROVIDER_INVALID_SCOPE: {
+    title: 'Your identity provider rejected the requested scopes',
+    detail: 'One of the additional scopes is not allowed for this application.',
+    action: 'Remove or correct the additional scopes.',
+    fix: { step: 'connection', label: 'Edit additional scopes' },
+  },
+  PROVIDER_CLIENT_REJECTED: {
+    title: 'Your identity provider rejected the client credentials',
+    detail:
+      'The client ID, client secret or token authentication method does not match the provider.',
+    action:
+      'Copy the client ID and a fresh secret from the provider, and choose the token authentication method it advertises.',
+    fix: { step: 'connection', label: 'Edit client credentials' },
+  },
+  PROVIDER_ERROR: {
+    title: 'Your identity provider returned an error',
+    detail: 'The provider ended the sign-in with an error.',
+    action: 'Read the provider message below, fix it in the provider, then run the test again.',
+    fix: { step: 'connection', label: 'Review provider settings' },
+  },
+  TOKEN_EXCHANGE_FAILED: {
+    title: 'OpsKnight could not complete the sign-in with your provider',
+    detail:
+      'The authorization code could not be exchanged or the ID token failed validation (signature, nonce, audience or clock).',
+    action:
+      'Check the client secret and token authentication method, both callback URLs, and that the server clock is correct.',
+    fix: { step: 'connection', label: 'Edit client credentials' },
+  },
+  FLOW_EXPIRED: {
+    title: 'The test took too long or was opened in another browser',
+    detail: 'A test must finish in the same browser within a few minutes.',
+    action: 'Run the test again and complete the provider sign-in promptly.',
+    tone: 'notice',
+    fix: { step: 'connection', label: 'Run the test again' },
+  },
+  REVISION_DELETED: {
+    title: 'The configuration under test was deleted',
+    detail: 'It was removed before the sign-in completed.',
+    action: 'Save your configuration again and run a new test.',
+    tone: 'notice',
+    fix: { step: 'connection', label: 'Back to the provider' },
+  },
+  UNKNOWN: {
+    title: 'The administrator test failed',
+    detail: 'OpsKnight could not verify administrator access with this configuration.',
+    action: 'Check the diagnostics below and the server log, then run the test again.',
+    fix: { step: 'connection', label: 'Back to the provider' },
+  },
+};
+
+const adminTestMessages = new Map(Object.entries(ADMIN_TEST_MESSAGES));
+
+export function adminTestMessage(code: string | null | undefined): AdminTestMessage {
+  return adminTestMessages.get(code ?? '') ?? ADMIN_TEST_MESSAGES.UNKNOWN;
+}
+
+export function isAdminTestFailureCode(code: unknown): code is AdminTestFailureCode {
+  return typeof code === 'string' && adminTestMessages.has(code);
+}

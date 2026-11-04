@@ -14,6 +14,7 @@ export const fixtureDashboard = {
     updateAgeSeconds: 3600,
   },
   freshAuthenticationRequired: false,
+  freshAuthenticationExpiresAt: null,
   actor: { kind: 'admin', id: 'admin' },
   mode: 'PASSWORD_ONLY',
   policyVersion: 1,

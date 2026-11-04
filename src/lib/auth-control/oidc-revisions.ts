@@ -1,8 +1,9 @@
 import 'server-only';
 import { coerceBooleanClaim, normalizeOidcBoundaryClaims } from '@/lib/oidc/claims';
-import { Issuer, custom, generators } from 'openid-client';
+import { Issuer, custom, generators, errors as openidErrors } from 'openid-client';
 import type { Prisma } from '@prisma/client';
 import prisma from '@/lib/prisma';
+import { logger } from '@/lib/logger';
 import { encrypt, decrypt } from '@/lib/encryption';
 import {
   validateOidcConnection,
@@ -26,6 +27,7 @@ import { emergencyReadiness } from './emergency-management';
 import { securityEvent } from './security-events';
 import { findRevisionIdentity } from './identity';
 import { evaluateOidcProof, oidcProofLabel, OIDC_PROOF_MAX_AGE_MS } from './proof-status';
+import { isAdminTestFailureCode, type AdminTestFailureCode } from './messages';
 
 export const OIDC_TEST_COOKIE =
   process.env.NODE_ENV === 'production' ? '__Host-opsknight-oidc-test' : 'opsknight-oidc-test';
@@ -46,6 +48,142 @@ export class OidcRevisionTestError extends Error {
   ) {
     super(message);
   }
+}
+
+/** A test failure the result page can explain. Diagnostics never contain tokens or secrets. */
+export class OidcTestFailure extends Error {
+  constructor(
+    readonly code: AdminTestFailureCode,
+    readonly diagnostics: OidcTestDiagnostics = {}
+  ) {
+    super(code);
+  }
+}
+
+export type OidcTestDiagnostics = {
+  /** Every claim name the provider sent, so a missing claim is obvious. */
+  claimNames?: string[];
+  /** Values of the claims OpsKnight uses for access decisions, capped. */
+  claims?: Record<string, string | boolean | string[] | null>;
+  receivedEmail?: string;
+  expectedEmail?: string;
+  role?: { result: string; matchedRule?: string | null; effectiveRole?: string };
+  providerMessage?: string;
+};
+
+const DIAGNOSTIC_CLAIMS = ['email', 'email_verified', 'hd', 'org_id', 'tid', 'groups', 'roles'];
+const MAX_DIAGNOSTIC_VALUES = 50;
+
+function diagnosticValue(value: unknown): string | boolean | string[] | null {
+  if (typeof value === 'boolean') return value;
+  if (typeof value === 'string' || typeof value === 'number') return String(value).slice(0, 200);
+  if (Array.isArray(value))
+    return value
+      .filter(item => typeof item === 'string' || typeof item === 'number')
+      .slice(0, MAX_DIAGNOSTIC_VALUES)
+      .map(item => String(item).slice(0, 200));
+  if (value && typeof value === 'object') return '[object]';
+  return null;
+}
+
+function readClaimPath(claims: Record<string, unknown>, path: string): unknown {
+  if (path in claims) return claims[path];
+  return path.split('.').reduce<unknown>((current, key) => {
+    if (!current || typeof current !== 'object' || Array.isArray(current)) return undefined;
+    return (current as Record<string, unknown>)[key];
+  }, claims);
+}
+
+/** Masks an email for display: the domain is useful for diagnosis, the mailbox is not. */
+export function maskEmail(email: string | null | undefined): string | undefined {
+  if (!email) return undefined;
+  const at = email.lastIndexOf('@');
+  if (at <= 0) return '***';
+  return `${email.slice(0, 1)}***${email.slice(at)}`;
+}
+
+export function claimDiagnostics(
+  claims: Record<string, unknown>,
+  ruleClaims: string[]
+): Pick<OidcTestDiagnostics, 'claimNames' | 'claims'> {
+  const names = Object.keys(claims)
+    .filter(name => !['at_hash', 'c_hash', 'nonce', 'sid'].includes(name))
+    .sort();
+  const selected = new Map<string, string | boolean | string[] | null>();
+  for (const name of [...DIAGNOSTIC_CLAIMS, ...ruleClaims]) {
+    const value = readClaimPath(claims, name);
+    if (value !== undefined)
+      selected.set(
+        name,
+        name === 'email' ? (maskEmail(String(value)) ?? null) : diagnosticValue(value)
+      );
+  }
+  return { claimNames: names.slice(0, 100), claims: Object.fromEntries(selected) };
+}
+
+function providerFailureCode(error: string | undefined): AdminTestFailureCode {
+  switch (error) {
+    case 'access_denied':
+    case 'login_required':
+    case 'consent_required':
+    case 'interaction_required':
+      return 'PROVIDER_ACCESS_DENIED';
+    case 'invalid_scope':
+      return 'PROVIDER_INVALID_SCOPE';
+    case 'invalid_client':
+    case 'unauthorized_client':
+      return 'PROVIDER_CLIENT_REJECTED';
+    default:
+      return 'PROVIDER_ERROR';
+  }
+}
+
+function sanitizedProviderMessage(value: unknown): string | undefined {
+  if (typeof value !== 'string' || !value.trim()) return undefined;
+  // Provider text is shown only to the administrator who started the test; strip control
+  // characters and cap it so it cannot dominate the page.
+  return value
+    .replace(/[\u0000-\u001f\u007f]/g, ' ')
+    .trim()
+    .slice(0, 300);
+}
+
+/** Converts token-exchange and validation errors into a catalogued failure. */
+function classifyTestError(error: unknown): OidcTestFailure {
+  if (error instanceof OidcTestFailure) return error;
+  if (error instanceof openidErrors.OPError)
+    return new OidcTestFailure(providerFailureCode(error.error), {
+      providerMessage: sanitizedProviderMessage(
+        [error.error, error.error_description].filter(Boolean).join(': ')
+      ),
+    });
+  if (error instanceof openidErrors.RPError)
+    return new OidcTestFailure('TOKEN_EXCHANGE_FAILED', {
+      providerMessage: sanitizedProviderMessage(error.message),
+    });
+  return new OidcTestFailure('UNKNOWN');
+}
+
+async function recordTestFailure(
+  flow: { id: string; adminUserId: string; revisionId: string },
+  failure: OidcTestFailure
+) {
+  await prisma.$transaction(async tx => {
+    await tx.oidcTestFlow.update({
+      where: { id: flow.id },
+      data: {
+        failureCode: failure.code,
+        diagnostics: failure.diagnostics as Prisma.InputJsonValue,
+      },
+    });
+    await securityEvent(
+      tx,
+      'auth.oidc.test.failed',
+      flow.adminUserId,
+      { revisionId: flow.revisionId, reason: failure.code },
+      'failed'
+    );
+  });
 }
 
 export function oidcTestClient(config: ProviderConfiguration, metadata: OidcRuntimeMetadata) {
@@ -283,6 +421,20 @@ export async function completeOidcRevisionTest(
 ): Promise<{ flowId: string; revisionId: string }> {
   const flow = await prisma.oidcTestFlow.findUnique({ where: { stateHash: digest(state) } });
   if (
+    flow &&
+    !flow.consumedAt &&
+    flow.expiresAt.getTime() <= Date.now() &&
+    flow.browserHash === digest(browserToken)
+  ) {
+    // Same browser, too slow: record why so the result page can say so.
+    const claimedExpired = await prisma.oidcTestFlow.updateMany({
+      where: { id: flow.id, consumedAt: null },
+      data: { consumedAt: new Date() },
+    });
+    if (claimedExpired.count === 1)
+      await recordTestFailure(flow, new OidcTestFailure('FLOW_EXPIRED'));
+  }
+  if (
     !flow ||
     flow.consumedAt ||
     flow.expiresAt.getTime() <= Date.now() ||
@@ -304,20 +456,13 @@ export async function completeOidcRevisionTest(
     select: { id: true },
   });
   if (!revisionExists) {
-    await prisma.$transaction(tx =>
-      securityEvent(
-        tx,
-        'auth.oidc.test.failed',
-        flow.adminUserId,
-        { revisionId: flow.revisionId, reason: 'REVISION_DELETED' },
-        'failed'
-      )
-    );
+    await recordTestFailure(flow, new OidcTestFailure('REVISION_DELETED'));
     throw new OidcRevisionTestError(
       'The configuration under test was deleted before sign-in completed. Production configuration is unchanged.',
       flow.id
     );
   }
+  let diagnostics: OidcTestDiagnostics = {};
   try {
     const secrets = JSON.parse(await decrypt(flow.secrets)) as {
       nonce: string;
@@ -326,7 +471,7 @@ export async function completeOidcRevisionTest(
       origin: string;
     };
     const origin = await authenticationOrigin();
-    if (origin !== secrets.origin) throw new Error('Application origin changed. Begin a new test.');
+    if (origin !== secrets.origin) throw new OidcTestFailure('ORIGIN_CHANGED');
     const revision = await prisma.oidcRevision.findUniqueOrThrow({
       where: { id: flow.revisionId },
     });
@@ -340,50 +485,75 @@ export async function completeOidcRevisionTest(
       { state, nonce: secrets.nonce, code_verifier: secrets.verifier }
     );
     const claims = tokens.claims();
+    diagnostics = claimDiagnostics(
+      claims,
+      config.roleMapping.map(rule => rule.claim)
+    );
     const provider = getOidcProviderPolicy(config.issuer, config.providerType);
-    if (
-      !provider.validateOrganizationBoundary(
-        normalizeOidcBoundaryClaims(claims),
-        config.allowedDomains,
-        config.organizationId
-      ).ok
-    )
-      throw new Error('Provider organization boundary rejected the login.');
-    if (!claims.sub) throw new Error('A subject claim is required for administrator verification.');
+    const boundary = provider.validateOrganizationBoundary(
+      normalizeOidcBoundaryClaims(claims),
+      config.allowedDomains,
+      config.organizationId
+    );
+    if (!boundary.ok)
+      throw new OidcTestFailure(
+        boundary.reason === 'OIDC_DOMAIN_NOT_ALLOWED'
+          ? 'DOMAIN_NOT_ALLOWED'
+          : boundary.reason === 'OIDC_EMAIL_ASSURANCE_REQUIRED'
+            ? 'EMAIL_UNVERIFIED'
+            : 'ORGANIZATION_REJECTED',
+        diagnostics
+      );
+    if (!claims.sub) throw new OidcTestFailure('SUBJECT_MISSING', diagnostics);
     const email = typeof claims.email === 'string' ? claims.email.trim().toLowerCase() : '';
     const emailVerified = coerceBooleanClaim(claims.email_verified);
-    if (emailVerified === false) throw new Error('Provider explicitly reports unverified email.');
+    if (emailVerified === false) throw new OidcTestFailure('EMAIL_UNVERIFIED', diagnostics);
     const emailOwnershipVerified =
       Boolean(email) && (emailVerified === true || provider.allowsMissingEmailVerified());
     const role = evaluateOidcRoleClaims(claims, config.roleMapping);
     if (!role.ok || role.groupsOverage)
-      throw new Error('Resolve missing/group-overage role claims before activation.');
+      throw new OidcTestFailure('GROUP_CLAIMS_INCOMPLETE', {
+        ...diagnostics,
+        role: { result: 'incomplete' },
+      });
     await prisma.$transaction(async tx => {
       await lockControlActor(tx, secrets.actor, false);
       await tx.$queryRaw`SELECT "id" FROM "User" WHERE "id" = ${flow.adminUserId} FOR UPDATE`;
       const active = await tx.oidcConfig.findUnique({ where: { id: 'default' } });
       if ((active?.configVersion ?? 0) !== flow.testedConfigVersion)
-        throw new Error('Production configuration changed during the test.');
+        throw new OidcTestFailure('CONFIG_CHANGED', diagnostics);
       const admin = await tx.user.findUniqueOrThrow({ where: { id: flow.adminUserId } });
       if (
         admin.role !== 'ADMIN' ||
         admin.status !== 'ACTIVE' ||
         admin.tokenVersion !== flow.adminTokenVersion
       )
-        throw new Error('Administrator security state changed during the test.');
+        throw new OidcTestFailure('ADMIN_STATE_CHANGED', diagnostics);
       const identity = await findRevisionIdentity(tx, config.issuer, claims.sub);
       if (identity && identity.userId !== admin.id)
-        throw new Error('This external identity belongs to another OpsKnight user.');
-      if (
-        !identity &&
-        (!flow.linkApproved || !emailOwnershipVerified || email !== admin.email.toLowerCase())
-      )
-        throw new Error(
-          'Explicit same-account linking approval and matching verified email are required.'
-        );
+        throw new OidcTestFailure('IDENTITY_OWNED_BY_OTHER_USER', diagnostics);
+      if (!identity) {
+        const emails = {
+          receivedEmail: maskEmail(email),
+          expectedEmail: maskEmail(admin.email.toLowerCase()),
+        };
+        if (!flow.linkApproved) throw new OidcTestFailure('LINK_NOT_ALLOWED', diagnostics);
+        if (!email) throw new OidcTestFailure('EMAIL_MISSING', { ...diagnostics, ...emails });
+        if (!emailOwnershipVerified)
+          throw new OidcTestFailure('EMAIL_UNVERIFIED', { ...diagnostics, ...emails });
+        if (email !== admin.email.toLowerCase())
+          throw new OidcTestFailure('EMAIL_MISMATCH', { ...diagnostics, ...emails });
+      }
       const effectiveRole = role.matched || admin.roleSource === 'OIDC' ? role.role : admin.role;
+      diagnostics = {
+        ...diagnostics,
+        role: {
+          result: role.matched ? 'matched' : 'no rule matched',
+          effectiveRole,
+        },
+      };
       if (effectiveRole !== 'ADMIN')
-        throw new Error('These role mappings would remove administrator access.');
+        throw new OidcTestFailure('ROLE_WOULD_DROP_ADMIN', diagnostics);
       await tx.oidcRevisionTest.create({
         data: {
           revisionId: revision.id,
@@ -399,6 +569,10 @@ export async function completeOidcRevisionTest(
           linkApproved: !identity && flow.linkApproved,
         },
       });
+      await tx.oidcTestFlow.update({
+        where: { id: flow.id },
+        data: { diagnostics: diagnostics as Prisma.InputJsonValue },
+      });
       await securityEvent(tx, 'auth.oidc.test.success', admin.id, {
         revisionId: revision.id,
         preservedUserId: admin.id,
@@ -407,26 +581,63 @@ export async function completeOidcRevisionTest(
       });
     });
     return { flowId: flow.id, revisionId: flow.revisionId };
-  } catch {
-    await prisma.$transaction(tx =>
-      securityEvent(
-        tx,
-        'auth.oidc.test.failed',
-        flow.adminUserId,
-        { revisionId: flow.revisionId, reason: 'PROVIDER_OR_IDENTITY_VERIFICATION_FAILED' },
-        'failed'
-      )
-    );
+  } catch (error) {
+    const failure = classifyTestError(error);
+    if (failure.code === 'UNKNOWN')
+      logger.error('[OIDC test] Unclassified administrator test failure', {
+        component: 'auth-control:oidc-test',
+        flowId: flow.id,
+        error,
+      });
+    await recordTestFailure(flow, failure);
     throw new OidcRevisionTestError(
-      'SSO administrator test failed. Check provider diagnostics, claims, linking approval and role mapping. Production configuration is unchanged.',
+      'SSO administrator test failed. Production configuration is unchanged.',
       flow.id
     );
   }
 }
 
+/**
+ * The provider ended the test with an OAuth error instead of a code (cancelled, not assigned,
+ * bad scope). The flow is still bound to this browser, so record why and show it.
+ */
+export async function recordOidcRevisionTestProviderError(
+  state: string,
+  browserToken: string,
+  error: string,
+  description: string | null
+): Promise<string | null> {
+  const flow = await prisma.oidcTestFlow.findUnique({ where: { stateHash: digest(state) } });
+  if (!flow || flow.browserHash !== digest(browserToken)) return null;
+  const claimed = await prisma.oidcTestFlow.updateMany({
+    where: { id: flow.id, consumedAt: null },
+    data: { consumedAt: new Date() },
+  });
+  if (claimed.count !== 1) return flow.id;
+  await recordTestFailure(
+    flow,
+    new OidcTestFailure(providerFailureCode(error), {
+      providerMessage: sanitizedProviderMessage([error, description].filter(Boolean).join(': ')),
+    })
+  );
+  return flow.id;
+}
+
 export type OidcTestResult =
-  | { outcome: 'verified'; revisionId: string; verifiedAt: string; expiresAt: string }
-  | { outcome: 'failed'; revisionId: string | null; reason: 'deleted' | 'failed' }
+  | {
+      outcome: 'verified';
+      revisionId: string;
+      verifiedAt: string;
+      expiresAt: string;
+      diagnostics: OidcTestDiagnostics;
+    }
+  | {
+      outcome: 'failed';
+      revisionId: string | null;
+      reason: 'deleted' | 'failed';
+      code: AdminTestFailureCode;
+      diagnostics: OidcTestDiagnostics;
+    }
   | { outcome: 'unavailable' };
 
 /**
@@ -450,7 +661,15 @@ export async function readOidcTestResult(reference: string | undefined): Promise
     where: { id: flow.revisionId },
     select: { id: true },
   });
-  if (!revision) return { outcome: 'failed', revisionId: null, reason: 'deleted' };
+  const diagnostics = (flow.diagnostics ?? {}) as OidcTestDiagnostics;
+  if (!revision)
+    return {
+      outcome: 'failed',
+      revisionId: null,
+      reason: 'deleted',
+      code: 'REVISION_DELETED',
+      diagnostics,
+    };
   const proof = await prisma.oidcRevisionTest.findFirst({
     where: {
       revisionId: flow.revisionId,
@@ -459,12 +678,20 @@ export async function readOidcTestResult(reference: string | undefined): Promise
     },
     orderBy: { verifiedAt: 'desc' },
   });
-  if (!proof) return { outcome: 'failed', revisionId: flow.revisionId, reason: 'failed' };
+  if (!proof)
+    return {
+      outcome: 'failed',
+      revisionId: flow.revisionId,
+      reason: 'failed',
+      code: isAdminTestFailureCode(flow.failureCode) ? flow.failureCode : 'UNKNOWN',
+      diagnostics,
+    };
   return {
     outcome: 'verified',
     revisionId: flow.revisionId,
     verifiedAt: proof.verifiedAt.toISOString(),
     expiresAt: new Date(proof.verifiedAt.getTime() + PROOF_MAX_AGE_MS).toISOString(),
+    diagnostics,
   };
 }
 

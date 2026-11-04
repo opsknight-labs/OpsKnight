@@ -4603,6 +4603,8 @@ model OidcTestFlow {
   expiresAt           DateTime
   consumedAt          DateTime?
   createdAt           DateTime  @default(now())
+  failureCode         String?
+  diagnostics         Json?
 
   @@index([expiresAt])
 }

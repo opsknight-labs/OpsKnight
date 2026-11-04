@@ -14,6 +14,7 @@ import {
   stageOidcRevision,
   beginOidcRevisionTest,
   completeOidcRevisionTest,
+  recordOidcRevisionTestProviderError,
   activateOidcRevision,
   enforcementPreview,
   deleteOidcRevision,
@@ -250,9 +251,14 @@ suite('staged OIDC authentication with HTTPS and signed ID tokens', () => {
     ).not.toContain('test-secret');
     expect((await enforcementPreview(revisionId)).adminVerified).toBe(false);
   });
-  it.each(['nonce', 'audience', 'email', 'unverified'])(
-    'rejects signed but invalid %s proof without altering production',
-    async variant => {
+  it.each([
+    ['nonce', 'TOKEN_EXCHANGE_FAILED'],
+    ['audience', 'TOKEN_EXCHANGE_FAILED'],
+    ['email', 'EMAIL_MISMATCH'],
+    ['unverified', 'EMAIL_UNVERIFIED'],
+  ])(
+    'rejects signed but invalid %s proof without altering production and records %s',
+    async (variant, expectedCode) => {
       const flow = await beginOidcRevisionTest(actor, revisionId, actor.id, true);
       const code = issueCode(flow.url, variant);
       await expect(
@@ -260,8 +266,35 @@ suite('staged OIDC authentication with HTTPS and signed ID tokens', () => {
       ).rejects.toThrow('test failed');
       expect(await prisma.oidcConfig.count()).toBe(0);
       expect(await prisma.oidcRevisionTest.count({ where: { revisionId } })).toBe(0);
+      const recorded = await prisma.oidcTestFlow.findFirstOrThrow({
+        where: { revisionId },
+        orderBy: { createdAt: 'desc' },
+      });
+      expect(recorded.failureCode).toBe(expectedCode);
+      expect(JSON.stringify(recorded.diagnostics ?? {})).not.toMatch(/eyJ[A-Za-z0-9_-]{10,}/);
     }
   );
+  it('records a provider error response so the result page can explain it', async () => {
+    const flow = await beginOidcRevisionTest(actor, revisionId, actor.id, true);
+    const flowId = await recordOidcRevisionTestProviderError(
+      callbackState(flow.url),
+      flow.browserToken,
+      'access_denied',
+      'User is not assigned to the application'
+    );
+    expect(flowId).toBeTruthy();
+    const recorded = await prisma.oidcTestFlow.findUniqueOrThrow({ where: { id: flowId! } });
+    expect(recorded.failureCode).toBe('PROVIDER_ACCESS_DENIED');
+    expect(recorded.consumedAt).not.toBeNull();
+    expect(
+      await recordOidcRevisionTestProviderError(
+        callbackState(flow.url),
+        'foreign-browser',
+        'access_denied',
+        null
+      )
+    ).toBeNull();
+  });
   it('rejects foreign-browser state and requires explicit first-link ownership approval', async () => {
     const flow = await beginOidcRevisionTest(actor, revisionId, actor.id, false);
     const code = issueCode(flow.url);

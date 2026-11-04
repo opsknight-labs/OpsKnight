@@ -9,7 +9,7 @@ import { storedProviderConfiguration } from './oidc-revisions';
 import { evaluateOidcRoleClaims } from '@/lib/oidc/role-mapping';
 import { normalizeOidcIssuer } from '@/lib/oidc/issuer-migration';
 import { getOidcProviderPolicy } from '@/lib/oidc/provider-policy';
-import { type ControlActor, isAuthenticationFresh } from './actor';
+import { type ControlActor, freshAuthenticationMaxAge, isAuthenticationFresh } from './actor';
 import { emergencyReadiness } from './emergency-management';
 import { findRevisionIdentity } from './identity';
 import { authenticationOrigin, recoveryOrigin } from './origin';
@@ -224,6 +224,10 @@ export async function authenticationDashboard(
     }),
     inheritedSessionPolicy: getEnterpriseSessionPolicy(),
     freshAuthenticationRequired: !isAuthenticationFresh(actor.authenticatedAt, actor.kind),
+    // Lets the console show "sign in again in 40 min" before the two-hour window closes.
+    freshAuthenticationExpiresAt: actor.authenticatedAt
+      ? new Date(actor.authenticatedAt + freshAuthenticationMaxAge(actor.kind)).toISOString()
+      : null,
     originConflict: canonical.conflict,
     recoveryOrigin: pinnedOrigin,
     recoveryOriginPinned: Boolean(process.env.AUTH_RECOVERY_ORIGIN),
