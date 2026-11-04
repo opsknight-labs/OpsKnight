@@ -4,7 +4,8 @@ import {
   assertCurrentOidcRegistration,
   OidcRegistrationChangedError,
 } from '@/lib/oidc/registration';
-import { createHash } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
+import { signInCodeForOidcFailure } from '@/lib/auth-control/messages';
 import type { NextAuthOptions, User } from 'next-auth';
 import OIDCProvider from '@/lib/oidc';
 import CredentialsProvider from 'next-auth/providers/credentials';
@@ -108,6 +109,57 @@ const AUTH_TTL_MS = safeTtlMs(AUTH_OPTIONS_CACHE_TTL_MS, 5000);
 
 function normalizeIssuer(issuer: string) {
   return normalizeOidcIssuer(issuer);
+}
+
+async function requestHeadersForAudit() {
+  try {
+    const { headers } = await import('next/headers');
+    const h = await headers();
+    return {
+      ua: h.get('user-agent') || 'Unknown',
+      ip: h.get('x-forwarded-for')?.split(',')[0].trim() || h.get('x-real-ip') || 'Unknown',
+    };
+  } catch {
+    return { ua: 'Unknown', ip: 'Unknown' };
+  }
+}
+
+/**
+ * Ends an OIDC sign-in with a specific, allow-listed code the login page can explain.
+ * The reference ID ties what the person sees to this log entry and the login audit row.
+ */
+async function rejectOidcSignIn(
+  reason: string,
+  context: { email?: string | null; userId?: string; issuer?: string; providerType?: string | null }
+): Promise<string> {
+  const code = reason.startsWith('SSO_') ? reason : signInCodeForOidcFailure(reason);
+  const ref = randomBytes(6).toString('hex');
+  logger.warn('[Auth] OIDC sign-in rejected', {
+    component: 'auth:signIn',
+    reasonCode: reason,
+    displayedCode: code,
+    ref,
+    issuer: context.issuer,
+    providerType: context.providerType,
+    userId: context.userId,
+  });
+  try {
+    const { logLoginEvent } = await import('@/lib/login-audit');
+    const { ip, ua } = await requestHeadersForAudit();
+    await logLoginEvent({
+      email: context.email || 'unknown',
+      ip,
+      userAgent: ua,
+      eventType: 'LOGIN_FAILED',
+      success: false,
+      failureReason: 'SSO_FAILED',
+      userId: context.userId,
+      metadata: { provider: 'oidc', reasonCode: reason, ref },
+    });
+  } catch {
+    // Audit failure must not change what the person sees.
+  }
+  return `/login?${new URLSearchParams({ error: code, ref }).toString()}`;
 }
 
 function clearSessionToken(token: AugmentedJWT, reason: string) {
@@ -423,10 +475,6 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
                     return null;
                   }
 
-                  if (user.status === 'DISABLED') {
-                    await logLoginFailed(email, ip, userAgent, 'USER_DISABLED');
-                    return null;
-                  }
                   if (
                     currentPolicy.passwordRecoveryUserId &&
                     (user.role !== 'ADMIN' || user.status !== 'ACTIVE')
@@ -456,6 +504,12 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
                       email,
                     });
                     return null;
+                  }
+
+                  if (user.status === 'DISABLED') {
+                    // Only after the password proved who is asking, say why sign-in stopped.
+                    await logLoginFailed(email, ip, userAgent, 'USER_DISABLED');
+                    throw new Error('AccountDisabled');
                   }
 
                   resetLoginAttempts(email, ip);
@@ -499,6 +553,20 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
       pages: {
         signIn: '/login',
         signOut: '/auth/signout',
+      },
+      events: {
+        async signOut({ token }) {
+          const email = typeof token?.email === 'string' ? token.email : null;
+          const userId = typeof token?.sub === 'string' ? token.sub : null;
+          if (!email || !userId) return;
+          try {
+            const { logLogout } = await import('@/lib/login-audit');
+            const { ip, ua } = await requestHeadersForAudit();
+            await logLogout(email, userId, ip, ua);
+          } catch {
+            // Sign-out must complete even when audit logging fails.
+          }
+        },
       },
       callbacks: {
         async jwt({ token, user, account, trigger, session }) {
@@ -907,13 +975,14 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
             return true;
           }
 
-          if (!(await checkAuthenticationPolicy('OIDC_LOGIN')).allowed) return false;
+          if (!(await checkAuthenticationPolicy('OIDC_LOGIN')).allowed)
+            return rejectOidcSignIn('SSO_NOT_AVAILABLE', { email: user?.email });
           const activeConfig = await getOidcConfig();
           if (!activeConfig) {
             logger.warn('[Auth] OIDC sign-in rejected: configuration missing or invalid', {
               component: 'auth:signIn',
             });
-            return false;
+            return rejectOidcSignIn('SSO_NOT_AVAILABLE', { email: user?.email });
           }
 
           if (
@@ -929,21 +998,16 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
           const emailVerifiedClaim = coerceBooleanClaim(claims.email_verified);
 
           if (emailVerifiedClaim === false) {
-            logger.warn('[Auth] OIDC sign-in rejected: IdP explicitly reports unverified email', {
-              component: 'auth:signIn',
+            return rejectOidcSignIn('SSO_EMAIL_UNVERIFIED', {
+              email,
               providerType: activeConfig.providerType,
             });
-            return false;
           }
 
           const issuer = normalizeIssuer(activeConfig.issuer);
           const subject = account.providerAccountId || stringClaim(claims, 'sub');
           if (!subject) {
-            logger.warn('[Auth] OIDC sign-in rejected: stable subject claim missing', {
-              component: 'auth:signIn',
-              issuer,
-            });
-            return false;
+            return rejectOidcSignIn('SSO_SUBJECT_MISSING', { email, issuer });
           }
 
           const roleEvaluation = evaluateOidcRoleClaims(claims, activeConfig.roleMapping ?? []);
@@ -1000,20 +1064,17 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
               subject,
               error,
             });
-            return false;
+            return rejectOidcSignIn('SSO_INTERNAL_ERROR', { email, issuer });
           }
 
           if (!resolution.ok) {
             if (resolution.reason === 'OIDC_CONFIGURATION_CHANGED')
               return '/login?error=OIDC_CONFIGURATION_CHANGED';
-            logger.warn('[Auth] OIDC sign-in rejected by identity policy', {
-              component: 'auth:signIn',
+            return rejectOidcSignIn(resolution.reason, {
+              email,
               issuer,
-              subject,
-              reasonCode: resolution.reason,
               providerType: activeConfig.providerType,
             });
-            return false;
           }
 
           const targetUser = resolution.user;

@@ -147,7 +147,7 @@ describe('resolveOidcIdentityForSignIn', () => {
       claims: { email: 'alice@example.com' },
     });
 
-    expect(result).toEqual({ ok: false, reason: 'OIDC_ORGANIZATION_REJECTED' });
+    expect(result).toEqual({ ok: false, reason: 'OIDC_DOMAIN_NOT_ALLOWED' });
     expect(tx.user.create).not.toHaveBeenCalled();
   });
 
@@ -173,7 +173,7 @@ describe('resolveOidcIdentityForSignIn', () => {
       claims: { hd: 'former-company.example' },
     });
 
-    expect(result).toEqual({ ok: false, reason: 'OIDC_ORGANIZATION_REJECTED' });
+    expect(result).toEqual({ ok: false, reason: 'OIDC_DOMAIN_NOT_ALLOWED' });
     expect(prisma.user.findUnique).not.toHaveBeenCalled();
   });
 
@@ -432,7 +432,7 @@ describe('resolveOidcIdentityForSignIn', () => {
       emailVerifiedClaim: undefined,
     });
 
-    expect(result).toEqual({ ok: false, reason: 'OIDC_ORGANIZATION_REJECTED' });
+    expect(result).toEqual({ ok: false, reason: 'OIDC_EMAIL_ASSURANCE_REQUIRED' });
     expect(tx.user.create).not.toHaveBeenCalled();
   });
 

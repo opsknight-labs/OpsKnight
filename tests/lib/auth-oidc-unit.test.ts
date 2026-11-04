@@ -139,7 +139,7 @@ describe('Auth JWT + OIDC callback contract', () => {
       credentials: undefined,
     });
 
-    expect(result).toBe(false);
+    expect(result).toMatch(/^\/login\?error=SSO_EMAIL_UNVERIFIED&ref=[0-9a-f]{12}$/);
     expect(resolveOidcIdentityForSignIn).not.toHaveBeenCalled();
   });
 
@@ -160,7 +160,7 @@ describe('Auth JWT + OIDC callback contract', () => {
       credentials: undefined,
     });
 
-    expect(result).toBe(false);
+    expect(result).toMatch(/^\/login\?error=SSO_EMAIL_UNVERIFIED&ref=[0-9a-f]{12}$/);
     expect(resolveOidcIdentityForSignIn).toHaveBeenCalledWith(
       expect.objectContaining({
         issuer: 'https://login.example.com',
@@ -224,7 +224,7 @@ describe('Auth JWT + OIDC callback contract', () => {
       credentials: undefined,
     });
 
-    expect(result).toBe(false);
+    expect(result).toMatch(/^\/login\?error=SSO_LINK_NOT_APPROVED&ref=[0-9a-f]{12}$/);
   });
 
   it('de-provisions an elevated role when no role mapping matches', async () => {

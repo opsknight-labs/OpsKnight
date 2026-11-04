@@ -6,6 +6,9 @@ type SearchParams = {
   callbackUrl?: string;
   error?: string;
   password?: string;
+  sessionRevoked?: string;
+  reason?: string;
+  ref?: string;
 };
 
 /**

@@ -155,7 +155,7 @@ describeIfRealDB('Authentication Logic (Real DB)', () => {
       expect(result).toBeNull();
     });
 
-    it('should return null for disabled user', async () => {
+    it('explains a disabled account only after the password is proven', async () => {
       const authOptions = await getAuthOptions();
       const authorize = getCredentialsAuthorize(authOptions);
 
@@ -166,12 +166,18 @@ describeIfRealDB('Authentication Logic (Real DB)', () => {
         status: 'DISABLED' as UserStatus,
       });
 
-      const result = await authorize({
-        email: 'test@example.com',
-        password: 'password',
-      });
-
-      expect(result).toBeNull();
+      await expect(
+        authorize({
+          email: 'test@example.com',
+          password: 'password',
+        })
+      ).rejects.toThrow('AccountDisabled');
+      await expect(
+        authorize({
+          email: 'test@example.com',
+          password: 'wrong-password',
+        })
+      ).resolves.toBeNull();
     });
 
     it('should activate invited user on successful login', async () => {
@@ -223,11 +229,11 @@ describeIfRealDB('Authentication Logic (Real DB)', () => {
 
       const result = await signInCallback({
         user: { name: 'No Email' },
-        account: { provider: 'oidc' },
-        profile: {},
-      });
+        account: { provider: 'oidc', providerAccountId: 'no-email-sub' },
+        profile: { sub: 'no-email-sub' },
+      } as never);
 
-      expect(result).toBe(false);
+      expect(result).toMatch(/^\/login\?error=SSO_EMAIL_REQUIRED&ref=/);
     });
 
     it('applies custom scopes to the OIDC provider', async () => {
@@ -261,11 +267,11 @@ describeIfRealDB('Authentication Logic (Real DB)', () => {
 
       const result = await signInCallback({
         user: { id: user.id, email: user.email, name: user.name },
-        account: { provider: 'oidc' },
-        profile: { groups: ['any'] },
-      });
+        account: { provider: 'oidc', providerAccountId: 'other-domain-sub' },
+        profile: { groups: ['any'], sub: 'other-domain-sub', email_verified: true },
+      } as never);
 
-      expect(result).toBe(false);
+      expect(result).toMatch(/^\/login\?error=SSO_DOMAIN_NOT_ALLOWED&ref=/);
     });
 
     it('rejects OIDC sign-in when auto-provision is disabled', async () => {
@@ -280,11 +286,11 @@ describeIfRealDB('Authentication Logic (Real DB)', () => {
 
       const result = await signInCallback({
         user: { email: 'new-user@example.com', name: 'New User' },
-        account: { provider: 'oidc' },
-        profile: { groups: ['any'] },
-      });
+        account: { provider: 'oidc', providerAccountId: 'new-user-sub' },
+        profile: { groups: ['any'], sub: 'new-user-sub', email_verified: true },
+      } as never);
 
-      expect(result).toBe(false);
+      expect(result).toMatch(/^\/login\?error=SSO_AUTO_PROVISION_DISABLED&ref=/);
     });
 
     it('rejects OIDC sign-in when email_verified is false', async () => {
@@ -307,7 +313,7 @@ describeIfRealDB('Authentication Logic (Real DB)', () => {
         profile: { email_verified: false, sub: 'sub-1' },
       });
 
-      expect(result).toBe(false);
+      expect(result).toMatch(/^\/login\?error=SSO_EMAIL_UNVERIFIED&ref=/);
     });
 
     it('creates an OIDC identity link when auto-provisioning a NEW user', async () => {
@@ -368,8 +374,8 @@ describeIfRealDB('Authentication Logic (Real DB)', () => {
         profile: { email_verified: true, sub: 'sub-xyz' },
       });
 
-      // Should be BLOCKED
-      expect(ok).toBe(false);
+      // Should be BLOCKED, with a reason the person can act on
+      expect(ok).toMatch(/^\/login\?error=SSO_LINK_NOT_APPROVED&ref=/);
 
       // Verify NO link was created
       const linked = await testPrisma.oidcIdentity.findUnique({

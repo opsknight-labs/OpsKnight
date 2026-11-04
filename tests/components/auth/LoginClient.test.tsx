@@ -55,7 +55,7 @@ describe('desktop login authentication methods', () => {
     );
 
     const alert = screen.getByRole('alert');
-    expect(alert).toHaveTextContent('Invalid email or password');
+    expect(alert).toHaveTextContent('Incorrect email or password');
 
     const dismissBtn = screen.getByRole('button', { name: 'Dismiss error' });
     expect(dismissBtn).toBeInTheDocument();
@@ -64,7 +64,7 @@ describe('desktop login authentication methods', () => {
     expect(dismissBtn.className).toContain('dark:hover:text-white');
 
     fireEvent.click(dismissBtn);
-    expect(screen.queryByText('Invalid email or password')).not.toBeInTheDocument();
+    expect(screen.queryByText('Incorrect email or password')).not.toBeInTheDocument();
   });
 
   it('renders a high-contrast dismissible X button on password set success alert', () => {
@@ -82,5 +82,56 @@ describe('desktop login authentication methods', () => {
 
     fireEvent.click(dismissBtn);
     expect(screen.queryByText('Password set successfully')).not.toBeInTheDocument();
+  });
+
+  it('explains a specific SSO rejection with its reference and next step', () => {
+    render(
+      <LoginClient
+        callbackUrl="/"
+        ssoEnabled={true}
+        localAuthEnabled={false}
+        errorCode="SSO_LINK_NOT_APPROVED"
+        errorReference="a1b2c3d4e5f6"
+      />
+    );
+
+    const alert = screen.getByRole('alert');
+    expect(alert).toHaveTextContent('Your administrator needs to approve your first SSO sign-in');
+    expect(alert).toHaveTextContent('Reference a1b2c3d4e5f6');
+    expect(
+      screen.getByRole('button', { name: 'Copy details for your administrator' })
+    ).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Learn more' })).toHaveAttribute(
+      'href',
+      expect.stringContaining('#sso_link_not_approved')
+    );
+  });
+
+  it('tells people why an earlier session ended', () => {
+    render(
+      <LoginClient
+        callbackUrl="/"
+        ssoEnabled={true}
+        localAuthEnabled={false}
+        endedReason="SESSION_REVOKED_BY_POLICY"
+      />
+    );
+
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'Your organization changed how you sign in'
+    );
+  });
+
+  it('ignores session-end reasons that are not allow-listed', () => {
+    render(
+      <LoginClient
+        callbackUrl="/"
+        ssoEnabled={true}
+        localAuthEnabled={false}
+        endedReason="<script>"
+      />
+    );
+
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
   });
 });

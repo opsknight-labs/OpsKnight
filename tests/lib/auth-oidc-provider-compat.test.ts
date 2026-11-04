@@ -197,7 +197,7 @@ describe('OIDC provider-specific email verification compatibility', () => {
       profile: { sub: 'entra-sub' },
     });
 
-    expect(result).toBe(false);
+    expect(result).toMatch(/^\/login\?error=SSO_LINK_NOT_APPROVED&ref=[0-9a-f]{12}$/);
     expect(prisma.oidcLinkingApproval.findUnique).toHaveBeenCalledWith({
       where: { userId: 'u1' },
       select: expect.objectContaining({
@@ -264,7 +264,7 @@ describe('OIDC provider-specific email verification compatibility', () => {
       profile: { sub: 'entra-sub', email_verified: false },
     });
 
-    expect(result).toBe(false);
+    expect(result).toMatch(/^\/login\?error=SSO_EMAIL_UNVERIFIED&ref=[0-9a-f]{12}$/);
     expect(prisma.user.create).not.toHaveBeenCalled();
   });
 
@@ -282,7 +282,7 @@ describe('OIDC provider-specific email verification compatibility', () => {
       profile: { sub: 'custom-sub' },
     });
 
-    expect(result).toBe(false);
+    expect(result).toMatch(/^\/login\?error=SSO_EMAIL_UNVERIFIED&ref=[0-9a-f]{12}$/);
     expect(prisma.user.create).not.toHaveBeenCalled();
   });
 });
