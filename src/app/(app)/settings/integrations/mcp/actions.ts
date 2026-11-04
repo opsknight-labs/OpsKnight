@@ -156,6 +156,8 @@ export async function updateMcpPolicy(form: FormData) {
       dcrEnabled: z.boolean(),
       dcrScopes: z.string().max(2048),
       sessionIdleDays: z.coerce.number().int().min(1).max(90),
+      approvalTtlMinutes: z.coerce.number().int().min(15).max(1440),
+      approvalCommitWindowMinutes: z.coerce.number().int().min(1).max(1440),
     })
     .strict()
     .parse({
@@ -170,6 +172,9 @@ export async function updateMcpPolicy(form: FormData) {
       // Scope checkboxes submit one value each; a plain text field submits a space-separated list.
       dcrScopes: form.getAll('dcrScopes').map(String).join(' '),
       sessionIdleDays: form.get('sessionIdleDays') ?? 30,
+      // Older forms without these fields keep the defaults.
+      approvalTtlMinutes: form.get('approvalTtlMinutes') ?? 240,
+      approvalCommitWindowMinutes: form.get('approvalCommitWindowMinutes') ?? 30,
     });
   const cimdAllowedHosts = [
     ...new Set(
@@ -223,6 +228,8 @@ export async function updateMcpPolicy(form: FormData) {
     dcrEnabled: input.dcrEnabled,
     dcrScopes,
     sessionIdleDays: input.sessionIdleDays,
+    approvalTtlMinutes: input.approvalTtlMinutes,
+    approvalCommitWindowMinutes: input.approvalCommitWindowMinutes,
   };
   await prisma.$transaction(async tx => {
     await assertCurrentAdmin(tx, actor);

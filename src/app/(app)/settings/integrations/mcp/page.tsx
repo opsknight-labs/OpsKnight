@@ -92,7 +92,9 @@ export default async function McpSettings({
   const permissions = await getUserPermissions();
   const isAdmin = permissions.isAdmin;
   const viewer = await loadMcpViewer(permissions);
-  const params = parseMcpListParams(await searchParams, isAdmin);
+  // Runbook approvers who are not administrators get the runbook approvals queue only.
+  const approvalAccess = isAdmin ? 'all' : viewer.canApproveRunbooks ? 'runbooks' : 'none';
+  const params = parseMcpListParams(await searchParams, isAdmin, approvalAccess);
   const { section } = params;
   const now = new Date();
 
@@ -100,7 +102,7 @@ export default async function McpSettings({
     getMcpConfigurationStatus(),
     prisma.mcpPolicy.findUnique({ where: { id: 'default' } }),
     countActiveConnections(viewer, now),
-    isAdmin ? countPendingApprovals(viewer, now) : Promise.resolve(null),
+    approvalAccess !== 'none' ? countPendingApprovals(viewer, now) : Promise.resolve(null),
     isAdmin && section === 'overview' ? countActiveClients(viewer) : Promise.resolve(null),
   ]);
   const systemSettings =
@@ -141,16 +143,22 @@ export default async function McpSettings({
       count: activeConnections,
     },
     ...(isAdmin
+      ? [{ id: 'assistants', label: 'Assistants', href: hrefs.assistants, icon: <Bot /> }]
+      : []),
+    ...(approvalAccess !== 'none'
       ? [
-          { id: 'assistants', label: 'Assistants', href: hrefs.assistants, icon: <Bot /> },
           {
             id: 'approvals',
-            label: 'Approvals',
+            label: isAdmin ? 'Approvals' : 'Runbook approvals',
             href: hrefs.approvals,
             icon: <ClipboardCheck />,
             count: pending?.total ?? 0,
             attention: true,
           },
+        ]
+      : []),
+    ...(isAdmin
+      ? [
           { id: 'policy', label: 'Access policy', href: hrefs.policy, icon: <SlidersHorizontal /> },
           {
             id: 'capabilities',
@@ -427,6 +435,7 @@ export default async function McpSettings({
             kind={params.approvalKind}
             state={params.approvalState}
             pending={result.pending}
+            runbooksOnly={!isAdmin}
             writesEnabled={policy?.writesEnabled ?? false}
             now={now}
             timeZone={viewer.timeZone}
@@ -447,6 +456,8 @@ export default async function McpSettings({
               maxInFlight: policy?.maxInFlight ?? 4,
               maxOperations: policy?.maxOperations ?? 8,
               requestsPerMinute: policy?.requestsPerMinute ?? 60,
+              approvalTtlMinutes: policy?.approvalTtlMinutes ?? 240,
+              approvalCommitWindowMinutes: policy?.approvalCommitWindowMinutes ?? 30,
             }}
             scopeChoices={scopeChoices}
             selectedScopes={ceiling}

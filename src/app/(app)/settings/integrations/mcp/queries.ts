@@ -4,6 +4,7 @@ import prisma from '@/lib/prisma';
 import { getCurrentUser, getUserPermissions } from '@/lib/rbac';
 import { getUserTimeZone } from '@/lib/timezone';
 import { requireMcp } from '@/lib/mcp/core/errors';
+import { CAPABILITIES } from '@/lib/authorization';
 import { operationReviewSummarySchema } from '@/lib/mcp/approvals/operation';
 import {
   MCP_PAGE_SIZE,
@@ -25,6 +26,10 @@ declare const viewerBrand: unique symbol;
 export type McpViewer = {
   readonly id: string;
   readonly isAdmin: boolean;
+  /** May approve runbook runs (and so sees the runbook approvals queue). */
+  readonly canApproveRunbooks: boolean;
+  /** Sees every incident and service, so no runbook plan is outside their review scope. */
+  readonly readsAllTargets: boolean;
   readonly timeZone: string;
   readonly [viewerBrand]: true;
 };
@@ -36,9 +41,18 @@ export async function loadMcpViewer(
   const permissions = preloadedPermissions ?? (await getUserPermissions());
   requireMcp(permissions.authenticated, 'MCP_LOGIN_REQUIRED', 401);
   const user = await getCurrentUser();
+  const capabilities: readonly string[] = permissions.capabilities ?? [];
   return {
     id: permissions.id,
     isAdmin: permissions.isAdmin,
+    canApproveRunbooks:
+      permissions.isAdmin ||
+      (capabilities.includes(CAPABILITIES.RUNBOOK_APPROVE) &&
+        capabilities.includes(CAPABILITIES.RUNBOOK_READ_ALL)),
+    readsAllTargets:
+      permissions.isAdmin ||
+      (capabilities.includes(CAPABILITIES.INCIDENT_READ_ALL) &&
+        capabilities.includes(CAPABILITIES.SERVICE_READ_ALL)),
     timeZone: getUserTimeZone(user),
   } as McpViewer;
 }
@@ -73,6 +87,20 @@ function pendingOperationWhere(now: Date): Prisma.McpOperationApprovalWhereInput
   return { status: 'PENDING', expiresAt: { gt: now } };
 }
 
+/**
+ * Runbook plans this viewer may review: everything for an administrator; for other runbook
+ * approvers, other people's plans within what they can see. Team-scoped readers are limited to
+ * untargeted plans here; the review page itself applies the exact incident and service checks.
+ */
+function runbookReviewScope(viewer: McpViewer): Prisma.RunbookPreviewAuthorizationWhereInput {
+  if (viewer.isAdmin) return {};
+  requireMcp(viewer.canApproveRunbooks, 'MCP_ADMIN_REQUIRED', 403);
+  return {
+    actorId: { not: viewer.id },
+    ...(viewer.readsAllTargets ? {} : { incidentId: null, serviceId: null }),
+  };
+}
+
 function pendingRunbookWhere(now: Date): Prisma.RunbookPreviewAuthorizationWhereInput {
   return {
     independentReview: true,
@@ -90,10 +118,13 @@ export async function countActiveConnections(viewer: McpViewer, now = new Date()
 }
 
 export async function countPendingApprovals(viewer: McpViewer, now = new Date()) {
-  requireAdmin(viewer);
+  const scope = runbookReviewScope(viewer);
   const [operations, runbooks] = await Promise.all([
-    prisma.mcpOperationApproval.count({ where: pendingOperationWhere(now) }),
-    prisma.runbookPreviewAuthorization.count({ where: pendingRunbookWhere(now) }),
+    // Configuration changes are reviewed by administrators only.
+    viewer.isAdmin ? prisma.mcpOperationApproval.count({ where: pendingOperationWhere(now) }) : 0,
+    prisma.runbookPreviewAuthorization.count({
+      where: { AND: [pendingRunbookWhere(now), scope] },
+    }),
   ]);
   return { operations, runbooks, total: operations + runbooks };
 }
@@ -368,7 +399,12 @@ export type McpApprovalRow = {
   expiresAt: Date;
   decidedAt: Date | null;
   requester: McpPerson;
+  /** Whoever decided it: the approver, or the person who rejected it. */
   reviewer: McpPerson | null;
+  /** An administrator approved their own request after confirming. */
+  selfApproved: boolean;
+  /** The reviewer's note, untrusted text. */
+  decisionReason: string | null;
   assistant: string | null;
   /** Host of the assistant's metadata document, when it has one. */
   assistantHost: string | null;
@@ -385,6 +421,22 @@ const OPERATION_STATUS: Record<string, McpApprovalStatus> = {
   COMMITTED: 'completed',
   FAILED: 'failed',
 };
+
+/** Who asked, and through which assistant: shown on the review and status pages. */
+export async function describeMcpRequester(actorId: string, grantId: string | null) {
+  const [people, assistants] = await Promise.all([
+    peopleById([actorId]),
+    assistantsByGrant([grantId]),
+  ]);
+  return {
+    person: people.get(actorId) ?? { id: actorId, name: null, email: null },
+    assistant: grantId ? (assistants.get(grantId) ?? null) : null,
+  };
+}
+
+function decider(people: Map<string, McpPerson>, id: string | null) {
+  return id ? (people.get(id) ?? { id, name: null, email: null }) : null;
+}
 
 async function assistantsByGrant(grantIds: Iterable<string | null>) {
   const ids = [...new Set([...grantIds].filter((id): id is string => Boolean(id)))];
@@ -406,10 +458,11 @@ export async function listMcpApprovals(
   input: { kind: ApprovalKind; state: ApprovalState; page: number },
   now = new Date()
 ) {
-  requireAdmin(viewer);
+  const scope = runbookReviewScope(viewer);
   const skip = (input.page - 1) * MCP_PAGE_SIZE;
 
   if (input.kind === 'operations') {
+    requireAdmin(viewer);
     const where: Prisma.McpOperationApprovalWhereInput =
       input.state === 'pending' ? pendingOperationWhere(now) : { NOT: pendingOperationWhere(now) };
     const [pending, rows, total] = await Promise.all([
@@ -428,6 +481,9 @@ export async function listMcpApprovals(
           actorId: true,
           requesterGrantId: true,
           reviewedById: true,
+          rejectedById: true,
+          selfApproved: true,
+          decisionReason: true,
           reviewedAt: true,
           rejectedAt: true,
           createdAt: true,
@@ -438,7 +494,11 @@ export async function listMcpApprovals(
     ]);
     const [people, assistants] = await Promise.all([
       peopleById(
-        rows.flatMap(row => [row.actorId, ...(row.reviewedById ? [row.reviewedById] : [])])
+        rows.flatMap(row => [
+          row.actorId,
+          ...(row.reviewedById ? [row.reviewedById] : []),
+          ...(row.rejectedById ? [row.rejectedById] : []),
+        ])
       ),
       assistantsByGrant(rows.map(row => row.requesterGrantId)),
     ]);
@@ -462,7 +522,9 @@ export async function listMcpApprovals(
           expiresAt: row.expiresAt,
           decidedAt: row.reviewedAt ?? row.rejectedAt,
           requester: people.get(row.actorId) ?? { id: row.actorId, name: null, email: null },
-          reviewer: row.reviewedById ? (people.get(row.reviewedById) ?? null) : null,
+          reviewer: decider(people, row.reviewedById ?? row.rejectedById),
+          selfApproved: row.selfApproved,
+          decisionReason: row.decisionReason,
           assistant: assistants.get(row.requesterGrantId)?.name ?? null,
           assistantHost: assistants.get(row.requesterGrantId)?.metadataHost ?? null,
           href: `/settings/integrations/mcp/approvals/operations/${row.id}`,
@@ -474,8 +536,8 @@ export async function listMcpApprovals(
   const base: Prisma.RunbookPreviewAuthorizationWhereInput = { independentReview: true };
   const where: Prisma.RunbookPreviewAuthorizationWhereInput =
     input.state === 'pending'
-      ? pendingRunbookWhere(now)
-      : { AND: [base, { NOT: pendingRunbookWhere(now) }] };
+      ? { AND: [pendingRunbookWhere(now), scope] }
+      : { AND: [base, scope, { NOT: pendingRunbookWhere(now) }] };
   const [pending, rows, total] = await Promise.all([
     countPendingApprovals(viewer, now),
     prisma.runbookPreviewAuthorization.findMany({
@@ -489,6 +551,9 @@ export async function listMcpApprovals(
         actorId: true,
         requesterGrantId: true,
         reviewedById: true,
+        rejectedById: true,
+        selfApproved: true,
+        decisionReason: true,
         reviewedAt: true,
         rejectedAt: true,
         consumedAt: true,
@@ -500,7 +565,13 @@ export async function listMcpApprovals(
     prisma.runbookPreviewAuthorization.count({ where }),
   ]);
   const [people, assistants, runbooks] = await Promise.all([
-    peopleById(rows.flatMap(row => [row.actorId, ...(row.reviewedById ? [row.reviewedById] : [])])),
+    peopleById(
+      rows.flatMap(row => [
+        row.actorId,
+        ...(row.reviewedById ? [row.reviewedById] : []),
+        ...(row.rejectedById ? [row.rejectedById] : []),
+      ])
+    ),
     assistantsByGrant(rows.map(row => row.requesterGrantId)),
     rows.length
       ? prisma.runbook.findMany({
@@ -536,7 +607,9 @@ export async function listMcpApprovals(
         expiresAt: row.expiresAt,
         decidedAt: row.reviewedAt ?? row.rejectedAt,
         requester: people.get(row.actorId) ?? { id: row.actorId, name: null, email: null },
-        reviewer: row.reviewedById ? (people.get(row.reviewedById) ?? null) : null,
+        reviewer: decider(people, row.reviewedById ?? row.rejectedById),
+        selfApproved: row.selfApproved,
+        decisionReason: row.decisionReason,
         assistant: row.requesterGrantId
           ? (assistants.get(row.requesterGrantId)?.name ?? null)
           : null,

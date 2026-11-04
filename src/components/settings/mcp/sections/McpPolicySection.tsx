@@ -21,6 +21,8 @@ export type McpPolicyValues = {
   maxInFlight: number;
   maxOperations: number;
   requestsPerMinute: number;
+  approvalTtlMinutes: number;
+  approvalCommitWindowMinutes: number;
 };
 
 /**
@@ -146,6 +148,40 @@ export default function McpPolicySection({
               description="Assistants can prepare changes; each one waits for approval by an administrator."
               defaultChecked={policy.writesEnabled}
             />
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label htmlFor="mcp-approval-ttl">Time to review (minutes)</Label>
+                <Input
+                  id="mcp-approval-ttl"
+                  name="approvalTtlMinutes"
+                  type="number"
+                  min="15"
+                  max="1440"
+                  defaultValue={policy.approvalTtlMinutes}
+                  aria-describedby="mcp-approval-ttl-help"
+                  required
+                />
+                <p id="mcp-approval-ttl-help" className="text-xs text-muted-foreground">
+                  How long a request waits for a reviewer, 15 to 1440 (24 hours).
+                </p>
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="mcp-commit-window">Time to apply after approval (minutes)</Label>
+                <Input
+                  id="mcp-commit-window"
+                  name="approvalCommitWindowMinutes"
+                  type="number"
+                  min="1"
+                  max="1440"
+                  defaultValue={policy.approvalCommitWindowMinutes}
+                  aria-describedby="mcp-commit-window-help"
+                  required
+                />
+                <p id="mcp-commit-window-help" className="text-xs text-muted-foreground">
+                  Starts when the request is approved. Never later than 24 hours after the request.
+                </p>
+              </div>
+            </div>
             <CheckRow
               name="sensitiveReadsEnabled"
               label="Allow reviewed sensitive configuration reads"

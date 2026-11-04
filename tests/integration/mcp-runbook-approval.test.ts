@@ -398,13 +398,15 @@ describe('independently reviewed MCP runbook execution', () => {
       { id: p.previewId, planDigest: p.planDigest, decision: 'reject' },
       f.reviewer
     );
+    // A rejected plan says so, instead of looking like one still waiting for review.
     await expect(
       executeApprovedMcpRunbook(f.ctx(), { previewId: p.previewId, idempotencyKey: 'execute' })
-    ).rejects.toThrow('MCP_APPROVAL_REQUIRED');
-    expect(
-      (await db.runbookPreviewAuthorization.findUniqueOrThrow({ where: { id: p.previewId } }))
-        .requestEnvelope
-    ).toBeNull();
+    ).rejects.toThrow('MCP_APPROVAL_REJECTED');
+    const row = await db.runbookPreviewAuthorization.findUniqueOrThrow({
+      where: { id: p.previewId },
+    });
+    expect(row.requestEnvelope).toBeNull();
+    expect(row.rejectedById).toBe(f.reviewer.id);
   });
   it('makes reviewed previews unusable through the ordinary execution entry point', async () => {
     const f = await fixture();

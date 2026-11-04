@@ -114,6 +114,13 @@ const STANDALONE_TOOLS: readonly Omit<McpCapability, 'kind' | 'curated' | 'tool'
     summary: 'Execute a runbook plan after it was approved in OpsKnight.',
   },
   {
+    id: 'runbook_get_approval',
+    domain: 'runbooks',
+    risk: 'R0',
+    approval: false,
+    summary: 'Read the status of a runbook plan the assistant requested.',
+  },
+  {
     id: 'incident_get_context',
     domain: 'incidents',
     risk: 'R0',

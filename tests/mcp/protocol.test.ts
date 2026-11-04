@@ -99,6 +99,8 @@ describe('official SDK modern protocol adapter', () => {
       const names = (await response.json()).result.tools.map((tool: { name: string }) => tool.name);
       expect(names.includes('runbook_prepare_execution')).toBe(enabled);
       expect(names.includes('runbook_execute_approved')).toBe(enabled);
+      // The assistant can check a plan's status without calling a destructive tool.
+      expect(names.includes('runbook_get_approval')).toBe(enabled);
       expect(names).not.toContain('runbook_approve');
       expect(names).not.toContain('approve_runbook_preview');
     }

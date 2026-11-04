@@ -1,6 +1,14 @@
+import type { ReactNode } from 'react';
 import { McpBoundaryError } from '@/lib/mcp/core/errors';
 
-type Blocked = 'own-request' | 'not-authorized' | 'expired';
+type Blocked =
+  | 'own-request'
+  | 'not-authorized'
+  | 'expired'
+  | 'unavailable'
+  | 'reviewer-changed'
+  | 'target-hidden'
+  | 'requester-changed';
 
 const REASONS = new Map<string, Blocked>([
   ['MCP_DISTINCT_REVIEWER_REQUIRED', 'own-request'],
@@ -9,6 +17,16 @@ const REASONS = new Map<string, Blocked>([
   ['MCP_APPROVER_REQUIRED', 'not-authorized'],
   ['MCP_APPROVAL_EXPIRED', 'expired'],
   ['PREVIEW_REVIEW_EXPIRED', 'expired'],
+  ['PREVIEW_ALREADY_REVIEWED', 'expired'],
+  ['MCP_APPROVAL_UNAVAILABLE', 'unavailable'],
+  ['MCP_REVIEWER_CHANGED', 'reviewer-changed'],
+  ['PREVIEW_REVIEW_APPROVER_CHANGED', 'reviewer-changed'],
+  ['PREVIEW_REVIEW_RESOURCE_UNAVAILABLE', 'target-hidden'],
+  ['MCP_RESOURCE_UNAVAILABLE', 'requester-changed'],
+  ['MCP_OPERATION_FORBIDDEN', 'requester-changed'],
+  ['MCP_AUTHORITY_CHANGED', 'requester-changed'],
+  ['MCP_ACCESS_CHANGED', 'requester-changed'],
+  ['MCP_INVALID_TOKEN', 'requester-changed'],
 ]);
 
 /** Expected reasons a person cannot review a request; anything else is a real failure. */
@@ -31,6 +49,22 @@ const COPY = new Map<Blocked, { title: string; body: string }>(
     expired: {
       title: 'This request is no longer open',
       body: 'It expired or was already used. Ask the assistant to prepare the change again.',
+    },
+    unavailable: {
+      title: 'This request was not found',
+      body: 'The link may be wrong, or the request was removed after it was closed.',
+    },
+    'reviewer-changed': {
+      title: 'Your access changed',
+      body: 'Your account, role or teams changed since you signed in. Sign out, sign in again and reopen this link.',
+    },
+    'target-hidden': {
+      title: 'You cannot review this plan',
+      body: 'It targets an incident or service you cannot see. Send this page link to someone who can.',
+    },
+    'requester-changed': {
+      title: 'This request can no longer be approved',
+      body: "The requester's access or assistant connection changed after they asked. Ask them to prepare it again.",
     },
   }) as [Blocked, { title: string; body: string }][]
 );
@@ -64,6 +98,124 @@ export function SelfApprovalConfirm() {
         <input type="checkbox" name="confirmSelfApproval" value="yes" required className="mt-1" />
         <span>I have reviewed this change and I am sure I want to apply it.</span>
       </label>
+    </div>
+  );
+}
+
+type Person = { name: string | null; email: string | null };
+
+function personText(person: Person) {
+  return person.name ?? person.email ?? 'Unknown user';
+}
+
+/** "Requested by X via assistant at T". Assistant names can be self-chosen, so they are quoted. */
+export function RequestedBy({
+  person,
+  assistant,
+  at,
+}: {
+  person: Person;
+  assistant: { name: string } | null;
+  at: Date;
+}) {
+  return (
+    <p className="text-sm text-muted-foreground">
+      Requested by <span className="font-medium text-foreground">{personText(person)}</span>
+      {person.name && person.email ? ` (${person.email})` : ''}
+      {assistant ? (
+        <>
+          {' '}
+          via the assistant <span className="font-medium text-foreground">“{assistant.name}”</span>
+        </>
+      ) : null}{' '}
+      at <time dateTime={at.toISOString()}>{at.toISOString()}</time>
+    </p>
+  );
+}
+
+const STATUS_COPY: Record<string, { label: string; body: string }> = {
+  PENDING: {
+    label: 'Waiting for review',
+    body: 'Reviewers were notified in OpsKnight. You can also send them this page link.',
+  },
+  APPROVED: {
+    label: 'Approved',
+    body: 'Ask your assistant to continue; it can apply the approved request once before the deadline below.',
+  },
+  REJECTED: {
+    label: 'Rejected',
+    body: 'Nothing was changed. Ask your assistant to prepare a corrected request if needed.',
+  },
+  EXPIRED: {
+    label: 'Expired',
+    body: 'It was not used in time. Ask your assistant to prepare it again with a new idempotency key.',
+  },
+  EXECUTING: { label: 'Running', body: 'Your assistant is applying the approved request.' },
+  COMMITTED: { label: 'Completed', body: 'The approved request was applied.' },
+  CONSUMED: { label: 'Completed', body: 'The approved plan was started.' },
+  FAILED: { label: 'Failed', body: 'The approved request could not be applied.' },
+};
+
+/** What a requester sees on their own request: status only, never the review controls. */
+export function RequesterStatus({
+  heading,
+  status,
+  expiresAt,
+  reviewer,
+  decidedAt,
+  selfApproved,
+  decisionReason,
+  children,
+}: {
+  heading: string;
+  status: string;
+  expiresAt: Date;
+  reviewer: Person | null;
+  decidedAt: Date | null;
+  selfApproved: boolean;
+  decisionReason: string | null;
+  children?: ReactNode;
+}) {
+  const copy = STATUS_COPY[status] ?? { label: status, body: '' };
+  const open = status === 'PENDING' || status === 'APPROVED';
+  return (
+    <div className="max-w-3xl space-y-4 rounded-lg border p-6">
+      <h1 className="text-2xl font-semibold">{heading}</h1>
+      {children}
+      <div role="status" className="rounded border p-4">
+        <p className="font-medium">Status: {copy.label}</p>
+        <p className="mt-1 text-sm">{copy.body}</p>
+      </div>
+      <dl className="grid gap-2 sm:grid-cols-2 break-all">
+        {open && (
+          <>
+            <dt>{status === 'APPROVED' ? 'Apply before' : 'Review before'}</dt>
+            <dd>{expiresAt.toISOString()}</dd>
+          </>
+        )}
+        {decidedAt && (
+          <>
+            <dt>Decided</dt>
+            <dd>
+              {decidedAt.toISOString()}
+              {reviewer ? ` by ${personText(reviewer)}` : ''}
+              {selfApproved ? ' (self-approved)' : ''}
+            </dd>
+          </>
+        )}
+      </dl>
+      <DecisionReason reason={decisionReason} />
+    </div>
+  );
+}
+
+/** The reviewer's note: written by a person, shown verbatim as untrusted text. */
+export function DecisionReason({ reason }: { reason: string | null }) {
+  if (!reason) return null;
+  return (
+    <div className="rounded border p-4">
+      <p className="text-sm font-medium">Reviewer&apos;s note</p>
+      <p className="mt-1 whitespace-pre-wrap break-words text-sm">{reason}</p>
     </div>
   );
 }

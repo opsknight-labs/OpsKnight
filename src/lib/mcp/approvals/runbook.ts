@@ -22,6 +22,9 @@ import { requireMcp } from '../core/errors';
 import { lockMcpMutationAuthority } from '../core/mutation-authority';
 import type { ExecutionContext } from '../core/execution';
 import { MCP_REVIEWED_RUNBOOK_SCOPES, canUseReviewedRunbooks } from './policy';
+import { commitDeadline, readMcpApprovalTiming, reviewDeadline } from './timing';
+import { notifyRequesterOfDecision, notifyRunbookReviewers } from './notify';
+import { decisionReasonSchema, untrustedDecisionReason } from './operation';
 
 const digest = z.string().regex(/^[a-f0-9]{64}$/);
 const idempotencyKey = z.string().trim().min(1).max(128);
@@ -35,6 +38,7 @@ export const prepareRunbookSchema = z
 export const executeApprovedRunbookSchema = z
   .object({ previewId: digest, idempotencyKey })
   .strict();
+export const runbookApprovalStatusSchema = z.object({ previewId: digest }).strict();
 const envelopeSchema = z
   .object({
     request: prepareRunbookSchema.omit({ idempotencyKey: true }),
@@ -193,9 +197,14 @@ export function prepareMcpRunbook(context: ExecutionContext, raw: unknown) {
                 ),
               })),
             });
+            // A second person needs time to notice and read the plan: the review window comes
+            // from the MCP policy instead of the short native preview lifetime.
+            const timing = await readMcpApprovalTiming(tx);
+            const expiresAt = reviewDeadline(timing);
             await tx.runbookPreviewAuthorization.update({
               where: { id: previewId },
               data: {
+                expiresAt,
                 independentReview: true,
                 requesterGrantId: context.grantId,
                 requesterCredentialId: context.credentialId,
@@ -219,10 +228,20 @@ export function prepareMcpRunbook(context: ExecutionContext, raw: unknown) {
               },
               tx
             );
+            await notifyRunbookReviewers(tx, {
+              previewId,
+              actorId: auth.actor.id,
+              grantId: context.grantId,
+              runbookId: input.runbookId,
+              incidentId: request.incidentId ?? null,
+              serviceId: request.serviceId ?? null,
+              expiresAt,
+            });
             return {
               previewId,
               planDigest: plan.digest,
-              expiresAt: plan.expiresAt,
+              expiresAt: expiresAt.toISOString(),
+              commitWindowMinutes: timing.commitWindowMinutes,
               status: 'REQUIRES_NATIVE_APPROVAL',
               reviewUrl: `${mcpOrigin()}/settings/integrations/mcp/approvals/${previewId}`,
               warnings: [
@@ -233,9 +252,25 @@ export function prepareMcpRunbook(context: ExecutionContext, raw: unknown) {
         });
         const bound = await tx.runbookPreviewAuthorization.findUnique({
           where: { id: prepared.value.previewId },
-          select: { requesterGrantId: true, requesterCredentialId: true },
+          select: {
+            requesterGrantId: true,
+            requesterCredentialId: true,
+            expiresAt: true,
+            consumedAt: true,
+            rejectedAt: true,
+          },
         });
         requireMcp(bound?.requesterGrantId === context.grantId, 'MCP_APPROVAL_UNAVAILABLE', 404);
+        // A retried prepare must not hand back a plan that was rejected, used or has lapsed.
+        if (prepared.replayed) {
+          requireMcp(!bound.rejectedAt, 'MCP_APPROVAL_REJECTED', 409, REPREPARE_HINT);
+          requireMcp(
+            !bound.consumedAt && bound.expiresAt > new Date(),
+            'MCP_APPROVAL_EXPIRED',
+            409,
+            REPREPARE_HINT
+          );
+        }
         return prepared;
       });
       context.budget.consumeResult(result.value);
@@ -263,10 +298,12 @@ export function executeApprovedMcpRunbook(context: ExecutionContext, raw: unknow
           context: { key: input.idempotencyKey, principalId: auth.apiKey.id },
           payload: { previewId: input.previewId },
           execute: async () => {
+            requireMcp(!preview.rejectedAt, 'MCP_APPROVAL_REJECTED', 403, REPREPARE_HINT);
             requireMcp(
               !preview.consumedAt && preview.expiresAt > new Date(),
               'MCP_APPROVAL_EXPIRED',
-              409
+              409,
+              REPREPARE_HINT
             );
             requireMcp(
               preview.reviewedAt && !preview.rejectedAt && preview.requestEnvelope,
@@ -338,6 +375,77 @@ export function executeApprovedMcpRunbook(context: ExecutionContext, raw: unknow
   );
 }
 
+const REPREPARE_HINT = 'This plan is no longer open; prepare it again with a new idempotencyKey.';
+
+type RunbookApprovalStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'EXPIRED' | 'CONSUMED';
+
+/** Status from the stored columns, in precedence order. */
+export function runbookApprovalStatus(
+  preview: Pick<
+    RunbookPreviewAuthorization,
+    'consumedAt' | 'rejectedAt' | 'expiresAt' | 'reviewedAt'
+  >,
+  now = new Date()
+): RunbookApprovalStatus {
+  if (preview.consumedAt) return 'CONSUMED';
+  if (preview.rejectedAt) return 'REJECTED';
+  if (preview.expiresAt <= now) return 'EXPIRED';
+  if (preview.reviewedAt) return 'APPROVED';
+  return 'PENDING';
+}
+
+/** Read-only status for the requesting assistant; the preview id is not a bearer capability. */
+export function getMcpRunbookApproval(context: ExecutionContext, raw: unknown) {
+  return context.budget.track(
+    withMcpDatabase(async () => {
+      const input = runbookApprovalStatusSchema.parse(raw);
+      context.budget.consumeOperation();
+      requireMcp(context.credentialId, 'MCP_INVALID_TOKEN', 401);
+      const auth = await resolveMcpGrant(context.grantId, context.credentialId);
+      await enforceV2RateLimit(auth.apiKey.id, 'READ');
+      const preview = await runSerializableTransaction(tx =>
+        tx.runbookPreviewAuthorization.findUnique({ where: { id: input.previewId } })
+      );
+      requireMcp(
+        preview?.independentReview &&
+          preview.requesterGrantId === context.grantId &&
+          preview.actorId === auth.actor.id,
+        'MCP_APPROVAL_UNAVAILABLE',
+        404
+      );
+      const status = runbookApprovalStatus(preview);
+      const result = {
+        previewId: preview.id,
+        planDigest: preview.planDigest,
+        status,
+        expiresAt: preview.expiresAt.toISOString(),
+        commitDeadline: preview.commitDeadline?.toISOString() ?? null,
+        reviewedAt: preview.reviewedAt?.toISOString() ?? null,
+        rejectedAt: preview.rejectedAt?.toISOString() ?? null,
+        consumedAt: preview.consumedAt?.toISOString() ?? null,
+        executionId: preview.executionId,
+        reviewUrl: `${mcpOrigin()}/settings/integrations/mcp/approvals/${preview.id}`,
+        ...untrustedDecisionReason(preview.decisionReason),
+        ...(status === 'PENDING' ? { pollAfterSeconds: 15 } : {}),
+        ...(status === 'APPROVED' ? { next: 'runbook_execute_approved' } : {}),
+        ...(status === 'EXPIRED' || status === 'REJECTED' ? { hint: REPREPARE_HINT } : {}),
+      };
+      context.budget.consumeResult(result);
+      return result;
+    })
+  );
+}
+
+/** The plan as its own requester sees it: status only. Null for anyone else. */
+export async function loadMcpRunbookRequest(id: string, viewerId: string) {
+  digest.parse(id);
+  const preview = await runSerializableTransaction(tx =>
+    tx.runbookPreviewAuthorization.findUnique({ where: { id } })
+  );
+  requireMcp(preview?.independentReview, 'MCP_APPROVAL_UNAVAILABLE', 404);
+  return preview.actorId === viewerId ? preview : null;
+}
+
 /** Native page/action callers supply the authenticated session identity themselves. */
 export async function loadMcpRunbookReview(
   id: string,
@@ -366,12 +474,30 @@ export async function decideMcpRunbookReview(
       planDigest: digest,
       decision: z.enum(['approve', 'reject']),
       confirmSelfApproval: z.literal('yes').optional(),
+      reason: decisionReasonSchema,
     })
     .strict()
     .parse(raw);
   return runSerializableTransaction(async tx => {
     const preview = await lockPreview(tx, input.id);
     await requesterAuthority(tx, preview);
-    await reviewRunbookPreview(tx, input, reviewer);
+    // Approval opens a fresh commit window, capped from the request; it replaces the review expiry.
+    const deadline =
+      input.decision === 'approve'
+        ? commitDeadline(await readMcpApprovalTiming(tx), preview.createdAt)
+        : undefined;
+    await reviewRunbookPreview(
+      tx,
+      { ...input, reason: input.reason || undefined, commitDeadline: deadline },
+      reviewer
+    );
+    await notifyRequesterOfDecision(tx, {
+      id: preview.id,
+      requesterId: preview.actorId,
+      reviewerId: reviewer.id,
+      kind: 'runbook',
+      decision: input.decision,
+      commitDeadline: deadline,
+    });
   });
 }

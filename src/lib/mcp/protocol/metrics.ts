@@ -39,6 +39,7 @@ const STANDALONE_TOOLS = [
   'operation_commit_approved',
   'runbook_prepare_execution',
   'runbook_execute_approved',
+  'runbook_get_approval',
 ];
 
 /** The bounded tool label values: named tools, `other` for anything else and `none` off tools/call. */

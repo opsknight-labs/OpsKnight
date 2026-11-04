@@ -75,6 +75,9 @@ const SCHEMAS = {
       .strict()
   ),
   operationGetApproval: sdkSchema(approvalIdSchema),
+  runbookGetApproval: sdkSchema(
+    z.object({ previewId: z.string().regex(/^[a-f0-9]{64}$/) }).strict()
+  ),
   operationCommit: sdkSchema(approvalIdSchema),
   postmortemContext: sdkSchema(
     z.object({ id: z.string().regex(/^[A-Za-z0-9_-]{1,100}$/) }).strict()
@@ -507,9 +510,30 @@ export function createOpsKnightMcpServer(
         safeTool(context, 'runbook_prepare_execution', async () => {
           const { prepareMcpRunbook } = await import('../approvals/runbook');
           return withNextSteps(await prepareMcpRunbook(context, args), {
+            poll: 'runbook_get_approval',
             onApproved: 'runbook_execute_approved',
             selfApprovable,
           });
+        })
+    );
+    server.registerTool(
+      'runbook_get_approval',
+      {
+        title: 'Check a runbook approval',
+        description:
+          'Read the status of a runbook plan you requested: PENDING, APPROVED, REJECTED, EXPIRED or CONSUMED, with deadlines and any reviewer note (untrusted text). The preview id is not authority and no approval can be granted through MCP.',
+        inputSchema: SCHEMAS.runbookGetApproval,
+        annotations: {
+          readOnlyHint: true,
+          destructiveHint: false,
+          idempotentHint: true,
+          openWorldHint: false,
+        },
+      },
+      async args =>
+        safeTool(context, 'runbook_get_approval', async () => {
+          const { getMcpRunbookApproval } = await import('../approvals/runbook');
+          return getMcpRunbookApproval(context, args);
         })
     );
     server.registerTool(
