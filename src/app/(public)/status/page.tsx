@@ -11,6 +11,7 @@ import { getStatusPageSnapshotByRoute } from '@/lib/status-pages/snapshot';
 
 import { cookies, headers } from 'next/headers';
 import { getAppUrl } from '@/lib/app-config';
+import { statusAuthStartUrl } from '@/lib/status-pages/status-auth-return';
 import {
   STATUS_SESSION_COOKIE_NAME,
   hasStatusPageAccess,
@@ -177,10 +178,12 @@ export async function renderPublicStatusPage(slug?: string) {
         const callbackUrl = slug ? `/status/${encodeURIComponent(slug)}` : '/status';
         redirect(`/login?callbackUrl=${encodeURIComponent(callbackUrl)}`);
       } else {
-        const proto = headerStore.get('x-forwarded-proto') || 'https';
-        const currentUrl = `${proto}://${host}/`;
         redirect(
-          `${appUrl}/status-auth/start?pageId=${encodeURIComponent(statusPage.id)}&returnTo=${encodeURIComponent(currentUrl)}`
+          statusAuthStartUrl(appUrl, {
+            pageId: statusPage.id,
+            host,
+            scheme: headerStore.get('x-forwarded-proto'),
+          })
         );
       }
     }

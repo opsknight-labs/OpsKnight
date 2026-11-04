@@ -52,7 +52,9 @@ export default function SetPasswordForm({ token }: { token: string }) {
       // Defense-in-depth: cache cleanup must never prevent signout
     }
     try {
-      await signOut({ redirect: false });
+      // Without an explicit callbackUrl NextAuth posts window.location.href (a
+      // full URL carrying the reset token), which WAF RFI rules block.
+      await signOut({ redirect: false, callbackUrl: '/login?password=1' });
     } catch {
       // Defense-in-depth: if signOut fails, proceed with client redirect
     }

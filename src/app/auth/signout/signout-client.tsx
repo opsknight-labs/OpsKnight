@@ -9,11 +9,11 @@ import { AuthLayout, AuthCard } from '@/components/auth/AuthLayout';
 import AuthBrand from '@/components/auth/AuthBrand';
 import Spinner from '@/components/ui/Spinner';
 import { purgeBrowserAuthCaches } from '@/lib/auth-cache-purge';
-import { safeInternalCallbackUrl } from '@/lib/auth-redirect';
+import { signOutDestination } from '@/lib/app-routes';
 
 export default function SignOutClient() {
   const searchParams = useSearchParams();
-  const callbackUrl = safeInternalCallbackUrl(searchParams.get('callbackUrl'), '/login');
+  const callbackUrl = signOutDestination(new URLSearchParams(searchParams.toString()));
   const [isSigningOut, setIsSigningOut] = useState(false);
   const [error, setError] = useState('');
 

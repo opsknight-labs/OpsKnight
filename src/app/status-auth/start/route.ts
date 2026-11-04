@@ -4,6 +4,7 @@ import { getAuthOptions } from '@/lib/auth';
 import prisma from '@/lib/prisma';
 import { getAppUrl } from '@/lib/app-config';
 import { createStatusAuthTicket } from '@/lib/status-pages/status-auth';
+import { resolveStatusAuthReturn } from '@/lib/status-pages/status-auth-return';
 import {
   normalizeHostname,
   matchesStatusPageDomain,
@@ -14,7 +15,6 @@ export const dynamic = 'force-dynamic';
 export async function GET(req: NextRequest) {
   const { searchParams } = req.nextUrl;
   const pageId = searchParams.get('pageId')?.trim();
-  const returnTo = searchParams.get('returnTo')?.trim() || '/';
 
   if (!pageId) {
     return new NextResponse('Missing pageId parameter', { status: 400 });
@@ -38,10 +38,8 @@ export async function GET(req: NextRequest) {
   }
 
   // Validate returnTo target host against registered domains
-  let targetUrl: URL;
-  try {
-    targetUrl = new URL(returnTo, appUrl);
-  } catch {
+  const targetUrl = resolveStatusAuthReturn(searchParams, appUrl);
+  if (!targetUrl) {
     return new NextResponse('Invalid returnTo URL', { status: 400 });
   }
 

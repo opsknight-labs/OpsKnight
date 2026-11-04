@@ -26,6 +26,9 @@ export async function statusDomainRequestHeaders(
     encoder.encode(`status-domain-map:${timestamp}`)
   );
   return {
+    // Explicit agent instead of the runtime default, which WAF bot rules flag
+    // when INTERNAL_API_URL points at the WAF-fronted public URL.
+    'user-agent': 'OpsKnight-Internal/1.0',
     'x-status-map-time': timestamp,
     'x-status-map-signature': Array.from(new Uint8Array(signature), byte =>
       byte.toString(16).padStart(2, '0')

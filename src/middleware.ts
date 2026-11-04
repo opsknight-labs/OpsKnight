@@ -506,6 +506,24 @@ type CachedDomainConfig = {
 let cachedStatusDomain: CachedDomainConfig | null = null;
 let inflightStatusDomainFetch: Promise<StatusDomainConfig | null> | null = null;
 
+let warnedInternalApiIsPublic = false;
+
+// A self-fetch through the public URL crosses the WAF, and a block there makes
+// every database-configured host answer 421. Say so once instead of failing quietly.
+function warnIfInternalApiIsPublic() {
+  if (warnedInternalApiIsPublic || !process.env.INTERNAL_API_URL) return;
+  try {
+    if (new URL(INTERNAL_API_BASE).host !== new URL(DEFAULT_APP_HOST).host) return;
+  } catch {
+    return;
+  }
+  warnedInternalApiIsPublic = true;
+  logger.warn(
+    'Status domain lookup failed and INTERNAL_API_URL points at the public app URL; set it to a loopback or in-cluster address that bypasses the WAF',
+    { component: 'middleware' }
+  );
+}
+
 async function fetchStatusDomainConfig(forceRefresh = false): Promise<StatusDomainConfig | null> {
   const now = Date.now();
   if (!forceRefresh && cachedStatusDomain && cachedStatusDomain.expiresAt > now)
@@ -527,6 +545,7 @@ async function fetchStatusDomainConfig(forceRefresh = false): Promise<StatusDoma
       };
       return value;
     } catch {
+      warnIfInternalApiIsPublic();
       cachedStatusDomain = {
         value: cachedStatusDomain?.value ?? null,
         expiresAt: Date.now() + Math.min(STATUS_DOMAIN_CACHE_TTL, 10) * 1000,

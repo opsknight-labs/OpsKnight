@@ -46,7 +46,7 @@ Set `NEXTAUTH_URL` and normally `NEXT_PUBLIC_APP_URL` to the exact public HTTPS 
 
 ## Apply the proxy configuration
 
-Validate the proxy or Ingress configuration, reload it without exposing the upstream port, then roll out Web/application when environment values changed. Apply equivalent header, body, and stream behavior at every intermediate CDN or load balancer.
+Validate the proxy or Ingress configuration, reload it without exposing the upstream port, then roll out Web/application when environment values changed. Apply equivalent header, body, and stream behavior at every intermediate CDN, load balancer, or web application firewall. A WAF needs narrow exclusions for some OpsKnight requests; see [WAF compatibility](./waf-compatibility).
 
 ## Terminate TLS safely
 
@@ -69,3 +69,4 @@ For symptoms and recovery, use [Misdirected Request](../../troubleshooting/insta
 - **Webhook signature failure:** stop body transformation and preserve signature headers.
 - **Realtime disconnects:** disable buffering and increase the stream idle timeout at every hop.
 - **HTTP 413:** set a bounded proxy limit that meets the documented provider limit.
+- **HTTP 403 from a WAF on sign-in, runbooks, or webhooks:** add the narrow exclusions in [WAF compatibility](./waf-compatibility).

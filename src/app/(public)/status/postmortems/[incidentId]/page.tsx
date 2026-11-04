@@ -11,6 +11,7 @@ import { deriveJiraCapability } from '@/lib/jira-capabilities';
 
 import { cookies, headers } from 'next/headers';
 import { getAppUrl } from '@/lib/app-config';
+import { statusAuthStartUrl } from '@/lib/status-pages/status-auth-return';
 import {
   STATUS_SESSION_COOKIE_NAME,
   hasStatusPageAccess,
@@ -73,10 +74,13 @@ export async function renderPublicPostmortem(incidentId: string, slug?: string) 
           : `/status/postmortems/${incidentId}`;
         redirect(`/login?callbackUrl=${encodeURIComponent(callbackUrl)}`);
       } else {
-        const proto = headerStore.get('x-forwarded-proto') || 'https';
-        const currentUrl = `${proto}://${host}/postmortems/${encodeURIComponent(incidentId)}`;
         redirect(
-          `${appUrl}/status-auth/start?pageId=${encodeURIComponent(statusPage.id)}&returnTo=${encodeURIComponent(currentUrl)}`
+          statusAuthStartUrl(appUrl, {
+            pageId: statusPage.id,
+            host,
+            scheme: headerStore.get('x-forwarded-proto'),
+            path: `/postmortems/${encodeURIComponent(incidentId)}`,
+          })
         );
       }
     }

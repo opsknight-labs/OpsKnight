@@ -81,7 +81,10 @@ describe('SetPasswordForm', () => {
 
     await waitFor(() => {
       expect(mockPurgeBrowserAuthCaches).toHaveBeenCalled();
-      expect(mockSignOut).toHaveBeenCalledWith({ redirect: false });
+      expect(mockSignOut).toHaveBeenCalledWith({
+        redirect: false,
+        callbackUrl: '/login?password=1',
+      });
       expect(mockPush).toHaveBeenCalledWith('/login?password=1');
     });
   });
@@ -99,7 +102,10 @@ describe('SetPasswordForm', () => {
 
     await waitFor(() => {
       expect(mockPurgeBrowserAuthCaches).toHaveBeenCalled();
-      expect(mockSignOut).toHaveBeenCalledWith({ redirect: false });
+      expect(mockSignOut).toHaveBeenCalledWith({
+        redirect: false,
+        callbackUrl: '/login?password=1',
+      });
       expect(mockPush).toHaveBeenCalledWith('/login?password=1');
     });
   });
