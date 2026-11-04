@@ -4,13 +4,13 @@ if (process.env.DOTENV_CONFIG_PATH) {
 } else {
   dotenv.config({ override: false });
 }
-import { PrismaClient } from '@prisma/client';
 import { createHmac, randomBytes, randomUUID } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { encrypt } from '../../src/lib/encryption';
 import { API_SCOPES } from '../../src/lib/authorization';
 import { computeDefinitionChecksum } from '../../src/lib/runbooks/definition';
+import { createPrismaClient } from '../../src/lib/db/create-client';
 
 function requireEnv(name: string): string {
   const value = process.env[name];
@@ -43,8 +43,8 @@ if (
 const API_BASE_URL = process.env.API_BASE_URL || 'http://127.0.0.1:3900/api/v2';
 const APP_BASE_URL = API_BASE_URL.replace('/api/v2', '');
 
-const prisma = new PrismaClient({
-  datasources: { db: { url: DATABASE_URL } },
+const prisma = createPrismaClient({
+  url: DATABASE_URL,
 });
 
 async function mintAdminApiKey(adminUserId: string): Promise<string> {

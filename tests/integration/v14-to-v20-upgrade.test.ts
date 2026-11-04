@@ -4,6 +4,8 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { PrismaClient } from '@prisma/client';
+import { createPrismaClient } from '../../src/lib/db/create-client';
+import { legacyPrisma } from '../../scripts/lib/legacy-prisma.cjs';
 import type { NextRequest } from 'next/server';
 import { afterAll, describe, expect, it, vi } from 'vitest';
 
@@ -68,10 +70,10 @@ if (!databaseUrl) {
             }
             throw error;
           }
-          runPrismaMigrate(
-            path.join(scratchRoot, 'prisma', 'schema.prisma'),
-            isolatedDatabaseUrl,
-            repoRoot
+          // The v1.4.0 schema is applied by the Prisma CLI that v1.4.0 shipped with.
+          legacyPrisma(repoRoot, 'v1.4.0').run(
+            ['migrate', 'deploy', '--schema', path.join(scratchRoot, 'prisma', 'schema.prisma')],
+            { ...process.env, DATABASE_URL: isolatedDatabaseUrl, NODE_ENV: 'test' }
           );
           await seedV14Data(isolatedDatabaseUrl, {
             OLD_NEXTAUTH_SECRET,
@@ -91,11 +93,7 @@ if (!databaseUrl) {
             INTEGRATION_SECRET,
           });
 
-          runPrismaMigrate(
-            path.join(repoRoot, 'prisma', 'schema.prisma'),
-            isolatedDatabaseUrl,
-            repoRoot
-          );
+          runCurrentPrismaMigrate(isolatedDatabaseUrl, repoRoot);
 
           process.env.DATABASE_URL = isolatedDatabaseUrl;
           setProcessEnv('NODE_ENV', 'test');
@@ -259,9 +257,7 @@ function isDatabaseUnavailable(error: unknown) {
 }
 
 async function createDatabase(rawUrl: string, databaseName: string) {
-  const prisma = new PrismaClient({
-    datasources: { db: { url: withDatabase(rawUrl, 'postgres') } },
-  });
+  const prisma = createPrismaClient({ url: withDatabase(rawUrl, 'postgres') });
   try {
     await prisma.$executeRawUnsafe(`CREATE DATABASE "${databaseName}"`);
   } finally {
@@ -271,9 +267,7 @@ async function createDatabase(rawUrl: string, databaseName: string) {
 
 async function dropDatabase(rawUrl: string, databaseName: string) {
   if (!rawUrl) return;
-  const prisma = new PrismaClient({
-    datasources: { db: { url: withDatabase(rawUrl, 'postgres') } },
-  });
+  const prisma = createPrismaClient({ url: withDatabase(rawUrl, 'postgres') });
   try {
     await prisma.$executeRawUnsafe(`DROP DATABASE IF EXISTS "${databaseName}" WITH (FORCE)`);
   } catch {
@@ -320,8 +314,10 @@ function extractPrismaFromTag(tag: string, scratchRoot: string, repoRoot: string
   }
 }
 
-function runPrismaMigrate(schemaPath: string, url: string, repoRoot: string) {
-  execFileSync('npx', ['prisma', 'migrate', 'deploy', '--schema', schemaPath], {
+/** Upgrade with this release's Prisma CLI and prisma.config.ts, as docker-entrypoint.sh does. */
+function runCurrentPrismaMigrate(url: string, repoRoot: string) {
+  const cli = path.join(repoRoot, 'node_modules', 'prisma', 'build', 'index.js');
+  execFileSync(process.execPath, [cli, 'migrate', 'deploy'], {
     cwd: repoRoot,
     env: { ...process.env, DATABASE_URL: url, NODE_ENV: 'test' },
     stdio: 'pipe',
@@ -387,7 +383,7 @@ async function seedV14Data(
     INTEGRATION_SECRET: string;
   }
 ) {
-  const prisma = new PrismaClient({ datasources: { db: { url } } });
+  const prisma = createPrismaClient({ url });
   const apiTokenHash = scryptSync(data.API_TOKEN, data.OLD_NEXTAUTH_SECRET, 32).toString('hex');
   const statusTokenHash = scryptSync(data.STATUS_TOKEN, data.OLD_NEXTAUTH_SECRET, 32).toString('hex');
   const encryptedIntegrationSecret = encryptV14WithKey(data.INTEGRATION_SECRET, data.OLD_ENCRYPTION_KEY);

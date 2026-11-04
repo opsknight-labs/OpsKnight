@@ -1,5 +1,5 @@
-import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
+import { createPrismaClient } from '../../src/lib/db/create-client';
 const url = process.env.DATABASE_URL;
 if (!url || !new URL(url).pathname.endsWith('/enterprise_scim_test'))
   throw new Error('SCIM certification requires the isolated enterprise_scim_test database.');
@@ -9,7 +9,7 @@ if (!email || !password || password.length < 20)
   throw new Error(
     'Supply disposable SCIM_E2E_ADMIN_EMAIL and a test password of at least 20 characters.'
   );
-const db = new PrismaClient();
+const db = createPrismaClient();
 async function main() {
   const passwordHash = await bcrypt.hash(password!, 12);
   const user = await db.user.upsert({

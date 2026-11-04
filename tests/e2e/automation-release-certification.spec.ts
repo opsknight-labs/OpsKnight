@@ -1,14 +1,14 @@
 import { completedIngestion } from './helpers/completed-ingestion';
 import { test, expect } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
-import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 import { compileAutomation } from '@/lib/automation/compiler';
 import { checksum } from '@/lib/automation/cache';
 import { discoverFields, formatHierarchicalLabel } from '@/lib/automation/discovery';
 import { randomUUID } from 'node:crypto';
+import { createPrismaClient } from '../../src/lib/db/create-client';
 
-const db = new PrismaClient();
+const db = createPrismaClient();
 
 const isDesktop = (info: { project: { use: { isMobile?: boolean } } }) =>
   !info.project.use.isMobile;

@@ -6,6 +6,8 @@
  * trigger router may parse them to decide what happens next.
  */
 
+import { isDatabaseUnavailableError, toPrismaClientError } from '@/lib/db/errors';
+
 export const ESCALATION_OUTCOMES = [
   /** A step ran: an audience was resolved and its pages were dispatched. */
   'RESPONDER_ROUTE_NONE',
@@ -110,7 +112,8 @@ export function escalationPolicyOwnsResponderRouting(outcome: EscalationOutcome)
 }
 
 /** Classifies a thrown engine error into a retryable or terminal outcome. */
-export function escalationOutcomeForError(error: unknown): EscalationOutcome {
+export function escalationOutcomeForError(rawError: unknown): EscalationOutcome {
+  const error = toPrismaClientError(rawError);
   if (
     typeof error === 'object' &&
     error !== null &&
@@ -125,7 +128,9 @@ export function escalationOutcomeForError(error: unknown): EscalationOutcome {
     code === 'P2034' ||
     code === 'P2028' ||
     code === 'P2002' ||
-    ['P1001', 'P1002', 'P1008', 'P1017'].includes(code)
+    ['P1001', 'P1002', 'P1008', 'P1017'].includes(code) ||
+    // Pool exhaustion and connectivity failures are transient, including raw-SQL (P2010) forms.
+    isDatabaseUnavailableError(error)
   ) {
     return 'RETRYABLE_FAILURE';
   }

@@ -1,9 +1,9 @@
 import { test, expect } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
-import { PrismaClient } from '@prisma/client';
 import { createHmac, randomBytes } from 'node:crypto';
+import { createPrismaClient } from '../../src/lib/db/create-client';
 
-const db = new PrismaClient();
+const db = createPrismaClient();
 test.afterAll(async () => db.$disconnect());
 
 test('SCIM administrator provisions, reviews bindings, rotates credentials and diagnoses activity', async ({

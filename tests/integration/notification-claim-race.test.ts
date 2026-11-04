@@ -1,5 +1,5 @@
 import { afterAll, beforeEach, expect, it, vi } from 'vitest';
-import { Prisma, PrismaClient } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 import prisma from '@/lib/prisma';
 import { testPrisma as db, resetDatabase } from '../helpers/test-db';
 import {
@@ -7,6 +7,7 @@ import {
   deliverCentralNotification,
   processCentralNotificationQueue,
 } from '@/lib/notification-control-plane';
+import { createPrismaClient } from '../../src/lib/db/create-client';
 
 const mocks = vi.hoisted(() => ({ sendWebhook: vi.fn().mockResolvedValue({ success: true }) }));
 vi.mock('@/lib/webhooks', () => ({ sendWebhook: mocks.sendWebhook }));
@@ -48,7 +49,7 @@ it.each(['in-flight', 'completed'] as const)(
         payload: { event: 'one' },
       },
     });
-    const gateClient = new PrismaClient();
+    const gateClient = createPrismaClient();
     let releaseGate!: () => void;
     let announceGate!: () => void;
     const release = new Promise<void>(resolve => {

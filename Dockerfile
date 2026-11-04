@@ -66,8 +66,10 @@ RUN --mount=type=cache,target=/root/.npm,sharing=locked \
 # Copy application source
 COPY . .
 
-# Generate Prisma Client
-RUN npx prisma generate
+# Generate Prisma Client and fetch the schema engine used by `migrate deploy` at startup,
+# so containers never download engines at run time (air-gapped installations).
+RUN node node_modules/prisma/build/index.js generate && \
+    node node_modules/prisma/build/index.js version
 
 # Set a dummy DATABASE_URL for build time only (Prisma requires it for validation)
 # This will be overridden by the actual DATABASE_URL at runtime
@@ -118,6 +120,7 @@ COPY --from=builder --chown=nextjs:nodejs /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 COPY --from=builder --chown=nextjs:nodejs /app/prisma ./prisma
+COPY --from=builder --chown=nextjs:nodejs /app/prisma.config.ts ./prisma.config.ts
 COPY --from=builder --chown=nextjs:nodejs /app/package*.json ./
 COPY --from=builder --chown=nextjs:nodejs /app/scripts ./scripts
 
@@ -131,8 +134,9 @@ COPY --from=builder --chown=nextjs:nodejs /app/LICENSES ./LICENSES
 # Copy base node_modules first
 COPY --from=deps --chown=nextjs:nodejs /app/node_modules ./node_modules
 
-# Then copy Prisma-specific files (must be AFTER base node_modules to avoid being overwritten)
-# This ensures Prisma CLI and client are available for migrations
+# Then copy Prisma-specific files (must be AFTER base node_modules to avoid being overwritten).
+# The Prisma CLI and its dependencies are production dependencies (installed above); the
+# builder adds the generated client and the schema engine downloaded during generation.
 COPY --from=builder --chown=nextjs:nodejs /app/node_modules/.prisma ./node_modules/.prisma
 COPY --from=builder --chown=nextjs:nodejs /app/node_modules/prisma ./node_modules/prisma
 COPY --from=builder --chown=nextjs:nodejs /app/node_modules/@prisma ./node_modules/@prisma

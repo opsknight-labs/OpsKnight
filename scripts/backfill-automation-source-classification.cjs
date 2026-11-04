@@ -1,6 +1,7 @@
 'use strict';
+const { createPrismaClient } = require('./lib/db-runtime.cjs');
 
-const { PrismaClient } = require('@prisma/client');
+
 
 const LOCK_ID = 1762184302;
 const BATCH_SIZE = Number(process.env.OPSKNIGHT_BACKFILL_BATCH_SIZE || 500);
@@ -75,7 +76,7 @@ async function backfillAutomationSourceClassification(prisma, options = {}) {
 async function main() {
   const url = new URL(process.env.DIRECT_DATABASE_URL || process.env.DATABASE_URL);
   url.searchParams.set('connection_limit', '1');
-  const prisma = new PrismaClient({ datasourceUrl: url.toString() });
+  const prisma = createPrismaClient({ url: url.toString() });
   await prisma.$queryRawUnsafe(`SELECT pg_advisory_lock(${LOCK_ID})::text AS "lockResult"`);
   try {
     const updated = await backfillAutomationSourceClassification(prisma);

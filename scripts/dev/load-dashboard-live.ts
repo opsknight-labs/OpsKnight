@@ -21,8 +21,8 @@ import { execFileSync } from 'node:child_process';
 import http from 'node:http';
 import { performance } from 'node:perf_hooks';
 import { writeFileSync } from 'node:fs';
-import { PrismaClient } from '@prisma/client';
 import { assertLocalDashboardTarget } from './seed-dashboard-live';
+import { createPrismaClient } from '../../src/lib/db/create-client';
 
 type Options = {
   base: string;
@@ -310,7 +310,7 @@ function dbQuery(container: string | null, sql: string): string | null {
 async function main() {
   assertLocalDashboardTarget();
   const opts = parseArgs(process.argv.slice(2));
-  const prisma = new PrismaClient();
+  const prisma = createPrismaClient();
   const runId = Date.now().toString(36);
   const service = await prisma.service.findUniqueOrThrow({
     where: { name: 'Dashboard Alpha API' },

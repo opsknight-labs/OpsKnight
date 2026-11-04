@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import { randomBytes, createHash, createHmac } from 'node:crypto';
-import { PrismaClient } from '@prisma/client';
+import { createRequire } from 'node:module';
 import jwt from 'next-auth/jwt';
+const { createPrismaClient } = createRequire(import.meta.url)('../lib/db-runtime.cjs');
 const { encode } = jwt;
 const url = new URL(process.env.DATABASE_URL ?? 'http://invalid');
 assert.equal(url.pathname, '/enterprise_scim_test');
@@ -12,7 +13,7 @@ assert.ok(
     origins.every(origin => ['localhost', '127.0.0.1'].includes(new URL(origin).hostname))
 );
 assert.ok(process.env.NEXTAUTH_SECRET);
-const db = new PrismaClient();
+const db = createPrismaClient();
 const id = `session-replica-${Date.now()}`;
 const scimToken = randomBytes(32).toString('hex');
 const secret = process.env.NEXTAUTH_SECRET;

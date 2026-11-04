@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
-import { PrismaClient } from '@prisma/client';
+import { createPrismaClient } from '../../src/lib/db/create-client';
 
-const prisma = new PrismaClient();
+const prisma = createPrismaClient();
 
 test.describe('production PWA service-worker contract', () => {
   test.beforeAll(async () => {

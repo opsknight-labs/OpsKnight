@@ -1,11 +1,12 @@
 /** Explicit, isolated reference measurement; excluded from ordinary test discovery. */
-import { Prisma, PrismaClient } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 import { randomUUID } from 'node:crypto';
 import { mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { performance } from 'node:perf_hooks';
 import { secretUsageQuery, type SecretUsage } from '../../src/lib/runbooks/secret-usage';
+import { createPrismaClient } from '../../src/lib/db/create-client';
 
 async function main() {
   const url = new URL(process.env.DATABASE_URL ?? '');
@@ -16,7 +17,7 @@ async function main() {
     process.env.API_SECRET_USAGE_BENCHMARK !== '1'
   )
     throw new Error('Explicit opt-in to the owned reference database is required.');
-  const db = new PrismaClient();
+  const db = createPrismaClient();
   const prefix = `secret-usage-${randomUUID()}`;
   const epoch = new Date('2026-01-01T00:00:00Z');
   const common = `secret://${prefix}-common`;

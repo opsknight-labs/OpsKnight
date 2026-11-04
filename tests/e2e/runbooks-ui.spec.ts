@@ -1,10 +1,10 @@
 import { generateApiKey } from '@/lib/api-keys';
 import { Client } from '../../sdk/typescript/client';
 import { test, expect, type Page } from '@playwright/test';
-import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
+import { createPrismaClient } from '../../src/lib/db/create-client';
 
-const prisma = new PrismaClient();
+const prisma = createPrismaClient();
 let EMAIL = '';
 
 const PASSWORD = 'Runbook-ui-test-harbor-472!';

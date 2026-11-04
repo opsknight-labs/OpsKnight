@@ -7,6 +7,8 @@ import { applyIntentionalChanges } from './intentional-changes';
 
 const MODE = process.env.PRISMA_CONTRACT_MODE === 'record' ? 'record' : 'verify';
 const GOLDEN_DIR = path.resolve(__dirname, '../__golden__');
+// Record elsewhere to compare a candidate against the committed goldens without touching them.
+const RECORD_DIR = process.env.PRISMA_CONTRACT_RECORD_DIR ?? GOLDEN_DIR;
 
 /**
  * Golden observations for one spec file. In record mode observations are written on
@@ -15,6 +17,7 @@ const GOLDEN_DIR = path.resolve(__dirname, '../__golden__');
  */
 export function goldenFile(name: string) {
   const file = path.join(GOLDEN_DIR, `${name}.json`);
+  const recordFile = path.join(RECORD_DIR, `${name}.json`);
   const recorded: Record<string, unknown> = {};
   const seen = new Set<string>();
   const golden: Record<string, unknown> =
@@ -22,13 +25,13 @@ export function goldenFile(name: string) {
 
   afterAll(() => {
     if (MODE === 'record') {
-      fs.mkdirSync(GOLDEN_DIR, { recursive: true });
+      fs.mkdirSync(RECORD_DIR, { recursive: true });
       const sorted = Object.fromEntries(
         Object.keys(recorded)
           .sort()
           .map(k => [k, recorded[k]])
       );
-      fs.writeFileSync(file, `${JSON.stringify(sorted, null, 2)}\n`);
+      fs.writeFileSync(recordFile, `${JSON.stringify(sorted, null, 2)}\n`);
       return;
     }
     const missing = Object.keys(golden).filter(key => !seen.has(key));
@@ -44,7 +47,9 @@ export function goldenFile(name: string) {
       }
       seen.add(key);
       expect(golden, `no golden recorded for ${name}:${key}`).toHaveProperty([key]);
-      expect(normalized, `${name}:${key}`).toEqual(applyIntentionalChanges(name, key, golden[key]));
+      expect(normalized, `${name}:${key}`).toEqual(
+        applyIntentionalChanges(name, key, golden[key], golden)
+      );
     },
   };
 }

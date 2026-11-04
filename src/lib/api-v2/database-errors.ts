@@ -1,4 +1,5 @@
 import { Prisma } from '@prisma/client';
+import { isDatabaseUnavailableError, toPrismaClientError } from '@/lib/db/errors';
 import { AppError, isAppError } from '@/lib/errors';
 import { postgresSqlState } from '@/lib/postgres-error';
 
@@ -9,16 +10,9 @@ import { postgresSqlState } from '@/lib/postgres-error';
  * connectivity or pool exhaustion is a retryable 503. Anything else is left for
  * the default (500) handling and its details are never exposed.
  */
-const UNAVAILABLE_CODES = new Set([
-  'P1001', // cannot reach database server
-  'P1002', // database server timed out
-  'P1008', // operation timed out
-  'P1017', // server closed the connection
-  'P2024', // timed out fetching a connection from the pool
-]);
-
-export function mapDatabaseError(error: unknown): unknown {
-  if (isAppError(error)) return error;
+export function mapDatabaseError(rawError: unknown): unknown {
+  if (isAppError(rawError)) return rawError;
+  const error = toPrismaClientError(rawError);
   const state = postgresSqlState(error);
   if (state === '40001' || state === '40P01')
     return new AppError({ code: 'TRANSIENT_CONFLICT', cause: error });
@@ -34,21 +28,12 @@ export function mapDatabaseError(error: unknown): unknown {
         return new AppError({ code: 'RESOURCE_NOT_FOUND', cause: error });
       case 'P2034':
         return new AppError({ code: 'TRANSIENT_CONFLICT', cause: error });
-      default:
-        if (UNAVAILABLE_CODES.has(error.code)) {
-          return new AppError({
-            code: 'DATABASE_UNAVAILABLE',
-            cause: error,
-            details: { retryAfter: 2 },
-          });
-        }
     }
   }
-  if (
-    error instanceof Prisma.PrismaClientInitializationError ||
-    error instanceof Prisma.PrismaClientRustPanicError
-  ) {
+  // Connectivity, pool exhaustion and database configuration failures (Prisma 5 engine codes,
+  // Prisma 7 adapter kinds, initialization and engine panics) are a retryable 503.
+  if (isDatabaseUnavailableError(error)) {
     return new AppError({ code: 'DATABASE_UNAVAILABLE', cause: error, details: { retryAfter: 2 } });
   }
-  return error;
+  return rawError;
 }

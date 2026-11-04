@@ -1,5 +1,6 @@
 /* eslint-disable security/detect-object-injection -- keys are fixed scenario names, array indices or test-owned object keys, never external input */
-import { PrismaClient } from '@prisma/client';
+import type { PrismaClient } from '@prisma/client';
+import { createPrismaClient } from '@/lib/db/create-client';
 
 /**
  * The only stage-specific file in the contract suite: how a PrismaClient is built
@@ -25,7 +26,7 @@ export function withParams(url: string, params: Record<string, string | undefine
 }
 
 export function createContractClient(url: string): PrismaClient {
-  const client = new PrismaClient({ datasourceUrl: url });
+  const client: PrismaClient = createPrismaClient({ url });
   clients.add(client);
   return client;
 }

@@ -1,8 +1,9 @@
 import { certifyNativeRunbookControl } from './native-runbook-workflow.mjs';
 import { createHmac, randomBytes, randomUUID } from 'node:crypto';
 import { spawn, spawnSync } from 'node:child_process';
-import { PrismaClient } from '@prisma/client';
+import { createRequire } from 'node:module';
 import { Client } from '../../sdk/typescript/dist/client.js';
+const { createPrismaClient } = createRequire(import.meta.url)('../../scripts/lib/db-runtime.cjs');
 
 const databaseUrl = process.env.DATABASE_URL;
 if (!databaseUrl || !new URL(databaseUrl).pathname.slice(1).endsWith('_test')) {
@@ -39,7 +40,7 @@ if (
   );
 const secret = externalBase ? process.env.API_KEY_SECRET : randomBytes(32).toString('hex');
 const token = `ok_test_${randomBytes(32).toString('base64url')}`;
-const prisma = new PrismaClient();
+const prisma = createPrismaClient();
 async function stopProcess(child) {
   if (!child || child.exitCode !== null || child.signalCode !== null) return;
   await new Promise(resolve => {

@@ -5,8 +5,8 @@ if (process.env.DOTENV_CONFIG_PATH) {
   dotenv.config({ override: false });
 }
 import { chromium, firefox, webkit, type Browser, type Page } from '@playwright/test';
-import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
+import { createPrismaClient } from '../../src/lib/db/create-client';
 
 // Safety Guard: Require explicit certification environment confirmation
 if (!process.env.OPSKNIGHT_CERT_TARGET && !process.env.DISPOSABLE_CERT_TARGET) {
@@ -36,8 +36,8 @@ const BASE_URL = process.env.APP_BASE_URL || 'http://127.0.0.1:3900';
 const TEST_EMAIL = process.env.CERT_ADMIN_EMAIL || 'cert-browser-admin@opsknight.internal';
 const TEST_PASSWORD = process.env.CERT_ADMIN_PASSWORD || 'Browser-Pass-2026-Cert!';
 
-const prisma = new PrismaClient({
-  datasources: { db: { url: DATABASE_URL } },
+const prisma = createPrismaClient({
+  url: DATABASE_URL,
 });
 
 const VIEWPORTS = [

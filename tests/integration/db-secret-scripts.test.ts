@@ -7,6 +7,7 @@ import path from 'node:path';
 import { promisify } from 'node:util';
 import { PrismaClient } from '@prisma/client';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { createPrismaClient } from '../../src/lib/db/create-client';
 
 const run = promisify(execFile);
 const enabled = process.env.DB_SECRET_SCRIPTS_CERTIFICATION === '1';
@@ -57,7 +58,7 @@ describeDatabase('operator scripts with DATABASE_URL_FILE only', () => {
   }
 
   beforeAll(async () => {
-    prisma = new PrismaClient({ datasourceUrl: databaseUrl });
+    prisma = createPrismaClient({ url: databaseUrl });
     fixtureDir = await mkdtemp(path.join(os.tmpdir(), 'opsknight-secret-scripts-'));
     secretFile = path.join(fixtureDir, 'database-url');
     await writeFile(secretFile, `${databaseUrl}\r\n`, { mode: 0o600 });

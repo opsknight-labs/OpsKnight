@@ -13,12 +13,12 @@
  */
 
 import 'dotenv/config';
-import { PrismaClient } from '@prisma/client';
 import { COLLABORATION_INVARIANTS } from '../src/lib/incident-collaboration/invariants';
 import { MeetingProviderRegistry } from '../src/lib/incident-collaboration/meeting-registry';
 import { getGlobalWarRoomPolicy } from '../src/lib/incident-collaboration/policy';
+import { createPrismaClient } from '../src/lib/db/create-client';
 
-const prisma = new PrismaClient();
+const prisma = createPrismaClient();
 
 interface CertificationResult {
   id: string;

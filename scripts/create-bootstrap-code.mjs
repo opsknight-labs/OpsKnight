@@ -1,6 +1,7 @@
 import { createHash, randomBytes } from 'node:crypto';
-import { PrismaClient } from '@prisma/client';
+import { createRequire } from 'node:module';
 import { resolveDatabaseUrl, getDatabaseDiagnostics } from './db-connection-resolver.mjs';
+const { createPrismaClient } = createRequire(import.meta.url)('./lib/db-runtime.cjs');
 
 const BOOTSTRAP_CONFIG_KEY = 'auth.bootstrap.authorization';
 const BOOTSTRAP_TTL_MS = 30 * 60 * 1000;
@@ -26,7 +27,7 @@ function getPrisma() {
           '  - Or set DATABASE_URL="postgresql://user:pass@host:5432/db" in your environment.'
       );
     }
-    prismaInstance = new PrismaClient({ datasourceUrl: databaseUrl });
+    prismaInstance = createPrismaClient({ url: databaseUrl });
   }
   return prismaInstance;
 }

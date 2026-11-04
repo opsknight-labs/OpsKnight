@@ -1,5 +1,5 @@
-import { PrismaClient } from '@prisma/client';
 import { DEFAULT_EMULATOR_ENDPOINTS } from '../fixtures/notification-providers';
+import { createPrismaClient } from '../../../src/lib/db/create-client';
 
 export interface LoadCleanupSummary {
   deletedNotifications: number;
@@ -44,7 +44,7 @@ export async function runLoadCleanup(options?: {
 
   const controlBaseUrl =
     options?.controlBaseUrl ?? DEFAULT_EMULATOR_ENDPOINTS.controlBaseUrl;
-  const prisma = new PrismaClient();
+  const prisma = createPrismaClient();
 
   try {
     // 1. Identify all load-test scoped entities by lt- prefix

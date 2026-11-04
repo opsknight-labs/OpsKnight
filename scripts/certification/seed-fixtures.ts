@@ -1,11 +1,11 @@
 import dotenv from 'dotenv';
 dotenv.config({ path: process.env.DOTENV_CONFIG_PATH || undefined, override: false });
-import { PrismaClient } from '@prisma/client';
 import { createHmac, randomBytes } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import bcrypt from 'bcryptjs';
 import { API_SCOPES } from '../../src/lib/authorization';
+import { createPrismaClient } from '../../src/lib/db/create-client';
 
 function requireEnv(name: string): string {
   const value = process.env[name];
@@ -21,8 +21,8 @@ const DATABASE_URL = requireEnv('DATABASE_URL');
 const API_KEY_SECRET = requireEnv('API_KEY_SECRET');
 const ADMIN_PASSWORD = requireEnv('ADMIN_PASSWORD');
 
-const prisma = new PrismaClient({
-  datasources: { db: { url: DATABASE_URL } },
+const prisma = createPrismaClient({
+  url: DATABASE_URL,
 });
 
 function hashToken(token: string): string {

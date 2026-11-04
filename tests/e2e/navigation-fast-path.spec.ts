@@ -1,8 +1,8 @@
 import { expect, test, type Page } from '@playwright/test';
-import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
+import { createPrismaClient } from '../../src/lib/db/create-client';
 
-const prisma = new PrismaClient();
+const prisma = createPrismaClient();
 const DEFAULT_EMAIL = 'e2e-fast-path@example.com';
 const DEFAULT_PASSWORD = 'FastPath-Secure-Pass-921!';
 

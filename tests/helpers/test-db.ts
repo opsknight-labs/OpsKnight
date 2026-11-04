@@ -1,7 +1,8 @@
-import { Prisma, PrismaClient } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 import { invalidateNotificationProviderCache } from '@/lib/notification-providers';
+import { createPrismaClient } from '../../src/lib/db/create-client';
 
-const prisma = new PrismaClient();
+const prisma = createPrismaClient();
 
 async function seedRequiredReferenceData() {
   // These are migration-owned reference rows, not disposable queue contents.

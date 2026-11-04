@@ -1,7 +1,7 @@
 import dotenv from 'dotenv';
 dotenv.config({ path: process.env.DOTENV_CONFIG_PATH || undefined, override: false });
 import fs from 'node:fs';
-import { PrismaClient } from '@prisma/client';
+import { createPrismaClient } from '../../src/lib/db/create-client';
 
 function requireEnv(name: string): string {
   const value = process.env[name];
@@ -14,8 +14,8 @@ function requireEnv(name: string): string {
 }
 
 const DATABASE_URL = requireEnv('DATABASE_URL');
-const prisma = new PrismaClient({
-  datasources: { db: { url: DATABASE_URL } },
+const prisma = createPrismaClient({
+  url: DATABASE_URL,
 });
 
 async function main() {

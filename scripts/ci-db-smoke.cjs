@@ -11,10 +11,11 @@
  *   DATABASE_URL env var set
  */
 
-const { PrismaClient } = require('@prisma/client');
+
 const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
+const { createPrismaClient } = require('./lib/db-runtime.cjs');
 
 function requireEnv(name) {
   const value = process.env[name];
@@ -74,7 +75,7 @@ function writeJUnit({ ok, durationMs, message, details }) {
 async function main() {
   requireEnv('DATABASE_URL');
 
-  const prisma = new PrismaClient();
+  const prisma = createPrismaClient();
   const runId = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
   const email = `ci-smoke-${runId}@example.com`.toLowerCase();
   const startedAt = Date.now();

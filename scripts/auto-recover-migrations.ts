@@ -12,11 +12,11 @@
  * - No manual intervention required
  */
 
-import { PrismaClient } from '@prisma/client';
 import { execFileSync } from 'child_process';
 import { logger } from '../src/lib/logger';
+import { createPrismaClient } from '../src/lib/db/create-client';
 
-const prisma = new PrismaClient();
+const prisma = createPrismaClient();
 
 type RecoveryMode = 'safe' | 'aggressive';
 

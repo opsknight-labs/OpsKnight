@@ -1,7 +1,6 @@
 /* eslint-disable security/detect-non-literal-fs-filename -- Evidence names are fixed literals at all fixture call sites. */
 import { beforeEach, describe, expect, it } from 'vitest';
 import { mkdir, writeFile } from 'node:fs/promises';
-import { PrismaClient } from '@prisma/client';
 import prisma from '@/lib/prisma';
 import { testPrisma, resetDatabase } from '../helpers/test-db';
 import {
@@ -11,6 +10,7 @@ import {
 import { reconcileRunbooks } from '@/lib/runbooks/reconciler';
 import { claimAgentAttempt } from '@/lib/runbooks/agent-claims';
 import { getServiceRulePage } from '@/lib/runbooks/service-rule-page';
+import { createPrismaClient } from '../../src/lib/db/create-client';
 const suite = process.env.VITEST_USE_REAL_DB === '1' ? describe : describe.skip;
 async function workflow() {
   const runbook = await testPrisma.runbook.create({
@@ -264,8 +264,8 @@ suite('bounded operational backlog handling', () => {
     });
     const url = new URL(process.env.DATABASE_URL!);
     url.searchParams.set('connection_limit', '1');
-    const maintenance = new PrismaClient({ datasourceUrl: url.toString() });
-    const recovery = new PrismaClient({ datasourceUrl: url.toString() });
+    const maintenance = createPrismaClient({ url: url.toString() });
+    const recovery = createPrismaClient({ url: url.toString() });
     await testPrisma.$executeRawUnsafe(
       `CREATE FUNCTION rbe_slow_purge_fixture() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN PERFORM pg_sleep(3); RETURN OLD; END $$`
     );
@@ -317,7 +317,7 @@ suite('bounded operational backlog handling', () => {
         })),
       });
     await testPrisma.$executeRaw`ANALYZE "ServiceRunbookBinding"`;
-    const measured = new PrismaClient({ log: [{ emit: 'event', level: 'query' }] });
+    const measured = createPrismaClient({ log: [{ emit: 'event', level: 'query' }] });
     const captured: Array<{ query: string; params: string }> = [];
     measured.$on('query', event => {
       if (event.query.includes('ILIKE')) captured.push(event);

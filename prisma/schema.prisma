@@ -3,9 +3,9 @@ generator client {
   previewFeatures = ["metrics"]
 }
 
+// Connection URLs live in prisma.config.ts (CLI) and src/lib/db/create-client.ts (runtime).
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
 }
 
 enum Role {

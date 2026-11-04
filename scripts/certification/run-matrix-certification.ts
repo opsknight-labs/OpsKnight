@@ -11,6 +11,7 @@ import {
 import { V2_MUTATION_CONTRACT } from '../../src/lib/api-v2/mutation-contract';
 import { getVerifiedSampleBody } from '../../src/lib/api-v2/endpoint-samples';
 import { encrypt } from '../../src/lib/encryption';
+import { createPrismaClient } from '../../src/lib/db/create-client';
 
 function requireEnv(name: string): string {
   const value = process.env[name];
@@ -1600,8 +1601,8 @@ async function prepareIncidentForAction(
 
 async function main() {
   const DATABASE_URL = requireEnv('DATABASE_URL');
-  const prisma = new PrismaClient({
-    datasources: { db: { url: DATABASE_URL } },
+  const prisma = createPrismaClient({
+    url: DATABASE_URL,
   });
   const fixturesPath = path.resolve('tests/certification/fixtures.json');
   const fixtures: Fixtures = JSON.parse(fs.readFileSync(fixturesPath, 'utf8'));

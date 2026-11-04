@@ -1,8 +1,8 @@
 import { test, expect } from '@playwright/test';
-import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 import { generateApiKey } from '@/lib/api-keys';
-const db = new PrismaClient();
+import { createPrismaClient } from '../../src/lib/db/create-client';
+const db = createPrismaClient();
 test.afterAll(async () => db.$disconnect());
 test('UI and REST invitations share real onboarding and never redisclose a stored manual capability', async ({
   page,

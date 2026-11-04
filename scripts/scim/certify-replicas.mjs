@@ -1,6 +1,7 @@
-import { PrismaClient } from '@prisma/client';
+import { createRequire } from 'node:module';
 import { createHash, createHmac, randomBytes } from 'node:crypto';
 import assert from 'node:assert/strict';
+const { createPrismaClient } = createRequire(import.meta.url)('../lib/db-runtime.cjs');
 
 if (
   !process.env.DATABASE_URL ||
@@ -15,7 +16,7 @@ if (
   throw new Error('Supply at least two local disposable SCIM_CERT_REPLICA_URLS.');
 if (!process.env.NEXTAUTH_SECRET)
   throw new Error('Supply the disposable NEXTAUTH_SECRET shared by test replicas.');
-const db = new PrismaClient();
+const db = createPrismaClient();
 const connectorId = `replica-cert-${Date.now()}`;
 const token = randomBytes(32).toString('hex');
 const tokenHash = createHash('sha256').update(token).digest('hex');
