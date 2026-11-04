@@ -1,8 +1,17 @@
 'use client';
-/* eslint-disable no-alert -- Native confirmations provide blocking, keyboard-accessible decisions for security-changing actions. */
 
 import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/shadcn/button';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/shadcn/alert-dialog';
 import { Badge } from '@/components/ui/shadcn/badge';
 import {
   scimOverviewAction,
@@ -100,12 +109,22 @@ export default function ScimSettingsSection({
   const [verification, setVerification] = useState(false);
   const [impactStale, setImpactStale] = useState(false);
   const [legacyCutoverAcknowledged, setLegacyCutoverAcknowledged] = useState(false);
+  // In-app confirmation instead of the browser's native confirm().
+  const [pendingConfirm, setPendingConfirm] = useState<{
+    title: string;
+    message: string;
+    confirmLabel: string;
+    resolve: (confirmed: boolean) => void;
+  } | null>(null);
+  const confirmAction = (request: { title: string; message: string; confirmLabel: string }) =>
+    new Promise<boolean>(resolve => setPendingConfirm({ ...request, resolve }));
   const [impact, setImpact] = useState<Impact | null>(null);
   const connector = connectors.find(c => c.id === selected);
   const legacyConnector = connectors.find(c => c.id === 'legacy');
   const legacyCredentialSource = legacyConnector
     ? legacyConnector.legacyCredentialSource
     : initialConfig.legacyCredentialSource;
+  const legacyTokenExists = Boolean(legacyCredentialSource);
   useEffect(() => {
     let current = true;
     result(scimOverviewAction({ selectedId: selected }))
@@ -113,6 +132,12 @@ export default function ScimSettingsSection({
         if (current) {
           setConnectors(data);
           setObservedAt(Date.now());
+          // Open a real connection rather than the pre-v2.1 compatibility one, unless a legacy
+          // token is actually still in use.
+          const legacy = data.find(item => item.id === 'legacy');
+          const other = data.find(item => item.id !== 'legacy');
+          if (selected === 'legacy' && other && legacy && !legacy.legacyCredentialSource)
+            setSelected(other.id);
         }
       })
       .catch(e => {
@@ -269,6 +294,33 @@ export default function ScimSettingsSection({
   const date = (value: string | null) => (value ? new Date(value).toLocaleString() : 'Never');
   return (
     <section aria-label="SCIM Provisioning" className="space-y-5">
+      <AlertDialog
+        open={Boolean(pendingConfirm)}
+        onOpenChange={open => {
+          if (!open) {
+            pendingConfirm?.resolve(false);
+            setPendingConfirm(null);
+          }
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{pendingConfirm?.title}</AlertDialogTitle>
+            <AlertDialogDescription>{pendingConfirm?.message}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                pendingConfirm?.resolve(true);
+                setPendingConfirm(null);
+              }}
+            >
+              {pendingConfirm?.confirmLabel}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h3 className="text-lg font-semibold">SCIM Provisioning</h3>
@@ -436,14 +488,17 @@ export default function ScimSettingsSection({
           <form
             key={`${selected}:${reload}:${Boolean(connector)}`}
             className="grid gap-3 sm:grid-cols-2"
-            onSubmit={e => {
+            onSubmit={async e => {
               e.preventDefault();
               const form = new FormData(e.currentTarget);
               if (connector?.enabled && form.get('enabled') !== 'on' && form.get('new') !== 'on') {
                 if (
-                  !window.confirm(
-                    'Disable provisioning? All credentials for this connector will be rejected until it is explicitly enabled again. Existing users are not deleted.'
-                  )
+                  !(await confirmAction({
+                    title: 'Turn off provisioning for this connection?',
+                    message:
+                      'Your identity provider will be refused until you turn it back on. Existing people and their access stay as they are.',
+                    confirmLabel: 'Turn off provisioning',
+                  }))
                 )
                   return;
               }
@@ -628,46 +683,65 @@ export default function ScimSettingsSection({
             aria-label={tab === 'Activity' ? 'Provisioning activity' : 'Directory resources'}
             className="divide-y rounded-lg border"
           >
-            {directory.rows.map(row => (
-              <li key={row.id} className="p-3 space-y-1 break-words">
-                <p className="font-medium text-sm">{row.label}</p>
-                <p className="text-xs text-muted-foreground">{row.detail}</p>
-                <p className="text-xs text-muted-foreground">{date(row.time)}</p>
-                {tab === 'Users & Groups' && kind === 'groups' && (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {
-                      setGroupId(row.id);
-                      setAdoptMemberIds([]);
-                      setTeamId('');
-                      setImpact(null);
-                    }}
+            {directory.rows.map(row => {
+              const attention = Boolean((row as { attention?: boolean }).attention);
+              return (
+                <li
+                  key={row.id}
+                  className={`p-3 space-y-1 break-words ${attention ? 'bg-amber-500/5' : ''}`}
+                >
+                  <p className="font-medium text-sm flex items-center gap-2">
+                    {row.label}
+                    {attention && (
+                      <Badge variant="outline" className="border-amber-500/40 text-[10px]">
+                        Needs coverage review
+                      </Badge>
+                    )}
+                  </p>
+                  <p
+                    className={`text-xs ${
+                      attention ? 'text-amber-800 dark:text-amber-200' : 'text-muted-foreground'
+                    }`}
                   >
-                    Review team binding
-                  </Button>
-                )}
-                {tab === 'Users & Groups' &&
-                  kind === 'users' &&
-                  row.detail.startsWith('DELETED') && (
+                    {row.detail}
+                  </p>
+                  <p className="text-xs text-muted-foreground">{date(row.time)}</p>
+                  {tab === 'Users & Groups' && kind === 'groups' && (
                     <Button
                       type="button"
-                      size="sm"
                       variant="outline"
-                      disabled={busy}
-                      onClick={() =>
-                        void run(
-                          () => result(restoreScimIdentityAction({ id: row.id })),
-                          'Restoration approved. The user remains disabled until the provider reactivates it.'
-                        )
-                      }
+                      size="sm"
+                      onClick={() => {
+                        setGroupId(row.id);
+                        setAdoptMemberIds([]);
+                        setTeamId('');
+                        setImpact(null);
+                      }}
                     >
-                      Approve rehire restoration
+                      Review team binding
                     </Button>
                   )}
-              </li>
-            ))}
+                  {tab === 'Users & Groups' &&
+                    kind === 'users' &&
+                    row.detail.startsWith('DELETED') && (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        disabled={busy}
+                        onClick={() =>
+                          void run(
+                            () => result(restoreScimIdentityAction({ id: row.id })),
+                            'Restoration approved. The user remains disabled until the provider reactivates it.'
+                          )
+                        }
+                      >
+                        Approve rehire restoration
+                      </Button>
+                    )}
+                </li>
+              );
+            })}
           </ul>
           <div className="flex flex-wrap items-center gap-3">
             <Button
@@ -846,15 +920,21 @@ export default function ScimSettingsSection({
                 variant="outline"
                 disabled={busy || !teamId}
                 onClick={() =>
-                  void run(async () => {
+                  void (async () => {
+                    // Cancelling is not an error: nothing happens and nothing is shown.
                     if (
-                      !window.confirm(
-                        'Detach this binding and revoke its directory-owned team access? Manual owners and independent grants remain.'
-                      )
+                      !(await confirmAction({
+                        title: 'Unlink this group from the team?',
+                        message:
+                          'People the directory added to this team lose that membership. People added by hand, and team owners, stay.',
+                        confirmLabel: 'Unlink group',
+                      }))
                     )
-                      throw new Error('Detachment cancelled. No access changed.');
-                    return result(detachScimBindingAction({ groupId, teamId }));
-                  }, 'Binding detached. Directory-owned access revoked; manual access retained.')
+                      return;
+                    void run(async () => {
+                      return result(detachScimBindingAction({ groupId, teamId }));
+                    }, 'Binding detached. Directory-owned access revoked; manual access retained.');
+                  })()
                 }
               >
                 Detach binding
@@ -884,7 +964,8 @@ export default function ScimSettingsSection({
                       scopes: form.getAll('scope'),
                       lifetimeDays: Number(form.get('days')),
                       overlapMinutes: Number(form.get('overlap')),
-                      acknowledgeLegacyCutover: legacyCutoverAcknowledged,
+                      // With no legacy token there is nothing to retire, so nothing to acknowledge.
+                      acknowledgeLegacyCutover: legacyCutoverAcknowledged || !legacyTokenExists,
                     })
                   ).then(value => setSecret(value.token)),
                 'Credential created. Copy it now and verify the provider before retiring its predecessor.'
@@ -934,24 +1015,27 @@ export default function ScimSettingsSection({
                 </label>
               ))}
             </fieldset>
-            {connector?.id === 'legacy' && connector.credentialAuthority === 'LEGACY' && (
-              <label className="sm:col-span-2 flex gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  disabled={busy}
-                  checked={legacyCutoverAcknowledged}
-                  onChange={event => setLegacyCutoverAcknowledged(event.target.checked)}
-                />
-                I acknowledge that registry cutover immediately retires the legacy token. Its
-                overlap does not apply.
-              </label>
-            )}
+            {connector?.id === 'legacy' &&
+              connector.credentialAuthority === 'LEGACY' &&
+              legacyTokenExists && (
+                <label className="sm:col-span-2 flex gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    disabled={busy}
+                    checked={legacyCutoverAcknowledged}
+                    onChange={event => setLegacyCutoverAcknowledged(event.target.checked)}
+                  />
+                  I acknowledge that registry cutover immediately retires the legacy token. Its
+                  overlap does not apply.
+                </label>
+              )}
             <Button
               disabled={
                 busy ||
                 !connector?.enabled ||
                 (connector.id === 'legacy' &&
                   connector.credentialAuthority === 'LEGACY' &&
+                  legacyTokenExists &&
                   !legacyCutoverAcknowledged)
               }
               type="submit"
@@ -1023,15 +1107,21 @@ export default function ScimSettingsSection({
                   size="sm"
                   disabled={busy || Boolean(credential.revokedAt)}
                   onClick={() =>
-                    void run(async () => {
+                    void (async () => {
+                      // Cancelling is not an error: nothing happens and nothing is shown.
                       if (
-                        !window.confirm(
-                          'Revoke this credential immediately? Provider requests using it will fail. Verify a replacement before continuing.'
-                        )
+                        !(await confirmAction({
+                          title: 'Revoke this credential now?',
+                          message:
+                            'Your identity provider stops syncing with it immediately. Make sure it already uses a replacement credential.',
+                          confirmLabel: 'Revoke credential',
+                        }))
                       )
-                        throw new Error('Revocation cancelled. Credential remains active.');
-                      return result(revokeScimCredentialAction(credential.id));
-                    }, 'Credential revoked immediately.')
+                        return;
+                      void run(async () => {
+                        return result(revokeScimCredentialAction(credential.id));
+                      }, 'Credential revoked immediately.');
+                    })()
                   }
                 >
                   Revoke credential

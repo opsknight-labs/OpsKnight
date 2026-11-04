@@ -12,6 +12,7 @@ import {
   KeyRound,
   Users,
   Settings2,
+  UserCog,
   Activity,
   Globe,
   Loader2,
@@ -34,6 +35,10 @@ import AuthenticationAccessWorkspace from './authentication/AuthenticationAccess
 import AuthenticationPolicyWorkspace from './authentication/AuthenticationPolicyWorkspace';
 import AuthenticationRecoveryWorkspace from './authentication/AuthenticationRecoveryWorkspace';
 import AuthenticationWorkflowSteps from './authentication/AuthenticationWorkflowSteps';
+import AuthenticationRolesWorkspace from './authentication/AuthenticationRolesWorkspace';
+import AuthenticationFreshnessNotice from './authentication/AuthenticationFreshnessNotice';
+import AuthenticationRestoreDraftNotice from './authentication/AuthenticationRestoreDraftNotice';
+import { AUTH_TAB_LABELS } from './authentication/setup-steps';
 
 export default function AuthenticationConsole(props: AuthenticationConsoleProps) {
   const controller = useAuthenticationController(props);
@@ -77,7 +82,7 @@ function AuthenticationWorkspace() {
             <div>
               <div className="flex items-center gap-2 flex-wrap">
                 <h3 className="text-base font-bold text-foreground">
-                  Authentication Control Center
+                  Single sign-on and authentication
                 </h3>
                 <Badge
                   variant={data.mode === 'SSO_REQUIRED' ? 'success' : 'neutral'}
@@ -96,24 +101,27 @@ function AuthenticationWorkspace() {
                 )}
               </div>
               <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
-                Secure sign-in, tested changes, independent recovery
+                Nothing changes for your team until you test and turn it on.
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-2 shrink-0 self-start sm:self-center">
-            <Badge
-              variant="outline"
-              className={
-                data.verifiedEmergencyAccounts >= 2
-                  ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-xs'
-                  : 'border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400 text-xs'
-              }
-            >
-              <KeyRound className="h-3 w-3 mr-1" />
-              {data.verifiedEmergencyAccounts} Recovery{' '}
-              {data.verifiedEmergencyAccounts === 1 ? 'Drill' : 'Drills'}
-            </Badge>
-          </div>
+          {(data.mode === 'SSO_REQUIRED' || data.verifiedEmergencyAccounts > 0) && (
+            <div className="flex items-center gap-2 shrink-0 self-start sm:self-center">
+              <Badge
+                variant="outline"
+                className={
+                  data.verifiedEmergencyAccounts >= 2
+                    ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-xs'
+                    : 'border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400 text-xs'
+                }
+              >
+                <KeyRound className="h-3 w-3 mr-1" />
+                {data.verifiedEmergencyAccounts >= 2
+                  ? 'Emergency recovery ready'
+                  : `${data.verifiedEmergencyAccounts} of 2 recovery identities`}
+              </Badge>
+            </div>
+          )}
         </div>
       </div>
       {data.originConflict && (
@@ -192,6 +200,8 @@ function AuthenticationWorkspace() {
         </Alert>
       )}
       <AuthenticationNavigationGuard />
+      <AuthenticationFreshnessNotice />
+      <AuthenticationRestoreDraftNotice />
       <DetailTabs
         syncWithUrl
         urlParamName="authTab"
@@ -201,10 +211,14 @@ function AuthenticationWorkspace() {
         tabs={[
           ...(!emergencyOnly
             ? [
-                { id: 'overview', label: 'Overview', icon: <Shield className="h-4 w-4" /> },
+                {
+                  id: 'overview',
+                  label: AUTH_TAB_LABELS.overview,
+                  icon: <Shield className="h-4 w-4" />,
+                },
                 {
                   id: 'connection',
-                  label: 'Identity Provider',
+                  label: AUTH_TAB_LABELS.connection,
                   icon: <Globe className="h-4 w-4" />,
                   badge: data.activeProvider ? (
                     <span
@@ -217,33 +231,48 @@ function AuthenticationWorkspace() {
                 },
                 {
                   id: 'access',
-                  label: 'Access & provisioning',
+                  label: AUTH_TAB_LABELS.access,
                   icon: <Users className="h-4 w-4" />,
+                  badge:
+                    data.linkingRequestCount > 0 ? (
+                      <span
+                        aria-hidden="true"
+                        className="rounded-full border border-amber-500/30 bg-amber-500/15 px-1.5 py-0.5 text-[9px] font-semibold text-amber-700 dark:text-amber-400"
+                      >
+                        {data.linkingRequestCount} request
+                        {data.linkingRequestCount === 1 ? '' : 's'}
+                      </span>
+                    ) : undefined,
+                },
+                {
+                  id: 'roles',
+                  label: AUTH_TAB_LABELS.roles,
+                  icon: <UserCog className="h-4 w-4" />,
                 },
                 {
                   id: 'policy',
-                  label: 'Sessions & Policies',
+                  label: AUTH_TAB_LABELS.policy,
                   icon: <Settings2 className="h-4 w-4" />,
                 },
               ]
             : []),
           {
             id: 'emergency',
-            label: 'Emergency Recovery',
+            label: AUTH_TAB_LABELS.emergency,
             icon: <KeyRound className="h-4 w-4" />,
             badge:
-              data.verifiedEmergencyAccounts < 2 ? (
+              data.mode === 'SSO_REQUIRED' && data.verifiedEmergencyAccounts < 2 ? (
                 <span
                   aria-hidden="true"
                   className="rounded-full border border-amber-500/30 bg-amber-500/15 px-1.5 py-0.5 text-[9px] font-semibold text-amber-700 dark:text-amber-400"
                 >
-                  Needs Drill
+                  Needs attention
                 </span>
               ) : undefined,
           },
           {
             id: 'diagnostics',
-            label: 'Diagnostics',
+            label: AUTH_TAB_LABELS.diagnostics,
             icon: <Activity className="h-4 w-4" />,
             badge:
               data.failedEmailAlertCount > 0 ? (
@@ -288,6 +317,11 @@ function AuthenticationWorkspace() {
             {activeTab === 'access' && (
               <DetailTabContent value="access">
                 <AuthenticationAccessWorkspace />
+              </DetailTabContent>
+            )}
+            {activeTab === 'roles' && (
+              <DetailTabContent value="roles">
+                <AuthenticationRolesWorkspace />
               </DetailTabContent>
             )}
             {activeTab === 'policy' && (

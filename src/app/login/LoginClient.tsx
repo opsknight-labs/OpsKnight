@@ -2,7 +2,7 @@
 
 import { useHydrated } from '@/hooks/useHydrated';
 
-import { useEffect, useState, useSyncExternalStore } from 'react';
+import { useState, useSyncExternalStore } from 'react';
 import { signIn } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -18,11 +18,20 @@ import { safeInternalCallbackUrl } from '@/lib/auth-redirect';
 import { detectResponderSessionPolicy } from '@/lib/pwa-session-policy';
 import { appRoutes } from '@/lib/app-routes';
 import { promiseWithTimeout } from '@/lib/client-timeout';
+import {
+  type AuthMessage,
+  sessionEndMessage,
+  signInMessage,
+  signInMessageFor,
+} from '@/lib/auth-control/messages';
 
 type Props = {
   callbackUrl: string;
   defaultCallbackUrl?: string;
   errorCode?: string | null;
+  errorReference?: string | null;
+  administratorsNotified?: boolean;
+  endedReason?: string | null;
   passwordSet?: boolean;
   sessionRevoked?: boolean;
   ssoError?: string | null;
@@ -33,20 +42,8 @@ type Props = {
   breakGlassOnly?: boolean;
 };
 
-function formatError(message: string | null | undefined) {
-  if (!message) return '';
-  // NextAuth appends ?error=SessionRequired on unauthenticated redirects — not a real error
-  if (message === 'SessionRequired') return '';
-  if (message === 'CredentialsSignin') return 'Invalid email or password';
-  if (message === 'OIDC_CONFIGURATION_CHANGED')
-    return 'SSO settings changed during sign-in. Please start a new sign-in.';
-  if (message === 'AccessDenied') return 'Access denied';
-  if (message === 'SessionExpired') return 'Your session has expired. Please sign in again.';
-  if (message === 'OAuthSignin' || message === 'OAuthCallback')
-    return 'SSO authentication failed. Please try again or contact your administrator.';
-  if (message === 'Configuration')
-    return 'Server configuration error. Please contact your administrator.';
-  return 'Authentication failed. Please try again.';
+function plainMessage(detail: string): AuthMessage {
+  return { title: 'Couldn’t sign you in', detail, action: '' };
 }
 
 const subscribeResponderSessionPolicy = (onStoreChange: () => void) => {
@@ -62,6 +59,9 @@ export default function LoginClient({
   callbackUrl,
   defaultCallbackUrl,
   errorCode,
+  errorReference,
+  administratorsNotified,
+  endedReason,
   passwordSet,
   sessionRevoked,
   ssoError,
@@ -85,7 +85,12 @@ export default function LoginClient({
   const [rememberMeOverride, setRememberMeOverride] = useState<boolean | null>(null);
   const rememberMe = rememberMeOverride ?? trustedPwa;
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [error, setError] = useState(() => formatError(errorCode) || ssoError || '');
+  const [error, setError] = useState<AuthMessage | null>(
+    () => signInMessageFor(errorCode, { administratorsNotified }) ?? signInMessage(ssoError)
+  );
+  const [reference, setReference] = useState(errorReference ?? null);
+  const [copied, setCopied] = useState(false);
+  const endedNotice = sessionEndMessage(endedReason);
   const [showPassword, setShowPassword] = useState(false);
   const [isSSOLoading, setIsSSOLoading] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
@@ -97,14 +102,28 @@ export default function LoginClient({
   // Email validation
   const isEmailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 
-  useEffect(() => {
-    if (errorCode) setError(formatError(errorCode));
-  }, [errorCode]);
+  const dismissError = () => {
+    setError(null);
+    setReference(null);
+  };
 
-  // Surface SSO configuration errors passed from the server component
-  useEffect(() => {
-    if (ssoError) setError(ssoError);
-  }, [ssoError]);
+  const copyDetails = async () => {
+    if (!error) return;
+    const details = [
+      error.title,
+      reference ? `Reference: ${reference}` : null,
+      errorCode ? `Code: ${errorCode}` : null,
+    ]
+      .filter(Boolean)
+      .join('\n');
+    try {
+      await navigator.clipboard.writeText(details);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      setCopied(false);
+    }
+  };
 
   const handleSSO = async () => {
     setIsSSOLoading(true);
@@ -117,7 +136,9 @@ export default function LoginClient({
         'SSO sign-in timed out. Please try again.'
       );
     } catch (err: unknown) {
-      setError(err instanceof Error && err.message ? err.message : 'Connection failed');
+      setError(
+        plainMessage(err instanceof Error && err.message ? err.message : 'Connection failed')
+      );
     } finally {
       setIsSSOLoading(false);
     }
@@ -131,7 +152,7 @@ export default function LoginClient({
     }
 
     setIsSubmitting(true);
-    setError('');
+    dismissError();
 
     try {
       const result = await promiseWithTimeout(
@@ -147,7 +168,7 @@ export default function LoginClient({
       );
 
       if (!result?.ok) {
-        setError(formatError(result?.error));
+        setError(signInMessage(result?.error ?? 'CredentialsSignin'));
         setIsSubmitting(false);
         // Trigger shake animation
         setIsShaking(true);
@@ -168,7 +189,9 @@ export default function LoginClient({
         }
       }
     } catch (err: unknown) {
-      setError(err instanceof Error && err.message ? err.message : 'Unexpected error');
+      setError(
+        plainMessage(err instanceof Error && err.message ? err.message : 'Unexpected error')
+      );
       setIsSubmitting(false);
     }
   };
@@ -202,6 +225,22 @@ export default function LoginClient({
           </p>
         </div>
 
+        {endedNotice && !error && !sessionRevoked && (
+          <div
+            role="status"
+            className={cn(
+              'mb-6 rounded-lg border p-3 text-sm',
+              endedNotice.tone === 'notice'
+                ? 'border-amber-200 bg-amber-50 text-amber-950 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-100'
+                : 'border-red-200 bg-red-50 text-red-950 dark:border-red-900 dark:bg-red-950/40 dark:text-red-100'
+            )}
+          >
+            <p className="text-xs font-semibold">{endedNotice.title}</p>
+            <p className="mt-0.5 text-xs leading-relaxed opacity-90">
+              {endedNotice.detail} {endedNotice.action}
+            </p>
+          </div>
+        )}
         {sessionRevoked && !error && (
           <div
             role="status"
@@ -246,24 +285,74 @@ export default function LoginClient({
             role="alert"
             aria-live="assertive"
             className={cn(
-              'mb-6 p-3 rounded-lg border border-red-200/80 dark:border-red-900/50 bg-red-50/30 dark:bg-red-950/20 shadow-xs flex items-start gap-3 transition-all',
+              'mb-6 p-3 rounded-lg border shadow-xs flex items-start gap-3 transition-all',
+              error.tone === 'notice'
+                ? 'border-amber-200/80 dark:border-amber-900/50 bg-amber-50/40 dark:bg-amber-950/20'
+                : 'border-red-200/80 dark:border-red-900/50 bg-red-50/30 dark:bg-red-950/20',
               isShaking && 'animate-shake'
             )}
           >
-            <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-red-100 dark:bg-red-500/20 text-red-600 dark:text-red-400 mt-0.5">
+            <div
+              className={cn(
+                'flex h-5 w-5 shrink-0 items-center justify-center rounded-md mt-0.5',
+                error.tone === 'notice'
+                  ? 'bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-300'
+                  : 'bg-red-100 dark:bg-red-500/20 text-red-600 dark:text-red-400'
+              )}
+            >
               <AlertCircle className="h-3.5 w-3.5" />
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-xs font-semibold text-slate-900 dark:text-white mb-0.5">
-                Couldn&apos;t sign you in
+                {error.title}
               </p>
-              <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">{error}</p>
+              <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
+                {error.detail}
+              </p>
+              {error.action && (
+                <p className="mt-1 text-xs text-slate-700 dark:text-slate-300 leading-relaxed">
+                  {error.action}
+                </p>
+              )}
+              {(reference || error.docsHref) && (
+                <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-slate-500 dark:text-slate-400">
+                  {reference && (
+                    <span>
+                      Reference <code className="font-mono">{reference}</code>
+                    </span>
+                  )}
+                  {reference && (
+                    <button
+                      type="button"
+                      onClick={copyDetails}
+                      className="font-semibold text-slate-700 underline-offset-2 hover:underline dark:text-slate-200"
+                    >
+                      {copied ? 'Copied' : 'Copy details for your administrator'}
+                    </button>
+                  )}
+                  {error.docsHref && (
+                    <a
+                      href={error.docsHref}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="font-semibold text-slate-700 underline-offset-2 hover:underline dark:text-slate-200"
+                    >
+                      Learn more
+                    </a>
+                  )}
+                </div>
+              )}
             </div>
             <button
               type="button"
               data-icon-button
-              onClick={() => setError('')}
-              className="relative shrink-0 flex h-6 w-6 min-h-0 min-w-0 p-0 after:absolute after:-inset-2.5 after:content-[''] items-center justify-center rounded-full border border-red-300/80 bg-red-100 hover:bg-red-200 text-red-700 hover:text-red-950 dark:border-red-500/50 dark:bg-red-900/60 dark:hover:bg-red-800/80 dark:text-red-100 dark:hover:text-white transition-all cursor-pointer shadow-2xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500/50"
+              onClick={dismissError}
+              className={cn(
+                "relative shrink-0 flex h-6 w-6 min-h-0 min-w-0 p-0 after:absolute after:-inset-2.5 after:content-[''] items-center justify-center rounded-full border transition-all cursor-pointer shadow-2xs focus-visible:outline-none focus-visible:ring-2",
+                error.tone === 'notice'
+                  ? 'border-amber-300/80 bg-amber-100 hover:bg-amber-200 text-amber-800 hover:text-amber-950 dark:border-amber-500/50 dark:bg-amber-900/60 dark:hover:bg-amber-800/80 dark:text-amber-100 dark:hover:text-white focus-visible:ring-amber-500/50'
+                  : 'border-red-300/80 bg-red-100 hover:bg-red-200 text-red-700 hover:text-red-950 dark:border-red-500/50 dark:bg-red-900/60 dark:hover:bg-red-800/80 dark:text-red-100 dark:hover:text-white focus-visible:ring-red-500/50'
+              )}
               aria-label="Dismiss error"
               title="Dismiss"
             >
@@ -347,7 +436,7 @@ export default function LoginClient({
                   value={email}
                   onChange={e => {
                     setEmail(e.target.value);
-                    if (error) setError('');
+                    if (error) dismissError();
                   }}
                   onBlur={() => setEmailTouched(true)}
                   className="auth-input w-full h-11 min-h-[44px] 2xl:h-12 pl-12 pr-4 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 text-base sm:text-sm 2xl:text-base shadow-xs hover:border-slate-400 dark:hover:border-slate-600 focus:outline-none focus:border-slate-900 dark:focus:border-slate-100 focus:ring-2 focus:ring-slate-900/10 dark:focus:ring-white/15 transition-all"
@@ -386,7 +475,7 @@ export default function LoginClient({
                   value={password}
                   onChange={e => {
                     setPassword(e.target.value);
-                    if (error) setError('');
+                    if (error) dismissError();
                   }}
                   onKeyDown={e => {
                     setCapsLockOn(e.getModifierState('CapsLock'));

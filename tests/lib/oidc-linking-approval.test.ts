@@ -36,6 +36,7 @@ vi.mock('@/lib/prisma', () => {
       upsert: vi.fn(),
       updateMany: vi.fn(),
     },
+    oidcLinkingRequest: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
     oidcConfig: { findFirst: vi.fn(), findUnique: vi.fn() },
   };
   type ManyArgs = { where: { userId: { in: string[] } } };

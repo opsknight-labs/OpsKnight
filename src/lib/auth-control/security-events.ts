@@ -343,3 +343,26 @@ export async function retryAuthenticationAlert(
     });
   });
 }
+
+/**
+ * A security event that can recur on every sign-in (for example incomplete group claims) is
+ * audited each time but alerts administrators at most once per key per window.
+ */
+export async function dedupedSecurityEvent(
+  key: string,
+  windowMs: number,
+  action: string,
+  actorId: string,
+  context: Prisma.InputJsonObject = {},
+  outcome = 'warning'
+) {
+  await prisma.$transaction(async tx => {
+    const bucket = Math.floor(Date.now() / windowMs);
+    const window = await tx.authenticationFailureWindow.upsert({
+      where: { id: `${key}:${bucket}` },
+      create: { id: `${key}:${bucket}`, expiresAt: new Date((bucket + 2) * windowMs) },
+      update: { count: { increment: 1 } },
+    });
+    if (window.count === 1) await securityEvent(tx, action, actorId, context, outcome);
+  });
+}

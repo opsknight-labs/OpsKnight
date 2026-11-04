@@ -110,6 +110,17 @@ const renderConsole = (data: Dashboard, tab = 'policy', revisionId?: string) => 
 };
 
 describe('revision selection reconciliation', () => {
+  it('continues from the saved configuration after a full page load before activation', async () => {
+    renderConsole(dashboard({ revisions: [revision('draft-1')] }), 'connection', 'draft-1');
+    expect(await screen.findByLabelText(/Directory \(tenant\) ID/)).toHaveValue('tenant-1');
+    expect(screen.getByLabelText('Client ID', { exact: true })).toHaveValue('app-b');
+    expect(screen.getByRole('radio', { name: /Microsoft Entra ID/ })).toHaveAttribute(
+      'aria-checked',
+      'true'
+    );
+    expect(screen.queryByText('Not saved')).not.toBeInTheDocument();
+  });
+
   const list = [
     revision('draft-new'),
     revision('active', { activatedAt: '2026-10-01T00:00:00.000Z' }),
@@ -166,16 +177,18 @@ describe('revision lifecycle in the console', () => {
     fireEvent.click(screen.getByRole('button', { name: /Delete draft/ }));
     const dialog = await screen.findByRole('dialog');
     fireEvent.click(within(dialog).getByRole('button', { name: 'Delete draft' }));
-    await waitFor(() =>
-      expect(screen.getByLabelText('Saved configuration to activate')).toHaveValue('')
-    );
+    // With nothing saved any more, the step shows one clear way forward.
+    await screen.findByText('Connect your provider first');
     expect(new URLSearchParams(window.location.search).get('revisionId')).toBeNull();
-    fireEvent.mouseDown(screen.getByRole('tab', { name: 'Identity Provider' }), { button: 0 });
-    fireEvent.change(await screen.findByLabelText('Client ID', { exact: true }), {
+    fireEvent.mouseDown(screen.getByRole('tab', { name: '1 · Connect provider' }), { button: 0 });
+    fireEvent.change(await screen.findByLabelText(/Directory \(tenant\) ID/), {
+      target: { value: '11111111-2222-3333-4444-555555555555' },
+    });
+    fireEvent.change(screen.getByLabelText('Client ID', { exact: true }), {
       target: { value: 'replacement-client' },
     });
     fireEvent.change(screen.getByLabelText(/Client secret/), { target: { value: 'secret' } });
-    fireEvent.click(screen.getAllByRole('button', { name: 'Stage configuration' })[0]);
+    fireEvent.click(screen.getAllByRole('button', { name: 'Save changes' })[0]);
     await waitFor(() => expect(requests.some(body => body.action === 'stage')).toBe(true));
     expect(requests.find(body => body.action === 'stage')?.sourceRevisionId).toBeUndefined();
   });
@@ -184,7 +197,7 @@ describe('revision lifecycle in the console', () => {
     renderConsole(dashboard(), 'connection', 'draft-1');
     // Another administrator deletes the selected draft; the next refresh must recover.
     server = { ...server, revisions: [revision('draft-2')] };
-    fireEvent.mouseDown(screen.getByRole('tab', { name: 'Sessions & Policies' }), { button: 0 });
+    fireEvent.mouseDown(screen.getByRole('tab', { name: '4 · Test & activate' }), { button: 0 });
     await waitFor(() =>
       expect(screen.getByLabelText('Saved configuration to activate')).toHaveValue('draft-2')
     );
@@ -224,7 +237,7 @@ describe('administrator retest consent', () => {
       'policy',
       'draft-1'
     );
-    const retest = screen.getByRole('button', { name: 'Retest administrator sign-in' });
+    const retest = screen.getByRole('button', { name: 'Test sign-in again' });
     // A previous successful test never implies consent for the next one.
     expect(retest).toBeDisabled();
     expect(retest).toHaveAccessibleDescription(/Allow linking below to test/);
@@ -251,7 +264,7 @@ describe('administrator retest consent', () => {
     expect(
       screen.queryByRole('checkbox', { name: /Allow this SSO identity to link/ })
     ).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Test administrator sign-in' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Test my sign-in' }));
     await waitFor(() => expect(requests.some(body => body.action === 'test')).toBe(true));
     expect(requests.find(body => body.action === 'test')).toMatchObject({ linkApproved: false });
   });

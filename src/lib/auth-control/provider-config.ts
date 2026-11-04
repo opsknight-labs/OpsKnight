@@ -1,13 +1,44 @@
 import { z } from 'zod/v3';
 import { normalizeOidcIssuer } from '@/lib/oidc/issuer-migration';
 
+const roleSchema = z.enum(['ADMIN', 'RESPONDER', 'AUDITOR', 'USER']);
+/** A claim name, or a dotted path into nested claims such as realm_access.roles. */
+const claimPathSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(128)
+  // Each dot-separated part must be non-empty and contain no spaces (checked without a
+  // backtracking-prone regular expression).
+  .refine(
+    value => value.split('.').every(part => part.length > 0 && !/\s/.test(part)),
+    'Use a claim name or a dotted path such as realm_access.roles.'
+  );
+const claimValueSchema = z
+  .string()
+  .trim()
+  .min(1, 'Enter the group or role value to match.')
+  .max(512);
+
 export const roleRuleSchema = z
   .object({
-    claim: z.string().trim().min(1).max(128),
-    value: z.string().min(1).max(512),
-    role: z.enum(['ADMIN', 'RESPONDER', 'AUDITOR', 'USER']),
+    claim: claimPathSchema,
+    value: claimValueSchema,
+    role: roleSchema,
+    // New rules ignore letter case; rules saved before v2.2 were case-sensitive and keep that.
+    caseSensitive: z.boolean().default(false),
   })
   .strict();
+
+export const teamRuleSchema = z
+  .object({
+    claim: claimPathSchema,
+    value: claimValueSchema,
+    caseSensitive: z.boolean().default(false),
+    teamId: z.string().trim().min(1).max(64),
+  })
+  .strict();
+export type TeamMappingRule = z.infer<typeof teamRuleSchema>;
 export const providerConfigSchema = z
   .object({
     issuer: z
@@ -36,6 +67,11 @@ export const providerConfigSchema = z
       .max(100)
       .default([]),
     roleMapping: z.array(roleRuleSchema).max(100).default([]),
+    defaultRole: roleSchema.default('USER'),
+    unmatchedPolicy: z.enum(['DEFAULT_ROLE', 'DENY']).default('DEFAULT_ROLE'),
+    rolePrecedence: z.enum(['FIRST_MATCH', 'HIGHEST_ROLE']).default('HIGHEST_ROLE'),
+    domainTrustedLinking: z.boolean().default(false),
+    teamMapping: z.array(teamRuleSchema).max(200).default([]),
     customScopes: z.string().max(2048).nullable().default(null),
     providerType: z.enum(['azure', 'google', 'okta', 'auth0', 'custom']).default('custom'),
     providerLabel: z.string().trim().max(80).nullable().default(null),

@@ -61,15 +61,19 @@ export async function GET(req: NextRequest) {
         const formattedNotifications = notifications.map((notification) => {
             const timeAgo = formatDateTime(notification.createdAt, userTimeZone, { format: 'relative' });
             const typeKey = notification.type.toLowerCase();
-            const typeMap: Record<string, 'incident' | 'service' | 'schedule'> = {
-                incident: 'incident',
-                schedule: 'schedule',
-                service: 'service',
-                team: 'service'
-            };
-            const type = typeMap[typeKey] || 'incident';
+            const typeMap = new Map<string, 'incident' | 'service' | 'schedule'>([
+                ['incident', 'incident'],
+                ['schedule', 'schedule'],
+                ['service', 'service'],
+                ['team', 'service'],
+            ]);
+            const type = typeMap.get(typeKey) ?? 'incident';
             const incidentId = notification.entityType === 'INCIDENT'
                 ? notification.entityId
+                : null;
+            // Non-incident notifications that need an administrator's action open its screen.
+            const href = notification.entityType === 'SSO_LINK_REQUEST'
+                ? '/settings/system?section=sso&authTab=access&linking=requested'
                 : null;
 
             return {
@@ -80,6 +84,7 @@ export async function GET(req: NextRequest) {
                 unread: !notification.readAt,
                 type,
                 incidentId,
+                href,
                 createdAt: notification.createdAt.toISOString()
             };
         });

@@ -14,7 +14,7 @@ export const providerDefinitions = {
     issuer: 'https://accounts.google.com',
     organization: false,
     tenant: false,
-    help: 'Create a Web application OAuth client. Restrict Workspace access with allowed domains in Access & Provisioning.',
+    help: 'Create a Web application OAuth client. Restrict sign-in to your Workspace domains in Who can sign in.',
   },
   okta: {
     label: 'Okta',
@@ -57,10 +57,55 @@ export function switchProviderDraft(
     customScopes: null,
     profileMapping: {},
     roleMapping: [],
+    // Group values are provider-specific, and domain trust depends on the provider's proof.
+    teamMapping: [],
+    domainTrustedLinking: false,
     autoProvision: false,
     tokenEndpointAuthMethod: 'client_secret_basic',
   };
 }
+
+/**
+ * What to do in each provider's console, in order. Shown next to the callback URLs so an
+ * administrator never has to leave the page to find the next step.
+ */
+export const providerSetupChecklists: Record<ProviderType, string[]> = {
+  azure: [
+    'Microsoft Entra admin center → App registrations → New registration. Account type: this organizational directory only.',
+    'Authentication → Add a platform → Web → paste both callback URLs above.',
+    'Certificates & secrets → New client secret → copy the Value (not the Secret ID).',
+    'Token configuration → Add optional claim → ID token → email (and xms_edov for automatic account linking).',
+    'For roles: App roles → create roles, assign groups in Enterprise applications, and use the "roles" claim. This avoids the 200-group limit.',
+    'Copy the Directory (tenant) ID and Application (client) ID from Overview into the fields here.',
+  ],
+  google: [
+    'Google Cloud Console → APIs & Services → OAuth consent screen → Internal.',
+    'Credentials → Create credentials → OAuth client ID → Web application.',
+    'Authorized redirect URIs → paste both callback URLs above.',
+    'Copy the client ID and secret here, and add your Workspace domain in Who can sign in.',
+    'Google does not send groups in the ID token; manage roles by hand or with SCIM.',
+  ],
+  okta: [
+    'Okta Admin Console → Applications → Create App Integration → OIDC → Web Application.',
+    'Sign-in redirect URIs → paste both callback URLs above. Assign the people or groups who should use OpsKnight.',
+    'Security → API → Authorization Servers → default → copy the Issuer URI here (it ends in /oauth2/default).',
+    'For roles: in that authorization server, add a "groups" claim (ID token, filter: matches regex .*), and add "groups" to Additional scopes here.',
+    'Copy the client ID and secret from the app’s General tab.',
+  ],
+  auth0: [
+    'Auth0 Dashboard → Applications → Create Application → Regular Web Application.',
+    'Settings → Allowed Callback URLs → paste both callback URLs above, separated by a comma.',
+    'Copy the Domain as the issuer (https://YOUR_TENANT.auth0.com/), and the client ID and secret.',
+    'For roles: add a post-login Action that sets a namespaced claim such as https://opsknight/roles, then use that claim in Roles & teams.',
+  ],
+  custom: [
+    'Create a confidential OpenID Connect client (authorization code flow with PKCE).',
+    'Add both callback URLs above as valid redirect URIs.',
+    'Use the issuer from /.well-known/openid-configuration. For Keycloak: https://HOST/realms/REALM.',
+    'OpsKnight must reach the issuer over HTTPS at a public address (private network addresses are refused), and ID tokens must be signed with RS256.',
+    'For Keycloak roles: add a "groups" mapper to the client scope, or use realm_access.roles in Roles & teams.',
+  ],
+};
 
 export function entraTenant(issuer: string): string {
   return /^https:\/\/login\.microsoftonline\.com\/([^/]+)\/v2\.0\/?$/.exec(issuer)?.[1] ?? '';
@@ -117,11 +162,16 @@ export function providerDraftErrors(configuration: ProviderConfiguration, hasSav
   return errors;
 }
 
-export function hasBroadAdministratorRule(rules: ProviderConfiguration['roleMapping']) {
-  return rules.some(
-    rule =>
+export function hasBroadAdministratorRule(
+  rules: Array<Pick<ProviderConfiguration['roleMapping'][number], 'claim' | 'value' | 'role'>>
+) {
+  return rules.some(rule => {
+    // realm_access.roles and resource_access.<client>.roles are group-like claims too.
+    const claimName = rule.claim.split('.').pop() ?? rule.claim;
+    return (
       rule.role === 'ADMIN' &&
-      (!/^(groups?|roles?)$/i.test(rule.claim) ||
-        /^(all|everyone|employees|users|members|authenticated|\*)$/i.test(rule.value))
-  );
+      (!/^(groups?|roles?)$/i.test(claimName) ||
+        /^(all|everyone|employees|users|members|authenticated|\*)$/i.test(rule.value.trim()))
+    );
+  });
 }

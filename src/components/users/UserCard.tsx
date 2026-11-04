@@ -76,6 +76,8 @@ type UserCardProps = {
     jobTitle?: string | null;
     department?: string | null;
     createdAt?: Date | string;
+    /** Who decides this person's role: an administrator (MANUAL) or the identity provider. */
+    roleSource?: string | null;
     teamMemberships?: Array<{
       id: string;
       role: string;
@@ -96,6 +98,8 @@ type UserCardProps = {
   onGenerateInvite?: () => void;
   onUpdateRole?: (role: string) => void;
   onAddToTeam?: (teamId: string) => void;
+  /** False when the workspace requires SSO, so password resets cannot be used. */
+  passwordResetAvailable?: boolean;
 };
 
 const getRoleStyle = (role: string) => {
@@ -160,6 +164,7 @@ export function UserCard({
   onGenerateInvite: _onGenerateInvite,
   onUpdateRole,
   onAddToTeam,
+  passwordResetAvailable = true,
 }: UserCardProps) {
   const router = useRouter();
   const [showDeactivateDialog, setShowDeactivateDialog] = useState(false);
@@ -323,7 +328,7 @@ export function UserCard({
 
           <DropdownMenuSeparator className="my-1" />
 
-          {(user.status === 'ACTIVE' || user.status === 'INVITED') && (
+          {(user.status === 'INVITED' || (user.status === 'ACTIVE' && passwordResetAvailable)) && (
             <DropdownMenuItem
               onClick={handleGenerateLink}
               className={cn(
@@ -403,14 +408,21 @@ export function UserCard({
     );
   };
 
+  const roleFromSso = user.roleSource === 'OIDC' || user.roleSource === 'SCIM';
   const renderRoleBadge = () => (
     <span
       className={cn(
-        'inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-medium border shadow-2xs',
+        'inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium border shadow-2xs',
         roleStyle.badge
       )}
+      title={
+        roleFromSso
+          ? 'Set by role rules from your identity provider at each sign-in.'
+          : 'Set by an administrator. Single sign-on never changes it.'
+      }
     >
       {roleStyle.label}
+      {roleFromSso && <span className="opacity-70">· SSO</span>}
     </span>
   );
 

@@ -122,6 +122,7 @@ export async function administerUser(
             where: { userId, revokedAt: null },
             data: { revokedAt },
           });
+          await client.oidcLinkingRequest.deleteMany({ where: { userId } });
           await client.userDevice.deleteMany({ where: { userId } });
         }
         await logAudit(

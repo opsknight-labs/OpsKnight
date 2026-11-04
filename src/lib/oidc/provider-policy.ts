@@ -9,7 +9,11 @@ export type OidcClaims = Record<string, unknown>;
 
 export type OrganizationPolicyResult =
   | { ok: true }
-  | { ok: false; reason: 'OIDC_ORGANIZATION_REJECTED' };
+  | {
+      ok: false;
+      reason:
+        'OIDC_ORGANIZATION_REJECTED' | 'OIDC_DOMAIN_NOT_ALLOWED' | 'OIDC_EMAIL_ASSURANCE_REQUIRED';
+    };
 
 export interface OidcProviderPolicy {
   readonly family: OidcProviderType;
@@ -44,12 +48,12 @@ function emailBoundary(claims: OidcClaims, allowedDomains: string[]): Organizati
   // If Allowed Domains is configured as an authorization security boundary,
   // require email_verified === true to ensure verified mailbox/domain ownership.
   if (claims.email_verified !== true) {
-    return { ok: false, reason: 'OIDC_ORGANIZATION_REJECTED' };
+    return { ok: false, reason: 'OIDC_EMAIL_ASSURANCE_REQUIRED' };
   }
   const domain = emailDomain(claims);
   return domain && allowed.has(domain)
     ? { ok: true }
-    : { ok: false, reason: 'OIDC_ORGANIZATION_REJECTED' };
+    : { ok: false, reason: 'OIDC_DOMAIN_NOT_ALLOWED' };
 }
 
 const genericPolicy: OidcProviderPolicy = {
@@ -78,7 +82,7 @@ const googlePolicy: OidcProviderPolicy = {
     const hostedDomain = typeof claims.hd === 'string' ? claims.hd.trim().toLowerCase() : null;
     return hostedDomain && allowed.has(hostedDomain)
       ? { ok: true }
-      : { ok: false, reason: 'OIDC_ORGANIZATION_REJECTED' };
+      : { ok: false, reason: 'OIDC_DOMAIN_NOT_ALLOWED' };
   },
   allowsMissingEmailVerified: () => false,
 };

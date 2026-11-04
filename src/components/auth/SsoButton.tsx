@@ -97,6 +97,8 @@ const providerConfig: Record<
   },
 };
 
+const providerConfigs = new Map(Object.entries(providerConfig));
+
 export default function SsoButton({
   providerType,
   providerLabel,
@@ -104,8 +106,8 @@ export default function SsoButton({
   loading,
   disabled,
 }: Props) {
-  const providerKey = providerType && providerConfig[providerType] ? providerType : 'custom';
-  const config = providerConfig[providerKey];
+  const providerKey = providerType && providerConfigs.has(providerType) ? providerType : 'custom';
+  const config = providerConfigs.get(providerKey) ?? providerConfig.custom;
   const label = providerLabel || config.defaultLabel;
   const isGoogle = providerKey === 'google';
 
@@ -114,7 +116,7 @@ export default function SsoButton({
       type="button"
       onClick={onClick}
       disabled={loading || disabled}
-      aria-label={`Sign in with ${label}`}
+      aria-label={`Continue with ${label}`}
       className={cn(
         'group relative w-full h-11 2xl:h-12 flex items-center justify-center gap-2.5 px-4',
         'rounded-lg text-sm font-medium border select-none cursor-pointer',

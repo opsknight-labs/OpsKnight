@@ -6,9 +6,6 @@ vi.mock('next-auth/react', () => ({
   signOut: vi.fn(),
 }));
 
-vi.mock('@/app/(app)/settings/security/actions', () => ({
-  revokeAllSessions: vi.fn().mockResolvedValue({ success: true }),
-}));
 
 describe('ActiveSessionsSection', () => {
   it('renders registered sessions from the API without fallback dependency', async () => {

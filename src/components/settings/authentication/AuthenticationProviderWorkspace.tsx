@@ -20,7 +20,7 @@ export default function AuthenticationProviderWorkspace() {
               id="auth-connection-title"
               className="text-base sm:text-lg font-bold text-foreground"
             >
-              Identity Provider
+              Connect provider
             </h2>
             {data.activeProvider && (
               <Badge variant="success" className="text-xs">
@@ -31,7 +31,8 @@ export default function AuthenticationProviderWorkspace() {
             )}
           </div>
           <p className="text-xs text-muted-foreground leading-relaxed">
-            Configure a candidate, verify administrator access, then review activation.
+            Tell OpsKnight about your identity provider. Saving checks the connection; it does not
+            turn single sign-on on.
           </p>
         </div>
       </header>
@@ -41,11 +42,11 @@ export default function AuthenticationProviderWorkspace() {
           className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-xs sm:text-sm text-amber-800 dark:text-amber-200"
         >
           The stored historical configuration cannot be edited with this form. It remains active and
-          unchanged. Choose a provider and stage a complete replacement for review.
+          unchanged. Choose a provider and save a complete replacement for review.
         </div>
       )}
       <AuthenticationProviderForm key={`${revisionId}:${configuration.providerType}`} />
-      <AuthenticationRevisionWorkflow />
+      {data.revisions.length > 0 && <AuthenticationRevisionWorkflow />}
     </section>
   );
 }

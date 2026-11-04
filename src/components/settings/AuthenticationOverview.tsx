@@ -1,4 +1,5 @@
 'use client';
+import { AUTH_TAB_LABELS, AUTH_TAB_NAMES } from './authentication/setup-steps';
 import {
   CheckCircle2,
   AlertTriangle,
@@ -30,71 +31,76 @@ export default function AuthenticationOverview({
   const active = data.revisions.find(revision => revision.id === data.activeRevisionId);
   const candidate = data.revisions.find(revision => !revision.activatedAt);
   const discovery = Boolean(candidate?.discoveryVerifiedAt);
-  const verified = Boolean(candidate?.testedAt); // Historical evidence; activation rechecks freshness on the server.
+  // The live proof state, not merely that a test once happened.
+  const verified = candidate?.verification.state === 'valid';
   const next = data.originConflict
     ? {
-        label: 'Review canonical URL conflict',
-        target: 'emergency',
-        reason: 'Align trusted public URLs before changing authentication.',
+        label: 'Fix the application address',
+        target: 'policy',
+        reason:
+          'OpsKnight is reachable at more than one address. Make NEXTAUTH_URL, NEXT_PUBLIC_APP_URL and the App URL in System settings identical.',
       }
     : data.recoveryDegradedAt ||
         (data.mode === 'SSO_REQUIRED' && data.verifiedEmergencyAccounts < 2)
       ? {
           label: 'Restore recovery readiness',
           target: 'emergency',
-          reason: 'Keep two independently verified recovery identities available.',
+          reason: 'SSO Required needs two independently tested recovery identities.',
         }
-      : data.failedEmailAlertCount > 0
+      : data.linkingRequestCount > 0
         ? {
-            label: 'Investigate security notifications',
-            target: 'diagnostics',
-            reason: 'Failed security emails need operator attention.',
+            label: `Review ${data.linkingRequestCount} SSO access request${data.linkingRequestCount === 1 ? '' : 's'}`,
+            target: 'access',
+            reason: 'People tried to sign in with SSO and are waiting for your approval.',
           }
-        : configured
+        : data.failedEmailAlertCount > 0
           ? {
-              label: 'Manage identity provider',
-              target: 'connection',
-              reason: 'Review the active connection or prepare a tested replacement.',
+              label: 'Investigate security notifications',
+              target: 'diagnostics',
+              reason: 'Failed security emails need operator attention.',
             }
-          : !discovery
+          : configured
             ? {
-                label: 'Continue setup',
+                label: 'Manage single sign-on',
                 target: 'connection',
-                reason: 'Choose a provider, register both callbacks and stage its credentials.',
+                reason: 'Review the active connection or prepare and test a replacement.',
               }
-            : !verified
+            : !discovery
               ? {
-                  label: 'Test administrator sign-in',
+                  label: 'Connect your identity provider',
                   target: 'connection',
-                  reason:
-                    'Discovery succeeded. Verify an existing administrator through the real provider.',
+                  reason: 'Choose a provider, copy two callback URLs into it, and save.',
                 }
-              : data.verifiedEmergencyAccounts < 2
+              : !verified
                 ? {
-                    label: 'Prepare emergency recovery',
-                    target: 'emergency',
-                    reason: 'Create and independently drill two recovery identities.',
+                    label: 'Test your own sign-in',
+                    target: 'policy',
+                    reason: 'Your provider responded correctly. Sign in once to prove it works.',
                   }
                 : {
-                    label: 'Review and activate',
+                    label: 'Turn on single sign-on',
                     target: 'policy',
-                    reason:
-                      'Review access, session policy and enforcement impact before activation.',
+                    reason: 'Review what will change, then turn it on. Start with SSO Optional.',
                   };
   const steps = [
     {
-      title: 'Choose a provider',
+      title: AUTH_TAB_NAMES.connection,
       target: 'connection',
-      state: configured ? 'Active' : candidate ? 'Ready to test' : 'Not started',
+      state: configured ? 'Active' : discovery ? 'Verified' : 'Not started',
     },
     {
-      title: 'Configure credentials and callbacks',
-      target: 'connection',
-      state: configured ? 'Active' : discovery ? 'Verified' : 'Needs attention',
+      title: AUTH_TAB_NAMES.access,
+      target: 'access',
+      state: data.linkingRequestCount > 0 ? 'Needs attention' : configured ? 'Active' : 'Optional',
     },
     {
-      title: 'Verify administrator sign-in',
-      target: 'connection',
+      title: AUTH_TAB_NAMES.roles,
+      target: 'roles',
+      state: configured ? 'Active' : 'Optional',
+    },
+    {
+      title: 'Test your sign-in',
+      target: 'policy',
       state: configured
         ? 'Active'
         : verified
@@ -104,18 +110,17 @@ export default function AuthenticationOverview({
             : 'Not started',
     },
     {
-      title: 'Review access and recovery',
+      title:
+        data.mode === 'SSO_REQUIRED'
+          ? 'Emergency recovery (required)'
+          : 'Emergency recovery (only for SSO Required)',
       target: 'emergency',
-      state: data.verifiedEmergencyAccounts >= 2 ? 'Verified' : 'Needs attention',
-    },
-    {
-      title: 'Review impact and activate',
-      target: 'policy',
-      state: configured
-        ? 'Active'
-        : verified && data.verifiedEmergencyAccounts >= 2
-          ? 'Ready to test'
-          : 'Not started',
+      state:
+        data.verifiedEmergencyAccounts >= 2
+          ? 'Verified'
+          : data.mode === 'SSO_REQUIRED'
+            ? 'Needs attention'
+            : 'Optional',
     },
   ];
   return (
@@ -326,47 +331,42 @@ export default function AuthenticationOverview({
       <div className="rounded-xl border border-border/80 bg-card p-4 sm:p-5 shadow-xs space-y-3">
         <div className="flex items-center gap-2">
           <Sparkles className="h-4 w-4 text-primary" />
-          <h3 className="text-sm font-semibold text-foreground">
-            How OpsKnight SSO Works · Quick Guide
-          </h3>
+          <h3 className="text-sm font-semibold text-foreground">How setup works</h3>
         </div>
         <div className="grid gap-2.5 sm:grid-cols-2 text-xs leading-relaxed">
-          <div className="rounded-lg border border-border/60 bg-muted/20 p-3 space-y-1">
-            <p className="font-semibold text-foreground flex items-center gap-1.5">
-              <Globe className="h-3.5 w-3.5 text-primary" />
-              1. Identity Provider (Connection)
-            </p>
-            <p className="text-muted-foreground">
-              Choose your IdP, register the two Callback URLs in your IdP console, and enter your Client ID and Secret. Stage the draft and run a real test sign-in.
-            </p>
-          </div>
-          <div className="rounded-lg border border-border/60 bg-muted/20 p-3 space-y-1">
-            <p className="font-semibold text-foreground flex items-center gap-1.5">
-              <KeyRound className="h-3.5 w-3.5 text-amber-500" />
-              2. Emergency Recovery
-            </p>
-            <p className="text-muted-foreground">
-              Create and drill at least 2 independent recovery credentials. These ensure you can always sign in at <code className="font-mono text-[10px] bg-background px-1 py-0.5 rounded border border-border/50">/login/emergency</code> even if your IdP is completely down.
-            </p>
-          </div>
-          <div className="rounded-lg border border-border/60 bg-muted/20 p-3 space-y-1">
-            <p className="font-semibold text-foreground flex items-center gap-1.5">
-              <Shield className="h-3.5 w-3.5 text-primary" />
-              3. Access & Provisioning
-            </p>
-            <p className="text-muted-foreground">
-              Enable JIT provisioning to automatically create accounts for corporate users on their first login, restrict logins to company domains, and map IdP groups to OpsKnight roles.
-            </p>
-          </div>
-          <div className="rounded-lg border border-border/60 bg-muted/20 p-3 space-y-1">
-            <p className="font-semibold text-foreground flex items-center gap-1.5">
-              <Clock className="h-3.5 w-3.5 text-primary" />
-              4. Sessions & Policies
-            </p>
-            <p className="text-muted-foreground">
-              Configure session limits and idle timeouts. Once your test login and recovery drills are complete, preview the impact and activate verified SSO enforcement.
-            </p>
-          </div>
+          {[
+            {
+              icon: <Globe className="h-3.5 w-3.5 text-primary" />,
+              title: AUTH_TAB_LABELS.connection,
+              body: 'Pick your provider, copy the two callback URLs into it, paste the client ID and secret, and save. Saving checks the connection.',
+            },
+            {
+              icon: <Shield className="h-3.5 w-3.5 text-primary" />,
+              title: AUTH_TAB_LABELS.access,
+              body: 'Choose whether new people get an account automatically, which email domains are allowed, and approve existing accounts in bulk.',
+            },
+            {
+              icon: <Sparkles className="h-3.5 w-3.5 text-primary" />,
+              title: AUTH_TAB_LABELS.roles,
+              body: 'Optional. Give people a role and teams from their identity provider groups, and try your rules with sample claims.',
+            },
+            {
+              icon: <Clock className="h-3.5 w-3.5 text-primary" />,
+              title: AUTH_TAB_LABELS.policy,
+              body: 'Sign in once yourself, see exactly what will change, and turn on SSO Optional. Move to SSO Required after two emergency recovery identities are set up.',
+            },
+          ].map(item => (
+            <div
+              key={item.title}
+              className="rounded-lg border border-border/60 bg-muted/20 p-3 space-y-1"
+            >
+              <p className="font-semibold text-foreground flex items-center gap-1.5">
+                {item.icon}
+                {item.title}
+              </p>
+              <p className="text-muted-foreground">{item.body}</p>
+            </div>
+          ))}
         </div>
       </div>
 
