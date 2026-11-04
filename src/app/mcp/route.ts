@@ -8,7 +8,12 @@ import {
   resolveMcpGrantWithPolicy,
 } from '@/lib/mcp/auth/principal';
 import { assertMcpHost, mcpHttpError } from '@/lib/mcp/auth/http';
-import { CostBudget, acquireMcpSlot, acquireMcpAuthenticationSlot } from '@/lib/mcp/core/budget';
+import {
+  CostBudget,
+  acquireMcpSlot,
+  acquireMcpAuthenticationSlot,
+  readmitMcpSlot,
+} from '@/lib/mcp/core/budget';
 import { requireMcp, McpBoundaryError } from '@/lib/mcp/core/errors';
 import { readMcpBody } from '@/lib/mcp/protocol/input';
 import {
@@ -116,9 +121,10 @@ async function handlePost(request: Request, requestId: string) {
     // A caller can pause its upload while permissions, credentials or policy change.
     // Refresh the complete authority snapshot before even permission-filtered discovery.
     identity = await authenticateMcp(request, null);
-    release();
-    release = undefined;
-    release = await acquireMcpSlot(identity.policy.maxInFlight, { grantId: identity.grantId });
+    // Judge the held slot by the refreshed limit; it is kept while that limit still admits it.
+    release = await readmitMcpSlot(release, identity.policy.maxInFlight, {
+      grantId: identity.grantId,
+    });
     rpcId = body.id;
     // 2025-revision clients are served statelessly by the SDK; tasks and listen are 2026-07-28 only.
     const modern = request.headers.get('mcp-protocol-version') === '2026-07-28';

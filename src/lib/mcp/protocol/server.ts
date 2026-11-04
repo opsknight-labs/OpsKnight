@@ -198,7 +198,11 @@ export function clampPageSize(
   const queryProperties = query?.properties as Record<string, Record<string, unknown>> | undefined;
   const limit = queryProperties?.limit;
   if (operation.kind !== 'list' || !query || !queryProperties || !limit) return schema;
-  const advertised = typeof limit.default === 'number' ? limit.default : 20;
+  // The default execution applies (mcpPageSize): the canonical one when it fits, else 20.
+  const advertised =
+    Number.isSafeInteger(limit.default) && (limit.default as number) <= MCP_MAX_PAGE_SIZE
+      ? (limit.default as number)
+      : 20;
   return {
     ...schema,
     properties: {
@@ -211,7 +215,7 @@ export function clampPageSize(
             ...limit,
             minimum: 1,
             maximum: MCP_MAX_PAGE_SIZE,
-            default: Math.min(advertised, MCP_MAX_PAGE_SIZE),
+            default: advertised,
             description: `Page size, 1-${MCP_MAX_PAGE_SIZE}. Pass data.pagination.nextCursor as query.cursor for the next page.`,
           },
         },

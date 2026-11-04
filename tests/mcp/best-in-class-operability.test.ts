@@ -6,6 +6,7 @@ import {
   acquireMcpSlot,
   mcpGrantSlotLimit,
   mcpSlotUsage,
+  readmitMcpSlot,
 } from '@/lib/mcp/core/budget';
 import { McpBoundaryError } from '@/lib/mcp/core/errors';
 import {
@@ -137,6 +138,33 @@ describe('E3: bounded wait for a work slot', () => {
     (await a3)();
     a2();
     b1();
+    expect(mcpSlotUsage()).toEqual({ inFlight: 0, queued: 0 });
+  });
+  it('keeps the slot of an admitted request on re-admission instead of handing it to a waiter', async () => {
+    vi.useFakeTimers();
+    const held = await acquireMcpSlot(1, { grantId: 'a' });
+    const waiter = acquireMcpSlot(1, { grantId: 'b' });
+    const waiterOutcome = waiter.then(
+      () => 'admitted',
+      () => 'shed'
+    );
+    // Same limit: the request that already passed admission keeps going without queueing.
+    const kept = await readmitMcpSlot(held, 1, { grantId: 'a' });
+    expect(kept).toBe(held);
+    expect(mcpSlotUsage()).toEqual({ inFlight: 1, queued: 1 });
+    kept();
+    expect(await waiterOutcome).toBe('admitted');
+    (await waiter)();
+    expect(mcpSlotUsage()).toEqual({ inFlight: 0, queued: 0 });
+  });
+
+  it('gives the slot up on re-admission when the refreshed limit no longer admits it', async () => {
+    const a = await acquireMcpSlot(2, { grantId: 'a' });
+    const b = await acquireMcpSlot(2, { grantId: 'b' });
+    // The administrator lowered maxInFlight to 1 while this request was uploading.
+    await expect(readmitMcpSlot(a, 1, { grantId: 'a', waitMs: 0 })).rejects.toThrow('MCP_BUSY');
+    expect(mcpSlotUsage()).toEqual({ inFlight: 1, queued: 0 });
+    b();
     expect(mcpSlotUsage()).toEqual({ inFlight: 0, queued: 0 });
   });
 });

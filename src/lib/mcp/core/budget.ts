@@ -124,6 +124,31 @@ export async function acquireMcpSlot(
 ): Promise<() => void> {
   if (admissible(limit, grantId)) return takeSlot(grantId);
   if (waitMs <= 0 || slotQueue.length >= limit * 2) busy();
+  return queueForSlot(limit, grantId, waitMs);
+}
+
+/**
+ * Re-admits a request that already holds a slot under a refreshed policy. The slot is kept while
+ * the refreshed limits still admit it, exactly as a release and a synchronous re-take used to.
+ * Releasing first would hand the slot to a queued waiter and send this request, which already
+ * passed admission, to the back of the queue where it could be shed after doing half its work.
+ */
+export async function readmitMcpSlot(
+  release: () => void,
+  limit: number,
+  options: { grantId?: string; waitMs?: number } = {}
+): Promise<() => void> {
+  const { grantId } = options;
+  if (
+    inFlight <= limit &&
+    (grantId === undefined || (grantInFlight.get(grantId) ?? 0) <= mcpGrantSlotLimit(limit))
+  )
+    return release;
+  release();
+  return acquireMcpSlot(limit, options);
+}
+
+function queueForSlot(limit: number, grantId: string | undefined, waitMs: number) {
   return new Promise<() => void>((resolve, reject) => {
     const waiter: SlotWaiter = {
       limit,

@@ -11,7 +11,7 @@ import {
 } from '@/lib/mcp/protocol/server';
 import { CostBudget } from '@/lib/mcp/core/budget';
 import { McpBoundaryError } from '@/lib/mcp/core/errors';
-import { MCP_MAX_PAGE_SIZE, domainRejection } from '@/lib/mcp/core/execution';
+import { MCP_MAX_PAGE_SIZE, domainRejection, mcpPageSize } from '@/lib/mcp/core/execution';
 import { executeMcpPlan } from '@/lib/mcp/core/plan';
 import { rpcSchema } from '@/lib/mcp/protocol/input';
 import { supportedMcpScopes } from '@/lib/mcp/auth/scopes';
@@ -352,6 +352,44 @@ describe('A5: page size in the wire view', () => {
     expect(described.structuredContent.inputSchema.properties.query.properties.limit.maximum).toBe(
       MCP_MAX_PAGE_SIZE
     );
+  });
+
+  it('advertises the default page size execution actually applies', () => {
+    const base = MCP_CATALOG.find(
+      operation =>
+        isMcpExecutable(operation) &&
+        operation.kind === 'list' &&
+        (operation.inputSchema.properties.query as { properties?: { limit?: unknown } })?.properties
+          ?.limit
+    )!;
+    for (const canonical of [undefined, 10, 50, 100]) {
+      const query = base.inputSchema.properties.query as { properties: Record<string, unknown> };
+      const operation = {
+        ...base,
+        inputSchema: {
+          ...base.inputSchema,
+          properties: {
+            ...base.inputSchema.properties,
+            query: {
+              ...query,
+              properties: {
+                ...query.properties,
+                limit: {
+                  type: 'integer',
+                  ...(canonical === undefined ? {} : { default: canonical }),
+                },
+              },
+            },
+          },
+        },
+      } as typeof base;
+      const wire = clampPageSize(operation, operation.inputSchema);
+      const limit = (
+        wire.properties as Record<string, { properties: Record<string, Record<string, unknown>> }>
+      ).query.properties.limit;
+      // What describe_operation says an omitted limit means is what execution applies.
+      expect(limit.default, String(canonical)).toBe(mcpPageSize(operation, null));
+    }
   });
 });
 
