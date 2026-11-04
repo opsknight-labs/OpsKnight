@@ -35,7 +35,7 @@ export async function expiredConsentReturn(id: string) {
   const target = new URL(request.redirectUri);
   target.searchParams.set('error', 'temporarily_unavailable');
   target.searchParams.set('error_description', friendlyMcpError('MCP_CONSENT_EXPIRED').body);
-  target.searchParams.set('state', request.state);
+  if (request.state) target.searchParams.set('state', request.state);
   target.searchParams.set('iss', mcpIssuer());
   return target.href;
 }

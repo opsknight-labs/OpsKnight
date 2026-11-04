@@ -448,7 +448,7 @@ export async function decideMcpConsent(form: FormData) {
         });
         requireMcp(consumed.count === 1, 'MCP_CONSENT_REPLAY');
         const target = new URL(pending.redirectUri);
-        target.searchParams.set('state', pending.state);
+        if (pending.state) target.searchParams.set('state', pending.state);
         target.searchParams.set('iss', mcpIssuer());
         if (input.decision === 'deny') {
           target.searchParams.set('error', 'access_denied');
