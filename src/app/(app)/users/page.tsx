@@ -1,4 +1,5 @@
 import prisma from '@/lib/prisma';
+import { getAuthenticationPolicy } from '@/lib/authentication-policy';
 import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import type { Prisma, Role, UserStatus } from '@prisma/client';
@@ -120,6 +121,7 @@ export default async function UsersPage({ searchParams }: UsersPageProps) {
   const page = pagination.page;
   const totalPages = pagination.totalPages;
 
+  const { mode: authenticationMode } = await getAuthenticationPolicy();
   const users = await prisma.user.findMany({
     select: {
       id: true,
@@ -132,6 +134,7 @@ export default async function UsersPage({ searchParams }: UsersPageProps) {
       jobTitle: true,
       department: true,
       createdAt: true,
+      roleSource: true,
       teamMemberships: {
         include: {
           team: true,
@@ -253,7 +256,12 @@ export default async function UsersPage({ searchParams }: UsersPageProps) {
             <div>
               <CardTitle className="text-base font-bold">User Directory</CardTitle>
               <CardDescription className="text-xs text-muted-foreground">
-                {formatPaginationSummary(pagination.startItem, pagination.endItem, totalCount, 'users')}
+                {formatPaginationSummary(
+                  pagination.startItem,
+                  pagination.endItem,
+                  totalCount,
+                  'users'
+                )}
               </CardDescription>
             </div>
             <div className="flex items-center gap-2.5">
@@ -275,6 +283,7 @@ export default async function UsersPage({ searchParams }: UsersPageProps) {
             currentUserId={currentUserId}
             isAdmin={isAdmin}
             teams={teams}
+            passwordResetAvailable={authenticationMode !== 'SSO_REQUIRED'}
             updateUserRole={updateUserRole}
             addUserToTeam={addUserToTeam}
             deactivateUser={deactivateUser}
