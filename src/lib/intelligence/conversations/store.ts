@@ -14,6 +14,7 @@ import {
 import { decrypt, encrypt } from '@/lib/encryption';
 import { logger } from '@/lib/logger';
 import { getAiSettings } from '../ai/settings';
+import { withDbBudget } from '../jobs/db-budget';
 
 /**
  * Saved assistant conversations. Off unless an administrator turns history on; each conversation is
@@ -281,25 +282,34 @@ export async function deleteAllConversations(userId: string): Promise<number> {
 }
 
 /**
- * Retention sweep, bounded per call. With history off every saved conversation is removed; otherwise
+ * Retention sweep, bounded per call. With history explicitly off every saved conversation is removed; otherwise
  * conversations idle longer than the configured retention are. Returns true when more may remain.
  */
 export async function purgeConversations(
   now: Date = new Date()
 ): Promise<{ deleted: number; more: boolean }> {
-  const status = await getHistoryStatus();
-  const where = status.enabled
-    ? { updatedAt: { lt: new Date(now.getTime() - status.retentionDays * 86_400_000) } }
-    : {};
-  const batch = await prisma.squireConversation.findMany({
-    where,
-    orderBy: { updatedAt: 'asc' },
-    take: CONVERSATION_LIMITS.purgeBatch,
-    select: { id: true },
+  return withDbBudget({ maxDbMs: 750 }, async tx => {
+    // Availability switches do not withdraw history consent. Continue normal retention when AI
+    // is paused; only the dedicated history flag requests removal of unexpired conversations.
+    const settings = await getAiSettings(tx);
+    const where = settings.squireHistoryEnabled
+      ? {
+          updatedAt: {
+            lt: new Date(now.getTime() - settings.squireHistoryRetentionDays * 86_400_000),
+          },
+        }
+      : {};
+    const batch = await tx.squireConversation.findMany({
+      where,
+      orderBy: [{ updatedAt: 'asc' }, { id: 'asc' }],
+      take: CONVERSATION_LIMITS.purgeBatch,
+      select: { id: true },
+    });
+    if (batch.length === 0) return { deleted: 0, more: false };
+    const { count } = await tx.squireConversation.deleteMany({
+      // Recheck the retention predicate if a conversation changed after candidate selection.
+      where: { ...where, id: { in: batch.map(row => row.id) } },
+    });
+    return { deleted: count, more: batch.length === CONVERSATION_LIMITS.purgeBatch };
   });
-  if (batch.length === 0) return { deleted: 0, more: false };
-  const { count } = await prisma.squireConversation.deleteMany({
-    where: { id: { in: batch.map(row => row.id) } },
-  });
-  return { deleted: count, more: batch.length === CONVERSATION_LIMITS.purgeBatch };
 }

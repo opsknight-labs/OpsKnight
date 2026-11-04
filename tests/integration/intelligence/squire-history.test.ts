@@ -4,6 +4,7 @@ import { updateAiSettings } from '@/lib/intelligence/ai/settings';
 import {
   CONVERSATION_LIMITS,
   getConversation,
+  getHistoryStatus,
   listConversations,
   purgeConversations,
   recordExchange,
@@ -29,12 +30,20 @@ beforeEach(async () => {
   actor.get.mockReset();
 });
 
-async function configure(adminId: string, history: { enabled: boolean; retentionDays?: number }) {
+async function configure(
+  adminId: string,
+  history: {
+    enabled: boolean;
+    retentionDays?: number;
+    aiEnabled?: boolean;
+    assistantEnabled?: boolean;
+  }
+) {
   const current = await db.aiSettings.findUnique({ where: { id: 'default' } });
   await updateAiSettings(
     {
-      enabled: true,
-      squireEnabled: true,
+      enabled: history.aiEnabled ?? true,
+      squireEnabled: history.assistantEnabled ?? true,
       squireName: 'Pip',
       allowExternalFallback: false,
       requestsPerMinutePerUser: 100,
@@ -300,4 +309,35 @@ it('does not attach an envelope to different text after a legacy writer changes 
   const saved = await getConversation(admin.id, id);
   expect(saved?.messages[1].content).toBe('replacement');
   expect(saved?.messages[1].envelope).toBeUndefined();
+});
+
+it.each([
+  { aiEnabled: false, assistantEnabled: true },
+  { aiEnabled: true, assistantEnabled: false },
+])('preserves unexpired owner histories while availability is paused: %o', async flags => {
+  const admin = await createTestUser({ role: 'ADMIN' });
+  const other = await createTestUser({ role: 'RESPONDER' });
+  await configure(admin.id, { enabled: true, retentionDays: 7 });
+  const mine = await recordExchange({
+    userId: admin.id,
+    question: 'Keep my answer',
+    answer: 'Saved.',
+  });
+  const theirs = await recordExchange({
+    userId: other.id,
+    question: 'Keep their answer',
+    answer: 'Saved.',
+  });
+  const expired = await recordExchange({ userId: other.id, question: 'Expired', answer: 'Old.' });
+  await db.$executeRaw`UPDATE "SquireConversation" SET "updatedAt" = now() - interval '8 days' WHERE id = ${expired}`;
+  await configure(admin.id, { enabled: true, retentionDays: 7, ...flags });
+  expect((await getHistoryStatus()).enabled).toBe(false);
+  expect(await purgeConversations()).toEqual({ deleted: 1, more: false });
+  expect((await db.squireConversation.findMany()).map(row => row.id).sort()).toEqual(
+    [mine, theirs].sort()
+  );
+  expect(await db.squireMessage.count()).toBe(4);
+  await configure(admin.id, { enabled: true, retentionDays: 7 });
+  expect((await getConversation(admin.id, mine))?.messages[1].content).toBe('Saved.');
+  expect(await getConversation(admin.id, theirs)).toBeNull();
 });

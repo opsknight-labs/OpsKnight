@@ -327,7 +327,7 @@ export function AiSettingsForm({
       <Check
         name="squireHistoryEnabled"
         label="Let people save assistant conversations"
-        help="Off by default. Conversations are encrypted, visible only to the person who had them (up to 50 each), deleted after the retention period without use, and all deleted within about 15 minutes of turning this off."
+        help="Off by default. Conversations are encrypted, visible only to the person who had them (up to 50 each), and expire after the retention period without use. Pausing AI or hiding the assistant keeps unexpired history. Turning this setting off deletes saved conversations in batches."
         defaultChecked={settings.squireHistoryEnabled}
         disabled={disabled}
       />
