@@ -575,7 +575,7 @@ test.describe.serial('intelligence responder workflows', () => {
   });
   test('freshness explains unfinished analysis and operator refresh uses the native queue', async ({
     page,
-  }) => {
+  }, testInfo) => {
     const source = await prisma.incident.findUniqueOrThrow({
       where: { id: incidentId },
       select: { serviceId: true },
@@ -629,6 +629,10 @@ test.describe.serial('intelligence responder workflows', () => {
       })
     ).toBe(1);
     await expectAccessible(page, '#main-content');
+    await page.screenshot({
+      path: testInfo.outputPath('recommendation-freshness-mobile.png'),
+      fullPage: true,
+    });
     expect(
       await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)
     ).toBe(true);

@@ -223,3 +223,19 @@ Use small reviewable changes: contract/migration, one vertical behavior, failure
 ## Deliberately deferred
 
 Autonomous remediation, pre-paging suppression/holds, automatic adoption of learned rules, unrestricted external knowledge ingestion, fine-tuning and a replacement agent/queue framework. None is required to deliver the foundation improvements above; each would need its own safety and product case.
+
+## Latest local verification — 2026-11-04
+
+The UI refinement and embedding-deployment compatibility follow-ups passed the full unit suite:
+10,928 passed, 7 intentionally skipped, across 1,047 files. Typecheck, zero-warning changed-source lint,
+production build and all 12 Chromium Intelligence browser journeys passed. The mobile freshness view
+was also inspected at 390px, with Axe and horizontal-overflow checks in the browser journey. The
+endpoint-change regression failed before the compatibility fix and passed afterward, including a
+change during an in-flight request. Forty-two retrieval/gateway database cases and twelve freshness
+state cases passed across the targeted runs.
+
+These are local results. The latest published PR revision remains `45beb53af`; the native GitHub push
+attempts for the earlier embedding-clearance commit were rejected server-side during GitHub's active
+Git operations incident. Subsequent follow-ups are committed locally and are not yet published.
+No full-roadmap completion, live-model usefulness, deployment certification or fresh performance
+certification is claimed. The P1-07 and P2-08 through P2-11 acceptance criteria remain open.
