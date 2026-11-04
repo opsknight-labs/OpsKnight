@@ -853,11 +853,11 @@ describe('Auth JWT + OIDC callback contract', () => {
     expect(new Date(result.expires).getTime()).toBe(sessionExpires * 1000);
   });
 
-  it('revokeUserSessions increments tokenVersion', async () => {
+  it('revokeUserSessions increments tokenVersion and revokes MCP access', async () => {
     await revokeUserSessions('u1');
     expect(prisma.user.update).toHaveBeenCalledWith({
       where: { id: 'u1' },
-      data: { tokenVersion: { increment: 1 } },
+      data: { tokenVersion: { increment: 1 }, mcpRevocationVersion: { increment: 1 } },
     });
   });
 });
