@@ -288,7 +288,7 @@ export default async function SecuritySettingsPage() {
                 OpsKnight implements RFC 7644 SCIM 2.0 for automated user lifecycle operations.
               </p>
               <Button variant="ghost" size="sm" asChild className="gap-1 text-xs h-8">
-                <Link href="/settings/system?section=sso">
+                <Link href="/settings/system?section=scim">
                   Configure SCIM Provisioning
                   <ExternalLink className="h-3.5 w-3.5" />
                 </Link>

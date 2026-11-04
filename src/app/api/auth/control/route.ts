@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server';
 import { z } from 'zod/v3';
+import { logger } from '@/lib/logger';
 import { jsonApiOk, jsonError } from '@/lib/api-response';
 import type { RegistrationResponseJSON } from '@simplewebauthn/server';
 import { retryAuthenticationAlert } from '@/lib/auth-control/security-events';
@@ -10,9 +11,10 @@ import {
   authenticationAlertHistory,
   authenticationAlertHistoryStatus,
   identityClaimsPreview,
+  claimsPreviewRulesSchema,
   searchAuthenticationUsers,
 } from '@/lib/auth-control/dashboard';
-import { assertAuthenticationOrigin } from '@/lib/auth-control/origin';
+import { assertAuthenticationOrigin, AuthenticationOriginError } from '@/lib/auth-control/origin';
 import {
   activateOidcRevision,
   beginOidcRevisionTest,
@@ -135,7 +137,14 @@ const schema = z.discriminatedUnion('action', [
     })
     .strict(),
   z.object({ action: z.literal('retireLegacy') }).strict(),
-  z.object({ action: z.literal('claims'), revisionId: id, claims: z.record(z.unknown()) }).strict(),
+  z
+    .object({
+      action: z.literal('claims'),
+      revisionId: id,
+      claims: z.record(z.unknown()),
+      draftRules: claimsPreviewRulesSchema.optional(),
+    })
+    .strict(),
   z
     .object({
       action: z.literal('mode'),
@@ -164,7 +173,7 @@ export async function GET(request: NextRequest) {
     const params = z
       .object({
         section: z
-          .enum(['overview', 'connection', 'access', 'policy', 'emergency', 'diagnostics'])
+          .enum(['overview', 'connection', 'access', 'roles', 'policy', 'emergency', 'diagnostics'])
           .default('overview'),
         view: z.enum(['dashboard', 'admins', 'users', 'alerts']).default('dashboard'),
         q: z.string().max(100).default(''),
@@ -194,7 +203,14 @@ export async function GET(request: NextRequest) {
         maxAge: 0,
       });
     return response;
-  } catch {
+  } catch (error) {
+    // The response stays generic; the reason belongs in the server log for operators.
+    logger.warn('[Auth control] Dashboard request rejected', {
+      component: 'auth-control:route',
+      reason: error instanceof Error ? error.message : 'unknown',
+    });
+    if (error instanceof AuthenticationOriginError)
+      return jsonError(error.message, 409, undefined, headers);
     return jsonError(
       'Authentication administration requires an active administrator or emergency recovery session.',
       403,
@@ -340,7 +356,7 @@ export async function POST(request: NextRequest) {
         await retireLegacyEmergency(actor);
         return json({ success: true });
       case 'claims':
-        return json(await identityClaimsPreview(input.revisionId, input.claims));
+        return json(await identityClaimsPreview(input.revisionId, input.claims, input.draftRules));
       case 'mode':
         if (actor.kind === 'emergency' && input.mode === 'SSO_OPTIONAL')
           return json(await relaxRequiredToOptional(actor, input.expectedVersion));

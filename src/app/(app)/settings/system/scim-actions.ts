@@ -1,6 +1,7 @@
 'use server';
 
 import { z } from 'zod/v3';
+import { describeScimEvent } from '@/lib/scim/activity-format';
 import { adminFailure } from '@/lib/scim/security/admin-errors';
 import prisma from '@/lib/prisma';
 import { getScimConfig } from '@/lib/scim';
@@ -199,14 +200,36 @@ export async function scimDirectoryAction(input: unknown) {
       }),
       prisma.scimEvent.count({ where }),
     ]);
+    const userIds = [
+      ...new Set(
+        rows.filter(r => r.action.startsWith('user.') && r.resourceId).map(r => r.resourceId!)
+      ),
+    ];
+    const people = userIds.length
+      ? await prisma.user.findMany({
+          where: { id: { in: userIds } },
+          select: { id: true, name: true, email: true },
+        })
+      : [];
+    const names = new Map(people.map(person => [person.id, person.name || person.email]));
     return {
       total,
-      rows: rows.map(r => ({
-        id: r.id,
-        label: r.action,
-        detail: `${r.resourceId ?? ''} · Request ${r.requestId} · ${JSON.stringify(r.details)}`,
-        time: r.createdAt.toISOString(),
-      })),
+      rows: rows.map(r => {
+        const described = describeScimEvent(
+          r.action,
+          r.details as Record<string, unknown> | null,
+          r.resourceId ? (names.get(r.resourceId) ?? null) : null
+        );
+        return {
+          id: r.id,
+          label: described.label,
+          detail: described.detail,
+          attention: described.attention,
+          // Kept for support: the provider's request ID correlates with its own logs.
+          requestId: r.requestId,
+          time: r.createdAt.toISOString(),
+        };
+      }),
     };
   } catch (error) {
     return await adminFailure(error);

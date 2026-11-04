@@ -8,6 +8,7 @@ import { redirect } from 'next/navigation';
 import { getDatabaseLocalAuthPolicy } from '@/lib/authentication-policy';
 import prisma from '@/lib/prisma';
 import { logger } from '@/lib/logger';
+import { SIGN_IN_REFERENCE_PATTERN } from '@/lib/auth-control/messages';
 
 export const dynamic = 'force-dynamic';
 
@@ -22,6 +23,9 @@ type SearchParams = {
   error?: string;
   password?: string;
   sessionRevoked?: string;
+  reason?: string;
+  ref?: string;
+  notified?: string;
 };
 
 export default async function LoginPage({
@@ -52,7 +56,16 @@ export default async function LoginPage({
   const ssoCapability = await getOidcRuntimeCapability();
   const localAuthPolicy = await getDatabaseLocalAuthPolicy();
   const ssoEnabled = ssoCapability.runtimeReady && localAuthPolicy.oidcLoginEnabled;
-  const ssoError = localAuthPolicy.oidcLoginEnabled ? ssoCapability.error : null;
+  // Provider validation detail is for administrators (logged and shown in the console);
+  // people signing in only need to know single sign-on is unavailable.
+  if (localAuthPolicy.oidcLoginEnabled && ssoCapability.error) {
+    logger.warn('[Login Page] SSO unavailable', {
+      component: 'login-page',
+      detail: ssoCapability.error,
+    });
+  }
+  const ssoError =
+    localAuthPolicy.oidcLoginEnabled && ssoCapability.error ? 'SSO_NOT_AVAILABLE' : null;
 
   const awaitedSearchParams = await searchParams;
   const rawCallbackUrl =
@@ -89,6 +102,13 @@ export default async function LoginPage({
   const errorCode =
     typeof awaitedSearchParams?.error === 'string' ? awaitedSearchParams.error : null;
   const passwordSet = awaitedSearchParams?.password === '1';
+  const endedReason =
+    typeof awaitedSearchParams?.reason === 'string' ? awaitedSearchParams.reason : null;
+  const reference =
+    typeof awaitedSearchParams?.ref === 'string' &&
+    SIGN_IN_REFERENCE_PATTERN.test(awaitedSearchParams.ref)
+      ? awaitedSearchParams.ref
+      : null;
 
   const credentialEntryEnabled = localAuthPolicy.enabled;
   const breakGlassOnly =
@@ -98,9 +118,14 @@ export default async function LoginPage({
 
   return (
     <LoginClient
+      // A new error in the URL remounts the client so its message state starts fresh.
+      key={`${errorCode ?? ''}:${ssoError ?? ''}:${reference ?? ''}`}
       callbackUrl={callbackUrl}
       defaultCallbackUrl={fallback}
       errorCode={errorCode}
+      errorReference={reference}
+      administratorsNotified={awaitedSearchParams?.notified === '1'}
+      endedReason={endedReason}
       passwordSet={passwordSet}
       sessionRevoked={awaitedSearchParams?.sessionRevoked === '1'}
       ssoError={ssoError}

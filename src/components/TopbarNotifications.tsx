@@ -388,7 +388,8 @@ export default function TopbarNotifications() {
         ? isMobileContext
           ? `/m/incidents/${incidentId}`
           : `/incidents/${incidentId}`
-        : href?.startsWith('/')
+        : // Only same-origin application paths are followed.
+          href?.startsWith('/') && !href.startsWith('//')
           ? href
           : null;
       if (!targetUrl) return;

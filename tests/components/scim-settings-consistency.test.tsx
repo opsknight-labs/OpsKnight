@@ -1,5 +1,5 @@
 import { beforeEach, expect, it, vi } from 'vitest';
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import ScimSettingsSection from '@/components/settings/ScimSettingsSection';
 const actions = vi.hoisted(() => ({
   scimOverviewAction: vi.fn(),
@@ -234,7 +234,7 @@ it('pages to and revokes an older active credential', async () => {
     ],
   }));
   actions.revokeScimCredentialAction.mockResolvedValue(undefined);
-  const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true);
+  const confirm = vi.spyOn(window, 'confirm');
   try {
     render(<ScimSettingsSection initialConfig={config} tenantUrl="https://ops.test/api/scim/v2" />);
     fireEvent.click(screen.getByRole('button', { name: 'Security' }));
@@ -242,6 +242,10 @@ it('pages to and revokes an older active credential', async () => {
     fireEvent.click(screen.getByRole('button', { name: 'Next credentials' }));
     await screen.findByText(/Oldest active credential/);
     fireEvent.click(screen.getByRole('button', { name: 'Revoke credential' }));
+    // An in-app confirmation replaces the browser's confirm().
+    const dialog = await screen.findByRole('alertdialog');
+    expect(dialog).toHaveTextContent('Revoke this credential now?');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Revoke credential' }));
     await waitFor(() => expect(actions.revokeScimCredentialAction).toHaveBeenCalledWith('oldest'));
     fireEvent.change(screen.getByLabelText('Credential status'), { target: { value: 'revoked' } });
     await screen.findByText(/Revoked history/);
@@ -250,6 +254,7 @@ it('pages to and revokes an older active credential', async () => {
       page: 1,
       status: 'revoked',
     });
+    expect(confirm).not.toHaveBeenCalled();
   } finally {
     confirm.mockRestore();
   }

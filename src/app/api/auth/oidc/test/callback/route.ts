@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod/v3';
 import {
   completeOidcRevisionTest,
+  recordOidcRevisionTestProviderError,
   OIDC_TEST_COOKIE,
   OIDC_TEST_RESULT_COOKIE,
   OidcRevisionTestError,
@@ -15,17 +16,27 @@ export async function GET(request: NextRequest) {
   const destination = new URL('/auth/oidc-test-result', await authenticationOrigin());
   const browserToken = request.cookies.get(OIDC_TEST_COOKIE)?.value ?? '';
   let flowId: string | null = null;
-  try {
-    const query = z
-      .object({ code: z.string().min(1).max(4096), state: z.string().min(32).max(128) })
-      .parse({
-        code: request.nextUrl.searchParams.get('code'),
-        state: request.nextUrl.searchParams.get('state'),
-      });
-    flowId = (await completeOidcRevisionTest(query.state, query.code, browserToken)).flowId;
-  } catch (error) {
-    flowId = error instanceof OidcRevisionTestError ? error.flowId : null;
-  }
+  const providerError = request.nextUrl.searchParams.get('error');
+  const returnedState = request.nextUrl.searchParams.get('state');
+  if (providerError && returnedState && returnedState.length <= 128) {
+    flowId = await recordOidcRevisionTestProviderError(
+      returnedState,
+      browserToken,
+      providerError.slice(0, 64),
+      request.nextUrl.searchParams.get('error_description')?.slice(0, 512) ?? null
+    ).catch(() => null);
+  } else
+    try {
+      const query = z
+        .object({ code: z.string().min(1).max(4096), state: z.string().min(32).max(128) })
+        .parse({
+          code: request.nextUrl.searchParams.get('code'),
+          state: request.nextUrl.searchParams.get('state'),
+        });
+      flowId = (await completeOidcRevisionTest(query.state, query.code, browserToken)).flowId;
+    } catch (error) {
+      flowId = error instanceof OidcRevisionTestError ? error.flowId : null;
+    }
   const response = NextResponse.redirect(destination, 303);
   response.headers.set('Cache-Control', 'no-store');
   response.headers.set('Referrer-Policy', 'no-referrer');

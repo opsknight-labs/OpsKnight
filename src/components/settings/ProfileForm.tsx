@@ -29,6 +29,10 @@ type Props = {
   jobTitle?: string | null;
   avatarUrl?: string | null;
   lastOidcSync?: string | null;
+  /** Connected to single sign-on, by identity or sync, consistent with the Security page. */
+  ssoLinked?: boolean;
+  /** Fields the directory or SSO overwrites, with who manages them. */
+  managedFields?: Partial<Record<'name' | 'department' | 'jobTitle', string>>;
 };
 
 const profileSchema = z.object({
@@ -48,6 +52,8 @@ export default function ProfileForm({
   jobTitle,
   avatarUrl,
   lastOidcSync,
+  ssoLinked = Boolean(lastOidcSync),
+  managedFields = {},
 }: Props) {
   const router = useRouter();
   const { update } = useSession();
@@ -286,9 +292,12 @@ export default function ProfileForm({
                 <Input
                   id="name"
                   {...form.register('name')}
+                  readOnly={Boolean(managedFields.name)}
+                  aria-describedby={managedFields.name ? 'name-managed' : undefined}
                   placeholder="e.g. Dushyant Rahangdale"
                   className="w-full max-w-md"
                 />
+                <ManagedNote id="name-managed" source={managedFields.name} />
               </SettingsRow>
 
               <SettingsRow
@@ -299,9 +308,12 @@ export default function ProfileForm({
                 <Input
                   id="department"
                   {...form.register('department')}
+                  readOnly={Boolean(managedFields.department)}
+                  aria-describedby={managedFields.department ? 'department-managed' : undefined}
                   placeholder="e.g. Infrastructure, Security, Platform"
                   className="w-full max-w-md"
                 />
+                <ManagedNote id="department-managed" source={managedFields.department} />
               </SettingsRow>
 
               <SettingsRow
@@ -312,9 +324,12 @@ export default function ProfileForm({
                 <Input
                   id="jobTitle"
                   {...form.register('jobTitle')}
+                  readOnly={Boolean(managedFields.jobTitle)}
+                  aria-describedby={managedFields.jobTitle ? 'jobTitle-managed' : undefined}
                   placeholder="e.g. Lead Site Reliability Engineer"
                   className="w-full max-w-md"
                 />
+                <ManagedNote id="jobTitle-managed" source={managedFields.jobTitle} />
               </SettingsRow>
             </div>
           </SettingsSection>
@@ -355,19 +370,21 @@ export default function ProfileForm({
             label="Authentication"
             description="Identity provider and session management"
           >
-            {lastOidcSync ? (
+            {ssoLinked ? (
               <div className="flex items-center gap-2">
                 <Badge
                   variant="outline"
                   className="text-xs bg-primary/5 text-primary border-primary/20"
                 >
-                  SSO Linked
+                  Single sign-on
                 </Badge>
-                <span className="text-xs text-muted-foreground">Synced {lastOidcSync}</span>
+                {lastOidcSync && (
+                  <span className="text-xs text-muted-foreground">Synced {lastOidcSync}</span>
+                )}
               </div>
             ) : (
               <Badge variant="outline" className="text-xs text-muted-foreground">
-                Direct Account
+                Password
               </Badge>
             )}
           </SettingsRow>
@@ -378,5 +395,15 @@ export default function ProfileForm({
         </div>
       </SettingsSection>
     </div>
+  );
+}
+
+/** Explains why a profile field cannot be edited here, and where to change it instead. */
+function ManagedNote({ id, source }: { id: string; source?: string }) {
+  if (!source) return null;
+  return (
+    <p id={id} className="mt-1 text-xs text-muted-foreground">
+      Managed by {source}. Ask your administrator to change it there.
+    </p>
   );
 }

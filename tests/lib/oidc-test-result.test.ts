@@ -62,11 +62,44 @@ describe('administrator test result page evidence', () => {
       outcome: 'failed',
       revisionId: 'rev-1',
       reason: 'failed',
+      code: 'UNKNOWN',
+      diagnostics: {},
     });
     expect(prisma.oidcRevisionTest.findFirst).toHaveBeenCalledWith({
       where: { revisionId: 'rev-1', adminUserId: 'admin-1', verifiedAt: { gte: createdAt } },
       orderBy: { verifiedAt: 'desc' },
     });
+  });
+
+  it('returns the recorded failure code and claim diagnostics', async () => {
+    vi.mocked(prisma.oidcTestFlow.findUnique).mockResolvedValue({
+      id: flowId,
+      revisionId: 'rev-1',
+      adminUserId: 'admin-1',
+      browserHash: digest(browserToken),
+      consumedAt: new Date(),
+      createdAt,
+      failureCode: 'EMAIL_MISMATCH',
+      diagnostics: { receivedEmail: 'a***@example.com', expectedEmail: 'b***@example.com' },
+    } as never);
+    expect(await readOidcTestResult(reference)).toMatchObject({
+      outcome: 'failed',
+      code: 'EMAIL_MISMATCH',
+      diagnostics: { receivedEmail: 'a***@example.com' },
+    });
+  });
+
+  it('never trusts an unknown stored failure code', async () => {
+    vi.mocked(prisma.oidcTestFlow.findUnique).mockResolvedValue({
+      id: flowId,
+      revisionId: 'rev-1',
+      adminUserId: 'admin-1',
+      browserHash: digest(browserToken),
+      consumedAt: new Date(),
+      createdAt,
+      failureCode: 'SOMETHING_ELSE',
+    } as never);
+    expect(await readOidcTestResult(reference)).toMatchObject({ code: 'UNKNOWN' });
   });
 
   it('reports a precise reason when the revision was deleted during the test', async () => {
@@ -75,6 +108,8 @@ describe('administrator test result page evidence', () => {
       outcome: 'failed',
       revisionId: null,
       reason: 'deleted',
+      code: 'REVISION_DELETED',
+      diagnostics: {},
     });
   });
 
@@ -86,6 +121,7 @@ describe('administrator test result page evidence', () => {
       revisionId: 'rev-1',
       verifiedAt: verifiedAt.toISOString(),
       expiresAt: new Date(verifiedAt.getTime() + PROOF_MAX_AGE_MS).toISOString(),
+      diagnostics: {},
     });
   });
 });

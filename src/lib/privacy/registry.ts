@@ -87,6 +87,7 @@ export const personalDataRegistry = [
       'issuerFingerprint',
       'emailAtLink',
       'expectedEmail',
+      'claimSnapshot',
     ],
     purpose: ['Authentication', 'safe identity linking', 'identity lifecycle'],
     classifications: ['PERSONAL', 'SENSITIVE'],

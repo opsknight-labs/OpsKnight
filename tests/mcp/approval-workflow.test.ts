@@ -81,6 +81,10 @@ describe('approval notification links', () => {
     ).toBeNull();
     expect(inAppNotificationHref({ entityType: 'INCIDENT', entityId: 'i1' })).toBeNull();
     expect(inAppNotificationHref({ entityType: 'MCP_APPROVAL', entityId: null })).toBeNull();
+    // SSO link requests (from main) still open the SSO access screen.
+    expect(inAppNotificationHref({ entityType: 'SSO_LINK_REQUEST', entityId: 'u1' })).toBe(
+      '/settings/system?section=sso&authTab=access&linking=requested'
+    );
   });
 });
 

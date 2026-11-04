@@ -50,6 +50,7 @@ export const USER_REFERENCE_POLICY = {
   scimIdentities: { deactivate: 'DENY_AUTH', delete: 'CASCADE' },
   scimMemberships: { deactivate: 'KEEP', delete: 'CASCADE' },
   oidcLinkingApproval: { deactivate: 'REVOKE', delete: 'CASCADE' },
+  oidcLinkingRequest: { deactivate: 'REVOKE', delete: 'CASCADE' },
   avatar: { deactivate: 'KEEP', delete: 'CASCADE' },
   dashboards: { deactivate: 'REPORT', delete: 'BLOCK' },
   savedReports: { deactivate: 'KEEP', delete: 'CASCADE' },

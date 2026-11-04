@@ -1,108 +1,109 @@
 'use client';
-import { hasBroadAdministratorRule } from '@/lib/auth-control/provider-definitions';
+import { useState } from 'react';
 import { useAuthenticationWorkspace } from './useAuthenticationController';
-import { authenticationRequest } from './request';
-import AuthenticationActionGuard, { actionAvailability } from './AuthenticationActionGuard';
 import { Button } from '@/components/ui/shadcn/button';
 import { Badge } from '@/components/ui/shadcn/badge';
-import AuthenticationRoleRules from '../AuthenticationRoleRules';
 import AuthenticationUserDirectory from '../AuthenticationUserDirectory';
-import { Users, AlertTriangle, CheckCircle2, Sparkles, Code2, ChevronDown } from 'lucide-react';
+import HelpHint from './HelpHint';
+import { authDocs } from './setup-steps';
+import {
+  approveOidcLinkingBulk,
+  dismissOidcLinkingRequest,
+  previewOidcLinkingBulk,
+} from '@/app/(app)/users/oidc-actions';
+import { Users, UserCheck, Inbox, ShieldCheck } from 'lucide-react';
+
+type BulkPreview = {
+  count: number;
+  sample: Array<{ id: string; name: string | null; email: string }>;
+};
+
+/** Per provider, what actually limits who can sign in. */
+function boundaryExplanation(providerType: string) {
+  switch (providerType) {
+    case 'azure':
+      return 'Microsoft Entra limits sign-in to your tenant automatically, so allowed domains are not used to block sign-in. Use them for domain-trusted linking below.';
+    case 'google':
+      return 'Google Workspace is checked with the signed hosted-domain (hd) claim, so only accounts in these Workspace domains can sign in.';
+    case 'auth0':
+      return 'Only verified emails in these domains can sign in. Set the Auth0 organization in Connect provider to restrict by organization as well.';
+    default:
+      return 'Only people whose provider reports a verified email in these domains can sign in. Leave empty to rely on who is assigned to the app in your provider.';
+  }
+}
 
 export default function AuthenticationAccessWorkspace() {
   const {
-    draftDirty,
-    setActiveTab,
-    setDraftDirty,
     data,
     configuration,
     domainText,
     setDomainText,
     revisionId,
-    profileJson,
-    setProfileJson,
-    claims,
-    setClaims,
-    claimResult,
-    setClaimResult,
     fieldErrors,
-    broadAcknowledged,
-    setBroadAcknowledged,
-    busy,
-    hydrated,
     pending,
     perform,
     update,
     setMessage,
+    refresh,
     inputClass,
     sectionClass,
     scimSection,
   } = useAuthenticationWorkspace();
+  const [scope, setScope] = useState<'domain' | 'all'>(
+    configuration.allowedDomains.length ? 'domain' : 'all'
+  );
+  const [expiryDays, setExpiryDays] = useState(14);
+  const [preview, setPreview] = useState<BulkPreview | null>(null);
+  const isEntra = configuration.providerType === 'azure';
+  const bulkInput = {
+    scope,
+    ...(scope === 'domain' ? { domains: configuration.allowedDomains } : {}),
+    ...(revisionId ? { revisionId } : {}),
+    expiryDays,
+  } as const;
 
   return (
-    <section id="authentication-2" className={sectionClass} aria-labelledby="auth-access-title">
-      <header className="flex flex-wrap items-start justify-between gap-4 pb-4 border-b">
-        <div className="space-y-1">
-          <div className="flex items-center gap-2">
-            <div className="p-2 rounded-lg bg-primary/10 text-primary">
-              <Users className="h-4 w-4" />
-            </div>
-            <h2 id="auth-access-title" className="text-base sm:text-lg font-bold text-foreground">
-              Access &amp; provisioning
-            </h2>
-            <Badge variant="outline" className="text-xs">
-              {configuration.autoProvision ? 'JIT Enabled' : 'JIT Disabled'}
-            </Badge>
+    <section className={sectionClass} aria-labelledby="auth-access-title">
+      <header className="space-y-1 border-b pb-4">
+        <div className="flex items-center gap-2">
+          <div className="rounded-lg bg-primary/10 p-2 text-primary">
+            <Users className="h-4 w-4" />
           </div>
-          <p className="text-xs text-muted-foreground leading-relaxed">
-            Configure automated user onboarding, allowed email domains, and identity claim-to-role
-            mappings.
-          </p>
+          <h2 id="auth-access-title" className="text-base font-bold text-foreground sm:text-lg">
+            Who can sign in
+          </h2>
         </div>
+        <p className="text-xs leading-relaxed text-muted-foreground">
+          Decide who gets a new account on first sign-in, and how people who already have an
+          OpsKnight account connect it to single sign-on.
+        </p>
       </header>
 
-      {/* 1. JIT Account Provisioning Card */}
-      <div className="rounded-xl border bg-card p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-xs">
-        <div className="space-y-0.5">
-          <div className="flex items-center gap-2">
-            <span className="font-semibold text-sm text-foreground">
-              Just-In-Time (JIT) Provisioning
-            </span>
-            <Badge
-              variant={configuration.autoProvision ? 'success' : 'neutral'}
-              className="text-[10px]"
-            >
-              {configuration.autoProvision ? 'Active' : 'Disabled'}
-            </Badge>
-          </div>
-          <p className="text-xs text-muted-foreground leading-relaxed">
-            Automatically register a local user account when an authorized employee signs in via SSO
-            for the first time.
-          </p>
-        </div>
-        <label className="flex items-center gap-2.5 text-sm font-medium shrink-0 cursor-pointer">
+      <div className="space-y-4 rounded-xl border bg-card p-4 shadow-xs sm:p-5">
+        <h3 className="text-sm font-semibold text-foreground">New people</h3>
+        <label className="flex cursor-pointer items-start gap-2.5 text-sm">
           <input
             type="checkbox"
-            className="h-4 w-4 rounded border-input text-primary focus:ring-primary"
+            className="mt-0.5 h-4 w-4 rounded border-input"
             disabled={pending}
             checked={configuration.autoProvision}
             onChange={event => update('autoProvision', event.target.checked)}
           />
-          <span>JIT account provisioning</span>
-        </label>
-      </div>
-
-      {/* 2. Allowed Domains Card */}
-      <div className="rounded-xl border bg-card p-4 sm:p-5 space-y-3 shadow-xs">
-        <label className="block space-y-1.5 text-sm">
-          <div className="flex items-center justify-between gap-2">
-            <span className="font-semibold text-foreground text-xs uppercase tracking-wider">
-              Allowed domains (comma separated; Google enforces signed hd)
+          <span className="space-y-0.5">
+            <span className="block font-medium">Create an account on first sign-in</span>
+            <span className="block text-xs text-muted-foreground">
+              Anyone your identity provider lets sign in to OpsKnight gets an account with the role
+              from Roles &amp; teams. Turn off to allow only people you invite.
             </span>
-            <Badge variant="outline" className="text-[10px]">
-              Security Filter
-            </Badge>
-          </div>
+          </span>
+        </label>
+        <label className="block space-y-1.5 text-sm">
+          <span className="flex items-center gap-1 text-xs font-semibold text-foreground">
+            Allowed email domains
+            <HelpHint label="About allowed domains" href={authDocs.configure}>
+              {boundaryExplanation(configuration.providerType)}
+            </HelpHint>
+          </span>
           <input
             className={inputClass}
             disabled={pending}
@@ -110,206 +111,235 @@ export default function AuthenticationAccessWorkspace() {
             aria-describedby="auth-domains-help"
             id="auth-field-allowedDomains"
             value={domainText}
-            placeholder="example.com, subsidiary.org"
+            placeholder="example.com, subsidiary.example"
             onChange={event => {
               update(
                 'allowedDomains',
                 event.target.value
                   .split(',')
-                  .map(value => value.trim())
+                  .map(value => value.trim().toLowerCase())
                   .filter(Boolean)
               );
               setDomainText(event.target.value);
+              setPreview(null);
             }}
           />
           <span
             id="auth-domains-help"
-            className="block text-xs text-muted-foreground leading-relaxed"
+            className="block text-xs leading-relaxed text-muted-foreground"
           >
-            {fieldErrors.allowedDomains ??
-              'Optional. Add each permitted domain separated by a comma. Google validates signed hosted-domain claims.'}
+            {fieldErrors.allowedDomains ?? boundaryExplanation(configuration.providerType)}
           </span>
         </label>
       </div>
 
-      {/* 3. Role Mapping Rules */}
-      <div id="auth-field-roleMapping" tabIndex={-1} className="space-y-2">
-        <AuthenticationRoleRules
-          rules={configuration.roleMapping}
-          onChange={rules => {
-            update('roleMapping', rules);
-            setBroadAcknowledged(false);
-          }}
-          disabled={busy || !hydrated}
-        />
-        {fieldErrors.roleMapping && (
-          <p
-            role="alert"
-            className="text-xs text-destructive font-medium flex items-center gap-1.5 pt-1"
-          >
-            <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
-            {fieldErrors.roleMapping}
+      <div className="space-y-4 rounded-xl border bg-card p-4 shadow-xs sm:p-5">
+        <div className="flex items-center gap-1">
+          <h3 className="text-sm font-semibold text-foreground">
+            People who already have an account
+          </h3>
+          <HelpHint label="About linking existing accounts" href={authDocs.linking}>
+            An existing account connects to single sign-on on its first SSO sign-in. Matching email
+            alone never connects an account: either you approve it, or you trust your verified
+            company domain.
+          </HelpHint>
+        </div>
+
+        <label className="flex cursor-pointer items-start gap-2.5 text-sm">
+          <input
+            type="checkbox"
+            className="mt-0.5 h-4 w-4 rounded border-input"
+            disabled={pending || configuration.allowedDomains.length === 0}
+            checked={configuration.domainTrustedLinking}
+            onChange={event => update('domainTrustedLinking', event.target.checked)}
+          />
+          <span className="space-y-0.5">
+            <span className="flex flex-wrap items-center gap-2 font-medium">
+              Connect accounts automatically for verified company emails
+              <Badge variant="outline" className="text-[10px]">
+                Recommended
+              </Badge>
+            </span>
+            <span className="block text-xs text-muted-foreground">
+              {configuration.allowedDomains.length === 0
+                ? 'Add an allowed domain first.'
+                : `By turning this on you confirm every verified @${configuration.allowedDomains.join(', @')} mailbox belongs to someone your company controls. Those people connect on first sign-in without approval. Administrators always need your approval.${isEntra ? ' Microsoft Entra must also send the xms_edov claim: add it as an optional ID token claim.' : ''}`}
+            </span>
+          </span>
+        </label>
+
+        <div className="space-y-3 rounded-lg border bg-muted/20 p-3">
+          <p className="flex items-center gap-2 text-xs font-semibold text-foreground">
+            <UserCheck className="h-3.5 w-3.5" />
+            Approve existing accounts in bulk
           </p>
-        )}
+          <p className="text-xs text-muted-foreground">
+            Prepares everyone so their first SSO sign-in just works. You can do this before turning
+            SSO on. Each approval is for this provider and the person&apos;s own email, and is used
+            once.
+          </p>
+          <div className="flex flex-wrap items-end gap-3">
+            <label className="space-y-1 text-xs font-medium">
+              Who
+              <select
+                className={inputClass}
+                value={scope}
+                disabled={pending}
+                onChange={event => {
+                  setScope(event.target.value as 'domain' | 'all');
+                  setPreview(null);
+                }}
+              >
+                {configuration.allowedDomains.length > 0 && (
+                  <option value="domain">Everyone in the allowed domains</option>
+                )}
+                <option value="all">Everyone</option>
+              </select>
+            </label>
+            <label className="space-y-1 text-xs font-medium">
+              Approval lasts
+              <select
+                className={inputClass}
+                value={expiryDays}
+                disabled={pending}
+                onChange={event => setExpiryDays(Number(event.target.value))}
+              >
+                {[7, 14, 30].map(days => (
+                  <option key={days} value={days}>
+                    {days} days
+                  </option>
+                ))}
+              </select>
+            </label>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={pending || (!revisionId && !data.activeProvider)}
+              onClick={() =>
+                void perform(async () => {
+                  const result = await previewOidcLinkingBulk(bulkInput);
+                  if ('error' in result && result.error) throw new Error(result.error);
+                  setPreview(result as BulkPreview);
+                })
+              }
+            >
+              Preview
+            </Button>
+          </div>
+          {!revisionId && !data.activeProvider && (
+            <p className="text-xs text-muted-foreground">Save your provider connection first.</p>
+          )}
+          {preview && (
+            <div className="space-y-2 text-xs" role="status">
+              {preview.count === 0 ? (
+                <p>Everyone in this group is already connected or approved.</p>
+              ) : (
+                <>
+                  <p>
+                    <strong>{preview.count}</strong> {preview.count === 1 ? 'person' : 'people'}{' '}
+                    will be approved
+                    {preview.sample.length > 0 &&
+                      `, including ${preview.sample
+                        .slice(0, 5)
+                        .map(person => person.name || person.email)
+                        .join(', ')}`}
+                    . Administrators are not included; approve them one by one below.
+                  </p>
+                  <Button
+                    size="sm"
+                    disabled={pending}
+                    onClick={() =>
+                      void perform(async () => {
+                        const result = await approveOidcLinkingBulk(bulkInput);
+                        if ('error' in result && result.error) throw new Error(result.error);
+                        setPreview(null);
+                        await refresh();
+                        setMessage(
+                          `Approved ${'approved' in result ? result.approved : 0} people for ${expiryDays} days.${
+                            'remaining' in result && result.remaining
+                              ? ` ${result.remaining} more remain; run it again to continue.`
+                              : ''
+                          }`
+                        );
+                      })
+                    }
+                  >
+                    <ShieldCheck className="mr-1.5 h-3.5 w-3.5" />
+                    Approve {preview.count} {preview.count === 1 ? 'person' : 'people'}
+                  </Button>
+                </>
+              )}
+            </div>
+          )}
+        </div>
       </div>
 
-      {hasBroadAdministratorRule(configuration.roleMapping) && (
-        <div
-          role="note"
-          className="space-y-2.5 rounded-xl border border-amber-500/40 bg-amber-500/10 p-4 text-xs text-amber-900 dark:text-amber-100 shadow-xs"
-        >
-          <div className="flex items-center gap-2 font-bold text-amber-800 dark:text-amber-200">
-            <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0" />
-            <span>Broad Administrator Grant Warning</span>
-          </div>
-          <p className="leading-relaxed">
-            This rule can grant administrator access broadly. Prefer an exact match on a dedicated
-            administrator group.
-          </p>
-          <label className="flex items-start gap-2 cursor-pointer font-medium pt-1">
-            <input
-              type="checkbox"
-              className="mt-0.5 rounded border-input"
-              disabled={pending}
-              checked={broadAcknowledged}
-              onChange={event => setBroadAcknowledged(event.target.checked)}
-            />
-            <span>I explicitly acknowledge this broadly matching administrator rule.</span>
-          </label>
+      {data.linkingRequests.length > 0 && (
+        <div className="space-y-3 rounded-xl border border-amber-500/30 bg-amber-500/5 p-4 shadow-xs sm:p-5">
+          <h3 className="flex items-center gap-2 text-sm font-semibold text-foreground">
+            <Inbox className="h-4 w-4" />
+            Waiting for your approval ({data.linkingRequestCount})
+          </h3>
+          <ul className="divide-y rounded-lg border bg-card">
+            {data.linkingRequests.map(request => (
+              <li
+                key={request.userId}
+                className="flex flex-wrap items-center justify-between gap-2 p-3 text-xs"
+              >
+                <span className="min-w-0">
+                  <span className="block font-medium text-foreground">
+                    {request.name || request.email}
+                    {request.role === 'ADMIN' && (
+                      <Badge variant="outline" className="ml-2 text-[10px]">
+                        Administrator
+                      </Badge>
+                    )}
+                  </span>
+                  <span className="text-muted-foreground">
+                    {request.email} · tried {request.attempts}{' '}
+                    {request.attempts === 1 ? 'time' : 'times'}
+                    {request.reason === 'OIDC_LINK_APPROVAL_EXPIRED' ? ' · approval expired' : ''}
+                  </span>
+                </span>
+                <span className="flex gap-2">
+                  <Button
+                    size="sm"
+                    disabled={pending}
+                    onClick={() =>
+                      void perform(async () => {
+                        const result = await approveOidcLinkingBulk({
+                          scope: 'selected',
+                          userIds: [request.userId],
+                          ...(revisionId ? { revisionId } : {}),
+                          expiryDays,
+                        });
+                        if ('error' in result && result.error) throw new Error(result.error);
+                        await refresh();
+                        setMessage(`${request.name || request.email} can now sign in with SSO.`);
+                      })
+                    }
+                  >
+                    Approve
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    disabled={pending}
+                    onClick={() =>
+                      void perform(async () => {
+                        await dismissOidcLinkingRequest(request.userId);
+                        await refresh();
+                      })
+                    }
+                  >
+                    Dismiss
+                  </Button>
+                </span>
+              </li>
+            ))}
+          </ul>
         </div>
       )}
-
-      {/* 4. Profile Claim Mapping Card */}
-      <div className="rounded-xl border bg-card p-4 sm:p-5 space-y-3 shadow-xs">
-        <label className="block space-y-1.5 text-sm">
-          <div className="flex items-center justify-between gap-2">
-            <span className="font-semibold text-foreground text-xs uppercase tracking-wider">
-              Profile claim mapping (department, jobTitle, avatarUrl)
-            </span>
-            <Badge variant="outline" className="text-[10px] font-mono">
-              JSON Mapping
-            </Badge>
-          </div>
-          <textarea
-            className={`${inputClass} font-mono text-xs`}
-            rows={3}
-            disabled={pending}
-            aria-invalid={Boolean(fieldErrors.profileMapping)}
-            aria-describedby="auth-profile-help"
-            id="auth-field-profileMapping"
-            value={profileJson}
-            placeholder='{ "department": "dept", "jobTitle": "title" }'
-            onChange={event => {
-              setProfileJson(event.target.value);
-              setDraftDirty(true);
-            }}
-          />
-        </label>
-        <p id="auth-profile-help" className="text-xs text-muted-foreground leading-relaxed">
-          {fieldErrors.profileMapping ??
-            'Map each supported profile field to a signed claim name using a JSON object.'}
-        </p>
-        <p className="text-xs text-muted-foreground border-t pt-2">
-          Use the shared draft bar above to save changes with <strong>Stage configuration</strong>,
-          then repeat the sign-in test. SCIM owns lifecycle independently of OIDC sign-in.
-        </p>
-      </div>
-
-      {/* 5. Sample Claims Sandbox */}
-      <div className="rounded-xl border bg-muted/20 p-4 sm:p-5 space-y-4 shadow-xs">
-        <div className="flex items-center gap-2 pb-2 border-b">
-          <Code2 className="h-4 w-4 text-primary" />
-          <h3 className="text-sm font-bold text-foreground">Sample Claims Evaluation Sandbox</h3>
-        </div>
-        <label className="block space-y-1.5 text-sm">
-          <span className="font-semibold text-foreground text-xs uppercase tracking-wider">
-            Sample claims for identity and role preview (never paste tokens)
-          </span>
-          <textarea
-            className={`${inputClass} font-mono text-xs`}
-            rows={6}
-            value={claims}
-            placeholder='{ "sub": "123456", "email": "admin@example.com", "groups": ["opsknight-admins"] }'
-            onChange={event => {
-              setClaims(event.target.value);
-              setClaimResult(null);
-            }}
-          />
-        </label>
-
-        <AuthenticationActionGuard
-          availability={actionAvailability('Preview claims', [
-            pending && { code: 'busy', message: 'Wait for the current operation.' },
-            draftDirty && {
-              code: 'draft',
-              message: 'Stage the shared draft before evaluating saved role rules.',
-              resolutionTarget: 'connection',
-            },
-            !revisionId && {
-              code: 'revision',
-              message: 'Select a staged configuration first.',
-              resolutionTarget: 'connection',
-            },
-          ])}
-          onResolve={setActiveTab}
-        >
-          <Button
-            variant="outline"
-            className="gap-1.5"
-            onClick={() =>
-              void perform(async () => {
-                setClaimResult(
-                  await authenticationRequest({
-                    action: 'claims',
-                    revisionId,
-                    claims: JSON.parse(claims),
-                  })
-                );
-                setMessage('Identity and role preview generated.');
-              })
-            }
-          >
-            <Sparkles className="h-3.5 w-3.5 text-primary" />
-            Preview identity and roles
-          </Button>
-        </AuthenticationActionGuard>
-
-        {claimResult && !draftDirty && (
-          <div
-            className="space-y-3 rounded-xl border border-border bg-card p-4 text-xs shadow-xs"
-            role="status"
-          >
-            <div className="flex items-center gap-2 font-semibold text-foreground">
-              <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-              <span>
-                {'identityRecognized' in claimResult && claimResult.identityRecognized
-                  ? 'Identity recognized'
-                  : claimResult.reason}
-              </span>
-            </div>
-            {claimResult.administratorVerification && (
-              <p
-                className={`font-medium ${
-                  claimResult.administratorVerification.ready
-                    ? 'text-emerald-700 dark:text-emerald-300'
-                    : 'text-amber-700 dark:text-amber-300'
-                }`}
-              >
-                {claimResult.administratorVerification.reason}
-              </p>
-            )}
-            <details className="group pt-2 border-t">
-              <summary className="flex items-center justify-between cursor-pointer text-xs font-semibold text-muted-foreground hover:text-foreground select-none list-none">
-                <span>Claim evaluation details</span>
-                <ChevronDown className="h-3.5 w-3.5 transition-transform duration-200 group-open:rotate-180" />
-              </summary>
-              <pre className="mt-2 max-w-full overflow-auto whitespace-pre-wrap break-all rounded-lg bg-muted p-3 font-mono text-[11px] leading-relaxed">
-                {JSON.stringify(claimResult, null, 2)}
-              </pre>
-            </details>
-          </div>
-        )}
-      </div>
 
       {data.actor.kind === 'admin' && <AuthenticationUserDirectory />}
 

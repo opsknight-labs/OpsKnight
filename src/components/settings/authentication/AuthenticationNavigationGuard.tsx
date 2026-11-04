@@ -80,14 +80,12 @@ export default function AuthenticationNavigationGuard() {
     >
       <DialogContent>
         <DialogTitle>
-          {generatedRecovery
-            ? 'Store your recovery password first'
-            : 'Leave with unstaged changes?'}
+          {generatedRecovery ? 'Store your recovery password first' : 'Leave with unsaved changes?'}
         </DialogTitle>
         <DialogDescription>
           {generatedRecovery
             ? 'Acknowledge secure storage in the password display before leaving this workspace.'
-            : 'Your provider, access and session edits are held only in this browser tab. Leaving discards the shared draft.'}
+            : 'Your changes are not saved yet. Leaving discards them.'}
         </DialogDescription>
         <div className="flex flex-wrap gap-2">
           <Button variant="outline" onClick={() => setDestination(null)}>

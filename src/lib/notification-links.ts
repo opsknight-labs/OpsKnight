@@ -7,6 +7,9 @@ export function inAppNotificationHref(notification: {
   entityId: string | null;
 }): string | null {
   const { entityType, entityId } = notification;
+  // Non-incident notifications that need an administrator's action open its screen.
+  if (entityType === 'SSO_LINK_REQUEST')
+    return '/settings/system?section=sso&authTab=access&linking=requested';
   if (!entityId) return null;
   if (entityType === 'MCP_APPROVAL') {
     // Operation approvals are cuids; runbook previews are 64-character hex digests.

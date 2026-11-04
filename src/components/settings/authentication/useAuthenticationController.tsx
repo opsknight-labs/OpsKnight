@@ -74,7 +74,15 @@ export function useAuthenticationController({
       const param = new URLSearchParams(window.location.search).get('authTab');
       if (
         param &&
-        ['overview', 'connection', 'access', 'policy', 'recovery', 'diagnostics'].includes(param)
+        [
+          'overview',
+          'connection',
+          'access',
+          'roles',
+          'policy',
+          'emergency',
+          'diagnostics',
+        ].includes(param)
       ) {
         return param as AuthenticationSection;
       }
@@ -134,6 +142,22 @@ export function useAuthenticationController({
   const sectionLoading = data.section !== activeTab && failedSection !== activeTab;
   const sectionRequestPending = sectionLoading;
   const [initialConfiguration] = useState<ProviderConfiguration>(() => {
+    // Before activation, continue from the saved configuration being worked on (for example
+    // after returning from the sign-in test) rather than an empty default draft.
+    const savedRevision = initialData.activeProvider
+      ? null
+      : initialData.revisions.find(
+          revision =>
+            revision.id ===
+            reconcileRevisionSelection(
+              initialData.revisions,
+              typeof window !== 'undefined'
+                ? (new URLSearchParams(window.location.search).get('revisionId') ?? '')
+                : '',
+              initialData.activeRevisionId
+            )
+        );
+    if (savedRevision) return editable(savedRevision.configuration);
     if (!initialData.activeProvider)
       return {
         issuer: initialData.providerCompatibilityWarning ? '' : 'https://accounts.google.com',
@@ -151,6 +175,11 @@ export function useAuthenticationController({
         profileMapping: {},
         sessionMaxAgeSeconds: null,
         sessionIdleTimeoutSeconds: null,
+        defaultRole: 'USER',
+        unmatchedPolicy: 'DEFAULT_ROLE',
+        rolePrecedence: 'HIGHEST_ROLE',
+        domainTrustedLinking: false,
+        teamMapping: [],
       };
     return editable(initialData.activeProvider);
   });
@@ -165,7 +194,14 @@ export function useAuthenticationController({
     draftDirty,
     setDraftDirty,
     discard,
+    restorable,
+    restore,
+    dismissRestorable,
   } = useAuthenticationDraft(initialConfiguration);
+  // Survives the provider form remounting when the provider changes.
+  const [providerChosen, setProviderChosen] = useState(
+    Boolean(initialData.activeProvider) || initialData.revisions.length > 0
+  );
   const [draftBaseConfigVersion, setDraftBaseConfigVersion] = useState(
     initialData.providerConfigVersion
   );
@@ -208,7 +244,7 @@ export function useAuthenticationController({
       ? data.actor.id
       : (data.users.find(user => user.role === 'ADMIN' && user.status === 'ACTIVE')?.id ?? '')
   );
-  const [claims, setClaims] = useState('{}');
+  const [claims, setClaims] = useState('');
   const [claimResult, setClaimResult] = useState<Awaited<
     ReturnType<typeof import('@/lib/auth-control/dashboard').identityClaimsPreview>
   > | null>(null);
@@ -332,11 +368,12 @@ export function useAuthenticationController({
     if (!parsed.success || Object.keys(errors).length) {
       setFieldErrors(errors);
       setMessageError(true);
-      setMessage('Check the highlighted draft fields before staging.');
+      setMessage('Fix the highlighted fields, then save again.');
       return false;
     }
     setFieldErrors({});
-    return perform(async () => {
+    let stagedRevisionId: string | null = null;
+    const saved = await perform(async () => {
       const result = await authenticationRequest<{ revisionId: string }>({
         action: 'stage',
         configuration: parsed.data,
@@ -351,10 +388,12 @@ export function useAuthenticationController({
       setConfirmation(false);
       setLinkApproved(false);
       await refresh(result.revisionId);
+      stagedRevisionId = result.revisionId;
       setMessage(
-        'Changes staged and discovery verified. Test administrator sign-in before activation.'
+        'Saved, and your provider responded correctly. Next, test your own sign-in in Test & activate.'
       );
     });
+    return saved ? stagedRevisionId : false;
   };
   const discardDraft = () => {
     discard();
@@ -366,7 +405,7 @@ export function useAuthenticationController({
   useEffect(() => {
     const allowed = emergencyOnly
       ? ['emergency', 'diagnostics']
-      : ['overview', 'connection', 'access', 'policy', 'emergency', 'diagnostics'];
+      : ['overview', 'connection', 'access', 'roles', 'policy', 'emergency', 'diagnostics'];
     const sync = () => {
       const tab = new URLSearchParams(window.location.search).get('authTab');
       if (tab && allowed.includes(tab)) setActiveTab(tab as AuthenticationSection);
@@ -406,6 +445,11 @@ export function useAuthenticationController({
     fieldErrors,
     setFieldErrors,
     stageDraft,
+    providerChosen,
+    setProviderChosen,
+    restorableDraft: restorable,
+    restoreDraft: restore,
+    dismissRestorableDraft: dismissRestorable,
     hasSavedSecret,
     discardDraft,
     draftDiscardRequested,

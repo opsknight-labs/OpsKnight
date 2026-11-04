@@ -14,6 +14,7 @@ import {
   stageOidcRevision,
   beginOidcRevisionTest,
   completeOidcRevisionTest,
+  recordOidcRevisionTestProviderError,
   activateOidcRevision,
   enforcementPreview,
   deleteOidcRevision,
@@ -25,6 +26,7 @@ import { evaluateAuthenticationPolicy } from '@/lib/authentication-policy-evalua
 import { searchAuthenticationUsers, identityClaimsPreview } from '@/lib/auth-control/dashboard';
 import { digest, secret } from '@/lib/auth-control/emergency';
 import { inviteSsoUser } from '@/lib/auth-control/sso-onboarding';
+import { oidcTrustFingerprint } from '@/lib/oidc/trust-fingerprint';
 import type { ControlActor } from '@/lib/auth-control/actor';
 
 const entraIssuer = 'https://login.microsoftonline.com/11111111-2222-3333-4444-555555555555/v2.0';
@@ -250,9 +252,14 @@ suite('staged OIDC authentication with HTTPS and signed ID tokens', () => {
     ).not.toContain('test-secret');
     expect((await enforcementPreview(revisionId)).adminVerified).toBe(false);
   });
-  it.each(['nonce', 'audience', 'email', 'unverified'])(
-    'rejects signed but invalid %s proof without altering production',
-    async variant => {
+  it.each([
+    ['nonce', 'TOKEN_EXCHANGE_FAILED'],
+    ['audience', 'TOKEN_EXCHANGE_FAILED'],
+    ['email', 'EMAIL_MISMATCH'],
+    ['unverified', 'EMAIL_UNVERIFIED'],
+  ])(
+    'rejects signed but invalid %s proof without altering production and records %s',
+    async (variant, expectedCode) => {
       const flow = await beginOidcRevisionTest(actor, revisionId, actor.id, true);
       const code = issueCode(flow.url, variant);
       await expect(
@@ -260,8 +267,35 @@ suite('staged OIDC authentication with HTTPS and signed ID tokens', () => {
       ).rejects.toThrow('test failed');
       expect(await prisma.oidcConfig.count()).toBe(0);
       expect(await prisma.oidcRevisionTest.count({ where: { revisionId } })).toBe(0);
+      const recorded = await prisma.oidcTestFlow.findFirstOrThrow({
+        where: { revisionId },
+        orderBy: { createdAt: 'desc' },
+      });
+      expect(recorded.failureCode).toBe(expectedCode);
+      expect(JSON.stringify(recorded.diagnostics ?? {})).not.toMatch(/eyJ[A-Za-z0-9_-]{10,}/);
     }
   );
+  it('records a provider error response so the result page can explain it', async () => {
+    const flow = await beginOidcRevisionTest(actor, revisionId, actor.id, true);
+    const flowId = await recordOidcRevisionTestProviderError(
+      callbackState(flow.url),
+      flow.browserToken,
+      'access_denied',
+      'User is not assigned to the application'
+    );
+    expect(flowId).toBeTruthy();
+    const recorded = await prisma.oidcTestFlow.findUniqueOrThrow({ where: { id: flowId! } });
+    expect(recorded.failureCode).toBe('PROVIDER_ACCESS_DENIED');
+    expect(recorded.consumedAt).not.toBeNull();
+    expect(
+      await recordOidcRevisionTestProviderError(
+        callbackState(flow.url),
+        'foreign-browser',
+        'access_denied',
+        null
+      )
+    ).toBeNull();
+  });
   it('rejects foreign-browser state and requires explicit first-link ownership approval', async () => {
     const flow = await beginOidcRevisionTest(actor, revisionId, actor.id, false);
     const code = issueCode(flow.url);
@@ -497,6 +531,26 @@ suite('staged OIDC authentication with HTTPS and signed ID tokens', () => {
     expect(await prisma.oidcIdentity.count({ where: { userId: actor.id } })).toBe(0);
     expect(await prisma.userDevice.count({ where: { userId: actor.id } })).toBe(0);
   });
+  it('keeps the administrator test across session-limit edits but not role-rule edits', async () => {
+    const base = { issuer: runtime.issuer, clientId: 'test-client', clientSecret: '' };
+    const sessionsOnly = await stageOidcRevision(
+      actor,
+      { ...base, sessionMaxAgeSeconds: 7200, providerLabel: 'Company SSO' },
+      false,
+      revisionId
+    );
+    expect((await enforcementPreview(sessionsOnly.revisionId)).adminVerified).toBe(true);
+    const rolesChanged = await stageOidcRevision(
+      actor,
+      { ...base, roleMapping: [{ claim: 'groups', value: 'ops', role: 'RESPONDER' }] },
+      false,
+      revisionId
+    );
+    expect((await enforcementPreview(rolesChanged.revisionId)).adminVerified).toBe(false);
+    await prisma.oidcRevision.deleteMany({
+      where: { id: { in: [sessionsOnly.revisionId, rolesChanged.revisionId] } },
+    });
+  });
   it('refuses Required without independent recovery, then activates Optional preserving the original User ID', async () => {
     await expect(
       activateOidcRevision(actor, revisionId, 900, 'SSO_REQUIRED', 'ACTIVATE VERIFIED SSO')
@@ -518,6 +572,11 @@ suite('staged OIDC authentication with HTTPS and signed ID tokens', () => {
       ).userId
     ).toBe(actor.id);
     expect((await prisma.user.findUniqueOrThrow({ where: { id: actor.id } })).role).toBe('ADMIN');
+    // The administrator who turned SSO on is linked to the current provider, not 'provider changed'.
+    const linked = await prisma.oidcIdentity.findUniqueOrThrow({
+      where: { issuer_subject: { issuer: runtime.issuer, subject: 'existing-admin-subject' } },
+    });
+    expect(linked.issuerFingerprint).toBe(oidcTrustFingerprint(runtime.issuer, 'test-client'));
     expect((await enforcementPreview(revisionId)).adminVerified).toBe(false); // proof tied to old production version
   });
   it('enforces the tested active revision with two current independent recovery drills', async () => {

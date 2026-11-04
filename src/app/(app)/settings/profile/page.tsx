@@ -2,6 +2,7 @@ import prisma from '@/lib/prisma';
 import { getAuthOptions } from '@/lib/auth';
 import { getServerSession } from 'next-auth';
 import ProfileForm from '@/components/settings/ProfileForm';
+import { userIdentityStatus } from '@/lib/users/identity-status';
 import PreferencesForm from '@/components/settings/PreferencesForm';
 import NotificationPreferencesForm from '@/components/settings/NotificationPreferencesForm';
 import QuietHoursForm from '@/components/settings/QuietHoursForm';
@@ -119,6 +120,9 @@ export default async function ProfileSettingsPage({ searchParams }: ProfileSetti
   const memberSince = user?.createdAt
     ? formatDateTime(user.createdAt, timeZone, { format: 'date' })
     : 'Recently';
+  const identity = user?.id
+    ? await userIdentityStatus(user.id)
+    : { ssoLinked: false, managedFields: {} };
   const lastOidcSync = user?.lastOidcSync
     ? formatDateTime(user.lastOidcSync, timeZone, { format: 'datetime' })
     : null;
@@ -220,6 +224,8 @@ export default async function ProfileSettingsPage({ searchParams }: ProfileSetti
               jobTitle={user?.jobTitle}
               avatarUrl={user?.avatarUrl}
               lastOidcSync={lastOidcSync}
+              ssoLinked={identity.ssoLinked}
+              managedFields={identity.managedFields}
             />
             {chatIdentityLinks.length > 0 && <ConnectedChatOpsAccounts links={chatIdentityLinks} />}
           </>
