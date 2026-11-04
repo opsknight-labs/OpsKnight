@@ -234,6 +234,24 @@ Monitoring, cloud, uptime, CI/CD, ChatOps, ticketing, notification and identity 
 
 ---
 
+## 🤖 AI assistants (MCP)
+
+OpsKnight ships a built-in [Model Context Protocol](https://modelcontextprotocol.io/) server, so Claude, ChatGPT, Cursor, VS Code and other MCP assistants can search incidents, check who is on call, explain escalations and draft postmortems from chat.
+
+- **One click to turn on.** An administrator enables read-only access in **Settings → Integrations & ChatOps → MCP (AI Assistants)**; people then paste the server URL into their assistant. No client IDs, secrets or callbacks to manage.
+- **Each person signs in.** Assistants act with that person's current role and teams, and only with the permissions they ticked on the consent page.
+- **Changes are reviewed.** Changes are off by default. When allowed, routine incident actions run directly, while configuration changes and runbook runs wait for a human to approve the exact, frozen request on an in-app review page.
+- **Administrators stay in control.** See every connection and what it can actually do, turn off individual tools or whole domains, and revoke one connection or all of them.
+
+| Client                                | Status                              |
+| :------------------------------------ | :---------------------------------- |
+| Claude Code                           | Verified                            |
+| Claude apps, ChatGPT, Cursor, VS Code | Expected (2025 revisions supported) |
+
+[MCP setup guide →](docs/v2.2.0/guides/mcp/self-hosted-setup.md) · [Troubleshooting](docs/v2.2.0/guides/mcp/troubleshooting.md) · [Permissions](docs/v2.2.0/reference/mcp/permissions.md)
+
+---
+
 ## 🏗️ Deploy anywhere
 
 |                                                                                                              | Topology                         | Best for                    | Guide                                                                                |

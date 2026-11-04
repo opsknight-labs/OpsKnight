@@ -22,3 +22,5 @@ generated/
 docs/internal/
 docs/*/integrations/catalog.yaml
 docs/*/reference/
+# Written by npm run mcp:docs; CI fails if it differs from the generator output.
+docs/v2.2.0/guides/mcp/troubleshooting.md

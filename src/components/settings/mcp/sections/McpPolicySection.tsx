@@ -152,12 +152,12 @@ export default function McpPolicySection({
         <div className="border-t border-border">
           <PolicyGroup
             title="Reviewed actions"
-            description="Off by default. Every proposal waits for an administrator to approve the exact, frozen request."
+            description="Off by default. Routine incident changes run directly. Configuration changes wait for an administrator to approve the exact, frozen request; runbook runs wait for anyone with runbook approve permission (Responders and Administrators by default). An administrator may approve their own request after confirming."
           >
             <CheckRow
               name="writesEnabled"
               label="Allow reviewed routine mutations and approved runbook executions"
-              description="Assistants can prepare changes; each one waits for approval by an administrator."
+              description="Assistants can acknowledge, assign, annotate, resolve and create incidents, and prepare configuration changes and runbook runs for review. Reviewers are notified in OpsKnight."
               defaultChecked={policy.writesEnabled}
             />
             <div className="grid gap-4 sm:grid-cols-2">

@@ -56,7 +56,7 @@ type Candidate = {
   teamMemberships: { teamId: string }[];
 };
 
-/** Active users in the given roles other than the requester: one bounded query. */
+/** Active users in the given roles, excluding the requester: one bounded query. */
 function candidates(tx: Prisma.TransactionClient, roles: string[], requesterId: string) {
   return tx.user.findMany({
     where: { role: { in: roles as Role[] }, status: 'ACTIVE', id: { not: requesterId } },

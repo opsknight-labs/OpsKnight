@@ -21,6 +21,7 @@ import { SettingsSection } from '@/components/settings/layout/SettingsSection';
 import McpCopyField from '@/components/settings/mcp/McpCopyField';
 import McpQuickSetup from '@/components/settings/mcp/McpQuickSetup';
 import McpConnectionTest from '@/components/settings/mcp/McpConnectionTest';
+import McpDocsLinks from '@/components/settings/mcp/McpDocsLinks';
 import { StatusPill } from '@/components/settings/mcp/McpListKit';
 import { mcpSetupCommands } from '@/components/settings/mcp/setup-commands';
 import { MCP_PROTOCOL_REVISION } from '@/lib/mcp/protocol/revision';
@@ -174,7 +175,7 @@ export default function McpOverviewSection({
                   ? [
                       `${previous.scopes} permission${previous.scopes === 1 ? '' : 's'} for automatic connections${previous.automatic ? '' : ' (automatic connections stay off)'}.`,
                       previous.writesEnabled
-                        ? 'Assistants can propose changes again; each change still needs administrator approval.'
+                        ? 'Assistants can make changes again; configuration changes and runbook runs still wait for human review.'
                         : 'Read-only: assistants cannot propose changes.',
                       previous.sensitiveReadsEnabled
                         ? 'Sensitive configuration reads are turned back on (secrets stay redacted).'
@@ -446,6 +447,7 @@ export default function McpOverviewSection({
                     />
                   </div>
                 </details>
+                <McpDocsLinks />
               </div>
             </SettingsSection>
           )}
