@@ -1,9 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import { dot, normalizeVector } from '@/lib/intelligence/semantic/vector';
-import { scoreSimilarity, semanticContent, SEMANTIC_FLOOR } from '@/lib/intelligence/similarity/scoring';
+import {
+  scoreSimilarity,
+  semanticContent,
+  SEMANTIC_FLOOR,
+} from '@/lib/intelligence/similarity/scoring';
 import { describeReasons } from '@/lib/intelligence/similarity/view';
 
-const fingerprint = (template: string, overrides: Partial<Parameters<typeof scoreSimilarity>[0]> = {}) => ({
+const fingerprint = (
+  template: string,
+  overrides: Partial<Parameters<typeof scoreSimilarity>[0]> = {}
+) => ({
   template,
   tokens: template.toLowerCase().match(/[a-z]{2,32}/g) ?? [],
   labels: {},
@@ -23,6 +30,14 @@ describe('vector helpers', () => {
     expect(normalizeVector([1, 2])).toBeNull();
     expect(normalizeVector([1, Number.NaN, 0, 0, 0, 0, 0, 0])).toBeNull();
     expect(normalizeVector(new Array(5000).fill(1))).toBeNull();
+  });
+
+  it('normalizes finite vectors without numerical overflow or underflow', () => {
+    for (const magnitude of [1e308, 1e-308]) {
+      const unit = normalizeVector([magnitude, magnitude, 0, 0, 0, 0, 0, 0])!;
+      expect(unit.every(Number.isFinite)).toBe(true);
+      expect(dot(unit, unit)).toBeCloseTo(1, 10);
+    }
   });
 
   it('never matches vectors of different shapes', () => {
@@ -62,7 +77,9 @@ describe('semantic similarity component', () => {
   it('explains a meaning-only match as "Similar meaning"', () => {
     const base = { tokens: 0, template: 0.1, labels: 0, sameService: 0, recency: 1, resolved: 0 };
     expect(describeReasons({ ...base, semantic: 0.95 })[0]).toBe('Similar meaning');
-    expect(describeReasons({ ...base, template: 0.9, semantic: 0.95 })[0]).toBe('Very similar wording');
+    expect(describeReasons({ ...base, template: 0.9, semantic: 0.95 })[0]).toBe(
+      'Very similar wording'
+    );
     expect(describeReasons(base)[0]).toBe('Similar wording');
   });
 });

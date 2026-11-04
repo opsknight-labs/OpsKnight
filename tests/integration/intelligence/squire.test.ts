@@ -310,7 +310,10 @@ describe('AI mode', () => {
       const tools = buildSquireTools(await actorOf(member.id), { personal: false });
       const semantic = tools.find(tool => tool.name === 'semantic_search_incidents')!;
       const results = await semantic.execute!({ query: 'checkout is slow' });
-      expect(results).toMatchObject([{ id: mine.id }]);
+      expect(results).toMatchObject({
+        items: [{ id: mine.id }],
+        coverage: { mode: expect.stringMatching(/^(ANN|BOUNDED_EXACT)$/) },
+      });
       expect(JSON.stringify(results)).not.toContain(theirs.id);
       const page = await db.statusPage.create({ data: { name: 'Restricted status' } });
       const status = tools.find(tool => tool.name === 'get_status_page')!;
@@ -493,4 +496,23 @@ it('preserves trusted Sensitive browser context and omits unproved assistant his
   });
   expect(model.requests).toHaveLength(1);
   expect(JSON.stringify(model.requests[0].body)).not.toContain('unproved-assistant-canary-67');
+});
+
+it('shows an explicit coverage notice when a semantic tool cannot search', async () => {
+  const admin = await setup({ ai: true, provider: true });
+  model.script.push(
+    {
+      toolCall: {
+        name: 'semantic_search_incidents',
+        args: JSON.stringify({ query: 'checkout error' }),
+      },
+    },
+    { content: 'Semantic search is unavailable; check the incident list.' }
+  );
+  const events = await turn(admin.id, 'Find similar checkout incidents');
+  expect(events).toContainEqual(
+    expect.objectContaining({ type: 'notice', text: expect.stringContaining('does not establish') })
+  );
+  expect(textOf(events)).toContain('check the incident list');
+  expect(JSON.stringify(model.requests.at(-1)!.body)).toContain('UNAVAILABLE');
 });

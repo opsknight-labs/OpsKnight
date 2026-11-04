@@ -135,3 +135,24 @@ it.each(['PERSONAL', 'SENSITIVE'] as const)(
     }
   }
 );
+
+it('does not start a semantic embedding request after cancellation', async () => {
+  const admin = await createTestUser({ role: 'ADMIN' });
+  const actor = (await resolveUserActor(admin.id))!;
+  const controller = new AbortController();
+  controller.abort();
+  const port = await import('@/lib/intelligence/ai/port');
+  const resolve = vi.spyOn(port, 'resolveEmbeddingModel');
+  try {
+    const tool = buildSquireTools(actor, { personal: true, signal: controller.signal }).find(
+      tool => tool.name === 'semantic_search_incidents'
+    )!;
+    expect(await tool.execute!({ query: 'cancelled query' })).toMatchObject({
+      items: [],
+      coverage: { mode: 'UNAVAILABLE' },
+    });
+    expect(resolve).not.toHaveBeenCalled();
+  } finally {
+    resolve.mockRestore();
+  }
+});

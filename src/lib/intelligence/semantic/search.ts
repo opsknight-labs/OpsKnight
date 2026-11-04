@@ -1,10 +1,13 @@
 import 'server-only';
 import { Prisma } from '@prisma/client';
+import type { AuthorizationActor } from '@/lib/authorization-policy';
+import { incidentReadWhereParts } from '@/lib/authorization-filters';
+import { compileIncidentMetricFilter } from '@/lib/metrics/domain/filter';
 import prisma from '@/lib/prisma';
 import { logger } from '@/lib/logger';
 import { withDbBudget } from '../jobs/db-budget';
 import { detectCapabilities } from '../similarity/capabilities';
-import { MAX_DIMENSIONS, MIN_DIMENSIONS } from './vector';
+import { MAX_DIMENSIONS, MIN_DIMENSIONS, normalizeVector } from './vector';
 
 export interface SemanticSearchOptions {
   /** Only vectors from this model are compared; vectors from another model are meaningless here. */
@@ -157,4 +160,120 @@ export async function semanticNeighbours(
     }
     return scores;
   });
+}
+
+export interface QuerySemanticResult {
+  items: Array<{
+    id: string;
+    title: string;
+    status: string;
+    updatedAt: string;
+    score: number;
+    href: string;
+  }>;
+  coverage: {
+    mode: 'ANN' | 'BOUNDED_EXACT' | 'UNAVAILABLE';
+    approximate: boolean;
+    recentScanLimit?: number;
+    annFallback?: boolean;
+  };
+}
+
+/** Actor scope is part of the neighbour query, before ranking and LIMIT in both retrieval paths. */
+export async function searchIncidentVector(
+  actor: AuthorizationActor,
+  queryVector: readonly number[],
+  options: { model: string; lowerBound: Date; limit?: number; scanLimit?: number; maxDbMs?: number }
+): Promise<QuerySemanticResult> {
+  const unavailable: QuerySemanticResult = {
+    items: [],
+    coverage: { mode: 'UNAVAILABLE', approximate: false },
+  };
+  if (
+    actor.status !== 'ACTIVE' ||
+    actor.apiKey ||
+    !options.model ||
+    !Number.isFinite(options.lowerBound.getTime())
+  )
+    return unavailable;
+  const vector = normalizeVector(queryVector);
+  if (!vector) return unavailable;
+  let global: boolean;
+  try {
+    global = incidentReadWhereParts(actor).global;
+  } catch {
+    return unavailable;
+  }
+  const scope = compileIncidentMetricFilter(
+    global ? {} : { authorizationScope: { actorId: actor.id, teamIds: actor.teamIds } },
+    'i'
+  ).sql;
+  const limit = Math.max(1, Math.min(10, Math.floor(options.limit ?? 10)));
+  const scanLimit = Math.max(limit, Math.min(1000, Math.floor(options.scanLimit ?? 500)));
+  const maxDbMs = Math.max(50, Math.min(2000, Math.floor(options.maxDbMs ?? 750)));
+  if (![limit, scanLimit, maxDbMs].every(Number.isFinite)) return unavailable;
+  const size = Prisma.raw(String(vector.length));
+  try {
+    return await withDbBudget({ maxDbMs }, async tx => {
+      const ready = await tx.$queryRaw<Array<{ ready: boolean }>>`
+        SELECT EXISTS (SELECT 1 FROM pg_class c JOIN pg_index idx ON idx.indexrelid = c.oid
+          WHERE c.relname = ${annIndexName(vector.length)} AND idx.indisvalid) AS ready`;
+      const useAnn = ready[0]?.ready === true;
+      type Match = { id: string; title: string; status: string; updatedAt: Date; score: number };
+      let matches: Match[] = [];
+      let usedAnn = useAnn;
+      if (useAnn) {
+        await tx.$executeRaw`SELECT set_config('hnsw.ef_search', ${String(ANN_EF_SEARCH)}, true),
+          set_config('hnsw.iterative_scan', 'relaxed_order', true)`;
+        const query = `[${vector.join(',')}]`;
+        matches = await tx.$queryRaw<Match[]>(Prisma.sql`
+          SELECT i.id, i.title, i.status, i."updatedAt",
+            (1 - (e.vector::vector(${size}) <=> ${query}::vector(${size})))::float8 AS score
+          FROM "IncidentEmbedding" e JOIN "Incident" i ON i.id = e."incidentId"
+          WHERE e.dims = ${size} AND e.model = ${options.model} AND e.vector IS NOT NULL
+            AND e."incidentCreatedAt" >= ${options.lowerBound} ${scope}
+          ORDER BY e.vector::vector(${size}) <=> ${query}::vector(${size})
+          LIMIT ${limit}`);
+      }
+      // A ready index can still return no qualifying neighbours. Keep this recovery bounded
+      // and report its coverage instead of treating an empty approximate result as complete.
+      if (!useAnn || !matches.some(match => Number.isFinite(match.score) && match.score >= 0.7)) {
+        usedAnn = false;
+        matches = await tx.$queryRaw<Match[]>(Prisma.sql`
+          WITH recent AS MATERIALIZED (
+            SELECT i.id, i.title, i.status, i."updatedAt", e.vector
+            FROM "IncidentEmbedding" e JOIN "Incident" i ON i.id = e."incidentId"
+            WHERE e.dims = ${vector.length} AND e.model = ${options.model} AND e.vector IS NOT NULL
+              AND e."incidentCreatedAt" >= ${options.lowerBound} ${scope}
+            ORDER BY e."incidentCreatedAt" DESC, i.id LIMIT ${scanLimit}
+          )
+          SELECT id, title, status, "updatedAt",
+            (SELECT COALESCE(SUM(x * y), 0) FROM unnest(vector, ${vector}::real[]) AS t(x, y))::float8 AS score
+          FROM recent ORDER BY score DESC, id LIMIT ${limit}`);
+      }
+      return {
+        items: matches
+          .filter(match => Number.isFinite(match.score) && match.score >= 0.7)
+          .map(match => ({
+            id: match.id,
+            title: match.title.slice(0, 160),
+            status: match.status,
+            updatedAt: match.updatedAt.toISOString(),
+            score: Math.max(-1, Math.min(1, match.score)),
+            href: `/incidents/${encodeURIComponent(match.id)}`,
+          })),
+        coverage: usedAnn
+          ? { mode: 'ANN' as const, approximate: true }
+          : {
+              mode: 'BOUNDED_EXACT' as const,
+              approximate: false,
+              recentScanLimit: scanLimit,
+              ...(useAnn ? { annFallback: true } : {}),
+            },
+      };
+    });
+  } catch {
+    // Timeouts, unavailable extensions and stale index metadata cannot cause an unbounded retry.
+    return unavailable;
+  }
 }

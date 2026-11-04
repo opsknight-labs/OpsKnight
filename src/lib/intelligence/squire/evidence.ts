@@ -25,6 +25,10 @@ const prefixes = new Map<SourceReference['kind'], string>([
 export class SquireEvidenceRegistry {
   private readonly captured = new Map<string, { source: SourceReference; label: string }>();
   private complete = true;
+  private readonly coverageNotices = new Set<string>();
+  notices(): string[] {
+    return [...this.coverageNotices];
+  }
   constructor(
     private readonly actor: AuthorizationActor,
     private readonly dataClass: AiDataClass
@@ -120,6 +124,21 @@ export class SquireEvidenceRegistry {
       return unavailable;
     }
     const object = row(result);
+    if (name === 'semantic_search_incidents') {
+      const coverage = row(object.coverage);
+      if (coverage.mode === 'BOUNDED_EXACT')
+        this.coverageNotices.add(
+          'Semantic search used a bounded scan of recent visible embeddings. Older matches may be missing.'
+        );
+      else if (coverage.mode === 'ANN')
+        this.coverageNotices.add(
+          'Semantic search is approximate; some matching incidents may be missing.'
+        );
+      else if (coverage.mode === 'UNAVAILABLE')
+        this.coverageNotices.add(
+          'Semantic search is unavailable. This does not establish that there are no matching incidents.'
+        );
+    }
     if (object.error) return result;
     const snapshots: EvidenceSnapshot[] = [];
     const add = (kind: SourceReference['kind'], data: Row, field = 'id') => {
@@ -145,8 +164,10 @@ export class SquireEvidenceRegistry {
     const subject = (kind: SourceReference['kind']) =>
       add(kind, { ...object, id: row(input).id, snapshot: result });
     switch (name) {
-      case 'search_incidents':
       case 'semantic_search_incidents':
+        rows(object.items ?? result).forEach(data => add('incident', data));
+        break;
+      case 'search_incidents':
         rows(result).forEach(data => add('incident', data));
         break;
       case 'get_incident':

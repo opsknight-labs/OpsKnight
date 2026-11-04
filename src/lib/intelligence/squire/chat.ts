@@ -157,6 +157,7 @@ export async function* streamSquire(
       let answer = '';
       let proposals = 0;
       let failed = false;
+      const emittedCoverage = new Set<string>();
       for await (const event of port.stream({
         context: {
           actorId: actor.id,
@@ -170,10 +171,17 @@ export async function* streamSquire(
         tools: buildSquireTools(actor, {
           personal: true,
           dataClass,
+          signal,
           observe: (name, input, result) => evidence.observe(name, input, result),
         }),
         maxSteps: SQUIRE_LIMITS.maxSteps,
       })) {
+        for (const text of evidence.notices()) {
+          if (!emittedCoverage.has(text)) {
+            emittedCoverage.add(text);
+            yield { type: 'notice', text };
+          }
+        }
         if (event.type === 'text-delta') {
           answer += event.delta;
           yield { type: 'delta', text: event.delta };

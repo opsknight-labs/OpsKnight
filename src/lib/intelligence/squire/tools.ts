@@ -22,7 +22,8 @@ import {
   type AiToolDefinition,
 } from '../ai/port';
 import { maskVolatileText } from '../normalization/text';
-import { normalizeVector, dot } from '../semantic/vector';
+import { normalizeVector } from '../semantic/vector';
+import { searchIncidentVector } from '../semantic/search';
 import { resolveEffectivePolicy } from '../settings/service';
 import { getResponseIntelligenceForActor } from '../response/view';
 import { getSimilarIncidentsForActor } from '../similarity/view';
@@ -37,6 +38,7 @@ import { readIncidentForActor } from './deterministic';
 
 const NOT_FOUND = { error: 'Not found, or you do not have access to it.' };
 const MAX_ROWS = 10;
+const SEMANTIC_UNAVAILABLE = { items: [], coverage: { mode: 'UNAVAILABLE', approximate: false } };
 
 const short = (text: string | null | undefined, max = 280) => {
   const value = (text ?? '').trim();
@@ -92,6 +94,7 @@ export function buildSquireTools(
   options: {
     personal: boolean;
     dataClass?: AiDataClass;
+    signal?: AbortSignal;
     observe?: (name: string, input: unknown, result: unknown) => Promise<unknown>;
   }
 ): AiToolDefinition[] {
@@ -177,7 +180,7 @@ export function buildSquireTools(
     ),
     readTool(
       'semantic_search_incidents',
-      'Find incidents with a similar meaning using optional embeddings. Bounded to recent incidents you may read; returns no results when embeddings are disabled.',
+      'Find incidents with a similar meaning using optional embeddings. Searches visible incidents from the last 90 days through ANN when available. Coverage reports a bounded recent scan when no ANN index is ready; never assume a complete history search.',
       {
         type: 'object',
         properties: { query: { type: 'string', minLength: 1, maxLength: 300 } },
@@ -192,40 +195,23 @@ export function buildSquireTools(
         if (!parsed.success) return { error: 'Invalid input' };
         const readable = scoped(() => incidentReadWhere(actor));
         if (!readable) return NOT_FOUND;
+        if (options.signal?.aborted) return SEMANTIC_UNAVAILABLE;
         const port = await resolveEmbeddingModel(highestDataClass(['PERSONAL', options.dataClass]));
-        if (!port) return [];
+        if (!port) return SEMANTIC_UNAVAILABLE;
         const { vectors } = await port.embed([maskVolatileText(parsed.data.query)], {
           actorId: actor.id,
+          signal: options.signal,
         });
+        if (options.signal?.aborted) return SEMANTIC_UNAVAILABLE;
         const vector = normalizeVector(vectors[0] ?? []);
-        if (!vector) return [];
-        const rows = await prisma.incidentEmbedding.findMany({
-          where: {
-            model: port.model,
-            dims: vector.length,
-            incidentCreatedAt: { gte: new Date(Date.now() - 90 * 86_400_000) },
-            incident: readable,
-          },
-          take: 500,
-          orderBy: { incidentCreatedAt: 'desc' },
-          select: {
-            incidentId: true,
-            vector: true,
-            incident: { select: { title: true, status: true, updatedAt: true } },
-          },
+        if (!vector) return SEMANTIC_UNAVAILABLE;
+        return searchIncidentVector(actor, vector, {
+          model: port.model,
+          lowerBound: new Date(Date.now() - 90 * 86_400_000),
+          limit: MAX_ROWS,
+          scanLimit: 1000,
+          maxDbMs: 750,
         });
-        return rows
-          .map(row => ({
-            id: row.incidentId,
-            title: short(row.incident.title, 160),
-            updatedAt: row.incident.updatedAt.toISOString(),
-            status: row.incident.status,
-            score: dot(vector, row.vector),
-            href: `/incidents/${row.incidentId}`,
-          }))
-          .filter(row => row.score >= 0.7)
-          .sort((a, b) => b.score - a.score)
-          .slice(0, MAX_ROWS);
       }
     ),
     readTool(
