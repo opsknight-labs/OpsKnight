@@ -287,7 +287,7 @@ export type AdminTestFailureCode =
   | 'REVISION_DELETED'
   | 'UNKNOWN';
 
-export type AuthSetupStep = 'connection' | 'access' | 'policy' | 'emergency';
+export type AuthSetupStep = 'connection' | 'access' | 'roles' | 'policy' | 'emergency';
 
 export type AdminTestMessage = AuthMessage & {
   /** Where in the setup console the administrator fixes this. */
@@ -336,7 +336,7 @@ export const ADMIN_TEST_MESSAGES: Record<AdminTestFailureCode, AdminTestMessage>
       'The first SSO sign-in links to your administrator account only when the verified email is identical.',
     action:
       'Sign in at the identity provider with the same email as your OpsKnight account, or change your OpsKnight email in Profile first.',
-    fix: { step: 'connection', label: 'Back to the test' },
+    fix: { step: 'policy', label: 'Back to the test' },
   },
   SUBJECT_MISSING: {
     title: 'The sign-in did not include a stable account identifier',
@@ -350,35 +350,35 @@ export const ADMIN_TEST_MESSAGES: Record<AdminTestFailureCode, AdminTestMessage>
       'A role rule uses a claim that was missing from your sign-in, or your provider sent a "too many groups" marker instead of the list.',
     action:
       'Make the provider send the claim used by your role rules. For Microsoft Entra with many groups, use App roles (the "roles" claim) or emit only groups assigned to the application.',
-    fix: { step: 'access', label: 'Review role rules' },
+    fix: { step: 'roles', label: 'Review role rules' },
   },
   CONFIG_CHANGED: {
     title: 'Single sign-on settings changed during the test',
     detail: 'Another administrator activated a configuration while you were signing in.',
     action: 'Reload the console and run the test again.',
     tone: 'notice',
-    fix: { step: 'connection', label: 'Run the test again' },
+    fix: { step: 'policy', label: 'Run the test again' },
   },
   ADMIN_STATE_CHANGED: {
     title: 'Your administrator account changed during the test',
     detail: 'Your role, status or sessions changed between starting and finishing the test.',
     action: 'Sign in again and run the test again.',
     tone: 'notice',
-    fix: { step: 'connection', label: 'Run the test again' },
+    fix: { step: 'policy', label: 'Run the test again' },
   },
   IDENTITY_OWNED_BY_OTHER_USER: {
     title: 'This identity is already linked to another OpsKnight user',
     detail: 'The account you used at the identity provider belongs to someone else in OpsKnight.',
     action:
       'Sign in at the identity provider as yourself (try a private window), then run the test again.',
-    fix: { step: 'connection', label: 'Run the test again' },
+    fix: { step: 'policy', label: 'Run the test again' },
   },
   LINK_NOT_ALLOWED: {
     title: 'Linking was not allowed for this test',
     detail:
       'This is your first SSO sign-in, so OpsKnight needs your permission to link it to your account.',
     action: 'Tick “Allow this SSO identity to link…” and run the test again.',
-    fix: { step: 'connection', label: 'Allow linking and retest' },
+    fix: { step: 'policy', label: 'Allow linking and retest' },
   },
   ROLE_WOULD_DROP_ADMIN: {
     title: 'These role rules would remove your administrator access',
@@ -386,7 +386,7 @@ export const ADMIN_TEST_MESSAGES: Record<AdminTestFailureCode, AdminTestMessage>
       'After applying the role rules to your sign-in, your role would no longer be Administrator, so activation would lock you out.',
     action:
       'Add a rule that grants Administrator to a group you belong to (see the claims below), or change the default role.',
-    fix: { step: 'access', label: 'Fix role rules' },
+    fix: { step: 'roles', label: 'Fix role rules' },
   },
   PROVIDER_ACCESS_DENIED: {
     title: 'Your identity provider refused the sign-in',
@@ -394,7 +394,7 @@ export const ADMIN_TEST_MESSAGES: Record<AdminTestFailureCode, AdminTestMessage>
       'Either the sign-in was cancelled, or your account is not assigned to the OpsKnight application at the identity provider.',
     action:
       'Assign yourself (or your group) to the OpsKnight application, then run the test again.',
-    fix: { step: 'connection', label: 'Run the test again' },
+    fix: { step: 'policy', label: 'Run the test again' },
   },
   PROVIDER_INVALID_SCOPE: {
     title: 'Your identity provider rejected the requested scopes',
@@ -429,7 +429,7 @@ export const ADMIN_TEST_MESSAGES: Record<AdminTestFailureCode, AdminTestMessage>
     detail: 'A test must finish in the same browser within a few minutes.',
     action: 'Run the test again and complete the provider sign-in promptly.',
     tone: 'notice',
-    fix: { step: 'connection', label: 'Run the test again' },
+    fix: { step: 'policy', label: 'Run the test again' },
   },
   REVISION_DELETED: {
     title: 'The configuration under test was deleted',

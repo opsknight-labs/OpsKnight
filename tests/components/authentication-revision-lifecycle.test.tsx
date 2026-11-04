@@ -110,6 +110,17 @@ const renderConsole = (data: Dashboard, tab = 'policy', revisionId?: string) => 
 };
 
 describe('revision selection reconciliation', () => {
+  it('continues from the saved configuration after a full page load before activation', async () => {
+    renderConsole(dashboard({ revisions: [revision('draft-1')] }), 'connection', 'draft-1');
+    expect(await screen.findByLabelText(/Directory \(tenant\) ID/)).toHaveValue('tenant-1');
+    expect(screen.getByLabelText('Client ID', { exact: true })).toHaveValue('app-b');
+    expect(screen.getByRole('radio', { name: /Microsoft Entra ID/ })).toHaveAttribute(
+      'aria-checked',
+      'true'
+    );
+    expect(screen.queryByText('Not saved')).not.toBeInTheDocument();
+  });
+
   const list = [
     revision('draft-new'),
     revision('active', { activatedAt: '2026-10-01T00:00:00.000Z' }),
@@ -170,7 +181,10 @@ describe('revision lifecycle in the console', () => {
     await screen.findByText('Connect your provider first');
     expect(new URLSearchParams(window.location.search).get('revisionId')).toBeNull();
     fireEvent.mouseDown(screen.getByRole('tab', { name: '1 · Connect provider' }), { button: 0 });
-    fireEvent.change(await screen.findByLabelText('Client ID', { exact: true }), {
+    fireEvent.change(await screen.findByLabelText(/Directory \(tenant\) ID/), {
+      target: { value: '11111111-2222-3333-4444-555555555555' },
+    });
+    fireEvent.change(screen.getByLabelText('Client ID', { exact: true }), {
       target: { value: 'replacement-client' },
     });
     fireEvent.change(screen.getByLabelText(/Client secret/), { target: { value: 'secret' } });

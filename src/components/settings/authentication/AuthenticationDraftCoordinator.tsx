@@ -144,7 +144,7 @@ export default function AuthenticationDraftCoordinator() {
           ) : (
             <Button size="sm" variant="secondary" disabled className="gap-1.5 opacity-80">
               <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
-              Staged
+              Saved
             </Button>
           )}
           <Button
@@ -160,9 +160,7 @@ export default function AuthenticationDraftCoordinator() {
       </div>
       {!draftDirty && data.revisions.length > 0 && (
         <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-border/50 text-xs text-muted-foreground">
-          <p>
-            Current configuration is staged. Proceed to test administrator access and activate SSO.
-          </p>
+          <p>Everything is saved. Next, test your sign-in in Test &amp; activate.</p>
           {activeTab !== 'policy' && (
             <Button
               variant="link"

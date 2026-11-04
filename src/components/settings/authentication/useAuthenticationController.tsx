@@ -142,6 +142,22 @@ export function useAuthenticationController({
   const sectionLoading = data.section !== activeTab && failedSection !== activeTab;
   const sectionRequestPending = sectionLoading;
   const [initialConfiguration] = useState<ProviderConfiguration>(() => {
+    // Before activation, continue from the saved configuration being worked on (for example
+    // after returning from the sign-in test) rather than an empty default draft.
+    const savedRevision = initialData.activeProvider
+      ? null
+      : initialData.revisions.find(
+          revision =>
+            revision.id ===
+            reconcileRevisionSelection(
+              initialData.revisions,
+              typeof window !== 'undefined'
+                ? (new URLSearchParams(window.location.search).get('revisionId') ?? '')
+                : '',
+              initialData.activeRevisionId
+            )
+        );
+    if (savedRevision) return editable(savedRevision.configuration);
     if (!initialData.activeProvider)
       return {
         issuer: initialData.providerCompatibilityWarning ? '' : 'https://accounts.google.com',

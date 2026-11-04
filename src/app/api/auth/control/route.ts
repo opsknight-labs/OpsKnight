@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server';
 import { z } from 'zod/v3';
+import { logger } from '@/lib/logger';
 import { jsonApiOk, jsonError } from '@/lib/api-response';
 import type { RegistrationResponseJSON } from '@simplewebauthn/server';
 import { retryAuthenticationAlert } from '@/lib/auth-control/security-events';
@@ -13,7 +14,7 @@ import {
   claimsPreviewRulesSchema,
   searchAuthenticationUsers,
 } from '@/lib/auth-control/dashboard';
-import { assertAuthenticationOrigin } from '@/lib/auth-control/origin';
+import { assertAuthenticationOrigin, AuthenticationOriginError } from '@/lib/auth-control/origin';
 import {
   activateOidcRevision,
   beginOidcRevisionTest,
@@ -202,7 +203,14 @@ export async function GET(request: NextRequest) {
         maxAge: 0,
       });
     return response;
-  } catch {
+  } catch (error) {
+    // The response stays generic; the reason belongs in the server log for operators.
+    logger.warn('[Auth control] Dashboard request rejected', {
+      component: 'auth-control:route',
+      reason: error instanceof Error ? error.message : 'unknown',
+    });
+    if (error instanceof AuthenticationOriginError)
+      return jsonError(error.message, 409, undefined, headers);
     return jsonError(
       'Authentication administration requires an active administrator or emergency recovery session.',
       403,
