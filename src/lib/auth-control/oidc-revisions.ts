@@ -1,9 +1,10 @@
 import 'server-only';
 import { coerceBooleanClaim, normalizeOidcBoundaryClaims } from '@/lib/oidc/claims';
 import { Issuer, custom, generators, errors as openidErrors } from 'openid-client';
-import type { Prisma } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 import prisma from '@/lib/prisma';
 import { logger } from '@/lib/logger';
+import { oidcTrustFingerprint } from '@/lib/oidc/trust-fingerprint';
 import { encrypt, decrypt } from '@/lib/encryption';
 import {
   validateOidcConnection,
@@ -714,6 +715,140 @@ export async function readOidcTestResult(reference: string | undefined): Promise
   };
 }
 
+/**
+ * Who can use single sign-on the moment this configuration is activated, and who still needs
+ * an administrator. Mirrors the sign-in rules in oidc-identity-resolution.ts.
+ */
+async function linkingReadiness(tx: Prisma.TransactionClient, config: ProviderConfiguration) {
+  const fingerprint = oidcTrustFingerprint(config.issuer, config.clientId);
+  const now = new Date();
+  const unlinked: Prisma.UserWhereInput = {
+    status: { in: ['ACTIVE', 'INVITED'] },
+    oidcIdentities: { none: { issuer: config.issuer } },
+  };
+  const [approvalsCarriedOver, approvalsRevoked, approvedUsers] = await Promise.all([
+    tx.oidcLinkingApproval.count({
+      where: {
+        consumedAt: null,
+        revokedAt: null,
+        issuerFingerprint: fingerprint,
+        OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
+      },
+    }),
+    tx.oidcLinkingApproval.count({
+      where: {
+        consumedAt: null,
+        revokedAt: null,
+        OR: [{ issuerFingerprint: { not: fingerprint } }, { issuerFingerprint: null }],
+      },
+    }),
+    tx.user.count({
+      where: {
+        ...unlinked,
+        oidcLinkingApproval: {
+          consumedAt: null,
+          revokedAt: null,
+          issuerFingerprint: fingerprint,
+          OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
+        },
+      },
+    }),
+  ]);
+  const domainTrusted =
+    config.domainTrustedLinking && config.allowedDomains.length > 0
+      ? await tx.user.count({
+          where: {
+            ...unlinked,
+            role: { not: 'ADMIN' },
+            OR: config.allowedDomains.map(domain => ({
+              email: { endsWith: `@${domain}`, mode: 'insensitive' as const },
+            })),
+            NOT: {
+              oidcLinkingApproval: {
+                consumedAt: null,
+                revokedAt: null,
+                issuerFingerprint: fingerprint,
+              },
+            },
+          },
+        })
+      : 0;
+  const total = await tx.user.count({ where: unlinked });
+  return {
+    total,
+    approved: approvedUsers,
+    domainTrusted,
+    needApproval: Math.max(0, total - approvedUsers - domainTrusted),
+    approvalsCarriedOver,
+    approvalsRevoked,
+  };
+}
+
+const ROLE_IMPACT_SCAN_LIMIT = 5000;
+const ROLE_IMPACT_SAMPLE = 25;
+
+/**
+ * Which directory-managed people would get a different role at their next sign-in under these
+ * rules, using the mapped claim values remembered from their last sign-in.
+ */
+async function roleChangeImpact(tx: Prisma.TransactionClient, config: ProviderConfiguration) {
+  const identities = await tx.oidcIdentity.findMany({
+    where: { issuer: config.issuer, claimSnapshot: { not: Prisma.DbNull } },
+    select: {
+      claimSnapshot: true,
+      user: {
+        select: { id: true, name: true, email: true, role: true, roleSource: true, status: true },
+      },
+    },
+    orderBy: { lastLoginAt: 'desc' },
+    take: ROLE_IMPACT_SCAN_LIMIT,
+  });
+  const changes: Array<{ userId: string; name: string; from: string; to: string }> = [];
+  let changed = 0;
+  let denied = 0;
+  for (const identity of identities) {
+    const user = identity.user;
+    if (user.status === 'DISABLED') continue;
+    const evaluation = evaluateOidcRoleClaims(
+      snapshotAsClaims(identity.claimSnapshot),
+      config.roleMapping,
+      config
+    );
+    const resolved = resolveSignInRole(evaluation, {
+      role: user.role,
+      roleSource: user.roleSource,
+    });
+    if (evaluation.deny && resolved.roleSource !== 'MANUAL') {
+      denied += 1;
+      continue;
+    }
+    if (resolved.role === user.role) continue;
+    changed += 1;
+    if (changes.length < ROLE_IMPACT_SAMPLE)
+      changes.push({
+        userId: user.id,
+        name: user.name || user.email,
+        from: user.role,
+        to: resolved.role,
+      });
+  }
+  return {
+    evaluated: identities.length,
+    changed,
+    denied,
+    changes,
+    truncated: identities.length === ROLE_IMPACT_SCAN_LIMIT,
+  };
+}
+
+/** Snapshots store values by claim path; rebuild an object the rule engine can read. */
+export function snapshotAsClaims(snapshot: unknown): Record<string, unknown> {
+  if (!snapshot || typeof snapshot !== 'object' || Array.isArray(snapshot)) return {};
+  return Object.fromEntries(
+    Object.entries(snapshot as Record<string, unknown>).filter(([, value]) => Array.isArray(value))
+  );
+}
+
 async function preview(tx: Prisma.TransactionClient, revisionId: string) {
   const origin = await authenticationOrigin(tx);
   const revision = await tx.oidcRevision.findUniqueOrThrow({ where: { id: revisionId } });
@@ -747,29 +882,42 @@ async function preview(tx: Prisma.TransactionClient, revisionId: string) {
       OR: [{ sessionExpiresAt: null }, { sessionExpiresAt: { gt: new Date() } }],
     },
   });
-  const usersRequiringLinking = await tx.user.count({
-    where: {
-      status: { in: ['ACTIVE', 'INVITED'] },
-      oidcIdentities: { none: { issuer: config.issuer } },
-    },
-  });
-  const blockers = [
-    !adminVerified ? oidcProofLabel(verification.state).detail : '',
-    ready.length < 2 ? 'Enroll and sign in with two independent emergency identities.' : '',
+  const linking = await linkingReadiness(tx, config);
+  const usersRequiringLinking = linking.needApproval;
+  const roleImpact = await roleChangeImpact(tx, config);
+  const staleRevision =
     !isActive && (active?.configVersion ?? 0) !== revision.baseConfigVersion
-      ? 'Active provider changed; create and test a new revision.'
-      : '',
-    replicas ? 'Reconcile conflicting legacy settings on active replicas.' : '',
-  ].filter(Boolean);
+      ? 'The active provider changed after this configuration was saved. Save and test again.'
+      : '';
+  // What each mode needs. SSO Optional keeps passwords working, so it never needs emergency
+  // identities; SSO Required does.
+  const blockersByMode = {
+    SSO_OPTIONAL: [
+      !adminVerified ? oidcProofLabel(verification.state).detail : '',
+      staleRevision,
+    ].filter(Boolean),
+    SSO_REQUIRED: [
+      !adminVerified ? oidcProofLabel(verification.state).detail : '',
+      ready.length < 2
+        ? 'Create two independent emergency identities and sign in with each once.'
+        : '',
+      staleRevision,
+      replicas ? 'Reconcile conflicting legacy settings on active replicas.' : '',
+    ].filter(Boolean),
+  };
+  const blockers = blockersByMode.SSO_REQUIRED;
   return {
     policyVersion: policy.version,
     revisionId,
     passwordSessionCount,
     usersRequiringLinking,
+    linking,
+    roleImpact,
     verifiedEmergencyAccounts: ready.length,
     adminVerified,
     verification,
     blockers,
+    blockersByMode,
     proof,
     config,
     revision,
@@ -787,10 +935,13 @@ export async function enforcementPreview(revisionId: string) {
       revisionId,
       passwordSessionCount: value.passwordSessionCount,
       usersRequiringLinking: value.usersRequiringLinking,
+      linking: value.linking,
+      roleImpact: value.roleImpact,
       verifiedEmergencyAccounts: value.verifiedEmergencyAccounts,
       adminVerified: value.adminVerified,
       verification: value.verification,
       blockers: value.blockers,
+      blockersByMode: value.blockersByMode,
     };
   });
 }
@@ -879,8 +1030,20 @@ export async function activateOidcRevision(
           where: { id: revisionId },
           data: { activatedAt: new Date(), previousRevisionId },
         });
+      // Approvals granted for this same issuer and client (including ones prepared before
+      // activation) stay valid and move to the new version; approvals for any other
+      // provider registration can never be used and are revoked.
+      const activatedFingerprint = oidcTrustFingerprint(data.config.issuer, data.config.clientId);
       await tx.oidcLinkingApproval.updateMany({
-        where: { consumedAt: null, revokedAt: null },
+        where: { consumedAt: null, revokedAt: null, issuerFingerprint: activatedFingerprint },
+        data: { configVersion: version },
+      });
+      await tx.oidcLinkingApproval.updateMany({
+        where: {
+          consumedAt: null,
+          revokedAt: null,
+          OR: [{ issuerFingerprint: { not: activatedFingerprint } }, { issuerFingerprint: null }],
+        },
         data: { revokedAt: new Date() },
       });
       const policy = await tx.authenticationPolicy.update({

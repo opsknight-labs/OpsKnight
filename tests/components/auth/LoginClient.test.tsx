@@ -92,12 +92,14 @@ describe('desktop login authentication methods', () => {
         localAuthEnabled={false}
         errorCode="SSO_LINK_NOT_APPROVED"
         errorReference="a1b2c3d4e5f6"
+        administratorsNotified
       />
     );
 
     const alert = screen.getByRole('alert');
     expect(alert).toHaveTextContent('Your administrator needs to approve your first SSO sign-in');
     expect(alert).toHaveTextContent('Reference a1b2c3d4e5f6');
+    expect(alert).toHaveTextContent('Your administrators have been notified');
     expect(
       screen.getByRole('button', { name: 'Copy details for your administrator' })
     ).toBeInTheDocument();
@@ -133,5 +135,19 @@ describe('desktop login authentication methods', () => {
     );
 
     expect(screen.queryByRole('status')).not.toBeInTheDocument();
+  });
+
+  it('does not claim administrators were notified when no request was recorded', () => {
+    render(
+      <LoginClient
+        callbackUrl="/"
+        ssoEnabled={true}
+        localAuthEnabled={false}
+        errorCode="SSO_LINK_NOT_APPROVED"
+      />
+    );
+    const alert = screen.getByRole('alert');
+    expect(alert).not.toHaveTextContent('have been notified');
+    expect(alert).toHaveTextContent('Ask an administrator to approve your SSO access');
   });
 });

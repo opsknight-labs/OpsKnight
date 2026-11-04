@@ -9,6 +9,7 @@ type SearchParams = {
   sessionRevoked?: string;
   reason?: string;
   ref?: string;
+  notified?: string;
 };
 
 /**

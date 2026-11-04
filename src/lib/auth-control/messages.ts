@@ -235,6 +235,24 @@ export function signInMessage(code: string | null | undefined): AuthMessage | nu
   );
 }
 
+/** Approval messages promise a notification only when one was actually sent. */
+export function signInMessageFor(
+  code: string | null | undefined,
+  options: { administratorsNotified?: boolean } = {}
+): AuthMessage | null {
+  const message = signInMessage(code);
+  if (
+    message &&
+    !options.administratorsNotified &&
+    (code === 'SSO_LINK_NOT_APPROVED' || code === 'SSO_LINK_APPROVAL_EXPIRED')
+  )
+    return {
+      ...message,
+      action: 'Ask an administrator to approve your SSO access, then sign in again.',
+    };
+  return message;
+}
+
 export function sessionEndMessage(reason: string | null | undefined): AuthMessage | null {
   if (!reason) return null;
   return sessionEndMessages.get(reason) ?? null;

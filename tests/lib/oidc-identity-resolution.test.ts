@@ -17,6 +17,10 @@ const tx = {
   },
   user: {
     findUnique: vi.fn(),
+    // Email lookup is case-insensitive; existing scenarios drive both through findUnique.
+    findFirst: vi.fn((...args: unknown[]) =>
+      (tx.user.findUnique as (...a: unknown[]) => unknown)(...args)
+    ),
     create: vi.fn(),
   },
   oidcLinkingApproval: {
@@ -292,6 +296,7 @@ describe('resolveOidcIdentityForSignIn', () => {
       identityCreated: true,
       userCreated: false,
       approvalConsumed: true,
+      linkMethod: 'APPROVAL',
     });
     expect(tx.oidcLinkingApproval.updateMany).toHaveBeenCalledWith({
       where: {

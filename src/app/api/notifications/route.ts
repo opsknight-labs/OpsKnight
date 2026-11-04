@@ -71,6 +71,10 @@ export async function GET(req: NextRequest) {
             const incidentId = notification.entityType === 'INCIDENT'
                 ? notification.entityId
                 : null;
+            // Non-incident notifications that need an administrator's action open its screen.
+            const href = notification.entityType === 'SSO_LINK_REQUEST'
+                ? '/settings/system?section=sso&authTab=access&linking=requested'
+                : null;
 
             return {
                 id: notification.id,
@@ -80,6 +84,7 @@ export async function GET(req: NextRequest) {
                 unread: !notification.readAt,
                 type,
                 incidentId,
+                href,
                 createdAt: notification.createdAt.toISOString()
             };
         });

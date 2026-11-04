@@ -25,6 +25,7 @@ type SearchParams = {
   sessionRevoked?: string;
   reason?: string;
   ref?: string;
+  notified?: string;
 };
 
 export default async function LoginPage({
@@ -121,6 +122,7 @@ export default async function LoginPage({
       defaultCallbackUrl={fallback}
       errorCode={errorCode}
       errorReference={reference}
+      administratorsNotified={awaitedSearchParams?.notified === '1'}
       endedReason={endedReason}
       passwordSet={passwordSet}
       sessionRevoked={awaitedSearchParams?.sessionRevoked === '1'}

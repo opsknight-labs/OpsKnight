@@ -561,6 +561,7 @@ model User {
   oidcConfigs                 OidcConfig[]
   oidcIdentities              OidcIdentity[]
   oidcLinkingApproval         OidcLinkingApproval?
+  oidcLinkingRequest          OidcLinkingRequest?
   avatar                      UserAvatar?
   dashboards                  Dashboard[]
   savedReports                SavedReport[]
@@ -2197,6 +2198,21 @@ model OidcLinkingApproval {
   user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([approvedById])
+}
+
+/// Raised automatically when an existing account's first SSO sign-in needs an administrator's
+/// approval. Deleted when the account links or the request is dismissed.
+model OidcLinkingRequest {
+  id            String   @id @default(cuid())
+  userId        String   @unique
+  email         String
+  reason        String
+  requestedAt   DateTime @default(now())
+  lastAttemptAt DateTime @default(now())
+  attempts      Int      @default(1)
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([lastAttemptAt])
 }
 
 model ApiKey {

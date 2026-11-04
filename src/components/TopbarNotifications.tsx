@@ -37,6 +37,7 @@ type Notification = {
   unread: boolean;
   type: 'incident' | 'service' | 'schedule';
   incidentId?: string;
+  href?: string | null;
   channel?: string;
   createdAt?: string;
 };
@@ -45,7 +46,7 @@ interface NotificationListProps {
   items: Notification[];
   emptyMessage?: string;
   emptySub?: string;
-  onNavigate: (incidentId?: string) => void;
+  onNavigate: (incidentId?: string, href?: string | null) => void;
   onMarkAsRead: (id: string, e: React.MouseEvent) => void;
 }
 
@@ -91,15 +92,18 @@ const NotificationList = memo(function NotificationList({
                 : 'bg-white/80 dark:bg-zinc-900/60 hover:bg-white dark:hover:bg-zinc-800/80 border-zinc-200/80 dark:border-zinc-800/80 border-l-[3.5px] border-l-zinc-300 dark:border-l-zinc-700 opacity-85 hover:opacity-100'
             )}
             onClick={() => {
-              if (notification.incidentId) {
-                onNavigate(notification.incidentId);
+              if (notification.incidentId || notification.href) {
+                onNavigate(notification.incidentId, notification.href);
               }
             }}
             role="button"
             tabIndex={0}
             onKeyDown={e => {
-              if ((e.key === 'Enter' || e.key === ' ') && notification.incidentId) {
-                onNavigate(notification.incidentId);
+              if (
+                (e.key === 'Enter' || e.key === ' ') &&
+                (notification.incidentId || notification.href)
+              ) {
+                onNavigate(notification.incidentId, notification.href);
               }
             }}
           >
@@ -182,6 +186,11 @@ const NotificationList = memo(function NotificationList({
                     )}
                   >
                     View incident <ArrowRight className="h-3 w-3" />
+                  </span>
+                )}
+                {!notification.incidentId && notification.href && (
+                  <span className="text-[11px] font-medium inline-flex items-center gap-0.5 text-zinc-700 dark:text-zinc-200 group-hover:translate-x-0.5 transition-transform">
+                    Review <ArrowRight className="h-3 w-3" />
                   </span>
                 )}
               </div>
@@ -372,8 +381,15 @@ export default function TopbarNotifications() {
   );
 
   const onNavigate = useCallback(
-    (incidentId?: string) => {
-      if (!incidentId) return;
+    (incidentId?: string, href?: string | null) => {
+      if (!incidentId) {
+        // Only same-origin application paths are followed.
+        if (href?.startsWith('/') && !href.startsWith('//')) {
+          setOpen(false);
+          router.push(href);
+        }
+        return;
+      }
       const isMobileContext = pathname?.startsWith('/m');
       const targetUrl = isMobileContext ? `/m/incidents/${incidentId}` : `/incidents/${incidentId}`;
       setOpen(false);

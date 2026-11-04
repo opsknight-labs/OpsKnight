@@ -45,6 +45,8 @@ export type OidcIdentityResolutionResult =
       identityCreated: boolean;
       userCreated: boolean;
       approvalConsumed: boolean;
+      /** How a new identity was linked to an existing account, for the audit trail. */
+      linkMethod?: 'APPROVAL' | 'DIRECTORY' | 'DOMAIN_TRUSTED';
     }
   | {
       ok: false;
@@ -69,7 +71,38 @@ type ResolveOidcIdentityInput = {
   organizationId?: string | null;
   /** No role rule matched and the workspace denies unmatched people: never create an account. */
   denyNewUnmatched?: boolean;
+  /**
+   * Existing non-administrator accounts in the allowed domains link on first sign-in without a
+   * per-user approval, when the provider proves the email domain.
+   */
+  domainTrustedLinking?: boolean;
 };
+
+/**
+ * Domain-trusted linking needs proof that the person controls a mailbox in an allowed domain,
+ * which differs per provider. Microsoft Entra's email claim is editable and unverified for
+ * guests, so Entra must also send xms_edov (email domain owner verified).
+ */
+export function canTrustEmailDomainForLinking(input: {
+  providerType: string | null | undefined;
+  email: string;
+  emailVerifiedClaim: boolean | undefined;
+  allowedDomains: string[];
+  claims?: OidcClaims;
+}): boolean {
+  const domain = input.email.split('@')[1]?.toLowerCase();
+  const allowed = new Set(input.allowedDomains.map(value => value.trim().toLowerCase()));
+  if (!domain || !allowed.has(domain)) return false;
+  if (input.providerType === 'azure') {
+    const edov = input.claims?.xms_edov;
+    return edov === true || edov === 1 || edov === '1' || edov === 'true';
+  }
+  if (input.providerType === 'google') {
+    const hostedDomain = typeof input.claims?.hd === 'string' ? input.claims.hd.toLowerCase() : '';
+    return input.emailVerifiedClaim === true && hostedDomain === domain;
+  }
+  return input.emailVerifiedClaim === true;
+}
 
 const targetUserSelect = {
   id: true,
@@ -295,8 +328,9 @@ export async function resolveOidcIdentityForSignIn(
       const trustedIdentity = trustedCandidates[0] ?? null;
       const emailUser =
         trustedIdentity?.user ??
-        (await tx.user.findUnique({
-          where: { email },
+        // Accounts created before canonical email reservation may differ only in letter case.
+        (await tx.user.findFirst({
+          where: { email: { equals: email, mode: 'insensitive' } },
           select: targetUserSelect,
         }));
 
@@ -312,7 +346,19 @@ export async function resolveOidcIdentityForSignIn(
           throw new Error('OIDC_EMAIL_ASSURANCE_REQUIRED');
         }
 
-        if (!trustedIdentity) {
+        const domainTrusted =
+          !trustedIdentity &&
+          input.domainTrustedLinking === true &&
+          emailUser.role !== 'ADMIN' &&
+          canTrustEmailDomainForLinking({
+            providerType: input.providerType,
+            email,
+            emailVerifiedClaim: input.emailVerifiedClaim,
+            allowedDomains: input.allowedDomains,
+            claims: input.claims,
+          });
+
+        if (!trustedIdentity && !domainTrusted) {
           const approval = await tx.oidcLinkingApproval.findUnique({
             where: { userId: emailUser.id },
             select: {
@@ -386,7 +432,12 @@ export async function resolveOidcIdentityForSignIn(
           user: emailUser,
           identityCreated: true,
           userCreated: false,
-          approvalConsumed: !trustedIdentity,
+          approvalConsumed: !trustedIdentity && !domainTrusted,
+          linkMethod: trustedIdentity
+            ? ('DIRECTORY' as const)
+            : domainTrusted
+              ? ('DOMAIN_TRUSTED' as const)
+              : ('APPROVAL' as const),
         };
       }
 

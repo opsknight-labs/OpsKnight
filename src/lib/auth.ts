@@ -165,7 +165,17 @@ async function rejectOidcSignIn(
   } catch {
     // Audit failure must not change what the person sees.
   }
-  return `/login?${new URLSearchParams({ error: code, ref }).toString()}`;
+  let notified = false;
+  if (
+    context.email &&
+    (reason === 'OIDC_LINK_NOT_APPROVED' || reason === 'OIDC_LINK_APPROVAL_EXPIRED')
+  ) {
+    const { recordOidcLinkingRequest } = await import('@/lib/oidc-linking-requests');
+    notified = await recordOidcLinkingRequest(context.email, reason);
+  }
+  const params = new URLSearchParams({ error: code, ref });
+  if (notified) params.set('notified', '1');
+  return `/login?${params.toString()}`;
 }
 
 function isLastAdministratorConflict(error: unknown) {
@@ -1064,6 +1074,7 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
               configVersion: activeConfig.configVersion,
               organizationId: activeConfig.organizationId,
               denyNewUnmatched: roleEvaluation.deny,
+              domainTrustedLinking: activeConfig.domainTrustedLinking === true,
             });
           } catch (error) {
             logger.error('[Auth] OIDC identity transaction failed', {
@@ -1105,8 +1116,31 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
               subject,
               userId: targetUser.id,
               approvalConsumed: resolution.approvalConsumed,
+              linkMethod: resolution.linkMethod,
               event: 'OIDC_IDENTITY_LINKED',
             });
+          }
+          if (resolution.identityCreated) {
+            try {
+              const { logAudit } = await import('@/lib/audit');
+              await logAudit({
+                action: resolution.userCreated ? 'user.oidc.provisioned' : 'user.oidc.linked',
+                entityType: 'USER',
+                entityId: targetUser.id,
+                actorId: targetUser.id,
+                source: 'AUTH',
+                details: {
+                  issuer,
+                  linkMethod: resolution.userCreated
+                    ? 'JIT'
+                    : (resolution.linkMethod ?? 'APPROVAL'),
+                },
+              });
+              // A pending access request is answered by the link itself.
+              await prisma.oidcLinkingRequest.deleteMany({ where: { userId: targetUser.id } });
+            } catch {
+              // Audit and request cleanup never block a verified sign-in.
+            }
           }
 
           const updateData: Record<string, unknown> = {};

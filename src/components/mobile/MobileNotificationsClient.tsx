@@ -30,6 +30,7 @@ type NotificationItem = {
   unread: boolean;
   type: 'incident' | 'service' | 'schedule';
   incidentId: string | null;
+  href?: string | null;
   createdAt: string;
 };
 
@@ -43,6 +44,8 @@ type Filter = 'all' | 'unread';
 
 const resolveNotificationHref = (notification: NotificationItem) => {
   if (notification.incidentId) return appRoutes.incident('mobile', notification.incidentId);
+  if (notification.href?.startsWith('/') && !notification.href.startsWith('//'))
+    return notification.href;
   if (notification.type === 'service') return appRoutes.services('mobile');
   if (notification.type === 'schedule') return appRoutes.schedules('mobile');
   return appRoutes.home('mobile');

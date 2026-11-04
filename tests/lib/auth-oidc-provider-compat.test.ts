@@ -32,6 +32,10 @@ vi.mock('@/lib/prisma', () => {
     },
     user: {
       findUnique: vi.fn(),
+      // Email lookup is case-insensitive; scenarios drive both through findUnique.
+      findFirst: vi.fn((...args: unknown[]) =>
+        (mockPrisma.user.findUnique as (...a: unknown[]) => unknown)(...args)
+      ),
       create: vi.fn(),
       update: vi.fn(),
     },
@@ -47,7 +51,8 @@ vi.mock('@/lib/prisma', () => {
       deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
       create: vi.fn(),
     },
-    $queryRaw: vi.fn().mockResolvedValue([{ mode: 'SSO_OPTIONAL' }]),
+    // Serves both the policy read and the advisory-lock probe used by role/status writes.
+    $queryRaw: vi.fn().mockResolvedValue([{ mode: 'SSO_OPTIONAL', acquired: true }]),
     oidcConfig: {
       findUnique: vi.fn().mockImplementation(() => getOidcConfigMock()),
       findFirst: vi.fn(),

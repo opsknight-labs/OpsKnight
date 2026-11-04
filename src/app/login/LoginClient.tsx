@@ -18,13 +18,19 @@ import { safeInternalCallbackUrl } from '@/lib/auth-redirect';
 import { detectResponderSessionPolicy } from '@/lib/pwa-session-policy';
 import { appRoutes } from '@/lib/app-routes';
 import { promiseWithTimeout } from '@/lib/client-timeout';
-import { type AuthMessage, sessionEndMessage, signInMessage } from '@/lib/auth-control/messages';
+import {
+  type AuthMessage,
+  sessionEndMessage,
+  signInMessage,
+  signInMessageFor,
+} from '@/lib/auth-control/messages';
 
 type Props = {
   callbackUrl: string;
   defaultCallbackUrl?: string;
   errorCode?: string | null;
   errorReference?: string | null;
+  administratorsNotified?: boolean;
   endedReason?: string | null;
   passwordSet?: boolean;
   sessionRevoked?: boolean;
@@ -54,6 +60,7 @@ export default function LoginClient({
   defaultCallbackUrl,
   errorCode,
   errorReference,
+  administratorsNotified,
   endedReason,
   passwordSet,
   sessionRevoked,
@@ -79,7 +86,7 @@ export default function LoginClient({
   const rememberMe = rememberMeOverride ?? trustedPwa;
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<AuthMessage | null>(
-    () => signInMessage(errorCode) ?? signInMessage(ssoError)
+    () => signInMessageFor(errorCode, { administratorsNotified }) ?? signInMessage(ssoError)
   );
   const [reference, setReference] = useState(errorReference ?? null);
   const [copied, setCopied] = useState(false);
@@ -96,8 +103,8 @@ export default function LoginClient({
   const isEmailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 
   useEffect(() => {
-    if (errorCode) setError(signInMessage(errorCode));
-  }, [errorCode]);
+    if (errorCode) setError(signInMessageFor(errorCode, { administratorsNotified }));
+  }, [errorCode, administratorsNotified]);
 
   // Surface SSO availability problems passed from the server component
   useEffect(() => {
