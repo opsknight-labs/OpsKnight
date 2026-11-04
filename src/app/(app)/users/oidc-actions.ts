@@ -220,3 +220,40 @@ export async function revokeOidcLinking(userId: string): Promise<OidcLinkingAppr
   revalidatePath('/audit');
   return { success: true, state: 'revoked' };
 }
+
+/**
+ * A manual role is sticky: single sign-on never overwrites it. This hands the role back to the
+ * identity provider, which applies the role rules at the person's next SSO sign-in.
+ */
+export async function returnRoleToDirectory(
+  userId: string
+): Promise<{ success?: boolean; error?: string }> {
+  let admin: { id: string; email: string };
+  try {
+    admin = await assertAdmin();
+  } catch {
+    return { error: 'Unauthorized. Admin access required.' };
+  }
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { id: true, role: true, roleSource: true, oidcIdentities: { select: { id: true } } },
+  });
+  if (!user) return { error: 'User not found.' };
+  if (user.roleSource === 'OIDC') return { success: true };
+  if (user.oidcIdentities.length === 0)
+    return {
+      error:
+        'This person has not signed in with single sign-on yet, so there is no directory role to return to.',
+    };
+  await prisma.user.update({ where: { id: user.id }, data: { roleSource: 'OIDC' } });
+  await logAudit({
+    action: 'user.role.returned_to_directory',
+    entityType: 'USER',
+    entityId: user.id,
+    actorId: admin.id,
+    details: { role: user.role, previousRoleSource: user.roleSource },
+  });
+  revalidatePath('/users');
+  revalidatePath('/settings/system');
+  return { success: true };
+}

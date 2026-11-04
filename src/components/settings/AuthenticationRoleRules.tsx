@@ -39,7 +39,7 @@ export default function AuthenticationRoleRules({
           size="sm"
           variant="outline"
           disabled={disabled || rules.length >= 100}
-          onClick={() => onChange([...rules, { claim: 'groups', value: '', role: 'USER' }])}
+          onClick={() => onChange([...rules, { claim: 'groups', value: '', role: 'USER', caseSensitive: false }])}
         >
           <Plus className="mr-1 h-3.5 w-3.5" />
           Add rule

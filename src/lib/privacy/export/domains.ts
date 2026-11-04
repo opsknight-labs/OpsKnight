@@ -74,6 +74,8 @@ export async function fetchIdentities(userId: string) {
       email: true,
       lastLoginAt: true,
       createdAt: true,
+      claimSnapshot: true,
+      claimSnapshotAt: true,
     },
   });
 }

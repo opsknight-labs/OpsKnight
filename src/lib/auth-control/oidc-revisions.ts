@@ -12,7 +12,7 @@ import {
 } from '@/lib/oidc-validation';
 import { safeOutboundLookup } from '@/lib/network-security';
 import { getOidcProviderPolicy } from '@/lib/oidc/provider-policy';
-import { evaluateOidcRoleClaims } from '@/lib/oidc/role-mapping';
+import { evaluateOidcRoleClaims, resolveSignInRole } from '@/lib/oidc/role-mapping';
 import { validateOidcCustomScopes } from '@/lib/oidc/scopes';
 import { resetAuthOptionsCache } from '@/lib/auth';
 import { normalizeOidcProviderType } from '@/lib/oidc-provider';
@@ -226,6 +226,11 @@ export function storedProviderConfiguration(
         : {},
     sessionMaxAgeSeconds: active.sessionMaxAgeSeconds,
     sessionIdleTimeoutSeconds: active.sessionIdleTimeoutSeconds,
+    defaultRole: active.defaultRole,
+    unmatchedPolicy: active.unmatchedPolicy,
+    rolePrecedence: active.rolePrecedence,
+    domainTrustedLinking: active.domainTrustedLinking,
+    teamMapping: Array.isArray(active.teamMapping) ? active.teamMapping : [],
   };
 }
 export function activeProviderConfiguration(
@@ -510,11 +515,11 @@ export async function completeOidcRevisionTest(
     if (emailVerified === false) throw new OidcTestFailure('EMAIL_UNVERIFIED', diagnostics);
     const emailOwnershipVerified =
       Boolean(email) && (emailVerified === true || provider.allowsMissingEmailVerified());
-    const role = evaluateOidcRoleClaims(claims, config.roleMapping);
-    if (!role.ok || role.groupsOverage)
+    const role = evaluateOidcRoleClaims(claims, config.roleMapping, config);
+    if (role.outcome === 'INCOMPLETE')
       throw new OidcTestFailure('GROUP_CLAIMS_INCOMPLETE', {
         ...diagnostics,
-        role: { result: 'incomplete' },
+        role: { result: 'incomplete group claims (too many groups)' },
       });
     await prisma.$transaction(async tx => {
       await lockControlActor(tx, secrets.actor, false);
@@ -544,12 +549,26 @@ export async function completeOidcRevisionTest(
         if (email !== admin.email.toLowerCase())
           throw new OidcTestFailure('EMAIL_MISMATCH', { ...diagnostics, ...emails });
       }
-      const effectiveRole = role.matched || admin.roleSource === 'OIDC' ? role.role : admin.role;
+      const resolved = resolveSignInRole(
+        role,
+        { role: admin.role, roleSource: admin.roleSource },
+        { firstLink: !identity }
+      );
+      const denied = role.deny && resolved.roleSource !== 'MANUAL';
+      const effectiveRole = denied ? 'DENIED' : resolved.role;
       diagnostics = {
         ...diagnostics,
         role: {
-          result: role.matched ? 'matched' : 'no rule matched',
-          effectiveRole,
+          result:
+            role.outcome === 'MATCHED'
+              ? `matched ${role.matchedRule?.claim} = ${role.matchedRule?.value}`
+              : role.missingClaims.length > 0
+                ? `no rule matched; missing claims: ${role.missingClaims.join(', ')}`
+                : 'no rule matched',
+          effectiveRole:
+            resolved.roleSource === 'MANUAL' && !denied
+              ? `${effectiveRole} (set manually, kept)`
+              : effectiveRole,
         },
       };
       if (effectiveRole !== 'ADMIN')

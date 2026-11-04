@@ -35,7 +35,13 @@ import {
   getDatabaseLocalAuthPolicy,
   getAuthenticationPolicy,
 } from '@/lib/authentication-policy';
-import { evaluateOidcRoleClaims } from '@/lib/oidc/role-mapping';
+import {
+  evaluateOidcRoleClaims,
+  oidcClaimSnapshot,
+  resolveSignInRole,
+  type OidcRole,
+} from '@/lib/oidc/role-mapping';
+import { Prisma } from '@prisma/client';
 import { getValidatedOidcRuntimeMetadata } from '@/lib/oidc-validation';
 import { normalizeOidcIssuer } from '@/lib/oidc/issuer-migration';
 import {
@@ -160,6 +166,15 @@ async function rejectOidcSignIn(
     // Audit failure must not change what the person sees.
   }
   return `/login?${new URLSearchParams({ error: code, ref }).toString()}`;
+}
+
+function isLastAdministratorConflict(error: unknown) {
+  return (
+    error instanceof Error &&
+    /no active administrators/i.test(
+      `${error.message} ${(error as { userMessage?: string }).userMessage ?? ''}`
+    )
+  );
 }
 
 function clearSessionToken(token: AugmentedJWT, reason: string) {
@@ -1010,30 +1025,22 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
             return rejectOidcSignIn('SSO_SUBJECT_MISSING', { email, issuer });
           }
 
-          const roleEvaluation = evaluateOidcRoleClaims(claims, activeConfig.roleMapping ?? []);
-          if (!roleEvaluation.ok) {
-            logger.warn('[Auth] OIDC role claims rejected', {
-              component: 'auth:signIn',
-              reasonCode: roleEvaluation.reason,
-              providerType: activeConfig.providerType,
-            });
-            return false;
-          }
+          const roleEvaluation = evaluateOidcRoleClaims(claims, activeConfig.roleMapping ?? [], {
+            defaultRole: activeConfig.defaultRole,
+            unmatchedPolicy: activeConfig.unmatchedPolicy,
+            rolePrecedence: activeConfig.rolePrecedence,
+          });
           logger.info('[Auth] OIDC role mapping evaluated', {
             component: 'auth:signIn',
-            event: roleEvaluation.matched
-              ? 'OIDC_ROLE_MAPPING_MATCHED'
-              : 'OIDC_ROLE_MAPPING_DEFAULTED',
+            event:
+              roleEvaluation.outcome === 'MATCHED'
+                ? 'OIDC_ROLE_MAPPING_MATCHED'
+                : roleEvaluation.outcome === 'INCOMPLETE'
+                  ? 'OIDC_ROLE_CLAIMS_INCOMPLETE'
+                  : 'OIDC_ROLE_MAPPING_DEFAULTED',
             mappedRole: roleEvaluation.role,
-            reason: roleEvaluation.matched ? 'mapping_match' : 'no_mapping_match',
+            missingClaims: roleEvaluation.missingClaims,
           });
-          if (roleEvaluation.groupsOverage) {
-            logger.warn('[Auth] OIDC group overage denied mapped elevation; continuing sign-in', {
-              component: 'auth:signIn',
-              reasonCode: 'OIDC_GROUPS_OVERAGE',
-              providerType: activeConfig.providerType,
-            });
-          }
 
           let resolution;
           try {
@@ -1056,6 +1063,7 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
               clientId: activeConfig.clientId,
               configVersion: activeConfig.configVersion,
               organizationId: activeConfig.organizationId,
+              denyNewUnmatched: roleEvaluation.deny,
             });
           } catch (error) {
             logger.error('[Auth] OIDC identity transaction failed', {
@@ -1114,31 +1122,53 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
             });
           }
 
-          if (roleEvaluation.matched) {
-            const desiredRole = roleEvaluation.role;
-            if (targetUser.role !== desiredRole || targetUser.roleSource !== 'OIDC') {
-              updateData.role = desiredRole;
-              updateData.roleSource = 'OIDC';
-              logger.info('[Auth] OIDC role changed from mapping evaluation', {
-                component: 'auth:signIn',
-                userId: targetUser.id,
-                previousRole: targetUser.role,
-                newRole: desiredRole,
-                event: 'OIDC_ROLE_CHANGED',
-              });
-            }
-          } else if (targetUser.roleSource === 'OIDC') {
-            const desiredRole = roleEvaluation.role;
-            if (targetUser.role !== desiredRole) {
-              updateData.role = desiredRole;
-              logger.info('[Auth] OIDC role changed from mapping evaluation', {
-                component: 'auth:signIn',
-                userId: targetUser.id,
-                previousRole: targetUser.role,
-                newRole: desiredRole,
-                event: 'OIDC_ROLE_CHANGED',
-              });
-            }
+          // Unmatched people are refused when the workspace says so, unless an administrator
+          // set their role explicitly.
+          if (roleEvaluation.deny && targetUser.roleSource !== 'MANUAL') {
+            return rejectOidcSignIn('OIDC_ROLE_UNMATCHED_DENIED', {
+              email,
+              issuer,
+              userId: targetUser.id,
+              providerType: activeConfig.providerType,
+            });
+          }
+
+          if (roleEvaluation.outcome === 'INCOMPLETE') {
+            logger.warn('[Auth] OIDC group claims incomplete; keeping current role', {
+              component: 'auth:signIn',
+              userId: targetUser.id,
+              reasonCode: 'OIDC_GROUPS_OVERAGE',
+              providerType: activeConfig.providerType,
+            });
+            const { dedupedSecurityEvent } = await import('@/lib/auth-control/security-events');
+            await dedupedSecurityEvent(
+              `oidc-claims-incomplete:${targetUser.id}`,
+              24 * 60 * 60 * 1000,
+              'auth.oidc.claims.incomplete',
+              targetUser.id,
+              { userId: targetUser.id, reason: 'OIDC_GROUPS_OVERAGE', keptRole: targetUser.role }
+            ).catch(() => undefined);
+          }
+
+          const resolvedRole = resolveSignInRole(
+            roleEvaluation,
+            {
+              role: targetUser.role as OidcRole,
+              roleSource: targetUser.roleSource as 'MANUAL' | 'OIDC' | 'SCIM',
+            },
+            { firstLink: resolution.identityCreated }
+          );
+          if (resolvedRole.changed) {
+            if (resolvedRole.role !== targetUser.role) updateData.role = resolvedRole.role;
+            if (resolvedRole.roleSource !== targetUser.roleSource)
+              updateData.roleSource = resolvedRole.roleSource;
+            logger.info('[Auth] OIDC role changed from mapping evaluation', {
+              component: 'auth:signIn',
+              userId: targetUser.id,
+              previousRole: targetUser.role,
+              newRole: resolvedRole.role,
+              event: 'OIDC_ROLE_CHANGED',
+            });
           }
 
           if (activeConfig.profileMapping) {
@@ -1188,23 +1218,27 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
           }
 
           if (Object.keys(updateData).length > 0) {
-            try {
-              const { updateUserSecurityState } = await import('@/lib/users/admin-invariants');
-              const mappedRole = updateData.role as
-                'ADMIN' | 'RESPONDER' | 'AUDITOR' | 'USER' | undefined;
-              const mappedRoleSource = updateData.roleSource as 'OIDC' | undefined;
-              const mappedStatus = updateData.status as 'ACTIVE' | undefined;
-              delete updateData.role;
-              delete updateData.roleSource;
-              delete updateData.status;
-              await updateUserSecurityState(
+            const { updateUserSecurityState } = await import('@/lib/users/admin-invariants');
+            const mappedRole = updateData.role as
+              'ADMIN' | 'RESPONDER' | 'AUDITOR' | 'USER' | undefined;
+            const mappedRoleSource = updateData.roleSource as 'OIDC' | 'MANUAL' | undefined;
+            const mappedStatus = updateData.status as 'ACTIVE' | undefined;
+            delete updateData.role;
+            delete updateData.roleSource;
+            delete updateData.status;
+            const applyUpdate = (includeRole: boolean) =>
+              updateUserSecurityState(
                 targetUser.id,
                 {
-                  ...(mappedRole ? { role: mappedRole } : {}),
-                  ...(mappedRoleSource ? { roleSource: mappedRoleSource } : {}),
+                  ...(includeRole && mappedRole ? { role: mappedRole } : {}),
+                  ...(includeRole && mappedRoleSource ? { roleSource: mappedRoleSource } : {}),
                   ...(mappedStatus ? { status: mappedStatus } : {}),
                 },
-                updateData,
+                includeRole
+                  ? updateData
+                  : Object.fromEntries(
+                      Object.entries(updateData).filter(([key]) => key !== 'tokenVersion')
+                    ),
                 undefined,
                 async tx => {
                   await assertCurrentOidcRegistration(tx, activeConfig);
@@ -1212,6 +1246,29 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
                 },
                 targetUser.tokenVersion
               );
+            try {
+              try {
+                await applyUpdate(true);
+              } catch (error) {
+                // The identity provider would demote the last active administrator. Keep the
+                // role, let them in, and tell every administrator, instead of locking them out.
+                if (!(mappedRole && isLastAdministratorConflict(error))) throw error;
+                await applyUpdate(false);
+                logger.warn('[Auth] Kept last administrator role despite OIDC mapping', {
+                  component: 'auth:signIn',
+                  userId: targetUser.id,
+                  mappedRole,
+                  event: 'OIDC_LAST_ADMIN_ROLE_KEPT',
+                });
+                const { dedupedSecurityEvent } = await import('@/lib/auth-control/security-events');
+                await dedupedSecurityEvent(
+                  `oidc-last-admin-kept:${targetUser.id}`,
+                  24 * 60 * 60 * 1000,
+                  'auth.oidc.last_admin_role_kept',
+                  targetUser.id,
+                  { userId: targetUser.id, mappedRole }
+                ).catch(() => undefined);
+              }
             } catch (error) {
               if (error instanceof OidcRegistrationChangedError)
                 return '/login?error=OIDC_CONFIGURATION_CHANGED';
@@ -1223,6 +1280,24 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
               component: 'auth:signIn',
               userId: targetUser.id,
               updatedFields: Object.keys(updateData),
+            });
+          }
+
+          // Remember the mapped claim values (not the token) for rule-impact previews.
+          const snapshot = oidcClaimSnapshot(claims, [
+            ...(activeConfig.roleMapping ?? []),
+            ...(activeConfig.teamMapping ?? []),
+          ]);
+          try {
+            await prisma.oidcIdentity.updateMany({
+              where: { issuer, subject },
+              data: { claimSnapshot: snapshot ?? Prisma.DbNull, claimSnapshotAt: new Date() },
+            });
+          } catch (error) {
+            // Previews degrade gracefully; sign-in never depends on the snapshot.
+            logger.warn('[Auth] Could not store OIDC claim snapshot', {
+              component: 'auth:signIn',
+              error,
             });
           }
 

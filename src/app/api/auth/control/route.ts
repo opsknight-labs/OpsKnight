@@ -10,6 +10,7 @@ import {
   authenticationAlertHistory,
   authenticationAlertHistoryStatus,
   identityClaimsPreview,
+  claimsPreviewRulesSchema,
   searchAuthenticationUsers,
 } from '@/lib/auth-control/dashboard';
 import { assertAuthenticationOrigin } from '@/lib/auth-control/origin';
@@ -135,7 +136,14 @@ const schema = z.discriminatedUnion('action', [
     })
     .strict(),
   z.object({ action: z.literal('retireLegacy') }).strict(),
-  z.object({ action: z.literal('claims'), revisionId: id, claims: z.record(z.unknown()) }).strict(),
+  z
+    .object({
+      action: z.literal('claims'),
+      revisionId: id,
+      claims: z.record(z.unknown()),
+      draftRules: claimsPreviewRulesSchema.optional(),
+    })
+    .strict(),
   z
     .object({
       action: z.literal('mode'),
@@ -340,7 +348,7 @@ export async function POST(request: NextRequest) {
         await retireLegacyEmergency(actor);
         return json({ success: true });
       case 'claims':
-        return json(await identityClaimsPreview(input.revisionId, input.claims));
+        return json(await identityClaimsPreview(input.revisionId, input.claims, input.draftRules));
       case 'mode':
         if (actor.kind === 'emergency' && input.mode === 'SSO_OPTIONAL')
           return json(await relaxRequiredToOptional(actor, input.expectedVersion));

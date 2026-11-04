@@ -40,6 +40,11 @@ type OidcConfigRecord = {
   configVersion: number;
   sessionMaxAgeSeconds?: number | null;
   sessionIdleTimeoutSeconds?: number | null;
+  defaultRole?: string | null;
+  unmatchedPolicy?: string | null;
+  rolePrecedence?: string | null;
+  domainTrustedLinking?: boolean | null;
+  teamMapping?: unknown;
 };
 
 export type OidcConfig = {
@@ -53,7 +58,14 @@ export type OidcConfig = {
     claim: string;
     value: string;
     role: 'ADMIN' | 'RESPONDER' | 'AUDITOR' | 'USER';
+    caseSensitive?: boolean;
   }>;
+  // Optional in the type so older callers and fixtures stay valid; the loader always sets them.
+  defaultRole?: 'ADMIN' | 'RESPONDER' | 'AUDITOR' | 'USER';
+  unmatchedPolicy?: 'DEFAULT_ROLE' | 'DENY';
+  rolePrecedence?: 'FIRST_MATCH' | 'HIGHEST_ROLE';
+  domainTrustedLinking?: boolean;
+  teamMapping?: Array<{ claim: string; value: string; caseSensitive?: boolean; teamId: string }>;
   customScopes?: string | null;
   providerType?: string | null;
   providerLabel?: string | null;
@@ -84,7 +96,34 @@ const RoleMappingRuleSchema = z.object({
   claim: z.string().min(1),
   value: z.string(),
   role: z.enum(['ADMIN', 'RESPONDER', 'AUDITOR', 'USER']),
+  caseSensitive: z.boolean().optional(),
 });
+
+const TeamMappingSchema = z.array(
+  z.object({
+    claim: z.string().min(1),
+    value: z.string().min(1),
+    caseSensitive: z.boolean().optional(),
+    teamId: z.string().min(1),
+  })
+);
+
+function parseTeamMapping(teamMapping: unknown) {
+  const result = TeamMappingSchema.safeParse(teamMapping ?? []);
+  if (!result.success) {
+    logger.warn('[OIDC] Invalid team mapping config; ignoring teamMapping', {
+      component: 'oidc-config',
+      issues: result.error.issues.map(i => ({ path: i.path.join('.'), message: i.message })),
+    });
+    return [];
+  }
+  return result.data;
+}
+
+const ROLES = ['ADMIN', 'RESPONDER', 'AUDITOR', 'USER'] as const;
+function parseRole(value: unknown): OidcConfig['defaultRole'] {
+  return ROLES.find(role => role === value) ?? 'USER';
+}
 
 const RoleMappingSchema = z.array(RoleMappingRuleSchema);
 
@@ -186,6 +225,11 @@ async function fetchOidcConfigRecordUncached(): Promise<OidcConfigRecord | null>
       configVersion: config.configVersion,
       sessionMaxAgeSeconds: config.sessionMaxAgeSeconds ?? null,
       sessionIdleTimeoutSeconds: config.sessionIdleTimeoutSeconds ?? null,
+      defaultRole: config.defaultRole,
+      unmatchedPolicy: config.unmatchedPolicy,
+      rolePrecedence: config.rolePrecedence,
+      domainTrustedLinking: config.domainTrustedLinking,
+      teamMapping: config.teamMapping,
     };
   } catch (error) {
     // Database connection error or other Prisma errors
@@ -309,6 +353,16 @@ export async function getOidcConfig(): Promise<OidcConfig | null> {
         configVersion: config.configVersion,
         sessionMaxAgeSeconds: config.sessionMaxAgeSeconds ?? null,
         sessionIdleTimeoutSeconds: config.sessionIdleTimeoutSeconds ?? null,
+        defaultRole: parseRole(config.defaultRole),
+        // Unknown stored values fall back to the behaviour that existed before they did.
+        unmatchedPolicy:
+          config.unmatchedPolicy === 'DENY' ? ('DENY' as const) : ('DEFAULT_ROLE' as const),
+        rolePrecedence:
+          config.rolePrecedence === 'HIGHEST_ROLE'
+            ? ('HIGHEST_ROLE' as const)
+            : ('FIRST_MATCH' as const),
+        domainTrustedLinking: config.domainTrustedLinking === true,
+        teamMapping: parseTeamMapping(config.teamMapping),
       };
 
       logger.info('[OIDC] Successfully loaded OIDC config', {

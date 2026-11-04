@@ -151,6 +151,11 @@ export function useAuthenticationController({
         profileMapping: {},
         sessionMaxAgeSeconds: null,
         sessionIdleTimeoutSeconds: null,
+        defaultRole: 'USER',
+        unmatchedPolicy: 'DEFAULT_ROLE',
+        rolePrecedence: 'HIGHEST_ROLE',
+        domainTrustedLinking: false,
+        teamMapping: [],
       };
     return editable(initialData.activeProvider);
   });

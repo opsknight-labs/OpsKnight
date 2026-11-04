@@ -601,6 +601,8 @@ model OidcIdentity {
   issuerFingerprint String?
   emailAtLink       String?
   lastLoginAt       DateTime?
+  claimSnapshot     Json?
+  claimSnapshotAt   DateTime?
   userId            String
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
@@ -987,6 +989,11 @@ model OidcConfig {
   profileMapping            Json?    @default("{}")
   sessionMaxAgeSeconds      Int?
   sessionIdleTimeoutSeconds Int?
+  defaultRole               Role     @default(USER)
+  unmatchedPolicy           String   @default("DEFAULT_ROLE")
+  rolePrecedence            String   @default("HIGHEST_ROLE")
+  domainTrustedLinking      Boolean  @default(false)
+  teamMapping               Json     @default("[]")
   createdAt                 DateTime @default(now())
   updatedAt                 DateTime @updatedAt
   updatedBy                 String?

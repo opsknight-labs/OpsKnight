@@ -35,7 +35,8 @@ export type OidcIdentityResolutionFailure =
   | 'OIDC_LINK_NOT_APPROVED'
   | 'OIDC_LINK_APPROVAL_EXPIRED'
   | 'OIDC_AMBIGUOUS_IDENTITY_CONFLICT'
-  | 'OIDC_TARGET_NOT_OPERATIONAL';
+  | 'OIDC_TARGET_NOT_OPERATIONAL'
+  | 'OIDC_ROLE_UNMATCHED_DENIED';
 
 export type OidcIdentityResolutionResult =
   | {
@@ -66,6 +67,8 @@ type ResolveOidcIdentityInput = {
   configVersion?: number;
   requireCurrentRegistration?: boolean;
   organizationId?: string | null;
+  /** No role rule matched and the workspace denies unmatched people: never create an account. */
+  denyNewUnmatched?: boolean;
 };
 
 const targetUserSelect = {
@@ -390,6 +393,9 @@ export async function resolveOidcIdentityForSignIn(
       if (!input.autoProvision) {
         throw new Error('OIDC_AUTO_PROVISION_DISABLED');
       }
+      if (input.denyNewUnmatched) {
+        throw new Error('OIDC_ROLE_UNMATCHED_DENIED');
+      }
 
       // JIT user and immutable identity are one atomic unit. If identity
       // insertion fails, the transaction rolls the new user back too.
@@ -447,6 +453,7 @@ export async function resolveOidcIdentityForSignIn(
       'OIDC_LINK_APPROVAL_EXPIRED',
       'OIDC_AMBIGUOUS_IDENTITY_CONFLICT',
       'OIDC_TARGET_NOT_OPERATIONAL',
+      'OIDC_ROLE_UNMATCHED_DENIED',
     ]);
     if (knownReasons.has(reason as OidcIdentityResolutionFailure)) {
       return { ok: false, reason: reason as OidcIdentityResolutionFailure };

@@ -117,11 +117,16 @@ export function providerDraftErrors(configuration: ProviderConfiguration, hasSav
   return errors;
 }
 
-export function hasBroadAdministratorRule(rules: ProviderConfiguration['roleMapping']) {
-  return rules.some(
-    rule =>
+export function hasBroadAdministratorRule(
+  rules: Array<Pick<ProviderConfiguration['roleMapping'][number], 'claim' | 'value' | 'role'>>
+) {
+  return rules.some(rule => {
+    // realm_access.roles and resource_access.<client>.roles are group-like claims too.
+    const claimName = rule.claim.split('.').pop() ?? rule.claim;
+    return (
       rule.role === 'ADMIN' &&
-      (!/^(groups?|roles?)$/i.test(rule.claim) ||
-        /^(all|everyone|employees|users|members|authenticated|\*)$/i.test(rule.value))
-  );
+      (!/^(groups?|roles?)$/i.test(claimName) ||
+        /^(all|everyone|employees|users|members|authenticated|\*)$/i.test(rule.value.trim()))
+    );
+  });
 }

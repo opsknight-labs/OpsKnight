@@ -655,6 +655,11 @@ describe('enterprise authentication experience', () => {
         profileMapping: {},
         sessionMaxAgeSeconds: null,
         sessionIdleTimeoutSeconds: null,
+        defaultRole: 'USER',
+        unmatchedPolicy: 'DEFAULT_ROLE',
+        rolePrecedence: 'HIGHEST_ROLE',
+        domainTrustedLinking: false,
+        teamMapping: [],
       },
     });
 
