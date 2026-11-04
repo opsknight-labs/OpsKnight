@@ -128,7 +128,7 @@ export default async function IntelligenceAiPage() {
             <p className="py-3 text-sm text-muted-foreground">
               {semantic === null
                 ? 'Status is unavailable right now.'
-                : 'Not active: turn AI on and give an enabled provider an embedding model. That provider must be allowed to receive Internal data and be in an allowed region.'}
+                : 'Not active: enable Intelligence and AI, and give an enabled provider an embedding model. Masked titles can still contain names. That provider must be allowed to receive Personal data and be in an allowed region.'}
             </p>
           )}
         </SettingsSection>

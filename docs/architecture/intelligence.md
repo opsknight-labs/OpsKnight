@@ -278,8 +278,10 @@ port, so moving to a newer SDK later is a one-adapter change.
 ## Semantic search (optional)
 
 With AI on, an administrator can turn on semantic search and give a provider an embedding model. Masked
-incident titles (numbers and identifiers already removed, so the request is Internal data) are then
+incident titles can still contain names or other personal text after numbers and identifiers are removed. They are classified as Personal and are then
 embedded, and similar-incident search also matches by meaning, not just wording.
+
+Background embedding checks the current service policy before reading title text. OFF services are excluded before the candidate batch limit. Changed source text is queued for the native indexer instead of being sent from an old fingerprint; policy, source ownership and provider eligibility are rechecked before responses are stored.
 
 - **No extension.** Vectors are unit-normalised `REAL[]` rows in `IncidentEmbedding`; similarity is a dot
   product computed in the database over a bounded number of the most recent vectors of the same model.

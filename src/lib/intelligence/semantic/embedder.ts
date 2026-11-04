@@ -1,5 +1,14 @@
 import 'server-only';
 import prisma from '@/lib/prisma';
+import { Prisma } from '@prisma/client';
+import {
+  getIntelligenceSettings,
+  resolveEffectivePolicy,
+  withIntelligenceReadMemo,
+} from '../settings/service';
+import { candidatePolicyModeSql } from '../settings/mode-sql';
+import { withDbBudget } from '../jobs/db-budget';
+import { enqueueWorkItems, WORK_KINDS } from '../jobs/work-queue';
 import { registerAiGateway } from '../ai/gateway';
 import { resolveEmbeddingModel } from '../ai/port';
 import { templateHash } from '../jobs/indexer';
@@ -22,44 +31,91 @@ const sourceHash = templateHash;
 
 /** The configured embedding model, or null when semantic search is off or unavailable. */
 export async function currentEmbeddingModel(): Promise<string | null> {
+  if (!(await withIntelligenceReadMemo(() => getIntelligenceSettings())).enabled) return null;
   registerAiGateway();
-  return (await resolveEmbeddingModel('INTERNAL'))?.model ?? null;
+  return (await resolveEmbeddingModel('PERSONAL'))?.model ?? null;
 }
 
 /**
  * Embeds the masked titles of the given incidents. Only the fingerprint template is sent: it is the
- * title with identifiers and numbers already masked, so the request is INTERNAL data, and providers
- * not allowed to receive INTERNAL data are never chosen. Incidents whose text and model are unchanged
+ * title with identifiers and numbers masked. Names and other personal text may remain, so providers
+ * must be permitted to receive PERSONAL data; masking never lowers that requirement. Incidents whose text, service and model are unchanged
  * are skipped, so re-indexing (for example on resolve) costs nothing.
  */
 export async function embedIncidents(
   incidentIds: readonly string[],
   signal?: AbortSignal
 ): Promise<EmbedOutcome> {
+  if (signal?.aborted || !(await withIntelligenceReadMemo(() => getIntelligenceSettings())).enabled)
+    return { status: 'disabled' };
   registerAiGateway();
-  const port = await resolveEmbeddingModel('INTERNAL');
+  const port = await resolveEmbeddingModel('PERSONAL');
   if (!port) return { status: 'disabled' };
 
   const ids = [...new Set(incidentIds)].slice(0, EMBED_BATCH_SIZE);
+  const subjects = await prisma.incident.findMany({
+    where: { id: { in: ids } },
+    select: {
+      id: true,
+      serviceId: true,
+      updatedAt: true,
+      intelligenceFingerprint: { select: { sourceUpdatedAt: true } },
+    },
+  });
+  const activeServices = await enabledServices(subjects.map(subject => subject.serviceId));
+  const activeSubjects = subjects.filter(subject => activeServices.has(subject.serviceId));
+  const stale = activeSubjects.filter(
+    subject =>
+      subject.intelligenceFingerprint?.sourceUpdatedAt?.getTime() !== subject.updatedAt.getTime()
+  );
+  if (stale.length)
+    await enqueueWorkItems(
+      stale.map(subject => ({ kind: WORK_KINDS.INDEX_INCIDENT, subjectKey: subject.id }))
+    );
+  const eligibleIds = activeSubjects
+    .filter(
+      subject =>
+        subject.intelligenceFingerprint?.sourceUpdatedAt?.getTime() === subject.updatedAt.getTime()
+    )
+    .map(subject => subject.id);
+  if (!eligibleIds.length) return { status: 'done', model: port.model, embedded: [] };
   const [fingerprints, existing] = await Promise.all([
     prisma.incidentFingerprint.findMany({
-      where: { incidentId: { in: ids } },
-      select: { incidentId: true, serviceId: true, template: true, incidentCreatedAt: true },
+      where: {
+        incidentId: { in: eligibleIds },
+        incident: { serviceId: { in: [...activeServices] } },
+      },
+      select: {
+        incidentId: true,
+        serviceId: true,
+        template: true,
+        sourceUpdatedAt: true,
+        incidentCreatedAt: true,
+        incident: { select: { serviceId: true } },
+      },
     }),
     prisma.incidentEmbedding.findMany({
-      where: { incidentId: { in: ids } },
-      select: { incidentId: true, model: true, sourceHash: true },
+      where: {
+        incidentId: { in: eligibleIds },
+        incident: { serviceId: { in: [...activeServices] } },
+      },
+      select: { incidentId: true, model: true, sourceHash: true, serviceId: true },
     }),
   ]);
-  const current = new Set(existing.map(row => `${row.incidentId}|${row.model}|${row.sourceHash}`));
+  const current = new Set(
+    existing.map(row => `${row.incidentId}|${row.model}|${row.sourceHash}|${row.serviceId}`)
+  );
   const pending = fingerprints
     .map(fingerprint => ({
       ...fingerprint,
+      serviceId: fingerprint.incident.serviceId,
       text: fingerprint.template,
       hash: sourceHash(fingerprint.template),
     }))
     .filter(
-      item => item.text.length > 0 && !current.has(`${item.incidentId}|${port.model}|${item.hash}`)
+      item =>
+        item.text.length > 0 &&
+        !current.has(`${item.incidentId}|${port.model}|${item.hash}|${item.serviceId}`)
     );
   if (pending.length === 0) return { status: 'done', model: port.model, embedded: [] };
 
@@ -70,9 +126,36 @@ export async function embedIncidents(
   if (vectors.length !== pending.length)
     throw new Error('Embedding provider returned the wrong number of vectors');
 
+  const latestSubjects = await prisma.incident.findMany({
+    where: { id: { in: pending.map(item => item.incidentId) } },
+    select: {
+      id: true,
+      serviceId: true,
+      updatedAt: true,
+      intelligenceFingerprint: { select: { sourceUpdatedAt: true } },
+    },
+  });
+  const latestServices = await enabledServices(latestSubjects.map(subject => subject.serviceId));
+  const latestById = new Map(latestSubjects.map(subject => [subject.id, subject]));
+  const currentPort = await resolveEmbeddingModel('PERSONAL');
+  if (
+    signal?.aborted ||
+    !currentPort ||
+    currentPort.model !== port.model ||
+    currentPort.providerId !== port.providerId
+  )
+    return { status: 'done', model: port.model, embedded: [] };
   const embedded: string[] = [];
   const dimensions = new Set<number>();
   for (const [index, item] of pending.entries()) {
+    const latest = latestById.get(item.incidentId);
+    if (
+      !latest ||
+      latest.serviceId !== item.serviceId ||
+      latest.updatedAt.getTime() !== item.sourceUpdatedAt?.getTime() ||
+      !latestServices.has(item.serviceId)
+    )
+      continue;
     const vector = normalizeVector(vectors.at(index) ?? []);
     if (vector) dimensions.add(vector.length);
     try {
@@ -125,14 +208,23 @@ export async function findIncidentsToEmbed(
   now: Date = new Date()
 ): Promise<string[]> {
   const lowerBound = new Date(now.getTime() - EMBED_LOOKBACK_DAYS * 86_400_000);
-  const rows = await prisma.$queryRaw<Array<{ incidentId: string }>>`
+  const activeMode = candidatePolicyModeSql(Prisma.sql`s.id`);
+  const rows = await withDbBudget(
+    { maxDbMs: 750 },
+    tx => tx.$queryRaw<Array<{ incidentId: string }>>`
+    WITH active_services AS MATERIALIZED (
+      SELECT s.id FROM "Service" s WHERE ${activeMode} <> 'OFF'::"IntelligenceMode"
+    )
     SELECT f."incidentId" FROM "IncidentFingerprint" f
+    JOIN "Incident" i ON i.id = f."incidentId"
+    JOIN active_services active ON active.id = i."serviceId"
     LEFT JOIN "IncidentEmbedding" e ON e."incidentId" = f."incidentId"
     WHERE f."incidentCreatedAt" > ${lowerBound} AND length(f."template") > 0
       AND f."templateHash" IS NOT NULL
-      AND (e."incidentId" IS NULL OR e."model" <> ${model} OR e."sourceHash" <> f."templateHash")
+      AND (e."incidentId" IS NULL OR e."model" <> ${model} OR e."sourceHash" <> f."templateHash" OR e."serviceId" <> i."serviceId" OR f."sourceUpdatedAt" IS DISTINCT FROM i."updatedAt")
     ORDER BY f."incidentCreatedAt" DESC
-    LIMIT ${EMBED_BATCH_SIZE}`;
+    LIMIT ${EMBED_BATCH_SIZE}`
+  );
   return rows.map(row => row.incidentId);
 }
 
@@ -152,17 +244,37 @@ export async function getSemanticIndexStatus(now: Date = new Date()): Promise<Se
   const model = await currentEmbeddingModel();
   if (!model) return { model: null, indexed: 0, pending: 0 };
   const lowerBound = new Date(now.getTime() - EMBED_LOOKBACK_DAYS * 86_400_000);
-  const [indexed, pending] = await Promise.all([
-    prisma.$queryRaw<Array<{ count: bigint }>>`
+  const activeMode = candidatePolicyModeSql(Prisma.sql`s.id`);
+  return withDbBudget({ maxDbMs: 750 }, async tx => {
+    const [indexed, pending] = await Promise.all([
+      tx.$queryRaw<Array<{ count: bigint }>>`
       SELECT count(*) AS count FROM "IncidentEmbedding" WHERE "model" = ${model} AND "vector" IS NOT NULL`.then(
-      rows => Number(rows[0]?.count ?? 0)
-    ),
-    prisma.$queryRaw<Array<{ count: bigint }>>`
+        rows => Number(rows[0]?.count ?? 0)
+      ),
+      tx.$queryRaw<Array<{ count: bigint }>>`
+      WITH active_services AS MATERIALIZED (SELECT s.id FROM "Service" s WHERE ${activeMode} <> 'OFF'::"IntelligenceMode")
       SELECT count(*) AS count FROM (
         SELECT 1 FROM "IncidentFingerprint" f
+        JOIN "Incident" i ON i.id = f."incidentId"
+        JOIN active_services active ON active.id = i."serviceId"
         LEFT JOIN "IncidentEmbedding" e ON e."incidentId" = f."incidentId" AND e."model" = ${model}
-        WHERE f."incidentCreatedAt" > ${lowerBound} AND length(f."template") > 0 AND e."incidentId" IS NULL
+        WHERE f."incidentCreatedAt" > ${lowerBound} AND length(f."template") > 0 AND (e."incidentId" IS NULL OR e."sourceHash" <> f."templateHash" OR e."serviceId" <> i."serviceId" OR f."sourceUpdatedAt" IS DISTINCT FROM i."updatedAt")
         LIMIT ${PENDING_COUNT_CAP}) pending`,
-  ]);
-  return { model, indexed, pending: Number(pending[0]?.count ?? 0) };
+    ]);
+    return { model, indexed, pending: Number(pending[0]?.count ?? 0) };
+  });
+}
+
+/** A fresh policy snapshot for each checkpoint, even inside a memoized worker cycle. */
+async function enabledServices(serviceIds: readonly string[]): Promise<Set<string>> {
+  return withIntelligenceReadMemo(async () => {
+    const ids = [...new Set(serviceIds)];
+    const policies = await Promise.all(ids.map(id => resolveEffectivePolicy(id)));
+    return new Set(
+      ids.filter((_, index) => {
+        const mode = policies.at(index)?.effectiveMode;
+        return mode === 'SHADOW' || mode === 'SUGGEST' || mode === 'AUTO';
+      })
+    );
+  });
 }

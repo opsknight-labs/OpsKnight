@@ -108,7 +108,7 @@ incidents.
    so they only run on a provider whose ceiling is **Personal**. Leave every provider at **Internal** to keep
    them unavailable.
 8. **Optional extras.** Each is off until you turn it on:
-   - **Semantic search**: give a provider an embedding model and turn on semantic search. The AI page shows
+   - **Semantic search**: give a provider an embedding model, explicitly permit Personal data, and turn on semantic search. Masked titles can still contain names; an Internal-only provider is not eligible. The AI page shows
      indexing progress. Watch the token budget for the first day while recent incidents are indexed.
    - **Saved conversations**: choose a retention period first. Turning it off later deletes all saved
      conversations.

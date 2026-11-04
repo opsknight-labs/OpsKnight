@@ -65,7 +65,7 @@ const embeddingCalls = () => model.requests.filter(request => request.path.endsW
 async function setup(
   overrides: {
     embeddingsEnabled?: boolean;
-    maxDataClass?: 'PUBLIC' | 'INTERNAL';
+    maxDataClass?: 'PUBLIC' | 'INTERNAL' | 'PERSONAL';
     embeddingModel?: string | null;
   } = {}
 ) {
@@ -105,7 +105,7 @@ async function setup(
       apiKey: 'k',
       enabled: true,
       isExternal: false,
-      maxDataClass: overrides.maxDataClass ?? 'INTERNAL',
+      maxDataClass: overrides.maxDataClass ?? 'PERSONAL',
       allowPrivateNetwork: true,
       priority: 1,
       embeddingModel: overrides.embeddingModel === undefined ? 'emb-1' : overrides.embeddingModel,
@@ -313,7 +313,7 @@ describe('semantic similar-incident search', () => {
     expect(scores.get(paraphrase.id)).toBeGreaterThan(0.99);
   });
 
-  it('is fully off unless enabled, configured with an embedding model, and allowed to receive Internal data', async () => {
+  it('is fully off unless enabled, configured with an embedding model, and allowed to receive Personal data', async () => {
     await setup({ embeddingsEnabled: false });
     expect(await currentEmbeddingModel()).toBeNull();
     expect(await embedIncidents(['x'])).toEqual({ status: 'disabled' });
@@ -360,4 +360,143 @@ describe('semantic similar-incident search', () => {
     await db.incident.delete({ where: { id: recent.id } });
     expect(await db.incidentEmbedding.count()).toBe(0);
   });
+});
+
+it('requires Personal clearance for masked titles that still contain a synthetic person name', async () => {
+  const { provider } = await setup({ maxDataClass: 'INTERNAL' });
+  const service = await createTestService('Embedding privacy boundary');
+  const incident = await indexed(
+    'Checkout failure investigated by Alice canarypersonaltext',
+    service.id
+  );
+  const fingerprint = await db.incidentFingerprint.findUniqueOrThrow({
+    where: { incidentId: incident.id },
+  });
+  expect(fingerprint.template).toContain('alice');
+  const selected = await currentEmbeddingModel();
+  const outcome = await embedIncidents([incident.id]);
+  if (embeddingCalls().length)
+    expect(JSON.stringify(embeddingCalls()[0].body.input)).toContain('alice');
+  expect(embeddingCalls()).toHaveLength(0);
+  expect(selected).toBeNull();
+  expect(outcome).toEqual({ status: 'disabled' });
+  expect((await db.aiProvider.findUniqueOrThrow({ where: { id: provider.id } })).maxDataClass).toBe(
+    'INTERNAL'
+  );
+  await db.aiProvider.update({ where: { id: provider.id }, data: { maxDataClass: 'PERSONAL' } });
+  invalidateGatewayCache();
+  await embedIncidents([incident.id]);
+  expect(embeddingCalls()).toHaveLength(1);
+  expect(JSON.stringify(embeddingCalls()[0].body.input)).toContain('alice');
+});
+
+it('skips OFF services before embedding and honours the Intelligence kill switch', async () => {
+  const { ctx } = await setup();
+  const activeService = await createTestService('Embedding active service');
+  const offService = await createTestService('Embedding OFF service');
+  const active = await indexed('Checkout activeembeddingcanary', activeService.id);
+  const off = await indexed('Checkout offembeddingcanary', offService.id);
+  await publishPolicyVersion(
+    { serviceId: offService.id },
+    { mode: 'OFF', definition: DEFAULT_POLICY_DEFINITION, expectedHeadVersion: 0 },
+    ctx
+  );
+  const result = await embedIncidents([off.id, active.id]);
+  expect(JSON.stringify(embeddingCalls())).not.toContain('offembeddingcanary');
+  expect(result).toMatchObject({ status: 'done', embedded: [active.id] });
+  expect(await db.incidentEmbedding.findUnique({ where: { incidentId: off.id } })).toBeNull();
+  const waiting = await indexed('Checkout globallyblockedcanary', activeService.id);
+  model.requests.length = 0;
+  await db.intelligenceSettings.update({ where: { id: 'default' }, data: { enabled: false } });
+  expect(await currentEmbeddingModel()).toBeNull();
+  expect(await embedIncidents([waiting.id])).toEqual({ status: 'disabled' });
+  expect(embeddingCalls()).toHaveLength(0);
+});
+
+it('filters OFF-service candidates before the pending batch limit', async () => {
+  const { ctx } = await setup();
+  const activeService = await createTestService('Older eligible embedding source');
+  const offService = await createTestService('Newer disabled embedding sources');
+  const active = await indexed(
+    'Checkout eligible source',
+    activeService.id,
+    new Date(Date.now() - 7_200_000)
+  );
+  const disabled: Array<Awaited<ReturnType<typeof indexed>>> = [];
+  for (let index = 0; index < 33; index++)
+    disabled.push(await indexed(`Checkout disabled source ${index}`, offService.id));
+  await publishPolicyVersion(
+    { serviceId: offService.id },
+    { mode: 'OFF', definition: DEFAULT_POLICY_DEFINITION, expectedHeadVersion: 0 },
+    ctx
+  );
+  const pending = await findIncidentsToEmbed((await currentEmbeddingModel())!);
+  expect(pending).toContain(active.id);
+  expect(pending.some(id => disabled.some(incident => incident.id === id))).toBe(false);
+});
+
+it('queues stale source text for native reindexing before sending it to an embedding provider', async () => {
+  await setup();
+  const service = await createTestService('Embedding source freshness');
+  const incident = await indexed('Checkout oldpersonalcanary', service.id);
+  await db.incident.update({
+    where: { id: incident.id },
+    data: { title: 'Checkout revised facts' },
+  });
+  expect(await embedIncidents([incident.id])).toMatchObject({ embedded: [] });
+  expect(embeddingCalls()).toHaveLength(0);
+  expect(
+    await db.intelligenceWorkItem.findUnique({
+      where: { kind_subjectKey: { kind: 'INDEX_INCIDENT', subjectKey: incident.id } },
+    })
+  ).not.toBeNull();
+  await db.$transaction(tx => indexIncident(incident.id, tx));
+  await embedIncidents([incident.id]);
+  expect(embeddingCalls()).toHaveLength(1);
+  expect(JSON.stringify(embeddingCalls()[0].body.input)).not.toContain('oldpersonalcanary');
+});
+
+it('discards an embedding response when its service was switched OFF during the request', async () => {
+  const { ctx } = await setup();
+  const service = await createTestService('Embedding in-flight policy change');
+  const incident = await indexed('Checkout permission race', service.id);
+  await currentEmbeddingModel();
+  const ports = await import('@/lib/intelligence/ai/port');
+  const real = await ports.resolveEmbeddingModel('PERSONAL');
+  if (!real) throw new Error('Expected eligible provider');
+  const send = vi.fn(async () => {
+    await publishPolicyVersion(
+      { serviceId: service.id },
+      { mode: 'OFF', definition: DEFAULT_POLICY_DEFINITION, expectedHeadVersion: 0 },
+      ctx
+    );
+    return { vectors: [[1, 0, 0, 0, 0, 0, 0, 0]], tokens: 1 };
+  });
+  const resolve = vi
+    .spyOn(ports, 'resolveEmbeddingModel')
+    .mockResolvedValue({ ...real, embed: send });
+  try {
+    expect(await embedIncidents([incident.id])).toMatchObject({ embedded: [] });
+    expect(send).toHaveBeenCalledTimes(1);
+    expect(await db.incidentEmbedding.count()).toBe(0);
+  } finally {
+    resolve.mockRestore();
+  }
+});
+
+it('uses current service ownership instead of a cached fingerprint service when applying OFF', async () => {
+  const { ctx } = await setup();
+  const active = await createTestService('Previous embedding owner');
+  const off = await createTestService('Current disabled embedding owner');
+  const incident = await indexed('Checkout moved source', active.id);
+  await publishPolicyVersion(
+    { serviceId: off.id },
+    { mode: 'OFF', definition: DEFAULT_POLICY_DEFINITION, expectedHeadVersion: 0 },
+    ctx
+  );
+  await db.incident.update({ where: { id: incident.id }, data: { serviceId: off.id } });
+  expect(await embedIncidents([incident.id])).toMatchObject({ embedded: [] });
+  expect(await findIncidentsToEmbed((await currentEmbeddingModel())!)).not.toContain(incident.id);
+  expect(embeddingCalls()).toHaveLength(0);
+  expect(await db.intelligenceWorkItem.count()).toBe(0);
 });
