@@ -33,9 +33,10 @@ vi.mock('@/lib/prisma', () => {
     user: {
       findUnique: vi.fn(),
       // Email lookup is case-insensitive; scenarios drive both through findUnique.
-      findFirst: vi.fn((...args: unknown[]) =>
-        (mockPrisma.user.findUnique as (...a: unknown[]) => unknown)(...args)
-      ),
+      findMany: vi.fn(async (...args: unknown[]) => {
+        const user = await (mockPrisma.user.findUnique as (...a: unknown[]) => unknown)(...args);
+        return user ? [user] : [];
+      }),
       create: vi.fn(),
       update: vi.fn(),
     },

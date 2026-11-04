@@ -329,7 +329,10 @@ export default function AuthenticationPolicyWorkspace() {
                             {
                               label: 'Still need approval',
                               value: linking.needApproval,
-                              note: `${linking.approved} approved · ${linking.domainTrusted} connect automatically`,
+                              note:
+                                linking.domainTrusted > 0
+                                  ? `${linking.approved} approved · ${linking.domainTrusted} may connect automatically`
+                                  : `${linking.approved} approved`,
                             },
                             {
                               label: 'Recovery identities',
@@ -363,7 +366,10 @@ export default function AuthenticationPolicyWorkspace() {
                             <li>
                               {linking.needApproval} existing{' '}
                               {linking.needApproval === 1 ? 'account needs' : 'accounts need'}{' '}
-                              approval before SSO works for them.{' '}
+                              approval before SSO works for them
+                              {linking.domainTrusted > 0 &&
+                                ` (${linking.domainTrusted} may connect automatically if your provider proves their email domain)`}
+                              .{' '}
                               <button
                                 type="button"
                                 className="font-semibold underline underline-offset-2"

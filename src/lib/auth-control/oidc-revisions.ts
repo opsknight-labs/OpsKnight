@@ -816,8 +816,11 @@ async function linkingReadiness(tx: Prisma.TransactionClient, config: ProviderCo
   return {
     total,
     approved: approvedUsers,
+    // Whether these accounts really connect automatically depends on claims the provider sends
+    // at sign-in (xms_edov, hd, email_verified), which cannot be known in advance. They stay
+    // in needApproval so the count never understates who could be locked out.
     domainTrusted,
-    needApproval: Math.max(0, total - approvedUsers - domainTrusted),
+    needApproval: Math.max(0, total - approvedUsers),
     approvalsCarriedOver,
     approvalsRevoked,
   };

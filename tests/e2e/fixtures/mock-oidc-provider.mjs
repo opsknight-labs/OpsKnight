@@ -4,6 +4,9 @@
 //   openssl req -x509 -newkey rsa:2048 -nodes -keyout key.pem -out cert.pem -days 2 \
 //     -subj /CN=idp.example.test -addext subjectAltName=DNS:idp.example.test,DNS:localhost
 //   MOCK_OIDC_CERT_DIR=<dir with key.pem and cert.pem> node tests/e2e/fixtures/mock-oidc-provider.mjs
+//
+// Like a real provider, it only redirects back to the registered app origin
+// (MOCK_OIDC_APP_ORIGIN, default https://localhost:3111).
 import { createServer } from 'node:https';
 import { readFileSync } from 'node:fs';
 import { createHash, generateKeyPairSync, randomBytes } from 'node:crypto';
@@ -12,6 +15,16 @@ const require = createRequire(new URL('../../../package.json', import.meta.url))
 const { SignJWT, exportJWK } = require('jose');
 const certDir = process.env.MOCK_OIDC_CERT_DIR ?? new URL('.', import.meta.url).pathname;
 const port = 3443;
+const appOrigin = new URL(process.env.MOCK_OIDC_APP_ORIGIN ?? 'https://localhost:3111').origin;
+/** The redirect target if it belongs to the registered app origin, otherwise null. */
+const registeredRedirect = value => {
+  try {
+    const target = new URL(value ?? '');
+    return target.origin === appOrigin ? target : null;
+  } catch {
+    return null;
+  }
+};
 const issuer = process.env.MOCK_OIDC_ISSUER ?? `https://idp.example.test:${port}`;
 const { publicKey, privateKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
 const jwk = { ...(await exportJWK(publicKey)), kid: 'k1', alg: 'RS256', use: 'sig' };
@@ -37,7 +50,8 @@ createServer({ key: readFileSync(certDir + '/key.pem'), cert: readFileSync(certD
   if (url.pathname === '/authorize') {
     const code = randomBytes(16).toString('hex');
     codes.set(code, { nonce: url.searchParams.get('nonce'), user: nextUser, clientId: url.searchParams.get('client_id') });
-    const back = new URL(url.searchParams.get('redirect_uri'));
+    const back = registeredRedirect(url.searchParams.get('redirect_uri'));
+    if (!back) return json(res, { error: 'invalid_request', error_description: 'Unregistered redirect_uri' }, 400);
     back.searchParams.set('code', code); back.searchParams.set('state', url.searchParams.get('state'));
     res.writeHead(302, { location: back.href }); return res.end();
   }
@@ -52,6 +66,10 @@ createServer({ key: readFileSync(certDir + '/key.pem'), cert: readFileSync(certD
       .setIssuedAt(now).setExpirationTime(now + 600).sign(privateKey);
     return json(res, { access_token: createHash('sha256').update(params.get('code')).digest('hex'), token_type: 'Bearer', expires_in: 600, id_token: idToken });
   }
-  if (url.pathname === '/logout') { res.writeHead(302, { location: url.searchParams.get('post_logout_redirect_uri') || '/login' }); return res.end(); }
+  if (url.pathname === '/logout') {
+    const back = registeredRedirect(url.searchParams.get('post_logout_redirect_uri'));
+    res.writeHead(302, { location: back ? back.href : `${appOrigin}/login` });
+    return res.end();
+  }
   json(res, { error: 'not_found' }, 404);
 }).listen(port, () => console.log('idp ready', issuer));

@@ -51,8 +51,10 @@ allowed domains, linking policy or role rules needs a new test.
 1. Choose **How people sign in**: **SSO Optional** to start.
 2. Select **Preview what will change**. It shows:
    - password sessions that end (only for SSO Required);
-   - how many existing accounts are approved, connect automatically, or still need approval,
-     with a link to approve them;
+   - how many existing accounts are approved or still need approval, with a link to approve
+     them. With automatic connection for verified company emails, it also shows how many may
+     connect automatically. They still count as needing approval, because whether they connect
+     depends on proof your provider sends at sign-in;
    - approvals that carry over or are cancelled;
    - whose role changes and which team memberships change at their next sign-in;
    - anything still blocking the mode you chose.

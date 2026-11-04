@@ -326,13 +326,17 @@ export async function resolveOidcIdentityForSignIn(
           : [];
       if (trustedCandidates.length > 1) throw new Error('OIDC_AMBIGUOUS_IDENTITY_CONFLICT');
       const trustedIdentity = trustedCandidates[0] ?? null;
-      const emailUser =
-        trustedIdentity?.user ??
-        // Accounts created before canonical email reservation may differ only in letter case.
-        (await tx.user.findFirst({
-          where: { email: { equals: email, mode: 'insensitive' } },
-          select: targetUserSelect,
-        }));
+      // Accounts created before canonical email reservation may differ only in letter case.
+      // Two such accounts are ambiguous: never pick one of them arbitrarily.
+      const emailCandidates = trustedIdentity
+        ? []
+        : await tx.user.findMany({
+            where: { email: { equals: email, mode: 'insensitive' } },
+            select: targetUserSelect,
+            take: 2,
+          });
+      if (emailCandidates.length > 1) throw new Error('OIDC_AMBIGUOUS_IDENTITY_CONFLICT');
+      const emailUser = trustedIdentity?.user ?? emailCandidates[0] ?? null;
 
       if (emailUser?.status === 'DISABLED') {
         throw new Error('OIDC_TARGET_NOT_OPERATIONAL');

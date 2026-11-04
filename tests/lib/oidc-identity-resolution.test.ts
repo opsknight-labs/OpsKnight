@@ -18,9 +18,10 @@ const tx = {
   user: {
     findUnique: vi.fn(),
     // Email lookup is case-insensitive; existing scenarios drive both through findUnique.
-    findFirst: vi.fn((...args: unknown[]) =>
-      (tx.user.findUnique as (...a: unknown[]) => unknown)(...args)
-    ),
+    findMany: vi.fn(async (...args: unknown[]) => {
+      const user = await (tx.user.findUnique as (...a: unknown[]) => unknown)(...args);
+      return user ? [user] : [];
+    }),
     create: vi.fn(),
   },
   oidcLinkingApproval: {
@@ -439,6 +440,19 @@ describe('resolveOidcIdentityForSignIn', () => {
 
     expect(result).toEqual({ ok: false, reason: 'OIDC_EMAIL_ASSURANCE_REQUIRED' });
     expect(tx.user.create).not.toHaveBeenCalled();
+  });
+
+  it('refuses to link when two accounts differ only by email letter case', async () => {
+    tx.user.findMany.mockResolvedValueOnce([
+      { ...linkedUser, id: 'user-1', email: 'alice@example.com' },
+      { ...linkedUser, id: 'user-2', email: 'Alice@example.com' },
+    ]);
+
+    const result = await resolveOidcIdentityForSignIn(baseInput);
+
+    expect(result).toEqual({ ok: false, reason: 'OIDC_AMBIGUOUS_IDENTITY_CONFLICT' });
+    expect(tx.oidcIdentity.create).not.toHaveBeenCalled();
+    expect(tx.oidcLinkingApproval.updateMany).not.toHaveBeenCalled();
   });
 
   it('rejects ambiguous legacy identity reconciliation when variants belong to different users', async () => {
