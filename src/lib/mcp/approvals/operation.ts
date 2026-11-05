@@ -10,13 +10,14 @@ import { authorize } from '@/lib/authorization-policy';
 import { authorizationActorFromUser } from '@/lib/authorization-actors';
 import { enforceV2RateLimit } from '@/lib/api-v2/rate-limit';
 import { logAudit } from '@/lib/audit';
-import { MCP_OPERATION_MAP, isMcpApprovalGated } from '../catalog';
+import { MCP_CATALOG, MCP_OPERATION_MAP, isMcpApprovalGated, isMcpExecutable } from '../catalog';
 import { resolveMcpGrant } from '../auth/principal';
 import { mcpOrigin } from '../auth/config';
 import { McpBoundaryError, requireMcp } from '../core/errors';
 import { isAuthenticationFresh } from '@/lib/auth-control/actor';
 import {
   callApprovedMcpOperation,
+  callMcpOperation,
   callPreviewMcpOperation,
   requireOperationAuthority,
   validateOperationArgs,
@@ -66,6 +67,17 @@ const frozenSchema = z
   .strict();
 type Frozen = z.infer<typeof frozenSchema>;
 
+const diffRowSchema = z
+  .object({
+    field: z.string(),
+    before: z.string().nullable(),
+    after: z.string(),
+    // not_in_view: the read of the target does not carry this field, so nothing is guessed.
+    status: z.enum(['changed', 'unchanged', 'not_in_view']),
+  })
+  .strict();
+export type OperationDiffRow = z.infer<typeof diffRowSchema>;
+
 export const operationReviewSummarySchema = z
   .object({
     operationId: z.string(),
@@ -81,6 +93,9 @@ export const operationReviewSummarySchema = z
     truncated: z.boolean(),
     // R3 only: the reviewed target state, shown to the native reviewer and never to the agent.
     preview: z.string().nullable().default(null),
+    // Display only, never digest input: each changed field against the target's state when the
+    // request was prepared. Shown to the native reviewer, never to the agent. Older rows have none.
+    diff: z.array(diffRowSchema).default([]),
   })
   .strict();
 
@@ -125,15 +140,23 @@ export function mcpApprovalCommitKey(id: string) {
 }
 
 const secretKey = /secret|password|token|credential|authorization|api.?key|private.?key/i;
-function flatten(value: unknown, path: string, out: [string, string][], depth = 0): void {
-  if (out.length >= 80) return;
+function flatten(
+  value: unknown,
+  path: string,
+  out: [string, string][],
+  depth = 0,
+  limit = 80
+): void {
+  if (out.length >= limit) return;
   if (depth > 6) {
     out.push([path, '[too deep]']);
     return;
   }
   if (Array.isArray(value)) {
     if (!value.length) out.push([path, '[]']);
-    value.slice(0, 40).forEach((item, index) => flatten(item, `${path}[${index}]`, out, depth + 1));
+    value
+      .slice(0, 40)
+      .forEach((item, index) => flatten(item, `${path}[${index}]`, out, depth + 1, limit));
     return;
   }
   if (value && typeof value === 'object') {
@@ -141,7 +164,7 @@ function flatten(value: unknown, path: string, out: [string, string][], depth = 
     if (!entries.length) out.push([path, '{}']);
     for (const [key, child] of entries)
       if (secretKey.test(key)) out.push([`${path}.${key}`, '[withheld]']);
-      else flatten(child, path ? `${path}.${key}` : key, out, depth + 1);
+      else flatten(child, path ? `${path}.${key}` : key, out, depth + 1, limit);
     return;
   }
   const text =
@@ -169,6 +192,27 @@ export function reviewSummary(operationId: string, frozen: Frozen) {
     ]),
     changes,
     truncated: changes.length >= 80,
+  });
+}
+
+/**
+ * The changed fields lined up against the target's state before the change, flattened and
+ * redacted exactly like the changes themselves. A field the read does not carry is reported as
+ * not in view rather than guessed.
+ */
+export function reviewDiff(changes: readonly [string, string][], before: unknown) {
+  if (before === null || before === undefined || !changes.length) return [];
+  const current: [string, string][] = [];
+  flatten(before, '', current, 0, 1000);
+  const values = new Map(current);
+  return changes.map(([field, after]): OperationDiffRow => {
+    const previous = values.get(field);
+    return {
+      field,
+      before: previous ?? null,
+      after,
+      status: previous === undefined ? 'not_in_view' : previous === after ? 'unchanged' : 'changed',
+    };
   });
 }
 
@@ -201,6 +245,42 @@ async function readPreview(context: ExecutionContext, operation: Operation, froz
   } catch (error) {
     if (error instanceof McpBoundaryError && [403, 404].includes(error.status)) return null;
     throw error;
+  }
+}
+
+const beforeReads = new Map<string, string | null>();
+/**
+ * The plain read of the same target an update or replace (R2, no impact preview) can be shown
+ * against: a reviewed R0 GET at exactly the same path. Null when there is none.
+ */
+export function beforeReadFor(operation: Operation): string | null {
+  if (operation.impactPreview || !['patch', 'put'].includes(operation.method)) return null;
+  const cached = beforeReads.get(operation.operationId);
+  if (cached !== undefined) return cached;
+  const read =
+    MCP_CATALOG.find(
+      candidate =>
+        candidate.method === 'get' &&
+        candidate.path === operation.path &&
+        candidate.risk === 'R0' &&
+        isMcpExecutable(candidate)
+    )?.operationId ?? null;
+  beforeReads.set(operation.operationId, read);
+  return read;
+}
+
+/**
+ * Best effort, for the reviewer's before/after view only: the target read under the requester's
+ * own permissions. Any failure shows no "before" and never blocks or binds the request.
+ */
+async function readBefore(context: ExecutionContext, operation: Operation, frozen: Frozen) {
+  const read = beforeReadFor(operation);
+  if (!read) return null;
+  try {
+    const result = await callMcpOperation(context, read, { path: frozen.path ?? {} });
+    return ((result.data as { data?: unknown })?.data ?? null) as unknown;
+  } catch {
+    return null;
   }
 }
 
@@ -301,6 +381,9 @@ export function prepareMcpOperation(context: ExecutionContext, raw: unknown) {
         ? await readPreview(context, operation, frozen)
         : null;
       if (isDestructive(operation)) requireMcp(preview, 'MCP_RESOURCE_UNAVAILABLE', 404);
+      const before = isDestructive(operation)
+        ? preview
+        : await readBefore(context, operation, frozen);
       const result = await runSerializableTransaction(async tx => {
         context.budget.check();
         const auth = await lockMcpMutationAuthority(
@@ -326,8 +409,10 @@ export function prepareMcpOperation(context: ExecutionContext, raw: unknown) {
             requireMcp(pending < MAX_PENDING_PER_GRANT, 'MCP_APPROVAL_BACKLOG', 429);
             const timing = await readMcpApprovalTiming(tx);
             const previewText = preview === null ? null : JSON.stringify(preview, null, 2);
+            const reviewed = reviewSummary(input.operationId, frozen);
             const summary = {
-              ...reviewSummary(input.operationId, frozen),
+              ...reviewed,
+              diff: reviewDiff(reviewed.changes, before),
               preview:
                 previewText && previewText.length > MAX_PREVIEW_CHARS
                   ? `${previewText.slice(0, MAX_PREVIEW_CHARS)}\n…`
@@ -348,6 +433,8 @@ export function prepareMcpOperation(context: ExecutionContext, raw: unknown) {
                 expiresAt: reviewDeadline(timing),
               },
             });
+            // The before/after values are for the human reviewer only, like the preview.
+            const { diff: _reviewerOnly, ...agentSummary } = summary;
             await notifyOperationReviewers(tx, {
               approvalId: approval.id,
               actorId: auth.actor.id,
@@ -380,7 +467,7 @@ export function prepareMcpOperation(context: ExecutionContext, raw: unknown) {
               commitWindowMinutes: timing.commitWindowMinutes,
               // The captured target state is for the human reviewer only.
               summary: {
-                ...summary,
+                ...agentSummary,
                 preview: summary.preview === null ? null : '[shown to reviewer]',
               },
               warnings: [

@@ -722,3 +722,44 @@ describe('OBS-13 finished approvals are purged after 90 days', () => {
     expect(await db.auditLog.count({ where: { entityId: committed } })).toBeGreaterThan(0);
   });
 });
+
+describe('UX-6 the reviewer sees each changed field against the current state', () => {
+  it('stores a display-only diff for an update and never returns it to the assistant', async () => {
+    const f = await fixture();
+    const team = await db.team.update({
+      where: { id: f.team.id },
+      data: { description: 'Before review' },
+    });
+    const prepared = await prepareMcpOperation(f.ctx(), {
+      operationId: 'updateTeam',
+      args: {
+        path: { id: f.team.id },
+        body: { name: team.name, description: 'After review' },
+        ifMatch: `"${await f.teamRevision()}"`,
+      },
+      idempotencyKey: `prepare-${randomBytes(8).toString('hex')}`,
+    });
+    expect(prepared.summary).not.toHaveProperty('diff');
+    expect(JSON.stringify(prepared)).not.toContain('Before review');
+    const row = await db.mcpOperationApproval.findUniqueOrThrow({
+      where: { id: prepared.approvalId },
+    });
+    const diff = (row.summary as { diff: unknown[] }).diff;
+    expect(diff).toEqual([
+      { field: 'name', before: team.name, after: team.name, status: 'unchanged' },
+      {
+        field: 'description',
+        before: 'Before review',
+        after: 'After review',
+        status: 'changed',
+      },
+    ]);
+    // A changed target does not stale-block the request: the diff is not part of the digest.
+    await db.team.update({ where: { id: f.team.id }, data: { description: 'Moved on' } });
+    await f.review(prepared, 'approve');
+    expect(
+      (await db.mcpOperationApproval.findUniqueOrThrow({ where: { id: prepared.approvalId } }))
+        .status
+    ).toBe('APPROVED');
+  });
+});
