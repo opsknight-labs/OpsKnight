@@ -28,6 +28,7 @@ export interface McpPolicyAccess {
   patMaxDays: number;
   patAllowedScopes: readonly string[];
   requireReadOnlyConnections: boolean;
+  deviceFlowEnabled: boolean;
 }
 
 type Access = McpPolicyAccess;
@@ -38,6 +39,8 @@ const SWITCHES: [string, (policy: Access) => boolean][] = [
   ['dcrEnabled', policy => policy.dcrEnabled],
   ['cimdEnabled', policy => policy.cimdEnabled],
   ['patEnabled', policy => policy.patEnabled],
+  // Device sign-in opens a path where the approving browser is not the device that gets tokens.
+  ['deviceFlowEnabled', policy => policy.deviceFlowEnabled],
   // Lifting the view-only cap lets every connection use its change scopes again.
   ['requireReadOnlyConnections', policy => !policy.requireReadOnlyConnections],
 ];

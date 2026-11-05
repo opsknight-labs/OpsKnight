@@ -245,6 +245,30 @@ export const MCP_ERROR_GUIDE: Record<string, Guide> = {
     meaning: 'An execute_plan step was skipped because a step it depends on failed.',
     fix: 'Fix the failed step first.',
   },
+  MCP_DEVICE_CODE_EXPIRED: {
+    area: 'sign-in',
+    meaning:
+      'A device sign-in code was entered after its ten minutes ran out, or after it was already approved, denied or used.',
+    fix: 'Start the sign-in again on the device to get a new code.',
+  },
+  MCP_DEVICE_CODE_INVALID: {
+    area: 'sign-in',
+    meaning:
+      'The code entered on /oauth/mcp/device matches no live device sign-in (a typo, or a code another person already entered). Each counts as a wrong code.',
+    fix: 'Enter the eight letters shown on the device; case and the dash do not matter.',
+  },
+  MCP_DEVICE_CODE_LOCKED: {
+    area: 'sign-in',
+    meaning:
+      'Five wrong device codes were entered by this person or from this network address within 15 minutes, so code entry is paused.',
+    fix: 'Wait 15 minutes, then enter the code shown on the device. Repeated lockouts can mean someone is guessing codes.',
+  },
+  MCP_DEVICE_FLOW_DISABLED: {
+    area: 'sign-in',
+    meaning:
+      'Device sign-in (RFC 8628) is off, or MCP is off. The device authorization endpoint answers 404 and metadata does not advertise it.',
+    fix: 'An administrator turns on Device sign-in under Access policy (this needs a recent sign-in).',
+  },
   MCP_DISABLED: {
     area: 'sign-in',
     meaning:
@@ -624,6 +648,10 @@ export const MCP_LOG_GUIDE: Record<string, string> = {
     'The metadata document was fetched but refused. `reason` names the check, such as http_status_404 or content_type_not_json.',
   'mcp.cimd.fetch_failed':
     'The metadata document could not be fetched. `reason` is the MCP code (timeout, too large, forbidden address).',
+  'mcp.device.client_denied':
+    'A device sign-in request was refused for its client. `reason`: unknown_client_id, client_revoked, device_grant_not_registered (the client did not declare, or was not registered for, the device_code grant), metadata_document_clients_unsupported or no_scopes_allowed_for_this_client.',
+  'mcp.device.unexpected_error':
+    'An unexpected error on the device authorization endpoint. `name` is the error class.',
   'mcp.grant.last_call_failed':
     'Recording the Last call column failed. The tool call itself still succeeded.',
   'mcp.register.unexpected_error':

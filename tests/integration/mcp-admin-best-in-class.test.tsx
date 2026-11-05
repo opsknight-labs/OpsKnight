@@ -412,6 +412,7 @@ describe('SEC-7 widening access needs a recent sign-in', () => {
       { dcrScopes: 'incidents:read services:read' },
       { requestsPerMinute: '600' },
       { allowedBrowserOrigins: 'http://localhost:6274' },
+      { deviceControls: '1', deviceFlowEnabled: 'on' },
     ]) {
       expect(await actions.updateMcpPolicy(policyForm(before.policyRevision, extra))).toEqual({
         ok: false,
@@ -424,6 +425,7 @@ describe('SEC-7 widening access needs a recent sign-in', () => {
       dcrScopes: ['incidents:read'],
       requestsPerMinute: before.requestsPerMinute,
       allowedBrowserOrigins: [],
+      deviceFlowEnabled: false,
       policyRevision: before.policyRevision,
     });
     // One-click setup, adding or restoring an assistant and re-exposing a capability also widen.
@@ -454,17 +456,39 @@ describe('SEC-7 widening access needs a recent sign-in', () => {
     expect((await stored()).disabledCapabilities).toEqual(['domain:incidents']);
   });
 
+  it('a recent sign-in turns device sign-in on; a form without the control keeps it', async () => {
+    await setPolicy(automatic(['incidents:read']));
+    const before = await stored();
+    actor.fresh = true;
+    expect(
+      await actions.updateMcpPolicy(
+        policyForm(before.policyRevision, { deviceControls: '1', deviceFlowEnabled: 'on' })
+      )
+    ).toMatchObject({ ok: true });
+    expect((await stored()).deviceFlowEnabled).toBe(true);
+    actor.fresh = false;
+    expect(await actions.updateMcpPolicy(policyForm(before.policyRevision + 1))).toMatchObject({
+      ok: true,
+    });
+    expect((await stored()).deviceFlowEnabled).toBe(true);
+  });
+
   it('lets a stale session narrow access', async () => {
     await setPolicy({
       ...automatic(['incidents:read', 'services:read']),
       writesEnabled: true,
       allowedBrowserOrigins: ['http://localhost:6274'],
+      deviceFlowEnabled: true,
     });
     const before = await stored();
     actor.fresh = false;
     expect(
       await actions.updateMcpPolicy(
-        policyForm(before.policyRevision, { requestsPerMinute: '30', allowedBrowserOrigins: '' })
+        policyForm(before.policyRevision, {
+          requestsPerMinute: '30',
+          allowedBrowserOrigins: '',
+          deviceControls: '1',
+        })
       )
     ).toEqual({ ok: true, revision: before.policyRevision + 1 });
     expect(await stored()).toMatchObject({
@@ -472,6 +496,7 @@ describe('SEC-7 widening access needs a recent sign-in', () => {
       dcrScopes: ['incidents:read'],
       requestsPerMinute: 30,
       allowedBrowserOrigins: [],
+      deviceFlowEnabled: false,
     });
     expect(
       await updateMcpDisabledCapabilities({ disabled: ['domain:incidents'], baseline: [] })

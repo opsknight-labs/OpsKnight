@@ -28,6 +28,7 @@ const policy = {
   patMaxDays: 30,
   patAllowedScopes: [],
   requireReadOnlyConnections: false,
+  deviceFlowEnabled: false,
 };
 
 function section() {

@@ -41,7 +41,7 @@ No metric carries a user, client, grant or incident identifier. `tool` is a boun
 
 `outcome` on `opsknight_mcp_requests_total`: `served`, `task_created`, `tool_error`, `notification`, `protocol_rejected`, `subscription_opened`, `subscription_rejected`, `unauthenticated`, `forbidden`, `rate_limited`, `busy`, `result_too_large`, `disabled`, `unavailable`, `invalid_request`, `error`. Every HTTP 429 counts as `rate_limited`. The duration histogram observes only `served`, `tool_error`, `task_created`, `result_too_large`.
 
-`opsknight_mcp_oauth_requests_total`: `endpoint` is `authorize`, `token`, `register`, `revoke`; `outcome` is `issued`, `invalid_request`, `invalid_grant`, `invalid_client`, `invalid_scope`, `rate_limited`, `unavailable`, `server_error`, read from the status and error code actually sent (`issued` covers any accepted request, including a redirect to sign-in or consent).
+`opsknight_mcp_oauth_requests_total`: `endpoint` is `authorize`, `token`, `register`, `revoke`, `device_authorization`; `outcome` is `issued`, `invalid_request`, `invalid_grant`, `invalid_client`, `invalid_scope`, `rate_limited`, `pending`, `denied`, `expired`, `unavailable`, `server_error`, read from the status and error code actually sent (`issued` covers any accepted request, including a redirect to sign-in or consent).
 
 ## Alerts
 

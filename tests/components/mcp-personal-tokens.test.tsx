@@ -246,6 +246,7 @@ it('policy: personal tokens and view-only connections are explicit, off by defau
         requireReadOnlyConnections: false,
         allowedBrowserOrigins: [],
         scopeStepUpEnabled: false,
+        deviceFlowEnabled: false,
       }}
       revision={0}
       scopeChoices={['incidents:read', 'incidents:write', 'runbooks:execute']}

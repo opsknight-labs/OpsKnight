@@ -36,6 +36,7 @@ const base: McpPolicyAccess = {
   patMaxDays: 30,
   patAllowedScopes: ['incidents:read'],
   requireReadOnlyConnections: false,
+  deviceFlowEnabled: false,
 };
 
 describe('mcpPolicyWidening', () => {
@@ -50,6 +51,13 @@ describe('mcpPolicyWidening', () => {
     expect(
       mcpPolicyWidening(base, { ...base, allowedBrowserOrigins: ['http://localhost:6274'] })
     ).toEqual(['allowedBrowserOrigins']);
+  });
+
+  it('treats turning device sign-in on as widening and turning it off as narrowing', () => {
+    expect(mcpPolicyWidening(base, { ...base, deviceFlowEnabled: true })).toEqual([
+      'deviceFlowEnabled',
+    ]);
+    expect(mcpPolicyWidening({ ...base, deviceFlowEnabled: true }, base)).toEqual([]);
   });
 
   it('treats turning personal tokens on, raising their limits or lifting view-only as widening', () => {

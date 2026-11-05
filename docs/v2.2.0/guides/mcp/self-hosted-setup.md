@@ -16,6 +16,9 @@ verification:
     - src/lib/runbooks/preview-review.ts
     - src/lib/mcp/approvals/notify.ts
     - src/components/settings/mcp/setup-commands.ts
+    - src/lib/mcp/auth/device-flow.ts
+    - src/app/oauth/mcp/device_authorization/route.ts
+    - tests/integration/mcp-device-flow.test.ts
     - docs/v2.2.0/operate/mcp/certification.md
     - tests/mcp/docs-reference.test.ts
 ---
@@ -52,6 +55,7 @@ The **Access policy** tab holds:
 - **Sign-in sessions**: how long an unused connection stays signed in (1 to 90 days, default 30).
 - **View-only connections**: **Require view-only connections** caps every connection, OAuth and personal, to view permissions until it is turned off.
 - **Personal access tokens**: off by default. When on, people can create a token for agents without a browser, up to the longest allowed expiry (default 30, at most 90 days) and with only the listed permissions (default: view incidents, services and schedules). Tokens never carry `runbooks:execute`, and changes they prepare always need a second person. Turning this off revokes every token. See [API-hosted and headless agents](api-agents.md).
+- **Device sign-in**: off by default. Lets command-line tools, SSH sessions and headless servers sign in with a short code entered in any browser (OAuth 2.0 device authorization grant, RFC 8628). Turning it on needs a recent sign-in. See [Sign in from a CLI or server (device code)](#sign-in-from-a-cli-or-server-device-code).
 - **Advanced**: **Trusted assistant hosts**, **Browser clients** (allowed browser origins and in-place permission step-up) and **Workload limits**.
 
 **Automatic connections** is one switch for both ways an assistant can identify itself: assistants that register themselves (dynamic client registration, DCR) and assistants that publish a client metadata document (CIMD). Both use the same ceiling. The trusted-hosts list is optional: leave it empty to allow any public HTTPS metadata host, or list hosts to allow only those (other metadata-document assistants are then refused). Documents are fetched without redirects, only from public addresses, with a pinned DNS lookup.
@@ -107,6 +111,26 @@ An administrator revoking your connection or its assistant, or policy no longer 
 Desktop loopback callback addresses belong to the user's computer. The assistant chooses its callback and port; do not open a callback port on the OpsKnight server.
 
 Callback addresses must be HTTPS, http on a loopback host (any port), or a native app's own scheme (RFC 8252): a reverse-DNS scheme such as `com.example.app:/callback`, or one of `cursor`, `vscode`, `vscode-insiders` and `windsurf`. App-scheme and HTTPS callbacks match exactly. For a manually registered Cursor client, the IDE uses `cursor://anysphere.cursor-mcp/oauth/callback`, the CLI `http://localhost:8787/callback` and Cloud Agents `https://www.cursor.com/agents/mcp/oauth/callback`. Assistants may send registration metadata this server does not use (for example OIDC logout addresses); it is ignored and never stored. Client secrets and key material are refused.
+
+### Sign in from a CLI or server (device code)
+
+Use this when the tool runs where no browser can open: over SSH, in a container, on a headless server. The tool shows a code; you approve it in a browser on any other device.
+
+An administrator first turns on **Device sign-in** under **Access policy**. Only assistants registered for it can use it:
+
+- an assistant that registers itself (Automatic connections) and lists `urn:ietf:params:oauth:grant-type:device_code` in its `grant_types`. A device-only client may leave out `redirect_uris`;
+- an assistant an administrator registers on the **Assistants** tab with **Allow device sign-in with a code** ticked.
+
+Assistants identified by a client metadata document cannot use device sign-in: OpsKnight never fetches a URL on behalf of an anonymous device request.
+
+Then:
+
+1. The tool calls `POST <App URL>/oauth/mcp/device_authorization` and shows you a code such as `BCDF-GHJK` and the address `<App URL>/oauth/mcp/device` (or a link with the code filled in).
+2. Open that address in any browser and sign in. Type the code (case and the dash do not matter), or check that the filled-in code matches the one on your device, and choose **Continue**. The page never continues by itself.
+3. You see the same permissions page as a browser sign-in, with a warning: **Only continue if you started this sign-in yourself on a device you control.** Someone who sends you a code or a link is trying to get access as you; choose **Cancel**.
+4. Approve. The tool finishes signing in on its next poll, within a few seconds.
+
+Codes last ten minutes and work once. The connection is the same as any other: same permissions (your choice, within the ceiling and your role), same five-minute access tokens with refresh, same session lifetime, and it is listed and revoked under **Connections**. After five wrong codes, code entry pauses for 15 minutes for you and for your network address.
 
 ## Manage connections
 
