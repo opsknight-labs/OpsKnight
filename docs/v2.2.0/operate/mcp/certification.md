@@ -94,3 +94,26 @@ The settings page now identifies local automatic-connection readiness and suppli
 The repeatable local browser harness and MCP CI now start two application replicas with the same database, canonical App URL and ordinary application secrets. The automatic-onboarding flow checks that one consented token discovers the same scoped tools on both replicas and is blocked on both after automatic connections are disabled. The second direct listener receives the canonical public Host, simulating an ingress that preserves it. Actual deployment topology, load balancers, production migration scale and independent real-client certification still need their own evidence.
 
 The post-commit fault-injection child now waits at a bounded barrier so it cannot exit normally before the parent injects SIGKILL. The isolated three-case process/connection recovery suite passed with this harness fix; a previous full-suite run reported 1,013 passes and one ESRCH harness race and is not counted as a green run. Final rerun results are recorded in the PR after completion.
+
+## Live client checkpoint
+
+A client's status in the [compatibility table](../../guides/mcp/self-hosted-setup.md#client-compatibility) is tied to a run recorded here, and a unit test (`tests/mcp/docs-reference.test.ts`) enforces it:
+
+- **Tested (vX.Y.Z, YYYY-MM-DD)** needs an entry below naming that version and date.
+- **Verified (Client X.Y.Z, YYYY-MM-DD)** needs an entry naming the client version, the date, the negotiated MCP revision, the full 40-character server commit SHA and a result for every check: registration, consent, tools/list, scoped read, refresh, role change and revocation.
+
+Record a new entry after each live run against a released build, using the steps of the OpsKnight MCP end-to-end rounds. Never record a check that was not observed.
+
+### Claude Code against v2.1.2, 2026-11-03
+
+- Server: a live deployment of build `386adeb` (v2.1.2 with the MCP pull requests up to #955); the full commit SHA was not recorded.
+- Client: Claude Code CLI; its version and the negotiated revision were not recorded.
+- Registration: pass (automatic registration, and the "not allowed to connect" page with automatic connections off).
+- Consent: pass (PKCE consent page; the 48-scope by four-role consent matrix had no mismatches).
+- tools/list: pass (31 tools for the administrator's consent).
+- Scoped read: pass (`search_capabilities`, paged `incident_search`, exact page-size and unknown-operation errors).
+- Refresh: not recorded.
+- Role change: pass (promotion and demotion change the offered scopes; deactivation ends the session).
+- Revocation: not recorded for an individual grant in this run.
+
+This is a "Tested" entry, not "Verified": the client version, revision, full SHA, refresh and revocation are missing. It predates this release.

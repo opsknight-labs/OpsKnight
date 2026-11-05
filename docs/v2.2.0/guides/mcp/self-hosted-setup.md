@@ -15,6 +15,8 @@ verification:
     - src/lib/mcp/approvals/operation.ts
     - src/lib/runbooks/preview-review.ts
     - src/lib/mcp/approvals/notify.ts
+    - src/components/settings/mcp/setup-commands.ts
+    - docs/v2.2.0/operate/mcp/certification.md
     - tests/mcp/docs-reference.test.ts
 ---
 
@@ -60,9 +62,16 @@ See the [permissions reference](../../reference/mcp/permissions.md) for what eac
 Copy the **MCP server URL** from the **Connect** tab; it also shows step-by-step instructions per assistant.
 
 - **Claude Code:** run `claude mcp add --scope user --transport http opsknight 'https://ops.your-company.com/mcp'`, then `/mcp` to sign in.
-- **Claude and ChatGPT apps:** add a custom connector in the app's connector settings, paste the URL and choose OAuth. Menu names vary by version, and some plans need a workspace owner to allow custom connectors.
+- **Claude apps:** in **Settings → Connectors** choose **Add custom connector**, paste the URL and connect. Menu names vary by version, and Team and Enterprise plans need an owner to allow custom connectors.
+- **ChatGPT:** open ChatGPT Plugins (`chatgpt.com/plugins`), select **+**, then **Add custom MCP server** and name it OpsKnight. Under Connection paste the URL for a public server, or choose **Tunnel** for a private installation (see [OpenAI Secure MCP Tunnel](#private-installation-openai-secure-mcp-tunnel)). Choose OAuth; ChatGPT registers itself. Accept the warning, select **Create** as a plugin, then sign in to OpsKnight and approve. Developer mode or a workspace administrator's permission may be required, and some plans allow only read and fetch tools. OpenAI's [custom MCP server guide](https://developers.openai.com/api/docs/guides/custom-mcp-server) has the current menus.
 - **Cursor:** use **Add to Cursor** on the Connect tab, or add the `opsknight` entry under `mcpServers` in `~/.cursor/mcp.json`, merging it into the file if it already exists so your other servers are kept.
 - **VS Code:** use **Add to VS Code**, or on macOS and Linux run `code --add-mcp '{"name":"opsknight","type":"http","url":"https://ops.your-company.com/mcp"}'`. On Windows use the link or **MCP: Add Server** in the Command Palette.
+- **Codex CLI:** run `codex mcp add opsknight --url 'https://ops.your-company.com/mcp'`, then `codex mcp login opsknight`.
+- **Gemini CLI:** run `gemini mcp add --transport http opsknight 'https://ops.your-company.com/mcp'` (or set `httpUrl`, not `url`, under `mcpServers.opsknight` in `~/.gemini/settings.json`; `url` selects the older SSE transport), then `/mcp auth opsknight` inside Gemini CLI.
+- **Windsurf:** add `{"mcpServers":{"opsknight":{"serverUrl":"https://ops.your-company.com/mcp"}}}` to `~/.codeium/windsurf/mcp_config.json` and sign in when prompted.
+- **Hosts that only run local (stdio) servers:** a third-party bridge such as `npx -y mcp-remote 'https://ops.your-company.com/mcp'` can relay to OpsKnight. It is not part of OpsKnight, and it stores tokens on disk in `~/.mcp-auth`.
+
+After approving, select **Check connection** on the Connect tab: it shows the connection you just made, or what to do next.
 
 ### What you see when you approve
 
@@ -131,15 +140,18 @@ Approvals and rejections are audited. See the [catalog](../../reference/mcp/cata
 
 The server serves MCP revision **2026-07-28** natively and also accepts clients on revisions **2025-06-18** and **2025-11-25** (stateless; no sessions). Tasks and resource subscriptions need 2026-07-28. All clients need OAuth with PKCE (S256).
 
-| Client                        | Status                              | Notes                                                                                                                                                                  |
-| ----------------------------- | ----------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Claude Code                   | Verified                            | Sign-in, scoped reads, refresh and revocation verified against a live deployment.                                                                                      |
-| Claude (web and desktop apps) | Expected (2025 revisions supported) | Team and Enterprise plans need an owner to allow custom connectors. Cloud-hosted: your server must be reachable from the internet with a publicly trusted certificate. |
-| ChatGPT                       | Expected (2025 revisions supported) | Cloud-hosted: needs a publicly reachable host and a publicly trusted TLS certificate. Identifies itself with a metadata document or registers itself.                  |
-| Cursor                        | Expected (2025 revisions supported) | Use **Add to Cursor** or merge the entry into `~/.cursor/mcp.json`.                                                                                                    |
-| VS Code                       | Expected (2025 revisions supported) | Use **Add to VS Code**, `code --add-mcp`, or **MCP: Add Server**.                                                                                                      |
+| Client                        | Status                              | Notes                                                                                                                                                                                                                                                      |
+| ----------------------------- | ----------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Claude Code                   | Tested (v2.1.2, 2026-11-03)         | Registration, consent, tools, scoped reads, role changes and deactivation checked against a live deployment ([checkpoint](../../operate/mcp/certification.md#live-client-checkpoint)). Refresh and grant revocation for this release are not yet recorded. |
+| Claude (web and desktop apps) | Expected (2025 revisions supported) | Team and Enterprise plans need an owner to allow custom connectors. Cloud-hosted: your server must be reachable from the internet with a publicly trusted certificate.                                                                                     |
+| ChatGPT                       | Expected (2025 revisions supported) | Needs a publicly reachable host with a trusted certificate, or OpenAI Secure MCP Tunnel for a private install. Identifies itself with a metadata document or registers itself.                                                                             |
+| Cursor                        | Expected (2025 revisions supported) | Use **Add to Cursor** or merge the entry into `~/.cursor/mcp.json`.                                                                                                                                                                                        |
+| VS Code                       | Expected (2025 revisions supported) | Use **Add to VS Code**, `code --add-mcp`, or **MCP: Add Server**.                                                                                                                                                                                          |
+| Codex CLI                     | Expected (not verified)             | `codex mcp add opsknight --url <url>`, then `codex mcp login opsknight`.                                                                                                                                                                                   |
+| Gemini CLI                    | Expected (not verified)             | `gemini mcp add --transport http opsknight <url>` (or `httpUrl` in `~/.gemini/settings.json`), then `/mcp auth opsknight`.                                                                                                                                 |
+| Windsurf                      | Expected (not verified)             | `serverUrl` in `~/.codeium/windsurf/mcp_config.json`.                                                                                                                                                                                                      |
 
-"Expected" means the client's protocol revision and OAuth flow are supported, but it has not been verified end to end. Verify sign-in, scoped calls, refresh and revocation against your own deployment before relying on it. A client that supports only private-key (`private_key_jwt`) authentication is refused, and a published JWKS URL is never fetched.
+"Expected" means the client's protocol revision and OAuth flow are supported, but it has not been verified end to end. "Tested" names the version and date of a recorded live run; "Verified" is used only when a [live client checkpoint](../../operate/mcp/certification.md#live-client-checkpoint) for that version records every check (registration, consent, tools, a scoped read, refresh, a role change and revocation) against a named commit. Verify sign-in, scoped calls, refresh and revocation against your own deployment before relying on it. A client that supports only private-key (`private_key_jwt`) authentication is refused, and a published JWKS URL is never fetched.
 
 ## Reverse proxies and private installations
 
@@ -151,9 +163,27 @@ A private installation serves clients that can reach its network. Cloud-hosted a
 
 Rotating the active application encryption key invalidates MCP credentials; users reconnect. Keep the key across ordinary restarts and upgrades.
 
+### Private installation: OpenAI Secure MCP Tunnel
+
+ChatGPT normally reaches your server over the internet. For a private installation, OpenAI's Secure MCP Tunnel carries ChatGPT's MCP requests through an outbound connection from inside your network:
+
+- Run OpenAI's `tunnel-client` on a host inside the network that has outbound HTTPS to `api.openai.com:443`.
+- Set its MCP server URL to the exact App URL plus `/mcp` (the public hostname, resolvable internally, with a trusted or configured-CA certificate). Never an internal IP or service name: OpsKnight rejects any other Host with `MCP_INVALID_HOST`.
+- The authorization server is not tunnelled. Each user's browser must reach `/oauth/mcp/authorize` and the consent page, and the tunnel-client host must reach the OpsKnight OAuth endpoints. OpsKnight must also be able to fetch ChatGPT's client metadata document over outbound HTTPS; otherwise ChatGPT registers itself instead.
+- Prerequisites: OpenAI Platform tunnel permissions (Read and Manage to create a tunnel, Read and Use to run one) and the tunnel linked to your ChatGPT workspace. Tunnels are not usable for publicly distributed plugins. OpenAI documents limits of 10 MiB and 120 seconds per request and 600 requests a minute per tunnel.
+- The same tunnel works for Codex and the Responses API.
+
+Follow OpenAI's Secure MCP Tunnel documentation, linked from its [custom MCP server guide](https://developers.openai.com/api/docs/guides/custom-mcp-server), for the current `tunnel-client` commands; they change between versions.
+
 ## Check and troubleshoot
 
-**Test connection** on the Overview tab runs the checks from the server. To check from outside, run the doctor from an OpsKnight source checkout:
+**Test connection** on the Overview tab runs the checks from the server. To check from outside, for example from a laptop on the public internet, download the doctor published with your release (Node.js 20; replace `2.2.0` with your version) and run it. No checkout is needed:
+
+```sh
+curl -fsSLo opsknight-mcp-doctor.cjs https://raw.githubusercontent.com/opsknight-labs/OpsKnight/v2.2.0/scripts/mcp/doctor.cjs && node opsknight-mcp-doctor.cjs 'https://ops.your-company.com/mcp'
+```
+
+The doctor is not served by OpsKnight itself: a misrouted or unhealthy instance is exactly what it diagnoses. From an OpsKnight source checkout:
 
 ```sh
 node scripts/mcp/doctor.cjs 'https://ops.your-company.com/mcp'
@@ -163,6 +193,12 @@ or inside the application container on the server (this does not test reachabili
 
 ```sh
 docker exec <opsknight-container> node scripts/mcp/doctor.cjs 'https://ops.your-company.com/mcp'
+```
+
+On Kubernetes:
+
+```sh
+kubectl exec deploy/<opsknight> -- node scripts/mcp/doctor.cjs 'https://ops.your-company.com/mcp'
 ```
 
 The doctor makes bounded, anonymous requests and follows no redirects. It checks discovery and resource binding, PKCE metadata, automatic registration and the protected endpoint's 401 challenge, and explains a 503 (MCP turned off, busy, or unavailable). It creates no credentials or settings and cannot certify real sign-in, load or every replica.

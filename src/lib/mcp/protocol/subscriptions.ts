@@ -5,7 +5,7 @@ import prisma from '@/lib/prisma';
 import { withMcpDatabase } from '@/lib/database-workload';
 import { logger } from '@/lib/logger';
 import { setOperationalGauge } from '@/lib/metrics/operational/registry';
-import { requireMcp } from '../core/errors';
+import { McpBoundaryError, requireMcp } from '../core/errors';
 
 export const MAX_RESOURCE_SUBSCRIPTIONS = 5;
 export const MAX_STREAMS_PER_PROCESS = 32;
@@ -47,7 +47,11 @@ const grantStreams = new Map<string, number>();
 /** Long-lived streams have their own capacity, separate from database-work admission. */
 export function acquireStreamSlot(grantId: string) {
   const forGrant = grantStreams.get(grantId) ?? 0;
-  requireMcp(processStreams < MAX_STREAMS_PER_PROCESS, 'MCP_SUBSCRIPTIONS_BUSY', 503);
+  // Process capacity frees as other streams end (at most STREAM_LIFETIME_MS); a retry can fit.
+  if (processStreams >= MAX_STREAMS_PER_PROCESS)
+    throw new McpBoundaryError('MCP_SUBSCRIPTIONS_BUSY', 503, true, undefined, {
+      retryAfterSeconds: 30,
+    });
   requireMcp(forGrant < MAX_STREAMS_PER_GRANT, 'MCP_SUBSCRIPTIONS_LIMIT', 429);
   processStreams++;
   grantStreams.set(grantId, forGrant + 1);
@@ -62,6 +66,11 @@ export function acquireStreamSlot(grantId: string) {
     else grantStreams.delete(grantId);
     setOperationalGauge('opsknight_mcp_subscriptions_active', processStreams);
   };
+}
+
+/** Open listen streams on this process and the per-process cap, for health checks. */
+export function mcpStreamUsage() {
+  return { streams: processStreams, streamsLimit: MAX_STREAMS_PER_PROCESS };
 }
 
 const tracked = new Map<string, number>();

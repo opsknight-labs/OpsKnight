@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import prisma from '@/lib/prisma';
 import { getMcpConfigurationStatus } from '@/lib/mcp/auth/config';
+import { mcpForceDisabled } from '@/lib/mcp/core/kill-switch';
 import DetailHeroBanner from '@/components/ui/DetailHeroBanner';
 import { Badge } from '@/components/ui/shadcn/badge';
 import { Button } from '@/components/ui/shadcn/button';
@@ -35,6 +36,7 @@ import McpCapabilityControls from './components/McpCapabilityControls';
 import { DEFAULT_ASSISTANT_SCOPES } from '@/lib/mcp/auth/client-policy';
 import { describeMcpScope, supportedMcpScopes } from '@/lib/mcp/auth/scopes';
 import {
+  checkMcpConnection,
   enableMcpQuickSetup,
   registerMcpClient,
   restoreMcpClient,
@@ -116,7 +118,8 @@ export default async function McpSettings({
     ]);
   const systemSettings = !configuration.origin ? systemRevision : null;
 
-  const enabled = policy?.enabled ?? false;
+  const forceDisabled = mcpForceDisabled();
+  const enabled = (policy?.enabled ?? false) && !forceDisabled;
   const ready = configuration.issues.length === 0;
   const automaticReady = ready && enabled && Boolean(policy?.dcrEnabled && policy.dcrScopes.length);
   const endpoint = configuration.origin ? `${configuration.origin}/mcp` : null;
@@ -271,6 +274,23 @@ export default async function McpSettings({
         ]}
       />
 
+      {forceDisabled && (
+        <section
+          role="alert"
+          aria-label="MCP disabled by deployment configuration"
+          className="rounded-xl border border-destructive/40 bg-destructive/5 p-4 text-sm md:p-5"
+        >
+          <h2 className="flex items-center gap-2 font-semibold text-destructive">
+            <XCircle className="h-4 w-4" aria-hidden="true" />
+            Disabled by deployment configuration (MCP_FORCE_DISABLED)
+          </h2>
+          <p className="mt-1 text-muted-foreground">
+            The server environment turns AI assistant access off for every user, whatever is saved
+            here. Remove MCP_FORCE_DISABLED and restart OpsKnight to turn it back on.
+          </p>
+        </section>
+      )}
+
       {isAdmin && configuration.issues.length > 0 && (
         <section
           role="alert"
@@ -327,6 +347,7 @@ export default async function McpSettings({
             }}
             hrefs={hrefs}
             enableAction={enableMcpQuickSetup}
+            forceDisabled={forceDisabled}
             testAction={testMcpConnection}
             previous={
               policy && !policy.enabled
@@ -349,6 +370,7 @@ export default async function McpSettings({
             endpoint={endpoint}
             sessionIdleDays={policy?.sessionIdleDays ?? null}
             hrefs={hrefs}
+            checkConnection={checkMcpConnection}
           />
         );
       case 'connections': {
@@ -440,7 +462,9 @@ export default async function McpSettings({
         return (
           <McpPolicySection
             policy={{
-              enabled,
+              // The stored switch, not the effective one: saving other settings while
+              // MCP_FORCE_DISABLED is set must not turn MCP off for when the switch is lifted.
+              enabled: policy?.enabled ?? false,
               dcrEnabled: policy?.dcrEnabled ?? false,
               dcrScopes: policy?.dcrScopes ?? [],
               sessionIdleDays: policy?.sessionIdleDays ?? 30,

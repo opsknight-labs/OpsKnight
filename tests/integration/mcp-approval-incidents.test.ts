@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { randomUUID } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import type { IncidentStatus } from '@prisma/client';

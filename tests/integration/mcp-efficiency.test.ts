@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { randomBytes } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import prisma, { disconnectPrisma } from '@/lib/prisma';

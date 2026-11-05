@@ -25,6 +25,8 @@ import { mcpSessionDates } from '@/lib/mcp/auth/session-lifetime';
 import { partitionScopesForRole } from '@/lib/mcp/auth/role-scopes';
 import { isAppRole } from '@/lib/authorization';
 import { supersededUnusedMcpGrantsWhere } from '@/lib/mcp/auth/consent';
+import { MCP_MAX_OPERATIONS } from '@/lib/mcp/core/budget';
+import { mcpForceDisabled } from '@/lib/mcp/core/kill-switch';
 
 const settingsPath = '/settings/integrations/mcp';
 const supportedScopes = supportedMcpScopes;
@@ -82,6 +84,7 @@ export async function enableMcpQuickSetup() {
     await assertCurrentAdmin(tx, actor);
     const existing = await tx.mcpPolicy.findUnique({ where: { id: 'default' } });
     requireMcp(!existing?.enabled, 'MCP_ALREADY_CONFIGURED');
+    requireMcp(!mcpForceDisabled(), 'MCP_FORCE_DISABLED');
     // First run gets the defaults. Turning MCP back on keeps the administrator's configuration
     // (scopes, hosts, switches, limits) and only fills scope lists that are empty.
     const update = existing
@@ -120,6 +123,35 @@ export async function testMcpConnection() {
   await admin();
   await loadMcpRuntime();
   return runMcpSetupCheck();
+}
+
+/** Recent enough to be the sign-in the person just finished on the Connect tab. */
+const CONNECTION_CHECK_WINDOW_MS = 15 * 60_000;
+
+export type McpConnectionCheck =
+  { connected: false } | { connected: true; client: string; createdAt: string };
+
+/**
+ * The Connect tab's "Check connection": the viewer's own newest live connection from the last
+ * 15 minutes. Client name and time only, never tokens or scopes; any signed-in person may ask
+ * about their own connections.
+ */
+export async function checkMcpConnection(): Promise<McpConnectionCheck> {
+  const user = await getCurrentUser();
+  const now = Date.now();
+  const grant = await prisma.mcpGrant.findFirst({
+    where: {
+      userId: user.id,
+      revokedAt: null,
+      expiresAt: { gt: new Date(now) },
+      createdAt: { gte: new Date(now - CONNECTION_CHECK_WINDOW_MS) },
+    },
+    orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+    select: { createdAt: true, client: { select: { name: true } } },
+  });
+  return grant
+    ? { connected: true, client: grant.client.name, createdAt: grant.createdAt.toISOString() }
+    : { connected: false };
 }
 
 /** Re-allow a revoked client. Its old grants stay revoked, so users sign in again. */
@@ -170,7 +202,7 @@ export async function updateMcpPolicy(form: FormData): Promise<UpdateMcpPolicyRe
       enabled: z.boolean(),
       writesEnabled: z.boolean(),
       maxInFlight: z.coerce.number().int().min(1).max(16),
-      maxOperations: z.coerce.number().int().min(1).max(16),
+      maxOperations: z.coerce.number().int().min(1).max(MCP_MAX_OPERATIONS),
       requestsPerMinute: z.coerce.number().int().min(1).max(600),
       sensitiveReadsEnabled: z.boolean(),
       cimdAllowedHosts: z.string().max(4096),
@@ -240,6 +272,10 @@ export async function updateMcpPolicy(form: FormData): Promise<UpdateMcpPolicyRe
     const existing = await tx.mcpPolicy.findUniqueOrThrow({ where: { id: 'default' } });
     if (input.policyRevision !== undefined && input.policyRevision !== existing.policyRevision)
       return { ok: false, code: 'MCP_POLICY_CONFLICT', revision: existing.policyRevision };
+    // The deployment kill switch wins: an admin cannot turn MCP on while it is forced off. A
+    // policy that is already on may still be edited (limits, scopes) and stays on for when the
+    // operator lifts the switch.
+    requireMcp(!input.enabled || existing.enabled || !mcpForceDisabled(), 'MCP_FORCE_DISABLED');
     // "Automatic connections" is one switch: assistants may register themselves (DCR) or identify
     // with a metadata document (CIMD) under the same scope ceiling. An optional host list narrows
     // CIMD. A pre-existing host-restricted metadata-document setup keeps working when

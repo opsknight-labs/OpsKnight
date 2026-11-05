@@ -1,0 +1,121 @@
+[
+  {
+    "name": "call_operation",
+    "title": "Change OpsKnight data",
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "openWorldHint": false
+    },
+    "inputSchemaSha256": "3bee753b4c8123dde1b0df7d6219787dba17d1c95de0ca34a6b452a301616b86",
+    "descriptionSha256": "f7afec0ea41a9839a60455b430f8e4067e744460152eef2b611b728ea29d21e7"
+  },
+  {
+    "name": "describe_operation",
+    "title": "Describe an operation",
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    },
+    "inputSchemaSha256": "1823dc5197c28dd6dc8bfeafdf1f9771508a0590b657dd642c787cfb82daff1a",
+    "descriptionSha256": "9e0d58c18bd20538c9a9dd5267833173787927c36ab6087cabbbe3b914f187a8"
+  },
+  {
+    "name": "execute_plan",
+    "title": "Run several reads",
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    },
+    "inputSchemaSha256": "54fbc0051c2ed391180225536f20a3562af6ca96b83411e185d225021ca3087b",
+    "descriptionSha256": "b01de9dc14e9bcb23302a2401c1361a78d1bcebc02b3b623b61a1e5e5ea79278"
+  },
+  {
+    "name": "incident_get",
+    "title": "Get an incident",
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    },
+    "inputSchemaSha256": "1f4209c9a628fd4112d08febcfe879537d680c48f40964d79ed4facc1eeb664f",
+    "descriptionSha256": "cae7601b0f9e310e70f17b23294d01b2f1897b42f0665f314d6635d643abd367"
+  },
+  {
+    "name": "incident_get_context",
+    "title": "Get incident context",
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    },
+    "inputSchemaSha256": "4a3c28a6052b1fa5e2b7846914e15222979b655d5b461ac46e76f60c7bcf2872",
+    "descriptionSha256": "a17c13e503a0b19dc3025a44c18cfbd1e4090a495fe122f09d3e76436f12e351"
+  },
+  {
+    "name": "incident_get_timeline",
+    "title": "Get an incident timeline",
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    },
+    "inputSchemaSha256": "a7e63e70cc1809f2e51c3ded560ee9d327613d8868aed46f7aea7a613eb79365",
+    "descriptionSha256": "8e954f1e60fb6edee6c2ca3d743dfacca3a988e832d962a5225307d233df57bb"
+  },
+  {
+    "name": "incident_search",
+    "title": "Search incidents",
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    },
+    "inputSchemaSha256": "9efc7fe242aa0488be448bc31b4974ef4d2a472c658b0ec08e558c261c974c22",
+    "descriptionSha256": "84aa110ef249b8621ec6aca6acea10e2f0d9d275f5e4a3bd73aa222ec5ea994e"
+  },
+  {
+    "name": "read_operation",
+    "title": "Read OpsKnight data",
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    },
+    "inputSchemaSha256": "3bee753b4c8123dde1b0df7d6219787dba17d1c95de0ca34a6b452a301616b86",
+    "descriptionSha256": "9a35050f8a2f009e10074a0e59499f5b585cff8d6573e45a422808b332b302b1"
+  },
+  {
+    "name": "search_capabilities",
+    "title": "Search OpsKnight capabilities",
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    },
+    "inputSchemaSha256": "dc9367bdd755769e752c56ebb005af45041eed6f364c4287aa25cd54b547db15",
+    "descriptionSha256": "c5ef3027eee25b5685e6c5d8dd962dfaa0a80c415f6651943af151aee662a848"
+  },
+  {
+    "name": "whoami",
+    "title": "Who am I",
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    },
+    "inputSchemaSha256": "99334726611ccf58a148b0814696bfa6fe08c1b2d027e946beccf5a74331c9aa",
+    "descriptionSha256": "84194aebdc4fe22cd38b988e221f30e5f28fdb1728dec76e0dfd79c6a6b4529c"
+  }
+]

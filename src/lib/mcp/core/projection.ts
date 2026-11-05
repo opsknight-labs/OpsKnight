@@ -2,7 +2,8 @@
 // including error and resource responses. No bearer values are included in evidence.
 import { sanitizeOutputText } from '../../../../agent/src/output-safety';
 
-const sensitive =
+/** Field names always removed from results (documented in guides/mcp/security-and-data.md). */
+export const MCP_REDACTED_FIELDS =
   /(?:secret|password|token|credential|authorization|api.?key|signed.?url|email|phone|payload|rawOutput|stdout|stderr)|^(?:definition|config|inputValues|executionPlan|environment|env)$/i;
 export function projectMcpData(
   value: unknown,
@@ -22,7 +23,7 @@ export function projectMcpData(
     return Object.fromEntries(
       Object.entries(value).map(([key, child]) => {
         const field = `${path}/${key}`;
-        if (sensitive.test(key)) {
+        if (MCP_REDACTED_FIELDS.test(key)) {
           redacted.push(field);
           return [key, '[REDACTED]'];
         }

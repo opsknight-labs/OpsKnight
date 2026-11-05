@@ -10,6 +10,9 @@ import { mcpResource, withMcpRuntime } from '@/lib/mcp/auth/config';
 import { assertMcpHost, mcpHttpError, uniqueQuery } from '@/lib/mcp/auth/http';
 import { McpBoundaryError, requireMcp } from '@/lib/mcp/core/errors';
 import { readBoundedMcpText } from '@/lib/mcp/core/body';
+import { mcpPolicyInForce } from '@/lib/mcp/core/kill-switch';
+import { observeMcpOAuth } from '@/lib/mcp/auth/oauth-observability';
+import { logger } from '@/lib/logger';
 
 export const runtime = 'nodejs';
 const schema = z
@@ -30,7 +33,9 @@ const schema = z
   .strip();
 
 export function POST(request: Request) {
-  return withMcpDatabase(() => withMcpRuntime(() => handlePost(request)));
+  return observeMcpOAuth('token', request, () =>
+    withMcpDatabase(() => withMcpRuntime(() => handlePost(request)))
+  );
 }
 
 async function handlePost(request: Request) {
@@ -40,7 +45,7 @@ async function handlePost(request: Request) {
     assertMcpHost(request);
     release = await acquireMcpOAuthSlot('token');
     const policy = await prisma.mcpPolicy.findUnique({ where: { id: 'default' } });
-    requireMcp(policy?.enabled, 'MCP_DISABLED', 503);
+    requireMcp(mcpPolicyInForce(policy), 'MCP_DISABLED', 503);
     await admitMcpOAuthRequest(request, 'token');
     requireMcp(
       request.headers.get('content-type')?.split(';')[0] === 'application/x-www-form-urlencoded',
@@ -98,19 +103,33 @@ async function handlePost(request: Request) {
       headers: { ...response.headers, 'Cache-Control': 'no-store', Pragma: 'no-cache' },
     });
   } catch (error) {
-    if (reused)
+    if (reused) {
+      const grantId = reused;
+      logger.warn('mcp.token.refresh_reuse_revoked', { grantId });
       await prisma.$transaction(async tx => {
-        await tx.mcpGrant.update({ where: { id: reused }, data: { revokedAt: new Date() } });
+        // The revoked grant names whose session ended and which assistant it belonged to.
+        const grant = await tx.mcpGrant.update({
+          where: { id: grantId },
+          data: { revokedAt: new Date() },
+          select: { userId: true, clientId: true, client: { select: { name: true } } },
+        });
         await logAudit(
           {
             source: 'AUTH',
             action: 'mcp.grant.reuse_detected',
             entityType: 'SYSTEM_CONFIG',
-            entityId: reused,
+            entityId: grantId,
+            actorId: grant.userId,
+            details: {
+              clientId: grant.clientId,
+              clientName: grant.client.name,
+              reason: 'refresh_token_reuse',
+            },
           },
           tx
         );
       });
+    }
     return tokenErrorResponse(error);
   } finally {
     release?.();
@@ -161,7 +180,12 @@ function isTransientDatabaseError(error: unknown) {
 function tokenErrorResponse(error: unknown) {
   const headers = { 'Cache-Control': 'no-store' };
   const inner = innerError(error);
-  if (isTransientDatabaseError(inner))
+  // Names and codes only: form values, codes, verifiers and tokens are never logged.
+  if (isTransientDatabaseError(inner)) {
+    logger.warn('mcp.token.transient', {
+      prismaCode: databaseCode(inner)?.code,
+      state: databaseCode(inner)?.state,
+    });
     return Response.json(
       {
         error: 'temporarily_unavailable',
@@ -169,6 +193,7 @@ function tokenErrorResponse(error: unknown) {
       },
       { status: 503, headers: { ...headers, 'Retry-After': '2' } }
     );
+  }
   // A model check keeps its own OAuth code (invalid_scope stays invalid_scope).
   if (inner instanceof McpBoundaryError && inner !== error && OAUTH_ERRORS.has(inner.code))
     return Response.json(
@@ -178,12 +203,23 @@ function tokenErrorResponse(error: unknown) {
   if (inner instanceof McpBoundaryError) return mcpHttpError(inner);
   if (error instanceof z.ZodError)
     return Response.json({ error: 'invalid_request' }, { status: 400, headers });
-  if (error instanceof OAuth2Server.ServerError)
+  if (error instanceof OAuth2Server.ServerError) {
+    logUnexpected(inner);
     return Response.json({ error: 'server_error' }, { status: 500, headers });
+  }
   if (error instanceof OAuth2Server.OAuthError)
     return Response.json(
       { error: OAUTH_ERRORS.has(error.name) ? error.name : 'invalid_grant' },
       { status: error.name === 'invalid_client' ? 401 : 400, headers }
     );
+  logUnexpected(inner);
   return mcpHttpError(error);
+}
+
+function logUnexpected(inner: unknown) {
+  if (inner instanceof McpBoundaryError) return;
+  logger.error('mcp.token.unexpected_error', {
+    name: inner instanceof Error ? inner.name : typeof inner,
+    prismaCode: databaseCode(inner)?.code,
+  });
 }

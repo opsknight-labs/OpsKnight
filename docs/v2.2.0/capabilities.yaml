@@ -1,0 +1,44 @@
+# Upcoming-release capability catalog (v2.2.0). The documentation-impact gate
+# (scripts/docs/check-impact.mjs) reads it alongside the current release's catalog, so
+# capabilities that only exist in the v2.2.0 docs are covered before the release flips.
+# Before currentRelease moves to v2.2.0, carry the v2.1.0 entries forward with their
+# v2.2.0 paths; until then they stay mapped in docs/v2.1.0/capabilities.yaml.
+catalog: upcoming
+authority_order: [runtime, tests, source, historical_docs]
+capabilities:
+  mcp_assistants:
+    title: Connect AI assistants over MCP with per-person sign-in and reviewed changes
+    product_area: mcp
+    status: documented
+    required: { concepts: true, guides: true, reference: true, tests: true, evidence: false }
+    concepts: [guides/mcp/README.md, guides/mcp/security-and-data.md]
+    guides:
+      [
+        guides/mcp/self-hosted-setup.md,
+        guides/mcp/what-to-ask.md,
+        guides/mcp/build-an-agent.md,
+        guides/mcp/troubleshooting.md,
+      ]
+    reference:
+      [
+        reference/mcp/README.md,
+        reference/mcp/permissions.md,
+        reference/mcp/catalog.md,
+        reference/mcp/tools.md,
+      ]
+    tests:
+      [
+        tests/mcp/docs-reference.test.ts,
+        tests/mcp/admin-ui-copy.test.ts,
+        tests/components/mcp-connect-guide.test.tsx,
+      ]
+    sources:
+      [
+        src/app/mcp,
+        src/lib/mcp,
+        src/app/oauth/mcp,
+        src/app/(app)/settings/integrations/mcp,
+        src/components/settings/mcp,
+      ]
+    evidence: []
+    roles: [responder, administrator, developer]

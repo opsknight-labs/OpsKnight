@@ -6,7 +6,9 @@ import { acquireMcpOAuthSlot, admitMcpOAuthRequest } from '@/lib/mcp/auth/admiss
 import { digestMcpSecret, withMcpRuntime } from '@/lib/mcp/auth/config';
 import { assertMcpHost, mcpHttpError, uniqueQuery } from '@/lib/mcp/auth/http';
 import { readBoundedMcpText } from '@/lib/mcp/core/body';
-import { requireMcp } from '@/lib/mcp/core/errors';
+import { McpBoundaryError, requireMcp } from '@/lib/mcp/core/errors';
+import { observeMcpOAuth } from '@/lib/mcp/auth/oauth-observability';
+import { logger } from '@/lib/logger';
 
 const schema = z
   .object({
@@ -18,7 +20,9 @@ const schema = z
   // RFC 7009 extensions and unknown parameters are ignored; duplicates are still refused.
   .strip();
 export function POST(request: Request) {
-  return withMcpDatabase(() => withMcpRuntime(() => handlePost(request)));
+  return observeMcpOAuth('revoke', request, () =>
+    withMcpDatabase(() => withMcpRuntime(() => handlePost(request)))
+  );
 }
 
 async function handlePost(request: Request) {
@@ -42,7 +46,7 @@ async function handlePost(request: Request) {
           OR: [{ accessHash: hash }, { refreshHash: hash }],
           grant: { clientId: input.client_id },
         },
-        select: { grantId: true },
+        select: { grantId: true, grant: { select: { userId: true, clientId: true } } },
       });
       if (!token) return;
       await tx.mcpGrant.update({ where: { id: token.grantId }, data: { revokedAt: new Date() } });
@@ -52,12 +56,18 @@ async function handlePost(request: Request) {
           action: 'mcp.grant.revoked',
           entityType: 'SYSTEM_CONFIG',
           entityId: token.grantId,
+          actorId: token.grant.userId,
+          details: { clientId: token.grant.clientId, via: 'rfc7009' },
         },
         tx
       );
     });
     return new Response(null, { status: 200, headers: { 'Cache-Control': 'no-store' } });
   } catch (error) {
+    if (!(error instanceof McpBoundaryError) && !(error instanceof z.ZodError))
+      logger.warn('mcp.revoke.unexpected_error', {
+        name: error instanceof Error ? error.name : typeof error,
+      });
     return mcpHttpError(error);
   } finally {
     release?.();

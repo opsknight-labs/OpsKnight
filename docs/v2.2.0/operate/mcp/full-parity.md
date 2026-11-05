@@ -49,9 +49,8 @@ For a future reviewed exclusion, record the operation-specific reason, reviewer 
 2. Read the REST route first: authorization action, `If-Match` source (what revision it fences), `replayAuthGuard`, and the library command it calls. Do not wrap logic; reuse the route handler.
 3. In `review.json` set `status: APPROVAL_REQUIRED` and `evidence` to the batch test; add the handler to `MCP_APPROVAL_HANDLERS` (never `MCP_HANDLERS`).
 4. Write `tests/integration/mcp-approval-<family>.test.ts` using `describeApprovalScenarios`: per operation a setup, the frozen input, a comparable `effect`, and an `invalidate` that makes the frozen revision stale (omit only when the route has no revision precondition, and then add a specific rejection test).
-5. Register the test in `package.json` (`test:mcp:db`), `.github/workflows/mcp-certification.yml` and `scripts/mcp/local-check.cjs`.
-6. Run, locally: `tsc`, eslint, `test:mcp`, `test:mcp:db`, `mcp:coverage` (no failures), then push and require the CI `contract-security` job green on that exact SHA. `release-gates` stays red by design until reviewed live evidence exists.
-7. Update the counts and the enabled list in `reference/mcp/catalog.md`.
+5. Run, locally: `tsc`, eslint, `test:mcp`, `test:mcp:db`, `mcp:coverage` (no failures), then push and require the CI `contract-security` job green on that exact SHA. `release-gates` stays red by design until reviewed live evidence exists.
+6. Update the counts and the enabled list in `reference/mcp/catalog.md`.
 
 CI notes from certifying this branch: the browser step is sensitive to slow shared runners (`playwright install --with-deps` can hang; re-run the job on the same SHA rather than pushing). The dependency audit is judged against `scripts/mcp/audit-baseline.json`; every entry needs an owner, justification and expiry.
 
@@ -80,7 +79,7 @@ Local evidence on PostgreSQL (not CI, not production):
   - It kills the whole process group with `SIGKILL` inside the effect transaction and immediately after it commits, and terminates the server-side PostgreSQL backend mid-commit with `pg_terminate_backend`.
   - A retry from a fresh process must then produce exactly one effect and one `COMMITTED` approval.
   - It passed three consecutive runs.
-- `scripts/mcp/mixed-load.cjs` runs the ingestion benchmark (synchronous and durable PostgreSQL modes, 200 events) while a separate OS process (`tests/integration/mcp-load-worker.test.ts`) sustains MCP reads at 0, 10, 25, 50 and 100 concurrent principals through the isolated MCP pool. Each principal has its own grant, so per-principal quotas do not hide the load.
+- `scripts/mcp/mixed-load.cjs` (`npm run load:mcp-mixed`) measures executor-level reads only; it does not go through the HTTP route (`npm run load:mcp` drives `/mcp` over HTTP with k6). It runs the ingestion benchmark (synchronous and durable PostgreSQL modes, 200 events) while a separate OS process (`tests/integration/mcp-load-worker.test.ts`) sustains MCP reads at 0, 10, 25, 50 and 100 concurrent principals through the isolated MCP pool. Each principal has its own grant, so per-principal quotas do not hide the load.
   - Every level stayed within the thresholds (p95 at most 2x baseline, throughput at least 0.5x) and reconciled every event.
   - Synchronous p95 ratio peaked at 1.59x; durable throughput was at least 0.78x.
   - MCP throughput stayed flat at about 2.8k requests per window from 10 to 100 principals while MCP latency rose. The MCP admission cap, not ingestion, absorbs the extra load.

@@ -74,3 +74,12 @@ it('states the protocol revision this server implements', () => {
   expect(screen.queryByText(/2024-11-05/)).toBeNull();
   expect(screen.queryByText(/Official Anthropic/)).toBeNull();
 });
+
+it('locks quick setup while the deployment forces MCP off, and says why', () => {
+  const { rerender } = render(<McpOverviewSection {...base} />);
+  const button = () => screen.getByRole('button', { name: /turn on/i }) as HTMLButtonElement;
+  expect(button().disabled).toBe(false);
+  rerender(<McpOverviewSection {...base} forceDisabled />);
+  expect(button().disabled).toBe(true);
+  expect(screen.getByText(/The deployment sets MCP_FORCE_DISABLED/)).toBeTruthy();
+});

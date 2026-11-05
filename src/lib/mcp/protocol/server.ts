@@ -1,3 +1,4 @@
+import { APP_VERSION } from '@/lib/version';
 import { searchCapabilities } from './capability-search';
 import {
   McpServer,
@@ -474,7 +475,8 @@ export function createOpsKnightMcpServer(
   // Administrator controls apply to every session whatever its role or consent; execution rechecks.
   const disabled = resolveDisabledMcpCapabilities(disabledCapabilities);
   const server = new McpServer(
-    { name: 'opsknight', title: 'OpsKnight', version: '2.2.0' },
+    // The running release, as /api/health reports it, so a bug report names its contract.
+    { name: 'opsknight', title: 'OpsKnight', version: APP_VERSION },
     {
       instructions: MCP_SERVER_INSTRUCTIONS,
       // Advertised because subscriptions/listen is served by the route with authorized URIs only.
@@ -1100,8 +1102,9 @@ export function createOpsKnightMcpServer(
   return server;
 }
 
-const READ_THROUGH_CALL_DEPRECATED =
-  'Reads through call_operation are deprecated; use read_operation, which never changes anything.';
+/** The release that stops serving reads through call_operation (also in CHANGELOG and catalog). */
+export const CALL_OPERATION_READS_REMOVED_IN = 'v2.3.0';
+const READ_THROUGH_CALL_DEPRECATED = `Reads through call_operation are deprecated and will be removed in ${CALL_OPERATION_READS_REMOVED_IN}; use read_operation, which never changes anything.`;
 
 /** The resource template each resource kind is read through. */
 const RESOURCE_OPERATIONS = new Map<CompletionSource, string>([

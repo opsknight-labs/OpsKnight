@@ -1,0 +1,409 @@
+[
+  {
+    "name": "automation_get_decision_trace",
+    "title": "Get automation decision trace",
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    },
+    "inputSchemaSha256": "4d683849ddd9b289ae1e024ee2983b9cbeb3b86605eaa6f107cfe0d61740968c",
+    "descriptionSha256": "94d4294df688b4de35bd12a382508b98ab5727c7cd4ebcb2a4cfdee84b7ed30d"
+  },
+  {
+    "name": "automation_get_effective",
+    "title": "Get effective service automation",
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    },
+    "inputSchemaSha256": "28c3e6fbcdb1983c50e8f20fa5062117f52588440cbe2bb9f9e6f7386070bc56",
+    "descriptionSha256": "f314d6bce0de21baaae32242fc095f590ff23827725751422aae946cf85fec8d"
+  },
+  {
+    "name": "automation_simulate",
+    "title": "Simulate automation rules",
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    },
+    "inputSchemaSha256": "8dbb959f0c2046071cf923130a917e167067b7cb1305057d41f58fbe1709492f",
+    "descriptionSha256": "decdcfe686eb3ac6220e1bcc5000ead07decc1a7a01f5959064d70948667a0bc"
+  },
+  {
+    "name": "call_operation",
+    "title": "Change OpsKnight data",
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "openWorldHint": false
+    },
+    "inputSchemaSha256": "3bee753b4c8123dde1b0df7d6219787dba17d1c95de0ca34a6b452a301616b86",
+    "descriptionSha256": "f7afec0ea41a9839a60455b430f8e4067e744460152eef2b611b728ea29d21e7"
+  },
+  {
+    "name": "describe_operation",
+    "title": "Describe an operation",
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    },
+    "inputSchemaSha256": "1823dc5197c28dd6dc8bfeafdf1f9771508a0590b657dd642c787cfb82daff1a",
+    "descriptionSha256": "9e0d58c18bd20538c9a9dd5267833173787927c36ab6087cabbbe3b914f187a8"
+  },
+  {
+    "name": "escalation_explain",
+    "title": "Explain an escalation policy",
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    },
+    "inputSchemaSha256": "1f4209c9a628fd4112d08febcfe879537d680c48f40964d79ed4facc1eeb664f",
+    "descriptionSha256": "d2886e35ff87eec8ffaa60d50331af3f95236cb0d0a8d277946a539600b8a5f9"
+  },
+  {
+    "name": "execute_plan",
+    "title": "Run several reads",
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    },
+    "inputSchemaSha256": "54fbc0051c2ed391180225536f20a3562af6ca96b83411e185d225021ca3087b",
+    "descriptionSha256": "b01de9dc14e9bcb23302a2401c1361a78d1bcebc02b3b623b61a1e5e5ea79278"
+  },
+  {
+    "name": "incident_acknowledge",
+    "title": "Acknowledge an incident",
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": true,
+      "openWorldHint": true
+    },
+    "inputSchemaSha256": "bdaf6f55261ece7ba56620ca59e7eeadfd9379c3b68f04ddeb20d4234414f6ef",
+    "descriptionSha256": "ef0754ea5996c8fcc628b02cad47dd847d8d3f843983138864228080ff6cdb93"
+  },
+  {
+    "name": "incident_add_note",
+    "title": "Add an incident note",
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    },
+    "inputSchemaSha256": "5f5523ff241b277d9e2b9c6baffaeb90761bf1430d18156502c93c5fa0a17c31",
+    "descriptionSha256": "32120c323e1008f5083d353f040a27d78bf185e088e9323c1d0d8c14269d1eba"
+  },
+  {
+    "name": "incident_assign",
+    "title": "Assign an incident",
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": true,
+      "openWorldHint": true
+    },
+    "inputSchemaSha256": "9f3300c3dd22c83d60af4b8f738ce4f08cf91079863be32064f1b67c60654453",
+    "descriptionSha256": "d8ccc1391f6ac071c5f4d5def02a09e08f1c1ba5deb0330df25e0c286a118547"
+  },
+  {
+    "name": "incident_create",
+    "title": "Create an incident",
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": true
+    },
+    "inputSchemaSha256": "2554f1f4aeb9e87245f00c8e04d7294729776036a2fb76eb4ebf0f7f7a26891b",
+    "descriptionSha256": "e26ba90a9a0273283c1c74502a306c6280a28423e1995c6968f676e32d83d91c"
+  },
+  {
+    "name": "incident_get",
+    "title": "Get an incident",
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    },
+    "inputSchemaSha256": "1f4209c9a628fd4112d08febcfe879537d680c48f40964d79ed4facc1eeb664f",
+    "descriptionSha256": "cae7601b0f9e310e70f17b23294d01b2f1897b42f0665f314d6635d643abd367"
+  },
+  {
+    "name": "incident_get_context",
+    "title": "Get incident context",
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    },
+    "inputSchemaSha256": "4a3c28a6052b1fa5e2b7846914e15222979b655d5b461ac46e76f60c7bcf2872",
+    "descriptionSha256": "a17c13e503a0b19dc3025a44c18cfbd1e4090a495fe122f09d3e76436f12e351"
+  },
+  {
+    "name": "incident_get_timeline",
+    "title": "Get an incident timeline",
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    },
+    "inputSchemaSha256": "a7e63e70cc1809f2e51c3ded560ee9d327613d8868aed46f7aea7a613eb79365",
+    "descriptionSha256": "8e954f1e60fb6edee6c2ca3d743dfacca3a988e832d962a5225307d233df57bb"
+  },
+  {
+    "name": "incident_resolve",
+    "title": "Resolve an incident",
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": true,
+      "openWorldHint": true
+    },
+    "inputSchemaSha256": "c22a7fa2b15afeb7f01881cf7e468ed3acb744f6282fca82c17f99dbc87d38b8",
+    "descriptionSha256": "52ed005168caed2a3e310c9643ea1f78443e6efa249f1e59c2d13f8035881d5c"
+  },
+  {
+    "name": "incident_search",
+    "title": "Search incidents",
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    },
+    "inputSchemaSha256": "9efc7fe242aa0488be448bc31b4974ef4d2a472c658b0ec08e558c261c974c22",
+    "descriptionSha256": "84aa110ef249b8621ec6aca6acea10e2f0d9d275f5e4a3bd73aa222ec5ea994e"
+  },
+  {
+    "name": "oncall_lookup",
+    "title": "Look up who is on call",
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    },
+    "inputSchemaSha256": "c2f520233c74906105497d5f2bae0817b44b96648da5dd7b630c56654911443e",
+    "descriptionSha256": "986bacd556a1c7e31a8af6d80d31190c8636275acbb05945b6a03c7b273ff83a"
+  },
+  {
+    "name": "operation_commit_approved",
+    "title": "Apply an approved change",
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": true,
+      "openWorldHint": false
+    },
+    "inputSchemaSha256": "89ae02649204aebfd820ace23877d0b7f0353be060ea394932134d62ed44981a",
+    "descriptionSha256": "345ede282cce16de535b40e96f423d11dfcc8f8083d47c9ac1c6931b5c87bca6"
+  },
+  {
+    "name": "operation_get_approval",
+    "title": "Check an approval",
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    },
+    "inputSchemaSha256": "89ae02649204aebfd820ace23877d0b7f0353be060ea394932134d62ed44981a",
+    "descriptionSha256": "17f9cea40661d7a215b71d9d3d0aab3a827faa60c4356df6cac4dc59a098460c"
+  },
+  {
+    "name": "operation_prepare",
+    "title": "Request approval for a change",
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    },
+    "inputSchemaSha256": "bd698554cfe0c2cfaaf594b4cb34c742d08853d81ea3fed2e29d35b80b79c52a",
+    "descriptionSha256": "57c12cb6a7474e26672530e10249aebe03b8f5c436fafd66a4ba26e8e7ebf8bd"
+  },
+  {
+    "name": "postmortem_get_context",
+    "title": "Get postmortem context",
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    },
+    "inputSchemaSha256": "b18f567c5c9bfca6575d899b5b208dcacd09f6dc71ebca6b5d81812b0a951342",
+    "descriptionSha256": "3f712be3f6501f4f0e5595084a12ca06d3fa8abad28b303ffe7d8a6f36566dbb"
+  },
+  {
+    "name": "read_operation",
+    "title": "Read OpsKnight data",
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    },
+    "inputSchemaSha256": "3bee753b4c8123dde1b0df7d6219787dba17d1c95de0ca34a6b452a301616b86",
+    "descriptionSha256": "9a35050f8a2f009e10074a0e59499f5b585cff8d6573e45a422808b332b302b1"
+  },
+  {
+    "name": "report_get_summary",
+    "title": "Get a saved report",
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    },
+    "inputSchemaSha256": "28c3e6fbcdb1983c50e8f20fa5062117f52588440cbe2bb9f9e6f7386070bc56",
+    "descriptionSha256": "080462256b3e282ec01b3a964d0453a3535676d1987b931eff56108827226767"
+  },
+  {
+    "name": "runbook_execute_approved",
+    "title": "Run an approved runbook",
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": true,
+      "openWorldHint": true
+    },
+    "inputSchemaSha256": "25f89bf08f5271c5948a921a64e156d26a3f4ca8527b9f7660a3f63d6344739d",
+    "descriptionSha256": "3c12e731701d34a9a780b2f2e88c23152634c943dbe96f6e21567be761e864bb"
+  },
+  {
+    "name": "runbook_find",
+    "title": "Find runbooks",
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    },
+    "inputSchemaSha256": "df03725b59320bdbaa920fbd52a2195e506130bbdbc1dd607f2e28c630dc6d9e",
+    "descriptionSha256": "88e2e049e0046bfee8b8f1499037811edaa12e6d2f38ea0cadfa6b1aa0dcced5"
+  },
+  {
+    "name": "runbook_get_approval",
+    "title": "Check a runbook approval",
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    },
+    "inputSchemaSha256": "e0d05d6723073a4e43cae7173c9b18506d852095aa5a12a5924a3541afc69d96",
+    "descriptionSha256": "fda1bc7412a8023a62431d6a61f13d2c6b17bcc068ab6382229f2e9d1cd99275"
+  },
+  {
+    "name": "runbook_get_execution",
+    "title": "Get a runbook execution",
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    },
+    "inputSchemaSha256": "1f4209c9a628fd4112d08febcfe879537d680c48f40964d79ed4facc1eeb664f",
+    "descriptionSha256": "f5e896acf257f4abb3bff10301114fede73b4d9ecd6b234623f942339e50021f"
+  },
+  {
+    "name": "runbook_prepare_execution",
+    "title": "Request a runbook run",
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    },
+    "inputSchemaSha256": "04256764e5070e2b3a3401fca6216bbdcf8f3d0abd4c993ed4b53c88bcff7302",
+    "descriptionSha256": "37a727476ee39a33244671b983cc1969ca473496bb427d3a020afd04fc03913f"
+  },
+  {
+    "name": "runbook_preview",
+    "title": "Preview a runbook execution",
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    },
+    "inputSchemaSha256": "b87538d50d84f204fd6f909d1bb0406975b78daf3d3c415ac1b9277ba0fbf890",
+    "descriptionSha256": "e39537728f72f2fd1ad4d133caafbebc6474fcfd90241b129e2e0efa7afdeed4"
+  },
+  {
+    "name": "schedule_get",
+    "title": "Get an on-call schedule",
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    },
+    "inputSchemaSha256": "1f4209c9a628fd4112d08febcfe879537d680c48f40964d79ed4facc1eeb664f",
+    "descriptionSha256": "12584fa89e44ef59bf015b8b2742f7363d3f2386c0d1631da4184f53bd5004df"
+  },
+  {
+    "name": "search_capabilities",
+    "title": "Search OpsKnight capabilities",
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    },
+    "inputSchemaSha256": "dc9367bdd755769e752c56ebb005af45041eed6f364c4287aa25cd54b547db15",
+    "descriptionSha256": "c5ef3027eee25b5685e6c5d8dd962dfaa0a80c415f6651943af151aee662a848"
+  },
+  {
+    "name": "service_get_health",
+    "title": "Get service health",
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    },
+    "inputSchemaSha256": "28c3e6fbcdb1983c50e8f20fa5062117f52588440cbe2bb9f9e6f7386070bc56",
+    "descriptionSha256": "4360086d4fb5a9cf654ea6c24958a20e08b8674c3f0e3f65c49815badc6cecbd"
+  },
+  {
+    "name": "status_page_get",
+    "title": "Get a status page",
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    },
+    "inputSchemaSha256": "1f4209c9a628fd4112d08febcfe879537d680c48f40964d79ed4facc1eeb664f",
+    "descriptionSha256": "0d5ef9a1c2889a956fa54376e10bd3a033cd8c7d7e391aea4a2682e755b74e6d"
+  },
+  {
+    "name": "whoami",
+    "title": "Who am I",
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    },
+    "inputSchemaSha256": "99334726611ccf58a148b0814696bfa6fe08c1b2d027e946beccf5a74331c9aa",
+    "descriptionSha256": "84194aebdc4fe22cd38b988e221f30e5f28fdb1728dec76e0dfd79c6a6b4529c"
+  }
+]

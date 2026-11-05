@@ -7,3 +7,16 @@ groups:
         expr: max without(instance, pod) (opsknight_jobs_pending)
       - record: opsknight:jobs_oldest_pending_age_seconds
         expr: max without(instance, pod) (opsknight_jobs_oldest_pending_age_seconds)
+  - name: opsknight.mcp
+    rules:
+      # Cluster-wide MCP request rate by outcome; outcome labels are MCP_METRIC_OUTCOMES.
+      - record: opsknight:mcp_requests:rate5m
+        expr: sum by (outcome) (rate(opsknight_mcp_requests_total[5m]))
+      # Share of requests the server failed (error or unavailable); client and domain errors excluded.
+      - record: opsknight:mcp_server_error_ratio:rate5m
+        expr: sum(rate(opsknight_mcp_requests_total{outcome=~"error|unavailable"}[5m])) / clamp_min(sum(rate(opsknight_mcp_requests_total[5m])), 0.001)
+      # p95 latency of calls that reached domain work, per bounded tool label.
+      - record: opsknight:mcp_request_duration_seconds:p95_5m
+        expr: histogram_quantile(0.95, sum by (le, tool) (rate(opsknight_mcp_request_duration_seconds_bucket{tool!="none"}[5m])))
+      - record: opsknight:mcp_oauth_requests:rate5m
+        expr: sum by (endpoint, outcome) (rate(opsknight_mcp_oauth_requests_total[5m]))
