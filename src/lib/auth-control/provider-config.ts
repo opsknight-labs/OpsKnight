@@ -46,7 +46,13 @@ export const providerConfigSchema = z
       .url()
       .max(2048)
       .refine(value => {
-        const url = new URL(value);
+        // Zod still runs refinements after .url() fails, so parsing must not throw here.
+        let url: URL;
+        try {
+          url = new URL(value);
+        } catch {
+          return false;
+        }
         return (
           url.protocol === 'https:' && !url.username && !url.password && !url.search && !url.hash
         );
@@ -67,7 +73,11 @@ export const providerConfigSchema = z
       .max(100)
       .default([]),
     roleMapping: z.array(roleRuleSchema).max(100).default([]),
-    defaultRole: roleSchema.default('USER'),
+    // Administrator is never a default: everyone no rule matches, and every new account, would
+    // get it. Give administrators their role with an explicit rule instead.
+    defaultRole: roleSchema
+      .refine(role => role !== 'ADMIN', 'The default role cannot be Administrator.')
+      .default('USER'),
     unmatchedPolicy: z.enum(['DEFAULT_ROLE', 'DENY']).default('DEFAULT_ROLE'),
     rolePrecedence: z.enum(['FIRST_MATCH', 'HIGHEST_ROLE']).default('HIGHEST_ROLE'),
     domainTrustedLinking: z.boolean().default(false),

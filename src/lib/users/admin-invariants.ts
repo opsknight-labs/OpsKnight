@@ -1,7 +1,7 @@
 import 'server-only';
 
 import type { Prisma, Role, RoleSource, UserStatus } from '@prisma/client';
-import { AppError } from '@/lib/errors';
+import { LastAdministratorError } from '@/lib/users/last-administrator-error';
 import { acquireAdvisoryLock, LOCK_KEYS } from '@/lib/db-locks';
 import { runSerializableTransaction } from '@/lib/db-utils';
 import {
@@ -68,10 +68,7 @@ export async function updateUserSecurityState(
         where: { id: { not: userId }, role: 'ADMIN', status: 'ACTIVE' },
       });
       if (otherActiveAdmins === 0) {
-        throw new AppError({
-          code: 'RESOURCE_CONFLICT',
-          userMessage: 'Operation would leave the system with no active administrators.',
-        });
+        throw new LastAdministratorError();
       }
     }
 
@@ -118,10 +115,7 @@ export async function bulkUpdateUserSecurityState(
         where: { role: 'ADMIN', status: 'ACTIVE' },
       });
       if (totalActiveAdmins - removesActiveAdmins < 1) {
-        throw new AppError({
-          code: 'RESOURCE_CONFLICT',
-          userMessage: 'Operation would leave the system with no active administrators.',
-        });
+        throw new LastAdministratorError();
       }
     }
     const updated = await tx.user.updateMany({

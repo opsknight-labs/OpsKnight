@@ -94,7 +94,7 @@ describe('enterprise authentication experience', () => {
       target: { value: 'example.test, second.test' },
     });
     fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
-    expect(screen.getByText('Resolve these fields before staging:')).toBeInTheDocument();
+    expect(screen.getByText('Fix these fields before saving:')).toBeInTheDocument();
     expect(
       screen.getByRole('button', { name: 'Enter a client secret for this provider and client.' })
     ).toBeInTheDocument();

@@ -92,6 +92,24 @@ Code `SSO_ROLE_UNMATCHED_DENIED`. You signed in successfully, but none of your g
 
 **What an administrator can do:** Add the person to a group that a role rule matches, or change **When no rule matches** in **3 · Roles & teams**. See [map groups to roles and teams](../../guides/identity/map-roles-and-teams/).
 
+<a id="sso_group_claims_incomplete"></a>
+
+### OpsKnight could not read your groups
+
+Code `SSO_GROUP_CLAIMS_INCOMPLETE`. Your identity provider sent an incomplete group list (for
+Microsoft Entra, a "too many groups" marker for people in more than 200 groups), and the
+workspace refuses people no rule matches. OpsKnight cannot evaluate a new person without their
+groups, so it does not create an account. People who already have an account can still sign
+in, but a role from SSO above the default role is lowered to the default until the full group
+list arrives.
+
+**What the person sees next:** Ask your identity administrator to send OpsKnight the groups or
+app roles it uses.
+
+**What an administrator can do:** Use App roles (the `roles` claim) instead of `groups`, or emit
+only groups assigned to the application. See
+[map groups to roles and teams](../../guides/identity/map-roles-and-teams/).
+
 <a id="sso_account_disabled"></a>
 
 ### Your OpsKnight account is disabled

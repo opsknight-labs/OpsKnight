@@ -33,9 +33,10 @@ they did; these are the differences you may notice.
   never changed by single sign-on. To hand it back to the rules, choose **Let role rules manage
   this role**. An account still moves under SSO control on its first SSO sign-in when a rule
   matches.
-- **Incomplete group lists no longer demote.** When Microsoft Entra reports more than 200 groups,
-  the person keeps their current role (before, an SSO-managed role fell back to User), and
-  administrators get an alert.
+- **Incomplete group lists lower only elevated roles.** When Microsoft Entra reports more than
+  200 groups, a role from SSO above the default role falls back to the default, as before.
+  Lower roles, and roles set by an administrator or SCIM, no longer change, and administrators
+  get an alert.
 - **The last administrator is never locked out by a rule.** OpsKnight keeps their Administrator
   role and alerts you instead of failing their sign-in.
 - **Pending approvals survive** turning on a new configuration for the same issuer and client.

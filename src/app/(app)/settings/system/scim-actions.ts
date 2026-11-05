@@ -1,7 +1,7 @@
 'use server';
 
 import { z } from 'zod/v3';
-import { describeScimEvent } from '@/lib/scim/activity-format';
+import { describeScimEvent, scimActionsMatchingLabel } from '@/lib/scim/activity-format';
 import { adminFailure } from '@/lib/scim/security/admin-errors';
 import prisma from '@/lib/prisma';
 import { getScimConfig } from '@/lib/scim';
@@ -187,9 +187,17 @@ export async function scimDirectoryAction(input: unknown) {
         })),
       };
     }
+    const labelled = query ? scimActionsMatchingLabel(query) : [];
     const where = {
       connectorId,
-      ...(query ? { action: { contains: query, mode: 'insensitive' as const } } : {}),
+      ...(query
+        ? {
+            OR: [
+              { action: { contains: query, mode: 'insensitive' as const } },
+              ...(labelled.length ? [{ action: { in: labelled } }] : []),
+            ],
+          }
+        : {}),
     };
     const [rows, total] = await prisma.$transaction([
       prisma.scimEvent.findMany({
@@ -218,7 +226,8 @@ export async function scimDirectoryAction(input: unknown) {
         const described = describeScimEvent(
           r.action,
           r.details as Record<string, unknown> | null,
-          r.resourceId ? (names.get(r.resourceId) ?? null) : null
+          r.resourceId ? (names.get(r.resourceId) ?? null) : null,
+          r.resourceId
         );
         return {
           id: r.id,
