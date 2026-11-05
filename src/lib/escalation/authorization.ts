@@ -18,6 +18,7 @@ import { executeEscalation } from './index';
 import type { EscalationExecutionResult } from './types';
 import { createHash } from 'node:crypto';
 import type { IdempotencyContext } from '@/lib/idempotency';
+import { AppError } from '@/lib/errors';
 import { Prisma } from '@prisma/client';
 
 export type ManualEscalationSource = 'WEB' | 'MOBILE' | 'REST_API' | 'SLACK' | 'MICROSOFT_TEAMS';
@@ -30,7 +31,7 @@ export interface ManualEscalationActor {
 }
 
 export type ManualEscalationResult =
-  | { requested: true; execution: EscalationExecutionResult }
+  | { requested: true; execution: EscalationExecutionResult; replayed?: boolean }
   | { requested: false; reason: 'INCIDENT_NOT_FOUND' | 'INCIDENT_NOT_ESCALATABLE' };
 
 /**
@@ -103,6 +104,8 @@ export async function requestIncidentEscalation(input: {
   actor: ManualEscalationActor;
   source: ManualEscalationSource;
   idempotency?: IdempotencyContext;
+  /** The REST credential (API key or MCP grant) that made the request, for the audit trail. */
+  credentialId?: string;
 }): Promise<ManualEscalationResult> {
   await authorizeIncidentEscalation({
     actorId: input.actor.userId,
@@ -125,7 +128,7 @@ export async function requestIncidentEscalation(input: {
     generation: incident.escalationGeneration ?? 0,
     stepIndex: incident.currentEscalationStep ?? 0,
   });
-  if (planned.result) return { requested: true, execution: planned.result };
+  if (planned.result) return { requested: true, execution: planned.result, replayed: true };
   if (planned.created) await recordManualEscalationRequest(input);
 
   // No generation is passed: a person is asking for the incident's *current*
@@ -218,7 +221,10 @@ async function planManualEscalation(
       saved.actorId !== input.actor.userId ||
       saved.source !== input.source
     ) {
-      throw new Error('Escalation idempotency key conflict');
+      throw new AppError({
+        code: 'IDEMPOTENCY_KEY_CONFLICT',
+        userMessage: 'This Idempotency-Key was already used for a different escalation request.',
+      });
     }
     return {
       recordId,
@@ -235,6 +241,7 @@ async function recordManualEscalationRequest(input: {
   incidentId: string;
   actor: ManualEscalationActor;
   source: ManualEscalationSource;
+  credentialId?: string;
 }): Promise<void> {
   const actorLabel = input.actor.name?.trim() || 'a responder';
 
@@ -243,10 +250,20 @@ async function recordManualEscalationRequest(input: {
   await Promise.all([
     emitAuditEvent({
       action: 'incident.escalation.requested',
-      source: input.source === 'SLACK' || input.source === 'MICROSOFT_TEAMS' ? 'INTEGRATION' : 'UI',
+      source:
+        input.source === 'SLACK' || input.source === 'MICROSOFT_TEAMS'
+          ? 'INTEGRATION'
+          : input.source === 'REST_API'
+            ? 'API'
+            : 'UI',
       target: { type: 'INCIDENT', id: input.incidentId },
       actor: { type: 'USER', id: input.actor.userId, name: input.actor.name ?? null },
-      metadata: { source: input.source },
+      // Attributed to the credential like every other REST v2 change (see logV2Audit); not
+      // named apiKeyId, which the audit writer would redact.
+      metadata: {
+        source: input.source,
+        ...(input.credentialId ? { apiGateway: 'api_v2', apiClientId: input.credentialId } : {}),
+      },
     }).catch(error => {
       logger.error('escalation.manual.audit_failed', {
         incidentId: input.incidentId,

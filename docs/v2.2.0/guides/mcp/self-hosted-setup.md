@@ -7,7 +7,7 @@ product_area: mcp
 audience: [administrator, responder]
 verification:
   level: source
-  verified_at: 2026-11-04
+  verified_at: 2026-11-05
   evidence:
     - src/app/(app)/settings/integrations/mcp/page.tsx
     - src/app/(app)/settings/integrations/mcp/actions.ts
@@ -67,6 +67,7 @@ Copy the **MCP server URL** from the **Connect** tab; it also shows step-by-step
 - **Claude Code:** run `claude mcp add --scope user --transport http opsknight 'https://ops.your-company.com/mcp'`, then `/mcp` to sign in.
 - **Claude apps:** in **Settings → Connectors** choose **Add custom connector**, paste the URL and connect. Menu names vary by version, and Team and Enterprise plans need an owner to allow custom connectors.
 - **ChatGPT:** open ChatGPT Plugins (`chatgpt.com/plugins`), select **+**, then **Add custom MCP server** and name it OpsKnight. Under Connection paste the URL for a public server, or choose **Tunnel** for a private installation (see [OpenAI Secure MCP Tunnel](#private-installation-openai-secure-mcp-tunnel)). Choose OAuth; ChatGPT registers itself. Accept the warning, select **Create** as a plugin, then sign in to OpsKnight and approve. Developer mode or a workspace administrator's permission may be required, and some plans allow only read and fetch tools. OpenAI's [custom MCP server guide](https://developers.openai.com/api/docs/guides/custom-mcp-server) has the current menus.
+- **ChatGPT company knowledge and deep research:** these call only a `search` and a `fetch` tool. OpsKnight serves both (on by default): they find and read the incidents, postmortems, runbooks and services the person can see, with a link back to OpsKnight for each answer. An administrator can turn them off under exposed capabilities.
 - **Cursor:** use **Add to Cursor** on the Connect tab, or add the `opsknight` entry under `mcpServers` in `~/.cursor/mcp.json`, merging it into the file if it already exists so your other servers are kept.
 - **VS Code:** use **Add to VS Code**, or on macOS and Linux run `code --add-mcp '{"name":"opsknight","type":"http","url":"https://ops.your-company.com/mcp"}'`. On Windows use the link or **MCP: Add Server** in the Command Palette.
 - **Codex CLI:** run `codex mcp add opsknight --url 'https://ops.your-company.com/mcp'`, then `codex mcp login opsknight`.

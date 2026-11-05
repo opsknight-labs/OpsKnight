@@ -41,9 +41,19 @@ import { reviewStateCodec, supportsUrlElicitation, type ReviewState } from './el
 import { logger } from '@/lib/logger';
 import prisma from '@/lib/prisma';
 import { withMcpDatabase } from '@/lib/database-workload';
-import { mcpOrigin } from '../auth/config';
 import { mcpApprovalPollGuidance } from '../approvals/timing';
 import { projectMcpData } from '../core/projection';
+import { MCP_WEB_PAGES, mcpWebOrigin } from '../core/web-links';
+import {
+  BULK_ACKNOWLEDGE_LIMIT,
+  KNOWLEDGE_SOURCES,
+  acknowledgeMcpIncidents,
+  fetchMcpKnowledge,
+  getMcpIncidentContext,
+  getMcpOncallForService,
+  searchMcpKnowledge,
+  type KnowledgeKind,
+} from '../core/composites';
 
 // Input view: a field with a default is optional to the caller, as promptArgs below already does.
 const sdkSchema = (schema: z.ZodType) =>
@@ -90,6 +100,33 @@ const SCHEMAS = {
     z.object({ id: z.string().regex(/^[A-Za-z0-9_-]{1,100}$/) }).strict()
   ),
   incidentContext: sdkSchema(z.object({ id: z.string().regex(/^[A-Za-z0-9_-]{1,128}$/) }).strict()),
+  oncallForService: sdkSchema(
+    z
+      .object({
+        serviceId: z.string().regex(/^[A-Za-z0-9_-]{1,128}$/),
+        at: z.string().datetime({ offset: true }).optional(),
+      })
+      .strict()
+  ),
+  acknowledgeMany: sdkSchema(
+    z
+      .object({
+        ids: z
+          .array(z.string().regex(/^[A-Za-z0-9_-]{1,128}$/))
+          .min(1)
+          .max(BULK_ACKNOWLEDGE_LIMIT),
+        // The acknowledge route's own bound: a longer note would fail every incident one by one.
+        note: z.string().max(1000).optional(),
+        idempotencyKey: z
+          .string()
+          .min(16)
+          .max(128)
+          .regex(/^[A-Za-z0-9_-]+$/),
+      })
+      .strict()
+  ),
+  knowledgeSearch: sdkSchema(z.object({ query: z.string().max(200) }).strict()),
+  knowledgeFetch: sdkSchema(z.object({ id: z.string().min(3).max(160) }).strict()),
   searchCapabilities: sdkSchema(
     z
       .object({
@@ -133,6 +170,39 @@ const SCHEMAS = {
           },
         },
       },
+    },
+  }),
+};
+
+// The fixed result shapes ChatGPT company knowledge and deep research expect.
+const KNOWLEDGE_OUTPUT = {
+  search: fromJsonSchema({
+    type: 'object',
+    required: ['results'],
+    properties: {
+      results: {
+        type: 'array',
+        items: {
+          type: 'object',
+          required: ['id', 'title', 'url'],
+          properties: {
+            id: { type: 'string' },
+            title: { type: 'string' },
+            url: { type: 'string' },
+          },
+        },
+      },
+    },
+  }),
+  fetch: fromJsonSchema({
+    type: 'object',
+    required: ['id', 'title', 'text', 'url'],
+    properties: {
+      id: { type: 'string' },
+      title: { type: 'string' },
+      text: { type: 'string' },
+      url: { type: 'string' },
+      metadata: { type: 'object' },
     },
   }),
 };
@@ -285,10 +355,6 @@ function promptArgs(shape: Record<string, z.ZodType>): StandardSchemaWithJSON {
     '~standard': { ...standard, jsonSchema: { input: () => json, output: () => json } },
   }) as unknown as StandardSchemaWithJSON;
 }
-
-// Like execute_plan, at most two reads at once: the MCP pool defaults to two connections
-// (MCP_DATABASE_POOL_SIZE, 1-4) with a one-second pool timeout.
-const CONTEXT_READ_CONCURRENCY = 2;
 
 /**
  * Runs independent reads with bounded concurrency and fails exactly as running them in order
@@ -477,19 +543,14 @@ const evidenceTool = (
 export const MCP_SERVER_INSTRUCTIONS =
   "assigneeId 'me' works on lists; whoami: id, teams, timeZone. Prefer named tools, else search_capabilities, describe_operation, read_operation or call_operation. Pages: query.limit 1-50, nextCursor. Approval: operation_prepare, share reviewUrl, poll operation_get_approval, operation_commit_approved.";
 
-/** Web pages for the resource kinds OpsKnight has a detail page for. */
-const WEB_PAGES = new Map<CompletionSource, string>([
-  ['incidents', '/incidents'],
-  ['services', '/services'],
-  ['schedules', '/schedules'],
-  ['runbooks', '/runbooks'],
-]);
-
 /** Single-entity results that can link to their resource: where the id is found in the result. */
 const LINKED_RESULTS = new Map<string, { source: CompletionSource; from: 'path' | 'data' }>([
   ['getIncident', { source: 'incidents', from: 'path' }],
   ['createIncident', { source: 'incidents', from: 'data' }],
   ['acknowledgeIncident', { source: 'incidents', from: 'path' }],
+  ['escalateIncident', { source: 'incidents', from: 'path' }],
+  ['reopenIncident', { source: 'incidents', from: 'path' }],
+  ['unsnoozeIncident', { source: 'incidents', from: 'path' }],
   ['assignIncident', { source: 'incidents', from: 'path' }],
   ['resolveIncident', { source: 'incidents', from: 'path' }],
   ['addIncidentNote', { source: 'incidents', from: 'path' }],
@@ -831,17 +892,15 @@ export function createOpsKnightMcpServer(
         )
     );
   }
-  if (
-    ['getIncident', 'getIncidentTimeline', 'listRelatedIncidents'].every(id =>
-      visible.some(operation => operation.operationId === id)
-    )
-  ) {
+  const isVisible = (operationId: string) =>
+    visible.some(operation => operation.operationId === operationId);
+  if (['getIncident', 'getIncidentTimeline', 'listRelatedIncidents'].every(isVisible)) {
+    const notes = isVisible('listIncidentNotes');
     server.registerTool(
       'incident_get_context',
       {
         title: 'Get incident context',
-        description:
-          'Read the incident, bounded timeline and related incidents. Separate observed evidence from hypotheses.',
+        description: `Read the incident (with escalation and SLA state), bounded timeline, related incidents${notes ? ' and recent responder notes' : ''} in one call. A part that cannot be read comes back as { ok: false, error } while the rest still answers. Separate observed evidence from hypotheses.`,
         inputSchema: SCHEMAS.incidentContext,
         annotations: {
           readOnlyHint: true,
@@ -855,29 +914,108 @@ export function createOpsKnightMcpServer(
         return evidenceTool(
           context,
           'incident_get_context',
-          async () => {
-            const [incident, timeline, related] = await settleInOrder(
-              [
-                () => callMcpOperation(context, 'getIncident', { path: { id } }),
-                () =>
-                  callMcpOperation(context, 'getIncidentTimeline', {
-                    path: { id },
-                    query: { limit: 25 },
-                  }),
-                () => callMcpOperation(context, 'listRelatedIncidents', { path: { id } }),
-              ],
-              CONTEXT_READ_CONCURRENCY
-            );
-            return {
-              incident,
-              timeline,
-              related,
-              rootCause: { status: 'unknown', confirmed: false },
-            };
-          },
+          () => getMcpIncidentContext(context, id, { notes }),
           linksFor('getIncident', { path: { id } })
         );
       }
+    );
+  }
+  if (['getService', 'getEscalationPolicy', 'getScheduleOnCall'].every(isVisible)) {
+    server.registerTool(
+      'oncall_for_service',
+      {
+        title: 'Who is on call for a service',
+        description:
+          "Answer 'who is on call for this service' in one call: the service's escalation policy step by step, the people on call now for each schedule, when their shift ends and who is next. Pass at (ISO 8601) for another time. Read-only; pages nobody.",
+        inputSchema: SCHEMAS.oncallForService,
+        annotations: {
+          readOnlyHint: true,
+          destructiveHint: false,
+          idempotentHint: true,
+          openWorldHint: false,
+        },
+      },
+      async args =>
+        evidenceTool(context, 'oncall_for_service', () =>
+          getMcpOncallForService(context, args as { serviceId: string; at?: string })
+        )
+    );
+  }
+  if (isVisible('acknowledgeIncident')) {
+    server.registerTool(
+      'incident_acknowledge_many',
+      {
+        title: 'Acknowledge several incidents',
+        description: `Acknowledge up to ${BULK_ACKNOWLEDGE_LIMIT} incidents, one at a time, each with its own permission check. Partial results per id (completed or failed); not a transaction. Retry with the same idempotencyKey to replay rather than repeat.`,
+        inputSchema: SCHEMAS.acknowledgeMany,
+        annotations: {
+          readOnlyHint: false,
+          destructiveHint: false,
+          idempotentHint: true,
+          openWorldHint: true,
+        },
+      },
+      async args =>
+        evidenceTool(context, 'incident_acknowledge_many', () =>
+          acknowledgeMcpIncidents(
+            context,
+            args as { ids: string[]; idempotencyKey: string; note?: string }
+          )
+        )
+    );
+  }
+  // ChatGPT company knowledge and deep research call exactly these two names and shapes.
+  const knowledgeKinds: KnowledgeKind[] = KNOWLEDGE_SOURCES.filter(
+    source => isVisible(source.list) && isVisible(source.get)
+  ).map(source => source.kind);
+  if (knowledgeKinds.length) {
+    const knowledgeResult = (value: unknown) => ({
+      content: [{ type: 'text' as const, text: JSON.stringify(value) }],
+      structuredContent: value as Record<string, unknown>,
+    });
+    const knowledgeTool = async (tool: string, callback: () => Promise<unknown>) => {
+      try {
+        const result = knowledgeResult(await callback());
+        if (
+          Buffer.byteLength(JSON.stringify(result)) >
+          context.budget.maxBytes - RESULT_ENVELOPE_RESERVE
+        )
+          throw new McpBoundaryError('MCP_RESULT_BUDGET_EXCEEDED', 413);
+        return result;
+      } catch (error) {
+        return toolError(context, tool, error);
+      }
+    };
+    server.registerTool(
+      'search',
+      {
+        title: 'Search OpsKnight',
+        description: `Search ${knowledgeKinds.map(kind => `${kind}s`).join(', ')} you can read, by text. Returns ids for fetch, titles and links. Read-only.`,
+        inputSchema: SCHEMAS.knowledgeSearch,
+        outputSchema: KNOWLEDGE_OUTPUT.search,
+        annotations: { readOnlyHint: true, openWorldHint: false },
+      },
+      async args =>
+        knowledgeTool('search', () =>
+          searchMcpKnowledge(context, (args as { query: string }).query, knowledgeKinds)
+        )
+    );
+    server.registerTool(
+      'fetch',
+      {
+        title: 'Fetch an OpsKnight record',
+        description:
+          'Fetch one search result in full by its id (incident:<id>, postmortem:<id>, runbook:<id> or service:<id>), as markdown text with a link. Access is checked again. Read-only.',
+        inputSchema: SCHEMAS.knowledgeFetch,
+        outputSchema: KNOWLEDGE_OUTPUT.fetch,
+        annotations: { readOnlyHint: true, openWorldHint: false },
+      },
+      async args =>
+        knowledgeTool('fetch', () =>
+          fetchMcpKnowledge(context, (args as { id: string }).id, knowledgeKinds, {
+            incidentNotes: isVisible('listIncidentNotes'),
+          })
+        )
     );
   }
   server.registerTool(
@@ -1166,7 +1304,7 @@ export function createOpsKnightMcpServer(
     {
       name: 'summarize_shift',
       title: 'Summarize an on-call shift',
-      instruction: `Call ${via('getScheduleOnCall')} for who is on call and ${via('listIncidents')} for open and acknowledged incidents; separate unresolved work and handover actions.`,
+      instruction: `Call ${via('getScheduleOnCall')} for who is on call (each person's shift end and who is next) and ${via('listIncidents')} with query status=ACTIVE (and createdAfter for the shift start) for the unresolved incidents; separate unresolved work and handover actions.`,
       requires: ['getScheduleOnCall', 'listIncidents'],
       args: { scheduleId: id('Schedule whose shift to summarize', 'schedules') },
     },
@@ -1279,9 +1417,19 @@ const RESOURCE_OPERATIONS = new Map<CompletionSource, string>([
   ['postmortems', 'getPostmortem'],
 ]);
 
+/** At most this many rows of a list result get an "Open in OpsKnight" link. */
+const LIST_LINK_LIMIT = 10;
+const LIST_LINK_SOURCES = new Map<string, CompletionSource>([
+  ['listIncidents', 'incidents'],
+  ['listServices', 'services'],
+  ['listSchedules', 'schedules'],
+  ['listRunbooks', 'runbooks'],
+]);
+
 /**
- * Links for a single-entity result: an `opsknight://` resource link when this session registered
- * that resource template, and the OpsKnight page for the person. List and plan results get none.
+ * Links for a result: for a single entity, an `opsknight://` resource link when this session
+ * registered that resource template, and the OpsKnight page for the person; for a list with a
+ * detail page, the page of each of the first rows. Plan results get none.
  */
 export function resultLinks(
   operationId: string,
@@ -1289,6 +1437,8 @@ export function resultLinks(
   value: unknown,
   readable: ReadonlySet<CompletionSource>
 ): ResultLink[] {
+  const listed = LIST_LINK_SOURCES.get(operationId);
+  if (listed) return listLinks(listed, value, readable);
   const linked = LINKED_RESULTS.get(operationId);
   if (!linked || !readable.has(linked.source)) return [];
   const id =
@@ -1304,13 +1454,8 @@ export function resultLinks(
       mimeType: 'application/json',
     },
   ];
-  const page = WEB_PAGES.get(linked.source);
-  let origin: string | undefined;
-  try {
-    origin = page ? mcpOrigin() : undefined;
-  } catch {
-    origin = undefined;
-  }
+  const page = MCP_WEB_PAGES.get(linked.source);
+  const origin = page ? mcpWebOrigin() : undefined;
   if (page && origin)
     links.push({
       type: 'resource_link',
@@ -1319,6 +1464,33 @@ export function resultLinks(
       mimeType: 'text/html',
       annotations: { audience: ['user'] },
     });
+  return links;
+}
+
+function listLinks(
+  source: CompletionSource,
+  value: unknown,
+  readable: ReadonlySet<CompletionSource>
+): ResultLink[] {
+  const page = MCP_WEB_PAGES.get(source);
+  const origin = page && readable.has(source) ? mcpWebOrigin() : undefined;
+  const rows = (value as { data?: { data?: unknown } } | undefined)?.data?.data;
+  if (!origin || !Array.isArray(rows)) return [];
+  const links: ResultLink[] = [];
+  for (const row of rows) {
+    if (links.length >= LIST_LINK_LIMIT) break;
+    const { id, title, name } = (row ?? {}) as { id?: unknown; title?: unknown; name?: unknown };
+    if (typeof id !== 'string' || !RESOURCE_ID.test(id)) continue;
+    const label = typeof title === 'string' ? title : typeof name === 'string' ? name : id;
+    links.push({
+      type: 'resource_link',
+      uri: `${origin}${page}/${encodeURIComponent(id)}`,
+      // Stored text on one line: a link name is not a place for business text to add lines.
+      name: `Open ${label.replace(/[\p{Cc}\s]+/gu, ' ').slice(0, 80)} in OpsKnight`,
+      mimeType: 'text/html',
+      annotations: { audience: ['user'] },
+    });
+  }
   return links;
 }
 

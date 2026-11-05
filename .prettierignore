@@ -28,3 +28,9 @@ docs/v2.2.0/operate/mcp/monitoring.md
 docs/v2.2.0/guides/mcp/security-and-data.md
 # Its scale-profile table is matched verbatim by tests/docs/tooling/capacity-contract.test.mjs.
 tests/load/README.md
+# Written by npm run api:clients; CI (api:clients:check) fails if it differs from the generator output.
+sdk/openapi-v2.json
+sdk/typescript/schema.ts
+sdk/python/opsknight_v2/operations.json
+plans/rest-api-enterprise/combined-progress.json
+plans/rest-api-enterprise/implementation-status.json

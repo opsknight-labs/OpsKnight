@@ -1,3 +1,4 @@
+import { mcpCompositeCost } from '@/lib/mcp/core/composites';
 import { withMcpRuntime } from '@/lib/mcp/auth/config';
 import { withMcpDatabase } from '@/lib/database-workload';
 import { createMcpHandler } from '@modelcontextprotocol/server';
@@ -216,11 +217,9 @@ async function handlePost(request: Request, requestId: string, browserOrigin: st
       ? 1 + subscribedUris.length
       : Array.isArray(steps)
         ? Math.max(1, steps.length)
-        : body.params?.name === 'incident_get_context'
-          ? 3
-          : body.method === 'tools/call' && body.params?.name === 'postmortem_get_context'
-            ? 4
-            : 1;
+        : body.method === 'tools/call'
+          ? (mcpCompositeCost(body.params?.name, body.params?.arguments) ?? 1)
+          : 1;
     requireMcp(cost <= MCP_MAX_OPERATIONS, 'MCP_OPERATION_BUDGET_EXCEEDED');
     await chargeMcpRequest(identity, cost);
     // A policy saved before the cap existed may hold 9 to 16; the cap is what is enforced.

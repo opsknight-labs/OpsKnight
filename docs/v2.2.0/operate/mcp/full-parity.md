@@ -56,10 +56,10 @@ CI notes from certifying this branch: the browser step is sensitive to slow shar
 
 ## Current checkpoint
 
-Inventory (from `npm run --silent mcp:coverage`): 320 operations.
+Inventory (from `npm run --silent mcp:coverage`): 321 operations.
 
-- 136 generic candidates: 75 ordinary, plus 61 sensitive reads behind the administrator opt-in.
-- 107 approval-gated: 87 R2 and 20 R3.
+- 139 generic candidates: 78 ordinary, plus 61 sensitive reads behind the administrator opt-in. Escalate (a new REST route), reopen and unsnooze run directly as reviewed R1 responder actions.
+- 105 approval-gated: 85 R2 and 20 R3.
 - 1 native equivalent (approved runbook execution).
 - 76 open. The [exclusion review packet](./exclusion-review.md) proposes implementing 1 (`updateStatusPage`) and excluding 75. No exclusion is reviewed: `reviewedExclusions` is 0.
 - The parity report keeps `implementationComplete: false` and `certified: false`.
