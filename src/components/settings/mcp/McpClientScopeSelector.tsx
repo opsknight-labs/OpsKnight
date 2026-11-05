@@ -67,7 +67,7 @@ function McpClientScopeSelector({
   }, []);
 
   return (
-    <fieldset className="space-y-3">
+    <fieldset aria-label="Allowed scopes" className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/80 pb-2">
         <div className="flex items-center gap-2">
           <label
@@ -139,6 +139,7 @@ function McpClientScopeSelector({
               <input
                 id={inputId}
                 type="checkbox"
+                aria-label={describeScope(scope)}
                 name="scopes"
                 value={scope}
                 checked={isChecked}

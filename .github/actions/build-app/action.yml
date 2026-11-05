@@ -17,6 +17,8 @@ runs:
     - name: Build application
       shell: bash
       run: npm run build
+      env:
+        NODE_OPTIONS: --max-old-space-size=6144
 
     - name: Performance architecture budgets
       shell: bash

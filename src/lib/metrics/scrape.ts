@@ -463,6 +463,13 @@ async function getMetrics(req: Request) {
     );
     metrics.set('opsknight_automation_retention_pending', snapshot.automationJobs.retention);
   }
+  // Intelligence is optional and advisory: its probes are best effort and never fail the scrape.
+  try {
+    const { collectIntelligenceMetrics } = await import('@/lib/intelligence/metrics');
+    for (const sample of await collectIntelligenceMetrics()) metrics.set(sample.name, sample.value);
+  } catch {
+    // omitted from this scrape
+  }
   metrics.set('opsknight_build_info', 1, {
     version: process.env.npm_package_version ?? 'unknown',
   });

@@ -135,7 +135,16 @@ const decisions: readonly ApiCapability[] = [
     status: 'partial',
     explanation:
       'Service notification settings, support hours, classification and SLA policy versions have REST contracts. Remaining notification channel/event controls still require parity work.',
-    operationIds: ['getServiceNotificationSettings', 'updateServiceNotificationSettings', 'getServiceSupportHours', 'updateServiceSupportHours', 'getServiceClassificationPolicy', 'updateServiceClassificationPolicy', 'getServiceSlaPolicy', 'updateServiceSlaPolicy'],
+    operationIds: [
+      'getServiceNotificationSettings',
+      'updateServiceNotificationSettings',
+      'getServiceSupportHours',
+      'updateServiceSupportHours',
+      'getServiceClassificationPolicy',
+      'updateServiceClassificationPolicy',
+      'getServiceSlaPolicy',
+      'updateServiceSlaPolicy',
+    ],
   },
   {
     id: 'incident-metadata',
@@ -144,7 +153,15 @@ const decisions: readonly ApiCapability[] = [
     status: 'available',
     explanation:
       'Incident custom-field values and tags can be read and updated with scoped authorization, canonical validation, durable replay and transactional timeline events. A redacted incident routing decision requires automation scope and incident visibility.',
-    operationIds: ['listIncidentCustomFields', 'getIncidentCustomField', 'setIncidentCustomField', 'listIncidentTags', 'addIncidentTag', 'removeIncidentTag', 'getIncidentRoutingDecision'],
+    operationIds: [
+      'listIncidentCustomFields',
+      'getIncidentCustomField',
+      'setIncidentCustomField',
+      'listIncidentTags',
+      'addIncidentTag',
+      'removeIncidentTag',
+      'getIncidentRoutingDecision',
+    ],
   },
   {
     id: 'incident-diagnostics',
@@ -153,7 +170,22 @@ const decisions: readonly ApiCapability[] = [
     status: 'partial',
     explanation:
       'A bounded, redacted activity snapshot joins incident alerts, events, routing, notification delivery and Runbook recovery. Incident-scoped pagination, advisory action discovery, evidence-based related-incident search, service health, escalation preview, operational events and service audit changes support investigation. Deployment-change ingestion is not yet represented by structured records.',
-    operationIds: ['getIncidentResponseActivity', 'listIncidentAlerts', 'listIncidentRunbookExecutions', 'listIncidentNotificationAttempts', 'getIncidentAvailableActions', 'listRelatedIncidents', 'listRunbookExecutions', 'listNotificationAttempts', 'getNotificationFeedback', 'listOperationalEvents', 'listServiceChangeEvents', 'previewEscalationPolicy', 'getServiceHealthSummary'],
+    operationIds: [
+      'getIncidentResponseActivity',
+      'listIncidentAlerts',
+      'listIncidentRunbookExecutions',
+      'listIncidentNotificationAttempts',
+      'getIncidentAvailableActions',
+      'listRelatedIncidents',
+      'getIncidentIntelligence',
+      'listRunbookExecutions',
+      'listNotificationAttempts',
+      'getNotificationFeedback',
+      'listOperationalEvents',
+      'listServiceChangeEvents',
+      'previewEscalationPolicy',
+      'getServiceHealthSummary',
+    ],
   },
   {
     id: 'incident-collaboration',
@@ -171,7 +203,13 @@ const decisions: readonly ApiCapability[] = [
     status: 'partial',
     explanation:
       'Template create, list, read, revision-protected update and delete use owner checks, scoped REST credentials, transactional audit and shared UI mutation commands. Combined UI/REST certification remains pending.',
-    operationIds: ['listIncidentTemplates', 'createIncidentTemplate', 'getIncidentTemplate', 'updateIncidentTemplate', 'deleteIncidentTemplate'],
+    operationIds: [
+      'listIncidentTemplates',
+      'createIncidentTemplate',
+      'getIncidentTemplate',
+      'updateIncidentTemplate',
+      'deleteIncidentTemplate',
+    ],
   },
   {
     id: 'schedule-layers',
@@ -180,7 +218,24 @@ const decisions: readonly ApiCapability[] = [
     status: 'partial',
     explanation:
       'Override cancellation, bounded effective coverage and unsaved-layer previews, participant management, revision-protected layer CRUD, atomic precedence reordering, bounded escalation dependency inspection and redacted schedule change history use the canonical schedule engine and shared domain commands. Combined UI/REST certification remains open.',
-    operationIds: ['listScheduleLayers', 'createScheduleLayer', 'getScheduleLayer', 'updateScheduleLayer', 'deleteScheduleLayer', 'reorderScheduleLayers', 'previewScheduleCoverage', 'getScheduleDependencies', 'listScheduleChanges', 'getScheduleOverride', 'cancelScheduleOverride', 'getScheduleCoverage', 'addScheduleParticipant', 'getScheduleParticipant', 'removeScheduleParticipant', 'moveScheduleParticipant'],
+    operationIds: [
+      'listScheduleLayers',
+      'createScheduleLayer',
+      'getScheduleLayer',
+      'updateScheduleLayer',
+      'deleteScheduleLayer',
+      'reorderScheduleLayers',
+      'previewScheduleCoverage',
+      'getScheduleDependencies',
+      'listScheduleChanges',
+      'getScheduleOverride',
+      'cancelScheduleOverride',
+      'getScheduleCoverage',
+      'addScheduleParticipant',
+      'getScheduleParticipant',
+      'removeScheduleParticipant',
+      'moveScheduleParticipant',
+    ],
   },
   {
     id: 'escalation-validation',
@@ -409,7 +464,20 @@ const decisions: readonly ApiCapability[] = [
     status: 'partial',
     explanation:
       'Postmortem CRUD persists strictly validated impact, timeline, contributing factors and five-whys data. Revision-protected replacement and per-item commands manage corrective actions; active-user contributor roles use relational records. Publication records one business audit. Bounded version reads capture parent-row changes from deployment onward. Combined UI/REST certification remains pending.',
-    operationIds: ['createPostmortem', 'getPostmortem', 'updatePostmortem', 'listPostmortemVersions', 'listPostmortemActionItems', 'getPostmortemActionItem', 'replacePostmortemActionItems', 'updatePostmortemActionItem', 'deletePostmortemActionItem', 'publishPostmortem', 'listPostmortemContributors', 'replacePostmortemContributors'],
+    operationIds: [
+      'createPostmortem',
+      'getPostmortem',
+      'updatePostmortem',
+      'listPostmortemVersions',
+      'listPostmortemActionItems',
+      'getPostmortemActionItem',
+      'replacePostmortemActionItems',
+      'updatePostmortemActionItem',
+      'deletePostmortemActionItem',
+      'publishPostmortem',
+      'listPostmortemContributors',
+      'replacePostmortemContributors',
+    ],
   },
   {
     id: 'report-exports',
@@ -419,9 +487,17 @@ const decisions: readonly ApiCapability[] = [
     explanation:
       'The report catalog, bounded actor-scoped metric queries, saved definitions and encrypted asynchronous metric exports are available. Exports require current global report and incident access and the originating credential; broader reporting and certification remain in progress.',
     operationIds: [
-      'getReportCatalog', 'queryReportMetrics', 'listSavedReports', 'createSavedReport',
-      'getSavedReport', 'updateSavedReport', 'deleteSavedReport',
-      'createReportExport', 'getReportExport', 'downloadReportExport', 'cancelReportExport',
+      'getReportCatalog',
+      'queryReportMetrics',
+      'listSavedReports',
+      'createSavedReport',
+      'getSavedReport',
+      'updateSavedReport',
+      'deleteSavedReport',
+      'createReportExport',
+      'getReportExport',
+      'downloadReportExport',
+      'cancelReportExport',
     ],
   },
   {
@@ -481,7 +557,17 @@ const decisions: readonly ApiCapability[] = [
     status: 'partial',
     explanation:
       'Workspace SLA policies and ChatOps configuration use shared UI/REST versioned commands. Custom-field definitions have strict typed creation, usage-aware reads and revision-protected edits/deletion; populated fields cannot be deleted. Remaining preferences and combined UI/REST certification remain pending.',
-    operationIds: ['getWorkspaceSlaPolicy', 'updateWorkspaceSlaPolicy', 'listCustomFieldDefinitions', 'createCustomFieldDefinition', 'getCustomFieldDefinition', 'updateCustomFieldDefinition', 'deleteCustomFieldDefinition', 'getChatOpsConfiguration', 'updateChatOpsConfiguration'],
+    operationIds: [
+      'getWorkspaceSlaPolicy',
+      'updateWorkspaceSlaPolicy',
+      'listCustomFieldDefinitions',
+      'createCustomFieldDefinition',
+      'getCustomFieldDefinition',
+      'updateCustomFieldDefinition',
+      'deleteCustomFieldDefinition',
+      'getChatOpsConfiguration',
+      'updateChatOpsConfiguration',
+    ],
   },
   {
     id: 'sensitive-maintenance',

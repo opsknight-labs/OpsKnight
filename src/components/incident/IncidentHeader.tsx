@@ -169,7 +169,10 @@ export default function IncidentHeader({
               onValueChange={handleUrgencyChange}
               disabled={isPending}
             >
-              <SelectTrigger className="h-auto w-fit border-0 bg-transparent p-0 shadow-none focus:ring-0 [&>svg]:hidden group">
+              <SelectTrigger
+                aria-label={`Urgency: ${incident.urgency}`}
+                className="h-auto w-fit border-0 bg-transparent p-0 shadow-none focus:ring-0 [&>svg]:hidden group"
+              >
                 <div className={cn(SELECTOR_BASE_CLASS, 'cursor-pointer group')}>
                   <span className={cn('h-2 w-2 rounded-full shrink-0', urgencyDot)} />
                   <span>{incident.urgency}</span>
@@ -223,7 +226,10 @@ export default function IncidentHeader({
               onValueChange={val => handleVisibilityChange(val as 'PUBLIC' | 'PRIVATE')}
               disabled={isPending}
             >
-              <SelectTrigger className="h-auto w-fit border-0 bg-transparent p-0 shadow-none focus:ring-0 [&>svg]:hidden group">
+              <SelectTrigger
+                aria-label={`Visibility: ${isPrivate ? 'Private' : 'Public'}`}
+                className="h-auto w-fit border-0 bg-transparent p-0 shadow-none focus:ring-0 [&>svg]:hidden group"
+              >
                 <div className={cn(SELECTOR_BASE_CLASS, 'cursor-pointer group')}>
                   {isPrivate ? (
                     <EyeOff className="h-3.5 w-3.5 text-muted-foreground shrink-0" />

@@ -134,7 +134,7 @@ export function ConfigurationHealth({
                 {hasErrors ? 'Action required' : 'Review recommended'}
               </Badge>
             </div>
-            <p className="text-[11px] text-muted-foreground mt-0.5">
+            <p className="text-[11px] text-foreground/80 mt-0.5">
               {hasErrors
                 ? 'Blocking validation errors must be resolved before publishing.'
                 : 'Static analysis check of rule ordering, precedence, and field usage.'}
@@ -142,7 +142,7 @@ export function ConfigurationHealth({
           </div>
         </div>
 
-        <p className="font-mono text-xs font-medium tabular-nums text-muted-foreground">
+        <p className="font-mono text-xs font-medium tabular-nums text-foreground/80">
           {errors.length} {errors.length === 1 ? 'error' : 'errors'} · {warnings.length}{' '}
           {warnings.length === 1 ? 'warning' : 'warnings'}
         </p>

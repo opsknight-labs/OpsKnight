@@ -31,11 +31,19 @@ test('add URL, automatically register, sign in and revoke without manual client 
   expect(settingsResponse?.headers()['cache-control']).toContain('no-store');
   // Earlier specs share this database and may have enabled MCP; return to a true first-run state.
   if (!(await page.getByRole('button', { name: 'Turn on AI assistant access' }).isVisible())) {
-    await page.goto('/settings/integrations/mcp?tab=policy');
+    await page
+      .locator('#main-content')
+      .getByRole('navigation', { name: 'MCP settings sections' })
+      .getByRole('link', { name: 'Access policy', exact: true })
+      .click();
     await page.getByRole('checkbox', { name: /Enable MCP/ }).uncheck();
     await page.getByRole('button', { name: 'Save policy', exact: true }).click();
     await expect(page.getByText('MCP configuration saved', { exact: true })).toBeVisible();
-    await page.goto('/settings/integrations/mcp');
+    await page
+      .locator('#main-content')
+      .getByRole('navigation', { name: 'MCP settings sections' })
+      .getByRole('link', { name: 'Overview', exact: true })
+      .click();
   }
   // First run: one click turns on read-only access with automatic connections.
   const quickSetup = page.getByRole('button', { name: 'Turn on AI assistant access' });
@@ -47,18 +55,25 @@ test('add URL, automatically register, sign in and revoke without manual client 
   await expect(page.getByText('MCP server URL', { exact: true })).toBeVisible();
   await shot('02-after-setup');
   // Narrow the ceiling to a single scope so the later assertions are deterministic.
-  await page.goto('/settings/integrations/mcp?tab=policy');
+  await page
+    .locator('#main-content')
+    .getByRole('navigation', { name: 'MCP settings sections' })
+    .getByRole('link', { name: 'Access policy', exact: true })
+    .click();
   await page.getByRole('checkbox', { name: /Enable MCP/ }).check();
   await page.getByRole('checkbox', { name: 'Automatic connections' }).check();
   for (const scope of await page.getByRole('checkbox', { name: /^View / }).all()) {
-    if ((await scope.locator('xpath=..').innerText()).trim() === 'View incidents')
-      await scope.check();
+    if ((await scope.getAttribute('value')) === 'incidents:read') await scope.check();
     else await scope.uncheck();
   }
   await page.getByRole('button', { name: 'Save policy', exact: true }).click();
   await expect(page.getByText('MCP configuration saved', { exact: true })).toBeVisible();
   // Per-assistant instructions live on the Connect section, Claude Code first.
-  await page.goto('/settings/integrations/mcp?tab=connect');
+  await page
+    .locator('#main-content')
+    .getByRole('navigation', { name: 'MCP settings sections' })
+    .getByRole('link', { name: 'Connect', exact: true })
+    .click();
   await expect(
     page.getByRole('button', { name: 'Copy Claude Code setup command', exact: true })
   ).toBeVisible();

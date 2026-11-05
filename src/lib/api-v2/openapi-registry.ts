@@ -29,13 +29,62 @@ const op = (
 ): V2OperationDefinition => ({ method, path, operationId, scope, kind, schema });
 
 export const V2_OPERATIONS: readonly V2OperationDefinition[] = [
-  op('get', '/settings/chatops', 'getChatOpsConfiguration', 'chatops:read', 'item', 'ChatOpsConfiguration'),
-  op('put', '/settings/chatops', 'updateChatOpsConfiguration', 'chatops:write', 'item', 'ChatOpsConfiguration'),
-  op('get', '/custom-fields', 'listCustomFieldDefinitions', 'custom-fields:read', 'item', 'CustomFieldDefinitionCollection'),
-  op('post', '/custom-fields', 'createCustomFieldDefinition', 'custom-fields:write', 'item', 'CustomFieldDefinition'),
-  op('get', '/custom-fields/{id}', 'getCustomFieldDefinition', 'custom-fields:read', 'item', 'CustomFieldDefinition'),
-  op('patch', '/custom-fields/{id}', 'updateCustomFieldDefinition', 'custom-fields:write', 'item', 'CustomFieldDefinition'),
-  op('delete', '/custom-fields/{id}', 'deleteCustomFieldDefinition', 'custom-fields:write', 'none', ''),
+  op(
+    'get',
+    '/settings/chatops',
+    'getChatOpsConfiguration',
+    'chatops:read',
+    'item',
+    'ChatOpsConfiguration'
+  ),
+  op(
+    'put',
+    '/settings/chatops',
+    'updateChatOpsConfiguration',
+    'chatops:write',
+    'item',
+    'ChatOpsConfiguration'
+  ),
+  op(
+    'get',
+    '/custom-fields',
+    'listCustomFieldDefinitions',
+    'custom-fields:read',
+    'item',
+    'CustomFieldDefinitionCollection'
+  ),
+  op(
+    'post',
+    '/custom-fields',
+    'createCustomFieldDefinition',
+    'custom-fields:write',
+    'item',
+    'CustomFieldDefinition'
+  ),
+  op(
+    'get',
+    '/custom-fields/{id}',
+    'getCustomFieldDefinition',
+    'custom-fields:read',
+    'item',
+    'CustomFieldDefinition'
+  ),
+  op(
+    'patch',
+    '/custom-fields/{id}',
+    'updateCustomFieldDefinition',
+    'custom-fields:write',
+    'item',
+    'CustomFieldDefinition'
+  ),
+  op(
+    'delete',
+    '/custom-fields/{id}',
+    'deleteCustomFieldDefinition',
+    'custom-fields:write',
+    'none',
+    ''
+  ),
   op('post', '/audit-exports', 'createAuditExport', 'audit:export', 'item', 'AuditExport'),
   op('get', '/audit-exports/{id}', 'getAuditExport', 'audit:export', 'item', 'AuditExport'),
   op('get', '/audit-exports/{id}/download', 'downloadAuditExport', 'audit:export', 'binary', ''),
@@ -449,7 +498,14 @@ export const V2_OPERATIONS: readonly V2OperationDefinition[] = [
     'list',
     'RunbookExecutionStepSummary'
   ),
-  op('get', '/runbooks/executions', 'listRunbookExecutions', 'runbooks:read', 'list', 'RunbookExecutionSummary'),
+  op(
+    'get',
+    '/runbooks/executions',
+    'listRunbookExecutions',
+    'runbooks:read',
+    'list',
+    'RunbookExecutionSummary'
+  ),
   op(
     'get',
     '/runbooks/executions/{id}/evidence',
@@ -690,10 +746,38 @@ export const V2_OPERATIONS: readonly V2OperationDefinition[] = [
     'item',
     'StatusPageSettings'
   ),
-  op('post', '/status-pages/{id}/assets', 'uploadStatusPageAsset', 'status-pages:write', 'item', 'StatusPageAssetUpload'),
-  op('get', '/status-pages/{id}/assets', 'listStatusPageAssets', 'status-pages:read', 'item', 'StatusPageAssetCollection'),
-  op('delete', '/status-pages/{id}/assets/{assetId}', 'deleteStatusPageAsset', 'status-pages:write', 'none', ''),
-  op('get', '/status-pages/{id}/assets/{assetId}', 'getStatusPageAsset', 'status-pages:read', 'item', 'StatusPageAsset'),
+  op(
+    'post',
+    '/status-pages/{id}/assets',
+    'uploadStatusPageAsset',
+    'status-pages:write',
+    'item',
+    'StatusPageAssetUpload'
+  ),
+  op(
+    'get',
+    '/status-pages/{id}/assets',
+    'listStatusPageAssets',
+    'status-pages:read',
+    'item',
+    'StatusPageAssetCollection'
+  ),
+  op(
+    'delete',
+    '/status-pages/{id}/assets/{assetId}',
+    'deleteStatusPageAsset',
+    'status-pages:write',
+    'none',
+    ''
+  ),
+  op(
+    'get',
+    '/status-pages/{id}/assets/{assetId}',
+    'getStatusPageAsset',
+    'status-pages:read',
+    'item',
+    'StatusPageAsset'
+  ),
   op(
     'patch',
     '/status-pages/{id}/settings',
@@ -1051,17 +1135,94 @@ export const V2_OPERATIONS: readonly V2OperationDefinition[] = [
     'IncidentWatcher'
   ),
   op('get', '/incidents/{id}/tags', 'listIncidentTags', 'incidents:read', 'list', 'IncidentTag'),
-  op('get', '/incidents/{id}/custom-fields', 'listIncidentCustomFields', 'incidents:read', 'list', 'IncidentCustomField'),
-  op('get', '/incidents/templates', 'listIncidentTemplates', 'incidents:read', 'list', 'IncidentTemplate'),
-  op('post', '/incidents/templates', 'createIncidentTemplate', 'incidents:write', 'item', 'IncidentTemplate'),
-  op('get', '/incidents/templates/{templateId}', 'getIncidentTemplate', 'incidents:read', 'item', 'IncidentTemplate'),
-  op('patch', '/incidents/templates/{templateId}', 'updateIncidentTemplate', 'incidents:write', 'item', 'IncidentTemplate'),
-  op('delete', '/incidents/templates/{templateId}', 'deleteIncidentTemplate', 'incidents:write', 'item', 'IncidentTemplateDeletion'),
-  op('get', '/incidents/{id}/custom-fields/{fieldId}', 'getIncidentCustomField', 'incidents:read', 'item', 'IncidentCustomField'),
-  op('put', '/incidents/{id}/custom-fields/{fieldId}', 'setIncidentCustomField', 'incidents:write', 'item', 'IncidentCustomField'),
-  op('post', '/incidents/{id}/tags', 'addIncidentTag', 'incidents:write', 'item', 'IncidentTagAdded'),
-  op('delete', '/incidents/{id}/tags/{tagId}', 'removeIncidentTag', 'incidents:write', 'item', 'IncidentTagRemoved'),
-  op('get', '/incidents/{id}/routing-decision', 'getIncidentRoutingDecision', 'automation:read', 'item', 'AutomationDecision'),
+  op(
+    'get',
+    '/incidents/{id}/custom-fields',
+    'listIncidentCustomFields',
+    'incidents:read',
+    'list',
+    'IncidentCustomField'
+  ),
+  op(
+    'get',
+    '/incidents/templates',
+    'listIncidentTemplates',
+    'incidents:read',
+    'list',
+    'IncidentTemplate'
+  ),
+  op(
+    'post',
+    '/incidents/templates',
+    'createIncidentTemplate',
+    'incidents:write',
+    'item',
+    'IncidentTemplate'
+  ),
+  op(
+    'get',
+    '/incidents/templates/{templateId}',
+    'getIncidentTemplate',
+    'incidents:read',
+    'item',
+    'IncidentTemplate'
+  ),
+  op(
+    'patch',
+    '/incidents/templates/{templateId}',
+    'updateIncidentTemplate',
+    'incidents:write',
+    'item',
+    'IncidentTemplate'
+  ),
+  op(
+    'delete',
+    '/incidents/templates/{templateId}',
+    'deleteIncidentTemplate',
+    'incidents:write',
+    'item',
+    'IncidentTemplateDeletion'
+  ),
+  op(
+    'get',
+    '/incidents/{id}/custom-fields/{fieldId}',
+    'getIncidentCustomField',
+    'incidents:read',
+    'item',
+    'IncidentCustomField'
+  ),
+  op(
+    'put',
+    '/incidents/{id}/custom-fields/{fieldId}',
+    'setIncidentCustomField',
+    'incidents:write',
+    'item',
+    'IncidentCustomField'
+  ),
+  op(
+    'post',
+    '/incidents/{id}/tags',
+    'addIncidentTag',
+    'incidents:write',
+    'item',
+    'IncidentTagAdded'
+  ),
+  op(
+    'delete',
+    '/incidents/{id}/tags/{tagId}',
+    'removeIncidentTag',
+    'incidents:write',
+    'item',
+    'IncidentTagRemoved'
+  ),
+  op(
+    'get',
+    '/incidents/{id}/routing-decision',
+    'getIncidentRoutingDecision',
+    'automation:read',
+    'item',
+    'AutomationDecision'
+  ),
   op(
     'post',
     '/incidents/{id}/watchers',
@@ -1232,18 +1393,102 @@ export const V2_OPERATIONS: readonly V2OperationDefinition[] = [
     'item',
     'EscalationPolicy'
   ),
-  op('get', '/escalation-policies/{id}/dependencies', 'getEscalationPolicyDependencies', 'escalation-policies:read', 'item', 'EscalationPolicyDependencies'),
-  op('get', '/escalation-policies/{id}/validation', 'validateEscalationPolicy', 'escalation-policies:read', 'item', 'EscalationPolicyValidation'),
-  op('get', '/status-pages/{id}/preview', 'previewStatusPage', 'status-pages:read', 'item', 'StatusPagePreview'),
-  op('get', '/schedules/{id}/layers', 'listScheduleLayers', 'schedules:read', 'item', 'ScheduleLayerCollection'),
-  op('post', '/schedules/{id}/layers', 'createScheduleLayer', 'schedules:write', 'item', 'ScheduleLayer'),
-  op('get', '/schedules/{id}/layers/{layerId}', 'getScheduleLayer', 'schedules:read', 'item', 'ScheduleLayer'),
-  op('patch', '/schedules/{id}/layers/{layerId}', 'updateScheduleLayer', 'schedules:write', 'item', 'ScheduleLayer'),
-  op('delete', '/schedules/{id}/layers/{layerId}', 'deleteScheduleLayer', 'schedules:write', 'none', ''),
-  op('put', '/schedules/{id}/layers/order', 'reorderScheduleLayers', 'schedules:write', 'item', 'ScheduleLayerOrder'),
-  op('post', '/schedules/{id}/coverage/preview', 'previewScheduleCoverage', 'schedules:write', 'item', 'ScheduleLayerPreview'),
-  op('get', '/schedules/{id}/dependencies', 'getScheduleDependencies', 'schedules:write', 'item', 'ScheduleDependencies'),
-  op('get', '/schedules/{id}/changes', 'listScheduleChanges', 'schedules:write', 'list', 'AuditLog'),
+  op(
+    'get',
+    '/escalation-policies/{id}/dependencies',
+    'getEscalationPolicyDependencies',
+    'escalation-policies:read',
+    'item',
+    'EscalationPolicyDependencies'
+  ),
+  op(
+    'get',
+    '/escalation-policies/{id}/validation',
+    'validateEscalationPolicy',
+    'escalation-policies:read',
+    'item',
+    'EscalationPolicyValidation'
+  ),
+  op(
+    'get',
+    '/status-pages/{id}/preview',
+    'previewStatusPage',
+    'status-pages:read',
+    'item',
+    'StatusPagePreview'
+  ),
+  op(
+    'get',
+    '/schedules/{id}/layers',
+    'listScheduleLayers',
+    'schedules:read',
+    'item',
+    'ScheduleLayerCollection'
+  ),
+  op(
+    'post',
+    '/schedules/{id}/layers',
+    'createScheduleLayer',
+    'schedules:write',
+    'item',
+    'ScheduleLayer'
+  ),
+  op(
+    'get',
+    '/schedules/{id}/layers/{layerId}',
+    'getScheduleLayer',
+    'schedules:read',
+    'item',
+    'ScheduleLayer'
+  ),
+  op(
+    'patch',
+    '/schedules/{id}/layers/{layerId}',
+    'updateScheduleLayer',
+    'schedules:write',
+    'item',
+    'ScheduleLayer'
+  ),
+  op(
+    'delete',
+    '/schedules/{id}/layers/{layerId}',
+    'deleteScheduleLayer',
+    'schedules:write',
+    'none',
+    ''
+  ),
+  op(
+    'put',
+    '/schedules/{id}/layers/order',
+    'reorderScheduleLayers',
+    'schedules:write',
+    'item',
+    'ScheduleLayerOrder'
+  ),
+  op(
+    'post',
+    '/schedules/{id}/coverage/preview',
+    'previewScheduleCoverage',
+    'schedules:write',
+    'item',
+    'ScheduleLayerPreview'
+  ),
+  op(
+    'get',
+    '/schedules/{id}/dependencies',
+    'getScheduleDependencies',
+    'schedules:write',
+    'item',
+    'ScheduleDependencies'
+  ),
+  op(
+    'get',
+    '/schedules/{id}/changes',
+    'listScheduleChanges',
+    'schedules:write',
+    'list',
+    'AuditLog'
+  ),
   op(
     'patch',
     '/escalation-policies/{id}',
@@ -1315,14 +1560,70 @@ export const V2_OPERATIONS: readonly V2OperationDefinition[] = [
   op('get', '/incidents', 'listIncidents', 'incidents:read', 'list', 'Incident'),
   op('post', '/incidents', 'createIncident', 'incidents:write', 'item', 'Incident'),
   op('get', '/integrations/{id}', 'getIntegration', 'integrations:read', 'item', 'Integration'),
-  op('get', '/integrations/types', 'listIntegrationTypes', 'integrations:read', 'list', 'IntegrationType'),
-  op('post', '/services/{id}/integrations', 'createServiceIntegration', 'integrations:create', 'item', 'IntegrationCreated'),
-  op('get', '/integrations/{id}/credentials', 'getIntegrationCredentialState', 'integrations:read', 'item', 'IntegrationCredentialState'),
-  op('post', '/integrations/{id}/credentials', 'rotateIntegrationCredentials', 'integrations:credentials:write', 'item', 'IntegrationCredentialRotation'),
-  op('post', '/integrations/{id}/test', 'validateIntegrationPayload', 'integrations:test', 'item', 'IntegrationTestResult'),
-  op('get', '/integrations/{id}/diagnostics', 'getIntegrationDiagnostics', 'integrations:read', 'item', 'IntegrationDiagnostics'),
-  op('post', '/integrations/{id}/validate', 'validateIntegrationConfiguration', 'integrations:test', 'item', 'IntegrationValidation'),
-  op('get', '/integrations/{id}/usage', 'getIntegrationUsage', 'integrations:read', 'item', 'IntegrationUsage'),
+  op(
+    'get',
+    '/integrations/types',
+    'listIntegrationTypes',
+    'integrations:read',
+    'list',
+    'IntegrationType'
+  ),
+  op(
+    'post',
+    '/services/{id}/integrations',
+    'createServiceIntegration',
+    'integrations:create',
+    'item',
+    'IntegrationCreated'
+  ),
+  op(
+    'get',
+    '/integrations/{id}/credentials',
+    'getIntegrationCredentialState',
+    'integrations:read',
+    'item',
+    'IntegrationCredentialState'
+  ),
+  op(
+    'post',
+    '/integrations/{id}/credentials',
+    'rotateIntegrationCredentials',
+    'integrations:credentials:write',
+    'item',
+    'IntegrationCredentialRotation'
+  ),
+  op(
+    'post',
+    '/integrations/{id}/test',
+    'validateIntegrationPayload',
+    'integrations:test',
+    'item',
+    'IntegrationTestResult'
+  ),
+  op(
+    'get',
+    '/integrations/{id}/diagnostics',
+    'getIntegrationDiagnostics',
+    'integrations:read',
+    'item',
+    'IntegrationDiagnostics'
+  ),
+  op(
+    'post',
+    '/integrations/{id}/validate',
+    'validateIntegrationConfiguration',
+    'integrations:test',
+    'item',
+    'IntegrationValidation'
+  ),
+  op(
+    'get',
+    '/integrations/{id}/usage',
+    'getIntegrationUsage',
+    'integrations:read',
+    'item',
+    'IntegrationUsage'
+  ),
   op('delete', '/integrations/{id}', 'deleteIntegration', 'integrations:delete', 'none', ''),
   op(
     'patch',
@@ -1342,29 +1643,191 @@ export const V2_OPERATIONS: readonly V2OperationDefinition[] = [
     'ActionResult'
   ),
   op('get', '/notifications', 'listNotifications', 'notifications:read', 'list', 'Notification'),
-  op('get', '/notifications/{id}/attempts', 'listNotificationAttempts', 'notifications:read', 'list', 'NotificationDeliveryAttempt'),
-  op('get', '/notifications/{id}/feedback', 'getNotificationFeedback', 'notifications:read', 'item', 'NotificationFeedback'),
-  op('get', '/incidents/{id}/response-activity', 'getIncidentResponseActivity', 'incidents:read', 'item', 'IncidentResponseActivity'),
-  op('get', '/incidents/{id}/war-rooms', 'listIncidentWarRooms', 'incidents:read', 'list', 'IncidentWarRoom'),
-  op('get', '/incidents/{id}/alerts', 'listIncidentAlerts', 'incidents:read', 'list', 'IncidentAlertSummary'),
-  op('get', '/incidents/{id}/runbook-executions', 'listIncidentRunbookExecutions', 'incidents:read', 'list', 'RunbookExecutionSummary'),
-  op('get', '/incidents/{id}/notification-attempts', 'listIncidentNotificationAttempts', 'incidents:read', 'list', 'IncidentNotificationAttempt'),
-  op('get', '/incidents/{id}/available-actions', 'getIncidentAvailableActions', 'incidents:read', 'item', 'IncidentAvailableActions'),
-  op('get', '/incidents/{id}/related-incidents', 'listRelatedIncidents', 'incidents:read', 'item', 'RelatedIncidents'),
-  op('get', '/operational-events', 'listOperationalEvents', 'incidents:read', 'list', 'OperationalEvent'),
-  op('get', '/services/{id}/change-events', 'listServiceChangeEvents', 'services:read', 'list', 'ServiceChangeEvent'),
-  op('post', '/escalation-policies/{id}/preview', 'previewEscalationPolicy', 'escalation-policies:read', 'item', 'EscalationPolicyPreview'),
-  op('get', '/services/{id}/health-summary', 'getServiceHealthSummary', 'services:read', 'item', 'ServiceHealthSummary'),
+  op(
+    'get',
+    '/notifications/{id}/attempts',
+    'listNotificationAttempts',
+    'notifications:read',
+    'list',
+    'NotificationDeliveryAttempt'
+  ),
+  op(
+    'get',
+    '/notifications/{id}/feedback',
+    'getNotificationFeedback',
+    'notifications:read',
+    'item',
+    'NotificationFeedback'
+  ),
+  op(
+    'get',
+    '/incidents/{id}/response-activity',
+    'getIncidentResponseActivity',
+    'incidents:read',
+    'item',
+    'IncidentResponseActivity'
+  ),
+  op(
+    'get',
+    '/incidents/{id}/war-rooms',
+    'listIncidentWarRooms',
+    'incidents:read',
+    'list',
+    'IncidentWarRoom'
+  ),
+  op(
+    'get',
+    '/incidents/{id}/alerts',
+    'listIncidentAlerts',
+    'incidents:read',
+    'list',
+    'IncidentAlertSummary'
+  ),
+  op(
+    'get',
+    '/incidents/{id}/runbook-executions',
+    'listIncidentRunbookExecutions',
+    'incidents:read',
+    'list',
+    'RunbookExecutionSummary'
+  ),
+  op(
+    'get',
+    '/incidents/{id}/notification-attempts',
+    'listIncidentNotificationAttempts',
+    'incidents:read',
+    'list',
+    'IncidentNotificationAttempt'
+  ),
+  op(
+    'get',
+    '/incidents/{id}/available-actions',
+    'getIncidentAvailableActions',
+    'incidents:read',
+    'item',
+    'IncidentAvailableActions'
+  ),
+  op(
+    'get',
+    '/incidents/{id}/related-incidents',
+    'listRelatedIncidents',
+    'incidents:read',
+    'item',
+    'RelatedIncidents'
+  ),
+  op(
+    'get',
+    '/incidents/{id}/intelligence',
+    'getIncidentIntelligence',
+    'incidents:read',
+    'item',
+    'IncidentIntelligence'
+  ),
+  op(
+    'get',
+    '/operational-events',
+    'listOperationalEvents',
+    'incidents:read',
+    'list',
+    'OperationalEvent'
+  ),
+  op(
+    'get',
+    '/services/{id}/change-events',
+    'listServiceChangeEvents',
+    'services:read',
+    'list',
+    'ServiceChangeEvent'
+  ),
+  op(
+    'post',
+    '/escalation-policies/{id}/preview',
+    'previewEscalationPolicy',
+    'escalation-policies:read',
+    'item',
+    'EscalationPolicyPreview'
+  ),
+  op(
+    'get',
+    '/services/{id}/health-summary',
+    'getServiceHealthSummary',
+    'services:read',
+    'item',
+    'ServiceHealthSummary'
+  ),
   op('get', '/postmortems/{id}', 'getPostmortem', 'postmortems:read', 'item', 'Postmortem'),
-  op('get', '/postmortems/{id}/versions', 'listPostmortemVersions', 'postmortems:read', 'item', 'PostmortemVersionCollection'),
-  op('get', '/postmortems/{id}/action-items', 'listPostmortemActionItems', 'postmortems:read', 'item', 'PostmortemActionItemCollection'),
-  op('get', '/postmortems/{id}/action-items/{itemId}', 'getPostmortemActionItem', 'postmortems:read', 'item', 'PostmortemActionItem'),
-  op('put', '/postmortems/{id}/action-items', 'replacePostmortemActionItems', 'postmortems:write', 'item', 'PostmortemActionItemCollection'),
-  op('patch', '/postmortems/{id}/action-items/{itemId}', 'updatePostmortemActionItem', 'postmortems:write', 'item', 'PostmortemActionItemChange'),
-  op('delete', '/postmortems/{id}/action-items/{itemId}', 'deletePostmortemActionItem', 'postmortems:write', 'item', 'PostmortemActionItemDeletion'),
-  op('post', '/postmortems/{id}/publish', 'publishPostmortem', 'postmortems:write', 'item', 'PostmortemPublication'),
-  op('get', '/postmortems/{id}/contributors', 'listPostmortemContributors', 'postmortems:read', 'item', 'PostmortemContributors'),
-  op('put', '/postmortems/{id}/contributors', 'replacePostmortemContributors', 'postmortems:write', 'item', 'PostmortemContributors'),
+  op(
+    'get',
+    '/postmortems/{id}/versions',
+    'listPostmortemVersions',
+    'postmortems:read',
+    'item',
+    'PostmortemVersionCollection'
+  ),
+  op(
+    'get',
+    '/postmortems/{id}/action-items',
+    'listPostmortemActionItems',
+    'postmortems:read',
+    'item',
+    'PostmortemActionItemCollection'
+  ),
+  op(
+    'get',
+    '/postmortems/{id}/action-items/{itemId}',
+    'getPostmortemActionItem',
+    'postmortems:read',
+    'item',
+    'PostmortemActionItem'
+  ),
+  op(
+    'put',
+    '/postmortems/{id}/action-items',
+    'replacePostmortemActionItems',
+    'postmortems:write',
+    'item',
+    'PostmortemActionItemCollection'
+  ),
+  op(
+    'patch',
+    '/postmortems/{id}/action-items/{itemId}',
+    'updatePostmortemActionItem',
+    'postmortems:write',
+    'item',
+    'PostmortemActionItemChange'
+  ),
+  op(
+    'delete',
+    '/postmortems/{id}/action-items/{itemId}',
+    'deletePostmortemActionItem',
+    'postmortems:write',
+    'item',
+    'PostmortemActionItemDeletion'
+  ),
+  op(
+    'post',
+    '/postmortems/{id}/publish',
+    'publishPostmortem',
+    'postmortems:write',
+    'item',
+    'PostmortemPublication'
+  ),
+  op(
+    'get',
+    '/postmortems/{id}/contributors',
+    'listPostmortemContributors',
+    'postmortems:read',
+    'item',
+    'PostmortemContributors'
+  ),
+  op(
+    'put',
+    '/postmortems/{id}/contributors',
+    'replacePostmortemContributors',
+    'postmortems:write',
+    'item',
+    'PostmortemContributors'
+  ),
   op('patch', '/postmortems/{id}', 'updatePostmortem', 'postmortems:write', 'item', 'Postmortem'),
   op('delete', '/postmortems/{id}', 'deletePostmortem', 'postmortems:write', 'none', ''),
   op('get', '/postmortems', 'listPostmortems', 'postmortems:read', 'list', 'Postmortem'),
@@ -1380,16 +1843,65 @@ export const V2_OPERATIONS: readonly V2OperationDefinition[] = [
   op('post', '/reports/exports', 'createReportExport', 'reports:read', 'item', 'ReportExport'),
   op('get', '/reports/exports/{id}', 'getReportExport', 'reports:read', 'item', 'ReportExport'),
   op('get', '/reports/exports/{id}/download', 'downloadReportExport', 'reports:read', 'binary', ''),
-  op('post', '/reports/exports/{id}/cancel', 'cancelReportExport', 'reports:read', 'item', 'ReportExportCancellation'),
-  op('get', '/dashboards', 'listReportDashboards', 'reports:read', 'list', 'ReportDashboardSummary'),
+  op(
+    'post',
+    '/reports/exports/{id}/cancel',
+    'cancelReportExport',
+    'reports:read',
+    'item',
+    'ReportExportCancellation'
+  ),
+  op(
+    'get',
+    '/dashboards',
+    'listReportDashboards',
+    'reports:read',
+    'list',
+    'ReportDashboardSummary'
+  ),
   op('post', '/dashboards', 'createReportDashboard', 'reports:write', 'item', 'ReportDashboard'),
   op('get', '/dashboards/{id}', 'getReportDashboard', 'reports:read', 'item', 'ReportDashboard'),
-  op('get', '/dashboards/{id}/data', 'getReportDashboardData', 'reports:read', 'item', 'ReportDashboardData'),
+  op(
+    'get',
+    '/dashboards/{id}/data',
+    'getReportDashboardData',
+    'reports:read',
+    'item',
+    'ReportDashboardData'
+  ),
   op('get', '/dashboards/{id}/export', 'downloadReportDashboardData', 'reports:read', 'binary', ''),
-  op('post', '/dashboards/{id}/duplicate', 'duplicateReportDashboard', 'reports:write', 'item', 'ReportDashboard'),
-  op('get', '/dashboards/{id}/widgets', 'listReportDashboardWidgets', 'reports:read', 'item', 'ReportDashboardWidgets'),
-  op('put', '/dashboards/{id}/widgets', 'replaceReportDashboardWidgets', 'reports:write', 'item', 'ReportDashboardWidgets'),
-  op('patch', '/dashboards/{id}', 'updateReportDashboard', 'reports:write', 'item', 'ReportDashboard'),
+  op(
+    'post',
+    '/dashboards/{id}/duplicate',
+    'duplicateReportDashboard',
+    'reports:write',
+    'item',
+    'ReportDashboard'
+  ),
+  op(
+    'get',
+    '/dashboards/{id}/widgets',
+    'listReportDashboardWidgets',
+    'reports:read',
+    'item',
+    'ReportDashboardWidgets'
+  ),
+  op(
+    'put',
+    '/dashboards/{id}/widgets',
+    'replaceReportDashboardWidgets',
+    'reports:write',
+    'item',
+    'ReportDashboardWidgets'
+  ),
+  op(
+    'patch',
+    '/dashboards/{id}',
+    'updateReportDashboard',
+    'reports:write',
+    'item',
+    'ReportDashboard'
+  ),
   op('delete', '/dashboards/{id}', 'deleteReportDashboard', 'reports:write', 'none', ''),
   op(
     'post',
@@ -1511,16 +2023,86 @@ export const V2_OPERATIONS: readonly V2OperationDefinition[] = [
     'ServiceAccount'
   ),
   op('get', '/services/{id}', 'getService', 'services:read', 'item', 'Service'),
-  op('get', '/services/{id}/notification-settings', 'getServiceNotificationSettings', 'services:read', 'item', 'ServiceNotificationSettings'),
-  op('patch', '/services/{id}/notification-settings', 'updateServiceNotificationSettings', 'services:write', 'item', 'ServiceNotificationSettings'),
-  op('get', '/services/{id}/support-hours', 'getServiceSupportHours', 'response-policy:read', 'item', 'ServiceSupportHours'),
-  op('put', '/services/{id}/support-hours', 'updateServiceSupportHours', 'response-policy:write', 'item', 'ServiceSupportHours'),
-  op('get', '/services/{id}/response-policy/classification', 'getServiceClassificationPolicy', 'response-policy:read', 'item', 'ServiceClassificationPolicy'),
-  op('put', '/services/{id}/response-policy/classification', 'updateServiceClassificationPolicy', 'response-policy:write', 'item', 'ServiceClassificationPolicy'),
-  op('get', '/services/{id}/response-policy/sla', 'getServiceSlaPolicy', 'response-policy:read', 'item', 'ServiceSlaPolicy'),
-  op('put', '/services/{id}/response-policy/sla', 'updateServiceSlaPolicy', 'response-policy:write', 'item', 'ServiceSlaPolicy'),
-  op('get', '/settings/incident-sla', 'getWorkspaceSlaPolicy', 'response-policy:read', 'item', 'ServiceSlaPolicy'),
-  op('put', '/settings/incident-sla', 'updateWorkspaceSlaPolicy', 'response-policy:write', 'item', 'ServiceSlaPolicy'),
+  op(
+    'get',
+    '/services/{id}/notification-settings',
+    'getServiceNotificationSettings',
+    'services:read',
+    'item',
+    'ServiceNotificationSettings'
+  ),
+  op(
+    'patch',
+    '/services/{id}/notification-settings',
+    'updateServiceNotificationSettings',
+    'services:write',
+    'item',
+    'ServiceNotificationSettings'
+  ),
+  op(
+    'get',
+    '/services/{id}/support-hours',
+    'getServiceSupportHours',
+    'response-policy:read',
+    'item',
+    'ServiceSupportHours'
+  ),
+  op(
+    'put',
+    '/services/{id}/support-hours',
+    'updateServiceSupportHours',
+    'response-policy:write',
+    'item',
+    'ServiceSupportHours'
+  ),
+  op(
+    'get',
+    '/services/{id}/response-policy/classification',
+    'getServiceClassificationPolicy',
+    'response-policy:read',
+    'item',
+    'ServiceClassificationPolicy'
+  ),
+  op(
+    'put',
+    '/services/{id}/response-policy/classification',
+    'updateServiceClassificationPolicy',
+    'response-policy:write',
+    'item',
+    'ServiceClassificationPolicy'
+  ),
+  op(
+    'get',
+    '/services/{id}/response-policy/sla',
+    'getServiceSlaPolicy',
+    'response-policy:read',
+    'item',
+    'ServiceSlaPolicy'
+  ),
+  op(
+    'put',
+    '/services/{id}/response-policy/sla',
+    'updateServiceSlaPolicy',
+    'response-policy:write',
+    'item',
+    'ServiceSlaPolicy'
+  ),
+  op(
+    'get',
+    '/settings/incident-sla',
+    'getWorkspaceSlaPolicy',
+    'response-policy:read',
+    'item',
+    'ServiceSlaPolicy'
+  ),
+  op(
+    'put',
+    '/settings/incident-sla',
+    'updateWorkspaceSlaPolicy',
+    'response-policy:write',
+    'item',
+    'ServiceSlaPolicy'
+  ),
   op('patch', '/services/{id}', 'updateService', 'services:write', 'item', 'Service'),
   op('delete', '/services/{id}', 'deleteService', 'services:write', 'item', 'ActionResult'),
   op('get', '/services', 'listServices', 'services:read', 'list', 'Service'),

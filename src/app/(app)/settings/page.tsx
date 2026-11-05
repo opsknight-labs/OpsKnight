@@ -259,10 +259,18 @@ export default async function SettingsOverviewPage() {
   const canAccess = (item: {
     requiresAdmin?: boolean;
     requiresAdminOrAuditor?: boolean;
+    requiresResponderOrAuditor?: boolean;
     requiresResponder?: boolean;
   }) => {
     if (item.requiresAdmin && !permissions.isAdmin) return false;
     if (item.requiresAdminOrAuditor && !permissions.isAdmin && !permissions.isAuditor) return false;
+    if (
+      item.requiresResponderOrAuditor &&
+      !permissions.isAdmin &&
+      !permissions.isAuditor &&
+      !permissions.isResponderOrAbove
+    )
+      return false;
     if (item.requiresResponder && !permissions.isResponderOrAbove) return false;
     return true;
   };

@@ -127,6 +127,11 @@ const config: Config = {
         sm: 'calc(var(--ui-radius) - 4px)',
       },
       keyframes: {
+        // Assistant mascot; only used when an administrator enables animations, and gated by motion-safe.
+        'squire-bob': {
+          '0%, 100%': { transform: 'translateY(0)' },
+          '50%': { transform: 'translateY(-2px)' },
+        },
         'accordion-down': {
           from: { height: '0' },
           to: { height: 'var(--radix-accordion-content-height)' },

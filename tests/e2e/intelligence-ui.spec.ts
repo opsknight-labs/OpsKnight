@@ -1,0 +1,707 @@
+import { startFakeModel, type FakeServer } from '../helpers/fake-model-server';
+import AxeBuilder from '@axe-core/playwright';
+import { expect, test, type BrowserContext, type Page } from '@playwright/test';
+import { PrismaClient } from '@prisma/client';
+import bcrypt from 'bcryptjs';
+
+/**
+ * Browser contracts for the recommendations-only Intelligence release: every settings page renders with
+ * its section navigation, an incident shows its suggestions, and the assistant opens from each entry
+ * point and answers in basic mode (no AI provider). State is created directly and removed afterwards so
+ * the assistant never appears in other specs that share this database.
+ */
+const prisma = new PrismaClient();
+const email = 'e2e-intelligence@example.com';
+const password = 'Intelligence-E2E-Pass-4417!';
+const tag = `e2e-intel-${Date.now()}`;
+
+let incidentId = '';
+let precedentId = '';
+let changeId = '';
+let alertId = '';
+let sessionCookies: Awaited<ReturnType<BrowserContext['cookies']>> = [];
+let fake: FakeServer;
+
+async function cleanup() {
+  await prisma.squireConversation.deleteMany({ where: { user: { email } } });
+  await prisma.aiProvider.deleteMany({ where: { name: 'e2e-intel-model' } });
+  await prisma.aiSettings.deleteMany({});
+  // Switching intelligence off first stops the worker picking up anything else from this spec.
+  await prisma.intelligenceSettings.deleteMany({});
+  await prisma.intelligenceWorkItem.deleteMany({});
+  await prisma.intelligenceFeedback.deleteMany({ where: { actor: { email } } });
+  const policies = await prisma.intelligencePolicy.findMany({
+    where: { scopeKey: 'global' },
+    select: { id: true },
+  });
+  if (policies.length) {
+    await prisma.$executeRawUnsafe('ALTER TABLE "IntelligencePolicyVersion" DISABLE TRIGGER USER');
+    try {
+      await prisma.intelligencePolicyVersion.deleteMany({
+        where: { policyId: { in: policies.map(p => p.id) } },
+      });
+    } finally {
+      await prisma.$executeRawUnsafe('ALTER TABLE "IntelligencePolicyVersion" ENABLE TRIGGER USER');
+    }
+    await prisma.intelligencePolicy.deleteMany({ where: { id: { in: policies.map(p => p.id) } } });
+  }
+  const services = { name: { startsWith: 'e2e-intel-' } };
+  // Findings and change events cascade from these; incidents must go before their service.
+  await prisma.incident.deleteMany({ where: { service: services } });
+  await prisma.changeEvent.deleteMany({ where: { service: services } });
+  await prisma.service.deleteMany({ where: services });
+}
+
+async function seed() {
+  const passwordHash = await bcrypt.hash(password, 12);
+  await prisma.rateLimit.deleteMany({ where: { key: { contains: email } } });
+  const admin = await prisma.user.upsert({
+    where: { email },
+    update: { passwordHash, role: 'ADMIN', status: 'ACTIVE' },
+    create: { email, name: 'Intelligence Admin', passwordHash, role: 'ADMIN', status: 'ACTIVE' },
+  });
+  await prisma.intelligenceSettings.create({ data: { id: 'default', enabled: true } });
+  const policy = await prisma.intelligencePolicy.create({
+    data: { scopeKey: 'global', headVersion: 1 },
+  });
+  await prisma.intelligencePolicyVersion.create({
+    data: {
+      policyId: policy.id,
+      version: 1,
+      mode: 'SUGGEST',
+      definition: { schemaVersion: 1 },
+      createdById: admin.id,
+    },
+  });
+  await prisma.aiSettings.create({
+    data: {
+      id: 'default',
+      enabled: false,
+      squireEnabled: true,
+      squireName: 'Pip',
+      squireAvatar: 'KNIGHT',
+      updatedAt: new Date(),
+    },
+  });
+
+  const service = await prisma.service.create({ data: { name: tag } });
+  const now = Date.now();
+  const precedent = await prisma.incident.create({
+    data: {
+      title: 'Checkout database connection pool exhausted (last month)',
+      serviceId: service.id,
+      status: 'RESOLVED',
+      urgency: 'LOW',
+      createdAt: new Date(now - 30 * 86_400_000),
+      resolvedAt: new Date(now - 30 * 86_400_000 + 3_600_000),
+    },
+  });
+  const incident = await prisma.incident.create({
+    data: {
+      title: 'Checkout database connection pool exhausted',
+      serviceId: service.id,
+      status: 'OPEN',
+      urgency: 'LOW',
+      createdAt: new Date(now - 5 * 60_000),
+    },
+  });
+  const change = await prisma.changeEvent.create({
+    data: {
+      serviceId: service.id,
+      source: 'ci',
+      kind: 'DEPLOY',
+      summary: 'checkout v42 rollout',
+      occurredAt: new Date(now - 20 * 60_000),
+    },
+  });
+  const alert = await prisma.alert.create({
+    data: {
+      incidentId: incident.id,
+      serviceId: service.id,
+      payload: { summary: 'Checkout synthetic alert' },
+    },
+  });
+  changeId = change.id;
+  alertId = alert.id;
+  // The production server runs the real intelligence worker, which analyses this new incident too. Its
+  // writes are fenced by generation, so a newer seeded generation is kept and the worker's older result
+  // is dropped as stale. That is the same guarantee that stops a late analysis overwriting a fresh one.
+  const common = {
+    incidentId: incident.id,
+    generation: 1_000_000,
+    engineVersion: 'e2e',
+    policyVersion: 1,
+  };
+  await prisma.intelligenceFinding.createMany({
+    data: [
+      {
+        ...common,
+        kind: 'SIMILAR_INCIDENT',
+        rank: 1,
+        confidence: 0.91,
+        subjectRef: precedent.id,
+        evidence: {
+          type: 'similarity',
+          calibrated: false,
+          tier: 'FTS',
+          components: {
+            tokens: 0.9,
+            template: 0.95,
+            labels: 0,
+            sameService: 1,
+            recency: 0.5,
+            resolved: 1,
+          },
+          matchedTokenCount: 5,
+        },
+      },
+      {
+        ...common,
+        kind: 'CHANGE_CORRELATION',
+        rank: 1,
+        confidence: 0.6,
+        subjectRef: change.id,
+        evidence: {
+          type: 'change',
+          calibrated: false,
+          kind: 'DEPLOY',
+          relation: 'SAME_SERVICE',
+          depth: 0,
+          leadSeconds: 900,
+          components: { proximity: 0.78, relation: 1, kind: 1 },
+        },
+      },
+    ],
+  });
+  await prisma.incidentRelationship.create({
+    data: {
+      sourceIncidentId: incident.id,
+      targetIncidentId: precedent.id,
+      type: 'RELATED',
+      origin: 'RULE',
+      decision: 'ACCEPTED',
+      score: 1,
+      evidence: { type: 'correlation', automatic: true, ruleId: 'e2e-group' },
+      engineVersion: 'e2e',
+    },
+  });
+  incidentId = incident.id;
+  precedentId = precedent.id;
+}
+
+async function login(page: Page) {
+  // Authenticate normally once, then reuse only this fixture account's session across scenarios.
+  // Repeated successful sign-ins otherwise exhaust production abuse limits in the combined CI suite.
+  if (sessionCookies.length) await page.context().addCookies(sessionCookies);
+  await page.goto('/login');
+  if (new URL(page.url()).pathname === '/login') {
+    await page.locator('input[type="email"]').fill(email);
+    await page.locator('input[type="password"]').fill(password);
+    await page.locator('form button[type="submit"]').click();
+  }
+  await expect(page).not.toHaveURL(/\/login/, { timeout: 30_000 });
+  sessionCookies = (await page.context().cookies()).filter(cookie =>
+    cookie.name.includes('next-auth.session-token')
+  );
+}
+
+/** The assistant marks the document once its client code is live; wait for it before interacting. */
+async function assistantReady(page: Page) {
+  await expect(page.locator('html[data-squire-name="Pip"]')).toHaveCount(1);
+}
+
+/** WCAG 2.1 AA scan scoped to the parts this feature owns, so unrelated shell issues do not mask ours. */
+async function expectAccessible(page: Page, selector: string) {
+  const result = await new AxeBuilder({ page })
+    .include(selector)
+    .withTags(['wcag2a', 'wcag2aa', 'wcag21aa'])
+    .analyze();
+  expect(
+    result.violations.map(v => `${v.id}: ${v.nodes.map(n => n.target.join(' ')).join(', ')}`)
+  ).toEqual([]);
+}
+
+async function noHorizontalOverflow(page: Page) {
+  const overflow = await page.evaluate(
+    () => document.documentElement.scrollWidth - window.innerWidth
+  );
+  expect(overflow).toBeLessThanOrEqual(1);
+}
+
+test.describe.serial('intelligence responder workflows', () => {
+  test.beforeAll(async () => {
+    if (!new URL(process.env.DATABASE_URL ?? '').pathname.endsWith('_test'))
+      throw new Error('Dedicated test DB required');
+    await cleanup();
+    await seed();
+    fake = await startFakeModel();
+  });
+
+  test.afterAll(async () => {
+    await cleanup();
+    await fake?.close();
+    await prisma.$disconnect();
+  });
+
+  test.beforeEach(async ({ page }) => {
+    await login(page);
+  });
+
+  test('every settings section renders with its navigation', async ({ page }) => {
+    const sections: Array<[string, string, RegExp]> = [
+      ['/settings/intelligence', 'Overview', /^Intelligence$/],
+      ['/settings/intelligence/services', 'Per-service policies', /Per-service policies/],
+      [
+        '/settings/intelligence/response',
+        'Dependencies & changes',
+        /Dependencies, changes and alert quality/,
+      ],
+      ['/settings/intelligence/insights', 'Insights', /^Insights$/],
+      ['/settings/intelligence/quality', 'Quality', /Grouping quality/],
+      ['/settings/intelligence/ai', 'Assistant & AI', /Assistant and AI/],
+    ];
+    for (const [path, tab, heading] of sections) {
+      await page.goto(path);
+      await expect(page.getByRole('heading', { level: 1, name: heading })).toBeVisible();
+      const nav = page.getByRole('navigation', { name: 'Intelligence sections' });
+      await expect(nav.getByRole('link', { name: tab })).toHaveAttribute('aria-current', 'page');
+      await expect(nav.locator('[aria-current="page"]')).toHaveCount(1);
+      await expectAccessible(page, '#main-content');
+    }
+    // The settings page reflects what was configured and never offers AUTO.
+    await page.goto('/settings/intelligence');
+    await expect(page.getByRole('option', { name: /Automatic/ })).toBeDisabled();
+    await page.goto('/settings/intelligence/ai');
+    await expect(page.getByRole('textbox', { name: 'Assistant name', exact: true })).toHaveValue(
+      'Pip'
+    );
+    await expect(page.getByRole('radio', { name: 'Knight' })).toBeChecked();
+  });
+
+  test('an incident shows explainable suggestions and accepts feedback', async ({ page }) => {
+    await page.goto(`/incidents/${incidentId}`);
+    const similar = page.getByRole('region', { name: 'Similar past incidents' });
+    await expect(similar).toBeVisible();
+    await expect(similar.getByRole('link', { name: /last month/ })).toHaveAttribute(
+      'href',
+      `/incidents/${precedentId}`
+    );
+
+    await similar.getByText('Why this matched', { exact: true }).click();
+    await expect(similar.getByLabel('Why this matched')).toBeVisible();
+    await page.getByRole('tab', { name: 'Causes & runbooks' }).click();
+    const causes = page.getByRole('region', { name: 'Possible causes' });
+    await expect(causes.getByText('checkout v42 rollout')).toBeVisible();
+    await expect(causes.getByText(/leads to verify, not confirmed causes/)).toBeVisible();
+
+    await expectAccessible(page, 'section[aria-labelledby="incident-intelligence-heading"]');
+    await page.getByRole('tab', { name: 'Similar', exact: true }).click();
+    const helpful = similar.getByRole('button', { name: 'Helpful', exact: true });
+    await helpful.click();
+    await expect(helpful).toHaveAttribute('aria-pressed', 'true');
+    await expect
+      .poll(() =>
+        prisma.intelligenceFeedback.count({ where: { actor: { email }, verdict: 'HELPFUL' } })
+      )
+      .toBe(1);
+  });
+
+  test('the assistant answers from the incident panel in basic mode', async ({ page }) => {
+    await page.goto(`/incidents/${incidentId}`);
+    await assistantReady(page);
+    await page.getByRole('tab', { name: 'Ask Squire', exact: true }).click();
+    const panel = page.getByRole('region', { name: 'Ask Pip' });
+    await expect(panel).toBeVisible();
+    await panel.getByRole('button', { name: 'Have we seen this before?' }).click();
+    const dialog = page.getByRole('dialog', { name: /Pip/ });
+    await expect(dialog).toBeVisible();
+    await expect(dialog.getByText(/last month/)).toBeVisible({ timeout: 30_000 });
+    await expect(dialog.getByText('Basic answer from your incident data')).toBeVisible();
+    await expect(
+      dialog.getByRole('link', { name: `/incidents/${precedentId}` }).first()
+    ).toBeVisible();
+    await expectAccessible(page, 'section[role="dialog"]');
+
+    await expectAccessible(page, 'section[aria-labelledby="ask-squire-heading"]');
+  });
+
+  test('the floating launcher is keyboard friendly and the search entry opens it', async ({
+    page,
+  }) => {
+    await page.goto('/');
+    await assistantReady(page);
+    const launcher = page.getByRole('button', { name: /Ask Pip/ });
+    await expect(launcher).toBeVisible();
+    await launcher.click();
+    const dialog = page.getByRole('dialog', { name: /Pip/ });
+    await expect(page.getByLabel('Message Pip')).toBeFocused();
+    await page.keyboard.press('Escape');
+    await expect(dialog).toBeHidden();
+    await expect(launcher).toBeFocused();
+
+    const search = page.getByPlaceholder('Search...');
+    await search.click();
+    await search.fill('pip');
+    await page.getByText('Ask Pip', { exact: true }).last().click();
+    await expect(dialog).toBeVisible();
+  });
+
+  test('fits a 390px phone screen', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    for (const path of [
+      '/settings/intelligence',
+      '/settings/intelligence/ai',
+      '/settings/intelligence/insights',
+      '/settings/intelligence/quality',
+      `/incidents/${incidentId}`,
+    ]) {
+      await page.goto(path);
+      await expect(page.locator('#main-content')).toBeVisible();
+      await noHorizontalOverflow(page);
+    }
+    const tabs = page.getByRole('tablist', { name: 'Incident intelligence' });
+    await tabs.getByRole('tab', { name: 'Similar', exact: true }).focus();
+    await page.keyboard.press('ArrowRight');
+    await expect(tabs.getByRole('tab', { name: 'Related', exact: true })).toBeFocused();
+    await expectAccessible(page, 'section[aria-labelledby="incident-intelligence-heading"]');
+    await assistantReady(page);
+    await page.getByRole('button', { name: /Ask Pip/ }).click();
+    const box = await page.getByRole('dialog', { name: /Pip/ }).boundingBox();
+    expect(box).not.toBeNull();
+    expect(box!.x).toBeGreaterThanOrEqual(0);
+    expect(box!.x + box!.width).toBeLessThanOrEqual(390);
+  });
+  test('validated change and alert citations open readable source pages', async ({ page }) => {
+    await page.goto(`/changes/${changeId}`);
+    await expect(
+      page.getByRole('heading', { level: 1, name: 'checkout v42 rollout' })
+    ).toBeVisible();
+    await expectAccessible(page, '#main-content');
+    await page.goto(`/alerts/${alertId}`);
+    await expect(
+      page.getByRole('heading', { level: 1, name: 'Checkout synthetic alert' })
+    ).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Open incident', exact: true })).toHaveAttribute(
+      'href',
+      `/incidents/${incidentId}`
+    );
+    await expectAccessible(page, '#main-content');
+  });
+
+  test('an automatic relationship can be ungrouped after intelligence is switched off', async ({
+    page,
+  }) => {
+    await prisma.intelligenceSettings.update({
+      where: { id: 'default' },
+      data: { enabled: false },
+    });
+    try {
+      await page.goto(`/incidents/${incidentId}`);
+      await page.getByRole('tab', { name: 'Related', exact: true }).click();
+      const related = page.getByRole('region', { name: 'Related incidents' });
+      await expect(
+        related.getByText('Automatically grouped after paging', { exact: false })
+      ).toBeVisible();
+      await related.getByRole('button', { name: 'Ungroup' }).click();
+      await expect
+        .poll(() =>
+          prisma.incidentRelationship.count({
+            where: { sourceIncidentId: incidentId, decision: 'REVERTED' },
+          })
+        )
+        .toBe(1);
+    } finally {
+      await prisma.intelligenceSettings.update({
+        where: { id: 'default' },
+        data: { enabled: true },
+      });
+    }
+  });
+
+  test('a real streamed proposal changes nothing until confirmation and cannot execute twice', async ({
+    page,
+  }) => {
+    await prisma.aiProvider.create({
+      data: {
+        name: 'e2e-intel-model',
+        kind: 'OPENAI_COMPATIBLE',
+        model: 'm',
+        baseUrl: fake.url,
+        isExternal: false,
+        allowPrivateNetwork: true,
+        maxDataClass: 'PERSONAL',
+      },
+    });
+    await page.goto('/settings/intelligence/ai');
+    await page.getByRole('checkbox', { name: /^Enable AI\b/ }).check();
+    await page
+      .locator('form:visible')
+      .filter({ has: page.getByRole('checkbox', { name: /^Enable AI\b/ }) })
+      .getByRole('button', { name: 'Save', exact: true })
+      .click();
+    await expect(page.getByRole('status').filter({ hasText: /saved/i }).first()).toBeVisible();
+    fake.script.push(
+      {
+        toolCall: {
+          name: 'propose_add_incident_note',
+          args: JSON.stringify({ incidentId, content: 'Browser confirmed note' }),
+        },
+      },
+      { content: 'Review the proposed note and confirm it.' }
+    );
+    await page.goto(`/incidents/${incidentId}`);
+    await assistantReady(page);
+    await page.getByRole('button', { name: /Ask Pip/ }).click();
+    await page.getByLabel('Message Pip').fill('Please add a note saying Browser confirmed note');
+    await page.getByRole('button', { name: 'Send', exact: true }).click();
+    const proposal = page.getByRole('group', { name: /Suggested action: Add/ });
+    await expect(proposal).toBeVisible();
+    expect(
+      await prisma.incidentNote.count({ where: { incidentId, content: 'Browser confirmed note' } })
+    ).toBe(0);
+    await page.route('**/api/intelligence/squire/actions', async route => {
+      await route.fetch(); // Let the real domain transaction commit, then lose its response.
+      await route.abort('failed');
+    });
+    const sent = page.waitForRequest(
+      request =>
+        request.url().endsWith('/api/intelligence/squire/actions') && request.method() === 'POST'
+    );
+    await proposal.getByRole('button', { name: 'Confirm', exact: true }).click();
+    const request = await sent;
+    await expect(proposal.getByRole('status')).toContainText('Could not confirm the result');
+    await proposal.getByRole('button', { name: 'Check result', exact: true }).click();
+    await expect(proposal.getByRole('status')).toHaveText('Note added.');
+    await page.unroute('**/api/intelligence/squire/actions');
+    const replay = await page.request.post('/api/intelligence/squire/actions', {
+      data: request.postDataJSON(),
+      headers: { Origin: new URL(page.url()).origin },
+    });
+    expect(await replay.json()).toMatchObject({
+      ok: true,
+      message: 'Note added.',
+    });
+    expect(
+      await prisma.incidentNote.count({ where: { incidentId, content: 'Browser confirmed note' } })
+    ).toBe(1);
+    await page.getByRole('button', { name: 'Close Pip', exact: true }).click();
+    await page.getByRole('button', { name: /Ask Pip/ }).click();
+    await expect(proposal.getByRole('status')).toHaveText('Note added.');
+    await expect(proposal.getByRole('button', { name: 'Confirm', exact: true })).toHaveCount(0);
+    await expectAccessible(page, 'section[role="dialog"]');
+  });
+  test('stopping a streamed answer preserves evidence and releases its token reservation on mobile', async ({
+    page,
+  }, testInfo) => {
+    fake.script.push({ content: 'Evidence collected so far.', finishDelayMs: 30_000 });
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto(`/incidents/${incidentId}`);
+    await assistantReady(page);
+    await page.getByRole('button', { name: /Ask Pip/ }).click();
+    await page.getByLabel('Message Pip').fill('Summarise the available evidence');
+    await page.getByRole('button', { name: 'Send', exact: true }).click();
+    await expect(page.getByText('Evidence collected so far.', { exact: true })).toBeVisible();
+    const actor = await prisma.user.findUniqueOrThrow({ where: { email }, select: { id: true } });
+    expect(
+      await prisma.aiTokenReservation.count({ where: { actorId: actor.id, settledAt: null } })
+    ).toBeGreaterThan(0);
+    await page.getByRole('button', { name: 'Stop response', exact: true }).click();
+    await expect(page.getByRole('dialog')).toContainText('Evidence collected so far.');
+    await expect(page.getByText(/Response stopped/)).toBeVisible();
+    await expect(page.getByLabel('Message Pip')).toBeFocused();
+    await expect
+      .poll(
+        () => prisma.aiTokenReservation.count({ where: { actorId: actor.id, settledAt: null } }),
+        { timeout: 10_000 }
+      )
+      .toBe(0);
+    await noHorizontalOverflow(page);
+    await expectAccessible(page, 'section[role="dialog"]');
+    await page.screenshot({
+      path: testInfo.outputPath('squire-stopped-mobile.png'),
+      fullPage: true,
+    });
+  });
+  test('an Internal-only provider receives no browser question or history', async ({ page }) => {
+    await prisma.aiProvider.updateMany({
+      where: { name: 'e2e-intel-model' },
+      data: { maxDataClass: 'INTERNAL' },
+    });
+    // Saving through the native settings command refreshes the running gateway policy cache.
+    await page.goto('/settings/intelligence/ai');
+    await page
+      .locator('form:visible')
+      .filter({ has: page.getByRole('checkbox', { name: /^Enable AI\b/ }) })
+      .getByRole('button', { name: 'Save', exact: true })
+      .click();
+    await expect(page.getByRole('status').filter({ hasText: /saved/i }).first()).toBeVisible();
+    const requestsBefore = fake.requests.length;
+    await page.goto(`/incidents/${incidentId}`);
+    await assistantReady(page);
+    await page.getByRole('button', { name: /Ask Pip/ }).click();
+    await page
+      .getByLabel('Message Pip')
+      .fill('Responder Alice privacy-canary-browser-73 needs help');
+    await page.getByRole('button', { name: 'Send', exact: true }).click();
+    await expect(page.getByRole('dialog')).toContainText(
+      'provider permitted to receive Personal data'
+    );
+    await expect(page.getByText(/Basic answer from your incident data/)).toBeVisible();
+    expect(fake.requests).toHaveLength(requestsBefore);
+    await expectAccessible(page, 'section[role="dialog"]');
+  });
+  test('saved history cannot silently switch to another incident', async ({ page }) => {
+    await prisma.aiSettings.update({
+      where: { id: 'default' },
+      data: { squireHistoryEnabled: true },
+    });
+    await page.goto(`/incidents/${incidentId}`);
+    await assistantReady(page);
+    await page.getByRole('button', { name: /Ask Pip/ }).click();
+    await page.getByLabel('Message Pip').fill('Help with original incident context');
+    await page.getByRole('button', { name: 'Send', exact: true }).click();
+    const owner = await prisma.user.findUniqueOrThrow({ where: { email }, select: { id: true } });
+    await expect
+      .poll(() => prisma.squireConversation.count({ where: { userId: owner.id, incidentId } }))
+      .toBe(1);
+    await page.goto(`/incidents/${precedentId}`);
+    await assistantReady(page);
+    await page.getByRole('button', { name: /Ask Pip/ }).click();
+    await page.getByRole('button', { name: 'Saved conversations', exact: true }).click();
+    await page.getByRole('button', { name: /^Help with original incident context/ }).click();
+    await expect(page.getByRole('dialog').getByRole('alert')).toContainText('another incident');
+    await expect(page.getByRole('button', { name: 'New chat', exact: true })).toBeVisible();
+    await expectAccessible(page, 'section[role="dialog"]');
+  });
+  test('quality service search reaches beyond the first hundred services on mobile', async ({
+    page,
+  }, testInfo) => {
+    const prefix = `${tag}-fleet-`;
+    await prisma.service.createMany({
+      data: Array.from({ length: 120 }, (_, i) => ({
+        name: `${prefix}${String(i).padStart(3, '0')}`,
+      })),
+    });
+    try {
+      await page.setViewportSize({ width: 390, height: 844 });
+      await page.goto(`/settings/intelligence/quality?q=${encodeURIComponent(prefix)}`);
+      const choose = page.getByRole('combobox', { name: 'Service', exact: true });
+      await expect(choose.locator('option')).toHaveCount(25);
+      await page.getByRole('link', { name: 'More services', exact: true }).click();
+      await expect(choose.locator('option')).toHaveCount(26); // 25 matches plus the retained selection.
+      await expect(page.getByRole('link', { name: 'First page', exact: true })).toBeVisible();
+      await page
+        .getByRole('searchbox', { name: 'Search services', exact: true })
+        .fill(`${prefix}119`);
+      await page.getByRole('button', { name: 'Search', exact: true }).click();
+      await choose.selectOption({ label: `${prefix}119` });
+      await page.getByRole('button', { name: 'View quality', exact: true }).click();
+      await expect(page.getByRole('heading', { name: `${prefix}119`, exact: true })).toBeVisible();
+      await expect(page.getByRole('button', { name: 'Search', exact: true })).toBeVisible();
+      await noHorizontalOverflow(page);
+      await expectAccessible(page, '#main-content');
+      await page.screenshot({
+        path: testInfo.outputPath('quality-service-search-mobile.png'),
+        fullPage: true,
+      });
+    } finally {
+      await prisma.service.deleteMany({ where: { name: { startsWith: prefix } } });
+    }
+  });
+
+  test('operator diagnostics withhold legacy error payloads and retain reviewed replay controls', async ({
+    page,
+  }) => {
+    const raw = 'legacy-private-provider-body Alice password=browser-canary';
+    const work = await prisma.intelligenceWorkItem.create({
+      data: {
+        kind: 'ANALYZE_INCIDENT',
+        subjectKey: 'diagnostic-test-source',
+        attempts: 8,
+        failedAt: new Date(),
+        lastError: raw,
+      },
+    });
+    try {
+      await page.goto('/settings/intelligence');
+      const failed = page.getByRole('heading', { name: 'Failed work', exact: true }).locator('..');
+      await expect(
+        page.getByText('The work could not be completed. Detailed exception text is withheld.', {
+          exact: true,
+        })
+      ).toBeVisible();
+      expect(await page.locator('body').textContent()).not.toContain(raw);
+      expect(await page.content()).not.toContain(raw);
+      await expect(failed).toBeVisible();
+      await expect(page.getByRole('button', { name: 'Retry', exact: true })).toBeVisible();
+      await expectAccessible(page, '#main-content');
+    } finally {
+      await prisma.intelligenceWorkItem.deleteMany({ where: { id: work.id } });
+    }
+  });
+
+  test('freshness explains unfinished analysis and operator refresh uses the native queue', async ({
+    page,
+  }, testInfo) => {
+    const source = await prisma.incident.findUniqueOrThrow({
+      where: { id: incidentId },
+      select: { serviceId: true },
+    });
+    const pending = await prisma.incident.create({
+      data: { title: 'Freshness browser source', serviceId: source.serviceId, urgency: 'LOW' },
+    });
+    // Hold a synthetic in-flight lease so the background worker cannot finish before the UI assertion.
+    await prisma.intelligenceWorkItem.upsert({
+      where: { kind_subjectKey: { kind: 'INDEX_INCIDENT', subjectKey: pending.id } },
+      create: {
+        kind: 'INDEX_INCIDENT',
+        subjectKey: pending.id,
+        claimToken: 'freshness-browser-lease',
+        claimedAt: new Date(),
+        leaseUntil: new Date(Date.now() + 600_000),
+      },
+      update: {
+        claimToken: 'freshness-browser-lease',
+        claimedAt: new Date(),
+        leaseUntil: new Date(Date.now() + 600_000),
+      },
+    });
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto(`/incidents/${pending.id}`);
+    await expect(
+      page.getByRole('status').filter({ hasText: 'Waiting for recommendation analysis.' })
+    ).toBeVisible();
+    await expect(page.getByRole('group', { name: 'Recommendation freshness' })).toHaveCount(1);
+    await page.getByRole('tab', { name: 'Related', exact: true }).click();
+    await expect(page.getByRole('group', { name: 'Recommendation freshness' })).toHaveCount(0);
+    await page.getByRole('tab', { name: 'Causes & runbooks', exact: true }).click();
+    await expect(page.getByRole('group', { name: 'Recommendation freshness' })).toHaveCount(1);
+    const requested = page.waitForResponse(
+      response =>
+        response.url().endsWith(`/api/intelligence/incidents/${pending.id}/analysis`) &&
+        response.request().method() === 'POST'
+    );
+    await page.getByRole('button', { name: 'Refresh recommendations', exact: true }).click();
+    expect((await requested).status()).toBe(202);
+    await expect
+      .poll(() =>
+        prisma.auditLog.count({
+          where: { action: 'intelligence.analysis.requested', entityId: pending.id },
+        })
+      )
+      .toBe(1);
+    expect(
+      await prisma.intelligenceWorkItem.count({
+        where: { kind: 'INDEX_INCIDENT', subjectKey: pending.id },
+      })
+    ).toBe(1);
+    await expectAccessible(page, '#main-content');
+    await page.screenshot({
+      path: testInfo.outputPath('recommendation-freshness-mobile.png'),
+      fullPage: true,
+    });
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)
+    ).toBe(true);
+  });
+});

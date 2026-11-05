@@ -40,7 +40,7 @@ export const SectionNav = memo(function SectionNav({
                 'group inline-flex min-h-8.5 shrink-0 flex-1 items-center justify-center gap-2 rounded-md px-3 text-xs font-medium transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 sm:flex-none',
                 selected
                   ? 'bg-background text-foreground shadow-xs'
-                  : 'text-muted-foreground hover:bg-background/50 hover:text-foreground'
+                  : 'text-foreground/80 hover:bg-background/50 hover:text-foreground'
               )}
             >
               {Icon && (

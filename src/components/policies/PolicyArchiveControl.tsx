@@ -4,6 +4,7 @@ import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { setPolicyArchived } from '@/app/(app)/policies/actions';
 import { Button } from '@/components/ui/shadcn/button';
+import { useHydrated } from '@/hooks/useHydrated';
 
 export default function PolicyArchiveControl({
   policyId,
@@ -15,13 +16,14 @@ export default function PolicyArchiveControl({
   blocked: boolean;
 }) {
   const router = useRouter();
+  const hydrated = useHydrated();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   return (
     <div className="space-y-2">
       <Button
         variant="outline"
-        disabled={pending || (!archived && blocked)}
+        disabled={!hydrated || pending || (!archived && blocked)}
         onClick={() => {
           setError(null);
           startTransition(async () => {

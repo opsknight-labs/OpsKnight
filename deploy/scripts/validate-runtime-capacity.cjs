@@ -263,6 +263,23 @@ function calculateRuntimeCapacity(customEnv) {
   if (ingestionPool > 100)
     throw new Error('DATABASE_POOL_SIZE_INGESTION_WORKER must not exceed 100');
   const ingestionConnections = ingestionReplicas * ingestionPool;
+
+  // The optional dedicated intelligence lane (OPSKNIGHT_PROCESS_ROLE=intelligence-worker). Off by default:
+  // the lane otherwise runs inside the integrated and general worker processes and their pools.
+  const intelligenceReplicaValue =
+    env.SWARM_REPLICAS_INTELLIGENCE_WORKER ||
+    env.SWARM_INTELLIGENCE_WORKER_REPLICAS ||
+    env.INTELLIGENCE_WORKER_REPLICAS;
+  const intelligenceReplicas =
+    intelligenceReplicaValue === undefined || intelligenceReplicaValue === '0'
+      ? 0
+      : parseStrictPositiveInt('INTELLIGENCE_WORKER_REPLICAS', intelligenceReplicaValue, 0);
+  const intelligencePool = parseStrictPositiveInt(
+    'DATABASE_POOL_SIZE_INTELLIGENCE_WORKER',
+    env.DATABASE_POOL_SIZE_INTELLIGENCE_WORKER,
+    5
+  );
+  const intelligenceConnections = intelligenceReplicas * intelligencePool;
   const reserveValue = env.DATABASE_CONNECTION_RESERVE;
   const connectionReserve =
     reserveValue === '0'
@@ -283,8 +300,9 @@ function calculateRuntimeCapacity(customEnv) {
 
   const directWorkerConnections =
     mode === 'integrated'
-      ? integratedReplicas + ingestionConnections
+      ? integratedReplicas + ingestionConnections + intelligenceConnections
       : ingestionConnections +
+        intelligenceConnections +
         schedulerReplicas * (schedulerPool + 1) +
         generalReplicas * generalPool +
         criticalReplicas * criticalPool +
@@ -310,6 +328,7 @@ function calculateRuntimeCapacity(customEnv) {
     headroom,
     breakdown: {
       mcp: { replicas: mcpReplicas, pool: mcpPool, total: mcpConnections },
+      intelligence: { replicas: intelligenceReplicas, pool: intelligencePool, total: intelligenceConnections },
       ingestionWorker: {
         replicas: ingestionReplicas,
         pool: ingestionPool,

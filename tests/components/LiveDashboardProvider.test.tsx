@@ -361,7 +361,9 @@ describe('LiveDashboardProvider', () => {
       // The next read is spaced 1s after the first one started (75ms debounce + up to 150ms
       // jitter), plus up to 150ms more jitter, so it can land as late as ~1,075ms from here.
       signal(view, 2, '45');
-      await flush(1_200);
+      // The one-second minimum read gap also includes up to 150ms of jitter. Advancing only
+      // one second races that timer when the first read happened late in the initial 300ms.
+      await flush(1_250);
       expect(fetchMock.mock.calls.length).toBeGreaterThanOrEqual(2);
       if (fetchMock.mock.calls.length === 2) {
         expect(screen.getByTestId('ids').textContent).toBe('a');

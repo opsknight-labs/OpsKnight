@@ -359,7 +359,7 @@ export default function McpConnectionsSection({
           {isAdmin && counts.active > 0 && (
             <McpConfirmAction
               action={revokeAllAction}
-              fields={{}}
+              fields={{ confirm: 'on' }}
               label="Revoke all active connections"
               accessibleLabel="Revoke all active MCP connections across OpsKnight"
               title="Revoke all active MCP connections?"

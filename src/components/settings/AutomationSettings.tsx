@@ -3,6 +3,8 @@ import { useEffect, useId, useRef, useState, type FormEvent } from 'react';
 import { AlertTriangle, CheckCircle2, Loader2, RotateCw, Workflow } from 'lucide-react';
 import {
   saveAutomationSettings,
+  readAutomationPrivacyCleanupStatus,
+  retryAutomationPrivacyCleanupAction,
   type SaveAutomationSettingsResult,
 } from '@/app/(app)/settings/system/automation-actions';
 import {
@@ -20,11 +22,18 @@ import { Input } from '@/components/ui/shadcn/input';
 import { Label } from '@/components/ui/shadcn/label';
 import { Switch } from '@/components/ui/shadcn/switch';
 import { cn } from '@/lib/utils';
+import {
+  automationReadinessPolicySchema,
+  DEFAULT_AUTOMATION_READINESS_POLICY,
+  type AutomationReadinessPolicy,
+} from '@/lib/automation/readiness-policy';
 
 type Settings = {
   automationEnabled: boolean;
   automationTraceRetentionDays: number;
   automationSettingsRevision: number;
+  automationStoreObservationPreviews?: boolean;
+  automationReadinessPolicy?: AutomationReadinessPolicy;
 };
 
 const MIN_RETENTION_DAYS = 1;
@@ -69,6 +78,46 @@ export default function AutomationSettings({ initialSettings }: { initialSetting
   const [busy, setBusy] = useState(false);
   const [feedback, setFeedback] = useState<Feedback>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [storePreviews, setStorePreviews] = useState(
+    initialSettings.automationStoreObservationPreviews ?? false
+  );
+  const [readiness, setReadiness] = useState(
+    initialSettings.automationReadinessPolicy ?? DEFAULT_AUTOMATION_READINESS_POLICY
+  );
+  const [cleanup, setCleanup] =
+    useState<Awaited<ReturnType<typeof readAutomationPrivacyCleanupStatus>>>(null);
+  const [cleanupBusy, setCleanupBusy] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    void readAutomationPrivacyCleanupStatus()
+      .then(status => {
+        if (active) setCleanup(status);
+      })
+      .catch(() => {
+        /* The refresh control reports read failures and allows retry. */
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  async function refreshCleanup(retry = false) {
+    setCleanupBusy(true);
+    try {
+      setCleanup(
+        await (retry ? retryAutomationPrivacyCleanupAction() : readAutomationPrivacyCleanupStatus())
+      );
+    } catch {
+      setFeedback({
+        kind: 'error',
+        text: 'Could not load diagnostic cleanup. Try refreshing its status.',
+        conflict: false,
+      });
+    } finally {
+      setCleanupBusy(false);
+    }
+  }
 
   const retentionProblem = retentionError(retention);
 
@@ -83,10 +132,21 @@ export default function AutomationSettings({ initialSettings }: { initialSetting
     setBusy(true);
     setFeedback(null);
     try {
+      const parsedPolicy = automationReadinessPolicySchema.safeParse(readiness);
+      if (!parsedPolicy.success) {
+        setFeedback({
+          kind: 'error',
+          text: 'Check the Shadow readiness limits and try again.',
+          conflict: false,
+        });
+        return;
+      }
       const result = await saveAutomationSettings({
         automationEnabled: enabled,
         automationTraceRetentionDays: Number(retention.trim()),
         expectedRevision: saved.automationSettingsRevision,
+        automationStoreObservationPreviews: storePreviews,
+        automationReadinessPolicy: parsedPolicy.data,
       });
       if (!result.ok) {
         const fieldError = result.fieldErrors?.automationTraceRetentionDays;
@@ -98,6 +158,8 @@ export default function AutomationSettings({ initialSettings }: { initialSetting
       setSaved(next);
       setEnabled(next.automationEnabled);
       setRetention(String(next.automationTraceRetentionDays));
+      setStorePreviews(next.automationStoreObservationPreviews ?? storePreviews);
+      setReadiness(next.automationReadinessPolicy ?? readiness);
       setFeedback({ kind: 'saved' });
     } catch {
       setFeedback(UNEXPECTED_FEEDBACK);
@@ -244,6 +306,76 @@ export default function AutomationSettings({ initialSettings }: { initialSetting
             1–3650 days. Incident routing decisions remain for the incident lifetime. Shortening
             retention removes older diagnostics during the next cleanup.
           </p>
+        </fieldset>
+
+        <fieldset className="space-y-3" disabled={busy}>
+          <legend className="text-sm font-medium">Shadow readiness</legend>
+          <p className="text-sm text-muted-foreground">
+            Review these evidence limits before activating a candidate policy.
+          </p>
+          {(
+            [
+              ['minimumEvaluations', 'Minimum candidate evaluations', 1, 1000000, 1],
+              ['maximumEvidenceAgeHours', 'Maximum evidence age (hours)', 24, 168, 1],
+              ['maximumPendingObservations', 'Maximum pending observations', 0, 1000, 1],
+              ['maximumErrorRate', 'Maximum error rate', 0, 1, 0.01],
+            ] as const
+          ).map(([key, label, min, max, step]) => (
+            <div key={key} className="space-y-1">
+              <Label htmlFor={`${ids}-${key}`}>{label}</Label>
+              <Input
+                id={`${ids}-${key}`}
+                type="number"
+                min={min}
+                max={max}
+                step={step}
+                value={Object.entries(readiness).find(([name]) => name === key)?.[1]}
+                className="max-w-[12rem]"
+                onChange={event => {
+                  setReadiness(previous => ({ ...previous, [key]: Number(event.target.value) }));
+                  edited();
+                }}
+              />
+            </div>
+          ))}
+        </fieldset>
+
+        <fieldset className="space-y-3" disabled={busy}>
+          <legend className="text-sm font-medium">Diagnostic privacy</legend>
+          <label className="flex items-start gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={storePreviews}
+              onChange={event => {
+                setStorePreviews(event.target.checked);
+                edited();
+              }}
+            />
+            Store diagnostic field-value previews
+          </label>
+          <p className="text-sm text-muted-foreground">
+            Previews may contain alert content. Storage is off by default. Turning it off hides
+            previews immediately and queues their removal.
+          </p>
+          <Button
+            type="button"
+            variant="outline"
+            disabled={cleanupBusy}
+            onClick={() => void refreshCleanup()}
+          >
+            Refresh cleanup status
+          </Button>
+          {cleanup && <p className="text-sm">Diagnostic cleanup: {cleanup.status}</p>}
+          {cleanup?.status === 'FAILED' && (
+            <Button
+              type="button"
+              variant="outline"
+              disabled={cleanupBusy || storePreviews}
+              onClick={() => void refreshCleanup(true)}
+            >
+              Retry diagnostic cleanup
+            </Button>
+          )}
         </fieldset>
 
         <div className="flex flex-col gap-3 border-t border-border pt-4 sm:flex-row sm:items-center">

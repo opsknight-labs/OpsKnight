@@ -211,7 +211,7 @@ export const AutomationOverview = memo(function AutomationOverview({
             {parityPct && (
               <Badge
                 variant="outline"
-                className="border-emerald-500/30 bg-emerald-500/10 text-[10px] font-semibold text-emerald-600 dark:text-emerald-400"
+                className="border-emerald-500/30 bg-emerald-500/10 text-[10px] font-semibold text-emerald-800 dark:text-emerald-300"
               >
                 {parityPct}% parity
               </Badge>
@@ -348,8 +348,8 @@ export const AutomationOverview = memo(function AutomationOverview({
                     !!counts?.evaluated &&
                     !hasFailures &&
                     !data.unmappedCount
-                    ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
-                    : 'border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400'
+                    ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-800 dark:text-emerald-300'
+                    : 'border-amber-500/30 bg-amber-500/10 text-amber-800 dark:text-amber-300'
                 )}
               >
                 <span
@@ -434,7 +434,7 @@ export const AutomationOverview = memo(function AutomationOverview({
                       ? 'Automation compares outcomes; incidents continue using the service route.'
                       : 'Automation is disabled for this service.'}
                 </p>
-                <p className="mt-1 text-[11px] text-muted-foreground/80">
+                <p className="mt-1 text-[11px] text-foreground/80">
                   Queue health and capacity approval require deployment review. A successful sample
                   test is not a capacity approval. Shadow counts update asynchronously.
                 </p>
@@ -583,8 +583,8 @@ export const AutomationOverview = memo(function AutomationOverview({
                       className={cn(
                         'px-1.5 py-0 font-mono text-[9px] font-bold uppercase tracking-wide',
                         trace.mode === 'LIVE'
-                          ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
-                          : 'border-amber-500/40 bg-amber-500/10 text-amber-600 dark:text-amber-400'
+                          ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-800 dark:text-emerald-300'
+                          : 'border-amber-500/40 bg-amber-500/10 text-amber-800 dark:text-amber-300'
                       )}
                     >
                       {trace.mode}
@@ -597,7 +597,7 @@ export const AutomationOverview = memo(function AutomationOverview({
                     className={cn(
                       'font-mono text-[10px] font-semibold tabular-nums px-1.5 py-0.5 rounded',
                       trace.durationMs < 5
-                        ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+                        ? 'bg-emerald-500/10 text-emerald-800 dark:text-emerald-300'
                         : 'bg-muted text-muted-foreground'
                     )}
                   >

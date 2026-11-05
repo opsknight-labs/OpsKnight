@@ -1064,7 +1064,9 @@ test('server pagination, administrator labels, effective capabilities and budget
   await expect
     .poll(() => prisma.runbookExecutionSigningKey.count({ where: { state: 'ACTIVE' } }))
     .toBe(1);
-  await page.goto(`/runbooks/agents?q=${encodeURIComponent(agent.name)}`);
+  // Follow application navigation so the upgrade action's refresh cannot abort a document load.
+  await page.getByRole('link', { name: 'Return to Agent health and diagnostics' }).click();
+  await page.waitForURL('**/runbooks/agents');
   await page
     .getByRole('navigation', { name: 'Infrastructure sections' })
     .getByRole('link', { name: /^security/i })
@@ -1524,7 +1526,10 @@ test('detached-rule suggestions stay visible with disabled execution and can be 
   await expect(
     history.getByRole('link', { name: /view archived (?:rule )?evidence/i })
   ).not.toBeVisible();
-  await history.getByRole('combobox', { name: 'Rule history', exact: true }).filter({ visible: true }).selectOption('archived');
+  await history
+    .getByRole('combobox', { name: 'Rule history', exact: true })
+    .filter({ visible: true })
+    .selectOption('archived');
   await expect(history).toHaveURL(/rulesState=archived/);
   await history
     .getByPlaceholder('Search rules by name, runbook, or target agent…')
@@ -1766,9 +1771,9 @@ test('service objectives retain immutable versions through UI create edit and ar
   ).toBeVisible();
   const name = `Response objective ${crypto.randomUUID()}`;
   const createSection = page
-    .locator('details')
-    .filter({ has: page.locator('summary', { hasText: /^Create objective$/ }) });
-  await createSection.locator('summary').click();
+    .locator('#main-content details:visible')
+    .filter({ has: page.locator(':scope > summary', { hasText: /^Create objective$/ }) });
+  await createSection.locator(':scope > summary').click();
   await createSection.getByLabel('Measurement', { exact: true }).selectOption('MTTA');
   await createSection.getByLabel('Name', { exact: true }).fill(name);
   await createSection

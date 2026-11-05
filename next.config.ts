@@ -115,7 +115,9 @@ const nextConfig: NextConfig = {
   output: 'standalone',
   // Instrumentation and handlers share a native Prisma client. Bundling a
   // second SQL-tag implementation breaks nested Prisma.sql fragment identity.
-  serverExternalPackages: ['@prisma/client', '.prisma/client'],
+  // ExcelJS's archive reader has optional S3 adapters. Native loading keeps
+  // those adapters lazy for the local XLSX export path.
+  serverExternalPackages: ['@prisma/client', '.prisma/client', 'exceljs'],
   outputFileTracingRoot: path.join(__dirname),
   // Instrumentation reads authentication policy before any request. Ensure the
   // generated Prisma client and native engine exist in the standalone artifact.
