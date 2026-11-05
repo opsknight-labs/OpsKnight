@@ -174,11 +174,15 @@ describe('F4: MCP docs are findable', () => {
       'ChatGPT',
       'Cursor',
       'VS Code',
+      'API-hosted agents',
+    ]);
+    // API-hosted agents depend on each provider's connector, so they are not claimed as expected.
+    const expected = new Map([
+      ['Claude Code', 'Verified'],
+      ['API-hosted agents', 'Not verified'],
     ]);
     for (const [client, value] of status)
-      expect(value, client).toBe(
-        client === 'Claude Code' ? 'Verified' : 'Expected (2025 revisions supported)'
-      );
+      expect(value, client).toBe(expected.get(client) ?? 'Expected (2025 revisions supported)');
   });
 
   it('shows the same setup commands as the Connect tab', () => {
