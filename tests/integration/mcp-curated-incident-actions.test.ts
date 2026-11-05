@@ -227,13 +227,15 @@ describe('incident_reopen and incident_unsnooze', () => {
       tool => tool.name
     );
     expect(listed).not.toContain('incident_reopen');
-    // Called anyway through the generic path: refused by the same authority check.
+    // A session that can change nothing is not offered the generic change tool either (W2), so
+    // a call through it is refused before any authority is used.
+    expect(listed).not.toContain('call_operation');
     const result = await call(outsider.bearer, 'call_operation', {
       operationId: 'reopenIncident',
       args: { path: { id }, body: {}, idempotencyKey: key() },
     });
-    expect(result.isError).toBe(true);
-    expect(result.content[0].text).toMatch(/^MCP_OPERATION_(FORBIDDEN|UNAVAILABLE)/);
+    expect(result?.isError ?? true).toBe(true);
+    if (result) expect(result.content[0].text).not.toMatch(/reopened/i);
     expect(await statusOf(id)).toBe('RESOLVED');
   });
 });

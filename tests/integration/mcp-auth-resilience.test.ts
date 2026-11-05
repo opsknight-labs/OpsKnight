@@ -6,6 +6,7 @@ import { createTestUser, resetDatabase, testPrisma as db } from '../helpers/test
 import prisma from '@/lib/prisma';
 import { mcpOAuthServer } from '@/lib/mcp/auth/oauth-model';
 import { mcpResource } from '@/lib/mcp/auth/config';
+import { clearDiscoveryPolicyCache } from '@/lib/mcp/auth/discovery-policy';
 import { authenticateMcp, resolveMcpGrant } from '@/lib/mcp/auth/principal';
 import { MCP_BAD_TOKEN_LIMIT, resetMcpAdmissionForTests } from '@/lib/mcp/auth/admission';
 import { POST as tokenExchange } from '@/app/oauth/mcp/token/route';
@@ -576,6 +577,8 @@ describe('OBS-11: MCP_FORCE_DISABLED overrides an enabled policy', () => {
       where: { id: 'default' },
       data: { dcrEnabled: true, dcrScopes: ['incidents:read'] },
     });
+    // Discovery reads a short-lived policy memo (W1 SEC-12); a direct write must clear it.
+    clearDiscoveryPolicyCache();
     expect((await (await authorizationMetadata()).json()).registration_endpoint).toBeDefined();
     vi.stubEnv('MCP_FORCE_DISABLED', 'true');
     const refused = await refresh(f, tokens.refresh_token);
