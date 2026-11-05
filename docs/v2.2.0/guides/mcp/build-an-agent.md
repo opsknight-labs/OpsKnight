@@ -15,6 +15,9 @@ verification:
     - src/lib/mcp/approvals/runbook.ts
     - tests/helpers/mcp-sdk-handshake.ts
     - tests/integration/mcp-sdk-clients.test.ts
+    - src/app/oauth/mcp/device_authorization/route.ts
+    - src/lib/mcp/auth/device-flow.ts
+    - tests/integration/mcp-device-flow.test.ts
 ---
 
 # Build an agent
@@ -64,6 +67,49 @@ async with streamablehttp_client("https://ops.your-company.com/mcp", auth=oauth)
         await session.initialize()
         me = await session.call_tool("whoami", {})
 ```
+
+## Sign in from a CLI or server (device code)
+
+For an agent without a browser (SSH sessions, containers, CI runners that a person starts), use the OAuth 2.0 device authorization grant (RFC 8628). An administrator must turn on **Device sign-in** in the access policy; the authorization server metadata then lists `device_authorization_endpoint` and the `urn:ietf:params:oauth:grant-type:device_code` grant. Without it the endpoint answers 404 (`MCP_DEVICE_FLOW_DISABLED`).
+
+1. Register once with dynamic registration, declaring the grant. Redirect URIs are optional for a device-only client:
+
+   ```bash
+   curl -s https://ops.your-company.com/oauth/mcp/register -H 'content-type: application/json' \
+     -d '{"client_name":"my-cli","grant_types":["urn:ietf:params:oauth:grant-type:device_code","refresh_token"],"scope":"incidents:read services:read"}'
+   ```
+
+   Keep the returned `client_id`. An administrator can instead register the client by hand with **Allow device sign-in with a code** ticked.
+
+2. Start a sign-in. `scope` and `resource` (`<App URL>/mcp`) are optional:
+
+   ```bash
+   curl -s https://ops.your-company.com/oauth/mcp/device_authorization \
+     -d client_id=$CLIENT_ID -d 'scope=incidents:read services:read'
+   ```
+
+   The answer has `device_code` (keep it secret), `user_code` (show it), `verification_uri`, `verification_uri_complete`, `expires_in` (600) and `interval` (5).
+
+3. Show the person the code and `verification_uri` (or `verification_uri_complete`, for example as a QR code). They sign in, confirm the code and approve.
+
+4. Poll the token endpoint no faster than `interval` seconds:
+
+   ```bash
+   curl -s https://ops.your-company.com/oauth/mcp/token \
+     -d grant_type=urn:ietf:params:oauth:grant-type:device_code \
+     -d device_code=$DEVICE_CODE -d client_id=$CLIENT_ID
+   ```
+
+   | Answer                   | Meaning                                                                             | What to do                              |
+   | ------------------------ | ----------------------------------------------------------------------------------- | --------------------------------------- |
+   | `authorization_pending`  | Not approved yet.                                                                   | Wait `interval` seconds and poll again. |
+   | `slow_down`              | You polled too fast. The body carries the new `interval` (5 seconds more).          | Use the new interval from now on.       |
+   | `access_denied`          | The person chose Cancel.                                                            | Stop; start again only if asked.        |
+   | `expired_token`          | Ten minutes passed.                                                                 | Start a new sign-in.                    |
+   | `invalid_grant`          | The code was already used, belongs to another client, or the person's access ended. | Start a new sign-in.                    |
+   | `unsupported_grant_type` | Device sign-in is turned off.                                                       | Ask an administrator.                   |
+
+   On approval the answer is the usual token response (`access_token`, `refresh_token`, `expires_in` 300, `scope`). Exactly one poll receives it. From then on refresh with `grant_type=refresh_token` as any other client does.
 
 ## Read and page
 
