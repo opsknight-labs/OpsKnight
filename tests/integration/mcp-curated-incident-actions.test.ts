@@ -1,3 +1,4 @@
+// @vitest-environment node
 /**
  * On-call actions that run directly over MCP, like acknowledge and resolve: escalate, reopen,
  * unsnooze and bulk acknowledge. Snooze and unacknowledge stay approval-gated

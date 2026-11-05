@@ -240,13 +240,15 @@ describe('TQ-11: tools/list stays small', () => {
       0
     );
     // automation_simulate alone was 5 KB. Without it the named tools take about 7.6 KB, plus about
-    // 1.2 KB of parameter descriptions (TQ-03); a large schema must not quietly come back.
+    // 1.2 KB of parameter descriptions (TQ-03) and about 2.2 KB for incident_escalate,
+    // incident_reopen, incident_unsnooze and the wider incident_search filters (round 2 W4, D5);
+    // a large schema must not quietly come back.
     const named = tools.filter(tool => MCP_CATALOG.some(operation => operation.tool === tool.name));
     const namedBytes = named.reduce(
       (total, tool) => total + Buffer.byteLength(JSON.stringify(tool.inputSchema)),
       0
     );
-    expect(namedBytes).toBeLessThanOrEqual(9216);
+    expect(namedBytes).toBeLessThanOrEqual(12288);
     expect(bytes).toBeGreaterThan(namedBytes);
   });
 });

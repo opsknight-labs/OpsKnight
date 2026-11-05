@@ -60,6 +60,16 @@
     "descriptionSha256": "b01de9dc14e9bcb23302a2401c1361a78d1bcebc02b3b623b61a1e5e5ea79278"
   },
   {
+    "name": "fetch",
+    "title": "Fetch an OpsKnight record",
+    "annotations": {
+      "readOnlyHint": true,
+      "openWorldHint": false
+    },
+    "inputSchemaSha256": "33ebc03b1d992f47ca10ca41a37e687e89e6da8c8379f2e0b1d85817f3601bcd",
+    "descriptionSha256": "e4751e3d062bda9736fab7deea15eb6ff0ba0fb038cc6d095600ab8449d7f6ce"
+  },
+  {
     "name": "incident_get",
     "title": "Get an incident",
     "annotations": {
@@ -69,7 +79,7 @@
       "openWorldHint": false
     },
     "inputSchemaSha256": "07d60a9e65584f1566dd56ab3a439a00e6e5c0753bd03c628fab88afa90a19fd",
-    "descriptionSha256": "73371a1fa1e23f91de8664978b0aacfbfef91b9475c0027da4afd704d727e107"
+    "descriptionSha256": "ca6128ae6ed9ae5916c103902f7a28a4dbd906b3a9083cbe75dc680c4786e2b4"
   },
   {
     "name": "incident_get_context",
@@ -81,7 +91,7 @@
       "openWorldHint": false
     },
     "inputSchemaSha256": "4a3c28a6052b1fa5e2b7846914e15222979b655d5b461ac46e76f60c7bcf2872",
-    "descriptionSha256": "a17c13e503a0b19dc3025a44c18cfbd1e4090a495fe122f09d3e76436f12e351"
+    "descriptionSha256": "60303bc343873cba553b665adb0a34d4a0ed0262a9b15742c37c86a2a8d19c5d"
   },
   {
     "name": "incident_get_timeline",
@@ -104,8 +114,20 @@
       "idempotentHint": true,
       "openWorldHint": false
     },
-    "inputSchemaSha256": "bb307bb81b1360546684d1bbf0d5925c9f02e5c11c3fb9d6c1622e5190c6ff2b",
-    "descriptionSha256": "947523813b413e8076c1e5db54440a2a0fe64dd5389ad61195c8a642732a8e97"
+    "inputSchemaSha256": "097e89fa62bc5f37db915cfa1b7eeb264bc86d61d768a708b608bdc2784db9b8",
+    "descriptionSha256": "ead72a2d55ef24e910eda1f8e592f12830e2670e2891ec2c415dfae947121765"
+  },
+  {
+    "name": "oncall_for_service",
+    "title": "Who is on call for a service",
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    },
+    "inputSchemaSha256": "96e8194319ee0af9028efdfd139b79068fee1387e330fbfba9744782496d2b30",
+    "descriptionSha256": "8c0e67af9d8b7ebda81dfe3ff4f22cc614ef74b1ee3f23be25a9b30cce3cb22e"
   },
   {
     "name": "oncall_lookup",
@@ -117,7 +139,7 @@
       "openWorldHint": false
     },
     "inputSchemaSha256": "a16c47ea89aaf901d1d462536c9feb48aa8c666e327e926c94cf75f14325dd63",
-    "descriptionSha256": "6c8ffa0f26322b532302e16a6e41a1d629856b2474c0ba347f06c23b313c716d"
+    "descriptionSha256": "ca3ae3c4e736206a525416d8e2fd816eca8b71de0884d2e264916aff669fc3b7"
   },
   {
     "name": "postmortem_get_context",
@@ -204,6 +226,16 @@
     "descriptionSha256": "8ce1143f5ce4e01199eafbd85308c60fad8d01a72131b07e649e9c25179b4a6c"
   },
   {
+    "name": "search",
+    "title": "Search OpsKnight",
+    "annotations": {
+      "readOnlyHint": true,
+      "openWorldHint": false
+    },
+    "inputSchemaSha256": "5dcd9764ce9c72aadf9dab54c9221450f0279115fe9259618f0b9dcf1d9e7bd4",
+    "descriptionSha256": "d1b42da58d378e6677403614d510e0627821cdec585274d969d06ebcb33c7991"
+  },
+  {
     "name": "search_capabilities",
     "title": "Search OpsKnight capabilities",
     "annotations": {
@@ -212,7 +244,7 @@
       "idempotentHint": true,
       "openWorldHint": false
     },
-    "inputSchemaSha256": "dc9367bdd755769e752c56ebb005af45041eed6f364c4287aa25cd54b547db15",
+    "inputSchemaSha256": "b3918e7c625a17d70f3012a7e1e1abc2294844cf677b0e234c72c822ab140f59",
     "descriptionSha256": "491538de989155affaf772d711076fd585f9cbc7b457284c071103159779e06e"
   },
   {

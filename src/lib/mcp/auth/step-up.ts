@@ -16,6 +16,9 @@ type Operation = (typeof MCP_CATALOG)[number];
 const COMPOSITE_TOOLS = new Map<string, readonly string[]>([
   ['incident_get_context', ['getIncident', 'getIncidentTimeline', 'listRelatedIncidents']],
   ['postmortem_get_context', POSTMORTEM_CONTEXT_OPERATIONS],
+  ['oncall_for_service', ['getService', 'getEscalationPolicy', 'getScheduleOnCall']],
+  ['incident_acknowledge_many', ['acknowledgeIncident']],
+  // search and fetch read whichever kinds the connection can see; a missing kind is no failure.
 ]);
 /** Generic tools whose `operationId` argument names the operation. */
 const BY_OPERATION_ID = new Set(['read_operation', 'call_operation', 'operation_prepare']);

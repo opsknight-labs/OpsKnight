@@ -117,7 +117,7 @@ Every REST v2 operation by area: how many an assistant can use directly (curated
 | custom-fields | 5 | 2 | 3 | 0 |
 | dashboards | 10 | 4 | 5 | 1 |
 | escalation-policies | 8 | 5 | 3 | 0 |
-| incidents | 39 | 27 | 12 | 0 |
+| incidents | 40 | 30 | 10 | 0 |
 | integrations | 11 | 5 | 2 | 4 |
 | notification-providers | 6 | 0 | 0 | 6 |
 | notifications | 4 | 3 | 1 | 0 |
@@ -133,7 +133,7 @@ Every REST v2 operation by area: how many an assistant can use directly (curated
 | status-pages | 30 | 14 | 10 | 6 |
 | teams | 14 | 7 | 7 | 0 |
 | users | 11 | 0 | 0 | 11 |
-| **All** | 320 | 136 | 108 | 76 |
+| **All** | 321 | 139 | 106 | 76 |
 
 <details>
 <summary>Operations by area</summary>
@@ -201,6 +201,7 @@ Every REST v2 operation by area: how many an assistant can use directly (curated
 | `createIncident` | `incident_create` |
 | `createIncidentTemplate` | `operation_prepare`, then approval |
 | `deleteIncidentTemplate` | `operation_prepare`, then approval |
+| `escalateIncident` | `incident_escalate` |
 | `getIncident` | `incident_get` |
 | `getIncidentAvailableActions` | `read_operation` |
 | `getIncidentCustomField` | `read_operation` (sensitive reads on) |
@@ -222,14 +223,14 @@ Every REST v2 operation by area: how many an assistant can use directly (curated
 | `listRelatedIncidents` | `read_operation` |
 | `removeIncidentTag` | `call_operation` |
 | `removeIncidentWatcher` | `operation_prepare`, then approval |
-| `reopenIncident` | `operation_prepare`, then approval |
+| `reopenIncident` | `incident_reopen` |
 | `resolveIncident` | `incident_resolve` |
 | `setIncidentCustomField` | `operation_prepare`, then approval |
 | `setIncidentWatcher` | `call_operation` |
 | `snoozeIncident` | `operation_prepare`, then approval |
 | `suppressIncident` | `operation_prepare`, then approval |
 | `unacknowledgeIncident` | `operation_prepare`, then approval |
-| `unsnoozeIncident` | `operation_prepare`, then approval |
+| `unsnoozeIncident` | `incident_unsnooze` |
 | `unsuppressIncident` | `operation_prepare`, then approval |
 | `updateIncident` | `operation_prepare`, then approval |
 | `updateIncidentTemplate` | `operation_prepare`, then approval |

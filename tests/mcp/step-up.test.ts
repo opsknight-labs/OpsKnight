@@ -52,6 +52,23 @@ describe('stepUpScopes', () => {
     expect(challenged).toBeGreaterThan(0);
   });
 
+  it('knows what the round 2 composite tools run', () => {
+    const tool = (name: string, args: unknown = {}) => ({
+      clientScopes: everyScope,
+      policy: open,
+      method: 'tools/call',
+      params: { name, arguments: args },
+    });
+    // oncall_for_service reads the service, its escalation policy and the schedules on call.
+    expect(stepUpScopes(actor('ADMIN', ['incidents:read']), tool('oncall_for_service'))).toEqual(
+      expect.arrayContaining(['incidents:read', 'services:read', 'schedules:read'])
+    );
+    // incident_acknowledge_many acknowledges each incident through acknowledgeIncident.
+    expect(
+      stepUpScopes(actor('ADMIN', ['incidents:read']), tool('incident_acknowledge_many'))
+    ).toEqual(expect.arrayContaining(['incidents:read', 'incidents:write']));
+  });
+
   it('keeps what the connection has and adds only what the call is missing', () => {
     expect(
       stepUpScopes(

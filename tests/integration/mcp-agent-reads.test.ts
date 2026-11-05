@@ -1,3 +1,4 @@
+// @vitest-environment node
 /**
  * Reads an assistant answers the common on-call questions with, through the real MCP route:
  * "what is open right now", "summarize this incident", "who is on call for X", and ChatGPT's
