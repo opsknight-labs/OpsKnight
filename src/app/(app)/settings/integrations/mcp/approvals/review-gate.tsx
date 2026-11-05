@@ -1,5 +1,42 @@
 import type { ReactNode } from 'react';
+import Link from 'next/link';
+import { ArrowLeft } from 'lucide-react';
 import { McpBoundaryError } from '@/lib/mcp/core/errors';
+import { formatDateTime } from '@/lib/timezone';
+import { InlineNotice } from '@/components/ui/InlineNotice';
+import { Deadline } from '@/components/settings/mcp/McpListKit';
+import { mcpHref } from '../list-params';
+
+/** Shared definition-list styles for the review and status pages, readable in both themes. */
+export const DT_CLASS = 'text-xs uppercase tracking-wide text-muted-foreground';
+export const DD_CLASS = 'text-foreground';
+
+/** Back to the approvals queue, on every review and status page. */
+export function BackToApprovals() {
+  return (
+    <Link
+      href={mcpHref({ tab: 'approvals' })}
+      className="inline-flex items-center gap-1.5 text-sm font-medium text-primary underline-offset-4 hover:underline"
+    >
+      <ArrowLeft className="h-4 w-4" aria-hidden="true" />
+      Back to approvals
+    </Link>
+  );
+}
+
+/** One plain sentence for both review pages, plus the untrusted-data note. */
+export function ReviewIntro() {
+  return (
+    <div className="space-y-1">
+      <p>
+        Approving lets this run once, exactly as shown. Permissions are re-checked when it runs.
+      </p>
+      <p className="text-sm text-muted-foreground">
+        Names and text below come from the assistant&apos;s request and may be inaccurate.
+      </p>
+    </div>
+  );
+}
 
 type Blocked =
   | 'own-request'
@@ -73,11 +110,11 @@ export function ReviewUnavailable({ reason, heading }: { reason: Blocked; headin
   const copy = COPY.get(reason)!;
   return (
     <div className="max-w-3xl space-y-4 rounded-lg border p-6">
+      <BackToApprovals />
       <h1 className="text-2xl font-semibold">{heading}</h1>
-      <div role="status" className="rounded border border-amber-300 bg-amber-50 p-4 text-amber-900">
-        <p className="font-medium">{copy.title}</p>
-        <p className="mt-1 text-sm">{copy.body}</p>
-      </div>
+      <InlineNotice tone="warning" role="status" title={copy.title}>
+        <p className="text-sm">{copy.body}</p>
+      </InlineNotice>
     </div>
   );
 }
@@ -88,9 +125,8 @@ export function ReviewUnavailable({ reason, heading }: { reason: Blocked; headin
  */
 export function SelfApprovalConfirm() {
   return (
-    <div className="rounded border border-amber-300 bg-amber-50 p-4 text-amber-900">
-      <p className="font-medium">You requested this change</p>
-      <p className="mt-1 text-sm">
+    <InlineNotice tone="warning" role="note" aria-live="off" title="You requested this change">
+      <p className="text-sm">
         As an administrator you can approve it yourself. It will run once, exactly as shown above,
         and the audit log records it as self-approved.
       </p>
@@ -98,7 +134,7 @@ export function SelfApprovalConfirm() {
         <input type="checkbox" name="confirmSelfApproval" value="yes" required className="mt-1" />
         <span>I have reviewed this change and I am sure I want to apply it.</span>
       </label>
-    </div>
+    </InlineNotice>
   );
 }
 
@@ -113,10 +149,13 @@ export function RequestedBy({
   person,
   assistant,
   at,
+  timeZone = 'UTC',
 }: {
   person: Person;
   assistant: { name: string } | null;
   at: Date;
+  /** The viewer's time zone; the absolute time is shown in it. */
+  timeZone?: string;
 }) {
   return (
     <p className="text-sm text-muted-foreground">
@@ -128,7 +167,10 @@ export function RequestedBy({
           via the assistant <span className="font-medium text-foreground">“{assistant.name}”</span>
         </>
       ) : null}{' '}
-      at <time dateTime={at.toISOString()}>{at.toISOString()}</time>
+      at{' '}
+      <time dateTime={at.toISOString()}>
+        {formatDateTime(at, timeZone, { includeTimeZone: true })}
+      </time>
     </p>
   );
 }
@@ -149,7 +191,7 @@ const STATUS_COPY = new Map<string, { label: string; body: string }>(
     },
     EXPIRED: {
       label: 'Expired',
-      body: 'It was not used in time. Ask your assistant to prepare it again with a new idempotency key.',
+      body: 'It was not used in time. Ask your assistant to prepare it again.',
     },
     EXECUTING: { label: 'Running', body: 'Your assistant is applying the approved request.' },
     COMMITTED: { label: 'Completed', body: 'The approved request was applied.' },
@@ -157,6 +199,11 @@ const STATUS_COPY = new Map<string, { label: string; body: string }>(
     FAILED: { label: 'Failed', body: 'The approved request could not be applied.' },
   })
 );
+
+/** Plain status labels shared by the review pages and the requester's status view. */
+export function statusLabel(status: string) {
+  return STATUS_COPY.get(status)?.label ?? status;
+}
 
 /** What a requester sees on their own request: status only, never the review controls. */
 export function RequesterStatus({
@@ -167,6 +214,8 @@ export function RequesterStatus({
   decidedAt,
   selfApproved,
   decisionReason,
+  timeZone = 'UTC',
+  now = new Date(),
   children,
 }: {
   heading: string;
@@ -176,30 +225,37 @@ export function RequesterStatus({
   decidedAt: Date | null;
   selfApproved: boolean;
   decisionReason: string | null;
+  timeZone?: string;
+  now?: Date;
   children?: ReactNode;
 }) {
   const copy = STATUS_COPY.get(status) ?? { label: status, body: '' };
   const open = status === 'PENDING' || status === 'APPROVED';
   return (
     <div className="max-w-3xl space-y-4 rounded-lg border p-6">
+      <BackToApprovals />
       <h1 className="text-2xl font-semibold">{heading}</h1>
       {children}
       <div role="status" className="rounded border p-4">
         <p className="font-medium">Status: {copy.label}</p>
         <p className="mt-1 text-sm">{copy.body}</p>
       </div>
-      <dl className="grid gap-2 sm:grid-cols-2 break-all">
+      <dl className="grid gap-2 sm:grid-cols-2 break-words">
         {open && (
           <>
-            <dt>{status === 'APPROVED' ? 'Apply before' : 'Review before'}</dt>
-            <dd>{expiresAt.toISOString()}</dd>
+            <dt className={DT_CLASS}>{status === 'APPROVED' ? 'Apply before' : 'Review before'}</dt>
+            <dd className={DD_CLASS}>
+              <Deadline value={expiresAt} now={now} timeZone={timeZone} />
+            </dd>
           </>
         )}
         {decidedAt && (
           <>
-            <dt>Decided</dt>
-            <dd>
-              {decidedAt.toISOString()}
+            <dt className={DT_CLASS}>Decided</dt>
+            <dd className={DD_CLASS}>
+              <time dateTime={decidedAt.toISOString()}>
+                {formatDateTime(decidedAt, timeZone, { includeTimeZone: true })}
+              </time>
               {reviewer ? ` by ${personText(reviewer)}` : ''}
               {selfApproved ? ' (self-approved)' : ''}
             </dd>

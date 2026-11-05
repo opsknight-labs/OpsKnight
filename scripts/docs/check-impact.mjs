@@ -2,8 +2,8 @@
 import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import YAML from 'yaml';
 import { repositoryRoot } from './discovery-lib.mjs';
+import { loadCapabilityInventories } from './impact-inventories.mjs';
 
 const argument = flag => {
   const index = process.argv.indexOf(flag);
@@ -16,8 +16,7 @@ const changed = execFileSync('git', ['diff', '--name-only', `${base}...HEAD`], {
   encoding: 'utf8',
 }).trim().split('\n').filter(Boolean);
 const versions = JSON.parse(readFileSync(resolve(repositoryRoot, 'docs/versions.json'), 'utf8'));
-const currentDocsVersion = versions.currentRelease || 'v2.0.0';
-const inventory = YAML.parse(readFileSync(resolve(repositoryRoot, `docs/${currentDocsVersion}/capabilities.yaml`), 'utf8'));
+const inventories = loadCapabilityInventories(repositoryRoot, versions);
 const currentGraph = JSON.parse(readFileSync(resolve(repositoryRoot, 'generated/docs-contracts/current.json'), 'utf8'));
 let baseGraph = { contracts: [] };
 try {
@@ -35,12 +34,14 @@ const changedContracts = (currentGraph.contracts ?? []).filter(node =>
 const rows = [];
 
 const matches = (file, source) => file === source || file.startsWith(`${source.replace(/\/$/, '')}/`);
-for (const [id, capability] of Object.entries(inventory.capabilities ?? {})) {
+for (const [docsVersion, id, capability] of inventories.flatMap(({ version, capabilities }) =>
+  capabilities.map(([id, capability]) => [version, id, capability])
+)) {
   const productChanges = changed.filter(file => (capability.sources ?? []).some(source => matches(file, source)));
   if (productChanges.length === 0) continue;
   const mappedDocs = ['concepts', 'guides', 'reference']
     .flatMap(group => capability[group] ?? [])
-    .map(path => `docs/${currentDocsVersion}/${path}`);
+    .map(path => `docs/${docsVersion}/${path}`);
   const documentationChanges = changed.filter(file =>
     mappedDocs.includes(file)
   );

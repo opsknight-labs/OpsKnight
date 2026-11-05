@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createTestUser, resetDatabase, testPrisma as db } from '../helpers/test-db';
 import { loadMcpRuntime } from '@/lib/mcp/auth/config';

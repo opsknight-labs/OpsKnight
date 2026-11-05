@@ -139,13 +139,26 @@ describe('curated tool descriptions', () => {
       for (const operation of curated) {
         const description = descriptions.get(operation.tool!);
         expect(operation.summary, operation.operationId).toBeTruthy();
-        expect(description).toContain(operation.summary);
+        expect(description).toContain(
+          (operation.agentDescription ?? operation.summary)!.replace(/\.$/, '')
+        );
         expect(description).not.toContain('Candidate in-process');
         expect(description).toMatch(operation.risk === 'R0' ? /Read-only/ : /idempotencyKey/);
-        expect(description!.length).toBeLessThan(220);
+        expect(description!.length).toBeLessThan(500);
       }
     } finally {
       spy.mockRestore();
+    }
+  });
+
+  it('say when to use every curated tool, without entering the contract hash', () => {
+    const curated = MCP_CATALOG.filter(operation => operation.status === 'CURATED');
+    expect(curated.length).toBeGreaterThan(15);
+    for (const operation of curated) {
+      expect(operation.agentDescription, operation.operationId).toMatch(/\bUse\b|\bStart here\b/);
+      expect(
+        mcpContractHash({ ...operation, agentDescription: 'changed description text here' })
+      ).toBe(operation.contractSha256);
     }
   });
 
@@ -200,7 +213,12 @@ describe('wire projection', () => {
     expect(text).not.toContain('#/components');
     expect(text).not.toContain('X-RateLimit');
     expect(described.summary).toBeTruthy();
-    expect(described.outputSchema.$defs.Service).toBeDefined();
+    // The projected tool result: evidence plus the body as delivered, references inlined.
+    expect(described.outputSchema.required).toEqual(['evidence', 'data']);
+    expect(text).not.toContain('$ref');
+    expect(
+      described.outputSchema.properties.data.anyOf[0].properties.data.items.properties.name
+    ).toEqual({ type: 'string' });
     expect(Object.keys(described.inputSchema.properties.query.properties)).toEqual(
       expect.arrayContaining(['limit', 'cursor'])
     );

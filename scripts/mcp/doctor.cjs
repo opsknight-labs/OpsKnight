@@ -187,7 +187,10 @@ if (require.main === module) {
   const args = process.argv.slice(2);
   const url = args.find(arg => !arg.startsWith('--'));
   if (!url) {
-    process.stderr.write('Usage: node scripts/mcp/doctor.cjs https://YOUR-HOST/mcp [--json]\n');
+    process.stderr.write(
+      'Usage: node opsknight-mcp-doctor.cjs https://YOUR-HOST/mcp [--json]\n' +
+        '   (or node scripts/mcp/doctor.cjs from an OpsKnight checkout or container)\n'
+    );
     process.exitCode = 1;
   } else
     checkMcpSetup(url)

@@ -1,6 +1,7 @@
 import prisma from '@/lib/prisma';
 import { withMcpDatabase } from '@/lib/database-workload';
 import { withMcpRuntime } from '@/lib/mcp/auth/config';
+import { browserPreflight, withBrowserCors } from '@/lib/mcp/auth/cors';
 import { assertMcpHost, mcpHttpError } from '@/lib/mcp/auth/http';
 import { admitMcpOAuthRequest } from '@/lib/mcp/auth/admission';
 import {
@@ -10,20 +11,28 @@ import {
 } from '@/lib/mcp/auth/registration';
 import { readBoundedMcpText } from '@/lib/mcp/core/body';
 import { rejectDuplicateJsonKeys } from '@/lib/mcp/protocol/input';
-import { requireMcp } from '@/lib/mcp/core/errors';
+import { McpBoundaryError, requireMcp } from '@/lib/mcp/core/errors';
+import { mcpPolicyInForce } from '@/lib/mcp/core/kill-switch';
+import { observeMcpOAuth } from '@/lib/mcp/auth/oauth-observability';
+import { logger } from '@/lib/logger';
 import { z } from 'zod/v3';
 
 export const runtime = 'nodejs';
 export function POST(request: Request) {
-  return withMcpDatabase(() => withMcpRuntime(() => handlePost(request)));
+  return observeMcpOAuth('register', request, () =>
+    withMcpDatabase(() =>
+      withMcpRuntime(() => withBrowserCors(request, origin => handlePost(request, origin)))
+    )
+  );
 }
-async function handlePost(request: Request) {
+export const OPTIONS = browserPreflight;
+async function handlePost(request: Request, browserOrigin: string | null) {
   let release: (() => void) | undefined;
   try {
-    assertMcpHost(request);
+    assertMcpHost(request, false, browserOrigin);
     release = acquireRegistrationSlot();
     const policy = await prisma.mcpPolicy.findUnique({ where: { id: 'default' } });
-    requireMcp(policy?.enabled && policy.dcrEnabled, 'MCP_REGISTRATION_DISABLED', 403);
+    requireMcp(mcpPolicyInForce(policy) && policy?.dcrEnabled, 'MCP_REGISTRATION_DISABLED', 403);
     await admitMcpOAuthRequest(request, 'register');
     requireMcp(
       request.headers.get('content-type')?.split(';')[0] === 'application/json',
@@ -94,6 +103,10 @@ async function handlePost(request: Request) {
         { error: 'invalid_client_metadata' },
         { status: 400, headers: { 'Cache-Control': 'no-store' } }
       );
+    if (!(error instanceof McpBoundaryError) && !(error instanceof SyntaxError))
+      logger.warn('mcp.register.unexpected_error', {
+        name: error instanceof Error ? error.name : typeof error,
+      });
     return mcpHttpError(error);
   } finally {
     release?.();

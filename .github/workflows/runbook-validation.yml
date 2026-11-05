@@ -44,7 +44,7 @@ jobs:
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v7
-      - name: Verify pinned Prometheus tooling and test maintenance alerts
+      - name: Verify pinned Prometheus tooling and test maintenance, ingestion and MCP alerts
         shell: bash
         run: |
           set -euo pipefail
@@ -58,6 +58,8 @@ jobs:
           "$tool_dir/promtool" check rules monitoring/prometheus/opsknight-alerts.yaml
           "$tool_dir/promtool" test rules monitoring/prometheus/runbook-maintenance.test.yml
           "$tool_dir/promtool" test rules monitoring/prometheus/ingestion.test.yml
+          "$tool_dir/promtool" check rules monitoring/prometheus/opsknight-recording-rules.yaml
+          "$tool_dir/promtool" test rules monitoring/prometheus/mcp.test.yml
 
   runbook-ui:
     needs: changes
@@ -139,7 +141,7 @@ jobs:
       - name: Apply all migrations
         run: npx prisma migrate deploy
       - name: Typecheck
-        run: npx tsc --noEmit --incremental false
+        run: NODE_OPTIONS=--max-old-space-size=8192 npx tsc --noEmit --incremental false
       - name: Agent runtime and authorization regressions
         run: >-
           npx vitest run --no-file-parallelism --maxWorkers=1

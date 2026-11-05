@@ -52,89 +52,144 @@ const supported = (rationale: string): MutationContract => ({
 
 export const V2_MUTATION_CONTRACT: Record<string, MutationContract> = {
   'PUT /api/v2/settings/chatops': {
-    idempotency: 'required', concurrency: 'etag', preconditionRequired: true,
-    rationale: 'A shared UI/REST command locks global policy, checks the exact revision, updates ChatOps and provider policy, and commits one attributed audit with the replay receipt.',
+    idempotency: 'required',
+    concurrency: 'etag',
+    preconditionRequired: true,
+    rationale:
+      'A shared UI/REST command locks global policy, checks the exact revision, updates ChatOps and provider policy, and commits one attributed audit with the replay receipt.',
   },
   'POST /api/v2/custom-fields': {
-    idempotency: 'required', concurrency: 'none',
-    rationale: 'Shared order lock serializes creation; strict type/default validation, definition, audit and replay receipt commit atomically.',
+    idempotency: 'required',
+    concurrency: 'none',
+    rationale:
+      'Shared order lock serializes creation; strict type/default validation, definition, audit and replay receipt commit atomically.',
   },
   'PATCH /api/v2/custom-fields/[id]': {
-    idempotency: 'required', concurrency: 'etag', preconditionRequired: true,
-    rationale: 'Exact database revision fences edits; current dependency values are checked before update, audit and replay receipt commit.',
+    idempotency: 'required',
+    concurrency: 'etag',
+    preconditionRequired: true,
+    rationale:
+      'Exact database revision fences edits; current dependency values are checked before update, audit and replay receipt commit.',
   },
   'DELETE /api/v2/custom-fields/[id]': {
-    idempotency: 'required', concurrency: 'etag', preconditionRequired: true, responseEtag: false,
-    rationale: 'Exact revision fences deletion; populated fields cannot be deleted and audit commits with the replay receipt.',
+    idempotency: 'required',
+    concurrency: 'etag',
+    preconditionRequired: true,
+    responseEtag: false,
+    rationale:
+      'Exact revision fences deletion; populated fields cannot be deleted and audit commits with the replay receipt.',
   },
   'POST /api/v2/audit-exports': {
-    idempotency: 'required', concurrency: 'none',
-    rationale: 'Dedicated audit export authority, bounded immutable filter, queue job, owner, request audit and replay receipt commit together.',
+    idempotency: 'required',
+    concurrency: 'none',
+    rationale:
+      'Dedicated audit export authority, bounded immutable filter, queue job, owner, request audit and replay receipt commit together.',
   },
   'PUT /api/v2/incidents/[id]/custom-fields/[fieldId]': {
-    idempotency: 'required', concurrency: 'none',
-    rationale: 'Canonical value validation, incident visibility, row locking, timeline event and credential audit commit with the replay receipt; identical values do not repeat side effects.',
+    idempotency: 'required',
+    concurrency: 'none',
+    rationale:
+      'Canonical value validation, incident visibility, row locking, timeline event and credential audit commit with the replay receipt; identical values do not repeat side effects.',
   },
   'POST /api/v2/escalation-policies/[id]/preview': {
-    idempotency: 'natural', concurrency: 'none',
-    rationale: 'Read-only bounded escalation evaluation; repeated previews never enqueue notifications or edit policy state.',
+    idempotency: 'natural',
+    concurrency: 'none',
+    rationale:
+      'Read-only bounded escalation evaluation; repeated previews never enqueue notifications or edit policy state.',
   },
   'POST /api/v2/reports/exports': {
-    idempotency: 'required', concurrency: 'none',
-    rationale: 'Bounded immutable query, per-credential and global admission, durable queue job, owner and audit commit with the replay receipt.',
+    idempotency: 'required',
+    concurrency: 'none',
+    rationale:
+      'Bounded immutable query, per-credential and global admission, durable queue job, owner and audit commit with the replay receipt.',
   },
   'POST /api/v2/reports/exports/[id]/cancel': {
-    idempotency: 'required', concurrency: 'none',
-    rationale: 'Only a pending owned export can transition to CANCELLED. Other keys observe the accepted cancellation without repeated audit.',
+    idempotency: 'required',
+    concurrency: 'none',
+    rationale:
+      'Only a pending owned export can transition to CANCELLED. Other keys observe the accepted cancellation without repeated audit.',
   },
   'POST /api/v2/reports/query': {
-    idempotency: 'natural', concurrency: 'none',
-    rationale: 'Read-only bounded analytics query with explicit report and incident visibility scopes; repeated calls do not mutate state.',
+    idempotency: 'natural',
+    concurrency: 'none',
+    rationale:
+      'Read-only bounded analytics query with explicit report and incident visibility scopes; repeated calls do not mutate state.',
   },
   'POST /api/v2/reports/saved': {
-    idempotency: 'required', concurrency: 'none',
-    rationale: 'Bounded validated definition, current team membership, owner, audit and receipt commit together.',
+    idempotency: 'required',
+    concurrency: 'none',
+    rationale:
+      'Bounded validated definition, current team membership, owner, audit and receipt commit together.',
   },
   'PATCH /api/v2/reports/saved/[id]': {
-    idempotency: 'required', concurrency: 'etag', preconditionRequired: true,
-    rationale: 'Exact saved-report revision fences the edit. Owner/team authority, definition, audit and receipt commit together.',
+    idempotency: 'required',
+    concurrency: 'etag',
+    preconditionRequired: true,
+    rationale:
+      'Exact saved-report revision fences the edit. Owner/team authority, definition, audit and receipt commit together.',
   },
   'DELETE /api/v2/reports/saved/[id]': {
-    idempotency: 'required', concurrency: 'etag', preconditionRequired: true, responseEtag: false,
-    rationale: 'Exact saved-report revision and ownership fence deletion; audit and receipt commit together and deleted resources are not replay-disclosed.',
+    idempotency: 'required',
+    concurrency: 'etag',
+    preconditionRequired: true,
+    responseEtag: false,
+    rationale:
+      'Exact saved-report revision and ownership fence deletion; audit and receipt commit together and deleted resources are not replay-disclosed.',
   },
   'POST /api/v2/incidents/templates': {
-    idempotency: 'required', concurrency: 'none',
-    rationale: 'Template name, owner, accessible default service, canonical audit and replay receipt commit together.',
+    idempotency: 'required',
+    concurrency: 'none',
+    rationale:
+      'Template name, owner, accessible default service, canonical audit and replay receipt commit together.',
   },
   'PATCH /api/v2/incidents/templates/[templateId]': {
-    idempotency: 'required', concurrency: 'etag', preconditionRequired: true,
-    rationale: 'An exact template revision fences edits; current owner authority and default-service access are rechecked before audit and receipt commit.',
+    idempotency: 'required',
+    concurrency: 'etag',
+    preconditionRequired: true,
+    rationale:
+      'An exact template revision fences edits; current owner authority and default-service access are rechecked before audit and receipt commit.',
   },
   'DELETE /api/v2/incidents/templates/[templateId]': {
-    idempotency: 'required', concurrency: 'etag', preconditionRequired: true, responseEtag: false,
-    rationale: 'An exact template revision and owner authority fence deletion; the audit and replay receipt commit atomically.',
+    idempotency: 'required',
+    concurrency: 'etag',
+    preconditionRequired: true,
+    responseEtag: false,
+    rationale:
+      'An exact template revision and owner authority fence deletion; the audit and replay receipt commit atomically.',
   },
   'POST /api/v2/dashboards': {
-    idempotency: 'required', concurrency: 'none',
-    rationale: 'Credential-scoped replay prevents duplicate dashboards; team membership, accessible template snapshot, nested widgets, owner and audit commit with the receipt.',
+    idempotency: 'required',
+    concurrency: 'none',
+    rationale:
+      'Credential-scoped replay prevents duplicate dashboards; team membership, accessible template snapshot, nested widgets, owner and audit commit with the receipt.',
   },
   'POST /api/v2/dashboards/[id]/duplicate': {
-    idempotency: 'required', concurrency: 'none',
-    rationale: 'The accessible source is rechecked in the replay transaction; bounded widgets, owned copy, audit and receipt commit together.',
+    idempotency: 'required',
+    concurrency: 'none',
+    rationale:
+      'The accessible source is rechecked in the replay transaction; bounded widgets, owned copy, audit and receipt commit together.',
   },
   'PUT /api/v2/dashboards/[id]/widgets': {
-    idempotency: 'required', concurrency: 'etag', preconditionRequired: true,
-    rationale: 'Exact parent revision fences atomic widget replacement; owner/team checks, audit and receipt commit together.',
+    idempotency: 'required',
+    concurrency: 'etag',
+    preconditionRequired: true,
+    rationale:
+      'Exact parent revision fences atomic widget replacement; owner/team checks, audit and receipt commit together.',
   },
   'PATCH /api/v2/dashboards/[id]': {
-    idempotency: 'required', concurrency: 'etag', preconditionRequired: true,
-    rationale: 'A concrete dashboard revision atomically fences parent and widget replacement; owner and team authority, audit and replay receipt are checked transactionally.',
+    idempotency: 'required',
+    concurrency: 'etag',
+    preconditionRequired: true,
+    rationale:
+      'A concrete dashboard revision atomically fences parent and widget replacement; owner and team authority, audit and replay receipt are checked transactionally.',
   },
   'DELETE /api/v2/dashboards/[id]': {
-    idempotency: 'required', concurrency: 'etag', preconditionRequired: true,
+    idempotency: 'required',
+    concurrency: 'etag',
+    preconditionRequired: true,
     responseEtag: false,
-    rationale: 'A concrete dashboard revision and ownership check fence deletion. Audit and receipt commit together; deleted resources are not replay-disclosed.',
+    rationale:
+      'A concrete dashboard revision and ownership check fence deletion. Audit and receipt commit together; deleted resources are not replay-disclosed.',
   },
   'PUT /api/v2/notification-providers/[provider]': {
     idempotency: 'required',
@@ -422,12 +477,18 @@ export const V2_MUTATION_CONTRACT: Record<string, MutationContract> = {
       'Absolute settings replacement uses the shared publication command. New keys with stale configuration revisions return 412; matching keys replay committed metadata. Canonical API-attributed audit commits with configuration and serving-state changes; persistence and public publication status are reported separately. The mandatory Idempotency-Key record commits in the same shared transaction as configuration and canonical audit. Publication is read after commit; replays do not repeat configuration changes.',
   },
   'POST /api/v2/status-pages/[id]/assets': {
-    idempotency: 'natural', concurrency: 'none', responseEtag: false,
-    rationale: 'Content-addressed upload validates raster bytes and deduplicates under a page lock. Upload only stores an asset; the revision-protected appearance command publishes its URL.',
+    idempotency: 'natural',
+    concurrency: 'none',
+    responseEtag: false,
+    rationale:
+      'Content-addressed upload validates raster bytes and deduplicates under a page lock. Upload only stores an asset; the revision-protected appearance command publishes its URL.',
   },
   'DELETE /api/v2/status-pages/[id]/assets/[assetId]': {
-    idempotency: 'required', concurrency: 'none', responseEtag: false,
-    rationale: 'Page-row lock serializes reference checks against draft and published snapshot; deletion, audit and replay receipt commit together.',
+    idempotency: 'required',
+    concurrency: 'none',
+    responseEtag: false,
+    rationale:
+      'Page-row lock serializes reference checks against draft and published snapshot; deletion, audit and replay receipt commit together.',
   },
   'DELETE /api/v2/status-pages/[id]/subscribers/[subscriberId]': {
     idempotency: 'required',
@@ -597,12 +658,16 @@ export const V2_MUTATION_CONTRACT: Record<string, MutationContract> = {
     rationale: 'Shared watcher command, timeline and audit commit with replay record.',
   },
   'POST /api/v2/incidents/[id]/tags': {
-    idempotency: 'required', concurrency: 'none',
-    rationale: 'Shared tag command, incident timeline, credential audit and replay commit atomically; duplicate associations emit no event.',
+    idempotency: 'required',
+    concurrency: 'none',
+    rationale:
+      'Shared tag command, incident timeline, credential audit and replay commit atomically; duplicate associations emit no event.',
   },
   'DELETE /api/v2/incidents/[id]/tags/[tagId]': {
-    idempotency: 'required', concurrency: 'none',
-    rationale: 'Parent-scoped idempotent removal emits a timeline event only when an association existed.',
+    idempotency: 'required',
+    concurrency: 'none',
+    rationale:
+      'Parent-scoped idempotent removal emits a timeline event only when an association existed.',
   },
   'DELETE /api/v2/incidents/[id]/watchers/[watcherId]': {
     idempotency: 'required',
@@ -695,6 +760,9 @@ export const V2_MUTATION_CONTRACT: Record<string, MutationContract> = {
     rationale: 'Sets fields; lifecycle/assignment side effects are replay-guarded by the key.',
   },
   'POST /api/v2/incidents/[id]/acknowledge': supported('Lifecycle transition with notifications.'),
+  'POST /api/v2/incidents/[id]/escalate': supported(
+    'Pages the next tier; the manual-escalation receipt replays the first result instead of paging again.'
+  ),
   'POST /api/v2/incidents/[id]/resolve': supported('Lifecycle transition with notifications.'),
   'POST /api/v2/incidents/[id]/assign': supported(
     'Assignment notifies and invites to the war room.'
@@ -712,32 +780,54 @@ export const V2_MUTATION_CONTRACT: Record<string, MutationContract> = {
   },
   'POST /api/v2/postmortems': supported('Creation.'),
   'PUT /api/v2/postmortems/[id]/action-items': {
-    idempotency: 'required', concurrency: 'etag', preconditionRequired: true,
-    rationale: 'Exact parent revision fences a bounded complete replacement; relational action items, legacy JSON, audit and replay receipt commit together.',
+    idempotency: 'required',
+    concurrency: 'etag',
+    preconditionRequired: true,
+    rationale:
+      'Exact parent revision fences a bounded complete replacement; relational action items, legacy JSON, audit and replay receipt commit together.',
   },
   'PATCH /api/v2/postmortems/[id]/action-items/[itemId]': {
-    idempotency: 'required', concurrency: 'etag', preconditionRequired: true,
-    rationale: 'Exact parent revision fences a single corrective-action edit while retaining other actions; data, audit and replay receipt commit together.',
+    idempotency: 'required',
+    concurrency: 'etag',
+    preconditionRequired: true,
+    rationale:
+      'Exact parent revision fences a single corrective-action edit while retaining other actions; data, audit and replay receipt commit together.',
   },
   'DELETE /api/v2/postmortems/[id]/action-items/[itemId]': {
-    idempotency: 'required', concurrency: 'etag', preconditionRequired: true,
-    rationale: 'Exact parent revision fences removal of one corrective action; remaining actions, audit and replay receipt commit together.',
+    idempotency: 'required',
+    concurrency: 'etag',
+    preconditionRequired: true,
+    rationale:
+      'Exact parent revision fences removal of one corrective action; remaining actions, audit and replay receipt commit together.',
   },
   'POST /api/v2/postmortems/[id]/publish': {
-    idempotency: 'required', concurrency: 'etag', preconditionRequired: true,
-    rationale: 'Exact parent revision fences the publication transition; visibility, timestamp, canonical audit and replay receipt commit atomically. Repetition at the current revision is side-effect-free.',
+    idempotency: 'required',
+    concurrency: 'etag',
+    preconditionRequired: true,
+    rationale:
+      'Exact parent revision fences the publication transition; visibility, timestamp, canonical audit and replay receipt commit atomically. Repetition at the current revision is side-effect-free.',
   },
   'PUT /api/v2/postmortems/[id]/contributors': {
-    idempotency: 'required', concurrency: 'etag', preconditionRequired: true,
-    rationale: 'Exact parent revision fences a bounded replacement of active-user contributor roles. Rows, parent version, audit and replay receipt commit together.',
+    idempotency: 'required',
+    concurrency: 'etag',
+    preconditionRequired: true,
+    rationale:
+      'Exact parent revision fences a bounded replacement of active-user contributor roles. Rows, parent version, audit and replay receipt commit together.',
   },
   'PATCH /api/v2/postmortems/[id]': {
-    idempotency: 'supported', concurrency: 'etag', preconditionRequired: false,
-    rationale: 'Legacy clients may omit both headers. A supplied strong ETag fences edits, and a supplied idempotency key binds the replay receipt to the credential.',
+    idempotency: 'supported',
+    concurrency: 'etag',
+    preconditionRequired: false,
+    rationale:
+      'Legacy clients may omit both headers. A supplied strong ETag fences edits, and a supplied idempotency key binds the replay receipt to the credential.',
   },
   'DELETE /api/v2/postmortems/[id]': {
-    idempotency: 'natural', concurrency: 'etag', preconditionRequired: false, responseEtag: false,
-    rationale: 'Legacy clients may omit If-Match. A supplied strong ETag fences deletion and its canonical audit; a repeat returns 404.',
+    idempotency: 'natural',
+    concurrency: 'etag',
+    preconditionRequired: false,
+    responseEtag: false,
+    rationale:
+      'Legacy clients may omit If-Match. A supplied strong ETag fences deletion and its canonical audit; a repeat returns 404.',
   },
   'POST /api/v2/teams': supported('Creation.'),
   'PATCH /api/v2/teams/[id]': natural('Sets fields to the requested values.', 'etag'),
@@ -776,27 +866,44 @@ export const V2_MUTATION_CONTRACT: Record<string, MutationContract> = {
     idempotency: 'required',
     concurrency: 'etag',
     preconditionRequired: true,
-    rationale: 'Canonical workspace SLA version lock, target validation, immutable version, attributed audit and replay receipt commit atomically.',
+    rationale:
+      'Canonical workspace SLA version lock, target validation, immutable version, attributed audit and replay receipt commit atomically.',
   },
   'POST /api/v2/schedules/[id]/layers': {
-    idempotency: 'required', concurrency: 'none',
-    rationale: 'Schedule-scoped admission lock, responder validation, layer creation and attributed audit commit with replay receipt.',
+    idempotency: 'required',
+    concurrency: 'none',
+    rationale:
+      'Schedule-scoped admission lock, responder validation, layer creation and attributed audit commit with replay receipt.',
   },
   'PATCH /api/v2/schedules/[id]/layers/[layerId]': {
-    idempotency: 'required', concurrency: 'etag', preconditionRequired: true,
-    rationale: 'Database-monotonic layer revision fences the shared UI/REST update; audit and replay receipt commit atomically.',
+    idempotency: 'required',
+    concurrency: 'etag',
+    preconditionRequired: true,
+    rationale:
+      'Database-monotonic layer revision fences the shared UI/REST update; audit and replay receipt commit atomically.',
   },
   'DELETE /api/v2/schedules/[id]/layers/[layerId]': {
-    idempotency: 'required', concurrency: 'etag', preconditionRequired: true, responseEtag: false,
-    rationale: 'Locked layer revision fences deletion, participant cleanup and attributed audit; replay returns only the prior empty result.',
+    idempotency: 'required',
+    concurrency: 'etag',
+    preconditionRequired: true,
+    responseEtag: false,
+    rationale:
+      'Locked layer revision fences deletion, participant cleanup and attributed audit; replay returns only the prior empty result.',
   },
   'PUT /api/v2/schedules/[id]/layers/order': {
-    idempotency: 'required', concurrency: 'etag', preconditionRequired: true,
-    rationale: 'Locked schedule revision fences an exact complete layer order; shared UI/REST precedence changes and audit commit with replay receipt.',
+    idempotency: 'required',
+    concurrency: 'etag',
+    preconditionRequired: true,
+    rationale:
+      'Locked schedule revision fences an exact complete layer order; shared UI/REST precedence changes and audit commit with replay receipt.',
   },
   'POST /api/v2/schedules/[id]/coverage/preview': {
-    idempotency: 'natural', concurrency: 'etag', preconditionRequired: true, responseEtag: false,
-    rationale: 'Read-only bounded seven-day simulation over an exact schedule revision using the canonical rotation and override engine; no jobs or writes.',
+    idempotency: 'natural',
+    concurrency: 'etag',
+    preconditionRequired: true,
+    responseEtag: false,
+    rationale:
+      'Read-only bounded seven-day simulation over an exact schedule revision using the canonical rotation and override engine; no jobs or writes.',
   },
   'DELETE /api/v2/services/[id]': natural('A repeat returns 404.'),
   'POST /api/v2/schedules': supported('Creation.'),
@@ -819,18 +926,30 @@ export const V2_MUTATION_CONTRACT: Record<string, MutationContract> = {
   'DELETE /api/v2/escalation-policies/[id]': natural('A repeat returns 404.'),
   'PATCH /api/v2/integrations/[id]': natural('Sets name and enabled state.', 'etag'),
   'POST /api/v2/services/[id]/integrations': {
-    idempotency: 'required', concurrency: 'none',
-    rationale: 'The created integration and audit are transactional. Its initial API key is disclosed once; durable replay metadata strips the key.',
+    idempotency: 'required',
+    concurrency: 'none',
+    rationale:
+      'The created integration and audit are transactional. Its initial API key is disclosed once; durable replay metadata strips the key.',
   },
   'POST /api/v2/integrations/[id]/credentials': {
-    idempotency: 'required', concurrency: 'etag', preconditionRequired: true,
-    rationale: 'Exact revision fences routing-key or signing-secret rotation. Prior key values are retained only through the bounded encrypted overlap window and are committed with audit; plaintext is stripped from replay metadata.',
+    idempotency: 'required',
+    concurrency: 'etag',
+    preconditionRequired: true,
+    rationale:
+      'Exact revision fences routing-key or signing-secret rotation. Prior key values are retained only through the bounded encrypted overlap window and are committed with audit; plaintext is stripped from replay metadata.',
   },
-  'POST /api/v2/integrations/[id]/test': natural('Pure local payload validation; repeating it does not ingest or emit an event.'),
-  'POST /api/v2/integrations/[id]/validate': natural('Pure local configuration validation; it does not activate the integration or contact its provider.'),
+  'POST /api/v2/integrations/[id]/test': natural(
+    'Pure local payload validation; repeating it does not ingest or emit an event.'
+  ),
+  'POST /api/v2/integrations/[id]/validate': natural(
+    'Pure local configuration validation; it does not activate the integration or contact its provider.'
+  ),
   'DELETE /api/v2/integrations/[id]': {
-    idempotency: 'required', concurrency: 'etag', preconditionRequired: true,
-    rationale: 'Delete requires current revision and no in-flight inbound deliveries; deletion, safe metadata audit and receipt commit together.',
+    idempotency: 'required',
+    concurrency: 'etag',
+    preconditionRequired: true,
+    rationale:
+      'Delete requires current revision and no in-flight inbound deliveries; deletion, safe metadata audit and receipt commit together.',
   },
   'POST /api/v2/status-pages': natural('Slugs are unique; a repeat returns 409.'),
   'PATCH /api/v2/status-pages/[id]': natural('Sets configuration to the requested values.'),

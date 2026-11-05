@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { randomUUID } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import { createTestService, testPrisma as db } from '../helpers/test-db';

@@ -1,5 +1,5 @@
 import { McpBoundaryError } from '../core/errors';
-import { MCP_DOCS_LINKS } from '../docs-links';
+import { mcpTroubleshootingLink } from '../docs-links';
 
 const MESSAGES = new Map<string, { title: string; body: string }>(
   Object.entries({
@@ -10,6 +10,14 @@ const MESSAGES = new Map<string, { title: string; body: string }>(
     MCP_CAPABILITY_DISABLED: {
       title: 'This capability is turned off',
       body: 'An OpsKnight administrator disabled this capability for AI assistants in Settings → Integrations & ChatOps → MCP (AI Assistants) → Exposed capabilities. Do not retry; ask an administrator if you need it.',
+    },
+    MCP_INSUFFICIENT_SCOPE: {
+      title: 'More permission needed',
+      body: 'This connection was not granted a permission this call needs. Approve the extra permission when your assistant opens OpsKnight sign-in again.',
+    },
+    MCP_TOKEN_REQUIRED: {
+      title: 'Sign-in required',
+      body: 'Sign in to OpsKnight from your assistant to connect.',
     },
     MCP_INVALID_TOKEN: {
       title: 'Sign-in required',
@@ -124,7 +132,7 @@ export function mcpErrorPage(error: unknown) {
   const code = error instanceof McpBoundaryError ? error.code : 'MCP_UNAVAILABLE';
   const status = error instanceof McpBoundaryError ? error.status : 503;
   const { title, body } = friendlyMcpError(code);
-  const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="referrer" content="no-referrer"><title>${escape(title)} | OpsKnight</title><style>body{font:16px/1.5 system-ui,sans-serif;margin:0;min-height:100vh;display:grid;place-items:center;background:#f6f7f9;color:#14171f}main{max-width:26rem;margin:1rem;padding:2rem;background:#fff;border:1px solid #e3e6ec;border-radius:12px}h1{font-size:1.25rem;margin:0 0 .5rem}p{margin:.25rem 0;color:#4b5262}small{color:#7b8294}a{color:inherit}@media(prefers-color-scheme:dark){body{background:#0e1117;color:#e8eaf0}main{background:#171b24;border-color:#2a3040}p{color:#a8afbf}}</style></head><body><main role="alert"><h1>${escape(title)}</h1><p>${escape(body)}</p><p><small>Reference: ${escape(code)} · <a href="${MCP_DOCS_LINKS.troubleshooting}" rel="noopener noreferrer">Troubleshooting guide</a></small></p></main></body></html>`;
+  const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="referrer" content="no-referrer"><title>${escape(title)} | OpsKnight</title><style>body{font:16px/1.5 system-ui,sans-serif;margin:0;min-height:100vh;display:grid;place-items:center;background:#f6f7f9;color:#14171f}main{max-width:26rem;margin:1rem;padding:2rem;background:#fff;border:1px solid #e3e6ec;border-radius:12px}h1{font-size:1.25rem;margin:0 0 .5rem}p{margin:.25rem 0;color:#4b5262}small{color:#7b8294}a{color:inherit}@media(prefers-color-scheme:dark){body{background:#0e1117;color:#e8eaf0}main{background:#171b24;border-color:#2a3040}p{color:#a8afbf}}</style></head><body><main role="alert"><h1>${escape(title)}</h1><p>${escape(body)}</p><p><small>Reference: ${escape(code)} · <a href="${escape(mcpTroubleshootingLink(code))}" rel="noopener noreferrer">Troubleshooting guide</a></small></p></main></body></html>`;
   return new Response(html, {
     status,
     headers: {

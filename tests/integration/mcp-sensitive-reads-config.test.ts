@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { randomBytes, randomUUID } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import {
@@ -16,11 +17,7 @@ import { compileAutomation } from '@/lib/automation/compiler';
 import { emptySnapshot } from '@/lib/automation/contract';
 import { checksum } from '@/lib/automation/cache';
 import { createServiceBinding } from '@/lib/runbooks/bindings';
-import {
-  cloneVersionToDraft,
-  createRunbook,
-  publishDraftVersion,
-} from '@/lib/runbooks/versioning';
+import { cloneVersionToDraft, createRunbook, publishDraftVersion } from '@/lib/runbooks/versioning';
 import { publishStatusPageSnapshot } from '@/lib/status-pages/snapshot';
 import { MCP_OPERATION_MAP } from '@/lib/mcp/catalog';
 import { callMcpOperation } from '@/lib/mcp/core/execution';
@@ -276,7 +273,9 @@ async function policyCheckFixture(owner: Owner) {
       slug: slug(),
       description: '',
       definition: {
-        steps: [{ key: 'check', name: 'Check', type: 'MANUAL', riskClass: 'READ_ONLY', config: {} }],
+        steps: [
+          { key: 'check', name: 'Check', type: 'MANUAL', riskClass: 'READ_ONLY', config: {} },
+        ],
       },
     },
     owner.id

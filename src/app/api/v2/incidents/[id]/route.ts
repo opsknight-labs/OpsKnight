@@ -13,7 +13,7 @@ import {
 import { AUTHORIZATION_ACTIONS } from '@/lib/authorization-policy';
 import { incidentReadWhere } from '@/lib/authorization-filters';
 import { applyRestIncidentPatch } from '@/lib/incidents/rest-patch';
-import { toIncidentApiDto } from '@/lib/incidents/api-dto';
+import { toIncidentApiDto, toIncidentDetailDto } from '@/lib/incidents/api-dto';
 import { AppError } from '@/lib/errors';
 import { withV2Observability } from '@/lib/api-v2/observability';
 
@@ -54,6 +54,11 @@ export const GET = withV2Observability(async function GET(
         slaPausedMs: true,
         slaAckElapsedMs: true,
         slaResolveElapsedMs: true,
+        slaAckTargetMs: true,
+        slaResolveTargetMs: true,
+        currentEscalationStep: true,
+        nextEscalationAt: true,
+        escalationStatus: true,
       },
     });
 
@@ -64,7 +69,7 @@ export const GET = withV2Observability(async function GET(
       });
     }
 
-    return apiV2Success(toIncidentApiDto(incident), { headers: rlHeaders });
+    return apiV2Success(toIncidentDetailDto(incident), { headers: rlHeaders });
   } catch (error) {
     return apiV2Error(error, req);
   }

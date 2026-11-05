@@ -145,14 +145,46 @@ export function describeSensitiveReads(scenarios: ReadScenario[]) {
       }
     });
 
-    it('writes no audit entry, receipt or job when it is not a GET', async () => {
+    it('writes no domain audit entry, receipt or job when it is not a GET', async () => {
       if (MCP_OPERATION_MAP.get(scenario.operationId)!.method === 'get') return;
       const admin = await principal('ADMIN', scopes());
       const args = await scenario.setup(admin.user);
-      const before = [await db.auditLog.count(), await db.backgroundJob.count()];
+      const domainAudit = { action: { not: 'mcp.sensitive_read' } };
+      const before = [
+        await db.auditLog.count({ where: domainAudit }),
+        await db.backgroundJob.count(),
+      ];
       await callMcpOperation(admin.ctx(), scenario.operationId, args);
       await callMcpOperation(admin.ctx(), scenario.operationId, args);
-      expect([await db.auditLog.count(), await db.backgroundJob.count()]).toEqual(before);
+      expect([
+        await db.auditLog.count({ where: domainAudit }),
+        await db.backgroundJob.count(),
+      ]).toEqual(before);
+    });
+
+    it('records exactly one mcp.sensitive_read audit per read, with no result data', async () => {
+      const admin = await principal('ADMIN', scopes());
+      const args = await scenario.setup(admin.user);
+      const context = admin.ctx();
+      await callMcpOperation(context, scenario.operationId, args);
+      const rows = await db.auditLog.findMany({
+        where: { action: 'mcp.sensitive_read', entityId: context.grantId },
+      });
+      expect(rows).toHaveLength(1);
+      expect(rows[0]).toMatchObject({ actorId: admin.user.id, entityId: context.grantId });
+      const details = (rows[0].details as { metadata: Record<string, unknown> }).metadata;
+      expect(details).toMatchObject({
+        operationId: scenario.operationId,
+        grantId: context.grantId,
+      });
+      expect(details.resultBytes).toBeGreaterThan(0);
+      // Only ids from the path, never query values or any projected field of the result.
+      expect(Object.keys(details).sort()).toEqual(
+        expect.arrayContaining(['grantId', 'operationId', 'pathIds', 'resultBytes'])
+      );
+      const text = JSON.stringify(rows[0]);
+      for (const value of Object.values(args.query ?? {}))
+        if (typeof value === 'string' && value.length > 3) expect(text).not.toContain(value);
     });
 
     it('returns a redacted, bounded projection to an authorized administrator', async () => {

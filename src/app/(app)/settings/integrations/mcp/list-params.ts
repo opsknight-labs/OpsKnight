@@ -55,6 +55,8 @@ export type McpListParams = {
   /** Narrows connections to one registered assistant. */
   clientId: string | null;
   approvalKind: ApprovalKind;
+  /** The URL chose the queue; otherwise the page may open the one with waiting requests. */
+  approvalKindExplicit: boolean;
   approvalState: ApprovalState;
 };
 
@@ -100,8 +102,27 @@ export function parseMcpListParams(
         : null,
     approvalKind:
       access === 'runbooks' ? 'runbooks' : oneOf(APPROVAL_KINDS, first(raw.kind), 'operations'),
+    approvalKindExplicit:
+      access === 'runbooks' ||
+      (APPROVAL_KINDS as readonly string[]).includes(first(raw.kind) ?? ''),
     approvalState: oneOf(APPROVAL_STATES, first(raw.state), 'pending'),
   };
+}
+
+type PendingCounts = { operations: number; runbooks: number } | null;
+
+/**
+ * The queue a bare approvals link should open: runbook runs when only they are waiting, so the
+ * pending badge never lands on an empty "Configuration changes" list. Null keeps the default.
+ */
+export function waitingApprovalKind(pending: PendingCounts): ApprovalKind | null {
+  return pending && pending.operations === 0 && pending.runbooks > 0 ? 'runbooks' : null;
+}
+
+/** The queue to show: the URL's choice when it made one, else the one with waiting requests. */
+export function effectiveApprovalKind(params: McpListParams, pending: PendingCounts): ApprovalKind {
+  if (params.approvalKindExplicit) return params.approvalKind;
+  return waitingApprovalKind(pending) ?? params.approvalKind;
 }
 
 export const MCP_SETTINGS_PATH = '/settings/integrations/mcp';

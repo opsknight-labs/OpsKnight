@@ -589,15 +589,10 @@ async function runOnce() {
     if (process.env.OPSKNIGHT_PROCESS_ROLE !== 'scheduler') await observeAuthenticationReplica();
     const tokenCleanup = await cleanupUserTokens();
     const rateLimitCleanup = await cleanupExpiredRateLimits();
-    // MCP maintenance failure must not block incident-response maintenance.
-    try {
-      const { cleanupMcpCredentials } = await import('./mcp/auth/retention');
-      await cleanupMcpCredentials();
-      const { cleanupExpiredMcpTasks } = await import('./mcp/protocol/tasks');
-      await cleanupExpiredMcpTasks();
-    } catch {
-      logger.warn('[Cron] MCP credential cleanup unavailable');
-    }
+    // MCP maintenance failure must not block incident-response maintenance; it logs and counts
+    // its own failures.
+    const { runMcpMaintenance } = await import('./mcp/maintenance');
+    const mcpCleanup = await runMcpMaintenance();
     const { cleanupExpiredNotificationCapacityData } = await import('./notification-fanout');
     const notificationCapacityCleanup = await cleanupExpiredNotificationCapacityData();
     const { expireDuePrivacyExportArtifacts } = await import('./privacy/export/artifact');
@@ -616,6 +611,7 @@ async function runOnce() {
       rateLimitCleanup,
       notificationCapacityCleanup,
       privacyExportArtifactsExpired,
+      mcpCleanup,
       jobsCleaned,
     });
 

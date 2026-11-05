@@ -24,24 +24,55 @@ const CLIENT_TRUSTED = Prisma.sql`COALESCE((NOT c."dynamicRegistration" OR p."dc
       AND (cardinality(p."cimdAllowedHosts") = 0
         OR split_part(substr(c."metadataUrl", 9), '/', 1) = ANY(p."cimdAllowedHosts")))), false)`;
 
+/** The one client every personal access token hangs off. It has no redirect URI. */
+export const MCP_PAT_CLIENT_ID = 'okmcp-personal-access-tokens';
+
+/** The one scope a personal access token may never carry, whatever the policy lists. */
+export const MCP_PAT_FORBIDDEN_SCOPES: readonly string[] = ['runbooks:execute'];
+
+// A personal access token has no assistant behind it: its ceiling is the personal-token policy
+// and it is trusted only while personal tokens are on.
+const PAT_CEILING = Prisma.sql`ARRAY(SELECT s FROM unnest(p."patAllowedScopes") AS s
+    WHERE s <> ALL(${[...MCP_PAT_FORBIDDEN_SCOPES]}::text[]))`;
+const PAT_TRUSTED = Prisma.sql`COALESCE(p."patEnabled", false)`;
+
+// "Require view-only connections" caps every ceiling to read scopes (see isMcpViewScope).
+const readOnlyCapped = (ceiling: Prisma.Sql) => Prisma.sql`CASE
+    WHEN COALESCE(p."requireReadOnlyConnections", false)
+    THEN ARRAY(SELECT s FROM unnest(${ceiling}) AS s WHERE s LIKE '%:read')
+    ELSE ${ceiling} END`;
+
+// The grant-aware ceiling and trust: an OAuth grant is judged by its client, a personal token by
+// the personal-token policy. Both expect g as well as c and p.
+const GRANT_CEILING = readOnlyCapped(
+  Prisma.sql`(CASE WHEN g.kind = 'PAT' THEN ${PAT_CEILING} ELSE ${CLIENT_CEILING} END)`
+);
+const GRANT_TRUSTED = Prisma.sql`(CASE WHEN g.kind = 'PAT' THEN ${PAT_TRUSTED}
+    ELSE ${CLIENT_TRUSTED} END)`;
+
 /** The client side of the snapshot: depends on c and p only. */
 export const CLIENT_ACCESS_COLUMNS = Prisma.sql`
-  ${CLIENT_CEILING} AS "clientScopes",
+  ${readOnlyCapped(CLIENT_CEILING)} AS "clientScopes",
   ${CLIENT_TRUSTED} AS "clientTrusted",
   c."revokedAt" AS "clientRevokedAt",
   p.enabled AS "policyEnabled"`;
 
 /** Everything `grantAccessVerdict` reads. */
 export const GRANT_ACCESS_COLUMNS = Prisma.sql`
-  g.id AS "grantId", g."userId", g."userRevocationVersion",
+  g.id AS "grantId", g."userId", g."userRevocationVersion", g.kind AS "grantKind",
   g.scopes AS "grantScopes", g.resource, g."revokedAt", g."expiresAt",
-  ${CLIENT_ACCESS_COLUMNS},
+  ${GRANT_CEILING} AS "clientScopes",
+  ${GRANT_TRUSTED} AS "clientTrusted",
+  c."revokedAt" AS "clientRevokedAt",
+  p.enabled AS "policyEnabled",
   u.role::text AS role, u.status::text AS status, u."mcpRevocationVersion"`;
 
 export interface GrantAccessSnapshot {
   grantId: string;
   userId: string;
   userRevocationVersion: number;
+  /** OAUTH or PAT. */
+  grantKind: string;
   grantScopes: string[];
   resource: string;
   revokedAt: Date | null;
@@ -60,7 +91,7 @@ export interface GrantAccessSnapshot {
  * - ended: revoked, expired, or issued for another server address.
  * - client_revoked: the assistant itself was revoked.
  * - client_untrusted: policy no longer trusts the assistant (automatic connections off, host
- *   not in the trusted list).
+ *   not in the trusted list), or personal access tokens are off for a personal token.
  * - user_inactive: the person is not active or has no valid role.
  * - access_changed: a security event (password, demotion from ADMIN, sign-out everywhere).
  * - admin_scope: carries a scope MCP never honours.
@@ -124,9 +155,9 @@ export function grantAccessVerdict(
 export function usableGrantSql(now: Date, resource: string | null) {
   return Prisma.sql`(g."revokedAt" IS NULL AND g."expiresAt" > ${now}
     AND (${resource}::text IS NULL OR g.resource = ${resource})
-    AND c."revokedAt" IS NULL AND ${CLIENT_TRUSTED}
+    AND c."revokedAt" IS NULL AND ${GRANT_TRUSTED}
     AND u.status::text = 'ACTIVE' AND u.role::text = ANY(${[...APP_ROLES]}::text[])
     AND u."mcpRevocationVersion" = g."userRevocationVersion"
-    AND NOT ('admin:manage' = ANY(${CLIENT_CEILING}) AND 'admin:manage' = ANY(g.scopes))
+    AND NOT ('admin:manage' = ANY(${GRANT_CEILING}) AND 'admin:manage' = ANY(g.scopes))
     AND COALESCE(p.enabled, false))`;
 }

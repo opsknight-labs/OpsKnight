@@ -145,6 +145,7 @@ export const TOPOLOGY_MATRIX: TopologyDefinition[] = [
       'realtime.js',
       'recovery.js',
       'mixed-incident-storm.js',
+      'mcp-assistants.js',
     ],
     defaultLoadLevels: ['L0', 'L1', 'L2', 'L3', 'L4', 'L5', 'L6', 'L7', 'L8', 'L9'],
   },
@@ -164,8 +165,7 @@ export const TOPOLOGY_MATRIX: TopologyDefinition[] = [
     teardownCommands: [
       'docker compose -f deploy/compose/docker-compose.yml -f deploy/compose/docker-compose.external-db.yml down -v --remove-orphans',
     ],
-    scenarios: ['alert-ingestion.js',
-      'automation.js', 'incident-lifecycle.js', 'notifications.js'],
+    scenarios: ['alert-ingestion.js', 'automation.js', 'incident-lifecycle.js', 'notifications.js'],
     defaultLoadLevels: ['L0', 'L1', 'L2'],
   },
   {
@@ -183,8 +183,13 @@ export const TOPOLOGY_MATRIX: TopologyDefinition[] = [
     teardownCommands: [
       'docker compose -f deploy/compose/docker-compose.yml -f deploy/compose/docker-compose.split.yml -f deploy/compose/docker-compose.pgbouncer.yml -f deploy/compose/docker-compose.external-db.yml -f deploy/compose/docker-compose.pgbouncer-ca.yml down -v --remove-orphans',
     ],
-    scenarios: ['alert-ingestion.js',
-      'automation.js', 'incident-lifecycle.js', 'escalation.js', 'notifications.js'],
+    scenarios: [
+      'alert-ingestion.js',
+      'automation.js',
+      'incident-lifecycle.js',
+      'escalation.js',
+      'notifications.js',
+    ],
     defaultLoadLevels: ['L0', 'L1', 'L2', 'L3'],
   },
 
@@ -272,6 +277,7 @@ export const TOPOLOGY_MATRIX: TopologyDefinition[] = [
       'realtime.js',
       'recovery.js',
       'mixed-incident-storm.js',
+      'mcp-assistants.js',
     ],
     defaultLoadLevels: ['L0', 'L1', 'L2', 'L3', 'L4', 'L5', 'L6', 'L7', 'L8', 'L9'],
   },
@@ -328,6 +334,7 @@ export const TOPOLOGY_MATRIX: TopologyDefinition[] = [
       'realtime.js',
       'recovery.js',
       'mixed-incident-storm.js',
+      'mcp-assistants.js',
     ],
     defaultLoadLevels: ['L0', 'L1', 'L2', 'L3', 'L4', 'L5', 'L6', 'L7', 'L8', 'L9'],
   },
@@ -377,6 +384,7 @@ export const TOPOLOGY_MATRIX: TopologyDefinition[] = [
       'realtime.js',
       'recovery.js',
       'mixed-incident-storm.js',
+      'mcp-assistants.js',
     ],
     defaultLoadLevels: ['L0', 'L1', 'L2', 'L3', 'L4', 'L5', 'L6', 'L7', 'L8', 'L9'],
   },

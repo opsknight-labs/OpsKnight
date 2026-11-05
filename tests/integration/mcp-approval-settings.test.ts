@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, expect, it } from 'vitest';
 import { testPrisma as db } from '../helpers/test-db';
 import { fixture } from '../helpers/mcp-approval';

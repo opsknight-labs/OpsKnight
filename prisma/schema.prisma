@@ -2116,6 +2116,8 @@ model InAppNotification {
   @@index([userId, readAt, createdAt])
   @@index([createdAt])
   @@index([createdAt, id])
+  // Resolving an MCP approval's reviewer notices inside the decision transaction.
+  @@index([entityType, entityId])
 }
 
 model UserDevice {
@@ -4836,9 +4838,10 @@ model McpPolicy {
   maxInFlight Int @default(4)
   maxOperations Int @default(8)
   requestsPerMinute Int @default(60)
-  // Client ID Metadata Documents: off until an administrator lists exact trusted hosts and a scope ceiling.
   // Reviewed configuration reads (SENSITIVE_READ) are off until an administrator enables them.
   sensitiveReadsEnabled Boolean @default(false)
+  // Client ID Metadata Documents. Once cimdEnabled is on, an empty cimdAllowedHosts allows any
+  // public HTTPS host; listing hosts allows only those (and marks them trusted on consent).
   cimdEnabled Boolean @default(false)
   cimdAllowedHosts String[] @default([])
   cimdScopes String[] @default([])
@@ -4856,6 +4859,20 @@ model McpPolicy {
   approvalCommitWindowMinutes Int @default(30)
   // A refresh token replayed within this many seconds, while its successor is unused, is reissued.
   refreshReuseGraceSeconds Int @default(30)
+  // Browser-hosted clients (MCP Inspector, web agents) whose exact Origin may call /mcp and the
+  // token, registration and revocation endpoints with CORS. Never credentialed; consent and
+  // review pages keep the strict same-origin check. Empty refuses every foreign Origin.
+  allowedBrowserOrigins String[] @default([])
+  // Answer a tool call that lacks a consented scope the client could obtain with HTTP 403
+  // insufficient_scope, so step-up capable clients re-authorize in place. Off by default.
+  scopeStepUpEnabled Boolean @default(false)
+  // Personal access tokens: off by default; at most patMaxDays long (1..90) and limited to
+  // patAllowedScopes (never runbooks:execute). Turning them off revokes every personal token.
+  patEnabled Boolean @default(false)
+  patMaxDays Int @default(30)
+  patAllowedScopes String[] @default([])
+  // Caps every connection, OAuth and personal, to read scopes.
+  requireReadOnlyConnections Boolean @default(false)
   // Optimistic concurrency for policy saves.
   policyRevision Int @default(0)
   updatedAt DateTime @updatedAt
@@ -4894,6 +4911,12 @@ model McpGrant {
   // Last tool call through this grant, written at most once a minute.
   lastCallAt DateTime?
   lastTool String?
+  // OAUTH (an assistant's consent) or PAT (a personal access token, which has one token and no
+  // refresh). A personal token's label is the name its owner gave it.
+  kind String @default("OAUTH")
+  label String?
+  // Set once the owner of a personal token was told it expires within seven days.
+  expiryNotifiedAt DateTime?
   createdAt DateTime @default(now())
   client McpClient @relation(fields: [clientId], references: [id], onDelete: Cascade)
   codes McpAuthorizationCode[]
@@ -4901,6 +4924,23 @@ model McpGrant {
   @@index([userId, createdAt, id])
   @@index([expiresAt])
   @@index([clientId])
+  @@index([kind, expiresAt])
+}
+
+// One row per MCP request on a grant, for the per-connection activity drawer. Bounded labels only:
+// never arguments, results or free text. Kept 30 days; no foreign key, so the write never fails.
+model McpCallLog {
+  id String @id @default(cuid())
+  grantId String
+  at DateTime @default(now())
+  tool String
+  operationId String?
+  outcome String
+  durationMs Int
+  requestId String
+  errorCode String?
+  @@index([grantId, at(sort: Desc), id(sort: Desc)])
+  @@index([at])
 }
 
 model McpAuthorizationCode {
@@ -4968,6 +5008,8 @@ model McpOperationApproval {
   createdAt DateTime @default(now())
   @@index([requesterGrantId, createdAt])
   @@index([status, expiresAt])
+  // Retention purge of finished approvals.
+  @@index([status, createdAt])
 }
 
 model McpTask {

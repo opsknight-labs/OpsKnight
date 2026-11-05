@@ -17,6 +17,7 @@ tests/load/
 │   ├── status-fanout.js          # Public status page reads + BULK subscriber fanout vs CRITICAL priority guard
 │   ├── realtime.js               # Concurrent SSE streams (/api/realtime/stream & /api/events/stream)
 │   ├── mixed-incident-storm.js   # Full major-outage storm combining all subsystems simultaneously
+│   ├── mcp-assistants.js         # AI assistants on /mcp: per-principal grants (MCP_LOAD_PRINCIPALS), 2026-07-28 + 2025-06-18 (npm run load:mcp)
 │   └── recovery.js               # Continuous ingestion & API probes during worker/scheduler/PgBouncer kills
 ├── fixtures/
 │   ├── users/index.ts            # Scale profiles (small, medium, large, storm), teams, users, push endpoints
