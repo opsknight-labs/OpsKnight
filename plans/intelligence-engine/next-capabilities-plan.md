@@ -262,8 +262,8 @@ The three regressions failed before their fixes. Focused verification passed 82 
 cases and 67 unit/architecture cases, plus typecheck and zero-warning changed-source lint. Full push
 and browser checks are recorded in the PR validation after they finish.
 
-The pasted review's input-aware freshness fan-out, feature metrics/alerts, a reviewable PR-scope
-decision and external certification evidence remain open. Background spend allocation has local
+The pasted review's input-aware freshness fan-out, a reviewable PR-scope decision and external
+certification evidence remain open. Feature telemetry is implemented in the later follow-up below. Background spend allocation has local
 implementation and verification in the follow-up below. Freshness optimization must preserve status, urgency, service and
 resolution/outcome changes that affect grouping eligibility and recommendations; restricting it to
 only title/description/labels would omit correctness-relevant changes. Historical shared-machine load
@@ -285,7 +285,7 @@ migration execution, 60 pure/architecture cases, typecheck, zero-warning changed
 production build and all 15 Intelligence browser journeys. The new settings journey saves 0/40/20%
 allocations at 390 px and checks persistence without increasing the global allowance. Full push hooks
 and new-head CI are recorded separately in the PR after publication. Input-aware freshness fan-out,
-feature metrics/alerts, PR scope/reviewability and external certification gates remain open.
+PR scope/reviewability and external certification gates remain open. Feature telemetry is implemented below.
 
 ## Review follow-up: feature telemetry — 2026-11-05
 
@@ -305,3 +305,28 @@ rules and the Intelligence, ingestion and runbook-maintenance scenarios, includi
 suppressed warnings. Production threshold calibration, input-aware freshness fan-out,
 PR scope/reviewability and the external quality/rollout gates remain open. Local-only validation is
 the current user-selected environment; it cannot be relabelled as live-provider or production evidence.
+
+## Local continuation and update-cost measurement — 2026-11-05
+
+Current main `1ba0994ab` is incorporated on the feature branch. The updated MCP UI requires an
+explicit acknowledgement before bulk revocation; its native browser contract now verifies the
+button is disabled until checked, cancellation preserves a usable token, and confirmed revocation
+invalidates it. The Intelligence mobile allocation journey additionally reads the authenticated
+native metrics endpoint. Generated MCP permissions now include the Intelligence read operation.
+These browser assertions must pass against the production bundle before they count as evidence.
+
+Fresh local verification passed 132 database cases across the review regressions, budgets,
+migration execution, feature probes, security, worker and queue fencing. A further semantic run
+passed all 22 cases, including a new 100-update burst: 100 source timestamp updates and enqueue
+signals coalesced into one index job, one follow-up per enabled analysis kind and zero additional
+embedding HTTP calls. The refreshed fingerprint retained the latest source timestamp. This is a
+functional work-count regression on a disposable local database, not a throughput or durability
+benchmark. It demonstrates existing coalescing and vector reuse; it does not implement or close
+the remaining input-aware analysis optimization.
+
+That optimization requires an explicit analysis-input identity, policy identity and operator-force
+intent. Skipping work must preserve status/urgency/service/outcome changes, independently changing
+labels and resolution sources, current access checks, snapshot generation fences and truthful UI
+freshness. A title/description/labels-only shortcut would be incorrect. Full push hooks, production
+browsers and the fresh published-head CI result are reported separately in PR #928. The local-only
+environment cannot close live-provider, labelled-data, dedicated-hardware or independent-review gates.

@@ -13,7 +13,12 @@ import { getAiSettings, saveAiProvider, updateAiSettings } from '@/lib/intellige
 import { indexIncident } from '@/lib/intelligence/jobs/indexer';
 import { purgeExpiredIntelligenceData } from '@/lib/intelligence/jobs/retention';
 import { DEFAULT_HANDLERS } from '@/lib/intelligence/jobs/runner';
-import { WORK_KINDS } from '@/lib/intelligence/jobs/work-queue';
+import {
+  claimWorkItems,
+  completeWorkItem,
+  enqueueWorkItems,
+  WORK_KINDS,
+} from '@/lib/intelligence/jobs/work-queue';
 import { getIntelligenceSettings, publishPolicyVersion } from '@/lib/intelligence/settings/service';
 import {
   currentEmbeddingModel,
@@ -685,4 +690,44 @@ it('pauses a budget-exhausted backfill without provider egress or dead letters a
   );
   invalidateGatewayCache();
   expect(await embedIncidents([pending.id])).toMatchObject({ embedded: [pending.id] });
+});
+
+it('coalesces a burst of 100 source touches into one index pass without re-embedding unchanged content', async () => {
+  await setup();
+  const service = await createTestService('Metadata burst service');
+  const incident = await indexed('Checkout payment failing', service.id);
+  await embedIncidents([incident.id]);
+  expect(embeddingCalls()).toHaveLength(1);
+  model.requests.length = 0;
+  const base = Date.now() - 1000;
+  let sourceUpdatedAt = new Date(base);
+  for (let i = 0; i < 100; i++) {
+    sourceUpdatedAt = new Date(base + i);
+    await db.incident.update({ where: { id: incident.id }, data: { updatedAt: sourceUpdatedAt } });
+    await enqueueWorkItems([{ kind: WORK_KINDS.INDEX_INCIDENT, subjectKey: incident.id }]);
+  }
+  expect(await db.intelligenceWorkItem.count()).toBe(1);
+  const claimed = await claimWorkItems({ limit: 10 });
+  expect(claimed).toHaveLength(1);
+  expect(claimed[0]).toMatchObject({ kind: WORK_KINDS.INDEX_INCIDENT, subjectKey: incident.id });
+  await DEFAULT_HANDLERS[WORK_KINDS.INDEX_INCIDENT]!(claimed[0], {
+    settings: await getIntelligenceSettings(),
+    signal: new AbortController().signal,
+  });
+  expect(await completeWorkItem(claimed[0])).toBe('completed');
+  const fingerprint = await db.incidentFingerprint.findUniqueOrThrow({
+    where: { incidentId: incident.id },
+  });
+  expect(fingerprint.sourceUpdatedAt).toEqual(sourceUpdatedAt);
+  // Freshness still advances and each enabled analysis kind is signalled once.
+  const followups = await db.intelligenceWorkItem.findMany({ select: { kind: true } });
+  expect(followups.map(item => item.kind).sort()).toEqual([
+    WORK_KINDS.ANALYZE_INCIDENT,
+    WORK_KINDS.ANALYZE_RESPONSE,
+  ]);
+  const space = await currentEmbeddingModel();
+  expect(space).not.toBeNull();
+  expect(await findIncidentsToEmbed(space!)).toEqual([]);
+  await embedIncidents([incident.id]);
+  expect(embeddingCalls()).toHaveLength(0);
 });
