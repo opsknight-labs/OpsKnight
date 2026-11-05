@@ -30,7 +30,7 @@ export interface ManualEscalationActor {
 }
 
 export type ManualEscalationResult =
-  | { requested: true; execution: EscalationExecutionResult }
+  | { requested: true; execution: EscalationExecutionResult; replayed?: boolean }
   | { requested: false; reason: 'INCIDENT_NOT_FOUND' | 'INCIDENT_NOT_ESCALATABLE' };
 
 /**
@@ -125,7 +125,7 @@ export async function requestIncidentEscalation(input: {
     generation: incident.escalationGeneration ?? 0,
     stepIndex: incident.currentEscalationStep ?? 0,
   });
-  if (planned.result) return { requested: true, execution: planned.result };
+  if (planned.result) return { requested: true, execution: planned.result, replayed: true };
   if (planned.created) await recordManualEscalationRequest(input);
 
   // No generation is passed: a person is asking for the incident's *current*

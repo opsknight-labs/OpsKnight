@@ -10,6 +10,11 @@ import {
 import { AUTHORIZATION_ACTIONS } from '@/lib/authorization-policy';
 import { scheduleReadWhere } from '@/lib/authorization-filters';
 import { resolveEscalationTarget } from '@/lib/escalation';
+import {
+  HANDOVER_LOOKAHEAD_MS,
+  getWindowOnCallShifts,
+  handoverFromShifts,
+} from '@/lib/oncall-shifts';
 import { AppError } from '@/lib/errors';
 import { withV2Observability } from '@/lib/api-v2/observability';
 
@@ -75,6 +80,14 @@ export const GET = withV2Observability(async function GET(
       },
     });
 
+    const windowEnd = new Date(atTime.getTime() + HANDOVER_LOOKAHEAD_MS);
+    const { shiftEnds, next } = handoverFromShifts(
+      await getWindowOnCallShifts(atTime, windowEnd, id),
+      userIds,
+      atTime,
+      windowEnd
+    );
+
     const result = {
       schedule: {
         id: schedule.id,
@@ -82,7 +95,8 @@ export const GET = withV2Observability(async function GET(
         timeZone: schedule.timeZone,
       },
       at: atTime.toISOString(),
-      onCallUsers: users,
+      onCallUsers: users.map(user => ({ ...user, shiftEndsAt: shiftEnds.get(user.id) ?? null })),
+      next,
     };
 
     return apiV2Success(result, { headers: rlHeaders });

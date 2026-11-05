@@ -7,8 +7,44 @@ export const PaginationQuerySchema = z.object({
   cursor: z.string().trim().min(1).optional(),
 });
 
+const INCIDENT_STATUSES = ['OPEN', 'ACKNOWLEDGED', 'RESOLVED', 'SNOOZED', 'SUPPRESSED'] as const;
+type IncidentStatusFilter = (typeof INCIDENT_STATUSES)[number];
+/** ACTIVE is shorthand for every status that still needs a responder. */
+const ACTIVE_INCIDENT_STATUSES: readonly IncidentStatusFilter[] = [
+  'OPEN',
+  'ACKNOWLEDGED',
+  'SNOOZED',
+];
+
+/**
+ * One status or several, comma-separated (`OPEN,ACKNOWLEDGED`); `ACTIVE` expands to the unresolved
+ * statuses. Parsed to a de-duplicated list so the route filters with `status IN (...)`.
+ */
+export const IncidentStatusListSchema = z
+  .string()
+  .trim()
+  .max(80)
+  .transform(value =>
+    value
+      .split(',')
+      .map(part => part.trim().toUpperCase())
+      .filter(Boolean)
+  )
+  .pipe(
+    z
+      .array(z.enum([...INCIDENT_STATUSES, 'ACTIVE']))
+      .min(1)
+      .max(6)
+  )
+  .transform(values => [
+    ...new Set(values.flatMap(value => (value === 'ACTIVE' ? ACTIVE_INCIDENT_STATUSES : [value]))),
+  ]);
+
 export const IncidentListQuerySchema = PaginationQuerySchema.extend({
-  status: z.enum(['OPEN', 'ACKNOWLEDGED', 'RESOLVED', 'SNOOZED', 'SUPPRESSED']).optional(),
+  status: IncidentStatusListSchema.optional(),
+  // Creation-time window: createdAfter inclusive, createdBefore exclusive.
+  createdAfter: z.string().datetime({ offset: true }).optional(),
+  createdBefore: z.string().datetime({ offset: true }).optional(),
   priority: z.enum(['P1', 'P2', 'P3', 'P4', 'P5']).optional(),
   urgency: z.enum(['LOW', 'MEDIUM', 'HIGH']).optional(),
   serviceId: z.string().trim().min(1).optional(),

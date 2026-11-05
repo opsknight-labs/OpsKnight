@@ -35,7 +35,9 @@ export const GET = withV2Observability(async function GET(req: NextRequest) {
     const accessWhere = incidentReadWhere(actor);
     const filters: Prisma.IncidentWhereInput[] = [accessWhere];
 
-    if (query.status) filters.push({ status: query.status });
+    if (query.status) filters.push({ status: { in: query.status } });
+    if (query.createdAfter) filters.push({ createdAt: { gte: new Date(query.createdAfter) } });
+    if (query.createdBefore) filters.push({ createdAt: { lt: new Date(query.createdBefore) } });
     if (query.priority) filters.push({ priority: query.priority });
     if (query.urgency) filters.push({ urgency: query.urgency });
     if (query.serviceId) filters.push({ serviceId: query.serviceId });

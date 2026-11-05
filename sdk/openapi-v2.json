@@ -11371,6 +11371,134 @@
           "updatedAt"
         ]
       },
+      "IncidentEscalation": {
+        "type": "object",
+        "description": "Result of POST /incidents/{id}/escalate, with who was paged.",
+        "properties": {
+          "requested": {
+            "type": "boolean",
+            "description": "False when the incident was not escalatable."
+          },
+          "reason": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "INCIDENT_NOT_ESCALATABLE",
+              null
+            ],
+            "description": "Why nothing was paged: only an OPEN incident escalates."
+          },
+          "outcome": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Escalation engine outcome."
+          },
+          "escalated": {
+            "type": "boolean",
+            "description": "True only when a step paged someone."
+          },
+          "paged": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "properties": {
+              "stepIndex": {
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "targetType": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "targetName": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "targetCount": {
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              }
+            }
+          },
+          "incident": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "OPEN",
+                  "ACKNOWLEDGED",
+                  "RESOLVED",
+                  "SNOOZED",
+                  "SUPPRESSED"
+                ]
+              },
+              "escalation": {
+                "type": "object",
+                "description": "Where the escalation policy stands for this incident.",
+                "properties": {
+                  "step": {
+                    "type": [
+                      "integer",
+                      "null"
+                    ],
+                    "description": "Zero-based index of the escalation step last notified."
+                  },
+                  "status": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "description": "Escalation state: ESCALATING, COMPLETED or FAILED; null before escalation starts."
+                  },
+                  "nextAt": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "format": "date-time",
+                    "description": "When the next step is due; null when nothing is scheduled."
+                  }
+                },
+                "required": [
+                  "step",
+                  "status",
+                  "nextAt"
+                ]
+              }
+            },
+            "required": [
+              "id",
+              "status",
+              "escalation"
+            ]
+          }
+        },
+        "required": [
+          "requested",
+          "reason",
+          "outcome",
+          "escalated",
+          "paged",
+          "incident"
+        ]
+      },
       "IncidentAssignment": {
         "type": "object",
         "description": "Assignment state after POST /incidents/{id}/assign.",
@@ -11481,15 +11609,51 @@
                     "string",
                     "null"
                   ]
+                },
+                "shiftEndsAt": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "format": "date-time",
+                  "description": "When this person stops being on call; null when the shift runs past the seven-day lookahead."
                 }
               }
             }
+          },
+          "next": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "description": "The next person to come on call within seven days, if anyone.",
+            "properties": {
+              "userId": {
+                "type": "string"
+              },
+              "name": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "start": {
+                "type": "string",
+                "format": "date-time"
+              }
+            },
+            "required": [
+              "userId",
+              "name",
+              "start"
+            ]
           }
         },
         "required": [
           "schedule",
           "at",
-          "onCallUsers"
+          "onCallUsers",
+          "next"
         ]
       },
       "ScheduleOverride": {
@@ -12138,6 +12302,247 @@
           "token",
           "apiKey"
         ]
+      },
+      "IncidentDetail": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "OPEN",
+              "ACKNOWLEDGED",
+              "RESOLVED",
+              "SNOOZED",
+              "SUPPRESSED"
+            ]
+          },
+          "priority": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "P1",
+              "P2",
+              "P3",
+              "P4",
+              "P5",
+              null
+            ]
+          },
+          "urgency": {
+            "type": "string",
+            "enum": [
+              "LOW",
+              "MEDIUM",
+              "HIGH"
+            ]
+          },
+          "serviceId": {
+            "type": "string"
+          },
+          "service": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              }
+            }
+          },
+          "assignee": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "email": {
+                "type": "string"
+              }
+            }
+          },
+          "teamId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "acknowledgedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "resolvedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "assigneeId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "team": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              }
+            }
+          },
+          "snoozedUntil": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "slaPausedMs": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "description": "Milliseconds the SLA clock was paused."
+          },
+          "slaAckElapsedMs": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "slaResolveElapsedMs": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "escalation": {
+            "type": "object",
+            "description": "Where the escalation policy stands for this incident.",
+            "properties": {
+              "step": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "description": "Zero-based index of the escalation step last notified."
+              },
+              "status": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "description": "Escalation state: ESCALATING, COMPLETED or FAILED; null before escalation starts."
+              },
+              "nextAt": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "format": "date-time",
+                "description": "When the next step is due; null when nothing is scheduled."
+              }
+            },
+            "required": [
+              "step",
+              "status",
+              "nextAt"
+            ]
+          },
+          "sla": {
+            "type": "object",
+            "description": "SLA targets captured for this incident against time spent so far.",
+            "properties": {
+              "ackTargetMs": {
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "resolveTargetMs": {
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "ackElapsedMs": {
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "resolveElapsedMs": {
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "pausedMs": {
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "ackTargetMs",
+              "resolveTargetMs",
+              "ackElapsedMs",
+              "resolveElapsedMs",
+              "pausedMs"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "status",
+          "urgency",
+          "serviceId",
+          "createdAt",
+          "updatedAt",
+          "escalation",
+          "sla"
+        ]
       }
     },
     "responses": {
@@ -12237,13 +12642,27 @@
             "in": "query",
             "schema": {
               "type": "string",
-              "enum": [
-                "OPEN",
-                "ACKNOWLEDGED",
-                "RESOLVED",
-                "SNOOZED",
-                "SUPPRESSED"
-              ]
+              "description": "One status or several, comma-separated (OPEN,ACKNOWLEDGED). ACTIVE means every unresolved status: OPEN, ACKNOWLEDGED and SNOOZED.",
+              "maxLength": 80,
+              "pattern": "^(OPEN|ACKNOWLEDGED|RESOLVED|SNOOZED|SUPPRESSED|ACTIVE)(,(OPEN|ACKNOWLEDGED|RESOLVED|SNOOZED|SUPPRESSED|ACTIVE)){0,5}$"
+            }
+          },
+          {
+            "name": "createdAfter",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date-time",
+              "description": "Only incidents created at or after this time (ISO 8601 with offset)."
+            }
+          },
+          {
+            "name": "createdBefore",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date-time",
+              "description": "Only incidents created before this time (ISO 8601 with offset)."
             }
           },
           {
@@ -12556,7 +12975,7 @@
                   "type": "object",
                   "properties": {
                     "data": {
-                      "$ref": "#/components/schemas/Incident"
+                      "$ref": "#/components/schemas/IncidentDetail"
                     },
                     "requestId": {
                       "type": "string"
@@ -12899,6 +13318,107 @@
         "operationId": "acknowledgeIncident",
         "x-required-scope": "incidents:write",
         "description": "Requires API scope `incidents:write` (Incidents manage).",
+        "x-idempotency": "supported",
+        "x-concurrency": "none"
+      }
+    },
+    "/incidents/{id}/escalate": {
+      "post": {
+        "tags": [
+          "Incidents"
+        ],
+        "summary": "Escalate an open incident to its next escalation step now",
+        "description": "Pages the next tier of the escalation policy immediately, through the same command as the Slack, Teams and web escalate actions. Only an OPEN incident escalates; otherwise the result reports requested: false with the reason.\n\nRequires API scope `incidents:write` (Incidents manage).",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "description": "Makes retries safe. A replay returns the original result with `Idempotency-Replayed: true`. Keys are scoped to the credential and operation and retained for 7 days; reusing a key with a different body returns 409.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Escalation requested, or the reason it was not",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/IncidentEscalation"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "requestId",
+                    "timestamp"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-RateLimit-Limit": {
+                "description": "Requests allowed per window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Remaining": {
+                "description": "Requests left in the window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Reset": {
+                "description": "Unix time at which the window resets.",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "404": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "409": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemError"
+          }
+        },
+        "operationId": "escalateIncident",
+        "x-required-scope": "incidents:write",
         "x-idempotency": "supported",
         "x-concurrency": "none"
       }
