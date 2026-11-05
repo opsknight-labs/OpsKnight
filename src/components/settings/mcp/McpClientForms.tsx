@@ -21,6 +21,8 @@ export const MCP_CLIENT_FORM_MESSAGES: ReadonlyMap<string, string> = new Map(
       'Use the exact callback address: HTTPS, http on 127.0.0.1, localhost or [::1], or an app address such as cursor://anysphere.cursor-mcp/oauth/callback, with no user name, password or #fragment.',
     MCP_INVALID_SCOPE: 'Choose at least one supported permission.',
     MCP_CLIENT_NOT_FOUND: 'This assistant no longer exists. Reload the page.',
+    MCP_REAUTHENTICATION_REQUIRED:
+      'Adding or restoring an assistant gives it access, so confirm it is you: sign out, sign in again, then retry.',
   })
 );
 

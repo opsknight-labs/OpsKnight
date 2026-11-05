@@ -6,6 +6,8 @@ import prisma from '@/lib/prisma';
 import { logAudit } from '@/lib/audit';
 import { getCurrentUser, getUserPermissions } from '@/lib/rbac';
 import { requireMcp } from '@/lib/mcp/core/errors';
+import { requireFreshMcpAdmin } from '@/lib/mcp/auth/fresh-admin';
+import { MCP_REAUTHENTICATION_REQUIRED, capabilitiesWiden } from '@/lib/mcp/auth/policy-widening';
 import {
   InvalidMcpCapabilityError,
   MAX_DISABLED_CAPABILITY_ENTRIES,
@@ -33,7 +35,8 @@ const inputSchema = z
 export type UpdateMcpCapabilitiesResult =
   | { ok: true; disabled: string[]; added: string[]; removed: string[] }
   | { ok: false; code: 'MCP_INVALID_CAPABILITY'; invalid: string[] }
-  | { ok: false; code: 'MCP_POLICY_CONFLICT'; disabled: string[] };
+  | { ok: false; code: 'MCP_POLICY_CONFLICT'; disabled: string[] }
+  | { ok: false; code: typeof MCP_REAUTHENTICATION_REQUIRED };
 
 /** The stored list with stale entries dropped, so it can be compared and re-saved safely. */
 function knownEntries(stored: readonly string[]) {
@@ -92,6 +95,9 @@ export async function updateMcpDisabledCapabilities(
     const stored = knownEntries(policy.disabledCapabilities);
     if (!sameList(stored, baseline))
       return { ok: false, code: 'MCP_POLICY_CONFLICT', disabled: stored };
+    // Re-exposing a capability widens access and needs a recent sign-in; hiding one never does.
+    if (capabilitiesWiden(stored, disabled) && !(await requireFreshMcpAdmin(permissions.id)))
+      return { ok: false, code: MCP_REAUTHENTICATION_REQUIRED };
     const added = disabled.filter(item => !stored.includes(item));
     const removed = stored.filter(item => !disabled.includes(item));
     if (!added.length && !removed.length && sameList(policy.disabledCapabilities, disabled))

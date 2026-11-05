@@ -25,8 +25,24 @@ import { mcpSessionDates } from '@/lib/mcp/auth/session-lifetime';
 import { partitionScopesForRole } from '@/lib/mcp/auth/role-scopes';
 import { isAppRole } from '@/lib/authorization';
 import { supersededUnusedMcpGrantsWhere } from '@/lib/mcp/auth/consent';
+import { clearDiscoveryPolicyCache } from '@/lib/mcp/auth/discovery-policy';
+import { requireFreshMcpAdmin } from '@/lib/mcp/auth/fresh-admin';
+import { MCP_REAUTHENTICATION_REQUIRED, mcpPolicyWidening } from '@/lib/mcp/auth/policy-widening';
 
 const settingsPath = '/settings/integrations/mcp';
+
+function validBrowserOrigin(value: string) {
+  try {
+    const url = new URL(value);
+    return (
+      url.origin === value &&
+      (url.protocol === 'https:' ||
+        (url.protocol === 'http:' && ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname)))
+    );
+  } catch {
+    return false;
+  }
+}
 const supportedScopes = supportedMcpScopes;
 function parseScopes(value: string) {
   const supported = supportedScopes();
@@ -60,9 +76,20 @@ async function assertCurrentAdmin(
   );
 }
 
-/** One-click first-run setup: read-only assistant access with automatic connections. */
-export async function enableMcpQuickSetup() {
+/** Refused before any write: the change widens access and the sign-in is not recent. */
+export type McpReauthenticationRequired = { ok: false; code: typeof MCP_REAUTHENTICATION_REQUIRED };
+const reauthenticationRequired: McpReauthenticationRequired = {
+  ok: false,
+  code: MCP_REAUTHENTICATION_REQUIRED,
+};
+
+/**
+ * One-click first-run setup: read-only assistant access with automatic connections. It always
+ * widens access (MCP, registration and metadata documents on), so it needs a recent sign-in.
+ */
+export async function enableMcpQuickSetup(): Promise<McpReauthenticationRequired | void> {
   const actor = await admin();
+  if (!(await requireFreshMcpAdmin(actor.id))) return reauthenticationRequired;
   await loadMcpRuntime();
   requireMcp(
     !(await getMcpConfigurationStatus({ force: true })).issues.length,
@@ -98,6 +125,7 @@ export async function enableMcpQuickSetup() {
       create: { ...policy, policyRevision: 1 },
       update: { ...update, policyRevision: { increment: 1 } },
     });
+    clearDiscoveryPolicyCache();
     await logAudit(
       {
         source: 'UI',
@@ -125,6 +153,7 @@ export async function testMcpConnection() {
 /** Re-allow a revoked client. Its old grants stay revoked, so users sign in again. */
 export async function restoreMcpClient(form: FormData): Promise<McpClientFormResult> {
   const actor = await admin();
+  if (!(await requireFreshMcpAdmin(actor.id))) return reauthenticationRequired;
   const parsed = z.string().min(1).max(256).safeParse(form.get('id'));
   if (!parsed.success) return { ok: false, code: 'MCP_CLIENT_NOT_FOUND' };
   const id = parsed.data;
@@ -155,7 +184,9 @@ export async function restoreMcpClient(form: FormData): Promise<McpClientFormRes
 }
 
 export type UpdateMcpPolicyResult =
-  { ok: true; revision: number } | { ok: false; code: 'MCP_POLICY_CONFLICT'; revision: number };
+  | { ok: true; revision: number }
+  | { ok: false; code: 'MCP_POLICY_CONFLICT'; revision: number }
+  | McpReauthenticationRequired;
 
 /**
  * Save the access policy. Optimistic against concurrent administrators: the form carries the
@@ -180,6 +211,8 @@ export async function updateMcpPolicy(form: FormData): Promise<UpdateMcpPolicyRe
       approvalTtlMinutes: z.coerce.number().int().min(15).max(1440).optional(),
       approvalCommitWindowMinutes: z.coerce.number().int().min(1).max(1440).optional(),
       policyRevision: z.coerce.number().int().min(0).optional(),
+      allowedBrowserOrigins: z.string().max(4096).optional(),
+      scopeStepUpEnabled: z.boolean(),
     })
     .strict()
     .parse({
@@ -199,6 +232,12 @@ export async function updateMcpPolicy(form: FormData): Promise<UpdateMcpPolicyRe
       approvalCommitWindowMinutes: form.get('approvalCommitWindowMinutes') ?? undefined,
       // Absent only for callers that predate the revision; the settings form always sends it.
       policyRevision: form.get('policyRevision') ?? undefined,
+      // A form without the field keeps the stored list.
+      allowedBrowserOrigins:
+        form.get('allowedBrowserOrigins') === null
+          ? undefined
+          : String(form.get('allowedBrowserOrigins')),
+      scopeStepUpEnabled: form.get('scopeStepUpEnabled') === 'on',
     });
   const cimdAllowedHosts = [
     ...new Set(
@@ -222,6 +261,16 @@ export async function updateMcpPolicy(form: FormData): Promise<UpdateMcpPolicyRe
         );
       }),
     'MCP_INVALID_CIMD_HOST'
+  );
+  const allowedBrowserOrigins =
+    input.allowedBrowserOrigins === undefined
+      ? undefined
+      : [...new Set(input.allowedBrowserOrigins.split(/\s+/).filter(Boolean))];
+  // Exact origins only (scheme, host, optional port); plain http only on loopback, for local tools.
+  requireMcp(
+    !allowedBrowserOrigins ||
+      (allowedBrowserOrigins.length <= 10 && allowedBrowserOrigins.every(validBrowserOrigin)),
+    'MCP_INVALID_BROWSER_ORIGIN'
   );
   // Refuse to switch MCP on when its bootstrap configuration would fail at request time.
   requireMcp(
@@ -263,7 +312,13 @@ export async function updateMcpPolicy(form: FormData): Promise<UpdateMcpPolicyRe
       approvalTtlMinutes: input.approvalTtlMinutes ?? existing.approvalTtlMinutes,
       approvalCommitWindowMinutes:
         input.approvalCommitWindowMinutes ?? existing.approvalCommitWindowMinutes,
+      allowedBrowserOrigins: allowedBrowserOrigins ?? existing.allowedBrowserOrigins,
+      scopeStepUpEnabled: input.scopeStepUpEnabled,
     };
+    // Widening access needs a recent sign-in; it is judged against the locked row and refused
+    // before the write, so the revision does not move. Narrowing is always allowed.
+    if (mcpPolicyWidening(existing, policy).length && !(await requireFreshMcpAdmin(actor.id)))
+      return reauthenticationRequired;
     const saved = await tx.mcpPolicy.update({
       where: { id: 'default' },
       data: { ...policy, policyRevision: { increment: 1 } },
@@ -281,7 +336,10 @@ export async function updateMcpPolicy(form: FormData): Promise<UpdateMcpPolicyRe
     );
     return { ok: true, revision: saved.policyRevision };
   });
-  if (result.ok) revalidatePath(settingsPath);
+  if (result.ok) {
+    clearDiscoveryPolicyCache();
+    revalidatePath(settingsPath);
+  }
   return result;
 }
 
@@ -295,6 +353,7 @@ export type McpClientFormResult =
  */
 export async function registerMcpClient(form: FormData): Promise<McpClientFormResult> {
   const actor = await admin();
+  if (!(await requireFreshMcpAdmin(actor.id))) return reauthenticationRequired;
   const parsed = z
     .object({
       name: z.string().trim().min(1).max(100),

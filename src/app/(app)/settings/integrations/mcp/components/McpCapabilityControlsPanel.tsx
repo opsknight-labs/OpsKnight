@@ -47,6 +47,11 @@ import {
 import { SaveIndicator } from '@/components/settings/feedback/SaveIndicator';
 import type { McpCapability, McpRisk } from '@/lib/mcp/catalog/capabilities';
 import type { UpdateMcpCapabilitiesResult } from '../capability-actions';
+import { signInAgainForMcp } from '@/components/settings/mcp/McpPolicyForm';
+import {
+  MCP_REAUTHENTICATION_MESSAGE,
+  MCP_REAUTHENTICATION_REQUIRED,
+} from '@/lib/mcp/auth/policy-widening';
 
 const PAGE_SIZE = 25;
 const DOMAIN_PREFIX = 'domain:';
@@ -325,6 +330,13 @@ export default function McpCapabilityControlsPanel({
             'Another administrator changed exposed capabilities. Their version is loaded; review it and make your change again.',
             { id: 'settings:mcp:capabilities' }
           );
+        } else if (result.code === MCP_REAUTHENTICATION_REQUIRED) {
+          // Re-exposing a capability needs a recent sign-in; the edit stays in place.
+          setStatus('error');
+          notify.error(MCP_REAUTHENTICATION_MESSAGE, {
+            id: 'settings:mcp:capabilities',
+            action: { label: 'Sign in again', onClick: signInAgainForMcp },
+          });
         } else {
           setStatus('error');
           notify.error(
