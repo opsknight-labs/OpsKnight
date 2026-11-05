@@ -7,6 +7,7 @@ import { digestMcpSecret, loadMcpRuntime, mcpResource } from '@/lib/mcp/auth/con
 import { resolveMcpGrantWithPolicy } from '@/lib/mcp/auth/principal';
 import { mcpGrantBlockError } from '@/lib/mcp/auth/effective-access';
 import { McpBoundaryError } from '@/lib/mcp/core/errors';
+import { clearDiscoveryPolicyCache, loadDiscoveryPolicy } from '@/lib/mcp/auth/discovery-policy';
 import { resetMcpUsageForTests } from '@/lib/mcp/core/usage';
 import McpConfirmAction from '@/components/settings/mcp/McpConfirmAction';
 
@@ -15,6 +16,18 @@ const actor = vi.hoisted(() => ({ id: '', isAdmin: true, fresh: true }));
 vi.mock('@/lib/mcp/auth/fresh-admin', () => ({
   requireFreshMcpAdmin: vi.fn(async (id: string) => actor.fresh && id === actor.id),
 }));
+// Runs inside a policy write's transaction, just before its audit row: a concurrent reader's view.
+const duringAudit = vi.hoisted(() => ({ run: null as null | (() => Promise<unknown>) }));
+vi.mock('@/lib/audit', async importOriginal => {
+  const actual = await importOriginal<typeof import('@/lib/audit')>();
+  return {
+    ...actual,
+    logAudit: vi.fn(async (...args: Parameters<typeof actual.logAudit>) => {
+      await duringAudit.run?.();
+      return actual.logAudit(...args);
+    }),
+  };
+});
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }));
 vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
 vi.mock('@/lib/toast', () => ({ notify: { success: vi.fn(), error: vi.fn() } }));
@@ -56,6 +69,8 @@ let admin: { id: string };
 beforeEach(async () => {
   actor.isAdmin = true;
   actor.fresh = true;
+  duringAudit.run = null;
+  clearDiscoveryPolicyCache();
   resetMcpUsageForTests();
   await db.mcpToken.deleteMany();
   await db.mcpGrant.deleteMany();
@@ -340,6 +355,18 @@ describe('D4 policy save is optimistic', () => {
     expect((await db.mcpPolicy.findUniqueOrThrow({ where: { id: 'default' } })).writesEnabled).toBe(
       false
     );
+  });
+});
+
+describe('SEC-12 policy saves clear the discovery memo after they commit', () => {
+  it('a discovery read racing one-click setup does not pin the old policy', async () => {
+    await db.mcpPolicy.create({ data: { id: 'default', enabled: false } });
+    // A public request served while the setup transaction is still open sees the committed row
+    // (MCP off) and memoises it; the memo must be cleared once the new policy is visible.
+    duringAudit.run = () => loadDiscoveryPolicy();
+    await actions.enableMcpQuickSetup();
+    duringAudit.run = null;
+    expect((await loadDiscoveryPolicy())?.enabled).toBe(true);
   });
 });
 

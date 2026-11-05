@@ -125,7 +125,6 @@ export async function enableMcpQuickSetup(): Promise<McpReauthenticationRequired
       create: { ...policy, policyRevision: 1 },
       update: { ...update, policyRevision: { increment: 1 } },
     });
-    clearDiscoveryPolicyCache();
     await logAudit(
       {
         source: 'UI',
@@ -141,6 +140,8 @@ export async function enableMcpQuickSetup(): Promise<McpReauthenticationRequired
       tx
     );
   });
+  // After the commit: a discovery read during the transaction would re-memoise the old policy.
+  clearDiscoveryPolicyCache();
   revalidatePath(settingsPath);
 }
 
