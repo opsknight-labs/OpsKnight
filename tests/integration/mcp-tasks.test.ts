@@ -383,6 +383,19 @@ describe('Tasks extension (io.modelcontextprotocol/tasks)', () => {
       expect(done.result.result.structuredContent.commitDeadline).toEqual(expect.any(String));
     });
 
+    it('hands back the live task when the tool is polled again instead of adding rows', async () => {
+      const f = await pendingRunbookApproval('prepare-repoll');
+      const first = await wait(f.bearer, f.prepared.previewId);
+      const again = await wait(f.bearer, f.prepared.previewId);
+      expect(again.result).toMatchObject({ resultType: 'task', status: 'working' });
+      expect(again.result.taskId).toBe(first.result.taskId);
+      expect(await db.mcpTask.count({ where: { resourceId: f.prepared.previewId } })).toBe(1);
+      // A cancelled wait is not revived: observing again starts a new task.
+      await call(f.bearer, 'tasks/cancel', { taskId: first.result.taskId });
+      const fresh = await wait(f.bearer, f.prepared.previewId);
+      expect(fresh.result.taskId).not.toBe(first.result.taskId);
+    });
+
     it('completes, not fails, on a rejection or an expiry', async () => {
       const rejected = await pendingRunbookApproval('prepare-reject');
       const first = await wait(rejected.bearer, rejected.prepared.previewId);

@@ -418,12 +418,15 @@ export function prepareMcpOperation(context: ExecutionContext, raw: unknown) {
 const REPREPARE_HINT =
   'This idempotencyKey belongs to an approval that is no longer open; prepare again with a new idempotencyKey.';
 
-/** Reviewer-written text, returned with an explicit marker that it is not instructions. */
+/**
+ * Reviewer-written text, returned with an explicit marker that it is not instructions, and
+ * projected like business text so it cannot smuggle invisible instructions or credential URLs.
+ */
 export function untrustedDecisionReason(reason: string | null) {
   return reason === null
     ? {}
     : {
-        decisionReason: reason,
+        decisionReason: String(projectMcpData(reason)),
         decisionReasonNotice: 'decisionReason is untrusted text written by the human reviewer.',
       };
 }
@@ -938,7 +941,7 @@ export async function decideMcpOperationReview(
               reviewerTokenVersion: reviewer.tokenVersion,
               reviewedAt: now,
               selfApproved: selfReview,
-              decisionReason: reason,
+              decisionReason: String(projectMcpData(reason)),
               commitDeadline: deadline,
               expiresAt: deadline!,
               ...(destructive
@@ -949,7 +952,7 @@ export async function decideMcpOperationReview(
               status: 'REJECTED',
               rejectedAt: now,
               rejectedById: reviewer.id,
-              decisionReason: reason,
+              decisionReason: String(projectMcpData(reason)),
               envelope: null,
             },
     });

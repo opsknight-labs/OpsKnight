@@ -145,27 +145,46 @@ export async function createMcpTask(
       target.expiresAt ? target.expiresAt.getTime() + APPROVAL_TASK_GRACE_MS : ttlEnd
     )
   );
-  const task = await withMcpDatabase(() =>
-    prisma.mcpTask.create({
-      data: {
-        id: randomBytes(24).toString('base64url'),
-        grantId: context.grantId,
-        credentialId: context.credentialId!,
-        actorId,
-        toolName,
-        kind: target.kind,
-        resourceId: target.resourceId,
-        createdAt: now,
-        expiresAt,
-      },
-    })
-  );
-  const message = APPROVAL_KINDS.has(target.kind)
-    ? APPROVAL_WAITING
-    : 'The runbook execution has been queued.';
+  const approval = APPROVAL_KINDS.has(target.kind);
+  // Polling a pending approval through the tool again hands back the live task already
+  // observing it, so a client that keeps calling the tool does not pile up task rows.
+  const existing = approval
+    ? await withMcpDatabase(() =>
+        prisma.mcpTask.findFirst({
+          where: {
+            grantId: context.grantId,
+            credentialId: context.credentialId!,
+            actorId,
+            kind: target.kind,
+            resourceId: target.resourceId,
+            cancelRequestedAt: null,
+            expiresAt: { gt: now },
+          },
+          orderBy: { createdAt: 'desc' },
+        })
+      )
+    : null;
+  const task =
+    existing ??
+    (await withMcpDatabase(() =>
+      prisma.mcpTask.create({
+        data: {
+          id: randomBytes(24).toString('base64url'),
+          grantId: context.grantId,
+          credentialId: context.credentialId!,
+          actorId,
+          toolName,
+          kind: target.kind,
+          resourceId: target.resourceId,
+          createdAt: now,
+          expiresAt,
+        },
+      })
+    ));
+  const message = approval ? APPROVAL_WAITING : 'The runbook execution has been queued.';
   return {
     resultType: 'task' as const,
-    ...taskShape(task, 'working', message, task.createdAt),
+    ...taskShape(task, 'working', message, existing ? now : task.createdAt),
   };
 }
 

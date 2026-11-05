@@ -11,8 +11,10 @@ export const MCP_PROJECTION_DEPTH = 24;
 /*
  * Characters a person cannot see but a model reads ("ASCII smuggling"): bidi embeddings,
  * overrides, isolates and marks, zero-width characters, word joiners, invisible operators, the
- * BOM, the soft hyphen, combining grapheme joiner, Mongolian vowel separator, Hangul fillers and
- * interlinear annotation marks, every Unicode tag character, and a zero-width joiner anywhere but
+ * BOM, the soft hyphen, combining grapheme joiner, Mongolian vowel separator and free variation
+ * selectors, Khmer inherent vowels, Hangul fillers, the deprecated format controls, interlinear
+ * annotation marks, shorthand and musical format controls, the rest of the default-ignorable
+ * planes, every Unicode tag character, and a zero-width joiner anywhere but
  * between two emoji. A subdivision flag (black flag, tag letters, cancel tag) is the one
  * legitimate use of tag characters and is kept whole. Variation selectors carry hidden bytes as
  * easily ("emoji smuggling": one per byte after a visible character), so only a single selector
@@ -23,7 +25,7 @@ const INVISIBLE =
   // No nested quantifiers, so matching is linear. safe-regex reads the source without the u
   // flag and takes \u{...} code points for quantifiers; each alternative passes it on its own.
   // eslint-disable-next-line security/detect-unsafe-regex
-  /(\u{1F3F4}[\u{E0061}-\u{E007A}]{2,7}\u{E007F})|[\u00ad\u034f\u061c\u115f\u1160\u180e\u200b\u200c\u200e\u200f\u202a-\u202e\u2060-\u2064\u2066-\u2069\u3164\ufeff\uffa0\ufff9-\ufffb\u{E0100}-\u{E01EF}]|(?<=[\ufe00-\ufe0f\u{E0100}-\u{E01EF}])[\ufe00-\ufe0f]|(?<![\p{Extended_Pictographic}\p{Emoji_Modifier}]\ufe0f?)\u200d|\u200d(?!\p{Extended_Pictographic})|[\u{E0000}-\u{E007F}]/gu;
+  /(\u{1F3F4}[\u{E0061}-\u{E007A}]{2,7}\u{E007F})|[\u00ad\u034f\u061c\u115f\u1160\u17b4\u17b5\u180b-\u180f\u200b\u200c\u200e\u200f\u202a-\u202e\u2060-\u206f\u3164\ufeff\uffa0\ufff0-\ufffb\u{1BCA0}-\u{1BCA3}\u{1D173}-\u{1D17A}\u{E0100}-\u{E0FFF}]|(?<=[\ufe00-\ufe0f\u{E0100}-\u{E01EF}])[\ufe00-\ufe0f]|(?<![\p{Extended_Pictographic}\p{Emoji_Modifier}]\ufe0f?)\u200d|\u200d(?!\p{Extended_Pictographic})|[\u{E0000}-\u{E00FF}]/gu;
 
 export function stripInvisibleText(value: string) {
   return value.replace(INVISIBLE, (_match, flag: string | undefined) => flag ?? '');
@@ -59,12 +61,16 @@ export function projectMcpData(
     );
   if (value && typeof value === 'object') {
     return Object.fromEntries(
-      Object.entries(value).map(([key, child]) => {
+      Object.entries(value).map(([raw, child]) => {
+        // Keys of open maps (labels, custom fields) are business text too, and a hidden
+        // character must not carry a sensitive name past the check below.
+        const key = stripInvisibleText(raw);
         const field = `${path}/${key}`;
         if (MCP_SENSITIVE_KEY.test(key)) {
           redacted.push(field);
           return [key, '[REDACTED]'];
         }
+        if (key !== raw) redacted.push(field);
         return [key, projectMcpData(child, redacted, field, depth + 1)];
       })
     );

@@ -439,6 +439,32 @@ describe('SEC-3: invisible text is stripped from business strings', () => {
     expect(redacted).toEqual(['/data/0/title']);
   });
 
+  it('removes the remaining default-ignorable format characters', () => {
+    expect(
+      stripInvisibleText(
+        'a\u17b4b\u180bc\u180fd\u2065e\u206af\u206fg\ufff0h\u{1BCA0}i\u{1D173}j\u{E0080}k\u{E0FFF}l'
+      )
+    ).toBe('abcdefghijkl');
+  });
+
+  it('cleans map keys and still redacts a sensitive name hidden behind invisible characters', () => {
+    const redacted: string[] = [];
+    const data = projectMcpData(
+      { labels: { 'team\u202e': 'payments', 'pass\u200bword': 'hunter2', region: 'eu' } },
+      redacted
+    );
+    expect(data).toEqual({ labels: { team: 'payments', password: '[REDACTED]', region: 'eu' } });
+    expect(redacted).toEqual(['/labels/team', '/labels/password']);
+  });
+
+  it('projects reviewer decision reasons like business text', async () => {
+    const { untrustedDecisionReason } = await import('@/lib/mcp/approvals/operation');
+    expect(
+      untrustedDecisionReason('Approved\u{E0049}\u{E0047} see https://x.test/p?sig=1\u202e')
+    ).toMatchObject({ decisionReason: 'Approved see https://x.test/p?[query removed]' });
+    expect(untrustedDecisionReason(null)).toEqual({});
+  });
+
   it('puts evidence ahead of data in every catalog result', () => {
     const source = readFileSync('src/lib/mcp/core/execution.ts');
     const result = source.slice(source.indexOf('const result = {'));
