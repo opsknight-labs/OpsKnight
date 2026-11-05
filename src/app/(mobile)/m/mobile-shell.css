@@ -44,7 +44,7 @@
   background: hsl(var(--ui-background));
   color: hsl(var(--ui-foreground));
   color-scheme: inherit;
-  font-family: var(--font-manrope), Manrope, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-family: var(--font-family-sans);
 }
 
 /* Compact phone: <= 359px */

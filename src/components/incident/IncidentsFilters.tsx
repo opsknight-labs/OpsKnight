@@ -329,7 +329,7 @@ export default function IncidentsFilters({
                 <SelectItem value="all">All priorities</SelectItem>
                 <SelectItem value="P1">
                   <div className="flex items-center gap-2">
-                    <div className="h-1.5 w-1.5 rounded-full bg-red-600 animate-pulse" />
+                    <div className="h-1.5 w-1.5 rounded-full bg-rose-600 animate-pulse" />
                     <span>P1 - Critical</span>
                   </div>
                 </SelectItem>
@@ -376,13 +376,13 @@ export default function IncidentsFilters({
                 <SelectItem value="all">All statuses</SelectItem>
                 <SelectItem value="all_open">
                   <div className="flex items-center gap-2">
-                    <div className="h-1.5 w-1.5 rounded-full bg-green-500" />
+                    <div className="h-1.5 w-1.5 rounded-full bg-rose-500" />
                     <span>Active</span>
                   </div>
                 </SelectItem>
                 <SelectItem value="open">
                   <div className="flex items-center gap-2">
-                    <div className="h-1.5 w-1.5 rounded-full bg-red-500" />
+                    <div className="h-1.5 w-1.5 rounded-full bg-rose-500" />
                     <span>Triggered</span>
                   </div>
                 </SelectItem>
@@ -467,7 +467,7 @@ export default function IncidentsFilters({
                 <SelectItem value="all">All urgency</SelectItem>
                 <SelectItem value="HIGH">
                   <div className="flex items-center gap-2">
-                    <div className="h-1.5 w-1.5 rounded-full bg-red-500" />
+                    <div className="h-1.5 w-1.5 rounded-full bg-rose-500" />
                     <span>High</span>
                   </div>
                 </SelectItem>

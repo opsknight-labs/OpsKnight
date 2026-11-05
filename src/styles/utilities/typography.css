@@ -6,15 +6,15 @@
 /* ---- Font Family Definitions ---- */
 h1, h2, h3, h4, h5, h6,
 .font-display {
-    font-family: var(--font-manrope), Manrope, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-    font-feature-settings: "ss01" on, "ss02" on, "cv01" on;
+    font-family: var(--font-family-display);
+    font-feature-settings: normal;
     text-rendering: optimizeLegibility;
 }
 
 body,
 .font-sans {
-    font-family: var(--font-manrope), Manrope, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-    font-feature-settings: "ss01" on, "cv01" on;
+    font-family: var(--font-family-sans);
+    font-feature-settings: normal;
     text-rendering: optimizeLegibility;
 }
 

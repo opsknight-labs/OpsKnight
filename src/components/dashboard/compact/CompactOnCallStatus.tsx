@@ -93,7 +93,7 @@ const CompactOnCallStatus = memo(function CompactOnCallStatus({
   if (!endDate) {
     return (
       <div
-        className="p-3.5 rounded-sm bg-green-600 border border-green-600 text-white"
+        className="p-3.5 rounded-sm bg-gradient-to-r from-status-shift-deep to-status-shift border border-status-shift text-white"
         role="status"
         aria-label="Currently on-call"
       >
@@ -112,7 +112,7 @@ const CompactOnCallStatus = memo(function CompactOnCallStatus({
 
   return (
     <div
-      className="p-3.5 rounded-sm bg-green-600 border border-green-600 text-white"
+      className="p-3.5 rounded-sm bg-gradient-to-r from-status-shift-deep to-status-shift border border-status-shift text-white"
       role="status"
       aria-label={`On-call now, ${remainingDisplay}, until ${endTimeStr}`}
     >

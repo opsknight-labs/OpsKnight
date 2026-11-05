@@ -29,27 +29,19 @@ export default function BrandLockup({
       )}
       aria-label="OpsKnight Home"
     >
-      {/* Shield Icon Box */}
-      <div
+      {/* Transparent logo, shown bare: brand standard forbids enclosing it in a
+          filled box (AGENTS.md "Official Brand Logo"). */}
+      <Image
+        src="/logo.svg"
+        alt="OpsKnight"
+        width={36}
+        height={36}
         className={cn(
-          'relative shrink-0 rounded-lg flex items-center justify-center overflow-hidden transition-all duration-200',
-          isHeader
-            ? 'h-9 w-9 bg-slate-900 border border-slate-700/80 shadow-sm group-hover:border-slate-500'
-            : 'h-8.5 w-8.5 bg-slate-900 dark:bg-slate-800 border border-slate-700/60 shadow-xs group-hover:border-slate-600'
+          'shrink-0 object-contain transition-transform duration-200 group-hover:scale-105',
+          isHeader ? 'h-8 w-8' : 'h-7 w-7'
         )}
-      >
-        <Image
-          src="/logo.svg"
-          alt="OpsKnight"
-          width={36}
-          height={36}
-          className={cn(
-            'relative z-10 object-contain transition-transform duration-200 group-hover:scale-105',
-            isHeader ? 'h-7 w-7' : 'h-6 w-6'
-          )}
-          priority
-        />
-      </div>
+        priority
+      />
 
       {/* Brand Text */}
       {!isCollapsed && (

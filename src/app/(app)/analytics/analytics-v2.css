@@ -293,7 +293,7 @@
 .analytics-card-large .analytics-value {
     font-size: 2rem;
     line-height: 1.1;
-    font-family: 'Space Grotesk', 'Manrope', sans-serif;
+    font-family: var(--font-family-display);
 }
 
 .analytics-card-large .analytics-label {
@@ -949,7 +949,7 @@
 .analytics-v2 h1,
 .analytics-v2 h2,
 .analytics-v2 .v2-section-title {
-    font-family: 'Space Grotesk', 'Manrope', sans-serif;
+    font-family: var(--font-family-display);
     letter-spacing: -0.02em;
 }
 

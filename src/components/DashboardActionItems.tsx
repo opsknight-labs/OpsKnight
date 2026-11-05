@@ -57,17 +57,17 @@ export default function DashboardActionItems({
         };
       case 'COMPLETED':
         return {
-          bg: 'bg-green-50',
-          border: 'border-green-200',
-          text: 'text-green-700',
-          dot: 'bg-green-500',
+          bg: 'bg-emerald-50',
+          border: 'border-emerald-200',
+          text: 'text-emerald-700',
+          dot: 'bg-emerald-500',
         };
       case 'BLOCKED':
         return {
-          bg: 'bg-red-50',
-          border: 'border-red-200',
-          text: 'text-red-700',
-          dot: 'bg-red-500',
+          bg: 'bg-rose-50',
+          border: 'border-rose-200',
+          text: 'text-rose-700',
+          dot: 'bg-rose-500',
         };
       default:
         return {
@@ -135,10 +135,10 @@ export default function DashboardActionItems({
           </div>
         </Link>
         <Link href="/action-items?status=COMPLETED" className="no-underline">
-          <div className="p-4 bg-white border-2 border-green-200 rounded-lg text-center transition-all duration-200 hover:shadow-md hover:-translate-y-0.5">
+          <div className="p-4 bg-white border-2 border-emerald-200 rounded-lg text-center transition-all duration-200 hover:shadow-md hover:-translate-y-0.5">
             <div className="flex items-center justify-center gap-2 mb-1">
-              <CheckCircle2 className="h-4 w-4 text-green-600" />
-              <div className="text-2xl font-bold text-green-600">{stats.completed}</div>
+              <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+              <div className="text-2xl font-bold text-emerald-600">{stats.completed}</div>
             </div>
             <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
               Completed
@@ -149,15 +149,15 @@ export default function DashboardActionItems({
           <div
             className={cn(
               'p-4 border-2 rounded-lg text-center transition-all duration-200 hover:shadow-md hover:-translate-y-0.5',
-              stats.overdue > 0 ? 'bg-red-50 border-red-300' : 'bg-white border-neutral-200'
+              stats.overdue > 0 ? 'bg-rose-50 border-rose-300' : 'bg-white border-neutral-200'
             )}
           >
             <div className="flex items-center justify-center gap-2 mb-1">
-              <AlertTriangle className="h-4 w-4 text-red-600" />
+              <AlertTriangle className="h-4 w-4 text-rose-600" />
               <div
                 className={cn(
                   'text-2xl font-bold',
-                  stats.overdue > 0 ? 'text-red-600' : 'text-neutral-500'
+                  stats.overdue > 0 ? 'text-rose-600' : 'text-neutral-500'
                 )}
               >
                 {stats.overdue}
@@ -182,7 +182,7 @@ export default function DashboardActionItems({
           <div
             className={cn(
               'h-full transition-all duration-300 ease-out rounded-full',
-              completionRate === 100 ? 'bg-green-500' : 'bg-blue-500'
+              completionRate === 100 ? 'bg-emerald-500' : 'bg-blue-500'
             )}
             style={{ width: `${completionRate}%` }}
           />

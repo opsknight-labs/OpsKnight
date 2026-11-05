@@ -20,7 +20,7 @@ export default async function McpConsentResult({
   // Only a known code is echoed as a reference, never arbitrary query text.
   const reference = known ? code : null;
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center bg-slate-50 px-4 py-8 font-['Inter',ui-sans-serif,system-ui,sans-serif] text-slate-900 sm:px-6 dark:bg-slate-950 dark:text-slate-100">
+    <main className="flex min-h-screen flex-col items-center justify-center bg-slate-50 px-4 py-8 font-sans text-slate-900 sm:px-6 dark:bg-slate-950 dark:text-slate-100">
       <div className="w-full max-w-md space-y-6">
         <a
           href="https://opsknight.com/"
@@ -38,7 +38,7 @@ export default async function McpConsentResult({
             priority
             unoptimized
           />
-          <span className="font-['Space_Grotesk',sans-serif] text-lg font-bold tracking-tight">
+          <span className="font-display text-lg font-bold tracking-tight">
             OpsKnight
           </span>
         </a>
@@ -46,7 +46,7 @@ export default async function McpConsentResult({
           role="alert"
           className="space-y-3 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900"
         >
-          <h1 className="font-['Space_Grotesk',sans-serif] text-xl font-bold tracking-tight">
+          <h1 className="font-display text-xl font-bold tracking-tight">
             {title}
           </h1>
           <p className="text-sm text-slate-600 dark:text-slate-300">{body}</p>

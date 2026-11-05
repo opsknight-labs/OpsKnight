@@ -41,7 +41,7 @@ export default function SetPasswordPage() {
       <AuthCard>
         <div className="mb-8 text-center">
           <AuthBrand className="mb-6" />
-          <h1 className="font-['Space_Grotesk',sans-serif] text-2xl font-bold text-slate-950 dark:text-white">Complete your invitation</h1>
+          <h1 className="font-display text-2xl font-bold text-slate-950 dark:text-white">Complete your invitation</h1>
           <p className="mt-1.5 text-sm text-slate-500 dark:text-slate-400">Set a secure passphrase to activate your OpsKnight account.</p>
         </div>
         <InviteActivation />

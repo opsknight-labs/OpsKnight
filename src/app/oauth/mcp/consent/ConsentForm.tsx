@@ -217,7 +217,7 @@ function ScopeGroup({
 
   return (
     <fieldset className="relative min-w-0 rounded-xl border border-slate-200 bg-white px-4 pb-3 pt-3 dark:border-slate-700 dark:bg-slate-900/40">
-      <legend className="float-left w-full pr-28 font-['Space_Grotesk',sans-serif] text-sm font-semibold text-slate-900 dark:text-slate-100">
+      <legend className="float-left w-full pr-28 font-display text-sm font-semibold text-slate-900 dark:text-slate-100">
         {group.label}
       </legend>
       {scopes.length > 1 && (

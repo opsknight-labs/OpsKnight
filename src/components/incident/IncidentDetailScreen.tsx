@@ -1,4 +1,5 @@
 import prisma from '@/lib/prisma';
+import { incidentStatusTone, statusGradientClass } from '@/lib/design/status-palette';
 import IncidentAutomationCard from '@/components/automation/IncidentAutomationCard';
 import EscalationExecutionHealth from '@/components/incident/detail/EscalationExecutionHealth';
 import { getEscalationExecutionHealth } from '@/lib/escalation/execution-health';
@@ -222,20 +223,12 @@ export default async function IncidentDetailScreen({
   const handleRemoveWatcher = removeIncidentDetailWatcher.bind(null, id);
   const handleUpdateDescription = updateIncidentDetailDescription.bind(null, id);
 
-  const statusGradient = (() => {
-    switch (incident.status) {
-      case 'RESOLVED':
-        return 'from-green-600 to-emerald-700';
-      case 'ACKNOWLEDGED':
-        return 'from-amber-500 to-orange-600';
-      case 'SNOOZED':
-        return 'from-indigo-500 to-purple-600';
-      case 'SUPPRESSED':
-        return 'from-gray-500 to-slate-600';
-      default:
-        return 'from-red-600 to-rose-700';
-    }
-  })();
+  const statusTone = incidentStatusTone(incident.status);
+  const statusGradient = statusTone
+    ? statusGradientClass(statusTone)
+    : incident.status === 'SUPPRESSED'
+      ? 'from-slate-600 to-slate-500'
+      : statusGradientClass('critical');
 
   const activityContent = (
     <IncidentNotes

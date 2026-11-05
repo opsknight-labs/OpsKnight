@@ -63,7 +63,7 @@ export default function ScheduleQuickStats({
         const currentIndex = layer.users.findIndex(u => u.user.name === earliest.userName);
         // If user not found in layer, default to showing first user as next
         const nextIndex = currentIndex === -1 ? 0 : (currentIndex + 1) % layer.users.length;
-        const nextUser = layer.users[nextIndex];
+        const nextUser = layer.users.at(nextIndex);
         nextPerson = nextUser?.user.name || 'Next responder';
         nextPersonAvatar =
           nextUser?.user.avatarUrl || getDefaultAvatar(nextUser?.user.gender, nextUser?.userId);
@@ -118,8 +118,8 @@ export default function ScheduleQuickStats({
 
       {/* Next Handoff */}
       {stats.nextHandoff && (
-        <div className="rounded-lg border border-indigo-100 bg-gradient-to-r from-indigo-50/50 to-white p-3">
-          <div className="flex items-center gap-1.5 text-[10px] font-semibold text-indigo-600 uppercase tracking-wider mb-2">
+        <div className="rounded-lg border border-violet-100 bg-gradient-to-r from-violet-50/50 to-white p-3">
+          <div className="flex items-center gap-1.5 text-[10px] font-semibold text-violet-600 uppercase tracking-wider mb-2">
             <Clock className="h-3 w-3" />
             Next Handoff
           </div>
@@ -139,13 +139,13 @@ export default function ScheduleQuickStats({
                 name={stats.nextHandoff.to}
                 size="xs"
               />
-              <span className="text-xs font-medium text-indigo-700 truncate">
+              <span className="text-xs font-medium text-violet-700 truncate">
                 {stats.nextHandoff.to}
               </span>
             </div>
             <Badge
               variant="secondary"
-              className="h-5 text-[10px] bg-indigo-100 text-indigo-700 border-indigo-200 shrink-0"
+              className="h-5 text-[10px] bg-violet-100 text-violet-700 border-violet-200 shrink-0"
             >
               {formatHandoffTime(stats.nextHandoff.time)}
             </Badge>

@@ -62,7 +62,7 @@ ${R} {
 ${R} *, ${R} *::before, ${R} *::after { box-sizing: border-box; }
 ${R} img, ${R} svg, ${R} video { max-inline-size: 100%; }
 ${R} .status-page-content { inline-size: 100%; max-inline-size: 100%; min-inline-size: 0; }
-${R} h1, ${R} h2, ${R} h3, ${R} h4 { font-family: var(--status-font-family, 'Space Grotesk'), Inter, ui-sans-serif, system-ui, sans-serif; }
+${R} h1, ${R} h2, ${R} h3, ${R} h4 { font-family: var(--status-font-family, var(--font-family-display)); }
 ${R} h1, ${R} h2, ${R} h3, ${R} h4, ${R} p, ${R} dl, ${R} dd, ${R} dt { margin: 0; }
 ${R} button, ${R} input, ${R} select { color: inherit; font: inherit; }
 
@@ -518,7 +518,7 @@ ${R} .status-subscribe__icon {
 }
 ${R} .status-subscribe__headcopy { display: grid; gap: .25rem; min-inline-size: 0; }
 ${R} .status-subscribe__headcopy strong {
-  color: var(--status-text-strong); font-family: 'Space Grotesk', Inter, system-ui, sans-serif;
+  color: var(--status-text-strong); font-family: var(--font-family-display);
   font-size: 1.05rem; font-weight: 750; letter-spacing: -.015em; line-height: 1.25;
 }
 ${R} .status-subscribe__headcopy span { color: var(--status-text-muted); font-size: .85rem; line-height: 1.45; }
@@ -628,7 +628,7 @@ ${R} .status-subscribe__success-icon {
   border: 1px solid color-mix(in srgb, var(--status-operational) 30%, transparent);
   color: var(--status-operational); box-shadow: 0 2px 8px color-mix(in srgb, var(--status-operational) 15%, transparent);
 }
-${R} .status-subscribe__success-title { color: var(--status-text-strong); font-size: 1.1rem; font-weight: 750; font-family: 'Space Grotesk', Inter, system-ui, sans-serif; }
+${R} .status-subscribe__success-title { color: var(--status-text-strong); font-size: 1.1rem; font-weight: 750; font-family: var(--font-family-display); }
 ${R} .status-subscribe__success-msg { margin: 0; font-size: .875rem; line-height: 1.5; color: var(--status-text); max-inline-size: 26rem; }
 ${R} .status-subscribe__success-close {
   margin-block-start: .4rem; padding: .5rem 1.25rem;
@@ -707,7 +707,7 @@ ${R} .status-subscribe-modal__head {
 }
 ${R} .status-subscribe-modal__headcopy { display: grid; gap: .25rem; min-inline-size: 0; }
 ${R} .status-subscribe-modal__title {
-  margin: 0; font-family: 'Space Grotesk', Inter, system-ui, sans-serif;
+  margin: 0; font-family: var(--font-family-display);
   font-size: 1.15rem; font-weight: 750; letter-spacing: -.015em; color: var(--status-text-strong);
 }
 ${R} .status-subscribe-modal__subtitle {
@@ -896,7 +896,7 @@ ${R} .status-v3-group__title {
   display: inline-flex;
   align-items: center;
   gap: 0.4rem;
-  font-family: 'Space Grotesk', Inter, sans-serif;
+  font-family: var(--font-family-display);
   font-size: 0.9rem;
   font-weight: 650;
   letter-spacing: -0.01em;
@@ -1116,7 +1116,7 @@ ${R} .status-v3-incidents-inline__head {
 }
 ${R} .status-v3-incidents-inline__title-wrap { display: flex; align-items: baseline; gap: 0.55rem; flex-wrap: wrap; }
 ${R} .status-v3-incidents-inline__title {
-  margin: 0; font-family: 'Space Grotesk', Inter, sans-serif; font-size: 1.05rem; font-weight: 700; letter-spacing: -0.015em; color: var(--status-text-strong);
+  margin: 0; font-family: var(--font-family-display); font-size: 1.05rem; font-weight: 700; letter-spacing: -0.015em; color: var(--status-text-strong);
 }
 ${R} .status-v3-incidents-inline__subtitle { font-size: 0.72rem; font-weight: 500; color: var(--status-text-muted); letter-spacing: 0.01em; }
 ${R} .status-v3-incidents-inline__tally { display: inline-flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
@@ -1171,7 +1171,7 @@ ${R} .status-v3-incident-pill__summary-meta { display: inline-flex; align-items:
 ${R} .status-v3-incident-pill__icon { color: var(--status-text-subtle); flex-shrink: 0; }
 ${R} .status-v3-incident-pill__live { inline-size: 6px; block-size: 6px; border-radius: 999px; background: var(--v3-accent, var(--status-major-outage)); flex: none; box-shadow: 0 0 0 4px color-mix(in srgb, var(--v3-accent, var(--status-major-outage)) 16%, transparent); }
 ${R} details.status-v3-incident-pill[data-active="true"] .status-v3-incident-pill__live { animation: status-pulse 2s ease-in-out infinite; }
-${R} .status-v3-incident-pill__title { font-family: 'Space Grotesk', Inter, sans-serif; font-weight: 700; font-size: 0.92rem; line-height: 1.35; color: var(--status-text-strong); letter-spacing: -0.015em; overflow-wrap: anywhere; }
+${R} .status-v3-incident-pill__title { font-family: var(--font-family-display); font-weight: 700; font-size: 0.92rem; line-height: 1.35; color: var(--status-text-strong); letter-spacing: -0.015em; overflow-wrap: anywhere; }
 ${R} .status-v3-incident-pill__divider { width: 1px; height: 11px; background: var(--status-panel-border); display: inline-block; flex-shrink: 0; }
 ${R} .status-v3-incident-pill__time { font-size: 0.78rem; font-weight: 500; color: var(--status-text-subtle); }
 ${R} .status-v3-incident-pill__duration { font-size: 0.72rem; font-weight: 600; color: var(--status-text-muted); padding: 0.15rem 0.5rem; border-radius: 999px; background: var(--status-panel-muted-bg); border: 1px solid var(--status-panel-border); white-space: nowrap; }
@@ -1279,7 +1279,7 @@ ${R} .status-v3-inspector__icon {
   flex-shrink: 0;
 }
 ${R} .status-v3-inspector__date {
-  font-family: 'Space Grotesk', Inter, sans-serif;
+  font-family: var(--font-family-display);
   font-weight: 650;
   font-size: 0.875rem;
   color: var(--status-text-strong);
@@ -1553,7 +1553,7 @@ ${R} .status-topbar__inner {
 ${R} .status-topbar__brand {
   display: inline-flex; align-items: center; gap: .8rem; min-inline-size: 0;
   color: var(--status-text-strong); text-decoration: none;
-  font-family: 'Space Grotesk', Inter, ui-sans-serif, system-ui, sans-serif;
+  font-family: var(--font-family-display);
   font-weight: 650; font-size: 1.2rem; letter-spacing: -.02em;
 }
 ${R} .status-topbar__brand:hover { color: var(--primary); }
@@ -1646,7 +1646,7 @@ ${R} .status-v3-hero__live {
 ${R} .status-v3-hero__copy { display: grid; gap: .2rem; min-inline-size: 0; }
 ${R} .status-v3-hero h1 {
   margin: 0; text-wrap: balance;
-  font-family: 'Space Grotesk', Inter, ui-sans-serif, system-ui, sans-serif;
+  font-family: var(--font-family-display);
   font-size: clamp(1.2rem, 2.1vw, 1.5rem); font-weight: 700; letter-spacing: -.03em; line-height: 1.2;
   color: var(--status-text-strong);
 }
@@ -1675,7 +1675,7 @@ ${R} .status-v3-hero__stats .status-stat__label {
   color: var(--status-text-subtle); line-height: 1.2; margin: 0; white-space: nowrap;
 }
 ${R} .status-v3-hero__stats .status-stat__value {
-  font-family: 'Space Grotesk', Inter, ui-sans-serif, system-ui, sans-serif;
+  font-family: var(--font-family-display);
   font-size: 1.35rem; font-weight: 700; letter-spacing: -.03em;
   font-variant-numeric: tabular-nums; color: var(--status-text-strong); line-height: 1.15; margin: 0;
 }
@@ -1750,7 +1750,7 @@ ${R} .status-v3-services__title-group {
 
 ${R} .status-v3-services__title {
   margin: 0;
-  font-family: 'Space Grotesk', Inter, sans-serif;
+  font-family: var(--font-family-display);
   font-size: 1.15rem;
   font-weight: 700;
   letter-spacing: -0.02em;
@@ -2043,7 +2043,7 @@ ${R} .status-v3-service__icon {
 }
 
 ${R} .status-v3-services .status-v3-service__name {
-  font-family: 'Space Grotesk', Inter, sans-serif;
+  font-family: var(--font-family-display);
   font-weight: 650;
   font-size: 0.85rem;
   color: var(--status-text-strong);
@@ -2172,7 +2172,7 @@ ${R} .status-v3-maintenance-inline__title {
   font-weight: 700;
   letter-spacing: -0.015em;
   color: var(--status-text-strong);
-  font-family: 'Space Grotesk', Inter, sans-serif;
+  font-family: var(--font-family-display);
 }
 ${R} .status-v3-maintenance-inline__subtitle {
   font-size: 0.72rem;
@@ -2283,7 +2283,7 @@ ${R} .status-v3-maintenance-pill__icon {
 }
 
 ${R} .status-v3-maintenance-pill__title {
-  font-family: 'Space Grotesk', Inter, sans-serif;
+  font-family: var(--font-family-display);
   font-weight: 650;
   font-size: 0.85rem;
   color: var(--status-text-strong);
@@ -2366,7 +2366,7 @@ ${R} .status-v3-announcements-inline__title {
   font-weight: 700;
   letter-spacing: -0.015em;
   color: var(--status-text-strong);
-  font-family: 'Space Grotesk', Inter, sans-serif;
+  font-family: var(--font-family-display);
 }
 ${R} .status-v3-announcements-inline__subtitle {
   font-size: 0.72rem;
@@ -2474,7 +2474,7 @@ ${R} .status-v3-changelog-pill__icon {
   flex-shrink: 0;
 }
 ${R} .status-v3-changelog-pill__title {
-  font-family: 'Space Grotesk', Inter, sans-serif;
+  font-family: var(--font-family-display);
   font-weight: 650;
   font-size: 0.85rem;
   color: var(--status-text-strong);
@@ -2571,7 +2571,7 @@ ${R} .status-v3-announcement-pill__icon {
 }
 
 ${R} .status-v3-announcement-pill__title {
-  font-family: 'Space Grotesk', Inter, sans-serif;
+  font-family: var(--font-family-display);
   font-weight: 650;
   font-size: 0.85rem;
   color: var(--status-text-strong);
@@ -2701,7 +2701,7 @@ ${R} .status-v3-regions-inline__title {
   font-weight: 700;
   letter-spacing: -0.02em;
   color: var(--status-text-strong);
-  font-family: 'Space Grotesk', Inter, sans-serif;
+  font-family: var(--font-family-display);
 }
 
 ${R} .status-v3-regions-inline__subtitle {
@@ -2796,7 +2796,7 @@ ${R} .status-v3-region-pill__name {
   font-size: 0.8125rem;
   letter-spacing: -0.01em;
   color: var(--status-text-strong);
-  font-family: 'Space Grotesk', Inter, sans-serif;
+  font-family: var(--font-family-display);
   white-space: nowrap;
 }
 
@@ -2979,7 +2979,7 @@ ${R} .status-site-footer__brand-logo {
   flex: none;
 }
 ${R} .status-site-footer__brand-name {
-  font-family: 'Space Grotesk', Inter, ui-sans-serif, system-ui, sans-serif;
+  font-family: var(--font-family-display);
   font-weight: 800;
   font-size: 1.05rem;
   color: var(--status-text-strong);

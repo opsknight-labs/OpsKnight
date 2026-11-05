@@ -675,7 +675,7 @@
   font-style: normal;
   line-height: 1;
   border: 1.5px solid rgba(17, 24, 39, 0.15);
-  font-family: 'Manrope', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-family: var(--font-family-sans);
 }
 
 .analytics-info-icon:hover {

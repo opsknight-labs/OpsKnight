@@ -384,7 +384,7 @@ export default function Sidebar({
             >
               {active && (
                 <span className="absolute top-1 right-1 flex h-2 w-2">
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500" />
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
                 </span>
               )}
               <Globe className={cn('h-[18px] w-[18px]', active && 'text-rose-400')} />
@@ -461,7 +461,7 @@ export default function Sidebar({
                       : 'text-slate-500 hover:text-slate-200 hover:bg-slate-800/40'
                   )}
                 >
-                  <span className={cn('h-1.5 w-1.5 rounded-full shrink-0', pageActive ? 'bg-green-400' : 'bg-slate-600')} />
+                  <span className={cn('h-1.5 w-1.5 rounded-full shrink-0', pageActive ? 'bg-emerald-400' : 'bg-slate-600')} />
                   <span className="truncate flex-1">{page.name}</span>
                   {page.isDefault && (
                     <span className="text-[9px] font-semibold text-slate-500 bg-slate-800 px-1 py-0.5 rounded shrink-0">default</span>

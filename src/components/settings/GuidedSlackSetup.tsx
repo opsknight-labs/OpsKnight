@@ -434,8 +434,8 @@ export default function GuidedSlackSetup({ baseUrl: initialBaseUrl }: GuidedSlac
         {step === 3 && (
           <div className="space-y-6 text-center py-8">
             <div className="flex justify-center">
-              <div className="p-4 rounded-full bg-green-500/10">
-                <CheckCircle2 className="h-12 w-12 text-green-500" />
+              <div className="p-4 rounded-full bg-emerald-500/10">
+                <CheckCircle2 className="h-12 w-12 text-emerald-500" />
               </div>
             </div>
 

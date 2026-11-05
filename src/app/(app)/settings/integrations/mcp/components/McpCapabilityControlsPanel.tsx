@@ -59,8 +59,8 @@ const PAGE_SIZE = 25;
 const DOMAIN_PREFIX = 'domain:';
 
 // Brand typography; the stacks fall back to the app's bundled face where these are not installed.
-const HEADING_FONT = "font-['Space_Grotesk',var(--font-manrope),system-ui,sans-serif]";
-const BODY_FONT = "font-['Inter',var(--font-manrope),system-ui,sans-serif]";
+const HEADING_FONT = 'font-display';
+const BODY_FONT = 'font-sans';
 // Small controls opt out of the page-wide compact-button padding (topbar.css, 1024–1600px) and the
 // 44px touch minimum (globals.css); the whole labelled row is the touch target instead.
 const COMPACT_CONTROL = 'ml-0 min-h-0 min-w-0 p-0';

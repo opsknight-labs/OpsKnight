@@ -32,7 +32,7 @@ export const NAV_SECTIONS: Record<NavSectionKey, NavSectionConfig> = {
   RELIABILITY: {
     key: 'RELIABILITY',
     label: 'Reliability',
-    dotClass: 'bg-green-500/80',
+    dotClass: 'bg-emerald-500/80',
     textClass: 'text-slate-400 dark:text-slate-400',
   },
   ON_CALL: {

@@ -213,7 +213,7 @@ const getTypeIcon = (type: string) => {
     case 'user':
       return <Users className="h-4 w-4 text-purple-500" />;
     case 'schedule':
-      return <Calendar className="h-4 w-4 text-green-500" />;
+      return <Calendar className="h-4 w-4 text-emerald-500" />;
     case 'policy':
       return <Shield className="h-4 w-4 text-yellow-500" />;
     case 'postmortem':

@@ -63,7 +63,7 @@ export default function ConsentView({
   return (
     <main
       id="mcp-consent"
-      className="flex min-h-screen flex-col items-center justify-center bg-slate-50 px-4 py-8 font-['Inter',ui-sans-serif,system-ui,sans-serif] text-slate-900 sm:px-6 sm:py-12 dark:bg-slate-950 dark:text-slate-100"
+      className="flex min-h-screen flex-col items-center justify-center bg-slate-50 px-4 py-8 font-sans text-slate-900 sm:px-6 sm:py-12 dark:bg-slate-950 dark:text-slate-100"
     >
       <div
         className={
@@ -88,7 +88,7 @@ export default function ConsentView({
             priority
             unoptimized
           />
-          <span className="font-['Space_Grotesk',sans-serif] text-lg font-bold tracking-tight">
+          <span className="font-display text-lg font-bold tracking-tight">
             OpsKnight
           </span>
         </a>
@@ -99,7 +99,7 @@ export default function ConsentView({
           <div className="space-y-1.5">
             <h1
               id="mcp-consent-title"
-              className="flex items-center gap-2 break-words font-['Space_Grotesk',sans-serif] font-bold tracking-tight text-slate-950 dark:text-white"
+              className="flex items-center gap-2 break-words font-display font-bold tracking-tight text-slate-950 dark:text-white"
             >
               {/* A brand logo only for a metadata host an administrator trusts (SEC-6); a chosen
                   name, or an untrusted publisher, gets the generic icon. */}

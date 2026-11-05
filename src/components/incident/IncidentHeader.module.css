@@ -64,7 +64,7 @@
     font-weight: var(--font-weight-bold);
     letter-spacing: -0.02em;
     color: var(--primary-color);
-    font-family: 'Space Grotesk', sans-serif;
+    font-family: var(--font-family-display);
 }
 
 .title {

@@ -47,8 +47,8 @@ npx prisma studio
 - **Next.js 15 App Router**: Prefer Server Components. Use `'use client'` only where interactive state or browser APIs are required. Use Server Actions (`'use server'`) in dedicated `actions.ts` files.
 - **RBAC**: Always enforce permissions in Server Actions via `getUserPermissions()` from `@/lib/rbac`.
 - **Validation**: Validate all inputs with Zod schemas.
-- **Styling**: Tailwind CSS, Radix UI primitives, Space Grotesk for headers/brand marks, Inter for body.
+- **Styling**: Tailwind CSS, Radix UI primitives, Space Grotesk for headers/brand marks (`font-display`), Inter for body (`font-sans`). Status colours come from Tailwind `status-*` tokens.
 - **OpsKnight Branding**: Use background-less transparent logo (`/logo.png`), no dark background boxes, and hyperlink all OpsKnight marks to `https://opsknight.com/`.
-- **Responsive Widths**: Support mobile up to 27-inch (1080px) and 4K (1180px) screens.
+- **Responsive Widths**: Support mobile up to 27-inch (1080px) and 4K (1180px) screens (email container widths; the app console is fluid).
 
 For detailed guidelines on email templates, status color semantics, and database invariants, refer to `@AGENTS.md`.

@@ -30,7 +30,7 @@
   - Tailwind CSS with customized color palettes.
   - Radix UI primitives (`@radix-ui/*`) wrapped in `src/components/ui/shadcn/`.
   - Lucide React (`lucide-react`) for icons.
-  - Font Pairing: `'Space Grotesk'` for prominent titles, badges, and brand headers; Inter / system sans for body text.
+  - Font Pairing: `'Space Grotesk'` for prominent titles, badges, and brand headers; Inter for body text (see "Typography" below).
 - **Type Safety**: Strict TypeScript. No unchecked `any` types; define explicit interfaces or infer from Zod schemas.
 - **Testing**:
   - Unit & Integration: Vitest (`tests/**/*.test.ts`).
@@ -45,20 +45,27 @@
 - **Subtle, Elegant, and SRE-Focused**: Clean, high-contrast, modern engineering aesthetic.
 - **No Intrusive Clutter**: Avoid loud promotional cards, excessive marketing copy, or noisy gamification banners in transactional alerts and operations interfaces.
 
+### Typography
+
+- **Inter** is the UI and body face; **Space Grotesk** is the display face for headings, badges and brand marks. Both are bundled with `next/font/local` in `src/app/layout.tsx` (no Google Fonts fetch at build or runtime).
+- Never hard-code a font family. Use the tokens `--font-family-sans`, `--font-family-display` and `--font-family-mono` (`src/styles/foundation/variables.css`) in CSS, and `font-sans`, `font-display` and `font-mono` in Tailwind. `h1`–`h6` pick up the display face automatically.
+- Transactional emails are the one exception: mail clients cannot load the bundled files, so email templates name `'Space Grotesk'` and Inter with system fallbacks.
+
 ### Official Brand Logo
 
 - **Asset**: Background-less transparent logo (`/logo.png` or `public/logo.png`).
 - **Vector Fallback**: Authentic red shield with knight headset SVG fallback for offline or blocked image scenarios.
 - **Never Enclose in Dark Boxes**: Do not wrap the logo in an opaque dark square or squircle (`#0f172a`) in transparent or light-themed contexts.
+- **Use the shared lockups**: `BrandLockup` (`src/components/layout/BrandLockup.tsx`) inside the app, `AuthBrand` (`src/components/auth/AuthBrand.tsx`) on sign-in, setup and other public pages. Both show the logo bare.
 
 ### Official Brand Hyperlinks
 
-- All OpsKnight brand logos, brand names, and footer attributions across email templates and public interfaces **must link to `https://opsknight.com/`**.
+- All OpsKnight brand logos, brand names, and footer attributions across email templates and public interfaces **must link to `https://opsknight.com/`** (`OPSKNIGHT_BRAND_URL` in `src/lib/brand.ts`). Inside the authenticated app the lockup links home (`/`).
 - In configurable components (`EmailStyles`), provide `brandUrl?: string` defaulting to `https://opsknight.com/`.
 
 ### Status Color Semantics
 
-Always use semantic color themes across badges, headers, accent borders, and primary buttons:
+Always use semantic color themes across badges, headers, accent borders, and primary buttons. The values below are mirrored in `src/lib/design/status-palette.ts` (enforced by `tests/architecture/design-system-contract.test.ts`) and exposed to Tailwind as `status-{critical,elevated,ok,info,shift}` with `-deep`, `-border` and `-soft` shades, e.g. `bg-gradient-to-r from-status-critical-deep to-status-critical`. Success is always emerald (never Tailwind `green`); on-call layers never use incident-state hues.
 
 - 🔴 **Critical / Triggered / High Urgency**: Crimson Red (`#881337` to `#e11d48`, border `#be123c`, bg `#fef2f2`).
 - 🟠 **Elevated / Medium Urgency / Acknowledged**: Warm Amber / Orange (`#78350f` to `#d97706`, border `#d97706`, bg `#fffbeb`).
@@ -68,7 +75,7 @@ Always use semantic color themes across badges, headers, accent borders, and pri
 
 ### Big-Screen & Responsive Scaling
 
-Email templates and dashboard views must be responsive across all devices:
+Email templates and dashboard views must be responsive across all devices. The fixed container widths below apply to emails; the operations console stays fluid so dense views use the full display, and `.page-shell` gutters scale at the same 1440px / 1920px tiers (content is centred at a 2304px reading width on 2560px+ ultrawides):
 
 - **Mobile (`<= 640px`)**: Full-width fluid containers, stacked action buttons (`padding: 14px 16px`), comfortable touch targets.
 - **Desktop (`>= 1024px`)**: Scaled layout with `860px` container width.

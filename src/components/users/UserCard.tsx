@@ -975,7 +975,7 @@ export function UserCard({
               {user.status === 'INVITED' ? (
                 <LinkIcon className="h-5 w-5 text-blue-600" />
               ) : (
-                <Key className="h-5 w-5 text-green-600" />
+                <Key className="h-5 w-5 text-emerald-600" />
               )}
               {user.status === 'INVITED' ? 'Get Invite Link' : 'Reset Password'}
             </DialogTitle>

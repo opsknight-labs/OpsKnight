@@ -79,7 +79,7 @@ function ResetPasswordForm() {
       <div className="space-y-4" role="status" aria-live="polite">
         <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-5 text-center dark:border-emerald-500/20 dark:bg-emerald-500/10">
           <ShieldCheck className="mx-auto h-8 w-8 text-emerald-600 dark:text-emerald-400" />
-          <h3 className="mt-3 font-['Space_Grotesk',sans-serif] font-semibold text-emerald-800 dark:text-emerald-300">
+          <h3 className="mt-3 font-display font-semibold text-emerald-800 dark:text-emerald-300">
             Password updated
           </h3>
           <p className="mt-1 text-sm text-emerald-700 dark:text-emerald-200/80">
@@ -232,7 +232,7 @@ export default function ResetPasswordPage() {
       <AuthCard>
         <div className="mb-8 text-center">
           <AuthBrand className="mb-6" />
-          <h1 className="font-['Space_Grotesk',sans-serif] text-2xl font-bold text-slate-950 dark:text-white">
+          <h1 className="font-display text-2xl font-bold text-slate-950 dark:text-white">
             Reset password
           </h1>
           <p className="mt-1.5 text-sm text-slate-500 dark:text-slate-400">
