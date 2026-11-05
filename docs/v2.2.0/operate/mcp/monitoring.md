@@ -26,17 +26,17 @@ Tool failures reach assistants as HTTP 200 JSON-RPC results, so the generic HTTP
 
 No metric carries a user, client, grant or incident identifier. `tool` is a bounded label (named tools, `other` for anything else, `none` off tools/call).
 
-| Metric                                   | Kind      | Labels                | Scope                         | Normal                                                                                       | When it is not                                                                                                                                                        |
-| ---------------------------------------- | --------- | --------------------- | ----------------------------- | -------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `opsknight_mcp_requests_total`           | counter   | `outcome`, `tool`     | Counter (sum across replicas) | Mostly `served`; some `tool_error` and `invalid_request` from assistants guessing arguments. | Alert on `error`/`unavailable` share (OpsKnightMcpServerErrorRateHigh). Group `mcp.request.completed` log lines by `outcome`, `tool` and `grantId` to find the cause. |
-| `opsknight_mcp_in_flight`                | gauge     | —                     | Per process (gauge)           | Below `opsknight_mcp_in_flight_limit` most of the time.                                      | Pinned at the limit with `opsknight_mcp_queued` above zero: raise the limit or add web replicas.                                                                      |
-| `opsknight_mcp_queued`                   | gauge     | —                     | Per process (gauge)           | Zero, with short spikes during bursts of parallel tool calls.                                | Never empties for five minutes: OpsKnightMcpQueueSaturated.                                                                                                           |
-| `opsknight_mcp_busy_total`               | counter   | —                     | Counter (sum across replicas) | Flat. Each increment is one request shed with MCP_BUSY (work or authentication slot).        | Sustained growth: OpsKnightMcpShedding. Raise the limit, add replicas, or find the busy connection.                                                                   |
-| `opsknight_mcp_subscriptions_active`     | gauge     | —                     | Per process (gauge)           | Open listen streams on this process, at most 32.                                             | At the cap, new streams get MCP_SUBSCRIPTIONS_BUSY (counted as outcome `busy`).                                                                                       |
-| `opsknight_mcp_in_flight_limit`          | gauge     | —                     | Per process (gauge)           | The policy value **Concurrent requests per process**, identical on every replica.            | Cluster capacity is this value times the web replicas.                                                                                                                |
-| `opsknight_mcp_request_duration_seconds` | histogram | `outcome`, `tool`     | Counter (sum across replicas) | Only calls that reached domain work are timed, so rejections never hide slow calls.          | p95 above 2.5 s for a tool: OpsKnightMcpP95High. Check the MCP database pool and slow queries.                                                                        |
-| `opsknight_mcp_oauth_requests_total`     | counter   | `endpoint`, `outcome` | Counter (sum across replicas) | Mostly `issued`; `invalid_grant` when assistants retry stale refresh tokens.                 | Token `server_error`/`unavailable`: OpsKnightMcpTokenEndpointFailing. A high `invalid_grant` share: OpsKnightMcpInvalidGrantSpike.                                    |
-| `opsknight_mcp_maintenance_runs_total`   | counter   | `task`, `result`      | Counter (sum across replicas) | One `success` per task per scheduler maintenance pass.                                       | Failures: OpsKnightMcpMaintenanceFailing. No success in 15 minutes: OpsKnightMcpMaintenanceStalled.                                                                   |
+| Metric | Kind | Labels | Scope | Normal | When it is not |
+| --- | --- | --- | --- | --- | --- |
+| `opsknight_mcp_requests_total` | counter | `outcome`, `tool` | Counter (sum across replicas) | Mostly `served`; some `tool_error` and `invalid_request` from assistants guessing arguments. | Alert on `error`/`unavailable` share (OpsKnightMcpServerErrorRateHigh). Group `mcp.request.completed` log lines by `outcome`, `tool` and `grantId` to find the cause. |
+| `opsknight_mcp_in_flight` | gauge | — | Per process (gauge) | Below `opsknight_mcp_in_flight_limit` most of the time. | Pinned at the limit with `opsknight_mcp_queued` above zero: raise the limit or add web replicas. |
+| `opsknight_mcp_queued` | gauge | — | Per process (gauge) | Zero, with short spikes during bursts of parallel tool calls. | Never empties for five minutes: OpsKnightMcpQueueSaturated. |
+| `opsknight_mcp_busy_total` | counter | — | Counter (sum across replicas) | Flat. Each increment is one request shed with MCP_BUSY (work or authentication slot). | Sustained growth: OpsKnightMcpShedding. Raise the limit, add replicas, or find the busy connection. |
+| `opsknight_mcp_subscriptions_active` | gauge | — | Per process (gauge) | Open listen streams on this process, at most 32. | At the cap, new streams get MCP_SUBSCRIPTIONS_BUSY (counted as outcome `busy`). |
+| `opsknight_mcp_in_flight_limit` | gauge | — | Per process (gauge) | The policy value **Concurrent requests per process**, identical on every replica. | Cluster capacity is this value times the web replicas. |
+| `opsknight_mcp_request_duration_seconds` | histogram | `outcome`, `tool` | Counter (sum across replicas) | Only calls that reached domain work are timed, so rejections never hide slow calls. | p95 above 2.5 s for a tool: OpsKnightMcpP95High. Check the MCP database pool and slow queries. |
+| `opsknight_mcp_oauth_requests_total` | counter | `endpoint`, `outcome` | Counter (sum across replicas) | Mostly `issued`; `invalid_grant` when assistants retry stale refresh tokens. | Token `server_error`/`unavailable`: OpsKnightMcpTokenEndpointFailing. A high `invalid_grant` share: OpsKnightMcpInvalidGrantSpike. |
+| `opsknight_mcp_maintenance_runs_total` | counter | `task`, `result` | Counter (sum across replicas) | One `success` per task per scheduler maintenance pass. | Failures: OpsKnightMcpMaintenanceFailing. No success in 15 minutes: OpsKnightMcpMaintenanceStalled. |
 
 `outcome` on `opsknight_mcp_requests_total`: `served`, `task_created`, `tool_error`, `notification`, `protocol_rejected`, `subscription_opened`, `subscription_rejected`, `unauthenticated`, `forbidden`, `rate_limited`, `busy`, `result_too_large`, `disabled`, `unavailable`, `invalid_request`, `error`. Every HTTP 429 counts as `rate_limited`. The duration histogram observes only `served`, `tool_error`, `task_created`, `result_too_large`.
 
@@ -44,20 +44,20 @@ No metric carries a user, client, grant or incident identifier. `tool` is a boun
 
 ## Alerts
 
-| Alert                                                                           | Severity | For         | Summary                                                       |
-| ------------------------------------------------------------------------------- | -------- | ----------- | ------------------------------------------------------------- |
-| <a id="OpsKnightMcpServerErrorRateHigh"></a>`OpsKnightMcpServerErrorRateHigh`   | critical | 10m         | More than 5% of MCP requests fail on the server               |
-| <a id="OpsKnightMcpToolErrorRateHigh"></a>`OpsKnightMcpToolErrorRateHigh`       | warning  | 15m         | More than a quarter of MCP calls return tool errors           |
-| <a id="OpsKnightMcpShedding"></a>`OpsKnightMcpShedding`                         | warning  | 10m         | MCP is shedding requests with MCP_BUSY                        |
-| <a id="OpsKnightMcpQueueSaturated"></a>`OpsKnightMcpQueueSaturated`             | warning  | immediately | MCP requests have waited for a work slot for five minutes     |
-| <a id="OpsKnightMcpAuthFailuresSpike"></a>`OpsKnightMcpAuthFailuresSpike`       | warning  | 10m         | Most MCP requests are refused authentication or authorization |
-| <a id="OpsKnightMcpRateLimited"></a>`OpsKnightMcpRateLimited`                   | warning  | 15m         | Assistants are hitting MCP quotas                             |
-| <a id="OpsKnightMcpDisabledTraffic"></a>`OpsKnightMcpDisabledTraffic`           | info     | 30m         | Assistants keep calling MCP while it is turned off            |
-| <a id="OpsKnightMcpP95High"></a>`OpsKnightMcpP95High`                           | warning  | 10m         | MCP tool {{ $labels.tool }} p95 latency is above 2.5 seconds  |
-| <a id="OpsKnightMcpTokenEndpointFailing"></a>`OpsKnightMcpTokenEndpointFailing` | critical | 10m         | MCP token refreshes are failing on the server                 |
-| <a id="OpsKnightMcpInvalidGrantSpike"></a>`OpsKnightMcpInvalidGrantSpike`       | warning  | 15m         | Most MCP token requests are rejected as invalid_grant         |
-| <a id="OpsKnightMcpMaintenanceFailing"></a>`OpsKnightMcpMaintenanceFailing`     | warning  | 2m          | MCP retention maintenance keeps failing                       |
-| <a id="OpsKnightMcpMaintenanceStalled"></a>`OpsKnightMcpMaintenanceStalled`     | warning  | 15m         | No successful MCP maintenance run in 15 minutes               |
+| Alert | Severity | For | Summary |
+| --- | --- | --- | --- |
+| <a id="OpsKnightMcpServerErrorRateHigh"></a>`OpsKnightMcpServerErrorRateHigh` | critical | 10m | More than 5% of MCP requests fail on the server |
+| <a id="OpsKnightMcpToolErrorRateHigh"></a>`OpsKnightMcpToolErrorRateHigh` | warning | 15m | More than a quarter of MCP calls return tool errors |
+| <a id="OpsKnightMcpShedding"></a>`OpsKnightMcpShedding` | warning | 10m | MCP is shedding requests with MCP_BUSY |
+| <a id="OpsKnightMcpQueueSaturated"></a>`OpsKnightMcpQueueSaturated` | warning | immediately | MCP requests have waited for a work slot for five minutes |
+| <a id="OpsKnightMcpAuthFailuresSpike"></a>`OpsKnightMcpAuthFailuresSpike` | warning | 10m | Most MCP requests are refused authentication or authorization |
+| <a id="OpsKnightMcpRateLimited"></a>`OpsKnightMcpRateLimited` | warning | 15m | Assistants are hitting MCP quotas |
+| <a id="OpsKnightMcpDisabledTraffic"></a>`OpsKnightMcpDisabledTraffic` | info | 30m | Assistants keep calling MCP while it is turned off |
+| <a id="OpsKnightMcpP95High"></a>`OpsKnightMcpP95High` | warning | 10m | MCP tool {{ $labels.tool }} p95 latency is above 2.5 seconds |
+| <a id="OpsKnightMcpTokenEndpointFailing"></a>`OpsKnightMcpTokenEndpointFailing` | critical | 10m | MCP token refreshes are failing on the server |
+| <a id="OpsKnightMcpInvalidGrantSpike"></a>`OpsKnightMcpInvalidGrantSpike` | warning | 15m | Most MCP token requests are rejected as invalid_grant |
+| <a id="OpsKnightMcpMaintenanceFailing"></a>`OpsKnightMcpMaintenanceFailing` | warning | 2m | MCP retention maintenance keeps failing |
+| <a id="OpsKnightMcpMaintenanceStalled"></a>`OpsKnightMcpMaintenanceStalled` | warning | 15m | No successful MCP maintenance run in 15 minutes |
 
 Each alert's description in the rules file names the log event to search. Thresholds are starting points; tune them to your traffic.
 
@@ -69,15 +69,15 @@ Every /mcp request writes one `mcp.request.completed` line: `requestId` (also th
 
 Every MCP limit is enforced per web process. Multiply by the number of web replicas for cluster capacity. These are arithmetic caps, not measured throughput (see [architecture](architecture.md#workload-isolation)).
 
-| Limit (per process)               | Value                                                         | Shed as                                              | Watch                                                        |
-| --------------------------------- | ------------------------------------------------------------- | ---------------------------------------------------- | ------------------------------------------------------------ |
-| Concurrent bearer authentications | 4                                                             | `MCP_BUSY`, Retry-After 1                            | `opsknight_mcp_busy_total`                                   |
-| Work slots                        | policy **Concurrent requests per process** (1 to 16)          | waits up to 750 ms, then `MCP_BUSY`                  | `opsknight_mcp_in_flight` vs `opsknight_mcp_in_flight_limit` |
-| Work-slot queue                   | twice the work slots                                          | `MCP_BUSY` at once                                   | `opsknight_mcp_queued`                                       |
-| Slots one person may hold         | half the work slots, rounded up, across all their connections | waits, then `MCP_BUSY`                               | `mcp.request.completed` with outcome `busy` by `grantId`     |
-| Listen streams                    | 32 (2 per connection, 10 minutes each)                        | `MCP_SUBSCRIPTIONS_BUSY` / `MCP_SUBSCRIPTIONS_LIMIT` | `opsknight_mcp_subscriptions_active`                         |
-| Operations per request            | policy **Operations per request**, at most 8                  | `MCP_OPERATION_BUDGET_EXCEEDED`                      | tool errors by `errorCode`                                   |
-| MCP database pool                 | 2 connections (maximum 4)                                     | waits on database connections                        | `/api/health/deep` `mcp.latencyMs`                           |
+| Limit (per process) | Value | Shed as | Watch |
+| --- | --- | --- | --- |
+| Concurrent bearer authentications | 4 | `MCP_BUSY`, Retry-After 1 | `opsknight_mcp_busy_total` |
+| Work slots | policy **Concurrent requests per process** (1 to 16) | waits up to 750 ms, then `MCP_BUSY` | `opsknight_mcp_in_flight` vs `opsknight_mcp_in_flight_limit` |
+| Work-slot queue | twice the work slots | `MCP_BUSY` at once | `opsknight_mcp_queued` |
+| Slots one person may hold | half the work slots, rounded up, across all their connections | waits, then `MCP_BUSY` | `mcp.request.completed` with outcome `busy` by `grantId` |
+| Listen streams | 32 (2 per connection, 10 minutes each) | `MCP_SUBSCRIPTIONS_BUSY` / `MCP_SUBSCRIPTIONS_LIMIT` | `opsknight_mcp_subscriptions_active` |
+| Operations per request | policy **Operations per request**, at most 8 | `MCP_OPERATION_BUDGET_EXCEEDED` | tool errors by `errorCode` |
+| MCP database pool | 2 connections (maximum 4) | waits on database connections | `/api/health/deep` `mcp.latencyMs` |
 
 Example: three web replicas with **Concurrent requests per process** set to 4 admit at most 12 MCP requests at once cluster-wide, queue 24 more, and hold up to 96 listen streams; they need 6 to 12 MCP database connections on top of the web pool. `/api/health/deep` reports each process's `inFlight`, `queued`, `authenticating`, `limit`, `queueCap`, `authLimit`, `streams` and `streamsLimit`.
 
