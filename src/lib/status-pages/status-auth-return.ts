@@ -1,3 +1,5 @@
+import { z } from 'zod/v3';
+
 /**
  * Return-target encoding for the status-page SSO hand-off.
  *
@@ -12,6 +14,18 @@
 // Host characters only (name, IPv6 brackets, port). The parsed-URL host
 // comparison below is the real check; this keeps userinfo, paths and odd bytes out.
 const HOST_PATTERN = /^[A-Za-z0-9.:[\]-]{1,260}$/;
+
+/** Strict query contract for `/status-auth/start`, current and legacy forms. */
+export const statusAuthStartQuerySchema = z
+  .object({
+    pageId: z.string().trim().min(1).max(128),
+    returnHost: z.string().trim().max(260).optional(),
+    returnScheme: z.enum(['http', 'https']).optional(),
+    returnTo: z.string().trim().max(2048).optional(),
+  })
+  .strict();
+
+export type StatusAuthStartQuery = z.infer<typeof statusAuthStartQuerySchema>;
 
 export function statusAuthStartUrl(
   appUrl: string,
@@ -32,9 +46,9 @@ export function statusAuthStartUrl(
  * issued before the change keep working. Host allow-listing stays with the
  * caller. Returns null for anything malformed.
  */
-export function resolveStatusAuthReturn(params: URLSearchParams, appUrl: string): URL | null {
-  const returnHost = params.get('returnHost')?.trim();
-  const returnTo = params.get('returnTo')?.trim() || '/';
+export function resolveStatusAuthReturn(query: StatusAuthStartQuery, appUrl: string): URL | null {
+  const returnHost = query.returnHost;
+  const returnTo = query.returnTo || '/';
 
   if (!returnHost) {
     try {
@@ -48,7 +62,7 @@ export function resolveStatusAuthReturn(params: URLSearchParams, appUrl: string)
   if (!returnTo.startsWith('/') || returnTo.startsWith('//') || returnTo.includes('\\')) {
     return null;
   }
-  const scheme = params.get('returnScheme') === 'http' ? 'http' : 'https';
+  const scheme = query.returnScheme === 'http' ? 'http' : 'https';
   try {
     const url = new URL(`${scheme}://${returnHost}${returnTo}`);
     const expected = returnHost.toLowerCase();

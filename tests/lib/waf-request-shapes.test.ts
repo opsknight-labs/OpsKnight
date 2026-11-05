@@ -1,7 +1,17 @@
 import { describe, expect, it } from 'vitest';
 import { forcedSignOutUrl, signOutDestination } from '@/lib/app-routes';
 import { relativeToAppOrigin, safeInternalCallbackUrl } from '@/lib/auth-redirect';
-import { resolveStatusAuthReturn, statusAuthStartUrl } from '@/lib/status-pages/status-auth-return';
+import {
+  resolveStatusAuthReturn as resolveParsed,
+  statusAuthStartQuerySchema,
+  statusAuthStartUrl,
+} from '@/lib/status-pages/status-auth-return';
+
+// The route parses the query through the strict schema before resolving it.
+function resolveStatusAuthReturn(params: URLSearchParams, appUrl: string) {
+  const parsed = statusAuthStartQuerySchema.safeParse(Object.fromEntries(params));
+  return parsed.success ? resolveParsed(parsed.data, appUrl) : null;
+}
 
 // WAFs block absolute URLs in query strings (OWASP CRS 931120/931130, AWS
 // GenericRFI_QUERYARGUMENTS) and values encoded more than once (CRS 920230).

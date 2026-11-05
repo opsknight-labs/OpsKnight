@@ -95,4 +95,18 @@ describe('GET /status-auth/start (WAF-friendly return target)', () => {
     );
     expect(res.status).toBe(400);
   });
+
+  it('rejects queries outside the strict schema', async () => {
+    mocks.session.mockResolvedValue({ user: { id: 'u1' } });
+    for (const search of [
+      '',
+      '?returnHost=status.customer.com',
+      '?pageId=page_1&returnHost=status.customer.com&extra=1',
+      '?pageId=page_1&returnHost=status.customer.com&returnScheme=ftp',
+    ]) {
+      const res = await GET(new NextRequest(`${appUrl}/status-auth/start${search}`));
+      expect(res.status).toBe(400);
+    }
+    expect(mocks.findFirst).not.toHaveBeenCalled();
+  });
 });
