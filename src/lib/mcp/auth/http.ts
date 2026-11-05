@@ -50,6 +50,10 @@ function bearerChallenge(error: unknown, code: string) {
   // RFC 6750 section 3.1: a request with no credential gets no error code, so clients start
   // sign-in instead of trying a refresh first. invalid_token tells them to refresh or sign in again.
   if (code === 'MCP_TOKEN_REQUIRED') return `Bearer ${resource}${scope}`;
+  // Step-up (RFC 6750 section 3.1, MCP scope challenge): the token is valid but lacks a
+  // permission a new consent can grant; `scope` names what to ask for.
+  if (code === 'MCP_INSUFFICIENT_SCOPE')
+    return `Bearer error="insufficient_scope", error_description="This call needs more permission; sign in again to approve it", ${resource}${scope}`;
   return `Bearer error="invalid_token", error_description="${challengeText(code)}", ${resource}${scope}`;
 }
 
@@ -82,7 +86,9 @@ export function mcpHttpError(error: unknown) {
               ),
             }
           : {}),
-        ...(status === 401 ? { 'WWW-Authenticate': bearerChallenge(error, code) } : {}),
+        ...(status === 401 || code === 'MCP_INSUFFICIENT_SCOPE'
+          ? { 'WWW-Authenticate': bearerChallenge(error, code) }
+          : {}),
       },
     }
   );

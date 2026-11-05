@@ -22,7 +22,7 @@ Start with **Test connection** on the Overview tab of **Settings → Integration
 
 Tool errors carry a structured `error` object: `code`, optional `domainCode` (a code from the application error registry), `fields` (which input failed and why), `retryable`, `retryAfterSeconds`, `hint` and `requestId`. The `requestId` is also the `X-Request-Id` response header and appears in server log entries, so support can find the exact request. Problem titles and details from the application are never forwarded.
 
-This page lists 95 MCP codes and 12 log events found in the source.
+This page lists 96 MCP codes and 12 log events found in the source.
 
 ## Connecting and signing in
 
@@ -39,6 +39,7 @@ This page lists 95 MCP codes and 12 log events found in the source.
 | `MCP_RATE_LIMITED` | Too many consents (10 a minute), metadata fetches (6 a minute) or review decisions by one person. | Wait a minute and retry. |
 | `MCP_ACCESS_CHANGED` | A security event ended the connection: the person's password or email changed, they were demoted from Administrator, deactivated, signed out everywhere, or an administrator revoked their sessions. | Reconnect OpsKnight from the assistant. Team and ordinary role changes do not cause this. |
 | `MCP_INVALID_TOKEN` | The bearer token is malformed, unknown or expired. | Let the assistant refresh or reconnect. |
+| `MCP_INSUFFICIENT_SCOPE` | Scope step-up is on and the call needs a permission this connection lacks but a new consent could grant. HTTP 403 with an insufficient_scope challenge naming the scopes to ask for. | A supporting assistant re-opens sign-in for the extra permission; approve it. Others reconnect. |
 | `MCP_CLIENT_UNKNOWN` | The assistant presented a client ID this server does not know (often a stale cached registration). | Remove OpsKnight from the assistant, add it again with the same URL and sign in. |
 | `MCP_REGISTRATION_DISABLED` | Automatic connections are off, so assistants cannot register themselves. | An administrator turns on Automatic connections under Access policy. |
 | `MCP_REGISTRATION_CAPACITY` | The registry already holds 5,000 automatically registered assistants. | Retry later; unused registrations are cleaned up after an hour. |
@@ -158,6 +159,7 @@ The sign-in, consent and error pages show these titles and explanations, with th
 | `MCP_RATE_LIMITED` | Too many attempts | Too many requests in the last minute. Wait a moment, then try again. |
 | `MCP_ACCESS_CHANGED` | Your access changed | Your password, email, account status or administrator role changed, or you signed out everywhere. Reconnect OpsKnight from your assistant to sign in again. |
 | `MCP_INVALID_TOKEN` | Sign-in required | Connect OpsKnight again from your assistant to sign in. |
+| `MCP_INSUFFICIENT_SCOPE` | More permission needed | This connection was not granted a permission this call needs. Approve the extra permission when your assistant opens OpsKnight sign-in again. |
 | `MCP_CLIENT_UNKNOWN` | This connection is out of date | OpsKnight no longer recognises the sign-in details this assistant saved. Remove OpsKnight from your assistant, add it again with the same URL, and sign in. |
 | `MCP_CAPABILITY_DISABLED` | This capability is turned off | An OpsKnight administrator disabled this capability for AI assistants in Settings → Integrations & ChatOps → MCP (AI Assistants) → Exposed capabilities. Do not retry; ask an administrator if you need it. |
 | `MCP_CLIENT_METADATA_TIMEOUT` | We could not load this assistant's details | OpsKnight could not fetch the details this assistant publishes about itself in time. Try again, and ask an administrator to check outbound network access from the server if it keeps failing. |

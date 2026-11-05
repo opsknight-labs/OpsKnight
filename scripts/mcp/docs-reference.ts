@@ -370,6 +370,12 @@ export const MCP_ERROR_GUIDE: Record<string, Guide> = {
     meaning: 'A resource id or opsknight:// URI is malformed.',
     fix: 'Use an id returned by a list or search.',
   },
+  MCP_INSUFFICIENT_SCOPE: {
+    area: 'sign-in',
+    meaning:
+      'Scope step-up is on and the call needs a permission this connection lacks but a new consent could grant. HTTP 403 with an insufficient_scope challenge naming the scopes to ask for.',
+    fix: 'A supporting assistant re-opens sign-in for the extra permission; approve it. Others reconnect.',
+  },
   MCP_INVALID_SCOPE: {
     area: 'sign-in',
     meaning:

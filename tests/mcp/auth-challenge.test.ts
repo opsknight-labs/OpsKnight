@@ -30,6 +30,21 @@ describe('401 challenges', () => {
   });
 });
 
+describe('403 step-up challenge (D2)', () => {
+  it('names insufficient_scope and the scopes to ask for; other 403s carry no challenge', () => {
+    const error = new McpBoundaryError('MCP_INSUFFICIENT_SCOPE', 403);
+    error.challengeScope = 'services:read incidents:read';
+    const response = mcpHttpError(error);
+    expect(response.status).toBe(403);
+    expect(response.headers.get('www-authenticate')).toMatch(
+      /^Bearer error="insufficient_scope", error_description="[^"]+", resource_metadata="[^"]+", scope="services:read incidents:read"$/
+    );
+    expect(
+      mcpHttpError(new McpBoundaryError('MCP_INVALID_ORIGIN', 403)).headers.get('www-authenticate')
+    ).toBeNull();
+  });
+});
+
 describe('challengeScopes', () => {
   const policy = {
     enabled: true,

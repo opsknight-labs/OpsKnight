@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto';
-import { beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createTestUser, resetDatabase, testPrisma as db } from '../helpers/test-db';
 import { digestMcpSecret, mcpResource, resetMcpRuntimeForTests } from '@/lib/mcp/auth/config';
 import { resetMcpAdmissionForTests } from '@/lib/mcp/auth/admission';
@@ -12,6 +12,26 @@ import {
   OPTIONS as protectedResourcePreflight,
 } from '@/app/.well-known/oauth-protected-resource/mcp/route';
 import { GET as authorizationServer } from '@/app/.well-known/oauth-authorization-server/oauth/mcp/route';
+
+// Records what the route hands the SDK per request, then serves it unchanged.
+const sdkCalls = vi.hoisted(() => [] as { authInfo?: { scopes: string[]; clientId: string } }[]);
+vi.mock('@modelcontextprotocol/server', async importOriginal => {
+  const actual = await importOriginal<typeof import('@modelcontextprotocol/server')>();
+  return {
+    ...actual,
+    createMcpHandler: (...args: Parameters<typeof actual.createMcpHandler>) => {
+      const handler = actual.createMcpHandler(...args);
+      return {
+        ...handler,
+        fetch: (request: Request, options?: Parameters<typeof handler.fetch>[1]) => {
+          sdkCalls.push(options as (typeof sdkCalls)[number]);
+          return handler.fetch(request, options);
+        },
+        close: () => handler.close(),
+      };
+    },
+  };
+});
 
 const origin = 'http://localhost:3000';
 const inspector = 'http://localhost:6274';
@@ -45,10 +65,10 @@ beforeEach(async () => {
   await db.mcpPolicy.upsert({ where: { id: 'default' }, create: basePolicy, update: basePolicy });
 });
 
-async function bearerFor(grantScopes = scopes) {
+async function bearerFor(grantScopes = scopes, clientScopes = grantScopes) {
   const user = await createTestUser({ role: 'ADMIN' });
   const client = await db.mcpClient.create({
-    data: { name: 'Edges', scopes: grantScopes, redirectUris: ['http://localhost/callback'] },
+    data: { name: 'Edges', scopes: clientScopes, redirectUris: ['http://localhost/callback'] },
   });
   const grant = await db.mcpGrant.create({
     data: {
@@ -227,5 +247,76 @@ describe('SEC-12: discovery metadata is memoised', () => {
     expect((await (await authorizationServer()).json()).registration_endpoint).toBeDefined();
     clearDiscoveryPolicyCache();
     expect((await (await authorizationServer()).json()).registration_endpoint).toBeUndefined();
+  });
+});
+
+describe('D2: step-up consent', () => {
+  const getIncident = (name = 'incident_get', args: unknown = { id: 'missing-incident' }) => ({
+    jsonrpc: '2.0',
+    id: 7,
+    method: 'tools/call',
+    params: { name, arguments: args },
+  });
+  const enableStepUp = () =>
+    db.mcpPolicy.update({ where: { id: 'default' }, data: { scopeStepUpEnabled: true } });
+
+  it('answers a grantable missing permission with 403 insufficient_scope', async () => {
+    await enableStepUp();
+    const { bearer } = await bearerFor(['services:read'], ['services:read', 'incidents:read']);
+    for (const body of [
+      getIncident(),
+      getIncident('call_operation', { operationId: 'getIncident', args: { path: { id: 'x' } } }),
+      getIncident('execute_plan', {
+        steps: [{ operationId: 'getIncident', args: { path: { id: 'x' } } }],
+      }),
+    ]) {
+      const response = await mcp({ authorization: `Bearer ${bearer}` }, body);
+      expect(response.status).toBe(403);
+      expect(await response.json()).toMatchObject({ error: 'MCP_INSUFFICIENT_SCOPE' });
+      const challenge = response.headers.get('www-authenticate')!;
+      expect(challenge).toContain('error="insufficient_scope"');
+      // What the connection has plus what the call needs.
+      expect(challenge).toContain('scope="services:read incidents:read"');
+      expect(challenge).toContain(
+        `resource_metadata="${origin}/.well-known/oauth-protected-resource/mcp"`
+      );
+    }
+  });
+
+  it('stays a tool error while the switch is off (the default)', async () => {
+    const { bearer } = await bearerFor(['services:read'], ['services:read', 'incidents:read']);
+    const response = await mcp({ authorization: `Bearer ${bearer}` }, getIncident());
+    expect(response.status).toBe(200);
+    expect(response.headers.get('www-authenticate')).toBeNull();
+  });
+
+  it('does not challenge for a permission a new consent could not grant', async () => {
+    await enableStepUp();
+    // The assistant's ceiling lacks incidents:read: reconnecting would not help.
+    const { bearer } = await bearerFor(['services:read']);
+    expect((await mcp({ authorization: `Bearer ${bearer}` }, getIncident())).status).toBe(200);
+    // An administrator-disabled capability is refused whatever the consent.
+    const second = await bearerFor(['services:read'], ['services:read', 'incidents:read']);
+    await db.mcpPolicy.update({
+      where: { id: 'default' },
+      data: { disabledCapabilities: ['getIncident'] },
+    });
+    expect((await mcp({ authorization: `Bearer ${second.bearer}` }, getIncident())).status).toBe(
+      200
+    );
+    // A granted call and discovery pass through.
+    expect((await mcp({ authorization: `Bearer ${second.bearer}` })).status).toBe(200);
+  });
+
+  it('hands the SDK the authenticated token facts as authInfo', async () => {
+    const { bearer, client } = await bearerFor();
+    sdkCalls.length = 0;
+    expect((await mcp({ authorization: `Bearer ${bearer}` })).status).toBe(200);
+    expect(sdkCalls.at(-1)?.authInfo).toMatchObject({
+      token: bearer,
+      clientId: client.id,
+      scopes,
+      resource: new URL(mcpResource()),
+    });
   });
 });

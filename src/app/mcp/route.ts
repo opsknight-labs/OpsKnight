@@ -56,6 +56,7 @@ import {
   type McpMetricOutcome,
 } from '@/lib/mcp/protocol/metrics';
 import { isMcpCapabilityDisabled } from '@/lib/mcp/catalog/capabilities';
+import { stepUpScopes } from '@/lib/mcp/auth/step-up';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -242,6 +243,22 @@ async function handlePost(request: Request, requestId: string, browserOrigin: st
       outcome = 'subscription_opened';
       return await openListenStream(request, body, context, identity, subscribedUris);
     }
+    // Step-up (opt-in): a call this connection lacks a grantable permission for gets an HTTP 403
+    // insufficient_scope challenge, so a supporting client re-opens consent for just that.
+    const stepUp = identity.policy.scopeStepUpEnabled
+      ? stepUpScopes(identity.auth.actor, {
+          clientScopes: identity.clientScopes,
+          policy: identity.policy,
+          method: body.method,
+          params: body.params,
+        })
+      : null;
+    if (stepUp) {
+      outcome = 'protocol_rejected';
+      const error = new McpBoundaryError('MCP_INSUFFICIENT_SCOPE', 403);
+      error.challengeScope = stepUp.join(' ');
+      return mcpHttpError(error);
+    }
     const handler = createMcpHandler(
       () =>
         createOpsKnightMcpServer(
@@ -261,7 +278,7 @@ async function handlePost(request: Request, requestId: string, browserOrigin: st
     );
     try {
       const response = await boundMcpResponse(
-        await handler.fetch(request, { parsedBody: body }),
+        await handler.fetch(request, { parsedBody: body, authInfo: identity.authInfo }),
         budget.maxBytes
       );
       const taskResponse =
@@ -434,7 +451,7 @@ async function openListenStream(
   };
   let response: Response;
   try {
-    response = await handler.fetch(request, { parsedBody: body });
+    response = await handler.fetch(request, { parsedBody: body, authInfo: identity.authInfo });
   } catch (error) {
     await cleanup();
     throw error;
