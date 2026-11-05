@@ -1,0 +1,41 @@
+name: MCP client metadata drift
+# Fetches the client metadata documents real assistants publish and checks them against the
+# fixtures the unit suite uses (CERT-09). Network access, so never part of the hermetic
+# certification workflow or pull requests. A rejected document opens (or updates) one issue.
+on:
+  schedule:
+    - cron: '41 4 * * *'
+  workflow_dispatch:
+permissions:
+  contents: read
+  issues: write
+concurrency:
+  group: mcp-cimd-drift
+  cancel-in-progress: true
+jobs:
+  cimd-drift:
+    name: Live client metadata documents
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v4
+        with: { node-version: 20, cache: npm }
+      - run: npm ci --legacy-peer-deps --ignore-scripts
+      - run: npx prisma generate
+      - name: Check live documents
+        id: check
+        run: npm run mcp:cimd-check -- --summary "$RUNNER_TEMP/cimd-drift.json"
+      - name: Open or update the drift issue
+        if: failure() && steps.check.outcome == 'failure'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          body="$(printf 'The nightly check found a client metadata document this server would reject, so that assistant cannot sign in.\n\nRun: %s/%s/actions/runs/%s\n\n```json\n%s\n```\n\nOperators see the same failure as the `mcp.cimd.document_rejected` log reason.' "$GITHUB_SERVER_URL" "$GITHUB_REPOSITORY" "$GITHUB_RUN_ID" "$(cat "$RUNNER_TEMP/cimd-drift.json" 2>/dev/null)")"
+          existing="$(gh issue list --label mcp-cimd-drift --state open --json number --jq '.[0].number')"
+          if [ -n "$existing" ]; then
+            gh issue comment "$existing" --body "$body"
+          else
+            gh label create mcp-cimd-drift --color B60205 --description 'Live MCP client metadata drift' 2>/dev/null || true
+            gh issue create --title 'MCP client metadata document rejected' --label mcp-cimd-drift --body "$body"
+          fi

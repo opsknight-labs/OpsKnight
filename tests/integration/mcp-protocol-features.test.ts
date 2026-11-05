@@ -210,6 +210,8 @@ describe('subscriptions/listen', () => {
     const response = await listen(admin.bearer, { resourceSubscriptions: [uri] });
     expect(response.status).toBe(200);
     expect(response.headers.get('content-type')).toContain('text/event-stream');
+    // Reverse proxies (nginx) must pass events straight through, not buffer them (CERT-07).
+    expect(response.headers.get('x-accel-buffering')).toBe('no');
     const reader = response.body!.getReader();
     const ack = await nextEvent(
       reader,
@@ -231,6 +233,65 @@ describe('subscriptions/listen', () => {
     ];
     expect(again.map(r => r.status)).toEqual([200, 200]);
     await Promise.all(again.map(r => r.body!.cancel()));
+  });
+
+  it('ends a listen stream and frees its slot when the client aborts the request (CERT-12)', async () => {
+    const admin = await principal();
+    const holders = await Promise.all(
+      [0, 1].map(async () => {
+        const controller = new AbortController();
+        const response = await POST(
+          new Request(mcpResource(), {
+            method: 'POST',
+            signal: controller.signal,
+            headers: {
+              authorization: `Bearer ${admin.bearer}`,
+              'content-type': 'application/json',
+              accept: 'application/json, text/event-stream',
+              'mcp-protocol-version': '2026-07-28',
+              'mcp-method': 'subscriptions/listen',
+            },
+            body: JSON.stringify({
+              jsonrpc: '2.0',
+              id: ++rpcId,
+              method: 'subscriptions/listen',
+              params: {
+                notifications: { toolsListChanged: true },
+                _meta: {
+                  'io.modelcontextprotocol/protocolVersion': '2026-07-28',
+                  'io.modelcontextprotocol/clientCapabilities': {},
+                  'io.modelcontextprotocol/clientInfo': { name: 'abort', version: '1' },
+                },
+              },
+            }),
+          })
+        );
+        expect(response.status).toBe(200);
+        const reader = response.body!.getReader();
+        await nextEvent(reader, m => m.method === 'notifications/subscriptions/acknowledged');
+        return { controller, reader };
+      })
+    );
+    // Both slots are held, so a third stream is refused until the aborts land.
+    expect((await listen(admin.bearer, { toolsListChanged: true })).status).toBe(429);
+    for (const { controller } of holders) controller.abort();
+    for (const { reader } of holders) {
+      const ended = await Promise.race([
+        reader.read().then(
+          chunk => chunk.done,
+          () => true
+        ),
+        new Promise<false>(resolve => setTimeout(() => resolve(false), 3000)),
+      ]);
+      expect(ended).toBe(true);
+    }
+    await expect
+      .poll(async () => {
+        const next = await listen(admin.bearer, { toolsListChanged: true });
+        await next.body?.cancel();
+        return next.status;
+      })
+      .toBe(200);
   });
 
   it('bounds streams per grant and does not hold database admission while streaming', async () => {

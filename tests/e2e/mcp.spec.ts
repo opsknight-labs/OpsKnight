@@ -1,5 +1,23 @@
 import { test, expect, type APIRequestContext, type Page } from '@playwright/test';
 import { createHash, randomBytes } from 'node:crypto';
+import { sdkHandshake } from '../helpers/mcp-sdk-handshake';
+
+/** Playwright's request context as a fetch, so the SDK can reach a replica under the public Host. */
+function playwrightFetch(request: APIRequestContext, target: string, host: string) {
+  return async (input: string | URL | Request, init?: RequestInit) => {
+    const url = new URL(input instanceof Request ? input.url : String(input));
+    const response = await request.fetch(`${target}${url.pathname}${url.search}`, {
+      method: init?.method ?? 'GET',
+      headers: { ...Object.fromEntries(new Headers(init?.headers).entries()), host },
+      data: typeof init?.body === 'string' ? init.body : undefined,
+    });
+    const status = response.status();
+    return new Response([204, 205, 304].includes(status) ? null : await response.body(), {
+      status,
+      headers: response.headers(),
+    });
+  };
+}
 
 async function connectClient(
   page: Page,
@@ -144,6 +162,67 @@ test('native MCP settings, PKCE consent, scoped call and revocation on desktop/m
   const denial = (await forbidden.json()).result;
   expect(denial.isError).toBe(true);
   expect(denial.content[0].text).toBe('MCP_OPERATION_FORBIDDEN');
+
+  // CERT-02: the published 1.x SDK client completes a real handshake at both 2025 revisions
+  // against the built server, and against the second replica when one is running.
+  const host = new URL(origin).host;
+  for (const target of [origin, process.env.MCP_E2E_REPLICA_URL].filter(Boolean) as string[])
+    for (const revision of ['2025-06-18', '2025-11-25'] as const) {
+      const handshake = await sdkHandshake({
+        url: `${origin}/mcp`,
+        bearer: token.access_token,
+        revision,
+        fetch: playwrightFetch(request, target, host),
+      });
+      expect(handshake.negotiated, `${target} ${revision}`).toBe(revision);
+      expect(handshake.toolNames).toContain('whoami');
+      expect(handshake.whoami.isError ?? false).toBe(false);
+      expect(handshake.whoami.structuredContent).toHaveProperty('userId');
+      expect(handshake.sentSessionId).toBe(false);
+    }
+
+  // CERT-07: the listen stream through the built server (not just the handler) is unbuffered: its
+  // acknowledgement arrives promptly and the proxy-buffering opt-out header survives Next.
+  const listen = await fetch(`${origin}/mcp`, {
+    method: 'POST',
+    headers: {
+      authorization: `Bearer ${token.access_token}`,
+      'content-type': 'application/json',
+      accept: 'application/json, text/event-stream',
+      'mcp-protocol-version': '2026-07-28',
+      'mcp-method': 'subscriptions/listen',
+    },
+    body: JSON.stringify({
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'subscriptions/listen',
+      params: {
+        notifications: { toolsListChanged: true },
+        _meta: {
+          'io.modelcontextprotocol/protocolVersion': '2026-07-28',
+          'io.modelcontextprotocol/clientInfo': { name: 'local-browser-fixture', version: '1' },
+          'io.modelcontextprotocol/clientCapabilities': {},
+        },
+      },
+    }),
+  });
+  expect(listen.status).toBe(200);
+  expect(listen.headers.get('content-type')).toContain('text/event-stream');
+  expect(listen.headers.get('cache-control')).toContain('no-store');
+  expect(listen.headers.get('x-accel-buffering')).toBe('no');
+  const stream = listen.body!.getReader();
+  const deadline = Date.now() + 2000;
+  let received = '';
+  while (Date.now() < deadline && !received.includes('notifications/subscriptions/acknowledged')) {
+    const chunk = await Promise.race([
+      stream.read(),
+      new Promise<null>(resolve => setTimeout(() => resolve(null), deadline - Date.now())),
+    ]);
+    if (!chunk || chunk.done) break;
+    received += new TextDecoder().decode(chunk.value);
+  }
+  expect(received).toContain('notifications/subscriptions/acknowledged');
+  await stream.cancel();
 
   // Connections render as stacked cards on phones; the rows and their actions are the same.
   await page.setViewportSize({ width: 390, height: 844 });
