@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { randomBytes } from 'node:crypto';
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import {
@@ -28,7 +29,7 @@ beforeEach(async () => {
 afterEach(() => resetSubscriptionStateForTests());
 
 const scopes = ['incidents:read', 'services:read'];
-async function principal(role: 'ADMIN' | 'USER' = 'ADMIN') {
+async function principal(role: 'ADMIN' | 'RESPONDER' | 'USER' = 'ADMIN') {
   const user = await createTestUser({ role });
   const client = await db.mcpClient.create({
     data: { name: 'Protocol features', scopes, redirectUris: ['http://localhost/callback'] },
@@ -209,6 +210,8 @@ describe('subscriptions/listen', () => {
     const response = await listen(admin.bearer, { resourceSubscriptions: [uri] });
     expect(response.status).toBe(200);
     expect(response.headers.get('content-type')).toContain('text/event-stream');
+    // Reverse proxies (nginx) must pass events straight through, not buffer them (CERT-07).
+    expect(response.headers.get('x-accel-buffering')).toBe('no');
     const reader = response.body!.getReader();
     const ack = await nextEvent(
       reader,
@@ -230,6 +233,65 @@ describe('subscriptions/listen', () => {
     ];
     expect(again.map(r => r.status)).toEqual([200, 200]);
     await Promise.all(again.map(r => r.body!.cancel()));
+  });
+
+  it('ends a listen stream and frees its slot when the client aborts the request (CERT-12)', async () => {
+    const admin = await principal();
+    const holders = await Promise.all(
+      [0, 1].map(async () => {
+        const controller = new AbortController();
+        const response = await POST(
+          new Request(mcpResource(), {
+            method: 'POST',
+            signal: controller.signal,
+            headers: {
+              authorization: `Bearer ${admin.bearer}`,
+              'content-type': 'application/json',
+              accept: 'application/json, text/event-stream',
+              'mcp-protocol-version': '2026-07-28',
+              'mcp-method': 'subscriptions/listen',
+            },
+            body: JSON.stringify({
+              jsonrpc: '2.0',
+              id: ++rpcId,
+              method: 'subscriptions/listen',
+              params: {
+                notifications: { toolsListChanged: true },
+                _meta: {
+                  'io.modelcontextprotocol/protocolVersion': '2026-07-28',
+                  'io.modelcontextprotocol/clientCapabilities': {},
+                  'io.modelcontextprotocol/clientInfo': { name: 'abort', version: '1' },
+                },
+              },
+            }),
+          })
+        );
+        expect(response.status).toBe(200);
+        const reader = response.body!.getReader();
+        await nextEvent(reader, m => m.method === 'notifications/subscriptions/acknowledged');
+        return { controller, reader };
+      })
+    );
+    // Both slots are held, so a third stream is refused until the aborts land.
+    expect((await listen(admin.bearer, { toolsListChanged: true })).status).toBe(429);
+    for (const { controller } of holders) controller.abort();
+    for (const { reader } of holders) {
+      const ended = await Promise.race([
+        reader.read().then(
+          chunk => chunk.done,
+          () => true
+        ),
+        new Promise<false>(resolve => setTimeout(() => resolve(false), 3000)),
+      ]);
+      expect(ended).toBe(true);
+    }
+    await expect
+      .poll(async () => {
+        const next = await listen(admin.bearer, { toolsListChanged: true });
+        await next.body?.cancel();
+        return next.status;
+      })
+      .toBe(200);
   });
 
   it('bounds streams per grant and does not hold database admission while streaming', async () => {
@@ -282,5 +344,130 @@ describe('subscriptions/listen', () => {
       ended = chunk.done;
     }
     expect(ended).toBe(true);
+  });
+
+  async function streamEnds(reader: ReadableStreamDefaultReader<Uint8Array>, withinMs = 5000) {
+    const deadline = Date.now() + withinMs;
+    while (Date.now() < deadline) {
+      const chunk = await Promise.race([
+        reader.read(),
+        new Promise<{ done: false; value: undefined }>(resolve =>
+          setTimeout(() => resolve({ done: false, value: undefined }), 250)
+        ),
+      ]);
+      if (chunk.done) return true;
+    }
+    return false;
+  }
+
+  it('streams without proxy buffering (CERT-07)', async () => {
+    const admin = await principal();
+    const response = await listen(admin.bearer, { toolsListChanged: true });
+    expect(response.headers.get('content-type')).toContain('text/event-stream');
+    expect(response.headers.get('cache-control')).toContain('no-store');
+    expect(response.headers.get('x-accel-buffering')).toBe('no');
+    await response.body!.cancel();
+  });
+
+  it('closes the stream when a subscribed incident moves to another team (SEC-13)', async () => {
+    resetSubscriptionStateForTests(150);
+    const viewer = await principal('USER');
+    const team = await createTestTeam('Subscription owners');
+    await db.teamMember.create({
+      data: { teamId: team.id, userId: viewer.user.id, role: 'MEMBER' },
+    });
+    const service = await createTestService('Subscription owners service', team.id);
+    // A USER reads only incidents of their own teams' services.
+    const incident = await createTestIncident('Moved incident', service.id, {
+      visibility: 'PUBLIC',
+      teamId: team.id,
+    });
+    const response = await listen(viewer.bearer, {
+      resourceSubscriptions: [`opsknight://incidents/${incident.id}`],
+    });
+    expect(response.headers.get('content-type')).toContain('text/event-stream');
+    const reader = response.body!.getReader();
+    await nextEvent(reader, m => m.method === 'notifications/subscriptions/acknowledged');
+    // Still allowed: the stream survives several revalidation ticks.
+    expect(await streamEnds(reader, 600)).toBe(false);
+    // The person's role and teams are unchanged; only the resource's owner moved.
+    const other = await createTestTeam('Other owners');
+    const otherService = await createTestService('Other owners service', other.id);
+    await db.incident.update({
+      where: { id: incident.id },
+      data: { teamId: other.id, serviceId: otherService.id },
+    });
+    expect(await streamEnds(reader)).toBe(true);
+  });
+
+  it('closes the stream when the person leaves a team (SEC-13)', async () => {
+    resetSubscriptionStateForTests(150);
+    const viewer = await principal('RESPONDER');
+    const team = await createTestTeam('Subscription membership');
+    await db.teamMember.create({
+      data: { teamId: team.id, userId: viewer.user.id, role: 'MEMBER' },
+    });
+    const service = await createTestService('Membership service', team.id);
+    const incident = await createTestIncident('Membership incident', service.id, {
+      visibility: 'PRIVATE',
+      teamId: team.id,
+    });
+    const response = await listen(viewer.bearer, {
+      resourceSubscriptions: [`opsknight://incidents/${incident.id}`],
+    });
+    expect(response.headers.get('content-type')).toContain('text/event-stream');
+    const reader = response.body!.getReader();
+    await nextEvent(reader, m => m.method === 'notifications/subscriptions/acknowledged');
+    expect(await streamEnds(reader, 600)).toBe(false);
+    await db.teamMember.deleteMany({ where: { teamId: team.id, userId: viewer.user.id } });
+    expect(await streamEnds(reader)).toBe(true);
+  });
+
+  it('ends the stream and frees its slot when the client aborts (CERT-12, node runtime)', async () => {
+    const admin = await principal();
+    const listenOnce = (signal?: AbortSignal) =>
+      POST(
+        new Request(mcpResource(), {
+          method: 'POST',
+          signal,
+          headers: {
+            authorization: `Bearer ${admin.bearer}`,
+            'content-type': 'application/json',
+            accept: 'application/json, text/event-stream',
+            'mcp-protocol-version': '2026-07-28',
+            'mcp-method': 'subscriptions/listen',
+          },
+          body: JSON.stringify({
+            jsonrpc: '2.0',
+            id: ++rpcId,
+            method: 'subscriptions/listen',
+            params: {
+              notifications: { toolsListChanged: true },
+              _meta: {
+                'io.modelcontextprotocol/protocolVersion': '2026-07-28',
+                'io.modelcontextprotocol/clientCapabilities': {},
+                'io.modelcontextprotocol/clientInfo': { name: 'abort', version: '1' },
+              },
+            },
+          }),
+        })
+      );
+    // AbortController here is Node's own, as in production, not a jsdom replacement.
+    expect(typeof process.versions.node).toBe('string');
+    expect(typeof (globalThis as { document?: unknown }).document).toBe('undefined');
+    const controller = new AbortController();
+    const response = await listenOnce(controller.signal);
+    expect(response.headers.get('content-type')).toContain('text/event-stream');
+    const reader = response.body!.getReader();
+    await nextEvent(reader, m => m.method === 'notifications/subscriptions/acknowledged');
+    controller.abort();
+    await reader.cancel();
+    // Both per-connection stream slots are free again.
+    const second = await listenOnce();
+    const third = await listenOnce();
+    expect(second.headers.get('content-type')).toContain('text/event-stream');
+    expect(third.headers.get('content-type')).toContain('text/event-stream');
+    await second.body!.cancel();
+    await third.body!.cancel();
   });
 });

@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { existsSync, writeFileSync } from 'node:fs';
 import { randomBytes } from 'node:crypto';
 import { it } from 'vitest';

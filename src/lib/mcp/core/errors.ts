@@ -26,6 +26,12 @@ export class McpBoundaryError extends Error {
   ) {
     super(code);
   }
+  /**
+   * Space-separated scopes for a 401 challenge's `scope` field (RFC 6750 §3), so a client asks
+   * for what a first connection is granted, or for a 403 step-up challenge (auth/step-up.ts).
+   * Set only from policy and catalog metadata; never from the request.
+   */
+  challengeScope?: string;
   get domainCode() {
     return this.details.domainCode;
   }

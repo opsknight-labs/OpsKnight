@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { createHash, randomBytes } from 'node:crypto';
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createTestUser, resetDatabase, testPrisma as db } from '../helpers/test-db';
@@ -22,6 +23,8 @@ vi.mock('@/lib/rbac', () => ({
   })),
 }));
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }));
+// These tests are about the actions themselves; the recent-sign-in rule has its own tests.
+vi.mock('@/lib/mcp/auth/fresh-admin', () => ({ requireFreshMcpAdmin: vi.fn(async () => true) }));
 vi.mock('next/navigation', () => ({
   redirect: vi.fn((url: string) => {
     actor.location = url;
@@ -219,6 +222,8 @@ describe('easy assistant onboarding', () => {
     const body = await (await protectedResource()).json();
     expect(body.scopes_supported).toEqual(scopes);
     await db.mcpPolicy.update({ where: { id: 'default' }, data: { enabled: false } });
+    // Discovery memoises the policy; a policy save clears it.
+    resetMcpRuntimeForTests();
     expect(await (await protectedResource()).json()).not.toHaveProperty('scopes_supported');
   });
 });
@@ -492,6 +497,33 @@ describe('saving the policy form', () => {
     await expect(
       updateMcpPolicy(form({ enabled: 'on', approvalTtlMinutes: '5' }))
     ).rejects.toThrow();
+  });
+  it('refuses turning MCP on while MCP_FORCE_DISABLED is set, but keeps an enabled policy editable', async () => {
+    const admin = await createTestUser({ role: 'ADMIN' });
+    actor.id = admin.id;
+    actor.tokenVersion = admin.tokenVersion;
+    const { updateMcpPolicy, enableMcpQuickSetup } =
+      await import('@/app/(app)/settings/integrations/mcp/actions');
+    vi.stubEnv('MCP_FORCE_DISABLED', 'true');
+    try {
+      await expect(updateMcpPolicy(form({ enabled: 'on' }))).rejects.toThrow('MCP_FORCE_DISABLED');
+      await expect(enableMcpQuickSetup()).rejects.toThrow('MCP_FORCE_DISABLED');
+      expect((await db.mcpPolicy.findUnique({ where: { id: 'default' } }))?.enabled).not.toBe(true);
+      // Switched on before the operator forced it off: limits can still change, and the stored
+      // switch stays on for when MCP_FORCE_DISABLED is removed.
+      await db.mcpPolicy.upsert({
+        where: { id: 'default' },
+        create: { enabled: true },
+        update: { enabled: true },
+      });
+      await updateMcpPolicy(form({ enabled: 'on', approvalTtlMinutes: '60' }));
+      expect(await db.mcpPolicy.findUniqueOrThrow({ where: { id: 'default' } })).toMatchObject({
+        enabled: true,
+        approvalTtlMinutes: 60,
+      });
+    } finally {
+      vi.unstubAllEnvs();
+    }
   });
   it('does not silently drop an existing host-restricted metadata setup', async () => {
     const admin = await createTestUser({ role: 'ADMIN' });

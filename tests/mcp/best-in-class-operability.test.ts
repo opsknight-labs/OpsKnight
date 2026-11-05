@@ -129,11 +129,11 @@ describe('E3: bounded wait for a work slot', () => {
 
   it('caps one connection at half the slots so another can still get in', async () => {
     expect(mcpGrantSlotLimit(4)).toBe(2);
-    const a1 = await acquireMcpSlot(4, { grantId: 'a' });
-    const a2 = await acquireMcpSlot(4, { grantId: 'a' });
-    await expect(acquireMcpSlot(4, { grantId: 'a', waitMs: 0 })).rejects.toThrow('MCP_BUSY');
-    const b1 = await acquireMcpSlot(4, { grantId: 'b', waitMs: 0 });
-    const a3 = acquireMcpSlot(4, { grantId: 'a' });
+    const a1 = await acquireMcpSlot(4, { ownerId: 'a' });
+    const a2 = await acquireMcpSlot(4, { ownerId: 'a' });
+    await expect(acquireMcpSlot(4, { ownerId: 'a', waitMs: 0 })).rejects.toThrow('MCP_BUSY');
+    const b1 = await acquireMcpSlot(4, { ownerId: 'b', waitMs: 0 });
+    const a3 = acquireMcpSlot(4, { ownerId: 'a' });
     a1();
     (await a3)();
     a2();
@@ -142,14 +142,14 @@ describe('E3: bounded wait for a work slot', () => {
   });
   it('keeps the slot of an admitted request on re-admission instead of handing it to a waiter', async () => {
     vi.useFakeTimers();
-    const held = await acquireMcpSlot(1, { grantId: 'a' });
-    const waiter = acquireMcpSlot(1, { grantId: 'b' });
+    const held = await acquireMcpSlot(1, { ownerId: 'a' });
+    const waiter = acquireMcpSlot(1, { ownerId: 'b' });
     const waiterOutcome = waiter.then(
       () => 'admitted',
       () => 'shed'
     );
     // Same limit: the request that already passed admission keeps going without queueing.
-    const kept = await readmitMcpSlot(held, 1, { grantId: 'a' });
+    const kept = await readmitMcpSlot(held, 1, { ownerId: 'a' });
     expect(kept).toBe(held);
     expect(mcpSlotUsage()).toEqual({ inFlight: 1, queued: 1 });
     kept();
@@ -159,10 +159,10 @@ describe('E3: bounded wait for a work slot', () => {
   });
 
   it('gives the slot up on re-admission when the refreshed limit no longer admits it', async () => {
-    const a = await acquireMcpSlot(2, { grantId: 'a' });
-    const b = await acquireMcpSlot(2, { grantId: 'b' });
+    const a = await acquireMcpSlot(2, { ownerId: 'a' });
+    const b = await acquireMcpSlot(2, { ownerId: 'b' });
     // The administrator lowered maxInFlight to 1 while this request was uploading.
-    await expect(readmitMcpSlot(a, 1, { grantId: 'a', waitMs: 0 })).rejects.toThrow('MCP_BUSY');
+    await expect(readmitMcpSlot(a, 1, { ownerId: 'a', waitMs: 0 })).rejects.toThrow('MCP_BUSY');
     expect(mcpSlotUsage()).toEqual({ inFlight: 1, queued: 0 });
     b();
     expect(mcpSlotUsage()).toEqual({ inFlight: 0, queued: 0 });

@@ -226,6 +226,31 @@ describe('requestIncidentEscalation', () => {
     expect(mocks.executeEscalation).toHaveBeenNthCalledWith(2, 'inc-1', 2, { generation: 4 });
   });
 
+  it('rejects a key reused for another incident with a typed conflict, paging nobody', async () => {
+    mocks.resolveUserActor.mockResolvedValue(actor({ role: 'RESPONDER' }));
+    vi.mocked(prisma.incident.findUnique)
+      .mockResolvedValueOnce(incidentResource() as never)
+      .mockResolvedValueOnce({ status: 'OPEN' } as never);
+    const { Prisma } = await import('@prisma/client');
+    vi.mocked(prisma.backgroundJob.create).mockRejectedValueOnce(
+      new Prisma.PrismaClientKnownRequestError('duplicate', {
+        code: 'P2002',
+        clientVersion: '5.22.0',
+      })
+    );
+    vi.mocked(prisma.backgroundJob.findUnique).mockResolvedValueOnce({
+      payload: { incidentId: 'inc-2', actorId: 'user-1', source: 'SLACK' },
+    } as never);
+
+    await expect(
+      requestIncidentEscalation({
+        ...request,
+        idempotency: { key: 'intent-1', principalId: 'chatops:user-1' },
+      })
+    ).rejects.toMatchObject({ code: 'IDEMPOTENCY_KEY_CONFLICT' });
+    expect(mocks.executeEscalation).not.toHaveBeenCalled();
+  });
+
   it('never reaches the engine for an unauthorized actor', async () => {
     await expect(requestIncidentEscalation(request)).rejects.toBeInstanceOf(AuthorizationError);
 
@@ -249,6 +274,22 @@ describe('requestIncidentEscalation', () => {
       expect(mocks.executeEscalation).not.toHaveBeenCalled();
     }
   );
+
+  it('audits a REST or MCP request as an API change attributed to its credential', async () => {
+    mocks.resolveUserActor.mockResolvedValue(actor({ role: 'RESPONDER' }));
+    vi.mocked(prisma.incident.findUnique)
+      .mockResolvedValueOnce(incidentResource() as never)
+      .mockResolvedValueOnce({ status: 'OPEN' } as never);
+
+    await requestIncidentEscalation({ ...request, source: 'REST_API', credentialId: 'grant-1' });
+
+    expect(mocks.emitAuditEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        source: 'API',
+        metadata: { source: 'REST_API', apiGateway: 'api_v2', apiClientId: 'grant-1' },
+      })
+    );
+  });
 
   it('still escalates when the audit write fails', async () => {
     mocks.resolveUserActor.mockResolvedValue(actor({ role: 'RESPONDER' }));

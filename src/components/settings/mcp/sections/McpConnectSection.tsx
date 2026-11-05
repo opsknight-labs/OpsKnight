@@ -3,6 +3,8 @@ import { InlineNotice } from '@/components/ui/InlineNotice';
 import { SettingsSection } from '@/components/settings/layout/SettingsSection';
 import McpConnectGuide from '@/components/settings/mcp/McpConnectGuide';
 import { MCP_ABSOLUTE_SESSION_DAYS } from '@/lib/mcp/auth/session-lifetime';
+import { APP_VERSION } from '@/lib/version';
+import type { McpConnectionCheck } from '@/app/(app)/settings/integrations/mcp/actions';
 
 export default function McpConnectSection({
   isAdmin,
@@ -11,6 +13,7 @@ export default function McpConnectSection({
   endpoint,
   sessionIdleDays,
   hrefs,
+  checkConnection,
 }: {
   isAdmin: boolean;
   enabled: boolean;
@@ -18,6 +21,8 @@ export default function McpConnectSection({
   endpoint: string | null;
   sessionIdleDays: number | null;
   hrefs: { connections: string; policy: string; overview: string };
+  /** The viewer's newest live connection, for "Check connection". */
+  checkConnection?: () => Promise<McpConnectionCheck>;
 }) {
   if (!endpoint || (!enabled && !isAdmin)) {
     return (
@@ -61,7 +66,12 @@ export default function McpConnectSection({
         description="Add the OpsKnight URL to your assistant, sign in once and approve. No keys or secrets to copy."
       >
         <div className="py-5">
-          <McpConnectGuide endpoint={endpoint} />
+          <McpConnectGuide
+            endpoint={endpoint}
+            version={APP_VERSION}
+            checkConnection={checkConnection}
+            hrefs={{ connections: hrefs.connections, overview: hrefs.overview }}
+          />
         </div>
         <div className="-mx-4 border-t border-border bg-muted/30 px-4 py-3 text-xs leading-relaxed text-muted-foreground md:-mx-6 md:px-6">
           You stay signed in while you use the assistant (

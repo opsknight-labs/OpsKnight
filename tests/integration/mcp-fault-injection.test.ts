@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { spawn, type ChildProcess } from 'node:child_process';
 import { describe, expect, it } from 'vitest';
 import { testPrisma as db } from '../helpers/test-db';

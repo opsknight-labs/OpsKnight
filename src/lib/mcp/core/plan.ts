@@ -2,6 +2,7 @@ import { z } from 'zod/v3';
 import { MCP_OPERATION_MAP } from '../catalog';
 import { callMcpOperation, type ExecutionContext } from './execution';
 import { McpBoundaryError, requireMcp } from './errors';
+import { MCP_MAX_OPERATIONS } from './budget';
 import { logger } from '@/lib/logger';
 
 export const planSchema = z
@@ -18,7 +19,7 @@ export const planSchema = z
           .strict()
       )
       .min(1)
-      .max(8),
+      .max(MCP_MAX_OPERATIONS),
   })
   .strict();
 

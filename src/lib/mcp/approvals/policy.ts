@@ -18,3 +18,9 @@ export function canUseReviewedRunbooks(actor: AuthorizationActor) {
     authorize({ actor, action: AUTHORIZATION_ACTIONS.RUNBOOK_EXECUTE }).allowed
   );
 }
+
+/**
+ * Open requests one connection may have waiting at once, shared by change and runbook prepares,
+ * so a looping assistant cannot flood reviewers with notices.
+ */
+export const MAX_PENDING_PER_GRANT = 20;

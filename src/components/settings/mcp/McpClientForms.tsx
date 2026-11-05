@@ -18,9 +18,11 @@ export const MCP_CLIENT_FORM_MESSAGES: ReadonlyMap<string, string> = new Map(
   Object.entries({
     MCP_INVALID_NAME: 'Enter a display name of up to 100 characters.',
     MCP_INVALID_REDIRECT:
-      'Use the exact callback address: HTTPS, or http on 127.0.0.1, localhost or [::1], with no user name, password or #fragment.',
+      'Use the exact callback address: HTTPS, http on 127.0.0.1, localhost or [::1], or an app address such as cursor://anysphere.cursor-mcp/oauth/callback, with no user name, password or #fragment.',
     MCP_INVALID_SCOPE: 'Choose at least one supported permission.',
     MCP_CLIENT_NOT_FOUND: 'This assistant no longer exists. Reload the page.',
+    MCP_REAUTHENTICATION_REQUIRED:
+      'Adding or restoring an assistant gives it access, so confirm it is you: sign out, sign in again, then retry.',
   })
 );
 
@@ -125,7 +127,7 @@ export function McpRegisterClientForm({
             aria-describedby={`${ids.redirect}-help${fieldError('redirectUri') ? ` ${ids.redirect}` : ''}`}
           />
           <p id={`${ids.redirect}-help`} className="text-xs text-muted-foreground">
-            HTTPS, or http on 127.0.0.1, localhost or [::1].
+            HTTPS, http on 127.0.0.1, localhost or [::1], or an app address such as cursor://….
           </p>
           {fieldError('redirectUri') && (
             <p id={ids.redirect} role="alert" className="text-xs text-destructive">

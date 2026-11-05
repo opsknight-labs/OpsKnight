@@ -5,6 +5,7 @@ import { Label } from '@/components/ui/shadcn/label';
 import McpPolicyForm, { type McpPolicyAction } from '@/components/settings/mcp/McpPolicyForm';
 import McpPolicyScopeSelector from '@/components/settings/mcp/McpPolicyScopeSelector';
 import SessionIdleSelect from '@/components/settings/mcp/SessionIdleSelect';
+import { MCP_MAX_OPERATIONS } from '@/lib/mcp/core/budget';
 
 const checkboxClass = 'mt-0.5 h-4 w-4 shrink-0 accent-primary';
 const textareaClass =
@@ -23,7 +24,16 @@ export type McpPolicyValues = {
   requestsPerMinute: number;
   approvalTtlMinutes: number;
   approvalCommitWindowMinutes: number;
+  allowedBrowserOrigins: string[];
+  scopeStepUpEnabled: boolean;
+  patEnabled: boolean;
+  patMaxDays: number;
+  patAllowedScopes: string[];
+  requireReadOnlyConnections: boolean;
 };
+
+/** Never offered for a personal token, whatever is ticked (effective-access.ts). */
+const PAT_FORBIDDEN = new Set(['runbooks:execute']);
 
 /**
  * One policy group: title and explanation on the left, controls on the right (stacked on small
@@ -130,10 +140,132 @@ export default function McpPolicySection({
       </PolicyGroup>
 
       <PolicyGroup
+        title="Reviewed actions"
+        description="Off by default. Routine incident changes run directly. Configuration changes wait for an administrator to approve the exact, frozen request; runbook runs wait for anyone with runbook approve permission (Responders and Administrators by default). An administrator may approve their own request after confirming."
+      >
+        <CheckRow
+          name="writesEnabled"
+          label="Allow reviewed routine mutations and approved runbook executions"
+          description="Assistants can acknowledge, assign, annotate, resolve and create incidents, and prepare configuration changes and runbook runs for review. Reviewers are notified in OpsKnight."
+          defaultChecked={policy.writesEnabled}
+        />
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div className="space-y-1.5">
+            <Label htmlFor="mcp-approval-ttl">Time to review (minutes)</Label>
+            <Input
+              id="mcp-approval-ttl"
+              name="approvalTtlMinutes"
+              type="number"
+              min="15"
+              max="1440"
+              defaultValue={policy.approvalTtlMinutes}
+              aria-describedby="mcp-approval-ttl-help"
+              required
+            />
+            <p id="mcp-approval-ttl-help" className="text-xs text-muted-foreground">
+              How long a request waits for a reviewer, 15 to 1440 (24 hours).
+            </p>
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="mcp-commit-window">Time to apply after approval (minutes)</Label>
+            <Input
+              id="mcp-commit-window"
+              name="approvalCommitWindowMinutes"
+              type="number"
+              min="1"
+              max="1440"
+              defaultValue={policy.approvalCommitWindowMinutes}
+              aria-describedby="mcp-commit-window-help"
+              required
+            />
+            <p id="mcp-commit-window-help" className="text-xs text-muted-foreground">
+              Starts when the request is approved. Never later than 24 hours after the request.
+            </p>
+          </div>
+        </div>
+        <CheckRow
+          name="sensitiveReadsEnabled"
+          label="Allow reviewed sensitive configuration reads"
+          description="Redacted, read-only, and limited to what the signed-in user can already see."
+          defaultChecked={policy.sensitiveReadsEnabled}
+        />
+      </PolicyGroup>
+
+      <PolicyGroup
         title="Sign-in sessions"
         description="How long an unused connection stays signed in."
       >
         <SessionIdleSelect defaultValue={policy.sessionIdleDays} />
+      </PolicyGroup>
+
+      <PolicyGroup
+        title="View-only connections"
+        description="Cap every connection, including personal access tokens, to viewing. Existing connections lose their change permissions on their next request and get them back if this is turned off."
+      >
+        {/* Tells the save that these controls were on the form, so an unticked box means off. */}
+        <input type="hidden" name="patControls" value="1" />
+        <CheckRow
+          name="requireReadOnlyConnections"
+          label="Require view-only connections"
+          description="Assistants and tokens can read what the person can see, but never change anything or run runbooks."
+          defaultChecked={policy.requireReadOnlyConnections}
+        />
+      </PolicyGroup>
+
+      <PolicyGroup
+        title="Personal access tokens"
+        description="Off by default. Lets people create a long-lived token for agents that cannot sign in through a browser, such as CI jobs and workflow tools. Tokens act as their owner, never run runbooks, and changes they prepare always need a second person to approve. Turning this off revokes every token immediately."
+      >
+        <CheckRow
+          name="patEnabled"
+          label="Allow personal access tokens"
+          description="People create tokens under Connections, after confirming their sign-in."
+          defaultChecked={policy.patEnabled}
+        />
+        <div className="space-y-1.5">
+          <Label htmlFor="mcp-pat-max-days">Longest allowed expiry (days)</Label>
+          <Input
+            id="mcp-pat-max-days"
+            name="patMaxDays"
+            type="number"
+            min="1"
+            max="90"
+            defaultValue={policy.patMaxDays}
+            aria-describedby="mcp-pat-max-days-help"
+            required
+          />
+          <p id="mcp-pat-max-days-help" className="text-xs text-muted-foreground">
+            1 to 90. Tokens are never renewed; people create a new one before it expires and are
+            reminded in OpsKnight a week ahead.
+          </p>
+        </div>
+        <fieldset className="space-y-2">
+          <legend className="text-sm font-medium text-foreground">
+            Permissions a token may carry
+          </legend>
+          <p className="text-xs text-muted-foreground">
+            Leave all unticked to start from viewing incidents, services and schedules.
+          </p>
+          <div className="grid gap-2 sm:grid-cols-2">
+            {scopeChoices
+              .filter(scope => !PAT_FORBIDDEN.has(scope))
+              .map(scope => (
+                <label
+                  key={scope}
+                  className="flex cursor-pointer items-center gap-2 rounded-md border border-border px-3 py-2 text-sm hover:bg-muted/40"
+                >
+                  <input
+                    type="checkbox"
+                    name="patAllowedScopes"
+                    value={scope}
+                    defaultChecked={policy.patAllowedScopes.includes(scope)}
+                    className={checkboxClass}
+                  />
+                  <code className="font-mono text-xs">{scope}</code>
+                </label>
+              ))}
+          </div>
+        </fieldset>
       </PolicyGroup>
 
       <details className="group border-t border-border">
@@ -141,7 +273,7 @@ export default function McpPolicySection({
           <span className="flex flex-col">
             <span>Advanced</span>
             <span className="text-xs font-normal text-muted-foreground">
-              Reviewed changes, sensitive reads, trusted hosts and workload limits
+              Trusted hosts, browser clients and workload limits
             </span>
           </span>
           <ChevronDown
@@ -150,57 +282,6 @@ export default function McpPolicySection({
           />
         </summary>
         <div className="border-t border-border">
-          <PolicyGroup
-            title="Reviewed actions"
-            description="Off by default. Routine incident changes run directly. Configuration changes wait for an administrator to approve the exact, frozen request; runbook runs wait for anyone with runbook approve permission (Responders and Administrators by default). An administrator may approve their own request after confirming."
-          >
-            <CheckRow
-              name="writesEnabled"
-              label="Allow reviewed routine mutations and approved runbook executions"
-              description="Assistants can acknowledge, assign, annotate, resolve and create incidents, and prepare configuration changes and runbook runs for review. Reviewers are notified in OpsKnight."
-              defaultChecked={policy.writesEnabled}
-            />
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-1.5">
-                <Label htmlFor="mcp-approval-ttl">Time to review (minutes)</Label>
-                <Input
-                  id="mcp-approval-ttl"
-                  name="approvalTtlMinutes"
-                  type="number"
-                  min="15"
-                  max="1440"
-                  defaultValue={policy.approvalTtlMinutes}
-                  aria-describedby="mcp-approval-ttl-help"
-                  required
-                />
-                <p id="mcp-approval-ttl-help" className="text-xs text-muted-foreground">
-                  How long a request waits for a reviewer, 15 to 1440 (24 hours).
-                </p>
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="mcp-commit-window">Time to apply after approval (minutes)</Label>
-                <Input
-                  id="mcp-commit-window"
-                  name="approvalCommitWindowMinutes"
-                  type="number"
-                  min="1"
-                  max="1440"
-                  defaultValue={policy.approvalCommitWindowMinutes}
-                  aria-describedby="mcp-commit-window-help"
-                  required
-                />
-                <p id="mcp-commit-window-help" className="text-xs text-muted-foreground">
-                  Starts when the request is approved. Never later than 24 hours after the request.
-                </p>
-              </div>
-            </div>
-            <CheckRow
-              name="sensitiveReadsEnabled"
-              label="Allow reviewed sensitive configuration reads"
-              description="Redacted, read-only, and limited to what the signed-in user can already see."
-              defaultChecked={policy.sensitiveReadsEnabled}
-            />
-          </PolicyGroup>
           <PolicyGroup
             title="Trusted assistant hosts"
             description="Optionally limit which assistants may identify with a metadata document."
@@ -225,6 +306,41 @@ export default function McpPolicySection({
             </div>
           </PolicyGroup>
           <PolicyGroup
+            title="Browser clients"
+            description="Assistants that run in a web page, such as MCP Inspector, send their page's origin. Every origin not listed here is refused."
+          >
+            <div className="space-y-1.5">
+              <Label htmlFor="mcp-browser-origins">
+                Allowed browser origins (optional, one per line)
+              </Label>
+              <textarea
+                id="mcp-browser-origins"
+                className={textareaClass}
+                name="allowedBrowserOrigins"
+                rows={2}
+                maxLength={4096}
+                defaultValue={policy.allowedBrowserOrigins.join('\n')}
+                placeholder="http://localhost:6274"
+                aria-describedby="mcp-browser-origins-help"
+              />
+              <p
+                id="mcp-browser-origins-help"
+                className="text-xs leading-relaxed text-muted-foreground"
+              >
+                Exact origins (scheme, host and port), at most 10; plain http only on localhost.
+                Listed pages may call the MCP endpoint and sign-in endpoints with their own tokens,
+                never with a person&apos;s OpsKnight cookies. Consent and review pages stay
+                same-origin only.
+              </p>
+            </div>
+            <CheckRow
+              name="scopeStepUpEnabled"
+              label="Let assistants ask for a missing permission in place"
+              description="When a call needs a permission the connection lacks but could be granted, answer with an upgrade request (HTTP 403 insufficient_scope) so assistants that support it re-open sign-in for just that permission. Off: the call returns a tool error and the person reconnects."
+              defaultChecked={policy.scopeStepUpEnabled}
+            />
+          </PolicyGroup>
+          <PolicyGroup
             title="Workload limits"
             description="Protects OpsKnight from busy or misbehaving assistants."
           >
@@ -238,8 +354,14 @@ export default function McpPolicySection({
                   min="1"
                   max="16"
                   defaultValue={policy.maxInFlight}
+                  aria-describedby="mcp-max-in-flight-help"
                   required
                 />
+                <p id="mcp-max-in-flight-help" className="text-xs text-muted-foreground">
+                  Per web process. Cluster capacity = value × web replicas. Each process has an MCP
+                  database pool of 2 connections (max 4); values above the pool size queue on
+                  database connections.
+                </p>
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="mcp-max-operations">Operations per request</Label>
@@ -248,10 +370,22 @@ export default function McpPolicySection({
                   name="maxOperations"
                   type="number"
                   min="1"
-                  max="16"
-                  defaultValue={policy.maxOperations}
+                  max={MCP_MAX_OPERATIONS}
+                  defaultValue={Math.min(policy.maxOperations, MCP_MAX_OPERATIONS)}
+                  aria-describedby="mcp-max-operations-help"
                   required
                 />
+                <p id="mcp-max-operations-help" className="text-xs text-muted-foreground">
+                  Up to {MCP_MAX_OPERATIONS}. Composite tools use several (incident context 3,
+                  postmortem context 4).
+                </p>
+                {policy.maxOperations < 4 && (
+                  <p role="status" className="text-xs text-amber-700 dark:text-amber-400">
+                    {policy.maxOperations < 3
+                      ? 'Below 3, incident_get_context, postmortem_get_context and approval commits stop working.'
+                      : 'Below 4, postmortem_get_context stops working.'}
+                  </p>
+                )}
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="mcp-rpm">Weighted operations per minute per grant</Label>

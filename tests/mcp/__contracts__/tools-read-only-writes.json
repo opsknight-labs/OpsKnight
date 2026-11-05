@@ -1,0 +1,130 @@
+[
+  {
+    "name": "describe_operation",
+    "title": "Describe an operation",
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    },
+    "inputSchemaSha256": "1823dc5197c28dd6dc8bfeafdf1f9771508a0590b657dd642c787cfb82daff1a",
+    "descriptionSha256": "9e0d58c18bd20538c9a9dd5267833173787927c36ab6087cabbbe3b914f187a8"
+  },
+  {
+    "name": "execute_plan",
+    "title": "Run several reads",
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    },
+    "inputSchemaSha256": "54fbc0051c2ed391180225536f20a3562af6ca96b83411e185d225021ca3087b",
+    "descriptionSha256": "b01de9dc14e9bcb23302a2401c1361a78d1bcebc02b3b623b61a1e5e5ea79278"
+  },
+  {
+    "name": "fetch",
+    "title": "Fetch an OpsKnight record",
+    "annotations": {
+      "readOnlyHint": true,
+      "openWorldHint": false
+    },
+    "inputSchemaSha256": "33ebc03b1d992f47ca10ca41a37e687e89e6da8c8379f2e0b1d85817f3601bcd",
+    "descriptionSha256": "e4751e3d062bda9736fab7deea15eb6ff0ba0fb038cc6d095600ab8449d7f6ce"
+  },
+  {
+    "name": "incident_get",
+    "title": "Get an incident",
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    },
+    "inputSchemaSha256": "07d60a9e65584f1566dd56ab3a439a00e6e5c0753bd03c628fab88afa90a19fd",
+    "descriptionSha256": "ca6128ae6ed9ae5916c103902f7a28a4dbd906b3a9083cbe75dc680c4786e2b4"
+  },
+  {
+    "name": "incident_get_context",
+    "title": "Get incident context",
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    },
+    "inputSchemaSha256": "4a3c28a6052b1fa5e2b7846914e15222979b655d5b461ac46e76f60c7bcf2872",
+    "descriptionSha256": "60303bc343873cba553b665adb0a34d4a0ed0262a9b15742c37c86a2a8d19c5d"
+  },
+  {
+    "name": "incident_get_timeline",
+    "title": "Get an incident timeline",
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    },
+    "inputSchemaSha256": "27e714747f49a4d078b8604fe316da59d4251e4a4c487755666c36bf3c9ba3fc",
+    "descriptionSha256": "411985fffd9836c1e7b5d709c4a972baa9a10644b8742b10d108be5ca9328b71"
+  },
+  {
+    "name": "incident_search",
+    "title": "Search incidents",
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    },
+    "inputSchemaSha256": "097e89fa62bc5f37db915cfa1b7eeb264bc86d61d768a708b608bdc2784db9b8",
+    "descriptionSha256": "ead72a2d55ef24e910eda1f8e592f12830e2670e2891ec2c415dfae947121765"
+  },
+  {
+    "name": "read_operation",
+    "title": "Read OpsKnight data",
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    },
+    "inputSchemaSha256": "3bee753b4c8123dde1b0df7d6219787dba17d1c95de0ca34a6b452a301616b86",
+    "descriptionSha256": "9a35050f8a2f009e10074a0e59499f5b585cff8d6573e45a422808b332b302b1"
+  },
+  {
+    "name": "search",
+    "title": "Search OpsKnight",
+    "annotations": {
+      "readOnlyHint": true,
+      "openWorldHint": false
+    },
+    "inputSchemaSha256": "5dcd9764ce9c72aadf9dab54c9221450f0279115fe9259618f0b9dcf1d9e7bd4",
+    "descriptionSha256": "0ef6ce58bc13fb2f8a7cdc61df6a1859f0065b70240ba1eb51f7f7ec8cea5e7a"
+  },
+  {
+    "name": "search_capabilities",
+    "title": "Search OpsKnight capabilities",
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    },
+    "inputSchemaSha256": "b3918e7c625a17d70f3012a7e1e1abc2294844cf677b0e234c72c822ab140f59",
+    "descriptionSha256": "491538de989155affaf772d711076fd585f9cbc7b457284c071103159779e06e"
+  },
+  {
+    "name": "whoami",
+    "title": "Who am I",
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    },
+    "inputSchemaSha256": "99334726611ccf58a148b0814696bfa6fe08c1b2d027e946beccf5a74331c9aa",
+    "descriptionSha256": "de684898b53a757df2bfb7627e31586d5a3a2ba4683a70fc9876d972a31a6092"
+  }
+]

@@ -6,10 +6,9 @@ import { McpBoundaryError } from '../core/errors';
 import { CIMD_MAX_BYTES, fetchPinnedMetadata, type CimdResponse } from './cimd-transport';
 import { rejectDuplicateJsonKeys } from '../protocol/input';
 import { logger } from '@/lib/logger';
-import { redirectUriAllowed, urlForLog } from './redirect-uri';
+import { isAllowedRedirect, redirectUriAllowed, urlForLog } from './redirect-uri';
 
 const JWT_BEARER_GRANT = 'urn:ietf:params:oauth:grant-type:jwt-bearer';
-const LOOPBACK = new Set(['localhost', '127.0.0.1', '[::1]']);
 
 /** Client IDs that are URLs select the metadata-document path; anything else is a registered id. */
 export function isCimdClientId(clientId: string) {
@@ -48,17 +47,7 @@ export function parseCimdClientId(raw: string) {
   return url;
 }
 function redirectUri(value: string) {
-  try {
-    const url = new URL(value);
-    return (
-      !url.username &&
-      !url.password &&
-      !url.hash &&
-      (url.protocol === 'https:' || (url.protocol === 'http:' && LOOPBACK.has(url.hostname)))
-    );
-  } catch {
-    return false;
-  }
+  return isAllowedRedirect(value, { canonicalWeb: false });
 }
 
 const metadataSchema = z

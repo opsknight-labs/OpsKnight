@@ -32,6 +32,33 @@ export function RelativeTime({
   );
 }
 
+const DEADLINE_SOON_MS = 15 * 60_000;
+
+/**
+ * A review or commit deadline: the absolute time in the viewer's zone plus how long is left.
+ * Amber with a spoken warning in the last 15 minutes; destructive once it has passed.
+ */
+export function Deadline({ value, now, timeZone }: { value: Date; now: Date; timeZone: string }) {
+  const left = value.getTime() - now.getTime();
+  const soon = left > 0 && left < DEADLINE_SOON_MS;
+  return (
+    <span
+      className={cn(
+        'inline-flex flex-wrap items-baseline gap-x-1.5',
+        soon && 'font-medium text-amber-700 dark:text-amber-400',
+        left <= 0 && 'font-medium text-destructive'
+      )}
+    >
+      <time dateTime={value.toISOString()}>
+        {formatDateTime(value, timeZone, { includeTimeZone: true })}
+      </time>{' '}
+      <span>({formatDistanceStrict(value, now, { addSuffix: true })})</span>
+      {soon && <span role="status"> Less than 15 minutes left</span>}
+      {left <= 0 && <span role="status"> Deadline passed</span>}
+    </span>
+  );
+}
+
 export type FilterOption = { value: string; label: string; count?: number; href: string };
 
 /** Segmented filter links. The selected option carries aria-current. */

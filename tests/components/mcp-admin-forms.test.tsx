@@ -111,6 +111,12 @@ it('D5: policy groups are named once and described for assistive technology', ()
         requestsPerMinute: 60,
         approvalTtlMinutes: 240,
         approvalCommitWindowMinutes: 30,
+        allowedBrowserOrigins: [],
+        scopeStepUpEnabled: false,
+        patEnabled: false,
+        patMaxDays: 30,
+        patAllowedScopes: [],
+        requireReadOnlyConnections: false,
       }}
       revision={0}
       scopeChoices={['incidents:read']}

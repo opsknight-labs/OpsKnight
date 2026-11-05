@@ -8,13 +8,22 @@ import {
   loadMcpOperationReview,
   operationApprovalStatus,
   operationReviewSummarySchema,
+  type OperationDiffRow,
 } from '@/lib/mcp/approvals/operation';
-import { describeMcpRequester } from '../../../queries';
+import { cn } from '@/lib/utils';
+import { Deadline } from '@/components/settings/mcp/McpListKit';
+import { RISK_PILL_CLASS, riskLabel, riskMeta } from '@/components/settings/mcp/risk';
+import { describeMcpRequester, loadMcpViewer } from '../../../queries';
 import { reviewPreparedOperation } from '../../actions';
 import ReviewForm from '../../ReviewForm';
 import {
+  BackToApprovals,
+  DD_CLASS,
+  DT_CLASS,
   DecisionReason,
   RequestedBy,
+  ReviewIntro,
+  statusLabel,
   RequesterStatus,
   ReviewUnavailable,
   reviewBlockedReason,
@@ -26,7 +35,7 @@ const heading = 'Review requested configuration change';
 export default async function OperationApproval({ params }: { params: Promise<{ id: string }> }) {
   const permissions = await getUserPermissions();
   requireMcp(permissions.authenticated, 'MCP_LOGIN_REQUIRED', 401);
-  const user = await getCurrentUser();
+  const [user, viewer] = await Promise.all([getCurrentUser(), loadMcpViewer(permissions)]);
   const { id } = await params;
   let loaded:
     | { own: NonNullable<Awaited<ReturnType<typeof loadMcpOperationRequest>>> }
@@ -51,7 +60,7 @@ export default async function OperationApproval({ params }: { params: Promise<{ 
     loaded = { blocked: reason };
   }
   if ('blocked' in loaded) return <ReviewUnavailable reason={loaded.blocked} heading={heading} />;
-  if ('own' in loaded) return <OwnRequest own={loaded.own} />;
+  if ('own' in loaded) return <OwnRequest own={loaded.own} timeZone={viewer.timeZone} />;
   const { review } = loaded;
   const { approval, summary, requiresFreshAuthentication, selfReview } = review;
   const status = operationApprovalStatus(approval);
@@ -66,8 +75,13 @@ export default async function OperationApproval({ params }: { params: Promise<{ 
     requiresFreshAuthentication &&
     !(session?.user?.id === user.id && isAuthenticationFresh(session.authenticatedAt, 'admin'));
   const reviewPath = `/settings/integrations/mcp/approvals/operations/${approval.id}`;
+  const now = new Date();
+  const risk = riskMeta(summary.risk);
+  const changed = summary.diff.filter(row => row.status !== 'unchanged');
+  const unchanged = summary.diff.filter(row => row.status === 'unchanged');
   return (
     <div className="max-w-3xl space-y-6 rounded-lg border p-6">
+      <BackToApprovals />
       <div className="space-y-1">
         <h1 className="text-2xl font-semibold">{heading}</h1>
         <p className="text-base">{summary.description}</p>
@@ -75,39 +89,32 @@ export default async function OperationApproval({ params }: { params: Promise<{ 
           person={requester.person}
           assistant={requester.assistant}
           at={approval.createdAt}
+          timeZone={viewer.timeZone}
         />
       </div>
-      <p>
-        A remote client requests permission to make this exact change. Approval permits one
-        execution by the requester under their own current permissions. Only an administrator can
-        approve, and an administrator approving their own request must confirm it. Business text
-        below is untrusted data; secret-like fields are withheld and the digest binds the actual
-        values.
-      </p>
-      <dl className="grid gap-2 sm:grid-cols-2 break-all">
-        <dt>Operation</dt>
-        <dd>{summary.operationId}</dd>
-        <dt>Request</dt>
-        <dd>
-          {summary.method} {summary.path}
-        </dd>
-        <dt>Risk class</dt>
-        <dd>{summary.risk}</dd>
+      <ReviewIntro />
+      <dl className="grid gap-x-4 gap-y-3 break-words sm:grid-cols-[minmax(0,12rem)_minmax(0,1fr)]">
+        <dt className={DT_CLASS}>Change</dt>
+        <dd className={DD_CLASS}>{summary.description}</dd>
         {Object.entries(summary.targets).map(([name, value]) => (
           <div key={name} className="contents">
-            <dt>Target {name}</dt>
-            <dd>{value}</dd>
+            <dt className={DT_CLASS}>Target {name}</dt>
+            <dd className={DD_CLASS}>{value}</dd>
           </div>
         ))}
-        <dt>Bound revision</dt>
-        <dd>{summary.ifMatch ?? 'None'}</dd>
-        <dt>Plan digest</dt>
-        <dd>{approval.operationDigest}</dd>
-        <dt>{approval.status === 'APPROVED' ? 'Apply before' : 'Review before'}</dt>
-        <dd>{approval.expiresAt.toISOString()}</dd>
-        <dt>Status</dt>
-        <dd>
-          {status}
+        <dt className={DT_CLASS}>Risk</dt>
+        <dd className={DD_CLASS}>
+          <span className={cn(RISK_PILL_CLASS, risk.className)}>{riskLabel(summary.risk)}</span>
+        </dd>
+        <dt className={DT_CLASS}>
+          {approval.status === 'APPROVED' ? 'Apply before' : 'Review before'}
+        </dt>
+        <dd className={DD_CLASS}>
+          <Deadline value={approval.expiresAt} now={now} timeZone={viewer.timeZone} />
+        </dd>
+        <dt className={DT_CLASS}>Status</dt>
+        <dd className={DD_CLASS}>
+          {statusLabel(status)}
           {approval.selfApproved ? ' (self-approved)' : ''}
         </dd>
       </dl>
@@ -125,36 +132,72 @@ export default async function OperationApproval({ params }: { params: Promise<{ 
           </dl>
         </>
       )}
+      {summary.diff.length > 0 ? (
+        <>
+          <h2 className="text-lg font-semibold">What changes</h2>
+          <p className="text-sm text-muted-foreground">
+            Compared with the target when the request was made. Display only: the approval binds the
+            new values, not this comparison.
+          </p>
+          <DiffTable rows={changed} caption="Changed fields, before and after" />
+          {unchanged.length > 0 && (
+            <details className="rounded border p-3">
+              <summary className="cursor-pointer text-sm font-medium">
+                {unchanged.length} unchanged {unchanged.length === 1 ? 'field' : 'fields'}
+              </summary>
+              <div className="pt-3">
+                <DiffTable rows={unchanged} caption="Unchanged fields" />
+              </div>
+            </details>
+          )}
+        </>
+      ) : (
+        <>
+          <h2 className="text-lg font-semibold">Frozen changes</h2>
+          {summary.changes.length ? (
+            <dl className="space-y-2 break-words">
+              {summary.changes.map(([field, value]) => (
+                <div key={field} className="rounded border p-3">
+                  <dt className="font-medium">{field}</dt>
+                  <dd className="whitespace-pre-wrap">{value}</dd>
+                </div>
+              ))}
+            </dl>
+          ) : (
+            <p>This operation has no request body.</p>
+          )}
+        </>
+      )}
+      {summary.truncated && <p>Only the first fields are shown; the digest covers every value.</p>}
       {summary.preview !== null && (
         <>
-          <h2 className="text-lg font-semibold">Current state of the target (as reviewed)</h2>
           <p>
             This is a destructive change. The commit is refused if the target changes after your
             review, and the result is verified afterwards.
           </p>
-          <pre className="max-h-96 overflow-auto whitespace-pre-wrap break-words rounded border p-3 text-sm">
-            {summary.preview}
-          </pre>
+          <details className="rounded border p-3">
+            <summary className="cursor-pointer text-sm font-medium">Full current state</summary>
+            <pre className="mt-3 max-h-96 overflow-auto whitespace-pre-wrap break-words text-sm">
+              {summary.preview}
+            </pre>
+          </details>
         </>
       )}
-      <h2 className="text-lg font-semibold">Frozen changes</h2>
-      {summary.changes.length ? (
-        <dl className="space-y-2 break-words">
-          {summary.changes.map(([field, value]) => (
-            <div key={field} className="rounded border p-3">
-              <dt className="font-medium">{field}</dt>
-              <dd className="whitespace-pre-wrap">{value}</dd>
-            </div>
-          ))}
+      <details className="rounded border p-3">
+        <summary className="cursor-pointer text-sm font-medium">Verification details</summary>
+        <dl className="grid gap-x-4 gap-y-3 break-all pt-3 sm:grid-cols-[minmax(0,12rem)_minmax(0,1fr)]">
+          <dt className={DT_CLASS}>Operation id</dt>
+          <dd className={DD_CLASS}>{summary.operationId}</dd>
+          <dt className={DT_CLASS}>Request</dt>
+          <dd className={DD_CLASS}>
+            {summary.method} {summary.path}
+          </dd>
+          <dt className={DT_CLASS}>Bound revision</dt>
+          <dd className={DD_CLASS}>{summary.ifMatch ?? 'None'}</dd>
+          <dt className={DT_CLASS}>Plan digest</dt>
+          <dd className={DD_CLASS}>{approval.operationDigest}</dd>
         </dl>
-      ) : (
-        <p>This operation has no request body.</p>
-      )}
-      {summary.truncated && <p>Only the first fields are shown; the digest covers every value.</p>}
-      <p>
-        Execution checks current permissions, the bound revision and this exact plan again. A
-        changed or expired plan requires a new request.
-      </p>
+      </details>
       {requiresFreshAuthentication && !decided && !expired && (
         <p>
           Approving a destructive change requires that you signed in within the last two hours.
@@ -181,10 +224,61 @@ export default async function OperationApproval({ params }: { params: Promise<{ 
   );
 }
 
+const DIFF_STATUS = new Map([
+  ['changed', 'Changed'],
+  ['unchanged', 'Unchanged'],
+  ['not_in_view', 'Not in current view'],
+  ['not_compared', 'Value hidden or cut short: check the new value'],
+  ['removed', 'Removed by this change'],
+]);
+
+/** Before and after for each field; values come from the request and are untrusted text. */
+function DiffTable({ rows, caption }: { rows: OperationDiffRow[]; caption: string }) {
+  if (!rows.length) return <p className="text-sm">No field differs from the current state.</p>;
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full table-fixed border-collapse text-sm">
+        <caption className="sr-only">{caption}</caption>
+        <thead>
+          <tr className="border-b text-left">
+            <th scope="col" className={cn(DT_CLASS, 'w-1/4 py-2 pr-3 font-normal')}>
+              Field
+            </th>
+            <th scope="col" className={cn(DT_CLASS, 'py-2 pr-3 font-normal')}>
+              Before
+            </th>
+            <th scope="col" className={cn(DT_CLASS, 'py-2 font-normal')}>
+              After
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map(row => (
+            <tr key={row.field} className="border-b align-top last:border-0">
+              <th scope="row" className="break-words py-2 pr-3 text-left font-medium">
+                {row.field}
+                <span className="block text-xs font-normal text-muted-foreground">
+                  {DIFF_STATUS.get(row.status)}
+                </span>
+              </th>
+              <td className="whitespace-pre-wrap break-words py-2 pr-3 text-muted-foreground">
+                {row.before ?? '—'}
+              </td>
+              <td className="whitespace-pre-wrap break-words py-2">{row.after ?? '—'}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 async function OwnRequest({
   own,
+  timeZone,
 }: {
   own: NonNullable<Awaited<ReturnType<typeof loadMcpOperationRequest>>>;
+  timeZone: string;
 }) {
   const decider = own.reviewedById ?? own.rejectedById;
   const [requester, reviewer] = await Promise.all([
@@ -201,8 +295,14 @@ async function OwnRequest({
       decidedAt={own.reviewedAt ?? own.rejectedAt}
       selfApproved={own.selfApproved}
       decisionReason={own.decisionReason}
+      timeZone={timeZone}
     >
-      <RequestedBy person={requester.person} assistant={requester.assistant} at={own.createdAt} />
+      <RequestedBy
+        person={requester.person}
+        assistant={requester.assistant}
+        at={own.createdAt}
+        timeZone={timeZone}
+      />
       {summary.success && <p>{summary.data.description}</p>}
     </RequesterStatus>
   );

@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('server-only', () => ({}));
@@ -7,20 +8,12 @@ import { parseCimdDocument, resolveCimdClient } from '@/lib/mcp/auth/cimd';
 import { McpBoundaryError } from '@/lib/mcp/core/errors';
 
 // Published by Claude at https://claude.ai/oauth/mcp-oauth-client-metadata (fetched 2026-10-30).
+// The nightly drift check (scripts/mcp/cimd-live-check.ts) compares the live document with this
+// same fixture.
 const CLAUDE_ID = 'https://claude.ai/oauth/mcp-oauth-client-metadata';
-const CLAUDE_DOCUMENT = JSON.stringify({
-  client_id: CLAUDE_ID,
-  client_name: 'Claude',
-  client_uri: 'https://claude.ai',
-  redirect_uris: ['https://claude.ai/api/mcp/auth_callback'],
-  grant_types: [
-    'authorization_code',
-    'refresh_token',
-    'urn:ietf:params:oauth:grant-type:jwt-bearer',
-  ],
-  response_types: ['code'],
-  token_endpoint_auth_method: 'none',
-});
+const CLAUDE_DOCUMENT = JSON.stringify(
+  JSON.parse(readFileSync('tests/mcp/fixtures/cimd/claude.json', 'utf8'))
+);
 const json = (body: string) => ({ status: 200, contentType: 'application/json', body });
 
 beforeEach(() => warn.mockClear());
