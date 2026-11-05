@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, expect, it } from 'vitest';
 import { randomBytes } from 'node:crypto';
 import { GET as getTeamMember } from '@/app/api/v2/teams/[id]/members/[userId]/route';

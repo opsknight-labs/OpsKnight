@@ -1,5 +1,6 @@
 'use strict';
-// Measures ingestion with concurrent MCP read load in a separate process. Local evidence only.
+// Measures ingestion with concurrent MCP read load in a separate process. Local and nightly CI evidence;
+// not production certification. Executor-level reads only: it does not go through the HTTP route.
 const { spawn } = require('node:child_process');
 const fs = require('node:fs');
 const path = require('node:path');

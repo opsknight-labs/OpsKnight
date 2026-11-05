@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { createHash, randomBytes } from 'node:crypto';
 import { isValidElement, type ReactNode } from 'react';
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
