@@ -203,6 +203,47 @@ Complete the rollout to every web/worker replica before relying on the backgroun
 application process still enforces only the previous global/personal limits. A rolling-deployment
 certification has not been claimed by these local fixtures.
 
+### Feature telemetry and operator alerts
+
+The authenticated Prometheus endpoint exports aggregate, label-free feature gauges. These are
+cluster snapshots: aggregate replicas with `max`, and do not treat rolling-window counts as lifetime
+counters. No incident/user/provider identifiers, recipient addresses, action inputs or error payloads
+are exported.
+
+- `opsknight_intelligence_embedding_enabled`, `opsknight_intelligence_embedding_pending` and
+  `opsknight_intelligence_embedding_budget_remaining_tokens` show eligible indexing, recent backlog
+  and allowance after settled usage plus live holds. Pending is capped at 1,000 (a lower bound at
+  the cap). Scraping does not count the entire vector index or call a provider. The backlog warning
+  requires available allowance and eligible indexing continuously for 30 minutes; disabled indexing,
+  a zero/exhausted allocation and brief backlogs are excluded.
+- `opsknight_intelligence_digest_failed_recipients_last_7d` and
+  `opsknight_intelligence_digest_oldest_sending_age_seconds` cover at most eight runs started in the
+  last seven days. Failed sends sustained for 15 minutes and a sending run older than one hour have
+  separate warnings. Provider acceptance does not prove end-to-end mail delivery. Inspect digest
+  history and delivery health before reviewed recipient retry; do not resend successful recipients.
+- `opsknight_intelligence_squire_actions_confirmed_last_24h`,
+  `opsknight_intelligence_squire_actions_succeeded_last_24h`,
+  `opsknight_intelligence_squire_actions_failed_last_24h` and
+  `opsknight_intelligence_squire_actions_uncertain_last_24h` describe the most recent 5,000 confirmed-action receipts
+  within 24 hours. Uncertain includes `UNKNOWN` and `RESERVED`/`RUNNING` older than five minutes.
+  A five-minute sustained warning requires the confirming responder to inspect their owner-only
+  receipt and incident audit. An ordinary rejected action is counted but does not trigger this warning.
+  Never automatically retry an uncertain write.
+- `opsknight_intelligence_digest_sample_truncated` and
+  `opsknight_intelligence_squire_actions_sample_truncated` explicitly flag omitted coverage. A
+  sustained truncation warning means outcome counts are sampled. Measure database cost before
+  changing caps; old retained history is not silently added to these time windows.
+- `opsknight_intelligence_feature_probe_failed` reports an unavailable embedding, digest or action
+  probe. Failed probes omit their samples and preserve other feature groups; they do not report a
+  misleading zero. Aggregate statements have a 750 ms database budget. A 15-minute warning directs
+  operators to database connectivity/timeouts. Probes log fixed category names without exception text
+  and never fail application readiness.
+
+Rules live in `monitoring/prometheus/opsknight-alerts.yaml`; test positive, transient, disabled and
+budget-exhausted scenarios with `monitoring/prometheus/intelligence.test.yml`. Route these advisory
+warnings to the operators of Intelligence rather than responder paging. Tune sustained thresholds
+from measured deployment behavior; the local fixtures do not certify production alert effectiveness.
+
 ### Finding services and reviewing failed work
 
 On **Grouping quality**, search for a service by name, use **More services** to browse additional

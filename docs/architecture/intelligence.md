@@ -423,3 +423,17 @@ an open group. HIGH, resolved and old incidents are excluded. Pending initial pa
 work without changing the paging job. Creation, anchor re-election and undo retain decision history;
 a human rejection or reversal vetoes automatic reapplication. No paging hold or notification suppression
 is implemented. These runtime quality gates do not replace deployment/load/security certification.
+
+## Feature operational telemetry
+
+Embedding, weekly digest and confirmed-action health use label-free cluster gauges in the typed
+operational metric registry. A frequent scrape reads capped semantic backlog without counting all
+vectors or making a provider call. Daily embedding allowance includes settled usage and live holds.
+Digest aggregates cover eight recent runs within seven days; action outcomes cover 5,000 recent
+receipts within 24 hours. SQL returns counts/ages only, with a 750 ms aggregate-query budget.
+Sample truncation and unavailable probes have explicit gauges. Independent probe failures omit only
+their own group, log fixed category names and never affect application readiness. Sustained operator
+warnings distinguish actual pending work, exhausted allocations, failed sends and uncertain writes;
+uncertain actions remain owner-only and are never automatically resumed or retried. Metric replica
+aggregation uses `max` because these are shared-database snapshots. Production alert calibration is
+still an external certification gate.

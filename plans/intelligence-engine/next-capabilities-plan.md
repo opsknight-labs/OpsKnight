@@ -286,3 +286,22 @@ production build and all 15 Intelligence browser journeys. The new settings jour
 allocations at 390 px and checks persistence without increasing the global allowance. Full push hooks
 and new-head CI are recorded separately in the PR after publication. Input-aware freshness fan-out,
 feature metrics/alerts, PR scope/reviewability and external certification gates remain open.
+
+## Review follow-up: feature telemetry — 2026-11-05
+
+The missing embedding/digest/confirmed-action metrics reproduced as four absent-gauge regressions.
+The typed Prometheus registry now exports label-free bounded cluster snapshots, with explicit
+truncation and unavailable-probe signals. Embedding telemetry includes live token holds and avoids
+an index-wide vector count or provider calls. Digest failures cover at most eight runs within seven
+days; action outcomes cover 5,000 receipts within 24 hours, including uncertain/stale unfinished
+attempts. Aggregate queries have database budgets and independent failure handling. Sustained
+operator warnings exclude disabled/budget-paused indexing and brief transients; uncertain writes
+require owner review instead of automatic retry. No identifiers, recipient lists, action payloads or
+raw exceptions are exported.
+
+Local verification passed 26 feature-metric/semantic database cases, 42 focused unit/API/registry/
+architecture cases, typecheck and zero-warning changed-source lint. Promtool validated all 31 alert
+rules and the Intelligence, ingestion and runbook-maintenance scenarios, including positive and
+suppressed warnings. Production threshold calibration, input-aware freshness fan-out,
+PR scope/reviewability and the external quality/rollout gates remain open. Local-only validation is
+the current user-selected environment; it cannot be relabelled as live-provider or production evidence.

@@ -247,6 +247,16 @@ const PENDING_COUNT_CAP = 1000;
 
 /** For the settings page: cheap, bounded counts. */
 export async function getSemanticIndexStatus(now: Date = new Date()): Promise<SemanticIndexStatus> {
+  return readSemanticStatus(now, true);
+}
+
+/** Frequent scrapes need the capped backlog, without counting the entire stored vector index. */
+export async function getSemanticBacklogStatus(now: Date = new Date()) {
+  const { model, modelLabel, pending } = await readSemanticStatus(now, false);
+  return { model, ...(modelLabel ? { modelLabel } : {}), pending };
+}
+
+async function readSemanticStatus(now: Date, countIndexed: boolean): Promise<SemanticIndexStatus> {
   const port = await currentEmbeddingPort();
   const model = port?.model;
   if (!model) return { model: null, indexed: 0, pending: 0 };
@@ -254,10 +264,12 @@ export async function getSemanticIndexStatus(now: Date = new Date()): Promise<Se
   const activeMode = candidatePolicyModeSql(Prisma.sql`s.id`);
   return withDbBudget({ maxDbMs: 750 }, async tx => {
     const [indexed, pending] = await Promise.all([
-      tx.$queryRaw<Array<{ count: bigint }>>`
+      countIndexed
+        ? tx.$queryRaw<Array<{ count: bigint }>>`
       SELECT count(*) AS count FROM "IncidentEmbedding" WHERE "model" = ${model} AND "vector" IS NOT NULL`.then(
-        rows => Number(rows[0]?.count ?? 0)
-      ),
+            rows => Number(rows[0]?.count ?? 0)
+          )
+        : Promise.resolve(0),
       tx.$queryRaw<Array<{ count: bigint }>>`
       WITH active_services AS MATERIALIZED (SELECT s.id FROM "Service" s WHERE ${activeMode} <> 'OFF'::"IntelligenceMode")
       SELECT count(*) AS count FROM (

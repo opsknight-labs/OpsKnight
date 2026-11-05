@@ -1,4 +1,5 @@
 import 'server-only';
+import { collectFeatureMetrics, type FeatureMetricName } from './feature-metrics';
 import { logger } from '@/lib/logger';
 import { getIntelligenceLaneStatus, type LaneStatus } from './jobs/runner';
 import { getWorkBacklog } from './jobs/work-queue';
@@ -17,8 +18,10 @@ export type LaneHealth =
  * of rotation. Messages are fixed strings; nothing from the database or an exception is exposed.
  */
 export function evaluateLaneHealth(status: LaneStatus, now: number = Date.now()): LaneHealth {
-  if (!status.running || status.lastResult?.status === 'disabled') return { status: 'disabled', expected: false };
-  if (status.paused) return { status: 'degraded', error: 'Paused to protect paging; resumes automatically' };
+  if (!status.running || status.lastResult?.status === 'disabled')
+    return { status: 'disabled', expected: false };
+  if (status.paused)
+    return { status: 'degraded', error: 'Paused to protect paging; resumes automatically' };
   if (status.lastCycleAt && now - status.lastCycleAt.getTime() > LANE_STALE_AFTER_MS) {
     return { status: 'degraded', error: 'Lane has not completed a cycle recently' };
   }
@@ -31,6 +34,7 @@ export function getIntelligenceHealthCheck() {
 
 export interface IntelligenceMetricSample {
   name:
+    | FeatureMetricName
     | 'opsknight_intelligence_queue_ready'
     | 'opsknight_intelligence_queue_oldest_ready_age_seconds'
     | 'opsknight_intelligence_dead_letters'
@@ -40,7 +44,9 @@ export interface IntelligenceMetricSample {
 }
 
 /** Best effort: a failing probe yields fewer samples and never fails the scrape. */
-export async function collectIntelligenceMetrics(now: number = Date.now()): Promise<IntelligenceMetricSample[]> {
+export async function collectIntelligenceMetrics(
+  now: number = Date.now()
+): Promise<IntelligenceMetricSample[]> {
   const samples: IntelligenceMetricSample[] = [];
   const lane = getIntelligenceLaneStatus();
   if (lane.running) {
@@ -67,5 +73,6 @@ export async function collectIntelligenceMetrics(now: number = Date.now()): Prom
       error: error instanceof Error ? error.message : String(error),
     });
   }
+  samples.push(...(await collectFeatureMetrics(new Date(now))));
   return samples;
 }

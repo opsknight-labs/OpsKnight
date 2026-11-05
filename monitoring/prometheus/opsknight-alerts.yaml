@@ -196,3 +196,51 @@ groups:
         annotations:
           summary: Some intelligence work exhausted its retries
           description: Review and replay the quarantined items in Settings, Intelligence. Affected incidents only lack suggestions; paging is unaffected.
+      - alert: OpsKnightIntelligenceEmbeddingBacklog
+        expr: max(opsknight_intelligence_embedding_pending) > 0 and max(opsknight_intelligence_embedding_enabled) == 1 and max(opsknight_intelligence_embedding_budget_remaining_tokens) > 0
+        for: 30m
+        labels:
+          severity: warning
+        annotations:
+          summary: Semantic indexing has pending work despite available allowance
+          description: Inspect semantic indexing progress and eligible provider health in Assistant & AI. Disabled indexing and exhausted allocations are excluded. Paging is unaffected.
+      - alert: OpsKnightIntelligenceDigestDeliveryFailures
+        expr: max(opsknight_intelligence_digest_failed_recipients_last_7d) > 0
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: Recent weekly digest recipient sends failed
+          description: Inspect digest history and mail-provider health. Use reviewed recipient retry after repairing delivery; successful recipients must not be resent automatically.
+      - alert: OpsKnightIntelligenceDigestStalled
+        expr: max(opsknight_intelligence_digest_oldest_sending_age_seconds) > 3600
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: A recent weekly digest has remained sending for over an hour
+          description: Inspect digest progress and worker/provider health before retrying individual failed recipients. Tune this threshold for measured large-recipient batches.
+      - alert: OpsKnightSquireActionUncertain
+        expr: max(opsknight_intelligence_squire_actions_uncertain_last_24h) > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: A confirmed assistant action has an uncertain or stale unfinished outcome
+          description: Have the confirming responder inspect their saved action receipt and the incident audit. Do not automatically retry uncertain writes.
+      - alert: OpsKnightIntelligenceFeatureProbeFailed
+        expr: max(opsknight_intelligence_feature_probe_failed) > 0
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: Intelligence feature telemetry could not be collected
+          description: Inspect database connectivity and bounded-query timeouts. Omitted feature samples mean unknown coverage. Application readiness is unaffected.
+      - alert: OpsKnightIntelligenceTelemetrySampleTruncated
+        expr: max(opsknight_intelligence_digest_sample_truncated) > 0 or max(opsknight_intelligence_squire_actions_sample_truncated) > 0
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: Intelligence feature telemetry exceeded its bounded sample
+          description: Treat recent outcome counts as sampled coverage and inspect the underlying authorized records. Measure database cost before increasing sample limits.
