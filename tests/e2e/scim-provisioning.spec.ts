@@ -138,8 +138,12 @@ test('SCIM administrator provisions, reviews bindings, rotates credentials and d
 
   await section.getByRole('button', { name: 'Activity', exact: true }).click();
   await section.getByLabel('Search', { exact: true }).fill('binding.approved');
-  await expect(section.getByText('binding.approved', { exact: true })).toHaveCount(2);
-  await expect(section.getByText('binding.approved', { exact: true }).first()).toBeVisible();
+  // Event codes remain searchable; current main renders the administrator-facing label.
+  const approvals = section
+    .getByRole('list', { name: 'Provisioning activity', exact: true })
+    .getByText(/^(?:binding\.approved|Group linked to a team)$/);
+  await expect(approvals).toHaveCount(2);
+  await expect(approvals.first()).toBeVisible();
   await section.getByRole('button', { name: 'Diagnostics', exact: true }).click();
   await expect(
     section.getByRole('heading', { name: 'Troubleshooting', exact: true })
