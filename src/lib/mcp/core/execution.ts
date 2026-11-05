@@ -223,6 +223,8 @@ export type ApprovedCommitGuard = (
 export interface ExecutionContext {
   grantId: string;
   credentialId?: string;
+  /** PAT for a personal access token; absent or OAUTH for an assistant's OAuth connection. */
+  credentialKind?: 'OAUTH' | 'PAT';
   tokenScopes: readonly string[];
   requestId: string;
   budget: CostBudget;

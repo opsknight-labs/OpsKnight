@@ -4864,6 +4864,13 @@ model McpPolicy {
   // Answer a tool call that lacks a consented scope the client could obtain with HTTP 403
   // insufficient_scope, so step-up capable clients re-authorize in place. Off by default.
   scopeStepUpEnabled Boolean @default(false)
+  // Personal access tokens: off by default; at most patMaxDays long (1..90) and limited to
+  // patAllowedScopes (never runbooks:execute). Turning them off revokes every personal token.
+  patEnabled Boolean @default(false)
+  patMaxDays Int @default(30)
+  patAllowedScopes String[] @default([])
+  // Caps every connection, OAuth and personal, to read scopes.
+  requireReadOnlyConnections Boolean @default(false)
   // Optimistic concurrency for policy saves.
   policyRevision Int @default(0)
   updatedAt DateTime @updatedAt
@@ -4902,6 +4909,12 @@ model McpGrant {
   // Last tool call through this grant, written at most once a minute.
   lastCallAt DateTime?
   lastTool String?
+  // OAUTH (an assistant's consent) or PAT (a personal access token, which has one token and no
+  // refresh). A personal token's label is the name its owner gave it.
+  kind String @default("OAUTH")
+  label String?
+  // Set once the owner of a personal token was told it expires within seven days.
+  expiryNotifiedAt DateTime?
   createdAt DateTime @default(now())
   client McpClient @relation(fields: [clientId], references: [id], onDelete: Cascade)
   codes McpAuthorizationCode[]
@@ -4909,6 +4922,7 @@ model McpGrant {
   @@index([userId, createdAt, id])
   @@index([expiresAt])
   @@index([clientId])
+  @@index([kind, expiresAt])
 }
 
 model McpAuthorizationCode {

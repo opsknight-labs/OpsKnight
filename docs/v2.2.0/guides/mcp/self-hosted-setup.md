@@ -49,6 +49,8 @@ The **Access policy** tab holds:
 - **Assistant access**: **Enable MCP** and **Automatic connections**.
 - **What assistants may do**: the permission ceiling. People can approve less on the consent page, and their own OpsKnight permissions always apply on top.
 - **Sign-in sessions**: how long an unused connection stays signed in (1 to 90 days, default 30).
+- **View-only connections**: **Require view-only connections** caps every connection, OAuth and personal, to view permissions until it is turned off.
+- **Personal access tokens**: off by default. When on, people can create a token for agents without a browser, up to the longest allowed expiry (default 30, at most 90 days) and with only the listed permissions (default: view incidents, services and schedules). Tokens never carry `runbooks:execute`, and changes they prepare always need a second person. Turning this off revokes every token. See [API-hosted and headless agents](api-agents.md).
 - **Advanced**: **Reviewed actions** (changes, the review window and commit window), sensitive configuration reads, **Trusted assistant hosts** and **Workload limits**.
 
 **Automatic connections** is one switch for both ways an assistant can identify itself: assistants that register themselves (dynamic client registration, DCR) and assistants that publish a client metadata document (CIMD). Both use the same ceiling. The trusted-hosts list is optional: leave it empty to allow any public HTTPS metadata host, or list hosts to allow only those (other metadata-document assistants are then refused). Documents are fetched without redirects, only from public addresses, with a pinned DNS lookup.
@@ -80,6 +82,7 @@ Your browser opens one OpsKnight page. Sign in if needed (including your SSO), t
 - The page says where it returns to ("Returns to _host_") and how the assistant is identified: "Identified by _host_" for a metadata-document assistant, "Name not verified" for one that registered itself, or "Registered by an administrator". Only continue if you just started the connection yourself. A self-registered assistant that returns to a web address that is not on your computer shows a warning.
 - Permissions are checkboxes grouped by area. View permissions are pre-selected. Change permissions are pre-selected only when the assistant asked for them by name, or when the connection you are replacing had them.
 - You can untick anything; **Allow** needs at least one permission.
+- **View only** (off by default) leaves every change permission out of the connection, whatever is ticked.
 - Permissions your role can never use are hidden and noted on the page. `admin:manage` is never offered.
 - When changes are turned off, a banner says so and change permissions show **Changes off**.
 - The page expires after five minutes.
@@ -105,9 +108,9 @@ Callback addresses must be HTTPS, http on a loopback host (any port), or a nativ
 
 ## Manage connections
 
-- **Your connections** (everyone): each assistant you connected, its usable permissions, when it last made a call and with which tool, when it expires, and **Revoke**.
+- **Your connections** (everyone): each assistant you connected and each personal access token you created, with an **OAuth** or **Personal token** badge, its usable permissions, when it last made a call and with which tool, when it expires, and **Revoke**. When the policy allows personal tokens, **Personal access tokens** here creates one: it needs a recent sign-in and is shown once.
 - **Connections** (administrators): every person's connections, filterable by status and assistant. The **Scopes** column shows "N of M usable": scopes no longer allowed are struck through. The **Status** column says **Blocked by policy** (MCP is off or policy no longer trusts the assistant) or **No longer allowed** (revoked assistant, inactive person, security event), with the reason on hover.
-- **Revoke all active connections**, under **Credential security** on the Connections tab, revokes every connection regardless of the current filter. The dialog shows how many will be revoked and needs a ticked confirmation.
+- **Revoke all active connections**, under **Credential security** on the Connections tab, revokes every connection, personal tokens included, regardless of the current filter. The dialog shows how many will be revoked and needs a ticked confirmation.
 - **Assistants** (administrators): every registered assistant with its type, effective scope ceiling, connections and last call. Revoking an assistant revokes all its connections; **Restore** allows it again, and people then sign in again.
 
 Every change is recorded in the general Audit log.
@@ -152,6 +155,7 @@ The server serves MCP revision **2026-07-28** natively and also accepts clients 
 | Codex CLI                     | Expected (not verified)             | `codex mcp add opsknight --url <url>`, then `codex mcp login opsknight`.                                                                                                                                                                                   |
 | Gemini CLI                    | Expected (not verified)             | `gemini mcp add --transport http opsknight <url>` (or `httpUrl` in `~/.gemini/settings.json`), then `/mcp auth opsknight`.                                                                                                                                 |
 | Windsurf                      | Expected (not verified)             | `serverUrl` in `~/.codeium/windsurf/mcp_config.json`.                                                                                                                                                                                                      |
+| API-hosted agents             | Not verified                        | Anthropic and OpenAI API agents, CI and workflow tools: an OAuth refresh loop or a personal access token. See [API-hosted and headless agents](api-agents.md).                                                                                             |
 
 "Expected" means the client's protocol revision and OAuth flow are supported, but it has not been verified end to end. "Tested" names the version and date of a recorded live run; "Verified" is used only when a [live client checkpoint](../../operate/mcp/certification.md#live-client-checkpoint) for that version records every check (registration, consent, tools, a scoped read, refresh, a role change and revocation) against a named commit. Verify sign-in, scoped calls, refresh and revocation against your own deployment before relying on it. A client that supports only private-key (`private_key_jwt`) authentication is refused, and a published JWKS URL is never fetched.
 

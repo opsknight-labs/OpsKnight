@@ -7,6 +7,7 @@ import { effectiveMcpClientScopes } from './client-policy';
 import { redirectUriAllowed } from './redirect-uri';
 import { MCP_ABSOLUTE_SESSION_DAYS, slideMcpExpiry } from './session-lifetime';
 import { logger } from '@/lib/logger';
+import { MCP_PAT_CLIENT_ID } from './effective-access';
 
 type Database = Prisma.TransactionClient;
 type Model = OAuth2Server.AuthorizationCodeModel & OAuth2Server.RefreshTokenModel;
@@ -26,6 +27,8 @@ export function createMcpOAuthModel(db: Database, onReuse: (grantId: string) => 
     return effectiveMcpClientScopes(client, policy);
   };
   const getClient = async (id: string) => {
+    // Personal access tokens hang off one internal client that no OAuth flow may use.
+    if (id === MCP_PAT_CLIENT_ID) return false;
     const client = await db.mcpClient.findUnique({ where: { id } });
     if (!client || client.revokedAt) return false;
     const scopes = await effectiveScopes(client);
@@ -41,6 +44,8 @@ export function createMcpOAuthModel(db: Database, onReuse: (grantId: string) => 
     const grant = await db.mcpGrant.findUnique({ where: { id }, include: { client: true } });
     requireMcp(
       grant &&
+        // A personal access token is never exchanged or refreshed.
+        grant.kind !== 'PAT' &&
         !grant.revokedAt &&
         !grant.client.revokedAt &&
         grant.expiresAt > new Date() &&

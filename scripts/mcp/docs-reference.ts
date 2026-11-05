@@ -259,7 +259,8 @@ export const MCP_ERROR_GUIDE: Record<string, Guide> = {
   },
   MCP_DISTINCT_REVIEWER_REQUIRED: {
     area: 'approvals',
-    meaning: 'Someone who is not an administrator tried to approve their own request.',
+    meaning:
+      'Someone tried to approve their own request without being an administrator, or the request was made with a personal access token, which always needs a second person.',
     fix: 'Ask a second person with approval rights to review it.',
   },
   MCP_DOMAIN_REJECTED: {
@@ -476,11 +477,27 @@ export const MCP_ERROR_GUIDE: Record<string, Guide> = {
       'Too many consents (10 a minute), metadata fetches (6 a minute) or review decisions by one person.',
     fix: 'Wait a minute and retry.',
   },
+  MCP_PAT_DISABLED: {
+    area: 'settings',
+    meaning:
+      'A personal access token was requested while personal access tokens are off in the access policy. Turning them off revokes every token; a revoked token gets MCP_INVALID_GRANT.',
+    fix: 'Ask an administrator to allow personal access tokens, then create a new token.',
+  },
+  MCP_PAT_INVALID_EXPIRY: {
+    area: 'settings',
+    meaning: 'The chosen expiry is outside 1 day to the policy maximum (at most 90 days).',
+    fix: 'Choose one of the offered expiry options.',
+  },
+  MCP_PAT_LIMIT_REACHED: {
+    area: 'settings',
+    meaning: 'The person already holds 20 active personal access tokens.',
+    fix: 'Revoke a token that is no longer used under Connections, then create the new one.',
+  },
   MCP_REAUTHENTICATION_REQUIRED: {
     area: 'approvals',
     meaning:
-      'Approving a destructive change, or a settings change that gives assistants more access (turning something on, adding a scope, host or origin, raising a limit, re-exposing a capability, adding or restoring an assistant), needs a sign-in within the last two hours. Changes that only reduce access never need it.',
-    fix: "Choose Confirm it's you on the review page, or Sign in again in settings, then repeat the action.",
+      'Approving a destructive change, creating a personal access token, or a settings change that gives assistants more access (turning something on, adding a scope, host or origin, raising a limit, allowing personal tokens or lifting view-only connections, re-exposing a capability, adding or restoring an assistant), needs a sign-in within the last two hours. Changes that only reduce access never need it.',
+    fix: "Choose Confirm it's you on the page, or Sign in again in settings, then repeat the action.",
   },
   MCP_REGISTRATION_CAPACITY: {
     area: 'sign-in',
@@ -577,6 +594,7 @@ export const MCP_ERROR_GUIDE: Record<string, Guide> = {
 export const MCP_NON_ERROR_CODES: Record<string, string> = {
   MCP_APPROVAL: 'notification entity type',
   MCP_EQUIVALENT: 'parity report disposition',
+  MCP_PERSONAL_TOKEN: 'notification entity type',
   MCP_PUBLIC_ORIGIN: 'optional environment override',
 };
 
@@ -921,7 +939,7 @@ export function renderPermissions() {
     '',
     '- **Configuration changes** (`operation_prepare`): an active administrator who holds every permission the change needs.',
     '- **Runbook runs** (`runbook_prepare_execution`): anyone with the runbook approve and runbook read permissions who can see the target incident or service. By default that is Responders and Administrators.',
-    '- An administrator may approve their own request after ticking an explicit confirmation; the approval is recorded as self-approved. Anyone else needs a second person. The assistant can never approve.',
+    '- An administrator may approve their own request after ticking an explicit confirmation; the approval is recorded as self-approved. Anyone else needs a second person, and so does any request made with a personal access token. The assistant can never approve.',
     ''
   );
   lines.push(...renderCoverage());

@@ -217,9 +217,10 @@ describe('actionable tool errors', () => {
     expect(generic.content[0].text).toBe(
       'MCP_INVALID_PAGE_SIZE: query.limit must be an integer from 1 to 50.'
     );
-    const unknown = await call('call_operation', { operationId: 'listServicez', args: {} });
+    // A read-only session is not offered call_operation; read_operation guides the same way.
+    const unknown = await call('read_operation', { operationId: 'listServicez', args: {} });
     expect(unknown.content[0].text).toContain('use search_capabilities');
-    const invalid = await call('call_operation', {
+    const invalid = await call('read_operation', {
       operationId: 'listServices',
       args: { query: { bogus: 1 } },
     });

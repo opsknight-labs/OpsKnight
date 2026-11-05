@@ -316,11 +316,14 @@ describe('F4: MCP docs are findable', () => {
       'Codex CLI',
       'Gemini CLI',
       'Windsurf',
+      'API-hosted agents',
     ]);
     for (const client of ['Codex CLI', 'Gemini CLI', 'Windsurf'])
       expect(status.get(client), client).toBe('Expected (not verified)');
     for (const client of ['Claude (web and desktop apps)', 'ChatGPT', 'Cursor', 'VS Code'])
       expect(status.get(client), client).toBe('Expected (2025 revisions supported)');
+    // API-hosted agents depend on each provider's connector, so they are not claimed as expected.
+    expect(status.get('API-hosted agents')).toBe('Not verified');
   });
 
   it('ties every Tested or Verified status to a recorded live checkpoint (CERT-05)', () => {
@@ -341,7 +344,7 @@ describe('F4: MCP docs are findable', () => {
     for (const [client, value] of compatibility()) {
       const tested = /^Tested \((v\d+\.\d+\.\d+), (\d{4}-\d{2}-\d{2})\)$/.exec(value);
       const verified = /^Verified \((.+) (\d+\.\d+\.\d+), (\d{4}-\d{2}-\d{2})\)$/.exec(value);
-      if (value.startsWith('Expected')) continue;
+      if (value.startsWith('Expected') || value === 'Not verified') continue;
       expect(tested ?? verified, `${client}: "${value}" names no version and date`).toBeTruthy();
       if (tested) {
         const [, version, date] = tested;

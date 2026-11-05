@@ -113,6 +113,7 @@ describe('D3 grant verdict', () => {
     grantId: 'g',
     userId: 'u',
     userRevocationVersion: 0,
+    grantKind: 'OAUTH',
     grantScopes: ['incidents:read', 'services:read'],
     resource: 'https://ops.example.com/mcp',
     revokedAt: null,

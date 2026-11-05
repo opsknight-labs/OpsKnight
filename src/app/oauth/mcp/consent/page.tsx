@@ -59,7 +59,7 @@ export default async function McpConsent({
   const [policy, previous] = await Promise.all([
     prisma.mcpPolicy.findUnique({
       where: { id: 'default' },
-      select: { writesEnabled: true, cimdAllowedHosts: true },
+      select: { writesEnabled: true, cimdAllowedHosts: true, requireReadOnlyConnections: true },
     }),
     // The latest live connection for this assistant; its permissions start selected again.
     prisma.mcpGrant.findFirst({
@@ -73,6 +73,7 @@ export default async function McpConsent({
     explicitlyRequested: request.requestedScopes,
     role: who.role,
     previouslyGranted: previous?.scopes ?? [],
+    readOnly: policy?.requireReadOnlyConnections ?? false,
   });
   const returnTo = consentRedirectFacts(request.redirectUri);
   const identity = consentIdentity(client, policy);

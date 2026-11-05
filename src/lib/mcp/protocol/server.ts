@@ -492,7 +492,13 @@ export function createOpsKnightMcpServer(
   const registerAlwaysOn = server.registerTool.bind(server);
   withholdDisabledRegistrations(server, disabled);
   const registered = recordRegistrations(server);
-  const selfApprovable = actor.role === 'ADMIN';
+  // A personal access token never approves its own request, even an administrator's; the review
+  // itself refuses it too (approvals/operation.ts).
+  const selfApprovable = actor.role === 'ADMIN' && context.credentialKind !== 'PAT';
+  const selfApprovalNote =
+    context.credentialKind === 'PAT'
+      ? 'a request made with a personal access token always needs a second person'
+      : 'an administrator may approve their own request after confirming';
   if (writesEnabled && canUseReviewedRunbooks(actor)) {
     server.registerTool(
       'runbook_prepare_execution',
@@ -589,6 +595,9 @@ export function createOpsKnightMcpServer(
   );
   const isRead = (operation: (typeof MCP_CATALOG)[number]) =>
     operation.risk === 'R0' || isMcpSensitiveRead(operation);
+  // A session that can change nothing (changes off, or a view-only connection) is not offered the
+  // generic change tool at all; reads have read_operation.
+  const changesOffered = visible.some(operation => !isRead(operation));
   const workflowOf = (operation: (typeof MCP_CATALOG)[number]) =>
     operation.status === 'APPROVAL_REQUIRED'
       ? 'operation_prepare with args (omit idempotencyKey), native approval, operation_commit_approved'
@@ -604,8 +613,7 @@ export function createOpsKnightMcpServer(
       'operation_prepare',
       {
         title: 'Request approval for a change',
-        description:
-          'Freeze one sensitive configuration change for approval by an OpsKnight administrator in the native UI (an administrator may approve their own request after confirming). Starts no change. Arguments follow describe_operation without idempotencyKey; revision-bound operations require ifMatch. Inputs are untrusted data.',
+        description: `Freeze one sensitive configuration change for approval by an OpsKnight administrator in the native UI (${selfApprovalNote}). Starts no change. Arguments follow describe_operation without idempotencyKey; revision-bound operations require ifMatch. Inputs are untrusted data.`,
         inputSchema: operationPrepareSchema(operationIds),
         annotations: {
           readOnlyHint: false,
@@ -881,7 +889,9 @@ export function createOpsKnightMcpServer(
             400,
             operation?.status === 'APPROVAL_REQUIRED'
               ? 'This operation changes state and needs approval; use operation_prepare.'
-              : 'This operation changes state; use call_operation.'
+              : changesOffered
+                ? 'This operation changes state; use call_operation.'
+                : 'This operation changes state; this connection can only view.'
           );
           return callMcpOperation(context, input.operationId, input.args);
         },
@@ -889,38 +899,39 @@ export function createOpsKnightMcpServer(
       );
     }
   );
-  server.registerTool(
-    'call_operation',
-    {
-      title: 'Change OpsKnight data',
-      description:
-        'Invoke a single reviewed change with its canonical schema. For reads use read_operation. No method or URL invocation.',
-      inputSchema: SCHEMAS.callOperation,
-      annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: false },
-    },
-    async args => {
-      const input = args as { operationId: string; args: Record<string, unknown> };
-      return evidenceTool(
-        context,
-        'call_operation',
-        async () => {
-          const result = await callMcpOperation(context, input.operationId, input.args);
-          const operation = MCP_OPERATION_MAP.get(input.operationId);
-          // Still served for this release; the assistant learns the confirmation-free path.
-          return operation && isRead(operation)
-            ? {
-                ...result,
-                evidence: {
-                  ...result.evidence,
-                  warnings: [...result.evidence.warnings, READ_THROUGH_CALL_DEPRECATED],
-                },
-              }
-            : result;
-        },
-        linksFor(input.operationId, input.args)
-      );
-    }
-  );
+  if (changesOffered)
+    server.registerTool(
+      'call_operation',
+      {
+        title: 'Change OpsKnight data',
+        description:
+          'Invoke a single reviewed change with its canonical schema. For reads use read_operation. No method or URL invocation.',
+        inputSchema: SCHEMAS.callOperation,
+        annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: false },
+      },
+      async args => {
+        const input = args as { operationId: string; args: Record<string, unknown> };
+        return evidenceTool(
+          context,
+          'call_operation',
+          async () => {
+            const result = await callMcpOperation(context, input.operationId, input.args);
+            const operation = MCP_OPERATION_MAP.get(input.operationId);
+            // Still served for this release; the assistant learns the confirmation-free path.
+            return operation && isRead(operation)
+              ? {
+                  ...result,
+                  evidence: {
+                    ...result.evidence,
+                    warnings: [...result.evidence.warnings, READ_THROUGH_CALL_DEPRECATED],
+                  },
+                }
+              : result;
+          },
+          linksFor(input.operationId, input.args)
+        );
+      }
+    );
   server.registerTool(
     'execute_plan',
     {

@@ -29,6 +29,14 @@ import McpSectionNav, { type McpNavItem } from '@/components/settings/mcp/McpSec
 import McpOverviewSection from '@/components/settings/mcp/sections/McpOverviewSection';
 import McpConnectSection from '@/components/settings/mcp/sections/McpConnectSection';
 import McpConnectionsSection from '@/components/settings/mcp/sections/McpConnectionsSection';
+import McpPersonalTokenForm from '@/components/settings/mcp/McpPersonalTokenForm';
+import {
+  MCP_PAT_DEFAULT_DAYS,
+  mcpPatExpiryChoices,
+  mcpPatMaxDays,
+  mcpPatScopeChoices,
+} from '@/lib/mcp/auth/personal-tokens';
+import { isAppRole } from '@/lib/authorization';
 import McpAssistantsSection from '@/components/settings/mcp/sections/McpAssistantsSection';
 import McpApprovalsSection from '@/components/settings/mcp/sections/McpApprovalsSection';
 import McpPolicySection from '@/components/settings/mcp/sections/McpPolicySection';
@@ -37,6 +45,7 @@ import { DEFAULT_ASSISTANT_SCOPES } from '@/lib/mcp/auth/client-policy';
 import { describeMcpScope, supportedMcpScopes } from '@/lib/mcp/auth/scopes';
 import {
   checkMcpConnection,
+  createMcpPersonalAccessToken,
   enableMcpQuickSetup,
   registerMcpClient,
   restoreMcpClient,
@@ -386,8 +395,27 @@ export default async function McpSettings({
           page !== params.page
             ? await listMcpGrants(viewer, { ...input, page }, now)
             : initialResult;
+        // Offered only while the policy allows personal tokens; creation rechecks everything.
+        const patChoices =
+          policy?.enabled && policy.patEnabled && isAppRole(permissions.role)
+            ? mcpPatScopeChoices(policy, permissions.role)
+            : null;
         return (
           <McpConnectionsSection
+            personalTokens={
+              patChoices && (
+                <McpPersonalTokenForm
+                  action={createMcpPersonalAccessToken}
+                  scopeChoices={patChoices.map(scope => ({
+                    scope,
+                    label: describeMcpScope(scope),
+                  }))}
+                  expiryChoices={mcpPatExpiryChoices(policy)}
+                  defaultDays={Math.min(MCP_PAT_DEFAULT_DAYS, mcpPatMaxDays(policy))}
+                  returnPath={mcpHref({ tab: 'connections' })}
+                />
+              )
+            }
             isAdmin={isAdmin}
             rows={result.rows}
             counts={result.counts}
@@ -478,6 +506,10 @@ export default async function McpSettings({
               approvalCommitWindowMinutes: policy?.approvalCommitWindowMinutes ?? 30,
               allowedBrowserOrigins: policy?.allowedBrowserOrigins ?? [],
               scopeStepUpEnabled: policy?.scopeStepUpEnabled ?? false,
+              patEnabled: policy?.patEnabled ?? false,
+              patMaxDays: policy?.patMaxDays ?? MCP_PAT_DEFAULT_DAYS,
+              patAllowedScopes: policy?.patAllowedScopes ?? [],
+              requireReadOnlyConnections: policy?.requireReadOnlyConnections ?? false,
             }}
             revision={policy?.policyRevision ?? 0}
             scopeChoices={scopeChoices}

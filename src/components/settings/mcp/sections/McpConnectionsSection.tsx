@@ -1,5 +1,6 @@
+import type { ReactNode } from 'react';
 import Link from 'next/link';
-import { Plug, SearchX, Unplug, X } from 'lucide-react';
+import { KeyRound, Plug, SearchX, Unplug, X } from 'lucide-react';
 import { Button } from '@/components/ui/shadcn/button';
 import { SettingsSection } from '@/components/settings/layout/SettingsSection';
 import McpConfirmAction from '@/components/settings/mcp/McpConfirmAction';
@@ -64,6 +65,22 @@ export const BLOCK_LABEL = {
   },
 } as const satisfies Record<McpConnectionBlock, { label: string; hint: string }>;
 
+const PAT_BLOCK_LABEL = {
+  label: 'Blocked by policy',
+  hint: 'Personal access tokens are turned off in the access policy.',
+} as const;
+
+/** Why a blocked connection gives no access, worded for its kind. */
+export function blockCopy(row: Pick<McpGrantRow, 'kind' | 'blockedReason'>) {
+  if (row.kind === 'pat' && row.blockedReason === 'client_untrusted') return PAT_BLOCK_LABEL;
+  return BLOCK_LABEL[row.blockedReason ?? 'ended'];
+}
+
+/** The connection's name: a personal token's label, or its assistant. */
+export function connectionName(row: Pick<McpGrantRow, 'kind' | 'label' | 'client'>) {
+  return row.kind === 'pat' ? (row.label ?? 'Personal access token') : row.client.name;
+}
+
 export function personLabel(person: { id: string; name: string | null; email: string | null }) {
   return person.name ?? person.email ?? 'Unknown user';
 }
@@ -85,6 +102,7 @@ export default function McpConnectionsSection({
   describeScope,
   revokeAction,
   revokeAllAction,
+  personalTokens,
 }: {
   isAdmin: boolean;
   rows: McpGrantRow[];
@@ -104,6 +122,8 @@ export default function McpConnectionsSection({
   describeScope: (scope: string) => string;
   revokeAction: (form: FormData) => Promise<void>;
   revokeAllAction: (form: FormData) => Promise<void>;
+  /** The personal access token panel, when the policy allows personal tokens. */
+  personalTokens?: ReactNode;
 }) {
   const base = { tab: 'connections', status, q, client: client?.id ?? null };
   const filtered = Boolean(q || client);
@@ -124,10 +144,11 @@ export default function McpConnectionsSection({
         title={isAdmin ? 'Connections' : 'Your connections'}
         description={
           isAdmin
-            ? "Each connection is one person's consent for one assistant. Revoking takes effect on the assistant's next request."
-            : 'Assistants you have approved. Revoking takes effect on the next request.'
+            ? "Each connection is one person's consent for one assistant, or a personal access token. Revoking takes effect on the next request."
+            : 'Assistants you have approved and your personal access tokens. Revoking takes effect on the next request.'
         }
       >
+        {personalTokens}
         <div className="flex flex-col gap-3 py-4 lg:flex-row lg:items-center lg:justify-between">
           <FilterChips
             label="Filter connections by status"
@@ -248,7 +269,8 @@ export default function McpConnectionsSection({
             >
               {rows.map(row => {
                 const who = personLabel(row.user);
-                const context = isAdmin ? `${row.client.name} for ${who}` : row.client.name;
+                const name = connectionName(row);
+                const context = isAdmin ? `${name} for ${who}` : name;
                 return (
                   <ResponsiveRow key={row.id} muted={row.status !== 'active'}>
                     {isAdmin && (
@@ -271,13 +293,23 @@ export default function McpConnectionsSection({
                     <ResponsiveCell label="Assistant" primary={!isAdmin}>
                       <div className="flex items-center gap-2.5 min-w-0">
                         <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-border/80 bg-muted/40 shadow-2xs">
-                          {getAssistantIcon(row.client.name, 'h-4 w-4', row.client.metadataHost)}
+                          {row.kind === 'pat' ? (
+                            <KeyRound
+                              className="h-4 w-4 text-muted-foreground"
+                              aria-hidden="true"
+                            />
+                          ) : (
+                            getAssistantIcon(row.client.name, 'h-4 w-4', row.client.metadataHost)
+                          )}
                         </div>
                         <div className="min-w-0">
-                          <p className="truncate font-medium text-foreground">{row.client.name}</p>
-                          <p className="text-xs text-muted-foreground">
-                            {CLIENT_TYPE_LABEL[row.client.type]}
-                            {row.client.revoked && ' · assistant revoked'}
+                          <p className="truncate font-medium text-foreground">{name}</p>
+                          <p className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+                            <StatusPill tone={row.kind === 'pat' ? 'warning' : 'neutral'}>
+                              {row.kind === 'pat' ? 'Personal token' : 'OAuth'}
+                            </StatusPill>
+                            {row.kind === 'oauth' && CLIENT_TYPE_LABEL[row.client.type]}
+                            {row.kind === 'oauth' && row.client.revoked && ' · assistant revoked'}
                           </p>
                         </div>
                       </div>
@@ -316,11 +348,11 @@ export default function McpConnectionsSection({
                     </ResponsiveCell>
                     <ResponsiveCell label="Status">
                       {row.blockedReason ? (
-                        <span title={BLOCK_LABEL[row.blockedReason].hint}>
+                        <span title={blockCopy(row).hint}>
                           <StatusPill tone="danger" dot>
-                            {BLOCK_LABEL[row.blockedReason].label}
+                            {blockCopy(row).label}
                           </StatusPill>
-                          <span className="sr-only">. {BLOCK_LABEL[row.blockedReason].hint}</span>
+                          <span className="sr-only">. {blockCopy(row).hint}</span>
                         </span>
                       ) : (
                         <StatusPill
@@ -345,24 +377,23 @@ export default function McpConnectionsSection({
                           label="Revoke"
                           accessibleLabel={
                             isAdmin
-                              ? `Revoke connection for ${row.client.name} and ${who}`
-                              : `Revoke connection for ${row.client.name}`
+                              ? `Revoke connection for ${name} and ${who}`
+                              : `Revoke connection for ${name}`
                           }
-                          title={`Revoke connection for ${row.client.name}?`}
+                          title={`Revoke connection for ${name}?`}
                           confirmLabel="Revoke connection"
                           successMessage="Connection revoked"
                           className="w-full md:w-auto"
                           description={
                             isAdmin ? (
                               <p>
-                                This revokes {who}&apos;s access for {row.client.name}. The
-                                assistant stops working on its next request. They can connect again
-                                any time.
+                                This revokes {who}&apos;s access for {name}. It stops working on its
+                                next request. They can connect again any time.
                               </p>
                             ) : (
                               <p>
-                                This revokes your access for {row.client.name}. The assistant stops
-                                working on its next request. You can connect again any time.
+                                This revokes your access for {name}. It stops working on its next
+                                request. You can connect again any time.
                               </p>
                             )
                           }

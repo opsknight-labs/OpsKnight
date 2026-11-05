@@ -27,6 +27,9 @@ interface GrantAuthoritySnapshot extends GrantAccessSnapshot {
   scopeStepUpEnabled: boolean | null;
 }
 
+/** OAUTH: an assistant's consent. PAT: a personal access token (one token, never refreshed). */
+export type McpCredentialKind = 'OAUTH' | 'PAT';
+
 /** The runtime switches and bounds of the MCP policy, read with the grant in one statement. */
 export interface McpRuntimePolicy {
   enabled: boolean;
@@ -167,6 +170,9 @@ interface BearerSnapshot extends Partial<GrantAuthoritySnapshot> {
 /**
  * The bearer's token, its grant's authority and the policy in one statement. The grant side is
  * outer-joined so a known token with a failing grant is still told apart from an unknown one.
+ * OAuth access tokens and personal access tokens share this lookup: a personal token is the
+ * access secret of its grant's only token, so revocation, quota and the last-call column apply
+ * to both unchanged; the grant kind selects the ceiling (effective-access.ts).
  */
 async function resolveBearer(accessHash: string) {
   const [row] = await prisma.$queryRaw<BearerSnapshot[]>`
@@ -197,6 +203,7 @@ export async function authenticateMcp(request: Request, cost: number | null) {
     /** What a new consent for this assistant could grant: its current client ceiling. */
     clientScopes: string[];
     bearer: string;
+    kind: McpCredentialKind;
   };
   admitMcpBearer(request);
   // Only a credential OpsKnight never issued counts against the peer. An expired or revoked token
@@ -222,6 +229,7 @@ export async function authenticateMcp(request: Request, cost: number | null) {
       clientId: row.clientId ?? '',
       clientScopes: row.clientScopes ?? [],
       bearer: header.slice(7),
+      kind: row.grantKind === 'PAT' ? 'PAT' : 'OAUTH',
     };
     // The same checks as resolveMcpGrantWithPolicy, judged on the row read with the token.
     resolved = authorityFrom(row.grantId ? (row as GrantAuthoritySnapshot) : undefined, now);
@@ -261,6 +269,8 @@ export async function authenticateMcp(request: Request, cost: number | null) {
     credentialId: token.id,
     tokenScopes: token.scopes,
     clientScopes: token.clientScopes,
+    /** A personal access token never approves its own requests. */
+    kind: token.kind,
     policy,
     // Handed to the SDK as-is (it verifies nothing): the token this request was authenticated by.
     authInfo: {

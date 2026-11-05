@@ -1,6 +1,7 @@
 import prisma from '@/lib/prisma';
 import { Prisma } from '@prisma/client';
 import { logAudit } from '@/lib/audit';
+import { createInAppNotifications } from '@/lib/in-app-notifications';
 
 /** Registrations never used to sign in are kept this long; registration evicts earlier when full. */
 export const UNUSED_REGISTRATION_TTL_MS = 30 * 86_400_000;
@@ -71,6 +72,55 @@ export async function expireMcpApprovals(now = new Date()) {
   return { operations, runbooks };
 }
 
+/** Notifications about a personal access token link to the connections list. */
+export const MCP_PAT_ENTITY_TYPE = 'MCP_PERSONAL_TOKEN';
+const PAT_NOTICE_MS = 7 * 86_400_000;
+
+/**
+ * Tells each owner, in OpsKnight only, that a personal access token expires within seven days
+ * (halfway through, for a token of a week or less), once per token. Tokens are never renewed, so
+ * this is the owner's cue to create a new one. Rows locked by a concurrent sweep are skipped this
+ * tick; expired tokens are removed by the cleanup.
+ */
+export async function notifyExpiringMcpPersonalTokens(now = new Date()) {
+  return prisma.$transaction(async tx => {
+    const rows = await tx.$queryRaw<
+      { id: string; userId: string; label: string | null; expiresAt: Date }[]
+    >`
+      SELECT g.id, g."userId", g.label, g."expiresAt" FROM "McpGrant" g
+      JOIN "User" u ON u.id = g."userId"
+      WHERE g.kind = 'PAT' AND g."revokedAt" IS NULL AND g."expiryNotifiedAt" IS NULL
+        AND g."expiresAt" > ${now} AND g."expiresAt" <= ${new Date(now.getTime() + PAT_NOTICE_MS)}
+        -- A token of a week or less is announced halfway, not the moment it is created.
+        AND g."expiresAt" - LEAST(interval '7 days', (g."expiresAt" - g."createdAt") / 2) <= ${now}
+        -- Only tokens that still work: an owner whose access a security event ended is not told.
+        AND u.status::text = 'ACTIVE' AND u."mcpRevocationVersion" = g."userRevocationVersion"
+      ORDER BY g."expiresAt" ASC, g.id ASC LIMIT ${MCP_CLEANUP_BATCH} FOR UPDATE OF g SKIP LOCKED`;
+    for (const row of rows) {
+      const days = Math.max(1, Math.ceil((row.expiresAt.getTime() - now.getTime()) / 86_400_000));
+      const name = (row.label ?? '').replace(/\s+/g, ' ').trim().slice(0, 80) || 'unnamed';
+      await createInAppNotifications(
+        {
+          userIds: [row.userId],
+          type: 'SYSTEM',
+          title: 'Personal access token expires soon',
+          message: `Your MCP personal access token "${name}" expires in ${days} day${days === 1 ? '' : 's'}. Create a new token under Connections and update the agent that uses it.`,
+          entityType: MCP_PAT_ENTITY_TYPE,
+          entityId: row.id,
+          dedupeKey: `mcp-pat-expiring:${row.id}`,
+        },
+        tx
+      );
+    }
+    if (rows.length)
+      await tx.mcpGrant.updateMany({
+        where: { id: { in: rows.map(row => row.id) }, expiryNotifiedAt: null },
+        data: { expiryNotifiedAt: now },
+      });
+    return rows.length;
+  });
+}
+
 /** Bounded maintenance on the existing scheduler; no new queue or worker. */
 export async function cleanupMcpCredentials() {
   const now = new Date();
@@ -120,6 +170,7 @@ export async function cleanupMcpCredentials() {
     }),
   ]);
   const expired = await expireMcpApprovals(now);
+  const expiringTokenNotices = await notifyExpiringMcpPersonalTokens(now);
   // Expire only registrations never used to sign in. Assistants cache their client_id, so one
   // removed too soon turns a single failed sign-in into a permanent "unknown client".
   const unusedBefore = new Date(now.getTime() - UNUSED_REGISTRATION_TTL_MS);
@@ -168,5 +219,6 @@ export async function cleanupMcpCredentials() {
     expiredApprovals: expired.operations,
     expiredRunbookPlans: expired.runbooks,
     registrations: registrations.count,
+    expiringTokenNotices,
   };
 }

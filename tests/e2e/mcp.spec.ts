@@ -156,9 +156,10 @@ test('native MCP settings, PKCE consent, scoped call and revocation on desktop/m
   expect((await read.json()).result.isError).not.toBe(true);
 
   // The client allows services:read, but this consent granted incidents:read only.
-  // A guessed operation must enforce the grant even through generic invocation.
+  // A guessed operation must enforce the grant even through generic invocation. This session can
+  // change nothing, so it is offered read_operation and not call_operation.
   const forbidden = await rpc('tools/call', {
-    name: 'call_operation',
+    name: 'read_operation',
     arguments: { operationId: 'listServices', args: { query: { limit: 5 } } },
   });
   expect(forbidden.status()).toBe(200);

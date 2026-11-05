@@ -226,6 +226,7 @@ async function handlePost(request: Request, requestId: string, browserOrigin: st
     const context = {
       grantId: identity.grantId,
       credentialId: identity.credentialId,
+      credentialKind: identity.kind,
       tokenScopes: identity.tokenScopes,
       requestId,
       budget,

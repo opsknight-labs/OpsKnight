@@ -259,6 +259,15 @@ async function assertOperationReviewer(
   // confirmation. Anyone else needs a second person.
   const selfReview = actor.id === approval.actorId;
   requireMcp(!selfReview || actor.role === 'ADMIN', 'MCP_DISTINCT_REVIEWER_REQUIRED', 403);
+  // A request made with a personal access token always needs a second person: the token is a
+  // long-lived secret that could be used by someone other than its owner.
+  if (selfReview) {
+    const requester = await tx.mcpGrant.findUnique({
+      where: { id: approval.requesterGrantId },
+      select: { kind: true },
+    });
+    requireMcp(requester?.kind !== 'PAT', 'MCP_DISTINCT_REVIEWER_REQUIRED', 403);
+  }
   // Several actions are allowed without a resource (resource checks happen later), so a
   // resource-less authorize() is not enough for a sensitive R2 change: require an administrator.
   requireMcp(

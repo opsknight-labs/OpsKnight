@@ -84,8 +84,12 @@ export function buildMcpConsentOffer(input: {
   role: AppRole;
   /** Scopes of the connection this consent replaces; they start selected again. */
   previouslyGranted?: readonly string[];
+  /** The policy requires view-only connections: only read scopes are offered. */
+  readOnly?: boolean;
 }): McpConsentOffer {
-  const { offered, unavailable } = partitionScopesForRole(input.scopes, input.role);
+  const partition = partitionScopesForRole(input.scopes, input.role);
+  const { unavailable } = partition;
+  const offered = input.readOnly ? partition.offered.filter(isMcpViewScope) : partition.offered;
   const previous = input.previouslyGranted ?? [];
   const explicit = new Set([...input.explicitlyRequested, ...previous]);
   const groups = new Map<string, McpConsentGroup>(
