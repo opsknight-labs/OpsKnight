@@ -11,6 +11,10 @@ const MESSAGES = new Map<string, { title: string; body: string }>(
       title: 'This capability is turned off',
       body: 'An OpsKnight administrator disabled this capability for AI assistants in Settings → Integrations & ChatOps → MCP (AI Assistants) → Exposed capabilities. Do not retry; ask an administrator if you need it.',
     },
+    MCP_TOKEN_REQUIRED: {
+      title: 'Sign-in required',
+      body: 'Sign in to OpsKnight from your assistant to connect.',
+    },
     MCP_INVALID_TOKEN: {
       title: 'Sign-in required',
       body: 'Connect OpsKnight again from your assistant to sign in.',

@@ -3,7 +3,15 @@ import { mcpOrigin } from './config';
 import { requireMcp, McpBoundaryError } from '../core/errors';
 import { friendlyMcpError } from './friendly-error';
 
-export function assertMcpHost(request: Request, browserWrite = false) {
+/**
+ * `allowedOrigin` is a foreign browser Origin an administrator allowed exactly (cors.ts); it is
+ * honoured only for bearer and public-client endpoints, never for a browser write.
+ */
+export function assertMcpHost(
+  request: Request,
+  browserWrite = false,
+  allowedOrigin: string | null = null
+) {
   const origin = mcpOrigin();
   const host = request.headers.get('host');
   // Next's standalone server builds request.url from its internal listener.
@@ -15,7 +23,12 @@ export function assertMcpHost(request: Request, browserWrite = false) {
     403
   );
   const supplied = request.headers.get('origin');
-  requireMcp((!browserWrite && !supplied) || supplied === origin, 'MCP_INVALID_ORIGIN', 403);
+  requireMcp(
+    (!browserWrite && (!supplied || (allowedOrigin !== null && supplied === allowedOrigin))) ||
+      supplied === origin,
+    'MCP_INVALID_ORIGIN',
+    403
+  );
 }
 
 /** Fixed challenge text: RFC 6750 section 3 forbids quotes and backslashes in it. */
@@ -23,6 +36,22 @@ const challengeText = (code: string) =>
   code === 'MCP_ACCESS_CHANGED'
     ? 'Your access changed; reconnect'
     : 'The access token is missing, expired or revoked';
+
+/** Only RFC 6749 §3.3 scope-token characters may sit inside the quoted `scope` field. */
+const SCOPE_TOKEN = /^[\x21\x23-\x5b\x5d-\x7e]+$/;
+const safeScope = (value: string) => value.split(' ').every(token => SCOPE_TOKEN.test(token));
+
+function bearerChallenge(error: unknown, code: string) {
+  const resource = `resource_metadata="${mcpOrigin()}/.well-known/oauth-protected-resource/mcp"`;
+  const scope =
+    error instanceof McpBoundaryError && error.challengeScope && safeScope(error.challengeScope)
+      ? `, scope="${error.challengeScope}"`
+      : '';
+  // RFC 6750 section 3.1: a request with no credential gets no error code, so clients start
+  // sign-in instead of trying a refresh first. invalid_token tells them to refresh or sign in again.
+  if (code === 'MCP_TOKEN_REQUIRED') return `Bearer ${resource}${scope}`;
+  return `Bearer error="invalid_token", error_description="${challengeText(code)}", ${resource}${scope}`;
+}
 
 export function mcpHttpError(error: unknown) {
   const status =
@@ -53,12 +82,7 @@ export function mcpHttpError(error: unknown) {
               ),
             }
           : {}),
-        ...(status === 401
-          ? {
-              // RFC 6750 section 3: invalid_token tells clients to refresh or sign in again.
-              'WWW-Authenticate': `Bearer error="invalid_token", error_description="${challengeText(code)}", resource_metadata="${mcpOrigin()}/.well-known/oauth-protected-resource/mcp"`,
-            }
-          : {}),
+        ...(status === 401 ? { 'WWW-Authenticate': bearerChallenge(error, code) } : {}),
       },
     }
   );

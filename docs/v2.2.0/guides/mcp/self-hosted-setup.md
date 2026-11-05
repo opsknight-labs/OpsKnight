@@ -131,7 +131,7 @@ Approvals and rejections are audited. See the [catalog](../../reference/mcp/cata
 
 ## Client compatibility
 
-The server serves MCP revision **2026-07-28** natively and also accepts clients on revisions **2025-06-18** and **2025-11-25** (stateless; no sessions). Tasks and resource subscriptions need 2026-07-28. All clients need OAuth with PKCE (S256).
+The server serves MCP revision **2026-07-28** natively and also accepts clients on revisions **2025-06-18** and **2025-11-25** (stateless; no sessions), and **2025-03-26** on a best-effort basis (tool results as text only). Clients that only speak the 2024-11-05 HTTP+SSE transport are not supported: `GET /mcp` returns 405. Tasks and resource subscriptions need 2026-07-28. All clients need OAuth with PKCE (S256).
 
 | Client                        | Status                              | Notes                                                                                                                                                                  |
 | ----------------------------- | ----------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

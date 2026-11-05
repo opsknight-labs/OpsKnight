@@ -8,6 +8,7 @@ import {
   resolveMcpGrantWithPolicy,
 } from '@/lib/mcp/auth/principal';
 import { assertMcpHost, mcpHttpError } from '@/lib/mcp/auth/http';
+import { browserPreflight, withBrowserCors } from '@/lib/mcp/auth/cors';
 import {
   CostBudget,
   acquireMcpSlot,
@@ -63,11 +64,17 @@ export function POST(request: Request) {
   // Every log line of this request carries the id returned to the client as X-Request-Id.
   const requestId = randomUUID();
   return runWithContext({ requestId, component: 'mcp' }, () =>
-    withMcpDatabase(() => withMcpRuntime(() => handlePost(request, requestId)))
+    withMcpDatabase(() =>
+      withMcpRuntime(() =>
+        withBrowserCors(request, browserOrigin => handlePost(request, requestId, browserOrigin))
+      )
+    )
   );
 }
+/** CORS preflight for a browser-hosted client on an allowed origin (Allowed browser origins). */
+export const OPTIONS = browserPreflight;
 
-async function handlePost(request: Request, requestId: string) {
+async function handlePost(request: Request, requestId: string, browserOrigin: string | null) {
   const started = performance.now();
   let outcome: McpMetricOutcome = 'error';
   let tool = 'none';
@@ -77,7 +84,7 @@ async function handlePost(request: Request, requestId: string) {
   let budget: CostBudget | undefined;
   let rpcId: string | number | null = null;
   try {
-    assertMcpHost(request);
+    assertMcpHost(request, false, browserOrigin);
     releaseAuth = acquireMcpAuthenticationSlot();
     requireMcp(!request.headers.has('mcp-session-id'), 'MCP_SESSIONS_UNSUPPORTED');
     // Verify bearer authority before accepting a potentially slow upload. Release the
@@ -128,7 +135,10 @@ async function handlePost(request: Request, requestId: string) {
       grantId: identity.grantId,
     });
     rpcId = body.id;
-    // 2025-revision clients are served statelessly by the SDK; tasks and listen are 2026-07-28 only.
+    // Older revisions are served statelessly by the SDK: 2025-11-25, 2025-06-18 and best-effort
+    // 2025-03-26 (also 2024-11-05 and 2024-10-07 over plain POST; their HTTP+SSE transport is not
+    // served, GET /mcp is 405). A POST without MCP-Protocol-Version is treated as 2025-03-26.
+    // Tasks and listen are 2026-07-28 only.
     const modern = request.headers.get('mcp-protocol-version') === MCP_PROTOCOL_REVISION;
     const steps =
       body.method === 'tools/call' && body.params?.name === 'execute_plan'
@@ -242,7 +252,7 @@ async function handlePost(request: Request, requestId: string) {
           identity.policy.disabledCapabilities
         ),
       {
-        // 2025-06-18 and 2025-11-25 clients: one fresh server per request, no session.
+        // Pre-2026 clients: one fresh server per request, no session.
         legacy: 'stateless',
         responseMode: 'auto',
         maxRequestBodySize: 65536,

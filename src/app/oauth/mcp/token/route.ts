@@ -7,6 +7,7 @@ import prisma from '@/lib/prisma';
 import { acquireMcpOAuthSlot, admitMcpOAuthRequest } from '@/lib/mcp/auth/admission';
 import { mcpOAuthServer } from '@/lib/mcp/auth/oauth-model';
 import { mcpResource, withMcpRuntime } from '@/lib/mcp/auth/config';
+import { browserPreflight, withBrowserCors } from '@/lib/mcp/auth/cors';
 import { assertMcpHost, mcpHttpError, uniqueQuery } from '@/lib/mcp/auth/http';
 import { McpBoundaryError, requireMcp } from '@/lib/mcp/core/errors';
 import { readBoundedMcpText } from '@/lib/mcp/core/body';
@@ -30,14 +31,17 @@ const schema = z
   .strip();
 
 export function POST(request: Request) {
-  return withMcpDatabase(() => withMcpRuntime(() => handlePost(request)));
+  return withMcpDatabase(() =>
+    withMcpRuntime(() => withBrowserCors(request, origin => handlePost(request, origin)))
+  );
 }
+export const OPTIONS = browserPreflight;
 
-async function handlePost(request: Request) {
+async function handlePost(request: Request, browserOrigin: string | null) {
   let reused: string | undefined;
   let release: (() => void) | undefined;
   try {
-    assertMcpHost(request);
+    assertMcpHost(request, false, browserOrigin);
     release = await acquireMcpOAuthSlot('token');
     const policy = await prisma.mcpPolicy.findUnique({ where: { id: 'default' } });
     requireMcp(policy?.enabled, 'MCP_DISABLED', 503);

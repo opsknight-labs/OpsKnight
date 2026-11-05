@@ -1,6 +1,7 @@
 import prisma from '@/lib/prisma';
 import { withMcpDatabase } from '@/lib/database-workload';
 import { withMcpRuntime } from '@/lib/mcp/auth/config';
+import { browserPreflight, withBrowserCors } from '@/lib/mcp/auth/cors';
 import { assertMcpHost, mcpHttpError } from '@/lib/mcp/auth/http';
 import { admitMcpOAuthRequest } from '@/lib/mcp/auth/admission';
 import {
@@ -15,12 +16,15 @@ import { z } from 'zod/v3';
 
 export const runtime = 'nodejs';
 export function POST(request: Request) {
-  return withMcpDatabase(() => withMcpRuntime(() => handlePost(request)));
+  return withMcpDatabase(() =>
+    withMcpRuntime(() => withBrowserCors(request, origin => handlePost(request, origin)))
+  );
 }
-async function handlePost(request: Request) {
+export const OPTIONS = browserPreflight;
+async function handlePost(request: Request, browserOrigin: string | null) {
   let release: (() => void) | undefined;
   try {
-    assertMcpHost(request);
+    assertMcpHost(request, false, browserOrigin);
     release = acquireRegistrationSlot();
     const policy = await prisma.mcpPolicy.findUnique({ where: { id: 'default' } });
     requireMcp(policy?.enabled && policy.dcrEnabled, 'MCP_REGISTRATION_DISABLED', 403);

@@ -4,6 +4,7 @@ import { z } from 'zod/v3';
 import prisma from '@/lib/prisma';
 import { acquireMcpOAuthSlot, admitMcpOAuthRequest } from '@/lib/mcp/auth/admission';
 import { digestMcpSecret, withMcpRuntime } from '@/lib/mcp/auth/config';
+import { browserPreflight, withBrowserCors } from '@/lib/mcp/auth/cors';
 import { assertMcpHost, mcpHttpError, uniqueQuery } from '@/lib/mcp/auth/http';
 import { readBoundedMcpText } from '@/lib/mcp/core/body';
 import { requireMcp } from '@/lib/mcp/core/errors';
@@ -18,13 +19,16 @@ const schema = z
   // RFC 7009 extensions and unknown parameters are ignored; duplicates are still refused.
   .strip();
 export function POST(request: Request) {
-  return withMcpDatabase(() => withMcpRuntime(() => handlePost(request)));
+  return withMcpDatabase(() =>
+    withMcpRuntime(() => withBrowserCors(request, origin => handlePost(request, origin)))
+  );
 }
+export const OPTIONS = browserPreflight;
 
-async function handlePost(request: Request) {
+async function handlePost(request: Request, browserOrigin: string | null) {
   let release: (() => void) | undefined;
   try {
-    assertMcpHost(request);
+    assertMcpHost(request, false, browserOrigin);
     release = await acquireMcpOAuthSlot('revoke');
     await admitMcpOAuthRequest(request, 'revoke');
     requireMcp(

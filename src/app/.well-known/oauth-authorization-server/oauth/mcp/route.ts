@@ -1,22 +1,13 @@
-import prisma from '@/lib/prisma';
 import { loadMcpRuntime, mcpIssuer } from '@/lib/mcp/auth/config';
 import { withMcpDatabase } from '@/lib/database-workload';
+import { loadDiscoveryPolicy } from '@/lib/mcp/auth/discovery-policy';
+import { PUBLIC_METADATA_CORS, publicMetadataPreflight } from '@/lib/mcp/auth/cors';
 
 export function GET() {
   return withMcpDatabase(async () => {
     await loadMcpRuntime();
     const issuer = mcpIssuer();
-    const policy = await prisma.mcpPolicy.findUnique({
-      where: { id: 'default' },
-      select: {
-        enabled: true,
-        cimdEnabled: true,
-        cimdAllowedHosts: true,
-        cimdScopes: true,
-        dcrEnabled: true,
-        dcrScopes: true,
-      },
-    });
+    const policy = await loadDiscoveryPolicy();
     // Advertise only what is enabled and usable in this deployment.
     const cimd = Boolean(policy?.enabled && policy.cimdEnabled && policy.cimdScopes.length);
     const scopes = policy?.enabled
@@ -46,7 +37,9 @@ export function GET() {
           : {}),
         ...(scopes.length ? { scopes_supported: scopes } : {}),
       },
-      { headers: { 'Cache-Control': 'no-store' } }
+      { headers: { 'Cache-Control': 'no-store', ...PUBLIC_METADATA_CORS } }
     );
   });
 }
+
+export const OPTIONS = publicMetadataPreflight;

@@ -4,6 +4,7 @@ import { createMcpOAuthModel } from '@/lib/mcp/auth/oauth-model';
 import { resolveCimdClient } from '@/lib/mcp/auth/cimd';
 import { resolveMcpGrant } from '@/lib/mcp/auth/principal';
 import { mcpResource } from '@/lib/mcp/auth/config';
+import { clearDiscoveryPolicyCache } from '@/lib/mcp/auth/discovery-policy';
 import { GET as metadata } from '@/app/.well-known/oauth-authorization-server/oauth/mcp/route';
 
 const id = 'https://client.example.com/oauth/metadata.json';
@@ -19,24 +20,27 @@ const document = (extra: Record<string, unknown> = {}) => ({
     ...extra,
   }),
 });
+// Discovery metadata memoises the policy; a direct write here stands in for a policy save.
 const policy = (data: Record<string, unknown> = {}) =>
-  db.mcpPolicy.upsert({
-    where: { id: 'default' },
-    create: {
-      enabled: true,
-      cimdEnabled: true,
-      cimdAllowedHosts: ['client.example.com'],
-      cimdScopes: ['incidents:read'],
-      ...data,
-    },
-    update: {
-      enabled: true,
-      cimdEnabled: true,
-      cimdAllowedHosts: ['client.example.com'],
-      cimdScopes: ['incidents:read'],
-      ...data,
-    },
-  });
+  db.mcpPolicy
+    .upsert({
+      where: { id: 'default' },
+      create: {
+        enabled: true,
+        cimdEnabled: true,
+        cimdAllowedHosts: ['client.example.com'],
+        cimdScopes: ['incidents:read'],
+        ...data,
+      },
+      update: {
+        enabled: true,
+        cimdEnabled: true,
+        cimdAllowedHosts: ['client.example.com'],
+        cimdScopes: ['incidents:read'],
+        ...data,
+      },
+    })
+    .finally(clearDiscoveryPolicyCache);
 const resolve = async (fetched = document(), requested = redirect, clientId = id) =>
   resolveCimdClient(
     db,
@@ -65,6 +69,7 @@ describe('Client ID Metadata Documents', () => {
       create: { enabled: true },
       update: { enabled: true, cimdEnabled: false, cimdAllowedHosts: [], cimdScopes: [] },
     });
+    clearDiscoveryPolicyCache();
     expect((await (await metadata()).json()).client_id_metadata_document_supported).toBe(false);
     await expect(
       resolveCimdClient(

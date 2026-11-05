@@ -6,6 +6,7 @@ import type { V2AuthContext } from '@/lib/api-v2/auth';
 import { digestMcpSecret, mcpResource } from './config';
 import { McpBoundaryError, requireMcp } from '../core/errors';
 import { admitMcpBearer, recordMcpBearerFailure } from './admission';
+import { challengeScopes, loadDiscoveryPolicy } from './discovery-policy';
 import {
   GRANT_ACCESS_COLUMNS,
   grantAccessVerdict,
@@ -178,6 +179,9 @@ export async function authenticateMcp(request: Request, cost: number | null) {
   let unknownCredential = true;
   try {
     const header = request.headers.get('authorization') ?? '';
+    // No credential at all is a first connection, not a bad token: it is answered with a plain
+    // challenge and never counts against the peer.
+    requireMcp(header.trim() !== '', 'MCP_TOKEN_REQUIRED', 401);
     requireMcp(/^Bearer [A-Za-z0-9_-]{32,256}$/.test(header), 'MCP_INVALID_TOKEN', 401);
     const row = await resolveBearer(digestMcpSecret(header.slice(7)));
     unknownCredential = !row;
@@ -199,6 +203,8 @@ export async function authenticateMcp(request: Request, cost: number | null) {
     )
       recordMcpBearerFailure(request);
     requireMcp((await loadRuntimePolicy())?.enabled, 'MCP_DISABLED', 503);
+    if (error instanceof McpBoundaryError && error.status === 401)
+      error.challengeScope = challengeScopes(await loadDiscoveryPolicy()).join(' ') || undefined;
     throw error;
   }
   const { auth, policy } = resolved;
