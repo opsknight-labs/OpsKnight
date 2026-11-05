@@ -13,7 +13,14 @@ import {
 } from '../../scripts/mcp/docs-reference';
 import { friendlyMcpError } from '@/lib/mcp/auth/friendly-error';
 import { mcpScopesUsableByRole } from '@/lib/mcp/auth/role-scopes';
-import { MCP_DOCS_LINKS, MCP_DOCS_PATHS } from '@/lib/mcp/docs-links';
+import {
+  MCP_DOCS_LINKS,
+  MCP_DOCS_PATHS,
+  MCP_DOCS_REPOSITORY,
+  MCP_DOCS_SITE,
+  mcpDocsHref,
+  mcpTroubleshootingLink,
+} from '@/lib/mcp/docs-links';
 import { mcpSetupCommands } from '@/components/settings/mcp/setup-commands';
 import {
   MCP_APPROVAL_ABSOLUTE_MAX_MS,
@@ -79,6 +86,20 @@ describe('F3: generated MCP reference pages', () => {
     );
   });
 
+  it('gives every code its own anchor, and error pages link to it (DX-2)', () => {
+    const page = renderTroubleshooting();
+    const raised = [...scanMcpCodes().keys()].filter(code => !(code in MCP_NON_ERROR_CODES));
+    for (const code of raised) expect(page, code).toContain(`<a id="${code}"></a>\`${code}\``);
+    for (const event of scanMcpLogEvents().keys())
+      expect(page, event).toContain(`<a id="${event}"></a>`);
+    expect(mcpTroubleshootingLink('invalid_client')).toBe(
+      `${MCP_DOCS_LINKS.troubleshooting}#invalid_client`
+    );
+    expect(readFileSync('src/lib/mcp/auth/friendly-error.ts', 'utf8')).toContain(
+      'mcpTroubleshootingLink(code)'
+    );
+  });
+
   it('fails the check script when a committed page drifts', () => {
     // The CI entry point must exit non-zero on drift, not only this test.
     const env = {
@@ -123,6 +144,25 @@ describe('F4: MCP docs are findable', () => {
         encoding: 'utf8',
       })
     ).toContain('passed');
+  });
+
+  it('derives every docs link from its path, in either published form (DX-1)', () => {
+    for (const path of Object.values(MCP_DOCS_PATHS)) {
+      expect(mcpDocsHref(path, false)).toBe(`${MCP_DOCS_REPOSITORY}/${path}`);
+      const site = mcpDocsHref(path, true);
+      // Swapping the base must not keep the .md suffix: the docs site serves slugs.
+      expect(site.startsWith(`${MCP_DOCS_SITE}/v2.2.0/`), site).toBe(true);
+      expect(site.endsWith('/'), site).toBe(true);
+      expect(site).not.toContain('.md');
+    }
+    expect(MCP_DOCS_REPOSITORY).toBe('https://github.com/opsknight-labs/OpsKnight/blob/main');
+    for (const [key, link] of Object.entries(MCP_DOCS_LINKS))
+      expect(
+        Object.values(MCP_DOCS_PATHS).some(
+          path => link === mcpDocsHref(path, false) || link === mcpDocsHref(path, true)
+        ),
+        key
+      ).toBe(true);
   });
 
   it('has an index for each MCP section, a README section and in-app links to real files', () => {
