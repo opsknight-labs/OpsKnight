@@ -36,6 +36,8 @@ export type McpActivityChange = {
   action: string;
   entityType: string;
   entityId: string | null;
+  /** The MCP request that made the change; matches McpActivityCall.requestId. */
+  requestId: string | null;
 };
 export type McpConnectionActivity = {
   calls: McpActivityCall[];
@@ -46,6 +48,16 @@ export type McpConnectionActivity = {
   /** Administrators: the full change history in API activity, filtered to this connection. */
   historyHref: string | null;
 };
+
+/**
+ * The correlation id an audit row was written under. An MCP write forwards its own request id to
+ * the in-process REST handler, so this is the McpCallLog row that made the change.
+ */
+function auditRequestId(details: unknown): string | null {
+  const value =
+    details && typeof details === 'object' ? (details as { requestId?: unknown }).requestId : null;
+  return typeof value === 'string' && value.length <= 128 ? value : null;
+}
 
 export async function listMcpConnectionActivity(
   viewer: McpViewer,
@@ -87,7 +99,14 @@ export async function listMcpConnectionActivity(
         },
         orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
         take: MCP_ACTIVITY_CHANGES_LIMIT,
-        select: { id: true, action: true, entityType: true, entityId: true, createdAt: true },
+        select: {
+          id: true,
+          action: true,
+          entityType: true,
+          entityId: true,
+          createdAt: true,
+          details: true,
+        },
       });
   return {
     calls: page.map(row => ({
@@ -110,6 +129,7 @@ export async function listMcpConnectionActivity(
       action: row.action,
       entityType: row.entityType,
       entityId: row.entityId,
+      requestId: auditRequestId(row.details),
     })),
     historyHref: viewer.isAdmin
       ? `/settings/api-keys?${new URLSearchParams({ tab: 'activity', key: apiClientId })}`

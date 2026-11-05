@@ -1,6 +1,13 @@
 import { randomBytes } from 'node:crypto';
 import { beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { createTestUser, resetDatabase, testPrisma as db } from '../helpers/test-db';
+import {
+  createTestIncident,
+  createTestService,
+  createTestTeam,
+  createTestUser,
+  resetDatabase,
+  testPrisma as db,
+} from '../helpers/test-db';
 import { digestMcpSecret, mcpResource } from '@/lib/mcp/auth/config';
 import { flushMcpCallLog, mcpCallLogOperationId } from '@/lib/mcp/core/call-log';
 import { cleanupMcpCredentials } from '@/lib/mcp/auth/retention';
@@ -232,6 +239,32 @@ describe('D8 activity drawer access and paging', () => {
     expect(new Set(all.map(row => row.id)).size).toBe(130);
     const keys = all.map(row => `${row.at}|${row.id}`);
     expect(keys).toEqual([...keys].sort().reverse());
+  });
+});
+
+describe('D8 writes are linked to their audit rows', () => {
+  it('records the change under the MCP request id that made it', async () => {
+    const { bearer, grant, user } = await principal('ADMIN');
+    const team = await createTestTeam('Activity team');
+    const service = await createTestService('Activity service', team.id);
+    const incident = await createTestIncident('Linked write', service.id);
+    const response = await call(bearer, 'tools/call', {
+      name: 'incident_acknowledge',
+      arguments: {
+        path: { id: incident.id },
+        body: {},
+        idempotencyKey: `ack-${randomBytes(6).toString('hex')}`,
+      },
+    });
+    const body = await response.json();
+    expect(body.result?.isError, JSON.stringify(body)).not.toBe(true);
+    const [row] = await rowsFor(grant.id);
+    expect(row.tool).toBe('incident_acknowledge');
+    const activity = await listMcpConnectionActivity(viewerOf(user, true), { grantId: grant.id });
+    expect(activity.changes.length).toBeGreaterThan(0);
+    // Every change this write made carries the request id shown on its activity row.
+    for (const change of activity.changes) expect(change.requestId).toBe(row.requestId);
+    expect(activity.calls.map(item => item.requestId)).toContain(row.requestId);
   });
 });
 

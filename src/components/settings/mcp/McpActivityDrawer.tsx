@@ -85,6 +85,14 @@ export default function McpActivityDrawer({
     [grantId, load]
   );
 
+  // A write's audit row carries the request id of the MCP call that made it.
+  const changeByRequest = new Map(
+    (data?.changes ?? []).flatMap(change =>
+      change.requestId ? [[change.requestId, change] as const] : []
+    )
+  );
+  const changeAnchor = (id: string) => `mcp-change-${grantId}-${id}`;
+
   const time = (iso: string) => formatDateTime(iso, timeZone, { includeTimeZone: true });
 
   return (
@@ -124,7 +132,11 @@ export default function McpActivityDrawer({
           {data && data.changes.length > 0 && (
             <ul className="divide-y divide-border rounded-lg border border-border">
               {data.changes.map(change => (
-                <li key={change.id} className="flex flex-col gap-0.5 px-3 py-2 text-xs">
+                <li
+                  key={change.id}
+                  id={changeAnchor(change.id)}
+                  className="flex flex-col gap-0.5 px-3 py-2 text-xs"
+                >
                   <code className="font-mono text-foreground">{change.action}</code>
                   <time dateTime={change.at} className="text-muted-foreground">
                     {time(change.at)}
@@ -159,6 +171,7 @@ export default function McpActivityDrawer({
             <ul className="divide-y divide-border rounded-lg border border-border">
               {data.calls.map(call => {
                 const meta = outcomeMeta(call.outcome);
+                const change = changeByRequest.get(call.requestId);
                 return (
                   <li key={call.id} className="flex flex-col gap-1 px-3 py-2 text-xs">
                     <div className="flex flex-wrap items-center justify-between gap-2">
@@ -172,6 +185,14 @@ export default function McpActivityDrawer({
                       <span className="font-mono" title="Request id (X-Request-Id)">
                         {call.requestId.slice(0, 8)}
                       </span>
+                      {change && (
+                        <a
+                          href={`#${changeAnchor(change.id)}`}
+                          className="font-medium text-primary underline-offset-4 hover:underline"
+                        >
+                          Changed: {change.action}
+                        </a>
+                      )}
                     </div>
                   </li>
                 );

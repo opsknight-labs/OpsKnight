@@ -96,6 +96,7 @@ describe('D8 activity drawer', () => {
         action: 'incident.acknowledged',
         entityType: 'INCIDENT',
         entityId: 'i1',
+        requestId: 'write-request',
       },
     ],
     historyHref: '/settings/api-keys?tab=activity&key=mcp%3Ag1',
@@ -124,6 +125,26 @@ describe('D8 activity drawer', () => {
       cursor: { at: '2026-11-05T11:00:00.000Z', id: 'b' },
     });
     expect(screen.queryByRole('button', { name: 'Show older requests' })).toBeNull();
+  });
+
+  it('links a write to the audit row it made, by request id', async () => {
+    const base = page(['a'], null);
+    const load = vi.fn().mockResolvedValueOnce({
+      ...base,
+      calls: [
+        ...base.calls,
+        { ...base.calls[0], id: 'w', tool: 'incident_acknowledge', requestId: 'write-request' },
+      ],
+    });
+    render(<McpActivityDrawer grantId="g1" label="Claude for Jane" timeZone="UTC" load={load} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Activity for Claude for Jane' }));
+    const link = await screen.findByRole('link', { name: 'Changed: incident.acknowledged' });
+    expect(link.getAttribute('href')).toBe('#mcp-change-g1-ch1');
+    expect(document.getElementById('mcp-change-g1-ch1')?.textContent).toContain(
+      'incident.acknowledged'
+    );
+    // Only the write that made the change is linked, never the read beside it.
+    expect(screen.getAllByRole('link', { name: /^Changed:/ })).toHaveLength(1);
   });
 
   it('is offered on each connection row when the page passes a loader', () => {
