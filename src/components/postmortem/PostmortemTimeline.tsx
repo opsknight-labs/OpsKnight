@@ -5,7 +5,6 @@ import { useTimezone } from '@/contexts/TimezoneContext';
 import { formatDateTime } from '@/lib/timezone';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/shadcn/card';
 import { cn } from '@/lib/utils';
-import { Search, Megaphone, Wrench, CheckCircle2 } from 'lucide-react';
 import { TIMELINE_EVENT_TYPE_CONFIG } from './shared';
 export type { TimelineEvent };
 
@@ -58,7 +57,7 @@ export default function PostmortemTimeline({
       <CardContent>
         <div className="relative pl-6">
           {/* Timeline line */}
-          <div className="absolute left-6 top-0 bottom-0 w-0.5 bg-gradient-to-b from-blue-500 to-green-500 rounded" />
+          <div className="absolute left-6 top-0 bottom-0 w-0.5 bg-gradient-to-b from-blue-500 to-emerald-500 rounded" />
 
           {sortedEvents.map((event, index) => {
             const eventTime = new Date(event.timestamp);

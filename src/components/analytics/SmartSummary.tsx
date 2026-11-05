@@ -124,7 +124,7 @@ export default function SmartSummary({ metrics, windowDays, trendSeries }: Smart
             className="flex items-start gap-3 p-3 rounded-md bg-background/40 border border-border/40 hover:bg-background/60 transition-colors"
           >
             {insight.type === 'good' && (
-              <CheckCircle className="w-5 h-5 text-green-500 mt-0.5 flex-shrink-0" />
+              <CheckCircle className="w-5 h-5 text-emerald-500 mt-0.5 flex-shrink-0" />
             )}
             {insight.type === 'bad' && (
               <AlertTriangle className="w-5 h-5 text-red-500 mt-0.5 flex-shrink-0" />

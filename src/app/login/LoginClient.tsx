@@ -6,7 +6,7 @@ import { useState, useSyncExternalStore } from 'react';
 import { signIn } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import Image from 'next/image';
+import AuthBrand from '@/components/auth/AuthBrand';
 import Spinner from '@/components/ui/Spinner';
 import SsoButton from '@/components/auth/SsoButton';
 import { AuthLayout, AuthCard } from '@/components/auth/AuthLayout';
@@ -201,19 +201,8 @@ export default function LoginClient({
       <AuthCard isSuccess={isSuccess}>
         {/* Brand Header */}
         <div className="text-center mb-7">
-          <div className="flex items-center justify-center gap-2.5 mb-3.5">
-            <Image
-              src="/logo.png"
-              alt="OpsKnight"
-              width={32}
-              height={32}
-              className="h-8 w-8 2xl:h-10 2xl:w-10 object-contain"
-              priority
-              unoptimized
-            />
-            <span className="text-[clamp(1.25rem,4.5vw,1.5rem)] 2xl:text-3xl font-bold tracking-tight text-slate-950 dark:text-white">
-              OpsKnight
-            </span>
+          <div className="flex items-center justify-center mb-3.5">
+            <AuthBrand size="hero" />
           </div>
           <h2 className="text-[clamp(1.55rem,6vw,1.875rem)] 2xl:text-4xl font-bold text-slate-950 dark:text-white mb-2 tracking-tight min-h-[1.25em] flex items-center justify-center">
             {isSuccess ? 'Station online.' : <HelloGreeting />}

@@ -570,7 +570,7 @@ export default async function AnalyticsContent({
           value={formatPercent(metrics.resolveRate)}
           detail="Completion"
           variant={metrics.resolveRate > 80 ? 'success' : 'default'}
-          icon={<CheckCircle className="w-5 h-5 text-green-500" />}
+          icon={<CheckCircle className="w-5 h-5 text-emerald-500" />}
           tooltip={metricDefinitionTooltip(
             INCIDENT_METRIC_DEFINITIONS.resolveRate,
             `Last ${windowLabelDays} days`

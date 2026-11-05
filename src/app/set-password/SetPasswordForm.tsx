@@ -72,7 +72,7 @@ export default function SetPasswordForm({ token }: { token: string }) {
       <div className="space-y-4" role="status" aria-live="polite">
         <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-5 text-center dark:border-emerald-500/20 dark:bg-emerald-500/10">
           <ShieldCheck className="mx-auto h-8 w-8 text-emerald-600 dark:text-emerald-400" />
-          <h3 className="mt-3 font-['Space_Grotesk',sans-serif] font-semibold text-emerald-800 dark:text-emerald-300">
+          <h3 className="mt-3 font-display font-semibold text-emerald-800 dark:text-emerald-300">
             Account activated
           </h3>
           <p className="mt-1 text-sm text-emerald-700 dark:text-emerald-200/80">

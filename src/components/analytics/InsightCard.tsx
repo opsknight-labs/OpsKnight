@@ -1,5 +1,5 @@
 import React from 'react';
-import { ArrowUpRight, ArrowDownRight, Sparkles, TrendingUp, TrendingDown, AlertCircle } from 'lucide-react';
+import { Sparkles, TrendingUp, TrendingDown } from 'lucide-react';
 
 interface InsightCardProps {
     type: string;
@@ -12,9 +12,9 @@ export default function InsightCard({ type, text }: InsightCardProps) {
 
     // Icon mapping
     const Icon = isPositive ? TrendingDown : (isNegative ? TrendingUp : Sparkles);
-    const colorClass = isPositive ? 'text-green-500' : (isNegative ? 'text-red-500' : 'text-blue-500');
-    const bgClass = isPositive ? 'bg-green-500/10' : (isNegative ? 'bg-red-500/10' : 'bg-blue-500/10');
-    const borderClass = isPositive ? 'border-l-green-500' : (isNegative ? 'border-l-red-500' : 'border-l-blue-500');
+    const colorClass = isPositive ? 'text-emerald-500' : (isNegative ? 'text-red-500' : 'text-blue-500');
+    const bgClass = isPositive ? 'bg-emerald-500/10' : (isNegative ? 'bg-red-500/10' : 'bg-blue-500/10');
+    const borderClass = isPositive ? 'border-l-emerald-500' : (isNegative ? 'border-l-red-500' : 'border-l-blue-500');
 
     return (
         <div className={`

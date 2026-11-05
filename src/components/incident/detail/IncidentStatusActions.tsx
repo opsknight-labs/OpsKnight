@@ -6,7 +6,7 @@ import SnoozeDurationDialog from './SnoozeDurationDialog';
 import { snoozeIncidentWithDuration } from '@/app/(app)/incidents/snooze-actions';
 import { Button } from '@/components/ui/shadcn/button';
 import { Card, CardContent } from '@/components/ui/shadcn/card';
-import { Check, X, Clock, BellOff, Bell, Lock, CheckCircle2, Pause, Volume2 } from 'lucide-react';
+import { Check, X, BellOff, Bell, Lock, CheckCircle2, Pause, Volume2 } from 'lucide-react';
 
 type IncidentStatusActionsProps = {
   incidentId: string;
@@ -58,14 +58,14 @@ export default function IncidentStatusActions({
 
   if (isResolved) {
     return (
-      <Card className="border-green-200 bg-green-50/50">
+      <Card className="border-emerald-200 bg-emerald-50/50">
         <CardContent className="p-3 flex items-center gap-3">
-          <div className="w-8 h-8 rounded-full bg-green-100 flex items-center justify-center shrink-0">
-            <CheckCircle2 className="h-4 w-4 text-green-600" />
+          <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center shrink-0">
+            <CheckCircle2 className="h-4 w-4 text-emerald-600" />
           </div>
           <div>
-            <p className="text-sm font-medium text-green-900">Incident Resolved</p>
-            <p className="text-xs text-green-700">No further actions needed</p>
+            <p className="text-sm font-medium text-emerald-900">Incident Resolved</p>
+            <p className="text-xs text-emerald-700">No further actions needed</p>
           </div>
         </CardContent>
       </Card>
@@ -93,7 +93,7 @@ export default function IncidentStatusActions({
           <form action={onAcknowledge}>
             <Button
               type="submit"
-              className="w-full h-11 justify-center bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white font-medium shadow-sm"
+              className="w-full h-11 justify-center bg-gradient-to-r from-emerald-600 to-emerald-600 hover:from-emerald-700 hover:to-emerald-700 text-white font-medium shadow-sm"
             >
               <Check className="h-4 w-4 mr-2" />
               Acknowledge Incident
@@ -106,7 +106,7 @@ export default function IncidentStatusActions({
         <form action={onAcknowledge}>
           <Button
             type="submit"
-            className="w-full h-11 justify-center bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white font-medium shadow-sm"
+            className="w-full h-11 justify-center bg-gradient-to-r from-emerald-600 to-emerald-600 hover:from-emerald-700 hover:to-emerald-700 text-white font-medium shadow-sm"
           >
             <Check className="h-4 w-4 mr-2" />
             Acknowledge Incident

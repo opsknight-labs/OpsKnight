@@ -15,17 +15,18 @@ const badgeVariants = cva(
           'border-transparent bg-destructive text-destructive-foreground hover:bg-destructive/90',
         outline: 'border-border text-foreground bg-transparent',
         neutral: 'border-transparent bg-slate-700 text-white shadow-sm',
-        info: 'border-transparent bg-gradient-to-r from-blue-500 to-indigo-500 text-white shadow-sm',
+        info: 'border-transparent bg-gradient-to-r from-status-info-deep to-status-info text-white shadow-sm',
         success:
-          'border-transparent bg-gradient-to-r from-emerald-500 to-green-600 text-white shadow-sm',
+          'border-transparent bg-gradient-to-r from-status-ok-deep to-status-ok text-white shadow-sm',
         warning:
-          'border-transparent bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-sm',
-        danger: 'border-transparent bg-gradient-to-r from-red-500 to-rose-600 text-white shadow-sm',
+          'border-transparent bg-gradient-to-r from-status-elevated-deep to-status-elevated text-white shadow-sm',
+        danger: 'border-transparent bg-gradient-to-r from-status-critical-deep to-status-critical text-white shadow-sm',
+        shift: 'border-transparent bg-gradient-to-r from-status-shift-deep to-status-shift text-white shadow-sm',
         // Sidebar variants - solid colors with white text for dark backgrounds
-        'sidebar-danger': 'border-red-500 bg-red-500 text-white',
-        'sidebar-info': 'border-blue-500 bg-blue-500 text-white',
-        'sidebar-success': 'border-emerald-500 bg-emerald-500 text-white',
-        'sidebar-warning': 'border-amber-500 bg-amber-500 text-white',
+        'sidebar-danger': 'border-status-critical bg-status-critical text-white',
+        'sidebar-info': 'border-status-info bg-status-info text-white',
+        'sidebar-success': 'border-status-ok bg-status-ok text-white',
+        'sidebar-warning': 'border-status-elevated bg-status-elevated text-white',
       },
       size: {
         xs: 'px-2 py-0.5 text-[10px]',

@@ -616,8 +616,8 @@ export default function IncidentTimeline({
           variant: 'danger' as const,
           icon: <AlertCircle className="h-4 w-4" />,
           label: 'Created',
-          avatarBg: 'bg-red-100',
-          avatarText: 'text-red-600',
+          avatarBg: 'bg-rose-100',
+          avatarText: 'text-rose-600',
         };
       case 'ACKNOWLEDGED':
         return {
@@ -632,8 +632,8 @@ export default function IncidentTimeline({
           variant: 'success' as const,
           icon: <Target className="h-4 w-4" />,
           label: 'Resolved',
-          avatarBg: 'bg-green-100',
-          avatarText: 'text-green-600',
+          avatarBg: 'bg-emerald-100',
+          avatarText: 'text-emerald-600',
         };
       case 'NOTE':
       case 'COMMENT':

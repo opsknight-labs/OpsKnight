@@ -681,7 +681,7 @@ export default function ServiceNotificationSettings({
                     <span className="text-xs font-semibold text-foreground truncate">
                       SLA Breach Warning
                     </span>
-                    <span className="text-[9px] font-mono font-semibold px-1.5 py-0.5 rounded bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/20 shrink-0">
+                    <span className="text-[9px] font-mono font-semibold px-1.5 py-0.5 rounded bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20 shrink-0">
                       SLA_BREACH
                     </span>
                   </div>

@@ -61,7 +61,7 @@ body {
     -webkit-filter: none !important;
     forced-color-adjust: none;
     -ms-high-contrast-adjust: none;
-    font-family: var(--font-manrope), 'Manrope', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-family: var(--font-family-sans);
     font-size: var(--font-size-base);
     font-weight: var(--font-weight-semibold);
     background-color: var(--bg-primary) !important;
@@ -207,6 +207,29 @@ select option {
 .page-shell>* {
     position: relative;
     z-index: 1;
+}
+
+/* Big-screen scaling (AGENTS.md "Big-Screen & Responsive Scaling").
+   The operations console stays fluid so dense views use the whole display;
+   gutters grow with the viewport, and ultrawide screens get a centred
+   reading width so rows never stretch edge to edge. */
+@media (min-width: 1440px) {
+    .page-shell {
+        padding: 1rem 1.5rem 1.5rem;
+    }
+}
+
+@media (min-width: 1920px) {
+    .page-shell {
+        padding: 1.25rem 2rem 2rem;
+    }
+}
+
+@media (min-width: 2560px) {
+    .page-shell > * {
+        max-width: 2304px;
+        margin-inline: auto;
+    }
 }
 
 /* ==========================================================================

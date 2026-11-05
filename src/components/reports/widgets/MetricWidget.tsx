@@ -89,7 +89,7 @@ const MetricWidget = memo(function MetricWidget({
   const getVariantStyle = (v: string): string => {
     switch (v) {
       case 'success':
-        return 'text-green-500';
+        return 'text-emerald-500';
       case 'warning':
         return 'text-yellow-500';
       case 'danger':
@@ -109,7 +109,7 @@ const MetricWidget = memo(function MetricWidget({
             trendIsContextOnly
               ? 'text-muted-foreground'
               : trendIsGood
-                ? 'text-green-500'
+                ? 'text-emerald-500'
                 : 'text-red-500'
           }`}
         >

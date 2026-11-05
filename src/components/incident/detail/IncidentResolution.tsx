@@ -25,7 +25,7 @@ function SubmitButton() {
     <Button
       type="submit"
       disabled={pending}
-      className="w-full h-10 bg-green-600 hover:bg-green-700 text-white"
+      className="w-full h-10 bg-emerald-600 hover:bg-emerald-700 text-white"
     >
       {pending ? (
         <>
@@ -64,13 +64,13 @@ export default function IncidentResolution({
   }
 
   return (
-    <Card className="border-green-200 bg-green-50/50">
+    <Card className="border-emerald-200 bg-emerald-50/50">
       <CardHeader>
-        <CardTitle className="flex items-center gap-2 text-green-900">
+        <CardTitle className="flex items-center gap-2 text-emerald-900">
           <Target className="h-5 w-5" />
           Resolve Incident
         </CardTitle>
-        <CardDescription className="text-green-700">
+        <CardDescription className="text-emerald-700">
           Mark this incident as resolved with a summary note
         </CardDescription>
       </CardHeader>

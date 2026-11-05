@@ -136,7 +136,7 @@ const ChartWidget = memo(function ChartWidget({
       {showTrend && trend !== null && (
         <div className="flex items-center gap-1 mb-2">
           {trend > 0 ? (
-            <TrendingUp className="h-3 w-3 text-green-500" />
+            <TrendingUp className="h-3 w-3 text-emerald-500" />
           ) : trend < 0 ? (
             <TrendingDown className="h-3 w-3 text-red-500" />
           ) : (
@@ -144,7 +144,7 @@ const ChartWidget = memo(function ChartWidget({
           )}
           <span
             className={`text-xs ${
-              trend > 0 ? 'text-green-500' : trend < 0 ? 'text-red-500' : 'text-muted-foreground'
+              trend > 0 ? 'text-emerald-500' : trend < 0 ? 'text-red-500' : 'text-muted-foreground'
             }`}
           >
             {trend > 0 ? '+' : ''}

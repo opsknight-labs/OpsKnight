@@ -72,7 +72,7 @@ export default function DashboardPerformanceMetrics({
       } else if (trend === 'down' || change < 0) {
         return {
           icon: <TrendingDown className="h-3 w-3" />,
-          color: 'text-green-600',
+          color: 'text-emerald-600',
           text: `-${formatTime(Math.abs(change))} (-${percentChange.toFixed(1)}%)`,
         };
       }
@@ -140,7 +140,7 @@ export default function DashboardPerformanceMetrics({
           className={cn(
             'text-2xl font-bold mb-0.5',
             ackSlaRate >= 95
-              ? 'text-green-600'
+              ? 'text-emerald-600'
               : ackSlaRate >= 80
                 ? 'text-orange-500'
                 : 'text-red-600'
@@ -162,7 +162,7 @@ export default function DashboardPerformanceMetrics({
           className={cn(
             'text-2xl font-bold mb-0.5',
             resolveSlaRate >= 95
-              ? 'text-green-600'
+              ? 'text-emerald-600'
               : resolveSlaRate >= 80
                 ? 'text-orange-500'
                 : 'text-red-600'

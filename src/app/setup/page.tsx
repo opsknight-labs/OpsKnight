@@ -1,7 +1,7 @@
 import prisma from '@/lib/prisma';
 import { redirect } from 'next/navigation';
 import { headers } from 'next/headers';
-import Image from 'next/image';
+import AuthBrand from '@/components/auth/AuthBrand';
 import BootstrapSetupForm from '@/components/BootstrapSetupForm';
 import { logger } from '@/lib/logger';
 import { AuthLayout, AuthCard } from '@/components/auth/AuthLayout';
@@ -40,19 +40,8 @@ export default async function SetupPage({
       <AuthLayout>
         <AuthCard>
           <div className="text-center mb-7">
-            <div className="flex items-center justify-center gap-2.5 mb-3.5">
-              <Image
-                src="/logo.png"
-                alt="OpsKnight"
-                width={32}
-                height={32}
-                className="h-8 w-8 2xl:h-10 2xl:w-10 object-contain"
-                priority
-                unoptimized
-              />
-              <span className="text-[clamp(1.25rem,4.5vw,1.5rem)] 2xl:text-3xl font-bold tracking-tight text-slate-950 dark:text-white">
-                OpsKnight
-              </span>
+            <div className="flex items-center justify-center mb-3.5">
+              <AuthBrand size="hero" />
             </div>
             <div className="mx-auto my-4 flex h-12 w-12 items-center justify-center rounded-full bg-red-100 text-red-600 dark:bg-red-500/10 dark:text-red-400">
               <ShieldAlert className="h-6 w-6" />
@@ -82,19 +71,8 @@ export default async function SetupPage({
       <AuthCard>
         {/* Brand Header matching Login Card */}
         <div className="text-center mb-7">
-          <div className="flex items-center justify-center gap-2.5 mb-3.5">
-            <Image
-              src="/logo.png"
-              alt="OpsKnight"
-              width={32}
-              height={32}
-              className="h-8 w-8 2xl:h-10 2xl:w-10 object-contain"
-              priority
-              unoptimized
-            />
-            <span className="text-[clamp(1.25rem,4.5vw,1.5rem)] 2xl:text-3xl font-bold tracking-tight text-slate-950 dark:text-white">
-              OpsKnight
-            </span>
+          <div className="flex items-center justify-center mb-3.5">
+            <AuthBrand size="hero" />
           </div>
           <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 mb-2">
             System initialization

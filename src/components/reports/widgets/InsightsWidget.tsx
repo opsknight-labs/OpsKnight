@@ -51,7 +51,7 @@ const InsightsWidget = memo(function InsightsWidget({
           </span>
         )}
         {counts.positive > 0 && (
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">
             <TrendingUp className="h-3 w-3" />
             {counts.positive} positive
           </span>
@@ -70,7 +70,7 @@ const InsightsWidget = memo(function InsightsWidget({
             key={idx}
             className={`p-2 rounded-lg border text-xs ${
               insight.type === 'positive'
-                ? 'bg-green-50 border-green-200 dark:bg-green-900/20 dark:border-green-800'
+                ? 'bg-emerald-50 border-emerald-200 dark:bg-emerald-900/20 dark:border-emerald-800'
                 : insight.type === 'negative'
                   ? 'bg-red-50 border-red-200 dark:bg-red-900/20 dark:border-red-800'
                   : 'bg-gray-50 border-gray-200 dark:bg-gray-800/50 dark:border-gray-700'
@@ -79,7 +79,7 @@ const InsightsWidget = memo(function InsightsWidget({
             <div className="flex items-start gap-2">
               <div className="flex-shrink-0 mt-0.5">
                 {insight.type === 'positive' ? (
-                  <TrendingUp className="h-3 w-3 text-green-600 dark:text-green-400" />
+                  <TrendingUp className="h-3 w-3 text-emerald-600 dark:text-emerald-400" />
                 ) : insight.type === 'negative' ? (
                   <TrendingDown className="h-3 w-3 text-red-600 dark:text-red-400" />
                 ) : (
