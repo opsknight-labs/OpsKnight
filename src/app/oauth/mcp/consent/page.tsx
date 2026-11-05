@@ -53,7 +53,10 @@ export default async function McpConsent({
   // decideMcpConsent repeats this on submit: pending request (already within the client ceiling)
   // ∩ what the person's current role can use. Nothing else is ever shown or grantable.
   const [policy, previous] = await Promise.all([
-    prisma.mcpPolicy.findUnique({ where: { id: 'default' }, select: { writesEnabled: true } }),
+    prisma.mcpPolicy.findUnique({
+      where: { id: 'default' },
+      select: { writesEnabled: true, requireReadOnlyConnections: true },
+    }),
     // The latest live connection for this assistant; its permissions start selected again.
     prisma.mcpGrant.findFirst({
       where: supersededMcpGrantsWhere(who.id, client),
@@ -66,6 +69,7 @@ export default async function McpConsent({
     explicitlyRequested: request.requestedScopes,
     role: who.role,
     previouslyGranted: previous?.scopes ?? [],
+    readOnly: policy?.requireReadOnlyConnections ?? false,
   });
   const returnTo = consentRedirectFacts(request.redirectUri);
   const identity = consentIdentity(client);

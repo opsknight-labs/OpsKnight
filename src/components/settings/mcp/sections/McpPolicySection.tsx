@@ -23,7 +23,14 @@ export type McpPolicyValues = {
   requestsPerMinute: number;
   approvalTtlMinutes: number;
   approvalCommitWindowMinutes: number;
+  patEnabled: boolean;
+  patMaxDays: number;
+  patAllowedScopes: string[];
+  requireReadOnlyConnections: boolean;
 };
+
+/** Never offered for a personal token, whatever is ticked (effective-access.ts). */
+const PAT_FORBIDDEN = new Set(['runbooks:execute']);
 
 /**
  * One policy group: title and explanation on the left, controls on the right (stacked on small
@@ -134,6 +141,76 @@ export default function McpPolicySection({
         description="How long an unused connection stays signed in."
       >
         <SessionIdleSelect defaultValue={policy.sessionIdleDays} />
+      </PolicyGroup>
+
+      <PolicyGroup
+        title="View-only connections"
+        description="Cap every connection, including personal access tokens, to viewing. Existing connections lose their change permissions on their next request and get them back if this is turned off."
+      >
+        {/* Tells the save that these controls were on the form, so an unticked box means off. */}
+        <input type="hidden" name="patControls" value="1" />
+        <CheckRow
+          name="requireReadOnlyConnections"
+          label="Require view-only connections"
+          description="Assistants and tokens can read what the person can see, but never change anything or run runbooks."
+          defaultChecked={policy.requireReadOnlyConnections}
+        />
+      </PolicyGroup>
+
+      <PolicyGroup
+        title="Personal access tokens"
+        description="Off by default. Lets people create a long-lived token for agents that cannot sign in through a browser, such as CI jobs and workflow tools. Tokens act as their owner, never run runbooks, and changes they prepare always need a second person to approve. Turning this off revokes every token immediately."
+      >
+        <CheckRow
+          name="patEnabled"
+          label="Allow personal access tokens"
+          description="People create tokens under Connections, after confirming their sign-in."
+          defaultChecked={policy.patEnabled}
+        />
+        <div className="space-y-1.5">
+          <Label htmlFor="mcp-pat-max-days">Longest allowed expiry (days)</Label>
+          <Input
+            id="mcp-pat-max-days"
+            name="patMaxDays"
+            type="number"
+            min="1"
+            max="90"
+            defaultValue={policy.patMaxDays}
+            aria-describedby="mcp-pat-max-days-help"
+            required
+          />
+          <p id="mcp-pat-max-days-help" className="text-xs text-muted-foreground">
+            1 to 90. Tokens are never renewed; people create a new one before it expires and are
+            reminded in OpsKnight a week ahead.
+          </p>
+        </div>
+        <fieldset className="space-y-2">
+          <legend className="text-sm font-medium text-foreground">
+            Permissions a token may carry
+          </legend>
+          <p className="text-xs text-muted-foreground">
+            Leave all unticked to start from viewing incidents, services and schedules.
+          </p>
+          <div className="grid gap-2 sm:grid-cols-2">
+            {scopeChoices
+              .filter(scope => !PAT_FORBIDDEN.has(scope))
+              .map(scope => (
+                <label
+                  key={scope}
+                  className="flex cursor-pointer items-center gap-2 rounded-md border border-border px-3 py-2 text-sm hover:bg-muted/40"
+                >
+                  <input
+                    type="checkbox"
+                    name="patAllowedScopes"
+                    value={scope}
+                    defaultChecked={policy.patAllowedScopes.includes(scope)}
+                    className={checkboxClass}
+                  />
+                  <code className="font-mono text-xs">{scope}</code>
+                </label>
+              ))}
+          </div>
+        </fieldset>
       </PolicyGroup>
 
       <details className="group border-t border-border">

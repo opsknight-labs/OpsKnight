@@ -2,7 +2,7 @@
 
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useFormStatus } from 'react-dom';
-import { Info, PencilLine } from 'lucide-react';
+import { Eye, Info, PencilLine } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { McpConsentGroup, McpConsentScope } from '@/lib/mcp/auth/consent-offer';
 
@@ -35,10 +35,22 @@ export default function ConsentForm({
   const [selected, setSelected] = useState(
     () => new Set(all.filter(item => item.checked).map(item => item.scope))
   );
+  // "View only" leaves every change permission out of the connection, whatever is ticked; the
+  // server applies the same rule to the submitted form.
+  const [viewOnly, setViewOnly] = useState(false);
+  const changeScopes = useMemo(
+    () => new Set(groups.flatMap(group => group.change.map(item => item.scope))),
+    [groups]
+  );
+  const effective = useMemo(
+    () => (viewOnly ? new Set([...selected].filter(scope => !changeScopes.has(scope))) : selected),
+    [viewOnly, selected, changeScopes]
+  );
   const summaryId = useId();
   const hintId = useId();
-  const total = all.length;
-  const count = selected.size;
+  const viewOnlyId = useId();
+  const total = viewOnly ? all.length - changeScopes.size : all.length;
+  const count = effective.size;
 
   const toggle = (scopes: string[], on: boolean) =>
     setSelected(previous => {
@@ -67,14 +79,41 @@ export default function ConsentForm({
               {count} of {total} selected
             </p>
           </div>
+          {changeScopes.size > 0 && (
+            <label
+              htmlFor={viewOnlyId}
+              className="flex cursor-pointer items-start gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm dark:border-slate-700 dark:bg-slate-900/40"
+            >
+              <input
+                id={viewOnlyId}
+                type="checkbox"
+                role="switch"
+                name="viewOnly"
+                checked={viewOnly}
+                aria-checked={viewOnly}
+                onChange={event => setViewOnly(event.target.checked)}
+                className={checkboxClass}
+              />
+              <span className="min-w-0 flex-1">
+                <span className="flex items-center gap-1.5 font-semibold text-slate-900 dark:text-slate-100">
+                  <Eye className="h-4 w-4" aria-hidden="true" />
+                  View only
+                </span>
+                <span className="block text-xs text-slate-500 dark:text-slate-400">
+                  {clientName} can read but never change anything or run runbooks.
+                </span>
+              </span>
+            </label>
+          )}
           <div className={cn('grid gap-3', wide && 'lg:grid-cols-2 lg:gap-4')}>
             {groups.map(group => (
               <ScopeGroup
                 key={group.id}
                 group={group}
-                selected={selected}
+                selected={effective}
                 onToggle={toggle}
                 writesEnabled={writesEnabled}
+                viewOnly={viewOnly}
               />
             ))}
           </div>
@@ -156,13 +195,15 @@ function ScopeGroup({
   selected,
   onToggle,
   writesEnabled,
+  viewOnly,
 }: {
   group: McpConsentGroup;
   selected: Set<string>;
   onToggle: (scopes: string[], on: boolean) => void;
   writesEnabled: boolean;
+  viewOnly: boolean;
 }) {
-  const scopes = [...group.view, ...group.change].map(item => item.scope);
+  const scopes = (viewOnly ? group.view : [...group.view, ...group.change]).map(item => item.scope);
   const chosen = scopes.filter(scope => selected.has(scope)).length;
   const allRef = useRef<HTMLInputElement>(null);
   const allId = useId();
@@ -203,6 +244,7 @@ function ScopeGroup({
             onToggle={onToggle}
             changes
             writesEnabled={writesEnabled}
+            disabled={viewOnly}
           />
         )}
       </div>
@@ -217,6 +259,7 @@ function ScopeList({
   onToggle,
   changes = false,
   writesEnabled = true,
+  disabled = false,
 }: {
   title: string;
   items: McpConsentScope[];
@@ -224,6 +267,8 @@ function ScopeList({
   onToggle: (scopes: string[], on: boolean) => void;
   changes?: boolean;
   writesEnabled?: boolean;
+  /** View only is on: change permissions are shown but cannot be chosen or submitted. */
+  disabled?: boolean;
 }) {
   return (
     <fieldset className="min-w-0">
@@ -249,8 +294,9 @@ function ScopeList({
                   name="scope"
                   value={item.scope}
                   checked={on}
+                  disabled={disabled}
                   onChange={event => onToggle([item.scope], event.target.checked)}
-                  className={checkboxClass}
+                  className={cn(checkboxClass, disabled && 'cursor-not-allowed opacity-50')}
                 />
                 <span className="min-w-0 flex-1 text-slate-800 dark:text-slate-100">
                   {item.label}

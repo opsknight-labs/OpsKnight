@@ -25,6 +25,15 @@ import { mcpSessionDates } from '@/lib/mcp/auth/session-lifetime';
 import { partitionScopesForRole } from '@/lib/mcp/auth/role-scopes';
 import { isAppRole } from '@/lib/authorization';
 import { supersededUnusedMcpGrantsWhere } from '@/lib/mcp/auth/consent';
+import { isMcpViewScope } from '@/lib/mcp/auth/consent-offer';
+import { MCP_PAT_CLIENT_ID, MCP_PAT_FORBIDDEN_SCOPES } from '@/lib/mcp/auth/effective-access';
+import {
+  MCP_PAT_MAX_DAYS,
+  createMcpPersonalToken,
+  type McpPatCreateResult,
+} from '@/lib/mcp/auth/personal-tokens';
+import { getServerSession } from 'next-auth';
+import { getAuthOptions } from '@/lib/auth';
 
 const settingsPath = '/settings/integrations/mcp';
 const supportedScopes = supportedMcpScopes;
@@ -180,6 +189,11 @@ export async function updateMcpPolicy(form: FormData): Promise<UpdateMcpPolicyRe
       approvalTtlMinutes: z.coerce.number().int().min(15).max(1440).optional(),
       approvalCommitWindowMinutes: z.coerce.number().int().min(1).max(1440).optional(),
       policyRevision: z.coerce.number().int().min(0).optional(),
+      // Absent fields keep the stored value, so older callers do not reset these switches.
+      patEnabled: z.boolean().optional(),
+      patMaxDays: z.coerce.number().int().min(1).max(MCP_PAT_MAX_DAYS).optional(),
+      patAllowedScopes: z.string().max(2048).optional(),
+      requireReadOnlyConnections: z.boolean().optional(),
     })
     .strict()
     .parse({
@@ -199,6 +213,15 @@ export async function updateMcpPolicy(form: FormData): Promise<UpdateMcpPolicyRe
       approvalCommitWindowMinutes: form.get('approvalCommitWindowMinutes') ?? undefined,
       // Absent only for callers that predate the revision; the settings form always sends it.
       policyRevision: form.get('policyRevision') ?? undefined,
+      // The policy form sends a marker with these controls; checkboxes alone cannot say "off".
+      patEnabled: form.has('patControls') ? form.get('patEnabled') === 'on' : undefined,
+      patMaxDays: form.get('patMaxDays') ?? undefined,
+      patAllowedScopes: form.has('patControls')
+        ? form.getAll('patAllowedScopes').map(String).join(' ')
+        : undefined,
+      requireReadOnlyConnections: form.has('patControls')
+        ? form.get('requireReadOnlyConnections') === 'on'
+        : undefined,
     });
   const cimdAllowedHosts = [
     ...new Set(
@@ -230,6 +253,13 @@ export async function updateMcpPolicy(form: FormData): Promise<UpdateMcpPolicyRe
   );
   const dcrScopes = parseScopes(input.dcrScopes);
   requireMcp(!input.dcrEnabled || dcrScopes.length > 0, 'MCP_DCR_REQUIRES_SCOPES');
+  // runbooks:execute is never allowed on a personal token, so it is never stored for one either.
+  const patAllowedScopes =
+    input.patAllowedScopes === undefined
+      ? undefined
+      : parseScopes(input.patAllowedScopes).filter(
+          scope => !MCP_PAT_FORBIDDEN_SCOPES.includes(scope)
+        );
   const result = await prisma.$transaction(async (tx): Promise<UpdateMcpPolicyResult> => {
     await assertCurrentAdmin(tx, actor);
     // Serialise with other policy writers (the capabilities editor uses the same lock), then
@@ -263,7 +293,28 @@ export async function updateMcpPolicy(form: FormData): Promise<UpdateMcpPolicyRe
       approvalTtlMinutes: input.approvalTtlMinutes ?? existing.approvalTtlMinutes,
       approvalCommitWindowMinutes:
         input.approvalCommitWindowMinutes ?? existing.approvalCommitWindowMinutes,
+      patEnabled: input.patEnabled ?? existing.patEnabled,
+      patMaxDays: input.patMaxDays ?? existing.patMaxDays,
+      // Turning personal tokens on with nothing listed starts from the read-only defaults.
+      patAllowedScopes: (() => {
+        const scopes = patAllowedScopes ?? existing.patAllowedScopes;
+        return (input.patEnabled ?? existing.patEnabled) && !scopes.length
+          ? DEFAULT_ASSISTANT_SCOPES.filter(scope => supportedScopes().has(scope))
+          : scopes;
+      })(),
+      requireReadOnlyConnections:
+        input.requireReadOnlyConnections ?? existing.requireReadOnlyConnections,
     };
+    // Turning personal tokens off ends every one of them for good, not only while it is off.
+    const revokedPersonalTokens =
+      existing.patEnabled && !policy.patEnabled
+        ? (
+            await tx.mcpGrant.updateMany({
+              where: { kind: 'PAT', revokedAt: null },
+              data: { revokedAt: new Date() },
+            })
+          ).count
+        : 0;
     const saved = await tx.mcpPolicy.update({
       where: { id: 'default' },
       data: { ...policy, policyRevision: { increment: 1 } },
@@ -275,7 +326,11 @@ export async function updateMcpPolicy(form: FormData): Promise<UpdateMcpPolicyRe
         action: 'mcp.policy.updated',
         entityType: 'SYSTEM_CONFIG',
         actorId: actor.id,
-        details: { ...policy, policyRevision: saved.policyRevision },
+        details: {
+          ...policy,
+          policyRevision: saved.policyRevision,
+          ...(revokedPersonalTokens ? { revokedPersonalTokens } : {}),
+        },
       },
       tx
     );
@@ -376,6 +431,8 @@ export async function revokeMcpAccess(form: FormData) {
     );
     if (input.kind === 'client') {
       requireMcp(current.role === 'ADMIN', 'MCP_ADMIN_REQUIRED', 403);
+      // Personal tokens are turned off in the access policy, not by revoking their internal client.
+      requireMcp(input.id !== MCP_PAT_CLIENT_ID, 'MCP_CLIENT_NOT_FOUND', 404);
       const now = new Date();
       await tx.mcpClient.update({ where: { id: input.id }, data: { revokedAt: now } });
       // "Revoke client and all its grants": make the grants themselves revoked, not only blocked.
@@ -453,12 +510,15 @@ export async function decideMcpConsent(form: FormData) {
             .regex(/^[a-z][a-z0-9:_-]*$/)
         )
         .max(256),
+      // "View only": the person allows reads only, whatever else they ticked.
+      viewOnly: z.boolean(),
     })
     .strict()
     .parse({
       id: form.get('id'),
       decision: form.get('decision'),
       scopes: form.getAll('scope').map(String),
+      viewOnly: form.get('viewOnly') === 'on',
     });
   let location: string;
   try {
@@ -504,9 +564,15 @@ export async function decideMcpConsent(form: FormData) {
         );
         // Recompute exactly what the page offered from the pending request and the current role;
         // the submitted form only chooses among those and is never trusted to add to them.
-        const { offered } = partitionScopesForRole(pending.scopes, user.role);
+        const { offered: roleOffered } = partitionScopesForRole(pending.scopes, user.role);
+        // A policy that requires view-only connections offers reads only, as the page does.
+        const offered = currentPolicy?.requireReadOnlyConnections
+          ? roleOffered.filter(isMcpViewScope)
+          : roleOffered;
         const chosen = new Set(input.scopes);
-        const selected = offered.filter(scope => chosen.has(scope));
+        const selected = offered.filter(
+          scope => chosen.has(scope) && (!input.viewOnly || isMcpViewScope(scope))
+        );
         if (input.decision === 'allow') {
           requireMcp(
             input.scopes.every(scope => offered.includes(scope)),
@@ -590,6 +656,7 @@ export async function decideMcpConsent(form: FormData) {
               selectedScopeCount: selected.length,
               selectedScopes: selected,
               offeredScopeCount: offered.length,
+              viewOnly: input.viewOnly,
               role: user.role,
             },
           },
@@ -625,4 +692,43 @@ export async function decideMcpConsent(form: FormData) {
     throw error;
   }
   redirect(location);
+}
+
+/**
+ * Create a personal access token for the signed-in person. Needs a recent sign-in, taken from the
+ * session and never the form. The token is in the result once; only its digest is stored.
+ */
+export async function createMcpPersonalAccessToken(form: FormData): Promise<McpPatCreateResult> {
+  const actor = await getCurrentUser();
+  const parsed = z
+    .object({
+      label: z.string().max(200),
+      scopes: z.array(z.string().max(128)).max(256),
+      expiresInDays: z.coerce.number().int(),
+    })
+    .strict()
+    .safeParse({
+      label: String(form.get('label') ?? ''),
+      scopes: form.getAll('scopes').map(String),
+      expiresInDays: form.get('expiresInDays'),
+    });
+  if (!parsed.success) {
+    const field = parsed.error.issues[0]?.path[0];
+    return field === 'label'
+      ? { ok: false, code: 'MCP_INVALID_NAME', field: 'label' }
+      : field === 'scopes'
+        ? { ok: false, code: 'MCP_INVALID_SCOPE', field: 'scopes' }
+        : { ok: false, code: 'MCP_PAT_INVALID_EXPIRY', field: 'expiresInDays' };
+  }
+  await loadMcpRuntime();
+  const session = await getServerSession(await getAuthOptions());
+  const result = await prisma.$transaction(tx =>
+    createMcpPersonalToken(tx, parsed.data, {
+      id: actor.id,
+      tokenVersion: actor.tokenVersion,
+      authenticatedAt: session?.user?.id === actor.id ? session.authenticatedAt : undefined,
+    })
+  );
+  if (result.ok) revalidatePath(settingsPath);
+  return result;
 }
