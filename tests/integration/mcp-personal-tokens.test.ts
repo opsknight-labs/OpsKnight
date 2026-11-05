@@ -604,6 +604,13 @@ describe('a personal token prepares changes for someone else to approve', () => 
     await expect(
       f.review(prepared as never, 'approve', { id: f.user.id, tokenVersion: f.user.tokenVersion })
     ).rejects.toMatchObject({ code: 'MCP_DISTINCT_REVIEWER_REQUIRED' });
+    // The tool description does not promise this session a self-approval either.
+    const { body } = await rpc(f.bearer, 'tools/list');
+    const prepare = (body.result.tools as { name: string; description: string }[]).find(
+      tool => tool.name === 'operation_prepare'
+    );
+    expect(prepare?.description).toContain('personal access token always needs a second person');
+    expect(prepare?.description).not.toContain('may approve their own request');
   });
 });
 

@@ -106,6 +106,33 @@ it('consent: "View only" leaves every change permission out of the submitted for
   expect(form.get('viewOnly')).toBe('on');
 });
 
+it('consent: "View only" on a request for changes only keeps the switch so it can be undone', () => {
+  render(
+    <ConsentForm
+      action={vi.fn()}
+      requestId="r1"
+      clientName="Claude"
+      groups={[
+        {
+          id: 'incidents',
+          label: 'Incidents',
+          view: [],
+          change: [{ scope: 'incidents:write', label: 'Change incidents', checked: true }],
+        },
+      ]}
+      unavailableNote={null}
+      wide={false}
+    />
+  );
+  fireEvent.click(screen.getByRole('switch', { name: /View only/ }));
+  // Not the "your role can't use any of these" refusal: the switch is still there to turn off.
+  expect(screen.queryByText(/Your role can.t use any/)).toBeNull();
+  expect(screen.getByRole('button', { name: 'Allow' })).toBeDisabled();
+  expect(screen.getByText(/asked for changes only/)).toBeVisible();
+  fireEvent.click(screen.getByRole('switch', { name: /View only/ }));
+  expect(screen.getByRole('button', { name: 'Allow' })).toBeEnabled();
+});
+
 it('consent: no "View only" switch when nothing could change anything', () => {
   render(
     <ConsentForm

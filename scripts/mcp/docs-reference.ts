@@ -237,7 +237,8 @@ export const MCP_ERROR_GUIDE: Record<string, Guide> = {
   },
   MCP_DISTINCT_REVIEWER_REQUIRED: {
     area: 'approvals',
-    meaning: 'Someone who is not an administrator tried to approve their own request.',
+    meaning:
+      'Someone tried to approve their own request without being an administrator, or the request was made with a personal access token, which always needs a second person.',
     fix: 'Ask a second person with approval rights to review it.',
   },
   MCP_DOMAIN_REJECTED: {
@@ -877,7 +878,7 @@ export function renderPermissions() {
     '',
     '- **Configuration changes** (`operation_prepare`): an active administrator who holds every permission the change needs.',
     '- **Runbook runs** (`runbook_prepare_execution`): anyone with the runbook approve and runbook read permissions who can see the target incident or service. By default that is Responders and Administrators.',
-    '- An administrator may approve their own request after ticking an explicit confirmation; the approval is recorded as self-approved. Anyone else needs a second person. The assistant can never approve.',
+    '- An administrator may approve their own request after ticking an explicit confirmation; the approval is recorded as self-approved. Anyone else needs a second person, and so does any request made with a personal access token. The assistant can never approve.',
     ''
   );
   return lines.join('\n');

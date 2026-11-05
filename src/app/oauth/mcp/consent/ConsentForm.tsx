@@ -49,6 +49,8 @@ export default function ConsentForm({
   const summaryId = useId();
   const hintId = useId();
   const viewOnlyId = useId();
+  // What can be chosen right now; the list itself (and the switch) stays while View only is on,
+  // even when the assistant asked for changes only.
   const total = viewOnly ? all.length - changeScopes.size : all.length;
   const count = effective.size;
 
@@ -65,7 +67,7 @@ export default function ConsentForm({
   return (
     <form action={action} className="space-y-5">
       <input type="hidden" name="id" value={requestId} />
-      {total > 0 ? (
+      {all.length > 0 ? (
         <>
           <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
             <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
@@ -133,10 +135,12 @@ export default function ConsentForm({
           <span>{unavailableNote}</span>
         </p>
       )}
-      <DecisionButtons canAllow={total > 0} count={count} hintId={hintId} />
-      {total > 0 && count === 0 && (
+      <DecisionButtons canAllow={all.length > 0} count={count} hintId={hintId} />
+      {all.length > 0 && count === 0 && (
         <p id={hintId} className="text-right text-xs text-slate-500 dark:text-slate-400">
-          Select at least one permission to allow this connection.
+          {total > 0
+            ? 'Select at least one permission to allow this connection.'
+            : `${clientName} asked for changes only. Turn View only off, or cancel.`}
         </p>
       )}
     </form>

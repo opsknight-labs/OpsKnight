@@ -104,4 +104,4 @@ Operation columns count catalog operations that need the permission: plain reads
 
 - **Configuration changes** (`operation_prepare`): an active administrator who holds every permission the change needs.
 - **Runbook runs** (`runbook_prepare_execution`): anyone with the runbook approve and runbook read permissions who can see the target incident or service. By default that is Responders and Administrators.
-- An administrator may approve their own request after ticking an explicit confirmation; the approval is recorded as self-approved. Anyone else needs a second person. The assistant can never approve.
+- An administrator may approve their own request after ticking an explicit confirmation; the approval is recorded as self-approved. Anyone else needs a second person, and so does any request made with a personal access token. The assistant can never approve.

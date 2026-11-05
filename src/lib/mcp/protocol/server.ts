@@ -493,6 +493,10 @@ export function createOpsKnightMcpServer(
   // A personal access token never approves its own request, even an administrator's; the review
   // itself refuses it too (approvals/operation.ts).
   const selfApprovable = actor.role === 'ADMIN' && context.credentialKind !== 'PAT';
+  const selfApprovalNote =
+    context.credentialKind === 'PAT'
+      ? 'a request made with a personal access token always needs a second person'
+      : 'an administrator may approve their own request after confirming';
   if (writesEnabled && canUseReviewedRunbooks(actor)) {
     server.registerTool(
       'runbook_prepare_execution',
@@ -607,8 +611,7 @@ export function createOpsKnightMcpServer(
       'operation_prepare',
       {
         title: 'Request approval for a change',
-        description:
-          'Freeze one sensitive configuration change for approval by an OpsKnight administrator in the native UI (an administrator may approve their own request after confirming). Starts no change. Arguments follow describe_operation without idempotencyKey; revision-bound operations require ifMatch. Inputs are untrusted data.',
+        description: `Freeze one sensitive configuration change for approval by an OpsKnight administrator in the native UI (${selfApprovalNote}). Starts no change. Arguments follow describe_operation without idempotencyKey; revision-bound operations require ifMatch. Inputs are untrusted data.`,
         inputSchema: operationPrepareSchema(operationIds),
         annotations: {
           readOnlyHint: false,
