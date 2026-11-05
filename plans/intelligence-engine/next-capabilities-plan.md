@@ -330,3 +330,30 @@ labels and resolution sources, current access checks, snapshot generation fences
 freshness. A title/description/labels-only shortcut would be incorrect. Full push hooks, production
 browsers and the fresh published-head CI result are reported separately in PR #928. The local-only
 environment cannot close live-provider, labelled-data, dedicated-hardware or independent-review gates.
+
+## Current-main certification follow-up — 2026-11-05
+
+The original supplied plan explicitly places phases 0–7, including gated AUTO, confirmed assistant
+actions and main's MCP catalog integration, in PR #928. Those features remain together as requested;
+no scope split or published-history rewrite is performed. Reviewability and production certification
+remain considerations for the draft review, rather than an unrecorded request to remove features.
+
+Fresh local checks passed all 408 Intelligence database cases on pgvector 0.8.7, with actual HNSW
+indexes verified, and the PostgreSQL-only review regressions described above. The normal push hooks
+passed 11,062 unit tests (seven skips), typecheck and production build. A typecheck with incremental
+compilation disabled also passed. The production bundle passed 15 Intelligence and five authentication
+browser cases, including the native metrics endpoint and mobile budget controls. All nine native MCP
+journeys passed across Chromium, Firefox and WebKit after aligning tests with current scope-error
+facts and accessible approval labels. Approval uses a separate consent tab, waits for the completed
+UI and verifies a persisted decision after reload; it does not wait for a streamed RSC response to
+close. Separate-reviewer, single-execution/idempotency and required-revocation acknowledgement
+assertions remain active.
+
+Fresh CI exposed a resource regression after incorporating main: step-level 4 GB heap declarations
+overrode the branch's 6 GB build setting. The two canonical artifact builds, automation and both
+runbook builds showed JavaScript heap exhaustion in their logs. The affected declarations now use
+6 GB, matching the Docker build and the successful local production build. No check, performance
+budget, browser case, path guard or assertion is skipped to accommodate this fix. Final published-head
+hooks and CI are reported in the PR. Production dependencies have eleven low audit findings and zero
+moderate, high or critical findings in the current local audit; the full development tree also has ten
+moderate findings. No forced dependency upgrade is applied.

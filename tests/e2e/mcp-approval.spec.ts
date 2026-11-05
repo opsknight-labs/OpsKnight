@@ -63,13 +63,15 @@ test('remote request requires a different native reviewer and commits one recove
     code_challenge: createHash('sha256').update(verifier).digest('base64url'),
     resource: `${origin}/mcp`,
   }).toString();
-  await page.route(`${redirectUri}?**`, route =>
+  // OAuth opens in its own tab so a registration refresh cannot cancel this navigation.
+  const consentPage = await page.context().newPage();
+  await consentPage.route(`${redirectUri}?**`, route =>
     route.fulfill({ status: 200, contentType: 'text/plain', body: 'Local callback.' })
   );
-  await page.goto(authorize.href);
-  await page.getByRole('button', { name: 'Allow', exact: true }).click();
-  await page.waitForURL(url => url.origin === new URL(redirectUri).origin);
-  const callback = new URL(page.url());
+  await consentPage.goto(authorize.href);
+  await consentPage.getByRole('button', { name: 'Allow', exact: true }).click();
+  await consentPage.waitForURL(url => url.origin === new URL(redirectUri).origin);
+  const callback = new URL(consentPage.url());
   expect(callback.searchParams.get('state')).toBe(state);
   expect(callback.searchParams.get('iss')).toBe(`${origin}/oauth/mcp`);
   const exchange = await request.post('/oauth/mcp/token', {
@@ -139,7 +141,22 @@ test('remote request requires a different native reviewer and commits one recove
       reviewPage.locator('#main-content').getByText(proposal.planDigest, { exact: true })
     ).toBeVisible();
     await reviewPage.setViewportSize({ width: 390, height: 844 });
-    await reviewPage.getByRole('button', { name: 'Approve frozen plan', exact: true }).click();
+    const reviewed = reviewPage.waitForResponse(
+      response =>
+        response.request().method() === 'POST' &&
+        new URL(response.url()).pathname === new URL(proposal.reviewUrl, origin).pathname
+    );
+    await reviewPage
+      .getByRole('button', { name: 'Approve frozen plan (runbook run)', exact: true })
+      .click();
+    const decision = await reviewed;
+    expect(decision.status()).toBe(200);
+    // Wait for the completed UI, rather than for a streamed RSC response to close.
+    await expect(
+      reviewPage.getByRole('button', { name: 'Approve frozen plan (runbook run)', exact: true })
+    ).toHaveCount(0);
+    // Verify the persisted decision independently of the form's inline confirmation.
+    await reviewPage.reload({ waitUntil: 'domcontentloaded' });
     await expect(
       reviewPage.locator('#main-content').getByText('Approved', { exact: true })
     ).toBeVisible();

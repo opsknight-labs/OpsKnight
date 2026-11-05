@@ -151,7 +151,11 @@ test('native MCP settings, PKCE consent, scoped call and revocation on desktop/m
   expect(forbidden.status()).toBe(200);
   const denial = (await forbidden.json()).result;
   expect(denial.isError).toBe(true);
-  expect(denial.content[0].text).toBe('MCP_OPERATION_FORBIDDEN');
+  expect(denial.structuredContent.error).toMatchObject({
+    code: 'MCP_SCOPE_NOT_GRANTED',
+    hint: 'This connection was not granted services:read. Reconnect OpsKnight from your assistant and allow that permission.',
+  });
+  expect(denial.content[0].text).toMatch(/^MCP_SCOPE_NOT_GRANTED: /);
 
   // Connections render as stacked cards on phones; the rows and their actions are the same.
   await page.setViewportSize({ width: 390, height: 844 });

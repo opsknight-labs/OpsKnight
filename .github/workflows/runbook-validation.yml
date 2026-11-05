@@ -101,7 +101,7 @@ jobs:
         run: npx playwright install --with-deps chromium firefox webkit
       - name: Production build
         env:
-          NODE_OPTIONS: --max-old-space-size=4096
+          NODE_OPTIONS: --max-old-space-size=6144
         run: npm run build
       - name: Authoring, execution preview and responsive browser checks
         run: npx playwright test --config playwright.runbooks.config.ts
@@ -286,7 +286,7 @@ jobs:
         run: npx prisma migrate deploy
       - name: Build production candidate
         env:
-          NODE_OPTIONS: --max-old-space-size=4096
+          NODE_OPTIONS: --max-old-space-size=6144
         run: npm run build
       - name: Build local Agent candidate
         run: docker build -f agent/Dockerfile -t opsknight-agent:rbe-local .
