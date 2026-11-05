@@ -204,6 +204,8 @@ async function main() {
       'tests/integration/mcp-sensitive-reads-post.test.ts',
       'tests/integration/mcp-fault-injection.test.ts',
       'tests/integration/mcp-fault-child.test.ts',
+      'tests/integration/mcp-curated-incident-actions.test.ts',
+      'tests/integration/mcp-agent-reads.test.ts',
       'tests/integration/mcp-load-worker.test.ts',
     ]);
     await node(

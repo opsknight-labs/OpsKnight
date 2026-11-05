@@ -248,7 +248,8 @@ describe('MCP investigation database amplification', () => {
     await measured(
       'incident_get_context',
       1,
-      3,
+      // Incident, timeline, related incidents and recent notes.
+      4,
       async () => {
         await tool('incident_get_context', { id: incidentId });
       },

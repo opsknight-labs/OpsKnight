@@ -447,7 +447,9 @@ describe('MCP PostgreSQL security and replay boundaries', () => {
           where: { key: { startsWith: `mcp:${f.grant.id}:` } },
         })
       ).count
-    ).toBe(3);
+      // Incident, timeline, related incidents and recent notes.
+    ).toBe(4);
+    expect(output.result.structuredContent.notes).toBeDefined();
   });
   it.each(['ADMIN', 'RESPONDER', 'AUDITOR', 'USER'] as const)(
     'preserves %s visibility and applies team removal on the next read',

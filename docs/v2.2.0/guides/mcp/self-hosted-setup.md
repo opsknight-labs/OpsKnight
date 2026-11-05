@@ -7,7 +7,7 @@ product_area: mcp
 audience: [administrator, responder]
 verification:
   level: source
-  verified_at: 2026-11-04
+  verified_at: 2026-11-05
   evidence:
     - src/app/(app)/settings/integrations/mcp/page.tsx
     - src/app/(app)/settings/integrations/mcp/actions.ts
@@ -61,6 +61,7 @@ Copy the **MCP server URL** from the **Connect** tab; it also shows step-by-step
 
 - **Claude Code:** run `claude mcp add --scope user --transport http opsknight 'https://ops.your-company.com/mcp'`, then `/mcp` to sign in.
 - **Claude and ChatGPT apps:** add a custom connector in the app's connector settings, paste the URL and choose OAuth. Menu names vary by version, and some plans need a workspace owner to allow custom connectors.
+- **ChatGPT company knowledge and deep research:** these call only a `search` and a `fetch` tool. OpsKnight serves both (on by default): they find and read the incidents, postmortems, runbooks and services the person can see, with a link back to OpsKnight for each answer. An administrator can turn them off under exposed capabilities.
 - **Cursor:** use **Add to Cursor** on the Connect tab, or add the `opsknight` entry under `mcpServers` in `~/.cursor/mcp.json`, merging it into the file if it already exists so your other servers are kept.
 - **VS Code:** use **Add to VS Code**, or on macOS and Linux run `code --add-mcp '{"name":"opsknight","type":"http","url":"https://ops.your-company.com/mcp"}'`. On Windows use the link or **MCP: Add Server** in the Command Palette.
 

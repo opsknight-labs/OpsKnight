@@ -321,8 +321,14 @@ describe('A10: single-entity results link back', () => {
         annotations: { audience: ['user'] },
       }),
     ]);
+    // A list links each of its first rows to its page (for the person), never a resource read.
     const { result: list } = await tool(bearer, 'incident_search', { query: { limit: 1 } });
-    expect(list.content).toHaveLength(1);
+    expect(list.content).toHaveLength(2);
+    expect(list.content[1]).toMatchObject({
+      type: 'resource_link',
+      mimeType: 'text/html',
+      annotations: { audience: ['user'] },
+    });
   });
 });
 
