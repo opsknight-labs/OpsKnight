@@ -967,6 +967,11 @@ function reachedBy(entry: ReturnType<typeof buildMcpParityReport>['operations'][
     case 'EXCLUDED_WITH_REASON':
       return 'not available: excluded after review';
     default:
+      // The real status first: a recorded denial or exclusion is never described as a to-do.
+      if (operation.status === 'DENIED_WITH_REASON')
+        return 'not available: restricted to native administration (exclusion review pending)';
+      if (operation.status === 'UNSUPPORTED_WITH_REASON')
+        return 'not available: not exposed, reason recorded in the catalog (exclusion review pending)';
       return `not available: ${entry.nextStep.toLowerCase().replace(/_/g, ' ')}`;
   }
 }

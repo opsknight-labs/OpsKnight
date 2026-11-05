@@ -56,12 +56,12 @@ CI notes from certifying this branch: the browser step is sensitive to slow shar
 
 ## Current checkpoint
 
-Inventory (from `npm run --silent mcp:coverage`): 321 operations.
+Inventory (from `npm run --silent mcp:coverage`): 322 operations.
 
-- 139 generic candidates: 78 ordinary, plus 61 sensitive reads behind the administrator opt-in. Escalate (a new REST route), reopen and unsnooze run directly as reviewed R1 responder actions.
+- 144 generic candidates: 82 ordinary, plus 62 sensitive reads behind the administrator opt-in. Escalate (a new REST route), reopen and unsnooze run directly as reviewed R1 responder actions. Round 3 adds the user directory (`listUsers`, `getUser`) and integration health (`getIntegrationDiagnostics`) as R0 reads, the audit log (`listAuditLogs`) as a sensitive read, and `oncall_my_shifts` (a new REST route, `listMyOnCallShifts`). Directory and audit reads pass a per-operation field allowlist before redaction.
 - 105 approval-gated: 85 R2 and 20 R3.
 - 1 native equivalent (approved runbook execution).
-- 76 open. The [exclusion review packet](./exclusion-review.md) proposes implementing 1 (`updateStatusPage`) and excluding 75. No exclusion is reviewed: `reviewedExclusions` is 0.
+- 72 open. The [exclusion review packet](./exclusion-review.md) proposes implementing 1 (`updateStatusPage`) and excluding 71. Audit and report exports stay closed: their rows require an API-key owner (`apiKeyId` is a NOT NULL foreign key) that an MCP principal does not have, and opening them needs a non-additive schema change. No exclusion is reviewed: `reviewedExclusions` is 0.
 - The parity report keeps `implementationComplete: false` and `certified: false`.
 
 Implemented since the previous checkpoint:

@@ -81,7 +81,7 @@
   "createAuditExport": {
     "status": "DENIED_WITH_REASON",
     "risk": "R3",
-    "reason": "Credential, personal-data or infrastructure boundary restricted to native administration.",
+    "reason": "Not exposed: an audit export is owned by an ApiKey row (AuditExport.apiKeyId, NOT NULL foreign key) and an MCP principal has none, so an approved export could never be created, read back or downloaded; the file carries actor emails and IP addresses the MCP projection must remove, so it would not be the reviewed artefact anyway. Opening it needs a non-additive schema change (nullable apiKeyId plus a grant owner). Safe equivalent: listAuditLogs (sensitive read, paged, email and IP removed).",
     "tool": null,
     "routeSha256": "eb2ad21fb1ad3ade5e2bf57716a034b79353247137ed9bb5bb594b843a2e413f",
     "resourceFilter": "existing REST route authorization and scoped projection",
@@ -92,7 +92,7 @@
   "getAuditExport": {
     "status": "DENIED_WITH_REASON",
     "risk": "R3",
-    "reason": "Credential, personal-data or infrastructure boundary restricted to native administration.",
+    "reason": "Not exposed: reads an audit export owned by an ApiKey row that MCP principals do not have (see createAuditExport). Safe equivalent: listAuditLogs.",
     "tool": null,
     "routeSha256": "c743f8c3307e90639a3ea99e3b9b6a1ecae6091ff064fc5f91db58eec289d2ac",
     "resourceFilter": "existing REST route authorization and scoped projection",
@@ -103,7 +103,7 @@
   "downloadAuditExport": {
     "status": "DENIED_WITH_REASON",
     "risk": "R3",
-    "reason": "Credential, personal-data or infrastructure boundary restricted to native administration.",
+    "reason": "Not exposed: downloads an unredacted audit file (actor emails, IP addresses) owned by an ApiKey row that MCP principals do not have (see createAuditExport). Safe equivalent: listAuditLogs.",
     "tool": null,
     "routeSha256": "79dec156e13106fc3a9c58fa94ca062cab5cbe405abfaf668b05a811a7a1c267",
     "resourceFilter": "existing REST route authorization and scoped projection",
@@ -1852,7 +1852,9 @@
     "tool": "incident_unsnooze",
     "title": "End an incident snooze",
     "agentDescription": "End an incident's snooze now so it is open and pages again. Use when the person wants a snoozed incident back before its snooze ends.",
-    "annotations": { "openWorldHint": true },
+    "annotations": {
+      "openWorldHint": true
+    },
     "routeSha256": "7221c99fbbdbd8ddd9ccf959844c060addd46727e40eaca3503233beb4bb2893",
     "resourceFilter": "existing REST route authorization and scoped projection",
     "evidence": "tests/integration/mcp-curated-incident-actions.test.ts",
@@ -1891,7 +1893,9 @@
     "tool": "incident_reopen",
     "title": "Reopen an incident",
     "agentDescription": "Reopen a resolved incident so it is open again and its escalation applies. Use when the person says the issue is back or was resolved too early.",
-    "annotations": { "openWorldHint": true },
+    "annotations": {
+      "openWorldHint": true
+    },
     "routeSha256": "3f786933efbef81e232ced968f5b8f150d4865a8ba8d9e8b4b7479774c90b7d0",
     "resourceFilter": "existing REST route authorization and scoped projection",
     "evidence": "tests/integration/mcp-curated-incident-actions.test.ts",
@@ -1977,13 +1981,13 @@
     "actions": ["runbook.publish"]
   },
   "listAuditLogs": {
-    "status": "DENIED_WITH_REASON",
-    "risk": "R3",
-    "reason": "Credential, personal-data or infrastructure boundary restricted to native administration.",
+    "status": "SENSITIVE_READ",
+    "risk": "R2",
+    "reason": "Reviewed audit read for Administrators and Auditors (audit.read) behind the administrator sensitive-reads opt-in: details pass the native audit projection and recursive redaction, and the MCP field allowlist drops actor email and IP address. Every read is itself audited.",
     "tool": null,
     "routeSha256": "104207f1882daad88ab1119c7529bcb527ff8393dec98cf8c353dbc51eb81c10",
     "resourceFilter": "existing REST route authorization and scoped projection",
-    "evidence": "pending final-SHA parity certification",
+    "evidence": "tests/integration/mcp-directory-reads.test.ts",
     "contractSha256": "7900969e713ffbd254f14006c0a9e97b5ca8b63abd026ec2c7aaf02a82df64ee",
     "actions": ["audit.read"]
   },
@@ -2187,7 +2191,9 @@
     "tool": "incident_acknowledge",
     "title": "Acknowledge an incident",
     "agentDescription": "Acknowledge an open incident so escalation stops paging further responders. Use when the person says they are taking or looking at the incident.",
-    "annotations": { "openWorldHint": true },
+    "annotations": {
+      "openWorldHint": true
+    },
     "routeSha256": "0136347684635ea5c34b8901bbdf70dad0dfeca3c2e20a1cbc7c3bd3579acee3",
     "resourceFilter": "existing REST route authorization and scoped projection",
     "evidence": "pending final-SHA parity certification",
@@ -2201,7 +2207,10 @@
     "tool": "incident_escalate",
     "title": "Escalate an incident",
     "agentDescription": "Page the next escalation step of an open incident now, instead of waiting for its timeout. The result says who was paged, or requested false with the reason. Use only when the person asks to escalate or wake up the next responder.",
-    "annotations": { "destructiveHint": false, "openWorldHint": true },
+    "annotations": {
+      "destructiveHint": false,
+      "openWorldHint": true
+    },
     "routeSha256": "8b638d8046b5059fdf35ea109d89b9e317bc6d4c986dce9879efa5a16b72dd77",
     "resourceFilter": "existing REST route authorization and scoped projection",
     "evidence": "tests/integration/mcp-curated-incident-actions.test.ts",
@@ -2215,7 +2224,9 @@
     "tool": "incident_assign",
     "title": "Assign an incident",
     "agentDescription": "Assign an incident to a user (assigneeId) or a team (teamId). Use to hand an incident over to someone the person names.",
-    "annotations": { "openWorldHint": true },
+    "annotations": {
+      "openWorldHint": true
+    },
     "routeSha256": "bef12caa58327e2a6c07f73d40a844340820065fb89d0e7d1855f89c3c773a7f",
     "resourceFilter": "existing REST route authorization and scoped projection",
     "evidence": "pending final-SHA parity certification",
@@ -2240,7 +2251,9 @@
     "tool": "incident_add_note",
     "title": "Add an incident note",
     "agentDescription": "Add a note to an incident's timeline, visible to responders. Use to record findings, decisions or handover context the person asked to write down.",
-    "annotations": { "destructiveHint": false },
+    "annotations": {
+      "destructiveHint": false
+    },
     "routeSha256": "d108aa673779ef1c370c96980d7ce3c2d55176f27568416c2a5c95b5e9740156",
     "resourceFilter": "existing REST route authorization and scoped projection",
     "evidence": "pending final-SHA parity certification",
@@ -2254,7 +2267,9 @@
     "tool": "incident_resolve",
     "title": "Resolve an incident",
     "agentDescription": "Resolve an incident, optionally with a resolution note and kind. Use only when the person confirms the issue is fixed.",
-    "annotations": { "openWorldHint": true },
+    "annotations": {
+      "openWorldHint": true
+    },
     "routeSha256": "9038dc371295907e26fd194d23e02ec8f93481f76fc58f63fa0ad5cf44833694",
     "resourceFilter": "existing REST route authorization and scoped projection",
     "evidence": "pending final-SHA parity certification",
@@ -2319,7 +2334,10 @@
     "tool": "incident_create",
     "title": "Create an incident",
     "agentDescription": "Open a new incident on a service (serviceId from a service list read). Creating it starts that service's escalation policy, so responders may be paged. Use only when the person asks to raise an incident.",
-    "annotations": { "destructiveHint": false, "openWorldHint": true },
+    "annotations": {
+      "destructiveHint": false,
+      "openWorldHint": true
+    },
     "routeSha256": "d2fd86bd76f87a47fe02765545b2027d365f0fa8a44acb6d69b0bb7d0d95becf",
     "resourceFilter": "existing REST route authorization and scoped projection",
     "evidence": "pending final-SHA parity certification",
@@ -2394,13 +2412,13 @@
     "sideEffectFree": true
   },
   "getIntegrationDiagnostics": {
-    "status": "UNSUPPORTED_WITH_REASON",
-    "risk": "R2",
-    "reason": "Proposed exclusion (pending named review): diagnostics can echo endpoint and header configuration.",
+    "status": "DISCOVERABLE",
+    "risk": "R0",
+    "reason": "Reviewed health read: enabled state, revision and recent delivery outcomes only, with service-team authorization. The route selects no configuration, endpoint, header or credential field.",
     "tool": null,
     "routeSha256": "1368aaa892d3a9f83e543d5a5be8c41e5dc48cac921b43c4c757f492bea70bc9",
     "resourceFilter": "existing REST route authorization and scoped projection",
-    "evidence": "pending final-SHA parity certification",
+    "evidence": "tests/integration/mcp-directory-reads.test.ts",
     "contractSha256": "62061c02d5cd754327c8e25d7f382db7fa93a5d028df81a128a0c37b7b987da6",
     "actions": ["integration.read"]
   },
@@ -2891,7 +2909,7 @@
   "createReportExport": {
     "status": "UNSUPPORTED_WITH_REASON",
     "risk": "R2",
-    "reason": "Not exposed: exports are bound to an API-key row and MCP principals have none, so an approved export could never be produced or downloaded.",
+    "reason": "Not exposed: exports are bound to an API-key row (ReportExport.apiKeyId, NOT NULL foreign key) and MCP principals have none, so an approved export could never be produced or downloaded. Opening report exports needs a non-additive schema change (nullable ReportExport.apiKeyId plus a grant owner). Safe equivalent: queryReportMetrics and getReportMetrics, bounded side-effect-free reads.",
     "tool": null,
     "routeSha256": "b8ea31b064a3a60b10f397683c85d81f65257ec0b48bb9333f323c65d1555781",
     "resourceFilter": "existing REST route authorization and scoped projection",
@@ -3104,6 +3122,19 @@
     "resourceFilter": "existing REST route authorization and scoped projection",
     "evidence": "pending final-SHA parity certification",
     "contractSha256": "f23395a9464538fe402d03b4cb2946e7cd0a7b9a4c3d00a0d8dddb3661280c9d",
+    "actions": ["schedule.read"]
+  },
+  "listMyOnCallShifts": {
+    "status": "CURATED",
+    "risk": "R0",
+    "reason": "Candidate in-process REST contract adapter; current role, scopes and resource authorization required.",
+    "tool": "oncall_my_shifts",
+    "title": "List my on-call shifts",
+    "agentDescription": "List your own current and upcoming on-call shifts across every schedule in one call, with schedule name, start and end, the schedule's time zone, who takes over and your next handoff. query.days sets the window (default 14, max 30). Use for 'when am I on call' questions.",
+    "routeSha256": "63508d0815f5d0f0b6c814ea15f914e8b9ac7fd15b91accab39da6b67beca43d",
+    "resourceFilter": "existing REST route authorization and scoped projection",
+    "evidence": "tests/integration/mcp-directory-reads.test.ts",
+    "contractSha256": "21384426e56adea66cd7d409613bf3a0c1836e5190664cc80ab7231ece9df0ed",
     "actions": ["schedule.read"]
   },
   "listScheduleOverrides": {
@@ -3570,24 +3601,24 @@
     "actions": ["team.manage"]
   },
   "getUser": {
-    "status": "DENIED_WITH_REASON",
-    "risk": "R3",
-    "reason": "Credential, personal-data or infrastructure boundary restricted to native administration.",
+    "status": "DISCOVERABLE",
+    "risk": "R0",
+    "reason": "Reviewed read-only directory: native user.read authorization (Administrators, Responders and Auditors) and an MCP field allowlist that keeps only id, name, role, status and team memberships; email, time zone, department and job title never reach an agent.",
     "tool": null,
     "routeSha256": "83360b2d95394d13d5feb1c7c71ee58c64a134c2e441d2f33f65ac011250b70d",
     "resourceFilter": "existing REST route authorization and scoped projection",
-    "evidence": "pending final-SHA parity certification",
+    "evidence": "tests/integration/mcp-directory-reads.test.ts",
     "contractSha256": "b4a447fcd5c749365afbd0bd3e2e3959adfef2fe5b8583c8d7db9c19b983a618",
     "actions": ["user.read"]
   },
   "listUsers": {
-    "status": "DENIED_WITH_REASON",
-    "risk": "R3",
-    "reason": "Credential, personal-data or infrastructure boundary restricted to native administration.",
+    "status": "DISCOVERABLE",
+    "risk": "R0",
+    "reason": "Reviewed read-only directory: native user.read authorization (Administrators, Responders and Auditors) and an MCP field allowlist that keeps only id, name, role, status and team memberships; email, time zone, department and job title never reach an agent, and an MCP search matches names only so an email cannot be probed.",
     "tool": null,
-    "routeSha256": "e8378652415570cce682f785fbe7ac2d5001ff66a6f0478c418f9158cea7d0b3",
+    "routeSha256": "ed75c8d6a830dc19188d9cf6ba42a113ca6269d5b18e237e271002e44ff0480a",
     "resourceFilter": "existing REST route authorization and scoped projection",
-    "evidence": "pending final-SHA parity certification",
+    "evidence": "tests/integration/mcp-directory-reads.test.ts",
     "contractSha256": "5b2c795ec6a7a30d43d63f4684e15276ca211e244bc9ac7f746680923a523e59",
     "actions": ["user.read"]
   },

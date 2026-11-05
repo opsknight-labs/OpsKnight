@@ -160,13 +160,28 @@ describe('honest MCP workflow inventory', () => {
         operationReviewSchema.safeParse({ ...base, ...change, exclusion: reviewed }).success
       ).toBe(false);
   });
+  it('never triages a recorded denial or exclusion as eligible for an approval batch', () => {
+    const report = buildMcpParityReport(MCP_CATALOG);
+    for (const entry of report.operations) {
+      const op = MCP_CATALOG.find(item => item.operationId === entry.operationId)!;
+      if (op.status === 'UNSUPPORTED_WITH_REASON' || op.status === 'DENIED_WITH_REASON')
+        expect(entry.nextStep, entry.operationId).not.toBe(
+          'ELIGIBLE_FOR_APPROVAL_BATCH_WITH_FAMILY_TESTS'
+        );
+    }
+    for (const id of ['createReportExport', 'cancelReportExport'])
+      expect(report.operations.find(op => op.operationId === id)?.nextStep).toBe(
+        'BLOCKED_BY_RECORDED_REASON'
+      );
+  });
   it('triages every open operation without enabling any of them', () => {
     const report = buildMcpParityReport(MCP_CATALOG);
     const triaged = report.byNextStep.flatMap(group => group.operationIds).sort();
     expect(triaged).toEqual([...report.pendingOperations].sort());
+    // Empty while every open R2 write carries a recorded "not exposed" reason.
     const eligible = report.byNextStep.find(
       group => group.key === 'ELIGIBLE_FOR_APPROVAL_BATCH_WITH_FAMILY_TESTS'
-    )!;
+    ) ?? { operationIds: [] };
     for (const id of eligible.operationIds) {
       const op = MCP_CATALOG.find(item => item.operationId === id)!;
       expect(op.risk).toBe('R2');

@@ -17,7 +17,7 @@ verification:
 
 This packet lists every operation still open in the MCP parity inventory, with a proposed disposition. It was generated from `npm run --silent mcp:coverage` to help reviewers; it does not record any decision. Automated tooling must not author `exclusion` records. An exclusion counts only when a named reviewer records it in `src/lib/mcp/catalog/review.json`. The record needs a date, a rationale of at least 20 characters, and a safe equivalent where one exists. The schema rejects anything else.
 
-Snapshot: 76 open operations of 320. Proposed: implement 1, exclude 75. Regenerate the inventory before reviewing. The operation IDs, risks and reasons below come from the registry.
+Snapshot: 72 open operations of 322. Proposed: implement 1, exclude 71. Regenerate the inventory before reviewing. The operation IDs, risks and reasons below come from the registry.
 
 ## How to record a decision
 
@@ -54,15 +54,15 @@ Proposed disposition: **Exclude**.
 
 Proposed disposition: **Exclude**.
 
-| Operation                      | Risk | Method | Current reason                                                                                                                                                                                                                                     | Reviewer | Date | Decision |
-| ------------------------------ | ---- | ------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- | ---- | -------- |
-| `cancelReportExport`           | R2   | POST   | Not exposed: cancellation is scoped to the creating API key, and MCP cannot create exports (see createReportExport).                                                                                                                               |          |      |          |
-| `createReportExport`           | R2   | POST   | Not exposed: exports are bound to an API-key row and MCP principals have none, so an approved export could never be produced or downloaded.                                                                                                        |          |      |          |
-| `createServiceIntegration`     | R2   | POST   | Not exposed: the response discloses the new integration key in clear, so it needs a rotation-style workflow that never returns the secret to an agent.                                                                                             |          |      |          |
-| `downloadReportDashboardData`  | R2   | GET    | Proposed exclusion (pending named review): bulk data download; agents should use getReportDashboardData.                                                                                                                                           |          |      |          |
-| `downloadReportExport`         | R2   | GET    | Proposed exclusion (pending named review): file export bound to API-key rows MCP principals do not have.                                                                                                                                           |          |      |          |
-| `getReportExport`              | R2   | GET    | Proposed exclusion (pending named review): exports are bound to API-key rows MCP principals do not have.                                                                                                                                           |          |      |          |
-| `previewRunbookExecutionRerun` | R2   | POST   | Not exposed: the preview returns a rerun authorization token that would let the holder start execution; a model must never receive it. Proposed exclusion (pending named review); safe equivalent is runbook_prepare_execution with native review. |          |      |          |
+| Operation                      | Risk | Method | Current reason                                                                                                                                                                                                                                                                                                                                                                                     | Reviewer | Date | Decision |
+| ------------------------------ | ---- | ------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- | ---- | -------- |
+| `cancelReportExport`           | R2   | POST   | Not exposed: cancellation is scoped to the creating API key, and MCP cannot create exports (see createReportExport).                                                                                                                                                                                                                                                                               |          |      |          |
+| `createReportExport`           | R2   | POST   | Not exposed: exports are bound to an API-key row (ReportExport.apiKeyId, NOT NULL foreign key) and MCP principals have none, so an approved export could never be produced or downloaded. Opening report exports needs a non-additive schema change (nullable ReportExport.apiKeyId plus a grant owner). Safe equivalent: queryReportMetrics and getReportMetrics, bounded side-effect-free reads. |          |      |          |
+| `createServiceIntegration`     | R2   | POST   | Not exposed: the response discloses the new integration key in clear, so it needs a rotation-style workflow that never returns the secret to an agent.                                                                                                                                                                                                                                             |          |      |          |
+| `downloadReportDashboardData`  | R2   | GET    | Proposed exclusion (pending named review): bulk data download; agents should use getReportDashboardData.                                                                                                                                                                                                                                                                                           |          |      |          |
+| `downloadReportExport`         | R2   | GET    | Proposed exclusion (pending named review): file export bound to API-key rows MCP principals do not have.                                                                                                                                                                                                                                                                                           |          |      |          |
+| `getReportExport`              | R2   | GET    | Proposed exclusion (pending named review): exports are bound to API-key rows MCP principals do not have.                                                                                                                                                                                                                                                                                           |          |      |          |
+| `previewRunbookExecutionRerun` | R2   | POST   | Not exposed: the preview returns a rerun authorization token that would let the holder start execution; a model must never receive it. Proposed exclusion (pending named review); safe equivalent is runbook_prepare_execution with native review.                                                                                                                                                 |          |      |          |
 
 ## Credential and secret material (24)
 
@@ -95,7 +95,7 @@ Proposed disposition: **Exclude**.
 | `stageRunbookSigningIdentity`        | R3   | POST   | Credential, personal-data or infrastructure boundary restricted to native administration. |          |      |          |
 | `testNotificationProvider`           | R3   | POST   | Credential, personal-data or infrastructure boundary restricted to native administration. |          |      |          |
 
-## Identity and access administration (13)
+## Identity and access administration (11)
 
 Proposed disposition: **Exclude**.
 
@@ -106,13 +106,11 @@ Proposed disposition: **Exclude**.
 | `createUserInvitation`    | R3   | POST   | Credential, personal-data or infrastructure boundary restricted to native administration. |          |      |          |
 | `deleteServiceAccount`    | R3   | DELETE | Credential, personal-data or infrastructure boundary restricted to native administration. |          |      |          |
 | `getServiceAccount`       | R3   | GET    | Credential, personal-data or infrastructure boundary restricted to native administration. |          |      |          |
-| `getUser`                 | R3   | GET    | Credential, personal-data or infrastructure boundary restricted to native administration. |          |      |          |
 | `getUserAdministration`   | R3   | GET    | Credential, personal-data or infrastructure boundary restricted to native administration. |          |      |          |
 | `getUserDependencies`     | R3   | GET    | Credential, personal-data or infrastructure boundary restricted to native administration. |          |      |          |
 | `getUserInvitation`       | R3   | GET    | Credential, personal-data or infrastructure boundary restricted to native administration. |          |      |          |
 | `getUserInvitationPolicy` | R3   | GET    | Credential, personal-data or infrastructure boundary restricted to native administration. |          |      |          |
 | `listServiceAccounts`     | R3   | GET    | Credential, personal-data or infrastructure boundary restricted to native administration. |          |      |          |
-| `listUsers`               | R3   | GET    | Credential, personal-data or infrastructure boundary restricted to native administration. |          |      |          |
 | `renewUserInvitation`     | R3   | POST   | Credential, personal-data or infrastructure boundary restricted to native administration. |          |      |          |
 
 ## Runbook execution infrastructure (agents and pools) (16)
@@ -138,16 +136,15 @@ Proposed disposition: **Exclude**.
 | `updateRunbookAgentConfiguration` | R3   | PATCH  | Credential, personal-data or infrastructure boundary restricted to native administration. |          |      |          |
 | `updateRunbookAgentPool`          | R3   | PATCH  | Credential, personal-data or infrastructure boundary restricted to native administration. |          |      |          |
 
-## Audit evidence (4)
+## Audit evidence (3)
 
 Proposed disposition: **Exclude**.
 
-| Operation             | Risk | Method | Current reason                                                                            | Reviewer | Date | Decision |
-| --------------------- | ---- | ------ | ----------------------------------------------------------------------------------------- | -------- | ---- | -------- |
-| `createAuditExport`   | R3   | POST   | Credential, personal-data or infrastructure boundary restricted to native administration. |          |      |          |
-| `downloadAuditExport` | R3   | GET    | Credential, personal-data or infrastructure boundary restricted to native administration. |          |      |          |
-| `getAuditExport`      | R3   | GET    | Credential, personal-data or infrastructure boundary restricted to native administration. |          |      |          |
-| `listAuditLogs`       | R3   | GET    | Credential, personal-data or infrastructure boundary restricted to native administration. |          |      |          |
+| Operation             | Risk | Method | Current reason                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | Reviewer | Date | Decision |
+| --------------------- | ---- | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- | ---- | -------- |
+| `createAuditExport`   | R3   | POST   | Not exposed: an audit export is owned by an ApiKey row (AuditExport.apiKeyId, NOT NULL foreign key) and an MCP principal has none, so an approved export could never be created, read back or downloaded; the file carries actor emails and IP addresses the MCP projection must remove, so it would not be the reviewed artefact anyway. Opening it needs a non-additive schema change (nullable apiKeyId plus a grant owner). Safe equivalent: listAuditLogs (sensitive read, paged, email and IP removed). |          |      |          |
+| `downloadAuditExport` | R3   | GET    | Not exposed: downloads an unredacted audit file (actor emails, IP addresses) owned by an ApiKey row that MCP principals do not have (see createAuditExport). Safe equivalent: listAuditLogs.                                                                                                                                                                                                                                                                                                                  |          |      |          |
+| `getAuditExport`      | R3   | GET    | Not exposed: reads an audit export owned by an ApiKey row that MCP principals do not have (see createAuditExport). Safe equivalent: listAuditLogs.                                                                                                                                                                                                                                                                                                                                                            |          |      |          |
 
 ## Personal data and personal paging settings (5)
 
@@ -161,13 +158,12 @@ Proposed disposition: **Exclude**.
 | `removeStatusPageSubscriber`      | R3   | DELETE | Credential, personal-data or infrastructure boundary restricted to native administration.              |          |      |          |
 | `updateMyNotificationPreferences` | R3   | PATCH  | Credential, personal-data or infrastructure boundary restricted to native administration.              |          |      |          |
 
-## Configuration that can carry endpoint secrets or access controls (4)
+## Configuration that can carry endpoint secrets or access controls (3)
 
 Proposed disposition: **Exclude**.
 
-| Operation                   | Risk | Method | Current reason                                                                                                                                 | Reviewer | Date | Decision |
-| --------------------------- | ---- | ------ | ---------------------------------------------------------------------------------------------------------------------------------------------- | -------- | ---- | -------- |
-| `getChatOpsConfiguration`   | R2   | GET    | Proposed exclusion (pending named review): ChatOps configuration contains webhook URLs whose path is itself a credential.                      |          |      |          |
-| `getIntegration`            | R2   | GET    | Proposed exclusion (pending named review): integration configuration can carry endpoint secrets; use listIntegrations and getIntegrationUsage. |          |      |          |
-| `getIntegrationDiagnostics` | R2   | GET    | Proposed exclusion (pending named review): diagnostics can echo endpoint and header configuration.                                             |          |      |          |
-| `getStatusPagePrivacy`      | R3   | GET    | Credential, personal-data or infrastructure boundary restricted to native administration.                                                      |          |      |          |
+| Operation                 | Risk | Method | Current reason                                                                                                                                 | Reviewer | Date | Decision |
+| ------------------------- | ---- | ------ | ---------------------------------------------------------------------------------------------------------------------------------------------- | -------- | ---- | -------- |
+| `getChatOpsConfiguration` | R2   | GET    | Proposed exclusion (pending named review): ChatOps configuration contains webhook URLs whose path is itself a credential.                      |          |      |          |
+| `getIntegration`          | R2   | GET    | Proposed exclusion (pending named review): integration configuration can carry endpoint secrets; use listIntegrations and getIntegrationUsage. |          |      |          |
+| `getStatusPagePrivacy`    | R3   | GET    | Credential, personal-data or infrastructure boundary restricted to native administration.                                                      |          |      |          |

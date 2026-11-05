@@ -3,6 +3,7 @@ import { V2_OPERATIONS } from '@/lib/api-v2/openapi-registry';
 import { V2_MUTATION_CONTRACT } from '@/lib/api-v2/mutation-contract';
 import reviewJson from './review.json';
 import { requireMcp } from '../core/errors';
+import { MCP_FIELD_ALLOWLISTS } from '../core/projection';
 import { createHash } from 'node:crypto';
 import { operationReviewSchema, type OperationReview } from './review-schema';
 import { isApiScope } from '@/lib/authorization';
@@ -177,6 +178,46 @@ export function mcpContractHash(operation: (typeof MCP_CATALOG)[number]) {
     )
     .digest('hex');
 }
+const pickProperties = (schema: JsonObject, allowed: ReadonlySet<string>): JsonObject => ({
+  ...schema,
+  ...(schema.properties && typeof schema.properties === 'object'
+    ? {
+        properties: Object.fromEntries(
+          Object.entries(schema.properties).filter(([key]) => allowed.has(key))
+        ),
+      }
+    : {}),
+  ...(Array.isArray(schema.required)
+    ? { required: schema.required.filter(key => allowed.has(String(key))) }
+    : {}),
+});
+/** The `data` items of an allowlisted read describe only the fields execution delivers. */
+function allowSchemaFields(
+  body: JsonObject,
+  definitions: Map<string, JsonObject>,
+  allowed: ReadonlySet<string>
+): JsonObject {
+  const restrict = (schema: JsonObject): JsonObject => {
+    if (typeof schema.$ref === 'string') {
+      const name = schema.$ref.slice('#/$defs/'.length);
+      const target = definitions.get(name);
+      requireMcp(target, 'MCP_SCHEMA_REFERENCE');
+      // A private copy: another member of the same body may still use the full definition.
+      const restricted = `${name}McpFields`;
+      definitions.set(restricted, pickProperties(target, allowed));
+      return { $ref: `#/$defs/${restricted}` };
+    }
+    return pickProperties(schema, allowed);
+  };
+  const properties = new Map(Object.entries((body.properties ?? {}) as JsonObject));
+  const data = properties.get('data') as JsonObject | undefined;
+  if (!data) return body;
+  const next =
+    data.items && typeof data.items === 'object'
+      ? { ...data, items: restrict(data.items as JsonObject) }
+      : restrict(data);
+  return { ...body, properties: { ...Object.fromEntries(properties), data: next } };
+}
 const responseSchemas = new WeakMap<object, JsonObject | null>();
 /**
  * The success body an agent receives as `data`, with component references resolved into `$defs`.
@@ -195,6 +236,8 @@ export function mcpResponseSchema(operation: (typeof MCP_CATALOG)[number]): Json
   if (body) {
     const definitions = new Map<string, JsonObject>();
     result = resolveSchema(body, 0, definitions, false);
+    const allowed = MCP_FIELD_ALLOWLISTS.get(operation.operationId);
+    if (allowed) result = allowSchemaFields(result, definitions, allowed);
     if (definitions.size) result = { ...result, $defs: Object.fromEntries(definitions) };
   }
   responseSchemas.set(operation, result);

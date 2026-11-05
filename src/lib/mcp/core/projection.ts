@@ -101,3 +101,41 @@ export function summarizeRedactions(paths: readonly string[]) {
     redactedCount: paths.length,
   };
 }
+
+/**
+ * Directory and audit reads expose only reviewed fields: every other member of each `data` item
+ * is dropped before redaction, so personal data (email, phone, IP address, job details) never
+ * reaches an agent even under a name the redaction rule does not know. Keyed by operationId.
+ */
+export const MCP_FIELD_ALLOWLISTS: ReadonlyMap<string, ReadonlySet<string>> = new Map([
+  ['listUsers', new Set(['id', 'name', 'role', 'status', 'teams'])],
+  ['getUser', new Set(['id', 'name', 'role', 'status', 'teams'])],
+  [
+    'listAuditLogs',
+    new Set([
+      'id',
+      'action',
+      'entityType',
+      'entityId',
+      'actorId',
+      'actorName',
+      'details',
+      'createdAt',
+    ]),
+  ],
+]);
+
+function pickFields(value: unknown, allowed: ReadonlySet<string>): unknown {
+  if (Array.isArray(value)) return value.map(item => pickFields(item, allowed));
+  if (!value || typeof value !== 'object') return value;
+  return Object.fromEntries(Object.entries(value).filter(([key]) => allowed.has(key)));
+}
+
+/** Applies an operation's field allowlist to the `data` of a REST envelope; others pass through. */
+export function allowMcpFields(operationId: string, envelope: unknown): unknown {
+  const allowed = MCP_FIELD_ALLOWLISTS.get(operationId);
+  if (!allowed || !envelope || typeof envelope !== 'object' || Array.isArray(envelope))
+    return envelope;
+  const { data, ...rest } = envelope as { data?: unknown };
+  return { ...rest, data: pickFields(data, allowed) };
+}

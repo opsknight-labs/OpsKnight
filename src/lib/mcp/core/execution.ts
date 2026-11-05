@@ -28,7 +28,7 @@ import { CostBudget } from './budget';
 import { mcpPolicyInForce } from './kill-switch';
 import { McpBoundaryError, requireMcp } from './errors';
 import { lockMcpMutationAuthority } from './mutation-authority';
-import { projectMcpData, summarizeRedactions } from './projection';
+import { allowMcpFields, projectMcpData, summarizeRedactions } from './projection';
 import { mcpListWebUrlTemplate } from './web-links';
 import { isMcpCapabilityDisabled } from '../catalog/capabilities';
 import { ERROR_REGISTRY } from '@/lib/errors';
@@ -436,7 +436,8 @@ async function executeMcpOperation(
       ? null
       : await readBoundedDomainResult(response, context.budget.maxBytes);
   const redacted: string[] = [];
-  const data = projectMcpData(raw, redacted);
+  // Reviewed field allowlists first, so a dropped field is never even redacted into the result.
+  const data = projectMcpData(allowMcpFields(operationId, raw), redacted);
   // One template per list result instead of a URL on every row: rows stay REST-identical.
   const webUrlTemplate = mcpListWebUrlTemplate(operationId);
   // Evidence first: the untrusted-data warning reaches the model before any business text.

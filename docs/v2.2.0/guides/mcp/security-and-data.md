@@ -52,6 +52,8 @@ Results pass through a recursive projection before they leave the server. It rem
 - Bearer tokens and OpsKnight API keys inside text.
 - URLs that carry credentials or a query string (they may grant access).
 
+People directory and audit reads go further: they keep only reviewed fields before that projection runs. `listUsers` and `getUser` return id, name, role, status and teams, never email, phone, time zone, department or job title, and an assistant’s `listUsers` search matches names only, so it cannot test whether an email address belongs to someone. `listAuditLogs` (Administrators and Auditors, sensitive reads on) drops the actor's email and IP address. Audit and report exports are not available to assistants.
+
 Secrets typed into free text are not detected. A password pasted into an incident note is returned like any other note text. Field-name redaction alone does not prove that no secret can be disclosed.
 
 ## What OpsKnight stores and logs
