@@ -34,6 +34,18 @@ describe('design system contract: typography', () => {
     expect(layout).toMatch(/<html[\s\S]*?className=\{`\$\{inter\.variable\} \$\{spaceGrotesk\.variable\}`\}/);
   });
 
+  it('ships the SIL OFL notice for every bundled typeface', () => {
+    const tracked = execFileSync('git', ['ls-files', 'src/app/fonts'], { encoding: 'utf8' })
+      .split('\n')
+      .filter(Boolean);
+    for (const family of ['Inter', 'SpaceGrotesk']) {
+      expect(tracked, family).toContain(`src/app/fonts/${family}-OFL.txt`);
+      const notice = read(`src/app/fonts/${family}-OFL.txt`);
+      expect(notice).toMatch(/^Copyright /);
+      expect(notice).toContain('SIL OPEN FONT LICENSE Version 1.1');
+    }
+  });
+
   it('defines one font token per role and wires Tailwind to it', () => {
     const variables = read('src/styles/foundation/variables.css');
     expect(variables).toMatch(/--font-family-sans: var\(--font-inter\), 'Inter'/);

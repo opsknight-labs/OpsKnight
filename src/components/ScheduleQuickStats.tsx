@@ -63,7 +63,7 @@ export default function ScheduleQuickStats({
         const currentIndex = layer.users.findIndex(u => u.user.name === earliest.userName);
         // If user not found in layer, default to showing first user as next
         const nextIndex = currentIndex === -1 ? 0 : (currentIndex + 1) % layer.users.length;
-        const nextUser = layer.users[nextIndex];
+        const nextUser = layer.users.at(nextIndex);
         nextPerson = nextUser?.user.name || 'Next responder';
         nextPersonAvatar =
           nextUser?.user.avatarUrl || getDefaultAvatar(nextUser?.user.gender, nextUser?.userId);

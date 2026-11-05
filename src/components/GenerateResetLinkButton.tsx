@@ -117,6 +117,8 @@ export default function GenerateResetLinkButton({
           variant="destructive"
           size="sm"
           className="h-7 text-xs gap-1"
+          title={confirmLabel}
+          aria-label={`${confirmLabel.replace(/\?$/, '')} for ${userName}`}
         >
           {isLoading && <Loader2 className="h-3 w-3 animate-spin" />}
           Confirm
@@ -148,6 +150,7 @@ export default function GenerateResetLinkButton({
         size="sm"
         className={`h-7 text-xs gap-1.5 ${isInvite ? 'text-blue-600 bg-blue-50 border border-blue-200 hover:bg-blue-100' : 'text-emerald-600 bg-emerald-50 border border-emerald-200 hover:bg-emerald-100'} ${className}`}
         title={buttonLabel}
+        aria-label={`${buttonLabel} for ${userName}`}
       >
         {isInvite ? <LinkIcon className="h-3 w-3" /> : <Key className="h-3 w-3" />}
         {buttonLabel}

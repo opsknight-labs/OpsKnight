@@ -67,6 +67,22 @@ export function incidentStatusTone(status: string | null | undefined): StatusTon
   }
 }
 
+/** Solid colour for an incident status (charts, timeline dots); neutral slate when untoned. */
+export function incidentStatusColor(status: string | null | undefined): string {
+  switch (incidentStatusTone(status)) {
+    case 'critical':
+      return STATUS_PALETTE.critical.base;
+    case 'elevated':
+      return STATUS_PALETTE.elevated.base;
+    case 'ok':
+      return STATUS_PALETTE.ok.base;
+    case 'info':
+      return STATUS_PALETTE.info.base;
+    default:
+      return '#64748b';
+  }
+}
+
 /** Maps an incident urgency to its semantic tone. */
 export function urgencyTone(urgency: string | null | undefined): StatusTone | null {
   switch ((urgency ?? '').toUpperCase()) {

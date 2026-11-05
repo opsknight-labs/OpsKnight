@@ -2,6 +2,7 @@
 
 import React from 'react';
 import { Sparkles, AlertTriangle, CheckCircle, Copy } from 'lucide-react';
+import { useToast } from '@/hooks/use-product-notification';
 
 interface SmartSummaryProps {
   metrics: {
@@ -14,10 +15,11 @@ interface SmartSummaryProps {
     totalIncidents: number;
   };
   windowDays: number;
-  trendSeries: any[];
+  trendSeries: Array<{ count: number }>;
 }
 
 export default function SmartSummary({ metrics, windowDays, trendSeries }: SmartSummaryProps) {
+  const { showToast } = useToast();
   // 1. Generate Insights
   const insights: { type: 'good' | 'bad' | 'neutral'; text: string }[] = [];
 
@@ -86,8 +88,10 @@ export default function SmartSummary({ metrics, windowDays, trendSeries }: Smart
 
   const copyToClipboard = () => {
     const text = `Weekly Operations Summary:\n${insights.map(i => `- ${i.text}`).join('\n')}`;
-    navigator.clipboard.writeText(text);
-    alert('Summary copied to clipboard');
+    navigator.clipboard
+      .writeText(text)
+      .then(() => showToast('Summary copied to clipboard', 'success'))
+      .catch(() => showToast('Could not copy the summary', 'warning'));
   };
 
   return (
