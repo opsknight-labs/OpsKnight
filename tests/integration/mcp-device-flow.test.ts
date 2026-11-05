@@ -589,6 +589,44 @@ describe('revocation and concurrency', () => {
     expect(await db.mcpToken.count()).toBe(1);
   });
 
+  it('the APPROVED to CONSUMED transition is itself the guard, even without serializable isolation', async () => {
+    const { client, device } = await approved();
+    const { pollMcpDeviceAuthorization } = await import('@/lib/mcp/auth/device-flow');
+    // Two read-committed polls that both read APPROVED before either writes.
+    let release!: () => void;
+    const bothRead = new Promise<void>(resolve => (release = resolve));
+    let reads = 0;
+    const racing = () =>
+      db.$transaction(async tx => {
+        const gated = new Proxy(tx, {
+          get(target, property, receiver) {
+            const value = Reflect.get(target, property, receiver);
+            if (property !== 'mcpDeviceAuthorization') return value;
+            return new Proxy(value, {
+              get(model, method, modelReceiver) {
+                const fn = Reflect.get(model, method, modelReceiver);
+                if (method !== 'findUnique') return fn;
+                return async (...args: unknown[]) => {
+                  const found = await fn.apply(model, args);
+                  if (++reads === 2) release();
+                  await bothRead;
+                  return found;
+                };
+              },
+            });
+          },
+        });
+        return pollMcpDeviceAuthorization(gated, {
+          deviceCode: device.device_code,
+          clientId: client.id,
+        });
+      });
+    const results = await Promise.all([racing(), racing()]);
+    expect(results.filter(result => result.ok)).toHaveLength(1);
+    expect(results.find(result => !result.ok)).toEqual({ ok: false, error: 'invalid_grant' });
+    expect(await db.mcpToken.count()).toBe(1);
+  });
+
   it('a security event before the poll: no tokens; after: the tokens stop working', async () => {
     const first = await approved();
     await db.user.update({
