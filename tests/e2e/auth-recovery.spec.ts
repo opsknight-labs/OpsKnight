@@ -145,10 +145,7 @@ test.describe.serial('authentication browser contracts', () => {
     ).toContainText('Invalid or expired reset link');
 
     await login(page, email, oldPassword);
-    // The SSO presentation uses ‘Incorrect’ on current main; both wordings assert rejection.
-    await expect(
-      page.getByRole('alert').getByText(/^(?:Invalid|Incorrect) email or password$/)
-    ).toBeVisible();
+    await expect(page.getByText('Incorrect email or password')).toBeVisible();
     await page.locator('input[type="password"]').fill(newPassword);
     await page.locator('form button[type="submit"]').click();
     await expect(page).not.toHaveURL(/\/login/);

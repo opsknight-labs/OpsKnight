@@ -29,15 +29,13 @@ export async function recordOidcLinkingRequest(
     });
     if (!user) return false;
     const now = new Date();
-    const existing = await prisma.oidcLinkingRequest.findUnique({ where: { userId: user.id } });
     await prisma.oidcLinkingRequest.upsert({
       where: { userId: user.id },
       create: { userId: user.id, email: user.email, reason },
       update: { reason, lastAttemptAt: now, attempts: { increment: 1 } },
     });
-    const shouldNotify =
-      !existing || now.getTime() - existing.lastAttemptAt.getTime() >= RENOTIFY_AFTER_MS;
-    if (!shouldNotify) return true;
+    // Every attempt notifies; the per-day dedupe key below makes repeats within the same day
+    // no-ops, so administrators are reminded once a day while the person keeps trying.
     const admins = await prisma.user.findMany({
       where: { role: 'ADMIN', status: 'ACTIVE' },
       select: { id: true },

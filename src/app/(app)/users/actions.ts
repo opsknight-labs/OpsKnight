@@ -762,7 +762,9 @@ export async function updateUserProfile(
           }
         : {}),
       ...(roleChanged || emailChanged ? { tokenVersion: { increment: 1 } } : {}),
-      ...(emailChanged ? { invitationGeneration: { increment: 1 } } : {}),
+      ...(emailChanged
+        ? { invitationGeneration: { increment: 1 }, mcpRevocationVersion: { increment: 1 } }
+        : {}),
     };
     const revokeInviteTokens = async (tx: Prisma.TransactionClient) => {
       if (emailChanged) {

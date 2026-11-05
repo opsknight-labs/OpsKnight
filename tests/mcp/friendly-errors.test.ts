@@ -48,7 +48,9 @@ describe('scope descriptions', () => {
   it('uses plain language and flags that changes need approval', () => {
     expect(describeMcpScope('incidents:read')).toBe('View incidents');
     expect(describeMcpScope('schedules:read')).toBe('View on-call schedules');
-    expect(describeMcpScope('runbooks:write')).toContain('administrator must approve');
+    expect(describeMcpScope('runbooks:write')).toBe(
+      'Change runbooks (higher-risk changes wait for approval)'
+    );
     expect(describeMcpScope('custom_thing:read')).toBe('View custom thing');
   });
 });

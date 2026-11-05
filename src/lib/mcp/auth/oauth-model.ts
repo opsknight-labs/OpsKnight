@@ -10,6 +10,12 @@ import { MCP_ABSOLUTE_SESSION_DAYS, slideMcpExpiry } from './session-lifetime';
 type Database = Prisma.TransactionClient;
 type Model = OAuth2Server.AuthorizationCodeModel & OAuth2Server.RefreshTokenModel;
 
+/** Tokens a refresh replaces: the presented one and, on a grace replay, its revoked successor. */
+const replacedTokenIds = (user: OAuth2Server.User) =>
+  Array.isArray(user.replacedTokenIds)
+    ? user.replacedTokenIds.filter((id): id is string => typeof id === 'string')
+    : [];
+
 export function createMcpOAuthModel(db: Database, onReuse: (grantId: string) => void): Model {
   // A metadata client is only as trusted as the current policy: its host must still be listed and
   // its scopes can never exceed the current ceiling, whatever copy was stored at registration.
@@ -43,14 +49,35 @@ export function createMcpOAuthModel(db: Database, onReuse: (grantId: string) => 
     );
     const user = await db.user.findUnique({
       where: { id: grant.userId },
-      select: { status: true, tokenVersion: true },
+      select: { status: true, mcpRevocationVersion: true },
     });
     requireMcp(
-      user?.status === 'ACTIVE' && user.tokenVersion === grant.userTokenVersion,
+      user?.status === 'ACTIVE' && user.mcpRevocationVersion === grant.userRevocationVersion,
       'invalid_grant',
       401
     );
     return grant;
+  };
+  /** The unused successor that a replay within the grace window replaces, or null. */
+  const graceReplay = async (token: {
+    grantId: string;
+    rotatedAt: Date | null;
+    successorId: string | null;
+  }) => {
+    if (!token.rotatedAt || !token.successorId) return null;
+    const policy = await db.mcpPolicy.findUnique({
+      where: { id: 'default' },
+      select: { refreshReuseGraceSeconds: true },
+    });
+    const graceMs = (policy?.refreshReuseGraceSeconds ?? 0) * 1000;
+    if (graceMs <= 0 || Date.now() - token.rotatedAt.getTime() > graceMs) return null;
+    const now = new Date();
+    // Revoke the successor only if it is still unused and current; the update is the check.
+    const revoked = await db.mcpToken.updateMany({
+      where: { id: token.successorId, grantId: token.grantId, rotatedAt: null, lastUsedAt: null },
+      data: { rotatedAt: now },
+    });
+    return revoked.count === 1 ? token.successorId : null;
   };
   const secret = async () => randomBytes(32).toString('base64url');
   return {
@@ -137,7 +164,7 @@ export function createMcpOAuthModel(db: Database, onReuse: (grantId: string) => 
         scope => grant.scopes.includes(scope) && ceiling.includes(scope)
       );
       requireMcp(scopes.length, 'invalid_scope');
-      await db.mcpToken.create({
+      const created = await db.mcpToken.create({
         data: {
           grantId: grant.id,
           accessHash: digestMcpSecret(token.accessToken),
@@ -146,7 +173,15 @@ export function createMcpOAuthModel(db: Database, onReuse: (grantId: string) => 
           accessExpiresAt: token.accessTokenExpiresAt,
           refreshExpiresAt: token.refreshTokenExpiresAt,
         },
+        select: { id: true },
       });
+      // Remember which token replaced the refreshed one, so a retried refresh can be recognised.
+      const replaced = replacedTokenIds(user);
+      if (replaced.length)
+        await db.mcpToken.updateMany({
+          where: { id: { in: replaced }, grantId: grant.id },
+          data: { successorId: created.id },
+        });
       // Using a connection keeps it signed in, up to the absolute cap.
       const now = new Date();
       const policy = await db.mcpPolicy.findUnique({ where: { id: 'default' } });
@@ -169,7 +204,10 @@ export function createMcpOAuthModel(db: Database, onReuse: (grantId: string) => 
         where: { refreshHash: digestMcpSecret(refreshToken) },
       });
       if (!token) return false;
-      if (token.rotatedAt) {
+      // A replay is a harmless retry (a lost response, a second terminal) only while it is recent
+      // and the token that replaced it was never used. Anything else is treated as theft.
+      const retried = token.rotatedAt ? await graceReplay(token) : null;
+      if (token.rotatedAt && !retried) {
         onReuse(token.grantId);
         return false;
       }
@@ -181,10 +219,17 @@ export function createMcpOAuthModel(db: Database, onReuse: (grantId: string) => 
         refreshTokenExpiresAt: token.refreshExpiresAt,
         scope: token.scopes,
         client,
-        user: { id: grant.userId, grantId: grant.id },
+        user: {
+          id: grant.userId,
+          grantId: grant.id,
+          replacedTokenIds: retried ? [token.id, retried] : [token.id],
+          graceReplay: Boolean(retried),
+        },
       };
     },
     revokeToken: async token => {
+      // The replayed token was already rotated; its unused successor was revoked instead.
+      if (token.user?.graceReplay === true) return true;
       const result = await db.mcpToken.updateMany({
         where: { refreshHash: digestMcpSecret(token.refreshToken), rotatedAt: null },
         data: { rotatedAt: new Date() },

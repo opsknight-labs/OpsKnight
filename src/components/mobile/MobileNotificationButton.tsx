@@ -13,7 +13,8 @@ interface Notification {
   time: string;
   createdAt?: string;
   unread: boolean;
-  type: 'incident' | 'service' | 'schedule';
+  type: 'incident' | 'service' | 'schedule' | 'system';
+  href?: string | null;
   incidentId?: string;
 }
 
@@ -130,6 +131,8 @@ export default function MobileNotificationButton() {
     setIsOpen(false);
     if (notification.incidentId) {
       router.push(`/m/incidents/${notification.incidentId}`);
+    } else if (notification.href?.startsWith('/')) {
+      router.push(notification.href);
     }
   };
 

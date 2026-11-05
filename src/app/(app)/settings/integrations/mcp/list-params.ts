@@ -20,10 +20,15 @@ export type McpSection = (typeof MCP_SECTIONS)[number];
 /** Sections that only administrators can open. */
 export const MCP_ADMIN_SECTIONS: ReadonlySet<McpSection> = new Set([
   'assistants',
-  'approvals',
   'policy',
   'capabilities',
 ]);
+
+/**
+ * Approvals are gated per viewer instead: administrators see every queue, other people who may
+ * approve runbook runs see the runbook queue only, and everyone else does not see the section.
+ */
+export type McpApprovalAccess = 'all' | 'runbooks' | 'none';
 
 export const GRANT_STATUSES = ['active', 'expired', 'revoked', 'all'] as const;
 export type GrantStatus = (typeof GRANT_STATUSES)[number];
@@ -67,9 +72,18 @@ function oneOf<T extends string>(choices: readonly T[], value: string | undefine
 
 const MAX_PAGE = 10_000;
 
-export function parseMcpListParams(raw: RawParams, isAdmin: boolean): McpListParams {
+export function parseMcpListParams(
+  raw: RawParams,
+  isAdmin: boolean,
+  approvals: McpApprovalAccess = isAdmin ? 'all' : 'none'
+): McpListParams {
   const requested = oneOf(MCP_SECTIONS, first(raw.tab), 'overview');
-  const section = !isAdmin && MCP_ADMIN_SECTIONS.has(requested) ? 'overview' : requested;
+  const access = isAdmin ? 'all' : approvals;
+  const section =
+    (!isAdmin && MCP_ADMIN_SECTIONS.has(requested)) ||
+    (requested === 'approvals' && access === 'none')
+      ? 'overview'
+      : requested;
   const pageNumber = Number.parseInt(first(raw.page) ?? '', 10);
   const clientId = first(raw.client) ?? '';
   return {
@@ -84,7 +98,8 @@ export function parseMcpListParams(raw: RawParams, isAdmin: boolean): McpListPar
       isAdmin && clientId.length > 0 && clientId.length <= 256 && !/\s/.test(clientId)
         ? clientId
         : null,
-    approvalKind: oneOf(APPROVAL_KINDS, first(raw.kind), 'operations'),
+    approvalKind:
+      access === 'runbooks' ? 'runbooks' : oneOf(APPROVAL_KINDS, first(raw.kind), 'operations'),
     approvalState: oneOf(APPROVAL_STATES, first(raw.state), 'pending'),
   };
 }

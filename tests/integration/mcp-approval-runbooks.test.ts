@@ -458,7 +458,8 @@ describe('step decisions keep native separation and control rules', () => {
       const narrow = await withoutRead(f);
       await expect(
         prepareMcpOperation(narrow.ctx(), { operationId, args, idempotencyKey: prepareKey() })
-      ).rejects.toThrow('MCP_OPERATION_FORBIDDEN');
+        // The role allows it; the connection lacks the scope, and the error says which.
+      ).rejects.toThrow('MCP_SCOPE_NOT_GRANTED');
       // An approval prepared with full scopes is still refused if the committing token lost the scope.
       const prepared = await approved(f, operationId, args);
       const lostScope = {
@@ -467,7 +468,7 @@ describe('step decisions keep native separation and control rules', () => {
       };
       await expect(
         commitApprovedMcpOperation(lostScope, { approvalId: prepared.approvalId })
-      ).rejects.toThrow('MCP_OPERATION_FORBIDDEN');
+      ).rejects.toThrow('MCP_SCOPE_NOT_GRANTED');
       expect(await step(s)).toMatchObject({ status: 'WAITING_APPROVAL', approvedAt: null });
       expect((await execution(s)).status).toBe('WAITING_APPROVAL');
       expect(await runCount(s)).toBe(1);

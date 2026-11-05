@@ -92,6 +92,24 @@ Code `SSO_ROLE_UNMATCHED_DENIED`. You signed in successfully, but none of your g
 
 **What an administrator can do:** Add the person to a group that a role rule matches, or change **When no rule matches** in **3 · Roles & teams**. See [map groups to roles and teams](../../guides/identity/map-roles-and-teams/).
 
+<a id="sso_group_claims_incomplete"></a>
+
+### OpsKnight could not read your groups
+
+Code `SSO_GROUP_CLAIMS_INCOMPLETE`. Your identity provider sent an incomplete group list (for
+Microsoft Entra, a "too many groups" marker for people in more than 200 groups), and the
+workspace refuses people no rule matches. OpsKnight cannot evaluate a new person without their
+groups, so it does not create an account. People who already have an account can still sign
+in, but a role from SSO above the default role is lowered to the default until the full group
+list arrives.
+
+**What the person sees next:** Ask your identity administrator to send OpsKnight the groups or
+app roles it uses.
+
+**What an administrator can do:** Use App roles (the `roles` claim) instead of `groups`, or emit
+only groups assigned to the application. See
+[map groups to roles and teams](../../guides/identity/map-roles-and-teams/).
+
 <a id="sso_account_disabled"></a>
 
 ### Your OpsKnight account is disabled
@@ -166,16 +184,16 @@ Code `SSO_INTERNAL_ERROR`. OpsKnight could not finish your sign-in. Nothing abou
 
 When a session ends, the sign-in page says why:
 
-| Reason | Message | Detail |
-| --- | --- | --- |
-| `SESSION_REVOKED_BY_POLICY` | Your organization changed how you sign in | Your administrator changed the sign-in policy, which ended earlier sessions. |
-| `AUTHENTICATION_POLICY_DENIED` | Your organization changed how you sign in | This sign-in method is no longer allowed for your session. |
-| `OIDC_SESSION_IDLE_TIMEOUT` | You were signed out after a period of inactivity | Your organization signs people out when they have been idle for a while. |
-| `OIDC_SESSION_RENEWAL_REQUIRED` | Please confirm your sign-in | Your organization asks you to sign in with your identity provider periodically. |
-| `OIDC_CONFIGURATION_CHANGED` | Single sign-on settings were updated | An administrator updated single sign-on, which signs everyone in again. |
-| `SESSION_EXPIRED` | Your session has expired | You were signed out for your security. |
-| `SESSION_REVOKED` | You were signed out | Your session ended because your account or access changed. |
-| `USER_DISABLED` | Your OpsKnight account is disabled | An administrator or your company directory has deactivated this account. |
+| Reason                          | Message                                          | Detail                                                                          |
+| ------------------------------- | ------------------------------------------------ | ------------------------------------------------------------------------------- |
+| `SESSION_REVOKED_BY_POLICY`     | Your organization changed how you sign in        | Your administrator changed the sign-in policy, which ended earlier sessions.    |
+| `AUTHENTICATION_POLICY_DENIED`  | Your organization changed how you sign in        | This sign-in method is no longer allowed for your session.                      |
+| `OIDC_SESSION_IDLE_TIMEOUT`     | You were signed out after a period of inactivity | Your organization signs people out when they have been idle for a while.        |
+| `OIDC_SESSION_RENEWAL_REQUIRED` | Please confirm your sign-in                      | Your organization asks you to sign in with your identity provider periodically. |
+| `OIDC_CONFIGURATION_CHANGED`    | Single sign-on settings were updated             | An administrator updated single sign-on, which signs everyone in again.         |
+| `SESSION_EXPIRED`               | Your session has expired                         | You were signed out for your security.                                          |
+| `SESSION_REVOKED`               | You were signed out                              | Your session ended because your account or access changed.                      |
+| `USER_DISABLED`                 | Your OpsKnight account is disabled               | An administrator or your company directory has deactivated this account.        |
 
 ## Password sign-in
 

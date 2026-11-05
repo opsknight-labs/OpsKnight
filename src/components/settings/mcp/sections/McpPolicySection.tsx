@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 import { ChevronDown } from 'lucide-react';
 import { Input } from '@/components/ui/shadcn/input';
 import { Label } from '@/components/ui/shadcn/label';
-import McpPolicyForm from '@/components/settings/mcp/McpPolicyForm';
+import McpPolicyForm, { type McpPolicyAction } from '@/components/settings/mcp/McpPolicyForm';
 import McpPolicyScopeSelector from '@/components/settings/mcp/McpPolicyScopeSelector';
 import SessionIdleSelect from '@/components/settings/mcp/SessionIdleSelect';
 
@@ -21,11 +21,14 @@ export type McpPolicyValues = {
   maxInFlight: number;
   maxOperations: number;
   requestsPerMinute: number;
+  approvalTtlMinutes: number;
+  approvalCommitWindowMinutes: number;
 };
 
 /**
  * One policy group: title and explanation on the left, controls on the right (stacked on small
- * screens). The fieldset keeps the group name for assistive technology.
+ * screens). The legend names the group once for assistive technology and the explanation is
+ * read when focus enters it.
  */
 function PolicyGroup({
   title,
@@ -36,12 +39,22 @@ function PolicyGroup({
   description: ReactNode;
   children: ReactNode;
 }) {
+  const descriptionId = `mcp-policy-${title.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-description`;
   return (
-    <fieldset className="grid min-w-0 gap-4 border-b border-border py-6 last:border-0 md:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] md:gap-8">
+    <fieldset
+      aria-describedby={descriptionId}
+      className="grid min-w-0 gap-4 border-b border-border py-6 last:border-0 md:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] md:gap-8"
+    >
+      {/* The legend must be the fieldset's first child to name it; the visible title is a
+          presentational copy so the name is announced once. */}
       <legend className="sr-only">{title}</legend>
-      <div className="space-y-1" aria-hidden="true">
-        <p className="text-sm font-semibold text-foreground">{title}</p>
-        <div className="text-sm leading-relaxed text-muted-foreground">{description}</div>
+      <div className="space-y-1">
+        <p className="text-sm font-semibold text-foreground" aria-hidden="true">
+          {title}
+        </p>
+        <div id={descriptionId} className="text-sm leading-relaxed text-muted-foreground">
+          {description}
+        </div>
       </div>
       <div className="min-w-0 space-y-4">{children}</div>
     </fieldset>
@@ -77,19 +90,20 @@ function CheckRow({
 
 export default function McpPolicySection({
   policy,
+  revision,
   scopeChoices,
   selectedScopes,
-  describeScope: _describeScope,
   action,
 }: {
   policy: McpPolicyValues;
+  /** The policyRevision this page was rendered from; a stale save is refused. */
+  revision: number;
   scopeChoices: string[];
   selectedScopes: string[];
-  describeScope?: (scope: string) => string;
-  action: (form: FormData) => Promise<void>;
+  action: McpPolicyAction;
 }) {
   return (
-    <McpPolicyForm action={action}>
+    <McpPolicyForm action={action} revision={revision}>
       <PolicyGroup
         title="Assistant access"
         description="The master switch and how assistants identify themselves."
@@ -138,14 +152,48 @@ export default function McpPolicySection({
         <div className="border-t border-border">
           <PolicyGroup
             title="Reviewed actions"
-            description="Off by default. Every proposal waits for an administrator to approve the exact, frozen request."
+            description="Off by default. Routine incident changes run directly. Configuration changes wait for an administrator to approve the exact, frozen request; runbook runs wait for anyone with runbook approve permission (Responders and Administrators by default). An administrator may approve their own request after confirming."
           >
             <CheckRow
               name="writesEnabled"
               label="Allow reviewed routine mutations and approved runbook executions"
-              description="Assistants can prepare changes; each one waits for approval by an administrator."
+              description="Assistants can acknowledge, assign, annotate, resolve and create incidents, and prepare configuration changes and runbook runs for review. Reviewers are notified in OpsKnight."
               defaultChecked={policy.writesEnabled}
             />
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label htmlFor="mcp-approval-ttl">Time to review (minutes)</Label>
+                <Input
+                  id="mcp-approval-ttl"
+                  name="approvalTtlMinutes"
+                  type="number"
+                  min="15"
+                  max="1440"
+                  defaultValue={policy.approvalTtlMinutes}
+                  aria-describedby="mcp-approval-ttl-help"
+                  required
+                />
+                <p id="mcp-approval-ttl-help" className="text-xs text-muted-foreground">
+                  How long a request waits for a reviewer, 15 to 1440 (24 hours).
+                </p>
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="mcp-commit-window">Time to apply after approval (minutes)</Label>
+                <Input
+                  id="mcp-commit-window"
+                  name="approvalCommitWindowMinutes"
+                  type="number"
+                  min="1"
+                  max="1440"
+                  defaultValue={policy.approvalCommitWindowMinutes}
+                  aria-describedby="mcp-commit-window-help"
+                  required
+                />
+                <p id="mcp-commit-window-help" className="text-xs text-muted-foreground">
+                  Starts when the request is approved. Never later than 24 hours after the request.
+                </p>
+              </div>
+            </div>
             <CheckRow
               name="sensitiveReadsEnabled"
               label="Allow reviewed sensitive configuration reads"

@@ -24,7 +24,7 @@ External-secrets support is an **implementation candidate, not certified support
 ### Changed
 
 - Roles set by an administrator are never overwritten by single sign-on; use **Let role rules manage this role** to hand one back. Existing role rules keep their case-sensitive, first-match behaviour.
-- Incomplete Entra group claims keep a person's current role instead of demoting them, and a rule never demotes the last active administrator; both alert administrators.
+- Incomplete Entra group claims fail safe: they never raise a role, lower only SSO roles above the default role, and leave administrator-set and SCIM roles alone. A rule never demotes the last active administrator. Both alert administrators.
 - Pending linking approvals survive activating a configuration for the same issuer and client.
 - Changing only session limits, the button label, profile fields or team rules keeps the administrator test.
 - SCIM opens a real connection by default, uses in-app confirmations, describes activity in sentences and flags offboarding that leaves on-call gaps. Profile fields managed by the directory are read-only.

@@ -190,10 +190,22 @@ test('native MCP settings, PKCE consent, scoped call and revocation on desktop/m
     name: 'Revoke all active MCP connections?',
   });
   await expect(confirmation).toBeVisible();
+  const confirmRevoke = confirmation.getByRole('button', {
+    name: 'Revoke all connections',
+    exact: true,
+  });
+  await expect(confirmRevoke).toBeDisabled();
   expect((await rpc('tools/list')).status()).toBe(200);
   await confirmation.getByRole('button', { name: 'Cancel', exact: true }).click();
   expect((await rpc('tools/list')).status()).toBe(200);
   await revokeAll.click();
-  await confirmation.getByRole('button', { name: 'Revoke all connections', exact: true }).click();
+  await expect(confirmRevoke).toBeDisabled();
+  await confirmation
+    .getByRole('checkbox', {
+      name: /I understand this disconnects every assistant for everyone/,
+    })
+    .check();
+  await expect(confirmRevoke).toBeEnabled();
+  await confirmRevoke.click();
   await expect.poll(async () => (await rpc('tools/list')).status()).toBe(401);
 });

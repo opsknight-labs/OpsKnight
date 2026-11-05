@@ -17,7 +17,11 @@ import {
   ResponsiveTable,
   StatusPill,
 } from '@/components/settings/mcp/McpListKit';
-import type { McpGrantRow } from '@/app/(app)/settings/integrations/mcp/queries';
+import type {
+  McpConnectionBlock,
+  McpGrantRow,
+} from '@/app/(app)/settings/integrations/mcp/queries';
+import { MCP_CREDENTIAL_SECURITY_COPY } from '@/components/settings/mcp/credential-security';
 import {
   MCP_PAGE_SIZE,
   mcpHref,
@@ -37,6 +41,29 @@ const STATUS_LABEL = {
   all: 'All',
 } as const satisfies Record<GrantStatus, string>;
 
+/** Why a connection that has not ended still gives no access: shown in place of "Active". */
+export const BLOCK_LABEL = {
+  mcp_disabled: { label: 'Blocked by policy', hint: 'MCP is turned off for OpsKnight.' },
+  client_untrusted: {
+    label: 'Blocked by policy',
+    hint: 'The access policy no longer trusts this assistant (automatic connections off, or its host is not trusted).',
+  },
+  client_revoked: { label: 'No longer allowed', hint: 'An administrator revoked this assistant.' },
+  user_inactive: { label: 'No longer allowed', hint: 'This person is not an active user.' },
+  access_changed: {
+    label: 'No longer allowed',
+    hint: 'A security change (password, sign-out everywhere or a change of administrator role) ended this connection. Sign in again from the assistant.',
+  },
+  admin_scope: {
+    label: 'No longer allowed',
+    hint: 'The connection carries a scope MCP never honours.',
+  },
+  ended: {
+    label: 'No longer allowed',
+    hint: 'The connection was issued for another server address.',
+  },
+} as const satisfies Record<McpConnectionBlock, { label: string; hint: string }>;
+
 export function personLabel(person: { id: string; name: string | null; email: string | null }) {
   return person.name ?? person.email ?? 'Unknown user';
 }
@@ -51,6 +78,8 @@ export default function McpConnectionsSection({
   q,
   client,
   availableClients = [],
+  availableClientsTruncated = false,
+  revocable = 0,
   now,
   timeZone,
   describeScope,
@@ -64,8 +93,12 @@ export default function McpConnectionsSection({
   page: number;
   status: GrantStatus;
   q: string;
-  client: { id: string; name: string } | null;
-  availableClients?: { id: string; name: string }[];
+  client: { id: string; name: string; metadataHost?: string | null } | null;
+  availableClients?: { id: string; name: string; metadataHost?: string | null }[];
+  /** More assistants exist than the filter lists. */
+  availableClientsTruncated?: boolean;
+  /** Every connection "Revoke all" would revoke, ignoring the current filter. */
+  revocable?: number;
   now: Date;
   timeZone: string;
   describeScope: (scope: string) => string;
@@ -79,7 +112,7 @@ export default function McpConnectionsSection({
     { label: 'Assistant' },
     { label: 'Scopes' },
     { label: 'Connected' },
-    { label: 'Last used' },
+    { label: 'Last call' },
     { label: status === 'revoked' ? 'Revoked' : 'Expires' },
     { label: 'Status' },
     { label: 'Actions', srOnly: true, className: 'text-right' },
@@ -130,6 +163,7 @@ export default function McpConnectionsSection({
             {isAdmin && availableClients.length > 0 && (
               <AssistantFilterSelect
                 clients={availableClients}
+                truncated={availableClientsTruncated}
                 selectedClientId={client?.id ?? null}
                 status={status}
                 q={q}
@@ -153,7 +187,7 @@ export default function McpConnectionsSection({
           <div className="flex flex-wrap items-center gap-2 pb-4 text-xs text-muted-foreground">
             <span>Filtered by assistant:</span>
             <span className="inline-flex items-center gap-1.5 rounded-lg border border-primary/30 bg-primary/5 py-1 pl-2.5 pr-1.5 font-medium text-foreground">
-              {getAssistantIcon(client.name, 'h-3.5 w-3.5')}
+              {getAssistantIcon(client.name, 'h-3.5 w-3.5', client.metadataHost)}
               {client.name}
               <Link
                 href={mcpHref({
@@ -237,7 +271,7 @@ export default function McpConnectionsSection({
                     <ResponsiveCell label="Assistant" primary={!isAdmin}>
                       <div className="flex items-center gap-2.5 min-w-0">
                         <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-border/80 bg-muted/40 shadow-2xs">
-                          {getAssistantIcon(row.client.name, 'h-4 w-4')}
+                          {getAssistantIcon(row.client.name, 'h-4 w-4', row.client.metadataHost)}
                         </div>
                         <div className="min-w-0">
                           <p className="truncate font-medium text-foreground">{row.client.name}</p>
@@ -252,18 +286,26 @@ export default function McpConnectionsSection({
                       <McpScopeSummary
                         context={context}
                         scopes={row.scopes.map(scope => ({ scope, label: describeScope(scope) }))}
+                        usable={row.status === 'active' ? row.effectiveScopes : undefined}
                       />
                     </ResponsiveCell>
                     <ResponsiveCell label="Connected">
                       <RelativeTime value={row.createdAt} now={now} timeZone={timeZone} />
                     </ResponsiveCell>
-                    <ResponsiveCell label="Last used">
-                      <RelativeTime
-                        value={row.lastUsedAt}
-                        now={now}
-                        timeZone={timeZone}
-                        empty="Not used yet"
-                      />
+                    <ResponsiveCell label="Last call">
+                      <span className="inline-flex flex-col gap-0.5">
+                        <RelativeTime
+                          value={row.lastCallAt}
+                          now={now}
+                          timeZone={timeZone}
+                          empty="No calls yet"
+                        />
+                        {row.lastCallAt && row.lastTool && (
+                          <code className="font-mono text-[11px] text-muted-foreground">
+                            {row.lastTool}
+                          </code>
+                        )}
+                      </span>
                     </ResponsiveCell>
                     <ResponsiveCell label={row.status === 'revoked' ? 'Revoked' : 'Expires'}>
                       <RelativeTime
@@ -273,18 +315,27 @@ export default function McpConnectionsSection({
                       />
                     </ResponsiveCell>
                     <ResponsiveCell label="Status">
-                      <StatusPill
-                        tone={
-                          row.status === 'active'
-                            ? 'success'
-                            : row.status === 'expired'
-                              ? 'warning'
-                              : 'neutral'
-                        }
-                        dot
-                      >
-                        {STATUS_LABEL[row.status]}
-                      </StatusPill>
+                      {row.blockedReason ? (
+                        <span title={BLOCK_LABEL[row.blockedReason].hint}>
+                          <StatusPill tone="danger" dot>
+                            {BLOCK_LABEL[row.blockedReason].label}
+                          </StatusPill>
+                          <span className="sr-only">. {BLOCK_LABEL[row.blockedReason].hint}</span>
+                        </span>
+                      ) : (
+                        <StatusPill
+                          tone={
+                            row.status === 'active'
+                              ? 'success'
+                              : row.status === 'expired'
+                                ? 'warning'
+                                : 'neutral'
+                          }
+                          dot
+                        >
+                          {STATUS_LABEL[row.status]}
+                        </StatusPill>
+                      )}
                     </ResponsiveCell>
                     <ResponsiveCell label="Actions" primary align="end">
                       {row.status === 'active' ? (
@@ -352,24 +403,32 @@ export default function McpConnectionsSection({
               Credential security
             </h3>
             <p className="max-w-2xl text-xs leading-relaxed text-muted-foreground">
-              Tokens use PKCE with SHA-256 and are salted with scrypt in the database, matching user
-              passwords. They cannot be retrieved after registration, only replaced or revoked.
+              {MCP_CREDENTIAL_SECURITY_COPY}
             </p>
           </div>
-          {isAdmin && counts.active > 0 && (
+          {isAdmin && revocable > 0 && (
             <McpConfirmAction
               action={revokeAllAction}
               fields={{}}
+              acknowledgement={`I understand this disconnects every assistant for everyone (${revocable === 1 ? '1 connection' : `${revocable} connections`}).`}
               label="Revoke all active connections"
               accessibleLabel="Revoke all active MCP connections across OpsKnight"
               title="Revoke all active MCP connections?"
               confirmLabel="Revoke all connections"
               successMessage="All MCP connections revoked"
               description={
-                <p>
-                  This disconnects every assistant immediately. People will need to sign in and
-                  approve again. Use this if a shared credential or laptop was compromised.
-                </p>
+                <>
+                  <p>
+                    This disconnects every assistant immediately. People will need to sign in and
+                    approve again. Use this if a shared credential or laptop was compromised.
+                  </p>
+                  {filtered && (
+                    <p className="font-medium text-foreground">
+                      It ignores the current filter: all {revocable} connections across OpsKnight
+                      are revoked, not only the ones shown.
+                    </p>
+                  )}
+                </>
               }
             />
           )}

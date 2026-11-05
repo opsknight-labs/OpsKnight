@@ -32,7 +32,9 @@
     ".next/types/**/*.ts",
     ".next/dev/types/**/*.ts",
     ".next-pre-push/types/**/*.ts",
-    ".next-pre-push/dev/types/**/*.ts"
+    ".next-pre-push/dev/types/**/*.ts",
+    ".next-scim-production/types/**/*.ts",
+    ".next-scim-production/dev/types/**/*.ts"
   ],
   "exclude": ["node_modules", ".next", ".next-pre-push"]
 }

@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { LastAdministratorError } from '@/lib/users/last-administrator-error';
 import type { NextAuthOptions } from 'next-auth';
 
 vi.mock('@/lib/oidc-config', () => ({
@@ -898,11 +899,11 @@ describe('Auth JWT + OIDC callback contract', () => {
     expect(new Date(result.expires).getTime()).toBe(sessionExpires * 1000);
   });
 
-  it('revokeUserSessions increments tokenVersion', async () => {
+  it('revokeUserSessions increments tokenVersion and revokes MCP access', async () => {
     await revokeUserSessions('u1');
     expect(prisma.user.update).toHaveBeenCalledWith({
       where: { id: 'u1' },
-      data: { tokenVersion: { increment: 1 } },
+      data: { tokenVersion: { increment: 1 }, mcpRevocationVersion: { increment: 1 } },
     });
   });
 });
@@ -973,7 +974,7 @@ describe('provider activation across auth option caches', () => {
       const result = await signInWith({ groups: ['other'] });
       expect(result).toMatch(/^\/login\?error=SSO_ROLE_UNMATCHED_DENIED&ref=/);
       expect(vi.mocked(resolveOidcIdentityForSignIn).mock.calls.at(-1)?.[0]).toMatchObject({
-        denyNewUnmatched: true,
+        denyUnmatched: true,
       });
     });
 
@@ -985,12 +986,35 @@ describe('provider activation across auth option caches', () => {
       expect(await signInWith({ groups: ['other'] })).toBe(true);
     });
 
-    it('keeps the current role and alerts once when group claims are incomplete', async () => {
+    it('lowers an elevated SSO role and alerts once when group claims are incomplete', async () => {
       vi.mocked(getOidcConfig).mockResolvedValue(baseConfig);
       vi.mocked(resolveOidcIdentityForSignIn).mockResolvedValue(
         successfulResolution({ role: 'ADMIN', roleSource: 'OIDC' })
       );
-      vi.mocked(updateUserSecurityState).mockClear();
+      vi.mocked(updateUserSecurityState)
+        .mockReset()
+        .mockResolvedValue(undefined as never);
+      expect(await signInWith({ _claim_names: { groups: 'src1' } })).toBe(true);
+      const [userId, mutation] = vi.mocked(updateUserSecurityState).mock.lastCall ?? [];
+      expect(userId).toBe('u1');
+      expect(mutation).toMatchObject({ role: 'USER' });
+      expect(dedupedSecurityEvent).toHaveBeenCalledWith(
+        'oidc-claims-incomplete:u1',
+        expect.any(Number),
+        'auth.oidc.claims.incomplete',
+        'u1',
+        expect.objectContaining({ previousRole: 'ADMIN', roleSource: 'OIDC' })
+      );
+    });
+
+    it('never changes an administrator-set role when group claims are incomplete', async () => {
+      vi.mocked(getOidcConfig).mockResolvedValue(baseConfig);
+      vi.mocked(resolveOidcIdentityForSignIn).mockResolvedValue(
+        successfulResolution({ role: 'ADMIN', roleSource: 'MANUAL' })
+      );
+      vi.mocked(updateUserSecurityState)
+        .mockReset()
+        .mockResolvedValue(undefined as never);
       expect(await signInWith({ _claim_names: { groups: 'src1' } })).toBe(true);
       expect(updateUserSecurityState).not.toHaveBeenCalledWith(
         'u1',
@@ -999,13 +1023,6 @@ describe('provider activation across auth option caches', () => {
         undefined,
         expect.any(Function),
         expect.anything()
-      );
-      expect(dedupedSecurityEvent).toHaveBeenCalledWith(
-        'oidc-claims-incomplete:u1',
-        expect.any(Number),
-        'auth.oidc.claims.incomplete',
-        'u1',
-        expect.objectContaining({ keptRole: 'ADMIN' })
       );
     });
 
@@ -1016,9 +1033,7 @@ describe('provider activation across auth option caches', () => {
       );
       vi.mocked(updateUserSecurityState)
         .mockReset()
-        .mockRejectedValueOnce(
-          new Error('Operation would leave the system with no active administrators.')
-        )
+        .mockRejectedValueOnce(new LastAdministratorError())
         .mockResolvedValue(undefined as never);
       expect(await signInWith({ groups: ['everyone'] })).toBe(true);
       expect(updateUserSecurityState).toHaveBeenLastCalledWith(

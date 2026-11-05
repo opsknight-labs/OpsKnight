@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createTestUser, resetDatabase, testPrisma as db } from '../helpers/test-db';
+import { loadMcpRuntime } from '@/lib/mcp/auth/config';
 
 const actor = vi.hoisted(() => ({ id: '', isAdmin: true, authenticated: true }));
 vi.mock('@/lib/rbac', () => ({
@@ -48,6 +49,11 @@ beforeEach(async () => {
   await db.mcpOperationApproval.deleteMany();
   await db.mcpGrant.deleteMany();
   await db.mcpClient.deleteMany();
+  // The headline count is the enforced one (effective-access.ts): MCP on and automatic
+  // connections trusted, so these fixtures' active connections are all usable.
+  const policy = { enabled: true, dcrEnabled: true, dcrScopes: ['incidents:read'] };
+  const resource = `${(await loadMcpRuntime()).origin}/mcp`;
+  await db.mcpPolicy.upsert({ where: { id: 'default' }, create: policy, update: policy });
   admin = await createTestUser({ name: 'Ada Admin', role: 'ADMIN' });
   jane = await createTestUser({ name: 'Jane Doe', email: `jane-${Date.now()}@example.com` });
   sam = await createTestUser({ name: 'Sam Lee' });
@@ -84,7 +90,7 @@ beforeEach(async () => {
     clientId,
     userTokenVersion: 0,
     scopes: ['incidents:read'],
-    resource: 'https://ops.example.test/mcp',
+    resource,
     createdAt: new Date(now.getTime() - index * 60_000),
     expiresAt: extra.expiresAt ?? new Date(now.getTime() + 10 * day),
     revokedAt: extra.revokedAt ?? null,
@@ -145,7 +151,7 @@ describe('MCP settings list queries', () => {
     expect((await list({ q: 'cursor' })).total).toBe(2);
     const byClient = await list({ clientId: cursor.id });
     expect(byClient.total).toBe(2);
-    expect(byClient.client).toEqual({ id: cursor.id, name: 'Cursor' });
+    expect(byClient.client).toEqual({ id: cursor.id, name: 'Cursor', metadataHost: null });
   });
 
   it('limits everyone else to their own connections and blocks admin lists', async () => {

@@ -73,15 +73,18 @@ export function isMcpViewScope(scope: string) {
  *
  * `scopes` is the pending request (assistant request ∩ client/policy ceiling). Scopes the role
  * cannot exercise are dropped. Requested read scopes start selected; a scope that can change
- * something starts selected only when the assistant explicitly asked for it.
+ * something starts selected only when the assistant explicitly asked for it or the connection
+ * being replaced already had it.
  */
 export function buildMcpConsentOffer(input: {
   scopes: readonly string[];
   explicitlyRequested: readonly string[];
   role: AppRole;
+  /** Scopes of the connection this consent replaces; they start selected again. */
+  previouslyGranted?: readonly string[];
 }): McpConsentOffer {
   const { offered, unavailable } = partitionScopesForRole(input.scopes, input.role);
-  const explicit = new Set(input.explicitlyRequested);
+  const explicit = new Set([...input.explicitlyRequested, ...(input.previouslyGranted ?? [])]);
   const groups = new Map<string, McpConsentGroup>(
     [...AREAS, OTHER].map(area => [
       area.id,

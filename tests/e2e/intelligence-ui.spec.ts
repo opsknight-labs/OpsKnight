@@ -311,6 +311,13 @@ test.describe.serial('intelligence responder workflows', () => {
     expect(
       (await prisma.aiSettings.findUniqueOrThrow({ where: { id: 'default' } })).dailyTokenBudget
     ).toBe(500000);
+    const metrics = await page.request.get('/api/metrics');
+    expect(metrics.status()).toBe(200);
+    const body = await metrics.text();
+    expect(body).toContain('# TYPE opsknight_intelligence_embedding_pending gauge');
+    expect(body).toMatch(/^opsknight_intelligence_embedding_budget_remaining_tokens 100000$/m);
+    expect(body).toMatch(/^opsknight_intelligence_feature_probe_failed 0$/m);
+    expect(body).toContain('# TYPE opsknight_intelligence_squire_actions_uncertain_last_24h gauge');
   });
 
   test('an incident shows explainable suggestions and accepts feedback', async ({ page }) => {

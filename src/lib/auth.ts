@@ -1,4 +1,5 @@
 import { preserveScimOwnedOidcFields } from '@/lib/scim/lifecycle/oidc-profile';
+import { LastAdministratorError } from '@/lib/users/last-administrator-error';
 import { coerceBooleanClaim } from '@/lib/oidc/claims';
 import {
   assertCurrentOidcRegistration,
@@ -179,12 +180,7 @@ async function rejectOidcSignIn(
 }
 
 function isLastAdministratorConflict(error: unknown) {
-  return (
-    error instanceof Error &&
-    /no active administrators/i.test(
-      `${error.message} ${(error as { userMessage?: string }).userMessage ?? ''}`
-    )
-  );
+  return error instanceof LastAdministratorError;
 }
 
 function clearSessionToken(token: AugmentedJWT, reason: string) {
@@ -1073,7 +1069,10 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
               clientId: activeConfig.clientId,
               configVersion: activeConfig.configVersion,
               organizationId: activeConfig.organizationId,
-              denyNewUnmatched: roleEvaluation.deny,
+              denyUnmatched: roleEvaluation.deny,
+              denyNewIncomplete:
+                roleEvaluation.outcome === 'INCOMPLETE' && activeConfig.unmatchedPolicy === 'DENY',
+              initialRole: activeConfig.defaultRole,
               domainTrustedLinking: activeConfig.domainTrustedLinking === true,
             });
           } catch (error) {
@@ -1168,7 +1167,7 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
           }
 
           if (roleEvaluation.outcome === 'INCOMPLETE') {
-            logger.warn('[Auth] OIDC group claims incomplete; keeping current role', {
+            logger.warn('[Auth] OIDC group claims incomplete; no role can be raised', {
               component: 'auth:signIn',
               userId: targetUser.id,
               reasonCode: 'OIDC_GROUPS_OVERAGE',
@@ -1180,7 +1179,12 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
               24 * 60 * 60 * 1000,
               'auth.oidc.claims.incomplete',
               targetUser.id,
-              { userId: targetUser.id, reason: 'OIDC_GROUPS_OVERAGE', keptRole: targetUser.role }
+              {
+                userId: targetUser.id,
+                reason: 'OIDC_GROUPS_OVERAGE',
+                previousRole: targetUser.role,
+                roleSource: targetUser.roleSource,
+              }
             ).catch(() => undefined);
           }
 
@@ -1404,7 +1408,7 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
 export async function revokeUserSessions(userId: string) {
   await prisma.user.update({
     where: { id: userId },
-    data: { tokenVersion: { increment: 1 } },
+    data: { tokenVersion: { increment: 1 }, mcpRevocationVersion: { increment: 1 } },
   });
   invalidateSessionSecurityProjection(userId);
 }

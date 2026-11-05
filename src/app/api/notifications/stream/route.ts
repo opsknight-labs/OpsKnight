@@ -9,6 +9,7 @@ import { getNotificationUserChangeVersion } from '@/lib/notification-change-cloc
 import { isAppError } from '@/lib/errors';
 import { getRequestSessionJti } from '@/lib/realtime-stream-authorization';
 import { isSessionActive } from '@/lib/session-registry';
+import { inAppNotificationHref } from '@/lib/notification-links';
 
 /**
  * Server-Sent Events endpoint for real-time notification updates
@@ -166,11 +167,13 @@ export async function GET(req: NextRequest) {
                   format: 'relative',
                 });
                 const typeKey = notification.type.toLowerCase();
-                let type: 'incident' | 'service' | 'schedule' = 'incident';
+                let type: 'incident' | 'service' | 'schedule' | 'system' = 'incident';
                 if (typeKey === 'schedule') {
                   type = 'schedule';
                 } else if (typeKey === 'service' || typeKey === 'team') {
                   type = 'service';
+                } else if (typeKey === 'system') {
+                  type = 'system';
                 }
                 const incidentId =
                   notification.entityType === 'INCIDENT' ? notification.entityId : null;
@@ -183,6 +186,7 @@ export async function GET(req: NextRequest) {
                   unread: !notification.readAt,
                   type,
                   incidentId,
+                  href: inAppNotificationHref(notification),
                   createdAt: notification.createdAt.toISOString(),
                 };
               });
@@ -254,11 +258,13 @@ export async function GET(req: NextRequest) {
                   format: 'relative',
                 });
                 const typeKey = notification.type.toLowerCase();
-                let type: 'incident' | 'service' | 'schedule' = 'incident';
+                let type: 'incident' | 'service' | 'schedule' | 'system' = 'incident';
                 if (typeKey === 'schedule') {
                   type = 'schedule';
                 } else if (typeKey === 'service' || typeKey === 'team') {
                   type = 'service';
+                } else if (typeKey === 'system') {
+                  type = 'system';
                 }
                 const incidentId =
                   notification.entityType === 'INCIDENT' ? notification.entityId : null;
@@ -271,6 +277,7 @@ export async function GET(req: NextRequest) {
                   unread: !notification.readAt,
                   type,
                   incidentId,
+                  href: inAppNotificationHref(notification),
                   createdAt: notification.createdAt.toISOString(),
                 };
               });

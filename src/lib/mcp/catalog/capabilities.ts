@@ -58,6 +58,13 @@ const STANDALONE_TOOLS: readonly Omit<McpCapability, 'kind' | 'curated' | 'tool'
     summary: 'Return the schema and safeguards of one operation.',
   },
   {
+    id: 'read_operation',
+    domain: 'mcp',
+    risk: 'R0',
+    approval: false,
+    summary: 'Run one enabled read by its operationId; never changes anything.',
+  },
+  {
     id: 'call_operation',
     domain: 'mcp',
     risk: 'R1',
@@ -90,7 +97,7 @@ const STANDALONE_TOOLS: readonly Omit<McpCapability, 'kind' | 'curated' | 'tool'
     domain: 'approvals',
     risk: 'R2',
     approval: true,
-    summary: 'Apply a change after a different administrator approved it.',
+    summary: 'Apply a change after it was approved in OpsKnight.',
   },
   {
     id: 'runbook_prepare_execution',
@@ -104,7 +111,14 @@ const STANDALONE_TOOLS: readonly Omit<McpCapability, 'kind' | 'curated' | 'tool'
     domain: 'runbooks',
     risk: 'R3',
     approval: true,
-    summary: 'Execute an independently approved runbook plan.',
+    summary: 'Execute a runbook plan after it was approved in OpsKnight.',
+  },
+  {
+    id: 'runbook_get_approval',
+    domain: 'runbooks',
+    risk: 'R0',
+    approval: false,
+    summary: 'Read the status of a runbook plan the assistant requested.',
   },
   {
     id: 'incident_get_context',

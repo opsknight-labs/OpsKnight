@@ -24,3 +24,27 @@ export function withholdDisabledRegistrations(server: McpServer, disabled: Reado
   });
   return server;
 }
+
+/**
+ * Records the names of the tools and prompts actually registered on `server` (after any withheld
+ * by withholdDisabledRegistrations), so later registrations can depend on earlier ones.
+ */
+export function recordRegistrations(server: McpServer) {
+  const tools = new Set<string>();
+  const prompts = new Set<string>();
+  const registerTool = server.registerTool.bind(server) as (...args: unknown[]) => unknown;
+  const registerPrompt = server.registerPrompt.bind(server) as (...args: unknown[]) => unknown;
+  Object.assign(server, {
+    registerTool: (name: string, ...rest: unknown[]) => {
+      const handle = registerTool(name, ...rest) as { enabled?: boolean };
+      if (handle?.enabled !== false) tools.add(name);
+      return handle;
+    },
+    registerPrompt: (name: string, ...rest: unknown[]) => {
+      const handle = registerPrompt(name, ...rest) as { enabled?: boolean };
+      if (handle?.enabled !== false) prompts.add(name);
+      return handle;
+    },
+  });
+  return { tools, prompts };
+}

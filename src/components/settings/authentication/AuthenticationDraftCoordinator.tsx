@@ -220,7 +220,7 @@ export default function AuthenticationDraftCoordinator() {
       </Dialog>
       {Object.keys(fieldErrors).length > 0 && (
         <div role="alert" className="text-sm text-destructive">
-          <p className="font-medium">Resolve these fields before staging:</p>
+          <p className="font-medium">Fix these fields before saving:</p>
           <ul className="mt-1 list-disc space-y-1 pl-5">
             {Object.entries(fieldErrors).map(([field, error]) => (
               <li key={field}>

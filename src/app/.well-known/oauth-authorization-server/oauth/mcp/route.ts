@@ -33,6 +33,8 @@ export function GET() {
         authorization_endpoint: `${issuer}/authorize`,
         token_endpoint: `${issuer}/token`,
         revocation_endpoint: `${issuer}/revoke`,
+        // Public clients revoke with client_id in the body (RFC 8414 defaults to client_secret_basic).
+        revocation_endpoint_auth_methods_supported: ['none'],
         response_types_supported: ['code'],
         grant_types_supported: ['authorization_code', 'refresh_token'],
         token_endpoint_auth_methods_supported: ['none'],

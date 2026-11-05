@@ -18,6 +18,12 @@ export function assertMcpHost(request: Request, browserWrite = false) {
   requireMcp((!browserWrite && !supplied) || supplied === origin, 'MCP_INVALID_ORIGIN', 403);
 }
 
+/** Fixed challenge text: RFC 6750 section 3 forbids quotes and backslashes in it. */
+const challengeText = (code: string) =>
+  code === 'MCP_ACCESS_CHANGED'
+    ? 'Your access changed; reconnect'
+    : 'The access token is missing, expired or revoked';
+
 export function mcpHttpError(error: unknown) {
   const status =
     error instanceof McpBoundaryError
@@ -39,10 +45,18 @@ export function mcpHttpError(error: unknown) {
       status,
       headers: {
         'Cache-Control': 'private, no-store',
-        ...(status === 429 || status === 503 ? { 'Retry-After': '5' } : {}),
+        // The real wait when the error knows it (a quota window, a busy queue); else a short one.
+        ...(status === 429 || status === 503
+          ? {
+              'Retry-After': String(
+                (error instanceof McpBoundaryError && error.retryAfterSeconds) || 5
+              ),
+            }
+          : {}),
         ...(status === 401
           ? {
-              'WWW-Authenticate': `Bearer resource_metadata="${mcpOrigin()}/.well-known/oauth-protected-resource/mcp"`,
+              // RFC 6750 section 3: invalid_token tells clients to refresh or sign in again.
+              'WWW-Authenticate': `Bearer error="invalid_token", error_description="${challengeText(code)}", resource_metadata="${mcpOrigin()}/.well-known/oauth-protected-resource/mcp"`,
             }
           : {}),
       },
@@ -56,7 +70,8 @@ export const authorizationQuerySchema = z
     redirect_uri: z.string().url().max(2048),
     response_type: z.literal('code'),
     scope: z.string().min(1).max(2048).optional(),
-    state: z.string().min(16).max(512),
+    // Optional in OAuth 2.1: PKCE (required below) is what protects the code.
+    state: z.string().min(1).max(512).optional(),
     code_challenge: z.string().regex(/^[A-Za-z0-9_-]{43}$/),
     code_challenge_method: z.literal('S256'),
     // RFC 8707 is optional here: the audience is always this server's MCP URL.

@@ -43,9 +43,8 @@ export function describeMcpScope(scope: string) {
   const action = scope.split(':')[1] ?? 'read';
   const label = mcpScopeResourceLabel(scope);
   if (action === 'read') return `View ${label}`;
-  if (action === 'write')
-    return `Propose changes to ${label} (an administrator must approve each one)`;
-  if (action === 'execute') return `Run ${label} after administrator approval`;
+  if (action === 'write') return `Change ${label} (higher-risk changes wait for approval)`;
+  if (action === 'execute') return `Run ${label} after approval`;
   if (action === 'approve') return `Approve ${label} waiting for review`;
   if (action === 'activate') return `Turn ${label} on or off`;
   if (action === 'test') return `Send test messages through ${label}`;

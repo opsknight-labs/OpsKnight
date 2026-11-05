@@ -1,3 +1,18 @@
+---
+title: MCP certification status
+order: 2
+description: What has and has not been certified for MCP, and how to collect release evidence.
+type: reference
+product_area: mcp
+audience: [operator, developer]
+verification:
+  level: source
+  verified_at: 2026-11-04
+  evidence:
+    - .github/workflows/mcp-certification.yml
+    - scripts/mcp/certify.cjs
+---
+
 # MCP certification status
 
 Baseline source: `f9f772a1fb43798bf45400c8e2ec7a0a823fa43f`. Branch: `feat/enterprise-mcp-2.2`. This is a development candidate; local results below were collected from the development worktree, without final-SHA certification or a released image.
