@@ -111,6 +111,18 @@ function credentialHashKey(): Buffer | null {
   );
 }
 
+/**
+ * HMAC key for the multi-round-trip requestState of a URL elicitation, derived like the credential
+ * hash key (same on every instance) but domain-separated, so neither key can stand in for the other.
+ */
+export function mcpRequestStateKey(): Buffer | null {
+  const key = getEncryptionKey();
+  if (!key) return null;
+  return Buffer.from(
+    hkdfSync('sha256', Buffer.from(key, 'hex'), 'opsknight:mcp', 'request-state:v1', 32)
+  );
+}
+
 async function readRuntime(env: NodeJS.ProcessEnv): Promise<Runtime> {
   const settings = await prisma.systemSettings.findUnique({
     where: { id: 'default' },

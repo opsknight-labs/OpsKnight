@@ -211,12 +211,17 @@ describe('A2: whoami and "me"', () => {
     const service = await createTestService('Mine service', team.id);
     const mine = await createTestIncident('Mine', service.id, { assigneeId: user.id });
     const theirs = await createTestIncident('Theirs', service.id);
+    await db.user.update({ where: { id: user.id }, data: { timeZone: 'Asia/Kolkata' } });
+    await db.teamMember.create({ data: { teamId: team.id, userId: user.id } });
     const { result: whoami } = await tool(bearer, 'whoami', {});
     expect(whoami.structuredContent).toMatchObject({
       userId: user.id,
       displayName: 'Grace Hopper',
       role: 'ADMIN',
       writesEnabled: true,
+      timeZone: 'Asia/Kolkata',
+      teamIds: [team.id],
+      teams: [{ id: team.id, name: team.name }],
     });
     expect(JSON.stringify(whoami)).not.toContain(user.email);
     const { result } = await tool(bearer, 'incident_search', {
@@ -294,7 +299,11 @@ describe('A7: prepare tells the assistant what to do next', () => {
       selfApprovable: true,
       nextSteps: {
         shareWithUser: result.structuredContent.reviewUrl,
-        poll: { tool: 'operation_get_approval', afterSeconds: 15 },
+        poll: {
+          tool: 'operation_get_approval',
+          afterSeconds: 30,
+          stopAt: result.structuredContent.expiresAt,
+        },
         onApproved: 'operation_commit_approved',
       },
     });
