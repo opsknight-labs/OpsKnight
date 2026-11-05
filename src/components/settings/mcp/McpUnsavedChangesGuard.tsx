@@ -70,7 +70,7 @@ export default function McpUnsavedChangesGuard({ dirty }: { dirty: boolean }) {
       <DialogContent>
         <DialogTitle>Leave with unsaved changes?</DialogTitle>
         <DialogDescription>
-          Your policy changes are not saved yet. Leaving discards them.
+          Your changes are not saved yet. Leaving discards them.
         </DialogDescription>
         <div className="flex flex-wrap gap-2">
           <Button type="button" variant="outline" onClick={() => setLink(null)}>

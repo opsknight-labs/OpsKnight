@@ -45,6 +45,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/shadcn/alert-dialog';
 import { SaveIndicator } from '@/components/settings/feedback/SaveIndicator';
+import McpUnsavedChangesGuard from '@/components/settings/mcp/McpUnsavedChangesGuard';
 import type { McpCapability, McpRisk } from '@/lib/mcp/catalog/capabilities';
 import { MCP_RISK as RISK } from '@/components/settings/mcp/risk';
 import type { UpdateMcpCapabilitiesResult } from '../capability-actions';
@@ -259,11 +260,6 @@ export default function McpCapabilityControlsPanel({
   const isCapabilitiesIndeterminate = !allExposed && !noneExposed;
 
   const capabilitiesMasterRef = useRef<HTMLInputElement>(null);
-  useEffect(() => {
-    if (capabilitiesMasterRef.current) {
-      capabilitiesMasterRef.current.indeterminate = isCapabilitiesIndeterminate;
-    }
-  }, [isCapabilitiesIndeterminate]);
 
   const setAll = useCallback(
     (exposed: boolean) =>
@@ -276,6 +272,50 @@ export default function McpCapabilityControlsPanel({
         }
       }),
     [update, groups]
+  );
+
+  // While a filter is active the bulk controls act on the capabilities shown, never on the rest.
+  const shown = useMemo(() => visibleGroups.flatMap(group => group.matches), [visibleGroups]);
+  const shownExposed = useMemo(
+    () => shown.filter(capability => !isDisabled(capability)).length,
+    [shown, isDisabled]
+  );
+  const setShown = useCallback(
+    (exposed: boolean) =>
+      update(next => {
+        for (const group of visibleGroups) {
+          const marker = DOMAIN_PREFIX + group.domain;
+          const ids = new Set(group.matches.map(capability => capability.id));
+          if (!exposed) {
+            for (const id of ids) next.add(id);
+            continue;
+          }
+          // A fully disabled domain keeps its unshown members disabled one by one.
+          if (next.delete(marker))
+            for (const member of group.items) if (!ids.has(member.id)) next.add(member.id);
+          for (const id of ids) next.delete(id);
+        }
+      }),
+    [update, visibleGroups]
+  );
+  const bulk = (exposed: boolean) => (filtering ? setShown(exposed) : setAll(exposed));
+  const masterIndeterminate = filtering
+    ? shownExposed > 0 && shownExposed < shown.length
+    : isCapabilitiesIndeterminate;
+  useEffect(() => {
+    if (capabilitiesMasterRef.current) {
+      capabilitiesMasterRef.current.indeterminate = masterIndeterminate;
+    }
+  }, [masterIndeterminate]);
+
+  // Preset: assistants may look but never change anything. Nothing is saved until Save.
+  const applyViewOnly = useCallback(
+    () =>
+      update(next => {
+        next.clear();
+        for (const capability of capabilities) if (!capability.read) next.add(capability.id);
+      }),
+    [update, capabilities]
   );
 
   function save() {
@@ -321,18 +361,26 @@ export default function McpCapabilityControlsPanel({
 
   return (
     <div className={BODY_FONT} aria-busy={pending}>
+      <McpUnsavedChangesGuard dirty={dirty} />
       <AlertDialog open={confirmDisableAll} onOpenChange={setConfirmDisableAll}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Disable all {capabilities.length} capabilities?</AlertDialogTitle>
+            <AlertDialogTitle>
+              {filtering
+                ? `Disable the ${shown.length} capabilities shown?`
+                : `Disable all ${capabilities.length} capabilities?`}
+            </AlertDialogTitle>
             <AlertDialogDescription>
-              Every connected assistant loses access to all OpsKnight tools until you expose them
-              again. Nothing changes until you save.
+              {filtering
+                ? 'Only the capabilities matching the current filter are turned off; the rest keep their setting. Nothing changes until you save.'
+                : 'Every connected assistant loses access to all OpsKnight tools until you expose them again. Nothing changes until you save.'}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Keep current selection</AlertDialogCancel>
-            <AlertDialogAction onClick={() => setAll(false)}>Disable all</AlertDialogAction>
+            <AlertDialogAction onClick={() => bulk(false)}>
+              {filtering ? 'Disable shown' : 'Disable all'}
+            </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
@@ -556,12 +604,18 @@ export default function McpCapabilityControlsPanel({
                   ref={capabilitiesMasterRef}
                   id={`${idPrefix}-capabilities-master-select`}
                   type="checkbox"
-                  checked={allExposed}
-                  onChange={e => (e.target.checked ? setAll(true) : setConfirmDisableAll(true))}
+                  checked={filtering ? shownExposed === shown.length : allExposed}
+                  onChange={e => (e.target.checked ? bulk(true) : setConfirmDisableAll(true))}
                   className="h-3.5 w-3.5 rounded border-border text-primary focus:ring-1 focus:ring-primary accent-primary cursor-pointer"
                 />
                 <span className="hidden sm:inline">
-                  {allExposed ? 'All exposed' : noneExposed ? 'All disabled' : 'Select all'}
+                  {filtering
+                    ? `${shownExposed} of ${shown.length} shown exposed`
+                    : allExposed
+                      ? 'All exposed'
+                      : noneExposed
+                        ? 'All disabled'
+                        : 'Select all'}
                 </span>
                 <span className="sm:hidden">All</span>
               </label>
@@ -571,12 +625,16 @@ export default function McpCapabilityControlsPanel({
                   type="button"
                   variant="ghost"
                   size="sm"
-                  onClick={() => setAll(true)}
-                  disabled={allExposed}
-                  aria-label="Select all capabilities"
+                  onClick={() => bulk(true)}
+                  disabled={filtering ? shownExposed === shown.length : allExposed}
+                  aria-label={
+                    filtering
+                      ? `Expose the ${shown.length} capabilities shown`
+                      : 'Select all capabilities'
+                  }
                   className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground disabled:opacity-30"
                 >
-                  Select all
+                  {filtering ? 'Expose shown' : 'Select all'}
                 </Button>
                 <span className="text-border" aria-hidden="true">
                   •
@@ -586,11 +644,28 @@ export default function McpCapabilityControlsPanel({
                   variant="ghost"
                   size="sm"
                   onClick={() => setConfirmDisableAll(true)}
-                  disabled={noneExposed}
-                  aria-label="Uncheck all capabilities"
+                  disabled={filtering ? shownExposed === 0 : noneExposed}
+                  aria-label={
+                    filtering
+                      ? `Disable the ${shown.length} capabilities shown`
+                      : 'Uncheck all capabilities'
+                  }
                   className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground disabled:opacity-30"
                 >
-                  Uncheck all
+                  {filtering ? 'Disable shown' : 'Uncheck all'}
+                </Button>
+                <span className="text-border" aria-hidden="true">
+                  •
+                </span>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={applyViewOnly}
+                  title="Expose every read and turn off everything that changes OpsKnight"
+                  className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground"
+                >
+                  View-only preset
                 </Button>
               </div>
 
