@@ -91,7 +91,14 @@ ENV OPSKNIGHT_BUILD_LOW_MEMORY=$OPSKNIGHT_BUILD_LOW_MEMORY
 ENV RAYON_NUM_THREADS=$BUILD_RAYON_THREADS
 ENV NODE_OPTIONS="--max-old-space-size=${BUILD_NODE_MAX_OLD_SPACE_SIZE}"
 ARG SKIP_BUILD_TYPECHECK=false
-ENV SKIP_BUILD_TYPECHECK=${SKIP_BUILD_TYPECHECK}
+# Type-check as its own step, then compile with Next's in-build check disabled. Running both
+# in one process tree doubled peak memory (the Prisma 7 model types need ~5 GB of heap).
+ARG BUILD_TYPECHECK_MAX_OLD_SPACE_SIZE=6144
+RUN if [ "$SKIP_BUILD_TYPECHECK" != "true" ]; then \
+      NODE_OPTIONS="--max-old-space-size=${BUILD_TYPECHECK_MAX_OLD_SPACE_SIZE}" \
+        node node_modules/typescript/lib/tsc.js --noEmit --incremental false; \
+    fi
+ENV SKIP_BUILD_TYPECHECK=true
 RUN npm run build
 # Compile helper scripts for production (where ts-node is not available)
 RUN npm run build:scripts
