@@ -14,6 +14,8 @@ import {
 } from '@/components/settings/mcp/McpListKit';
 import { personLabel } from '@/components/settings/mcp/sections/McpConnectionsSection';
 import { getAssistantIcon } from '@/components/common/BrandLogos';
+import { RISK_PILL_CLASS, riskMeta } from '@/components/settings/mcp/risk';
+import { cn } from '@/lib/utils';
 import type {
   McpApprovalRow,
   McpApprovalStatus,
@@ -34,13 +36,6 @@ const STATUS: Record<McpApprovalStatus, { label: string; tone: PillTone }> = {
   completed: { label: 'Completed', tone: 'success' },
   failed: { label: 'Failed', tone: 'danger' },
 };
-
-/** R0–R3 risk classes from the operation catalogue; R3 is destructive. */
-function riskTone(risk: string): PillTone {
-  if (risk === 'R3') return 'danger';
-  if (risk === 'R2') return 'warning';
-  return 'info';
-}
 
 export default function McpApprovalsSection({
   rows,
@@ -66,12 +61,28 @@ export default function McpApprovalsSection({
   now: Date;
   timeZone: string;
 }) {
+  // The kind is always explicit in links: a bare approvals link opens whichever queue is waiting.
   const base = {
     tab: 'approvals',
-    kind: kind === 'operations' ? null : kind,
+    kind: runbooksOnly ? null : kind,
     state: state === 'pending' ? null : state,
   };
   const noun = kind === 'operations' ? 'change' : 'runbook run';
+  // The other queue's waiting requests, offered from this queue's empty state.
+  const otherKind: ApprovalKind = kind === 'operations' ? 'runbooks' : 'operations';
+  const otherWaiting = runbooksOnly
+    ? 0
+    : otherKind === 'operations'
+      ? pending.operations
+      : pending.runbooks;
+  const otherNoun =
+    otherKind === 'operations'
+      ? otherWaiting === 1
+        ? 'change is'
+        : 'changes are'
+      : otherWaiting === 1
+        ? 'runbook run is'
+        : 'runbook runs are';
   return (
     <SettingsSection
       title={runbooksOnly ? 'Runbook approvals' : 'Approvals'}
@@ -91,7 +102,7 @@ export default function McpApprovalsSection({
                 value: 'operations',
                 label: 'Configuration changes',
                 count: pending.operations,
-                href: mcpHref({ ...base, kind: null, page: null }),
+                href: mcpHref({ ...base, kind: 'operations', page: null }),
               },
               {
                 value: 'runbooks',
@@ -125,10 +136,25 @@ export default function McpApprovalsSection({
             <ListEmpty
               icon={<ClipboardCheck className="h-5 w-5" />}
               title={`No ${noun}s waiting for review`}
+              action={
+                otherWaiting > 0 ? (
+                  <Link
+                    href={mcpHref({
+                      ...base,
+                      kind: otherKind,
+                      page: null,
+                    })}
+                    className="inline-flex items-center gap-1.5 text-sm font-medium text-primary underline-offset-4 hover:underline"
+                  >
+                    {otherWaiting} {otherNoun} waiting. View
+                    <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
+                  </Link>
+                ) : undefined
+              }
             >
               {writesEnabled
                 ? `When an assistant proposes a ${noun}, it appears here and in the assistant's reply as a review link. An administrator must approve it; the requester can approve only if they are an administrator and confirm.`
-                : 'Assistants are read only, so nothing can be proposed. Turn on reviewed changes in Access policy to allow proposals.'}
+                : 'Assistants are read only, so nothing can be proposed. Turn on changes under "Reviewed actions" in Access policy to allow proposals.'}
             </ListEmpty>
           ) : (
             <ListEmpty icon={<History className="h-5 w-5" />} title={`No reviewed ${noun}s yet`}>
@@ -173,7 +199,12 @@ export default function McpApprovalsSection({
                   {kind === 'operations' && (
                     <ResponsiveCell label="Risk">
                       {row.risk ? (
-                        <StatusPill tone={riskTone(row.risk)}>{row.risk}</StatusPill>
+                        <span
+                          className={cn(RISK_PILL_CLASS, riskMeta(row.risk).className)}
+                          title={riskMeta(row.risk).title}
+                        >
+                          {row.risk} · {riskMeta(row.risk).short}
+                        </span>
                       ) : (
                         '—'
                       )}

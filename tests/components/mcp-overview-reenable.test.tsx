@@ -70,7 +70,7 @@ it('says when a restored policy stays read-only with automatic connections off',
 
 it('states the protocol revision this server implements', () => {
   render(<McpOverviewSection {...base} enabled />);
-  expect(screen.getByText('MCP 2026-07-28')).toBeTruthy();
+  expect(screen.getByText(/^MCP 2026-07-28 \(also 2025-06-18, 2025-11-25\)$/)).toBeTruthy();
   expect(screen.queryByText(/2024-11-05/)).toBeNull();
   expect(screen.queryByText(/Official Anthropic/)).toBeNull();
 });

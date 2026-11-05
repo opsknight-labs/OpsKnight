@@ -62,6 +62,14 @@ export const OPERATIONAL_METRICS = [
     estimatedMaxSeries: 1,
   },
   {
+    name: 'opsknight_mcp_call_log_dropped_total',
+    help: 'MCP activity log rows dropped because the write queue was full or a batch write failed',
+    kind: 'counter',
+    labels: [],
+    scope: 'counter',
+    estimatedMaxSeries: 1,
+  },
+  {
     name: 'opsknight_mcp_subscriptions_active',
     help: 'Open MCP subscriptions/listen streams on this process',
     kind: 'gauge',

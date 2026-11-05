@@ -32,6 +32,7 @@ No metric carries a user, client, grant or incident identifier. `tool` is a boun
 | `opsknight_mcp_in_flight` | gauge | — | Per process (gauge) | Below `opsknight_mcp_in_flight_limit` most of the time. | Pinned at the limit with `opsknight_mcp_queued` above zero: raise the limit or add web replicas. |
 | `opsknight_mcp_queued` | gauge | — | Per process (gauge) | Zero, with short spikes during bursts of parallel tool calls. | Never empties for five minutes: OpsKnightMcpQueueSaturated. |
 | `opsknight_mcp_busy_total` | counter | — | Counter (sum across replicas) | Flat. Each increment is one request shed with MCP_BUSY (work or authentication slot). | Sustained growth: OpsKnightMcpShedding. Raise the limit, add replicas, or find the busy connection. |
+| `opsknight_mcp_call_log_dropped_total` | counter | — | Counter (sum across replicas) |  |  |
 | `opsknight_mcp_subscriptions_active` | gauge | — | Per process (gauge) | Open listen streams on this process, at most 32. | At the cap, new streams get MCP_SUBSCRIPTIONS_BUSY (counted as outcome `busy`). |
 | `opsknight_mcp_in_flight_limit` | gauge | — | Per process (gauge) | The policy value **Concurrent requests per process**, identical on every replica. | Cluster capacity is this value times the web replicas. |
 | `opsknight_mcp_request_duration_seconds` | histogram | `outcome`, `tool` | Counter (sum across replicas) | Only calls that reached domain work are timed, so rejections never hide slow calls. | p95 above 2.5 s for a tool: OpsKnightMcpP95High. Check the MCP database pool and slow queries. |

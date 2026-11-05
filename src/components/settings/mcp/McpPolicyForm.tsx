@@ -11,6 +11,8 @@ import {
   MCP_REAUTHENTICATION_MESSAGE,
   MCP_REAUTHENTICATION_REQUIRED,
 } from '@/lib/mcp/auth/policy-widening';
+import { MCP_WRITE_MODE_SUMMARY } from '@/lib/mcp/policy-copy';
+import McpUnsavedChangesGuard from '@/components/settings/mcp/McpUnsavedChangesGuard';
 
 /**
  * A save succeeds with the new revision, is refused because the policy moved on, or is refused
@@ -45,6 +47,8 @@ export default function McpPolicyForm({
   const [pending, startTransition] = useTransition();
   const [status, setStatus] = useState<'idle' | 'saved' | 'error' | 'conflict' | 'reauth'>('idle');
   const [current, setCurrent] = useState(revision);
+  // Edits not yet saved: leaving the page asks first.
+  const [dirty, setDirty] = useState(false);
   const submitting = useRef(false);
 
   function submit(event: FormEvent<HTMLFormElement>) {
@@ -66,6 +70,7 @@ export default function McpPolicyForm({
           return;
         }
         if (result) setCurrent(result.revision);
+        setDirty(false);
         setStatus('saved');
         notify.success('MCP configuration saved', { id: 'settings:mcp:save' });
       } catch (error) {
@@ -81,17 +86,25 @@ export default function McpPolicyForm({
     <form
       action={action as (form: FormData) => Promise<void>}
       onSubmit={submit}
-      onChange={() =>
+      onChange={() => {
+        setDirty(true);
         setStatus(previous =>
           previous === 'conflict' || previous === 'reauth' ? previous : 'idle'
-        )
-      }
+        );
+      }}
+      // A field the browser refuses inside a closed section cannot be focused or seen, so the
+      // save would silently do nothing: open the section that holds it.
+      onInvalidCapture={event => {
+        const section = (event.target as Element).closest('details');
+        if (section && !section.open) section.open = true;
+      }}
       aria-busy={pending}
     >
+      <McpUnsavedChangesGuard dirty={dirty} />
       {current !== undefined && <input type="hidden" name="policyRevision" value={current} />}
       <SettingsSection
         title="Access and workload policy"
-        description="What assistants may do. Every change an assistant proposes still needs an administrator to approve it in OpsKnight; administrators confirm their own."
+        description={`What assistants may do. ${MCP_WRITE_MODE_SUMMARY}`}
         footer={
           <div className="flex flex-wrap items-center justify-end gap-3">
             <SaveIndicator

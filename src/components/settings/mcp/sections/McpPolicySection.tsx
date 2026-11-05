@@ -140,6 +140,58 @@ export default function McpPolicySection({
       </PolicyGroup>
 
       <PolicyGroup
+        title="Reviewed actions"
+        description="Off by default. Routine incident changes run directly. Configuration changes wait for an administrator to approve the exact, frozen request; runbook runs wait for anyone with runbook approve permission (Responders and Administrators by default). An administrator may approve their own request after confirming."
+      >
+        <CheckRow
+          name="writesEnabled"
+          label="Allow reviewed routine mutations and approved runbook executions"
+          description="Assistants can acknowledge, assign, annotate, resolve and create incidents, and prepare configuration changes and runbook runs for review. Reviewers are notified in OpsKnight."
+          defaultChecked={policy.writesEnabled}
+        />
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div className="space-y-1.5">
+            <Label htmlFor="mcp-approval-ttl">Time to review (minutes)</Label>
+            <Input
+              id="mcp-approval-ttl"
+              name="approvalTtlMinutes"
+              type="number"
+              min="15"
+              max="1440"
+              defaultValue={policy.approvalTtlMinutes}
+              aria-describedby="mcp-approval-ttl-help"
+              required
+            />
+            <p id="mcp-approval-ttl-help" className="text-xs text-muted-foreground">
+              How long a request waits for a reviewer, 15 to 1440 (24 hours).
+            </p>
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="mcp-commit-window">Time to apply after approval (minutes)</Label>
+            <Input
+              id="mcp-commit-window"
+              name="approvalCommitWindowMinutes"
+              type="number"
+              min="1"
+              max="1440"
+              defaultValue={policy.approvalCommitWindowMinutes}
+              aria-describedby="mcp-commit-window-help"
+              required
+            />
+            <p id="mcp-commit-window-help" className="text-xs text-muted-foreground">
+              Starts when the request is approved. Never later than 24 hours after the request.
+            </p>
+          </div>
+        </div>
+        <CheckRow
+          name="sensitiveReadsEnabled"
+          label="Allow reviewed sensitive configuration reads"
+          description="Redacted, read-only, and limited to what the signed-in user can already see."
+          defaultChecked={policy.sensitiveReadsEnabled}
+        />
+      </PolicyGroup>
+
+      <PolicyGroup
         title="Sign-in sessions"
         description="How long an unused connection stays signed in."
       >
@@ -221,7 +273,7 @@ export default function McpPolicySection({
           <span className="flex flex-col">
             <span>Advanced</span>
             <span className="text-xs font-normal text-muted-foreground">
-              Reviewed changes, sensitive reads, trusted hosts, browser clients and workload limits
+              Trusted hosts, browser clients and workload limits
             </span>
           </span>
           <ChevronDown
@@ -230,57 +282,6 @@ export default function McpPolicySection({
           />
         </summary>
         <div className="border-t border-border">
-          <PolicyGroup
-            title="Reviewed actions"
-            description="Off by default. Routine incident changes run directly. Configuration changes wait for an administrator to approve the exact, frozen request; runbook runs wait for anyone with runbook approve permission (Responders and Administrators by default). An administrator may approve their own request after confirming."
-          >
-            <CheckRow
-              name="writesEnabled"
-              label="Allow reviewed routine mutations and approved runbook executions"
-              description="Assistants can acknowledge, assign, annotate, resolve and create incidents, and prepare configuration changes and runbook runs for review. Reviewers are notified in OpsKnight."
-              defaultChecked={policy.writesEnabled}
-            />
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-1.5">
-                <Label htmlFor="mcp-approval-ttl">Time to review (minutes)</Label>
-                <Input
-                  id="mcp-approval-ttl"
-                  name="approvalTtlMinutes"
-                  type="number"
-                  min="15"
-                  max="1440"
-                  defaultValue={policy.approvalTtlMinutes}
-                  aria-describedby="mcp-approval-ttl-help"
-                  required
-                />
-                <p id="mcp-approval-ttl-help" className="text-xs text-muted-foreground">
-                  How long a request waits for a reviewer, 15 to 1440 (24 hours).
-                </p>
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="mcp-commit-window">Time to apply after approval (minutes)</Label>
-                <Input
-                  id="mcp-commit-window"
-                  name="approvalCommitWindowMinutes"
-                  type="number"
-                  min="1"
-                  max="1440"
-                  defaultValue={policy.approvalCommitWindowMinutes}
-                  aria-describedby="mcp-commit-window-help"
-                  required
-                />
-                <p id="mcp-commit-window-help" className="text-xs text-muted-foreground">
-                  Starts when the request is approved. Never later than 24 hours after the request.
-                </p>
-              </div>
-            </div>
-            <CheckRow
-              name="sensitiveReadsEnabled"
-              label="Allow reviewed sensitive configuration reads"
-              description="Redacted, read-only, and limited to what the signed-in user can already see."
-              defaultChecked={policy.sensitiveReadsEnabled}
-            />
-          </PolicyGroup>
           <PolicyGroup
             title="Trusted assistant hosts"
             description="Optionally limit which assistants may identify with a metadata document."

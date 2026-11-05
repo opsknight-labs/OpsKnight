@@ -51,6 +51,7 @@ import { logger, runWithContext } from '@/lib/logger';
 import { trustedMcpRequestId } from '@/lib/mcp/request-id';
 import { mcpForceDisabled } from '@/lib/mcp/core/kill-switch';
 import { recordMcpGrantCall } from '@/lib/mcp/core/usage';
+import { mcpCallLogOperationId, recordMcpCallLog } from '@/lib/mcp/core/call-log';
 import { MCP_PROTOCOL_REVISION } from '@/lib/mcp/protocol/revision';
 import {
   MCP_TIMED_OUTCOMES,
@@ -115,6 +116,8 @@ async function handlePost(request: Request, requestId: string, browserOrigin: st
   let grantId: string | undefined;
   let clientId: string | undefined;
   let errorCode: string | undefined;
+  // Activity log: the catalog operation this call ran, once the body is read.
+  let operationId: string | null = null;
   try {
     assertMcpHost(request, false, browserOrigin);
     requireMcp(!mcpForceDisabled(), 'MCP_DISABLED', 503);
@@ -156,6 +159,8 @@ async function handlePost(request: Request, requestId: string, browserOrigin: st
     }
     method = body.method;
     tool = mcpMetricTool(body.method, body.params?.name);
+    if (body.method === 'tools/call')
+      operationId = mcpCallLogOperationId(tool, body.params?.arguments);
     // A notification (no id) gets no response and does no work: acknowledge it before any
     // quota is charged. notifications/initialized and notifications/cancelled arrive this way.
     if (body.id === undefined) {
@@ -419,6 +424,17 @@ async function handlePost(request: Request, requestId: string, browserOrigin: st
         outcome,
         durationMs: Math.round(durationMs),
         ...(errorCode ? { errorCode } : {}),
+      });
+    // Same bounded labels as the metrics; never the arguments. Notifications do no work.
+    if (grantId && outcome !== 'notification')
+      recordMcpCallLog({
+        grantId,
+        tool,
+        operationId,
+        outcome,
+        durationMs,
+        requestId,
+        errorCode: errorCode ?? null,
       });
   }
 }

@@ -27,6 +27,11 @@ import { StatusPill } from '@/components/settings/mcp/McpListKit';
 import { mcpSetupCommands } from '@/components/settings/mcp/setup-commands';
 import { MCP_PROTOCOL_REVISION } from '@/lib/mcp/protocol/revision';
 import { MCP_ABSOLUTE_SESSION_DAYS } from '@/lib/mcp/auth/session-lifetime';
+import {
+  MCP_WRITE_MODE_HINT,
+  MCP_WRITE_MODE_LABEL,
+  MCP_WRITE_MODE_VALUE,
+} from '@/lib/mcp/policy-copy';
 
 type SetupReport = Awaited<ReturnType<Parameters<typeof McpConnectionTest>[0]['action']>>;
 
@@ -221,7 +226,7 @@ export default function McpOverviewSection({
         </Card>
       )}
 
-      {/* MCP Protocol & Identity Card (Matching Teams / Slack Header Card Style) */}
+      {/* Server identity: status and the two next steps. The facts live in Server endpoint. */}
       {enabled && (
         <Card className="overflow-hidden border-border/80 shadow-2xs">
           <div className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between bg-card">
@@ -229,37 +234,31 @@ export default function McpOverviewSection({
               <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500/15 via-primary/10 to-violet-500/15 border border-primary/25 shadow-inner">
                 <McpLogo className="h-6 w-6" />
               </div>
-              <div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <h2 className="text-base font-bold text-foreground tracking-tight">
-                    Model Context Protocol Server
-                  </h2>
+              <div className="flex flex-wrap items-center gap-2">
+                <h2 className="text-base font-bold text-foreground tracking-tight">
+                  Model Context Protocol server
+                </h2>
+                <Badge
+                  variant="outline"
+                  className={cn(
+                    'text-[10px] font-semibold',
+                    live
+                      ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400'
+                      : 'border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-400'
+                  )}
+                >
+                  <span className="mr-1 h-1.5 w-1.5 rounded-full bg-current" aria-hidden="true" />
+                  {live ? 'Ready' : 'Needs attention'}
+                </Badge>
+                {automaticReady && (
                   <Badge
                     variant="outline"
-                    className={cn(
-                      'text-[10px] font-semibold',
-                      live
-                        ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
-                        : 'border-amber-500/40 bg-amber-500/10 text-amber-600 dark:text-amber-400'
-                    )}
+                    className="text-[10px] font-semibold border-sky-500/30 bg-sky-500/10 text-sky-700 dark:text-sky-400"
                   >
-                    <span className="mr-1 h-1.5 w-1.5 rounded-full bg-current" aria-hidden="true" />
-                    {live ? 'Active & Ready' : 'Needs Attention'}
+                    <Sparkles className="mr-1 h-3 w-3" aria-hidden="true" />
+                    Automatic connections on
                   </Badge>
-                  {automaticReady && (
-                    <Badge
-                      variant="outline"
-                      className="text-[10px] font-semibold border-sky-500/30 bg-sky-500/10 text-sky-600 dark:text-sky-400"
-                    >
-                      <Sparkles className="mr-1 h-3 w-3" />
-                      DCR Enabled
-                    </Badge>
-                  )}
-                </div>
-                <p className="mt-0.5 text-xs text-muted-foreground">
-                  Model Context Protocol over Streamable HTTP · OAuth with PKCE · client metadata
-                  documents and dynamic registration
-                </p>
+                )}
               </div>
             </div>
             <div className="flex flex-wrap items-center gap-2 self-end sm:self-auto">
@@ -271,8 +270,8 @@ export default function McpOverviewSection({
                   className="h-8 gap-1.5 text-xs font-semibold"
                 >
                   <Link href={hrefs.connect}>
-                    <Plug className="h-3.5 w-3.5" />
-                    Connect Guide
+                    <Plug className="h-3.5 w-3.5" aria-hidden="true" />
+                    Connect an assistant
                   </Link>
                 </Button>
               )}
@@ -284,43 +283,11 @@ export default function McpOverviewSection({
                   className="h-8 gap-1.5 text-xs font-semibold"
                 >
                   <Link href={hrefs.policy}>
-                    <SlidersHorizontal className="h-3.5 w-3.5" />
-                    Configure Policy
+                    <SlidersHorizontal className="h-3.5 w-3.5" aria-hidden="true" />
+                    Access policy
                   </Link>
                 </Button>
               )}
-            </div>
-          </div>
-          <div className="grid grid-cols-2 divide-x divide-y sm:divide-y-0 sm:grid-cols-4 border-t border-border/70 bg-muted/20 px-4 py-3 text-xs">
-            <div className="px-3 py-1">
-              <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground block">
-                Protocol Spec
-              </span>
-              <span className="font-medium text-foreground">MCP {MCP_PROTOCOL_REVISION}</span>
-            </div>
-            <div className="px-3 py-1">
-              <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground block">
-                Auth Method
-              </span>
-              <span className="font-medium text-foreground">OAuth PKCE · CIMD / DCR</span>
-            </div>
-            <div className="px-3 py-1">
-              <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground block">
-                Session Security
-              </span>
-              <span className="font-medium text-foreground">
-                {sessionIdleDays}-day idle · {MCP_ABSOLUTE_SESSION_DAYS}-day max
-              </span>
-            </div>
-            <div className="px-3 py-1">
-              <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground block">
-                Mutations
-              </span>
-              <span
-                className={cn('font-medium', writesEnabled ? 'text-amber-500' : 'text-emerald-500')}
-              >
-                {writesEnabled ? 'Approval Gate' : 'Read-Only'}
-              </span>
             </div>
           </div>
         </Card>
@@ -366,15 +333,13 @@ export default function McpOverviewSection({
           <StatTile
             href={hrefs.policy}
             icon={<ShieldCheck />}
-            label="Assistant permissions"
+            label={MCP_WRITE_MODE_LABEL}
             value={
-              <span className="text-lg">{writesEnabled ? 'Reviewed changes' : 'Read only'}</span>
+              <span className="text-lg">
+                {writesEnabled ? MCP_WRITE_MODE_VALUE.on : MCP_WRITE_MODE_VALUE.off}
+              </span>
             }
-            hint={
-              writesEnabled
-                ? 'Each change needs administrator approval'
-                : 'Assistants cannot change anything'
-            }
+            hint={writesEnabled ? MCP_WRITE_MODE_HINT.on : MCP_WRITE_MODE_HINT.off}
             tone={writesEnabled ? 'default' : 'success'}
           />
         )}
@@ -409,6 +374,9 @@ export default function McpOverviewSection({
               )}
               <dl className="grid grid-cols-1 gap-4 border-t border-border pt-4 sm:grid-cols-2">
                 <Fact label="Address from">{originSource ?? 'Not configured'}</Fact>
+                <Fact label="Protocol">
+                  MCP {MCP_PROTOCOL_REVISION} (also 2025-06-18, 2025-11-25)
+                </Fact>
                 <Fact label="Stay signed in">
                   Until {sessionIdleDays} {sessionIdleDays === 1 ? 'day' : 'days'} without use, and
                   at most {MCP_ABSOLUTE_SESSION_DAYS} days

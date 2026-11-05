@@ -3,6 +3,10 @@ import { AlertTriangle, BadgeCheck, Info } from 'lucide-react';
 import type { McpConsentGroup } from '@/lib/mcp/auth/consent-offer';
 import type { McpConsentIdentity } from '@/lib/mcp/auth/consent-identity';
 import ConsentForm from './ConsentForm';
+import { MCP_CONSENT_WRITES_OFF_NOTE } from '@/lib/mcp/policy-copy';
+import { AssistantIcon } from '@/components/common/BrandLogos';
+import { formatDateTime } from '@/lib/timezone';
+import { mcpHref } from '@/app/(app)/settings/integrations/mcp/list-params';
 
 type Props = {
   action: (form: FormData) => Promise<void>;
@@ -30,10 +34,9 @@ type Props = {
    * was never used (an unfinished sign-in); one in use stays signed in.
    */
   previousConnection: { createdAt: Date; inUse: boolean } | null;
+  /** The signed-in person's time zone, for every time shown here. */
+  timeZone: string;
 };
-
-const shortDate = (value: Date) =>
-  value.toLocaleDateString('en-US', { dateStyle: 'medium', timeZone: 'UTC' });
 
 /** The focused consent dialog. Pure presentation: the page loads and authorizes the data. */
 export default function ConsentView({
@@ -49,8 +52,11 @@ export default function ConsentView({
   redirectWarning,
   writesEnabled,
   previousConnection,
+  timeZone,
 }: Props) {
   const hasChanges = groups.some(group => group.change.length > 0);
+  // Shown in the person's own time zone, named, so an unfamiliar time is not misread.
+  const connectedAt = (value: Date) => formatDateTime(value, timeZone, { includeTimeZone: true });
   // Many areas get a two-column grid on large screens; a short list stays a compact dialog.
   const wide =
     groups.length > 2 && groups.reduce((n, g) => n + g.view.length + g.change.length, 0) > 8;
@@ -93,9 +99,18 @@ export default function ConsentView({
           <div className="space-y-1.5">
             <h1
               id="mcp-consent-title"
-              className="break-words font-['Space_Grotesk',sans-serif] font-bold tracking-tight text-slate-950 dark:text-white"
+              className="flex items-center gap-2 break-words font-['Space_Grotesk',sans-serif] font-bold tracking-tight text-slate-950 dark:text-white"
             >
-              Connect {clientName}?
+              {/* A brand logo only for a metadata host an administrator trusts (SEC-6); a chosen
+                  name, or an untrusted publisher, gets the generic icon. */}
+              <AssistantIcon
+                name={clientName}
+                verifiedHost={
+                  identity.kind === 'metadata' && identity.trusted ? identity.host : null
+                }
+                className="h-6 w-6 shrink-0"
+              />
+              <span className="min-w-0">Connect {clientName}?</span>
             </h1>
             <p
               data-testid="mcp-consent-identity"
@@ -166,24 +181,27 @@ export default function ConsentView({
               className="flex items-start gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-700 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-200"
             >
               <Info className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
-              <span>
-                Changes are currently turned off by your administrator. Change permissions take
-                effect only if changes are turned on, and each change still needs approval.
-              </span>
+              <span>{MCP_CONSENT_WRITES_OFF_NOTE}</span>
             </div>
           )}
           {previousConnection && (
             <p className="text-xs text-slate-500 dark:text-slate-400">
               {previousConnection.inUse ? (
                 <>
-                  Your existing connection from {shortDate(previousConnection.createdAt)} stays
-                  signed in; you can sign it out under Settings → Integrations & ChatOps → MCP (AI
-                  Assistants). Permissions marked New are what this adds.
+                  Your existing connection from{' '}
+                  <time dateTime={previousConnection.createdAt.toISOString()}>
+                    {connectedAt(previousConnection.createdAt)}
+                  </time>{' '}
+                  stays signed in; you can sign it out under Settings → Integrations & ChatOps → MCP
+                  (AI Assistants). Permissions marked New are what this adds.
                 </>
               ) : (
                 <>
                   Allowing replaces your unfinished sign-in from{' '}
-                  {shortDate(previousConnection.createdAt)}.
+                  <time dateTime={previousConnection.createdAt.toISOString()}>
+                    {connectedAt(previousConnection.createdAt)}
+                  </time>
+                  .
                 </>
               )}
             </p>
@@ -202,7 +220,14 @@ export default function ConsentView({
             writesEnabled={writesEnabled}
           />
           <p className="border-t border-slate-100 pt-4 text-xs leading-relaxed text-slate-500 dark:border-slate-800 dark:text-slate-400">
-            You can disconnect any time in Settings → Integrations & ChatOps → MCP (AI Assistants).
+            You can{' '}
+            <a
+              href={mcpHref({ tab: 'connections' })}
+              className="font-medium text-slate-700 underline underline-offset-2 hover:text-slate-900 dark:text-slate-200 dark:hover:text-white"
+            >
+              disconnect any time
+            </a>{' '}
+            in Settings → Integrations & ChatOps → MCP (AI Assistants).
             {identity.kind === 'self-registered' && !redirectWarning && (
               <> Only continue if you just started this connection yourself.</>
             )}

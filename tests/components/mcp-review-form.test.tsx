@@ -4,7 +4,11 @@ import ReviewForm from '@/app/(app)/settings/integrations/mcp/approvals/ReviewFo
 import {
   RequesterStatus,
   RequestedBy,
+  ReviewUnavailable,
+  SelfApprovalConfirm,
+  statusLabel,
 } from '@/app/(app)/settings/integrations/mcp/approvals/review-gate';
+import { Deadline } from '@/components/settings/mcp/McpListKit';
 
 const signOut = vi.hoisted(() => vi.fn());
 vi.mock('next-auth/react', () => ({ signOut }));
@@ -85,11 +89,14 @@ describe('requester views', () => {
         person={{ name: 'Rita', email: 'rita@example.com' }}
         assistant={{ name: 'Claude' }}
         at={new Date('2026-11-04T12:00:00Z')}
+        timeZone="Asia/Kolkata"
       />
     );
+    // UX-4: the viewer's own time zone, never raw UTC ISO.
     expect(screen.getByText(/Requested by/)).toHaveTextContent(
-      'Requested by Rita (rita@example.com) via the assistant “Claude” at 2026-11-04T12:00:00.000Z'
+      'Requested by Rita (rita@example.com) via the assistant “Claude” at Nov 4, 2026, 5:30 PM GMT+5:30'
     );
+    expect(screen.getByText(/Requested by/).textContent).not.toContain('T12:00:00');
   });
 
   it('shows a rejected request with the reviewer and their note, and no review controls', () => {
@@ -108,5 +115,86 @@ describe('requester views', () => {
     expect(screen.getByText(/by Ada/)).toBeInTheDocument();
     expect(screen.getByText('Use the staging gateway first')).toBeInTheDocument();
     expect(screen.queryByRole('button')).toBeNull();
+  });
+});
+
+describe('UX-4 / UX-5 / UX-7 review pages', () => {
+  const now = new Date('2026-11-05T09:00:00Z');
+
+  it('shows a deadline in local time with how long is left, and warns near and past it', () => {
+    render(<Deadline value={new Date('2026-11-05T09:27:00Z')} now={now} timeZone="Asia/Kolkata" />);
+    expect(document.body).toHaveTextContent('Nov 5, 2026, 2:57 PM GMT+5:30 (in 27 minutes)');
+    expect(screen.queryByRole('status')).toBeNull();
+    cleanup();
+    render(<Deadline value={new Date('2026-11-05T09:10:00Z')} now={now} timeZone="UTC" />);
+    expect(screen.getByRole('status')).toHaveTextContent('Less than 15 minutes left');
+    cleanup();
+    render(<Deadline value={new Date('2026-11-05T08:59:00Z')} now={now} timeZone="UTC" />);
+    expect(screen.getByRole('status')).toHaveTextContent('Deadline passed');
+  });
+
+  it('uses plain status labels and the shorter expiry copy', () => {
+    expect(statusLabel('PENDING')).toBe('Waiting for review');
+    expect(statusLabel('COMMITTED')).toBe('Completed');
+    render(
+      <RequesterStatus
+        heading="Your requested configuration change"
+        status="EXPIRED"
+        expiresAt={now}
+        reviewer={null}
+        decidedAt={null}
+        selfApproved={false}
+        decisionReason={null}
+      />
+    );
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'It was not used in time. Ask your assistant to prepare it again.'
+    );
+    expect(screen.getByRole('status')).not.toHaveTextContent('idempotency');
+    expect(screen.getByRole('link', { name: 'Back to approvals' }).getAttribute('href')).toBe(
+      '/settings/integrations/mcp?tab=approvals'
+    );
+  });
+
+  it('renders theme-safe notices with a way back to the queue', () => {
+    render(<ReviewUnavailable reason="expired" heading="Review requested change" />);
+    const notice = screen.getByRole('status');
+    expect(notice.className).toMatch(/dark:bg-amber-950/);
+    expect(screen.getByRole('link', { name: 'Back to approvals' })).toBeTruthy();
+    cleanup();
+    render(<SelfApprovalConfirm />);
+    const box = screen.getByRole('checkbox', { name: /I have reviewed this change/ });
+    expect(box).toHaveAttribute('name', 'confirmSelfApproval');
+    expect(box).toBeRequired();
+    expect(box.closest('[class*="dark:bg-amber-950"]')).not.toBeNull();
+  });
+
+  it('styles the decision buttons like every other action and links back after deciding', async () => {
+    const action = vi.fn(async (_previous: unknown, _form: FormData) => ({
+      ok: false as const,
+      code: 'MCP_APPROVAL_EXPIRED',
+    }));
+    render(<ReviewForm {...base} action={action} />);
+    const reject = screen.getByRole('button', { name: 'Reject change' });
+    expect(reject).toHaveAttribute('formnovalidate');
+    expect(reject).toHaveAttribute('value', 'reject');
+    expect(reject.className).toMatch(/border-input/);
+    expect(screen.getByRole('button', { name: /Approve frozen change/ }).className).toMatch(
+      /bg-primary/
+    );
+    fireEvent.click(reject);
+    const alert = await screen.findByRole('alert');
+    expect(alert.className).toMatch(/dark:bg-rose-950/);
+    cleanup();
+    const ok = vi.fn(async (_previous: unknown, _form: FormData) => ({
+      ok: true as const,
+      decision: 'approve' as const,
+    }));
+    render(<ReviewForm {...base} action={ok} />);
+    fireEvent.click(screen.getByRole('button', { name: /Approve frozen change/ }));
+    await screen.findByRole('status');
+    expect(screen.getByRole('link', { name: 'Back to approvals' }).getAttribute('href')).toBe(
+      '/settings/integrations/mcp?tab=approvals'
+    );
   });
 });

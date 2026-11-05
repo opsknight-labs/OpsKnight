@@ -48,10 +48,11 @@ The **Access policy** tab holds:
 
 - **Assistant access**: **Enable MCP** and **Automatic connections**.
 - **What assistants may do**: the permission ceiling. People can approve less on the consent page, and their own OpsKnight permissions always apply on top.
+- **Reviewed actions**: changes, the review window and commit window, and sensitive configuration reads.
 - **Sign-in sessions**: how long an unused connection stays signed in (1 to 90 days, default 30).
 - **View-only connections**: **Require view-only connections** caps every connection, OAuth and personal, to view permissions until it is turned off.
 - **Personal access tokens**: off by default. When on, people can create a token for agents without a browser, up to the longest allowed expiry (default 30, at most 90 days) and with only the listed permissions (default: view incidents, services and schedules). Tokens never carry `runbooks:execute`, and changes they prepare always need a second person. Turning this off revokes every token. See [API-hosted and headless agents](api-agents.md).
-- **Advanced**: **Reviewed actions** (changes, the review window and commit window), sensitive configuration reads, **Trusted assistant hosts** and **Workload limits**.
+- **Advanced**: **Trusted assistant hosts**, **Browser clients** (allowed browser origins and in-place permission step-up) and **Workload limits**.
 
 **Automatic connections** is one switch for both ways an assistant can identify itself: assistants that register themselves (dynamic client registration, DCR) and assistants that publish a client metadata document (CIMD). Both use the same ceiling. The trusted-hosts list is optional: leave it empty to allow any public HTTPS metadata host, or list hosts to allow only those (other metadata-document assistants are then refused). Documents are fetched without redirects, only from public addresses, with a pinned DNS lookup.
 
@@ -125,7 +126,7 @@ The **Exposed capabilities** tab is a hard deny-list across all roles and consen
 
 ## Reviewed changes
 
-Changes are off by default. Turn them on with **Allow reviewed routine mutations and approved runbook executions** under **Access policy → Advanced → Reviewed actions**. Then:
+Changes are off by default. Turn them on with **Allow reviewed routine mutations and approved runbook executions** under **Access policy → Reviewed actions**. Then:
 
 - **Routine incident changes** (acknowledge, assign, add a note, resolve, create, tags and watchers) run directly, each with an `idempotencyKey`, within the person's own permissions.
 - **Configuration changes** go through `operation_prepare` and are approved by an **administrator** who holds every permission the change needs.

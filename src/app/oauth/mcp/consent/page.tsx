@@ -16,6 +16,7 @@ import {
   consentRedirectFacts,
   consentRedirectWarning,
 } from '@/lib/mcp/auth/consent-identity';
+import { getUserTimeZone } from '@/lib/timezone';
 import ConsentView from './ConsentView';
 import './consent.css';
 
@@ -94,6 +95,7 @@ export default async function McpConsent({
         // A connection with tokens is in use and stays signed in (supersededUnusedMcpGrantsWhere).
         previous ? { createdAt: previous.createdAt, inUse: previous._count.tokens > 0 } : null
       }
+      timeZone={getUserTimeZone(who)}
     />
   );
 }

@@ -2,12 +2,20 @@ import prisma from '@/lib/prisma';
 import { Prisma } from '@prisma/client';
 import { logAudit } from '@/lib/audit';
 import { createInAppNotifications } from '@/lib/in-app-notifications';
+import { resolveReviewerNotices } from '../approvals/notify';
+import { MCP_CALL_LOG_RETENTION_MS } from '../core/call-log';
 
 /** Registrations never used to sign in are kept this long; registration evicts earlier when full. */
 export const UNUSED_REGISTRATION_TTL_MS = 30 * 86_400_000;
 
 /** Rows touched per table per tick; the scheduler runs again soon enough to catch up. */
 export const MCP_CLEANUP_BATCH = 500;
+
+/**
+ * Finished approvals (committed, failed, rejected or expired) are deleted this long after they were
+ * requested. The mcp.operation.* audit events stay as the durable record.
+ */
+export const MCP_APPROVAL_RETENTION_MS = 90 * 86_400_000;
 
 /**
  * Closes out approvals that lapsed without being used: marks them EXPIRED, drops the encrypted
@@ -29,6 +37,12 @@ export async function expireMcpApprovals(now = new Date()) {
       },
       data: { status: 'EXPIRED', envelope: null },
     });
+    await resolveReviewerNotices(
+      tx,
+      rows.map(row => row.id),
+      'expire',
+      now
+    );
     for (const row of rows)
       await logAudit(
         {
@@ -55,6 +69,12 @@ export async function expireMcpApprovals(now = new Date()) {
       where: { id: { in: rows.map(row => row.id) }, consumedAt: null, expiresAt: { lt: now } },
       data: { requestEnvelope: null },
     });
+    await resolveReviewerNotices(
+      tx,
+      rows.map(row => row.id),
+      'expire',
+      now
+    );
     for (const row of rows)
       await logAudit(
         {
@@ -121,6 +141,58 @@ export async function notifyExpiringMcpPersonalTokens(now = new Date()) {
   });
 }
 
+/**
+ * Deletes one batch of finished approvals older than the retention window. Open and executing
+ * rows are never selected; rows locked by a concurrent reconcile are skipped this tick.
+ */
+export async function purgeFinishedMcpApprovals(now = new Date()) {
+  const before = new Date(now.getTime() - MCP_APPROVAL_RETENTION_MS);
+  // FAILED can still reconcile to COMMITTED, but only within the hour-long execution window.
+  const finished = ['COMMITTED', 'FAILED', 'REJECTED', 'EXPIRED'];
+  return prisma.$transaction(async tx => {
+    const rows = await tx.$queryRaw<{ id: string }[]>`
+      SELECT id FROM "McpOperationApproval"
+      WHERE status IN (${Prisma.join(finished)}) AND "createdAt" < ${before}
+      ORDER BY "createdAt" ASC, id ASC LIMIT ${MCP_CLEANUP_BATCH} FOR UPDATE SKIP LOCKED`;
+    if (!rows.length) return 0;
+    const deleted = await tx.mcpOperationApproval.deleteMany({
+      where: {
+        id: { in: rows.map(row => row.id) },
+        status: { in: finished },
+        createdAt: { lt: before },
+      },
+    });
+    return deleted.count;
+  });
+}
+
+/**
+ * Activity batches deleted per tick. One row is written per MCP request, so a single batch per
+ * tick (every few minutes) would fall behind a busy deployment and let the table grow for ever.
+ */
+export const MCP_CALL_LOG_PURGE_BATCHES = 20;
+
+/** Deletes activity rows older than the retention window, in bounded batches. */
+export async function purgeMcpCallLog(now = new Date()) {
+  const before = new Date(now.getTime() - MCP_CALL_LOG_RETENTION_MS);
+  let total = 0;
+  for (let batch = 0; batch < MCP_CALL_LOG_PURGE_BATCHES; batch++) {
+    const count = await prisma.$transaction(async tx => {
+      const rows = await tx.$queryRaw<{ id: string }[]>`
+        SELECT id FROM "McpCallLog" WHERE "at" < ${before}
+        ORDER BY "at" ASC, id ASC LIMIT ${MCP_CLEANUP_BATCH} FOR UPDATE SKIP LOCKED`;
+      if (!rows.length) return 0;
+      const deleted = await tx.mcpCallLog.deleteMany({
+        where: { id: { in: rows.map(row => row.id) }, at: { lt: before } },
+      });
+      return deleted.count;
+    });
+    total += count;
+    if (count < MCP_CLEANUP_BATCH) break;
+  }
+  return total;
+}
+
 /** Bounded maintenance on the existing scheduler; no new queue or worker. */
 export async function cleanupMcpCredentials() {
   const now = new Date();
@@ -171,6 +243,8 @@ export async function cleanupMcpCredentials() {
   ]);
   const expired = await expireMcpApprovals(now);
   const expiringTokenNotices = await notifyExpiringMcpPersonalTokens(now);
+  const purgedApprovals = await purgeFinishedMcpApprovals(now);
+  const purgedCallLog = await purgeMcpCallLog(now);
   // Expire only registrations never used to sign in. Assistants cache their client_id, so one
   // removed too soon turns a single failed sign-in into a permanent "unknown client".
   const unusedBefore = new Date(now.getTime() - UNUSED_REGISTRATION_TTL_MS);
@@ -218,6 +292,8 @@ export async function cleanupMcpCredentials() {
     codes: removed[3].count,
     expiredApprovals: expired.operations,
     expiredRunbookPlans: expired.runbooks,
+    purgedApprovals,
+    purgedCallLog,
     registrations: registrations.count,
     expiringTokenNotices,
   };

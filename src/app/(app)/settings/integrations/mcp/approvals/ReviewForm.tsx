@@ -2,7 +2,11 @@
 
 import { useActionState, type ReactNode } from 'react';
 import { useFormStatus } from 'react-dom';
+import Link from 'next/link';
 import { signOut } from 'next-auth/react';
+import { Button } from '@/components/ui/shadcn/button';
+import { InlineNotice } from '@/components/ui/InlineNotice';
+import { mcpHref } from '../list-params';
 import { reviewMessage, type ReviewResult } from './review-result';
 
 type ReviewAction = (previous: ReviewResult | null, form: FormData) => Promise<ReviewResult>;
@@ -24,39 +28,40 @@ function Buttons({
   const choice = pending ? data?.get('decision') : null;
   return (
     <div className="flex flex-wrap gap-4" aria-busy={pending}>
-      <button
+      <Button
         type="submit"
         name="decision"
         value="reject"
         formNoValidate
         disabled={pending}
-        className="rounded border px-4 py-3 disabled:opacity-60"
+        variant="outline"
+        size="lg"
       >
         {choice === 'reject' ? 'Rejecting…' : rejectLabel}
-      </button>
+      </Button>
       {freshSignInRequired ? (
         // A stale sign-in cannot approve a destructive change; sign in again and come back here.
-        <button
+        <Button
           type="button"
+          size="lg"
           disabled={pending}
           onClick={() =>
             signOut({ callbackUrl: `/login?callbackUrl=${encodeURIComponent(reviewPath)}` })
           }
-          className="rounded bg-primary px-4 py-3 text-primary-foreground disabled:opacity-60"
         >
           Confirm it&apos;s you to approve
-        </button>
+        </Button>
       ) : (
-        <button
+        <Button
           type="submit"
           name="decision"
           value="approve"
+          size="lg"
           disabled={pending}
           aria-label={`${approveLabel} (${noun})`}
-          className="rounded bg-primary px-4 py-3 text-primary-foreground disabled:opacity-60"
         >
           {choice === 'approve' ? 'Approving…' : approveLabel}
-        </button>
+        </Button>
       )}
     </div>
   );
@@ -88,22 +93,27 @@ export default function ReviewForm({
   const [result, formAction] = useActionState(action, null);
   if (result?.ok)
     return (
-      <div
-        role="status"
-        className="rounded border border-emerald-300 bg-emerald-50 p-4 text-emerald-900"
-      >
-        <p className="font-medium">
-          {result.decision === 'approve'
+      <InlineNotice
+        tone="success"
+        title={
+          result.decision === 'approve'
             ? `You approved this ${noun}.`
-            : `You rejected this ${noun}.`}
-        </p>
-        <p className="mt-1 text-sm">
+            : `You rejected this ${noun}.`
+        }
+      >
+        <p className="text-sm">
           {selfReview ? '' : 'The requester was notified in OpsKnight. '}
           {result.decision === 'approve'
             ? `${selfReview ? 'Your' : 'Their'} assistant can now apply it once.`
             : 'Nothing was changed.'}
         </p>
-      </div>
+        <Link
+          href={mcpHref({ tab: 'approvals' })}
+          className="mt-2 inline-block text-sm font-medium underline underline-offset-4"
+        >
+          Back to approvals
+        </Link>
+      </InlineNotice>
     );
   return (
     <form action={formAction} className="space-y-4">
@@ -128,12 +138,9 @@ export default function ReviewForm({
         </p>
       </div>
       {result && !result.ok && (
-        <div
-          role="alert"
-          className="rounded border border-amber-300 bg-amber-50 p-4 text-amber-900"
-        >
+        <InlineNotice tone="error" urgency="assertive">
           <p className="text-sm">{reviewMessage(result.code)}</p>
-        </div>
+        </InlineNotice>
       )}
       <Buttons
         noun={noun}

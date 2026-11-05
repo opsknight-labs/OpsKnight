@@ -22,7 +22,7 @@ Start with **Test connection** on the Overview tab of **Settings → Integration
 
 Tool errors carry a structured `error` object: `code`, optional `domainCode` (a code from the application error registry), `fields` (which input failed and why), `retryable`, `retryAfterSeconds`, `hint` and `requestId`. The `requestId` is also the `X-Request-Id` response header and appears in server log entries, so support can find the exact request. Problem titles and details from the application are never forwarded.
 
-This page lists 100 MCP codes and 21 log events found in the source.
+This page lists 100 MCP codes and 22 log events found in the source.
 
 ## Connecting and signing in
 
@@ -102,7 +102,7 @@ This page lists 100 MCP codes and 21 log events found in the source.
 | <a id="MCP_APPROVER_REQUIRED"></a>`MCP_APPROVER_REQUIRED` | The signed-in person cannot approve runbook runs. | Ask someone with the runbook approve permission (Responders and Administrators by default). |
 | <a id="MCP_DISTINCT_REVIEWER_REQUIRED"></a>`MCP_DISTINCT_REVIEWER_REQUIRED` | Someone tried to approve their own request without being an administrator, or the request was made with a personal access token, which always needs a second person. | Ask a second person with approval rights to review it. |
 | <a id="MCP_REVIEWER_NOT_AUTHORIZED"></a>`MCP_REVIEWER_NOT_AUTHORIZED` | Configuration changes need an active administrator who holds every permission the change needs. | Ask an administrator to review it. |
-| <a id="MCP_APPROVAL_EXPIRED"></a>`MCP_APPROVAL_EXPIRED` | The request was not reviewed within the review window, or was approved but not applied within the commit window. | Prepare the change again with a new idempotencyKey. Administrators can lengthen both windows under Access policy → Advanced → Reviewed actions. |
+| <a id="MCP_APPROVAL_EXPIRED"></a>`MCP_APPROVAL_EXPIRED` | The request was not reviewed within the review window, or was approved but not applied within the commit window. | Prepare the change again with a new idempotencyKey. Administrators can lengthen both windows under Access policy → Reviewed actions. |
 | <a id="MCP_APPROVAL_UNAVAILABLE"></a>`MCP_APPROVAL_UNAVAILABLE` | No such approval for this connection and person (another grant or user cannot see it). | Use the approval ID returned by the prepare call, from the same connection. |
 | <a id="MCP_REVIEWER_CHANGED"></a>`MCP_REVIEWER_CHANGED` | The reviewer's account or session changed while reviewing. | Reload the review page and decide again. |
 | <a id="MCP_AUTHORITY_CHANGED"></a>`MCP_AUTHORITY_CHANGED` | The requester's connection or permissions changed after the request was made. | The requester reconnects if needed and prepares the change again. |
@@ -204,6 +204,7 @@ Search the application log for these event names. Entries never contain tokens, 
 | <a id="mcp.authorize.client_denied"></a>`mcp.authorize.client_denied` | warn | Sign-in refused the assistant. `reason`: unknown_client_id, client_revoked, automatic_connections_off and similar, or no_scopes_allowed_for_this_client (the ceiling and role leave nothing). | `src/app/oauth/mcp/authorize/route.ts` |
 | <a id="mcp.authorize.invalid_request"></a>`mcp.authorize.invalid_request` | warn | The authorization request failed validation. `fields` lists the parameters (never their values). | `src/app/oauth/mcp/authorize/route.ts` |
 | <a id="mcp.authorize.unexpected_error"></a>`mcp.authorize.unexpected_error` | warn | An unexpected error on the authorization endpoint. `name` is the error class. | `src/app/oauth/mcp/authorize/route.ts` |
+| <a id="mcp.call_log.write_failed"></a>`mcp.call_log.write_failed` | warn | A batch of activity-log rows could not be written and was dropped (counted in `opsknight_mcp_call_log_dropped_total`). `rows` is the batch size, `errorName` the error class. | `src/lib/mcp/core/call-log.ts` |
 | <a id="mcp.cimd.client_denied"></a>`mcp.cimd.client_denied` | warn | A metadata-document assistant was refused by policy. `reason`: automatic_connections_off, host_not_in_allowlist or no_scopes. | `src/lib/mcp/auth/cimd.ts` |
 | <a id="mcp.cimd.client_id_rejected"></a>`mcp.cimd.client_id_rejected` | warn | The client_id is not a canonical HTTPS URL (`reason`: not_canonical_https_url). | `src/lib/mcp/auth/cimd.ts` |
 | <a id="mcp.cimd.document_rejected"></a>`mcp.cimd.document_rejected` | warn | The metadata document was fetched but refused. `reason` names the check, such as http_status_404 or content_type_not_json. | `src/lib/mcp/auth/cimd.ts` |
