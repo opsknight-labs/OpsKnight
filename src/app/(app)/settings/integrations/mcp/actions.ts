@@ -171,7 +171,7 @@ export type McpConnectionCheck =
 
 /**
  * The Connect tab's "Check connection": the viewer's own newest live connection from the last
- * 15 minutes. Client name and time only, never tokens or scopes; any signed-in person may ask
+ * 15 minutes (OAuth sign-ins only). Client name and time only, never tokens or scopes; any signed-in person may ask
  * about their own connections.
  */
 export async function checkMcpConnection(): Promise<McpConnectionCheck> {
@@ -180,6 +180,8 @@ export async function checkMcpConnection(): Promise<McpConnectionCheck> {
   const grant = await prisma.mcpGrant.findFirst({
     where: {
       userId: user.id,
+      // An assistant's sign-in, not a personal access token the viewer created.
+      kind: 'OAUTH',
       revokedAt: null,
       expiresAt: { gt: new Date(now) },
       createdAt: { gte: new Date(now - CONNECTION_CHECK_WINDOW_MS) },

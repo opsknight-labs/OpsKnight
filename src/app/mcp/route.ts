@@ -286,15 +286,17 @@ async function handlePost(request: Request, requestId: string, browserOrigin: st
       return await openListenStream(request, body, context, identity, subscribedUris);
     }
     // Step-up (opt-in): a call this connection lacks a grantable permission for gets an HTTP 403
-    // insufficient_scope challenge, so a supporting client re-opens consent for just that.
-    const stepUp = identity.policy.scopeStepUpEnabled
-      ? stepUpScopes(identity.auth.actor, {
-          clientScopes: identity.clientScopes,
-          policy: identity.policy,
-          method: body.method,
-          params: body.params,
-        })
-      : null;
+    // insufficient_scope challenge, so a supporting client re-opens consent for just that. A
+    // personal access token has no consent to re-open, so it keeps the plain tool error.
+    const stepUp =
+      identity.policy.scopeStepUpEnabled && identity.kind !== 'PAT'
+        ? stepUpScopes(identity.auth.actor, {
+            clientScopes: identity.clientScopes,
+            policy: identity.policy,
+            method: body.method,
+            params: body.params,
+          })
+        : null;
     if (stepUp) {
       outcome = 'protocol_rejected';
       const error = new McpBoundaryError('MCP_INSUFFICIENT_SCOPE', 403);

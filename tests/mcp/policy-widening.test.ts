@@ -32,6 +32,10 @@ const base: McpPolicyAccess = {
   sessionIdleDays: 30,
   approvalTtlMinutes: 240,
   approvalCommitWindowMinutes: 30,
+  patEnabled: false,
+  patMaxDays: 30,
+  patAllowedScopes: ['incidents:read'],
+  requireReadOnlyConnections: false,
 };
 
 describe('mcpPolicyWidening', () => {
@@ -46,6 +50,22 @@ describe('mcpPolicyWidening', () => {
     expect(
       mcpPolicyWidening(base, { ...base, allowedBrowserOrigins: ['http://localhost:6274'] })
     ).toEqual(['allowedBrowserOrigins']);
+  });
+
+  it('treats turning personal tokens on, raising their limits or lifting view-only as widening', () => {
+    expect(mcpPolicyWidening(base, { ...base, patEnabled: true })).toEqual(['patEnabled']);
+    const pat = { ...base, patEnabled: true };
+    expect(mcpPolicyWidening(pat, { ...pat, patMaxDays: 60 })).toEqual(['patMaxDays']);
+    expect(
+      mcpPolicyWidening(pat, { ...pat, patAllowedScopes: ['incidents:read', 'incidents:write'] })
+    ).toEqual(['patAllowedScopes']);
+    // Limits on a switched-off feature give nobody anything.
+    expect(mcpPolicyWidening(base, { ...base, patMaxDays: 90 })).toEqual([]);
+    expect(mcpPolicyWidening({ ...base, requireReadOnlyConnections: true }, base)).toEqual([
+      'requireReadOnlyConnections',
+    ]);
+    expect(mcpPolicyWidening(base, { ...base, requireReadOnlyConnections: true })).toEqual([]);
+    expect(mcpPolicyWidening(pat, base)).toEqual([]);
   });
 
   it('treats emptying the trusted-host list, or adding a host while CIMD is on, as widening', () => {

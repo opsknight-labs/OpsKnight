@@ -5,6 +5,7 @@ import { createTestUser, resetDatabase, testPrisma as db } from '../helpers/test
 import { digestMcpSecret, mcpResource, resetMcpRuntimeForTests } from '@/lib/mcp/auth/config';
 import { resetMcpAdmissionForTests } from '@/lib/mcp/auth/admission';
 import { clearDiscoveryPolicyCache } from '@/lib/mcp/auth/discovery-policy';
+import { MCP_PAT_CLIENT_ID } from '@/lib/mcp/auth/effective-access';
 import { POST, OPTIONS } from '@/app/mcp/route';
 import { POST as token, OPTIONS as tokenPreflight } from '@/app/oauth/mcp/token/route';
 import { POST as register } from '@/app/oauth/mcp/register/route';
@@ -61,6 +62,9 @@ const basePolicy = {
   requestsPerMinute: 600,
   allowedBrowserOrigins: [] as string[],
   scopeStepUpEnabled: false,
+  patEnabled: false,
+  patAllowedScopes: [] as string[],
+  disabledCapabilities: [] as string[],
 };
 beforeEach(async () => {
   resetMcpRuntimeForTests();
@@ -318,6 +322,33 @@ describe('D2: step-up consent', () => {
     );
     // A granted call and discovery pass through.
     expect((await mcp({ authorization: `Bearer ${second.bearer}` })).status).toBe(200);
+  });
+
+  it('never challenges a personal access token, which has no consent to re-open', async () => {
+    await enableStepUp();
+    const { bearer, grant } = await bearerFor(['services:read'], ['services:read']);
+    await db.mcpClient.upsert({
+      where: { id: MCP_PAT_CLIENT_ID },
+      create: {
+        id: MCP_PAT_CLIENT_ID,
+        name: 'Personal access token',
+        redirectUris: [],
+        scopes: [],
+      },
+      update: {},
+    });
+    await db.mcpGrant.update({
+      where: { id: grant.id },
+      data: { kind: 'PAT', clientId: MCP_PAT_CLIENT_ID },
+    });
+    // The personal-token ceiling would allow incidents:read, but no sign-in can add it.
+    await db.mcpPolicy.update({
+      where: { id: 'default' },
+      data: { patEnabled: true, patAllowedScopes: ['services:read', 'incidents:read'] },
+    });
+    const response = await mcp({ authorization: `Bearer ${bearer}` }, getIncident());
+    expect(response.status).toBe(200);
+    expect(response.headers.get('www-authenticate')).toBeNull();
   });
 
   it('hands the SDK the authenticated token facts as authInfo', async () => {

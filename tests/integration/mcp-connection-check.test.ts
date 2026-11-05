@@ -21,7 +21,7 @@ beforeAll(async () => {
 async function grant(
   userId: string,
   clientName: string,
-  options: { minutesAgo: number; revoked?: boolean; expired?: boolean }
+  options: { minutesAgo: number; revoked?: boolean; expired?: boolean; personal?: boolean }
 ) {
   const client = await db.mcpClient.create({
     data: { name: clientName, scopes: ['incidents:read'], redirectUris: ['http://localhost/cb'] },
@@ -29,6 +29,7 @@ async function grant(
   const createdAt = new Date(Date.now() - options.minutesAgo * 60_000);
   return db.mcpGrant.create({
     data: {
+      ...(options.personal ? { kind: 'PAT' } : {}),
       clientId: client.id,
       userId,
       userTokenVersion: 0,
@@ -53,6 +54,8 @@ describe('checkMcpConnection', () => {
     await grant(me.id, 'Revoked', { minutesAgo: 1, revoked: true });
     await grant(me.id, 'Expired', { minutesAgo: 1, expired: true });
     await grant(other.id, 'Someone else', { minutesAgo: 0 });
+    // A personal access token the viewer just created is not an assistant connecting.
+    await grant(me.id, 'Personal access token', { minutesAgo: 0, personal: true });
     expect(await checkMcpConnection()).toEqual({ connected: false });
 
     await grant(me.id, 'Older live', { minutesAgo: 10 });

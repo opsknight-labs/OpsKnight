@@ -24,6 +24,10 @@ export interface McpPolicyAccess {
   sessionIdleDays: number;
   approvalTtlMinutes: number;
   approvalCommitWindowMinutes: number;
+  patEnabled: boolean;
+  patMaxDays: number;
+  patAllowedScopes: readonly string[];
+  requireReadOnlyConnections: boolean;
 }
 
 type Access = McpPolicyAccess;
@@ -33,6 +37,9 @@ const SWITCHES: [string, (policy: Access) => boolean][] = [
   ['sensitiveReadsEnabled', policy => policy.sensitiveReadsEnabled],
   ['dcrEnabled', policy => policy.dcrEnabled],
   ['cimdEnabled', policy => policy.cimdEnabled],
+  ['patEnabled', policy => policy.patEnabled],
+  // Lifting the view-only cap lets every connection use its change scopes again.
+  ['requireReadOnlyConnections', policy => !policy.requireReadOnlyConnections],
 ];
 const LIMITS: [string, (policy: Access) => number][] = [
   ['requestsPerMinute', policy => policy.requestsPerMinute],
@@ -55,6 +62,10 @@ export function mcpPolicyWidening(before: McpPolicyAccess, after: McpPolicyAcces
   if (gains(before.cimdScopes, after.cimdScopes)) widened.push('cimdScopes');
   if (gains(before.allowedBrowserOrigins, after.allowedBrowserOrigins))
     widened.push('allowedBrowserOrigins');
+  // Personal-token limits matter only while personal tokens can be created.
+  if (after.patEnabled && after.patMaxDays > before.patMaxDays) widened.push('patMaxDays');
+  if (after.patEnabled && gains(before.patAllowedScopes, after.patAllowedScopes))
+    widened.push('patAllowedScopes');
   // An empty trusted-host list allows any public host; adding a host while CIMD is on trusts it.
   if (
     (before.cimdAllowedHosts.length > 0 && after.cimdAllowedHosts.length === 0) ||

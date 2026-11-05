@@ -36,17 +36,6 @@
     "descriptionSha256": "decdcfe686eb3ac6220e1bcc5000ead07decc1a7a01f5959064d70948667a0bc"
   },
   {
-    "name": "call_operation",
-    "title": "Change OpsKnight data",
-    "annotations": {
-      "readOnlyHint": false,
-      "destructiveHint": true,
-      "openWorldHint": false
-    },
-    "inputSchemaSha256": "3bee753b4c8123dde1b0df7d6219787dba17d1c95de0ca34a6b452a301616b86",
-    "descriptionSha256": "f7afec0ea41a9839a60455b430f8e4067e744460152eef2b611b728ea29d21e7"
-  },
-  {
     "name": "describe_operation",
     "title": "Describe an operation",
     "annotations": {
