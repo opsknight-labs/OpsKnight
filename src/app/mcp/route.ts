@@ -174,6 +174,7 @@ async function handlePost(request: Request, requestId: string) {
     const context = {
       grantId: identity.grantId,
       credentialId: identity.credentialId,
+      credentialKind: identity.kind,
       tokenScopes: identity.tokenScopes,
       requestId,
       budget,

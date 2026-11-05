@@ -11,6 +11,8 @@ export function inAppNotificationHref(notification: {
   if (entityType === 'SSO_LINK_REQUEST')
     return '/settings/system?section=sso&authTab=access&linking=requested';
   if (!entityId) return null;
+  // A personal access token about to expire: its owner's connections list.
+  if (entityType === 'MCP_PERSONAL_TOKEN') return '/settings/integrations/mcp?tab=connections';
   if (entityType === 'MCP_APPROVAL') {
     // Operation approvals are cuids; runbook previews are 64-character hex digests.
     if (/^[a-f0-9]{64}$/.test(entityId)) return `/settings/integrations/mcp/approvals/${entityId}`;

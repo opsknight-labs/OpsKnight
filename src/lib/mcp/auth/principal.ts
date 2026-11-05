@@ -23,6 +23,9 @@ interface GrantAuthoritySnapshot extends GrantAccessSnapshot {
   disabledCapabilities: string[] | null;
 }
 
+/** OAUTH: an assistant's consent. PAT: a personal access token (one token, never refreshed). */
+export type McpCredentialKind = 'OAUTH' | 'PAT';
+
 /** The runtime switches and bounds of the MCP policy, read with the grant in one statement. */
 export interface McpRuntimePolicy {
   enabled: boolean;
@@ -150,6 +153,9 @@ interface BearerSnapshot extends Partial<GrantAuthoritySnapshot> {
 /**
  * The bearer's token, its grant's authority and the policy in one statement. The grant side is
  * outer-joined so a known token with a failing grant is still told apart from an unknown one.
+ * OAuth access tokens and personal access tokens share this lookup: a personal token is the
+ * access secret of its grant's only token, so revocation, quota and the last-call column apply
+ * to both unchanged; the grant kind selects the ceiling (effective-access.ts).
  */
 async function resolveBearer(accessHash: string) {
   const [row] = await prisma.$queryRaw<BearerSnapshot[]>`
@@ -170,7 +176,13 @@ export async function authenticateMcp(request: Request, cost: number | null) {
   // The policy is read with the grant. A disabled MCP still answers MCP_DISABLED ahead of any
   // credential error, so a failure reads the policy on its own before reporting the cause.
   let resolved: Awaited<ReturnType<typeof resolveMcpGrantWithPolicy>>;
-  let token: { id: string; grantId: string; scopes: string[]; lastUsedAt: Date | null };
+  let token: {
+    id: string;
+    grantId: string;
+    scopes: string[];
+    lastUsedAt: Date | null;
+    kind: McpCredentialKind;
+  };
   admitMcpBearer(request);
   // Only a credential OpsKnight never issued counts against the peer. An expired or revoked token
   // is a normal refresh, and many users can share one egress address (claude.ai), so counting it
@@ -188,6 +200,7 @@ export async function authenticateMcp(request: Request, cost: number | null) {
       grantId: row.tokenGrantId,
       scopes: row.tokenScopes,
       lastUsedAt: row.lastUsedAt,
+      kind: row.grantKind === 'PAT' ? 'PAT' : 'OAUTH',
     };
     // The same checks as resolveMcpGrantWithPolicy, judged on the row read with the token.
     resolved = authorityFrom(row.grantId ? (row as GrantAuthoritySnapshot) : undefined, now);
@@ -223,6 +236,8 @@ export async function authenticateMcp(request: Request, cost: number | null) {
     grantId: token.grantId,
     credentialId: token.id,
     tokenScopes: token.scopes,
+    /** A personal access token never approves its own requests. */
+    kind: token.kind,
     policy,
   };
 }
