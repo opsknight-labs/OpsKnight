@@ -190,7 +190,7 @@ describe('F4: MCP docs are findable', () => {
     );
   });
 
-  it('marks only Claude Code as verified in the compatibility matrix', () => {
+  const compatibility = () => {
     const guide = readFileSync('docs/v2.2.0/guides/mcp/self-hosted-setup.md', 'utf8');
     const rows = guide
       .split('## Client compatibility')[1]
@@ -199,7 +199,7 @@ describe('F4: MCP docs are findable', () => {
       .filter(
         line => line.startsWith('| ') && !line.startsWith('| Client') && !line.startsWith('| ---')
       );
-    const status = new Map(
+    return new Map(
       rows.map(
         line =>
           line
@@ -208,26 +208,88 @@ describe('F4: MCP docs are findable', () => {
             .slice(1, 3) as [string, string]
       )
     );
+  };
+
+  it('lists every client the Connect tab covers, none verified without recorded evidence', () => {
+    const status = compatibility();
     expect([...status.keys()]).toEqual([
       'Claude Code',
       'Claude (web and desktop apps)',
       'ChatGPT',
       'Cursor',
       'VS Code',
+      'Codex CLI',
+      'Gemini CLI',
+      'Windsurf',
     ]);
-    for (const [client, value] of status)
-      expect(value, client).toBe(
-        client === 'Claude Code' ? 'Verified' : 'Expected (2025 revisions supported)'
-      );
+    for (const client of ['Codex CLI', 'Gemini CLI', 'Windsurf'])
+      expect(status.get(client), client).toBe('Expected (not verified)');
+    for (const client of ['Claude (web and desktop apps)', 'ChatGPT', 'Cursor', 'VS Code'])
+      expect(status.get(client), client).toBe('Expected (2025 revisions supported)');
+  });
+
+  it('ties every Tested or Verified status to a recorded live checkpoint (CERT-05)', () => {
+    const certification = readFileSync('docs/v2.2.0/operate/mcp/certification.md', 'utf8');
+    const checkpoint = certification.split('## Live client checkpoint')[1]?.split('\n## ')[0];
+    expect(checkpoint).toBeTruthy();
+    const entries = checkpoint!.split('\n### ').slice(1);
+    const CHECKS = [
+      'Registration',
+      'Consent',
+      'tools/list',
+      'Scoped read',
+      'Refresh',
+      'Role change',
+      'Revocation',
+    ];
+    let evidenced = 0;
+    for (const [client, value] of compatibility()) {
+      const tested = /^Tested \((v\d+\.\d+\.\d+), (\d{4}-\d{2}-\d{2})\)$/.exec(value);
+      const verified = /^Verified \((.+) (\d+\.\d+\.\d+), (\d{4}-\d{2}-\d{2})\)$/.exec(value);
+      if (value.startsWith('Expected')) continue;
+      expect(tested ?? verified, `${client}: "${value}" names no version and date`).toBeTruthy();
+      if (tested) {
+        const [, version, date] = tested;
+        expect(
+          entries.some(entry => entry.split('\n')[0].includes(version) && entry.includes(date)),
+          `${client}: no checkpoint for ${version} on ${date}`
+        ).toBe(true);
+      } else {
+        const [, , version, date] = verified!;
+        const entry = entries.find(
+          candidate => candidate.includes(version) && candidate.includes(date)
+        );
+        expect(entry, `${client}: no checkpoint for ${version} on ${date}`).toBeTruthy();
+        expect(entry).toMatch(/\b[0-9a-f]{40}\b/);
+        expect(entry).toMatch(
+          /\b20\d{2}-\d{2}-\d{2}\b.*revision|revision.*\b20\d{2}-\d{2}-\d{2}\b/is
+        );
+        for (const check of CHECKS)
+          expect(entry!.includes(`- ${check}: pass`), `${client}: ${check}`).toBe(true);
+      }
+      evidenced++;
+    }
+    // Claude Code carries recorded evidence; nothing else claims any.
+    expect(evidenced).toBe(1);
   });
 
   it('shows the same setup commands as the Connect tab', () => {
     const guide = readFileSync('docs/v2.2.0/guides/mcp/self-hosted-setup.md', 'utf8');
-    const commands = mcpSetupCommands('https://ops.your-company.com/mcp');
-    expect(guide).toContain(commands.claudeCode);
-    expect(guide).toContain(commands.vscode);
-    expect(guide).toContain(commands.doctor);
-    expect(guide).toContain(commands.doctorDocker);
+    const commands = mcpSetupCommands('https://ops.your-company.com/mcp', '2.2.0');
+    for (const command of [
+      commands.claudeCode,
+      commands.vscode,
+      commands.codex,
+      commands.codexLogin,
+      commands.geminiCli,
+      commands.doctor,
+      commands.doctorSource,
+      commands.doctorDocker,
+      commands.doctorKubernetes,
+    ])
+      expect(guide).toContain(command);
+    // The no-checkout doctor comes first: it works from a laptop outside the network.
+    expect(guide.indexOf(commands.doctor)).toBeLessThan(guide.indexOf(commands.doctorSource));
   });
 });
 

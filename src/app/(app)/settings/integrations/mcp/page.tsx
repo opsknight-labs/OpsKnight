@@ -36,6 +36,7 @@ import McpCapabilityControls from './components/McpCapabilityControls';
 import { DEFAULT_ASSISTANT_SCOPES } from '@/lib/mcp/auth/client-policy';
 import { describeMcpScope, supportedMcpScopes } from '@/lib/mcp/auth/scopes';
 import {
+  checkMcpConnection,
   enableMcpQuickSetup,
   registerMcpClient,
   restoreMcpClient,
@@ -368,6 +369,7 @@ export default async function McpSettings({
             endpoint={endpoint}
             sessionIdleDays={policy?.sessionIdleDays ?? null}
             hrefs={hrefs}
+            checkConnection={checkMcpConnection}
           />
         );
       case 'connections': {

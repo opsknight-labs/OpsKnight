@@ -124,6 +124,35 @@ export async function testMcpConnection() {
   return runMcpSetupCheck();
 }
 
+/** Recent enough to be the sign-in the person just finished on the Connect tab. */
+const CONNECTION_CHECK_WINDOW_MS = 15 * 60_000;
+
+export type McpConnectionCheck =
+  { connected: false } | { connected: true; client: string; createdAt: string };
+
+/**
+ * The Connect tab's "Check connection": the viewer's own newest live connection from the last
+ * 15 minutes. Client name and time only, never tokens or scopes; any signed-in person may ask
+ * about their own connections.
+ */
+export async function checkMcpConnection(): Promise<McpConnectionCheck> {
+  const user = await getCurrentUser();
+  const now = Date.now();
+  const grant = await prisma.mcpGrant.findFirst({
+    where: {
+      userId: user.id,
+      revokedAt: null,
+      expiresAt: { gt: new Date(now) },
+      createdAt: { gte: new Date(now - CONNECTION_CHECK_WINDOW_MS) },
+    },
+    orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+    select: { createdAt: true, client: { select: { name: true } } },
+  });
+  return grant
+    ? { connected: true, client: grant.client.name, createdAt: grant.createdAt.toISOString() }
+    : { connected: false };
+}
+
 /** Re-allow a revoked client. Its old grants stay revoked, so users sign in again. */
 export async function restoreMcpClient(form: FormData): Promise<McpClientFormResult> {
   const actor = await admin();

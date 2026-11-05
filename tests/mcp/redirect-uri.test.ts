@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { redirectUriAllowed, urlForLog } from '@/lib/mcp/auth/redirect-uri';
 
@@ -48,5 +49,15 @@ describe('urlForLog', () => {
   it('keeps a registered client id as it is, bounded', () => {
     expect(urlForLog('cmvt5fuwj034tm9k62fcz9r4z')).toBe('cmvt5fuwj034tm9k62fcz9r4z');
     expect(urlForLog('x'.repeat(400))).toHaveLength(256);
+  });
+});
+
+describe('catalog wording (INT-13)', () => {
+  it('describes the any-port loopback rule the code applies, not "ephemeral ports are unsupported"', () => {
+    const catalog = readFileSync('docs/v2.2.0/reference/mcp/catalog.md', 'utf8');
+    expect(catalog).not.toMatch(/ephemeral ports are unsupported/i);
+    expect(catalog).toContain('same host, path and query on any port');
+    // The behaviour the sentence describes.
+    expect(redirectUriAllowed(['http://127.0.0.1/cb'], 'http://127.0.0.1:61234/cb')).toBe(true);
   });
 });

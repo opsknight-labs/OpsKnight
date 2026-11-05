@@ -17,7 +17,7 @@ const docsHrefs = () =>
 
 describe('F4: in-app links to the MCP documentation', () => {
   it('the Connect guide links to setup, troubleshooting and permissions', () => {
-    render(<McpConnectGuide endpoint="https://ops.example.com/mcp" />);
+    render(<McpConnectGuide endpoint="https://ops.example.com/mcp" version="2.2.0" />);
     expect(docsHrefs()).toEqual([
       MCP_DOCS_LINKS.guide,
       MCP_DOCS_LINKS.troubleshooting,
