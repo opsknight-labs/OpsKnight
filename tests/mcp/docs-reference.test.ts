@@ -124,6 +124,21 @@ describe('F3: generated MCP reference pages', () => {
     );
   });
 
+  it('states the real status of every operation that is not available', () => {
+    const rows = renderPermissions()
+      .split('\n')
+      .filter(line => line.includes('| not available'));
+    expect(rows.length).toBeGreaterThan(0);
+    for (const row of rows)
+      expect(row).not.toMatch(/eligible|approval batch|needs |review .*projection/);
+    expect(rows.find(row => row.includes('`createReportExport`'))).toContain(
+      'not exposed, reason recorded in the catalog'
+    );
+    expect(rows.find(row => row.includes('`createServiceAccount`'))).toContain(
+      'restricted to native administration'
+    );
+  });
+
   it('keeps the catalog counts and the coverage table in step with the registry (DX-12)', () => {
     const catalog = readFileSync('docs/v2.2.0/reference/mcp/catalog.md', 'utf8');
     const counts = renderCatalogCounts();

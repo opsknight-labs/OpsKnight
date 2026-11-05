@@ -142,9 +142,9 @@ Every REST v2 operation by area: how many an assistant can use directly (curated
 
 | Operation | How an assistant reaches it |
 | --- | --- |
-| `createAuditExport` | not available: needs reauth impact preview and postcondition |
-| `downloadAuditExport` | not available: review private read projection |
-| `getAuditExport` | not available: review private read projection |
+| `createAuditExport` | not available: restricted to native administration (exclusion review pending) |
+| `downloadAuditExport` | not available: restricted to native administration (exclusion review pending) |
+| `getAuditExport` | not available: restricted to native administration (exclusion review pending) |
 
 ### audit-logs
 
@@ -168,7 +168,7 @@ Every REST v2 operation by area: how many an assistant can use directly (curated
 | --- | --- |
 | `createReportDashboard` | `operation_prepare`, then approval |
 | `deleteReportDashboard` | `operation_prepare`, then approval |
-| `downloadReportDashboardData` | not available: review read projection |
+| `downloadReportDashboardData` | not available: not exposed, reason recorded in the catalog (exclusion review pending) |
 | `duplicateReportDashboard` | `operation_prepare`, then approval |
 | `getReportDashboard` | `read_operation` (sensitive reads on) |
 | `getReportDashboardData` | `read_operation` (sensitive reads on) |
@@ -240,13 +240,13 @@ Every REST v2 operation by area: how many an assistant can use directly (curated
 | Operation | How an assistant reaches it |
 | --- | --- |
 | `deleteIntegration` | `operation_prepare`, then approval |
-| `getIntegration` | not available: review read projection |
-| `getIntegrationCredentialState` | not available: review private read projection |
+| `getIntegration` | not available: not exposed, reason recorded in the catalog (exclusion review pending) |
+| `getIntegrationCredentialState` | not available: restricted to native administration (exclusion review pending) |
 | `getIntegrationDiagnostics` | `read_operation` |
 | `getIntegrationUsage` | `read_operation` (sensitive reads on) |
 | `listIntegrationTypes` | `read_operation` (sensitive reads on) |
 | `listIntegrations` | `read_operation` (sensitive reads on) |
-| `rotateIntegrationCredentials` | not available: needs reauth impact preview and postcondition |
+| `rotateIntegrationCredentials` | not available: restricted to native administration (exclusion review pending) |
 | `updateIntegration` | `operation_prepare`, then approval |
 | `validateIntegrationConfiguration` | `read_operation` (sensitive reads on) |
 | `validateIntegrationPayload` | `read_operation` (sensitive reads on) |
@@ -255,12 +255,12 @@ Every REST v2 operation by area: how many an assistant can use directly (curated
 
 | Operation | How an assistant reaches it |
 | --- | --- |
-| `configureNotificationProvider` | not available: needs reauth impact preview and postcondition |
-| `getNotificationProvider` | not available: review private read projection |
-| `getNotificationProviderDiagnostics` | not available: review private read projection |
-| `listNotificationProviders` | not available: review private read projection |
-| `rotateWebPushKeys` | not available: needs reauth impact preview and postcondition |
-| `testNotificationProvider` | not available: needs reauth impact preview and postcondition |
+| `configureNotificationProvider` | not available: restricted to native administration (exclusion review pending) |
+| `getNotificationProvider` | not available: restricted to native administration (exclusion review pending) |
+| `getNotificationProviderDiagnostics` | not available: restricted to native administration (exclusion review pending) |
+| `listNotificationProviders` | not available: restricted to native administration (exclusion review pending) |
+| `rotateWebPushKeys` | not available: restricted to native administration (exclusion review pending) |
+| `testNotificationProvider` | not available: restricted to native administration (exclusion review pending) |
 
 ### notifications
 
@@ -300,14 +300,14 @@ Every REST v2 operation by area: how many an assistant can use directly (curated
 
 | Operation | How an assistant reaches it |
 | --- | --- |
-| `cancelReportExport` | not available: eligible for approval batch with family tests |
-| `createReportExport` | not available: eligible for approval batch with family tests |
+| `cancelReportExport` | not available: not exposed, reason recorded in the catalog (exclusion review pending) |
+| `createReportExport` | not available: not exposed, reason recorded in the catalog (exclusion review pending) |
 | `createSavedReport` | `operation_prepare`, then approval |
 | `deleteSavedReport` | `operation_prepare`, then approval |
-| `downloadReportExport` | not available: review read projection |
+| `downloadReportExport` | not available: not exposed, reason recorded in the catalog (exclusion review pending) |
 | `getMetricsReport` | `read_operation` (sensitive reads on) |
 | `getReportCatalog` | `read_operation` |
-| `getReportExport` | not available: review read projection |
+| `getReportExport` | not available: not exposed, reason recorded in the catalog (exclusion review pending) |
 | `getSavedReport` | `report_get_summary` |
 | `listSavedReports` | `read_operation` |
 | `queryReportMetrics` | `read_operation` (sensitive reads on) |
@@ -317,62 +317,62 @@ Every REST v2 operation by area: how many an assistant can use directly (curated
 
 | Operation | How an assistant reaches it |
 | --- | --- |
-| `activateRunbookSigningIdentity` | not available: needs reauth impact preview and postcondition |
+| `activateRunbookSigningIdentity` | not available: restricted to native administration (exclusion review pending) |
 | `approveRunbookExecutionStep` | `operation_prepare`, then approval |
 | `archiveRunbook` | `operation_prepare`, then approval |
 | `cancelRunbookExecution` | `operation_prepare`, then approval |
-| `checkRunbookAgentPoolDeletion` | not available: review private read projection |
+| `checkRunbookAgentPoolDeletion` | not available: restricted to native administration (exclusion review pending) |
 | `checkRunbookDeletion` | `read_operation` (sensitive reads on) |
 | `compareRunbookVersions` | `read_operation` (sensitive reads on) |
 | `createRunbook` | `operation_prepare`, then approval |
-| `createRunbookAgentEnrollment` | not available: needs reauth impact preview and postcondition |
-| `createRunbookAgentPool` | not available: needs reauth impact preview and postcondition |
+| `createRunbookAgentEnrollment` | not available: restricted to native administration (exclusion review pending) |
+| `createRunbookAgentPool` | not available: restricted to native administration (exclusion review pending) |
 | `createRunbookDraft` | `operation_prepare`, then approval |
-| `createRunbookSecret` | not available: needs reauth impact preview and postcondition |
-| `deleteRunbook` | not available: needs reauth impact preview and postcondition |
-| `deleteRunbookAgentPool` | not available: needs reauth impact preview and postcondition |
+| `createRunbookSecret` | not available: restricted to native administration (exclusion review pending) |
+| `deleteRunbook` | not available: restricted to native administration (exclusion review pending) |
+| `deleteRunbookAgentPool` | not available: restricted to native administration (exclusion review pending) |
 | `duplicateRunbook` | `operation_prepare`, then approval |
 | `executeRunbook` | `runbook_prepare_execution`, then `runbook_execute_approved` |
 | `getRunbook` | `read_operation` |
-| `getRunbookAgent` | not available: review private read projection |
-| `getRunbookAgentConfiguration` | not available: review private read projection |
-| `getRunbookAgentEnrollment` | not available: review private read projection |
-| `getRunbookAgentPolicyStatus` | not available: review private read projection |
-| `getRunbookAgentPool` | not available: review private read projection |
+| `getRunbookAgent` | not available: restricted to native administration (exclusion review pending) |
+| `getRunbookAgentConfiguration` | not available: restricted to native administration (exclusion review pending) |
+| `getRunbookAgentEnrollment` | not available: restricted to native administration (exclusion review pending) |
+| `getRunbookAgentPolicyStatus` | not available: restricted to native administration (exclusion review pending) |
+| `getRunbookAgentPool` | not available: restricted to native administration (exclusion review pending) |
 | `getRunbookDraft` | `read_operation` (sensitive reads on) |
 | `getRunbookExecution` | `runbook_get_execution` |
 | `getRunbookMetadata` | `read_operation` |
-| `getRunbookSecret` | not available: review private read projection |
-| `grantRunbookSecret` | not available: needs reauth impact preview and postcondition |
-| `listRunbookAgentPoolMembers` | not available: review private read projection |
-| `listRunbookAgentPools` | not available: review private read projection |
-| `listRunbookAgents` | not available: review private read projection |
+| `getRunbookSecret` | not available: restricted to native administration (exclusion review pending) |
+| `grantRunbookSecret` | not available: restricted to native administration (exclusion review pending) |
+| `listRunbookAgentPoolMembers` | not available: restricted to native administration (exclusion review pending) |
+| `listRunbookAgentPools` | not available: restricted to native administration (exclusion review pending) |
+| `listRunbookAgents` | not available: restricted to native administration (exclusion review pending) |
 | `listRunbookExecutionEvents` | `read_operation` (sensitive reads on) |
 | `listRunbookExecutionEvidence` | `read_operation` (sensitive reads on) |
 | `listRunbookExecutionSteps` | `read_operation` (sensitive reads on) |
 | `listRunbookExecutions` | `read_operation` |
-| `listRunbookSecretGrants` | not available: review private read projection |
-| `listRunbookSecretUsage` | not available: review private read projection |
-| `listRunbookSecrets` | not available: review private read projection |
-| `listRunbookSigningIdentities` | not available: review private read projection |
+| `listRunbookSecretGrants` | not available: restricted to native administration (exclusion review pending) |
+| `listRunbookSecretUsage` | not available: restricted to native administration (exclusion review pending) |
+| `listRunbookSecrets` | not available: restricted to native administration (exclusion review pending) |
+| `listRunbookSigningIdentities` | not available: restricted to native administration (exclusion review pending) |
 | `listRunbookVersions` | `read_operation` |
 | `listRunbooks` | `runbook_find` |
 | `previewRunbookExecution` | `runbook_preview` |
-| `previewRunbookExecutionRerun` | not available: needs durable receipt before approval gating |
+| `previewRunbookExecutionRerun` | not available: not exposed, reason recorded in the catalog (exclusion review pending) |
 | `publishRunbookDraft` | `operation_prepare`, then approval |
 | `rejectRunbookExecutionStep` | `operation_prepare`, then approval |
-| `removeRunbookAgentPoolMember` | not available: needs reauth impact preview and postcondition |
+| `removeRunbookAgentPoolMember` | not available: restricted to native administration (exclusion review pending) |
 | `rerunRunbookExecution` | `operation_prepare`, then approval |
 | `restoreRunbook` | `operation_prepare`, then approval |
-| `retireRunbookAgentPool` | not available: needs reauth impact preview and postcondition |
-| `retireRunbookSigningIdentity` | not available: needs reauth impact preview and postcondition |
-| `revokeRunbookAgent` | not available: needs reauth impact preview and postcondition |
-| `revokeRunbookSecretGrant` | not available: needs reauth impact preview and postcondition |
-| `rotateRunbookSecret` | not available: needs reauth impact preview and postcondition |
-| `setRunbookAgentPoolMember` | not available: needs reauth impact preview and postcondition |
-| `stageRunbookSigningIdentity` | not available: needs reauth impact preview and postcondition |
-| `updateRunbookAgentConfiguration` | not available: needs reauth impact preview and postcondition |
-| `updateRunbookAgentPool` | not available: needs reauth impact preview and postcondition |
+| `retireRunbookAgentPool` | not available: restricted to native administration (exclusion review pending) |
+| `retireRunbookSigningIdentity` | not available: restricted to native administration (exclusion review pending) |
+| `revokeRunbookAgent` | not available: restricted to native administration (exclusion review pending) |
+| `revokeRunbookSecretGrant` | not available: restricted to native administration (exclusion review pending) |
+| `rotateRunbookSecret` | not available: restricted to native administration (exclusion review pending) |
+| `setRunbookAgentPoolMember` | not available: restricted to native administration (exclusion review pending) |
+| `stageRunbookSigningIdentity` | not available: restricted to native administration (exclusion review pending) |
+| `updateRunbookAgentConfiguration` | not available: restricted to native administration (exclusion review pending) |
+| `updateRunbookAgentPool` | not available: restricted to native administration (exclusion review pending) |
 | `updateRunbookDraft` | `operation_prepare`, then approval |
 | `updateRunbookMetadata` | `operation_prepare`, then approval |
 | `validateRunbookDraft` | `call_operation` |
@@ -410,12 +410,12 @@ Every REST v2 operation by area: how many an assistant can use directly (curated
 
 | Operation | How an assistant reaches it |
 | --- | --- |
-| `createServiceAccount` | not available: needs reauth impact preview and postcondition |
-| `deleteServiceAccount` | not available: needs reauth impact preview and postcondition |
-| `getServiceAccount` | not available: review private read projection |
-| `issueServiceAccountToken` | not available: needs reauth impact preview and postcondition |
-| `listServiceAccounts` | not available: review private read projection |
-| `revokeServiceAccountToken` | not available: needs reauth impact preview and postcondition |
+| `createServiceAccount` | not available: restricted to native administration (exclusion review pending) |
+| `deleteServiceAccount` | not available: restricted to native administration (exclusion review pending) |
+| `getServiceAccount` | not available: restricted to native administration (exclusion review pending) |
+| `issueServiceAccountToken` | not available: restricted to native administration (exclusion review pending) |
+| `listServiceAccounts` | not available: restricted to native administration (exclusion review pending) |
+| `revokeServiceAccountToken` | not available: restricted to native administration (exclusion review pending) |
 
 ### service-objectives
 
@@ -440,7 +440,7 @@ Every REST v2 operation by area: how many an assistant can use directly (curated
 | `activateAutomationCandidate` | `operation_prepare`, then approval |
 | `activateServiceRunbookRule` | `operation_prepare`, then approval |
 | `createService` | `operation_prepare`, then approval |
-| `createServiceIntegration` | not available: eligible for approval batch with family tests |
+| `createServiceIntegration` | not available: not exposed, reason recorded in the catalog (exclusion review pending) |
 | `createServiceRunbookRule` | `operation_prepare`, then approval |
 | `deleteService` | `operation_prepare`, then approval |
 | `detachServiceRunbookRule` | `operation_prepare`, then approval |
@@ -486,7 +486,7 @@ Every REST v2 operation by area: how many an assistant can use directly (curated
 | Operation | How an assistant reaches it |
 | --- | --- |
 | `getAutomationSettings` | `read_operation` (sensitive reads on) |
-| `getChatOpsConfiguration` | not available: review read projection |
+| `getChatOpsConfiguration` | not available: not exposed, reason recorded in the catalog (exclusion review pending) |
 | `getRunbookSettings` | `read_operation` (sensitive reads on) |
 | `getWorkspaceSlaPolicy` | `read_operation` (sensitive reads on) |
 | `updateAutomationSettings` | `operation_prepare`, then approval |
@@ -505,29 +505,29 @@ Every REST v2 operation by area: how many an assistant can use directly (curated
 | `getStatusPageAppearance` | `read_operation` (sensitive reads on) |
 | `getStatusPageAsset` | `read_operation` (sensitive reads on) |
 | `getStatusPageContent` | `read_operation` (sensitive reads on) |
-| `getStatusPagePrivacy` | not available: review private read projection |
+| `getStatusPagePrivacy` | not available: restricted to native administration (exclusion review pending) |
 | `getStatusPagePublication` | `read_operation` (sensitive reads on) |
 | `getStatusPagePublicationJob` | `read_operation` (sensitive reads on) |
 | `getStatusPageSettings` | `read_operation` (sensitive reads on) |
-| `getStatusPageSubscriber` | not available: review read projection |
+| `getStatusPageSubscriber` | not available: not exposed, reason recorded in the catalog (exclusion review pending) |
 | `getStatusPageSubscriberStats` | `read_operation` (sensitive reads on) |
 | `getStatusPageSubscriptionSettings` | `read_operation` (sensitive reads on) |
 | `listStatusPageAnnouncements` | `read_operation` |
 | `listStatusPageAssets` | `read_operation` (sensitive reads on) |
 | `listStatusPageServices` | `read_operation` |
-| `listStatusPageSubscribers` | not available: review read projection |
+| `listStatusPageSubscribers` | not available: not exposed, reason recorded in the catalog (exclusion review pending) |
 | `listStatusPages` | `read_operation` |
 | `previewStatusPage` | `read_operation` (sensitive reads on) |
-| `removeStatusPageSubscriber` | not available: needs reauth impact preview and postcondition |
+| `removeStatusPageSubscriber` | not available: restricted to native administration (exclusion review pending) |
 | `retryStatusPagePublication` | `operation_prepare`, then approval |
 | `setStatusPageServices` | `operation_prepare`, then approval |
-| `updateStatusPage` | not available: needs durable receipt before approval gating |
+| `updateStatusPage` | not available: not exposed, reason recorded in the catalog (exclusion review pending) |
 | `updateStatusPageAppearance` | `operation_prepare`, then approval |
 | `updateStatusPageContent` | `operation_prepare`, then approval |
 | `updateStatusPagePrivacy` | `operation_prepare`, then approval |
 | `updateStatusPageService` | `operation_prepare`, then approval |
 | `updateStatusPageSettings` | `operation_prepare`, then approval |
-| `uploadStatusPageAsset` | not available: needs durable receipt before approval gating |
+| `uploadStatusPageAsset` | not available: not exposed, reason recorded in the catalog (exclusion review pending) |
 
 ### teams
 
@@ -552,17 +552,17 @@ Every REST v2 operation by area: how many an assistant can use directly (curated
 
 | Operation | How an assistant reaches it |
 | --- | --- |
-| `administerUser` | not available: needs reauth impact preview and postcondition |
-| `createUserInvitation` | not available: needs reauth impact preview and postcondition |
-| `getMyNotificationPreferences` | not available: review private read projection |
+| `administerUser` | not available: restricted to native administration (exclusion review pending) |
+| `createUserInvitation` | not available: restricted to native administration (exclusion review pending) |
+| `getMyNotificationPreferences` | not available: restricted to native administration (exclusion review pending) |
 | `getUser` | `read_operation` |
-| `getUserAdministration` | not available: review private read projection |
-| `getUserDependencies` | not available: review private read projection |
-| `getUserInvitation` | not available: review private read projection |
-| `getUserInvitationPolicy` | not available: review private read projection |
+| `getUserAdministration` | not available: restricted to native administration (exclusion review pending) |
+| `getUserDependencies` | not available: restricted to native administration (exclusion review pending) |
+| `getUserInvitation` | not available: restricted to native administration (exclusion review pending) |
+| `getUserInvitationPolicy` | not available: restricted to native administration (exclusion review pending) |
 | `listMyOnCallShifts` | `oncall_my_shifts` |
 | `listUsers` | `read_operation` |
-| `renewUserInvitation` | not available: needs reauth impact preview and postcondition |
-| `updateMyNotificationPreferences` | not available: needs reauth impact preview and postcondition |
+| `renewUserInvitation` | not available: restricted to native administration (exclusion review pending) |
+| `updateMyNotificationPreferences` | not available: restricted to native administration (exclusion review pending) |
 
 </details>
