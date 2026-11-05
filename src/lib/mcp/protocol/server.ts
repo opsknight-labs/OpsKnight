@@ -42,6 +42,7 @@ import prisma from '@/lib/prisma';
 import { withMcpDatabase } from '@/lib/database-workload';
 import { mcpOrigin } from '../auth/config';
 import { mcpApprovalPollGuidance } from '../approvals/timing';
+import { projectMcpData } from '../core/projection';
 
 // Input view: a field with a default is optional to the caller, as promptArgs below already does.
 const sdkSchema = (schema: z.ZodType) =>
@@ -1074,11 +1075,12 @@ export function createOpsKnightMcpServer(
         );
         return {
           userId: actor.id,
-          displayName: user?.name ?? null,
+          // Names are business text: projected like evidence (invisible characters, URLs).
+          displayName: user?.name ? projectMcpData(user.name) : null,
           role: actor.role,
           timeZone: user?.timeZone ?? 'UTC',
           teamIds,
-          teams: teams.map(team => ({ id: team.id, name: team.name })),
+          teams: teams.map(team => ({ id: team.id, name: projectMcpData(team.name) })),
           effectiveScopes: [...(actor.apiKey?.scopes ?? [])].sort(),
           writesEnabled,
           sensitiveReadsEnabled,

@@ -6,7 +6,12 @@ import { decideMcpRunbookReview, prepareMcpRunbook } from '@/lib/mcp/approvals/r
 import { MCP_REVIEWED_RUNBOOK_SCOPES } from '@/lib/mcp/approvals/policy';
 import { digestMcpSecret, mcpResource } from '@/lib/mcp/auth/config';
 import { CostBudget } from '@/lib/mcp/core/budget';
-import { cleanupExpiredMcpTasks, getMcpTask } from '@/lib/mcp/protocol/tasks';
+import {
+  APPROVAL_TASK_GRACE_MS,
+  APPROVAL_TASK_POLL_INTERVAL_MS,
+  cleanupExpiredMcpTasks,
+  getMcpTask,
+} from '@/lib/mcp/protocol/tasks';
 import { POST } from '@/app/mcp/route';
 
 beforeAll(async () => {
@@ -353,12 +358,14 @@ describe('Tasks extension (io.modelcontextprotocol/tasks)', () => {
         toolName: 'runbook_get_approval',
         resourceId: f.prepared.previewId,
       });
-      // Never outlives the approval it observes.
+      // Ends a short grace after the review deadline, so a last-moment outcome still arrives.
       const preview = await db.runbookPreviewAuthorization.findUniqueOrThrow({
         where: { id: f.prepared.previewId },
       });
-      expect(task.expiresAt.getTime()).toBeLessThanOrEqual(preview.expiresAt.getTime());
+      expect(task.expiresAt.getTime()).toBe(preview.expiresAt.getTime() + APPROVAL_TASK_GRACE_MS);
       expect(created.result.ttlMs).toBe(task.expiresAt.getTime() - task.createdAt.getTime());
+      // A human review is polled at the backoff's opening interval, not the runner's.
+      expect(created.result.pollIntervalMs).toBe(APPROVAL_TASK_POLL_INTERVAL_MS);
       const working = await call(f.bearer, 'tasks/get', { taskId: task.id });
       expect(working.result).toMatchObject({ status: 'working' });
       await decideMcpRunbookReview(
@@ -396,9 +403,23 @@ describe('Tasks extension (io.modelcontextprotocol/tasks)', () => {
 
       const lapsed = await pendingRunbookApproval('prepare-expire');
       const second = await wait(lapsed.bearer, lapsed.prepared.previewId);
+      // Time passes for both records: the review deadline is a second ago, and the task's own
+      // expiry moves back by the same amount, as it would have on a real clock.
+      const before = await db.runbookPreviewAuthorization.findUniqueOrThrow({
+        where: { id: lapsed.prepared.previewId },
+      });
+      const shift = before.expiresAt.getTime() - (Date.now() - 1000);
       await db.runbookPreviewAuthorization.update({
         where: { id: lapsed.prepared.previewId },
-        data: { expiresAt: new Date(Date.now() - 1000) },
+        data: { expiresAt: new Date(before.expiresAt.getTime() - shift) },
+      });
+      const parked = await db.mcpTask.findUniqueOrThrow({ where: { id: second.result.taskId } });
+      await db.mcpTask.update({
+        where: { id: parked.id },
+        data: {
+          createdAt: new Date(parked.createdAt.getTime() - shift),
+          expiresAt: new Date(parked.expiresAt.getTime() - shift),
+        },
       });
       expect(
         (await call(lapsed.bearer, 'tasks/get', { taskId: second.result.taskId })).result

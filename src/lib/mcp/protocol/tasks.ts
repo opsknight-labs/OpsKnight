@@ -15,6 +15,13 @@ import {
 export const TASKS_EXTENSION = 'io.modelcontextprotocol/tasks';
 export const TASK_TTL_MS = 24 * 3600_000;
 export const TASK_POLL_INTERVAL_MS = 5_000;
+/** A human review takes minutes, not seconds: an approval task asks for the initial backoff. */
+export const APPROVAL_TASK_POLL_INTERVAL_MS = 30_000;
+/**
+ * How long an approval task stays readable past the approval's own review deadline, so a decision
+ * made at the last moment, or the lapse itself, is still delivered as the task's result.
+ */
+export const APPROVAL_TASK_GRACE_MS = 15 * 60_000;
 /**
  * Tools whose wait is durable and asynchronous, so a task handle is meaningful: a runbook run,
  * and a human review of an approval (the long wait). The prepare tools stay synchronous so the
@@ -75,7 +82,7 @@ function mapStatus(execution: ExecutionView): { status: TaskStatus; message: str
 }
 
 function taskShape(
-  task: { id: string; createdAt: Date; expiresAt: Date },
+  task: { id: string; kind: string; createdAt: Date; expiresAt: Date },
   status: TaskStatus,
   message: string,
   lastUpdatedAt: Date
@@ -87,7 +94,9 @@ function taskShape(
     createdAt: task.createdAt.toISOString(),
     lastUpdatedAt: lastUpdatedAt.toISOString(),
     ttlMs: task.expiresAt.getTime() - task.createdAt.getTime(),
-    pollIntervalMs: TASK_POLL_INTERVAL_MS,
+    pollIntervalMs: APPROVAL_KINDS.has(task.kind)
+      ? APPROVAL_TASK_POLL_INTERVAL_MS
+      : TASK_POLL_INTERVAL_MS,
   };
 }
 
@@ -125,11 +134,17 @@ export async function createMcpTask(
   target: { kind: string; resourceId: string; expiresAt?: Date }
 ) {
   requireMcp(context.credentialId, 'MCP_INVALID_TOKEN', 401);
-  // One clock for both ends keeps the advertised TTL exact. An approval task never outlives
-  // the approval it observes.
+  // One clock for both ends keeps the advertised TTL exact. An approval task ends a short grace
+  // after the approval's review deadline: long enough to report a last-moment decision or the
+  // lapse, never a day-long handle on a review that is already over.
   const now = new Date();
   const ttlEnd = now.getTime() + TASK_TTL_MS;
-  const expiresAt = new Date(Math.min(ttlEnd, target.expiresAt?.getTime() ?? ttlEnd));
+  const expiresAt = new Date(
+    Math.min(
+      ttlEnd,
+      target.expiresAt ? target.expiresAt.getTime() + APPROVAL_TASK_GRACE_MS : ttlEnd
+    )
+  );
   const task = await withMcpDatabase(() =>
     prisma.mcpTask.create({
       data: {
