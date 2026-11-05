@@ -589,6 +589,9 @@ export function createOpsKnightMcpServer(
   );
   const isRead = (operation: (typeof MCP_CATALOG)[number]) =>
     operation.risk === 'R0' || isMcpSensitiveRead(operation);
+  // A session that can change nothing (changes off, or a view-only connection) is not offered the
+  // generic change tool at all; reads have read_operation.
+  const changesOffered = visible.some(operation => !isRead(operation));
   const workflowOf = (operation: (typeof MCP_CATALOG)[number]) =>
     operation.status === 'APPROVAL_REQUIRED'
       ? 'operation_prepare with args (omit idempotencyKey), native approval, operation_commit_approved'
@@ -881,7 +884,9 @@ export function createOpsKnightMcpServer(
             400,
             operation?.status === 'APPROVAL_REQUIRED'
               ? 'This operation changes state and needs approval; use operation_prepare.'
-              : 'This operation changes state; use call_operation.'
+              : changesOffered
+                ? 'This operation changes state; use call_operation.'
+                : 'This operation changes state; this connection can only view.'
           );
           return callMcpOperation(context, input.operationId, input.args);
         },
@@ -889,9 +894,7 @@ export function createOpsKnightMcpServer(
       );
     }
   );
-  // A session that can change nothing (changes off, or a view-only connection) is not offered the
-  // generic change tool at all; reads have read_operation.
-  if (visible.some(operation => !isRead(operation)))
+  if (changesOffered)
     server.registerTool(
       'call_operation',
       {

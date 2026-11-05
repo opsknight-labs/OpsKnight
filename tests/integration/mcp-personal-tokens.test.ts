@@ -642,6 +642,14 @@ describe('view-only connections', () => {
     expect(capped).not.toContain('call_operation');
     expect(capped).not.toContain('operation_prepare');
     expect(capped).toContain('read_operation');
+    // A change guessed through read_operation is not pointed at a tool the session lacks.
+    const guessed = await rpc(writer.bearer, 'tools/call', {
+      name: 'read_operation',
+      arguments: { operationId: 'resolveIncident', args: { path: { id: 'inc_1' } } },
+    });
+    expect(guessed.body.result.content[0].text).toBe(
+      'MCP_NOT_A_READ: This operation changes state; this connection can only view.'
+    );
     await db.mcpPolicy.update({
       where: { id: 'default' },
       data: { requireReadOnlyConnections: false, writesEnabled: false },
