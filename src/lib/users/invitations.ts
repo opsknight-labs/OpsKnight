@@ -223,7 +223,7 @@ async function executeInvitation(
         where: { id: actor.id },
         select: { name: true },
       });
-      const template = getUserInviteEmailTemplate({
+      const template = await getUserInviteEmailTemplate({
         userName: user.name,
         invitedBy: principal.name || undefined,
         inviteUrl,

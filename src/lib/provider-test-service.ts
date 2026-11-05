@@ -11,7 +11,6 @@ import {
 import { logAudit } from '@/lib/audit';
 import type { Prisma } from '@prisma/client';
 import { AppError } from '@/lib/errors';
-import { escapeHtml } from '@/lib/email-components';
 
 export type ProviderTestStatus =
   'ACCEPTED' | 'DELIVERED' | 'QUEUED' | 'DEFERRED' | 'CONFIGURED_NO_DEVICE' | 'FAILED' | 'UNKNOWN';
@@ -91,7 +90,9 @@ export async function prepareProviderTestIntent(
         kind: 'EMAIL',
         to: user.email,
         subject: `[OpsKnight Test] Outbound Alert via ${normalizedKey.toUpperCase()}`,
-        html: `<p>OpsKnight provider test via ${normalizedKey.toUpperCase()} at ${now}.</p>`,
+        html: await renderProviderTestEmail(normalizedKey, [
+          { label: 'Dispatched at', value: now },
+        ]),
         text: `[OpsKnight] Provider test notification via ${normalizedKey.toUpperCase()} at ${now}.`,
         providerKey: normalizedKey,
       },
@@ -441,15 +442,10 @@ export async function executeProviderTest(
         kind: 'EMAIL',
         to: user.email,
         subject: `[OpsKnight Test] Outbound Alert via ${normalizedKey.toUpperCase()}`,
-        html: `
-          <div style="font-family: sans-serif; padding: 20px; color: #111;">
-            <h2 style="color: #059669; margin-bottom: 8px;">✅ Provider Test Successful</h2>
-            <p>This is an automated test notification dispatched from your OpsKnight instance via <strong>${normalizedKey.toUpperCase()}</strong>.</p>
-            <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 16px 0;" />
-            <p style="font-size: 12px; color: #6b7280;">Dispatched by: ${escapeHtml(user.name || user.email || 'Admin')} (${escapeHtml(user.role || 'ADMIN')})</p>
-            <p style="font-size: 12px; color: #6b7280;">Timestamp: ${new Date().toISOString()}</p>
-          </div>
-        `,
+        html: await renderProviderTestEmail(normalizedKey, [
+          { label: 'Dispatched by', value: `${user.name || user.email || 'Admin'} (${user.role || 'ADMIN'})` },
+          { label: 'Timestamp', value: new Date().toISOString() },
+        ]),
         text: `[OpsKnight Test] Provider Test Successful. Outbound alert dispatched via ${normalizedKey.toUpperCase()}.`,
         providerKey: normalizedKey,
       },
@@ -663,4 +659,22 @@ export async function executeProviderTest(
       message: error instanceof Error ? error.message : 'Failed to dispatch test notification',
     };
   }
+}
+
+/** Provider test emails use the production template, so a passing test proves real alerts render. */
+async function renderProviderTestEmail(
+  providerKey: string,
+  details: Array<{ label: string; value: string }>
+): Promise<string> {
+  const { renderEmail } = await import('@/emails/render');
+  const { DeliveryTestEmail } = await import('@/emails/templates/delivery-test');
+  const providerLabel = providerKey.toUpperCase();
+  const { html } = await renderEmail(
+    DeliveryTestEmail({
+      variant: 'provider',
+      providerLabel,
+      details: [{ label: 'Provider', value: providerLabel, highlight: true }, ...details],
+    })
+  );
+  return html;
 }

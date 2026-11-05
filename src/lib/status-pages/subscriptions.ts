@@ -369,7 +369,7 @@ export async function subscribeStatusPageRequest(req: NextRequest) {
             ? getStatusPageLogoUrl(statusPage, statusPage.id, appBaseUrl)
             : rawLogoUrl;
 
-        const emailTemplate = getVerificationEmailTemplate({
+        const emailTemplate = await getVerificationEmailTemplate({
           statusPageName: statusPage.name,
           organizationName: statusPage.organizationName || undefined,
           statusPageUrl,

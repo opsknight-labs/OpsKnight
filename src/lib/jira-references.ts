@@ -1,4 +1,4 @@
-import { sanitizeUrl } from '@/lib/email-components';
+import { sanitizeUrl } from '@/lib/html-sanitize';
 
 export type JiraIssueReference = {
   linkId: string;

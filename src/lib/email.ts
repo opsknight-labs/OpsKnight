@@ -4,16 +4,10 @@ import prisma from './prisma';
 import { getBaseUrl } from './env-validation';
 import { getUserTimeZone, formatDateTime } from './timezone';
 import { logger } from './logger';
-import {
-  EmailButton,
-  EmailContainer,
-  EmailContent,
-  EmailFooter,
-  EmailHeader,
-  InfoCard,
-  StatusBadge,
-  escapeHtml,
-} from './email-components';
+import { emailHtmlToText, renderEmail } from '@/emails/render';
+import { IncidentEmail, incidentPresentation } from '@/emails/templates/incident';
+import { ShiftReminderEmail } from '@/emails/templates/shift-reminder';
+import { ShiftHandoffEmail } from '@/emails/templates/shift-handoff';
 import type { EmailConfig } from './notification-providers';
 import { decodeNotificationEnvelope } from './notification-payload';
 import { announcementEmailDeliveryEligibility } from './status-pages/announcement-delivery-eligibility';
@@ -24,6 +18,8 @@ export type EmailOptions = {
   html: string;
   text?: string;
   idempotencyKey?: string;
+  /** Extra RFC 5322 headers, e.g. List-Unsubscribe / List-Unsubscribe-Post. */
+  headers?: Record<string, string>;
 };
 
 export type EmailDeliveryResult = {
@@ -57,34 +53,9 @@ type SmtpTransportCache = {
   transporter: SmtpTransporter;
 };
 let cachedSmtpTransport: SmtpTransportCache | null = null;
-const HTML_ENTITY_MAP: Record<string, string> = {
-  '&nbsp;': ' ',
-  '&lt;': '<',
-  '&gt;': '>',
-  '&quot;': '"',
-  '&#39;': "'",
-  '&apos;': "'",
-  '&amp;': '&',
-};
-
+/** Plain-text alternative for HTML-only payloads (fan-out templates, legacy callers). */
 export function htmlToPlainText(html: string): string {
-  if (!html) return '';
-  let text = html
-    .replace(/<\s*br\s*\/?>/gi, '\n')
-    .replace(/<\s*\/\s*(?:p|div|tr|h[1-6]|li)\s*>/gi, '\n');
-  let previous: string;
-  do {
-    previous = text;
-    text = text.replace(/<[^>]*>/g, '');
-  } while (text !== previous);
-  text = text.replace(
-    /&(?:nbsp|lt|gt|quot|#39|apos|amp);/gi,
-    match => HTML_ENTITY_MAP[match.toLowerCase()] ?? match
-  );
-  return text
-    .replace(/\r\n|\r/g, '\n')
-    .replace(/\n{3,}/g, '\n\n')
-    .trim();
+  return emailHtmlToText(html);
 }
 
 async function getSmtpTransport(emailConfig: EmailConfig): Promise<SmtpTransporter> {
@@ -133,11 +104,32 @@ async function getSmtpTransport(emailConfig: EmailConfig): Promise<SmtpTransport
   return transporter;
 }
 
+/** Builds an RFC 5322 message (multipart/alternative) with nodemailer's stream transport. */
+async function buildRawMimeMessage(message: {
+  from?: string;
+  to: string;
+  subject: string;
+  html: string;
+  text: string;
+  headers: Record<string, string>;
+}): Promise<Uint8Array> {
+  const nodemailerModule = (await import('nodemailer' as string)) as Record<string, unknown>;
+  const nodemailer = (nodemailerModule.default || nodemailerModule) as {
+    createTransport: (options: Record<string, unknown>) => {
+      sendMail(options: Record<string, unknown>): Promise<{ message: Buffer | string }>;
+    };
+  };
+  const composer = nodemailer.createTransport({ streamTransport: true, buffer: true, newline: 'windows' });
+  const info = await composer.sendMail(message);
+  return typeof info.message === 'string' ? Buffer.from(info.message) : new Uint8Array(info.message);
+}
+
 async function sendWithSingleProvider(
   options: EmailOptions,
   emailConfig: EmailConfig
 ): Promise<EmailDeliveryResult> {
   const textContent = options.text || htmlToPlainText(options.html);
+  const headers = options.headers && Object.keys(options.headers).length ? options.headers : undefined;
   if (emailConfig.provider === 'resend') {
     try {
       const resendModule = await import('resend');
@@ -167,6 +159,7 @@ async function sendWithSingleProvider(
         subject: options.subject,
         html: options.html,
         text: textContent,
+        ...(headers ? { headers } : {}),
       };
       const result = options.idempotencyKey
         ? await resend.emails.send(payload, {
@@ -218,6 +211,7 @@ async function sendWithSingleProvider(
         subject: options.subject,
         html: options.html,
         text: textContent,
+        ...(headers ? { headers } : {}),
         trackingSettings: {
           clickTracking: { enable: false, enableText: false },
           openTracking: { enable: false },
@@ -274,6 +268,23 @@ async function sendWithSingleProvider(
           secretAccessKey: emailConfig.apiKey,
         },
       });
+      // SendEmail cannot carry custom headers; List-Unsubscribe needs a raw MIME message.
+      if (headers) {
+        const { SendRawEmailCommand } = sesModule;
+        const raw = await buildRawMimeMessage({
+          from: emailConfig.fromEmail,
+          to: options.to,
+          subject: options.subject,
+          html: options.html,
+          text: textContent,
+          headers,
+        });
+        const rawResult = await client.send(
+          new SendRawEmailCommand({ RawMessage: { Data: raw } })
+        );
+        logger.info('Email sent via Amazon SES (raw)', { messageId: rawResult.MessageId });
+        return { success: true, providerMessageId: rawResult.MessageId };
+      }
       const result = await client.send(
         new SendEmailCommand({
           Destination: { ToAddresses: [options.to] },
@@ -320,6 +331,7 @@ async function sendWithSingleProvider(
         subject: options.subject,
         html: options.html,
         text: textContent,
+        ...(headers ? { headers } : {}),
       });
       logger.info('Email sent via SMTP', { messageId: info.messageId });
       return { success: true, providerMessageId: info.messageId };
@@ -574,172 +586,71 @@ type IncidentEmailData = {
   resolvedAt?: Date | null;
   incidentUrl?: string;
 };
-function eventPresentation(
-  eventType: 'triggered' | 'acknowledged' | 'resolved' | 'updated',
-  urgency: string,
-  eventMessage?: string
-) {
-  const escalationMatch = eventMessage?.match(/Escalation Level\s+(\d+)/i);
-  if (escalationMatch) {
-    return {
-      header: `Escalation Level ${escalationMatch[1]}`,
-      label: `Escalation Level ${escalationMatch[1]}`,
-      message: `This incident has reached escalation level ${escalationMatch[1]} and requires responder attention.`,
-      badge: 'error' as const,
-      headerGradient: 'linear-gradient(135deg, #881337 0%, #be123c 45%, #e11d48 100%)',
-      buttonBackground: 'linear-gradient(135deg, #be123c 0%, #e11d48 100%)',
-      buttonShadow: '0 8px 20px rgba(225, 29, 72, 0.35)',
-      accentColor: '#e11d48',
-    };
-  }
-  if (eventType === 'resolved') {
-    return {
-      header: 'Incident Resolved',
-      label: 'Resolved',
-      message: 'This incident has been resolved.',
-      badge: 'success' as const,
-      headerGradient: 'linear-gradient(135deg, #064e3b 0%, #047857 45%, #059669 100%)',
-      buttonBackground: 'linear-gradient(135deg, #047857 0%, #059669 100%)',
-      buttonShadow: '0 8px 20px rgba(5, 150, 105, 0.35)',
-      accentColor: '#059669',
-    };
-  }
-  if (eventType === 'acknowledged') {
-    return {
-      header: 'Incident Acknowledged',
-      label: 'Acknowledged',
-      message: 'This incident has been acknowledged and is being actively worked.',
-      badge: 'warning' as const,
-      headerGradient: 'linear-gradient(135deg, #78350f 0%, #b45309 45%, #d97706 100%)',
-      buttonBackground: 'linear-gradient(135deg, #b45309 0%, #d97706 100%)',
-      buttonShadow: '0 8px 20px rgba(217, 119, 6, 0.35)',
-      accentColor: '#d97706',
-    };
-  }
-  if (eventType === 'updated') {
-    return {
-      header: 'Incident Updated',
-      label: 'Updated',
-      message: 'Incident details have been updated. Review the latest committed update below.',
-      badge: 'info' as const,
-      headerGradient: 'linear-gradient(135deg, #1e3a8a 0%, #2563eb 45%, #3b82f6 100%)',
-      buttonBackground: 'linear-gradient(135deg, #2563eb 0%, #3b82f6 100%)',
-      buttonShadow: '0 8px 20px rgba(37, 99, 235, 0.35)',
-      accentColor: '#2563eb',
-    };
-  }
-
-  const isHigh = urgency === 'HIGH';
-  const isMedium = urgency === 'MEDIUM';
-
-  return {
-    header: isHigh
-      ? 'Critical Incident Alert'
-      : isMedium
-        ? 'Elevated Incident Alert'
-        : 'Incident Notification',
-    label: isHigh ? 'Critical Incident' : isMedium ? 'Elevated Incident' : 'New Incident',
-    message: 'A new incident has been reported. Review the details and take action.',
-    badge: isHigh ? ('error' as const) : isMedium ? ('warning' as const) : ('info' as const),
-    headerGradient: isHigh
-      ? 'linear-gradient(135deg, #881337 0%, #be123c 45%, #e11d48 100%)'
-      : isMedium
-        ? 'linear-gradient(135deg, #78350f 0%, #b45309 45%, #d97706 100%)'
-        : 'linear-gradient(135deg, #1e3a8a 0%, #2563eb 45%, #3b82f6 100%)',
-    buttonBackground: isHigh
-      ? 'linear-gradient(135deg, #be123c 0%, #e11d48 100%)'
-      : isMedium
-        ? 'linear-gradient(135deg, #b45309 0%, #d97706 100%)'
-        : 'linear-gradient(135deg, #2563eb 0%, #3b82f6 100%)',
-    buttonShadow: isHigh
-      ? '0 8px 20px rgba(225, 29, 72, 0.35)'
-      : isMedium
-        ? '0 8px 20px rgba(217, 119, 6, 0.35)'
-        : '0 8px 20px rgba(37, 99, 235, 0.35)',
-    accentColor: isHigh ? '#e11d48' : isMedium ? '#d97706' : '#2563eb',
-  };
-}
-
 export function generateIncidentEmailHTML(
   incident: IncidentEmailData,
   timeZone: string = 'UTC',
   eventType: 'triggered' | 'acknowledged' | 'resolved' | 'updated' = 'triggered',
   eventMessage?: string
-): string {
-  const presentation = eventPresentation(eventType, incident.urgency, eventMessage);
-  const incidentUrl = incident.incidentUrl || `${getBaseUrl()}/incidents/${incident.id}`;
+): Promise<string> {
+  return renderIncidentEmail(incident, timeZone, eventType, eventMessage).then(email => email.html);
+}
+
+/** Renders the incident lifecycle email (triggered / acknowledged / resolved / updated / escalation). */
+export async function renderIncidentEmail(
+  incident: IncidentEmailData,
+  timeZone: string = 'UTC',
+  eventType: 'triggered' | 'acknowledged' | 'resolved' | 'updated' = 'triggered',
+  eventMessage?: string
+) {
+  const presentation = incidentPresentation(eventType, incident.urgency, eventMessage);
+  const baseUrl = getBaseUrl();
+  const incidentUrl = incident.incidentUrl || `${baseUrl}/incidents/${incident.id}`;
+  const serviceName = incident.service?.name || 'Service';
   const assigneeName =
     incident.assignee?.name ||
     incident.assignee?.email ||
     (incident.team?.name ? `${incident.team.name} (Team)` : '') ||
     'Unassigned';
-  const infoItems = [
-    { label: 'Service', value: incident.service?.name || 'Service', highlight: true },
+  const details = [
+    { label: 'Service', value: serviceName, highlight: true },
     { label: 'Status', value: incident.status },
     { label: 'Urgency', value: incident.urgency },
     { label: 'Assignee', value: assigneeName },
-    {
-      label: 'Created',
-      value: formatDateTime(incident.createdAt, timeZone, { format: 'datetime' }),
-    },
+    { label: 'Created', value: formatDateTime(incident.createdAt, timeZone, { format: 'datetime' }) },
   ];
   if (incident.acknowledgedAt)
-    infoItems.push({
+    details.push({
       label: 'Acknowledged',
       value: formatDateTime(incident.acknowledgedAt, timeZone, { format: 'datetime' }),
     });
   if (incident.resolvedAt)
-    infoItems.push({
+    details.push({
       label: 'Resolved',
       value: formatDateTime(incident.resolvedAt, timeZone, { format: 'datetime' }),
     });
-  const serviceName = incident.service?.name || '';
-  const trimmedMsg = (eventMessage || '').trim().toLowerCase();
-  const trimmedTitle = incident.title.trim().toLowerCase();
-  const prefixedTitle = `[${serviceName}] ${incident.title}`.trim().toLowerCase();
-  const isDuplicateMessage =
-    trimmedMsg === trimmedTitle ||
-    trimmedMsg === prefixedTitle ||
-    (trimmedMsg.startsWith(`[${serviceName.toLowerCase()}]`) && trimmedMsg.endsWith(trimmedTitle));
 
-  const context =
-    eventMessage && !isDuplicateMessage
-      ? `<div class="dm-context-box" style="background:#f8fafc;border:1px solid #e2e8f0;border-left:3px solid ${presentation.accentColor};border-radius:8px;padding:12px 16px;margin:16px 0;color:#334155;font-size:13px;line-height:1.5;">${escapeHtml(eventMessage)}</div>`
-      : '';
+  // Skip event context that only echoes the title ("[Service] Title").
+  const rawService = incident.service?.name || '';
+  const message = (eventMessage || '').trim();
+  const normalizedMessage = message.toLowerCase();
+  const normalizedTitle = incident.title.trim().toLowerCase();
+  const isEcho =
+    normalizedMessage === normalizedTitle ||
+    normalizedMessage === `[${rawService}] ${incident.title}`.trim().toLowerCase() ||
+    (normalizedMessage.startsWith(`[${rawService.toLowerCase()}]`) &&
+      normalizedMessage.endsWith(normalizedTitle));
 
-  const description = incident.description
-    ? `<div class="desktop-font-body dm-desc-box" style="margin-top:20px;background:#f8fafc;border:1px solid #e2e8f0;border-left:4px solid ${presentation.accentColor};border-radius:8px;padding:14px 18px;">
-        <div class="dm-desc-label" style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:#64748b;margin-bottom:6px;">
-          Incident Description
-        </div>
-        <div class="dm-desc-text" style="white-space:pre-wrap;font-size:14px;color:#334155;line-height:1.6;word-break:break-word;">
-          ${escapeHtml(incident.description)}
-        </div>
-      </div>`
-    : '';
-
-  return EmailContainer(
-    EmailHeader(presentation.header, `Service: ${incident.service?.name || 'Service'}`, {
-      headerGradient: presentation.headerGradient,
-      logoUrl: `${getBaseUrl()}/logo.png`,
-    }) +
-      EmailContent(`
-        <div style="margin-bottom:16px">${StatusBadge(presentation.label.toUpperCase(), presentation.badge)}</div>
-        <div class="desktop-font-body dm-text-body" style="font-size:14px;color:#475569;margin-bottom:18px;line-height:1.5;">${escapeHtml(presentation.message)}</div>
-        <h2 class="desktop-font-title dm-text-heading" style="font-size:20px;font-weight:700;color:#0f172a;margin:0 0 16px 0;line-height:1.35;letter-spacing:-0.01em;">${escapeHtml(incident.title)}</h2>
-        ${context}
-        ${InfoCard(infoItems, { accentColor: presentation.accentColor })}
-        ${description}
-        <div style="margin-top:24px;text-align:center;">${EmailButton(
-          eventType === 'resolved' ? 'View Resolution' : 'View Incident',
-          escapeHtml(incidentUrl),
-          {
-            buttonBackground: presentation.buttonBackground,
-            buttonShadow: presentation.buttonShadow,
-          }
-        )}</div>
-      `) +
-      EmailFooter()
+  return renderEmail(
+    IncidentEmail({
+      presentation,
+      title: incident.title,
+      serviceName,
+      description: incident.description,
+      context: message && !isEcho ? message : undefined,
+      details,
+      incidentUrl,
+      settingsUrl: baseUrl ? `${baseUrl}/settings/notifications` : undefined,
+    })
   );
 }
 
@@ -804,7 +715,7 @@ export async function sendIncidentEmail(
                 : 'NEW';
     const incidentUrl = `${getBaseUrl()}/incidents/${incidentId}`;
     const userTimeZone = getUserTimeZone(user ?? undefined);
-    const html = generateIncidentEmailHTML(
+    const html = await generateIncidentEmailHTML(
       { ...eventIncident, incidentUrl },
       userTimeZone,
       eventType,
@@ -846,58 +757,36 @@ export type ShiftReminderData = {
   minutesUntilStart: number;
 };
 
-export function generateShiftReminderEmailHTML(data: ShiftReminderData): string {
-  const headerGradient = 'linear-gradient(135deg, #4c1d95 0%, #6d28d9 45%, #7c3aed 100%)';
-  const buttonBackground = 'linear-gradient(135deg, #6d28d9 0%, #7c3aed 100%)';
-  const buttonShadow = '0 8px 20px rgba(124, 58, 237, 0.35)';
-
+export async function generateShiftReminderEmailHTML(data: ShiftReminderData): Promise<string> {
   const formattedStart = formatDateTime(data.shiftStart, data.timeZone, { format: 'datetime' });
   const formattedEnd = formatDateTime(data.shiftEnd, data.timeZone, { format: 'datetime' });
   const durationHours = Math.max(
     1,
     Math.round((data.shiftEnd.getTime() - data.shiftStart.getTime()) / (1000 * 60 * 60))
   );
-
-  const infoItems = [
-    { label: 'Schedule', value: data.scheduleName, highlight: true },
-    { label: 'Starts In', value: `~${data.minutesUntilStart} minute(s)` },
-    { label: 'Shift Start', value: `${formattedStart} (${data.timeZone})` },
-    { label: 'Shift End', value: `${formattedEnd} (${data.timeZone})` },
-    { label: 'Duration', value: `${durationHours} hour(s)` },
-  ];
-
-  return EmailContainer(
-    EmailHeader('Upcoming On-Call Shift', `Schedule: ${data.scheduleName}`, {
-      headerGradient,
-      logoUrl: `${getBaseUrl()}/logo.png`,
-    }) +
-      EmailContent(`
-        <div style="margin-bottom:18px">${StatusBadge('UPCOMING ON-CALL', 'schedule')}</div>
-        <h2 class="dm-text-heading" style="font-size:22px;color:#0f172a;margin-bottom:12px">Hi ${escapeHtml(data.userName)}, your on-call shift is starting soon!</h2>
-        <p class="dm-text-body" style="font-size:14px;color:#475569;margin-bottom:20px;line-height:1.6">
-          You are scheduled to go on-call for <strong>${escapeHtml(data.scheduleName)}</strong> in approximately <strong>${data.minutesUntilStart} minute(s)</strong>.
-          Please ensure your notification channels are active and you are prepared to respond to alerts.
-        </p>
-        ${InfoCard(infoItems, { accentColor: '#7c3aed' })}
-        <div class="dm-checklist" style="margin-top:24px;background:#f5f3ff;border:1px solid #ddd6fe;border-radius:10px;padding:16px 20px;color:#5b21b6;font-size:13px;line-height:1.6">
-          <strong>💡 Responder Checklist:</strong>
-          <ul style="margin:8px 0 0 0;padding-left:20px">
-            <li>Verify your phone/SMS and mobile push notifications are unmuted.</li>
-            <li>Review active incidents or maintenance windows before taking over.</li>
-            <li>Coordinate with outgoing responders if any handoff context is pending.</li>
-          </ul>
-        </div>
-        <div style="margin-top:28px;text-align:center;">${EmailButton('View On-Call Schedule', escapeHtml(data.scheduleUrl), { buttonBackground, buttonShadow })}</div>
-      `) +
-      EmailFooter()
+  const { html } = await renderEmail(
+    ShiftReminderEmail({
+      userName: data.userName,
+      scheduleName: data.scheduleName,
+      scheduleUrl: data.scheduleUrl,
+      minutesUntilStart: data.minutesUntilStart,
+      details: [
+        { label: 'Schedule', value: data.scheduleName, highlight: true },
+        { label: 'Starts In', value: `~${data.minutesUntilStart} minute(s)` },
+        { label: 'Shift Start', value: `${formattedStart} (${data.timeZone})` },
+        { label: 'Shift End', value: `${formattedEnd} (${data.timeZone})` },
+        { label: 'Duration', value: `${durationHours} hour(s)` },
+      ],
+    })
   );
+  return html;
 }
 
 export async function sendShiftReminderEmail(
   data: ShiftReminderData & { to: string }
 ): Promise<EmailDeliveryResult> {
   const subject = `⏰ [Upcoming Shift] You are on-call for "${data.scheduleName}" in ~${data.minutesUntilStart}m`;
-  const html = generateShiftReminderEmailHTML(data);
+  const html = await generateShiftReminderEmailHTML(data);
   const text = `Upcoming On-Call Shift: You are scheduled to go on-call for "${data.scheduleName}" in approximately ${data.minutesUntilStart} minutes.\n\nSchedule: ${data.scheduleUrl}`;
   return sendEmail({
     to: data.to,
@@ -923,65 +812,27 @@ export type ShiftHandoffData = {
 
 export const DEFAULT_MAX_SHIFT_HANDOFF_INCIDENTS = 5;
 
-export function generateShiftHandoffEmailHTML(data: ShiftHandoffData): string {
-  const headerGradient = 'linear-gradient(135deg, #1e3a8a 0%, #312e81 45%, #4338ca 100%)';
-  const buttonBackground = 'linear-gradient(135deg, #3730a3 0%, #4338ca 100%)';
-  const buttonShadow = '0 8px 20px rgba(67, 56, 202, 0.35)';
-
+export async function generateShiftHandoffEmailHTML(data: ShiftHandoffData): Promise<string> {
   const maxIncidents = data.maxIncidents ?? DEFAULT_MAX_SHIFT_HANDOFF_INCIDENTS;
-  const displayedIncidents = data.activeIncidents.slice(0, maxIncidents);
-  const remainingCount = data.activeIncidents.length - displayedIncidents.length;
-
-  const incidentListHtml = displayedIncidents
-    .map(
-      inc => `
-      <div class="dm-incident-item" style="padding:10px 14px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;margin-bottom:8px">
-        <div class="dm-incident-title" style="font-weight:600;font-size:14px;color:#0f172a">${escapeHtml(inc.title)}</div>
-        <div class="dm-incident-meta" style="font-size:12px;color:#64748b;margin-top:4px">
-          Status: <strong>${escapeHtml(inc.status)}</strong> · <a href="${escapeHtml(inc.incidentUrl)}" class="dm-link-color" style="color:#2563eb;text-decoration:none;font-weight:600">Open Incident &rarr;</a>
-        </div>
-      </div>`
-    )
-    .join('');
-
-  const overflowHtml =
-    remainingCount > 0
-      ? `
-      <div class="dm-incident-item" style="padding:12px 14px;background:#f1f5f9;border:1px dashed #cbd5e1;border-radius:8px;margin-bottom:8px;text-align:center">
-        <span class="dm-text-muted" style="font-size:13px;color:#64748b;font-weight:500">
-          + ${remainingCount} more active incident${remainingCount === 1 ? '' : 's'} assigned to this shift.
-        </span>
-        <div style="margin-top:6px">
-          <a href="${escapeHtml(data.scheduleUrl)}" class="dm-link-color" style="color:#2563eb;text-decoration:none;font-size:13px;font-weight:600">View all on schedule &rarr;</a>
-        </div>
-      </div>`
-      : '';
-
-  return EmailContainer(
-    EmailHeader('Shift Rotation Handoff', `Schedule: ${data.scheduleName}`, {
-      headerGradient,
-      logoUrl: `${getBaseUrl()}/logo.png`,
-    }) +
-      EmailContent(`
-        <div style="margin-bottom:18px">${StatusBadge('SHIFT HANDOFF', 'schedule')}</div>
-        <h2 class="dm-text-heading" style="font-size:22px;color:#0f172a;margin-bottom:12px">Hi ${escapeHtml(data.userName)}, you are now On-Call</h2>
-        <p class="dm-text-body" style="font-size:14px;color:#475569;margin-bottom:20px;line-height:1.6">
-          Your on-call shift for <strong>${escapeHtml(data.scheduleName)}</strong> has started.
-          The following <strong>${data.activeIncidents.length} active incident(s)</strong> have been automatically reassigned to you${remainingCount > 0 ? ` (showing top ${displayedIncidents.length})` : ''}:
-        </p>
-        ${incidentListHtml}
-        ${overflowHtml}
-        <div style="margin-top:28px;text-align:center;">${EmailButton('View Schedule & Incidents', escapeHtml(data.scheduleUrl), { buttonBackground, buttonShadow })}</div>
-      `) +
-      EmailFooter()
+  const displayed = data.activeIncidents.slice(0, maxIncidents);
+  const { html } = await renderEmail(
+    ShiftHandoffEmail({
+      userName: data.userName,
+      scheduleName: data.scheduleName,
+      scheduleUrl: data.scheduleUrl,
+      totalIncidents: data.activeIncidents.length,
+      incidents: displayed,
+      remainingCount: data.activeIncidents.length - displayed.length,
+    })
   );
+  return html;
 }
 
 export async function sendShiftHandoffEmail(
   data: ShiftHandoffData & { to: string }
 ): Promise<EmailDeliveryResult> {
   const subject = `🔄 [Shift Handoff] You are now On-Call for "${data.scheduleName}" (${data.activeIncidents.length} active incidents)`;
-  const html = generateShiftHandoffEmailHTML(data);
+  const html = await generateShiftHandoffEmailHTML(data);
   const maxIncidents = data.maxIncidents ?? DEFAULT_MAX_SHIFT_HANDOFF_INCIDENTS;
   const displayed = data.activeIncidents.slice(0, maxIncidents);
   const remaining = data.activeIncidents.length - displayed.length;

@@ -6,6 +6,21 @@ import {
 } from '@/lib/email';
 import { getUserInviteEmailTemplate } from '@/lib/user-invite-email-template';
 import { getPasswordResetEmailTemplate } from '@/lib/password-reset-email-template';
+import { toneTokens, type EmailTone } from '@/emails/tokens';
+
+/** Header band: Outlook solid fallback + documented deep → base gradient for everyone else. */
+function expectHeaderTone(html: string, tone: EmailTone) {
+  const t = toneTokens(tone);
+  expect(html).toContain(`bgcolor="${t.deep}"`);
+  expect(html).toContain(`linear-gradient(135deg, ${t.deep} 0%, ${t.base} 100%)`);
+}
+
+/** CTA: VML roundrect for Outlook desktop and a solid-fill link for every other client. */
+function expectButtonTone(html: string, tone: EmailTone) {
+  const fill = toneTokens(tone).button;
+  expect(html).toContain(`fillcolor="${fill}"`);
+  expect(html).toContain(`background-color:${fill}`);
+}
 
 describe('Dynamic Colorful Incident Email Templates', () => {
   const baseIncident = {
@@ -20,142 +35,139 @@ describe('Dynamic Colorful Incident Email Templates', () => {
     incidentUrl: 'https://opsknight.com/incidents/inc-12345',
   };
 
-  it('generates a vivid Crimson Red template for Critical / HIGH urgency incidents', () => {
-    const html = generateIncidentEmailHTML(baseIncident, 'UTC', 'triggered');
+  it('generates a Crimson template for Critical / HIGH urgency incidents', async () => {
+    const html = await generateIncidentEmailHTML(baseIncident, 'UTC', 'triggered');
 
-    // Header gradient should be Crimson / Rose
-    expect(html).toContain('linear-gradient(135deg, #881337 0%, #be123c 45%, #e11d48 100%)');
-    // Button should be red
-    expect(html).toContain('linear-gradient(135deg, #be123c 0%, #e11d48 100%)');
-    // Badge should be error type
-    expect(html).toContain('CRITICAL INCIDENT');
-    // Contains incident title and service name
+    expectHeaderTone(html, 'critical');
+    expectButtonTone(html, 'critical');
+    expect(html).toContain('Critical Incident');
     expect(html).toContain('Payment Gateway Connection Timeout');
     expect(html).toContain('Checkout &amp; Payments');
-    // Contains CTA button
     expect(html).toContain('View Incident');
     expect(html).toContain('https://opsknight.com/incidents/inc-12345');
   });
 
-  it('generates an Amber / Orange template for Elevated / MEDIUM urgency incidents', () => {
-    const mediumIncident = {
-      ...baseIncident,
-      urgency: 'MEDIUM',
-    };
-    const html = generateIncidentEmailHTML(mediumIncident, 'UTC', 'triggered');
-
-    expect(html).toContain('linear-gradient(135deg, #78350f 0%, #b45309 45%, #d97706 100%)');
-    expect(html).toContain('linear-gradient(135deg, #b45309 0%, #d97706 100%)');
-    expect(html).toContain('ELEVATED INCIDENT');
+  it('generates an Amber template for Elevated / MEDIUM urgency incidents', async () => {
+    const html = await generateIncidentEmailHTML(
+      { ...baseIncident, urgency: 'MEDIUM' },
+      'UTC',
+      'triggered'
+    );
+    expectHeaderTone(html, 'elevated');
+    expectButtonTone(html, 'elevated');
+    expect(html).toContain('Elevated Incident');
   });
 
-  it('generates an Emerald Green template for Resolved incidents', () => {
-    const resolvedIncident = {
-      ...baseIncident,
-      status: 'RESOLVED',
-      resolvedAt: new Date('2026-09-05T10:30:00Z'),
-    };
-    const html = generateIncidentEmailHTML(resolvedIncident, 'UTC', 'resolved');
-
-    expect(html).toContain('linear-gradient(135deg, #064e3b 0%, #047857 45%, #059669 100%)');
-    expect(html).toContain('linear-gradient(135deg, #047857 0%, #059669 100%)');
-    expect(html).toContain('RESOLVED');
+  it('generates an Emerald template for Resolved incidents', async () => {
+    const html = await generateIncidentEmailHTML(
+      { ...baseIncident, status: 'RESOLVED', resolvedAt: new Date('2026-09-05T10:30:00Z') },
+      'UTC',
+      'resolved'
+    );
+    expectHeaderTone(html, 'ok');
+    expectButtonTone(html, 'ok');
+    expect(html).toContain('Resolved');
     expect(html).toContain('View Resolution');
   });
 
-  it('generates an Amber template for Acknowledged incidents', () => {
-    const ackIncident = {
-      ...baseIncident,
-      status: 'ACKNOWLEDGED',
-      acknowledgedAt: new Date('2026-09-05T10:05:00Z'),
-    };
-    const html = generateIncidentEmailHTML(ackIncident, 'UTC', 'acknowledged');
-
-    expect(html).toContain('linear-gradient(135deg, #78350f 0%, #b45309 45%, #d97706 100%)');
-    expect(html).toContain('ACKNOWLEDGED');
+  it('generates an Amber template for Acknowledged incidents', async () => {
+    const html = await generateIncidentEmailHTML(
+      { ...baseIncident, status: 'ACKNOWLEDGED', acknowledgedAt: new Date('2026-09-05T10:05:00Z') },
+      'UTC',
+      'acknowledged'
+    );
+    expectHeaderTone(html, 'elevated');
+    expect(html).toContain('Acknowledged');
   });
 
-  it('generates a Cobalt Blue template for Low urgency / updated incidents', () => {
-    const lowIncident = {
-      ...baseIncident,
-      urgency: 'LOW',
-    };
-    const html = generateIncidentEmailHTML(lowIncident, 'UTC', 'updated');
-
-    expect(html).toContain('linear-gradient(135deg, #1e3a8a 0%, #2563eb 45%, #3b82f6 100%)');
-    expect(html).toContain('UPDATED');
+  it('generates a Cobalt template for updated incidents', async () => {
+    const html = await generateIncidentEmailHTML({ ...baseIncident, urgency: 'LOW' }, 'UTC', 'updated');
+    expectHeaderTone(html, 'info');
+    expect(html).toContain('Updated');
   });
 
-  it('renders a dynamic fluid container with responsive viewport and styling', () => {
-    const html = generateIncidentEmailHTML(baseIncident, 'UTC', 'triggered');
+  it('renders a 640px Outlook ghost table with responsive and big-screen tiers', async () => {
+    const html = await generateIncidentEmailHTML(baseIncident, 'UTC', 'triggered');
 
-    // Fluid container with max-width 640px
-    expect(html).toContain('max-width: 640px');
-    expect(html).toContain('viewport');
-    expect(html).toContain('mobile-container');
-    expect(html).toContain('mobile-outer-padding');
-    expect(html).toContain('mobile-table-cell');
-    expect(html).toContain('mobile-table-label');
+    expect(html).toContain('max-width:640px');
+    expect(html).toContain('<!--[if mso]><table role="presentation" cellpadding="0" cellspacing="0" border="0" width="640"');
+    expect(html).toContain('name="viewport"');
+    for (const hook of ['mobile-container', 'mobile-outer-padding', 'mobile-table-cell', 'mobile-table-label'])
+      expect(html).toContain(hook);
+    expect(html).toContain('.desktop-container{max-width:1080px!important');
+    expect(html).toContain('.desktop-container{max-width:1180px!important');
   });
 
-  it('renders a dedicated Incident Description card instead of unstyled Overview header', () => {
-    const html = generateIncidentEmailHTML(baseIncident, 'UTC', 'triggered');
+  it('is Outlook-safe: no gradient without a solid fallback, no SVG, no flex', async () => {
+    const html = await generateIncidentEmailHTML(baseIncident, 'UTC', 'triggered');
+    expect(html).not.toMatch(/<svg/i);
+    expect(html).not.toMatch(/display:\s*(inline-)?flex/);
+    expect(html).not.toMatch(/style="background:\s*linear-gradient/);
+    expect(html).toContain('v:roundrect');
+    expect(html).toContain("font-family:'Segoe UI',Arial,sans-serif!important");
+  });
 
-    // Must NOT contain ambiguous unstyled Overview heading
+  it('renders a dedicated Incident Description card', async () => {
+    const html = await generateIncidentEmailHTML(baseIncident, 'UTC', 'triggered');
     expect(html).not.toContain('<h3 style="font-size:14px">Overview</h3>');
-    // Must contain structured Incident Description header
     expect(html).toContain('Incident Description');
     expect(html).toContain('PostgreSQL connection pool exhausted on ap-south-1 cluster.');
+    expect(html).toContain('white-space:pre-wrap');
   });
 
-  it('includes subtle, elegant branding in the footer without intrusive promotional blocks', () => {
-    const html = generateIncidentEmailHTML(baseIncident, 'UTC', 'triggered');
-
+  it('includes subtle branding in the footer without promotional blocks', async () => {
+    const html = await generateIncidentEmailHTML(baseIncident, 'UTC', 'triggered');
     expect(html).toContain('OpsKnight');
     expect(html).toContain('Open-Source Incident Response');
     expect(html).toContain('automated notification');
-    // Must NOT contain loud promotional cards or star buttons
     expect(html).not.toContain('⭐ Star on GitHub');
     expect(html).not.toContain('https://docs.opsknight.com');
   });
 
-  it('hyperlinks OpsKnight brand logo, name, and footer to https://opsknight.com/', () => {
-    const html = generateIncidentEmailHTML(baseIncident, 'UTC', 'triggered');
-
-    // Header logo & brand name should link to https://opsknight.com/
-    expect(html).toContain('href="https://opsknight.com/"');
-    expect(html).toContain(
-      '<strong class="dm-text-brand" style="color: #0f172a;">OpsKnight</strong></a>'
-    );
+  it('hyperlinks the OpsKnight logo, name and footer to https://opsknight.com/', async () => {
+    const html = await generateIncidentEmailHTML(baseIncident, 'UTC', 'triggered');
+    const brandLinks = html.match(/href="https:\/\/opsknight\.com\/"/g) ?? [];
+    expect(brandLinks.length).toBeGreaterThanOrEqual(3);
+    expect(html).toContain('/images/email/opsknight-logo@2x.png');
+    // Logo sits on a white chip inside the status band, with its true aspect ratio.
+    expect(html).toMatch(/<img[^>]+width="24"[^>]+height="26"/);
+    expect(html).toContain('class="desktop-logo-chip"');
   });
 
-  it('deduplicates eventMessage if it echoes incident title or [Service] title', () => {
-    // Case 1: eventMessage duplicates [Checkout & Payments] Payment Gateway Connection Timeout
-    const duplicateHtml = generateIncidentEmailHTML(
+  it('deduplicates eventMessage if it echoes incident title or [Service] title', async () => {
+    const duplicateHtml = await generateIncidentEmailHTML(
       baseIncident,
       'UTC',
       'triggered',
       `[Checkout & Payments] ${baseIncident.title}`
     );
-    // Should NOT render a standalone duplicate box for the echo
-    expect(duplicateHtml).not.toContain(
-      `padding:12px 16px;margin:16px 0;color:#334155;font-size:13px;line-height:1.5;">[Checkout &amp; Payments]`
-    );
+    expect(duplicateHtml).not.toContain('Latest update');
 
-    // Case 2: Distinct eventMessage provides unique escalation info
-    const distinctHtml = generateIncidentEmailHTML(
+    const distinctHtml = await generateIncidentEmailHTML(
       baseIncident,
       'UTC',
       'triggered',
       'Escalation Level 2: Paged Secondary On-Call'
     );
+    expect(distinctHtml).toContain('Latest update');
     expect(distinctHtml).toContain('Escalation Level 2: Paged Secondary On-Call');
+  });
+
+  it('escapes incident content', async () => {
+    const html = await generateIncidentEmailHTML(
+      { ...baseIncident, title: '<script>alert(1)</script>', description: '<img src=x onerror=1>' },
+      'UTC',
+      'triggered'
+    );
+    expect(html).not.toContain('<script>alert(1)</script>');
+    expect(html).not.toContain('<img src=x');
+    expect(html).toContain('&lt;script&gt;');
   });
 });
 
 describe('Shift Reminder & Handoff Email Templates', () => {
-  it('generates a polished upcoming shift reminder email with countdown and checklist', () => {
-    const data = {
+  it('generates an upcoming shift reminder with countdown and checklist in Royal Violet', async () => {
+    const html = await generateShiftReminderEmailHTML({
       userName: 'Sarah Chen',
       scheduleName: 'Primary Tier-1 SRE',
       scheduleUrl: 'https://opsknight.com/schedules/sched-123',
@@ -163,12 +175,10 @@ describe('Shift Reminder & Handoff Email Templates', () => {
       shiftEnd: new Date('2026-09-06T02:00:00Z'),
       timeZone: 'America/New_York',
       minutesUntilStart: 60,
-    };
+    });
 
-    const html = generateShiftReminderEmailHTML(data);
-
-    // Header gradient should be purple/violet
-    expect(html).toContain('linear-gradient(135deg, #4c1d95 0%, #6d28d9 45%, #7c3aed 100%)');
+    expectHeaderTone(html, 'shift');
+    expectButtonTone(html, 'shift');
     expect(html).toContain('Upcoming On-Call Shift');
     expect(html).toContain('Primary Tier-1 SRE');
     expect(html).toContain('Sarah Chen');
@@ -178,8 +188,8 @@ describe('Shift Reminder & Handoff Email Templates', () => {
     expect(html).toContain('https://opsknight.com/schedules/sched-123');
   });
 
-  it('generates a shift handoff email with reassigned active incidents', () => {
-    const data = {
+  it('generates a shift handoff email with reassigned active incidents', async () => {
+    const html = await generateShiftHandoffEmailHTML({
       userName: 'David Miller',
       scheduleName: 'Platform Infrastructure Rotation',
       scheduleUrl: 'https://opsknight.com/schedules/sched-456',
@@ -198,10 +208,9 @@ describe('Shift Reminder & Handoff Email Templates', () => {
         },
       ],
       timeZone: 'UTC',
-    };
+    });
 
-    const html = generateShiftHandoffEmailHTML(data);
-
+    expectHeaderTone(html, 'shift');
     expect(html).toContain('Shift Rotation Handoff');
     expect(html).toContain('David Miller');
     expect(html).toContain('Platform Infrastructure Rotation');
@@ -212,52 +221,41 @@ describe('Shift Reminder & Handoff Email Templates', () => {
     expect(html).toContain('https://opsknight.com/incidents/inc-102');
   });
 
-  it('caps the number of active incidents in shift handoff email to default limit of 5 with an overflow card', () => {
+  it('caps handoff incidents to the default limit of 5 with an overflow card', async () => {
     const incidents = Array.from({ length: 9 }, (_, i) => ({
       id: `inc-${i + 1}`,
       title: `Incident Service Outage #${i + 1}`,
       status: i % 2 === 0 ? 'TRIGGERED' : 'ACKNOWLEDGED',
       incidentUrl: `https://opsknight.com/incidents/inc-${i + 1}`,
     }));
-
-    const data = {
+    const html = await generateShiftHandoffEmailHTML({
       userName: 'David Miller',
       scheduleName: 'Platform Infrastructure Rotation',
       scheduleUrl: 'https://opsknight.com/schedules/sched-456',
       activeIncidents: incidents,
       timeZone: 'UTC',
-    };
+    });
 
-    const html = generateShiftHandoffEmailHTML(data);
-
-    // Should indicate total count
     expect(html).toContain('9 active incident(s)');
     expect(html).toContain('showing top 5');
-
-    // Should render the first 5 incidents
     for (let i = 1; i <= 5; i++) {
       expect(html).toContain(`Incident Service Outage #${i}`);
       expect(html).toContain(`https://opsknight.com/incidents/inc-${i}`);
     }
-
-    // Should NOT render incidents beyond the cap
     expect(html).not.toContain('Incident Service Outage #6');
     expect(html).not.toContain('https://opsknight.com/incidents/inc-6');
-
-    // Should render overflow card indicating + 4 more
     expect(html).toContain('+ 4 more active incidents assigned to this shift.');
     expect(html).toContain('View all on schedule');
   });
 
-  it('allows custom maxIncidents cap in shift handoff email', () => {
+  it('allows a custom maxIncidents cap', async () => {
     const incidents = Array.from({ length: 4 }, (_, i) => ({
       id: `inc-${i + 1}`,
       title: `Incident #${i + 1}`,
       status: 'TRIGGERED',
       incidentUrl: `https://opsknight.com/incidents/inc-${i + 1}`,
     }));
-
-    const html = generateShiftHandoffEmailHTML({
+    const html = await generateShiftHandoffEmailHTML({
       userName: 'David Miller',
       scheduleName: 'Tier 1 Support',
       scheduleUrl: 'https://opsknight.com/schedules/sched-789',
@@ -265,7 +263,6 @@ describe('Shift Reminder & Handoff Email Templates', () => {
       timeZone: 'UTC',
       maxIncidents: 2,
     });
-
     expect(html).toContain('Incident #1');
     expect(html).toContain('Incident #2');
     expect(html).not.toContain('Incident #3');
@@ -274,36 +271,35 @@ describe('Shift Reminder & Handoff Email Templates', () => {
 });
 
 describe('Email Templates Dark Mode Compliance', () => {
-  it('includes dark mode media query and color-scheme metadata in container', () => {
-    const baseIncident = {
-      id: 'inc-999',
-      title: 'Dark Mode Verification Incident',
-      status: 'TRIGGERED',
-      urgency: 'HIGH',
-      service: { name: 'Core API' },
-      createdAt: new Date('2026-09-05T10:00:00Z'),
-    };
+  it('ships all three dark-mode layers and color-scheme metadata', async () => {
+    const html = await generateIncidentEmailHTML(
+      {
+        id: 'inc-999',
+        title: 'Dark Mode Verification Incident',
+        status: 'TRIGGERED',
+        urgency: 'HIGH',
+        service: { name: 'Core API' },
+        createdAt: new Date('2026-09-05T10:00:00Z'),
+      },
+      'UTC',
+      'triggered'
+    );
 
-    const html = generateIncidentEmailHTML(baseIncident, 'UTC', 'triggered');
-
-    // Must declare light dark color-scheme in meta and CSS root
     expect(html).toContain('name="color-scheme" content="light dark"');
     expect(html).toContain('name="supported-color-schemes" content="light dark"');
-    expect(html).toContain('@media (prefers-color-scheme: dark)');
-
-    // Must include dm-* class hooks for background, cards, text, and containers
-    expect(html).toContain('dm-bg-outer');
-    expect(html).toContain('dm-bg-card');
-    expect(html).toContain('dm-bg-content');
-    expect(html).toContain('dm-bg-footer');
-    expect(html).toContain('dm-text-heading');
-    expect(html).toContain('dm-text-body');
+    // 1. Apple Mail / Outlook Mac & iOS
+    expect(html).toContain('@media (prefers-color-scheme:dark)');
+    // 2. Outlook.com / new Outlook
+    expect(html).toContain('[data-ogsc] .dm-text-heading');
+    expect(html).toContain('[data-ogsb] .dm-bg-card');
+    for (const hook of ['dm-bg-page', 'dm-bg-card', 'dm-text-heading', 'dm-text-body'])
+      expect(html).toContain(hook);
   });
 });
 
 describe('User Invite Email Template', () => {
-  it('generates standardized invite email with 40px logo, [OpsKnight] subject, and dark mode support', () => {
-    const result = getUserInviteEmailTemplate({
+  it('generates the invite email with subject, CTA, expiry and dark mode support', async () => {
+    const result = await getUserInviteEmailTemplate({
       userName: 'Jordan Lee',
       inviteUrl: 'https://opsknight.com/invite/tok123',
       invitedBy: 'Admin Team',
@@ -311,17 +307,13 @@ describe('User Invite Email Template', () => {
     });
 
     expect(result.subject).toBe("[OpsKnight] You're invited to join");
-    expect(result.html).toContain('width="40"');
-    expect(result.html).toContain('Hi Jordan Lee,');
-    expect(result.html).toContain(
-      'You have been invited by <strong>Admin Team</strong> to join OpsKnight.'
-    );
-    expect(result.html).toContain(
-      'Click the button below to set your password and access your account.'
-    );
-    expect(result.html).toContain('This invite link expires in 7 days');
+    expect(result.html).toContain('Hi <!-- -->Jordan Lee<!-- -->,');
+    expect(result.html).toContain('<strong class="dm-text-heading"');
+    expect(result.html).toContain('Admin Team');
+    expect(result.html).toContain('Click the button below to set your password and access your account.');
+    expect(result.html).toContain('This invite link expires in <!-- -->7 days');
     expect(result.html).toContain('https://opsknight.com/invite/tok123');
-    expect(result.html).toContain('@media (prefers-color-scheme: dark)');
+    expect(result.html).toContain('@media (prefers-color-scheme:dark)');
     expect(result.html).toContain('dm-text-heading');
 
     expect(result.text).toContain('[OpsKnight] Invitation');
@@ -331,21 +323,20 @@ describe('User Invite Email Template', () => {
 });
 
 describe('Password Reset Email Template', () => {
-  it('generates clean reset email with standardized subject, 40px logo, no AlertBox emoji, and dark mode support', () => {
-    const result = getPasswordResetEmailTemplate({
+  it('generates the reset email with subject, security notice, expiry and dark mode support', async () => {
+    const result = await getPasswordResetEmailTemplate({
       userName: 'Alex Morgan',
       resetLink: 'https://opsknight.com/reset-password/tok456',
       expiryMinutes: 60,
     });
 
     expect(result.subject).toBe('[OpsKnight] Reset your password');
-    expect(result.html).toContain('width="40"');
-    expect(result.html).toContain('Hi Alex Morgan,');
+    expect(result.html).toContain('Alex Morgan');
     expect(result.html).toContain('Security Notice');
     expect(result.html).not.toContain('🛡️ Security Notice');
-    expect(result.html).toContain('This link expires in 60 minutes');
+    expect(result.html).toContain('This link expires in <!-- -->60 minutes');
     expect(result.html).toContain('https://opsknight.com/reset-password/tok456');
-    expect(result.html).toContain('@media (prefers-color-scheme: dark)');
+    expect(result.html).toContain('@media (prefers-color-scheme:dark)');
     expect(result.html).toContain('dm-text-heading');
 
     expect(result.text).toContain('[OpsKnight] Password Reset Request');

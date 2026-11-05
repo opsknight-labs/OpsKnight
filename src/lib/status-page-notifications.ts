@@ -11,14 +11,15 @@ import {
   buildSubscriberIncidentPresentation,
   incidentSubscriberDeliveryKey,
 } from '@/lib/status-page-delivery';
+import { renderEmail } from '@/emails/render';
+import { StatusUpdateEmail } from '@/emails/templates/status-update';
 import {
-  EmailContainer,
-  EmailContent,
-  SubscriberEmailHeader,
-  SubscriberEmailFooter,
-  EmailButton,
-  escapeHtml,
-} from '@/lib/email-components';
+  StatusAnnouncementEmail,
+  announcementEndTimeSection,
+  announcementPostedAtSection,
+  announcementPresentation,
+} from '@/emails/templates/status-announcement';
+import { normalizeSupportUrl, resolveBrandLogoUrl } from '@/emails/utils';
 import { addOperationalMetric } from '@/lib/metrics/operational/registry';
 import {
   beginNotificationFanout,
@@ -176,16 +177,15 @@ export async function notifyStatusPageSubscribers(
           ? getStatusPageLogoUrl(page, page.id, appBaseUrl)
           : rawLogoUrl;
       const brandLogoUrl = resolveBrandLogoUrl(logoUrl, statusPageUrl);
-      const safeBrandLogoUrl = brandLogoUrl ? escapeHtml(brandLogoUrl) : undefined;
       const presentation = buildSubscriberIncidentPresentation(page, incident);
       const subject = formatSubject(displayName, presentation.incident.title, eventType);
-      const html = formatEmailBody(
+      const html = await formatEmailBody(
         displayName,
         presentation.incident,
         eventType,
         statusPageUrl,
         page.contactUrl,
-        safeBrandLogoUrl,
+        brandLogoUrl,
         {
           showAffectedService: presentation.showAffectedService,
           showDescription: presentation.showDescription,
@@ -271,6 +271,7 @@ export async function notifyStatusPageSubscribers(
                 subject,
                 contentId: fanout.contentId,
                 unsubscribeUrl: `${statusPageUrl}/unsubscribe/${unsubscribeTokens.get(sub.id)}`,
+                listUnsubscribeUrl: oneClickUnsubscribeUrl(appBaseUrl, unsubscribeTokens.get(sub.id)),
                 providerScope: {
                   statusPageId: page.id,
                   subscriptionId: sub.id,
@@ -359,43 +360,16 @@ function formatSubject(pageName: string, incidentTitle: string, eventType: strin
   return `${prefix} ${label}: ${incidentTitle}`;
 }
 
-function resolveBrandLogoUrl(logoUrl: string | undefined, baseUrl: string): string | undefined {
-  if (!logoUrl) return undefined;
-  if (logoUrl.startsWith('http') || logoUrl.startsWith('data:')) return logoUrl;
-  if (!baseUrl || !baseUrl.startsWith('http')) return logoUrl;
-  try {
-    const parsed = new URL(baseUrl);
-    const basePath =
-      parsed.pathname && parsed.pathname !== '/' ? parsed.pathname.replace(/\/$/, '') : '';
-    const normalizedPath = logoUrl.startsWith('/') ? logoUrl : `/${logoUrl}`;
-    if (basePath.endsWith('/status')) {
-      const prefix = `${parsed.origin}${basePath.slice(0, -'/status'.length)}`;
-      return `${prefix}${normalizedPath}`;
-    }
-    const prefix = basePath ? `${parsed.origin}${basePath}` : parsed.origin;
-    return `${prefix}${normalizedPath}`;
-  } catch {
-    const normalizedBase = baseUrl.replace(/\/$/, '');
-    const normalizedPath = logoUrl.startsWith('/') ? logoUrl : `/${logoUrl}`;
-    return `${normalizedBase}${normalizedPath}`;
-  }
+/**
+ * RFC 8058 one-click unsubscribe endpoint for the List-Unsubscribe header. Mail providers
+ * POST here without cookies or an Origin, so it lives on the app host (public /api/status).
+ */
+function oneClickUnsubscribeUrl(appBaseUrl: string, token: string | undefined): string | undefined {
+  if (!token || !/^https?:\/\//i.test(appBaseUrl)) return undefined;
+  return `${appBaseUrl.replace(/\/+$/, '')}/api/status/subscriptions/unsubscribe/one-click/${encodeURIComponent(token)}`;
 }
 
-function normalizeSupportUrl(value?: string | null): string | undefined {
-  if (!value) return undefined;
-  const trimmed = value.trim();
-  if (!trimmed) return undefined;
-  if (
-    trimmed.startsWith('http://') ||
-    trimmed.startsWith('https://') ||
-    trimmed.startsWith('mailto:')
-  ) {
-    return trimmed;
-  }
-  return undefined;
-}
-
-function formatEmailBody(
+async function formatEmailBody(
   pageName: string,
   incident: {
     title?: string | null;
@@ -411,131 +385,26 @@ function formatEmailBody(
     showDescription: boolean;
     showTimestamp: boolean;
   } = { showAffectedService: true, showDescription: true, showTimestamp: true }
-): string {
-  const statusInfo = new Map<
-    string,
-    { label: string; badge: 'success' | 'warning' | 'error' | 'info' }
-  >([
-    ['triggered', { label: 'New Incident', badge: 'error' }],
-    ['acknowledged', { label: 'Investigating', badge: 'warning' }],
-    ['resolved', { label: 'Resolved', badge: 'success' }],
-    ['investigating', { label: 'Investigating', badge: 'warning' }],
-    ['identified', { label: 'Identified', badge: 'warning' }],
-    ['monitoring', { label: 'Monitoring', badge: 'info' }],
-    ['completed', { label: 'Maintenance Completed', badge: 'success' }],
-    ['scheduled', { label: 'Maintenance Scheduled', badge: 'info' }],
-    ['inprogress', { label: 'In Progress', badge: 'warning' }],
-  ]).get(eventType) ?? { label: 'Update', badge: 'info' as const };
-  const safePageName = escapeHtml(pageName);
-  const safeIncidentTitle = escapeHtml(incident.title || 'Incident Update');
-  const safeServiceName = escapeHtml(incident.service?.name || 'Service');
-  const safeDescription = incident.description
-    ? escapeHtml(incident.description)
-    : 'Additional incident details are not published.';
-  const safeStatusPageUrl = escapeHtml(statusPageUrl);
-  const supportUrl = normalizeSupportUrl(contactUrl);
-  const safeSupportUrl = supportUrl ? escapeHtml(supportUrl) : '';
-  const safeStatusLabel = escapeHtml(statusInfo.label);
-
-  const headerGradients: Record<string, string> = {
-    success: 'linear-gradient(135deg, #166534 0%, #16a34a 45%, #22c55e 100%)',
-    warning: 'linear-gradient(135deg, #92400e 0%, #d97706 50%, #f59e0b 100%)',
-    error: 'linear-gradient(135deg, #7f1d1d 0%, #b91c1c 50%, #dc2626 100%)',
-    info: 'linear-gradient(135deg, #1e3a8a 0%, #2563eb 50%, #3b82f6 100%)',
-  };
-  const buttonThemes: Record<string, { background: string; shadow: string }> = {
-    success: {
-      background: 'linear-gradient(135deg, #16a34a 0%, #22c55e 100%)',
-      shadow: '0 10px 22px rgba(22, 163, 74, 0.35)',
-    },
-    warning: {
-      background: 'linear-gradient(135deg, #d97706 0%, #f59e0b 100%)',
-      shadow: '0 10px 22px rgba(217, 119, 6, 0.35)',
-    },
-    error: {
-      background: 'linear-gradient(135deg, #b91c1c 0%, #dc2626 100%)',
-      shadow: '0 10px 22px rgba(185, 28, 28, 0.35)',
-    },
-    info: {
-      background: 'linear-gradient(135deg, #2563eb 0%, #3b82f6 100%)',
-      shadow: '0 10px 22px rgba(37, 99, 235, 0.35)',
-    },
-  };
-
-  const headerGradient =
-    statusInfo.badge === 'success'
-      ? headerGradients.success
-      : statusInfo.badge === 'warning'
-        ? headerGradients.warning
-        : statusInfo.badge === 'error'
-          ? headerGradients.error
-          : headerGradients.info;
-  const header = SubscriberEmailHeader(safePageName, safeStatusLabel, safeIncidentTitle, {
-    headerGradient,
-    logoUrl,
-    brandName: safePageName,
-  });
-
-  let contentBody = '';
-  if (privacy.showAffectedService) {
-    contentBody += `
-        <div style="margin-bottom: 24px;">
-            <p style="font-size: 16px; color: #4b5563; margin-bottom: 8px; font-weight: 500;">
-                Affecting Service:
-            </p>
-            <h2 style="font-size: 20px; color: #1f2937; margin: 0; font-weight: 700;">
-                ${safeServiceName}
-            </h2>
-        </div>`;
-  }
-
-  contentBody += `
-        <div style="background: #f9fafb; border-radius: 12px; padding: 24px; border: 1px solid #e5e7eb; margin-bottom: 32px;">
-            <h3 style="font-size: 14px; text-transform: uppercase; color: #6b7280; margin: 0 0 12px 0; letter-spacing: 0.05em; font-weight: 600;">
-                Update Details
-            </h3>
-            <p style="font-size: 16px; line-height: 1.6; color: #374151; margin: 0; white-space: pre-wrap;">
-                ${privacy.showDescription ? safeDescription : 'Additional incident details are not published.'}
-            </p>
-            ${
-              privacy.showTimestamp
-                ? `<p style="font-size: 14px; color: #9ca3af; margin-top: 16px; font-style: italic;">
-                Posted on ${new Date().toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })}
-            </p>`
-                : ''
-            }
-        </div>
-    `;
-
-  const buttonTheme =
-    statusInfo.badge === 'success'
-      ? buttonThemes.success
-      : statusInfo.badge === 'warning'
-        ? buttonThemes.warning
-        : statusInfo.badge === 'error'
-          ? buttonThemes.error
-          : buttonThemes.info;
-  contentBody += EmailButton('View Status Page', safeStatusPageUrl, {
-    buttonBackground: buttonTheme.background,
-    buttonShadow: buttonTheme.shadow,
-  });
-
-  if (supportUrl) {
-    contentBody += `
-        <div style="text-align: center; margin-top: 24px;">
-            <a href="${safeSupportUrl}" style="color: #6b7280; font-size: 14px; text-decoration: none;">Contact Support</a>
-        </div>`;
-  } else {
-    contentBody += `
-        <div style="text-align: center; margin-top: 32px; padding-top: 24px; border-top: 1px solid #e5e7eb;">
-            <span style="color: #9ca3af; font-weight: 600;">Contact support via your usual channels.</span>
-        </div>`;
-  }
-
-  const body = EmailContent(contentBody);
-  const footer = SubscriberEmailFooter('{{unsubscribe_url}}', safePageName);
-
-  return EmailContainer(header + body + footer);
+): Promise<string> {
+  const { html } = await renderEmail(
+    StatusUpdateEmail({
+      pageName,
+      logoUrl,
+      statusPageUrl,
+      eventType,
+      incidentTitle: incident.title || 'Incident Update',
+      serviceName: privacy.showAffectedService ? incident.service?.name || 'Service' : undefined,
+      description: privacy.showDescription ? incident.description || undefined : undefined,
+      // Subscribers have no stored timezone here, so state UTC explicitly.
+      postedAt: privacy.showTimestamp
+        ? formatDateTime(new Date(), 'UTC', { format: 'datetime', includeTimeZone: true })
+        : undefined,
+      supportUrl: normalizeSupportUrl(contactUrl),
+      // Substituted per recipient at send time (notification-control-plane).
+      unsubscribeUrl: '{{unsubscribe_url}}',
+    })
+  );
+  return html;
 }
 
 export async function notifyStatusPageSubscribersAnnouncement(
@@ -610,74 +479,23 @@ export async function notifyStatusPageSubscribersAnnouncement(
         ? getStatusPageLogoUrl(page, page.id, appBaseUrl)
         : rawLogoUrl;
     const brandLogoUrl = resolveBrandLogoUrl(logoUrl, statusPageUrl);
-    const safeBrandLogoUrl = brandLogoUrl ? escapeHtml(brandLogoUrl) : undefined;
-    const safeDisplayName = escapeHtml(displayName);
-    const safeAnnouncementTitle = escapeHtml(announcement.title || 'Announcement');
-    const safeAnnouncementMessage = escapeHtml(announcement.message || '');
-
-    const themes: Record<
-      string,
-      { label: string; color: string; bg: string; borderColor: string }
-    > = {
-      INCIDENT: { label: 'Incident', color: '#dc2626', bg: '#fef2f2', borderColor: '#fecaca' },
-      MAINTENANCE: {
-        label: 'Maintenance',
-        color: '#2563eb',
-        bg: '#eff6ff',
-        borderColor: '#bfdbfe',
-      },
-      UPDATE: { label: 'Update', color: '#059669', bg: '#ecfdf5', borderColor: '#a7f3d0' },
-      WARNING: { label: 'Warning', color: '#d97706', bg: '#fffbeb', borderColor: '#fde68a' },
-      INFO: { label: 'Information', color: '#4b5563', bg: '#f9fafb', borderColor: '#e5e7eb' },
-    };
-
-    const theme = themes[announcement.type as string] || themes['INFO'];
+    const theme = announcementPresentation(announcement.type as string);
     const subject = `[${displayName}] ${theme.label}: ${announcement.title}`;
-
-    const announcementHeader = SubscriberEmailHeader(
-      safeDisplayName,
-      escapeHtml(theme.label),
-      safeAnnouncementTitle,
-      {
-        headerGradient:
-          announcement.type === 'INCIDENT'
-            ? 'linear-gradient(135deg, #7f1d1d 0%, #b91c1c 50%, #dc2626 100%)'
-            : announcement.type === 'MAINTENANCE'
-              ? 'linear-gradient(135deg, #1e3a8a 0%, #2563eb 50%, #3b82f6 100%)'
-              : announcement.type === 'UPDATE'
-                ? 'linear-gradient(135deg, #166534 0%, #16a34a 45%, #22c55e 100%)'
-                : announcement.type === 'WARNING'
-                  ? 'linear-gradient(135deg, #92400e 0%, #d97706 50%, #f59e0b 100%)'
-                  : 'linear-gradient(135deg, #8b1a1a 0%, #b91c1c 40%, #c92a2a 70%, #dc2626 100%)',
-        logoUrl: safeBrandLogoUrl,
-        brandName: safeDisplayName,
-      }
+    const { html } = await renderEmail(
+      StatusAnnouncementEmail({
+        pageName: displayName,
+        logoUrl: brandLogoUrl,
+        statusPageUrl,
+        type: announcement.type as string,
+        title: announcement.title || 'Announcement',
+        message: announcement.message || '',
+        // Per-recipient placeholders, substituted at send time in the subscriber's timezone.
+        startTime: '{{start_time}}',
+        endTimeSectionHtml: '{{end_time_section}}',
+        postedAtSectionHtml: '{{posted_at_section}}',
+        unsubscribeUrl: '{{unsubscribe_url}}',
+      })
     );
-
-    const contentBody = `
-            <div style="background: ${theme.bg}; border-radius: 12px; padding: 24px; border: 1px solid ${theme.borderColor}; margin-bottom: 32px;">
-                <h3 style="font-size: 14px; text-transform: uppercase; color: ${theme.color}; margin: 0 0 12px 0; letter-spacing: 0.05em; font-weight: 700;">
-                    ${escapeHtml(theme.label)} Details
-                </h3>
-                <p style="font-size: 16px; line-height: 1.6; color: #374151; margin: 0; white-space: pre-wrap;">
-                    ${safeAnnouncementMessage}
-                </p>
-                <div style="margin-top: 20px; padding-top: 16px; border-top: 1px solid ${theme.borderColor}; display: flex; gap: 24px; color: #6b7280; font-size: 14px;">
-                    <div>
-                        <span style="font-weight: 600; color: ${theme.color};">Start:</span> {{start_time}}
-                    </div>
-                    {{end_time_section}}
-                </div>
-                {{posted_at_section}}
-            </div>
-            <div style="text-align: center; margin-top: 32px;">
-                <a href="${escapeHtml(statusPageUrl)}" style="display: inline-block; background: #2563eb; color: white; padding: 12px 24px; border-radius: 6px; text-decoration: none; font-weight: 600; box-shadow: 0 4px 6px -1px rgba(37, 99, 235, 0.2);">View Status Page</a>
-            </div>
-        `;
-
-    const body = EmailContent(contentBody);
-    const footer = SubscriberEmailFooter('{{unsubscribe_url}}', safeDisplayName);
-    const html = EmailContainer(announcementHeader + body + footer);
 
     const PAGE_SIZE = 500;
     const trafficClass = 'BULK' as const;
@@ -843,7 +661,7 @@ export async function notifyStatusPageSubscribersAnnouncement(
                     format: 'datetime',
                     includeTimeZone: true,
                   });
-                  endTimeSectionForSub = `<div><span style="font-weight: 600; color: ${theme.color};">End:</span> ${endFormatted}</div>`;
+                  endTimeSectionForSub = announcementEndTimeSection(endFormatted);
                 }
               }
 
@@ -855,7 +673,7 @@ export async function notifyStatusPageSubscribersAnnouncement(
                   includeTimeZone: true,
                 }
               );
-              const postedAtSectionForSub = `<p style="font-size: 14px; color: #9ca3af; margin-top: 16px; font-style: italic;">Posted on ${postedAtFormatted}</p>`;
+              const postedAtSectionForSub = announcementPostedAtSection(postedAtFormatted);
 
               return {
                 category: 'STATUS_PAGE',
@@ -882,6 +700,10 @@ export async function notifyStatusPageSubscribersAnnouncement(
                   subject,
                   contentId: fanout.contentId,
                   unsubscribeUrl: `${statusPageUrl}/unsubscribe/${unsubscribeTokens.get(sub.id)}`,
+                  listUnsubscribeUrl: oneClickUnsubscribeUrl(
+                    appBaseUrl,
+                    unsubscribeTokens.get(sub.id)
+                  ),
                   startTime: startTimeForSub,
                   endTimeSection: endTimeSectionForSub,
                   postedAtSection: postedAtSectionForSub,

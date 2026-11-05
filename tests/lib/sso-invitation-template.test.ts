@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { getUserInviteEmailTemplate } from '@/lib/user-invite-email-template';
 describe('password-free invitation instructions', () => {
-  it('describes verified SSO linking without suggesting password setup', () => {
-    const result = getUserInviteEmailTemplate({
+  it('describes verified SSO linking without suggesting password setup', async () => {
+    const result = await getUserInviteEmailTemplate({
       userName: '<script>unsafe</script>',
       inviteUrl: 'https://instance.example.test/login',
       ssoOnly: true,
