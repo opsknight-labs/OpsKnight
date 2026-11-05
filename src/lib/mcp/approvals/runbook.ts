@@ -512,7 +512,7 @@ export async function decideMcpRunbookReview(
       { ...input, reason: input.reason || undefined, commitDeadline: deadline },
       reviewer
     );
-    await resolveReviewerNotices(tx, [preview.id], input.decision);
+    await resolveReviewerNotices(tx, [preview.id], input.decision, new Date(), reviewer.id);
     await notifyRequesterOfDecision(tx, {
       id: preview.id,
       requesterId: preview.actorId,

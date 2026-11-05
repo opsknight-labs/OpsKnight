@@ -604,7 +604,10 @@ describe('UX-3 reviewer notices close when a request is decided or lapses', () =
     const closed = await unread(prepared.approvalId, second.id);
     expect(closed.readAt).not.toBeNull();
     expect(closed.message).toMatch(/Another reviewer approved/);
-    expect((await unread(prepared.approvalId, f.reviewer.id)).readAt).not.toBeNull();
+    const own = await unread(prepared.approvalId, f.reviewer.id);
+    expect(own.readAt).not.toBeNull();
+    // The reviewer who decided is not told "another reviewer" did it.
+    expect(own.message).toBe('You approved this request.');
     // The requester's decision notice (same entity) stays unread.
     const decision = await unread(prepared.approvalId, f.user.id);
     expect(decision.title).toBe('Your change was approved');
@@ -626,6 +629,10 @@ describe('UX-3 reviewer notices close when a request is decided or lapses', () =
       r.reviewer
     );
     expect((await unread(plan.previewId, admin.id)).readAt).not.toBeNull();
+    expect((await unread(plan.previewId, admin.id)).message).toMatch(/Another reviewer approved/);
+    expect((await unread(plan.previewId, r.reviewer.id)).message).toBe(
+      'You approved this request.'
+    );
     expect((await unread(plan.previewId, r.user.id)).readAt).toBeNull();
 
     await expireMcpApprovals();
@@ -682,13 +689,21 @@ describe('SEC-8 runbook prepares share the pending backlog cap', () => {
 });
 
 describe('OBS-13 finished approvals are purged after 90 days', () => {
-  it('deletes old committed, rejected and expired rows and never open or executing ones', async () => {
+  it('deletes old committed, failed, rejected and expired rows and never open or executing ones', async () => {
     const f = await fixture();
     const old = new Date(Date.now() - 91 * 86_400_000);
     const rows = [];
-    for (const title of ['committed', 'rejected', 'expired', 'executing', 'pending', 'recent'])
+    for (const title of [
+      'committed',
+      'rejected',
+      'expired',
+      'executing',
+      'pending',
+      'recent',
+      'failed',
+    ])
       rows.push(await prepareMcpOperation(f.ctx(), f.announcementArgs(title)));
-    const [committed, rejected, expired, executing, pending, recent] = rows.map(
+    const [committed, rejected, expired, executing, pending, recent, failed] = rows.map(
       row => row.approvalId
     );
     const set = (id: string, status: string, createdAt: Date) =>
@@ -698,7 +713,9 @@ describe('OBS-13 finished approvals are purged after 90 days', () => {
           status,
           createdAt,
           ...(status === 'REJECTED' ? { rejectedAt: createdAt } : {}),
-          ...(['EXECUTING', 'COMMITTED'].includes(status) ? { reviewedAt: createdAt } : {}),
+          ...(['EXECUTING', 'COMMITTED', 'FAILED'].includes(status)
+            ? { reviewedAt: createdAt }
+            : {}),
         },
       });
     await set(committed, 'COMMITTED', old);
@@ -707,8 +724,10 @@ describe('OBS-13 finished approvals are purged after 90 days', () => {
     await set(executing, 'EXECUTING', old);
     await set(pending, 'PENDING', old);
     await set(recent, 'COMMITTED', new Date(Date.now() - 89 * 86_400_000));
+    // A definitive failure is terminal too, long after its execution window.
+    await set(failed, 'FAILED', old);
     const result = await cleanupMcpCredentials();
-    expect(result.purgedApprovals).toBeGreaterThanOrEqual(3);
+    expect(result.purgedApprovals).toBeGreaterThanOrEqual(4);
     const left = new Set(
       (
         await db.mcpOperationApproval.findMany({

@@ -101,6 +101,15 @@ it('UX-12: bulk expose under a filter keeps the rest of a disabled domain off', 
   expect(action.mock.calls[0][0].disabled).toEqual(['deleteService', 'domain:incidents']);
 });
 
+it('UX-12: a filter that matches nothing offers no bulk action', () => {
+  renderMixed();
+  search('no-such-capability');
+  const master = screen.getByRole('checkbox', { name: /0 of 0 shown exposed/ });
+  expect(master).toBeDisabled();
+  expect(master).not.toBeChecked();
+  expect(screen.getByRole('button', { name: 'Expose the 0 capabilities shown' })).toBeDisabled();
+});
+
 it('UX-12: the view-only preset turns off every change and keeps every read', async () => {
   const action = renderMixed(['listServices']);
   fireEvent.click(screen.getByRole('button', { name: 'View-only preset' }));

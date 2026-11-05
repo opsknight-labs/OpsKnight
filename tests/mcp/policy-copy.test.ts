@@ -64,10 +64,31 @@ describe('SEC-2 / UX-1 accurate change copy', () => {
       expect(describeMcpScope(scope)).not.toMatch(MCP_FALSE_APPROVAL_CLAIM);
   });
 
+  it('never says every incident action runs directly while some wait for approval', () => {
+    // Snooze, suppress, reopen and incident edits are approval-gated R2 operations.
+    const gated = MCP_CATALOG.filter(
+      operation =>
+        operation.domain === 'incidents' &&
+        operation.method !== 'get' &&
+        isMcpApprovalGated(operation)
+    );
+    expect(gated.length).toBeGreaterThan(0);
+    for (const copy of [
+      MCP_WRITE_MODE_SUMMARY,
+      MCP_WRITE_SCOPE_GROUP_DESCRIPTION,
+      MCP_WRITE_MODE_HINT.on,
+      MCP_CONSENT_WRITES_OFF_NOTE,
+    ])
+      // Each clause that says incident actions run directly must qualify them as routine.
+      for (const clause of copy.toLowerCase().split(/[.;]/))
+        if (clause.includes('incident actions') && clause.includes('direct'))
+          expect(clause, copy).toContain('routine incident actions');
+  });
+
   it('says both halves: incident actions run directly, the rest waits for a human', () => {
     expect(MCP_WRITE_MODE_SUMMARY).toMatch(/run directly/);
     expect(MCP_WRITE_MODE_SUMMARY).toMatch(/runbook approver/);
-    expect(MCP_CONSENT_WRITES_OFF_NOTE).toMatch(/incident actions then run directly/);
+    expect(MCP_CONSENT_WRITES_OFF_NOTE).toMatch(/routine incident actions then run directly/);
     // The screens render the shared strings, not their own wording.
     expect(source('src/components/settings/mcp/McpPolicyForm.tsx')).toContain(
       'MCP_WRITE_MODE_SUMMARY'

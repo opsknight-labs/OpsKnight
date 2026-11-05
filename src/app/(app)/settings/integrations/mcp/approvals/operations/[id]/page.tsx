@@ -139,14 +139,14 @@ export default async function OperationApproval({ params }: { params: Promise<{ 
             Compared with the target when the request was made. Display only: the approval binds the
             new values, not this comparison.
           </p>
-          <DiffTable rows={changed} />
+          <DiffTable rows={changed} caption="Changed fields, before and after" />
           {unchanged.length > 0 && (
             <details className="rounded border p-3">
               <summary className="cursor-pointer text-sm font-medium">
                 {unchanged.length} unchanged {unchanged.length === 1 ? 'field' : 'fields'}
               </summary>
               <div className="pt-3">
-                <DiffTable rows={unchanged} />
+                <DiffTable rows={unchanged} caption="Unchanged fields" />
               </div>
             </details>
           )}
@@ -228,15 +228,17 @@ const DIFF_STATUS = new Map([
   ['changed', 'Changed'],
   ['unchanged', 'Unchanged'],
   ['not_in_view', 'Not in current view'],
+  ['not_compared', 'Value hidden or cut short: check the new value'],
+  ['removed', 'Removed by this change'],
 ]);
 
 /** Before and after for each field; values come from the request and are untrusted text. */
-function DiffTable({ rows }: { rows: OperationDiffRow[] }) {
+function DiffTable({ rows, caption }: { rows: OperationDiffRow[]; caption: string }) {
   if (!rows.length) return <p className="text-sm">No field differs from the current state.</p>;
   return (
     <div className="overflow-x-auto">
       <table className="w-full table-fixed border-collapse text-sm">
-        <caption className="sr-only">Changed fields, before and after</caption>
+        <caption className="sr-only">{caption}</caption>
         <thead>
           <tr className="border-b text-left">
             <th scope="col" className={cn(DT_CLASS, 'w-1/4 py-2 pr-3 font-normal')}>
@@ -262,7 +264,7 @@ function DiffTable({ rows }: { rows: OperationDiffRow[] }) {
               <td className="whitespace-pre-wrap break-words py-2 pr-3 text-muted-foreground">
                 {row.before ?? '—'}
               </td>
-              <td className="whitespace-pre-wrap break-words py-2">{row.after}</td>
+              <td className="whitespace-pre-wrap break-words py-2">{row.after ?? '—'}</td>
             </tr>
           ))}
         </tbody>

@@ -71,9 +71,12 @@ const diffRowSchema = z
   .object({
     field: z.string(),
     before: z.string().nullable(),
-    after: z.string(),
+    // Null only for a list member the request drops.
+    after: z.string().nullable(),
     // not_in_view: the read of the target does not carry this field, so nothing is guessed.
-    status: z.enum(['changed', 'unchanged', 'not_in_view']),
+    // not_compared: a withheld, cut-short or too-deep value, which can never be shown as equal.
+    // removed: a list member the target has and the request's replacement list does not.
+    status: z.enum(['changed', 'unchanged', 'not_in_view', 'not_compared', 'removed']),
   })
   .strict();
 export type OperationDiffRow = z.infer<typeof diffRowSchema>;
@@ -195,25 +198,80 @@ export function reviewSummary(operationId: string, frozen: Frozen) {
   });
 }
 
+const MAX_DIFF_TEXT = 300;
+const MAX_REMOVED_ROWS = 40;
+
+/** A flattened value that stands in for the real one, so equality says nothing. */
+function placeholderValue(text: string) {
+  return (
+    text === '[withheld]' ||
+    text === '[too deep]' ||
+    (text.length > MAX_DIFF_TEXT && text.endsWith('…'))
+  );
+}
+
+function clip(text: string) {
+  return text.length > MAX_DIFF_TEXT ? `${text.slice(0, MAX_DIFF_TEXT)}…` : text;
+}
+
+/** The members of a list or object at `field`, as "suffix: value" lines. */
+function membersOf(current: readonly [string, string][], field: string) {
+  return current
+    .filter(([path]) => path.startsWith(`${field}.`) || path.startsWith(`${field}[`))
+    .map(([path, value]) => `${path.slice(field.length)}: ${value}`);
+}
+
 /**
  * The changed fields lined up against the target's state before the change, flattened and
  * redacted exactly like the changes themselves. A field the read does not carry is reported as
- * not in view rather than guessed.
+ * not in view rather than guessed; a withheld or cut-short value is never called unchanged; and a
+ * list the request replaces with a shorter one lists the members it drops.
  */
 export function reviewDiff(changes: readonly [string, string][], before: unknown) {
   if (before === null || before === undefined || !changes.length) return [];
   const current: [string, string][] = [];
   flatten(before, '', current, 0, 1000);
   const values = new Map(current);
-  return changes.map(([field, after]): OperationDiffRow => {
+  const rows = changes.map(([field, after]): OperationDiffRow => {
     const previous = values.get(field);
-    return {
-      field,
-      before: previous ?? null,
-      after,
-      status: previous === undefined ? 'not_in_view' : previous === after ? 'unchanged' : 'changed',
-    };
+    if (previous === undefined) {
+      // The request sets a whole list or object (an empty one, say) the target holds members of.
+      const members = membersOf(current, field);
+      return members.length
+        ? { field, before: clip(members.join('\n')), after, status: 'changed' }
+        : { field, before: null, after, status: 'not_in_view' };
+    }
+    if (placeholderValue(previous) || placeholderValue(after))
+      return { field, before: previous, after, status: 'not_compared' };
+    return { field, before: previous, after, status: previous === after ? 'unchanged' : 'changed' };
   });
+  // A cut-short request may not show every member it sends, so nothing is called dropped.
+  if (changes.length >= 80) return rows;
+  // Every list the request names, with the member indexes it sends.
+  const sent = new Map<string, Set<string>>();
+  for (const [field] of changes)
+    for (const match of field.matchAll(/\[(\d+)\]/g)) {
+      const list = field.slice(0, match.index);
+      const indexes = sent.get(list) ?? new Set<string>();
+      indexes.add(match[1]);
+      sent.set(list, indexes);
+    }
+  const removed: OperationDiffRow[] = [];
+  for (const [list, indexes] of sent) {
+    const dropped = new Set<string>();
+    for (const [path] of current) {
+      if (!path.startsWith(`${list}[`)) continue;
+      const index = /^\[(\d+)\]/.exec(path.slice(list.length))?.[1];
+      if (index !== undefined && !indexes.has(index)) dropped.add(index);
+    }
+    for (const index of dropped) {
+      if (removed.length >= MAX_REMOVED_ROWS) break;
+      const field = `${list}[${index}]`;
+      const previous = values.get(field) ?? clip(membersOf(current, field).join('\n'));
+      removed.push({ field, before: previous, after: null, status: 'removed' });
+    }
+  }
+  return [...rows, ...removed];
 }
 
 const MAX_PREVIEW_CHARS = 4000;
@@ -1056,7 +1114,7 @@ export async function decideMcpOperationReview(
       },
       tx
     );
-    await resolveReviewerNotices(tx, [approval.id], input.decision, now);
+    await resolveReviewerNotices(tx, [approval.id], input.decision, now, reviewer.id);
     await notifyRequesterOfDecision(tx, {
       id: approval.id,
       requesterId: approval.actorId,

@@ -31,6 +31,10 @@ const RESOLVED_MESSAGE = new Map([
   ['reject', 'Another reviewer rejected this request. Nothing is waiting for you.'],
   ['expire', 'This request expired before it was used. Nothing is waiting for you.'],
 ] as const);
+const DECIDER_MESSAGE = new Map([
+  ['approve', 'You approved this request.'],
+  ['reject', 'You rejected this request.'],
+] as const);
 
 /** Untrusted names (a self-registered assistant chooses its own) are quoted and shortened. */
 function quoted(value: string | null | undefined, max = 60) {
@@ -224,23 +228,32 @@ export async function notifyRequesterOfDecision(
 /**
  * Closes the other reviewers' unread calls to action once a request is decided or lapses, in the
  * caller's transaction. Only the reviewer titles match, so the requester's decision notice (same
- * entity) stays unread.
+ * entity) stays unread. The reviewer who decided gets their own wording, not "another reviewer".
  */
 export async function resolveReviewerNotices(
   tx: Prisma.TransactionClient,
   ids: readonly string[],
   outcome: 'approve' | 'reject' | 'expire',
-  now = new Date()
+  now = new Date(),
+  deciderId?: string
 ) {
   if (!ids.length) return 0;
+  const where = {
+    entityType: MCP_APPROVAL_ENTITY_TYPE,
+    entityId: { in: [...ids] },
+    readAt: null,
+    title: { in: [OPERATION_REVIEW_TITLE, RUNBOOK_REVIEW_TITLE] },
+  };
+  const own =
+    deciderId && outcome !== 'expire'
+      ? await tx.inAppNotification.updateMany({
+          where: { ...where, userId: deciderId },
+          data: { readAt: now, message: DECIDER_MESSAGE.get(outcome)! },
+        })
+      : { count: 0 };
   const resolved = await tx.inAppNotification.updateMany({
-    where: {
-      entityType: MCP_APPROVAL_ENTITY_TYPE,
-      entityId: { in: [...ids] },
-      readAt: null,
-      title: { in: [OPERATION_REVIEW_TITLE, RUNBOOK_REVIEW_TITLE] },
-    },
+    where,
     data: { readAt: now, message: RESOLVED_MESSAGE.get(outcome)! },
   });
-  return resolved.count;
+  return own.count + resolved.count;
 }

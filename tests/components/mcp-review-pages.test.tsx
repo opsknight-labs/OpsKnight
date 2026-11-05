@@ -96,6 +96,7 @@ beforeEach(() => {
       diff: [
         { field: 'name', before: 'Platform', after: 'Platform', status: 'unchanged' },
         { field: 'description', before: 'Before', after: 'After', status: 'changed' },
+        { field: 'members[1]', before: '.userId: u2', after: null, status: 'removed' },
       ],
     },
   });
@@ -158,6 +159,12 @@ describe('UX-6 / UX-7 operation review page', () => {
     expect(row).toHaveTextContent('Before');
     expect(row).toHaveTextContent('After');
     expect(screen.getByText('1 unchanged field').closest('details')).not.toBeNull();
+    // A list member the request drops is shown in the main table, never collapsed.
+    const dropped = within(table)
+      .getByRole('rowheader', { name: /members\[1\]/ })
+      .closest('tr')!;
+    expect(dropped).toHaveTextContent('Removed by this change');
+    expect(dropped.closest('details')).toBeNull();
     // Digest and request line live behind "Verification details".
     const verification = screen.getByText('Verification details').closest('details')!;
     expect(verification).toHaveTextContent(digest);

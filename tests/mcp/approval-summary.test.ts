@@ -72,10 +72,42 @@ describe('UX-6 before/after view of a reviewed change', () => {
       { field: 'name', before: 'Old name', after: 'New name', status: 'changed' },
       { field: 'description', before: 'Same', after: 'Same', status: 'unchanged' },
       { field: 'tier', before: null, after: 'gold', status: 'not_in_view' },
-      { field: '.apiToken', before: '[withheld]', after: '[withheld]', status: 'unchanged' },
+      // A withheld secret may have changed: never filed under "unchanged".
+      { field: '.apiToken', before: '[withheld]', after: '[withheld]', status: 'not_compared' },
     ]);
     expect(JSON.stringify(diff)).not.toMatch(/sk-(old|new)/);
     expect(reviewDiff(changes, null)).toEqual([]);
+  });
+
+  it('never calls a cut-short value unchanged', () => {
+    const long = 'x'.repeat(400);
+    const changes = reviewSummary('updateService', {
+      path: { id: 's1' },
+      body: { description: `${long}new` },
+    }).changes;
+    expect(reviewDiff(changes, { description: `${long}old` })).toEqual([
+      expect.objectContaining({ field: 'description', status: 'not_compared' }),
+    ]);
+  });
+
+  it('lists the members a shorter replacement list drops, and an emptied list as changed', () => {
+    const changes = reviewSummary('updateEscalationPolicy', {
+      path: { id: 'p1' },
+      body: { steps: [{ targetId: 'u1', delay: 5 }], tags: [] },
+    }).changes;
+    const diff = reviewDiff(changes, {
+      steps: [
+        { targetId: 'u1', delay: 5 },
+        { targetId: 'u2', delay: 10 },
+      ],
+      tags: ['prod', 'db'],
+    });
+    expect(diff).toEqual([
+      { field: 'steps[0].targetId', before: 'u1', after: 'u1', status: 'unchanged' },
+      { field: 'steps[0].delay', before: '5', after: '5', status: 'unchanged' },
+      { field: 'tags', before: '[0]: prod\n[1]: db', after: '[]', status: 'changed' },
+      { field: 'steps[1]', before: '.targetId: u2\n.delay: 10', after: null, status: 'removed' },
+    ]);
   });
 
   it('keeps the diff out of the digest', () => {

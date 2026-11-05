@@ -11,7 +11,7 @@ export const UNUSED_REGISTRATION_TTL_MS = 30 * 86_400_000;
 export const MCP_CLEANUP_BATCH = 500;
 
 /**
- * Finished approvals (committed, rejected or expired) are deleted this long after they were
+ * Finished approvals (committed, failed, rejected or expired) are deleted this long after they were
  * requested. The mcp.operation.* audit events stay as the durable record.
  */
 export const MCP_APPROVAL_RETENTION_MS = 90 * 86_400_000;
@@ -97,7 +97,8 @@ export async function expireMcpApprovals(now = new Date()) {
  */
 export async function purgeFinishedMcpApprovals(now = new Date()) {
   const before = new Date(now.getTime() - MCP_APPROVAL_RETENTION_MS);
-  const finished = ['COMMITTED', 'REJECTED', 'EXPIRED'];
+  // FAILED can still reconcile to COMMITTED, but only within the hour-long execution window.
+  const finished = ['COMMITTED', 'FAILED', 'REJECTED', 'EXPIRED'];
   return prisma.$transaction(async tx => {
     const rows = await tx.$queryRaw<{ id: string }[]>`
       SELECT id FROM "McpOperationApproval"
@@ -115,19 +116,31 @@ export async function purgeFinishedMcpApprovals(now = new Date()) {
   });
 }
 
-/** Deletes one batch of activity rows older than the activity retention window. */
+/**
+ * Activity batches deleted per tick. One row is written per MCP request, so a single batch per
+ * tick (every few minutes) would fall behind a busy deployment and let the table grow for ever.
+ */
+export const MCP_CALL_LOG_PURGE_BATCHES = 20;
+
+/** Deletes activity rows older than the retention window, in bounded batches. */
 export async function purgeMcpCallLog(now = new Date()) {
   const before = new Date(now.getTime() - MCP_CALL_LOG_RETENTION_MS);
-  return prisma.$transaction(async tx => {
-    const rows = await tx.$queryRaw<{ id: string }[]>`
-      SELECT id FROM "McpCallLog" WHERE "at" < ${before}
-      ORDER BY "at" ASC, id ASC LIMIT ${MCP_CLEANUP_BATCH} FOR UPDATE SKIP LOCKED`;
-    if (!rows.length) return 0;
-    const deleted = await tx.mcpCallLog.deleteMany({
-      where: { id: { in: rows.map(row => row.id) }, at: { lt: before } },
+  let total = 0;
+  for (let batch = 0; batch < MCP_CALL_LOG_PURGE_BATCHES; batch++) {
+    const count = await prisma.$transaction(async tx => {
+      const rows = await tx.$queryRaw<{ id: string }[]>`
+        SELECT id FROM "McpCallLog" WHERE "at" < ${before}
+        ORDER BY "at" ASC, id ASC LIMIT ${MCP_CLEANUP_BATCH} FOR UPDATE SKIP LOCKED`;
+      if (!rows.length) return 0;
+      const deleted = await tx.mcpCallLog.deleteMany({
+        where: { id: { in: rows.map(row => row.id) }, at: { lt: before } },
+      });
+      return deleted.count;
     });
-    return deleted.count;
-  });
+    total += count;
+    if (count < MCP_CLEANUP_BATCH) break;
+  }
+  return total;
 }
 
 /** Bounded maintenance on the existing scheduler; no new queue or worker. */

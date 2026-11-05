@@ -604,7 +604,11 @@ export default function McpCapabilityControlsPanel({
                   ref={capabilitiesMasterRef}
                   id={`${idPrefix}-capabilities-master-select`}
                   type="checkbox"
-                  checked={filtering ? shownExposed === shown.length : allExposed}
+                  checked={
+                    filtering ? shown.length > 0 && shownExposed === shown.length : allExposed
+                  }
+                  // A filter that matches nothing leaves nothing to select.
+                  disabled={filtering && shown.length === 0}
                   onChange={e => (e.target.checked ? bulk(true) : setConfirmDisableAll(true))}
                   className="h-3.5 w-3.5 rounded border-border text-primary focus:ring-1 focus:ring-primary accent-primary cursor-pointer"
                 />

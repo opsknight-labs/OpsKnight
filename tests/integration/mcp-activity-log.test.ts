@@ -10,7 +10,11 @@ import {
 } from '../helpers/test-db';
 import { digestMcpSecret, mcpResource } from '@/lib/mcp/auth/config';
 import { flushMcpCallLog, mcpCallLogOperationId } from '@/lib/mcp/core/call-log';
-import { cleanupMcpCredentials } from '@/lib/mcp/auth/retention';
+import {
+  MCP_CLEANUP_BATCH,
+  cleanupMcpCredentials,
+  purgeMcpCallLog,
+} from '@/lib/mcp/auth/retention';
 import { listMcpConnectionActivity } from '@/app/(app)/settings/integrations/mcp/activity';
 import type { McpViewer } from '@/app/(app)/settings/integrations/mcp/queries';
 import { McpBoundaryError } from '@/lib/mcp/core/errors';
@@ -286,5 +290,23 @@ describe('D8 activity retention', () => {
     const left = await db.mcpCallLog.findMany({ where: { grantId: grant.id } });
     expect(left).toHaveLength(2);
     for (const kept of left) expect(Date.now() - kept.at.getTime()).toBeLessThan(30 * day);
+  });
+
+  it('purges more than one batch per tick, so a busy deployment cannot outgrow the purge', async () => {
+    const { grant } = await principal();
+    const at = new Date(Date.now() - 31 * 86_400_000);
+    const count = MCP_CLEANUP_BATCH * 2 + 7;
+    await db.mcpCallLog.createMany({
+      data: Array.from({ length: count }, (_, index) => ({
+        grantId: grant.id,
+        at,
+        tool: 'whoami',
+        outcome: 'served',
+        durationMs: 1,
+        requestId: `old-${index}`,
+      })),
+    });
+    expect(await purgeMcpCallLog()).toBeGreaterThanOrEqual(count);
+    expect(await db.mcpCallLog.count({ where: { grantId: grant.id } })).toBe(0);
   });
 });
