@@ -184,8 +184,9 @@ export type EscalationPolicyValidation = { "policyId": string; "revision": numbe
 export type EscalationPolicyDependencies = { "policyId": string; "services": Array<{ "id": string; "name": string } & Record<string, unknown>>; "usage": { "services": number; "versionRefs": number; "decisions": number } & Record<string, unknown>; "truncated": { "services": boolean; "targets": boolean } & Record<string, unknown>; "targets": Array<{ "stepId": string; "stepOrder": number; "targetType": "USER" | "TEAM" | "SCHEDULE"; "targetId": string | null; "exists": boolean } & Record<string, unknown>>; "valid": boolean; "deletionAllowed": boolean } & Record<string, unknown>;
 export type ActionResult = { "success": boolean; "message"?: string } & Record<string, unknown>;
 export type IncidentTransition = { "id": string; "title": string; "status": "OPEN" | "ACKNOWLEDGED" | "RESOLVED" | "SNOOZED" | "SUPPRESSED"; "priority"?: string | null; "urgency": "LOW" | "MEDIUM" | "HIGH"; "acknowledgedAt"?: string | null; "resolvedAt"?: string | null; "updatedAt": string } & Record<string, unknown>;
+export type IncidentEscalation = { "requested": boolean; "reason": "INCIDENT_NOT_ESCALATABLE" | null; "outcome": string | null; "escalated": boolean; "paged": { "stepIndex"?: number | null; "targetType"?: string | null; "targetName"?: string | null; "targetCount"?: number | null } & Record<string, unknown> | null; "incident": { "id": string; "status": "OPEN" | "ACKNOWLEDGED" | "RESOLVED" | "SNOOZED" | "SUPPRESSED"; "escalation": { "step": number | null; "status": string | null; "nextAt": string | null } & Record<string, unknown> } & Record<string, unknown> } & Record<string, unknown>;
 export type IncidentAssignment = { "id": string; "title"?: string; "status": string; "assigneeId"?: string | null; "teamId"?: string | null; "assignee"?: { "id"?: string; "name"?: string; "email"?: string } & Record<string, unknown> | null; "team"?: { "id"?: string; "name"?: string } & Record<string, unknown> | null; "updatedAt": string } & Record<string, unknown>;
-export type ScheduleOnCall = { "schedule": { "id"?: string; "name"?: string; "timeZone"?: string } & Record<string, unknown>; "at": string; "onCallUsers": Array<{ "id"?: string; "name"?: string; "email"?: string; "role"?: string; "timeZone"?: string | null } & Record<string, unknown>> } & Record<string, unknown>;
+export type ScheduleOnCall = { "schedule": { "id"?: string; "name"?: string; "timeZone"?: string } & Record<string, unknown>; "at": string; "onCallUsers": Array<{ "id"?: string; "name"?: string; "email"?: string; "role"?: string; "timeZone"?: string | null; "shiftEndsAt"?: string | null } & Record<string, unknown>>; "next": { "userId": string; "name": string | null; "start": string } & Record<string, unknown> | null } & Record<string, unknown>;
 export type ScheduleOverride = { "id": string; "scheduleId": string; "userId": string; "replacesUserId"?: string | null; "startDate": string; "endDate": string; "createdAt"?: string } & Record<string, unknown>;
 export type ScheduleOverrideCancellation = { "id": string; "cancelled": true } & Record<string, unknown>;
 export type ScheduleCoverage = { "schedule": { "id": string; "name": string; "timeZone": string; "revision": number } & Record<string, unknown>; "start": string; "end": string; "shifts": Array<{ "userId": string; "start": string; "end": string } & Record<string, unknown>>; "gaps": Array<{ "start": string; "end": string } & Record<string, unknown>> } & Record<string, unknown>;
@@ -196,6 +197,7 @@ export type ServiceSlaPolicy = { "policy": null | { "scopeKey": string; "version
 export type RunbookExecutionStarted = { "executionId": string; "status": string; "runbookId": string; "incidentId"?: string | null; "serviceId"?: string | null; "message"?: string } & Record<string, unknown>;
 export type RunbookStep = { "key": string; "name": string; "type": string; "riskClass"?: string | null; "description"?: string | null; "requiresApproval": boolean; "requiresAgent": boolean; "timeoutSeconds"?: number | null; "maxRetries"?: number | null; "precheckSteps"?: Array<RunbookStep>; "verificationSteps"?: Array<RunbookStep> } & Record<string, unknown>;
 export type ServiceAccountTokenIssued = { "token": string; "apiKey": { "id": string; "name": string; "prefix": string; "scopes": Array<string>; "createdAt": string; "expiresAt"?: string | null } & Record<string, unknown> } & Record<string, unknown>;
+export type IncidentDetail = { "id": string; "title": string; "description"?: string | null; "status": "OPEN" | "ACKNOWLEDGED" | "RESOLVED" | "SNOOZED" | "SUPPRESSED"; "priority"?: "P1" | "P2" | "P3" | "P4" | "P5" | null; "urgency": "LOW" | "MEDIUM" | "HIGH"; "serviceId": string; "service"?: { "id"?: string; "name"?: string } & Record<string, unknown>; "assignee"?: { "id"?: string; "name"?: string; "email"?: string } & Record<string, unknown> | null; "teamId"?: string | null; "createdAt": string; "updatedAt": string; "acknowledgedAt"?: string | null; "resolvedAt"?: string | null; "assigneeId"?: string | null; "team"?: { "id"?: string; "name"?: string } & Record<string, unknown> | null; "snoozedUntil"?: string | null; "slaPausedMs"?: number | null; "slaAckElapsedMs"?: number | null; "slaResolveElapsedMs"?: number | null; "escalation": { "step": number | null; "status": string | null; "nextAt": string | null } & Record<string, unknown>; "sla": { "ackTargetMs": number | null; "resolveTargetMs": number | null; "ackElapsedMs": number | null; "resolveElapsedMs": number | null; "pausedMs": number | null } & Record<string, unknown> } & Record<string, unknown>;
 export interface OperationRequests {
   getChatOpsConfiguration: Record<string, never>;
   updateChatOpsConfiguration: { "headers": { "Idempotency-Key": string; "If-Match": string }; "body": { "enabled": boolean; "channelPrefix": string; "autoCreateOnUrgency": Array<string>; "autoCreateOnPriority": Array<string>; "archiveOnResolve": boolean; "defaultVideoBridge": string; "customBridgeUrlTemplate": string; "defaultProviders": Array<string> } };
@@ -397,13 +399,14 @@ export interface OperationRequests {
   createEscalationPolicy: { "body": { "name": string; "description"?: string | null; "steps": Array<{ "delayMinutes": number; "targetType": "USER" | "SCHEDULE" | "TEAM"; "targetId": string; "notificationChannels"?: Array<string>; "notifyOnlyTeamLead"?: boolean; "conditions"?: Array<Record<string, unknown>> } & Record<string, unknown>> } & Record<string, unknown> };
   acknowledgeIncident: { "params": { "id": string }; "headers"?: { "Idempotency-Key"?: string }; "body"?: { "note"?: string } & Record<string, unknown> };
   assignIncident: { "params": { "id": string }; "headers"?: { "Idempotency-Key"?: string }; "body": { "assigneeId"?: string | null; "teamId"?: string | null } & Record<string, unknown> };
+  escalateIncident: { "params": { "id": string }; "headers"?: { "Idempotency-Key"?: string } };
   listIncidentNotes: { "params": { "id": string } };
   addIncidentNote: { "params": { "id": string }; "headers"?: { "Idempotency-Key"?: string }; "body": { "content": string } & Record<string, unknown> };
   resolveIncident: { "params": { "id": string }; "headers"?: { "Idempotency-Key"?: string }; "body"?: { "resolutionNote"?: string; "resolutionKind"?: "MANUAL" | "SOURCE_RECOVERY" | "AUTOMATION" | "AUTO_TIMEOUT" | "UNKNOWN" } & Record<string, unknown> };
   getIncident: { "params": { "id": string } };
   updateIncident: { "params": { "id": string }; "headers"?: { "Idempotency-Key"?: string }; "body": { "title"?: string; "description"?: string | null; "priority"?: "P1" | "P2" | "P3" | "P4" | "P5" | null; "urgency"?: "LOW" | "MEDIUM" | "HIGH"; "status"?: "OPEN" | "ACKNOWLEDGED" | "RESOLVED" | "SNOOZED" | "SUPPRESSED"; "assigneeId"?: string | null } & Record<string, unknown> };
   getIncidentTimeline: { "params": { "id": string }; "query"?: { "limit"?: number; "cursor"?: string } };
-  listIncidents: { "query"?: { "limit"?: number; "cursor"?: string; "status"?: "OPEN" | "ACKNOWLEDGED" | "RESOLVED" | "SNOOZED" | "SUPPRESSED"; "priority"?: "P1" | "P2" | "P3" | "P4" | "P5"; "urgency"?: "LOW" | "MEDIUM" | "HIGH"; "serviceId"?: string; "assigneeId"?: string; "teamId"?: string; "search"?: string } };
+  listIncidents: { "query"?: { "limit"?: number; "cursor"?: string; "status"?: string; "createdAfter"?: string; "createdBefore"?: string; "priority"?: "P1" | "P2" | "P3" | "P4" | "P5"; "urgency"?: "LOW" | "MEDIUM" | "HIGH"; "serviceId"?: string; "assigneeId"?: string; "teamId"?: string; "search"?: string } };
   createIncident: { "headers"?: { "Idempotency-Key"?: string }; "body": { "title": string; "description"?: string | null; "serviceId": string; "urgency"?: "LOW" | "MEDIUM" | "HIGH"; "priority"?: "P1" | "P2" | "P3" | "P4" | "P5" | null; "assigneeId"?: string | null; "teamId"?: string | null; "dedupKey"?: string | null; "customFields"?: Array<Record<string, unknown>> } & Record<string, unknown> };
   getIntegration: { "params": { "id": string } };
   listIntegrationTypes: Record<string, never>;
@@ -719,10 +722,11 @@ export interface OperationResponses {
   createEscalationPolicy: { "data": EscalationPolicy; "requestId": string; "timestamp": string } & Record<string, unknown>;
   acknowledgeIncident: { "data": IncidentTransition; "requestId": string; "timestamp": string } & Record<string, unknown>;
   assignIncident: { "data": IncidentAssignment; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  escalateIncident: { "data": IncidentEscalation; "requestId": string; "timestamp": string } & Record<string, unknown>;
   listIncidentNotes: { "data": Array<IncidentNote>; "requestId": string; "timestamp": string } & Record<string, unknown>;
   addIncidentNote: { "data": IncidentNote; "requestId": string; "timestamp": string } & Record<string, unknown>;
   resolveIncident: { "data": IncidentTransition; "requestId": string; "timestamp": string } & Record<string, unknown>;
-  getIncident: { "data": Incident; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  getIncident: { "data": IncidentDetail; "requestId": string; "timestamp": string } & Record<string, unknown>;
   updateIncident: { "data": Incident; "requestId": string; "timestamp": string } & Record<string, unknown>;
   getIncidentTimeline: { "data": Array<IncidentTimelineEvent>; "pagination"?: Pagination; "requestId": string; "timestamp": string } & Record<string, unknown>;
   listIncidents: { "data"?: Array<Incident>; "pagination"?: Pagination } & Record<string, unknown>;
@@ -2687,6 +2691,14 @@ export const OPERATIONS = {
     "idempotency": "supported",
     "requiredHeaders": [],
     "bodyRequired": true
+  },
+  "escalateIncident": {
+    "method": "POST",
+    "path": "/incidents/{id}/escalate",
+    "kind": "item",
+    "idempotency": "supported",
+    "requiredHeaders": [],
+    "bodyRequired": false
   },
   "listIncidentNotes": {
     "method": "GET",

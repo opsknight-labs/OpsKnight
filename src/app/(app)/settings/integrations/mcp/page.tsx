@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import prisma from '@/lib/prisma';
 import { getMcpConfigurationStatus } from '@/lib/mcp/auth/config';
+import { mcpForceDisabled } from '@/lib/mcp/core/kill-switch';
 import DetailHeroBanner from '@/components/ui/DetailHeroBanner';
 import { Badge } from '@/components/ui/shadcn/badge';
 import { Button } from '@/components/ui/shadcn/button';
@@ -28,6 +29,14 @@ import McpSectionNav, { type McpNavItem } from '@/components/settings/mcp/McpSec
 import McpOverviewSection from '@/components/settings/mcp/sections/McpOverviewSection';
 import McpConnectSection from '@/components/settings/mcp/sections/McpConnectSection';
 import McpConnectionsSection from '@/components/settings/mcp/sections/McpConnectionsSection';
+import McpPersonalTokenForm from '@/components/settings/mcp/McpPersonalTokenForm';
+import {
+  MCP_PAT_DEFAULT_DAYS,
+  mcpPatExpiryChoices,
+  mcpPatMaxDays,
+  mcpPatScopeChoices,
+} from '@/lib/mcp/auth/personal-tokens';
+import { isAppRole } from '@/lib/authorization';
 import McpAssistantsSection from '@/components/settings/mcp/sections/McpAssistantsSection';
 import McpApprovalsSection from '@/components/settings/mcp/sections/McpApprovalsSection';
 import McpPolicySection from '@/components/settings/mcp/sections/McpPolicySection';
@@ -35,6 +44,14 @@ import McpCapabilityControls from './components/McpCapabilityControls';
 import { DEFAULT_ASSISTANT_SCOPES } from '@/lib/mcp/auth/client-policy';
 import { describeMcpScope, supportedMcpScopes } from '@/lib/mcp/auth/scopes';
 import {
+  MCP_WRITE_MODE_HINT,
+  MCP_WRITE_MODE_LABEL,
+  MCP_WRITE_MODE_VALUE,
+} from '@/lib/mcp/policy-copy';
+import { loadMcpConnectionActivity } from './activity-actions';
+import {
+  checkMcpConnection,
+  createMcpPersonalAccessToken,
   enableMcpQuickSetup,
   registerMcpClient,
   restoreMcpClient,
@@ -43,7 +60,14 @@ import {
   testMcpConnection,
   updateMcpPolicy,
 } from './actions';
-import { mcpHref, parseMcpListParams, totalPages, type McpSection } from './list-params';
+import {
+  effectiveApprovalKind,
+  mcpHref,
+  parseMcpListParams,
+  totalPages,
+  waitingApprovalKind,
+  type McpSection,
+} from './list-params';
 import {
   countActiveClients,
   countActiveConnections,
@@ -116,7 +140,8 @@ export default async function McpSettings({
     ]);
   const systemSettings = !configuration.origin ? systemRevision : null;
 
-  const enabled = policy?.enabled ?? false;
+  const forceDisabled = mcpForceDisabled();
+  const enabled = (policy?.enabled ?? false) && !forceDisabled;
   const ready = configuration.issues.length === 0;
   const automaticReady = ready && enabled && Boolean(policy?.dcrEnabled && policy.dcrScopes.length);
   const endpoint = configuration.origin ? `${configuration.origin}/mcp` : null;
@@ -130,7 +155,8 @@ export default async function McpSettings({
     connect: mcpHref({ tab: 'connect' }),
     connections: mcpHref({ tab: 'connections' }),
     assistants: mcpHref({ tab: 'assistants' }),
-    approvals: mcpHref({ tab: 'approvals' }),
+    // Opens the queue that has waiting requests, so the pending badge never lands on an empty list.
+    approvals: mcpHref({ tab: 'approvals', kind: isAdmin ? waitingApprovalKind(pending) : null }),
     policy: mcpHref({ tab: 'policy' }),
     capabilities: mcpHref({ tab: 'capabilities' }),
   };
@@ -178,7 +204,7 @@ export default async function McpSettings({
       <DetailHeroBanner
         tag="AI AGENT PROTOCOL & INTEGRATION"
         title="Model Context Protocol (MCP) Integration"
-        subtitle="Connect Anthropic Claude, ChatGPT, Cursor, and agentic assistants to OpsKnight with explicit user consent, fine-grained RBAC, and administrator approval gates."
+        subtitle="Connect Claude, ChatGPT, Cursor and other assistants to OpsKnight. Each person consents, their own permissions apply, and higher-risk changes wait for human review."
         icon={
           <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500/20 via-primary/15 to-violet-500/20 border border-primary/30 shadow-inner">
             <McpLogo className="h-7 w-7 text-white" />
@@ -191,7 +217,7 @@ export default async function McpSettings({
               className="border-primary-foreground/30 bg-primary-foreground/10 text-primary-foreground text-[10px] font-semibold"
             >
               <Shield className="mr-1 h-3 w-3" aria-hidden="true" />
-              {isAdmin ? 'Administrator view' : 'Your Access'}
+              {isAdmin ? 'Administrator view' : 'Your access'}
             </Badge>
             <Badge
               variant="outline"
@@ -206,17 +232,17 @@ export default async function McpSettings({
               {enabled && ready ? (
                 <>
                   <CheckCircle2 className="mr-1 h-3 w-3" aria-hidden="true" />
-                  Protocol Active & Ready
+                  Ready
                 </>
               ) : ready ? (
                 <>
                   <ArrowUpRight className="mr-1 h-3 w-3" aria-hidden="true" />
-                  Ready to Connect
+                  Ready to connect
                 </>
               ) : (
                 <>
                   <AlertTriangle className="mr-1 h-3 w-3" aria-hidden="true" />
-                  {enabled ? 'Configuration Needed' : 'Setup Required'}
+                  {enabled ? 'Needs configuration' : 'Not set up'}
                 </>
               )}
             </Badge>
@@ -226,7 +252,7 @@ export default async function McpSettings({
                 className="border-primary-foreground/20 bg-primary-foreground/10 text-primary-foreground text-[10px] font-semibold"
               >
                 <Sparkles className="mr-1 h-3 w-3 text-sky-300" aria-hidden="true" />
-                Zero-Config DCR
+                Automatic connections on
               </Badge>
             )}
           </div>
@@ -234,7 +260,7 @@ export default async function McpSettings({
         statsPlacement="bottom"
         stats={[
           {
-            label: 'Server Endpoint',
+            label: 'Server endpoint',
             value: endpoint ?? 'Not configured',
             icon: <Globe className="h-4 w-4" />,
             tooltip: endpoint ?? undefined,
@@ -244,17 +270,17 @@ export default async function McpSettings({
             subtext: originSource ?? 'Set App URL in System settings',
           },
           {
-            label: 'Change Safety',
-            value: policy?.writesEnabled ? 'Approval Required' : 'Read Only',
+            label: MCP_WRITE_MODE_LABEL,
+            value: policy?.writesEnabled ? MCP_WRITE_MODE_VALUE.on : MCP_WRITE_MODE_VALUE.off,
             icon: <PencilLine className="h-4 w-4" />,
             valueClassName: policy?.writesEnabled
               ? 'text-amber-300 font-semibold text-sm sm:text-base'
               : 'text-emerald-300 font-semibold text-sm sm:text-base',
-            subtext: policy?.writesEnabled ? 'Admin approval before run' : 'Mutations blocked',
+            subtext: policy?.writesEnabled ? MCP_WRITE_MODE_HINT.on : MCP_WRITE_MODE_HINT.off,
           },
           {
-            label: 'Sensitive Reads',
-            value: policy?.sensitiveReadsEnabled ? 'Permitted' : 'Enforced Off',
+            label: 'Sensitive reads',
+            value: policy?.sensitiveReadsEnabled ? 'Allowed' : 'Off',
             icon: <ShieldAlert className="h-4 w-4" />,
             valueClassName: policy?.sensitiveReadsEnabled
               ? 'text-amber-300 font-semibold text-sm sm:text-base'
@@ -262,14 +288,31 @@ export default async function McpSettings({
             subtext: 'Configuration redaction',
           },
           {
-            label: isAdmin ? 'Active Connections' : 'Your Connections',
-            value: activeConnections === 1 ? '1 Connection' : `${activeConnections} Connections`,
+            label: isAdmin ? 'Active connections' : 'Your connections',
+            value: activeConnections === 1 ? '1 connection' : `${activeConnections} connections`,
             icon: <Bot className="h-4 w-4" />,
             valueClassName: 'text-primary-foreground font-semibold text-sm sm:text-base',
             subtext: 'Consented agent grants',
           },
         ]}
       />
+
+      {forceDisabled && (
+        <section
+          role="alert"
+          aria-label="MCP disabled by deployment configuration"
+          className="rounded-xl border border-destructive/40 bg-destructive/5 p-4 text-sm md:p-5"
+        >
+          <h2 className="flex items-center gap-2 font-semibold text-destructive">
+            <XCircle className="h-4 w-4" aria-hidden="true" />
+            Disabled by deployment configuration (MCP_FORCE_DISABLED)
+          </h2>
+          <p className="mt-1 text-muted-foreground">
+            The server environment turns AI assistant access off for every user, whatever is saved
+            here. Remove MCP_FORCE_DISABLED and restart OpsKnight to turn it back on.
+          </p>
+        </section>
+      )}
 
       {isAdmin && configuration.issues.length > 0 && (
         <section
@@ -327,6 +370,7 @@ export default async function McpSettings({
             }}
             hrefs={hrefs}
             enableAction={enableMcpQuickSetup}
+            forceDisabled={forceDisabled}
             testAction={testMcpConnection}
             previous={
               policy && !policy.enabled
@@ -349,6 +393,7 @@ export default async function McpSettings({
             endpoint={endpoint}
             sessionIdleDays={policy?.sessionIdleDays ?? null}
             hrefs={hrefs}
+            checkConnection={checkMcpConnection}
           />
         );
       case 'connections': {
@@ -364,8 +409,27 @@ export default async function McpSettings({
           page !== params.page
             ? await listMcpGrants(viewer, { ...input, page }, now)
             : initialResult;
+        // Offered only while the policy allows personal tokens; creation rechecks everything.
+        const patChoices =
+          policy?.enabled && policy.patEnabled && isAppRole(permissions.role)
+            ? mcpPatScopeChoices(policy, permissions.role)
+            : null;
         return (
           <McpConnectionsSection
+            personalTokens={
+              patChoices && (
+                <McpPersonalTokenForm
+                  action={createMcpPersonalAccessToken}
+                  scopeChoices={patChoices.map(scope => ({
+                    scope,
+                    label: describeMcpScope(scope),
+                  }))}
+                  expiryChoices={mcpPatExpiryChoices(policy)}
+                  defaultDays={Math.min(MCP_PAT_DEFAULT_DAYS, mcpPatMaxDays(policy))}
+                  returnPath={mcpHref({ tab: 'connections' })}
+                />
+              )
+            }
             isAdmin={isAdmin}
             rows={result.rows}
             counts={result.counts}
@@ -382,6 +446,7 @@ export default async function McpSettings({
             describeScope={describeMcpScope}
             revokeAction={revokeMcpAccess}
             revokeAllAction={revokeAllMcpConnections}
+            activityAction={loadMcpConnectionActivity}
           />
         );
       }
@@ -414,7 +479,8 @@ export default async function McpSettings({
         );
       }
       case 'approvals': {
-        const input = { kind: params.approvalKind, state: params.approvalState };
+        const kind = effectiveApprovalKind(params, pending);
+        const input = { kind, state: params.approvalState };
         const initialResult = await listMcpApprovals(viewer, { ...input, page: params.page }, now);
         const page = clampPage(params.page, initialResult.total);
         const result =
@@ -426,7 +492,7 @@ export default async function McpSettings({
             rows={result.rows}
             total={result.total}
             page={page}
-            kind={params.approvalKind}
+            kind={kind}
             state={params.approvalState}
             pending={result.pending}
             runbooksOnly={!isAdmin}
@@ -440,7 +506,9 @@ export default async function McpSettings({
         return (
           <McpPolicySection
             policy={{
-              enabled,
+              // The stored switch, not the effective one: saving other settings while
+              // MCP_FORCE_DISABLED is set must not turn MCP off for when the switch is lifted.
+              enabled: policy?.enabled ?? false,
               dcrEnabled: policy?.dcrEnabled ?? false,
               dcrScopes: policy?.dcrScopes ?? [],
               sessionIdleDays: policy?.sessionIdleDays ?? 30,
@@ -452,6 +520,12 @@ export default async function McpSettings({
               requestsPerMinute: policy?.requestsPerMinute ?? 60,
               approvalTtlMinutes: policy?.approvalTtlMinutes ?? 240,
               approvalCommitWindowMinutes: policy?.approvalCommitWindowMinutes ?? 30,
+              allowedBrowserOrigins: policy?.allowedBrowserOrigins ?? [],
+              scopeStepUpEnabled: policy?.scopeStepUpEnabled ?? false,
+              patEnabled: policy?.patEnabled ?? false,
+              patMaxDays: policy?.patMaxDays ?? MCP_PAT_DEFAULT_DAYS,
+              patAllowedScopes: policy?.patAllowedScopes ?? [],
+              requireReadOnlyConnections: policy?.requireReadOnlyConnections ?? false,
             }}
             revision={policy?.policyRevision ?? 0}
             scopeChoices={scopeChoices}

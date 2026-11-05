@@ -1,0 +1,64 @@
+name: MCP mixed-load evidence
+# Nightly and on demand only, never on pull requests: shared runners are too noisy to block merges
+# on a latency ratio. Hermetic: a disposable PostgreSQL service, no external hosts.
+on:
+  schedule:
+    - cron: '17 3 * * *'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: mcp-mixed-load
+  cancel-in-progress: true
+jobs:
+  mcp-mixed-load:
+    name: MCP read load versus ingestion
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    # Advisory until a few nightly runs show the p95 ratio is stable on shared runners; then the
+    # script's own exit code (thresholds MCP_LOAD_MAX_P95_RATIO / MCP_LOAD_MIN_THROUGHPUT_RATIO) blocks.
+    continue-on-error: true
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_PASSWORD: isolated-mcp-ci
+          POSTGRES_DB: opsknight_mcp_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres -d opsknight_mcp_test"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgresql://postgres:isolated-mcp-ci@localhost:5432/opsknight_mcp_test
+      NEXTAUTH_URL: http://localhost:3042
+      NEXT_PUBLIC_APP_URL: http://localhost:3042
+      OPSKNIGHT_PROCESS_ROLE: web
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v4
+        with: { node-version: 20, cache: npm }
+      - run: npm ci --legacy-peer-deps
+      - name: Generate disposable fixture keys
+        run: |
+          node <<'JS'
+          const {randomBytes}=require('node:crypto');
+          const {appendFileSync}=require('node:fs');
+          for (const name of ['NEXTAUTH_SECRET','ENCRYPTION_KEY','API_KEY_SECRET']) {
+            const value=randomBytes(32).toString('hex');
+            console.log(`::add-mask::${value}`);
+            appendFileSync(process.env.GITHUB_ENV,`${name}=${value}\n`);
+          }
+          JS
+      - run: npx prisma generate && npx prisma migrate deploy
+      - name: Mixed MCP and ingestion load (level 0 is the baseline and must come first)
+        env:
+          MCP_LOAD_LEVELS: 0,25,100
+          INGESTION_BENCHMARK_EVENTS: '400'
+        run: |
+          mkdir -p "$RUNNER_TEMP/mcp-evidence"
+          node scripts/mcp/mixed-load.cjs "$RUNNER_TEMP/mcp-evidence/mixed-load.json"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: mcp-mixed-load-${{ github.sha }}
+          path: ${{ runner.temp }}/mcp-evidence

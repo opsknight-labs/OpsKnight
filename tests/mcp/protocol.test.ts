@@ -180,7 +180,7 @@ describe('official SDK modern protocol adapter', () => {
     expect(investigate.title).toBe('Investigate an incident');
     expect(investigate.description).not.toContain('(v2)');
     expect(investigate.arguments).toEqual([
-      expect.objectContaining({ name: 'incidentId', required: false }),
+      expect.objectContaining({ name: 'incidentId', required: true }),
     ]);
     // No database behind this unit handler: authorization fails, so completion must be empty, not an error.
     const completion = await (

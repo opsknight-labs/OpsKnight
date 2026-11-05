@@ -3,6 +3,8 @@
  * its canonical schemas byte for byte (contract hashes cover them); these helpers return copies.
  */
 
+import { MCP_PROJECTION_DEPTH, MCP_SENSITIVE_KEY } from '../core/projection';
+
 type Json = unknown;
 type JsonObject = Record<string, unknown>;
 
@@ -101,4 +103,136 @@ export function compactResult(value: Json): Json {
   }
   // Entries, not assignment: a domain key such as __proto__ stays an own property.
   return Object.fromEntries(entries);
+}
+
+const REF_HOPS = 16;
+// Keywords a projected value may no longer satisfy, or that only constrain absent members.
+const DROPPED = new Set([
+  '$ref',
+  '$defs',
+  'definitions',
+  '$schema',
+  'additionalProperties',
+  'patternProperties',
+  'required',
+  'format',
+  'pattern',
+  'minLength',
+  'maxLength',
+  'not',
+  'discriminator',
+  'nullable',
+  'oneOf',
+  'example',
+  'examples',
+]);
+
+function typesOf(schema: JsonObject): string[] | undefined {
+  if (typeof schema.type === 'string') return [schema.type];
+  return Array.isArray(schema.type) ? (schema.type as string[]) : undefined;
+}
+
+/**
+ * One subschema as projectMcpData leaves its value: `depth` counts like the projection does,
+ * from the root of the domain result. References are inlined, so the depth is exact.
+ */
+function projectSchema(
+  schema: Json,
+  definitions: ReadonlyMap<string, Json>,
+  depth: number,
+  hops = 0
+): Json {
+  if (depth > MCP_PROJECTION_DEPTH || !isObject(schema)) return {};
+  if (typeof schema.$ref === 'string') {
+    const name = schema.$ref.replace(/^#\/\$defs\//, '');
+    return hops < REF_HOPS && definitions.has(name)
+      ? projectSchema(definitions.get(name), definitions, depth, hops + 1)
+      : {};
+  }
+  const entries: [string, unknown][] = [];
+  let types = typesOf(schema);
+  // OpenAPI 3.0 `nullable` is not JSON Schema; a validator would refuse the null it allows.
+  if (schema.nullable === true && types && !types.includes('null')) types = [...types, 'null'];
+  const values = [
+    ...(Array.isArray(schema.enum) ? schema.enum : []),
+    ...('const' in schema ? [schema.const] : []),
+  ];
+  // Any string may be rewritten (redacted, invisible characters stripped), so fixed string
+  // values can no longer be promised.
+  const rewritable = types?.includes('string') || values.some(value => typeof value === 'string');
+  for (const [key, value] of Object.entries(schema)) {
+    if (DROPPED.has(key)) continue;
+    if (key === 'type') {
+      entries.push([key, types && types.length === 1 ? types[0] : types]);
+    } else if ((key === 'enum' || key === 'const') && rewritable) {
+      continue;
+    } else if (key === 'properties' && isObject(value)) {
+      entries.push([
+        key,
+        Object.fromEntries(
+          Object.entries(value).map(([name, child]) => [
+            name,
+            MCP_SENSITIVE_KEY.test(name)
+              ? { type: 'string', const: '[REDACTED]' }
+              : projectSchema(child, definitions, depth + 1),
+          ])
+        ),
+      ]);
+    } else if (key === 'items' || key === 'contains') {
+      entries.push([key, projectSchema(value, definitions, depth + 1)]);
+    } else if (key === 'prefixItems' && Array.isArray(value)) {
+      entries.push([key, value.map(child => projectSchema(child, definitions, depth + 1))]);
+    } else if ((key === 'anyOf' || key === 'allOf') && Array.isArray(value)) {
+      entries.push([key, value.map(child => projectSchema(child, definitions, depth, hops))]);
+    } else {
+      entries.push([key, value]);
+    }
+  }
+  // Rewritten strings can make several branches match, which oneOf would refuse.
+  if (Array.isArray(schema.oneOf))
+    entries.push([
+      'anyOf',
+      schema.oneOf.map(child => projectSchema(child, definitions, depth, hops)),
+    ]);
+  return Object.fromEntries(entries.filter(([, value]) => value !== undefined));
+}
+
+/** The evidence every catalog result carries; see executeMcpOperation. */
+const EVIDENCE_SCHEMA = {
+  type: 'object',
+  required: ['operationId', 'source', 'observedAt', 'requestId', 'redactedFields', 'warnings'],
+  properties: {
+    operationId: { type: 'string' },
+    source: { type: 'string' },
+    observedAt: { type: 'string' },
+    requestId: { type: 'string' },
+    etag: { type: ['string', 'null'] },
+    redactedFields: { type: 'array', items: { type: 'string' } },
+    redactedCount: { type: 'integer', minimum: 0 },
+    limits: { type: 'object' },
+    warnings: { type: 'array', items: { type: 'string' } },
+  },
+};
+
+/**
+ * The result schema an agent can rely on: the success body as projectMcpData and compactResult
+ * deliver it, not the REST contract. Sensitive members are the redaction marker whatever their
+ * declared type; strings lose formats, patterns, lengths and fixed values; maps are open, since a
+ * dynamic key may itself be redacted; nothing below `data` is required, because null and empty
+ * members are dropped; values past the projection depth may be anything; and `data` is null for
+ * a body-less (204) response. Not hashed: derived from the hashed contract.
+ */
+export function projectedOutputSchema(response: JsonObject | null): JsonObject {
+  const definitions = new Map(
+    Object.entries(isObject(response?.$defs) ? (response.$defs as JsonObject) : {})
+  );
+  const data = response ? projectSchema(response, definitions, 0) : {};
+  return {
+    type: 'object',
+    required: ['evidence', 'data'],
+    properties: {
+      evidence: EVIDENCE_SCHEMA,
+      data: isObject(data) && Object.keys(data).length ? { anyOf: [data, { type: 'null' }] } : {},
+    },
+  };
 }

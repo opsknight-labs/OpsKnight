@@ -1,9 +1,12 @@
+import type { ReactNode } from 'react';
 import Link from 'next/link';
-import { Plug, SearchX, Unplug, X } from 'lucide-react';
+import { KeyRound, Plug, SearchX, Unplug, X } from 'lucide-react';
 import { Button } from '@/components/ui/shadcn/button';
 import { SettingsSection } from '@/components/settings/layout/SettingsSection';
 import McpConfirmAction from '@/components/settings/mcp/McpConfirmAction';
 import McpScopeSummary from '@/components/settings/mcp/McpScopeSummary';
+import McpActivityDrawer from '@/components/settings/mcp/McpActivityDrawer';
+import type { McpConnectionActivity } from '@/app/(app)/settings/integrations/mcp/activity';
 import AssistantFilterSelect from '@/components/settings/mcp/AssistantFilterSelect';
 import { getAssistantIcon } from '@/components/common/BrandLogos';
 import {
@@ -43,26 +46,48 @@ const STATUS_LABEL = {
 
 /** Why a connection that has not ended still gives no access: shown in place of "Active". */
 export const BLOCK_LABEL = {
-  mcp_disabled: { label: 'Blocked by policy', hint: 'MCP is turned off for OpsKnight.' },
+  mcp_disabled: { label: 'MCP turned off', hint: 'MCP is turned off for OpsKnight.' },
   client_untrusted: {
-    label: 'Blocked by policy',
+    label: 'Assistant not trusted',
     hint: 'The access policy no longer trusts this assistant (automatic connections off, or its host is not trusted).',
   },
-  client_revoked: { label: 'No longer allowed', hint: 'An administrator revoked this assistant.' },
-  user_inactive: { label: 'No longer allowed', hint: 'This person is not an active user.' },
+  client_revoked: { label: 'Assistant revoked', hint: 'An administrator revoked this assistant.' },
+  user_inactive: { label: 'User inactive', hint: 'This person is not an active user.' },
   access_changed: {
-    label: 'No longer allowed',
+    label: 'Signed out by security change',
     hint: 'A security change (password, sign-out everywhere or a change of administrator role) ended this connection. Sign in again from the assistant.',
   },
   admin_scope: {
-    label: 'No longer allowed',
+    label: 'Unsupported scope',
     hint: 'The connection carries a scope MCP never honours.',
   },
   ended: {
-    label: 'No longer allowed',
+    label: 'Wrong server address',
     hint: 'The connection was issued for another server address.',
   },
 } as const satisfies Record<McpConnectionBlock, { label: string; hint: string }>;
+
+const PAT_BLOCK_LABEL = {
+  label: 'Blocked by policy',
+  hint: 'Personal access tokens are turned off in the access policy.',
+} as const;
+
+/** Why a blocked connection gives no access, worded for its kind. */
+export function blockCopy(row: Pick<McpGrantRow, 'kind' | 'blockedReason'>) {
+  if (row.kind === 'pat' && row.blockedReason === 'client_untrusted') return PAT_BLOCK_LABEL;
+  return BLOCK_LABEL[row.blockedReason ?? 'ended'];
+}
+
+/** The connection's name: a personal token's label, or its assistant. */
+export function connectionName(row: Pick<McpGrantRow, 'kind' | 'label' | 'client'>) {
+  return row.kind === 'pat' ? (row.label ?? 'Personal access token') : row.client.name;
+}
+
+/** Causes an administrator fixes in Access policy. */
+const POLICY_FIXABLE: ReadonlySet<McpConnectionBlock> = new Set([
+  'mcp_disabled',
+  'client_untrusted',
+]);
 
 export function personLabel(person: { id: string; name: string | null; email: string | null }) {
   return person.name ?? person.email ?? 'Unknown user';
@@ -85,6 +110,8 @@ export default function McpConnectionsSection({
   describeScope,
   revokeAction,
   revokeAllAction,
+  personalTokens,
+  activityAction,
 }: {
   isAdmin: boolean;
   rows: McpGrantRow[];
@@ -104,6 +131,13 @@ export default function McpConnectionsSection({
   describeScope: (scope: string) => string;
   revokeAction: (form: FormData) => Promise<void>;
   revokeAllAction: (form: FormData) => Promise<void>;
+  /** The personal access token panel, when the policy allows personal tokens. */
+  personalTokens?: ReactNode;
+  /** Loads one connection's activity drawer; omitted, no drawer is offered. */
+  activityAction?: (input: {
+    grantId: string;
+    cursor?: { at: string; id: string };
+  }) => Promise<McpConnectionActivity>;
 }) {
   const base = { tab: 'connections', status, q, client: client?.id ?? null };
   const filtered = Boolean(q || client);
@@ -124,10 +158,11 @@ export default function McpConnectionsSection({
         title={isAdmin ? 'Connections' : 'Your connections'}
         description={
           isAdmin
-            ? "Each connection is one person's consent for one assistant. Revoking takes effect on the assistant's next request."
-            : 'Assistants you have approved. Revoking takes effect on the next request.'
+            ? "Each connection is one person's consent for one assistant, or a personal access token. Revoking takes effect on the next request."
+            : 'Assistants you have approved and your personal access tokens. Revoking takes effect on the next request.'
         }
       >
+        {personalTokens}
         <div className="flex flex-col gap-3 py-4 lg:flex-row lg:items-center lg:justify-between">
           <FilterChips
             label="Filter connections by status"
@@ -248,7 +283,8 @@ export default function McpConnectionsSection({
             >
               {rows.map(row => {
                 const who = personLabel(row.user);
-                const context = isAdmin ? `${row.client.name} for ${who}` : row.client.name;
+                const name = connectionName(row);
+                const context = isAdmin ? `${name} for ${who}` : name;
                 return (
                   <ResponsiveRow key={row.id} muted={row.status !== 'active'}>
                     {isAdmin && (
@@ -271,13 +307,23 @@ export default function McpConnectionsSection({
                     <ResponsiveCell label="Assistant" primary={!isAdmin}>
                       <div className="flex items-center gap-2.5 min-w-0">
                         <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-border/80 bg-muted/40 shadow-2xs">
-                          {getAssistantIcon(row.client.name, 'h-4 w-4', row.client.metadataHost)}
+                          {row.kind === 'pat' ? (
+                            <KeyRound
+                              className="h-4 w-4 text-muted-foreground"
+                              aria-hidden="true"
+                            />
+                          ) : (
+                            getAssistantIcon(row.client.name, 'h-4 w-4', row.client.metadataHost)
+                          )}
                         </div>
                         <div className="min-w-0">
-                          <p className="truncate font-medium text-foreground">{row.client.name}</p>
-                          <p className="text-xs text-muted-foreground">
-                            {CLIENT_TYPE_LABEL[row.client.type]}
-                            {row.client.revoked && ' · assistant revoked'}
+                          <p className="truncate font-medium text-foreground">{name}</p>
+                          <p className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+                            <StatusPill tone={row.kind === 'pat' ? 'warning' : 'neutral'}>
+                              {row.kind === 'pat' ? 'Personal token' : 'OAuth'}
+                            </StatusPill>
+                            {row.kind === 'oauth' && CLIENT_TYPE_LABEL[row.client.type]}
+                            {row.kind === 'oauth' && row.client.revoked && ' · assistant revoked'}
                           </p>
                         </div>
                       </div>
@@ -316,11 +362,21 @@ export default function McpConnectionsSection({
                     </ResponsiveCell>
                     <ResponsiveCell label="Status">
                       {row.blockedReason ? (
-                        <span title={BLOCK_LABEL[row.blockedReason].hint}>
+                        <span className="flex flex-col gap-0.5">
                           <StatusPill tone="danger" dot>
-                            {BLOCK_LABEL[row.blockedReason].label}
+                            {blockCopy(row).label}
                           </StatusPill>
-                          <span className="sr-only">. {BLOCK_LABEL[row.blockedReason].hint}</span>
+                          <span className="line-clamp-2 text-xs text-muted-foreground">
+                            {blockCopy(row).hint}
+                          </span>
+                          {isAdmin && POLICY_FIXABLE.has(row.blockedReason) && (
+                            <Link
+                              href={mcpHref({ tab: 'policy' })}
+                              className="text-xs font-medium text-primary underline-offset-4 hover:underline"
+                            >
+                              Open access policy
+                            </Link>
+                          )}
                         </span>
                       ) : (
                         <StatusPill
@@ -338,43 +394,52 @@ export default function McpConnectionsSection({
                       )}
                     </ResponsiveCell>
                     <ResponsiveCell label="Actions" primary align="end">
-                      {row.status === 'active' ? (
-                        <McpConfirmAction
-                          action={revokeAction}
-                          fields={{ kind: 'grant', id: row.id }}
-                          label="Revoke"
-                          accessibleLabel={
-                            isAdmin
-                              ? `Revoke connection for ${row.client.name} and ${who}`
-                              : `Revoke connection for ${row.client.name}`
-                          }
-                          title={`Revoke connection for ${row.client.name}?`}
-                          confirmLabel="Revoke connection"
-                          successMessage="Connection revoked"
-                          className="w-full md:w-auto"
-                          description={
-                            isAdmin ? (
-                              <p>
-                                This revokes {who}&apos;s access for {row.client.name}. The
-                                assistant stops working on its next request. They can connect again
-                                any time.
-                              </p>
-                            ) : (
-                              <p>
-                                This revokes your access for {row.client.name}. The assistant stops
-                                working on its next request. You can connect again any time.
-                              </p>
-                            )
-                          }
-                        />
-                      ) : (
-                        <span
-                          className="text-xs text-muted-foreground/60 md:inline-block"
-                          aria-hidden="true"
-                        >
-                          —
-                        </span>
-                      )}
+                      <span className="flex flex-wrap items-center justify-end gap-1.5">
+                        {activityAction && (
+                          <McpActivityDrawer
+                            grantId={row.id}
+                            label={context}
+                            timeZone={timeZone}
+                            load={activityAction}
+                          />
+                        )}
+                        {row.status === 'active' ? (
+                          <McpConfirmAction
+                            action={revokeAction}
+                            fields={{ kind: 'grant', id: row.id }}
+                            label="Revoke"
+                            accessibleLabel={
+                              isAdmin
+                                ? `Revoke connection for ${name} and ${who}`
+                                : `Revoke connection for ${name}`
+                            }
+                            title={`Revoke connection for ${name}?`}
+                            confirmLabel="Revoke connection"
+                            successMessage="Connection revoked"
+                            className="w-full md:w-auto"
+                            description={
+                              isAdmin ? (
+                                <p>
+                                  This revokes {who}&apos;s access for {name}. It stops working on
+                                  its next request. They can connect again any time.
+                                </p>
+                              ) : (
+                                <p>
+                                  This revokes your access for {name}. It stops working on its next
+                                  request. You can connect again any time.
+                                </p>
+                              )
+                            }
+                          />
+                        ) : (
+                          <span
+                            className="text-xs text-muted-foreground/60 md:inline-block"
+                            aria-hidden="true"
+                          >
+                            —
+                          </span>
+                        )}
+                      </span>
                     </ResponsiveCell>
                   </ResponsiveRow>
                 );

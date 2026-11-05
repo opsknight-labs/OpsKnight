@@ -70,7 +70,16 @@ it('says when a restored policy stays read-only with automatic connections off',
 
 it('states the protocol revision this server implements', () => {
   render(<McpOverviewSection {...base} enabled />);
-  expect(screen.getByText('MCP 2026-07-28')).toBeTruthy();
+  expect(screen.getByText(/^MCP 2026-07-28 \(also 2025-06-18, 2025-11-25\)$/)).toBeTruthy();
   expect(screen.queryByText(/2024-11-05/)).toBeNull();
   expect(screen.queryByText(/Official Anthropic/)).toBeNull();
+});
+
+it('locks quick setup while the deployment forces MCP off, and says why', () => {
+  const { rerender } = render(<McpOverviewSection {...base} />);
+  const button = () => screen.getByRole('button', { name: /turn on/i }) as HTMLButtonElement;
+  expect(button().disabled).toBe(false);
+  rerender(<McpOverviewSection {...base} forceDisabled />);
+  expect(button().disabled).toBe(true);
+  expect(screen.getByText(/The deployment sets MCP_FORCE_DISABLED/)).toBeTruthy();
 });

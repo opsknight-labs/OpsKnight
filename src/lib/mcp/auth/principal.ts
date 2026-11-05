@@ -6,6 +6,8 @@ import type { V2AuthContext } from '@/lib/api-v2/auth';
 import { digestMcpSecret, mcpResource } from './config';
 import { McpBoundaryError, requireMcp } from '../core/errors';
 import { admitMcpBearer, recordMcpBearerFailure } from './admission';
+import { mcpForceDisabled } from '../core/kill-switch';
+import { challengeScopes, loadDiscoveryPolicy } from './discovery-policy';
 import {
   GRANT_ACCESS_COLUMNS,
   grantAccessVerdict,
@@ -14,6 +16,7 @@ import {
 } from './effective-access';
 
 interface GrantAuthoritySnapshot extends GrantAccessSnapshot {
+  clientId: string;
   teamIds: string[];
   writesEnabled: boolean | null;
   sensitiveReadsEnabled: boolean | null;
@@ -21,7 +24,11 @@ interface GrantAuthoritySnapshot extends GrantAccessSnapshot {
   maxOperations: number | null;
   requestsPerMinute: number | null;
   disabledCapabilities: string[] | null;
+  scopeStepUpEnabled: boolean | null;
 }
+
+/** OAUTH: an assistant's consent. PAT: a personal access token (one token, never refreshed). */
+export type McpCredentialKind = 'OAUTH' | 'PAT';
 
 /** The runtime switches and bounds of the MCP policy, read with the grant in one statement. */
 export interface McpRuntimePolicy {
@@ -32,21 +39,31 @@ export interface McpRuntimePolicy {
   maxOperations: number;
   requestsPerMinute: number;
   disabledCapabilities: string[];
+  /** Answer a grantable missing permission with 403 insufficient_scope (step-up.ts). */
+  scopeStepUpEnabled: boolean;
 }
 
 const loadRuntimePolicy = async (): Promise<McpRuntimePolicy | null> =>
-  prisma.mcpPolicy.findUnique({
-    where: { id: 'default' },
-    select: {
-      enabled: true,
-      writesEnabled: true,
-      sensitiveReadsEnabled: true,
-      maxInFlight: true,
-      maxOperations: true,
-      requestsPerMinute: true,
-      disabledCapabilities: true,
-    },
-  });
+  forceOff(
+    await prisma.mcpPolicy.findUnique({
+      where: { id: 'default' },
+      select: {
+        enabled: true,
+        writesEnabled: true,
+        sensitiveReadsEnabled: true,
+        maxInFlight: true,
+        maxOperations: true,
+        requestsPerMinute: true,
+        disabledCapabilities: true,
+        scopeStepUpEnabled: true,
+      },
+    })
+  );
+
+/** MCP_FORCE_DISABLED overrides the stored switch everywhere the runtime policy is read. */
+function forceOff<T extends { enabled: boolean } | null>(policy: T): T {
+  return policy && mcpForceDisabled() ? { ...policy, enabled: false } : policy;
+}
 
 export async function resolveMcpGrant(
   grantId: string,
@@ -59,11 +76,12 @@ export async function resolveMcpGrant(
 // The authority columns shared by both lookups. The access columns are the same ones the
 // settings lists read (effective-access.ts), so the admin page shows what is enforced here.
 const AUTHORITY_COLUMNS = Prisma.sql`
-  ${GRANT_ACCESS_COLUMNS},
+  ${GRANT_ACCESS_COLUMNS}, g."clientId",
   ARRAY(SELECT tm."teamId" FROM "TeamMember" tm WHERE tm."userId" = u.id) AS "teamIds",
   -- The policy row this request is judged by; already joined for the client ceilings.
   p."writesEnabled", p."sensitiveReadsEnabled",
-  p."maxInFlight", p."maxOperations", p."requestsPerMinute", p."disabledCapabilities"`;
+  p."maxInFlight", p."maxOperations", p."requestsPerMinute", p."disabledCapabilities",
+  p."scopeStepUpEnabled"`;
 
 /**
  * The grant's current authority and the MCP policy as of the same statement. The policy is null
@@ -74,7 +92,7 @@ export async function resolveMcpGrantWithPolicy(
   grantId: string,
   credentialId?: string,
   db: Prisma.TransactionClient = prisma
-): Promise<{ auth: V2AuthContext; policy: McpRuntimePolicy | null }> {
+): Promise<{ auth: V2AuthContext; policy: McpRuntimePolicy | null; clientId: string }> {
   const now = new Date();
   // One current-statement snapshot avoids four ORM round trips per domain step.
   // No values are interpolated into SQL syntax and no authority is cached.
@@ -95,7 +113,7 @@ export async function resolveMcpGrantWithPolicy(
 function authorityFrom(
   grant: GrantAuthoritySnapshot | undefined,
   now: Date
-): { auth: V2AuthContext; policy: McpRuntimePolicy | null } {
+): { auth: V2AuthContext; policy: McpRuntimePolicy | null; clientId: string } {
   requireMcp(grant, 'MCP_INVALID_GRANT', 401);
   // Only security events (password, email, deactivation, sign-out everywhere, demotion from ADMIN)
   // end a connection; other role and team edits narrow access live through authorize().
@@ -111,6 +129,7 @@ function authorityFrom(
   requireMcp(base, 'MCP_INACTIVE_PRINCIPAL', 401);
   const id = `mcp:${grant.grantId}`;
   return {
+    clientId: grant.clientId,
     auth: {
       actor: { ...base, apiKey: { id, scopes } },
       apiKey: {
@@ -127,13 +146,14 @@ function authorityFrom(
       grant.policyEnabled === null
         ? null
         : {
-            enabled: grant.policyEnabled,
+            enabled: grant.policyEnabled && !mcpForceDisabled(),
             writesEnabled: grant.writesEnabled!,
             sensitiveReadsEnabled: grant.sensitiveReadsEnabled!,
             maxInFlight: grant.maxInFlight!,
             maxOperations: grant.maxOperations!,
             requestsPerMinute: grant.requestsPerMinute!,
             disabledCapabilities: grant.disabledCapabilities ?? [],
+            scopeStepUpEnabled: grant.scopeStepUpEnabled ?? false,
           },
   };
 }
@@ -150,6 +170,9 @@ interface BearerSnapshot extends Partial<GrantAuthoritySnapshot> {
 /**
  * The bearer's token, its grant's authority and the policy in one statement. The grant side is
  * outer-joined so a known token with a failing grant is still told apart from an unknown one.
+ * OAuth access tokens and personal access tokens share this lookup: a personal token is the
+ * access secret of its grant's only token, so revocation, quota and the last-call column apply
+ * to both unchanged; the grant kind selects the ceiling (effective-access.ts).
  */
 async function resolveBearer(accessHash: string) {
   const [row] = await prisma.$queryRaw<BearerSnapshot[]>`
@@ -170,7 +193,18 @@ export async function authenticateMcp(request: Request, cost: number | null) {
   // The policy is read with the grant. A disabled MCP still answers MCP_DISABLED ahead of any
   // credential error, so a failure reads the policy on its own before reporting the cause.
   let resolved: Awaited<ReturnType<typeof resolveMcpGrantWithPolicy>>;
-  let token: { id: string; grantId: string; scopes: string[]; lastUsedAt: Date | null };
+  let token: {
+    id: string;
+    grantId: string;
+    scopes: string[];
+    lastUsedAt: Date | null;
+    accessExpiresAt: Date;
+    clientId: string;
+    /** What a new consent for this assistant could grant: its current client ceiling. */
+    clientScopes: string[];
+    bearer: string;
+    kind: McpCredentialKind;
+  };
   admitMcpBearer(request);
   // Only a credential OpsKnight never issued counts against the peer. An expired or revoked token
   // is a normal refresh, and many users can share one egress address (claude.ai), so counting it
@@ -178,6 +212,9 @@ export async function authenticateMcp(request: Request, cost: number | null) {
   let unknownCredential = true;
   try {
     const header = request.headers.get('authorization') ?? '';
+    // No credential at all is a first connection, not a bad token: it is answered with a plain
+    // challenge and never counts against the peer.
+    requireMcp(header.trim() !== '', 'MCP_TOKEN_REQUIRED', 401);
     requireMcp(/^Bearer [A-Za-z0-9_-]{32,256}$/.test(header), 'MCP_INVALID_TOKEN', 401);
     const row = await resolveBearer(digestMcpSecret(header.slice(7)));
     unknownCredential = !row;
@@ -188,6 +225,11 @@ export async function authenticateMcp(request: Request, cost: number | null) {
       grantId: row.tokenGrantId,
       scopes: row.tokenScopes,
       lastUsedAt: row.lastUsedAt,
+      accessExpiresAt: row.accessExpiresAt,
+      clientId: row.clientId ?? '',
+      clientScopes: row.clientScopes ?? [],
+      bearer: header.slice(7),
+      kind: row.grantKind === 'PAT' ? 'PAT' : 'OAUTH',
     };
     // The same checks as resolveMcpGrantWithPolicy, judged on the row read with the token.
     resolved = authorityFrom(row.grantId ? (row as GrantAuthoritySnapshot) : undefined, now);
@@ -199,6 +241,8 @@ export async function authenticateMcp(request: Request, cost: number | null) {
     )
       recordMcpBearerFailure(request);
     requireMcp((await loadRuntimePolicy())?.enabled, 'MCP_DISABLED', 503);
+    if (error instanceof McpBoundaryError && error.status === 401)
+      error.challengeScope = challengeScopes(await loadDiscoveryPolicy()).join(' ') || undefined;
     throw error;
   }
   const { auth, policy } = resolved;
@@ -221,9 +265,21 @@ export async function authenticateMcp(request: Request, cost: number | null) {
   return {
     auth,
     grantId: token.grantId,
+    clientId: resolved.clientId,
     credentialId: token.id,
     tokenScopes: token.scopes,
+    clientScopes: token.clientScopes,
+    /** A personal access token never approves its own requests. */
+    kind: token.kind,
     policy,
+    // Handed to the SDK as-is (it verifies nothing): the token this request was authenticated by.
+    authInfo: {
+      token: token.bearer,
+      clientId: token.clientId,
+      scopes: effectiveScopes,
+      expiresAt: Math.floor(token.accessExpiresAt.getTime() / 1000),
+      resource: new URL(mcpResource()),
+    },
   };
 }
 

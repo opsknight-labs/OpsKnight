@@ -11,6 +11,10 @@ External-secrets support is an **implementation candidate, not certified support
 
 ### Added
 
+- **AI assistants (MCP)**: a native MCP server at `<App URL>/mcp` with per-person OAuth sign-in (PKCE, automatic registration or client metadata documents), serving revision 2026-07-28 and 2025-06-18 / 2025-11-25 clients statelessly. Includes `whoami`, `read_operation`, `execute_plan`, curated incident, on-call, service, automation, runbook, report and status-page tools, six prompts, structured tool errors with `requestId`, human-approved configuration changes (`operation_prepare`, `operation_get_approval`, `operation_commit_approved`) and runbook runs (`runbook_prepare_execution`, `runbook_get_approval`, `runbook_execute_approved`). The server reports the running release as its version. See `docs/v2.2.0/guides/mcp/`.
+- MCP operability: the `mcp.request.completed` log line, `X-Request-Id` on every MCP and OAuth response, OAuth endpoint metrics, capacity gauges, the `opsknight.mcp` alert and recording rules with a monitoring page, and the `MCP_FORCE_DISABLED` emergency stop.
+- MCP certification in CI: tools/list contract snapshots, a route-drift check, published-SDK handshakes at the 2025 revisions, JSON-RPC fuzzing, a nightly client-metadata drift check and a k6 MCP load scenario (`npm run load:mcp`).
+- MCP docs: a generated tool reference, coverage by area, "What to ask", "Build an agent" and "Security and data" guides, an Other clients tab (Codex CLI, Gemini CLI, Windsurf) and a Check connection button on the Connect tab, and a doctor that runs without a checkout.
 - Optional Secrets Store CSI mounts for integrated/split application workloads and migration Jobs, preserving existing Kubernetes Secret mappings. Includes Helm and Kustomize support, AWS/Azure SecretProviderClass examples, OpenShift application security profiles, rotation guidance, and rendering regression tests. Cluster driver/provider installation remains external; live cloud/OpenShift certification is required before production rollout.
 - **Single sign-on setup in four guided steps** (Connect provider, Who can sign in, Roles & teams, Test & activate) with per-provider checklists, plain-language help, one-click "save and test", draft recovery after a reload, and a warning before the two-hour fresh sign-in window closes. Emergency recovery is required only for SSO Required.
 - **Specific sign-in messages** instead of "Access denied", each with a reference ID tied to the server log and login audit; people are told why a session ended.
@@ -23,12 +27,17 @@ External-secrets support is an **implementation candidate, not certified support
 
 ### Changed
 
+- MCP sessions: access tokens last five minutes and refresh with a 30-second reuse grace for a lost response; grants slide by the policy idle period and end after 90 days. Grants pin a revocation version that moves only on security events, so role and team changes apply live without signing anyone out. Approval review and commit windows are set in the access policy (240 and 30 minutes by default).
 - Roles set by an administrator are never overwritten by single sign-on; use **Let role rules manage this role** to hand one back. Existing role rules keep their case-sensitive, first-match behaviour.
 - Incomplete Entra group claims fail safe: they never raise a role, lower only SSO roles above the default role, and leave administrator-set and SCIM roles alone. A rule never demotes the last active administrator. Both alert administrators.
 - Pending linking approvals survive activating a configuration for the same issuer and client.
 - Changing only session limits, the button label, profile fields or team rules keeps the administrator test.
 - SCIM opens a real connection by default, uses in-app confirmations, describes activity in sentences and flags offboarding that leaves on-call gaps. Profile fields managed by the directory are read-only.
 - The sign-in page reflects SSO being turned on immediately; deployment address problems are shown to administrators as a specific fix.
+
+### Deprecated
+
+- MCP: reads through `call_operation` are deprecated; use `read_operation`. Removal is planned in v2.3.0, and the runtime warning names that release.
 
 ### Fixed
 

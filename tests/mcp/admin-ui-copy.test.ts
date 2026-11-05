@@ -33,7 +33,7 @@ describe('D2 credential security copy', () => {
 
 describe('D6 setup commands', () => {
   const endpoint = "https://ops.example.com/mcp?x='y'";
-  const commands = mcpSetupCommands(endpoint);
+  const commands = mcpSetupCommands(endpoint, '2.2.0');
 
   it('builds an "Add to Cursor" link carrying base64 JSON config', () => {
     const url = new URL(commands.cursorInstall);
@@ -51,14 +51,32 @@ describe('D6 setup commands', () => {
     expect(JSON.parse(json)).toEqual({ name: 'opsknight', type: 'http', url: endpoint });
   });
 
-  it('keeps the shell commands quoted and offers the container doctor', () => {
+  it('keeps the shell commands quoted and offers the no-checkout, container and cluster doctor', () => {
     expect(JSON.parse(commands.cursor)).toEqual({ mcpServers: { opsknight: { url: endpoint } } });
+    const quoted = `'https://ops.example.com/mcp?x='\\''y'\\'''`;
+    // DX-9: downloaded for the running release (never from the instance it diagnoses).
     expect(commands.doctor).toBe(
-      `node scripts/mcp/doctor.cjs 'https://ops.example.com/mcp?x='\\''y'\\'''`
+      `curl -fsSLo opsknight-mcp-doctor.cjs https://raw.githubusercontent.com/opsknight-labs/OpsKnight/v2.2.0/scripts/mcp/doctor.cjs && node opsknight-mcp-doctor.cjs ${quoted}`
     );
+    expect(mcpSetupCommands(endpoint, 'v2.3.1').doctor).toContain('/OpsKnight/v2.3.1/');
+    expect(commands.doctorSource).toBe(`node scripts/mcp/doctor.cjs ${quoted}`);
+    expect(commands.doctorKubernetes).toBe(
+      `kubectl exec deploy/<opsknight> -- node scripts/mcp/doctor.cjs ${quoted}`
+    );
+    expect(commands.codex).toBe(`codex mcp add opsknight --url ${quoted}`);
+    expect(commands.geminiCli).toBe(`gemini mcp add --transport http opsknight ${quoted}`);
     expect(commands.doctorDocker).toBe(
       `docker exec <opsknight-container> node scripts/mcp/doctor.cjs 'https://ops.example.com/mcp?x='\\''y'\\'''`
     );
+  });
+});
+
+describe('DX-9 downloadable doctor', () => {
+  it('runs as one file with only Node built-ins, so it works without a checkout', () => {
+    const doctor = source('scripts/mcp/doctor.cjs');
+    const imports = [...doctor.matchAll(/require\(\s*['"]([^'"]+)['"]\s*\)/g)].map(m => m[1]);
+    for (const name of imports) expect(name, name).toMatch(/^node:/);
+    expect(doctor).toContain('Usage: node opsknight-mcp-doctor.cjs');
   });
 });
 
@@ -78,7 +96,7 @@ describe('D6 copy', () => {
   it('states the 90-day maximum and the real navigation path', () => {
     const overview = source('src/components/settings/mcp/sections/McpOverviewSection.tsx');
     expect(overview).not.toMatch(/Days Sliding/);
-    expect(overview).toContain('-day max');
+    expect(overview).toContain('at most {MCP_ABSOLUTE_SESSION_DAYS} days');
     expect(overview).toContain('Settings → Integrations &amp; ChatOps →');
     expect(source('src/components/settings/mcp/sections/McpConnectSection.tsx')).toContain(
       'MCP_ABSOLUTE_SESSION_DAYS'
@@ -95,6 +113,7 @@ describe('D3 grant verdict', () => {
     grantId: 'g',
     userId: 'u',
     userRevocationVersion: 0,
+    grantKind: 'OAUTH',
     grantScopes: ['incidents:read', 'services:read'],
     resource: 'https://ops.example.com/mcp',
     revokedAt: null,

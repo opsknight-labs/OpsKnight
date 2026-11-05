@@ -10,6 +10,7 @@ import { encrypt } from '@/lib/encryption';
 import { encryptProviderConfig } from '@/lib/encrypted-provider-config';
 import { getNextAuthSecretSync } from '@/lib/secret-manager';
 import { publishStatusPageSnapshot } from '@/lib/status-pages/snapshot';
+import { seedMcpLoadPrincipals } from './mcp-seed';
 import { buildEscalationPolicyFixtures } from '../fixtures/escalation-policies';
 import { buildBaselineIncidentFixtures } from '../fixtures/incidents';
 import {
@@ -54,6 +55,8 @@ export interface LoadSeedManifest {
   userIds: string[];
   baselineIncidentIds: string[];
   emulatorEndpoints: LoadProviderEmulatorEndpoints;
+  /** Per-principal MCP access tokens for tests/load/scenarios/mcp-assistants.js. */
+  mcp: { resource: string; tokens: string[] };
 }
 
 async function mintLoadTestSessionCookie(params: {
@@ -683,6 +686,17 @@ export async function runLoadSeed(options?: {
       );
     }
 
+    // 14. MCP principals (MCP_LOAD_PRINCIPALS, default 25; 0 skips MCP entirely).
+    const mcp = await seedMcpLoadPrincipals(
+      prisma,
+      users.filter(u => u.status === 'ACTIVE').map(u => u.id),
+      {
+        count: Number(process.env.MCP_LOAD_PRINCIPALS ?? '25'),
+        // The App URL the server publishes as its MCP resource.
+        origin: process.env.MCP_PUBLIC_ORIGIN ?? process.env.NEXTAUTH_URL ?? baseUrl,
+      }
+    );
+
     const manifest: LoadSeedManifest = {
       generatedAt: new Date().toISOString(),
       scaleProfile: scaleName,
@@ -706,6 +720,7 @@ export async function runLoadSeed(options?: {
       userIds: users.map(u => u.id),
       baselineIncidentIds: baselineIncidents.map(i => i.id),
       emulatorEndpoints: endpoints,
+      mcp,
     };
 
     await fs.mkdir(path.dirname(manifestPath), { recursive: true });
@@ -730,6 +745,7 @@ if (require.main === module) {
           sessionCookies: manifest.sessionCookies.length,
           subscribers: manifest.statusPage.subscriberCount,
           baselineIncidents: manifest.baselineIncidentIds.length,
+          mcpPrincipals: manifest.mcp.tokens.length,
         })
       );
     })

@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { randomBytes } from 'node:crypto';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createTestUser, resetDatabase, testPrisma as db } from '../helpers/test-db';
@@ -11,6 +12,8 @@ import { fixture } from '../helpers/mcp-approval';
 
 const admin = vi.hoisted(() => ({ id: '', tokenVersion: 0, capabilities: ['admin.manage'] }));
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }));
+// These tests are about the actions themselves; the recent-sign-in rule has its own tests.
+vi.mock('@/lib/mcp/auth/fresh-admin', () => ({ requireFreshMcpAdmin: vi.fn(async () => true) }));
 vi.mock('@/lib/rbac', async importOriginal => ({
   ...(await importOriginal<typeof import('@/lib/rbac')>()),
   getUserPermissions: vi.fn(async () => ({

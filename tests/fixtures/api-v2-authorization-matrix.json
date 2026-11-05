@@ -203,6 +203,12 @@
     "AUDITOR": "allow:global",
     "USER": "allow:resource"
   },
+  "POST /incidents/{id}/escalate [incidents:write]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "allow:global",
+    "AUDITOR": "deny:MISSING_CAPABILITY",
+    "USER": "deny:MISSING_CAPABILITY"
+  },
   "GET /incidents/{id}/notes [incidents:read]": {
     "ADMIN": "allow:global",
     "RESPONDER": "allow:global",

@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { randomBytes } from 'node:crypto';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
@@ -146,7 +147,7 @@ const quotaUsed = async (grantId: string) =>
   )._sum.count ?? 0;
 
 describe('A1: 2025-revision clients and notifications', () => {
-  it.each(['2025-06-18', '2025-11-25'])(
+  it.each(['2025-03-26', '2025-06-18', '2025-11-25'])(
     'serves initialize, notifications, tools/list and tools/call to a %s client',
     async version => {
       const { bearer, user, grant } = await principal();
@@ -181,9 +182,43 @@ describe('A1: 2025-revision clients and notifications', () => {
         })
       );
       expect(whoami.result.isError).not.toBe(true);
-      expect(whoami.result.structuredContent.userId).toBe(user.id);
+      // 2025-03-26 predates structured tool output; a text block is all such a client reads.
+      const text = whoami.result.content.find((block: { type: string }) => block.type === 'text');
+      expect(text.text).toContain(user.id);
+      if (version !== '2025-03-26') expect(whoami.result.structuredContent.userId).toBe(user.id);
     }
   );
+
+  it('serves a POST without an MCP-Protocol-Version header (treated as 2025-03-26)', async () => {
+    const { bearer, user } = await principal();
+    const response = await POST(
+      new Request(mcpResource(), {
+        method: 'POST',
+        headers: {
+          authorization: `Bearer ${bearer}`,
+          'content-type': 'application/json',
+          accept: 'application/json, text/event-stream',
+        },
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          id: 9,
+          method: 'tools/call',
+          params: { name: 'whoami', arguments: {} },
+        }),
+      })
+    );
+    expect(response.status).toBe(200);
+    const whoami = await reply(response);
+    expect(whoami.result.isError).not.toBe(true);
+    expect(JSON.stringify(whoami.result.content)).toContain(user.id);
+  });
+
+  it('refuses an unsupported protocol version header with a 400 naming the supported ones', async () => {
+    const { bearer } = await principal();
+    const response = await legacy(bearer, '2023-01-01', { id: 4, method: 'tools/list' });
+    expect(response.status).toBe(400);
+    expect(JSON.stringify(await reply(response))).toContain('2025-11-25');
+  });
 
   it('acknowledges a modern notification with 202 before any charge', async () => {
     const { bearer, grant } = await principal();
@@ -211,12 +246,17 @@ describe('A2: whoami and "me"', () => {
     const service = await createTestService('Mine service', team.id);
     const mine = await createTestIncident('Mine', service.id, { assigneeId: user.id });
     const theirs = await createTestIncident('Theirs', service.id);
+    await db.user.update({ where: { id: user.id }, data: { timeZone: 'Asia/Kolkata' } });
+    await db.teamMember.create({ data: { teamId: team.id, userId: user.id } });
     const { result: whoami } = await tool(bearer, 'whoami', {});
     expect(whoami.structuredContent).toMatchObject({
       userId: user.id,
       displayName: 'Grace Hopper',
       role: 'ADMIN',
       writesEnabled: true,
+      timeZone: 'Asia/Kolkata',
+      teamIds: [team.id],
+      teams: [{ id: team.id, name: team.name }],
     });
     expect(JSON.stringify(whoami)).not.toContain(user.email);
     const { result } = await tool(bearer, 'incident_search', {
@@ -244,7 +284,7 @@ describe('A3: read_operation and the call_operation deprecation', () => {
     });
     expect(legacyRead.result.isError).not.toBe(true);
     expect(legacyRead.result.structuredContent.evidence.warnings).toContain(
-      'Reads through call_operation are deprecated; use read_operation, which never changes anything.'
+      'Reads through call_operation are deprecated and will be removed in v2.3.0; use read_operation, which never changes anything.'
     );
   });
 });
@@ -294,7 +334,11 @@ describe('A7: prepare tells the assistant what to do next', () => {
       selfApprovable: true,
       nextSteps: {
         shareWithUser: result.structuredContent.reviewUrl,
-        poll: { tool: 'operation_get_approval', afterSeconds: 15 },
+        poll: {
+          tool: 'operation_get_approval',
+          afterSeconds: 30,
+          stopAt: result.structuredContent.expiresAt,
+        },
         onApproved: 'operation_commit_approved',
       },
     });
@@ -321,8 +365,14 @@ describe('A10: single-entity results link back', () => {
         annotations: { audience: ['user'] },
       }),
     ]);
+    // A list links each of its first rows to its page (for the person), never a resource read.
     const { result: list } = await tool(bearer, 'incident_search', { query: { limit: 1 } });
-    expect(list.content).toHaveLength(1);
+    expect(list.content).toHaveLength(2);
+    expect(list.content[1]).toMatchObject({
+      type: 'resource_link',
+      mimeType: 'text/html',
+      annotations: { audience: ['user'] },
+    });
   });
 });
 

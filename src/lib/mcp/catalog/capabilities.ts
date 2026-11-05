@@ -125,7 +125,36 @@ const STANDALONE_TOOLS: readonly Omit<McpCapability, 'kind' | 'curated' | 'tool'
     domain: 'incidents',
     risk: 'R0',
     approval: false,
-    summary: 'Read an incident with its timeline and related incidents.',
+    summary: 'Read an incident with its timeline, related incidents and recent notes.',
+  },
+  {
+    id: 'oncall_for_service',
+    domain: 'schedules',
+    risk: 'R0',
+    approval: false,
+    summary: "Read a service's escalation steps with who is on call now and when shifts end.",
+  },
+  {
+    id: 'incident_acknowledge_many',
+    domain: 'incidents',
+    risk: 'R1',
+    approval: false,
+    summary: 'Acknowledge up to eight incidents, each with its own permission check.',
+  },
+  {
+    id: 'search',
+    domain: 'mcp',
+    risk: 'R0',
+    approval: false,
+    summary:
+      'Search incidents, postmortems, runbooks and services by text (ChatGPT company knowledge and deep research).',
+  },
+  {
+    id: 'fetch',
+    domain: 'mcp',
+    risk: 'R0',
+    approval: false,
+    summary: 'Fetch one search result in full; access is checked again.',
   },
   {
     id: 'postmortem_get_context',

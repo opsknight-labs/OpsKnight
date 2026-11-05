@@ -17,7 +17,7 @@ const docsHrefs = () =>
 
 describe('F4: in-app links to the MCP documentation', () => {
   it('the Connect guide links to setup, troubleshooting and permissions', () => {
-    render(<McpConnectGuide endpoint="https://ops.example.com/mcp" />);
+    render(<McpConnectGuide endpoint="https://ops.example.com/mcp" version="2.2.0" />);
     expect(docsHrefs()).toEqual([
       MCP_DOCS_LINKS.guide,
       MCP_DOCS_LINKS.troubleshooting,
@@ -68,9 +68,9 @@ describe('F4: in-app links to the MCP documentation', () => {
     expect(screen.getByRole('link', { name: 'Troubleshooting guide' })).toBeTruthy();
   });
 
-  it('the OAuth error page links to troubleshooting', async () => {
+  it('the OAuth error page links to its own row of the troubleshooting page (DX-2)', async () => {
     const html = await mcpErrorPage(new McpBoundaryError('invalid_client', 400)).text();
     expect(html).toContain('Reference: invalid_client');
-    expect(html).toContain(`href="${MCP_DOCS_LINKS.troubleshooting}"`);
+    expect(html).toContain(`href="${MCP_DOCS_LINKS.troubleshooting}#invalid_client"`);
   });
 });

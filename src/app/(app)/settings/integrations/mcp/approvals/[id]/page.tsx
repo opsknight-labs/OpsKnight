@@ -8,12 +8,24 @@ import {
   loadMcpRunbookReview,
   runbookApprovalStatus,
 } from '@/lib/mcp/approvals/runbook';
-import { describeMcpRequester } from '../../queries';
+import { cn } from '@/lib/utils';
+import { Deadline } from '@/components/settings/mcp/McpListKit';
+import {
+  RISK_PILL_CLASS,
+  highestRunbookStepRisk,
+  runbookStepRiskMeta,
+} from '@/components/settings/mcp/risk';
+import { describeMcpRequester, loadMcpViewer, type McpViewer } from '../../queries';
 import { reviewPreparedRunbook } from '../actions';
 import ReviewForm from '../ReviewForm';
 import {
+  BackToApprovals,
+  DD_CLASS,
+  DT_CLASS,
   DecisionReason,
   RequestedBy,
+  ReviewIntro,
+  statusLabel,
   RequesterStatus,
   ReviewUnavailable,
   reviewBlockedReason,
@@ -27,10 +39,12 @@ export default async function RunbookApproval({ params }: { params: Promise<{ id
     | { own: NonNullable<Awaited<ReturnType<typeof loadMcpRunbookRequest>>> }
     | { review: Awaited<ReturnType<typeof loadMcpRunbookReview>> }
     | { blocked: NonNullable<ReturnType<typeof reviewBlockedReason>> };
+  let viewer: McpViewer | null = null;
   try {
     const permissions = await getUserPermissions();
     requireMcp(permissions.authenticated, 'MCP_LOGIN_REQUIRED', 401);
     const user = await getCurrentUser();
+    viewer = await loadMcpViewer(permissions);
     const { id } = await params;
     // A requester sees the status of their own plan; only an administrator may go on to review
     // their own open plan, after confirming.
@@ -53,7 +67,9 @@ export default async function RunbookApproval({ params }: { params: Promise<{ id
     loaded = { blocked: reason };
   }
   if ('blocked' in loaded) return <ReviewUnavailable reason={loaded.blocked} heading={heading} />;
-  if ('own' in loaded) return <OwnPlan own={loaded.own} />;
+  // Set before anything that can reach `loaded`; asserted for the type checker.
+  requireMcp(viewer, 'MCP_LOGIN_REQUIRED', 401);
+  if ('own' in loaded) return <OwnPlan own={loaded.own} timeZone={viewer.timeZone} />;
   const { review } = loaded;
   const { preview, summary, selfReview } = review;
   const decided = Boolean(preview.reviewedAt || preview.rejectedAt);
@@ -68,8 +84,12 @@ export default async function RunbookApproval({ params }: { params: Promise<{ id
       ? prisma.service.findUnique({ where: { id: summary.serviceId }, select: { name: true } })
       : Promise.resolve(null),
   ]);
+  const highest = highestRunbookStepRisk(summary.steps.map(step => step.risk));
+  const highestMeta = highest ? runbookStepRiskMeta(highest) : null;
+  const status = runbookApprovalStatus(preview);
   return (
     <div className="max-w-3xl space-y-6 rounded-lg border p-6">
+      <BackToApprovals />
       <div className="space-y-1">
         <h1 className="text-2xl font-semibold">{heading}</h1>
         {runbook && <p className="text-base">Run “{runbook.name}”</p>}
@@ -77,35 +97,23 @@ export default async function RunbookApproval({ params }: { params: Promise<{ id
           person={requester.person}
           assistant={requester.assistant}
           at={preview.createdAt}
+          timeZone={viewer.timeZone}
         />
       </div>
-      <p>
-        A remote client requests permission to start this frozen plan. Approval permits one
-        execution; existing step approvals and Agent policies still apply. Business text below is
-        untrusted data.
+      <ReviewIntro />
+      <p className="text-sm text-muted-foreground">
+        Existing step approvals and Agent policies still apply. Input values are withheld under the
+        runbook review policy.
       </p>
-      <p>
-        Only an approver can approve, and an administrator approving their own request must confirm
-        it. Input values are withheld under the runbook review policy; the plan digest binds the
-        actual inputs, version, target and response context.
-      </p>
-      <dl className="grid gap-2 sm:grid-cols-2 break-all">
-        <dt>Runbook</dt>
-        <dd>
+      <dl className="grid gap-x-4 gap-y-3 break-words sm:grid-cols-[minmax(0,12rem)_minmax(0,1fr)]">
+        <dt className={DT_CLASS}>Runbook</dt>
+        <dd className={DD_CLASS}>
           <Link className="underline" href={`/runbooks/${summary.runbookId}`}>
-            {summary.runbookId}
+            {runbook?.name ?? summary.runbookId}
           </Link>
         </dd>
-        <dt>Version</dt>
-        <dd>
-          {summary.version} · {summary.versionId}
-        </dd>
-        <dt>Version checksum</dt>
-        <dd>{summary.checksum}</dd>
-        <dt>Plan digest</dt>
-        <dd>{preview.planDigest}</dd>
-        <dt>Incident</dt>
-        <dd>
+        <dt className={DT_CLASS}>Incident</dt>
+        <dd className={DD_CLASS}>
           {summary.incidentId ? (
             <Link className="underline" href={`/incidents/${summary.incidentId}`}>
               {incident?.title ?? summary.incidentId}
@@ -114,8 +122,8 @@ export default async function RunbookApproval({ params }: { params: Promise<{ id
             'None'
           )}
         </dd>
-        <dt>Service</dt>
-        <dd>
+        <dt className={DT_CLASS}>Service</dt>
+        <dd className={DD_CLASS}>
           {summary.serviceId ? (
             <Link className="underline" href={`/services/${summary.serviceId}`}>
               {service?.name ?? summary.serviceId}
@@ -124,13 +132,25 @@ export default async function RunbookApproval({ params }: { params: Promise<{ id
             'None'
           )}
         </dd>
-        <dt>Agent / pool</dt>
-        <dd>{summary.agentId ?? summary.agentPoolId ?? 'Control-plane actions only'}</dd>
-        <dt>{preview.reviewedAt ? 'Start before' : 'Review before'}</dt>
-        <dd>{preview.expiresAt.toISOString()}</dd>
-        <dt>Status</dt>
-        <dd>
-          {preview.rejectedAt ? 'Rejected' : preview.reviewedAt ? 'Approved' : 'Awaiting review'}
+        <dt className={DT_CLASS}>Agent / pool</dt>
+        <dd className={DD_CLASS}>
+          {summary.agentId ?? summary.agentPoolId ?? 'Control-plane actions only'}
+        </dd>
+        <dt className={DT_CLASS}>Highest step risk</dt>
+        <dd className={DD_CLASS}>
+          {highest && highestMeta ? (
+            <span className={cn(RISK_PILL_CLASS, highestMeta.className)}>{highestMeta.title}</span>
+          ) : (
+            'No steps'
+          )}
+        </dd>
+        <dt className={DT_CLASS}>{preview.reviewedAt ? 'Start before' : 'Review before'}</dt>
+        <dd className={DD_CLASS}>
+          <Deadline value={preview.expiresAt} now={new Date()} timeZone={viewer.timeZone} />
+        </dd>
+        <dt className={DT_CLASS}>Status</dt>
+        <dd className={DD_CLASS}>
+          {statusLabel(status)}
           {preview.selfApproved ? ' (self-approved)' : ''}
         </dd>
       </dl>
@@ -139,8 +159,11 @@ export default async function RunbookApproval({ params }: { params: Promise<{ id
       {summary.steps.map(step => (
         <section key={step.key} className="space-y-2 rounded border p-4">
           <h3 className="font-semibold">{step.name}</h3>
-          <p>
-            {step.type} · {step.risk}
+          <p className="flex flex-wrap items-center gap-2 text-sm">
+            <span>{step.type}</span>
+            <span className={cn(RISK_PILL_CLASS, runbookStepRiskMeta(step.risk).className)}>
+              {runbookStepRiskMeta(step.risk).title}
+            </span>
           </p>
           <dl className="space-y-2 break-words">
             {step.configuration.map(([label, value]) => (
@@ -152,10 +175,21 @@ export default async function RunbookApproval({ params }: { params: Promise<{ id
           </dl>
         </section>
       ))}
-      <p>
-        Execution checks current permissions and the plan again. A changed or expired plan requires
-        a new request.
-      </p>
+      <details className="rounded border p-3">
+        <summary className="cursor-pointer text-sm font-medium">Verification details</summary>
+        <dl className="grid gap-x-4 gap-y-3 break-all pt-3 sm:grid-cols-[minmax(0,12rem)_minmax(0,1fr)]">
+          <dt className={DT_CLASS}>Runbook id</dt>
+          <dd className={DD_CLASS}>{summary.runbookId}</dd>
+          <dt className={DT_CLASS}>Version</dt>
+          <dd className={DD_CLASS}>
+            {summary.version} · {summary.versionId}
+          </dd>
+          <dt className={DT_CLASS}>Version checksum</dt>
+          <dd className={DD_CLASS}>{summary.checksum}</dd>
+          <dt className={DT_CLASS}>Plan digest</dt>
+          <dd className={DD_CLASS}>{preview.planDigest}</dd>
+        </dl>
+      </details>
       {!decided && (
         <ReviewForm
           action={reviewPreparedRunbook}
@@ -175,8 +209,10 @@ export default async function RunbookApproval({ params }: { params: Promise<{ id
 
 async function OwnPlan({
   own,
+  timeZone,
 }: {
   own: NonNullable<Awaited<ReturnType<typeof loadMcpRunbookRequest>>>;
+  timeZone: string;
 }) {
   const decider = own.reviewedById ?? own.rejectedById;
   const [requester, reviewer, runbook] = await Promise.all([
@@ -193,8 +229,14 @@ async function OwnPlan({
       decidedAt={own.reviewedAt ?? own.rejectedAt}
       selfApproved={own.selfApproved}
       decisionReason={own.decisionReason}
+      timeZone={timeZone}
     >
-      <RequestedBy person={requester.person} assistant={requester.assistant} at={own.createdAt} />
+      <RequestedBy
+        person={requester.person}
+        assistant={requester.assistant}
+        at={own.createdAt}
+        timeZone={timeZone}
+      />
       {runbook && <p>Runbook: {runbook.name}</p>}
     </RequesterStatus>
   );

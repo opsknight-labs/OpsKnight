@@ -1,5 +1,5 @@
+import { mcpCompositeCost } from '@/lib/mcp/core/composites';
 import { withMcpRuntime } from '@/lib/mcp/auth/config';
-import { randomUUID } from 'node:crypto';
 import { withMcpDatabase } from '@/lib/database-workload';
 import { createMcpHandler } from '@modelcontextprotocol/server';
 import {
@@ -8,8 +8,10 @@ import {
   resolveMcpGrantWithPolicy,
 } from '@/lib/mcp/auth/principal';
 import { assertMcpHost, mcpHttpError } from '@/lib/mcp/auth/http';
+import { browserPreflight, withBrowserCors } from '@/lib/mcp/auth/cors';
 import {
   CostBudget,
+  MCP_MAX_OPERATIONS,
   acquireMcpSlot,
   acquireMcpAuthenticationSlot,
   readmitMcpSlot,
@@ -37,8 +39,9 @@ import {
   TASKS_EXTENSION,
   cancelMcpTask,
   clientSupportsTasks,
-  createRunbookExecutionTask,
+  createMcpTask,
   getMcpTask,
+  taskTargetOf,
   updateMcpTask,
 } from '@/lib/mcp/protocol/tasks';
 import {
@@ -46,28 +49,62 @@ import {
   observeOperationalHistogram,
 } from '@/lib/metrics/operational/registry';
 import { logger, runWithContext } from '@/lib/logger';
+import { trustedMcpRequestId } from '@/lib/mcp/request-id';
+import { mcpForceDisabled } from '@/lib/mcp/core/kill-switch';
 import { recordMcpGrantCall } from '@/lib/mcp/core/usage';
+import { mcpCallLogOperationId, recordMcpCallLog } from '@/lib/mcp/core/call-log';
 import { MCP_PROTOCOL_REVISION } from '@/lib/mcp/protocol/revision';
 import {
+  MCP_TIMED_OUTCOMES,
   mcpErrorOutcome,
   mcpMetricTool,
   mcpToolErrored,
   type McpMetricOutcome,
 } from '@/lib/mcp/protocol/metrics';
 import { isMcpCapabilityDisabled } from '@/lib/mcp/catalog/capabilities';
+import { stepUpScopes } from '@/lib/mcp/auth/step-up';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-export function POST(request: Request) {
-  // Every log line of this request carries the id returned to the client as X-Request-Id.
-  const requestId = randomUUID();
-  return runWithContext({ requestId, component: 'mcp' }, () =>
-    withMcpDatabase(() => withMcpRuntime(() => handlePost(request, requestId)))
+export async function POST(request: Request) {
+  // One id for the whole request: the one the middleware validated and returns as x-request-id,
+  // on every log line, and on every response including errors, so a client error can be matched.
+  const requestId = trustedMcpRequestId(request);
+  const response = await runWithContext({ requestId, component: 'mcp' }, () =>
+    withMcpDatabase(() =>
+      withMcpRuntime(() =>
+        withBrowserCors(request, browserOrigin => handlePost(request, requestId, browserOrigin))
+      )
+    )
   );
+  return withRequestId(response, requestId);
 }
 
-async function handlePost(request: Request, requestId: string) {
+function withRequestId(response: Response, requestId: string) {
+  try {
+    response.headers.set('X-Request-Id', requestId);
+    return response;
+  } catch {
+    // Some runtime responses have immutable headers; rebuild around the same body.
+    const headers = new Headers(response.headers);
+    headers.set('X-Request-Id', requestId);
+    return new Response(response.body, { status: response.status, headers });
+  }
+}
+
+/**
+ * Fraction of plain `served` requests that write mcp.request.completed (MCP_LOG_SAMPLE_SERVED,
+ * 0 to 1, default 1). Every other outcome is always logged.
+ */
+function servedSampleRate() {
+  const raw = Number(process.env.MCP_LOG_SAMPLE_SERVED ?? '1');
+  return Number.isFinite(raw) ? Math.min(1, Math.max(0, raw)) : 1;
+}
+/** CORS preflight for a browser-hosted client on an allowed origin (Allowed browser origins). */
+export const OPTIONS = browserPreflight;
+
+async function handlePost(request: Request, requestId: string, browserOrigin: string | null) {
   const started = performance.now();
   let outcome: McpMetricOutcome = 'error';
   let tool = 'none';
@@ -76,16 +113,28 @@ async function handlePost(request: Request, requestId: string) {
   let releaseAuth: (() => void) | undefined;
   let budget: CostBudget | undefined;
   let rpcId: string | number | null = null;
+  // Attribution for the completion log, set as soon as the bearer resolves so 429/busy count too.
+  let grantId: string | undefined;
+  let clientId: string | undefined;
+  let errorCode: string | undefined;
+  // Activity log: the catalog operation this call ran, once the body is read.
+  let operationId: string | null = null;
   try {
-    assertMcpHost(request);
+    assertMcpHost(request, false, browserOrigin);
+    requireMcp(!mcpForceDisabled(), 'MCP_DISABLED', 503);
     releaseAuth = acquireMcpAuthenticationSlot();
     requireMcp(!request.headers.has('mcp-session-id'), 'MCP_SESSIONS_UNSUPPORTED');
     // Verify bearer authority before accepting a potentially slow upload. Release the
     // authentication slot before reading; only authenticated callers occupy work slots.
     let identity = await authenticateMcp(request, null);
+    grantId = identity.grantId;
+    clientId = identity.clientId;
     releaseAuth();
     releaseAuth = undefined;
-    release = await acquireMcpSlot(identity.policy.maxInFlight, { grantId: identity.grantId });
+    // Fairness is per person: all of one user's connections share one slot cap.
+    release = await acquireMcpSlot(identity.policy.maxInFlight, {
+      ownerId: identity.auth.actor.id,
+    });
     let body;
     try {
       body = await readMcpBody(request);
@@ -111,6 +160,8 @@ async function handlePost(request: Request, requestId: string) {
     }
     method = body.method;
     tool = mcpMetricTool(body.method, body.params?.name);
+    if (body.method === 'tools/call')
+      operationId = mcpCallLogOperationId(tool, body.params?.arguments);
     // A notification (no id) gets no response and does no work: acknowledge it before any
     // quota is charged. notifications/initialized and notifications/cancelled arrive this way.
     if (body.id === undefined) {
@@ -125,10 +176,13 @@ async function handlePost(request: Request, requestId: string) {
     identity = await authenticateMcp(request, null);
     // Judge the held slot by the refreshed limit; it is kept while that limit still admits it.
     release = await readmitMcpSlot(release, identity.policy.maxInFlight, {
-      grantId: identity.grantId,
+      ownerId: identity.auth.actor.id,
     });
     rpcId = body.id;
-    // 2025-revision clients are served statelessly by the SDK; tasks and listen are 2026-07-28 only.
+    // Older revisions are served statelessly by the SDK: 2025-11-25, 2025-06-18 and best-effort
+    // 2025-03-26 (also 2024-11-05 and 2024-10-07 over plain POST; their HTTP+SSE transport is not
+    // served, GET /mcp is 405). A POST without MCP-Protocol-Version is treated as 2025-03-26.
+    // Tasks and listen are 2026-07-28 only.
     const modern = request.headers.get('mcp-protocol-version') === MCP_PROTOCOL_REVISION;
     const steps =
       body.method === 'tools/call' && body.params?.name === 'execute_plan'
@@ -163,17 +217,21 @@ async function handlePost(request: Request, requestId: string) {
       ? 1 + subscribedUris.length
       : Array.isArray(steps)
         ? Math.max(1, steps.length)
-        : body.params?.name === 'incident_get_context'
-          ? 3
-          : body.method === 'tools/call' && body.params?.name === 'postmortem_get_context'
-            ? 4
-            : 1;
-    requireMcp(cost <= 8, 'MCP_OPERATION_BUDGET_EXCEEDED');
+        : body.method === 'tools/call'
+          ? (mcpCompositeCost(body.params?.name, body.params?.arguments) ?? 1)
+          : 1;
+    requireMcp(cost <= MCP_MAX_OPERATIONS, 'MCP_OPERATION_BUDGET_EXCEEDED');
     await chargeMcpRequest(identity, cost);
-    budget = new CostBudget(identity.policy.maxOperations, 262144, request.signal);
+    // A policy saved before the cap existed may hold 9 to 16; the cap is what is enforced.
+    budget = new CostBudget(
+      Math.min(identity.policy.maxOperations, MCP_MAX_OPERATIONS),
+      262144,
+      request.signal
+    );
     const context = {
       grantId: identity.grantId,
       credentialId: identity.credentialId,
+      credentialKind: identity.kind,
       tokenScopes: identity.tokenScopes,
       requestId,
       budget,
@@ -232,6 +290,24 @@ async function handlePost(request: Request, requestId: string) {
       outcome = 'subscription_opened';
       return await openListenStream(request, body, context, identity, subscribedUris);
     }
+    // Step-up (opt-in): a call this connection lacks a grantable permission for gets an HTTP 403
+    // insufficient_scope challenge, so a supporting client re-opens consent for just that. A
+    // personal access token has no consent to re-open, so it keeps the plain tool error.
+    const stepUp =
+      identity.policy.scopeStepUpEnabled && identity.kind !== 'PAT'
+        ? stepUpScopes(identity.auth.actor, {
+            clientScopes: identity.clientScopes,
+            policy: identity.policy,
+            method: body.method,
+            params: body.params,
+          })
+        : null;
+    if (stepUp) {
+      outcome = 'protocol_rejected';
+      const error = new McpBoundaryError('MCP_INSUFFICIENT_SCOPE', 403);
+      error.challengeScope = stepUp.join(' ');
+      return mcpHttpError(error);
+    }
     const handler = createMcpHandler(
       () =>
         createOpsKnightMcpServer(
@@ -242,7 +318,7 @@ async function handlePost(request: Request, requestId: string) {
           identity.policy.disabledCapabilities
         ),
       {
-        // 2025-06-18 and 2025-11-25 clients: one fresh server per request, no session.
+        // Pre-2026 clients: one fresh server per request, no session.
         legacy: 'stateless',
         responseMode: 'auto',
         maxRequestBodySize: 65536,
@@ -251,14 +327,19 @@ async function handlePost(request: Request, requestId: string) {
     );
     try {
       const response = await boundMcpResponse(
-        await handler.fetch(request, { parsedBody: body }),
+        await handler.fetch(request, { parsedBody: body, authInfo: identity.authInfo }),
         budget.maxBytes
       );
       const taskResponse =
         supportsTasks &&
         body.method === 'tools/call' &&
         TASK_CAPABLE_TOOLS.has(String(body.params?.name))
-          ? await asTaskResponse(response, context, identity.auth.actor.id)
+          ? await asTaskResponse(
+              response,
+              context,
+              identity.auth.actor.id,
+              String(body.params?.name)
+            )
           : null;
       if (taskResponse) {
         outcome = 'task_created';
@@ -280,12 +361,14 @@ async function handlePost(request: Request, requestId: string) {
     }
   } catch (error) {
     outcome = mcpErrorOutcome(error);
+    errorCode = error instanceof McpBoundaryError ? error.code : undefined;
     if (
       !(error instanceof McpBoundaryError) ||
       (error.status >= 500 && !['MCP_BUSY', 'MCP_DISABLED'].includes(error.code))
     )
       logger.error('mcp.request.unexpected_error', {
         requestId,
+        grantId,
         tool,
         errorName: error instanceof Error ? error.name : typeof error,
         ...(error instanceof McpBoundaryError ? { code: error.code } : {}),
@@ -321,33 +404,61 @@ async function handlePost(request: Request, requestId: string) {
     // Keep the DB-work admission slot until that actual work has settled.
     await budget?.drain();
     release?.();
+    const durationMs = performance.now() - started;
     addOperationalMetric('opsknight_mcp_requests_total', 1, { outcome, tool });
-    observeOperationalHistogram(
-      'opsknight_mcp_request_duration_seconds',
-      (performance.now() - started) / 1000,
-      { tool }
-    );
+    // Rejections are counted above, never timed: a flood of fast 429s must not hide slow calls.
+    if (MCP_TIMED_OUTCOMES.has(outcome))
+      observeOperationalHistogram('opsknight_mcp_request_duration_seconds', durationMs / 1000, {
+        outcome,
+        tool,
+      });
+    // The stable per-request record for log pipelines and SIEMs. Never arguments or results.
+    if (outcome !== 'served' || Math.random() < servedSampleRate())
+      logger.info('mcp.request.completed', {
+        requestId,
+        grantId,
+        clientId,
+        method,
+        tool,
+        outcome,
+        durationMs: Math.round(durationMs),
+        ...(errorCode ? { errorCode } : {}),
+      });
+    // Same bounded labels as the metrics; never the arguments. Notifications do no work.
+    if (grantId && outcome !== 'notification')
+      recordMcpCallLog({
+        grantId,
+        tool,
+        operationId,
+        outcome,
+        durationMs,
+        requestId,
+        errorCode: errorCode ?? null,
+      });
   }
 }
 
 /**
- * A task-capable tool that durably started work becomes a task handle for a client that opted in.
- * Errors and non-JSON responses pass through unchanged.
+ * A task-capable tool whose result is a durable wait (a started runbook execution, or an approval
+ * still PENDING) becomes a task handle for a client that opted in. Errors, non-JSON responses and
+ * results that are already final pass through unchanged.
  */
 async function asTaskResponse(
   response: Response,
-  context: Parameters<typeof createRunbookExecutionTask>[0],
-  actorId: string
+  context: Parameters<typeof createMcpTask>[0],
+  actorId: string,
+  toolName: string
 ) {
   if (!response.ok || !response.headers.get('content-type')?.includes('application/json'))
     return null;
   const message = (await response.clone().json()) as {
     id: string | number | null;
-    result?: { isError?: boolean; structuredContent?: { executionId?: unknown } };
+    result?: { isError?: boolean; structuredContent?: Record<string, unknown> };
   };
-  const executionId = message.result?.structuredContent?.executionId;
-  if (message.result?.isError || typeof executionId !== 'string') return null;
-  const task = await createRunbookExecutionTask(context, actorId, executionId);
+  if (message.result?.isError) return null;
+  const target = taskTargetOf(toolName, message.result?.structuredContent);
+  if (!target) return null;
+  const task = await createMcpTask(context, actorId, toolName, target);
   return Response.json(
     { jsonrpc: '2.0', id: message.id, result: task },
     {
@@ -424,7 +535,7 @@ async function openListenStream(
   };
   let response: Response;
   try {
-    response = await handler.fetch(request, { parsedBody: body });
+    response = await handler.fetch(request, { parsedBody: body, authInfo: identity.authInfo });
   } catch (error) {
     await cleanup();
     throw error;
@@ -435,20 +546,54 @@ async function openListenStream(
   }
   // Notifications are hints; ending a stream is always safe because clients re-read on reconnect.
   timers.lifetime = setTimeout(() => void cleanup(), STREAM_LIFETIME_MS);
-  // Turning MCP off, or disabling a subscribed resource's read, ends the stream at the next check.
-  const readOperations = uris.map(uri => parseSubscriptionUri(uri).readOperation);
+  // Turning MCP off, disabling a subscribed resource's read, a role or team change, or losing
+  // access to any subscribed resource ends the stream at the next check.
+  const subscriptions = uris.map(uri => parseSubscriptionUri(uri));
+  const sameActor = (actor: typeof identity.auth.actor) =>
+    actor.id === identity.auth.actor.id &&
+    actor.role === identity.auth.actor.role &&
+    teamKey(actor) === teamKey(identity.auth.actor);
+  let revalidating = false;
   timers.revalidate = setInterval(() => {
-    void withMcpDatabase(() => resolveMcpGrantWithPolicy(identity.grantId, identity.credentialId))
-      .then(({ policy }) => {
-        if (
-          !policy?.enabled ||
-          readOperations.some(operationId =>
-            isMcpCapabilityDisabled(policy.disabledCapabilities, operationId)
-          )
+    if (revalidating || closed) return;
+    revalidating = true;
+    void withMcpDatabase(async () => {
+      const { policy, auth } = await resolveMcpGrantWithPolicy(
+        identity.grantId,
+        identity.credentialId
+      );
+      if (
+        !policy?.enabled ||
+        subscriptions.some(({ readOperation }) =>
+          isMcpCapabilityDisabled(policy.disabledCapabilities, readOperation)
         )
+      )
+        return false;
+      if (!sameActor(auth.actor)) return false;
+      // The same person can still lose a resource (moved to another team, made private).
+      // Re-read each subscribed resource with fresh authority under a small budget.
+      const recheck = new CostBudget(MAX_RESOURCE_SUBSCRIPTIONS, 262144);
+      try {
+        for (const { readOperation, id } of subscriptions)
+          await callMcpOperation({ ...context, budget: recheck }, readOperation, { path: { id } });
+      } finally {
+        await recheck.drain();
+      }
+      return true;
+    })
+      .then(stillAllowed => {
+        if (!stillAllowed) {
+          logger.info('mcp.subscription.access_lost', { grantId: identity.grantId });
           void cleanup();
+        }
       })
-      .catch(() => void cleanup());
+      .catch(() => {
+        logger.info('mcp.subscription.access_lost', { grantId: identity.grantId });
+        void cleanup();
+      })
+      .finally(() => {
+        revalidating = false;
+      });
   }, revalidateIntervalMs());
   const reader = response.body.getReader();
   const stream = new ReadableStream<Uint8Array>({
@@ -473,7 +618,13 @@ async function openListenStream(
   headers.set('Cache-Control', 'private, no-store');
   headers.set('X-Request-Id', context.requestId);
   headers.set('X-Content-Type-Options', 'nosniff');
+  // Reverse proxies (nginx) must pass events through as they are written, not buffer the stream.
+  headers.set('X-Accel-Buffering', 'no');
   return new Response(stream, { status: response.status, headers });
+}
+
+function teamKey(actor: { teamIds?: readonly string[] }) {
+  return [...(actor.teamIds ?? [])].sort().join(',');
 }
 
 export function GET() {

@@ -62,8 +62,8 @@ Operation columns count catalog operations that need the permission: plain reads
 | `custom-fields:write` | Change custom fields (higher-risk changes wait for approval) | Settings | Change | ✓ |  |  |  | 0 | 0 | 0 | 3 |
 | `escalation-policies:read` | View escalation policies | Schedules and escalation | View | ✓ | ✓ | ✓ |  | 5 | 1 | 0 | 1 |
 | `escalation-policies:write` | Change escalation policies (higher-risk changes wait for approval) | Schedules and escalation | Change | ✓ |  |  |  | 0 | 0 | 0 | 3 |
-| `incidents:read` | View incidents | Incidents | View | ✓ | ✓ | ✓ | ✓ | 21 | 12 | 0 | 18 |
-| `incidents:write` | Change incidents (higher-risk changes wait for approval) | Incidents | Change | ✓ | ✓ |  |  | 0 | 0 | 8 | 12 |
+| `incidents:read` | View incidents | Incidents | View | ✓ | ✓ | ✓ | ✓ | 21 | 12 | 2 | 16 |
+| `incidents:write` | Change incidents (higher-risk changes wait for approval) | Incidents | Change | ✓ | ✓ |  |  | 0 | 0 | 11 | 10 |
 | `integrations:delete` | Delete integrations | Services | Change | ✓ |  |  |  | 0 | 0 | 0 | 1 |
 | `integrations:read` | View integrations | Services | View | ✓ | ✓ | ✓ | ✓ | 0 | 3 | 0 | 1 |
 | `integrations:test` | Send test messages through integrations | Services | Change | ✓ |  |  |  | 0 | 2 | 0 | 0 |
@@ -104,4 +104,464 @@ Operation columns count catalog operations that need the permission: plain reads
 
 - **Configuration changes** (`operation_prepare`): an active administrator who holds every permission the change needs.
 - **Runbook runs** (`runbook_prepare_execution`): anyone with the runbook approve and runbook read permissions who can see the target incident or service. By default that is Responders and Administrators.
-- An administrator may approve their own request after ticking an explicit confirmation; the approval is recorded as self-approved. Anyone else needs a second person. The assistant can never approve.
+- An administrator may approve their own request after ticking an explicit confirmation; the approval is recorded as self-approved. Anyone else needs a second person, and so does any request made with a personal access token. The assistant can never approve.
+
+## Coverage by area
+
+Every REST v2 operation by area: how many an assistant can use directly (curated tools, `read_operation` and `call_operation`), how many need approval first (`operation_prepare` or the runbook approval tools) and how many are not available to assistants. Not available means excluded after review or not yet implemented; the catalog explains each.
+
+| Area | Operations | Direct | With approval | Not available |
+| --- | --: | --: | --: | --: |
+| audit-exports | 3 | 0 | 0 | 3 |
+| audit-logs | 1 | 0 | 0 | 1 |
+| custom-fields | 5 | 2 | 3 | 0 |
+| dashboards | 10 | 4 | 5 | 1 |
+| escalation-policies | 8 | 5 | 3 | 0 |
+| incidents | 40 | 30 | 10 | 0 |
+| integrations | 11 | 5 | 2 | 4 |
+| notification-providers | 6 | 0 | 0 | 6 |
+| notifications | 4 | 3 | 1 | 0 |
+| operational-events | 1 | 1 | 0 | 0 |
+| postmortems | 14 | 6 | 8 | 0 |
+| reports | 12 | 5 | 3 | 4 |
+| runbooks | 59 | 14 | 13 | 32 |
+| schedules | 24 | 12 | 12 | 0 |
+| service-accounts | 6 | 0 | 0 | 6 |
+| service-objectives | 11 | 7 | 4 | 0 |
+| services | 43 | 21 | 21 | 1 |
+| settings | 8 | 3 | 4 | 1 |
+| status-pages | 30 | 14 | 10 | 6 |
+| teams | 14 | 7 | 7 | 0 |
+| users | 11 | 0 | 0 | 11 |
+| **All** | 321 | 139 | 106 | 76 |
+
+<details>
+<summary>Operations by area</summary>
+
+### audit-exports
+
+| Operation | How an assistant reaches it |
+| --- | --- |
+| `createAuditExport` | not available: needs reauth impact preview and postcondition |
+| `downloadAuditExport` | not available: review private read projection |
+| `getAuditExport` | not available: review private read projection |
+
+### audit-logs
+
+| Operation | How an assistant reaches it |
+| --- | --- |
+| `listAuditLogs` | not available: review private read projection |
+
+### custom-fields
+
+| Operation | How an assistant reaches it |
+| --- | --- |
+| `createCustomFieldDefinition` | `operation_prepare`, then approval |
+| `deleteCustomFieldDefinition` | `operation_prepare`, then approval |
+| `getCustomFieldDefinition` | `read_operation` (sensitive reads on) |
+| `listCustomFieldDefinitions` | `read_operation` (sensitive reads on) |
+| `updateCustomFieldDefinition` | `operation_prepare`, then approval |
+
+### dashboards
+
+| Operation | How an assistant reaches it |
+| --- | --- |
+| `createReportDashboard` | `operation_prepare`, then approval |
+| `deleteReportDashboard` | `operation_prepare`, then approval |
+| `downloadReportDashboardData` | not available: review read projection |
+| `duplicateReportDashboard` | `operation_prepare`, then approval |
+| `getReportDashboard` | `read_operation` (sensitive reads on) |
+| `getReportDashboardData` | `read_operation` (sensitive reads on) |
+| `listReportDashboardWidgets` | `read_operation` (sensitive reads on) |
+| `listReportDashboards` | `read_operation` (sensitive reads on) |
+| `replaceReportDashboardWidgets` | `operation_prepare`, then approval |
+| `updateReportDashboard` | `operation_prepare`, then approval |
+
+### escalation-policies
+
+| Operation | How an assistant reaches it |
+| --- | --- |
+| `createEscalationPolicy` | `operation_prepare`, then approval |
+| `deleteEscalationPolicy` | `operation_prepare`, then approval |
+| `getEscalationPolicy` | `escalation_explain` |
+| `getEscalationPolicyDependencies` | `read_operation` |
+| `listEscalationPolicies` | `read_operation` |
+| `previewEscalationPolicy` | `call_operation` |
+| `updateEscalationPolicy` | `operation_prepare`, then approval |
+| `validateEscalationPolicy` | `read_operation` (sensitive reads on) |
+
+### incidents
+
+| Operation | How an assistant reaches it |
+| --- | --- |
+| `acknowledgeIncident` | `incident_acknowledge` |
+| `addIncidentNote` | `incident_add_note` |
+| `addIncidentTag` | `call_operation` |
+| `assignIncident` | `incident_assign` |
+| `createIncident` | `incident_create` |
+| `createIncidentTemplate` | `operation_prepare`, then approval |
+| `deleteIncidentTemplate` | `operation_prepare`, then approval |
+| `escalateIncident` | `incident_escalate` |
+| `getIncident` | `incident_get` |
+| `getIncidentAvailableActions` | `read_operation` |
+| `getIncidentCustomField` | `read_operation` (sensitive reads on) |
+| `getIncidentResponseActivity` | `read_operation` |
+| `getIncidentRoutingDecision` | `read_operation` |
+| `getIncidentTemplate` | `read_operation` (sensitive reads on) |
+| `getIncidentTimeline` | `incident_get_timeline` |
+| `getIncidentWatcher` | `read_operation` (sensitive reads on) |
+| `listIncidentAlerts` | `read_operation` (sensitive reads on) |
+| `listIncidentCustomFields` | `read_operation` |
+| `listIncidentNotes` | `read_operation` |
+| `listIncidentNotificationAttempts` | `read_operation` (sensitive reads on) |
+| `listIncidentRunbookExecutions` | `read_operation` |
+| `listIncidentTags` | `read_operation` |
+| `listIncidentTemplates` | `read_operation` (sensitive reads on) |
+| `listIncidentWarRooms` | `read_operation` (sensitive reads on) |
+| `listIncidentWatchers` | `read_operation` (sensitive reads on) |
+| `listIncidents` | `incident_search` |
+| `listRelatedIncidents` | `read_operation` |
+| `removeIncidentTag` | `call_operation` |
+| `removeIncidentWatcher` | `operation_prepare`, then approval |
+| `reopenIncident` | `incident_reopen` |
+| `resolveIncident` | `incident_resolve` |
+| `setIncidentCustomField` | `operation_prepare`, then approval |
+| `setIncidentWatcher` | `call_operation` |
+| `snoozeIncident` | `operation_prepare`, then approval |
+| `suppressIncident` | `operation_prepare`, then approval |
+| `unacknowledgeIncident` | `operation_prepare`, then approval |
+| `unsnoozeIncident` | `incident_unsnooze` |
+| `unsuppressIncident` | `operation_prepare`, then approval |
+| `updateIncident` | `operation_prepare`, then approval |
+| `updateIncidentTemplate` | `operation_prepare`, then approval |
+
+### integrations
+
+| Operation | How an assistant reaches it |
+| --- | --- |
+| `deleteIntegration` | `operation_prepare`, then approval |
+| `getIntegration` | not available: review read projection |
+| `getIntegrationCredentialState` | not available: review private read projection |
+| `getIntegrationDiagnostics` | not available: review read projection |
+| `getIntegrationUsage` | `read_operation` (sensitive reads on) |
+| `listIntegrationTypes` | `read_operation` (sensitive reads on) |
+| `listIntegrations` | `read_operation` (sensitive reads on) |
+| `rotateIntegrationCredentials` | not available: needs reauth impact preview and postcondition |
+| `updateIntegration` | `operation_prepare`, then approval |
+| `validateIntegrationConfiguration` | `read_operation` (sensitive reads on) |
+| `validateIntegrationPayload` | `read_operation` (sensitive reads on) |
+
+### notification-providers
+
+| Operation | How an assistant reaches it |
+| --- | --- |
+| `configureNotificationProvider` | not available: needs reauth impact preview and postcondition |
+| `getNotificationProvider` | not available: review private read projection |
+| `getNotificationProviderDiagnostics` | not available: review private read projection |
+| `listNotificationProviders` | not available: review private read projection |
+| `rotateWebPushKeys` | not available: needs reauth impact preview and postcondition |
+| `testNotificationProvider` | not available: needs reauth impact preview and postcondition |
+
+### notifications
+
+| Operation | How an assistant reaches it |
+| --- | --- |
+| `getNotificationFeedback` | `read_operation` (sensitive reads on) |
+| `listNotificationAttempts` | `read_operation` (sensitive reads on) |
+| `listNotifications` | `read_operation` (sensitive reads on) |
+| `retryNotification` | `operation_prepare`, then approval |
+
+### operational-events
+
+| Operation | How an assistant reaches it |
+| --- | --- |
+| `listOperationalEvents` | `read_operation` (sensitive reads on) |
+
+### postmortems
+
+| Operation | How an assistant reaches it |
+| --- | --- |
+| `createPostmortem` | `operation_prepare`, then approval |
+| `deletePostmortem` | `operation_prepare`, then approval |
+| `deletePostmortemActionItem` | `operation_prepare`, then approval |
+| `getPostmortem` | `read_operation` |
+| `getPostmortemActionItem` | `read_operation` |
+| `listPostmortemActionItems` | `read_operation` |
+| `listPostmortemContributors` | `read_operation` |
+| `listPostmortemVersions` | `read_operation` |
+| `listPostmortems` | `read_operation` |
+| `publishPostmortem` | `operation_prepare`, then approval |
+| `replacePostmortemActionItems` | `operation_prepare`, then approval |
+| `replacePostmortemContributors` | `operation_prepare`, then approval |
+| `updatePostmortem` | `operation_prepare`, then approval |
+| `updatePostmortemActionItem` | `operation_prepare`, then approval |
+
+### reports
+
+| Operation | How an assistant reaches it |
+| --- | --- |
+| `cancelReportExport` | not available: eligible for approval batch with family tests |
+| `createReportExport` | not available: eligible for approval batch with family tests |
+| `createSavedReport` | `operation_prepare`, then approval |
+| `deleteSavedReport` | `operation_prepare`, then approval |
+| `downloadReportExport` | not available: review read projection |
+| `getMetricsReport` | `read_operation` (sensitive reads on) |
+| `getReportCatalog` | `read_operation` |
+| `getReportExport` | not available: review read projection |
+| `getSavedReport` | `report_get_summary` |
+| `listSavedReports` | `read_operation` |
+| `queryReportMetrics` | `read_operation` (sensitive reads on) |
+| `updateSavedReport` | `operation_prepare`, then approval |
+
+### runbooks
+
+| Operation | How an assistant reaches it |
+| --- | --- |
+| `activateRunbookSigningIdentity` | not available: needs reauth impact preview and postcondition |
+| `approveRunbookExecutionStep` | `operation_prepare`, then approval |
+| `archiveRunbook` | `operation_prepare`, then approval |
+| `cancelRunbookExecution` | `operation_prepare`, then approval |
+| `checkRunbookAgentPoolDeletion` | not available: review private read projection |
+| `checkRunbookDeletion` | `read_operation` (sensitive reads on) |
+| `compareRunbookVersions` | `read_operation` (sensitive reads on) |
+| `createRunbook` | `operation_prepare`, then approval |
+| `createRunbookAgentEnrollment` | not available: needs reauth impact preview and postcondition |
+| `createRunbookAgentPool` | not available: needs reauth impact preview and postcondition |
+| `createRunbookDraft` | `operation_prepare`, then approval |
+| `createRunbookSecret` | not available: needs reauth impact preview and postcondition |
+| `deleteRunbook` | not available: needs reauth impact preview and postcondition |
+| `deleteRunbookAgentPool` | not available: needs reauth impact preview and postcondition |
+| `duplicateRunbook` | `operation_prepare`, then approval |
+| `executeRunbook` | `runbook_prepare_execution`, then `runbook_execute_approved` |
+| `getRunbook` | `read_operation` |
+| `getRunbookAgent` | not available: review private read projection |
+| `getRunbookAgentConfiguration` | not available: review private read projection |
+| `getRunbookAgentEnrollment` | not available: review private read projection |
+| `getRunbookAgentPolicyStatus` | not available: review private read projection |
+| `getRunbookAgentPool` | not available: review private read projection |
+| `getRunbookDraft` | `read_operation` (sensitive reads on) |
+| `getRunbookExecution` | `runbook_get_execution` |
+| `getRunbookMetadata` | `read_operation` |
+| `getRunbookSecret` | not available: review private read projection |
+| `grantRunbookSecret` | not available: needs reauth impact preview and postcondition |
+| `listRunbookAgentPoolMembers` | not available: review private read projection |
+| `listRunbookAgentPools` | not available: review private read projection |
+| `listRunbookAgents` | not available: review private read projection |
+| `listRunbookExecutionEvents` | `read_operation` (sensitive reads on) |
+| `listRunbookExecutionEvidence` | `read_operation` (sensitive reads on) |
+| `listRunbookExecutionSteps` | `read_operation` (sensitive reads on) |
+| `listRunbookExecutions` | `read_operation` |
+| `listRunbookSecretGrants` | not available: review private read projection |
+| `listRunbookSecretUsage` | not available: review private read projection |
+| `listRunbookSecrets` | not available: review private read projection |
+| `listRunbookSigningIdentities` | not available: review private read projection |
+| `listRunbookVersions` | `read_operation` |
+| `listRunbooks` | `runbook_find` |
+| `previewRunbookExecution` | `runbook_preview` |
+| `previewRunbookExecutionRerun` | not available: needs durable receipt before approval gating |
+| `publishRunbookDraft` | `operation_prepare`, then approval |
+| `rejectRunbookExecutionStep` | `operation_prepare`, then approval |
+| `removeRunbookAgentPoolMember` | not available: needs reauth impact preview and postcondition |
+| `rerunRunbookExecution` | `operation_prepare`, then approval |
+| `restoreRunbook` | `operation_prepare`, then approval |
+| `retireRunbookAgentPool` | not available: needs reauth impact preview and postcondition |
+| `retireRunbookSigningIdentity` | not available: needs reauth impact preview and postcondition |
+| `revokeRunbookAgent` | not available: needs reauth impact preview and postcondition |
+| `revokeRunbookSecretGrant` | not available: needs reauth impact preview and postcondition |
+| `rotateRunbookSecret` | not available: needs reauth impact preview and postcondition |
+| `setRunbookAgentPoolMember` | not available: needs reauth impact preview and postcondition |
+| `stageRunbookSigningIdentity` | not available: needs reauth impact preview and postcondition |
+| `updateRunbookAgentConfiguration` | not available: needs reauth impact preview and postcondition |
+| `updateRunbookAgentPool` | not available: needs reauth impact preview and postcondition |
+| `updateRunbookDraft` | `operation_prepare`, then approval |
+| `updateRunbookMetadata` | `operation_prepare`, then approval |
+| `validateRunbookDraft` | `call_operation` |
+
+### schedules
+
+| Operation | How an assistant reaches it |
+| --- | --- |
+| `addScheduleParticipant` | `operation_prepare`, then approval |
+| `cancelScheduleOverride` | `operation_prepare`, then approval |
+| `createSchedule` | `operation_prepare`, then approval |
+| `createScheduleLayer` | `operation_prepare`, then approval |
+| `createScheduleOverride` | `operation_prepare`, then approval |
+| `deleteSchedule` | `operation_prepare`, then approval |
+| `deleteScheduleLayer` | `operation_prepare`, then approval |
+| `getSchedule` | `schedule_get` |
+| `getScheduleCoverage` | `read_operation` |
+| `getScheduleDependencies` | `read_operation` (sensitive reads on) |
+| `getScheduleLayer` | `read_operation` |
+| `getScheduleOnCall` | `oncall_lookup` |
+| `getScheduleOverride` | `read_operation` |
+| `getScheduleParticipant` | `read_operation` |
+| `listScheduleChanges` | `read_operation` (sensitive reads on) |
+| `listScheduleLayers` | `read_operation` |
+| `listScheduleOverrides` | `read_operation` |
+| `listSchedules` | `read_operation` |
+| `moveScheduleParticipant` | `operation_prepare`, then approval |
+| `previewScheduleCoverage` | `call_operation` |
+| `removeScheduleParticipant` | `operation_prepare`, then approval |
+| `reorderScheduleLayers` | `operation_prepare`, then approval |
+| `updateSchedule` | `operation_prepare`, then approval |
+| `updateScheduleLayer` | `operation_prepare`, then approval |
+
+### service-accounts
+
+| Operation | How an assistant reaches it |
+| --- | --- |
+| `createServiceAccount` | not available: needs reauth impact preview and postcondition |
+| `deleteServiceAccount` | not available: needs reauth impact preview and postcondition |
+| `getServiceAccount` | not available: review private read projection |
+| `issueServiceAccountToken` | not available: needs reauth impact preview and postcondition |
+| `listServiceAccounts` | not available: review private read projection |
+| `revokeServiceAccountToken` | not available: needs reauth impact preview and postcondition |
+
+### service-objectives
+
+| Operation | How an assistant reaches it |
+| --- | --- |
+| `archiveServiceObjective` | `operation_prepare`, then approval |
+| `createServiceObjective` | `operation_prepare`, then approval |
+| `evaluateServiceObjective` | `operation_prepare`, then approval |
+| `getServiceObjective` | `read_operation` (sensitive reads on) |
+| `getServiceObjectiveCatalog` | `read_operation` (sensitive reads on) |
+| `getServiceObjectiveEvaluation` | `read_operation` (sensitive reads on) |
+| `getServiceObjectiveHistory` | `read_operation` (sensitive reads on) |
+| `listServiceObjectiveSnapshots` | `read_operation` (sensitive reads on) |
+| `listServiceObjectiveVersions` | `read_operation` (sensitive reads on) |
+| `listServiceObjectives` | `read_operation` (sensitive reads on) |
+| `updateServiceObjective` | `operation_prepare`, then approval |
+
+### services
+
+| Operation | How an assistant reaches it |
+| --- | --- |
+| `activateAutomationCandidate` | `operation_prepare`, then approval |
+| `activateServiceRunbookRule` | `operation_prepare`, then approval |
+| `createService` | `operation_prepare`, then approval |
+| `createServiceIntegration` | not available: eligible for approval batch with family tests |
+| `createServiceRunbookRule` | `operation_prepare`, then approval |
+| `deleteService` | `operation_prepare`, then approval |
+| `detachServiceRunbookRule` | `operation_prepare`, then approval |
+| `discardAutomationCandidate` | `operation_prepare`, then approval |
+| `duplicateServiceRunbookRule` | `operation_prepare`, then approval |
+| `getAutomationCandidate` | `read_operation` (sensitive reads on) |
+| `getAutomationDraft` | `read_operation` |
+| `getAutomationVersion` | `read_operation` |
+| `getService` | `read_operation` |
+| `getServiceAutomation` | `automation_get_effective` |
+| `getServiceClassificationPolicy` | `read_operation` |
+| `getServiceHealthSummary` | `service_get_health` |
+| `getServiceNotificationSettings` | `read_operation` (sensitive reads on) |
+| `getServiceRunbookRule` | `read_operation` |
+| `getServiceSlaPolicy` | `read_operation` |
+| `getServiceSupportHours` | `read_operation` |
+| `listAutomationDecisions` | `automation_get_decision_trace` |
+| `listAutomationObservations` | `read_operation` (sensitive reads on) |
+| `listAutomationVersions` | `read_operation` |
+| `listRunbookRulePolicyChecks` | `read_operation` (sensitive reads on) |
+| `listServiceChangeEvents` | `read_operation` (sensitive reads on) |
+| `listServiceRunbookRules` | `read_operation` |
+| `listServices` | `read_operation` |
+| `pauseServiceRunbookRule` | `operation_prepare`, then approval |
+| `publishAutomationVersion` | `operation_prepare`, then approval |
+| `replaceRunbookRuleTriggers` | `operation_prepare`, then approval |
+| `requestRunbookRulePolicyChecks` | `operation_prepare`, then approval |
+| `restoreAutomationDraft` | `operation_prepare`, then approval |
+| `saveAutomationDraft` | `operation_prepare`, then approval |
+| `simulateAutomation` | `call_operation` |
+| `updateService` | `operation_prepare`, then approval |
+| `updateServiceAutomationMode` | `operation_prepare`, then approval |
+| `updateServiceClassificationPolicy` | `operation_prepare`, then approval |
+| `updateServiceNotificationSettings` | `operation_prepare`, then approval |
+| `updateServiceRunbookRule` | `operation_prepare`, then approval |
+| `updateServiceSlaPolicy` | `operation_prepare`, then approval |
+| `updateServiceSupportHours` | `operation_prepare`, then approval |
+| `validateAutomation` | `call_operation` |
+| `validateServiceRunbookRule` | `read_operation` (sensitive reads on) |
+
+### settings
+
+| Operation | How an assistant reaches it |
+| --- | --- |
+| `getAutomationSettings` | `read_operation` (sensitive reads on) |
+| `getChatOpsConfiguration` | not available: review read projection |
+| `getRunbookSettings` | `read_operation` (sensitive reads on) |
+| `getWorkspaceSlaPolicy` | `read_operation` (sensitive reads on) |
+| `updateAutomationSettings` | `operation_prepare`, then approval |
+| `updateChatOpsConfiguration` | `operation_prepare`, then approval |
+| `updateRunbookSettings` | `operation_prepare`, then approval |
+| `updateWorkspaceSlaPolicy` | `operation_prepare`, then approval |
+
+### status-pages
+
+| Operation | How an assistant reaches it |
+| --- | --- |
+| `createStatusPage` | `operation_prepare`, then approval |
+| `createStatusPageAnnouncement` | `operation_prepare`, then approval |
+| `deleteStatusPageAsset` | `operation_prepare`, then approval |
+| `getStatusPage` | `status_page_get` |
+| `getStatusPageAppearance` | `read_operation` (sensitive reads on) |
+| `getStatusPageAsset` | `read_operation` (sensitive reads on) |
+| `getStatusPageContent` | `read_operation` (sensitive reads on) |
+| `getStatusPagePrivacy` | not available: review private read projection |
+| `getStatusPagePublication` | `read_operation` (sensitive reads on) |
+| `getStatusPagePublicationJob` | `read_operation` (sensitive reads on) |
+| `getStatusPageSettings` | `read_operation` (sensitive reads on) |
+| `getStatusPageSubscriber` | not available: review read projection |
+| `getStatusPageSubscriberStats` | `read_operation` (sensitive reads on) |
+| `getStatusPageSubscriptionSettings` | `read_operation` (sensitive reads on) |
+| `listStatusPageAnnouncements` | `read_operation` |
+| `listStatusPageAssets` | `read_operation` (sensitive reads on) |
+| `listStatusPageServices` | `read_operation` |
+| `listStatusPageSubscribers` | not available: review read projection |
+| `listStatusPages` | `read_operation` |
+| `previewStatusPage` | `read_operation` (sensitive reads on) |
+| `removeStatusPageSubscriber` | not available: needs reauth impact preview and postcondition |
+| `retryStatusPagePublication` | `operation_prepare`, then approval |
+| `setStatusPageServices` | `operation_prepare`, then approval |
+| `updateStatusPage` | not available: needs durable receipt before approval gating |
+| `updateStatusPageAppearance` | `operation_prepare`, then approval |
+| `updateStatusPageContent` | `operation_prepare`, then approval |
+| `updateStatusPagePrivacy` | `operation_prepare`, then approval |
+| `updateStatusPageService` | `operation_prepare`, then approval |
+| `updateStatusPageSettings` | `operation_prepare`, then approval |
+| `uploadStatusPageAsset` | not available: needs durable receipt before approval gating |
+
+### teams
+
+| Operation | How an assistant reaches it |
+| --- | --- |
+| `assignTeamService` | `operation_prepare`, then approval |
+| `createTeam` | `operation_prepare`, then approval |
+| `deleteTeam` | `operation_prepare`, then approval |
+| `getTeam` | `read_operation` |
+| `getTeamLead` | `read_operation` |
+| `getTeamMember` | `read_operation` |
+| `listTeamActivity` | `read_operation` (sensitive reads on) |
+| `listTeamMembers` | `read_operation` |
+| `listTeamServices` | `read_operation` |
+| `listTeams` | `read_operation` |
+| `removeTeamMember` | `operation_prepare`, then approval |
+| `setTeamLead` | `operation_prepare`, then approval |
+| `setTeamMember` | `operation_prepare`, then approval |
+| `updateTeam` | `operation_prepare`, then approval |
+
+### users
+
+| Operation | How an assistant reaches it |
+| --- | --- |
+| `administerUser` | not available: needs reauth impact preview and postcondition |
+| `createUserInvitation` | not available: needs reauth impact preview and postcondition |
+| `getMyNotificationPreferences` | not available: review private read projection |
+| `getUser` | not available: review private read projection |
+| `getUserAdministration` | not available: review private read projection |
+| `getUserDependencies` | not available: review private read projection |
+| `getUserInvitation` | not available: review private read projection |
+| `getUserInvitationPolicy` | not available: review private read projection |
+| `listUsers` | not available: review private read projection |
+| `renewUserInvitation` | not available: needs reauth impact preview and postcondition |
+| `updateMyNotificationPreferences` | not available: needs reauth impact preview and postcondition |
+
+</details>

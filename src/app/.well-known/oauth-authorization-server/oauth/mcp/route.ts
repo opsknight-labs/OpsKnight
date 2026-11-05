@@ -1,32 +1,26 @@
-import prisma from '@/lib/prisma';
 import { loadMcpRuntime, mcpIssuer } from '@/lib/mcp/auth/config';
 import { withMcpDatabase } from '@/lib/database-workload';
+import { mcpPolicyInForce } from '@/lib/mcp/core/kill-switch';
+import { loadDiscoveryPolicy } from '@/lib/mcp/auth/discovery-policy';
+import { PUBLIC_METADATA_CORS, publicMetadataPreflight } from '@/lib/mcp/auth/cors';
 
 export function GET() {
   return withMcpDatabase(async () => {
     await loadMcpRuntime();
     const issuer = mcpIssuer();
-    const policy = await prisma.mcpPolicy.findUnique({
-      where: { id: 'default' },
-      select: {
-        enabled: true,
-        cimdEnabled: true,
-        cimdAllowedHosts: true,
-        cimdScopes: true,
-        dcrEnabled: true,
-        dcrScopes: true,
-      },
-    });
+    const policy = await loadDiscoveryPolicy();
     // Advertise only what is enabled and usable in this deployment.
-    const cimd = Boolean(policy?.enabled && policy.cimdEnabled && policy.cimdScopes.length);
-    const scopes = policy?.enabled
-      ? [
-          ...new Set([
-            ...(policy.dcrEnabled ? policy.dcrScopes : []),
-            ...(cimd ? policy.cimdScopes : []),
-          ]),
-        ]
-      : [];
+    const enabled = mcpPolicyInForce(policy);
+    const cimd = Boolean(enabled && policy?.cimdEnabled && policy.cimdScopes.length);
+    const scopes =
+      enabled && policy
+        ? [
+            ...new Set([
+              ...(policy.dcrEnabled ? policy.dcrScopes : []),
+              ...(cimd ? policy.cimdScopes : []),
+            ]),
+          ]
+        : [];
     return Response.json(
       {
         issuer,
@@ -41,12 +35,14 @@ export function GET() {
         code_challenge_methods_supported: ['S256'],
         authorization_response_iss_parameter_supported: true,
         client_id_metadata_document_supported: cimd,
-        ...(policy?.enabled && policy.dcrEnabled && policy.dcrScopes.length
+        ...(enabled && policy?.dcrEnabled && policy.dcrScopes.length
           ? { registration_endpoint: `${issuer}/register` }
           : {}),
         ...(scopes.length ? { scopes_supported: scopes } : {}),
       },
-      { headers: { 'Cache-Control': 'no-store' } }
+      { headers: { 'Cache-Control': 'no-store', ...PUBLIC_METADATA_CORS } }
     );
   });
 }
+
+export const OPTIONS = publicMetadataPreflight;

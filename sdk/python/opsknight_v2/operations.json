@@ -1846,6 +1846,14 @@
     "requiredHeaders": [],
     "bodyRequired": true
   },
+  "escalateIncident": {
+    "method": "POST",
+    "path": "/incidents/{id}/escalate",
+    "kind": "item",
+    "idempotency": "supported",
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
   "listIncidentNotes": {
     "method": "GET",
     "path": "/incidents/{id}/notes",

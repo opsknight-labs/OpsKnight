@@ -10,6 +10,8 @@ import { getRealtimeControlPlaneStatus } from '@/lib/realtime-change-control-pla
 import { getDashboardAnalyticsHealth } from '@/lib/dashboard/dashboard-analytics-cache';
 import { withMcpDatabase } from '@/lib/database-workload';
 import { mcpSlotUsage } from '@/lib/mcp/core/budget';
+import { mcpStreamUsage } from '@/lib/mcp/protocol/subscriptions';
+import { mcpForceDisabled } from '@/lib/mcp/core/kill-switch';
 
 const MCP_CHECK_TIMEOUT_MS = 1000;
 
@@ -24,7 +26,10 @@ async function mcpHealth() {
     const policy = await Promise.race([
       withMcpDatabase(async () => {
         await prisma.$queryRaw`SELECT 1`;
-        return prisma.mcpPolicy.findUnique({ where: { id: 'default' }, select: { enabled: true } });
+        return prisma.mcpPolicy.findUnique({
+          where: { id: 'default' },
+          select: { enabled: true, maxInFlight: true },
+        });
       }),
       new Promise<never>((_, reject) => {
         timer = setTimeout(
@@ -35,8 +40,11 @@ async function mcpHealth() {
     ]);
     return {
       latencyMs: Math.round(performance.now() - started),
-      enabled: policy?.enabled ?? false,
-      ...mcpSlotUsage(),
+      enabled: (policy?.enabled ?? false) && !mcpForceDisabled(),
+      forceDisabled: mcpForceDisabled(),
+      // Every limit here is per process; cluster capacity is each one times the web replicas.
+      ...mcpSlotUsage(policy?.maxInFlight),
+      ...mcpStreamUsage(),
     };
   } finally {
     clearTimeout(timer);

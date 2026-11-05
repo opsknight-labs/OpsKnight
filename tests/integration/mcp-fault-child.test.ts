@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { it } from 'vitest';
 
 // Runs only as a child process of mcp-fault-injection.test.ts, which kills it at chosen points.

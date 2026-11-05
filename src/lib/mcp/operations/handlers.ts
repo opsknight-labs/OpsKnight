@@ -146,9 +146,19 @@ export const MCP_HANDLERS = new Map<string, () => Promise<Handler>>([
     async () => (await import('@/app/api/v2/incidents/[id]/acknowledge/route')).POST,
   ],
   ['assignIncident', async () => (await import('@/app/api/v2/incidents/[id]/assign/route')).POST],
+  [
+    'escalateIncident',
+    async () => (await import('@/app/api/v2/incidents/[id]/escalate/route')).POST,
+  ],
   ['listIncidentNotes', async () => (await import('@/app/api/v2/incidents/[id]/notes/route')).GET],
   ['addIncidentNote', async () => (await import('@/app/api/v2/incidents/[id]/notes/route')).POST],
   ['resolveIncident', async () => (await import('@/app/api/v2/incidents/[id]/resolve/route')).POST],
+  // Routine responder actions run directly, like acknowledge; snooze and unacknowledge stay gated.
+  ['reopenIncident', async () => (await import('@/app/api/v2/incidents/[id]/reopen/route')).POST],
+  [
+    'unsnoozeIncident',
+    async () => (await import('@/app/api/v2/incidents/[id]/unsnooze/route')).POST,
+  ],
   ['getIncident', async () => (await import('@/app/api/v2/incidents/[id]/route')).GET],
   [
     'getIncidentTimeline',
@@ -579,7 +589,6 @@ export const MCP_APPROVAL_HANDLERS = new Map<string, () => Promise<Handler>>([
     'createIncidentTemplate',
     async () => (await import('@/app/api/v2/incidents/templates/route')).POST,
   ],
-  ['reopenIncident', async () => (await import('@/app/api/v2/incidents/[id]/reopen/route')).POST],
   ['snoozeIncident', async () => (await import('@/app/api/v2/incidents/[id]/snooze/route')).POST],
   [
     'suppressIncident',
@@ -588,10 +597,6 @@ export const MCP_APPROVAL_HANDLERS = new Map<string, () => Promise<Handler>>([
   [
     'unacknowledgeIncident',
     async () => (await import('@/app/api/v2/incidents/[id]/unacknowledge/route')).POST,
-  ],
-  [
-    'unsnoozeIncident',
-    async () => (await import('@/app/api/v2/incidents/[id]/unsnooze/route')).POST,
   ],
   [
     'unsuppressIncident',

@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { randomBytes, randomUUID } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import {
