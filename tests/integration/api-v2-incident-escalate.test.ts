@@ -79,6 +79,17 @@ describe('POST /api/v2/incidents/{id}/escalate', () => {
     expect(replay.headers.get('idempotency-replayed')).toBe('true');
     expect((await replay.json()).data.paged).toEqual(body.paged);
     expect(await requests(id)).toBe(1);
+    // Audited as an API change attributed to the credential, like every other REST v2 change.
+    const credentialId = (
+      await db.apiKey.findFirstOrThrow({ where: { prefix: admin.slice(0, 12) } })
+    ).id;
+    const audit = await db.auditLog.findFirstOrThrow({
+      where: { action: 'incident.escalation.requested', entityId: id },
+    });
+    expect(audit.details).toMatchObject({
+      source: 'API',
+      metadata: { source: 'REST_API', apiGateway: 'api_v2', apiClientId: credentialId },
+    });
   });
 
   it('refuses a key reused for another incident with 409, paging nobody', async () => {

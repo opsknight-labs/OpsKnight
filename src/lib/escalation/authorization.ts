@@ -104,6 +104,8 @@ export async function requestIncidentEscalation(input: {
   actor: ManualEscalationActor;
   source: ManualEscalationSource;
   idempotency?: IdempotencyContext;
+  /** The REST credential (API key or MCP grant) that made the request, for the audit trail. */
+  credentialId?: string;
 }): Promise<ManualEscalationResult> {
   await authorizeIncidentEscalation({
     actorId: input.actor.userId,
@@ -239,6 +241,7 @@ async function recordManualEscalationRequest(input: {
   incidentId: string;
   actor: ManualEscalationActor;
   source: ManualEscalationSource;
+  credentialId?: string;
 }): Promise<void> {
   const actorLabel = input.actor.name?.trim() || 'a responder';
 
@@ -247,10 +250,20 @@ async function recordManualEscalationRequest(input: {
   await Promise.all([
     emitAuditEvent({
       action: 'incident.escalation.requested',
-      source: input.source === 'SLACK' || input.source === 'MICROSOFT_TEAMS' ? 'INTEGRATION' : 'UI',
+      source:
+        input.source === 'SLACK' || input.source === 'MICROSOFT_TEAMS'
+          ? 'INTEGRATION'
+          : input.source === 'REST_API'
+            ? 'API'
+            : 'UI',
       target: { type: 'INCIDENT', id: input.incidentId },
       actor: { type: 'USER', id: input.actor.userId, name: input.actor.name ?? null },
-      metadata: { source: input.source },
+      // Attributed to the credential like every other REST v2 change (see logV2Audit); not
+      // named apiKeyId, which the audit writer would redact.
+      metadata: {
+        source: input.source,
+        ...(input.credentialId ? { apiGateway: 'api_v2', apiClientId: input.credentialId } : {}),
+      },
     }).catch(error => {
       logger.error('escalation.manual.audit_failed', {
         incidentId: input.incidentId,

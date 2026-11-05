@@ -206,6 +206,8 @@ export async function acknowledgeMcpIncidents(
     400,
     '/ids must not repeat an incident.'
   );
+  // Like execute_plan: refused up front rather than acknowledging only the first few.
+  requireMcp(input.ids.length <= context.budget.maxOperations, 'MCP_OPERATION_BUDGET_EXCEEDED');
   const results: Record<string, unknown>[] = [];
   for (const id of input.ids) {
     try {

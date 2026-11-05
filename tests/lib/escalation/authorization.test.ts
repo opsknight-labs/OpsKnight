@@ -275,6 +275,22 @@ describe('requestIncidentEscalation', () => {
     }
   );
 
+  it('audits a REST or MCP request as an API change attributed to its credential', async () => {
+    mocks.resolveUserActor.mockResolvedValue(actor({ role: 'RESPONDER' }));
+    vi.mocked(prisma.incident.findUnique)
+      .mockResolvedValueOnce(incidentResource() as never)
+      .mockResolvedValueOnce({ status: 'OPEN' } as never);
+
+    await requestIncidentEscalation({ ...request, source: 'REST_API', credentialId: 'grant-1' });
+
+    expect(mocks.emitAuditEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        source: 'API',
+        metadata: { source: 'REST_API', apiGateway: 'api_v2', apiClientId: 'grant-1' },
+      })
+    );
+  });
+
   it('still escalates when the audit write fails', async () => {
     mocks.resolveUserActor.mockResolvedValue(actor({ role: 'RESPONDER' }));
     vi.mocked(prisma.incident.findUnique)

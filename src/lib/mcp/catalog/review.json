@@ -2195,7 +2195,7 @@
     "tool": "incident_escalate",
     "title": "Escalate an incident",
     "annotations": { "destructiveHint": false, "openWorldHint": true },
-    "routeSha256": "4275cc5bff87687bd09409397d53947f8b3dad0b7a4f3603af6a249dd087b38e",
+    "routeSha256": "8b638d8046b5059fdf35ea109d89b9e317bc6d4c986dce9879efa5a16b72dd77",
     "resourceFilter": "existing REST route authorization and scoped projection",
     "evidence": "tests/integration/mcp-curated-incident-actions.test.ts",
     "contractSha256": "1abdeb413feacf892c412e1e6225a42ebe3dead176be68ee6902d648a612df39",

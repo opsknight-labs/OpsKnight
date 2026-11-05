@@ -49,6 +49,7 @@ export const POST = defineV2Route({
       actor: { userId: actor.id },
       source: 'REST_API',
       idempotency: key ? { key, principalId: apiKey.id } : undefined,
+      credentialId: apiKey.id,
     });
     if (!outcome.requested && outcome.reason === 'INCIDENT_NOT_FOUND')
       throw new AppError({ code: 'INCIDENT_NOT_FOUND' });

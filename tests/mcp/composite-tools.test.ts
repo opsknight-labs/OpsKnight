@@ -87,6 +87,17 @@ describe('bulk acknowledge', () => {
       execution.callMcpOperation.mock.calls.every(call => call[1] === 'acknowledgeIncident')
     ).toBe(true);
   });
+
+  it('refuses more incidents than the policy operation limit before acknowledging any', async () => {
+    execution.callMcpOperation.mockImplementation(async () => result('acknowledgeIncident', {}));
+    await expect(
+      composites.acknowledgeMcpIncidents(
+        { ...context(), budget: new CostBudget(2) },
+        { ids: ['a', 'b', 'c'], idempotencyKey: 'caller-key-0000000002' }
+      )
+    ).rejects.toThrow('MCP_OPERATION_BUDGET_EXCEEDED');
+    expect(execution.callMcpOperation).not.toHaveBeenCalled();
+  });
 });
 
 describe('search and fetch', () => {
