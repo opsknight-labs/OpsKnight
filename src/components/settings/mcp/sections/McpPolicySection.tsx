@@ -5,6 +5,7 @@ import { Label } from '@/components/ui/shadcn/label';
 import McpPolicyForm, { type McpPolicyAction } from '@/components/settings/mcp/McpPolicyForm';
 import McpPolicyScopeSelector from '@/components/settings/mcp/McpPolicyScopeSelector';
 import SessionIdleSelect from '@/components/settings/mcp/SessionIdleSelect';
+import { MCP_MAX_OPERATIONS } from '@/lib/mcp/core/budget';
 
 const checkboxClass = 'mt-0.5 h-4 w-4 shrink-0 accent-primary';
 const textareaClass =
@@ -238,8 +239,14 @@ export default function McpPolicySection({
                   min="1"
                   max="16"
                   defaultValue={policy.maxInFlight}
+                  aria-describedby="mcp-max-in-flight-help"
                   required
                 />
+                <p id="mcp-max-in-flight-help" className="text-xs text-muted-foreground">
+                  Per web process. Cluster capacity = value × web replicas. Each process has an MCP
+                  database pool of 2 connections (max 4); values above the pool size queue on
+                  database connections.
+                </p>
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="mcp-max-operations">Operations per request</Label>
@@ -248,10 +255,22 @@ export default function McpPolicySection({
                   name="maxOperations"
                   type="number"
                   min="1"
-                  max="16"
-                  defaultValue={policy.maxOperations}
+                  max={MCP_MAX_OPERATIONS}
+                  defaultValue={Math.min(policy.maxOperations, MCP_MAX_OPERATIONS)}
+                  aria-describedby="mcp-max-operations-help"
                   required
                 />
+                <p id="mcp-max-operations-help" className="text-xs text-muted-foreground">
+                  Up to {MCP_MAX_OPERATIONS}. Composite tools use several (incident context 3,
+                  postmortem context 4).
+                </p>
+                {policy.maxOperations < 4 && (
+                  <p role="status" className="text-xs text-amber-700 dark:text-amber-400">
+                    {policy.maxOperations < 3
+                      ? 'Below 3, incident_get_context, postmortem_get_context and approval commits stop working.'
+                      : 'Below 4, postmortem_get_context stops working.'}
+                  </p>
+                )}
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="mcp-rpm">Weighted operations per minute per grant</Label>

@@ -25,6 +25,8 @@ import { mcpSessionDates } from '@/lib/mcp/auth/session-lifetime';
 import { partitionScopesForRole } from '@/lib/mcp/auth/role-scopes';
 import { isAppRole } from '@/lib/authorization';
 import { supersededUnusedMcpGrantsWhere } from '@/lib/mcp/auth/consent';
+import { MCP_MAX_OPERATIONS } from '@/lib/mcp/core/budget';
+import { mcpForceDisabled } from '@/lib/mcp/core/kill-switch';
 
 const settingsPath = '/settings/integrations/mcp';
 const supportedScopes = supportedMcpScopes;
@@ -170,7 +172,7 @@ export async function updateMcpPolicy(form: FormData): Promise<UpdateMcpPolicyRe
       enabled: z.boolean(),
       writesEnabled: z.boolean(),
       maxInFlight: z.coerce.number().int().min(1).max(16),
-      maxOperations: z.coerce.number().int().min(1).max(16),
+      maxOperations: z.coerce.number().int().min(1).max(MCP_MAX_OPERATIONS),
       requestsPerMinute: z.coerce.number().int().min(1).max(600),
       sensitiveReadsEnabled: z.boolean(),
       cimdAllowedHosts: z.string().max(4096),
@@ -223,6 +225,8 @@ export async function updateMcpPolicy(form: FormData): Promise<UpdateMcpPolicyRe
       }),
     'MCP_INVALID_CIMD_HOST'
   );
+  // The deployment kill switch wins: an admin cannot turn MCP on while it is forced off.
+  requireMcp(!input.enabled || !mcpForceDisabled(), 'MCP_FORCE_DISABLED');
   // Refuse to switch MCP on when its bootstrap configuration would fail at request time.
   requireMcp(
     !input.enabled || !(await getMcpConfigurationStatus({ force: true })).issues.length,

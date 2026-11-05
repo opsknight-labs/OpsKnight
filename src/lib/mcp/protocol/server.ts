@@ -1,3 +1,4 @@
+import { APP_VERSION } from '@/lib/version';
 import { searchCapabilities } from './capability-search';
 import {
   McpServer,
@@ -474,7 +475,8 @@ export function createOpsKnightMcpServer(
   // Administrator controls apply to every session whatever its role or consent; execution rechecks.
   const disabled = resolveDisabledMcpCapabilities(disabledCapabilities);
   const server = new McpServer(
-    { name: 'opsknight', title: 'OpsKnight', version: '2.2.0' },
+    // The running release, as /api/health reports it, so a bug report names its contract.
+    { name: 'opsknight', title: 'OpsKnight', version: APP_VERSION },
     {
       instructions: MCP_SERVER_INSTRUCTIONS,
       // Advertised because subscriptions/listen is served by the route with authorized URIs only.

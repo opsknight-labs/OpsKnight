@@ -13,9 +13,13 @@ import { effectiveMcpClientScopes } from '@/lib/mcp/auth/client-policy';
 import { logger } from '@/lib/logger';
 import { redirectUriAllowed, urlForLog } from '@/lib/mcp/auth/redirect-uri';
 import { z } from 'zod/v3';
+import { mcpPolicyInForce } from '@/lib/mcp/core/kill-switch';
+import { observeMcpOAuth } from '@/lib/mcp/auth/oauth-observability';
 
 export function GET(request: Request) {
-  return withMcpDatabase(() => withMcpRuntime(() => handleGet(request)));
+  return observeMcpOAuth('authorize', request, () =>
+    withMcpDatabase(() => withMcpRuntime(() => handleGet(request)))
+  );
 }
 
 async function handleGet(request: Request) {
@@ -25,7 +29,7 @@ async function handleGet(request: Request) {
   try {
     assertMcpHost(request);
     const policy = await prisma.mcpPolicy.findUnique({ where: { id: 'default' } });
-    requireMcp(policy?.enabled, 'MCP_DISABLED', 503);
+    requireMcp(policy && mcpPolicyInForce(policy), 'MCP_DISABLED', 503);
     const user = await getCurrentUser();
     requireMcp(user.status === 'ACTIVE', 'MCP_INACTIVE_PRINCIPAL', 403);
     requireMcp(

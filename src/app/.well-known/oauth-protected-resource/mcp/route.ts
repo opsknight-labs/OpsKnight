@@ -1,6 +1,7 @@
 import prisma from '@/lib/prisma';
 import { loadMcpRuntime, mcpIssuer, mcpResource } from '@/lib/mcp/auth/config';
 import { withMcpDatabase } from '@/lib/database-workload';
+import { mcpPolicyInForce } from '@/lib/mcp/core/kill-switch';
 
 export const dynamic = 'force-dynamic';
 
@@ -18,14 +19,15 @@ export function GET() {
       },
     });
     // Tell clients which scopes to ask for so they request something the policy will grant.
-    const scopes = policy?.enabled
-      ? [
-          ...new Set([
-            ...(policy.dcrEnabled ? policy.dcrScopes : []),
-            ...(policy.cimdEnabled ? policy.cimdScopes : []),
-          ]),
-        ]
-      : [];
+    const scopes =
+      policy && mcpPolicyInForce(policy)
+        ? [
+            ...new Set([
+              ...(policy.dcrEnabled ? policy.dcrScopes : []),
+              ...(policy.cimdEnabled ? policy.cimdScopes : []),
+            ]),
+          ]
+        : [];
     return Response.json(
       {
         resource: mcpResource(),

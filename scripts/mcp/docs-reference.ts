@@ -23,12 +23,24 @@ import { mcpScopesUsableByRole } from '../../src/lib/mcp/auth/role-scopes';
 import { describeMcpScope, supportedMcpScopes } from '../../src/lib/mcp/auth/scopes';
 import { McpBoundaryError } from '../../src/lib/mcp/core/errors';
 import { toolErrorText } from '../../src/lib/mcp/protocol/server';
+import { parse as parseYaml } from 'yaml';
+import { OPERATIONAL_METRICS } from '../../src/lib/metrics/operational/registry';
+import { MCP_METRIC_OUTCOMES, MCP_TIMED_OUTCOMES } from '../../src/lib/mcp/protocol/metrics';
+import {
+  MCP_OAUTH_ENDPOINTS,
+  MCP_OAUTH_OUTCOMES,
+} from '../../src/lib/mcp/auth/oauth-observability';
+import { MCP_AUTH_CONCURRENCY, MCP_MAX_OPERATIONS } from '../../src/lib/mcp/core/budget';
 
 export const MCP_DOCS_ROOT = 'docs/v2.2.0';
 /** Date the hand-written explanations below were last checked against the code. */
 export const MCP_DOCS_VERIFIED_AT = '2026-11-04';
 export const MCP_TROUBLESHOOTING_PAGE = `${MCP_DOCS_ROOT}/guides/mcp/troubleshooting.md`;
 export const MCP_PERMISSIONS_PAGE = `${MCP_DOCS_ROOT}/reference/mcp/permissions.md`;
+export const MCP_MONITORING_PAGE = `${MCP_DOCS_ROOT}/operate/mcp/monitoring.md`;
+export const MCP_ALERT_RULES_FILE = 'monitoring/prometheus/opsknight-alerts.yaml';
+/** Listen-stream caps, mirrored from src/lib/mcp/protocol/subscriptions.ts (a test pins them). */
+export const MCP_STREAM_LIMITS = { perProcess: 32, perGrant: 2, lifetimeMinutes: 10 };
 
 type Area = 'sign-in' | 'tools' | 'approvals' | 'settings' | 'server';
 
@@ -232,8 +244,15 @@ export const MCP_ERROR_GUIDE: Record<string, Guide> = {
   },
   MCP_DISABLED: {
     area: 'sign-in',
-    meaning: 'MCP is turned off for this installation.',
-    fix: 'An administrator turns it on from the Overview tab.',
+    meaning:
+      'MCP is turned off for this installation, by an administrator or by the MCP_FORCE_DISABLED=true deployment setting.',
+    fix: 'An administrator turns it on from the Overview tab. If the settings page says it is disabled by deployment configuration, the operator removes MCP_FORCE_DISABLED and restarts.',
+  },
+  MCP_FORCE_DISABLED: {
+    area: 'settings',
+    meaning:
+      'MCP was switched on in settings while the deployment sets MCP_FORCE_DISABLED=true, which overrides the stored policy.',
+    fix: 'Ask the operator to remove MCP_FORCE_DISABLED from the environment and restart OpsKnight, then turn MCP on again.',
   },
   MCP_DISTINCT_REVIEWER_REQUIRED: {
     area: 'approvals',
@@ -565,10 +584,28 @@ export const MCP_LOG_GUIDE: Record<string, string> = {
     'The metadata document could not be fetched. `reason` is the MCP code (timeout, too large, forbidden address).',
   'mcp.grant.last_call_failed':
     'Recording the Last call column failed. The tool call itself still succeeded.',
+  'mcp.register.unexpected_error':
+    'An unexpected error on the client registration endpoint. `name` is the error class.',
+  'mcp.request.completed':
+    'One line per /mcp request: `requestId`, `grantId`, `clientId`, `method`, `tool` (the bounded metrics label), `outcome`, `durationMs` and, on failure, `errorCode`. Never arguments or results. Every outcome other than served is always written; MCP_LOG_SAMPLE_SERVED (0 to 1, default 1) samples served requests. A stable contract for log pipelines and SIEMs.',
   'mcp.request.unexpected_error':
-    'An unexpected error in the /mcp route. Look up `requestId` (also the X-Request-Id header).',
+    'An unexpected error in the /mcp route. Carries `requestId` (also the X-Request-Id header) and `grantId`.',
+  'mcp.revoke.unexpected_error':
+    'An unexpected error on the token revocation endpoint. `name` is the error class.',
+  'mcp.sensitive_read.audit_failed':
+    'Writing the audit row for a sensitive read failed; the read itself was still served. `operationId` and `errorName` only.',
   'mcp.subscription.listener_failed': 'A subscription stream failed while delivering a change.',
   'mcp.subscription.poll_failed': 'The subscription change poll failed; the stream retries.',
+  'mcp.subscription.access_lost':
+    'A listen stream was closed because the person lost access to a subscribed resource, or their role or teams changed. Clients re-read on reconnect.',
+  'mcp.token.grace_reissued':
+    'A rotated refresh token was replayed inside the grace window and a new token issued (`grantId`, `replacedId`, `revokedSuccessorId`). Occasional lines are lost responses; many for one grant suggest a stolen token racing the real client.',
+  'mcp.token.refresh_reuse_revoked':
+    'A rotated refresh token was reused outside the grace window; the whole grant was revoked (`grantId`). The audit log has mcp.grant.reuse_detected with the user and client.',
+  'mcp.token.transient':
+    'A token request hit a passing database problem and was answered temporarily_unavailable. `prismaCode` and `state` only.',
+  'mcp.token.unexpected_error':
+    'An unexpected error on the token endpoint, answered server_error. `name` and `prismaCode` only; never form values, codes or tokens.',
   'mcp.tool.unexpected_error':
     'A tool failed unexpectedly. Carries requestId, tool, grantId, errorName and prismaCode; never the arguments.',
 };
@@ -698,7 +735,10 @@ export function renderTroubleshooting(repoRoot = process.cwd()) {
     );
     for (const code of rows) {
       const guide = MCP_ERROR_GUIDE[code];
-      lines.push(`| \`${code}\` | ${cell(guide.meaning)} | ${cell(guide.fix)} |`);
+      // Stable per-code anchor, in the code's own case, for deep links from error pages.
+      lines.push(
+        `| <a id="${code}"></a>\`${code}\` | ${cell(guide.meaning)} | ${cell(guide.fix)} |`
+      );
     }
     lines.push('');
   }
@@ -737,7 +777,7 @@ export function renderTroubleshooting(repoRoot = process.cwd()) {
     '| --- | --- | --- | --- |',
     ...[...events.keys()].sort().map(event => {
       const entry = events.get(event)!;
-      return `| \`${event}\` | ${entry.level} | ${cell(MCP_LOG_GUIDE[event] ?? '')} | ${[
+      return `| <a id="${event}"></a>\`${event}\` | ${entry.level} | ${cell(MCP_LOG_GUIDE[event] ?? '')} | ${[
         ...entry.files,
       ]
         .sort()
@@ -865,7 +905,155 @@ export function renderPermissions() {
   return lines.join('\n');
 }
 
+/** What each opsknight_mcp_* series means for an operator. A new MCP metric without one fails CI. */
+export const MCP_METRIC_GUIDE: Record<string, { normal: string; action: string }> = {
+  opsknight_mcp_requests_total: {
+    normal:
+      'Mostly `served`; some `tool_error` and `invalid_request` from assistants guessing arguments.',
+    action:
+      'Alert on `error`/`unavailable` share (OpsKnightMcpServerErrorRateHigh). Group `mcp.request.completed` log lines by `outcome`, `tool` and `grantId` to find the cause.',
+  },
+  opsknight_mcp_in_flight: {
+    normal: 'Below `opsknight_mcp_in_flight_limit` most of the time.',
+    action:
+      'Pinned at the limit with `opsknight_mcp_queued` above zero: raise the limit or add web replicas.',
+  },
+  opsknight_mcp_in_flight_limit: {
+    normal: 'The policy value **Concurrent requests per process**, identical on every replica.',
+    action: 'Cluster capacity is this value times the web replicas.',
+  },
+  opsknight_mcp_queued: {
+    normal: 'Zero, with short spikes during bursts of parallel tool calls.',
+    action: 'Never empties for five minutes: OpsKnightMcpQueueSaturated.',
+  },
+  opsknight_mcp_busy_total: {
+    normal: 'Flat. Each increment is one request shed with MCP_BUSY (work or authentication slot).',
+    action:
+      'Sustained growth: OpsKnightMcpShedding. Raise the limit, add replicas, or find the busy connection.',
+  },
+  opsknight_mcp_subscriptions_active: {
+    normal: `Open listen streams on this process, at most ${MCP_STREAM_LIMITS.perProcess}.`,
+    action: 'At the cap, new streams get MCP_SUBSCRIPTIONS_BUSY (counted as outcome `busy`).',
+  },
+  opsknight_mcp_request_duration_seconds: {
+    normal: 'Only calls that reached domain work are timed, so rejections never hide slow calls.',
+    action:
+      'p95 above 2.5 s for a tool: OpsKnightMcpP95High. Check the MCP database pool and slow queries.',
+  },
+  opsknight_mcp_oauth_requests_total: {
+    normal: 'Mostly `issued`; `invalid_grant` when assistants retry stale refresh tokens.',
+    action:
+      'Token `server_error`/`unavailable`: OpsKnightMcpTokenEndpointFailing. A high `invalid_grant` share: OpsKnightMcpInvalidGrantSpike.',
+  },
+  opsknight_mcp_maintenance_runs_total: {
+    normal: 'One `success` per task per scheduler maintenance pass.',
+    action:
+      'Failures: OpsKnightMcpMaintenanceFailing. No success in 15 minutes: OpsKnightMcpMaintenanceStalled.',
+  },
+};
+
+/** The `opsknight.mcp` alert group as shipped. */
+export function mcpAlertRules(repoRoot = process.cwd()) {
+  const document = parseYaml(readFileSync(join(repoRoot, MCP_ALERT_RULES_FILE), 'utf8')) as {
+    groups: {
+      name: string;
+      rules: {
+        alert: string;
+        for?: string;
+        labels?: { severity?: string };
+        annotations?: { summary?: string };
+      }[];
+    }[];
+  };
+  return document.groups.find(group => group.name === 'opsknight.mcp')?.rules ?? [];
+}
+
+export function renderMonitoring(repoRoot = process.cwd()) {
+  const metrics = OPERATIONAL_METRICS.filter(metric => metric.name.startsWith('opsknight_mcp_'));
+  const alerts = mcpAlertRules(repoRoot);
+  const scope = (value: string) =>
+    value === 'instance'
+      ? 'Per process (gauge)'
+      : value === 'counter'
+        ? 'Counter (sum across replicas)'
+        : value;
+  return [
+    frontmatter({
+      title: 'MCP monitoring and capacity',
+      description:
+        'Every MCP metric, the shipped alerts, the per-request log line and how MCP capacity scales with replicas.',
+      type: 'reference',
+      audience: ['operator', 'administrator'],
+      evidence: [
+        'scripts/mcp/docs-reference.ts',
+        'src/lib/metrics/operational/registry.ts',
+        'src/lib/mcp/protocol/metrics.ts',
+        'src/lib/mcp/core/budget.ts',
+        'monitoring/prometheus/opsknight-alerts.yaml',
+        'monitoring/prometheus/mcp.test.yml',
+      ],
+    }),
+    GENERATED_NOTE,
+    '',
+    '# MCP monitoring and capacity',
+    '',
+    'Tool failures reach assistants as HTTP 200 JSON-RPC results, so the generic HTTP 5xx alert never fires when MCP breaks. Scrape `/api/metrics` and load the `opsknight.mcp` groups from `monitoring/prometheus/opsknight-alerts.yaml` and `opsknight-recording-rules.yaml`; CI runs their promtool unit tests (`monitoring/prometheus/mcp.test.yml`).',
+    '',
+    '## Metrics',
+    '',
+    'No metric carries a user, client, grant or incident identifier. `tool` is a bounded label (named tools, `other` for anything else, `none` off tools/call).',
+    '',
+    '| Metric | Kind | Labels | Scope | Normal | When it is not |',
+    '| --- | --- | --- | --- | --- | --- |',
+    ...metrics.map(metric => {
+      const guide = MCP_METRIC_GUIDE[metric.name];
+      return `| \`${metric.name}\` | ${metric.kind} | ${metric.labels.map(label => `\`${label}\``).join(', ') || '—'} | ${scope(metric.scope)} | ${cell(guide?.normal ?? '')} | ${cell(guide?.action ?? '')} |`;
+    }),
+    '',
+    `\`outcome\` on \`opsknight_mcp_requests_total\`: ${MCP_METRIC_OUTCOMES.map(value => `\`${value}\``).join(', ')}. Every HTTP 429 counts as \`rate_limited\`. The duration histogram observes only ${[...MCP_TIMED_OUTCOMES].map(value => `\`${value}\``).join(', ')}.`,
+    '',
+    `\`opsknight_mcp_oauth_requests_total\`: \`endpoint\` is ${MCP_OAUTH_ENDPOINTS.map(value => `\`${value}\``).join(', ')}; \`outcome\` is ${MCP_OAUTH_OUTCOMES.map(value => `\`${value}\``).join(', ')}, read from the status and error code actually sent (\`issued\` covers any accepted request, including a redirect to sign-in or consent).`,
+    '',
+    '## Alerts',
+    '',
+    '| Alert | Severity | For | Summary |',
+    '| --- | --- | --- | --- |',
+    ...alerts.map(
+      rule =>
+        `| <a id="${rule.alert}"></a>\`${rule.alert}\` | ${rule.labels?.severity ?? ''} | ${rule.for ?? 'immediately'} | ${cell(rule.annotations?.summary ?? '')} |`
+    ),
+    '',
+    "Each alert's description in the rules file names the log event to search. Thresholds are starting points; tune them to your traffic.",
+    '',
+    '## Per-request log',
+    '',
+    'Every /mcp request writes one `mcp.request.completed` line: `requestId` (also the `X-Request-Id` response header, on errors too), `grantId`, `clientId`, `method`, `tool`, `outcome`, `durationMs` and, on failure, `errorCode`. Arguments and results are never logged. Requests refused before the bearer resolves carry no `grantId`. Outcomes other than `served` are always written; set `MCP_LOG_SAMPLE_SERVED` (0 to 1, default 1) to sample served requests. Treat the field names as a stable contract for SIEM pipelines. Admin-gated sensitive reads also write an `mcp.sensitive_read` audit row (operation, grant, path ids, page size and result size; never query values or data). See [troubleshooting](../../guides/mcp/troubleshooting.md#mcp.request.completed) for every MCP log event.',
+    '',
+    '## Capacity and sizing',
+    '',
+    'Every MCP limit is enforced per web process. Multiply by the number of web replicas for cluster capacity. These are arithmetic caps, not measured throughput (see [architecture](architecture.md#workload-isolation)).',
+    '',
+    '| Limit (per process) | Value | Shed as | Watch |',
+    '| --- | --- | --- | --- |',
+    `| Concurrent bearer authentications | ${MCP_AUTH_CONCURRENCY} | \`MCP_BUSY\`, Retry-After 1 | \`opsknight_mcp_busy_total\` |`,
+    '| Work slots | policy **Concurrent requests per process** (1 to 16) | waits up to 750 ms, then `MCP_BUSY` | `opsknight_mcp_in_flight` vs `opsknight_mcp_in_flight_limit` |',
+    '| Work-slot queue | twice the work slots | `MCP_BUSY` at once | `opsknight_mcp_queued` |',
+    '| Slots one person may hold | half the work slots, rounded up, across all their connections | waits, then `MCP_BUSY` | `mcp.request.completed` with outcome `busy` by `grantId` |',
+    `| Listen streams | ${MCP_STREAM_LIMITS.perProcess} (${MCP_STREAM_LIMITS.perGrant} per connection, ${MCP_STREAM_LIMITS.lifetimeMinutes} minutes each) | \`MCP_SUBSCRIPTIONS_BUSY\` / \`MCP_SUBSCRIPTIONS_LIMIT\` | \`opsknight_mcp_subscriptions_active\` |`,
+    `| Operations per request | policy **Operations per request**, at most ${MCP_MAX_OPERATIONS} | \`MCP_OPERATION_BUDGET_EXCEEDED\` | tool errors by \`errorCode\` |`,
+    '| MCP database pool | 2 connections (maximum 4) | waits on database connections | `/api/health/deep` `mcp.latencyMs` |',
+    '',
+    "Example: three web replicas with **Concurrent requests per process** set to 4 admit at most 12 MCP requests at once cluster-wide, queue 24 more, and hold up to 96 listen streams; they need 6 to 12 MCP database connections on top of the web pool. `/api/health/deep` reports each process's `inFlight`, `queued`, `authenticating`, `limit`, `queueCap`, `authLimit`, `streams` and `streamsLimit`.",
+    '',
+    '## Emergency stop',
+    '',
+    'Set `MCP_FORCE_DISABLED=true` in the environment and restart to turn MCP off for every surface (the /mcp endpoint, sign-in, token refresh, registration and discovery) whatever the stored policy says. The settings page shows **Disabled by deployment configuration** and refuses to turn MCP on; `/api/health/deep` reports `forceDisabled: true`. Remove the variable and restart to restore the saved policy. Connections are not revoked, so they work again afterwards.',
+    '',
+  ].join('\n');
+}
+
 export const MCP_GENERATED_PAGES = [
   { path: MCP_TROUBLESHOOTING_PAGE, render: () => renderTroubleshooting() },
   { path: MCP_PERMISSIONS_PAGE, render: () => renderPermissions() },
+  { path: MCP_MONITORING_PAGE, render: () => renderMonitoring() },
 ] as const;

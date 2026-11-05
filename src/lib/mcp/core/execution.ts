@@ -25,11 +25,14 @@ import {
   type resolveMcpGrant,
 } from '../auth/principal';
 import { CostBudget } from './budget';
+import { mcpPolicyInForce } from './kill-switch';
 import { McpBoundaryError, requireMcp } from './errors';
 import { lockMcpMutationAuthority } from './mutation-authority';
 import { projectMcpData } from './projection';
 import { isMcpCapabilityDisabled } from '../catalog/capabilities';
 import { ERROR_REGISTRY } from '@/lib/errors';
+import { logAudit } from '@/lib/audit';
+import { logger } from '@/lib/logger';
 
 // Static: the reads that some approval-gated destructive operation declares as its preview.
 const MCP_CATALOG_PREVIEW_IDS = new Set(
@@ -271,7 +274,8 @@ async function executeMcpOperation(
   const exposed = (policy: McpRuntimePolicy | null) =>
     mode === 'preview' || !mcpCapabilityDisabled(policy, operation);
   const permitted = (policy: McpRuntimePolicy | null) =>
-    policy?.enabled &&
+    policy &&
+    mcpPolicyInForce(policy) &&
     (mode === 'generic' && isMcpSensitiveRead(operation)
       ? policy.sensitiveReadsEnabled
       : operation.risk === 'R0' || policy.writesEnabled);
@@ -443,6 +447,34 @@ async function executeMcpOperation(
     },
   };
   context.budget.consumeResult(result);
+  // An admin-gated sensitive read leaves a forensic trail: what was read, by whom, through which
+  // connection. Never query values or result data. Ordinary reads are not audited (as in REST v2).
+  if (mode === 'generic' && isMcpSensitiveRead(operation))
+    try {
+      await logAudit({
+        action: 'mcp.sensitive_read',
+        entityType: 'SYSTEM_CONFIG',
+        entityId: context.grantId,
+        actorId: auth.actor.id,
+        source: 'API',
+        requestId: context.requestId,
+        details: {
+          operationId,
+          grantId: context.grantId,
+          pathIds: Object.values(path).filter(
+            (value): value is string => typeof value === 'string'
+          ),
+          ...(pageSize === undefined ? {} : { pageSize }),
+          resultBytes: Buffer.byteLength(JSON.stringify(data) ?? ''),
+        },
+      });
+    } catch (error) {
+      // An audit failure never fails the read the policy already allowed.
+      logger.warn('mcp.sensitive_read.audit_failed', {
+        operationId,
+        errorName: error instanceof Error ? error.name : typeof error,
+      });
+    }
   return result;
 }
 

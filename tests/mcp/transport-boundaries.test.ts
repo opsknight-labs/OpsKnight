@@ -6,7 +6,10 @@ import { assertMcpHost } from '@/lib/mcp/auth/http';
 // Parsing-envelope tests use an authenticated principal. Anonymous callers must now
 // fail authentication before their request bodies are read.
 vi.mock('@/lib/mcp/auth/principal', () => ({
-  authenticateMcp: vi.fn(async () => ({ policy: { maxInFlight: 2 } })),
+  authenticateMcp: vi.fn(async () => ({
+    auth: { actor: { id: 'user' } },
+    policy: { maxInFlight: 2 },
+  })),
   chargeMcpRequest: vi.fn(),
   resolveMcpGrant: vi.fn(),
 }));

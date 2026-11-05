@@ -20,6 +20,8 @@ test('Runbook code, Agent code and browser journeys run only Runbook jobs', () =
     'agent/src/executor.ts',
     'monitoring/prometheus/opsknight-alerts.yaml',
     'monitoring/prometheus/runbook-maintenance.test.yml',
+    'monitoring/prometheus/mcp.test.yml',
+    'monitoring/prometheus/opsknight-recording-rules.yaml',
     'tests/e2e/runbooks-ui.spec.ts',
     'tests/e2e/team-administration.spec.ts',
     'src/app/(app)/teams/actions.ts',
