@@ -16,7 +16,11 @@ const actor = (role: string, scopes: string[], teamIds: string[] = []) => ({
   })!,
   apiKey: { id: 'mcp:g1', scopes },
 });
-const open = { writesEnabled: true, sensitiveReadsEnabled: true, disabledCapabilities: [] };
+const open = {
+  writesEnabled: true,
+  sensitiveReadsEnabled: true,
+  disabledCapabilities: [] as string[],
+};
 const call = (operationId: string, clientScopes: readonly string[], policy = open) => ({
   clientScopes,
   policy,

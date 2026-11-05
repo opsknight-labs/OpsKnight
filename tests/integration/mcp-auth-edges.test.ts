@@ -12,6 +12,10 @@ import {
   OPTIONS as protectedResourcePreflight,
 } from '@/app/.well-known/oauth-protected-resource/mcp/route';
 import { GET as authorizationServer } from '@/app/.well-known/oauth-authorization-server/oauth/mcp/route';
+import {
+  GET as rootProtectedResource,
+  OPTIONS as rootProtectedResourcePreflight,
+} from '@/app/.well-known/oauth-protected-resource/route';
 
 // Records what the route hands the SDK per request, then serves it unchanged.
 const sdkCalls = vi.hoisted(() => [] as { authInfo?: { scopes: string[]; clientId: string } }[]);
@@ -236,6 +240,13 @@ describe('INT-02: browser-hosted clients', () => {
     const preflight = protectedResourcePreflight();
     expect(preflight.status).toBe(204);
     expect(preflight.headers.get('access-control-allow-credentials')).toBeNull();
+    // Clients fall back to the root path; a page sending MCP-Protocol-Version preflights it too.
+    expect((await rootProtectedResource()).headers.get('access-control-allow-origin')).toBe('*');
+    const rootPreflight = rootProtectedResourcePreflight();
+    expect(rootPreflight.status).toBe(204);
+    expect(rootPreflight.headers.get('access-control-allow-headers')).toContain(
+      'Mcp-Protocol-Version'
+    );
   });
 });
 
