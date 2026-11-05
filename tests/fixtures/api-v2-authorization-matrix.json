@@ -203,6 +203,12 @@
     "AUDITOR": "allow:global",
     "USER": "allow:resource"
   },
+  "POST /incidents/{id}/escalate [incidents:write]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "allow:global",
+    "AUDITOR": "deny:MISSING_CAPABILITY",
+    "USER": "deny:MISSING_CAPABILITY"
+  },
   "GET /incidents/{id}/intelligence [incidents:read]": {
     "ADMIN": "allow:global",
     "RESPONDER": "allow:global",
@@ -270,6 +276,12 @@
     "USER": "deny:MISSING_CAPABILITY"
   },
   "GET /incidents/{id}/runbook-executions [incidents:read]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "allow:global",
+    "AUDITOR": "allow:global",
+    "USER": "allow:resource"
+  },
+  "GET /incidents/{id}/similar [incidents:read]": {
     "ADMIN": "allow:global",
     "RESPONDER": "allow:global",
     "AUDITOR": "allow:global",
@@ -1175,6 +1187,12 @@
     "AUDITOR": "deny:MISSING_CAPABILITY",
     "USER": "deny:MISSING_CAPABILITY"
   },
+  "GET /schedules/on-call-now [schedules:read]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "allow:global",
+    "AUDITOR": "allow:global",
+    "USER": "allow:resource"
+  },
   "GET /schedules [schedules:read]": {
     "ADMIN": "allow:global",
     "RESPONDER": "allow:global",
@@ -1907,6 +1925,12 @@
     "AUDITOR": "deny:MISSING_CAPABILITY",
     "USER": "deny:MISSING_CAPABILITY"
   },
+  "GET /users/me/catch-up [incidents:read]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "allow:global",
+    "AUDITOR": "allow:global",
+    "USER": "allow:resource"
+  },
   "GET /users/me/notification-preferences [notification-preferences:read]": {
     "ADMIN": "allow:global",
     "RESPONDER": "allow:global",
@@ -1918,6 +1942,12 @@
     "RESPONDER": "allow:global",
     "AUDITOR": "allow:global",
     "USER": "allow:global"
+  },
+  "GET /users/me/on-call-shifts [schedules:read]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "allow:global",
+    "AUDITOR": "allow:global",
+    "USER": "allow:resource"
   },
   "GET /users [users:read]": {
     "ADMIN": "allow:global",

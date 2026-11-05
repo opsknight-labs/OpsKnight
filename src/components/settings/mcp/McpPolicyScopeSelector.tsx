@@ -5,6 +5,10 @@ import { Badge } from '@/components/ui/shadcn/badge';
 import { Button } from '@/components/ui/shadcn/button';
 import { cn } from '@/lib/utils';
 import { describeMcpScope } from '@/lib/mcp/auth/scope-labels';
+import {
+  MCP_WRITE_SCOPE_GROUP_DESCRIPTION,
+  MCP_WRITE_SCOPE_GROUP_TITLE,
+} from '@/lib/mcp/policy-copy';
 
 type Props = {
   scopeChoices: string[];
@@ -167,13 +171,13 @@ function McpPolicyScopeSelector({
         badgeLabel="READ"
       />
 
-      {/* Propose or run (needs approval) scopes group */}
+      {/* Change or run scopes group: incident actions direct, the rest reviewed */}
       {actScopes.length > 0 && (
         <ScopeGroup
           idPrefix={idPrefix}
           groupKey="act"
-          title="Propose or run (needs approval)"
-          description="Allow assistants to propose mutations and triggers; each request requires explicit human approval."
+          title={MCP_WRITE_SCOPE_GROUP_TITLE}
+          description={MCP_WRITE_SCOPE_GROUP_DESCRIPTION}
           scopes={actScopes}
           selected={selected}
           describeScope={describeScope}

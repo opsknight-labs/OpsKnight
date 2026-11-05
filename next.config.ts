@@ -223,6 +223,10 @@ const nextConfig: NextConfig = {
   typescript: {
     // Dedicated typecheck step runs in CI/cert; skip inside container bundle to avoid OOM
     ignoreBuildErrors: Boolean(process.env.SKIP_BUILD_TYPECHECK === 'true'),
+    // The build type-checks application code only. Test files are type-checked by the
+    // full `tsc --noEmit` step (CI static validation and pre-push); including them here
+    // pushed the build's type check past the 4 GB build heap.
+    tsconfigPath: 'tsconfig.build.json',
   },
   webpack: (config, { isServer, dev }) => {
     if (!dev && process.env.OPSKNIGHT_BUILD_LOW_MEMORY === 'true') {

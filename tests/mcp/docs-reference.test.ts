@@ -6,14 +6,30 @@ import {
   MCP_GENERATED_PAGES,
   MCP_LOG_GUIDE,
   MCP_NON_ERROR_CODES,
+  fillGeneratedBlocks,
+  redactedFieldRule,
+  renderCatalogCounts,
+  renderSecurityBlocks,
   renderPermissions,
   renderTroubleshooting,
   scanMcpCodes,
   scanMcpLogEvents,
 } from '../../scripts/mcp/docs-reference';
+import { renderTools } from '../../scripts/mcp/docs-tools';
+import { MCP_CAPABILITIES, MCP_PROMPT_NAMES } from '@/lib/mcp/catalog/capabilities';
+import { MCP_CATALOG } from '@/lib/mcp/catalog';
+import { projectMcpData } from '@/lib/mcp/core/projection';
+import { CALL_OPERATION_READS_REMOVED_IN } from '@/lib/mcp/protocol/server';
 import { friendlyMcpError } from '@/lib/mcp/auth/friendly-error';
 import { mcpScopesUsableByRole } from '@/lib/mcp/auth/role-scopes';
-import { MCP_DOCS_LINKS, MCP_DOCS_PATHS } from '@/lib/mcp/docs-links';
+import {
+  MCP_DOCS_LINKS,
+  MCP_DOCS_PATHS,
+  MCP_DOCS_REPOSITORY,
+  MCP_DOCS_SITE,
+  mcpDocsHref,
+  mcpTroubleshootingLink,
+} from '@/lib/mcp/docs-links';
 import { mcpSetupCommands } from '@/components/settings/mcp/setup-commands';
 import {
   MCP_APPROVAL_ABSOLUTE_MAX_MS,
@@ -33,8 +49,8 @@ const existsSync = (path: string) => fsExists(path);
 describe('F3: generated MCP reference pages', () => {
   it.each(MCP_GENERATED_PAGES.map(page => [page.path, page] as const))(
     '%s matches what the code generates (run npm run mcp:docs)',
-    (path, page) => {
-      expect(readFileSync(path, 'utf8')).toBe(page.render());
+    async (path, page) => {
+      expect(readFileSync(path, 'utf8')).toBe(await page.render());
     }
   );
 
@@ -77,6 +93,121 @@ describe('F3: generated MCP reference pages', () => {
     expect(permissions).toContain(
       'effective scopes = scopes the person ticked on the consent page'
     );
+  });
+
+  it('gives every code its own anchor, and error pages link to it (DX-2)', () => {
+    const page = renderTroubleshooting();
+    const raised = [...scanMcpCodes().keys()].filter(code => !(code in MCP_NON_ERROR_CODES));
+    for (const code of raised) expect(page, code).toContain(`<a id="${code}"></a>\`${code}\``);
+    for (const event of scanMcpLogEvents().keys())
+      expect(page, event).toContain(`<a id="${event}"></a>`);
+    expect(mcpTroubleshootingLink('invalid_client')).toBe(
+      `${MCP_DOCS_LINKS.troubleshooting}#invalid_client`
+    );
+    expect(readFileSync('src/lib/mcp/auth/friendly-error.ts', 'utf8')).toContain(
+      'mcpTroubleshootingLink(code)'
+    );
+  });
+
+  it('documents every tool the server offers and every prompt, from the live tool list (DX-6)', async () => {
+    const page = await renderTools('2026-11-04');
+    const standalone = MCP_CAPABILITIES.filter(capability => capability.kind === 'tool');
+    for (const tool of standalone) expect(page, tool.id).toContain(`### \`${tool.id}\``);
+    for (const tool of new Set(
+      MCP_CATALOG.flatMap(operation => (operation.tool ? [operation.tool] : []))
+    ))
+      expect(page, tool).toContain(`### \`${tool}\``);
+    for (const prompt of MCP_PROMPT_NAMES) expect(page, prompt).toContain(`| \`${prompt}\` |`);
+    // Hints and requirements come from the server: a change tool says it needs changes on.
+    expect(page).toMatch(
+      /### `incident_resolve`[\s\S]*?\| no \| [^|]+ \| [^|]+ \| `incidents:write` \| Changes \|/
+    );
+  });
+
+  it('states the real status of every operation that is not available', () => {
+    const rows = renderPermissions()
+      .split('\n')
+      .filter(line => line.includes('| not available'));
+    expect(rows.length).toBeGreaterThan(0);
+    for (const row of rows)
+      expect(row).not.toMatch(/eligible|approval batch|needs |review .*projection/);
+    expect(rows.find(row => row.includes('`createReportExport`'))).toContain(
+      'not exposed, reason recorded in the catalog'
+    );
+    expect(rows.find(row => row.includes('`createServiceAccount`'))).toContain(
+      'restricted to native administration'
+    );
+  });
+
+  it('keeps the catalog counts and the coverage table in step with the registry (DX-12)', () => {
+    const catalog = readFileSync('docs/v2.2.0/reference/mcp/catalog.md', 'utf8');
+    const counts = renderCatalogCounts();
+    for (const [name, text] of counts)
+      expect(catalog).toContain(`<!-- generated:${name} -->${text}<!-- /generated:${name} -->`);
+    expect(counts.get('mcp-counts')).toContain(`${MCP_CATALOG.length} classified operations`);
+    expect(() => fillGeneratedBlocks('no markers', counts)).toThrow('Missing generated block');
+    const total = renderPermissions()
+      .split('\n')
+      .find(line => line.startsWith('| **All** |'))!
+      .split('|')
+      .slice(2, 6)
+      .map(value => Number(value.trim()));
+    expect(total[0]).toBe(MCP_CATALOG.length);
+    expect(total[1] + total[2] + total[3]).toBe(total[0]);
+  });
+
+  it('lists exactly the fields the projection removes, and every listed field is removed (DX-5)', () => {
+    const page = readFileSync('docs/v2.2.0/guides/mcp/security-and-data.md', 'utf8');
+    for (const [name, text] of renderSecurityBlocks())
+      expect(page).toContain(`<!-- generated:${name} -->${text}<!-- /generated:${name} -->`);
+    const { contains, exact } = redactedFieldRule();
+    expect(contains).toContain('password');
+    expect(exact).toContain('environment');
+    for (const field of [
+      ...contains.map(value => `my${value.replace(/\.\?/g, '_')}Value`),
+      ...exact,
+    ])
+      expect(projectMcpData({ [field]: 'x' }), field).toEqual({ [field]: '[REDACTED]' });
+    expect(projectMcpData({ title: 'x' })).toEqual({ title: 'x' });
+    expect(page).toContain('Secrets typed into free text are not detected.');
+  });
+
+  it('names one removal release for call_operation reads everywhere it is announced (DX-7)', () => {
+    expect(CALL_OPERATION_READS_REMOVED_IN).toMatch(/^v\d+\.\d+\.\d+$/);
+    const changelog = readFileSync('CHANGELOG.md', 'utf8').split('\n## [')[1];
+    const deprecated = changelog.split('### Deprecated')[1]?.split('\n### ')[0] ?? '';
+    expect(deprecated).toContain('`call_operation`');
+    expect(deprecated).toContain(CALL_OPERATION_READS_REMOVED_IN);
+    const catalog = readFileSync('docs/v2.2.0/reference/mcp/catalog.md', 'utf8');
+    expect(catalog).toContain(`until ${CALL_OPERATION_READS_REMOVED_IN}, still serves reads`);
+    expect(catalog).not.toContain('for this release, still serves reads');
+    expect(readFileSync('src/lib/mcp/protocol/server.ts', 'utf8')).toContain(
+      'version: APP_VERSION'
+    );
+  });
+
+  it('names only real tools, prompts and codes in the hand-written guides (DX-4, DX-10)', async () => {
+    const page = await renderTools('2026-11-04');
+    const known = new Set(
+      [...page.matchAll(/^### `([a-z_]+)`/gm), ...page.matchAll(/^\| `([a-z_]+)` \|/gm)].map(
+        match => match[1]
+      )
+    );
+    const codes = new Set(scanMcpCodes().keys());
+    for (const file of [
+      'docs/v2.2.0/guides/mcp/what-to-ask.md',
+      'docs/v2.2.0/guides/mcp/build-an-agent.md',
+    ]) {
+      const text = readFileSync(file, 'utf8');
+      for (const [, name] of text.matchAll(/`([a-z_]+)`/g))
+        if (/[a-z]_[a-z]/.test(name)) expect(known, `${file}: ${name}`).toContain(name);
+      for (const [, code] of text.matchAll(/`(MCP_[A-Z_]+)`/g))
+        expect(codes.has(code), `${file}: ${code}`).toBe(true);
+    }
+    // Every built-in prompt has at least one example request.
+    const ask = readFileSync('docs/v2.2.0/guides/mcp/what-to-ask.md', 'utf8');
+    for (const prompt of MCP_PROMPT_NAMES) expect(ask, prompt).toContain(`\`${prompt}\` prompt`);
+    expect(ask).toContain('`assigneeId: "me"`');
   });
 
   it('fails the check script when a committed page drifts', () => {
@@ -125,6 +256,25 @@ describe('F4: MCP docs are findable', () => {
     ).toContain('passed');
   });
 
+  it('derives every docs link from its path, in either published form (DX-1)', () => {
+    for (const path of Object.values(MCP_DOCS_PATHS)) {
+      expect(mcpDocsHref(path, false)).toBe(`${MCP_DOCS_REPOSITORY}/${path}`);
+      const site = mcpDocsHref(path, true);
+      // Swapping the base must not keep the .md suffix: the docs site serves slugs.
+      expect(site.startsWith(`${MCP_DOCS_SITE}/v2.2.0/`), site).toBe(true);
+      expect(site.endsWith('/'), site).toBe(true);
+      expect(site).not.toContain('.md');
+    }
+    expect(MCP_DOCS_REPOSITORY).toBe('https://github.com/opsknight-labs/OpsKnight/blob/main');
+    for (const [key, link] of Object.entries(MCP_DOCS_LINKS))
+      expect(
+        Object.values(MCP_DOCS_PATHS).some(
+          path => link === mcpDocsHref(path, false) || link === mcpDocsHref(path, true)
+        ),
+        key
+      ).toBe(true);
+  });
+
   it('has an index for each MCP section, a README section and in-app links to real files', () => {
     for (const index of [
       'docs/v2.2.0/guides/mcp/README.md',
@@ -150,7 +300,7 @@ describe('F4: MCP docs are findable', () => {
     );
   });
 
-  it('marks only Claude Code as verified in the compatibility matrix', () => {
+  const compatibility = () => {
     const guide = readFileSync('docs/v2.2.0/guides/mcp/self-hosted-setup.md', 'utf8');
     const rows = guide
       .split('## Client compatibility')[1]
@@ -159,7 +309,7 @@ describe('F4: MCP docs are findable', () => {
       .filter(
         line => line.startsWith('| ') && !line.startsWith('| Client') && !line.startsWith('| ---')
       );
-    const status = new Map(
+    return new Map(
       rows.map(
         line =>
           line
@@ -168,26 +318,90 @@ describe('F4: MCP docs are findable', () => {
             .slice(1, 3) as [string, string]
       )
     );
+  };
+
+  it('lists every client the Connect tab covers, none verified without recorded evidence', () => {
+    const status = compatibility();
     expect([...status.keys()]).toEqual([
       'Claude Code',
       'Claude (web and desktop apps)',
       'ChatGPT',
       'Cursor',
       'VS Code',
+      'Codex CLI',
+      'Gemini CLI',
+      'Windsurf',
+      'API-hosted agents',
     ]);
-    for (const [client, value] of status)
-      expect(value, client).toBe(
-        client === 'Claude Code' ? 'Verified' : 'Expected (2025 revisions supported)'
-      );
+    for (const client of ['Codex CLI', 'Gemini CLI', 'Windsurf'])
+      expect(status.get(client), client).toBe('Expected (not verified)');
+    for (const client of ['Claude (web and desktop apps)', 'ChatGPT', 'Cursor', 'VS Code'])
+      expect(status.get(client), client).toBe('Expected (2025 revisions supported)');
+    // API-hosted agents depend on each provider's connector, so they are not claimed as expected.
+    expect(status.get('API-hosted agents')).toBe('Not verified');
+  });
+
+  it('ties every Tested or Verified status to a recorded live checkpoint (CERT-05)', () => {
+    const certification = readFileSync('docs/v2.2.0/operate/mcp/certification.md', 'utf8');
+    const checkpoint = certification.split('## Live client checkpoint')[1]?.split('\n## ')[0];
+    expect(checkpoint).toBeTruthy();
+    const entries = checkpoint!.split('\n### ').slice(1);
+    const CHECKS = [
+      'Registration',
+      'Consent',
+      'tools/list',
+      'Scoped read',
+      'Refresh',
+      'Role change',
+      'Revocation',
+    ];
+    let evidenced = 0;
+    for (const [client, value] of compatibility()) {
+      const tested = /^Tested \((v\d+\.\d+\.\d+), (\d{4}-\d{2}-\d{2})\)$/.exec(value);
+      const verified = /^Verified \((.+) (\d+\.\d+\.\d+), (\d{4}-\d{2}-\d{2})\)$/.exec(value);
+      if (value.startsWith('Expected') || value === 'Not verified') continue;
+      expect(tested ?? verified, `${client}: "${value}" names no version and date`).toBeTruthy();
+      if (tested) {
+        const [, version, date] = tested;
+        expect(
+          entries.some(entry => entry.split('\n')[0].includes(version) && entry.includes(date)),
+          `${client}: no checkpoint for ${version} on ${date}`
+        ).toBe(true);
+      } else {
+        const [, , version, date] = verified!;
+        const entry = entries.find(
+          candidate => candidate.includes(version) && candidate.includes(date)
+        );
+        expect(entry, `${client}: no checkpoint for ${version} on ${date}`).toBeTruthy();
+        expect(entry).toMatch(/\b[0-9a-f]{40}\b/);
+        // The negotiated MCP revision.
+        expect(entry).toMatch(/revision[^\n]*(?:2025-06-18|2025-11-25|2026-07-28)/i);
+        for (const check of CHECKS)
+          expect(entry!.includes(`- ${check}: pass`), `${client}: ${check}`).toBe(true);
+      }
+      evidenced++;
+    }
+    // Claude Code carries recorded evidence; nothing else claims any.
+    expect(evidenced).toBe(1);
   });
 
   it('shows the same setup commands as the Connect tab', () => {
     const guide = readFileSync('docs/v2.2.0/guides/mcp/self-hosted-setup.md', 'utf8');
-    const commands = mcpSetupCommands('https://ops.your-company.com/mcp');
-    expect(guide).toContain(commands.claudeCode);
-    expect(guide).toContain(commands.vscode);
-    expect(guide).toContain(commands.doctor);
-    expect(guide).toContain(commands.doctorDocker);
+    const commands = mcpSetupCommands('https://ops.your-company.com/mcp', '2.2.0');
+    for (const command of [
+      commands.claudeCode,
+      commands.vscode,
+      commands.codex,
+      commands.codexLogin,
+      commands.geminiCli,
+      commands.doctor,
+      commands.doctorSource,
+      commands.doctorDocker,
+      commands.doctorKubernetes,
+    ])
+      expect(guide).toContain(command);
+    // The no-checkout doctor comes first: it works from a laptop outside the network.
+    expect(guide.indexOf(commands.doctor)).toBeLessThan(guide.indexOf(commands.doctorSource));
   });
 });
 
@@ -195,7 +409,7 @@ describe('F1/F2: the guides describe current behaviour', () => {
   const guide = readFileSync('docs/v2.2.0/guides/mcp/self-hosted-setup.md', 'utf8');
   const catalog = readFileSync('docs/v2.2.0/reference/mcp/catalog.md', 'utf8');
   const architecture = readFileSync('docs/v2.2.0/operate/mcp/architecture.md', 'utf8');
-  const quickstart = readFileSync('docs/v2.2.0/guides/mcp/quickstart.md', 'utf8');
+  const quickstart = readFileSync('docs/v2.2.0/operate/mcp/contributing.md', 'utf8');
 
   it('uses the tab and control names the settings page renders', () => {
     const page = readFileSync('src/app/(app)/settings/integrations/mcp/page.tsx', 'utf8');

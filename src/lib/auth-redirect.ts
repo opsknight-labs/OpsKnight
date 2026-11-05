@@ -79,3 +79,24 @@ export function safeInternalCallbackUrl(value: string | null | undefined, fallba
 
   return `${parsed.pathname}${parsed.search}${parsed.hash}`;
 }
+
+/**
+ * NextAuth expands callback URLs to absolute ones (`/login?callbackUrl=https%3A%2F%2F<app>%2F...`).
+ * Turn an absolute URL on the app's own origin back into a relative path so
+ * `safeInternalCallbackUrl` keeps the deep link instead of dropping it. Other
+ * values pass through unchanged and still face the full policy.
+ */
+export function relativeToAppOrigin(
+  value: string | null | undefined,
+  appOrigin: string
+): string | null | undefined {
+  if (!value || !/^https?:\/\//i.test(value.trim())) return value;
+  try {
+    const parsed = new URL(value.trim());
+    if (parsed.username || parsed.password) return value;
+    if (parsed.origin !== new URL(appOrigin).origin) return value;
+    return `${parsed.pathname}${parsed.search}${parsed.hash}`;
+  } catch {
+    return value;
+  }
+}

@@ -485,6 +485,22 @@
           "createdAt": {
             "type": "string",
             "format": "date-time"
+          },
+          "teams": {
+            "type": "array",
+            "description": "Teams the user belongs to (at most 20 on list rows).",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                }
+              },
+              "required": ["id", "name"]
+            }
           }
         },
         "required": ["id", "name", "email", "role", "status"]
@@ -9436,6 +9452,80 @@
         },
         "required": ["id", "title", "status", "urgency", "updatedAt"]
       },
+      "IncidentEscalation": {
+        "type": "object",
+        "description": "Result of POST /incidents/{id}/escalate, with who was paged.",
+        "properties": {
+          "requested": {
+            "type": "boolean",
+            "description": "False when the incident was not escalatable."
+          },
+          "reason": {
+            "type": ["string", "null"],
+            "enum": ["INCIDENT_NOT_ESCALATABLE", null],
+            "description": "Why nothing was paged: only an OPEN incident escalates."
+          },
+          "outcome": {
+            "type": ["string", "null"],
+            "description": "Escalation engine outcome."
+          },
+          "escalated": {
+            "type": "boolean",
+            "description": "True only when a step paged someone."
+          },
+          "paged": {
+            "type": ["object", "null"],
+            "properties": {
+              "stepIndex": {
+                "type": ["integer", "null"]
+              },
+              "targetType": {
+                "type": ["string", "null"]
+              },
+              "targetName": {
+                "type": ["string", "null"]
+              },
+              "targetCount": {
+                "type": ["integer", "null"]
+              }
+            }
+          },
+          "incident": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "status": {
+                "type": "string",
+                "enum": ["OPEN", "ACKNOWLEDGED", "RESOLVED", "SNOOZED", "SUPPRESSED"]
+              },
+              "escalation": {
+                "type": "object",
+                "description": "Where the escalation policy stands for this incident.",
+                "properties": {
+                  "step": {
+                    "type": ["integer", "null"],
+                    "description": "Zero-based index of the escalation step last notified."
+                  },
+                  "status": {
+                    "type": ["string", "null"],
+                    "description": "Escalation state: ESCALATING, COMPLETED or FAILED; null before escalation starts."
+                  },
+                  "nextAt": {
+                    "type": ["string", "null"],
+                    "format": "date-time",
+                    "description": "When the next step is due; null when nothing is scheduled."
+                  }
+                },
+                "required": ["step", "status", "nextAt"]
+              }
+            },
+            "required": ["id", "status", "escalation"]
+          }
+        },
+        "required": ["requested", "reason", "outcome", "escalated", "paged", "incident"]
+      },
       "IncidentAssignment": {
         "type": "object",
         "description": "Assignment state after POST /incidents/{id}/assign.",
@@ -9487,6 +9577,716 @@
         },
         "required": ["id", "status", "updatedAt"]
       },
+      "OnCallNow": {
+        "type": "object",
+        "description": "Who is on call now, and who is next, for each schedule the caller can read.",
+        "properties": {
+          "userId": {
+            "type": "string"
+          },
+          "now": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "scope": {
+            "type": "string",
+            "enum": ["mine", "all"]
+          },
+          "iAmOnCall": {
+            "type": "boolean"
+          },
+          "schedules": {
+            "type": "array",
+            "maxItems": 50,
+            "items": {
+              "type": "object",
+              "properties": {
+                "scheduleId": {
+                  "type": "string"
+                },
+                "scheduleName": {
+                  "type": "string"
+                },
+                "scheduleTimeZone": {
+                  "type": "string"
+                },
+                "onCall": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "userId": {
+                        "type": "string"
+                      },
+                      "name": {
+                        "type": ["string", "null"]
+                      },
+                      "start": {
+                        "type": "string",
+                        "format": "date-time"
+                      },
+                      "end": {
+                        "type": "string",
+                        "format": "date-time"
+                      },
+                      "startClamped": {
+                        "type": "boolean",
+                        "description": "Coverage runs back past the lookback limit; start is that limit."
+                      },
+                      "endClamped": {
+                        "type": "boolean",
+                        "description": "Coverage runs on past the lookahead limit; end is that limit."
+                      }
+                    },
+                    "required": ["userId", "name", "start", "end", "startClamped", "endClamped"]
+                  }
+                },
+                "next": {
+                  "type": ["object", "null"],
+                  "properties": {
+                    "userId": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": ["string", "null"]
+                    },
+                    "start": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "end": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  },
+                  "required": ["userId", "name", "start", "end"]
+                },
+                "gap": {
+                  "type": "boolean",
+                  "description": "Nobody is on call right now."
+                }
+              },
+              "required": [
+                "scheduleId",
+                "scheduleName",
+                "scheduleTimeZone",
+                "onCall",
+                "next",
+                "gap"
+              ]
+            }
+          },
+          "gaps": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "truncated": {
+            "type": "boolean"
+          },
+          "schedulesEvaluated": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "userId",
+          "now",
+          "scope",
+          "iAmOnCall",
+          "schedules",
+          "gaps",
+          "truncated",
+          "schedulesEvaluated"
+        ]
+      },
+      "CatchUp": {
+        "type": "object",
+        "description": "What opened, resolved and is still active since a point in time.",
+        "properties": {
+          "userId": {
+            "type": "string"
+          },
+          "since": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "now": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "scope": {
+            "type": "string",
+            "enum": ["mine", "all"]
+          },
+          "filters": {
+            "type": "object",
+            "properties": {
+              "serviceId": {
+                "type": ["string", "null"]
+              },
+              "teamId": {
+                "type": ["string", "null"]
+              },
+              "urgency": {
+                "type": ["string", "null"],
+                "enum": ["HIGH", "MEDIUM", "LOW", null]
+              }
+            },
+            "required": ["serviceId", "teamId", "urgency"]
+          },
+          "myTeamCount": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Teams the caller belongs to; 0 explains an empty scope=mine result."
+          },
+          "counts": {
+            "type": "object",
+            "properties": {
+              "opened": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "resolved": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "active": {
+                "type": "integer",
+                "minimum": 0
+              }
+            },
+            "required": ["opened", "resolved", "active"]
+          },
+          "active": {
+            "type": "array",
+            "maxItems": 25,
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "title": {
+                  "type": "string"
+                },
+                "status": {
+                  "type": "string",
+                  "enum": ["OPEN", "ACKNOWLEDGED", "RESOLVED", "SNOOZED", "SUPPRESSED"]
+                },
+                "urgency": {
+                  "type": "string",
+                  "enum": ["LOW", "MEDIUM", "HIGH"]
+                },
+                "priority": {
+                  "type": ["string", "null"]
+                },
+                "serviceId": {
+                  "type": "string"
+                },
+                "serviceName": {
+                  "type": "string"
+                },
+                "assignedToMe": {
+                  "type": "boolean"
+                },
+                "openedSinceThen": {
+                  "type": "boolean"
+                },
+                "createdAt": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "acknowledgedAt": {
+                  "type": ["string", "null"],
+                  "format": "date-time"
+                },
+                "resolvedAt": {
+                  "type": ["string", "null"],
+                  "format": "date-time"
+                }
+              },
+              "required": [
+                "id",
+                "title",
+                "status",
+                "urgency",
+                "priority",
+                "serviceId",
+                "serviceName",
+                "assignedToMe",
+                "openedSinceThen",
+                "createdAt",
+                "acknowledgedAt",
+                "resolvedAt"
+              ]
+            }
+          },
+          "assignedToMe": {
+            "type": "array",
+            "maxItems": 25,
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "title": {
+                  "type": "string"
+                },
+                "status": {
+                  "type": "string",
+                  "enum": ["OPEN", "ACKNOWLEDGED", "RESOLVED", "SNOOZED", "SUPPRESSED"]
+                },
+                "urgency": {
+                  "type": "string",
+                  "enum": ["LOW", "MEDIUM", "HIGH"]
+                },
+                "priority": {
+                  "type": ["string", "null"]
+                },
+                "serviceId": {
+                  "type": "string"
+                },
+                "serviceName": {
+                  "type": "string"
+                },
+                "assignedToMe": {
+                  "type": "boolean"
+                },
+                "openedSinceThen": {
+                  "type": "boolean"
+                },
+                "createdAt": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "acknowledgedAt": {
+                  "type": ["string", "null"],
+                  "format": "date-time"
+                },
+                "resolvedAt": {
+                  "type": ["string", "null"],
+                  "format": "date-time"
+                }
+              },
+              "required": [
+                "id",
+                "title",
+                "status",
+                "urgency",
+                "priority",
+                "serviceId",
+                "serviceName",
+                "assignedToMe",
+                "openedSinceThen",
+                "createdAt",
+                "acknowledgedAt",
+                "resolvedAt"
+              ]
+            }
+          },
+          "recentlyResolved": {
+            "type": "array",
+            "maxItems": 25,
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "title": {
+                  "type": "string"
+                },
+                "status": {
+                  "type": "string",
+                  "enum": ["OPEN", "ACKNOWLEDGED", "RESOLVED", "SNOOZED", "SUPPRESSED"]
+                },
+                "urgency": {
+                  "type": "string",
+                  "enum": ["LOW", "MEDIUM", "HIGH"]
+                },
+                "priority": {
+                  "type": ["string", "null"]
+                },
+                "serviceId": {
+                  "type": "string"
+                },
+                "serviceName": {
+                  "type": "string"
+                },
+                "assignedToMe": {
+                  "type": "boolean"
+                },
+                "openedSinceThen": {
+                  "type": "boolean"
+                },
+                "createdAt": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "acknowledgedAt": {
+                  "type": ["string", "null"],
+                  "format": "date-time"
+                },
+                "resolvedAt": {
+                  "type": ["string", "null"],
+                  "format": "date-time"
+                }
+              },
+              "required": [
+                "id",
+                "title",
+                "status",
+                "urgency",
+                "priority",
+                "serviceId",
+                "serviceName",
+                "assignedToMe",
+                "openedSinceThen",
+                "createdAt",
+                "acknowledgedAt",
+                "resolvedAt"
+              ]
+            }
+          },
+          "pagedMe": {
+            "type": "object",
+            "description": "Incidents that notified the caller in the window, from their own notification history.",
+            "properties": {
+              "count": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "items": {
+                "type": "array",
+                "maxItems": 25,
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "incident": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "title": {
+                          "type": "string"
+                        },
+                        "urgency": {
+                          "type": "string",
+                          "enum": ["LOW", "MEDIUM", "HIGH"]
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": ["OPEN", "ACKNOWLEDGED", "RESOLVED", "SNOOZED", "SUPPRESSED"]
+                        }
+                      },
+                      "required": ["id", "title", "urgency", "status"]
+                    },
+                    "lastEventType": {
+                      "type": "string"
+                    },
+                    "lastAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "channels": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "delivered": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": ["incident", "lastEventType", "lastAt", "channels", "delivered"]
+                }
+              }
+            },
+            "required": ["count", "items"]
+          },
+          "truncated": {
+            "type": "object",
+            "properties": {
+              "active": {
+                "type": "boolean"
+              },
+              "recentlyResolved": {
+                "type": "boolean"
+              },
+              "pagedMe": {
+                "type": "boolean"
+              }
+            },
+            "required": ["active", "recentlyResolved", "pagedMe"]
+          }
+        },
+        "required": [
+          "userId",
+          "since",
+          "now",
+          "scope",
+          "filters",
+          "myTeamCount",
+          "counts",
+          "active",
+          "assignedToMe",
+          "recentlyResolved",
+          "pagedMe",
+          "truncated"
+        ]
+      },
+      "SimilarIncidents": {
+        "type": "object",
+        "description": "Past resolved incidents that look like one incident, with how each ended.",
+        "properties": {
+          "incidentId": {
+            "type": "string"
+          },
+          "basis": {
+            "type": "string",
+            "enum": ["TITLE_AND_SERVICE"]
+          },
+          "candidatesConsidered": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "similar": {
+            "type": "array",
+            "maxItems": 10,
+            "items": {
+              "type": "object",
+              "properties": {
+                "incident": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "priority": {
+                      "type": ["string", "null"]
+                    },
+                    "serviceId": {
+                      "type": "string"
+                    },
+                    "serviceName": {
+                      "type": "string"
+                    },
+                    "createdAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "resolvedAt": {
+                      "type": ["string", "null"],
+                      "format": "date-time"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "title",
+                    "priority",
+                    "serviceId",
+                    "serviceName",
+                    "createdAt",
+                    "resolvedAt"
+                  ]
+                },
+                "similarity": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1
+                },
+                "reasons": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "enum": ["TITLE_OVERLAP", "SAME_SERVICE", "SAME_PRIORITY"]
+                  }
+                },
+                "resolutionKind": {
+                  "type": ["string", "null"],
+                  "enum": [
+                    "MANUAL",
+                    "SOURCE_RECOVERY",
+                    "AUTOMATION",
+                    "AUTO_TIMEOUT",
+                    "UNKNOWN",
+                    null
+                  ]
+                },
+                "durationMinutes": {
+                  "type": ["integer", "null"],
+                  "minimum": 0
+                },
+                "lastNote": {
+                  "type": ["object", "null"],
+                  "properties": {
+                    "excerpt": {
+                      "type": "string"
+                    },
+                    "createdAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "writtenBeforeResolution": {
+                      "type": "boolean",
+                      "description": "True only when the note was written at or before the incident was resolved; false means it was written afterwards (a closing note typed moments after the click, or a later follow-up)."
+                    }
+                  },
+                  "required": ["excerpt", "createdAt", "writtenBeforeResolution"]
+                }
+              },
+              "required": [
+                "incident",
+                "similarity",
+                "reasons",
+                "resolutionKind",
+                "durationMinutes",
+                "lastNote"
+              ]
+            }
+          },
+          "truncated": {
+            "type": "boolean"
+          }
+        },
+        "required": ["incidentId", "basis", "candidatesConsidered", "similar", "truncated"]
+      },
+      "MyOnCallShifts": {
+        "type": "object",
+        "description": "The caller’s current and upcoming on-call shifts across every readable schedule.",
+        "properties": {
+          "userId": {
+            "type": "string"
+          },
+          "now": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "windowEnd": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "onCallNow": {
+            "type": "boolean"
+          },
+          "nextHandoff": {
+            "type": ["object", "null"],
+            "description": "The next moment the caller’s on-call status changes, if any within the window.",
+            "properties": {
+              "at": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "change": {
+                "type": "string",
+                "enum": ["SHIFT_ENDS", "SHIFT_STARTS"]
+              },
+              "scheduleId": {
+                "type": "string"
+              },
+              "scheduleName": {
+                "type": "string"
+              },
+              "handoffTo": {
+                "type": ["object", "null"],
+                "properties": {
+                  "userId": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": ["string", "null"]
+                  }
+                },
+                "required": ["userId", "name"]
+              }
+            },
+            "required": ["at", "change", "scheduleId", "scheduleName"]
+          },
+          "shifts": {
+            "type": "array",
+            "maxItems": 50,
+            "items": {
+              "type": "object",
+              "properties": {
+                "scheduleId": {
+                  "type": "string"
+                },
+                "scheduleName": {
+                  "type": "string"
+                },
+                "scheduleTimeZone": {
+                  "type": "string"
+                },
+                "start": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "end": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "current": {
+                  "type": "boolean"
+                },
+                "startClamped": {
+                  "type": "boolean",
+                  "description": "True when coverage runs back past the lookback limit, so start is that limit, not the real start."
+                },
+                "endClamped": {
+                  "type": "boolean",
+                  "description": "True when coverage runs on past the lookahead limit, so end is that limit, not the real end."
+                },
+                "handoffTo": {
+                  "type": ["object", "null"],
+                  "description": "Who is on call in the same schedule when this shift ends; null for a gap or a clamped end.",
+                  "properties": {
+                    "userId": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": ["string", "null"]
+                    }
+                  },
+                  "required": ["userId", "name"]
+                }
+              },
+              "required": [
+                "scheduleId",
+                "scheduleName",
+                "scheduleTimeZone",
+                "start",
+                "end",
+                "current",
+                "startClamped",
+                "endClamped",
+                "handoffTo"
+              ]
+            }
+          },
+          "truncated": {
+            "type": "boolean"
+          },
+          "schedulesEvaluated": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "userId",
+          "now",
+          "windowEnd",
+          "onCallNow",
+          "nextHandoff",
+          "shifts",
+          "truncated",
+          "schedulesEvaluated"
+        ]
+      },
       "ScheduleOnCall": {
         "type": "object",
         "properties": {
@@ -9527,12 +10327,34 @@
                 },
                 "timeZone": {
                   "type": ["string", "null"]
+                },
+                "shiftEndsAt": {
+                  "type": ["string", "null"],
+                  "format": "date-time",
+                  "description": "When this person stops being on call; null when the shift runs past the seven-day lookahead."
                 }
               }
             }
+          },
+          "next": {
+            "type": ["object", "null"],
+            "description": "The next person to come on call within seven days, if anyone.",
+            "properties": {
+              "userId": {
+                "type": "string"
+              },
+              "name": {
+                "type": ["string", "null"]
+              },
+              "start": {
+                "type": "string",
+                "format": "date-time"
+              }
+            },
+            "required": ["userId", "name", "start"]
           }
         },
-        "required": ["schedule", "at", "onCallUsers"]
+        "required": ["schedule", "at", "onCallUsers", "next"]
       },
       "ScheduleOverride": {
         "type": "object",
@@ -10017,6 +10839,166 @@
           }
         },
         "required": ["token", "apiKey"]
+      },
+      "IncidentDetail": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "description": {
+            "type": ["string", "null"]
+          },
+          "status": {
+            "type": "string",
+            "enum": ["OPEN", "ACKNOWLEDGED", "RESOLVED", "SNOOZED", "SUPPRESSED"]
+          },
+          "priority": {
+            "type": ["string", "null"],
+            "enum": ["P1", "P2", "P3", "P4", "P5", null]
+          },
+          "urgency": {
+            "type": "string",
+            "enum": ["LOW", "MEDIUM", "HIGH"]
+          },
+          "serviceId": {
+            "type": "string"
+          },
+          "service": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              }
+            }
+          },
+          "assignee": {
+            "type": ["object", "null"],
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "email": {
+                "type": "string"
+              }
+            }
+          },
+          "teamId": {
+            "type": ["string", "null"]
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "acknowledgedAt": {
+            "type": ["string", "null"],
+            "format": "date-time"
+          },
+          "resolvedAt": {
+            "type": ["string", "null"],
+            "format": "date-time"
+          },
+          "assigneeId": {
+            "type": ["string", "null"]
+          },
+          "team": {
+            "type": ["object", "null"],
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              }
+            }
+          },
+          "snoozedUntil": {
+            "type": ["string", "null"],
+            "format": "date-time"
+          },
+          "slaPausedMs": {
+            "type": ["integer", "null"],
+            "description": "Milliseconds the SLA clock was paused."
+          },
+          "slaAckElapsedMs": {
+            "type": ["integer", "null"]
+          },
+          "slaResolveElapsedMs": {
+            "type": ["integer", "null"]
+          },
+          "escalation": {
+            "type": "object",
+            "description": "Where the escalation policy stands for this incident.",
+            "properties": {
+              "step": {
+                "type": ["integer", "null"],
+                "description": "Zero-based index of the escalation step last notified."
+              },
+              "status": {
+                "type": ["string", "null"],
+                "description": "Escalation state: ESCALATING, COMPLETED or FAILED; null before escalation starts."
+              },
+              "nextAt": {
+                "type": ["string", "null"],
+                "format": "date-time",
+                "description": "When the next step is due; null when nothing is scheduled."
+              }
+            },
+            "required": ["step", "status", "nextAt"]
+          },
+          "sla": {
+            "type": "object",
+            "description": "SLA targets captured for this incident against time spent so far.",
+            "properties": {
+              "ackTargetMs": {
+                "type": ["integer", "null"]
+              },
+              "resolveTargetMs": {
+                "type": ["integer", "null"]
+              },
+              "ackElapsedMs": {
+                "type": ["integer", "null"]
+              },
+              "resolveElapsedMs": {
+                "type": ["integer", "null"]
+              },
+              "pausedMs": {
+                "type": ["integer", "null"]
+              }
+            },
+            "required": [
+              "ackTargetMs",
+              "resolveTargetMs",
+              "ackElapsedMs",
+              "resolveElapsedMs",
+              "pausedMs"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "status",
+          "urgency",
+          "serviceId",
+          "createdAt",
+          "updatedAt",
+          "escalation",
+          "sla"
+        ]
       }
     },
     "responses": {
@@ -10114,7 +11096,27 @@
             "in": "query",
             "schema": {
               "type": "string",
-              "enum": ["OPEN", "ACKNOWLEDGED", "RESOLVED", "SNOOZED", "SUPPRESSED"]
+              "description": "One status or several, comma-separated (OPEN,ACKNOWLEDGED). ACTIVE means every unresolved status: OPEN, ACKNOWLEDGED and SNOOZED.",
+              "maxLength": 80,
+              "pattern": "^(OPEN|ACKNOWLEDGED|RESOLVED|SNOOZED|SUPPRESSED|ACTIVE)(,(OPEN|ACKNOWLEDGED|RESOLVED|SNOOZED|SUPPRESSED|ACTIVE)){0,5}$"
+            }
+          },
+          {
+            "name": "createdAfter",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date-time",
+              "description": "Only incidents created at or after this time (ISO 8601 with offset)."
+            }
+          },
+          {
+            "name": "createdBefore",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date-time",
+              "description": "Only incidents created before this time (ISO 8601 with offset)."
             }
           },
           {
@@ -10380,7 +11382,7 @@
                   "type": "object",
                   "properties": {
                     "data": {
-                      "$ref": "#/components/schemas/Incident"
+                      "$ref": "#/components/schemas/IncidentDetail"
                     },
                     "requestId": {
                       "type": "string"
@@ -10681,6 +11683,101 @@
         "operationId": "acknowledgeIncident",
         "x-required-scope": "incidents:write",
         "description": "Requires API scope `incidents:write` (Incidents manage).",
+        "x-idempotency": "supported",
+        "x-concurrency": "none"
+      }
+    },
+    "/incidents/{id}/escalate": {
+      "post": {
+        "tags": ["Incidents"],
+        "summary": "Escalate an open incident to its next escalation step now",
+        "description": "Pages the next tier of the escalation policy immediately, through the same command as the Slack, Teams and web escalate actions. Only an OPEN incident escalates; otherwise the result reports requested: false with the reason.\n\nRequires API scope `incidents:write` (Incidents manage).",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "description": "Makes retries safe. A replay returns the original result with `Idempotency-Replayed: true`. Keys are scoped to the credential and operation and retained for 7 days; reusing a key with a different body returns 409.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Escalation requested, or the reason it was not",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/IncidentEscalation"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  },
+                  "required": ["data", "requestId", "timestamp"]
+                }
+              }
+            },
+            "headers": {
+              "X-RateLimit-Limit": {
+                "description": "Requests allowed per window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Remaining": {
+                "description": "Requests left in the window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Reset": {
+                "description": "Unix time at which the window resets.",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "404": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "409": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemError"
+          }
+        },
+        "operationId": "escalateIncident",
+        "x-required-scope": "incidents:write",
         "x-idempotency": "supported",
         "x-concurrency": "none"
       }
@@ -13565,6 +14662,420 @@
         "operationId": "listUsers",
         "x-required-scope": "users:read",
         "description": "Requires API scope `users:read` (Users read)."
+      }
+    },
+    "/schedules/on-call-now": {
+      "get": {
+        "tags": ["Schedules"],
+        "summary": "Who is on call now, and who is next, across schedules",
+        "description": "For each schedule the caller can read: who is on call right now (with the real start and end of the shift), who takes over next within seven days, and whether nobody is on call (a gap). scope=mine (default) keeps schedules the caller, or someone on one of their teams, takes part in; scope=all is every schedule they may read. Names only, never contact details. Bounded to 50 schedules; truncated reports when more matched.\n\nRequires API scope `schedules:read` (Schedules read).",
+        "parameters": [
+          {
+            "name": "scope",
+            "in": "query",
+            "description": "mine (default) or all.",
+            "schema": {
+              "type": "string",
+              "enum": ["mine", "all"],
+              "default": "mine"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Maximum schedules to return (1-50).",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50,
+              "default": 25
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Who is on call now across schedules",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/OnCallNow"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  },
+                  "required": ["data", "requestId", "timestamp"]
+                }
+              }
+            },
+            "headers": {
+              "X-RateLimit-Limit": {
+                "description": "Requests allowed per window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Remaining": {
+                "description": "Requests left in the window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Reset": {
+                "description": "Unix time at which the window resets.",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "401": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemError"
+          }
+        },
+        "operationId": "getOnCallNow",
+        "x-required-scope": "schedules:read"
+      }
+    },
+    "/users/me/catch-up": {
+      "get": {
+        "tags": ["Users"],
+        "summary": "What opened, resolved and is still active since a point in time",
+        "description": "Self-service catch-up over incidents the caller can read. scope=mine (default) narrows to incidents assigned to, watched by, or owned by a team of the caller; scope=all is everything they may read. Returns counts of incidents opened and resolved, the active incidents (most urgent first), the ones assigned to the caller, the recently resolved ones, and which incidents paged the caller (from their own notification history only). The window is explicit: hours back from now (default 12) or a since timestamp, at most 168 hours; nothing is stored between calls. Bounded to 25 rows per list; truncated reports when a list was cut.\n\nRequires API scope `incidents:read` (Incidents read).",
+        "parameters": [
+          {
+            "name": "hours",
+            "in": "query",
+            "description": "How far back to look, in hours (1-168). Not with since.",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 168
+            }
+          },
+          {
+            "name": "since",
+            "in": "query",
+            "description": "Start of the window as an RFC 3339 timestamp, in the past and within 168 hours. Not with hours.",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "scope",
+            "in": "query",
+            "description": "mine (default) or all.",
+            "schema": {
+              "type": "string",
+              "enum": ["mine", "all"],
+              "default": "mine"
+            }
+          },
+          {
+            "name": "serviceId",
+            "in": "query",
+            "description": "Only incidents on this service.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "teamId",
+            "in": "query",
+            "description": "Only incidents owned by this team or on its services.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "urgency",
+            "in": "query",
+            "description": "Only incidents with this urgency.",
+            "schema": {
+              "type": "string",
+              "enum": ["HIGH", "MEDIUM", "LOW"]
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Maximum rows per list (1-25).",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 25,
+              "default": 10
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The caller’s catch-up",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/CatchUp"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  },
+                  "required": ["data", "requestId", "timestamp"]
+                }
+              }
+            },
+            "headers": {
+              "X-RateLimit-Limit": {
+                "description": "Requests allowed per window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Remaining": {
+                "description": "Requests left in the window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Reset": {
+                "description": "Unix time at which the window resets.",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "401": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemError"
+          }
+        },
+        "operationId": "getMyCatchUp",
+        "x-required-scope": "incidents:read"
+      }
+    },
+    "/incidents/{id}/similar": {
+      "get": {
+        "tags": ["Incidents"],
+        "summary": "Past resolved incidents that look like this one, with how each ended",
+        "description": "Compares this incident with resolved incidents from the last year that the caller can read. Similarity is title and description word overlap, after light stemming and a small synonym table, nudged by the same service and priority; every row lists why it matched. Candidates come from the same service and from each title word separately, so a busy service or a very common word cannot crowd out older matches elsewhere. A lead for a human, not proof of a shared cause. Each row carries the resolution kind, how long it took and an excerpt of the note written at resolution (flagged when only a later note exists).\n\nRequires API scope `incidents:read` (Incidents read).",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Maximum similar incidents to return (1-10).",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 10,
+              "default": 5
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Similar past incidents",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/SimilarIncidents"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  },
+                  "required": ["data", "requestId", "timestamp"]
+                }
+              }
+            },
+            "headers": {
+              "X-RateLimit-Limit": {
+                "description": "Requests allowed per window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Remaining": {
+                "description": "Requests left in the window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Reset": {
+                "description": "Unix time at which the window resets.",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "401": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "404": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemError"
+          }
+        },
+        "operationId": "listSimilarIncidents",
+        "x-required-scope": "incidents:read"
+      }
+    },
+    "/users/me/on-call-shifts": {
+      "get": {
+        "tags": ["Users"],
+        "summary": "List the caller’s current and upcoming on-call shifts across all schedules",
+        "description": "Self-service read over every schedule the caller can read and takes part in (a rotation layer or an override), computed with the same rotation math as the schedule page. Back-to-back blocks in one schedule are one shift. Bounded to 30 days of look-ahead, 50 shifts and 25 schedules; truncated reports when a bound was reached.\n\nRequires API scope `schedules:read` (Schedules read).",
+        "parameters": [
+          {
+            "name": "days",
+            "in": "query",
+            "description": "Look-ahead window in days (1-30).",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 30,
+              "default": 14
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Maximum number of shifts to return (1-50).",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50,
+              "default": 20
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The caller’s on-call shifts",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/MyOnCallShifts"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  },
+                  "required": ["data", "requestId", "timestamp"]
+                }
+              }
+            },
+            "headers": {
+              "X-RateLimit-Limit": {
+                "description": "Requests allowed per window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Remaining": {
+                "description": "Requests left in the window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Reset": {
+                "description": "Unix time at which the window resets.",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "401": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemError"
+          }
+        },
+        "operationId": "listMyOnCallShifts",
+        "x-required-scope": "schedules:read"
       }
     },
     "/users/{id}": {

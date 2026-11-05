@@ -84,6 +84,8 @@ artifacts/automation-rolling/
 
 # Temporary test logs and reports
 *.txt
+# Bundled font licence notices must ship with the fonts (SIL OFL 1.1)
+!src/app/fonts/*-OFL.txt
 docker/pgbouncer/userlist.txt
 eslint_output.json
 job_log*.txt

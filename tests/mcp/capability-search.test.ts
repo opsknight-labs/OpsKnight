@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { searchCapabilities } from '@/lib/mcp/protocol/capability-search';
+import { MCP_SEARCH_KEYWORDS } from '@/lib/mcp/protocol/search-keywords';
+import { MCP_CATALOG, MCP_OPERATION_MAP } from '@/lib/mcp/catalog';
 
 const catalog = [
   { operationId: 'listServices', tool: null, domain: 'services' },
@@ -10,26 +12,66 @@ const catalog = [
   { operationId: 'lookupOncall', tool: 'oncall_lookup', domain: 'schedules' },
 ];
 const ids = (query: string) => searchCapabilities(catalog, query).map(op => op.operationId);
+const top = (query: string) => ids(query)[0];
 
 describe('searchCapabilities', () => {
   it('finds operations from natural multi-word queries an assistant sends', () => {
-    expect(ids('list services')).toEqual(['listServices']);
-    expect(ids('list all the teams')).toEqual(['listTeams']);
-    expect(ids('escalation policies')).toEqual(['listEscalationPolicies']);
-    expect(ids('incident timeline')).toEqual(['getIncidentTimeline']);
+    expect(top('list services')).toBe('listServices');
+    expect(top('list all the teams')).toBe('listTeams');
+    expect(top('escalation policies')).toBe('listEscalationPolicies');
+    expect(top('incident timeline')).toBe('getIncidentTimeline');
     expect(ids('who is oncall')).toEqual(['lookupOncall']);
   });
 
   it('still matches exact ids, tools, domains and single words', () => {
-    expect(ids('listServices')).toEqual(['listServices']);
-    expect(ids('incident_get_timeline')).toEqual(['getIncidentTimeline']);
+    expect(top('listServices')).toBe('listServices');
+    // The id typed as one lowercase word, as assistants often do.
+    expect(top('listteams')).toBe('listTeams');
+    expect(top('getincidenttimeline')).toBe('getIncidentTimeline');
+    expect(top('incident_get_timeline')).toBe('getIncidentTimeline');
     expect(ids('service')).toEqual(['listServices', 'getService']);
     expect(ids('LIST')).toEqual(['listServices', 'listTeams', 'listEscalationPolicies']);
   });
 
-  it('returns the operations matching the most words, and nothing when no word matches', () => {
-    expect(ids('list services unknownword')).toEqual(['listServices']);
+  it('ranks the operation matching the most words first, and returns nothing when none match', () => {
+    expect(ids('list services unknownword')[0]).toBe('listServices');
+    // Partial matches follow instead of being dropped, so the next page still has candidates.
+    expect(ids('list services unknownword')).toContain('listTeams');
     expect(ids('users')).toEqual([]);
+  });
+
+  it('matches whole words only, singular or plural', () => {
+    const catalog = [
+      {
+        operationId: 'reopenIncident',
+        domain: 'incidents',
+        risk: 'R2',
+        status: 'APPROVAL_REQUIRED',
+      },
+      { operationId: 'listEscalationPolicies', domain: 'escalation-policies' },
+      { operationId: 'listIncidents', domain: 'incidents', risk: 'R0', status: 'CURATED' },
+    ];
+    const found = (query: string) => searchCapabilities(catalog, query).map(op => op.operationId);
+    expect(found('reopen')).toEqual(['reopenIncident']);
+    // "open" is not a word of reopenIncident; listIncidents has it as a search keyword.
+    expect(found('open')).toEqual(['listIncidents']);
+    expect(found('policy')).toEqual(['listEscalationPolicies']);
+    expect(found('incident')[0]).toBe('listIncidents');
+  });
+
+  it('ranks reads before changes and curated before approval-gated on equal scores', () => {
+    const catalog = [
+      { operationId: 'updateThing', domain: 'things', risk: 'R1', status: 'CURATED' },
+      { operationId: 'deleteThing', domain: 'things', risk: 'R2', status: 'APPROVAL_REQUIRED' },
+      { operationId: 'getThing', domain: 'things', risk: 'R0', status: 'DISCOVERABLE' },
+      { operationId: 'getThingConfig', domain: 'things', risk: 'R2', status: 'SENSITIVE_READ' },
+    ];
+    expect(searchCapabilities(catalog, 'things').map(op => op.operationId)).toEqual([
+      'getThing',
+      'getThingConfig',
+      'updateThing',
+      'deleteThing',
+    ]);
   });
 
   it('treats an empty or filler-only query as everything', () => {
@@ -45,7 +87,49 @@ describe('searchCapabilities', () => {
     ];
     const found = (query: string) => searchCapabilities(described, query).map(op => op.operationId);
     expect(found('effective on-call')).toEqual(['getScheduleOnCall']);
-    expect(found('users')).toEqual(['listUsers']);
-    expect(found('list users')).toEqual(['listUsers']);
+    expect(found('users').slice(0, 2)).toEqual(['listUsers', 'listTeams']);
+    expect(found('list users')[0]).toBe('listUsers');
+  });
+});
+
+describe('golden queries against the real catalog', () => {
+  const first = (query: string) => searchCapabilities(MCP_CATALOG, query)[0]?.operationId;
+  it.each([
+    ['open incidents', 'listIncidents'],
+    ['list incidents', 'listIncidents'],
+    ['show open incidents', 'listIncidents'],
+    ['check SLO', 'listServiceObjectives'],
+    ['error budget', 'listServiceObjectives'],
+    ['who is on call', 'getOnCallNow'],
+    ['who is covering my team right now', 'getOnCallNow'],
+    ['oncall_lookup', 'getScheduleOnCall'],
+    ['what changed on the service', 'listServiceChangeEvents'],
+    ['who owns the payments service', 'getService'],
+    ['which services are about to breach sla', 'listServiceObjectives'],
+    ['maintenance announcement on the status page', 'listStatusPageAnnouncements'],
+    ['my shifts', 'listMyOnCallShifts'],
+    ['when am I on call', 'listMyOnCallShifts'],
+    ['audit log', 'listAuditLogs'],
+    ['user directory', 'listUsers'],
+    ['integration health', 'getIntegrationDiagnostics'],
+    ['run runbook', 'executeRunbook'],
+    ['acknowledge incident', 'acknowledgeIncident'],
+    ['incident_get_timeline', 'getIncidentTimeline'],
+    ['what did I miss overnight', 'getMyCatchUp'],
+    ['has this happened before, what fixed it last time', 'listSimilarIncidents'],
+  ])('%s -> %s', (query, expected) => {
+    expect(first(query)).toBe(expected);
+  });
+
+  it('never ranks an approval-gated change first for a read question', () => {
+    const best = searchCapabilities(MCP_CATALOG, 'show open incidents')[0];
+    expect(best?.status).not.toBe('APPROVAL_REQUIRED');
+  });
+});
+
+describe('search keywords', () => {
+  it('name only catalog operations', () => {
+    for (const operationId of MCP_SEARCH_KEYWORDS.keys())
+      expect(MCP_OPERATION_MAP.has(operationId), operationId).toBe(true);
   });
 });

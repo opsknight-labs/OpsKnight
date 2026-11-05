@@ -45,13 +45,22 @@ Quick setup and the default ceiling grant: `incidents:read`, `services:read`, `s
 - Any permission can be unticked; Allow needs at least one.
 - Permissions the person's role can never use are hidden and noted on the page.
 
+## Why some changes run directly and others wait for approval
+
+Each change is reviewed once and given a risk tier. The tier, not the tool, decides whether it waits for a person.
+
+- **Routine incident actions run directly** (acknowledge, resolve, assign, escalate, reopen, unsnooze, add a note, create an incident, add a watcher or tag). They are what a responder does all night; they already require the person to hold the permission; each is recorded in the audit log under the person who connected the assistant; and each can be undone or corrected by another action. Making them wait for a second person would defeat the point of on-call tooling.
+- **Everything that can hide, delay or reconfigure waits for approval** (snooze, suppress, unacknowledge, removing a watcher, schedule overrides, status-page announcements, configuration, runbook runs). These can silence a page, change who is paged, or reach customers, so a person reviews the exact, frozen request first.
+- **Neither tier widens anyone's access.** A direct action still runs only within the connected person's current role and team scope, and only while an administrator has turned changes on.
+- A tier changes only by a documented review: see the catalog page for the tier of every operation.
+
 ## Permissions
 
 Operation columns count catalog operations that need the permission: plain reads, sensitive reads (only while an administrator allows sensitive reads), routine changes (run directly when changes are allowed) and reviewed changes (need human approval first). Curated tools reuse these operations. A ✓ means the role can use at least one action the permission gates. The consent label is the text the consent page shows; the operation columns are authoritative for whether a change runs directly or waits for review.
 
 | Permission | Consent label | Area | Kind | Admin | Responder | Auditor | User | Reads | Sensitive reads | Routine changes | Reviewed changes |
 | --- | --- | --- | --- | :-: | :-: | :-: | :-: | --: | --: | --: | --: |
-| `audit:read` | View the audit log | Reports and audit | View | ✓ |  | ✓ |  | 0 | 1 | 0 | 0 |
+| `audit:read` | View the audit log | Reports and audit | View | ✓ |  | ✓ |  | 0 | 2 | 0 | 0 |
 | `automation-settings:read` | View automation settings | Automation | View | ✓ |  |  |  | 0 | 1 | 0 | 0 |
 | `automation-settings:write` | Change automation settings (higher-risk changes wait for approval) | Automation | Change | ✓ |  |  |  | 0 | 0 | 0 | 1 |
 | `automation:publish` | Publish automation | Automation | Change | ✓ |  |  |  | 0 | 0 | 0 | 4 |
@@ -62,10 +71,10 @@ Operation columns count catalog operations that need the permission: plain reads
 | `custom-fields:write` | Change custom fields (higher-risk changes wait for approval) | Settings | Change | ✓ |  |  |  | 0 | 0 | 0 | 3 |
 | `escalation-policies:read` | View escalation policies | Schedules and escalation | View | ✓ | ✓ | ✓ |  | 5 | 1 | 0 | 1 |
 | `escalation-policies:write` | Change escalation policies (higher-risk changes wait for approval) | Schedules and escalation | Change | ✓ |  |  |  | 0 | 0 | 0 | 3 |
-| `incidents:read` | View incidents | Incidents | View | ✓ | ✓ | ✓ | ✓ | 22 | 12 | 0 | 18 |
-| `incidents:write` | Change incidents (higher-risk changes wait for approval) | Incidents | Change | ✓ | ✓ |  |  | 0 | 0 | 8 | 12 |
+| `incidents:read` | View incidents | Incidents | View | ✓ | ✓ | ✓ | ✓ | 24 | 12 | 2 | 16 |
+| `incidents:write` | Change incidents (higher-risk changes wait for approval) | Incidents | Change | ✓ | ✓ |  |  | 0 | 0 | 11 | 10 |
 | `integrations:delete` | Delete integrations | Services | Change | ✓ |  |  |  | 0 | 0 | 0 | 1 |
-| `integrations:read` | View integrations | Services | View | ✓ | ✓ | ✓ | ✓ | 0 | 3 | 0 | 1 |
+| `integrations:read` | View integrations | Services | View | ✓ | ✓ | ✓ | ✓ | 1 | 3 | 0 | 1 |
 | `integrations:test` | Send test messages through integrations | Services | Change | ✓ |  |  |  | 0 | 2 | 0 | 0 |
 | `integrations:write` | Change integrations (higher-risk changes wait for approval) | Services | Change | ✓ |  |  |  | 0 | 0 | 0 | 1 |
 | `notifications:read` | View notifications | Schedules and escalation | View | ✓ | ✓ | ✓ |  | 2 | 4 | 0 | 0 |
@@ -86,7 +95,7 @@ Operation columns count catalog operations that need the permission: plain reads
 | `runbooks:publish` | Publish runbooks | Runbooks | Change | ✓ |  |  |  | 0 | 0 | 0 | 1 |
 | `runbooks:read` | View runbooks | Runbooks | View | ✓ | ✓ | ✓ |  | 6 | 3 | 0 | 3 |
 | `runbooks:write` | Change runbooks (higher-risk changes wait for approval) | Runbooks | Change | ✓ |  |  |  | 3 | 3 | 0 | 7 |
-| `schedules:read` | View on-call schedules | Schedules and escalation | View | ✓ | ✓ | ✓ | ✓ | 11 | 0 | 0 | 4 |
+| `schedules:read` | View on-call schedules | Schedules and escalation | View | ✓ | ✓ | ✓ | ✓ | 13 | 0 | 0 | 4 |
 | `schedules:write` | Change on-call schedules (higher-risk changes wait for approval) | Schedules and escalation | Change | ✓ | ✓ |  |  | 1 | 2 | 0 | 12 |
 | `service-objectives:evaluate` | Evaluate service level objectives | Services | Change | ✓ | ✓ | ✓ | ✓ | 0 | 0 | 0 | 1 |
 | `service-objectives:read` | View service level objectives | Services | View | ✓ | ✓ | ✓ | ✓ | 1 | 7 | 0 | 0 |
@@ -98,10 +107,475 @@ Operation columns count catalog operations that need the permission: plain reads
 | `status-pages:write` | Change status pages (higher-risk changes wait for approval) | Status pages | Change | ✓ |  |  |  | 0 | 0 | 0 | 10 |
 | `teams:read` | View teams | Teams and people | View | ✓ | ✓ | ✓ | ✓ | 6 | 1 | 0 | 2 |
 | `teams:write` | Change teams (higher-risk changes wait for approval) | Teams and people | Change | ✓ | ✓ |  | ✓ | 0 | 0 | 0 | 7 |
-| `users:read` | View people | Teams and people | View | ✓ | ✓ | ✓ |  | 1 | 0 | 0 | 0 |
+| `users:read` | View people | Teams and people | View | ✓ | ✓ | ✓ |  | 3 | 0 | 0 | 0 |
 
 ## Who approves reviewed changes
 
 - **Configuration changes** (`operation_prepare`): an active administrator who holds every permission the change needs.
 - **Runbook runs** (`runbook_prepare_execution`): anyone with the runbook approve and runbook read permissions who can see the target incident or service. By default that is Responders and Administrators.
-- An administrator may approve their own request after ticking an explicit confirmation; the approval is recorded as self-approved. Anyone else needs a second person. The assistant can never approve.
+- An administrator may approve their own request after ticking an explicit confirmation; the approval is recorded as self-approved. Anyone else needs a second person, and so does any request made with a personal access token. When an administrator turns on **Require a different reviewer** (Access policy), nobody may approve their own request, whatever their role. The assistant can never approve.
+
+## Coverage by area
+
+Every REST v2 operation by area: how many an assistant can use directly (curated tools, `read_operation` and `call_operation`), how many need approval first (`operation_prepare` or the runbook approval tools) and how many are not available to assistants. Not available means excluded after review or not yet implemented; the catalog explains each.
+
+| Area | Operations | Direct | With approval | Not available |
+| --- | --: | --: | --: | --: |
+| audit-exports | 3 | 0 | 0 | 3 |
+| audit-logs | 1 | 1 | 0 | 0 |
+| custom-fields | 5 | 2 | 3 | 0 |
+| dashboards | 10 | 4 | 5 | 1 |
+| escalation-policies | 8 | 5 | 3 | 0 |
+| incidents | 42 | 32 | 10 | 0 |
+| integrations | 11 | 6 | 2 | 3 |
+| notification-providers | 6 | 0 | 0 | 6 |
+| notifications | 4 | 3 | 1 | 0 |
+| operational-events | 1 | 1 | 0 | 0 |
+| postmortems | 14 | 6 | 8 | 0 |
+| reports | 12 | 5 | 3 | 4 |
+| runbooks | 59 | 14 | 13 | 32 |
+| schedules | 25 | 13 | 12 | 0 |
+| service-accounts | 6 | 0 | 0 | 6 |
+| service-objectives | 11 | 7 | 4 | 0 |
+| services | 43 | 21 | 21 | 1 |
+| settings | 8 | 3 | 4 | 1 |
+| status-pages | 30 | 14 | 10 | 6 |
+| teams | 14 | 7 | 7 | 0 |
+| users | 13 | 4 | 0 | 9 |
+| **All** | 326 | 148 | 106 | 72 |
+
+<details>
+<summary>Operations by area</summary>
+
+### audit-exports
+
+| Operation | How an assistant reaches it |
+| --- | --- |
+| `createAuditExport` | not available: restricted to native administration (exclusion review pending) |
+| `downloadAuditExport` | not available: restricted to native administration (exclusion review pending) |
+| `getAuditExport` | not available: restricted to native administration (exclusion review pending) |
+
+### audit-logs
+
+| Operation | How an assistant reaches it |
+| --- | --- |
+| `listAuditLogs` | `read_operation` (sensitive reads on) |
+
+### custom-fields
+
+| Operation | How an assistant reaches it |
+| --- | --- |
+| `createCustomFieldDefinition` | `operation_prepare`, then approval |
+| `deleteCustomFieldDefinition` | `operation_prepare`, then approval |
+| `getCustomFieldDefinition` | `read_operation` (sensitive reads on) |
+| `listCustomFieldDefinitions` | `read_operation` (sensitive reads on) |
+| `updateCustomFieldDefinition` | `operation_prepare`, then approval |
+
+### dashboards
+
+| Operation | How an assistant reaches it |
+| --- | --- |
+| `createReportDashboard` | `operation_prepare`, then approval |
+| `deleteReportDashboard` | `operation_prepare`, then approval |
+| `downloadReportDashboardData` | not available: not exposed, reason recorded in the catalog (exclusion review pending) |
+| `duplicateReportDashboard` | `operation_prepare`, then approval |
+| `getReportDashboard` | `read_operation` (sensitive reads on) |
+| `getReportDashboardData` | `read_operation` (sensitive reads on) |
+| `listReportDashboardWidgets` | `read_operation` (sensitive reads on) |
+| `listReportDashboards` | `read_operation` (sensitive reads on) |
+| `replaceReportDashboardWidgets` | `operation_prepare`, then approval |
+| `updateReportDashboard` | `operation_prepare`, then approval |
+
+### escalation-policies
+
+| Operation | How an assistant reaches it |
+| --- | --- |
+| `createEscalationPolicy` | `operation_prepare`, then approval |
+| `deleteEscalationPolicy` | `operation_prepare`, then approval |
+| `getEscalationPolicy` | `escalation_explain` |
+| `getEscalationPolicyDependencies` | `read_operation` |
+| `listEscalationPolicies` | `read_operation` |
+| `previewEscalationPolicy` | `call_operation` |
+| `updateEscalationPolicy` | `operation_prepare`, then approval |
+| `validateEscalationPolicy` | `read_operation` (sensitive reads on) |
+
+### incidents
+
+| Operation | How an assistant reaches it |
+| --- | --- |
+| `acknowledgeIncident` | `incident_acknowledge` |
+| `addIncidentNote` | `incident_add_note` |
+| `addIncidentTag` | `call_operation` |
+| `assignIncident` | `incident_assign` |
+| `createIncident` | `incident_create` |
+| `createIncidentTemplate` | `operation_prepare`, then approval |
+| `deleteIncidentTemplate` | `operation_prepare`, then approval |
+| `escalateIncident` | `incident_escalate` |
+| `getIncident` | `incident_get` |
+| `getIncidentAvailableActions` | `incident_available_actions` |
+| `getIncidentCustomField` | `read_operation` (sensitive reads on) |
+| `getIncidentIntelligence` | `read_operation` |
+| `getIncidentResponseActivity` | `read_operation` |
+| `getIncidentRoutingDecision` | `read_operation` |
+| `getIncidentTemplate` | `read_operation` (sensitive reads on) |
+| `getIncidentTimeline` | `incident_get_timeline` |
+| `getIncidentWatcher` | `read_operation` (sensitive reads on) |
+| `listIncidentAlerts` | `read_operation` (sensitive reads on) |
+| `listIncidentCustomFields` | `read_operation` |
+| `listIncidentNotes` | `incident_list_notes` |
+| `listIncidentNotificationAttempts` | `read_operation` (sensitive reads on) |
+| `listIncidentRunbookExecutions` | `read_operation` |
+| `listIncidentTags` | `read_operation` |
+| `listIncidentTemplates` | `read_operation` (sensitive reads on) |
+| `listIncidentWarRooms` | `read_operation` (sensitive reads on) |
+| `listIncidentWatchers` | `read_operation` (sensitive reads on) |
+| `listIncidents` | `incident_search` |
+| `listRelatedIncidents` | `read_operation` |
+| `listSimilarIncidents` | `incident_find_similar` |
+| `removeIncidentTag` | `call_operation` |
+| `removeIncidentWatcher` | `operation_prepare`, then approval |
+| `reopenIncident` | `incident_reopen` |
+| `resolveIncident` | `incident_resolve` |
+| `setIncidentCustomField` | `operation_prepare`, then approval |
+| `setIncidentWatcher` | `incident_watch` |
+| `snoozeIncident` | `operation_prepare`, then approval |
+| `suppressIncident` | `operation_prepare`, then approval |
+| `unacknowledgeIncident` | `operation_prepare`, then approval |
+| `unsnoozeIncident` | `incident_unsnooze` |
+| `unsuppressIncident` | `operation_prepare`, then approval |
+| `updateIncident` | `operation_prepare`, then approval |
+| `updateIncidentTemplate` | `operation_prepare`, then approval |
+
+### integrations
+
+| Operation | How an assistant reaches it |
+| --- | --- |
+| `deleteIntegration` | `operation_prepare`, then approval |
+| `getIntegration` | not available: not exposed, reason recorded in the catalog (exclusion review pending) |
+| `getIntegrationCredentialState` | not available: restricted to native administration (exclusion review pending) |
+| `getIntegrationDiagnostics` | `read_operation` |
+| `getIntegrationUsage` | `read_operation` (sensitive reads on) |
+| `listIntegrationTypes` | `read_operation` (sensitive reads on) |
+| `listIntegrations` | `read_operation` (sensitive reads on) |
+| `rotateIntegrationCredentials` | not available: restricted to native administration (exclusion review pending) |
+| `updateIntegration` | `operation_prepare`, then approval |
+| `validateIntegrationConfiguration` | `read_operation` (sensitive reads on) |
+| `validateIntegrationPayload` | `read_operation` (sensitive reads on) |
+
+### notification-providers
+
+| Operation | How an assistant reaches it |
+| --- | --- |
+| `configureNotificationProvider` | not available: restricted to native administration (exclusion review pending) |
+| `getNotificationProvider` | not available: restricted to native administration (exclusion review pending) |
+| `getNotificationProviderDiagnostics` | not available: restricted to native administration (exclusion review pending) |
+| `listNotificationProviders` | not available: restricted to native administration (exclusion review pending) |
+| `rotateWebPushKeys` | not available: restricted to native administration (exclusion review pending) |
+| `testNotificationProvider` | not available: restricted to native administration (exclusion review pending) |
+
+### notifications
+
+| Operation | How an assistant reaches it |
+| --- | --- |
+| `getNotificationFeedback` | `read_operation` (sensitive reads on) |
+| `listNotificationAttempts` | `read_operation` (sensitive reads on) |
+| `listNotifications` | `read_operation` (sensitive reads on) |
+| `retryNotification` | `operation_prepare`, then approval |
+
+### operational-events
+
+| Operation | How an assistant reaches it |
+| --- | --- |
+| `listOperationalEvents` | `read_operation` (sensitive reads on) |
+
+### postmortems
+
+| Operation | How an assistant reaches it |
+| --- | --- |
+| `createPostmortem` | `operation_prepare`, then approval |
+| `deletePostmortem` | `operation_prepare`, then approval |
+| `deletePostmortemActionItem` | `operation_prepare`, then approval |
+| `getPostmortem` | `postmortem_get` |
+| `getPostmortemActionItem` | `read_operation` |
+| `listPostmortemActionItems` | `read_operation` |
+| `listPostmortemContributors` | `read_operation` |
+| `listPostmortemVersions` | `read_operation` |
+| `listPostmortems` | `postmortem_list` |
+| `publishPostmortem` | `operation_prepare`, then approval |
+| `replacePostmortemActionItems` | `operation_prepare`, then approval |
+| `replacePostmortemContributors` | `operation_prepare`, then approval |
+| `updatePostmortem` | `operation_prepare`, then approval |
+| `updatePostmortemActionItem` | `operation_prepare`, then approval |
+
+### reports
+
+| Operation | How an assistant reaches it |
+| --- | --- |
+| `cancelReportExport` | not available: not exposed, reason recorded in the catalog (exclusion review pending) |
+| `createReportExport` | not available: not exposed, reason recorded in the catalog (exclusion review pending) |
+| `createSavedReport` | `operation_prepare`, then approval |
+| `deleteSavedReport` | `operation_prepare`, then approval |
+| `downloadReportExport` | not available: not exposed, reason recorded in the catalog (exclusion review pending) |
+| `getMetricsReport` | `read_operation` (sensitive reads on) |
+| `getReportCatalog` | `read_operation` |
+| `getReportExport` | not available: not exposed, reason recorded in the catalog (exclusion review pending) |
+| `getSavedReport` | `report_get_summary` |
+| `listSavedReports` | `read_operation` |
+| `queryReportMetrics` | `read_operation` (sensitive reads on) |
+| `updateSavedReport` | `operation_prepare`, then approval |
+
+### runbooks
+
+| Operation | How an assistant reaches it |
+| --- | --- |
+| `activateRunbookSigningIdentity` | not available: restricted to native administration (exclusion review pending) |
+| `approveRunbookExecutionStep` | `operation_prepare`, then approval |
+| `archiveRunbook` | `operation_prepare`, then approval |
+| `cancelRunbookExecution` | `operation_prepare`, then approval |
+| `checkRunbookAgentPoolDeletion` | not available: restricted to native administration (exclusion review pending) |
+| `checkRunbookDeletion` | `read_operation` (sensitive reads on) |
+| `compareRunbookVersions` | `read_operation` (sensitive reads on) |
+| `createRunbook` | `operation_prepare`, then approval |
+| `createRunbookAgentEnrollment` | not available: restricted to native administration (exclusion review pending) |
+| `createRunbookAgentPool` | not available: restricted to native administration (exclusion review pending) |
+| `createRunbookDraft` | `operation_prepare`, then approval |
+| `createRunbookSecret` | not available: restricted to native administration (exclusion review pending) |
+| `deleteRunbook` | not available: restricted to native administration (exclusion review pending) |
+| `deleteRunbookAgentPool` | not available: restricted to native administration (exclusion review pending) |
+| `duplicateRunbook` | `operation_prepare`, then approval |
+| `executeRunbook` | `runbook_prepare_execution`, then `runbook_execute_approved` |
+| `getRunbook` | `read_operation` |
+| `getRunbookAgent` | not available: restricted to native administration (exclusion review pending) |
+| `getRunbookAgentConfiguration` | not available: restricted to native administration (exclusion review pending) |
+| `getRunbookAgentEnrollment` | not available: restricted to native administration (exclusion review pending) |
+| `getRunbookAgentPolicyStatus` | not available: restricted to native administration (exclusion review pending) |
+| `getRunbookAgentPool` | not available: restricted to native administration (exclusion review pending) |
+| `getRunbookDraft` | `read_operation` (sensitive reads on) |
+| `getRunbookExecution` | `runbook_get_execution` |
+| `getRunbookMetadata` | `read_operation` |
+| `getRunbookSecret` | not available: restricted to native administration (exclusion review pending) |
+| `grantRunbookSecret` | not available: restricted to native administration (exclusion review pending) |
+| `listRunbookAgentPoolMembers` | not available: restricted to native administration (exclusion review pending) |
+| `listRunbookAgentPools` | not available: restricted to native administration (exclusion review pending) |
+| `listRunbookAgents` | not available: restricted to native administration (exclusion review pending) |
+| `listRunbookExecutionEvents` | `read_operation` (sensitive reads on) |
+| `listRunbookExecutionEvidence` | `read_operation` (sensitive reads on) |
+| `listRunbookExecutionSteps` | `read_operation` (sensitive reads on) |
+| `listRunbookExecutions` | `read_operation` |
+| `listRunbookSecretGrants` | not available: restricted to native administration (exclusion review pending) |
+| `listRunbookSecretUsage` | not available: restricted to native administration (exclusion review pending) |
+| `listRunbookSecrets` | not available: restricted to native administration (exclusion review pending) |
+| `listRunbookSigningIdentities` | not available: restricted to native administration (exclusion review pending) |
+| `listRunbookVersions` | `read_operation` |
+| `listRunbooks` | `runbook_find` |
+| `previewRunbookExecution` | `runbook_preview` |
+| `previewRunbookExecutionRerun` | not available: not exposed, reason recorded in the catalog (exclusion review pending) |
+| `publishRunbookDraft` | `operation_prepare`, then approval |
+| `rejectRunbookExecutionStep` | `operation_prepare`, then approval |
+| `removeRunbookAgentPoolMember` | not available: restricted to native administration (exclusion review pending) |
+| `rerunRunbookExecution` | `operation_prepare`, then approval |
+| `restoreRunbook` | `operation_prepare`, then approval |
+| `retireRunbookAgentPool` | not available: restricted to native administration (exclusion review pending) |
+| `retireRunbookSigningIdentity` | not available: restricted to native administration (exclusion review pending) |
+| `revokeRunbookAgent` | not available: restricted to native administration (exclusion review pending) |
+| `revokeRunbookSecretGrant` | not available: restricted to native administration (exclusion review pending) |
+| `rotateRunbookSecret` | not available: restricted to native administration (exclusion review pending) |
+| `setRunbookAgentPoolMember` | not available: restricted to native administration (exclusion review pending) |
+| `stageRunbookSigningIdentity` | not available: restricted to native administration (exclusion review pending) |
+| `updateRunbookAgentConfiguration` | not available: restricted to native administration (exclusion review pending) |
+| `updateRunbookAgentPool` | not available: restricted to native administration (exclusion review pending) |
+| `updateRunbookDraft` | `operation_prepare`, then approval |
+| `updateRunbookMetadata` | `operation_prepare`, then approval |
+| `validateRunbookDraft` | `call_operation` |
+
+### schedules
+
+| Operation | How an assistant reaches it |
+| --- | --- |
+| `addScheduleParticipant` | `operation_prepare`, then approval |
+| `cancelScheduleOverride` | `operation_prepare`, then approval |
+| `createSchedule` | `operation_prepare`, then approval |
+| `createScheduleLayer` | `operation_prepare`, then approval |
+| `createScheduleOverride` | `operation_prepare`, then approval |
+| `deleteSchedule` | `operation_prepare`, then approval |
+| `deleteScheduleLayer` | `operation_prepare`, then approval |
+| `getOnCallNow` | `oncall_now` |
+| `getSchedule` | `schedule_get` |
+| `getScheduleCoverage` | `read_operation` |
+| `getScheduleDependencies` | `read_operation` (sensitive reads on) |
+| `getScheduleLayer` | `read_operation` |
+| `getScheduleOnCall` | `oncall_lookup` |
+| `getScheduleOverride` | `read_operation` |
+| `getScheduleParticipant` | `read_operation` |
+| `listScheduleChanges` | `read_operation` (sensitive reads on) |
+| `listScheduleLayers` | `read_operation` |
+| `listScheduleOverrides` | `schedule_list_overrides` |
+| `listSchedules` | `schedule_list` |
+| `moveScheduleParticipant` | `operation_prepare`, then approval |
+| `previewScheduleCoverage` | `call_operation` |
+| `removeScheduleParticipant` | `operation_prepare`, then approval |
+| `reorderScheduleLayers` | `operation_prepare`, then approval |
+| `updateSchedule` | `operation_prepare`, then approval |
+| `updateScheduleLayer` | `operation_prepare`, then approval |
+
+### service-accounts
+
+| Operation | How an assistant reaches it |
+| --- | --- |
+| `createServiceAccount` | not available: restricted to native administration (exclusion review pending) |
+| `deleteServiceAccount` | not available: restricted to native administration (exclusion review pending) |
+| `getServiceAccount` | not available: restricted to native administration (exclusion review pending) |
+| `issueServiceAccountToken` | not available: restricted to native administration (exclusion review pending) |
+| `listServiceAccounts` | not available: restricted to native administration (exclusion review pending) |
+| `revokeServiceAccountToken` | not available: restricted to native administration (exclusion review pending) |
+
+### service-objectives
+
+| Operation | How an assistant reaches it |
+| --- | --- |
+| `archiveServiceObjective` | `operation_prepare`, then approval |
+| `createServiceObjective` | `operation_prepare`, then approval |
+| `evaluateServiceObjective` | `operation_prepare`, then approval |
+| `getServiceObjective` | `read_operation` (sensitive reads on) |
+| `getServiceObjectiveCatalog` | `read_operation` (sensitive reads on) |
+| `getServiceObjectiveEvaluation` | `read_operation` (sensitive reads on) |
+| `getServiceObjectiveHistory` | `read_operation` (sensitive reads on) |
+| `listServiceObjectiveSnapshots` | `read_operation` (sensitive reads on) |
+| `listServiceObjectiveVersions` | `read_operation` (sensitive reads on) |
+| `listServiceObjectives` | `read_operation` (sensitive reads on) |
+| `updateServiceObjective` | `operation_prepare`, then approval |
+
+### services
+
+| Operation | How an assistant reaches it |
+| --- | --- |
+| `activateAutomationCandidate` | `operation_prepare`, then approval |
+| `activateServiceRunbookRule` | `operation_prepare`, then approval |
+| `createService` | `operation_prepare`, then approval |
+| `createServiceIntegration` | not available: not exposed, reason recorded in the catalog (exclusion review pending) |
+| `createServiceRunbookRule` | `operation_prepare`, then approval |
+| `deleteService` | `operation_prepare`, then approval |
+| `detachServiceRunbookRule` | `operation_prepare`, then approval |
+| `discardAutomationCandidate` | `operation_prepare`, then approval |
+| `duplicateServiceRunbookRule` | `operation_prepare`, then approval |
+| `getAutomationCandidate` | `read_operation` (sensitive reads on) |
+| `getAutomationDraft` | `read_operation` |
+| `getAutomationVersion` | `read_operation` |
+| `getService` | `read_operation` |
+| `getServiceAutomation` | `automation_get_effective` |
+| `getServiceClassificationPolicy` | `read_operation` |
+| `getServiceHealthSummary` | `service_get_health` |
+| `getServiceNotificationSettings` | `read_operation` (sensitive reads on) |
+| `getServiceRunbookRule` | `read_operation` |
+| `getServiceSlaPolicy` | `read_operation` |
+| `getServiceSupportHours` | `read_operation` |
+| `listAutomationDecisions` | `automation_get_decision_trace` |
+| `listAutomationObservations` | `read_operation` (sensitive reads on) |
+| `listAutomationVersions` | `read_operation` |
+| `listRunbookRulePolicyChecks` | `read_operation` (sensitive reads on) |
+| `listServiceChangeEvents` | `read_operation` (sensitive reads on) |
+| `listServiceRunbookRules` | `read_operation` |
+| `listServices` | `service_list` |
+| `pauseServiceRunbookRule` | `operation_prepare`, then approval |
+| `publishAutomationVersion` | `operation_prepare`, then approval |
+| `replaceRunbookRuleTriggers` | `operation_prepare`, then approval |
+| `requestRunbookRulePolicyChecks` | `operation_prepare`, then approval |
+| `restoreAutomationDraft` | `operation_prepare`, then approval |
+| `saveAutomationDraft` | `operation_prepare`, then approval |
+| `simulateAutomation` | `call_operation` |
+| `updateService` | `operation_prepare`, then approval |
+| `updateServiceAutomationMode` | `operation_prepare`, then approval |
+| `updateServiceClassificationPolicy` | `operation_prepare`, then approval |
+| `updateServiceNotificationSettings` | `operation_prepare`, then approval |
+| `updateServiceRunbookRule` | `operation_prepare`, then approval |
+| `updateServiceSlaPolicy` | `operation_prepare`, then approval |
+| `updateServiceSupportHours` | `operation_prepare`, then approval |
+| `validateAutomation` | `call_operation` |
+| `validateServiceRunbookRule` | `read_operation` (sensitive reads on) |
+
+### settings
+
+| Operation | How an assistant reaches it |
+| --- | --- |
+| `getAutomationSettings` | `read_operation` (sensitive reads on) |
+| `getChatOpsConfiguration` | not available: not exposed, reason recorded in the catalog (exclusion review pending) |
+| `getRunbookSettings` | `read_operation` (sensitive reads on) |
+| `getWorkspaceSlaPolicy` | `read_operation` (sensitive reads on) |
+| `updateAutomationSettings` | `operation_prepare`, then approval |
+| `updateChatOpsConfiguration` | `operation_prepare`, then approval |
+| `updateRunbookSettings` | `operation_prepare`, then approval |
+| `updateWorkspaceSlaPolicy` | `operation_prepare`, then approval |
+
+### status-pages
+
+| Operation | How an assistant reaches it |
+| --- | --- |
+| `createStatusPage` | `operation_prepare`, then approval |
+| `createStatusPageAnnouncement` | `operation_prepare`, then approval |
+| `deleteStatusPageAsset` | `operation_prepare`, then approval |
+| `getStatusPage` | `status_page_get` |
+| `getStatusPageAppearance` | `read_operation` (sensitive reads on) |
+| `getStatusPageAsset` | `read_operation` (sensitive reads on) |
+| `getStatusPageContent` | `read_operation` (sensitive reads on) |
+| `getStatusPagePrivacy` | not available: restricted to native administration (exclusion review pending) |
+| `getStatusPagePublication` | `read_operation` (sensitive reads on) |
+| `getStatusPagePublicationJob` | `read_operation` (sensitive reads on) |
+| `getStatusPageSettings` | `read_operation` (sensitive reads on) |
+| `getStatusPageSubscriber` | not available: not exposed, reason recorded in the catalog (exclusion review pending) |
+| `getStatusPageSubscriberStats` | `read_operation` (sensitive reads on) |
+| `getStatusPageSubscriptionSettings` | `read_operation` (sensitive reads on) |
+| `listStatusPageAnnouncements` | `read_operation` |
+| `listStatusPageAssets` | `read_operation` (sensitive reads on) |
+| `listStatusPageServices` | `read_operation` |
+| `listStatusPageSubscribers` | not available: not exposed, reason recorded in the catalog (exclusion review pending) |
+| `listStatusPages` | `read_operation` |
+| `previewStatusPage` | `read_operation` (sensitive reads on) |
+| `removeStatusPageSubscriber` | not available: restricted to native administration (exclusion review pending) |
+| `retryStatusPagePublication` | `operation_prepare`, then approval |
+| `setStatusPageServices` | `operation_prepare`, then approval |
+| `updateStatusPage` | not available: not exposed, reason recorded in the catalog (exclusion review pending) |
+| `updateStatusPageAppearance` | `operation_prepare`, then approval |
+| `updateStatusPageContent` | `operation_prepare`, then approval |
+| `updateStatusPagePrivacy` | `operation_prepare`, then approval |
+| `updateStatusPageService` | `operation_prepare`, then approval |
+| `updateStatusPageSettings` | `operation_prepare`, then approval |
+| `uploadStatusPageAsset` | not available: not exposed, reason recorded in the catalog (exclusion review pending) |
+
+### teams
+
+| Operation | How an assistant reaches it |
+| --- | --- |
+| `assignTeamService` | `operation_prepare`, then approval |
+| `createTeam` | `operation_prepare`, then approval |
+| `deleteTeam` | `operation_prepare`, then approval |
+| `getTeam` | `read_operation` |
+| `getTeamLead` | `read_operation` |
+| `getTeamMember` | `read_operation` |
+| `listTeamActivity` | `read_operation` (sensitive reads on) |
+| `listTeamMembers` | `read_operation` |
+| `listTeamServices` | `read_operation` |
+| `listTeams` | `team_list` |
+| `removeTeamMember` | `operation_prepare`, then approval |
+| `setTeamLead` | `operation_prepare`, then approval |
+| `setTeamMember` | `operation_prepare`, then approval |
+| `updateTeam` | `operation_prepare`, then approval |
+
+### users
+
+| Operation | How an assistant reaches it |
+| --- | --- |
+| `administerUser` | not available: restricted to native administration (exclusion review pending) |
+| `createUserInvitation` | not available: restricted to native administration (exclusion review pending) |
+| `getMyCatchUp` | `oncall_catch_up` |
+| `getMyNotificationPreferences` | not available: restricted to native administration (exclusion review pending) |
+| `getUser` | `read_operation` |
+| `getUserAdministration` | not available: restricted to native administration (exclusion review pending) |
+| `getUserDependencies` | not available: restricted to native administration (exclusion review pending) |
+| `getUserInvitation` | not available: restricted to native administration (exclusion review pending) |
+| `getUserInvitationPolicy` | not available: restricted to native administration (exclusion review pending) |
+| `listMyOnCallShifts` | `oncall_my_shifts` |
+| `listUsers` | `read_operation` |
+| `renewUserInvitation` | not available: restricted to native administration (exclusion review pending) |
+| `updateMyNotificationPreferences` | not available: restricted to native administration (exclusion review pending) |
+
+</details>

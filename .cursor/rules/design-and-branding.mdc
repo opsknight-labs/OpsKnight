@@ -8,6 +8,6 @@ alwaysApply: true
 - Authentic OpsKnight logo is background-less and transparent (`/logo.png`).
 - Never enclose the logo in an opaque dark square in light/neutral contexts.
 - All OpsKnight brand logos, names, and footer attributions MUST link to `https://opsknight.com/`.
-- Font: `'Space Grotesk'` for prominent headers/brand, Inter for UI body.
-- Status colors: Crimson for Critical/High, Amber for Medium/Ack, Emerald for Resolved, Cobalt for Low, Royal Violet for Shifts.
-- Responsive scaling up to 27-inch (1080px) and 4K (1180px) monitors.
+- Font: `'Space Grotesk'` for prominent headers/brand, Inter for UI body. Bundled via next/font; use `font-display` / `font-sans` (CSS: `--font-family-display` / `--font-family-sans`), never a literal family.
+- Status colors: Crimson for Critical/High, Amber for Medium/Ack, Emerald for Resolved, Cobalt for Low, Royal Violet for Shifts. Use Tailwind `status-*` tokens from `src/lib/design/status-palette.ts`.
+- Responsive scaling up to 27-inch (1080px) and 4K (1180px) monitors for emails; the app console is fluid with scaled gutters.

@@ -1,13 +1,22 @@
 import { McpBoundaryError, requireMcp } from './errors';
 import { addOperationalMetric, setOperationalGauge } from '@/lib/metrics/operational/registry';
 
+/**
+ * The most operations one request may run. The policy field, the plan step limit and the route's
+ * declared-cost check all use this value; a stored policy above it is clamped, not honoured.
+ */
+export const MCP_MAX_OPERATIONS = 8;
+
+/** Concurrent bearer authentications per process before MCP_BUSY. */
+export const MCP_AUTH_CONCURRENCY = 4;
+
 export class CostBudget {
   private calls = 0;
   private bytes = 0;
   private readonly work = new Set<Promise<unknown>>();
   readonly deadline: number;
   constructor(
-    readonly maxOperations = 8,
+    readonly maxOperations = MCP_MAX_OPERATIONS,
     readonly maxBytes = 262144,
     readonly signal?: AbortSignal,
     timeoutMs = 10000
@@ -44,7 +53,8 @@ export class CostBudget {
 let inFlight = 0;
 let authenticating = 0;
 export function acquireMcpAuthenticationSlot() {
-  requireMcp(authenticating < 4, 'MCP_BUSY', 503);
+  // Shed exactly like the work queue: counted in busy_total and answered with Retry-After: 1.
+  if (authenticating >= MCP_AUTH_CONCURRENCY) busy();
   authenticating++;
   let released = false;
   return () => {
@@ -57,24 +67,36 @@ export function acquireMcpAuthenticationSlot() {
 
 /** How long a request waits for a work slot before MCP_BUSY; parallel tool calls are routine. */
 export const MCP_SLOT_WAIT_MS = 750;
-const grantInFlight = new Map<string, number>();
+// Keyed by the owning user, not the connection: parallel connections of one person share one cap.
+const ownerInFlight = new Map<string, number>();
 interface SlotWaiter {
   limit: number;
-  grantId?: string;
+  ownerId?: string;
   admit: () => void;
 }
 const slotQueue: SlotWaiter[] = [];
 
-/** One connection may hold at most half the slots, so it cannot starve everyone else. */
+/** One user may hold at most half the slots, however many connections they open. */
 export const mcpGrantSlotLimit = (limit: number) => Math.max(1, Math.ceil(limit / 2));
 
-const admissible = (limit: number, grantId?: string) =>
+const admissible = (limit: number, ownerId?: string) =>
   inFlight < limit &&
-  (grantId === undefined || (grantInFlight.get(grantId) ?? 0) < mcpGrantSlotLimit(limit));
+  (ownerId === undefined || (ownerInFlight.get(ownerId) ?? 0) < mcpGrantSlotLimit(limit));
 
-/** Work-slot usage on this process, for health checks. */
-export function mcpSlotUsage() {
-  return { inFlight, queued: slotQueue.length };
+/**
+ * Work-slot usage on this process, for health checks. With the policy limit it also reports the
+ * caps it is judged against; every cap is per process, so cluster capacity is cap x replicas.
+ */
+export function mcpSlotUsage(limit?: number) {
+  const usage = { inFlight, queued: slotQueue.length };
+  if (limit === undefined) return usage;
+  return {
+    ...usage,
+    authenticating,
+    limit,
+    queueCap: limit * 2,
+    authLimit: MCP_AUTH_CONCURRENCY,
+  };
 }
 
 function publishSlotGauges() {
@@ -82,24 +104,24 @@ function publishSlotGauges() {
   setOperationalGauge('opsknight_mcp_queued', slotQueue.length);
 }
 
-function takeSlot(grantId?: string) {
+function takeSlot(ownerId?: string) {
   inFlight++;
-  if (grantId !== undefined) grantInFlight.set(grantId, (grantInFlight.get(grantId) ?? 0) + 1);
+  if (ownerId !== undefined) ownerInFlight.set(ownerId, (ownerInFlight.get(ownerId) ?? 0) + 1);
   publishSlotGauges();
   let released = false;
   return () => {
     if (released) return;
     released = true;
     inFlight--;
-    if (grantId !== undefined) {
-      const held = (grantInFlight.get(grantId) ?? 1) - 1;
-      if (held > 0) grantInFlight.set(grantId, held);
-      else grantInFlight.delete(grantId);
+    if (ownerId !== undefined) {
+      const held = (ownerInFlight.get(ownerId) ?? 1) - 1;
+      if (held > 0) ownerInFlight.set(ownerId, held);
+      else ownerInFlight.delete(ownerId);
     }
     // First come, first served among the waiters that can now be admitted.
     for (let index = 0; index < slotQueue.length;) {
       const waiter = slotQueue.at(index)!;
-      if (admissible(waiter.limit, waiter.grantId)) {
+      if (admissible(waiter.limit, waiter.ownerId)) {
         slotQueue.splice(index, 1);
         waiter.admit();
       } else index++;
@@ -120,11 +142,12 @@ function busy(): never {
  */
 export async function acquireMcpSlot(
   limit: number,
-  { grantId, waitMs = MCP_SLOT_WAIT_MS }: { grantId?: string; waitMs?: number } = {}
+  { ownerId, waitMs = MCP_SLOT_WAIT_MS }: { ownerId?: string; waitMs?: number } = {}
 ): Promise<() => void> {
-  if (admissible(limit, grantId)) return takeSlot(grantId);
+  setOperationalGauge('opsknight_mcp_in_flight_limit', limit);
+  if (admissible(limit, ownerId)) return takeSlot(ownerId);
   if (waitMs <= 0 || slotQueue.length >= limit * 2) busy();
-  return queueForSlot(limit, grantId, waitMs);
+  return queueForSlot(limit, ownerId, waitMs);
 }
 
 /**
@@ -136,26 +159,26 @@ export async function acquireMcpSlot(
 export async function readmitMcpSlot(
   release: () => void,
   limit: number,
-  options: { grantId?: string; waitMs?: number } = {}
+  options: { ownerId?: string; waitMs?: number } = {}
 ): Promise<() => void> {
-  const { grantId } = options;
+  const { ownerId } = options;
   if (
     inFlight <= limit &&
-    (grantId === undefined || (grantInFlight.get(grantId) ?? 0) <= mcpGrantSlotLimit(limit))
+    (ownerId === undefined || (ownerInFlight.get(ownerId) ?? 0) <= mcpGrantSlotLimit(limit))
   )
     return release;
   release();
   return acquireMcpSlot(limit, options);
 }
 
-function queueForSlot(limit: number, grantId: string | undefined, waitMs: number) {
+function queueForSlot(limit: number, ownerId: string | undefined, waitMs: number) {
   return new Promise<() => void>((resolve, reject) => {
     const waiter: SlotWaiter = {
       limit,
-      grantId,
+      ownerId,
       admit: () => {
         clearTimeout(timer);
-        resolve(takeSlot(grantId));
+        resolve(takeSlot(ownerId));
       },
     };
     const timer = setTimeout(() => {

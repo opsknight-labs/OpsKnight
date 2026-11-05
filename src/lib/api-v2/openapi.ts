@@ -261,6 +261,15 @@ function buildBaseSpec(): Record<string, unknown> {
             department: { type: 'string', nullable: true },
             jobTitle: { type: 'string', nullable: true },
             createdAt: { type: 'string', format: 'date-time' },
+            teams: {
+              type: 'array',
+              description: 'Teams the user belongs to (at most 20 on list rows).',
+              items: {
+                type: 'object',
+                properties: { id: { type: 'string' }, name: { type: 'string' } },
+                required: ['id', 'name'],
+              },
+            },
           },
           required: ['id', 'name', 'email', 'role', 'status'],
         },
@@ -315,7 +324,10 @@ function buildBaseSpec(): Record<string, unknown> {
             name: { type: 'string' },
             type: { type: 'string' },
             enabled: { type: 'boolean' },
-            snsTopicArn: { type: ['string', 'null'], description: 'Configured CloudWatch SNS topic; absent for other provider types.' },
+            snsTopicArn: {
+              type: ['string', 'null'],
+              description: 'Configured CloudWatch SNS topic; absent for other provider types.',
+            },
             serviceId: { type: 'string' },
             service: {
               type: 'object',
@@ -497,7 +509,11 @@ function buildBaseSpec(): Record<string, unknown> {
             usersAffected: { type: 'integer', minimum: 0, maximum: 1000000000 },
             downtimeMinutes: { type: 'integer', minimum: 0, maximum: 10000000 },
             errorRate: { type: 'number', minimum: 0, maximum: 100 },
-            servicesAffected: { type: 'array', maxItems: 100, items: { type: 'string', minLength: 1, maxLength: 100 } },
+            servicesAffected: {
+              type: 'array',
+              maxItems: 100,
+              items: { type: 'string', minLength: 1, maxLength: 100 },
+            },
             slaBreaches: { type: 'integer', minimum: 0, maximum: 1000000000 },
             revenueImpact: { type: 'number', minimum: 0, maximum: 1000000000000 },
             apiErrors: { type: 'integer', minimum: 0, maximum: 1000000000 },
@@ -505,13 +521,18 @@ function buildBaseSpec(): Record<string, unknown> {
           },
         },
         PostmortemTimeline: {
-          type: 'array', maxItems: 100,
+          type: 'array',
+          maxItems: 100,
           items: {
-            type: 'object', additionalProperties: false,
+            type: 'object',
+            additionalProperties: false,
             properties: {
               id: { type: 'string', minLength: 1, maxLength: 100 },
               timestamp: { type: 'string', format: 'date-time' },
-              type: { type: 'string', enum: ['DETECTION', 'ESCALATION', 'MITIGATION', 'RESOLUTION'] },
+              type: {
+                type: 'string',
+                enum: ['DETECTION', 'ESCALATION', 'MITIGATION', 'RESOLUTION'],
+              },
               title: { type: 'string', minLength: 1, maxLength: 200 },
               description: { type: 'string', maxLength: 2000 },
               actor: { type: 'string', maxLength: 200 },
@@ -520,21 +541,40 @@ function buildBaseSpec(): Record<string, unknown> {
           },
         },
         PostmortemFactors: {
-          type: 'array', maxItems: 30,
-          items: { type: 'object', additionalProperties: false, properties: {
-            id: { type: 'string', minLength: 1, maxLength: 100 },
-            category: { type: 'string', enum: ['TECHNICAL', 'PROCESS', 'HUMAN', 'EXTERNAL', 'OTHER'] },
-            description: { type: 'string', minLength: 1, maxLength: 2000 },
-            evidence: { type: 'array', maxItems: 10, items: { type: 'string', minLength: 1, maxLength: 500 } },
-          }, required: ['id', 'category', 'description', 'evidence'] },
+          type: 'array',
+          maxItems: 30,
+          items: {
+            type: 'object',
+            additionalProperties: false,
+            properties: {
+              id: { type: 'string', minLength: 1, maxLength: 100 },
+              category: {
+                type: 'string',
+                enum: ['TECHNICAL', 'PROCESS', 'HUMAN', 'EXTERNAL', 'OTHER'],
+              },
+              description: { type: 'string', minLength: 1, maxLength: 2000 },
+              evidence: {
+                type: 'array',
+                maxItems: 10,
+                items: { type: 'string', minLength: 1, maxLength: 500 },
+              },
+            },
+            required: ['id', 'category', 'description', 'evidence'],
+          },
         },
         PostmortemFiveWhys: {
-          type: 'array', maxItems: 10,
-          items: { type: 'object', additionalProperties: false, properties: {
-            id: { type: 'string', minLength: 1, maxLength: 100 },
-            question: { type: 'string', minLength: 1, maxLength: 500 },
-            answer: { type: 'string', minLength: 1, maxLength: 2000 },
-          }, required: ['id', 'question', 'answer'] },
+          type: 'array',
+          maxItems: 10,
+          items: {
+            type: 'object',
+            additionalProperties: false,
+            properties: {
+              id: { type: 'string', minLength: 1, maxLength: 100 },
+              question: { type: 'string', minLength: 1, maxLength: 500 },
+              answer: { type: 'string', minLength: 1, maxLength: 2000 },
+            },
+            required: ['id', 'question', 'answer'],
+          },
         },
         Postmortem: {
           type: 'object',
@@ -547,17 +587,34 @@ function buildBaseSpec(): Record<string, unknown> {
             rootCause: { type: 'string', nullable: true },
             resolution: { type: 'string', nullable: true },
             mitigation: { type: 'string', nullable: true },
-            impact: { oneOf: [{ $ref: '#/components/schemas/PostmortemImpact' }, { type: 'null' }] },
-            timeline: { oneOf: [{ $ref: '#/components/schemas/PostmortemTimeline' }, { type: 'null' }] },
-            contributingFactors: { oneOf: [{ $ref: '#/components/schemas/PostmortemFactors' }, { type: 'null' }] },
-            fiveWhys: { oneOf: [{ $ref: '#/components/schemas/PostmortemFiveWhys' }, { type: 'null' }] },
+            impact: {
+              oneOf: [{ $ref: '#/components/schemas/PostmortemImpact' }, { type: 'null' }],
+            },
+            timeline: {
+              oneOf: [{ $ref: '#/components/schemas/PostmortemTimeline' }, { type: 'null' }],
+            },
+            contributingFactors: {
+              oneOf: [{ $ref: '#/components/schemas/PostmortemFactors' }, { type: 'null' }],
+            },
+            fiveWhys: {
+              oneOf: [{ $ref: '#/components/schemas/PostmortemFiveWhys' }, { type: 'null' }],
+            },
             lessons: { type: 'string', nullable: true },
             status: { type: 'string', enum: ['DRAFT', 'IN_REVIEW', 'PUBLISHED', 'ARCHIVED'] },
             isPublic: { type: 'boolean' },
             createdAt: { type: 'string', format: 'date-time' },
             updatedAt: { type: 'string', format: 'date-time' },
           },
-          required: ['id', 'revision', 'incidentId', 'summary', 'status', 'isPublic', 'createdAt', 'updatedAt'],
+          required: [
+            'id',
+            'revision',
+            'incidentId',
+            'summary',
+            'status',
+            'isPublic',
+            'createdAt',
+            'updatedAt',
+          ],
         },
       },
       responses: {
@@ -586,7 +643,29 @@ function buildBaseSpec(): Record<string, unknown> {
               in: 'query',
               schema: {
                 type: 'string',
-                enum: ['OPEN', 'ACKNOWLEDGED', 'RESOLVED', 'SNOOZED', 'SUPPRESSED'],
+                description:
+                  'One status or several, comma-separated (OPEN,ACKNOWLEDGED). ACTIVE means every unresolved status: OPEN, ACKNOWLEDGED and SNOOZED.',
+                maxLength: 80,
+                pattern:
+                  '^(OPEN|ACKNOWLEDGED|RESOLVED|SNOOZED|SUPPRESSED|ACTIVE)(,(OPEN|ACKNOWLEDGED|RESOLVED|SNOOZED|SUPPRESSED|ACTIVE)){0,5}$',
+              },
+            },
+            {
+              name: 'createdAfter',
+              in: 'query',
+              schema: {
+                type: 'string',
+                format: 'date-time',
+                description: 'Only incidents created at or after this time (ISO 8601 with offset).',
+              },
+            },
+            {
+              name: 'createdBefore',
+              in: 'query',
+              schema: {
+                type: 'string',
+                format: 'date-time',
+                description: 'Only incidents created before this time (ISO 8601 with offset).',
               },
             },
             {
@@ -735,6 +814,22 @@ function buildBaseSpec(): Record<string, unknown> {
             '401': { $ref: '#/components/responses/ProblemError' },
             '403': { $ref: '#/components/responses/ProblemError' },
             '404': { $ref: '#/components/responses/ProblemError' },
+          },
+        },
+      },
+      '/incidents/{id}/escalate': {
+        post: {
+          tags: ['Incidents'],
+          summary: 'Escalate an open incident to its next escalation step now',
+          description:
+            'Pages the next tier of the escalation policy immediately, through the same command as the Slack, Teams and web escalate actions. Only an OPEN incident escalates; otherwise the result reports requested: false with the reason.',
+          parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+          responses: {
+            '200': { description: 'Escalation requested, or the reason it was not' },
+            '401': { $ref: '#/components/responses/ProblemError' },
+            '403': { $ref: '#/components/responses/ProblemError' },
+            '404': { $ref: '#/components/responses/ProblemError' },
+            '409': { $ref: '#/components/responses/ProblemError' },
           },
         },
       },
@@ -995,7 +1090,23 @@ function buildBaseSpec(): Record<string, unknown> {
                   type: 'object',
                   additionalProperties: false,
                   properties: {
-                    serviceNotificationChannels: { type: 'array', uniqueItems: true, maxItems: 7, items: { type: 'string', enum: ['SLACK', 'WEBHOOK', 'EMAIL', 'SMS', 'PUSH', 'WHATSAPP', 'MICROSOFT_TEAMS'] } },
+                    serviceNotificationChannels: {
+                      type: 'array',
+                      uniqueItems: true,
+                      maxItems: 7,
+                      items: {
+                        type: 'string',
+                        enum: [
+                          'SLACK',
+                          'WEBHOOK',
+                          'EMAIL',
+                          'SMS',
+                          'PUSH',
+                          'WHATSAPP',
+                          'MICROSOFT_TEAMS',
+                        ],
+                      },
+                    },
                     serviceNotifyOnTriggered: { type: 'boolean' },
                     serviceNotifyOnAck: { type: 'boolean' },
                     serviceNotifyOnResolved: { type: 'boolean' },
@@ -1032,8 +1143,36 @@ function buildBaseSpec(): Record<string, unknown> {
                     timezone: { type: 'string', maxLength: 100 },
                     inheritWorkspace: { type: 'boolean' },
                     mode: { type: 'string', enum: ['INHERIT', 'ALWAYS', 'SCHEDULED'] },
-                    windows: { type: 'array', maxItems: 28, items: { type: 'object', additionalProperties: false, required: ['dayOfWeek', 'startMinute', 'endMinute'], properties: { dayOfWeek: { type: 'integer', minimum: 0, maximum: 6 }, startMinute: { type: 'integer', minimum: 0, maximum: 1439 }, endMinute: { type: 'integer', minimum: 1, maximum: 1440 } } } },
-                    exceptions: { type: 'array', maxItems: 366, items: { type: 'object', additionalProperties: false, required: ['localDate', 'available', 'startMinute', 'endMinute'], properties: { localDate: { type: 'string', format: 'date' }, available: { type: 'boolean' }, startMinute: { type: ['integer', 'null'] }, endMinute: { type: ['integer', 'null'] }, label: { type: ['string', 'null'], maxLength: 120 } } } },
+                    windows: {
+                      type: 'array',
+                      maxItems: 28,
+                      items: {
+                        type: 'object',
+                        additionalProperties: false,
+                        required: ['dayOfWeek', 'startMinute', 'endMinute'],
+                        properties: {
+                          dayOfWeek: { type: 'integer', minimum: 0, maximum: 6 },
+                          startMinute: { type: 'integer', minimum: 0, maximum: 1439 },
+                          endMinute: { type: 'integer', minimum: 1, maximum: 1440 },
+                        },
+                      },
+                    },
+                    exceptions: {
+                      type: 'array',
+                      maxItems: 366,
+                      items: {
+                        type: 'object',
+                        additionalProperties: false,
+                        required: ['localDate', 'available', 'startMinute', 'endMinute'],
+                        properties: {
+                          localDate: { type: 'string', format: 'date' },
+                          available: { type: 'boolean' },
+                          startMinute: { type: ['integer', 'null'] },
+                          endMinute: { type: ['integer', 'null'] },
+                          label: { type: ['string', 'null'], maxLength: 120 },
+                        },
+                      },
+                    },
                   },
                 },
               },
@@ -1063,17 +1202,36 @@ function buildBaseSpec(): Record<string, unknown> {
                   required: ['rules'],
                   properties: {
                     derivePriorityFromUrgency: { type: 'boolean' },
-                    priorityFallbackMode: { type: 'string', enum: ['INHERIT', 'ENABLED', 'DISABLED'] },
+                    priorityFallbackMode: {
+                      type: 'string',
+                      enum: ['INHERIT', 'ENABLED', 'DISABLED'],
+                    },
                     rules: {
-                      type: 'array', minItems: 4, maxItems: 4,
-                      items: { type: 'object', additionalProperties: false,
+                      type: 'array',
+                      minItems: 4,
+                      maxItems: 4,
+                      items: {
+                        type: 'object',
+                        additionalProperties: false,
                         required: ['matchValue', 'priority', 'urgency'],
                         properties: {
-                          matchValue: { type: 'string', enum: ['critical', 'error', 'warning', 'info'] },
-                          priorityMode: { type: 'string', enum: ['INHERIT', 'FALLBACK', 'SET', 'CLEAR'] },
-                          priority: { type: ['string', 'null'], enum: ['P1', 'P2', 'P3', 'P4', 'P5', null] },
+                          matchValue: {
+                            type: 'string',
+                            enum: ['critical', 'error', 'warning', 'info'],
+                          },
+                          priorityMode: {
+                            type: 'string',
+                            enum: ['INHERIT', 'FALLBACK', 'SET', 'CLEAR'],
+                          },
+                          priority: {
+                            type: ['string', 'null'],
+                            enum: ['P1', 'P2', 'P3', 'P4', 'P5', null],
+                          },
                           urgencyMode: { type: 'string', enum: ['INHERIT', 'SET', 'DEFAULT'] },
-                          urgency: { type: ['string', 'null'], enum: ['HIGH', 'MEDIUM', 'LOW', null] },
+                          urgency: {
+                            type: ['string', 'null'],
+                            enum: ['HIGH', 'MEDIUM', 'LOW', null],
+                          },
                         },
                       },
                     },
@@ -1107,11 +1265,17 @@ function buildBaseSpec(): Record<string, unknown> {
                   properties: {
                     inheritWorkspace: { type: 'boolean' },
                     baseAckTargetMs: { type: ['integer', 'null'], minimum: 1, maximum: 2073600000 },
-                    baseResolveTargetMs: { type: ['integer', 'null'], minimum: 1, maximum: 2073600000 },
+                    baseResolveTargetMs: {
+                      type: ['integer', 'null'],
+                      minimum: 1,
+                      maximum: 2073600000,
+                    },
                     rules: {
-                      type: 'array', maxItems: 5,
+                      type: 'array',
+                      maxItems: 5,
                       items: {
-                        type: 'object', additionalProperties: false,
+                        type: 'object',
+                        additionalProperties: false,
                         required: ['priority', 'ackTargetMs', 'resolveTargetMs'],
                         properties: {
                           priority: { type: 'string', enum: ['P1', 'P2', 'P3', 'P4', 'P5'] },
@@ -1133,31 +1297,43 @@ function buildBaseSpec(): Record<string, unknown> {
         get: {
           tags: ['Administration'],
           summary: 'Read the current workspace incident SLA policy',
-          responses: { '200': { description: 'Current immutable policy or null, with version ETag' } },
+          responses: {
+            '200': { description: 'Current immutable policy or null, with version ETag' },
+          },
         },
         put: {
           tags: ['Administration'],
           summary: 'Create the next immutable workspace incident SLA policy version',
           requestBody: {
             required: true,
-            content: { 'application/json': { schema: {
-              type: 'object', additionalProperties: false,
-              required: ['baseAckTargetMs', 'baseResolveTargetMs', 'rules'],
-              properties: {
-                baseAckTargetMs: { type: 'integer', minimum: 1, maximum: 2073600000 },
-                baseResolveTargetMs: { type: 'integer', minimum: 1, maximum: 2073600000 },
-                rules: { type: 'array', maxItems: 5, items: {
-                  type: 'object', additionalProperties: false,
-                  required: ['priority', 'ackTargetMs', 'resolveTargetMs'],
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  additionalProperties: false,
+                  required: ['baseAckTargetMs', 'baseResolveTargetMs', 'rules'],
                   properties: {
-                    priority: { type: 'string', enum: ['P1', 'P2', 'P3', 'P4', 'P5'] },
-                    ackTargetMs: { type: 'integer', minimum: 1, maximum: 2073600000 },
-                    resolveTargetMs: { type: 'integer', minimum: 1, maximum: 2073600000 },
-                    label: { type: 'string', maxLength: 120 },
+                    baseAckTargetMs: { type: 'integer', minimum: 1, maximum: 2073600000 },
+                    baseResolveTargetMs: { type: 'integer', minimum: 1, maximum: 2073600000 },
+                    rules: {
+                      type: 'array',
+                      maxItems: 5,
+                      items: {
+                        type: 'object',
+                        additionalProperties: false,
+                        required: ['priority', 'ackTargetMs', 'resolveTargetMs'],
+                        properties: {
+                          priority: { type: 'string', enum: ['P1', 'P2', 'P3', 'P4', 'P5'] },
+                          ackTargetMs: { type: 'integer', minimum: 1, maximum: 2073600000 },
+                          resolveTargetMs: { type: 'integer', minimum: 1, maximum: 2073600000 },
+                          label: { type: 'string', maxLength: 120 },
+                        },
+                      },
+                    },
                   },
-                } },
+                },
               },
-            } } },
+            },
           },
           responses: { '200': { description: 'New immutable workspace SLA policy version' } },
         },
@@ -1266,6 +1442,145 @@ function buildBaseSpec(): Record<string, unknown> {
           ],
           responses: {
             '200': { description: 'Paginated user directory' },
+            '401': { $ref: '#/components/responses/ProblemError' },
+            '403': { $ref: '#/components/responses/ProblemError' },
+          },
+        },
+      },
+      '/schedules/on-call-now': {
+        get: {
+          tags: ['Schedules'],
+          summary: 'Who is on call now, and who is next, across schedules',
+          description:
+            'For each schedule the caller can read: who is on call right now (with the real start and end of the shift), who takes over next within seven days, and whether nobody is on call (a gap). scope=mine (default) keeps schedules the caller, or someone on one of their teams, takes part in; scope=all is every schedule they may read. Names only, never contact details. Bounded to 50 schedules; truncated reports when more matched.',
+          parameters: [
+            {
+              name: 'scope',
+              in: 'query',
+              description: 'mine (default) or all.',
+              schema: { type: 'string', enum: ['mine', 'all'], default: 'mine' },
+            },
+            {
+              name: 'limit',
+              in: 'query',
+              description: 'Maximum schedules to return (1-50).',
+              schema: { type: 'integer', minimum: 1, maximum: 50, default: 25 },
+            },
+          ],
+          responses: {
+            '200': { description: 'Who is on call now across schedules' },
+            '400': { $ref: '#/components/responses/ProblemError' },
+            '401': { $ref: '#/components/responses/ProblemError' },
+            '403': { $ref: '#/components/responses/ProblemError' },
+          },
+        },
+      },
+      '/users/me/catch-up': {
+        get: {
+          tags: ['Users'],
+          summary: 'What opened, resolved and is still active since a point in time',
+          description:
+            'Self-service catch-up over incidents the caller can read. scope=mine (default) narrows to incidents assigned to, watched by, or owned by a team of the caller; scope=all is everything they may read. Returns counts of incidents opened and resolved, the active incidents (most urgent first), the ones assigned to the caller, the recently resolved ones, and which incidents paged the caller (from their own notification history only). The window is explicit: hours back from now (default 12) or a since timestamp, at most 168 hours; nothing is stored between calls. Bounded to 25 rows per list; truncated reports when a list was cut.',
+          parameters: [
+            {
+              name: 'hours',
+              in: 'query',
+              description: 'How far back to look, in hours (1-168). Not with since.',
+              schema: { type: 'integer', minimum: 1, maximum: 168 },
+            },
+            {
+              name: 'since',
+              in: 'query',
+              description:
+                'Start of the window as an RFC 3339 timestamp, in the past and within 168 hours. Not with hours.',
+              schema: { type: 'string', format: 'date-time' },
+            },
+            {
+              name: 'scope',
+              in: 'query',
+              description: 'mine (default) or all.',
+              schema: { type: 'string', enum: ['mine', 'all'], default: 'mine' },
+            },
+            {
+              name: 'serviceId',
+              in: 'query',
+              description: 'Only incidents on this service.',
+              schema: { type: 'string' },
+            },
+            {
+              name: 'teamId',
+              in: 'query',
+              description: 'Only incidents owned by this team or on its services.',
+              schema: { type: 'string' },
+            },
+            {
+              name: 'urgency',
+              in: 'query',
+              description: 'Only incidents with this urgency.',
+              schema: { type: 'string', enum: ['HIGH', 'MEDIUM', 'LOW'] },
+            },
+            {
+              name: 'limit',
+              in: 'query',
+              description: 'Maximum rows per list (1-25).',
+              schema: { type: 'integer', minimum: 1, maximum: 25, default: 10 },
+            },
+          ],
+          responses: {
+            '200': { description: 'The caller’s catch-up' },
+            '400': { $ref: '#/components/responses/ProblemError' },
+            '401': { $ref: '#/components/responses/ProblemError' },
+            '403': { $ref: '#/components/responses/ProblemError' },
+          },
+        },
+      },
+      '/incidents/{id}/similar': {
+        get: {
+          tags: ['Incidents'],
+          summary: 'Past resolved incidents that look like this one, with how each ended',
+          description:
+            'Compares this incident with resolved incidents from the last year that the caller can read. Similarity is title and description word overlap, after light stemming and a small synonym table, nudged by the same service and priority; every row lists why it matched. Candidates come from the same service and from each title word separately, so a busy service or a very common word cannot crowd out older matches elsewhere. A lead for a human, not proof of a shared cause. Each row carries the resolution kind, how long it took and an excerpt of the note written at resolution (flagged when only a later note exists).',
+          parameters: [
+            { name: 'id', in: 'path', required: true, schema: { type: 'string' } },
+            {
+              name: 'limit',
+              in: 'query',
+              description: 'Maximum similar incidents to return (1-10).',
+              schema: { type: 'integer', minimum: 1, maximum: 10, default: 5 },
+            },
+          ],
+          responses: {
+            '200': { description: 'Similar past incidents' },
+            '400': { $ref: '#/components/responses/ProblemError' },
+            '401': { $ref: '#/components/responses/ProblemError' },
+            '403': { $ref: '#/components/responses/ProblemError' },
+            '404': { $ref: '#/components/responses/ProblemError' },
+          },
+        },
+      },
+      '/users/me/on-call-shifts': {
+        get: {
+          tags: ['Users'],
+          summary: 'List the caller’s current and upcoming on-call shifts across all schedules',
+          description:
+            'Self-service read over every schedule the caller can read and takes part in (a rotation layer or an override), computed with the same rotation math as the schedule page. Back-to-back blocks in one schedule are one shift. Bounded to 30 days of look-ahead, 50 shifts and 25 schedules; truncated reports when a bound was reached.',
+          parameters: [
+            {
+              name: 'days',
+              in: 'query',
+              description: 'Look-ahead window in days (1-30).',
+              schema: { type: 'integer', minimum: 1, maximum: 30, default: 14 },
+            },
+            {
+              name: 'limit',
+              in: 'query',
+              description: 'Maximum number of shifts to return (1-50).',
+              schema: { type: 'integer', minimum: 1, maximum: 50, default: 20 },
+            },
+          ],
+          responses: {
+            '200': { description: 'The caller’s on-call shifts' },
+            '400': { $ref: '#/components/responses/ProblemError' },
             '401': { $ref: '#/components/responses/ProblemError' },
             '403': { $ref: '#/components/responses/ProblemError' },
           },
@@ -1458,8 +1773,18 @@ function buildBaseSpec(): Record<string, unknown> {
           summary: 'Calculate bounded effective coverage and gaps',
           parameters: [
             { name: 'id', in: 'path', required: true, schema: { type: 'string' } },
-            { name: 'start', in: 'query', required: true, schema: { type: 'string', format: 'date-time' } },
-            { name: 'end', in: 'query', required: true, schema: { type: 'string', format: 'date-time' } },
+            {
+              name: 'start',
+              in: 'query',
+              required: true,
+              schema: { type: 'string', format: 'date-time' },
+            },
+            {
+              name: 'end',
+              in: 'query',
+              required: true,
+              schema: { type: 'string', format: 'date-time' },
+            },
           ],
           responses: {
             '200': { description: 'Effective shifts and uncovered intervals' },

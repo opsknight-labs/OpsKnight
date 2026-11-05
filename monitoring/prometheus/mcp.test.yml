@@ -1,0 +1,240 @@
+rule_files:
+  - opsknight-alerts.yaml
+  - opsknight-recording-rules.yaml
+evaluation_interval: 1m
+tests:
+  - name: healthy MCP traffic pages nobody
+    interval: 1m
+    input_series:
+      - series: opsknight_mcp_requests_total{job="opsknight",instance="web-a",outcome="served",tool="incident_search"}
+        values: 0+600x30
+      - series: opsknight_mcp_requests_total{job="opsknight",instance="web-a",outcome="invalid_request",tool="incident_search"}
+        values: 0+60x30
+      - series: opsknight_mcp_queued{job="opsknight",instance="web-a"}
+        values: 0 1 0 2 0 1 0 0 1 0 0 1 0 0 0 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
+      - series: opsknight_mcp_oauth_requests_total{job="opsknight",instance="web-a",endpoint="token",outcome="issued"}
+        values: 0+60x30
+    promql_expr_test:
+      - expr: count(ALERTS{alertname=~"OpsKnightMcp.*",alertstate="firing"}) or vector(0)
+        eval_time: 20m
+        exp_samples:
+          - labels: '{}'
+            value: 0
+
+  - name: server errors page after ten minutes; client errors do not count
+    interval: 1m
+    input_series:
+      - series: opsknight_mcp_requests_total{job="opsknight",instance="web-a",outcome="served",tool="incident_search"}
+        values: 0+540x30
+      - series: opsknight_mcp_requests_total{job="opsknight",instance="web-a",outcome="unavailable",tool="incident_search"}
+        values: 0+60x30
+    promql_expr_test:
+      - expr: count(ALERTS{alertname="OpsKnightMcpServerErrorRateHigh",alertstate="firing"}) or vector(0)
+        eval_time: 5m
+        exp_samples:
+          - labels: '{}'
+            value: 0
+      - expr: count(ALERTS{alertname="OpsKnightMcpServerErrorRateHigh",alertstate="firing"}) or vector(0)
+        eval_time: 15m
+        exp_samples:
+          - labels: '{}'
+            value: 1
+      - expr: count(opsknight:mcp_server_error_ratio:rate5m > 0.05)
+        eval_time: 15m
+        exp_samples:
+          - labels: '{}'
+            value: 1
+
+  - name: tool errors above a quarter of traffic warn after fifteen minutes
+    interval: 1m
+    input_series:
+      - series: opsknight_mcp_requests_total{job="opsknight",instance="web-a",outcome="served",tool="call_operation"}
+        values: 0+60x40
+      - series: opsknight_mcp_requests_total{job="opsknight",instance="web-a",outcome="tool_error",tool="call_operation"}
+        values: 0+60x40
+    promql_expr_test:
+      - expr: count(ALERTS{alertname="OpsKnightMcpToolErrorRateHigh",alertstate="firing"}) or vector(0)
+        eval_time: 10m
+        exp_samples:
+          - labels: '{}'
+            value: 0
+      - expr: count(ALERTS{alertname="OpsKnightMcpToolErrorRateHigh",alertstate="firing"}) or vector(0)
+        eval_time: 25m
+        exp_samples:
+          - labels: '{}'
+            value: 1
+
+  - name: sustained shedding and a queue that never empties
+    interval: 1m
+    input_series:
+      - series: opsknight_mcp_busy_total{job="opsknight",instance="web-a"}
+        values: 0+12x30
+      - series: opsknight_mcp_queued{job="opsknight",instance="web-a"}
+        values: 1x30
+    promql_expr_test:
+      - expr: count(ALERTS{alertname="OpsKnightMcpShedding",alertstate="firing"}) or vector(0)
+        eval_time: 15m
+        exp_samples:
+          - labels: '{}'
+            value: 1
+      - expr: count(ALERTS{alertname="OpsKnightMcpQueueSaturated",alertstate="firing"}) or vector(0)
+        eval_time: 10m
+        exp_samples:
+          - labels: '{}'
+            value: 1
+
+  - name: an authentication storm with real volume
+    interval: 1m
+    input_series:
+      - series: opsknight_mcp_requests_total{job="opsknight",instance="web-a",outcome="unauthenticated",tool="none"}
+        values: 0+60x30
+      - series: opsknight_mcp_requests_total{job="opsknight",instance="web-a",outcome="served",tool="none"}
+        values: 0+30x30
+    promql_expr_test:
+      - expr: count(ALERTS{alertname="OpsKnightMcpAuthFailuresSpike",alertstate="firing"}) or vector(0)
+        eval_time: 15m
+        exp_samples:
+          - labels: '{}'
+            value: 1
+
+  - name: a trickle of failed authentications stays quiet
+    interval: 1m
+    input_series:
+      - series: opsknight_mcp_requests_total{job="opsknight",instance="web-a",outcome="unauthenticated",tool="none"}
+        values: 0+3x30
+    promql_expr_test:
+      - expr: count(ALERTS{alertname="OpsKnightMcpAuthFailuresSpike",alertstate="firing"}) or vector(0)
+        eval_time: 20m
+        exp_samples:
+          - labels: '{}'
+            value: 0
+
+  - name: slow served calls breach the p95 budget
+    interval: 1m
+    input_series:
+      - series: opsknight_mcp_request_duration_seconds_bucket{job="opsknight",instance="web-a",outcome="served",tool="incident_search",le="1"}
+        values: 0+0x30
+      - series: opsknight_mcp_request_duration_seconds_bucket{job="opsknight",instance="web-a",outcome="served",tool="incident_search",le="2.5"}
+        values: 0+0x30
+      - series: opsknight_mcp_request_duration_seconds_bucket{job="opsknight",instance="web-a",outcome="served",tool="incident_search",le="5"}
+        values: 0+60x30
+      - series: opsknight_mcp_request_duration_seconds_bucket{job="opsknight",instance="web-a",outcome="served",tool="incident_search",le="+Inf"}
+        values: 0+60x30
+    promql_expr_test:
+      - expr: count(ALERTS{alertname="OpsKnightMcpP95High",alertstate="firing"}) or vector(0)
+        eval_time: 15m
+        exp_samples:
+          - labels: '{}'
+            value: 1
+
+  - name: token refreshes failing on the server and mass invalid_grant
+    interval: 1m
+    input_series:
+      - series: opsknight_mcp_oauth_requests_total{job="opsknight",instance="web-a",endpoint="token",outcome="server_error"}
+        values: 0+6x40
+      - series: opsknight_mcp_oauth_requests_total{job="opsknight",instance="web-a",endpoint="token",outcome="invalid_grant"}
+        values: 0+60x40
+    promql_expr_test:
+      - expr: count(ALERTS{alertname="OpsKnightMcpTokenEndpointFailing",alertstate="firing"}) or vector(0)
+        eval_time: 15m
+        exp_samples:
+          - labels: '{}'
+            value: 1
+      - expr: count(ALERTS{alertname="OpsKnightMcpInvalidGrantSpike",alertstate="firing"}) or vector(0)
+        eval_time: 35m
+        exp_samples:
+          - labels: '{}'
+            value: 1
+
+  - name: MCP maintenance failing, then stalled
+    interval: 1m
+    input_series:
+      - series: opsknight_mcp_maintenance_runs_total{job="opsknight",instance="worker-a",task="credentials",result="failed"}
+        values: 0+1x60
+      - series: opsknight_mcp_maintenance_runs_total{job="opsknight",instance="worker-a",task="credentials",result="success"}
+        values: 5x60
+    promql_expr_test:
+      - expr: count(ALERTS{alertname="OpsKnightMcpMaintenanceFailing",alertstate="firing"}) or vector(0)
+        eval_time: 15m
+        exp_samples:
+          - labels: '{}'
+            value: 1
+      - expr: count(ALERTS{alertname="OpsKnightMcpMaintenanceStalled",alertstate="firing"}) or vector(0)
+        eval_time: 40m
+        exp_samples:
+          - labels: '{}'
+            value: 1
+
+  - name: healthy maintenance never reports stalled
+    interval: 1m
+    input_series:
+      - series: opsknight_mcp_maintenance_runs_total{job="opsknight",instance="worker-a",task="credentials",result="success"}
+        values: 0+1x60
+    promql_expr_test:
+      - expr: count(ALERTS{alertname=~"OpsKnightMcpMaintenance.*",alertstate="firing"}) or vector(0)
+        eval_time: 40m
+        exp_samples:
+          - labels: '{}'
+            value: 0
+
+  - name: sustained quota exhaustion and traffic while MCP is off
+    interval: 1m
+    input_series:
+      - series: opsknight_mcp_requests_total{job="opsknight",instance="web-a",outcome="rate_limited",tool="incident_search"}
+        values: 0+12x40
+      - series: opsknight_mcp_requests_total{job="opsknight",instance="web-a",outcome="disabled",tool="none"}
+        values: 0+6x40
+    promql_expr_test:
+      - expr: count(ALERTS{alertname="OpsKnightMcpRateLimited",alertstate="firing"}) or vector(0)
+        eval_time: 20m
+        exp_samples:
+          - labels: '{}'
+            value: 1
+      - expr: count(ALERTS{alertname="OpsKnightMcpDisabledTraffic",alertstate="firing"}) or vector(0)
+        eval_time: 38m
+        exp_samples:
+          - labels: '{}'
+            value: 1
+
+  - name: dropped request-log rows alert, and a quiet log stays quiet
+    interval: 1m
+    input_series:
+      - series: opsknight_mcp_call_log_dropped_total{job="opsknight",instance="web-a"}
+        values: 0+2x40
+      - series: opsknight_mcp_call_log_dropped_total{job="opsknight",instance="web-b"}
+        values: 7x40
+    promql_expr_test:
+      - expr: count(ALERTS{alertname="OpsKnightMcpCallLogDropping",alertstate="firing"}) or vector(0)
+        eval_time: 5m
+        exp_samples:
+          - labels: '{}'
+            value: 0
+      - expr: count(ALERTS{alertname="OpsKnightMcpCallLogDropping",alertstate="firing"}) or vector(0)
+        eval_time: 20m
+        exp_samples:
+          - labels: '{}'
+            value: 1
+
+  - name: listen streams near the cap alert only on the busy process
+    interval: 1m
+    input_series:
+      - series: opsknight_mcp_subscriptions_active{job="opsknight",instance="web-a"}
+        values: 30x40
+      - series: opsknight_mcp_subscriptions_active{job="opsknight",instance="web-b"}
+        values: 12x40
+    promql_expr_test:
+      - expr: count(ALERTS{alertname="OpsKnightMcpStreamsNearLimit",alertstate="firing"}) or vector(0)
+        eval_time: 5m
+        exp_samples:
+          - labels: '{}'
+            value: 0
+      - expr: count(ALERTS{alertname="OpsKnightMcpStreamsNearLimit",alertstate="firing",instance="web-a"}) or vector(0)
+        eval_time: 20m
+        exp_samples:
+          - labels: '{}'
+            value: 1
+      - expr: count(ALERTS{alertname="OpsKnightMcpStreamsNearLimit",alertstate="firing",instance="web-b"}) or vector(0)
+        eval_time: 20m
+        exp_samples:
+          - labels: '{}'
+            value: 0

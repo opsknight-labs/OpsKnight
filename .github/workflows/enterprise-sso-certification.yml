@@ -68,7 +68,7 @@ jobs:
           node-version: '22'
           generate-prisma: 'true'
       - name: Type check
-        run: npx tsc --noEmit
+        run: NODE_OPTIONS=--max-old-space-size=8192 npx tsc --noEmit
       - name: Authentication and provider unit regressions
         run: npx vitest run -c vitest.unit.config.ts tests/lib/auth tests/lib/oidc tests/actions/authentication-policy-actions.test.ts tests/components/authentication tests/api/authentication-diagnostics.test.ts tests/components/emergency-password-login.test.tsx tests/lib/providers/email-control-plane-failover.test.ts tests/api/provider-feedback-webhook.test.ts tests/lib/notification-control-plane.test.ts tests/api/metrics.test.ts tests/api/recovery-stream-policy.test.ts tests/lib/metrics-domain.test.ts
       - name: Apply additive migrations
@@ -150,6 +150,8 @@ jobs:
       - name: Production HTTPS recovery, password rotation and database restart
         env:
           SSO_CERT_CAPTURE_DIR: ${{ runner.temp }}/enterprise-authentication-captures
+          # The production build outgrew Node's default heap (about 3.4 GB) and ran out of memory.
+          NODE_OPTIONS: --max-old-space-size=6144
         run: python3 scripts/certify-enterprise-authentication-browser.py --build
       - uses: actions/upload-artifact@v4
         if: always()

@@ -32,10 +32,10 @@ export default function DashboardServiceHealth({ services }: DashboardServiceHea
     switch (status) {
       case 'OPERATIONAL':
         return {
-          bg: 'bg-green-50',
-          text: 'text-green-700',
-          border: 'border-green-200',
-          dotBg: 'bg-green-500',
+          bg: 'bg-emerald-50',
+          text: 'text-emerald-700',
+          border: 'border-emerald-200',
+          dotBg: 'bg-emerald-500',
           icon: <CheckCircle className="h-4 w-4" />,
           label: 'Operational',
         };

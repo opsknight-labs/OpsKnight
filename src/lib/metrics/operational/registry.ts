@@ -170,8 +170,8 @@ export const OPERATIONAL_METRICS = [
     kind: 'counter',
     labels: ['outcome', 'tool'],
     scope: 'counter',
-    // MCP_METRIC_OUTCOMES (16) x MCP_METRIC_TOOL_LABEL_LIMIT (48).
-    estimatedMaxSeries: 768,
+    // MCP_METRIC_OUTCOMES (16) x MCP_METRIC_TOOL_LABEL_LIMIT (64).
+    estimatedMaxSeries: 1024,
   },
   {
     name: 'opsknight_mcp_in_flight',
@@ -198,6 +198,14 @@ export const OPERATIONAL_METRICS = [
     estimatedMaxSeries: 1,
   },
   {
+    name: 'opsknight_mcp_call_log_dropped_total',
+    help: 'MCP activity log rows dropped because the write queue was full or a batch write failed',
+    kind: 'counter',
+    labels: [],
+    scope: 'counter',
+    estimatedMaxSeries: 1,
+  },
+  {
     name: 'opsknight_mcp_subscriptions_active',
     help: 'Open MCP subscriptions/listen streams on this process',
     kind: 'gauge',
@@ -206,14 +214,39 @@ export const OPERATIONAL_METRICS = [
     estimatedMaxSeries: 1,
   },
   {
+    name: 'opsknight_mcp_in_flight_limit',
+    help: 'MCP work-slot limit (policy maxInFlight) applied on this process; cluster capacity is this times web replicas',
+    kind: 'gauge',
+    labels: [],
+    scope: 'instance',
+    estimatedMaxSeries: 1,
+  },
+  {
     name: 'opsknight_mcp_request_duration_seconds',
-    help: 'MCP top-level request duration including admission and domain work, by bounded tool',
+    help: 'Duration of MCP requests that reached domain work (served, tool_error, task_created, result_too_large), by bounded outcome and tool',
     kind: 'histogram',
-    labels: ['tool'],
+    labels: ['outcome', 'tool'],
     scope: 'counter',
-    // 12 bucket, sum and count series per tool label (MCP_METRIC_TOOL_LABEL_LIMIT).
-    estimatedMaxSeries: 576,
+    // 12 bucket, sum and count series per MCP_TIMED_OUTCOMES (4) x MCP_METRIC_TOOL_LABEL_LIMIT (64).
+    estimatedMaxSeries: 3072,
     buckets: [0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10],
+  },
+  {
+    name: 'opsknight_mcp_oauth_requests_total',
+    help: 'MCP OAuth endpoint responses by endpoint and the outcome actually sent, without client or user identifiers',
+    kind: 'counter',
+    labels: ['endpoint', 'outcome'],
+    scope: 'counter',
+    // MCP_OAUTH_ENDPOINTS (5) x MCP_OAUTH_OUTCOMES (11).
+    estimatedMaxSeries: 55,
+  },
+  {
+    name: 'opsknight_mcp_maintenance_runs_total',
+    help: 'MCP maintenance runs (expired credentials, expired approvals and tasks) by task and result',
+    kind: 'counter',
+    labels: ['task', 'result'],
+    scope: 'counter',
+    estimatedMaxSeries: 4,
   },
   {
     name: 'opsknight_ingestion_enabled',

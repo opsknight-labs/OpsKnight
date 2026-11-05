@@ -12,6 +12,7 @@ import {
   GRANT_ACCESS_COLUMNS,
   grantAccessVerdict,
   usableGrantSql,
+  MCP_PAT_CLIENT_ID,
   type GrantAccessSnapshot,
   type McpGrantBlock,
 } from '@/lib/mcp/auth/effective-access';
@@ -165,7 +166,8 @@ export async function countPendingApprovals(viewer: McpViewer, now = new Date())
 
 export async function countActiveClients(viewer: McpViewer) {
   requireAdmin(viewer);
-  return prisma.mcpClient.count({ where: { revokedAt: null } });
+  // The internal client personal tokens hang off is not an assistant.
+  return prisma.mcpClient.count({ where: { revokedAt: null, id: { not: MCP_PAT_CLIENT_ID } } });
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -196,6 +198,10 @@ export type McpConnectionBlock = McpGrantBlock | 'mcp_disabled';
 
 export type McpGrantRow = {
   id: string;
+  /** oauth: an assistant's consent. pat: a personal access token. */
+  kind: 'oauth' | 'pat';
+  /** The name a personal token's owner gave it; null for OAuth connections. */
+  label: string | null;
   /** What the person approved. */
   scopes: string[];
   /** What the server honours today: approved scopes within the assistant's current ceiling. */
@@ -238,6 +244,7 @@ export function connectionAccess(row: GrantAccessSnapshot, now: Date, resource: 
 }
 
 type GrantListRow = GrantAccessSnapshot & {
+  label: string | null;
   createdAt: Date;
   lastUsedAt: Date | null;
   lastCallAt: Date | null;
@@ -279,12 +286,13 @@ export async function listMcpGrants(
   const scope = viewer.isAdmin ? Prisma.sql`TRUE` : Prisma.sql`g."userId" = ${viewer.id}`;
   const base = Prisma.sql`${scope}
     AND (${input.clientId}::text IS NULL OR g."clientId" = ${input.clientId})
-    AND (${input.q} = '' OR c.name ILIKE ${pattern}
+    AND (${input.q} = '' OR c.name ILIKE ${pattern} OR g.label ILIKE ${pattern}
       OR g."userId" = ANY(${personIds}::text[]))`;
   const [rows, [counts], client] = await Promise.all([
     // One statement for the page and what each connection may do right now.
     prisma.$queryRaw<GrantListRow[]>`
-      SELECT ${GRANT_ACCESS_COLUMNS}, g."createdAt", g."lastUsedAt", g."lastCallAt", g."lastTool",
+      SELECT ${GRANT_ACCESS_COLUMNS}, g.label, g."createdAt", g."lastUsedAt", g."lastCallAt",
+        g."lastTool",
         c.id AS "clientId", c.name AS "clientName", c."dynamicRegistration", c."metadataUrl"
       FROM ${GRANT_ACCESS_FROM}
       WHERE ${base} AND ${grantStatusSql(input.status, now)}
@@ -324,6 +332,8 @@ export async function listMcpGrants(
       const access = connectionAccess(row, now, resource);
       return {
         id: row.grantId,
+        kind: row.grantKind === 'PAT' ? 'pat' : 'oauth',
+        label: row.label,
         scopes: row.grantScopes,
         effectiveScopes: access.effectiveScopes,
         blockedReason: status === 'active' ? access.blockedReason : null,
@@ -422,12 +432,14 @@ export async function listMcpClients(
   requireAdmin(viewer);
   const where = (status: ClientStatus): Prisma.McpClientWhereInput => ({
     AND: [
+      // Personal tokens are listed under Connections; their internal client is not an assistant.
+      { id: { not: MCP_PAT_CLIENT_ID } },
       clientTypeWhere(input.type),
       clientStatusWhere(status),
       input.q ? { name: contains(input.q) } : {},
     ],
   });
-  const filter = Prisma.sql`${clientTypeSql(input.type)}
+  const filter = Prisma.sql`c.id <> ${MCP_PAT_CLIENT_ID} AND ${clientTypeSql(input.type)}
     AND (${input.q} = '' OR c.name ILIKE ${`%${input.q}%`})`;
   const [rows, [counts]] = await Promise.all([
     prisma.mcpClient.findMany({

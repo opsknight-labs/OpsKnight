@@ -20,7 +20,7 @@ export function SaveIndicator({ status, error, onRetry, className }: SaveIndicat
       className={cn(
         'flex items-center gap-2 text-sm transition-all duration-200',
         status === 'saving' && 'text-muted-foreground',
-        status === 'saved' && 'text-green-600 dark:text-green-400',
+        status === 'saved' && 'text-emerald-600 dark:text-emerald-400',
         status === 'error' && 'text-destructive',
         className
       )}

@@ -119,7 +119,7 @@ export default function PostmortemActionItems({
                     <div
                       className={cn(
                         'h-full transition-all duration-300',
-                        completionRate === 100 ? 'bg-green-500' : 'bg-blue-500'
+                        completionRate === 100 ? 'bg-emerald-500' : 'bg-blue-500'
                       )}
                       style={{ width: `${completionRate}%` }}
                     />

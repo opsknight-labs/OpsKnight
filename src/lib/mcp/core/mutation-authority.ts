@@ -3,6 +3,7 @@ import type { AuthorizationAction, AuthorizationActor } from '@/lib/authorizatio
 import { enforceV2Authorization } from '@/lib/api-v2/rbac';
 import { resolveMcpGrant } from '../auth/principal';
 import { requireMcp } from './errors';
+import { mcpPolicyInForce } from './kill-switch';
 import { isMcpCapabilityDisabled } from '../catalog/capabilities';
 
 /** Shared transaction fence for reviewed commands and canonical REST mutations. */
@@ -56,7 +57,11 @@ export async function lockMcpMutationAuthority(
   );
   for (const action of actions) enforceV2Authorization(auth.actor, action);
   const policy = await tx.mcpPolicy.findUnique({ where: { id: 'default' } });
-  requireMcp(policy?.enabled && policy.writesEnabled, 'MCP_OPERATION_DISABLED', 403);
+  requireMcp(
+    policy && mcpPolicyInForce(policy) && policy.writesEnabled,
+    'MCP_OPERATION_DISABLED',
+    403
+  );
   requireMcp(
     !isMcpCapabilityDisabled(policy.disabledCapabilities, ...capabilities),
     'MCP_CAPABILITY_DISABLED',

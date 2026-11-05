@@ -260,7 +260,7 @@ export async function initiatePasswordReset(
 
     if (emailConfig?.enabled) {
       const { getPasswordResetEmailTemplate } = await import('@/lib/password-reset-email-template');
-      const template = getPasswordResetEmailTemplate({
+      const template = await getPasswordResetEmailTemplate({
         userName: user.name || 'User',
         resetLink,
         expiryMinutes: RESET_TOKEN_TTL_MS / 60_000,
@@ -528,6 +528,19 @@ export async function completePasswordReset(
       const emailConfig = await getEmailConfig();
 
       if (emailConfig?.enabled) {
+        const changedAtText = `${now.toISOString()} (UTC)`;
+        const passwordChangedText = `Your OpsKnight password was changed at ${now.toISOString()}. If this was not you, contact your administrator immediately.`;
+        const { renderEmail } = await import('@/emails/render');
+        const { PasswordChangedEmail } = await import('@/emails/templates/password-changed');
+        const { getBaseUrl } = await import('@/lib/env-validation');
+        const { html: passwordChangedHtml } = await renderEmail(
+          PasswordChangedEmail({
+            userName: user.name || 'there',
+            changedAt: changedAtText,
+            loginUrl: `${getBaseUrl().replace(/\/+$/, '')}/login`,
+          }),
+          { text: passwordChangedText }
+        );
         await enqueueCentralNotification(
           {
             category: 'SECURITY',
@@ -545,8 +558,9 @@ export async function completePasswordReset(
             payload: {
               kind: 'EMAIL',
               to: user.email,
-              subject: 'Your OpsKnight password was changed',
-              text: `Your OpsKnight password was changed at ${now.toISOString()}. If this was not you, contact your administrator immediately.`,
+              subject: '[OpsKnight] Your password was changed',
+              html: passwordChangedHtml,
+              text: passwordChangedText,
             },
           },
           { dispatchImmediately: false }

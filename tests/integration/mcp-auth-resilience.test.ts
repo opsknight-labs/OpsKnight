@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { createHash } from 'node:crypto';
 import OAuth2Server from '@node-oauth/oauth2-server';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -5,6 +6,7 @@ import { createTestUser, resetDatabase, testPrisma as db } from '../helpers/test
 import prisma from '@/lib/prisma';
 import { mcpOAuthServer } from '@/lib/mcp/auth/oauth-model';
 import { mcpResource } from '@/lib/mcp/auth/config';
+import { clearDiscoveryPolicyCache } from '@/lib/mcp/auth/discovery-policy';
 import { authenticateMcp, resolveMcpGrant } from '@/lib/mcp/auth/principal';
 import { MCP_BAD_TOKEN_LIMIT, resetMcpAdmissionForTests } from '@/lib/mcp/auth/admission';
 import { POST as tokenExchange } from '@/app/oauth/mcp/token/route';
@@ -489,5 +491,106 @@ describe('B7: bad-token limiter on /mcp', () => {
     await expect(
       authenticateMcp(bearer(liveTokens.access_token, peer), null)
     ).resolves.toBeTruthy();
+  });
+});
+
+describe('SEC-9 / OBS-3: token lifecycle is attributed, logged and counted', () => {
+  const auditFor = (grantId: string, action: string) =>
+    db.auditLog.findFirstOrThrow({ where: { action, entityId: grantId } });
+  const metadataOf = (row: { details: unknown }) =>
+    (row.details as { metadata: Record<string, unknown> }).metadata;
+
+  it('names the user and client on a reuse revocation, and logs it', async () => {
+    const { logger } = await import('@/lib/logger');
+    const warn = vi.spyOn(logger, 'warn');
+    const f = await fixture();
+    const first = await access(f);
+    const next: Tokens = await (await refresh(f, first.refresh_token)).json();
+    await authenticateMcp(bearer(next.access_token), null);
+    expect((await refresh(f, first.refresh_token)).status).toBe(400);
+    const row = await auditFor(f.grant.id, 'mcp.grant.reuse_detected');
+    expect(row.actorId).toBe(f.user.id);
+    expect(metadataOf(row)).toMatchObject({
+      clientId: f.client.id,
+      clientName: 'MCP resilience',
+      reason: 'refresh_token_reuse',
+    });
+    expect(warn).toHaveBeenCalledWith('mcp.token.refresh_reuse_revoked', { grantId: f.grant.id });
+  });
+
+  it('names the user and client on an RFC 7009 revocation', async () => {
+    const f = await fixture();
+    const tokens = await access(f);
+    const response = await revokeToken(
+      new Request(`${origin}/oauth/mcp/revoke`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/x-www-form-urlencoded', 'x-request-id': 'rv-1' },
+        body: new URLSearchParams({
+          client_id: f.client.id,
+          token: tokens.access_token,
+        }).toString(),
+      })
+    );
+    expect(response.status).toBe(200);
+    expect(response.headers.get('X-Request-Id')).toBe('rv-1');
+    const row = await auditFor(f.grant.id, 'mcp.grant.revoked');
+    expect(row.actorId).toBe(f.user.id);
+    expect(metadataOf(row)).toMatchObject({ clientId: f.client.id, via: 'rfc7009' });
+  });
+
+  it('logs a grace reissue without an audit row', async () => {
+    const { logger } = await import('@/lib/logger');
+    const warn = vi.spyOn(logger, 'warn');
+    const f = await fixture();
+    const first = await access(f);
+    expect((await refresh(f, first.refresh_token)).status).toBe(200);
+    const auditsBefore = await db.auditLog.count({ where: { entityId: f.grant.id } });
+    expect((await refresh(f, first.refresh_token)).status).toBe(200);
+    expect(warn).toHaveBeenCalledWith(
+      'mcp.token.grace_reissued',
+      expect.objectContaining({ grantId: f.grant.id })
+    );
+    expect(await db.auditLog.count({ where: { entityId: f.grant.id } })).toBe(auditsBefore);
+  });
+
+  it('counts token responses by the outcome actually sent', async () => {
+    const { clearRuntimeOperationalMetrics, runtimeOperationalMetrics } =
+      await import('@/lib/metrics/operational/registry');
+    clearRuntimeOperationalMetrics();
+    const f = await fixture();
+    await access(f);
+    expect((await refresh(f, 'x'.repeat(43))).status).toBe(400);
+    const rows = runtimeOperationalMetrics().get('opsknight_mcp_oauth_requests_total') ?? [];
+    const value = (outcome: string) =>
+      rows.find(row => row.labels.endpoint === 'token' && row.labels.outcome === outcome)?.value;
+    expect(value('issued')).toBe(1);
+    expect(value('invalid_grant')).toBe(1);
+  });
+});
+
+describe('OBS-11: MCP_FORCE_DISABLED overrides an enabled policy', () => {
+  afterEach(() => vi.unstubAllEnvs());
+  it('refuses token refresh and bearer use, and hides registration from discovery', async () => {
+    const f = await fixture();
+    const tokens = await access(f);
+    await db.mcpPolicy.update({
+      where: { id: 'default' },
+      data: { dcrEnabled: true, dcrScopes: ['incidents:read'] },
+    });
+    // Discovery reads a short-lived policy memo (W1 SEC-12); a direct write must clear it.
+    clearDiscoveryPolicyCache();
+    expect((await (await authorizationMetadata()).json()).registration_endpoint).toBeDefined();
+    vi.stubEnv('MCP_FORCE_DISABLED', 'true');
+    const refused = await refresh(f, tokens.refresh_token);
+    expect(refused.status).toBe(503);
+    expect((await refused.json()).error).toBe('MCP_DISABLED');
+    await expect(authenticateMcp(bearer(tokens.access_token), null)).rejects.toThrow(
+      'MCP_DISABLED'
+    );
+    const metadata = await (await authorizationMetadata()).json();
+    expect(metadata.registration_endpoint).toBeUndefined();
+    expect(metadata.scopes_supported).toBeUndefined();
+    vi.unstubAllEnvs();
+    await expect(authenticateMcp(bearer(tokens.access_token), null)).resolves.toBeTruthy();
   });
 });

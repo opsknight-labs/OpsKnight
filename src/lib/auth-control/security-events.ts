@@ -209,7 +209,7 @@ export async function processAuthenticationAlerts() {
         continue;
       }
       const { enqueueCentralNotification } = await import('@/lib/notification-control-plane');
-      const template = getAuthenticationSecurityEmailTemplate({
+      const template = await getAuthenticationSecurityEmailTemplate({
         title: alert.title,
         message: alert.message,
         eventId: alert.eventId,

@@ -50,6 +50,29 @@ function convertNullable(node: unknown): unknown {
   return out;
 }
 
+/** Where the escalation policy stands for one incident; shared by the detail read and escalate. */
+const INCIDENT_ESCALATION_STATE: Json = {
+  type: 'object',
+  description: 'Where the escalation policy stands for this incident.',
+  properties: {
+    step: {
+      type: ['integer', 'null'],
+      description: 'Zero-based index of the escalation step last notified.',
+    },
+    status: {
+      type: ['string', 'null'],
+      description:
+        'Escalation state: ESCALATING, COMPLETED or FAILED; null before escalation starts.',
+    },
+    nextAt: {
+      type: ['string', 'null'],
+      format: 'date-time',
+      description: 'When the next step is due; null when nothing is scheduled.',
+    },
+  },
+  required: ['step', 'status', 'nextAt'],
+};
+
 const extraSchemas: Json = {
   ChatOpsConfiguration: {
     type: 'object',
@@ -1196,6 +1219,42 @@ const extraSchemas: Json = {
     },
     required: ['id', 'title', 'status', 'urgency', 'updatedAt'],
   },
+  IncidentEscalation: {
+    type: 'object',
+    description: 'Result of POST /incidents/{id}/escalate, with who was paged.',
+    properties: {
+      requested: { type: 'boolean', description: 'False when the incident was not escalatable.' },
+      reason: {
+        type: ['string', 'null'],
+        enum: ['INCIDENT_NOT_ESCALATABLE', null],
+        description: 'Why nothing was paged: only an OPEN incident escalates.',
+      },
+      outcome: { type: ['string', 'null'], description: 'Escalation engine outcome.' },
+      escalated: { type: 'boolean', description: 'True only when a step paged someone.' },
+      paged: {
+        type: ['object', 'null'],
+        properties: {
+          stepIndex: { type: ['integer', 'null'] },
+          targetType: { type: ['string', 'null'] },
+          targetName: { type: ['string', 'null'] },
+          targetCount: { type: ['integer', 'null'] },
+        },
+      },
+      incident: {
+        type: 'object',
+        properties: {
+          id: { type: 'string' },
+          status: {
+            type: 'string',
+            enum: ['OPEN', 'ACKNOWLEDGED', 'RESOLVED', 'SNOOZED', 'SUPPRESSED'],
+          },
+          escalation: INCIDENT_ESCALATION_STATE,
+        },
+        required: ['id', 'status', 'escalation'],
+      },
+    },
+    required: ['requested', 'reason', 'outcome', 'escalated', 'paged', 'incident'],
+  },
   IncidentAssignment: {
     type: 'object',
     description: 'Assignment state after POST /incidents/{id}/assign.',
@@ -1216,6 +1275,434 @@ const extraSchemas: Json = {
       updatedAt: { type: 'string', format: 'date-time' },
     },
     required: ['id', 'status', 'updatedAt'],
+  },
+  OnCallNow: {
+    type: 'object',
+    description: 'Who is on call now, and who is next, for each schedule the caller can read.',
+    properties: {
+      userId: { type: 'string' },
+      now: { type: 'string', format: 'date-time' },
+      scope: { type: 'string', enum: ['mine', 'all'] },
+      iAmOnCall: { type: 'boolean' },
+      schedules: {
+        type: 'array',
+        maxItems: 50,
+        items: {
+          type: 'object',
+          properties: {
+            scheduleId: { type: 'string' },
+            scheduleName: { type: 'string' },
+            scheduleTimeZone: { type: 'string' },
+            onCall: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  userId: { type: 'string' },
+                  name: { type: ['string', 'null'] },
+                  start: { type: 'string', format: 'date-time' },
+                  end: { type: 'string', format: 'date-time' },
+                  startClamped: {
+                    type: 'boolean',
+                    description: 'Coverage runs back past the lookback limit; start is that limit.',
+                  },
+                  endClamped: {
+                    type: 'boolean',
+                    description: 'Coverage runs on past the lookahead limit; end is that limit.',
+                  },
+                },
+                required: ['userId', 'name', 'start', 'end', 'startClamped', 'endClamped'],
+              },
+            },
+            next: {
+              type: ['object', 'null'],
+              properties: {
+                userId: { type: 'string' },
+                name: { type: ['string', 'null'] },
+                start: { type: 'string', format: 'date-time' },
+                end: { type: 'string', format: 'date-time' },
+              },
+              required: ['userId', 'name', 'start', 'end'],
+            },
+            gap: { type: 'boolean', description: 'Nobody is on call right now.' },
+          },
+          required: ['scheduleId', 'scheduleName', 'scheduleTimeZone', 'onCall', 'next', 'gap'],
+        },
+      },
+      gaps: { type: 'integer', minimum: 0 },
+      truncated: { type: 'boolean' },
+      schedulesEvaluated: { type: 'integer', minimum: 0 },
+    },
+    required: [
+      'userId',
+      'now',
+      'scope',
+      'iAmOnCall',
+      'schedules',
+      'gaps',
+      'truncated',
+      'schedulesEvaluated',
+    ],
+  },
+  CatchUp: {
+    type: 'object',
+    description: 'What opened, resolved and is still active since a point in time.',
+    properties: {
+      userId: { type: 'string' },
+      since: { type: 'string', format: 'date-time' },
+      now: { type: 'string', format: 'date-time' },
+      scope: { type: 'string', enum: ['mine', 'all'] },
+      filters: {
+        type: 'object',
+        properties: {
+          serviceId: { type: ['string', 'null'] },
+          teamId: { type: ['string', 'null'] },
+          urgency: { type: ['string', 'null'], enum: ['HIGH', 'MEDIUM', 'LOW', null] },
+        },
+        required: ['serviceId', 'teamId', 'urgency'],
+      },
+      myTeamCount: {
+        type: 'integer',
+        minimum: 0,
+        description: 'Teams the caller belongs to; 0 explains an empty scope=mine result.',
+      },
+      counts: {
+        type: 'object',
+        properties: {
+          opened: { type: 'integer', minimum: 0 },
+          resolved: { type: 'integer', minimum: 0 },
+          active: { type: 'integer', minimum: 0 },
+        },
+        required: ['opened', 'resolved', 'active'],
+      },
+      active: {
+        type: 'array',
+        maxItems: 25,
+        items: {
+          type: 'object',
+          properties: {
+            id: { type: 'string' },
+            title: { type: 'string' },
+            status: {
+              type: 'string',
+              enum: ['OPEN', 'ACKNOWLEDGED', 'RESOLVED', 'SNOOZED', 'SUPPRESSED'],
+            },
+            urgency: { type: 'string', enum: ['LOW', 'MEDIUM', 'HIGH'] },
+            priority: { type: ['string', 'null'] },
+            serviceId: { type: 'string' },
+            serviceName: { type: 'string' },
+            assignedToMe: { type: 'boolean' },
+            openedSinceThen: { type: 'boolean' },
+            createdAt: { type: 'string', format: 'date-time' },
+            acknowledgedAt: { type: ['string', 'null'], format: 'date-time' },
+            resolvedAt: { type: ['string', 'null'], format: 'date-time' },
+          },
+          required: [
+            'id',
+            'title',
+            'status',
+            'urgency',
+            'priority',
+            'serviceId',
+            'serviceName',
+            'assignedToMe',
+            'openedSinceThen',
+            'createdAt',
+            'acknowledgedAt',
+            'resolvedAt',
+          ],
+        },
+      },
+      assignedToMe: {
+        type: 'array',
+        maxItems: 25,
+        items: {
+          type: 'object',
+          properties: {
+            id: { type: 'string' },
+            title: { type: 'string' },
+            status: {
+              type: 'string',
+              enum: ['OPEN', 'ACKNOWLEDGED', 'RESOLVED', 'SNOOZED', 'SUPPRESSED'],
+            },
+            urgency: { type: 'string', enum: ['LOW', 'MEDIUM', 'HIGH'] },
+            priority: { type: ['string', 'null'] },
+            serviceId: { type: 'string' },
+            serviceName: { type: 'string' },
+            assignedToMe: { type: 'boolean' },
+            openedSinceThen: { type: 'boolean' },
+            createdAt: { type: 'string', format: 'date-time' },
+            acknowledgedAt: { type: ['string', 'null'], format: 'date-time' },
+            resolvedAt: { type: ['string', 'null'], format: 'date-time' },
+          },
+          required: [
+            'id',
+            'title',
+            'status',
+            'urgency',
+            'priority',
+            'serviceId',
+            'serviceName',
+            'assignedToMe',
+            'openedSinceThen',
+            'createdAt',
+            'acknowledgedAt',
+            'resolvedAt',
+          ],
+        },
+      },
+      recentlyResolved: {
+        type: 'array',
+        maxItems: 25,
+        items: {
+          type: 'object',
+          properties: {
+            id: { type: 'string' },
+            title: { type: 'string' },
+            status: {
+              type: 'string',
+              enum: ['OPEN', 'ACKNOWLEDGED', 'RESOLVED', 'SNOOZED', 'SUPPRESSED'],
+            },
+            urgency: { type: 'string', enum: ['LOW', 'MEDIUM', 'HIGH'] },
+            priority: { type: ['string', 'null'] },
+            serviceId: { type: 'string' },
+            serviceName: { type: 'string' },
+            assignedToMe: { type: 'boolean' },
+            openedSinceThen: { type: 'boolean' },
+            createdAt: { type: 'string', format: 'date-time' },
+            acknowledgedAt: { type: ['string', 'null'], format: 'date-time' },
+            resolvedAt: { type: ['string', 'null'], format: 'date-time' },
+          },
+          required: [
+            'id',
+            'title',
+            'status',
+            'urgency',
+            'priority',
+            'serviceId',
+            'serviceName',
+            'assignedToMe',
+            'openedSinceThen',
+            'createdAt',
+            'acknowledgedAt',
+            'resolvedAt',
+          ],
+        },
+      },
+      pagedMe: {
+        type: 'object',
+        description:
+          'Incidents that notified the caller in the window, from their own notification history.',
+        properties: {
+          count: { type: 'integer', minimum: 0 },
+          items: {
+            type: 'array',
+            maxItems: 25,
+            items: {
+              type: 'object',
+              properties: {
+                incident: {
+                  type: 'object',
+                  properties: {
+                    id: { type: 'string' },
+                    title: { type: 'string' },
+                    urgency: { type: 'string', enum: ['LOW', 'MEDIUM', 'HIGH'] },
+                    status: {
+                      type: 'string',
+                      enum: ['OPEN', 'ACKNOWLEDGED', 'RESOLVED', 'SNOOZED', 'SUPPRESSED'],
+                    },
+                  },
+                  required: ['id', 'title', 'urgency', 'status'],
+                },
+                lastEventType: { type: 'string' },
+                lastAt: { type: 'string', format: 'date-time' },
+                channels: { type: 'array', items: { type: 'string' } },
+                delivered: { type: 'boolean' },
+              },
+              required: ['incident', 'lastEventType', 'lastAt', 'channels', 'delivered'],
+            },
+          },
+        },
+        required: ['count', 'items'],
+      },
+      truncated: {
+        type: 'object',
+        properties: {
+          active: { type: 'boolean' },
+          recentlyResolved: { type: 'boolean' },
+          pagedMe: { type: 'boolean' },
+        },
+        required: ['active', 'recentlyResolved', 'pagedMe'],
+      },
+    },
+    required: [
+      'userId',
+      'since',
+      'now',
+      'scope',
+      'filters',
+      'myTeamCount',
+      'counts',
+      'active',
+      'assignedToMe',
+      'recentlyResolved',
+      'pagedMe',
+      'truncated',
+    ],
+  },
+  SimilarIncidents: {
+    type: 'object',
+    description: 'Past resolved incidents that look like one incident, with how each ended.',
+    properties: {
+      incidentId: { type: 'string' },
+      basis: { type: 'string', enum: ['TITLE_AND_SERVICE'] },
+      candidatesConsidered: { type: 'integer', minimum: 0 },
+      similar: {
+        type: 'array',
+        maxItems: 10,
+        items: {
+          type: 'object',
+          properties: {
+            incident: {
+              type: 'object',
+              properties: {
+                id: { type: 'string' },
+                title: { type: 'string' },
+                priority: { type: ['string', 'null'] },
+                serviceId: { type: 'string' },
+                serviceName: { type: 'string' },
+                createdAt: { type: 'string', format: 'date-time' },
+                resolvedAt: { type: ['string', 'null'], format: 'date-time' },
+              },
+              required: [
+                'id',
+                'title',
+                'priority',
+                'serviceId',
+                'serviceName',
+                'createdAt',
+                'resolvedAt',
+              ],
+            },
+            similarity: { type: 'number', minimum: 0, maximum: 1 },
+            reasons: {
+              type: 'array',
+              items: { type: 'string', enum: ['TITLE_OVERLAP', 'SAME_SERVICE', 'SAME_PRIORITY'] },
+            },
+            resolutionKind: {
+              type: ['string', 'null'],
+              enum: ['MANUAL', 'SOURCE_RECOVERY', 'AUTOMATION', 'AUTO_TIMEOUT', 'UNKNOWN', null],
+            },
+            durationMinutes: { type: ['integer', 'null'], minimum: 0 },
+            lastNote: {
+              type: ['object', 'null'],
+              properties: {
+                excerpt: { type: 'string' },
+                createdAt: { type: 'string', format: 'date-time' },
+                writtenBeforeResolution: {
+                  type: 'boolean',
+                  description:
+                    'True only when the note was written at or before the incident was resolved; false means it was written afterwards (a closing note typed moments after the click, or a later follow-up).',
+                },
+              },
+              required: ['excerpt', 'createdAt', 'writtenBeforeResolution'],
+            },
+          },
+          required: [
+            'incident',
+            'similarity',
+            'reasons',
+            'resolutionKind',
+            'durationMinutes',
+            'lastNote',
+          ],
+        },
+      },
+      truncated: { type: 'boolean' },
+    },
+    required: ['incidentId', 'basis', 'candidatesConsidered', 'similar', 'truncated'],
+  },
+  MyOnCallShifts: {
+    type: 'object',
+    description: 'The caller’s current and upcoming on-call shifts across every readable schedule.',
+    properties: {
+      userId: { type: 'string' },
+      now: { type: 'string', format: 'date-time' },
+      windowEnd: { type: 'string', format: 'date-time' },
+      onCallNow: { type: 'boolean' },
+      nextHandoff: {
+        type: ['object', 'null'],
+        description:
+          'The next moment the caller’s on-call status changes, if any within the window.',
+        properties: {
+          at: { type: 'string', format: 'date-time' },
+          change: { type: 'string', enum: ['SHIFT_ENDS', 'SHIFT_STARTS'] },
+          scheduleId: { type: 'string' },
+          scheduleName: { type: 'string' },
+          handoffTo: {
+            type: ['object', 'null'],
+            properties: { userId: { type: 'string' }, name: { type: ['string', 'null'] } },
+            required: ['userId', 'name'],
+          },
+        },
+        required: ['at', 'change', 'scheduleId', 'scheduleName'],
+      },
+      shifts: {
+        type: 'array',
+        maxItems: 50,
+        items: {
+          type: 'object',
+          properties: {
+            scheduleId: { type: 'string' },
+            scheduleName: { type: 'string' },
+            scheduleTimeZone: { type: 'string' },
+            start: { type: 'string', format: 'date-time' },
+            end: { type: 'string', format: 'date-time' },
+            current: { type: 'boolean' },
+            startClamped: {
+              type: 'boolean',
+              description:
+                'True when coverage runs back past the lookback limit, so start is that limit, not the real start.',
+            },
+            endClamped: {
+              type: 'boolean',
+              description:
+                'True when coverage runs on past the lookahead limit, so end is that limit, not the real end.',
+            },
+            handoffTo: {
+              type: ['object', 'null'],
+              description:
+                'Who is on call in the same schedule when this shift ends; null for a gap or a clamped end.',
+              properties: { userId: { type: 'string' }, name: { type: ['string', 'null'] } },
+              required: ['userId', 'name'],
+            },
+          },
+          required: [
+            'scheduleId',
+            'scheduleName',
+            'scheduleTimeZone',
+            'start',
+            'end',
+            'current',
+            'startClamped',
+            'endClamped',
+            'handoffTo',
+          ],
+        },
+      },
+      truncated: { type: 'boolean' },
+      schedulesEvaluated: { type: 'integer', minimum: 0 },
+    },
+    required: [
+      'userId',
+      'now',
+      'windowEnd',
+      'onCallNow',
+      'nextHandoff',
+      'shifts',
+      'truncated',
+      'schedulesEvaluated',
+    ],
   },
   ScheduleOnCall: {
     type: 'object',
@@ -1239,11 +1726,27 @@ const extraSchemas: Json = {
             email: { type: 'string' },
             role: { type: 'string' },
             timeZone: { type: ['string', 'null'] },
+            shiftEndsAt: {
+              type: ['string', 'null'],
+              format: 'date-time',
+              description:
+                'When this person stops being on call; null when the shift runs past the seven-day lookahead.',
+            },
           },
         },
       },
+      next: {
+        type: ['object', 'null'],
+        description: 'The next person to come on call within seven days, if anyone.',
+        properties: {
+          userId: { type: 'string' },
+          name: { type: ['string', 'null'] },
+          start: { type: 'string', format: 'date-time' },
+        },
+        required: ['userId', 'name', 'start'],
+      },
     },
-    required: ['schedule', 'at', 'onCallUsers'],
+    required: ['schedule', 'at', 'onCallUsers', 'next'],
   },
   ScheduleOverride: {
     type: 'object',
@@ -1623,6 +2126,34 @@ export function finalizeOpenApiSpec(base: Json): Json {
     slaAckElapsedMs: { type: ['integer', 'null'] },
     slaResolveElapsedMs: { type: ['integer', 'null'] },
   });
+  // GET /incidents/{id} alone adds where escalation stands and the SLA targets; lists stay lean.
+  const incident = spec.components.schemas.Incident as Json;
+  spec.components.schemas.IncidentDetail = {
+    ...incident,
+    properties: {
+      ...incident.properties,
+      escalation: INCIDENT_ESCALATION_STATE,
+      sla: {
+        type: 'object',
+        description: 'SLA targets captured for this incident against time spent so far.',
+        properties: {
+          ackTargetMs: { type: ['integer', 'null'] },
+          resolveTargetMs: { type: ['integer', 'null'] },
+          ackElapsedMs: { type: ['integer', 'null'] },
+          resolveElapsedMs: { type: ['integer', 'null'] },
+          pausedMs: { type: ['integer', 'null'] },
+        },
+        required: [
+          'ackTargetMs',
+          'resolveTargetMs',
+          'ackElapsedMs',
+          'resolveElapsedMs',
+          'pausedMs',
+        ],
+      },
+    },
+    required: [...(incident.required ?? []), 'escalation', 'sla'],
+  };
   spec.components.schemas.Runbook.properties.steps = {
     type: 'array',
     items: { $ref: '#/components/schemas/RunbookStep' },

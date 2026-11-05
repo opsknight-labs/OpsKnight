@@ -192,18 +192,18 @@ export async function getActiveOnCallShifts(
 
 /**
  * Resolves shifts in a time window for coverage and on-call hours calculations.
- * Pass a schedule id for bounded single-schedule API reads.
+ * Pass a schedule id (or a bounded schedule filter) for API reads.
  */
 export async function getWindowOnCallShifts(
   windowStart: Date,
   windowEnd: Date,
-  scheduleId?: string
+  scheduleIdOrWhere?: string | Prisma.OnCallScheduleWhereInput
 ): Promise<DynamicOnCallShift[]> {
   if (!prisma?.onCallSchedule?.findMany) {
     return [];
   }
   const schedules = await prisma.onCallSchedule.findMany({
-    where: scheduleId ? { id: scheduleId } : undefined,
+    where: typeof scheduleIdOrWhere === 'string' ? { id: scheduleIdOrWhere } : scheduleIdOrWhere,
     include: {
       layers: {
         include: {
@@ -336,4 +336,49 @@ export async function getWindowOnCallShifts(
   }
 
   return shifts;
+}
+
+/** How far ahead a shift end or the next handover is looked up. */
+export const HANDOVER_LOOKAHEAD_MS = 7 * 24 * 60 * 60 * 1000;
+
+/**
+ * When each on-call user's current shift ends and who takes over next, from the same rotation
+ * math the schedule page uses. Back-to-back blocks for one person are one shift. A shift that
+ * runs past the lookahead window has no known end (null).
+ */
+export function handoverFromShifts(
+  shifts: readonly Pick<DynamicOnCallShift, 'userId' | 'start' | 'end' | 'user'>[],
+  onCallUserIds: readonly string[],
+  at: Date,
+  windowEnd: Date
+) {
+  const ordered = [...shifts].sort((a, b) => a.start.getTime() - b.start.getTime());
+  const shiftEnds = new Map<string, string | null>();
+  for (const userId of onCallUserIds) {
+    let end: number | null = null;
+    for (const shift of ordered) {
+      if (shift.userId !== userId) continue;
+      const start = shift.start.getTime();
+      if (end === null ? start <= at.getTime() && shift.end.getTime() > at.getTime() : start <= end)
+        end = Math.max(end ?? 0, shift.end.getTime());
+    }
+    shiftEnds.set(
+      userId,
+      end === null || end >= windowEnd.getTime() ? null : new Date(end).toISOString()
+    );
+  }
+  const current = new Set(onCallUserIds);
+  const upcoming = ordered.find(
+    shift => shift.start.getTime() > at.getTime() && !current.has(shift.userId)
+  );
+  return {
+    shiftEnds,
+    next: upcoming
+      ? {
+          userId: upcoming.userId,
+          name: upcoming.user.name,
+          start: upcoming.start.toISOString(),
+        }
+      : null,
+  };
 }

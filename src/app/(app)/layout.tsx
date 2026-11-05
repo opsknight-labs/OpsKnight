@@ -3,6 +3,7 @@ import OperationalStatus from '@/components/OperationalStatus';
 import { Suspense } from 'react';
 import { redirect } from 'next/navigation';
 import SquireMount from '@/components/squire/SquireMount';
+import { forcedSignOutUrl } from '@/lib/app-routes';
 
 import Sidebar from '@/components/Sidebar';
 import DatabaseOffline from '@/components/DatabaseOffline';
@@ -90,7 +91,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       />
     );
   }
-  if (!shell) redirect('/api/auth/signout?callbackUrl=/login?error=SessionExpired');
+  if (!shell) redirect(forcedSignOutUrl('desktop', { error: 'SessionExpired' }));
   const activeShell: AppShellContext = shell;
 
   const userName = activeShell.user.name;

@@ -1,14 +1,7 @@
-import {
-  EmailContainer,
-  EmailHeader,
-  EmailContent,
-  EmailButton,
-  EmailFooter,
-  InfoCard,
-  StatusBadge,
-  AlertBox,
-  escapeHtml,
-} from './email-components';
+import { renderEmail } from '@/emails/render';
+import { AuthSecurityEmail } from '@/emails/templates/auth-security';
+import { SsoInviteEmail } from '@/emails/templates/sso-invite';
+import type { EmailTone } from '@/emails/tokens';
 
 type Tone = 'info' | 'success' | 'warning' | 'error';
 type Presentation = { title: string; tone: Tone; label: string; guidance: string };
@@ -174,11 +167,11 @@ const presentations: Record<string, Presentation> = {
       'Confirm the invited identity and assigned access in the user directory. The user must complete a verified provider sign-in before the first-link approval expires.',
   },
 };
-const colors = {
-  info: { accent: '#2563eb', gradient: 'linear-gradient(135deg, #1e3a8a 0%, #2563eb 100%)' },
-  success: { accent: '#059669', gradient: 'linear-gradient(135deg, #064e3b 0%, #059669 100%)' },
-  warning: { accent: '#d97706', gradient: 'linear-gradient(135deg, #78350f 0%, #d97706 100%)' },
-  error: { accent: '#be123c', gradient: 'linear-gradient(135deg, #881337 0%, #be123c 100%)' },
+const tones: Record<Tone, EmailTone> = {
+  info: 'info',
+  success: 'ok',
+  warning: 'elevated',
+  error: 'critical',
 };
 
 /** Uses the already-authoritative origin, never a URL from event context. */
@@ -188,13 +181,13 @@ export function authenticationEmailUrls(origin: string) {
     throw new Error('Canonical authentication origin unavailable.');
   return {
     instance: base.origin,
-    logo: new URL('/logo.png', base).href,
+    logo: new URL('/images/email/opsknight-logo@2x.png', base).href,
     review: new URL('/settings/system?section=sso&authTab=diagnostics&authView=audit', base).href,
     login: new URL('/login', base).href,
   };
 }
 
-export function getAuthenticationSecurityEmailTemplate(data: {
+export async function getAuthenticationSecurityEmailTemplate(data: {
   title: string;
   message: string;
   eventId: string;
@@ -223,7 +216,6 @@ export function getAuthenticationSecurityEmailTemplate(data: {
           guidance:
             'Review the recorded authentication event and confirm the activity was authorized. If it was unexpected, contact your deployment administrator using an independent channel.',
         });
-  const color = colors[presentation.tone];
   const when = (recorded?.createdAt ?? data.createdAt).toISOString();
   const items = [
     { label: 'Instance', value: urls.instance, highlight: true },
@@ -236,33 +228,24 @@ export function getAuthenticationSecurityEmailTemplate(data: {
         ]
       : []),
   ];
-  const html = EmailContainer(
-    EmailHeader(presentation.title, 'OpsKnight Authentication Security', {
-      headerGradient: color.gradient,
+  const text = `${presentation.title}\n\n${items.map(item => `${item.label}: ${item.value}`).join('\n')}\n\n${data.message}\n\nRecommended next step\n${presentation.guidance}\n\nReview authentication activity: ${urls.review}\nOr open your known OpsKnight instance and go to System → SSO / Authentication → Diagnostics.\nNo password or security-key response is requested by email.\n\nOpsKnight — https://opsknight.com/`;
+  const { html } = await renderEmail(
+    AuthSecurityEmail({
+      title: presentation.title,
+      label: presentation.label,
+      tone: tones[presentation.tone],
+      guidance: presentation.guidance,
+      message: data.message,
+      details: items,
+      reviewUrl: urls.review,
       logoUrl: urls.logo,
-    }) +
-      EmailContent(`
-      <div style="margin-bottom:16px">${StatusBadge(presentation.label, presentation.tone)}</div>
-      <h2 class="desktop-font-title dm-text-heading" style="font-size:20px;font-weight:700;color:#0f172a;margin:0 0 16px;line-height:1.35;">${escapeHtml(presentation.title)}</h2>
-      ${InfoCard(items, { accentColor: color.accent })}
-      <div class="desktop-font-body dm-desc-box" style="margin-top:20px;background:#f8fafc;border:1px solid #e2e8f0;border-left:4px solid ${color.accent};border-radius:8px;padding:14px 18px;">
-        <div class="dm-desc-label" style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:#64748b;margin-bottom:6px;">Recorded security summary</div>
-        <div class="dm-desc-text" style="white-space:pre-wrap;word-break:break-word;font-size:14px;color:#334155;line-height:1.6;">${escapeHtml(data.message)}</div>
-      </div>
-      ${AlertBox('Recommended next step', presentation.guidance, presentation.tone)}
-      ${EmailButton('Review authentication activity', urls.review, { buttonBackground: color.gradient })}
-      <p class="dm-text-muted" style="font-size:12px;color:#64748b;line-height:1.6;word-break:break-word;">You can also open your known OpsKnight instance directly and go to System → SSO / Authentication → Diagnostics. No password or security-key response is requested by email.</p>
-    `) +
-      EmailFooter()
+    }),
+    { text }
   );
-  return {
-    subject: `[OpsKnight] ${presentation.title}`,
-    html,
-    text: `${presentation.title}\n\n${items.map(item => `${item.label}: ${item.value}`).join('\n')}\n\n${data.message}\n\nRecommended next step\n${presentation.guidance}\n\nReview authentication activity: ${urls.review}\nOr open your known OpsKnight instance and go to System → SSO / Authentication → Diagnostics.\nNo password or security-key response is requested by email.\n\nOpsKnight — https://opsknight.com/`,
-  };
+  return { subject: `[OpsKnight] ${presentation.title}`, html, text };
 }
 
-export function getSsoInvitationEmailTemplate(data: {
+export async function getSsoInvitationEmailTemplate(data: {
   userName: string;
   inviteUrl: string;
   invitedBy?: string;
@@ -279,28 +262,17 @@ export function getSsoInvitationEmailTemplate(data: {
     { label: 'First-link approval', value: `Expires in ${expiry}` },
     ...(data.invitedBy ? [{ label: 'Invited by', value: data.invitedBy }] : []),
   ];
-  return {
-    subject: '[OpsKnight] Invitation to sign in with SSO',
-    html: EmailContainer(
-      EmailHeader('Your SSO invitation', 'OpsKnight Account Access', {
-        headerGradient: colors.info.gradient,
-        logoUrl: urls.logo,
-      }) +
-        EmailContent(`
-        <div style="margin-bottom:16px">${StatusBadge('Invitation', 'info')}</div>
-        <h2 class="desktop-font-title dm-text-heading" style="font-size:20px;font-weight:700;color:#0f172a;margin:0 0 16px;line-height:1.35;">Hi ${escapeHtml(name)},</h2>
-        <p class="desktop-font-body dm-text-body" style="font-size:14px;color:#475569;line-height:1.6;">You have been invited${data.invitedBy ? ` by ${escapeHtml(data.invitedBy)}` : ''} to join OpsKnight.</p>
-        ${InfoCard(items, { accentColor: colors.info.accent })}
-        <div class="desktop-font-body dm-desc-box" style="margin-top:20px;background:#f8fafc;border:1px solid #e2e8f0;border-left:4px solid #2563eb;border-radius:8px;padding:14px 18px;">
-          <div class="dm-desc-label" style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:#64748b;margin-bottom:6px;">Sign in to accept</div>
-          <div class="dm-desc-text" style="font-size:14px;color:#334155;line-height:1.6;">${summary}</div>
-        </div>
-        ${EmailButton('Sign in with SSO', urls.login, { buttonBackground: colors.info.gradient })}
-        <p class="dm-text-muted" style="font-size:12px;color:#64748b;line-height:1.6;word-break:break-word;">You can also open <a href="${escapeHtml(urls.login)}" class="dm-link-color" style="color:#2563eb;">${escapeHtml(urls.login)}</a> directly and choose your organization’s SSO connection.</p>
-        ${AlertBox('Invitation help', 'If this invitation was unexpected, contact your organization administrator through a known channel. If the first-link approval has expired, ask them to renew it. Do not send passwords or security-key responses by email.', 'info')}
-      `) +
-        EmailFooter()
-    ),
-    text: `Your SSO invitation\n\nHi ${name},\n\nYou have been invited${data.invitedBy ? ` by ${data.invitedBy}` : ''} to join OpsKnight.\n\n${items.map(item => `${item.label}: ${item.value}`).join('\n')}\n\n${summary}\n\nSign in with SSO: ${urls.login}\n\nIf this invitation was unexpected, contact your organization administrator through a known channel. If the first-link approval has expired, ask them to renew it. Do not send passwords or security-key responses by email.\n\nOpsKnight — https://opsknight.com/`,
-  };
+  const text = `Your SSO invitation\n\nHi ${name},\n\nYou have been invited${data.invitedBy ? ` by ${data.invitedBy}` : ''} to join OpsKnight.\n\n${items.map(item => `${item.label}: ${item.value}`).join('\n')}\n\n${summary}\n\nSign in with SSO: ${urls.login}\n\nIf this invitation was unexpected, contact your organization administrator through a known channel. If the first-link approval has expired, ask them to renew it. Do not send passwords or security-key responses by email.\n\nOpsKnight — https://opsknight.com/`;
+  const { html } = await renderEmail(
+    SsoInviteEmail({
+      name,
+      invitedBy: data.invitedBy,
+      loginUrl: urls.login,
+      summary,
+      details: items,
+      logoUrl: urls.logo,
+    }),
+    { text }
+  );
+  return { subject: '[OpsKnight] Invitation to sign in with SSO', html, text };
 }

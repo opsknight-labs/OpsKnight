@@ -2,6 +2,7 @@
 
 import React from 'react';
 import { Sparkles, AlertTriangle, CheckCircle, Copy } from 'lucide-react';
+import { useToast } from '@/hooks/use-product-notification';
 
 interface SmartSummaryProps {
   metrics: {
@@ -14,10 +15,11 @@ interface SmartSummaryProps {
     totalIncidents: number;
   };
   windowDays: number;
-  trendSeries: any[];
+  trendSeries: Array<{ count: number }>;
 }
 
 export default function SmartSummary({ metrics, windowDays, trendSeries }: SmartSummaryProps) {
+  const { showToast } = useToast();
   // 1. Generate Insights
   const insights: { type: 'good' | 'bad' | 'neutral'; text: string }[] = [];
 
@@ -86,8 +88,10 @@ export default function SmartSummary({ metrics, windowDays, trendSeries }: Smart
 
   const copyToClipboard = () => {
     const text = `Weekly Operations Summary:\n${insights.map(i => `- ${i.text}`).join('\n')}`;
-    navigator.clipboard.writeText(text);
-    alert('Summary copied to clipboard');
+    navigator.clipboard
+      .writeText(text)
+      .then(() => showToast('Summary copied to clipboard', 'success'))
+      .catch(() => showToast('Could not copy the summary', 'warning'));
   };
 
   return (
@@ -124,7 +128,7 @@ export default function SmartSummary({ metrics, windowDays, trendSeries }: Smart
             className="flex items-start gap-3 p-3 rounded-md bg-background/40 border border-border/40 hover:bg-background/60 transition-colors"
           >
             {insight.type === 'good' && (
-              <CheckCircle className="w-5 h-5 text-green-500 mt-0.5 flex-shrink-0" />
+              <CheckCircle className="w-5 h-5 text-emerald-500 mt-0.5 flex-shrink-0" />
             )}
             {insight.type === 'bad' && (
               <AlertTriangle className="w-5 h-5 text-red-500 mt-0.5 flex-shrink-0" />

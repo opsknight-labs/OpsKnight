@@ -6,20 +6,22 @@ import { Providers } from './providers';
 import VersionCheck from '@/components/VersionCheck';
 import ServiceWorkerBootstrap from '@/components/pwa/ServiceWorkerBootstrap';
 
-// Bundle the same typefaces so builds do not depend on Google font downloads.
-const manrope = localFont({
-  src: './fonts/Manrope-latin.woff2',
-  variable: '--font-manrope',
-  weight: '200 800',
-  style: 'normal',
+// Brand typefaces, bundled so builds never depend on Google font downloads.
+// Inter is the UI/body face; Space Grotesk is the display face for titles,
+// badges and brand marks. See AGENTS.md "Typography".
+const inter = localFont({
+  src: [
+    { path: './fonts/Inter-latin-normal.woff2', weight: '100 900', style: 'normal' },
+    { path: './fonts/Inter-latin-italic.woff2', weight: '100 900', style: 'italic' },
+  ],
+  variable: '--font-inter',
   display: 'swap',
 });
-const playfair = localFont({
-  src: [
-    { path: './fonts/PlayfairDisplay-latin-normal.woff2', weight: '400 900', style: 'normal' },
-    { path: './fonts/PlayfairDisplay-latin-italic.woff2', weight: '400 900', style: 'italic' },
-  ],
-  variable: '--font-serif',
+const spaceGrotesk = localFont({
+  src: './fonts/SpaceGrotesk-latin.woff2',
+  variable: '--font-space-grotesk',
+  weight: '300 700',
+  style: 'normal',
   display: 'swap',
 });
 
@@ -49,7 +51,11 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html
+      lang="en"
+      className={`${inter.variable} ${spaceGrotesk.variable}`}
+      suppressHydrationWarning
+    >
       <head>
         <meta name="color-scheme" content="light dark" />
         <meta
@@ -61,7 +67,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <meta name="darkreader-lock" />
       </head>
       <body
-        className={`${manrope.variable} ${playfair.variable} antialiased`}
+        className="antialiased"
         suppressHydrationWarning
       >
         <Providers>

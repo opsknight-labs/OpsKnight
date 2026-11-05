@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { randomUUID } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import type { IncidentStatus } from '@prisma/client';
@@ -28,14 +29,13 @@ async function incidentWith(status: IncidentStatus, extra: Record<string, unknow
 const incidentStatus = async (_f: Fixture, s: Record<string, string>) =>
   (await db.incident.findUniqueOrThrow({ where: { id: s.incidentId } })).status;
 
+// Reopen and unsnooze run directly (tests/integration/mcp-curated-incident-actions.test.ts).
 // Lifecycle routes take no If-Match; the frozen expectedStatus is what binds the reviewed
 // transition. A status that is neither expectedStatus nor the target makes it stale.
 const lifecycleStaleStatus: Record<string, IncidentStatus> = {
-  reopenIncident: 'ACKNOWLEDGED',
   snoozeIncident: 'ACKNOWLEDGED',
   suppressIncident: 'ACKNOWLEDGED',
   unacknowledgeIncident: 'RESOLVED',
-  unsnoozeIncident: 'ACKNOWLEDGED',
   unsuppressIncident: 'ACKNOWLEDGED',
 };
 
@@ -159,13 +159,11 @@ const scenarios: Scenario[] = [
       return [incident.title, incident.priority];
     },
   },
-  lifecycle('reopenIncident', 'RESOLVED'),
   lifecycle('snoozeIncident', 'OPEN', () => ({
     snoozedUntil: new Date(Date.now() + 3600000).toISOString(),
   })),
   lifecycle('suppressIncident', 'OPEN'),
   lifecycle('unacknowledgeIncident', 'ACKNOWLEDGED'),
-  lifecycle('unsnoozeIncident', 'SNOOZED'),
   lifecycle('unsuppressIncident', 'SUPPRESSED'),
   {
     name: 'set incident custom field',

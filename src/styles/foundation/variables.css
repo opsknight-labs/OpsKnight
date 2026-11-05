@@ -16,7 +16,7 @@
     /* Semantic Colors - Muted Professional */
     --color-success: #059669;
     --color-success-light: #10b981;
-    --color-success-dark: #064e3b;
+    --color-success-dark: #047857;
     --color-warning: #d97706;
     --color-warning-light: #f59e0b;
     --color-warning-dark: #78350f;
@@ -26,6 +26,8 @@
     --color-info: #3b82f6;
     --color-info-light: #60a5fa;
     --color-info-dark: #2563eb;
+    --color-shift: #7c3aed;
+    --color-shift-dark: #4c1d95;
 
     /* Legacy Support */
     --success: var(--color-success);
@@ -116,6 +118,12 @@
     --spacing-24: 6rem;
     /* 96px */
 
+    /* Font Families (brand standard, see AGENTS.md "Typography").
+       --font-inter / --font-space-grotesk come from next/font on <html>. */
+    --font-family-sans: var(--font-inter), 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    --font-family-display: var(--font-space-grotesk), 'Space Grotesk', var(--font-inter), 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    --font-family-mono: ui-monospace, 'SF Mono', SFMono-Regular, 'Fira Code', Menlo, Consolas, monospace;
+
     /* Typography Scale */
     --font-size-xs: 0.75rem;
     /* 12px */
@@ -185,14 +193,18 @@
     --gradient-surface: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
 
     /* Badge Colors */
-    --badge-success-bg: #bbf7d0;
-    --badge-success-text: #15803d;
-    --badge-warning-bg: #fde68a;
-    --badge-warning-text: #b45309;
-    --badge-info-bg: #bfdbfe;
-    --badge-info-text: #1d4ed8;
-    --badge-error-bg: #fecaca;
-    --badge-error-text: #b91c1c;
+    /* Status badges follow AGENTS.md "Status Color Semantics"
+       (src/lib/design/status-palette.ts): tinted surface + deep ramp text. */
+    --badge-success-bg: #d1fae5;
+    --badge-success-text: #047857;
+    --badge-warning-bg: #fef3c7;
+    --badge-warning-text: #92400e;
+    --badge-info-bg: #dbeafe;
+    --badge-info-text: #1e3a8a;
+    --badge-error-bg: #ffe4e6;
+    --badge-error-text: #be123c;
+    --badge-shift-bg: #ede9fe;
+    --badge-shift-text: #4c1d95;
     --badge-snoozed-bg: #e0e7ff;
     --badge-snoozed-text: #4f46e5;
     --badge-neutral-bg: #e2e8f0;

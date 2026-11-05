@@ -21,10 +21,24 @@ import { mcpOrigin } from '../auth/config';
 import { requireMcp } from '../core/errors';
 import { lockMcpMutationAuthority } from '../core/mutation-authority';
 import type { ExecutionContext } from '../core/execution';
-import { MCP_REVIEWED_RUNBOOK_SCOPES, canUseReviewedRunbooks } from './policy';
-import { commitDeadline, readMcpApprovalTiming, reviewDeadline } from './timing';
-import { notifyRequesterOfDecision, notifyRunbookReviewers } from './notify';
+import {
+  MAX_PENDING_PER_GRANT,
+  MCP_REVIEWED_RUNBOOK_SCOPES,
+  canUseReviewedRunbooks,
+} from './policy';
+import {
+  commitDeadline,
+  mcpApprovalPollGuidance,
+  readMcpApprovalTiming,
+  reviewDeadline,
+} from './timing';
+import {
+  notifyRequesterOfDecision,
+  notifyRunbookReviewers,
+  resolveReviewerNotices,
+} from './notify';
 import { decisionReasonSchema, untrustedDecisionReason } from './operation';
+import { enforceDistinctReviewer } from './distinct-reviewer';
 
 const digest = z.string().regex(/^[a-f0-9]{64}$/);
 const idempotencyKey = z.string().trim().min(1).max(128);
@@ -158,6 +172,19 @@ export function prepareMcpRunbook(context: ExecutionContext, raw: unknown) {
           context: { key: input.idempotencyKey, principalId: auth.apiKey.id },
           payload: { runbookId: input.runbookId, body: input.body },
           execute: async () => {
+            // Same backlog cap as change requests. Inside execute, so a replay returns the stored
+            // result; approved plans not yet run still count, like APPROVED changes do.
+            const now = new Date();
+            const pending = await tx.runbookPreviewAuthorization.count({
+              where: {
+                requesterGrantId: context.grantId,
+                independentReview: true,
+                consumedAt: null,
+                rejectedAt: null,
+                OR: [{ expiresAt: { gt: now } }, { commitDeadline: { gt: now } }],
+              },
+            });
+            requireMcp(pending < MAX_PENDING_PER_GRANT, 'MCP_APPROVAL_BACKLOG', 429);
             const request = await resolveV2RunbookExecution(
               tx,
               { id: input.runbookId },
@@ -426,7 +453,9 @@ export function getMcpRunbookApproval(context: ExecutionContext, raw: unknown) {
         executionId: preview.executionId,
         reviewUrl: `${mcpOrigin()}/settings/integrations/mcp/approvals/${preview.id}`,
         ...untrustedDecisionReason(preview.decisionReason),
-        ...(status === 'PENDING' ? { pollAfterSeconds: 15 } : {}),
+        ...(status === 'PENDING'
+          ? { pollAfterSeconds: 30, poll: mcpApprovalPollGuidance(preview.expiresAt.toISOString()) }
+          : {}),
         ...(status === 'APPROVED' ? { next: 'runbook_execute_approved' } : {}),
         ...(status === 'EXPIRED' || status === 'REJECTED' ? { hint: REPREPARE_HINT } : {}),
       };
@@ -455,6 +484,7 @@ export async function loadMcpRunbookReview(
   return runSerializableTransaction(async tx => {
     const preview = await lockPreview(tx, id);
     const { selfReview } = await assertPreviewReviewer(tx, preview, reviewer);
+    await enforceDistinctReviewer(tx, selfReview);
     requireMcp(preview.expiresAt > new Date() && !preview.consumedAt, 'MCP_APPROVAL_EXPIRED', 409);
     await requesterAuthority(tx, preview);
     return {
@@ -481,6 +511,8 @@ export async function decideMcpRunbookReview(
   return runSerializableTransaction(async tx => {
     const preview = await lockPreview(tx, input.id);
     await requesterAuthority(tx, preview);
+    // Strict four-eyes: judged before the shared reviewer check, which allows an admin's own request.
+    await enforceDistinctReviewer(tx, preview.actorId === reviewer.id);
     // Approval opens a fresh commit window, capped from the request; it replaces the review expiry.
     const deadline =
       input.decision === 'approve'
@@ -491,6 +523,7 @@ export async function decideMcpRunbookReview(
       { ...input, reason: input.reason || undefined, commitDeadline: deadline },
       reviewer
     );
+    await resolveReviewerNotices(tx, [preview.id], input.decision, new Date(), reviewer.id);
     await notifyRequesterOfDecision(tx, {
       id: preview.id,
       requesterId: preview.actorId,

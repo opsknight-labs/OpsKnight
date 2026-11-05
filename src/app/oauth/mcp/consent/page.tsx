@@ -11,7 +11,12 @@ import {
 import { McpBoundaryError } from '@/lib/mcp/core/errors';
 import { buildMcpConsentOffer } from '@/lib/mcp/auth/consent-offer';
 import { decideMcpConsent } from '@/app/(app)/settings/integrations/mcp/actions';
-import { consentIdentity, consentRedirectFacts } from '@/lib/mcp/auth/consent-identity';
+import {
+  consentIdentity,
+  consentRedirectFacts,
+  consentRedirectWarning,
+} from '@/lib/mcp/auth/consent-identity';
+import { getUserTimeZone } from '@/lib/timezone';
 import ConsentView from './ConsentView';
 import './consent.css';
 
@@ -53,12 +58,15 @@ export default async function McpConsent({
   // decideMcpConsent repeats this on submit: pending request (already within the client ceiling)
   // ∩ what the person's current role can use. Nothing else is ever shown or grantable.
   const [policy, previous] = await Promise.all([
-    prisma.mcpPolicy.findUnique({ where: { id: 'default' }, select: { writesEnabled: true } }),
+    prisma.mcpPolicy.findUnique({
+      where: { id: 'default' },
+      select: { writesEnabled: true, cimdAllowedHosts: true, requireReadOnlyConnections: true },
+    }),
     // The latest live connection for this assistant; its permissions start selected again.
     prisma.mcpGrant.findFirst({
       where: supersededMcpGrantsWhere(who.id, client),
       orderBy: { createdAt: 'desc' },
-      select: { scopes: true, createdAt: true },
+      select: { scopes: true, createdAt: true, _count: { select: { tokens: true } } },
     }),
   ]);
   const offer = buildMcpConsentOffer({
@@ -66,9 +74,10 @@ export default async function McpConsent({
     explicitlyRequested: request.requestedScopes,
     role: who.role,
     previouslyGranted: previous?.scopes ?? [],
+    readOnly: policy?.requireReadOnlyConnections ?? false,
   });
   const returnTo = consentRedirectFacts(request.redirectUri);
-  const identity = consentIdentity(client);
+  const identity = consentIdentity(client, policy);
   return (
     <ConsentView
       action={decideMcpConsent}
@@ -80,9 +89,13 @@ export default async function McpConsent({
       hasUnavailable={offer.unavailable.length > 0}
       returnHost={returnTo.host}
       identity={identity}
-      redirectWarning={identity.kind === 'self-registered' && !returnTo.staysLocal}
+      redirectWarning={consentRedirectWarning(identity, request.redirectUri)}
       writesEnabled={policy?.writesEnabled ?? false}
-      replacesConnectionFrom={previous?.createdAt ?? null}
+      previousConnection={
+        // A connection with tokens is in use and stays signed in (supersededUnusedMcpGrantsWhere).
+        previous ? { createdAt: previous.createdAt, inUse: previous._count.tokens > 0 } : null
+      }
+      timeZone={getUserTimeZone(who)}
     />
   );
 }

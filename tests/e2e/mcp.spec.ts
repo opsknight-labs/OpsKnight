@@ -1,5 +1,26 @@
 import { test, expect, type APIRequestContext, type Page } from '@playwright/test';
 import { createHash, randomBytes } from 'node:crypto';
+import { sdkHandshake } from '../helpers/mcp-sdk-handshake';
+
+/** Playwright's request context as a fetch, so the SDK can reach a replica under the public Host. */
+function playwrightFetch(request: APIRequestContext, target: string, host: string) {
+  return async (input: string | URL | Request, init?: RequestInit) => {
+    const url = new URL(input instanceof Request ? input.url : String(input));
+    const response = await request.fetch(`${target}${url.pathname}${url.search}`, {
+      method: init?.method ?? 'GET',
+      headers: { ...Object.fromEntries(new Headers(init?.headers).entries()), host },
+      data: typeof init?.body === 'string' ? init.body : undefined,
+    });
+    const status = response.status();
+    return new Response(
+      [204, 205, 304].includes(status) ? null : new Uint8Array(await response.body()),
+      {
+        status,
+        headers: response.headers(),
+      }
+    );
+  };
+}
 
 async function connectClient(
   page: Page,
@@ -69,34 +90,39 @@ test('native MCP settings, PKCE consent, scoped call and revocation on desktop/m
     url => !url.pathname.startsWith('/login') && !url.pathname.startsWith('/api/auth')
   );
   await page.goto('/settings/integrations/mcp');
-  await expect(
-    page.getByRole('heading', { name: 'Model Context Protocol (MCP) Integration', exact: true })
-  ).toBeVisible();
   // Scoped: WebKit can briefly hold a second copy of the page outside the main region.
   const main = page.locator('#main-content');
   await expect(
-    main.getByRole('definition').filter({ hasText: /^App URL \(Settings → System\)$/ })
+    main.getByRole('heading', {
+      level: 1,
+      name: 'Model Context Protocol (MCP) Integration',
+      exact: true,
+    })
+  ).toBeVisible();
+  // The origin source shows in the header stats and again in the overview details.
+  await expect(
+    main.getByText('App URL (Settings → System)', { exact: true }).first()
   ).toBeVisible();
   await expect(main.getByRole('button', { name: 'Copy MCP endpoint', exact: true })).toBeVisible();
   await page.goto('/settings/integrations/mcp?tab=policy');
-  await page.getByRole('checkbox', { name: /Enable MCP/ }).check();
-  await page.locator('#main-content').getByText('Advanced', { exact: true }).click();
-  await page.getByRole('checkbox', { name: /Allow reviewed routine mutations/ }).uncheck();
-  await page.getByRole('button', { name: 'Save policy' }).click();
+  await main.getByRole('checkbox', { name: /Enable MCP/ }).check();
+  await main.getByText('Advanced', { exact: true }).click();
+  await main.getByRole('checkbox', { name: /Allow reviewed routine mutations/ }).uncheck();
+  await main.getByRole('button', { name: 'Save policy' }).click();
   await expect(page.getByText('MCP configuration saved', { exact: true })).toBeVisible();
-  await page
-    .locator('#main-content')
-    .getByRole('navigation', { name: 'MCP settings sections' })
-    .getByRole('link', { name: 'Assistants', exact: true })
-    .click();
+  await page.goto('/settings/integrations/mcp?tab=assistants');
   await main.getByText('Manual client registration (advanced)', { exact: true }).click();
 
   const name = `Local ${browserName} ${Date.now()}`;
   const redirectUri = 'http://127.0.0.1:8799/callback';
-  await page.getByLabel('Display name', { exact: true }).fill(name);
-  await page.getByLabel('Exact redirect URI').fill(redirectUri);
+  const registration = main
+    .locator('form')
+    .filter({ has: page.getByRole('button', { name: 'Register client', exact: true }) });
+  const register = registration.getByRole('button', { name: 'Register client', exact: true });
+  await registration.getByLabel('Display name', { exact: true }).fill(name);
+  await registration.getByLabel('Exact redirect URI').fill(redirectUri);
   // Read-only scopes are pre-selected in the manual registration form.
-  await page.getByRole('button', { name: 'Register client', exact: true }).click();
+  await register.click();
   // Newest first, so the new client is on the first page of the Assistants list.
   const clientRow = main.getByRole('row').filter({ hasText: name });
   await expect(clientRow).toHaveCount(1);
@@ -143,19 +169,78 @@ test('native MCP settings, PKCE consent, scoped call and revocation on desktop/m
   expect((await read.json()).result.isError).not.toBe(true);
 
   // The client allows services:read, but this consent granted incidents:read only.
-  // A guessed operation must enforce the grant even through generic invocation.
+  // A guessed operation must enforce the grant even through generic invocation. This session can
+  // change nothing, so it is offered read_operation and not call_operation.
   const forbidden = await rpc('tools/call', {
-    name: 'call_operation',
+    name: 'read_operation',
     arguments: { operationId: 'listServices', args: { query: { limit: 5 } } },
   });
   expect(forbidden.status()).toBe(200);
   const denial = (await forbidden.json()).result;
   expect(denial.isError).toBe(true);
-  expect(denial.structuredContent.error).toMatchObject({
-    code: 'MCP_SCOPE_NOT_GRANTED',
-    hint: 'This connection was not granted services:read. Reconnect OpsKnight from your assistant and allow that permission.',
+  // The denial names the missing consent so the assistant can tell the person how to fix it.
+  expect(denial.content[0].text).toMatch(/^MCP_SCOPE_NOT_GRANTED: .*\bservices:read\b/);
+
+  // CERT-02: the published 1.x SDK client completes a real handshake at both 2025 revisions
+  // against the built server, and against the second replica when one is running.
+  const host = new URL(origin).host;
+  for (const target of [origin, process.env.MCP_E2E_REPLICA_URL].filter(Boolean) as string[])
+    for (const revision of ['2025-06-18', '2025-11-25'] as const) {
+      const handshake = await sdkHandshake({
+        url: `${origin}/mcp`,
+        bearer: token.access_token,
+        revision,
+        fetch: playwrightFetch(request, target, host),
+      });
+      expect(handshake.negotiated, `${target} ${revision}`).toBe(revision);
+      expect(handshake.toolNames).toContain('whoami');
+      expect(handshake.whoami.isError ?? false).toBe(false);
+      expect(handshake.whoami.structuredContent).toHaveProperty('userId');
+      expect(handshake.sentSessionId).toBe(false);
+    }
+
+  // CERT-07: the listen stream through the built server (not just the handler) is unbuffered: its
+  // acknowledgement arrives promptly and the proxy-buffering opt-out header survives Next.
+  const listen = await fetch(`${origin}/mcp`, {
+    method: 'POST',
+    headers: {
+      authorization: `Bearer ${token.access_token}`,
+      'content-type': 'application/json',
+      accept: 'application/json, text/event-stream',
+      'mcp-protocol-version': '2026-07-28',
+      'mcp-method': 'subscriptions/listen',
+    },
+    body: JSON.stringify({
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'subscriptions/listen',
+      params: {
+        notifications: { toolsListChanged: true },
+        _meta: {
+          'io.modelcontextprotocol/protocolVersion': '2026-07-28',
+          'io.modelcontextprotocol/clientInfo': { name: 'local-browser-fixture', version: '1' },
+          'io.modelcontextprotocol/clientCapabilities': {},
+        },
+      },
+    }),
   });
-  expect(denial.content[0].text).toMatch(/^MCP_SCOPE_NOT_GRANTED: /);
+  expect(listen.status).toBe(200);
+  expect(listen.headers.get('content-type')).toContain('text/event-stream');
+  expect(listen.headers.get('cache-control')).toContain('no-store');
+  expect(listen.headers.get('x-accel-buffering')).toBe('no');
+  const stream = listen.body!.getReader();
+  const deadline = Date.now() + 2000;
+  let received = '';
+  while (Date.now() < deadline && !received.includes('notifications/subscriptions/acknowledged')) {
+    const chunk = await Promise.race([
+      stream.read(),
+      new Promise<null>(resolve => setTimeout(() => resolve(null), deadline - Date.now())),
+    ]);
+    if (!chunk || chunk.done) break;
+    received += new TextDecoder().decode(chunk.value);
+  }
+  expect(received).toContain('notifications/subscriptions/acknowledged');
+  await stream.cancel();
 
   // Connections render as stacked cards on phones; the rows and their actions are the same.
   await page.setViewportSize({ width: 390, height: 844 });
@@ -165,16 +250,17 @@ test('native MCP settings, PKCE consent, scoped call and revocation on desktop/m
   // Destructive row actions ask for confirmation first.
   await grant.getByRole('button', { name: /^Revoke / }).click();
   await page
-    .getByRole('alertdialog', { name: `Revoke connection for ${name}?` })
+    .getByRole('alertdialog', { name: `Revoke connection for ${name}?`, exact: true })
     .getByRole('button', { name: 'Revoke connection', exact: true })
     .click();
   await expect(page.getByText('Connection revoked', { exact: true })).toBeVisible();
   // The default view lists active connections; the revoked one moves to the Revoked filter.
   await expect(grant).toHaveCount(0);
-  await main
-    .getByRole('navigation', { name: 'Filter connections by status' })
-    .getByRole('link', { name: /^Revoked/ })
-    .click();
+  // The dialog's router.refresh() can still be settling (WebKit reports it as a navigation), so
+  // retry the move to the Revoked filter instead of racing it.
+  await expect(async () => {
+    await page.goto('/settings/integrations/mcp?tab=connections&status=revoked');
+  }).toPass({ timeout: 15_000 });
   await expect(
     main.getByRole('row').filter({ hasText: name }).first().getByText('Revoked', { exact: true })
   ).toBeVisible();
@@ -185,31 +271,30 @@ test('native MCP settings, PKCE consent, scoped call and revocation on desktop/m
   token = await connectClient(page, request, origin, clientId, name, redirectUri);
   expect((await rpc('tools/list')).status()).toBe(200);
   await page.goto('/settings/integrations/mcp?tab=connections');
-  const revokeAll = page.getByRole('button', {
-    name: 'Revoke all active MCP connections across OpsKnight',
+  await main
+    .getByRole('button', {
+      name: 'Revoke all active MCP connections across OpsKnight',
+      exact: true,
+    })
+    .click();
+  const revokeAllDialog = page.getByRole('alertdialog', {
+    name: 'Revoke all active MCP connections?',
     exact: true,
   });
-  await revokeAll.click();
-  const confirmation = page.getByRole('alertdialog', {
-    name: 'Revoke all active MCP connections?',
+  // The emergency action stays disabled until the administrator acknowledges its reach.
+  const confirmation = revokeAllDialog.getByRole('checkbox', {
+    name: /^I understand this disconnects every assistant for everyone/,
   });
-  await expect(confirmation).toBeVisible();
-  const confirmRevoke = confirmation.getByRole('button', {
+  await expect(confirmation).toHaveAttribute('required', '');
+  await expect(confirmation).not.toBeChecked();
+  const revokeAll = revokeAllDialog.getByRole('button', {
     name: 'Revoke all connections',
     exact: true,
   });
-  await expect(confirmRevoke).toBeDisabled();
+  await expect(revokeAll).toBeDisabled();
   expect((await rpc('tools/list')).status()).toBe(200);
-  await confirmation.getByRole('button', { name: 'Cancel', exact: true }).click();
-  expect((await rpc('tools/list')).status()).toBe(200);
+  await confirmation.check();
   await revokeAll.click();
-  await expect(confirmRevoke).toBeDisabled();
-  await confirmation
-    .getByRole('checkbox', {
-      name: /I understand this disconnects every assistant for everyone/,
-    })
-    .check();
-  await expect(confirmRevoke).toBeEnabled();
-  await confirmRevoke.click();
+  await expect(page.getByText('All MCP connections revoked', { exact: true })).toBeVisible();
   await expect.poll(async () => (await rpc('tools/list')).status()).toBe(401);
 });

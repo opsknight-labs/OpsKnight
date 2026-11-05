@@ -2,7 +2,8 @@ import LoginClient from './LoginClient';
 import { getServerSession } from 'next-auth';
 import { getAuthOptions } from '@/lib/auth';
 import { getOidcRuntimeCapability } from '@/lib/oidc-validation';
-import { safeInternalCallbackUrl } from '@/lib/auth-redirect';
+import { relativeToAppOrigin, safeInternalCallbackUrl } from '@/lib/auth-redirect';
+import { getAppUrl } from '@/lib/app-config';
 import { forcedSignOutUrl } from '@/lib/app-routes';
 import { redirect } from 'next/navigation';
 import { getDatabaseLocalAuthPolicy } from '@/lib/authentication-policy';
@@ -75,7 +76,10 @@ export default async function LoginPage({
   // auth loops, control characters, and external origins before the value ever
   // reaches a client-side navigation API.
   const fallback = defaultCallbackUrl || '/';
-  const callbackUrl = safeInternalCallbackUrl(rawCallbackUrl, fallback);
+  const callbackUrl = safeInternalCallbackUrl(
+    relativeToAppOrigin(rawCallbackUrl, await getAppUrl()),
+    fallback
+  );
 
   // Server-side check: If user is already authenticated with a valid user, redirect them away.
   // Invalidated or cleared sessions (e.g. tokenVersion mismatch or timeout) do not redirect,

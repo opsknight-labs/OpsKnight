@@ -2,6 +2,7 @@ import { createHmac, hkdfSync } from 'node:crypto';
 import prisma from '@/lib/prisma';
 import { getEncryptionKey } from '@/lib/encryption';
 import { McpBoundaryError, requireMcp } from '../core/errors';
+import { clearDiscoveryPolicyCache } from './discovery-policy';
 
 /**
  * MCP needs two values before it can serve a request, and neither is an MCP environment variable:
@@ -111,6 +112,18 @@ function credentialHashKey(): Buffer | null {
   );
 }
 
+/**
+ * HMAC key for the multi-round-trip requestState of a URL elicitation, derived like the credential
+ * hash key (same on every instance) but domain-separated, so neither key can stand in for the other.
+ */
+export function mcpRequestStateKey(): Buffer | null {
+  const key = getEncryptionKey();
+  if (!key) return null;
+  return Buffer.from(
+    hkdfSync('sha256', Buffer.from(key, 'hex'), 'opsknight:mcp', 'request-state:v1', 32)
+  );
+}
+
 async function readRuntime(env: NodeJS.ProcessEnv): Promise<Runtime> {
   const settings = await prisma.systemSettings.findUnique({
     where: { id: 'default' },
@@ -144,6 +157,7 @@ export async function withMcpRuntime<T>(callback: () => Promise<T>): Promise<T> 
 export function resetMcpRuntimeForTests() {
   runtime = null;
   loading = null;
+  clearDiscoveryPolicyCache();
 }
 
 export function mcpOrigin(): string {

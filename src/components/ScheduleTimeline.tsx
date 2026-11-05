@@ -39,30 +39,21 @@ type ScheduleTimelineProps = {
   timeZone: string;
 };
 
+// On-call layers carry the Royal Violet shift identity (AGENTS.md "Status Color
+// Semantics"). Hues that mean incident state (rose, amber, emerald) are kept out
+// so a layer is never mistaken for a triggered/acknowledged/resolved signal.
 const LAYER_COLORS = [
+  {
+    bg: 'from-violet-500 to-violet-600',
+    light: 'bg-violet-500/10',
+    text: 'text-violet-700 dark:text-violet-300',
+    ring: 'ring-violet-400',
+  },
   {
     bg: 'from-indigo-500 to-indigo-600',
     light: 'bg-indigo-500/10',
     text: 'text-indigo-700 dark:text-indigo-300',
     ring: 'ring-indigo-400',
-  },
-  {
-    bg: 'from-emerald-500 to-emerald-600',
-    light: 'bg-emerald-500/10',
-    text: 'text-emerald-700 dark:text-emerald-300',
-    ring: 'ring-emerald-400',
-  },
-  {
-    bg: 'from-amber-500 to-amber-600',
-    light: 'bg-amber-500/10',
-    text: 'text-amber-700 dark:text-amber-300',
-    ring: 'ring-amber-400',
-  },
-  {
-    bg: 'from-rose-500 to-rose-600',
-    light: 'bg-rose-500/10',
-    text: 'text-rose-700 dark:text-rose-300',
-    ring: 'ring-rose-400',
   },
   {
     bg: 'from-sky-500 to-sky-600',
@@ -71,10 +62,22 @@ const LAYER_COLORS = [
     ring: 'ring-sky-400',
   },
   {
-    bg: 'from-violet-500 to-violet-600',
-    light: 'bg-violet-500/10',
-    text: 'text-violet-700 dark:text-violet-300',
-    ring: 'ring-violet-400',
+    bg: 'from-fuchsia-500 to-fuchsia-600',
+    light: 'bg-fuchsia-500/10',
+    text: 'text-fuchsia-700 dark:text-fuchsia-300',
+    ring: 'ring-fuchsia-400',
+  },
+  {
+    bg: 'from-purple-500 to-purple-600',
+    light: 'bg-purple-500/10',
+    text: 'text-purple-700 dark:text-purple-300',
+    ring: 'ring-purple-400',
+  },
+  {
+    bg: 'from-cyan-500 to-cyan-600',
+    light: 'bg-cyan-500/10',
+    text: 'text-cyan-700 dark:text-cyan-300',
+    ring: 'ring-cyan-400',
   },
 ];
 

@@ -1,6 +1,7 @@
 import 'server-only';
 import { z } from 'zod/v3';
 import { requireMcp } from '../core/errors';
+import { isAllowedRedirect } from './redirect-uri';
 
 export const MAX_DYNAMIC_CLIENTS = 5000;
 // Registration is a short, rate-limited insert; a few may overlap so a team onboarding at once
@@ -20,25 +21,10 @@ export function acquireRegistrationSlot() {
   };
 }
 
-function validRedirect(value: string) {
-  try {
-    const url = new URL(value);
-    return (
-      // Canonical form, allowing the empty path that native clients often register
-      // (http://127.0.0.1:33418 is stored and matched exactly as sent).
-      (url.href === value || url.href === `${value}/`) &&
-      !url.username &&
-      !url.password &&
-      !url.hash &&
-      (url.protocol === 'https:' ||
-        (url.protocol === 'http:' && ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname)))
-    );
-  } catch {
-    return false;
-  }
-}
-// Grant types assistants commonly declare. Registration records only the two this server issues;
-// the others are known names that are ignored rather than refused (RFC 7591 section 3.2.1).
+export const DEVICE_CODE_GRANT_TYPE = 'urn:ietf:params:oauth:grant-type:device_code';
+// Grant types assistants commonly declare. Registration records authorization code and refresh,
+// and the device code grant (RFC 8628) when declared; the others are known names that are
+// ignored rather than refused (RFC 7591 section 3.2.1).
 const KNOWN_GRANT_TYPES = [
   'authorization_code',
   'refresh_token',
@@ -49,7 +35,7 @@ const KNOWN_GRANT_TYPES = [
 const informationalUrl = z.string().url().max(2048);
 // Informational URLs are accepted for standard client compatibility but never fetched,
 // rendered as trusted links, or persisted. Registration conveys no user authority.
-export const registrationSchema = z
+const registrationMetadataSchema = z
   .object({
     client_name: z
       .string()
@@ -58,20 +44,31 @@ export const registrationSchema = z
       .max(100)
       .regex(/^[^\u0000-\u001f\u007f]+$/)
       .default('MCP assistant'),
+    // Optional only for a device-only client (RFC 8628), which never receives a redirect.
     redirect_uris: z
-      .array(z.string().max(2048).refine(validRedirect))
+      .array(z.string().max(2048).refine(isAllowedRedirect))
       .min(1)
       .max(5)
-      .refine(uris => new Set(uris).size === uris.length),
+      .refine(uris => new Set(uris).size === uris.length)
+      .optional(),
     token_endpoint_auth_method: z.literal('none').default('none'),
     grant_types: z
       .array(z.enum(KNOWN_GRANT_TYPES))
       .min(1)
       .max(KNOWN_GRANT_TYPES.length)
-      .refine(types => types.includes('authorization_code') && new Set(types).size === types.length)
+      .refine(
+        types =>
+          (types.includes('authorization_code') || types.includes(DEVICE_CODE_GRANT_TYPE)) &&
+          new Set(types).size === types.length
+      )
       .default(['authorization_code', 'refresh_token']),
-    response_types: z.array(z.literal('code')).length(1).default(['code']),
-    scope: z.string().trim().min(1).max(2048).optional(),
+    // A device-only client may declare no response types.
+    response_types: z.array(z.literal('code')).max(1).default(['code']),
+    // Some clients (Gemini CLI) send `scope: ""`; that is no request, so the policy ceiling applies.
+    scope: z.preprocess(
+      value => (typeof value === 'string' && value.trim() === '' ? undefined : value),
+      z.string().trim().min(1).max(2048).optional()
+    ),
     client_uri: informationalUrl.optional(),
     logo_uri: informationalUrl.optional(),
     tos_uri: informationalUrl.optional(),
@@ -83,6 +80,29 @@ export const registrationSchema = z
     // Accepted for MCP SDK compatibility; never verified or used, since it confers nothing here.
     software_statement: z.string().max(4096).optional(),
   })
-  // Every accepted field is modelled above. Secrets, key material and unknown or misspelled
-  // fields are refused: this server registers public clients only.
-  .strict();
+  // A browser sign-in needs somewhere to return to.
+  .refine(
+    value =>
+      !value.grant_types.includes('authorization_code') ||
+      (value.redirect_uris !== undefined && value.response_types.length === 1)
+  );
+// Unknown metadata (OIDC fields such as post_logout_redirect_uris, newer SDK fields) is dropped by
+// zod's default strip, never persisted or echoed: RFC 7591 §2 has the server ignore what it does
+// not understand.
+// Secrets and key material are still refused: this server registers public clients only, and a
+// client that sends them expects to authenticate with them.
+const REFUSED_METADATA = [
+  'client_secret',
+  'client_secret_expires_at',
+  'jwks',
+  'jwks_uri',
+  'tls_client_auth_subject_dn',
+] as const;
+export const registrationSchema = z
+  .record(z.unknown())
+  .superRefine((value, context) => {
+    for (const key of REFUSED_METADATA)
+      if (Object.hasOwn(value, key))
+        context.addIssue({ code: z.ZodIssueCode.custom, path: [key], message: 'not supported' });
+  })
+  .pipe(registrationMetadataSchema);

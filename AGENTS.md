@@ -30,7 +30,7 @@
   - Tailwind CSS with customized color palettes.
   - Radix UI primitives (`@radix-ui/*`) wrapped in `src/components/ui/shadcn/`.
   - Lucide React (`lucide-react`) for icons.
-  - Font Pairing: `'Space Grotesk'` for prominent titles, badges, and brand headers; Inter / system sans for body text.
+  - Font Pairing: `'Space Grotesk'` for prominent titles, badges, and brand headers; Inter for body text (see "Typography" below).
 - **Type Safety**: Strict TypeScript. No unchecked `any` types; define explicit interfaces or infer from Zod schemas.
 - **Testing**:
   - Unit & Integration: Vitest (`tests/**/*.test.ts`).
@@ -45,20 +45,27 @@
 - **Subtle, Elegant, and SRE-Focused**: Clean, high-contrast, modern engineering aesthetic.
 - **No Intrusive Clutter**: Avoid loud promotional cards, excessive marketing copy, or noisy gamification banners in transactional alerts and operations interfaces.
 
+### Typography
+
+- **Inter** is the UI and body face; **Space Grotesk** is the display face for headings, badges and brand marks. Both are bundled with `next/font/local` in `src/app/layout.tsx` (no Google Fonts fetch at build or runtime).
+- Never hard-code a font family. Use the tokens `--font-family-sans`, `--font-family-display` and `--font-family-mono` (`src/styles/foundation/variables.css`) in CSS, and `font-sans`, `font-display` and `font-mono` in Tailwind. `h1`–`h6` pick up the display face automatically.
+- Transactional emails are the one exception: mail clients cannot load the bundled files, so email templates name `'Space Grotesk'` and Inter with system fallbacks.
+
 ### Official Brand Logo
 
 - **Asset**: Background-less transparent logo (`/logo.png` or `public/logo.png`).
 - **Vector Fallback**: Authentic red shield with knight headset SVG fallback for offline or blocked image scenarios.
 - **Never Enclose in Dark Boxes**: Do not wrap the logo in an opaque dark square or squircle (`#0f172a`) in transparent or light-themed contexts.
+- **Use the shared lockups**: `BrandLockup` (`src/components/layout/BrandLockup.tsx`) inside the app, `AuthBrand` (`src/components/auth/AuthBrand.tsx`) on sign-in, setup and other public pages. Both show the logo bare.
 
 ### Official Brand Hyperlinks
 
-- All OpsKnight brand logos, brand names, and footer attributions across email templates and public interfaces **must link to `https://opsknight.com/`**.
+- All OpsKnight brand logos, brand names, and footer attributions across email templates and public interfaces **must link to `https://opsknight.com/`** (`OPSKNIGHT_BRAND_URL` in `src/lib/brand.ts`). Inside the authenticated app the lockup links home (`/`).
 - In configurable components (`EmailStyles`), provide `brandUrl?: string` defaulting to `https://opsknight.com/`.
 
 ### Status Color Semantics
 
-Always use semantic color themes across badges, headers, accent borders, and primary buttons:
+Always use semantic color themes across badges, headers, accent borders, and primary buttons. The values below are mirrored in `src/lib/design/status-palette.ts` (enforced by `tests/architecture/design-system-contract.test.ts`) and exposed to Tailwind as `status-{critical,elevated,ok,info,shift}` with `-deep`, `-border` and `-soft` shades, e.g. `bg-gradient-to-r from-status-critical-deep to-status-critical`. Success is always emerald (never Tailwind `green`); on-call layers never use incident-state hues.
 
 - 🔴 **Critical / Triggered / High Urgency**: Crimson Red (`#881337` to `#e11d48`, border `#be123c`, bg `#fef2f2`).
 - 🟠 **Elevated / Medium Urgency / Acknowledged**: Warm Amber / Orange (`#78350f` to `#d97706`, border `#d97706`, bg `#fffbeb`).
@@ -68,7 +75,7 @@ Always use semantic color themes across badges, headers, accent borders, and pri
 
 ### Big-Screen & Responsive Scaling
 
-Email templates and dashboard views must be responsive across all devices:
+Email templates and dashboard views must be responsive across all devices. The fixed container widths below apply to emails; the operations console stays fluid so dense views use the full display, and `.page-shell` gutters scale at the same 1440px / 1920px tiers (content is centred at a 2304px reading width on 2560px+ ultrawides):
 
 - **Mobile (`<= 640px`)**: Full-width fluid containers, stacked action buttons (`padding: 14px 16px`), comfortable touch targets.
 - **Desktop (`>= 1024px`)**: Scaled layout with `860px` container width.
@@ -118,13 +125,24 @@ Email templates and dashboard views must be responsive across all devices:
 
 ## 6. Email & Transactional Notification Standards
 
-- **Template Structure**:
-  - `EmailContainer`: Fluid table with Outlook MSO conditional tags and responsive media queries.
-  - `EmailHeader`: Gradient header with hyperlinked transparent logo, brand name, and title.
-  - `EmailContent`: Clean white content section with status badge, metrics table (`InfoCard`), and dedicated `Incident Description` box.
-  - `Incident Description Card`: Framed in `#f8fafc` with status-colored 4px left border, `white-space: pre-wrap; word-break: break-word;`.
-  - `EmailFooter`: Subtle attribution hyperlinked to `https://opsknight.com/`, notification settings, and unsubscribe links.
+Every email OpsKnight sends is a React Email template in `src/emails/templates/` built from the primitives in `src/emails/components.tsx`. No product code hand-writes email HTML; `tests/architecture/email-contract.test.ts` fails if it does.
+
+- **Building blocks** (`src/emails/components.tsx`):
+  - `EmailLayout`: document shell. Color-scheme meta, the three-layer dark-mode stylesheet, the Outlook `OfficeDocumentSettings` block and Segoe UI font fix, the 640px MSO ghost table, the card and the footer slot.
+  - `HeaderBand`: status-coloured band at the top of every card. It holds the brand mark (logo + wordmark), eyebrow, title and subtitle. `bgcolor` = the tone's deep colour (Outlook), CSS gradient deep → base for everyone else. The transparent logo sits on a small white circular chip, so the red shield stays legible on crimson and every other tone (a light chip, never the forbidden dark box). OpsKnight emails link the mark to `https://opsknight.com/`; status-page emails show the page's own logo and name and link to the page.
+  - `Badge`, `InfoTable`, `Callout` (the `#f8fafc` `surface="muted"` description card with a 4px status accent and `white-space: pre-wrap`), `Button`, `LinkFallback`, `EmailFooter`, `SubscriberFooter`.
+- **Rendering**: `renderEmail(element, { text? })` from `src/emails/render.tsx` returns `{ html, text }`. Pass the hand-written `text` for security/auth emails; otherwise plain text is derived from the HTML.
+- **Outlook (Word engine)**: tables only (no flex, grid, position, SVG); solid `bgcolor` under every gradient; bulletproof CTAs (VML `v:roundrect` + padded link); images are absolute https PNGs with explicit `width`/`height`/`alt` (no data: URIs).
+- **Dark mode, three layers**, all generated from `dm-*` classes in `src/emails/styles.ts`:
+  1. `@media (prefers-color-scheme: dark)`: Apple Mail, Outlook for Mac/iOS.
+  2. `[data-ogsc]` (text) / `[data-ogsb]` (backgrounds): Outlook.com and new Outlook.
+  3. Forced inversion (Gmail apps, Outlook for Windows): off-white/off-black surfaces and solid fills so inverted emails stay readable.
+- **Colour**: status tones come from `src/emails/tokens.ts`, which mirrors "Status Color Semantics" above (pinned by the contract test). CTA/badge fills, callout text and body text all meet WCAG AA in both modes.
+- **Width**: 640px base (and always 640px in Outlook desktop), scaling to 860 / 1080 / 1180px at the big-screen tiers in §3.
+- **Size**: keep each email under 102 KB of HTML; Gmail clips anything larger and hides the footer and unsubscribe link.
+- **Bulk subscriber email**: status-page fan-out renders once with `{{unsubscribe_url}}` / `{{start_time}}` / `{{…_section}}` placeholders substituted per recipient at send time, and sends RFC 8058 `List-Unsubscribe` + `List-Unsubscribe-Post` headers pointing at `/api/status/subscriptions/unsubscribe/one-click/<token>`.
 - **No Intrusive Promotions**: Transactional alert emails must remain clean, concise, and focused on operational telemetry.
+- **Tooling**: `npm run email:dev` (live previews of every template with fixture props), `npm run test:email:visual` (Chromium + WebKit screenshots in light, dark and forced-inversion at 375–1440px with contrast checks), `npm run email:send-test -- --to you@example.com` (send the full set to Mailpit from `deploy/compose/docker-compose.mailpit.yml`, or to real inboxes via `--smtp`).
 
 ---
 

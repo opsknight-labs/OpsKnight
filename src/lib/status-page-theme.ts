@@ -15,16 +15,15 @@ export interface StatusPageFontOption {
 export const STATUS_PAGE_FONTS: StatusPageFontOption[] = [
   {
     id: 'default',
-    name: 'Default (System Sans)',
-    fontFamily:
-      'var(--font-manrope), -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+    name: 'OpsKnight Default (Inter)',
+    fontFamily: 'var(--font-family-sans)',
     category: 'sans',
     previewText: 'Aa Bb Cc 123',
   },
   {
     id: 'inter',
     name: 'Inter / Clean Sans',
-    fontFamily: '"Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+    fontFamily: 'var(--font-inter), "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
     category: 'sans',
     previewText: 'Aa Bb Cc 123',
   },

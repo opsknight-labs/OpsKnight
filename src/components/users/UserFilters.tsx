@@ -119,7 +119,7 @@ export default function UserFilters({ teams }: UserFiltersProps) {
           <Badge
             variant={status === 'ACTIVE' ? 'success' : 'outline'}
             size="sm"
-            className="cursor-pointer rounded-md hover:bg-green-100 hover:text-green-800 transition-colors"
+            className="cursor-pointer rounded-md hover:bg-emerald-100 hover:text-emerald-800 transition-colors"
             onClick={() => handleFilterChange('status', status === 'ACTIVE' ? '' : 'ACTIVE')}
           >
             <UserCheck className="mr-1 h-3 w-3" /> Active
@@ -183,7 +183,7 @@ export default function UserFilters({ teams }: UserFiltersProps) {
                 <SelectItem value="all">All Statuses</SelectItem>
                 <SelectItem value="ACTIVE">
                   <div className="flex items-center gap-2">
-                    <div className="h-1.5 w-1.5 rounded-full bg-green-500" />
+                    <div className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
                     <span>Active</span>
                   </div>
                 </SelectItem>

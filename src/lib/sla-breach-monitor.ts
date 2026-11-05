@@ -3,7 +3,6 @@ import { logger } from './logger';
 import { WebhookIntegration } from '@prisma/client';
 import { projectIncidentSlaState } from '@/lib/incident-sla/state';
 import { DEFAULT_SLA_WARNING_POLICY } from '@/lib/incident-sla/warning-policy';
-import { escapeHtml } from './email-components';
 import { activeIncidentStatuses } from './incident-status';
 import { enqueueCentralNotification } from './notification-control-plane';
 import { formatWebhookPayloadByType } from './webhooks';
@@ -459,61 +458,27 @@ async function notifyBreachWarning(
       const alertEmail = config.alertEmail || process.env.SLA_ALERT_EMAIL;
 
       if (alertEmail) {
-        const safeServiceName = escapeHtml(warning.serviceName);
-        const safeTitle = escapeHtml(warning.title);
-        const safeUrgency = escapeHtml(warning.urgency);
-        const baseUrl = (process.env.NEXTAUTH_URL || '').replace(/\/+$/, '');
-        const incidentUrl = `${baseUrl}/incidents/${encodeURIComponent(warning.incidentId)}`;
+        const incidentUrl = `${getBaseUrl().replace(/\/+$/, '')}/incidents/${encodeURIComponent(warning.incidentId)}`;
 
         const subject = isBreached
           ? `[SLA BREACHED] ${warning.serviceName}: ${warning.title}`
           : `[SLA WARNING] ${warning.serviceName}: ${warning.title}`;
-        const html = `
-                          <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 0; border: 1px solid #e5e7eb; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);">
-                              <div style="background-color: ${isBreached ? '#fee2e2' : '#fef3c7'}; padding: 20px; text-align: center; border-bottom: 1px solid ${isBreached ? '#fecaca' : '#fde68a'};">
-                                  <h1 style="color: ${isBreached ? '#991b1b' : '#92400e'}; margin: 0; font-size: 24px; font-weight: 800;">${breachEmoji} SLA ${breachTypeUpper} ${breachAction}</h1>
-                                  <p style="color: ${isBreached ? '#7f1d1d' : '#78350f'}; margin: 8px 0 0 0; font-size: 16px; font-weight: 500;">Action Required Immediately</p>
-                              </div>
-                              
-                              <div style="padding: 24px; background-color: #ffffff;">
-                                  <div style="margin-bottom: 24px; text-align: center;">
-                                      <p style="font-size: 36px; font-weight: 800; color: ${isBreached ? '#dc2626' : '#d97706'}; margin: 0;">
-                                          ${isBreached ? 'BREACHED' : `${remainingMinutes} min`}
-                                      </p>
-                                      <p style="color: #6b7280; margin: 4px 0 0 0; font-size: 14px;">${isBreached ? 'SLA Status' : 'Time Remaining'}</p>
-                                  </div>
-
-                                  <div style="background-color: #f9fafb; border-radius: 8px; padding: 16px; margin-bottom: 24px;">
-                                      <table style="width: 100%; border-collapse: collapse;">
-                                          <tr>
-                                              <td style="padding: 8px 0; color: #6b7280; font-size: 14px;">Service</td>
-                                              <td style="padding: 8px 0; color: #111827; font-weight: 600; text-align: right;">${safeServiceName}</td>
-                                          </tr>
-                                          <tr>
-                                              <td style="padding: 8px 0; color: #6b7280; font-size: 14px;">Urgency</td>
-                                              <td style="padding: 8px 0; color: #111827; font-weight: 600; text-align: right;">${safeUrgency}</td>
-                                          </tr>
-                                          <tr>
-                                              <td style="padding: 8px 0; color: #6b7280; font-size: 14px;">Target</td>
-                                              <td style="padding: 8px 0; color: #111827; font-weight: 600; text-align: right;">${warning.targetMinutes} min (${breachTypeUpper})</td>
-                                          </tr>
-                                      </table>
-                                  </div>
-
-                                  <h3 style="margin: 0 0 8px 0; color: #111827; font-size: 18px;">${safeTitle}</h3>
-                                  <p style="color: #4b5563; font-size: 14px; line-height: 1.5; margin: 0 0 24px 0;">
-                                      ${isBreached ? 'This incident has exceeded its SLA target deadline. Immediate triage and resolution are required.' : 'This incident is approaching its SLA limit. Please acknowledge or resolve it immediately to avoid a breach.'}
-                                  </p>
-
-                                  <a href="${incidentUrl}" style="display: block; width: 100%; padding: 12px 0; background-color: #dc2626; color: #ffffff; text-decoration: none; text-align: center; border-radius: 6px; font-weight: 600; font-size: 16px;">
-                                      View Incident
-                                  </a>
-                              </div>
-                              <div style="background-color: #f3f4f6; padding: 12px; text-align: center; color: #6b7280; font-size: 12px;">
-                                  OpsKnight SLA Monitor • ${new Date().toUTCString()}
-                              </div>
-                          </div>
-                      `;
+        const { renderEmail } = await import('@/emails/render');
+        const { SlaAlertEmail } = await import('@/emails/templates/sla-alert');
+        const { html } = await renderEmail(
+          SlaAlertEmail({
+            breached: isBreached,
+            breachType: breachTypeUpper,
+            incidentTitle: warning.title,
+            serviceName: warning.serviceName,
+            urgency: warning.urgency,
+            targetMinutes: warning.targetMinutes,
+            remainingMinutes,
+            incidentUrl,
+            detectedAt: new Date().toUTCString(),
+          }),
+          { text: `${plainText}\n\nView incident: ${incidentUrl}` }
+        );
         await enqueueCentralNotification({
           category: 'SLA',
           channel: 'EMAIL',
@@ -526,7 +491,13 @@ async function notifyBreachWarning(
           eventKey,
           displayMessage: plainText,
           priority: isBreached ? 0 : 1,
-          payload: { kind: 'EMAIL', to: alertEmail, subject, html, text: plainText },
+          payload: {
+            kind: 'EMAIL',
+            to: alertEmail,
+            subject,
+            html,
+            text: `${plainText}\n\nView incident: ${incidentUrl}`,
+          },
         });
         durableIntentCount++;
 

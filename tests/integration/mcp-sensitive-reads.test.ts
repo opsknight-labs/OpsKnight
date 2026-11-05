@@ -1,5 +1,12 @@
+// @vitest-environment node
 import { randomUUID } from 'node:crypto';
-import { describeSensitiveReads, setupMcpReadDatabase } from '../helpers/mcp-read-scenarios';
+import { expect, it } from 'vitest';
+import { callMcpOperation } from '@/lib/mcp/core/execution';
+import {
+  describeSensitiveReads,
+  principal,
+  setupMcpReadDatabase,
+} from '../helpers/mcp-read-scenarios';
 import {
   createTestEscalationPolicy,
   createTestIncident,
@@ -289,3 +296,10 @@ describeSensitiveReads([
     },
   },
 ]);
+
+it('does not audit an ordinary R0 read (SEC-4: only sensitive reads leave a row)', async () => {
+  const caller = await principal('ADMIN', ['incidents:read']);
+  const before = await db.auditLog.count();
+  await callMcpOperation(caller.ctx(), 'listIncidents', { query: { limit: 5 } });
+  expect(await db.auditLog.count()).toBe(before);
+});

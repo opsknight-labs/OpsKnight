@@ -108,6 +108,7 @@ The packaging-specific production checklist gives exact commands and expected re
 - [Runbook Agent operations](./agent-operations)
 - [Application URL and host routing](./application-url-and-host-routing)
 - [Reverse-proxy contract](./reverse-proxy-contract)
+- [WAF compatibility](./waf-compatibility)
 - [Initial setup](../../start/initial-setup)
 - [Production sizing](../capacity/sizing)
 - [Health and metrics](../reliability/health-and-metrics)

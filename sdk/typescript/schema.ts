@@ -90,6 +90,7 @@ export type User = {
   department?: string | null;
   jobTitle?: string | null;
   createdAt?: string;
+  teams?: Array<{ id: string; name: string } & Record<string, unknown>>;
 } & Record<string, unknown>;
 export type Schedule = {
   id: string;
@@ -2087,6 +2088,28 @@ export type IncidentTransition = {
   resolvedAt?: string | null;
   updatedAt: string;
 } & Record<string, unknown>;
+export type IncidentEscalation = {
+  requested: boolean;
+  reason: 'INCIDENT_NOT_ESCALATABLE' | null;
+  outcome: string | null;
+  escalated: boolean;
+  paged:
+    | ({
+        stepIndex?: number | null;
+        targetType?: string | null;
+        targetName?: string | null;
+        targetCount?: number | null;
+      } & Record<string, unknown>)
+    | null;
+  incident: {
+    id: string;
+    status: 'OPEN' | 'ACKNOWLEDGED' | 'RESOLVED' | 'SNOOZED' | 'SUPPRESSED';
+    escalation: { step: number | null; status: string | null; nextAt: string | null } & Record<
+      string,
+      unknown
+    >;
+  } & Record<string, unknown>;
+} & Record<string, unknown>;
 export type IncidentAssignment = {
   id: string;
   title?: string;
@@ -2096,6 +2119,181 @@ export type IncidentAssignment = {
   assignee?: ({ id?: string; name?: string; email?: string } & Record<string, unknown>) | null;
   team?: ({ id?: string; name?: string } & Record<string, unknown>) | null;
   updatedAt: string;
+} & Record<string, unknown>;
+export type OnCallNow = {
+  userId: string;
+  now: string;
+  scope: 'mine' | 'all';
+  iAmOnCall: boolean;
+  schedules: Array<
+    {
+      scheduleId: string;
+      scheduleName: string;
+      scheduleTimeZone: string;
+      onCall: Array<
+        {
+          userId: string;
+          name: string | null;
+          start: string;
+          end: string;
+          startClamped: boolean;
+          endClamped: boolean;
+        } & Record<string, unknown>
+      >;
+      next:
+        | ({ userId: string; name: string | null; start: string; end: string } & Record<
+            string,
+            unknown
+          >)
+        | null;
+      gap: boolean;
+    } & Record<string, unknown>
+  >;
+  gaps: number;
+  truncated: boolean;
+  schedulesEvaluated: number;
+} & Record<string, unknown>;
+export type CatchUp = {
+  userId: string;
+  since: string;
+  now: string;
+  scope: 'mine' | 'all';
+  filters: {
+    serviceId: string | null;
+    teamId: string | null;
+    urgency: 'HIGH' | 'MEDIUM' | 'LOW' | null;
+  } & Record<string, unknown>;
+  myTeamCount: number;
+  counts: { opened: number; resolved: number; active: number } & Record<string, unknown>;
+  active: Array<
+    {
+      id: string;
+      title: string;
+      status: 'OPEN' | 'ACKNOWLEDGED' | 'RESOLVED' | 'SNOOZED' | 'SUPPRESSED';
+      urgency: 'LOW' | 'MEDIUM' | 'HIGH';
+      priority: string | null;
+      serviceId: string;
+      serviceName: string;
+      assignedToMe: boolean;
+      openedSinceThen: boolean;
+      createdAt: string;
+      acknowledgedAt: string | null;
+      resolvedAt: string | null;
+    } & Record<string, unknown>
+  >;
+  assignedToMe: Array<
+    {
+      id: string;
+      title: string;
+      status: 'OPEN' | 'ACKNOWLEDGED' | 'RESOLVED' | 'SNOOZED' | 'SUPPRESSED';
+      urgency: 'LOW' | 'MEDIUM' | 'HIGH';
+      priority: string | null;
+      serviceId: string;
+      serviceName: string;
+      assignedToMe: boolean;
+      openedSinceThen: boolean;
+      createdAt: string;
+      acknowledgedAt: string | null;
+      resolvedAt: string | null;
+    } & Record<string, unknown>
+  >;
+  recentlyResolved: Array<
+    {
+      id: string;
+      title: string;
+      status: 'OPEN' | 'ACKNOWLEDGED' | 'RESOLVED' | 'SNOOZED' | 'SUPPRESSED';
+      urgency: 'LOW' | 'MEDIUM' | 'HIGH';
+      priority: string | null;
+      serviceId: string;
+      serviceName: string;
+      assignedToMe: boolean;
+      openedSinceThen: boolean;
+      createdAt: string;
+      acknowledgedAt: string | null;
+      resolvedAt: string | null;
+    } & Record<string, unknown>
+  >;
+  pagedMe: {
+    count: number;
+    items: Array<
+      {
+        incident: {
+          id: string;
+          title: string;
+          urgency: 'LOW' | 'MEDIUM' | 'HIGH';
+          status: 'OPEN' | 'ACKNOWLEDGED' | 'RESOLVED' | 'SNOOZED' | 'SUPPRESSED';
+        } & Record<string, unknown>;
+        lastEventType: string;
+        lastAt: string;
+        channels: Array<string>;
+        delivered: boolean;
+      } & Record<string, unknown>
+    >;
+  } & Record<string, unknown>;
+  truncated: { active: boolean; recentlyResolved: boolean; pagedMe: boolean } & Record<
+    string,
+    unknown
+  >;
+} & Record<string, unknown>;
+export type SimilarIncidents = {
+  incidentId: string;
+  basis: 'TITLE_AND_SERVICE';
+  candidatesConsidered: number;
+  similar: Array<
+    {
+      incident: {
+        id: string;
+        title: string;
+        priority: string | null;
+        serviceId: string;
+        serviceName: string;
+        createdAt: string;
+        resolvedAt: string | null;
+      } & Record<string, unknown>;
+      similarity: number;
+      reasons: Array<'TITLE_OVERLAP' | 'SAME_SERVICE' | 'SAME_PRIORITY'>;
+      resolutionKind:
+        'MANUAL' | 'SOURCE_RECOVERY' | 'AUTOMATION' | 'AUTO_TIMEOUT' | 'UNKNOWN' | null;
+      durationMinutes: number | null;
+      lastNote:
+        | ({ excerpt: string; createdAt: string; writtenBeforeResolution: boolean } & Record<
+            string,
+            unknown
+          >)
+        | null;
+    } & Record<string, unknown>
+  >;
+  truncated: boolean;
+} & Record<string, unknown>;
+export type MyOnCallShifts = {
+  userId: string;
+  now: string;
+  windowEnd: string;
+  onCallNow: boolean;
+  nextHandoff:
+    | ({
+        at: string;
+        change: 'SHIFT_ENDS' | 'SHIFT_STARTS';
+        scheduleId: string;
+        scheduleName: string;
+        handoffTo?: ({ userId: string; name: string | null } & Record<string, unknown>) | null;
+      } & Record<string, unknown>)
+    | null;
+  shifts: Array<
+    {
+      scheduleId: string;
+      scheduleName: string;
+      scheduleTimeZone: string;
+      start: string;
+      end: string;
+      current: boolean;
+      startClamped: boolean;
+      endClamped: boolean;
+      handoffTo: ({ userId: string; name: string | null } & Record<string, unknown>) | null;
+    } & Record<string, unknown>
+  >;
+  truncated: boolean;
+  schedulesEvaluated: number;
 } & Record<string, unknown>;
 export type ScheduleOnCall = {
   schedule: { id?: string; name?: string; timeZone?: string } & Record<string, unknown>;
@@ -2107,8 +2305,10 @@ export type ScheduleOnCall = {
       email?: string;
       role?: string;
       timeZone?: string | null;
+      shiftEndsAt?: string | null;
     } & Record<string, unknown>
   >;
+  next: ({ userId: string; name: string | null; start: string } & Record<string, unknown>) | null;
 } & Record<string, unknown>;
 export type ScheduleOverride = {
   id: string;
@@ -2235,6 +2435,39 @@ export type ServiceAccountTokenIssued = {
     scopes: Array<string>;
     createdAt: string;
     expiresAt?: string | null;
+  } & Record<string, unknown>;
+} & Record<string, unknown>;
+export type IncidentDetail = {
+  id: string;
+  title: string;
+  description?: string | null;
+  status: 'OPEN' | 'ACKNOWLEDGED' | 'RESOLVED' | 'SNOOZED' | 'SUPPRESSED';
+  priority?: 'P1' | 'P2' | 'P3' | 'P4' | 'P5' | null;
+  urgency: 'LOW' | 'MEDIUM' | 'HIGH';
+  serviceId: string;
+  service?: { id?: string; name?: string } & Record<string, unknown>;
+  assignee?: ({ id?: string; name?: string; email?: string } & Record<string, unknown>) | null;
+  teamId?: string | null;
+  createdAt: string;
+  updatedAt: string;
+  acknowledgedAt?: string | null;
+  resolvedAt?: string | null;
+  assigneeId?: string | null;
+  team?: ({ id?: string; name?: string } & Record<string, unknown>) | null;
+  snoozedUntil?: string | null;
+  slaPausedMs?: number | null;
+  slaAckElapsedMs?: number | null;
+  slaResolveElapsedMs?: number | null;
+  escalation: { step: number | null; status: string | null; nextAt: string | null } & Record<
+    string,
+    unknown
+  >;
+  sla: {
+    ackTargetMs: number | null;
+    resolveTargetMs: number | null;
+    ackElapsedMs: number | null;
+    resolveElapsedMs: number | null;
+    pausedMs: number | null;
   } & Record<string, unknown>;
 } & Record<string, unknown>;
 export interface OperationRequests {
@@ -3213,6 +3446,7 @@ export interface OperationRequests {
     headers?: { 'Idempotency-Key'?: string };
     body: { assigneeId?: string | null; teamId?: string | null } & Record<string, unknown>;
   };
+  escalateIncident: { params: { id: string }; headers?: { 'Idempotency-Key'?: string } };
   listIncidentNotes: { params: { id: string } };
   addIncidentNote: {
     params: { id: string };
@@ -3245,7 +3479,9 @@ export interface OperationRequests {
     query?: {
       limit?: number;
       cursor?: string;
-      status?: 'OPEN' | 'ACKNOWLEDGED' | 'RESOLVED' | 'SNOOZED' | 'SUPPRESSED';
+      status?: string;
+      createdAfter?: string;
+      createdBefore?: string;
       priority?: 'P1' | 'P2' | 'P3' | 'P4' | 'P5';
       urgency?: 'LOW' | 'MEDIUM' | 'HIGH';
       serviceId?: string;
@@ -3723,6 +3959,20 @@ export interface OperationRequests {
     body: { name: string; description?: string | null } & Record<string, unknown>;
   };
   getUser: { params: { id: string } };
+  listMyOnCallShifts: { query?: { days?: number; limit?: number } };
+  getMyCatchUp: {
+    query?: {
+      hours?: number;
+      since?: string;
+      scope?: 'mine' | 'all';
+      serviceId?: string;
+      teamId?: string;
+      urgency?: 'HIGH' | 'MEDIUM' | 'LOW';
+      limit?: number;
+    };
+  };
+  getOnCallNow: { query?: { scope?: 'mine' | 'all'; limit?: number } };
+  listSimilarIncidents: { params: { id: string }; query?: { limit?: number } };
   listUsers: { query?: { limit?: number; cursor?: string; search?: string; role?: string } };
 }
 export interface OperationResponses {
@@ -4657,6 +4907,10 @@ export interface OperationResponses {
     string,
     unknown
   >;
+  escalateIncident: { data: IncidentEscalation; requestId: string; timestamp: string } & Record<
+    string,
+    unknown
+  >;
   listIncidentNotes: { data: Array<IncidentNote>; requestId: string; timestamp: string } & Record<
     string,
     unknown
@@ -4669,7 +4923,10 @@ export interface OperationResponses {
     string,
     unknown
   >;
-  getIncident: { data: Incident; requestId: string; timestamp: string } & Record<string, unknown>;
+  getIncident: { data: IncidentDetail; requestId: string; timestamp: string } & Record<
+    string,
+    unknown
+  >;
   updateIncident: { data: Incident; requestId: string; timestamp: string } & Record<
     string,
     unknown
@@ -5159,6 +5416,16 @@ export interface OperationResponses {
   } & Record<string, unknown>;
   createTeam: { data: Team; requestId: string; timestamp: string } & Record<string, unknown>;
   getUser: { data: User; requestId: string; timestamp: string } & Record<string, unknown>;
+  listMyOnCallShifts: { data: MyOnCallShifts; requestId: string; timestamp: string } & Record<
+    string,
+    unknown
+  >;
+  getMyCatchUp: { data: CatchUp; requestId: string; timestamp: string } & Record<string, unknown>;
+  getOnCallNow: { data: OnCallNow; requestId: string; timestamp: string } & Record<string, unknown>;
+  listSimilarIncidents: { data: SimilarIncidents; requestId: string; timestamp: string } & Record<
+    string,
+    unknown
+  >;
   listUsers: {
     data: Array<User>;
     pagination?: Pagination;
@@ -6767,6 +7034,14 @@ export const OPERATIONS = {
     requiredHeaders: [],
     bodyRequired: true,
   },
+  escalateIncident: {
+    method: 'POST',
+    path: '/incidents/{id}/escalate',
+    kind: 'item',
+    idempotency: 'supported',
+    requiredHeaders: [],
+    bodyRequired: false,
+  },
   listIncidentNotes: {
     method: 'GET',
     path: '/incidents/{id}/notes',
@@ -7722,6 +7997,38 @@ export const OPERATIONS = {
   getUser: {
     method: 'GET',
     path: '/users/{id}',
+    kind: 'item',
+    idempotency: null,
+    requiredHeaders: [],
+    bodyRequired: false,
+  },
+  listMyOnCallShifts: {
+    method: 'GET',
+    path: '/users/me/on-call-shifts',
+    kind: 'item',
+    idempotency: null,
+    requiredHeaders: [],
+    bodyRequired: false,
+  },
+  getMyCatchUp: {
+    method: 'GET',
+    path: '/users/me/catch-up',
+    kind: 'item',
+    idempotency: null,
+    requiredHeaders: [],
+    bodyRequired: false,
+  },
+  getOnCallNow: {
+    method: 'GET',
+    path: '/schedules/on-call-now',
+    kind: 'item',
+    idempotency: null,
+    requiredHeaders: [],
+    bodyRequired: false,
+  },
+  listSimilarIncidents: {
+    method: 'GET',
+    path: '/incidents/{id}/similar',
     kind: 'item',
     idempotency: null,
     requiredHeaders: [],

@@ -20,9 +20,9 @@ function getStatusStyle(status: string): string {
 function getUrgencyStyle(urgency: string): string {
   switch (urgency.toUpperCase()) {
     case 'HIGH':
-      return 'border-rose-500 bg-rose-500 text-white';
+      return 'border-status-critical bg-status-critical text-white';
     case 'MEDIUM':
-      return 'border-amber-500 bg-amber-500 text-white';
+      return 'border-status-elevated bg-status-elevated text-white';
     case 'LOW':
       return 'border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-900/70 dark:bg-blue-950/35 dark:text-blue-300';
     default:

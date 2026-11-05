@@ -22,8 +22,23 @@ export const MCP_METRIC_OUTCOMES = [
 ] as const;
 export type McpMetricOutcome = (typeof MCP_METRIC_OUTCOMES)[number];
 
-/** Upper bound on distinct `tool` label values; a test pins the actual set below it. */
-export const MCP_METRIC_TOOL_LABEL_LIMIT = 48;
+/**
+ * Outcomes whose request reached domain work. Only these are timed, so sub-millisecond rejections
+ * (429, 401, busy) cannot pull the latency percentiles of served calls down.
+ */
+export const MCP_TIMED_OUTCOMES: ReadonlySet<McpMetricOutcome> = new Set([
+  'served',
+  'tool_error',
+  'task_created',
+  'result_too_large',
+]);
+
+/**
+ * Upper bound on distinct `tool` label values; a test pins the actual set below it. Raised from 48
+ * to 64 in round 5 (55 named tools): still a small fixed set (64 tools x a handful of outcomes), and
+ * every label is a registered tool name, never caller input.
+ */
+export const MCP_METRIC_TOOL_LABEL_LIMIT = 64;
 
 const STANDALONE_TOOLS = [
   'whoami',
@@ -34,6 +49,11 @@ const STANDALONE_TOOLS = [
   'execute_plan',
   'incident_get_context',
   'postmortem_get_context',
+  'oncall_for_service',
+  'service_get_changes',
+  'incident_acknowledge_many',
+  'search',
+  'fetch',
   'operation_prepare',
   'operation_get_approval',
   'operation_commit_approved',
@@ -63,6 +83,7 @@ export function mcpErrorOutcome(error: unknown): McpMetricOutcome {
     case 'MCP_RATE_LIMITED':
       return 'rate_limited';
     case 'MCP_BUSY':
+    case 'MCP_SUBSCRIPTIONS_BUSY':
       return 'busy';
     case 'MCP_RESULT_BUDGET_EXCEEDED':
       return 'result_too_large';
@@ -71,6 +92,8 @@ export function mcpErrorOutcome(error: unknown): McpMetricOutcome {
     case 'MCP_UNAVAILABLE':
       return 'unavailable';
   }
+  // Every 429 is a limit the caller hit (quota, subscription cap, plan budget), whatever its code.
+  if (error.status === 429) return 'rate_limited';
   if (error.status === 401) return 'unauthenticated';
   if (error.status === 403) return 'forbidden';
   if (error.status >= 500) return 'unavailable';

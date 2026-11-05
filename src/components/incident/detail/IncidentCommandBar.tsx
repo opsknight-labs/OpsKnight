@@ -495,7 +495,7 @@ export default function IncidentCommandBar({
                 <form action={onAcknowledge} className="flex-1 min-w-0">
                   <Button
                     type="submit"
-                    className="w-full h-11 gap-2 bg-gradient-to-r from-green-600 to-emerald-600 text-white text-sm font-semibold truncate"
+                    className="w-full h-11 gap-2 bg-gradient-to-r from-emerald-600 to-emerald-600 text-white text-sm font-semibold truncate"
                   >
                     <Check className="h-4 w-4 shrink-0" />
                     <span className="truncate">Acknowledge</span>

@@ -1537,6 +1537,14 @@ export const V2_OPERATIONS: readonly V2OperationDefinition[] = [
     'item',
     'IncidentAssignment'
   ),
+  op(
+    'post',
+    '/incidents/{id}/escalate',
+    'escalateIncident',
+    'incidents:write',
+    'item',
+    'IncidentEscalation'
+  ),
   op('get', '/incidents/{id}/notes', 'listIncidentNotes', 'incidents:read', 'list', 'IncidentNote'),
   op('post', '/incidents/{id}/notes', 'addIncidentNote', 'incidents:write', 'item', 'IncidentNote'),
   op(
@@ -1547,7 +1555,7 @@ export const V2_OPERATIONS: readonly V2OperationDefinition[] = [
     'item',
     'IncidentTransition'
   ),
-  op('get', '/incidents/{id}', 'getIncident', 'incidents:read', 'item', 'Incident'),
+  op('get', '/incidents/{id}', 'getIncident', 'incidents:read', 'item', 'IncidentDetail'),
   op('patch', '/incidents/{id}', 'updateIncident', 'incidents:write', 'item', 'Incident'),
   op(
     'get',
@@ -2133,6 +2141,24 @@ export const V2_OPERATIONS: readonly V2OperationDefinition[] = [
   op('get', '/teams', 'listTeams', 'teams:read', 'list', 'Team'),
   op('post', '/teams', 'createTeam', 'teams:write', 'item', 'Team'),
   op('get', '/users/{id}', 'getUser', 'users:read', 'item', 'User'),
+  op(
+    'get',
+    '/users/me/on-call-shifts',
+    'listMyOnCallShifts',
+    'schedules:read',
+    'item',
+    'MyOnCallShifts'
+  ),
+  op('get', '/users/me/catch-up', 'getMyCatchUp', 'incidents:read', 'item', 'CatchUp'),
+  op('get', '/schedules/on-call-now', 'getOnCallNow', 'schedules:read', 'item', 'OnCallNow'),
+  op(
+    'get',
+    '/incidents/{id}/similar',
+    'listSimilarIncidents',
+    'incidents:read',
+    'item',
+    'SimilarIncidents'
+  ),
   op('get', '/users', 'listUsers', 'users:read', 'list', 'User'),
 ];
 

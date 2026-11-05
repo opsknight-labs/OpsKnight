@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { incidentStatusColor } from '@/lib/design/status-palette';
 import { useTimezone } from '@/contexts/TimezoneContext';
 import { formatDateTime } from '@/lib/timezone';
 
@@ -51,34 +52,19 @@ export default function DashboardTimelineView({ incidents, services }: Dashboard
           return service?.id === selectedService;
         });
 
-  const grouped = filteredIncidents.reduce(
-    (acc, incident) => {
-      const key = getTimeKey(incident.createdAt);
-      if (!acc[key]) {
-        acc[key] = [];
-      }
-      acc[key].push(incident);
-      return acc;
-    },
-    {} as Record<string, TimelineIncident[]>
-  );
+  const grouped = new Map<string, TimelineIncident[]>();
+  for (const incident of filteredIncidents) {
+    const key = getTimeKey(incident.createdAt);
+    const bucket = grouped.get(key);
+    if (bucket) bucket.push(incident);
+    else grouped.set(key, [incident]);
+  }
 
-  const sortedGroups = Object.entries(grouped)
+  const sortedGroups = [...grouped.entries()]
     .sort((a, b) => new Date(a[0]).getTime() - new Date(b[0]).getTime())
     .reverse();
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'OPEN':
-        return '#dc2626';
-      case 'ACKNOWLEDGED':
-        return '#2563eb';
-      case 'RESOLVED':
-        return '#16a34a';
-      default:
-        return '#6b7280';
-    }
-  };
+  const getStatusColor = (status: string) => incidentStatusColor(status);
 
   const getUrgencyColor = (urgency: string) => {
     if (urgency === 'HIGH') return '#ef5350';

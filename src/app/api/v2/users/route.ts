@@ -14,6 +14,7 @@ import { AUTHORIZATION_ACTIONS } from '@/lib/authorization-policy';
 import { Role, type Prisma } from '@prisma/client';
 import { z } from 'zod/v3';
 import { withV2Observability } from '@/lib/api-v2/observability';
+import { internalV2Auth } from '@/lib/api-v2/internal-context';
 
 export const GET = withV2Observability(async function GET(req: NextRequest) {
   try {
@@ -31,10 +32,13 @@ export const GET = withV2Observability(async function GET(req: NextRequest) {
 
     const filters: Prisma.UserWhereInput[] = [];
     if (search) {
+      // An in-process MCP invocation (bound to this Request; headers cannot forge it) never sees
+      // email, so it must not be able to probe it either: names only.
+      const nameOnly = internalV2Auth(req) !== undefined;
       filters.push({
         OR: [
           { name: { contains: search, mode: 'insensitive' } },
-          { email: { contains: search, mode: 'insensitive' } },
+          ...(nameOnly ? [] : [{ email: { contains: search, mode: 'insensitive' as const } }]),
         ],
       });
     }
@@ -64,10 +68,22 @@ export const GET = withV2Observability(async function GET(req: NextRequest) {
         department: true,
         jobTitle: true,
         createdAt: true,
+        teamMemberships: {
+          select: { team: { select: { id: true, name: true } } },
+          orderBy: { team: { name: 'asc' } },
+          // A directory row names a person's teams; a bounded list keeps the page small.
+          take: 20,
+        },
       },
     });
 
-    const result = formatCursorPagination(users, limit);
+    const result = formatCursorPagination(
+      users.map(({ teamMemberships, ...user }) => ({
+        ...user,
+        teams: teamMemberships.map(membership => membership.team),
+      })),
+      limit
+    );
 
     return apiV2Success(result.data, {
       pagination: result.pagination,

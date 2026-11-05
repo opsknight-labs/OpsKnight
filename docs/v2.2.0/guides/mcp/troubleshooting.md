@@ -22,125 +22,137 @@ Start with **Test connection** on the Overview tab of **Settings → Integration
 
 Tool errors carry a structured `error` object: `code`, optional `domainCode` (a code from the application error registry), `fields` (which input failed and why), `retryable`, `retryAfterSeconds`, `hint` and `requestId`. The `requestId` is also the `X-Request-Id` response header and appears in server log entries, so support can find the exact request. Problem titles and details from the application are never forwarded.
 
-This page lists 93 MCP codes and 12 log events found in the source.
+This page lists 105 MCP codes and 24 log events found in the source.
 
 ## Connecting and signing in
 
 | Code | What it means | What to do |
 | --- | --- | --- |
-| `MCP_INVALID_SCOPE` | No requested permission is allowed, or the connection carries admin:manage, which MCP never honours. | Reconnect; an administrator checks the scope ceiling. |
-| `MCP_INACTIVE_PRINCIPAL` | The person is deactivated, has no valid role, or their session changed. | Sign in again; an administrator reactivates the account if needed. |
-| `MCP_INVALID_GRANT` | The connection is no longer usable: revoked, expired, issued for another server address, its assistant was revoked, or policy no longer trusts the assistant. | Reconnect. On the Connections tab the row shows why (No longer allowed or Blocked by policy). |
-| `MCP_DISABLED` | MCP is turned off for this installation. | An administrator turns it on from the Overview tab. |
-| `MCP_CONSENT_EXPIRED` | The consent page was opened more than five minutes ago. | Start the connection again from the assistant. |
-| `MCP_CONSENT_NO_SCOPES` | Allow was clicked with every permission unticked. | Tick at least one permission, or choose Cancel. |
-| `MCP_CONSENT_REPLAY` | The consent form was already submitted (for example from another tab). | Return to the assistant; start again if it is not connected. |
-| `MCP_AUTHORIZATION_FAILED` | The consent page could not create the authorization code. | Start the connection again from the assistant. Check the server log if it repeats. |
-| `MCP_RATE_LIMITED` | Too many consents (10 a minute), metadata fetches (6 a minute) or review decisions by one person. | Wait a minute and retry. |
-| `MCP_ACCESS_CHANGED` | A security event ended the connection: the person's password or email changed, they were demoted from Administrator, deactivated, signed out everywhere, or an administrator revoked their sessions. | Reconnect OpsKnight from the assistant. Team and ordinary role changes do not cause this. |
-| `MCP_INVALID_TOKEN` | The bearer token is missing, malformed, unknown or expired. | Let the assistant refresh or reconnect. |
-| `MCP_CLIENT_UNKNOWN` | The assistant presented a client ID this server does not know (often a stale cached registration). | Remove OpsKnight from the assistant, add it again with the same URL and sign in. |
-| `MCP_REGISTRATION_DISABLED` | Automatic connections are off, so assistants cannot register themselves. | An administrator turns on Automatic connections under Access policy. |
-| `MCP_REGISTRATION_CAPACITY` | The registry already holds 5,000 automatically registered assistants. | Retry later; unused registrations are cleaned up after an hour. |
-| `MCP_CLIENT_METADATA_TIMEOUT` | Fetching the assistant's metadata document took longer than three seconds. | Retry. Check outbound HTTPS and DNS from the server. |
-| `MCP_CLIENT_METADATA_UNAVAILABLE` | The assistant's metadata document could not be fetched. | Retry. Check outbound HTTPS from the server; search the log for mcp.cimd.fetch_failed. |
-| `MCP_CLIENT_METADATA_FORBIDDEN` | The assistant's metadata document host resolves to a private, loopback or otherwise non-public address. | The assistant must publish its metadata document on a public HTTPS host. |
-| `MCP_CLIENT_METADATA_TOO_LARGE` | The assistant's metadata document is larger than 5 KiB. | Contact the assistant vendor. |
-| `MCP_INVALID_ORIGIN` | A browser Origin header does not match the App URL, or the App URL itself is invalid. | Check the App URL in Settings → System. |
-| `MCP_CLIENT_REVOKED` | An administrator revoked this assistant. | An administrator restores it on the Assistants tab; everyone then signs in again. |
-| `MCP_DUPLICATE_PARAMETER` | An OAuth parameter was sent twice. Unknown parameters are ignored; duplicates are refused. | Report it to the assistant vendor; reconnect. |
-| `MCP_INVALID_HOST` | The request Host does not match the configured App URL. | Open OpsKnight on the App URL; make the proxy preserve the public Host header. |
+| <a id="MCP_INVALID_SCOPE"></a>`MCP_INVALID_SCOPE` | No requested permission is allowed, or the connection carries admin:manage, which MCP never honours. | Reconnect; an administrator checks the scope ceiling. |
+| <a id="MCP_INACTIVE_PRINCIPAL"></a>`MCP_INACTIVE_PRINCIPAL` | The person is deactivated, has no valid role, or their session changed. | Sign in again; an administrator reactivates the account if needed. |
+| <a id="MCP_INVALID_GRANT"></a>`MCP_INVALID_GRANT` | The connection is no longer usable: revoked, expired, issued for another server address, its assistant was revoked, or policy no longer trusts the assistant. | Reconnect. On the Connections tab the row shows why (No longer allowed or Blocked by policy). |
+| <a id="MCP_DISABLED"></a>`MCP_DISABLED` | MCP is turned off for this installation, by an administrator or by the MCP_FORCE_DISABLED=true deployment setting. | An administrator turns it on from the Overview tab. If the settings page says it is disabled by deployment configuration, the operator removes MCP_FORCE_DISABLED and restarts. |
+| <a id="MCP_CONSENT_EXPIRED"></a>`MCP_CONSENT_EXPIRED` | The consent page was opened more than five minutes ago. | Start the connection again from the assistant. |
+| <a id="MCP_CONSENT_NO_SCOPES"></a>`MCP_CONSENT_NO_SCOPES` | Allow was clicked with every permission unticked. | Tick at least one permission, or choose Cancel. |
+| <a id="MCP_CONSENT_REPLAY"></a>`MCP_CONSENT_REPLAY` | The consent form was already submitted (for example from another tab). | Return to the assistant; start again if it is not connected. |
+| <a id="MCP_AUTHORIZATION_FAILED"></a>`MCP_AUTHORIZATION_FAILED` | The consent page could not create the authorization code. | Start the connection again from the assistant. Check the server log if it repeats. |
+| <a id="MCP_RATE_LIMITED"></a>`MCP_RATE_LIMITED` | Too many consents (10 a minute), metadata fetches (6 a minute) or review decisions by one person. | Wait a minute and retry. |
+| <a id="MCP_ACCESS_CHANGED"></a>`MCP_ACCESS_CHANGED` | A security event ended the connection: the person's password or email changed, they were demoted from Administrator, deactivated, signed out everywhere, or an administrator revoked their sessions. | Reconnect OpsKnight from the assistant. Team and ordinary role changes do not cause this. |
+| <a id="MCP_INVALID_TOKEN"></a>`MCP_INVALID_TOKEN` | The bearer token is malformed, unknown or expired. | Let the assistant refresh or reconnect. |
+| <a id="MCP_INSUFFICIENT_SCOPE"></a>`MCP_INSUFFICIENT_SCOPE` | Scope step-up is on and the call needs a permission this connection lacks but a new consent could grant. HTTP 403 with an insufficient_scope challenge naming the scopes to ask for. | A supporting assistant re-opens sign-in for the extra permission; approve it. Others reconnect. |
+| <a id="MCP_CLIENT_UNKNOWN"></a>`MCP_CLIENT_UNKNOWN` | The assistant presented a client ID this server does not know (often a stale cached registration). | Remove OpsKnight from the assistant, add it again with the same URL and sign in. |
+| <a id="MCP_INVALID_ORIGIN"></a>`MCP_INVALID_ORIGIN` | A browser Origin header does not match the App URL and is not listed under Allowed browser origins, or the App URL itself is invalid. | Check the App URL in Settings → System. For a browser-hosted client such as MCP Inspector, an administrator adds its exact origin under Allowed browser origins. |
+| <a id="MCP_DEVICE_FLOW_DISABLED"></a>`MCP_DEVICE_FLOW_DISABLED` | Device sign-in (RFC 8628) is off, or MCP is off. The device authorization endpoint answers 404 and metadata does not advertise it. | An administrator turns on Device sign-in under Access policy (this needs a recent sign-in). |
+| <a id="MCP_DEVICE_CODE_LOCKED"></a>`MCP_DEVICE_CODE_LOCKED` | Five wrong device codes were entered by this person or from this network address within 15 minutes, so code entry is paused. | Wait 15 minutes, then enter the code shown on the device. Repeated lockouts can mean someone is guessing codes. |
+| <a id="MCP_DEVICE_CODE_INVALID"></a>`MCP_DEVICE_CODE_INVALID` | The code entered on /oauth/mcp/device matches no live device sign-in (a typo, or a code another person already entered). Each counts as a wrong code. | Enter the eight letters shown on the device; case and the dash do not matter. |
+| <a id="MCP_DEVICE_CODE_EXPIRED"></a>`MCP_DEVICE_CODE_EXPIRED` | A device sign-in code was entered after its ten minutes ran out, or after it was already approved, denied or used. | Start the sign-in again on the device to get a new code. |
+| <a id="MCP_REGISTRATION_DISABLED"></a>`MCP_REGISTRATION_DISABLED` | Automatic connections are off, so assistants cannot register themselves. | An administrator turns on Automatic connections under Access policy. |
+| <a id="MCP_REGISTRATION_CAPACITY"></a>`MCP_REGISTRATION_CAPACITY` | The registry already holds 5,000 automatically registered assistants. | Retry later; unused registrations are cleaned up after an hour. |
+| <a id="MCP_CLIENT_METADATA_TIMEOUT"></a>`MCP_CLIENT_METADATA_TIMEOUT` | Fetching the assistant's metadata document took longer than three seconds. | Retry. Check outbound HTTPS and DNS from the server. |
+| <a id="MCP_CLIENT_METADATA_UNAVAILABLE"></a>`MCP_CLIENT_METADATA_UNAVAILABLE` | The assistant's metadata document could not be fetched. | Retry. Check outbound HTTPS from the server; search the log for mcp.cimd.fetch_failed. |
+| <a id="MCP_CLIENT_METADATA_FORBIDDEN"></a>`MCP_CLIENT_METADATA_FORBIDDEN` | The assistant's metadata document host resolves to a private, loopback or otherwise non-public address. | The assistant must publish its metadata document on a public HTTPS host. |
+| <a id="MCP_CLIENT_METADATA_TOO_LARGE"></a>`MCP_CLIENT_METADATA_TOO_LARGE` | The assistant's metadata document is larger than 5 KiB. | Contact the assistant vendor. |
+| <a id="MCP_CLIENT_REVOKED"></a>`MCP_CLIENT_REVOKED` | An administrator revoked this assistant. | An administrator restores it on the Assistants tab; everyone then signs in again. |
+| <a id="MCP_DUPLICATE_PARAMETER"></a>`MCP_DUPLICATE_PARAMETER` | An OAuth parameter was sent twice. Unknown parameters are ignored; duplicates are refused. | Report it to the assistant vendor; reconnect. |
+| <a id="MCP_INVALID_HOST"></a>`MCP_INVALID_HOST` | The request Host does not match the configured App URL. | Open OpsKnight on the App URL; make the proxy preserve the public Host header. |
+| <a id="MCP_TOKEN_REQUIRED"></a>`MCP_TOKEN_REQUIRED` | The request to /mcp carried no Authorization header: the assistant has not signed in yet. | Let the assistant start sign-in from the challenge; this is normal on a first connection. |
 
 ## Tool calls
 
 | Code | What it means | What to do |
 | --- | --- | --- |
-| `MCP_RESOURCE_UNAVAILABLE` | Not found, or not visible to this person. | Check the id with a list or search read. |
-| `MCP_OPERATION_FORBIDDEN` | The person's OpsKnight role does not allow this operation. | An administrator changes the role. Reconnecting does not help. |
-| `MCP_SESSIONS_UNSUPPORTED` | The client sent an Mcp-Session-Id header. The server is stateless. | Use a client that does not require sessions, or remove the header. |
-| `MCP_INVALID_ENCODING` | The body is not valid UTF-8 JSON. | Send UTF-8 JSON. |
-| `MCP_OPERATION_BUDGET_EXCEEDED` | The request uses more operations than Operations per request allows (at most 8). | Split the work across several calls. |
-| `MCP_INVALID_HEADERS` | A Tasks request is missing the matching Mcp-Method or Mcp-Protocol-Version header. | Use a client that supports protocol revision 2026-07-28 for Tasks. |
-| `MCP_TASK_NOT_FOUND` | Unknown task id, or a task that belongs to another connection or has passed its 24-hour retention. | Use the task id returned by runbook_execute_approved. |
-| `MCP_BUSY` | The server is at its concurrent-request limit and the request waited too long in the queue (or the queue is full, or this connection already uses half the slots). | Retry after the Retry-After interval (1 second). Administrators can raise Concurrent requests per process under Workload limits. |
-| `MCP_RESULT_BUDGET_EXCEEDED` | The result is larger than 256 KiB. | Lower query.limit or narrow the filters. |
-| `MCP_INVALID_SUBSCRIPTION` | subscriptions/listen received more than five URIs or a non-string URI. | Subscribe to at most five opsknight:// URIs per stream. |
-| `MCP_UNAVAILABLE` | An unexpected server error. The structured error carries a requestId. | Retry. Administrators search the log for mcp.tool.unexpected_error with that requestId. |
-| `MCP_OPERATION_UNAVAILABLE` | Unknown operationId, or the operation is not available through this tool. | Use search_capabilities to find one. |
-| `MCP_INVALID_ARGUMENTS` | The arguments do not match the operation schema. The hint names the path and rule. | Call describe_operation and correct the arguments. |
-| `MCP_CAPABILITY_DISABLED` | An administrator turned this tool, operation or domain off under Exposed capabilities. | Do not retry. Ask an administrator if you need it. |
-| `MCP_DOMAIN_REJECTED` | OpsKnight refused the operation for a business reason. The error carries a domainCode from the application error registry and, for invalid input, the failing fields. | Read domainCode and fields in the structured error, correct the input and retry. |
-| `MCP_EMPTY_BODY` | The POST had no body. | Send a JSON-RPC message. |
-| `MCP_BODY_TIMEOUT` | The request body took longer than five seconds to arrive. | Retry; check proxy buffering and network health. |
-| `MCP_CANCELLED` | The client cancelled the request or closed the connection. | Nothing to fix. A change may still have committed; retry with the same idempotencyKey. |
-| `MCP_BODY_TOO_LARGE` | The request body is larger than 64 KiB. | Send smaller arguments. |
-| `MCP_DEADLINE_EXCEEDED` | The request ran past its ten-second deadline. | Retry with fewer steps or a smaller query.limit. |
-| `MCP_INVALID_PAGE_SIZE` | query.limit is outside 1 to 50. | Use a limit from 1 to 50 and follow nextCursor for more. |
-| `MCP_SCOPE_NOT_GRANTED` | The role allows the operation, but this connection was not granted the permission it needs. The hint names the missing scopes. | Reconnect and tick the named permission on the consent page (the administrator ceiling must include it). |
-| `MCP_OPERATION_DISABLED` | Changes or sensitive reads are turned off in Access policy. | An administrator turns on reviewed actions or sensitive reads under Advanced. |
-| `MCP_INVALID_RESOURCE_ID` | A resource id or opsknight:// URI is malformed. | Use an id returned by a list or search. |
-| `MCP_INVALID_QUERY` | A query parameter value is an object or array where a scalar is required. | Send a string, number or boolean. |
-| `MCP_EMPTY_DOMAIN_RESULT` | An operation returned no body where one was expected. | Retry; report it if it repeats. |
-| `MCP_DUPLICATE_STEP` | Two execute_plan steps share an id. | Give every step a unique id. |
-| `MCP_PLAN_READS_ONLY` | execute_plan accepts reads only. | Run changes one at a time with call_operation. |
-| `MCP_INVALID_DEPENDENCY` | An execute_plan step depends on a step id that does not exist. | Correct dependsOn. |
-| `MCP_CYCLIC_PLAN` | execute_plan steps depend on each other in a cycle. | Remove the circular dependsOn. |
-| `MCP_DEPENDENCY_FAILED` | An execute_plan step was skipped because a step it depends on failed. | Fix the failed step first. |
-| `MCP_DUPLICATE_OR_UNSAFE_KEY` | The JSON body repeats a key or uses a reserved key such as __proto__. | Send plain JSON with unique keys. |
-| `MCP_JSON_DEPTH` | The JSON body is nested deeper than 24 levels. | Flatten the arguments. |
-| `MCP_CONTENT_TYPE` | The POST did not send Content-Type: application/json. | Use an MCP client or the official SDK. |
-| `MCP_NOT_A_READ` | read_operation was called with an operation that changes something. | Use call_operation for routine changes or operation_prepare for reviewed ones. |
-| `MCP_SUBSCRIPTIONS_BUSY` | The process already holds 32 subscription streams. | Retry later. |
-| `MCP_SUBSCRIPTIONS_LIMIT` | This connection already holds two subscription streams. | Close a stream first. |
+| <a id="MCP_RESOURCE_UNAVAILABLE"></a>`MCP_RESOURCE_UNAVAILABLE` | Not found, or not visible to this person. | Check the id with a list or search read. |
+| <a id="MCP_OPERATION_FORBIDDEN"></a>`MCP_OPERATION_FORBIDDEN` | The person's OpsKnight role does not allow this operation. | An administrator changes the role. Reconnecting does not help. |
+| <a id="MCP_SESSIONS_UNSUPPORTED"></a>`MCP_SESSIONS_UNSUPPORTED` | The client sent an Mcp-Session-Id header. The server is stateless. | Use a client that does not require sessions, or remove the header. |
+| <a id="MCP_INVALID_ENCODING"></a>`MCP_INVALID_ENCODING` | The body is not valid UTF-8 JSON. | Send UTF-8 JSON. |
+| <a id="MCP_OPERATION_BUDGET_EXCEEDED"></a>`MCP_OPERATION_BUDGET_EXCEEDED` | The request uses more operations than Operations per request allows (at most 8). | Split the work across several calls. |
+| <a id="MCP_INVALID_HEADERS"></a>`MCP_INVALID_HEADERS` | A Tasks request is missing the matching Mcp-Method or Mcp-Protocol-Version header. | Use a client that supports protocol revision 2026-07-28 for Tasks. |
+| <a id="MCP_TASK_NOT_FOUND"></a>`MCP_TASK_NOT_FOUND` | Unknown task id, or a task that belongs to another connection or has passed its 24-hour retention. | Use the task id returned by runbook_execute_approved. |
+| <a id="MCP_BUSY"></a>`MCP_BUSY` | The server is at its concurrent-request limit and the request waited too long in the queue (or the queue is full, or this connection already uses half the slots). | Retry after the Retry-After interval (1 second). Administrators can raise Concurrent requests per process under Workload limits. |
+| <a id="MCP_RESULT_BUDGET_EXCEEDED"></a>`MCP_RESULT_BUDGET_EXCEEDED` | The result is larger than 256 KiB. | Lower query.limit or narrow the filters. |
+| <a id="MCP_INVALID_SUBSCRIPTION"></a>`MCP_INVALID_SUBSCRIPTION` | subscriptions/listen received more than five URIs or a non-string URI. | Subscribe to at most five opsknight:// URIs per stream. |
+| <a id="MCP_UNAVAILABLE"></a>`MCP_UNAVAILABLE` | An unexpected server error. The structured error carries a requestId. | Retry. Administrators search the log for mcp.tool.unexpected_error with that requestId. |
+| <a id="MCP_OPERATION_UNAVAILABLE"></a>`MCP_OPERATION_UNAVAILABLE` | Unknown operationId, or the operation is not available through this tool. | Use search_capabilities to find one. |
+| <a id="MCP_INVALID_ARGUMENTS"></a>`MCP_INVALID_ARGUMENTS` | The arguments do not match the operation schema. The hint names the path and rule. | Call describe_operation and correct the arguments. |
+| <a id="MCP_CAPABILITY_DISABLED"></a>`MCP_CAPABILITY_DISABLED` | An administrator turned this tool, operation or domain off under Exposed capabilities. | Do not retry. Ask an administrator if you need it. |
+| <a id="MCP_DOMAIN_REJECTED"></a>`MCP_DOMAIN_REJECTED` | OpsKnight refused the operation for a business reason. The error carries a domainCode from the application error registry and, for invalid input, the failing fields. | Read domainCode and fields in the structured error, correct the input and retry. |
+| <a id="MCP_EMPTY_BODY"></a>`MCP_EMPTY_BODY` | The POST had no body. | Send a JSON-RPC message. |
+| <a id="MCP_BODY_TIMEOUT"></a>`MCP_BODY_TIMEOUT` | The request body took longer than five seconds to arrive. | Retry; check proxy buffering and network health. |
+| <a id="MCP_CANCELLED"></a>`MCP_CANCELLED` | The client cancelled the request or closed the connection. | Nothing to fix. A change may still have committed; retry with the same idempotencyKey. |
+| <a id="MCP_BODY_TOO_LARGE"></a>`MCP_BODY_TOO_LARGE` | The request body is larger than 64 KiB. | Send smaller arguments. |
+| <a id="MCP_DEADLINE_EXCEEDED"></a>`MCP_DEADLINE_EXCEEDED` | The request ran past its ten-second deadline. | Retry with fewer steps or a smaller query.limit. |
+| <a id="MCP_INVALID_PAGE_SIZE"></a>`MCP_INVALID_PAGE_SIZE` | query.limit is outside 1 to 50. | Use a limit from 1 to 50 and follow nextCursor for more. |
+| <a id="MCP_SCOPE_NOT_GRANTED"></a>`MCP_SCOPE_NOT_GRANTED` | The role allows the operation, but this connection was not granted the permission it needs. The hint names the missing scopes. | Reconnect and tick the named permission on the consent page (the administrator ceiling must include it). |
+| <a id="MCP_OPERATION_DISABLED"></a>`MCP_OPERATION_DISABLED` | Changes or sensitive reads are turned off in Access policy. | An administrator turns on reviewed actions or sensitive reads under Advanced. |
+| <a id="MCP_INVALID_RESOURCE_ID"></a>`MCP_INVALID_RESOURCE_ID` | A resource id or opsknight:// URI is malformed. | Use an id returned by a list or search. |
+| <a id="MCP_INVALID_QUERY"></a>`MCP_INVALID_QUERY` | A query parameter value is an object or array where a scalar is required. | Send a string, number or boolean. |
+| <a id="MCP_EMPTY_DOMAIN_RESULT"></a>`MCP_EMPTY_DOMAIN_RESULT` | An operation returned no body where one was expected. | Retry; report it if it repeats. |
+| <a id="MCP_DUPLICATE_STEP"></a>`MCP_DUPLICATE_STEP` | Two execute_plan steps share an id. | Give every step a unique id. |
+| <a id="MCP_PLAN_READS_ONLY"></a>`MCP_PLAN_READS_ONLY` | execute_plan accepts reads only. | Run changes one at a time with call_operation. |
+| <a id="MCP_INVALID_DEPENDENCY"></a>`MCP_INVALID_DEPENDENCY` | An execute_plan step depends on a step id that does not exist. | Correct dependsOn. |
+| <a id="MCP_CYCLIC_PLAN"></a>`MCP_CYCLIC_PLAN` | execute_plan steps depend on each other in a cycle. | Remove the circular dependsOn. |
+| <a id="MCP_DEPENDENCY_FAILED"></a>`MCP_DEPENDENCY_FAILED` | An execute_plan step was skipped because a step it depends on failed. | Fix the failed step first. |
+| <a id="MCP_DUPLICATE_OR_UNSAFE_KEY"></a>`MCP_DUPLICATE_OR_UNSAFE_KEY` | The JSON body repeats a key or uses a reserved key such as __proto__. | Send plain JSON with unique keys. |
+| <a id="MCP_JSON_DEPTH"></a>`MCP_JSON_DEPTH` | The JSON body is nested deeper than 24 levels. | Flatten the arguments. |
+| <a id="MCP_CONTENT_TYPE"></a>`MCP_CONTENT_TYPE` | The POST did not send Content-Type: application/json. | Use an MCP client or the official SDK. |
+| <a id="MCP_SUBSCRIPTIONS_BUSY"></a>`MCP_SUBSCRIPTIONS_BUSY` | The process already holds 32 subscription streams. | Retry later. |
+| <a id="MCP_NOT_A_READ"></a>`MCP_NOT_A_READ` | read_operation was called with an operation that changes something. | Use call_operation for routine changes or operation_prepare for reviewed ones. |
+| <a id="MCP_SUBSCRIPTIONS_LIMIT"></a>`MCP_SUBSCRIPTIONS_LIMIT` | This connection already holds two subscription streams. | Close a stream first. |
 
 ## Reviewed changes
 
 | Code | What it means | What to do |
 | --- | --- | --- |
-| `MCP_APPROVER_REQUIRED` | The signed-in person cannot approve runbook runs. | Ask someone with the runbook approve permission (Responders and Administrators by default). |
-| `MCP_DISTINCT_REVIEWER_REQUIRED` | Someone who is not an administrator tried to approve their own request. | Ask a second person with approval rights to review it. |
-| `MCP_REVIEWER_NOT_AUTHORIZED` | Configuration changes need an active administrator who holds every permission the change needs. | Ask an administrator to review it. |
-| `MCP_APPROVAL_EXPIRED` | The request was not reviewed within the review window, or was approved but not applied within the commit window. | Prepare the change again with a new idempotencyKey. Administrators can lengthen both windows under Access policy → Advanced → Reviewed actions. |
-| `MCP_APPROVAL_UNAVAILABLE` | No such approval for this connection and person (another grant or user cannot see it). | Use the approval ID returned by the prepare call, from the same connection. |
-| `MCP_REVIEWER_CHANGED` | The reviewer's account or session changed while reviewing. | Reload the review page and decide again. |
-| `MCP_AUTHORITY_CHANGED` | The requester's connection or permissions changed after the request was made. | The requester reconnects if needed and prepares the change again. |
-| `MCP_APPROVAL_BACKLOG` | This connection already has 20 configuration changes waiting or approved but unused. | Review, reject or let the pending requests expire, then prepare again. |
-| `MCP_APPROVAL_REJECTED` | A reviewer rejected the request. The status tools return their reason, labelled untrusted. | Read the reason with operation_get_approval or runbook_get_approval; prepare a new request with a new idempotencyKey if appropriate. |
-| `MCP_APPROVAL_REQUIRED` | The assistant tried to apply a request that is still waiting for review. | Share the reviewUrl and poll the get_approval tool until it reports APPROVED. |
-| `MCP_APPROVAL_PLAN_CHANGED` | The reviewed request no longer matches: its digest differs, or for a destructive change the target changed after review. | Prepare the change again so a reviewer sees the current state. |
-| `MCP_REAUTHENTICATION_REQUIRED` | Approving a destructive change needs a sign-in within the last two hours. | Choose Confirm it's you on the review page, sign in again and approve. |
-| `MCP_SELF_APPROVAL_CONFIRMATION_REQUIRED` | An administrator approving their own request did not tick the self-approval confirmation. | Tick the confirmation on the review page and approve again. |
+| <a id="MCP_APPROVER_REQUIRED"></a>`MCP_APPROVER_REQUIRED` | The signed-in person cannot approve runbook runs. | Ask someone with the runbook approve permission (Responders and Administrators by default). |
+| <a id="MCP_DISTINCT_REVIEWER_REQUIRED"></a>`MCP_DISTINCT_REVIEWER_REQUIRED` | Someone tried to approve their own request without being an administrator, the request was made with a personal access token (which always needs a second person), or the administrator-set option Require a different reviewer is on. | Ask a second person with approval rights to review it. |
+| <a id="MCP_REVIEWER_NOT_AUTHORIZED"></a>`MCP_REVIEWER_NOT_AUTHORIZED` | Configuration changes need an active administrator who holds every permission the change needs. | Ask an administrator to review it. |
+| <a id="MCP_APPROVAL_EXPIRED"></a>`MCP_APPROVAL_EXPIRED` | The request was not reviewed within the review window, or was approved but not applied within the commit window. | Prepare the change again with a new idempotencyKey. Administrators can lengthen both windows under Access policy → Reviewed actions. |
+| <a id="MCP_APPROVAL_UNAVAILABLE"></a>`MCP_APPROVAL_UNAVAILABLE` | No such approval for this connection and person (another grant or user cannot see it). | Use the approval ID returned by the prepare call, from the same connection. |
+| <a id="MCP_REVIEWER_CHANGED"></a>`MCP_REVIEWER_CHANGED` | The reviewer's account or session changed while reviewing. | Reload the review page and decide again. |
+| <a id="MCP_AUTHORITY_CHANGED"></a>`MCP_AUTHORITY_CHANGED` | The requester's connection or permissions changed after the request was made. | The requester reconnects if needed and prepares the change again. |
+| <a id="MCP_REAUTHENTICATION_REQUIRED"></a>`MCP_REAUTHENTICATION_REQUIRED` | Approving a destructive change, creating a personal access token, or a settings change that gives assistants more access (turning something on, adding a scope, host or origin, raising a limit, allowing personal tokens or lifting view-only connections, re-exposing a capability, adding or restoring an assistant), needs a sign-in within the last two hours. Changes that only reduce access never need it. | Choose Confirm it's you on the page, or Sign in again in settings, then repeat the action. |
+| <a id="MCP_APPROVAL_BACKLOG"></a>`MCP_APPROVAL_BACKLOG` | This connection already has 20 configuration changes waiting or approved but unused. | Review, reject or let the pending requests expire, then prepare again. |
+| <a id="MCP_APPROVAL_REJECTED"></a>`MCP_APPROVAL_REJECTED` | A reviewer rejected the request. The status tools return their reason, labelled untrusted. | Read the reason with operation_get_approval or runbook_get_approval; prepare a new request with a new idempotencyKey if appropriate. |
+| <a id="MCP_APPROVAL_REQUIRED"></a>`MCP_APPROVAL_REQUIRED` | The assistant tried to apply a request that is still waiting for review. | Share the reviewUrl and poll the get_approval tool until it reports APPROVED. |
+| <a id="MCP_APPROVAL_PLAN_CHANGED"></a>`MCP_APPROVAL_PLAN_CHANGED` | The reviewed request no longer matches: its digest differs, or for a destructive change the target changed after review. | Prepare the change again so a reviewer sees the current state. |
+| <a id="MCP_SELF_APPROVAL_CONFIRMATION_REQUIRED"></a>`MCP_SELF_APPROVAL_CONFIRMATION_REQUIRED` | An administrator approving their own request did not tick the self-approval confirmation. | Tick the confirmation on the review page and approve again. |
 
 ## Settings pages
 
 | Code | What it means | What to do |
 | --- | --- | --- |
-| `MCP_ADMIN_REQUIRED` | The settings action needs an administrator (or, for runbook approvals, a runbook approver). | Ask an administrator. |
-| `MCP_CONFIGURATION_INVALID` | MCP cannot be turned on while a configuration problem is listed (App URL, migrations, encryption key). | Fix the problems shown on the Overview tab, then retry. |
-| `MCP_ALREADY_CONFIGURED` | Quick setup was clicked while MCP was already on. | Reload the page; use Access policy to change settings. |
-| `MCP_CLIENT_NOT_FOUND` | The assistant to restore does not exist. | Reload the Assistants tab. |
-| `MCP_POLICY_CONFLICT` | Someone else saved the MCP policy or exposed capabilities after this page loaded. | Choose Reload policy, re-apply your change and save. |
-| `MCP_INVALID_CIMD_HOST` | A trusted assistant host is not a plain DNS name. | Enter one host name per line, without scheme, port or path. |
-| `MCP_DCR_REQUIRES_SCOPES` | Automatic connections was turned on with no permissions ticked. | Tick at least one permission under What assistants may do. |
-| `MCP_INVALID_NAME` | A manually registered assistant needs a name. | Enter a name. |
-| `MCP_INVALID_REDIRECT` | A manual registration redirect URI is not HTTPS or loopback HTTP. | Enter the exact callback the assistant uses. |
-| `MCP_CONFIRMATION_REQUIRED` | "Revoke all active connections" was submitted without ticking the confirmation box. | Tick the box in the dialog, then confirm. |
-| `MCP_LOGIN_REQUIRED` | The settings or review page needs a signed-in user. | Sign in. |
-| `MCP_INVALID_CAPABILITY` | Exposed capabilities was saved with a name that is not a tool, operation or domain. | Reload the tab and choose from the list. |
+| <a id="MCP_ADMIN_REQUIRED"></a>`MCP_ADMIN_REQUIRED` | The settings action needs an administrator (or, for runbook approvals, a runbook approver). | Ask an administrator. |
+| <a id="MCP_CONFIGURATION_INVALID"></a>`MCP_CONFIGURATION_INVALID` | MCP cannot be turned on while a configuration problem is listed (App URL, migrations, encryption key). | Fix the problems shown on the Overview tab, then retry. |
+| <a id="MCP_ALREADY_CONFIGURED"></a>`MCP_ALREADY_CONFIGURED` | Quick setup was clicked while MCP was already on. | Reload the page; use Access policy to change settings. |
+| <a id="MCP_FORCE_DISABLED"></a>`MCP_FORCE_DISABLED` | MCP was switched on in settings while the deployment sets MCP_FORCE_DISABLED=true, which overrides the stored policy. | Ask the operator to remove MCP_FORCE_DISABLED from the environment and restart OpsKnight, then turn MCP on again. |
+| <a id="MCP_CLIENT_NOT_FOUND"></a>`MCP_CLIENT_NOT_FOUND` | The assistant to restore does not exist. | Reload the Assistants tab. |
+| <a id="MCP_POLICY_CONFLICT"></a>`MCP_POLICY_CONFLICT` | Someone else saved the MCP policy or exposed capabilities after this page loaded. | Choose Reload policy, re-apply your change and save. |
+| <a id="MCP_POLICY_INVALID"></a>`MCP_POLICY_INVALID` | The MCP settings save refused a value; the form shows which one (for example no permission for automatic connections, a bad host or browser origin, or setup not ready). | Change the value the message names, then save again. |
+| <a id="MCP_INVALID_CIMD_HOST"></a>`MCP_INVALID_CIMD_HOST` | A trusted assistant host is not a plain DNS name. | Enter one host name per line, without scheme, port or path. |
+| <a id="MCP_INVALID_BROWSER_ORIGIN"></a>`MCP_INVALID_BROWSER_ORIGIN` | An Allowed browser origins entry is not an exact origin (scheme, host and optional port), uses plain http off loopback, or the list has more than 10 entries. | Enter origins such as https://inspector.example.com or http://localhost:6274, one per line. |
+| <a id="MCP_DCR_REQUIRES_SCOPES"></a>`MCP_DCR_REQUIRES_SCOPES` | Automatic connections was turned on with no permissions ticked. | Tick at least one permission under What assistants may do. |
+| <a id="MCP_INVALID_NAME"></a>`MCP_INVALID_NAME` | A manually registered assistant needs a name. | Enter a name. |
+| <a id="MCP_INVALID_REDIRECT"></a>`MCP_INVALID_REDIRECT` | A manual registration redirect URI is not HTTPS or loopback HTTP. | Enter the exact callback the assistant uses. |
+| <a id="MCP_CONFIRMATION_REQUIRED"></a>`MCP_CONFIRMATION_REQUIRED` | "Revoke all active connections" was submitted without ticking the confirmation box. | Tick the box in the dialog, then confirm. |
+| <a id="MCP_PAT_INVALID_EXPIRY"></a>`MCP_PAT_INVALID_EXPIRY` | The chosen expiry is outside 1 day to the policy maximum (at most 90 days). | Choose one of the offered expiry options. |
+| <a id="MCP_LOGIN_REQUIRED"></a>`MCP_LOGIN_REQUIRED` | The settings or review page needs a signed-in user. | Sign in. |
+| <a id="MCP_INVALID_CAPABILITY"></a>`MCP_INVALID_CAPABILITY` | Exposed capabilities was saved with a name that is not a tool, operation or domain. | Reload the tab and choose from the list. |
+| <a id="MCP_PAT_DISABLED"></a>`MCP_PAT_DISABLED` | A personal access token was requested while personal access tokens are off in the access policy. Turning them off revokes every token; a revoked token gets MCP_INVALID_GRANT. | Ask an administrator to allow personal access tokens, then create a new token. |
+| <a id="MCP_PAT_LIMIT_REACHED"></a>`MCP_PAT_LIMIT_REACHED` | The person already holds 20 active personal access tokens. | Revoke a token that is no longer used under Connections, then create the new one. |
 
 ## Server configuration and start-up
 
 | Code | What it means | What to do |
 | --- | --- | --- |
-| `MCP_HTTPS_REQUIRED` | The App URL is plain HTTP on a host other than localhost. | Set an HTTPS App URL in Settings → System. |
-| `MCP_ORIGIN_REQUIRED` | No App URL is configured. | Set the App URL in Settings → System. |
-| `MCP_RUNTIME_NOT_LOADED` | MCP configuration was used before it loaded. | Retry; report it if it repeats. |
-| `MCP_HASH_SECRET_UNAVAILABLE` | No active application encryption key is available to derive the credential key. | Configure the same ENCRYPTION_KEY on every replica and restart. |
-| `MCP_DUPLICATE_OPERATION` | Start-up check: two REST operations share an operation ID. | Build defect; reinstall a released image. |
-| `MCP_SCHEMA_DEPTH` | Start-up check: an operation schema nests deeper than 24 levels. | Build defect; reinstall a released image. |
-| `MCP_SCHEMA_REFERENCE` | Start-up check: an operation schema has an unresolvable reference. | Build defect; reinstall a released image. |
-| `MCP_STALE_REVIEW` | Start-up check: review.json does not classify every operation. | Build defect; reinstall a released image. |
-| `MCP_APPROVAL_GUARD_NOT_ENFORCED` | An approved change reached a route that did not run the shared approval check. | Report it: this is a server defect. Nothing is retried automatically. |
+| <a id="MCP_HTTPS_REQUIRED"></a>`MCP_HTTPS_REQUIRED` | The App URL is plain HTTP on a host other than localhost. | Set an HTTPS App URL in Settings → System. |
+| <a id="MCP_ORIGIN_REQUIRED"></a>`MCP_ORIGIN_REQUIRED` | No App URL is configured. | Set the App URL in Settings → System. |
+| <a id="MCP_RUNTIME_NOT_LOADED"></a>`MCP_RUNTIME_NOT_LOADED` | MCP configuration was used before it loaded. | Retry; report it if it repeats. |
+| <a id="MCP_HASH_SECRET_UNAVAILABLE"></a>`MCP_HASH_SECRET_UNAVAILABLE` | No active application encryption key is available to derive the credential key. | Configure the same ENCRYPTION_KEY on every replica and restart. |
+| <a id="MCP_DUPLICATE_OPERATION"></a>`MCP_DUPLICATE_OPERATION` | Start-up check: two REST operations share an operation ID. | Build defect; reinstall a released image. |
+| <a id="MCP_SCHEMA_DEPTH"></a>`MCP_SCHEMA_DEPTH` | Start-up check: an operation schema nests deeper than 24 levels. | Build defect; reinstall a released image. |
+| <a id="MCP_SCHEMA_REFERENCE"></a>`MCP_SCHEMA_REFERENCE` | Start-up check: an operation schema has an unresolvable reference. | Build defect; reinstall a released image. |
+| <a id="MCP_STALE_REVIEW"></a>`MCP_STALE_REVIEW` | Start-up check: review.json does not classify every operation. | Build defect; reinstall a released image. |
+| <a id="MCP_APPROVAL_GUARD_NOT_ENFORCED"></a>`MCP_APPROVAL_GUARD_NOT_ENFORCED` | An approved change reached a route that did not run the shared approval check. | Report it: this is a server defect. Nothing is retried automatically. |
 
 ## Messages people see
 
@@ -156,13 +168,20 @@ The sign-in, consent and error pages show these titles and explanations, with th
 | `MCP_RATE_LIMITED` | Too many attempts | Too many requests in the last minute. Wait a moment, then try again. |
 | `MCP_ACCESS_CHANGED` | Your access changed | Your password, email, account status or administrator role changed, or you signed out everywhere. Reconnect OpsKnight from your assistant to sign in again. |
 | `MCP_INVALID_TOKEN` | Sign-in required | Connect OpsKnight again from your assistant to sign in. |
+| `MCP_INSUFFICIENT_SCOPE` | More permission needed | This connection was not granted a permission this call needs. Approve the extra permission when your assistant opens OpsKnight sign-in again. |
 | `MCP_CLIENT_UNKNOWN` | This connection is out of date | OpsKnight no longer recognises the sign-in details this assistant saved. Remove OpsKnight from your assistant, add it again with the same URL, and sign in. |
+| `MCP_INVALID_ORIGIN` | Wrong address | Open the sign-in page using the address configured in Settings → System, then try again. |
+| `MCP_DEVICE_FLOW_DISABLED` | Device sign-in is turned off | An OpsKnight administrator needs to allow device sign-in in Settings → Integrations & ChatOps → MCP (AI Assistants) → Access policy. |
+| `MCP_DEVICE_CODE_LOCKED` | Too many wrong codes | Code entry is paused for 15 minutes after five wrong codes. Wait, then enter the code shown on your device. |
+| `MCP_DEVICE_CODE_INVALID` | That code did not work | Check the code shown on your device and enter it again. Codes are eight letters, like BCDF-GHJK. |
+| `MCP_DEVICE_CODE_EXPIRED` | This code expired or was already used | Start the sign-in again on your device to get a new code. Codes are valid for ten minutes. |
 | `MCP_CAPABILITY_DISABLED` | This capability is turned off | An OpsKnight administrator disabled this capability for AI assistants in Settings → Integrations & ChatOps → MCP (AI Assistants) → Exposed capabilities. Do not retry; ask an administrator if you need it. |
 | `MCP_CLIENT_METADATA_TIMEOUT` | We could not load this assistant's details | OpsKnight could not fetch the details this assistant publishes about itself in time. Try again, and ask an administrator to check outbound network access from the server if it keeps failing. |
 | `MCP_CLIENT_METADATA_UNAVAILABLE` | We could not load this assistant's details | OpsKnight could not fetch the details this assistant publishes about itself. Try again, and ask an administrator to check outbound network access from the server if it keeps failing. |
 | `MCP_CLIENT_METADATA_TOO_LARGE` | This assistant's details are not valid | The details this assistant publishes about itself are larger than OpsKnight accepts. Ask the assistant vendor or an administrator. |
 | `MCP_CLIENT_REVOKED` | This assistant was disconnected | An administrator revoked it. Ask them to allow it again, then reconnect. |
 | `MCP_INVALID_HOST` | Wrong address | Open OpsKnight using the address configured in Settings → System. |
+| `MCP_TOKEN_REQUIRED` | Sign-in required | Sign in to OpsKnight from your assistant to connect. |
 | `invalid_client` | This assistant is not allowed to connect | OpsKnight could not verify this assistant, or an administrator has turned off automatic connections. An administrator can find the exact reason in the server log by searching for client_denied. |
 | `invalid_request` | The assistant sent an incomplete sign-in request | Return to your assistant and connect again. If it keeps happening, remove OpsKnight from the assistant and add it again. |
 | `invalid_scope` | The requested access is not available | An administrator limited what assistants may access. Reconnect to get the allowed access. |
@@ -192,18 +211,30 @@ Search the application log for these event names. Entries never contain tokens, 
 
 | Event | Level | Meaning | Source |
 | --- | --- | --- | --- |
-| `mcp.authorize.client_denied` | warn | Sign-in refused the assistant. `reason`: unknown_client_id, client_revoked, automatic_connections_off and similar, or no_scopes_allowed_for_this_client (the ceiling and role leave nothing). | `src/app/oauth/mcp/authorize/route.ts` |
-| `mcp.authorize.invalid_request` | warn | The authorization request failed validation. `fields` lists the parameters (never their values). | `src/app/oauth/mcp/authorize/route.ts` |
-| `mcp.authorize.unexpected_error` | warn | An unexpected error on the authorization endpoint. `name` is the error class. | `src/app/oauth/mcp/authorize/route.ts` |
-| `mcp.cimd.client_denied` | warn | A metadata-document assistant was refused by policy. `reason`: automatic_connections_off, host_not_in_allowlist or no_scopes. | `src/lib/mcp/auth/cimd.ts` |
-| `mcp.cimd.client_id_rejected` | warn | The client_id is not a canonical HTTPS URL (`reason`: not_canonical_https_url). | `src/lib/mcp/auth/cimd.ts` |
-| `mcp.cimd.document_rejected` | warn | The metadata document was fetched but refused. `reason` names the check, such as http_status_404 or content_type_not_json. | `src/lib/mcp/auth/cimd.ts` |
-| `mcp.cimd.fetch_failed` | warn | The metadata document could not be fetched. `reason` is the MCP code (timeout, too large, forbidden address). | `src/lib/mcp/auth/cimd.ts` |
-| `mcp.grant.last_call_failed` | warn | Recording the Last call column failed. The tool call itself still succeeded. | `src/lib/mcp/core/usage.ts` |
-| `mcp.request.unexpected_error` | error | An unexpected error in the /mcp route. Look up `requestId` (also the X-Request-Id header). | `src/app/mcp/route.ts` |
-| `mcp.subscription.listener_failed` | warn | A subscription stream failed while delivering a change. | `src/lib/mcp/protocol/subscriptions.ts` |
-| `mcp.subscription.poll_failed` | warn | The subscription change poll failed; the stream retries. | `src/lib/mcp/protocol/subscriptions.ts` |
-| `mcp.tool.unexpected_error` | error | A tool failed unexpectedly. Carries requestId, tool, grantId, errorName and prismaCode; never the arguments. | `src/lib/mcp/core/plan.ts`, `src/lib/mcp/protocol/server.ts` |
+| <a id="mcp.authorize.client_denied"></a>`mcp.authorize.client_denied` | warn | Sign-in refused the assistant. `reason`: unknown_client_id, client_revoked, automatic_connections_off and similar, or no_scopes_allowed_for_this_client (the ceiling and role leave nothing). | `src/app/oauth/mcp/authorize/route.ts` |
+| <a id="mcp.authorize.invalid_request"></a>`mcp.authorize.invalid_request` | warn | The authorization request failed validation. `fields` lists the parameters (never their values). | `src/app/oauth/mcp/authorize/route.ts` |
+| <a id="mcp.authorize.unexpected_error"></a>`mcp.authorize.unexpected_error` | warn | An unexpected error on the authorization endpoint. `name` is the error class. | `src/app/oauth/mcp/authorize/route.ts` |
+| <a id="mcp.call_log.write_failed"></a>`mcp.call_log.write_failed` | warn | A batch of activity-log rows could not be written and was dropped (counted in `opsknight_mcp_call_log_dropped_total`). `rows` is the batch size, `errorName` the error class. | `src/lib/mcp/core/call-log.ts` |
+| <a id="mcp.cimd.client_denied"></a>`mcp.cimd.client_denied` | warn | A metadata-document assistant was refused by policy. `reason`: automatic_connections_off, host_not_in_allowlist or no_scopes. | `src/lib/mcp/auth/cimd.ts` |
+| <a id="mcp.cimd.client_id_rejected"></a>`mcp.cimd.client_id_rejected` | warn | The client_id is not a canonical HTTPS URL (`reason`: not_canonical_https_url). | `src/lib/mcp/auth/cimd.ts` |
+| <a id="mcp.cimd.document_rejected"></a>`mcp.cimd.document_rejected` | warn | The metadata document was fetched but refused. `reason` names the check, such as http_status_404 or content_type_not_json. | `src/lib/mcp/auth/cimd.ts` |
+| <a id="mcp.cimd.fetch_failed"></a>`mcp.cimd.fetch_failed` | warn | The metadata document could not be fetched. `reason` is the MCP code (timeout, too large, forbidden address). | `src/lib/mcp/auth/cimd.ts` |
+| <a id="mcp.device.client_denied"></a>`mcp.device.client_denied` | warn | A device sign-in request was refused for its client. `reason`: unknown_client_id, client_revoked, device_grant_not_registered (the client did not declare, or was not registered for, the device_code grant), metadata_document_clients_unsupported or no_scopes_allowed_for_this_client. | `src/app/oauth/mcp/device_authorization/route.ts` |
+| <a id="mcp.device.unexpected_error"></a>`mcp.device.unexpected_error` | warn | An unexpected error on the device authorization endpoint. `name` is the error class. | `src/app/oauth/mcp/device_authorization/route.ts` |
+| <a id="mcp.grant.last_call_failed"></a>`mcp.grant.last_call_failed` | warn | Recording the Last call column failed. The tool call itself still succeeded. | `src/lib/mcp/core/usage.ts` |
+| <a id="mcp.register.unexpected_error"></a>`mcp.register.unexpected_error` | warn | An unexpected error on the client registration endpoint. `name` is the error class. | `src/app/oauth/mcp/register/route.ts` |
+| <a id="mcp.request.completed"></a>`mcp.request.completed` | info | One line per /mcp request: `requestId`, `grantId`, `clientId`, `method`, `tool` (the bounded metrics label), `outcome`, `durationMs` and, on failure, `errorCode`. Never arguments or results. Every outcome other than served is always written; MCP_LOG_SAMPLE_SERVED (0 to 1, default 1) samples served requests. A stable contract for log pipelines and SIEMs. | `src/app/mcp/route.ts` |
+| <a id="mcp.request.unexpected_error"></a>`mcp.request.unexpected_error` | error | An unexpected error in the /mcp route. Carries `requestId` (also the X-Request-Id header) and `grantId`. | `src/app/mcp/route.ts` |
+| <a id="mcp.revoke.unexpected_error"></a>`mcp.revoke.unexpected_error` | warn | An unexpected error on the token revocation endpoint. `name` is the error class. | `src/app/oauth/mcp/revoke/route.ts` |
+| <a id="mcp.sensitive_read.audit_failed"></a>`mcp.sensitive_read.audit_failed` | warn | Writing the audit row for a sensitive read failed; the read itself was still served. `operationId` and `errorName` only. | `src/lib/mcp/core/execution.ts` |
+| <a id="mcp.subscription.access_lost"></a>`mcp.subscription.access_lost` | info | A listen stream was closed because the person lost access to a subscribed resource, or their role or teams changed. Clients re-read on reconnect. | `src/app/mcp/route.ts` |
+| <a id="mcp.subscription.listener_failed"></a>`mcp.subscription.listener_failed` | warn | A subscription stream failed while delivering a change. | `src/lib/mcp/protocol/subscriptions.ts` |
+| <a id="mcp.subscription.poll_failed"></a>`mcp.subscription.poll_failed` | warn | The subscription change poll failed; the stream retries. | `src/lib/mcp/protocol/subscriptions.ts` |
+| <a id="mcp.token.grace_reissued"></a>`mcp.token.grace_reissued` | warn | A rotated refresh token was replayed inside the grace window and a new token issued (`grantId`, `replacedId`, `revokedSuccessorId`). Occasional lines are lost responses; many for one grant suggest a stolen token racing the real client. | `src/lib/mcp/auth/oauth-model.ts` |
+| <a id="mcp.token.refresh_reuse_revoked"></a>`mcp.token.refresh_reuse_revoked` | warn | A rotated refresh token was reused outside the grace window; the whole grant was revoked (`grantId`). The audit log has mcp.grant.reuse_detected with the user and client. | `src/app/oauth/mcp/token/route.ts` |
+| <a id="mcp.token.transient"></a>`mcp.token.transient` | warn | A token request hit a passing database problem and was answered temporarily_unavailable. `prismaCode` and `state` only. | `src/app/oauth/mcp/token/route.ts` |
+| <a id="mcp.token.unexpected_error"></a>`mcp.token.unexpected_error` | error | An unexpected error on the token endpoint, answered server_error. `name` and `prismaCode` only; never form values, codes or tokens. | `src/app/oauth/mcp/token/route.ts` |
+| <a id="mcp.tool.unexpected_error"></a>`mcp.tool.unexpected_error` | error | A tool failed unexpectedly. Carries requestId, tool, grantId, errorName and prismaCode; never the arguments. | `src/lib/mcp/core/plan.ts`, `src/lib/mcp/protocol/server.ts` |
 
 ## Common symptoms
 

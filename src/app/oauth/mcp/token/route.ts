@@ -7,14 +7,19 @@ import prisma from '@/lib/prisma';
 import { acquireMcpOAuthSlot, admitMcpOAuthRequest } from '@/lib/mcp/auth/admission';
 import { mcpOAuthServer } from '@/lib/mcp/auth/oauth-model';
 import { mcpResource, withMcpRuntime } from '@/lib/mcp/auth/config';
+import { browserPreflight, withBrowserCors } from '@/lib/mcp/auth/cors';
 import { assertMcpHost, mcpHttpError, uniqueQuery } from '@/lib/mcp/auth/http';
 import { McpBoundaryError, requireMcp } from '@/lib/mcp/core/errors';
 import { readBoundedMcpText } from '@/lib/mcp/core/body';
+import { mcpPolicyInForce } from '@/lib/mcp/core/kill-switch';
+import { observeMcpOAuth } from '@/lib/mcp/auth/oauth-observability';
+import { logger } from '@/lib/logger';
+import { MCP_DEVICE_CODE_GRANT, pollMcpDeviceAuthorization } from '@/lib/mcp/auth/device-flow';
 
 export const runtime = 'nodejs';
 const schema = z
   .object({
-    grant_type: z.enum(['authorization_code', 'refresh_token']),
+    grant_type: z.enum(['authorization_code', 'refresh_token', MCP_DEVICE_CODE_GRANT]),
     client_id: z.string().max(256),
     code: z.string().max(256).optional(),
     code_verifier: z
@@ -23,6 +28,7 @@ const schema = z
       .optional(),
     redirect_uri: z.string().url().max(2048).optional(),
     refresh_token: z.string().max(256).optional(),
+    device_code: z.string().max(256).optional(),
     scope: z.string().max(2048).optional(),
     resource: z.string().url().optional(),
   })
@@ -30,17 +36,22 @@ const schema = z
   .strip();
 
 export function POST(request: Request) {
-  return withMcpDatabase(() => withMcpRuntime(() => handlePost(request)));
+  return observeMcpOAuth('token', request, () =>
+    withMcpDatabase(() =>
+      withMcpRuntime(() => withBrowserCors(request, origin => handlePost(request, origin)))
+    )
+  );
 }
+export const OPTIONS = browserPreflight;
 
-async function handlePost(request: Request) {
+async function handlePost(request: Request, browserOrigin: string | null) {
   let reused: string | undefined;
   let release: (() => void) | undefined;
   try {
-    assertMcpHost(request);
+    assertMcpHost(request, false, browserOrigin);
     release = await acquireMcpOAuthSlot('token');
     const policy = await prisma.mcpPolicy.findUnique({ where: { id: 'default' } });
-    requireMcp(policy?.enabled, 'MCP_DISABLED', 503);
+    requireMcp(mcpPolicyInForce(policy), 'MCP_DISABLED', 503);
     await admitMcpOAuthRequest(request, 'token');
     requireMcp(
       request.headers.get('content-type')?.split(';')[0] === 'application/x-www-form-urlencoded',
@@ -56,6 +67,12 @@ async function handlePost(request: Request) {
       'invalid_request'
     );
     requireMcp(body.grant_type !== 'refresh_token' || body.refresh_token, 'invalid_request');
+    if (body.grant_type === MCP_DEVICE_CODE_GRANT) {
+      // Not offered while the administrator has the device flow off, as metadata says.
+      requireMcp(policy?.deviceFlowEnabled, 'unsupported_grant_type');
+      requireMcp(body.device_code, 'invalid_request');
+      return await deviceTokenResponse(body.device_code, body.client_id);
+    }
     let response = new OAuth2Server.Response();
     const exchange = async () => {
       // Each attempt starts clean: only a genuine reuse in the attempt that failed revokes.
@@ -98,23 +115,73 @@ async function handlePost(request: Request) {
       headers: { ...response.headers, 'Cache-Control': 'no-store', Pragma: 'no-cache' },
     });
   } catch (error) {
-    if (reused)
+    if (reused) {
+      const grantId = reused;
+      logger.warn('mcp.token.refresh_reuse_revoked', { grantId });
       await prisma.$transaction(async tx => {
-        await tx.mcpGrant.update({ where: { id: reused }, data: { revokedAt: new Date() } });
+        // The revoked grant names whose session ended and which assistant it belonged to.
+        const grant = await tx.mcpGrant.update({
+          where: { id: grantId },
+          data: { revokedAt: new Date() },
+          select: { userId: true, clientId: true, client: { select: { name: true } } },
+        });
         await logAudit(
           {
             source: 'AUTH',
             action: 'mcp.grant.reuse_detected',
             entityType: 'SYSTEM_CONFIG',
-            entityId: reused,
+            entityId: grantId,
+            actorId: grant.userId,
+            details: {
+              clientId: grant.clientId,
+              clientName: grant.client.name,
+              reason: 'refresh_token_reuse',
+            },
           },
           tx
         );
       });
+    }
     return tokenErrorResponse(error);
   } finally {
     release?.();
   }
+}
+
+/**
+ * RFC 8628 §3.4-3.5. The poll runs serializable with one retry, like a refresh: of two polls at
+ * once, the one that loses the race sees the code already consumed.
+ */
+async function deviceTokenResponse(deviceCode: string, clientId: string) {
+  const poll = () =>
+    prisma.$transaction(tx => pollMcpDeviceAuthorization(tx, { deviceCode, clientId }), {
+      isolationLevel: 'Serializable',
+      timeout: 5000,
+    });
+  const headers = { 'Cache-Control': 'no-store', Pragma: 'no-cache' };
+  let result;
+  try {
+    try {
+      result = await poll();
+    } catch (error) {
+      if (!isSerializationConflict(innerError(error))) throw error;
+      result = await poll();
+    }
+  } catch (error) {
+    // The grant was revoked or the person's access changed between approval and this poll: the
+    // whole transaction rolled back and the code stays unusable.
+    if (error instanceof McpBoundaryError && OAUTH_ERRORS.has(error.code))
+      return Response.json(
+        { error: error.code },
+        { status: error.code === 'invalid_client' ? 401 : 400, headers }
+      );
+    throw error;
+  }
+  if (result.ok) return Response.json(result.body, { headers });
+  return Response.json(
+    { error: result.error, ...(result.interval ? { interval: result.interval } : {}) },
+    { status: result.error === 'invalid_client' ? 401 : 400, headers }
+  );
 }
 
 const OAUTH_ERRORS = new Set([
@@ -161,7 +228,12 @@ function isTransientDatabaseError(error: unknown) {
 function tokenErrorResponse(error: unknown) {
   const headers = { 'Cache-Control': 'no-store' };
   const inner = innerError(error);
-  if (isTransientDatabaseError(inner))
+  // Names and codes only: form values, codes, verifiers and tokens are never logged.
+  if (isTransientDatabaseError(inner)) {
+    logger.warn('mcp.token.transient', {
+      prismaCode: databaseCode(inner)?.code,
+      state: databaseCode(inner)?.state,
+    });
     return Response.json(
       {
         error: 'temporarily_unavailable',
@@ -169,6 +241,7 @@ function tokenErrorResponse(error: unknown) {
       },
       { status: 503, headers: { ...headers, 'Retry-After': '2' } }
     );
+  }
   // A model check keeps its own OAuth code (invalid_scope stays invalid_scope).
   if (inner instanceof McpBoundaryError && inner !== error && OAUTH_ERRORS.has(inner.code))
     return Response.json(
@@ -178,12 +251,23 @@ function tokenErrorResponse(error: unknown) {
   if (inner instanceof McpBoundaryError) return mcpHttpError(inner);
   if (error instanceof z.ZodError)
     return Response.json({ error: 'invalid_request' }, { status: 400, headers });
-  if (error instanceof OAuth2Server.ServerError)
+  if (error instanceof OAuth2Server.ServerError) {
+    logUnexpected(inner);
     return Response.json({ error: 'server_error' }, { status: 500, headers });
+  }
   if (error instanceof OAuth2Server.OAuthError)
     return Response.json(
       { error: OAUTH_ERRORS.has(error.name) ? error.name : 'invalid_grant' },
       { status: error.name === 'invalid_client' ? 401 : 400, headers }
     );
+  logUnexpected(inner);
   return mcpHttpError(error);
+}
+
+function logUnexpected(inner: unknown) {
+  if (inner instanceof McpBoundaryError) return;
+  logger.error('mcp.token.unexpected_error', {
+    name: inner instanceof Error ? inner.name : typeof inner,
+    prismaCode: databaseCode(inner)?.code,
+  });
 }

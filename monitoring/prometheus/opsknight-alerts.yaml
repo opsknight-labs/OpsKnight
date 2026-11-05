@@ -160,6 +160,120 @@ groups:
           severity: critical
         annotations:
           summary: Durable ingestion queue evidence is unavailable
+  - name: opsknight.mcp
+    rules:
+      # Tool failures are answered with HTTP 200, so the HTTP 5xx alert never sees MCP breaking.
+      - alert: OpsKnightMcpServerErrorRateHigh
+        expr: sum(rate(opsknight_mcp_requests_total{outcome=~"error|unavailable"}[5m])) / clamp_min(sum(rate(opsknight_mcp_requests_total[5m])), 0.001) > 0.05
+        for: 10m
+        labels:
+          severity: critical
+        annotations:
+          summary: More than 5% of MCP requests fail on the server
+          description: Search logs for mcp.request.unexpected_error and mcp.request.completed with outcome error or unavailable; check the MCP database pool and /api/health/deep. See docs/v2.2.0/operate/mcp/monitoring.md.
+      - alert: OpsKnightMcpToolErrorRateHigh
+        expr: sum(rate(opsknight_mcp_requests_total{outcome="tool_error"}[5m])) / clamp_min(sum(rate(opsknight_mcp_requests_total[5m])), 0.001) > 0.25
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: More than a quarter of MCP calls return tool errors
+          description: Usually assistants sending invalid arguments or calling disabled capabilities. Group mcp.request.completed by tool and errorCode.
+      - alert: OpsKnightMcpShedding
+        expr: sum(rate(opsknight_mcp_busy_total[5m])) > 0.1
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: MCP is shedding requests with MCP_BUSY
+          description: Work or authentication slots are full on at least one web process. Raise Concurrent requests per process, add web replicas, or find the busy grant in mcp.request.completed.
+      - alert: OpsKnightMcpQueueSaturated
+        expr: max_over_time(opsknight_mcp_queued[5m]) > 0 and min_over_time(opsknight_mcp_queued[5m]) > 0
+        labels:
+          severity: warning
+        annotations:
+          summary: MCP requests have waited for a work slot for five minutes
+          description: The bounded slot queue never emptied on this process. Compare opsknight_mcp_in_flight with opsknight_mcp_in_flight_limit.
+      - alert: OpsKnightMcpAuthFailuresSpike
+        expr: (sum(rate(opsknight_mcp_requests_total{outcome=~"unauthenticated|forbidden"}[5m])) / clamp_min(sum(rate(opsknight_mcp_requests_total[5m])), 0.001) > 0.5) and on() (sum(rate(opsknight_mcp_requests_total[5m])) > 0.2)
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: Most MCP requests are refused authentication or authorization
+          description: A misconfigured or stale assistant, an expired policy change, or a token-guessing client. mcp.request.completed carries grantId and clientId for refused requests after the bearer resolved.
+      - alert: OpsKnightMcpRateLimited
+        expr: sum(rate(opsknight_mcp_requests_total{outcome="rate_limited"}[5m])) > 0.1
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: Assistants are hitting MCP quotas
+          description: Requests per minute or subscription caps are exhausted. Find the grant in mcp.request.completed (outcome rate_limited) before raising the policy limit.
+      - alert: OpsKnightMcpDisabledTraffic
+        expr: sum(rate(opsknight_mcp_requests_total{outcome="disabled"}[5m])) > 0.05
+        for: 30m
+        labels:
+          severity: info
+        annotations:
+          summary: Assistants keep calling MCP while it is turned off
+          description: Expected briefly after turning MCP off or setting MCP_FORCE_DISABLED. Sustained traffic means configured assistants were not told.
+      - alert: OpsKnightMcpP95High
+        expr: histogram_quantile(0.95, sum by (le, tool) (rate(opsknight_mcp_request_duration_seconds_bucket{tool!="none"}[5m]))) > 2.5
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: 'MCP tool {{ $labels.tool }} p95 latency is above 2.5 seconds'
+          description: Only calls that reached domain work are timed. Check the MCP database pool, slow queries and opsknight_mcp_queued.
+      - alert: OpsKnightMcpTokenEndpointFailing
+        expr: sum(rate(opsknight_mcp_oauth_requests_total{endpoint="token",outcome=~"server_error|unavailable"}[5m])) > 0.05
+        for: 10m
+        labels:
+          severity: critical
+        annotations:
+          summary: MCP token refreshes are failing on the server
+          description: Every assistant falls back to a new sign-in. Search for mcp.token.unexpected_error and mcp.token.transient; check database health.
+      - alert: OpsKnightMcpInvalidGrantSpike
+        expr: (sum(rate(opsknight_mcp_oauth_requests_total{endpoint="token",outcome="invalid_grant"}[15m])) / clamp_min(sum(rate(opsknight_mcp_oauth_requests_total{endpoint="token"}[15m])), 0.001) > 0.5) and on() (sum(rate(opsknight_mcp_oauth_requests_total{endpoint="token"}[15m])) > 0.05)
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: Most MCP token requests are rejected as invalid_grant
+          description: Assistants are being sent back through sign-in. After a deploy, check the encryption key and refresh grace window; otherwise look for mcp.token.refresh_reuse_revoked.
+      - alert: OpsKnightMcpMaintenanceFailing
+        expr: sum(increase(opsknight_mcp_maintenance_runs_total{result="failed"}[10m])) >= 3
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: MCP retention maintenance keeps failing
+          description: Expired approvals, spent credentials or tasks are not being cleaned up. Search for '[Cron] MCP maintenance failed' (task, name, Prisma code).
+      - alert: OpsKnightMcpMaintenanceStalled
+        expr: (sum(increase(opsknight_mcp_maintenance_runs_total{result="success"}[15m])) or vector(0)) == 0 and on() (sum(increase(opsknight_mcp_maintenance_runs_total[1h])) > 0)
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: No successful MCP maintenance run in 15 minutes
+          description: The cron scheduler ran MCP maintenance in the last hour but none succeeded recently. Check scheduler leadership and database locks.
+      - alert: OpsKnightMcpCallLogDropping
+        expr: sum(increase(opsknight_mcp_call_log_dropped_total[10m])) > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: MCP request-log rows are being dropped
+          description: The Usage tab and each connection's activity are missing entries because the queue was full or a batch write failed. Requests and audit rows are unaffected. Search for mcp.call_log.write_failed and check database health.
+      - alert: OpsKnightMcpStreamsNearLimit
+        expr: max by (instance) (opsknight_mcp_subscriptions_active) >= 28
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: 'MCP listen streams on {{ $labels.instance }} are close to the 32-stream cap'
+          description: At the cap new streams get MCP_SUBSCRIPTIONS_BUSY. Streams last at most ten minutes and each connection may hold two; add web replicas or find the connection holding streams in mcp.request.completed (outcome subscription_opened).
   # Intelligence is optional and advisory: it never pages. These are warnings for the people who run it.
   # The lane gauges exist only on instances running the lane, so a disabled install raises nothing.
   - name: opsknight.intelligence

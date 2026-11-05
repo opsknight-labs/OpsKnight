@@ -125,7 +125,44 @@ const STANDALONE_TOOLS: readonly Omit<McpCapability, 'kind' | 'curated' | 'tool'
     domain: 'incidents',
     risk: 'R0',
     approval: false,
-    summary: 'Read an incident with its timeline and related incidents.',
+    summary: 'Read an incident with its timeline, related incidents and recent notes.',
+  },
+  {
+    id: 'oncall_for_service',
+    domain: 'schedules',
+    risk: 'R0',
+    approval: false,
+    summary: "Read a service's escalation steps with who is on call now and when shifts end.",
+  },
+  {
+    id: 'service_get_changes',
+    domain: 'services',
+    risk: 'R0',
+    approval: false,
+    summary:
+      'Read what changed on a service: configuration edits, runbook runs and incidents (no deploy data).',
+  },
+  {
+    id: 'incident_acknowledge_many',
+    domain: 'incidents',
+    risk: 'R1',
+    approval: false,
+    summary: 'Acknowledge up to eight incidents, each with its own permission check.',
+  },
+  {
+    id: 'search',
+    domain: 'mcp',
+    risk: 'R0',
+    approval: false,
+    summary:
+      'Search incidents, postmortems, runbooks and services by text (ChatGPT company knowledge and deep research).',
+  },
+  {
+    id: 'fetch',
+    domain: 'mcp',
+    risk: 'R0',
+    approval: false,
+    summary: 'Fetch one search result in full; access is checked again.',
   },
   {
     id: 'postmortem_get_context',
@@ -144,6 +181,11 @@ export const MCP_PROMPT_NAMES = [
   'prepare_postmortem',
   'review_automation_rule',
   'preview_remediation',
+  'catch_up',
+  'find_precedent',
+  'draft_status_update',
+  'request_shift_cover',
+  'getting_started',
 ] as const;
 
 const PROMPT_DOMAIN = 'prompts';

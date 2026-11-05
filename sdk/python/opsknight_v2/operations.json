@@ -1599,6 +1599,14 @@
     "requiredHeaders": [],
     "bodyRequired": true
   },
+  "escalateIncident": {
+    "method": "POST",
+    "path": "/incidents/{id}/escalate",
+    "kind": "item",
+    "idempotency": "supported",
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
   "listIncidentNotes": {
     "method": "GET",
     "path": "/incidents/{id}/notes",
@@ -2554,6 +2562,38 @@
   "getUser": {
     "method": "GET",
     "path": "/users/{id}",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "listMyOnCallShifts": {
+    "method": "GET",
+    "path": "/users/me/on-call-shifts",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "getMyCatchUp": {
+    "method": "GET",
+    "path": "/users/me/catch-up",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "getOnCallNow": {
+    "method": "GET",
+    "path": "/schedules/on-call-now",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "listSimilarIncidents": {
+    "method": "GET",
+    "path": "/incidents/{id}/similar",
     "kind": "item",
     "idempotency": null,
     "requiredHeaders": [],

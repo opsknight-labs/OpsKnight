@@ -34,6 +34,8 @@ function nextStep(operation: Operation) {
   if (operation.risk === 'R3') return 'NEEDS_REAUTH_IMPACT_PREVIEW_AND_POSTCONDITION';
   if (idempotency === 'never') return 'EXCLUDE_ONE_TIME_SECRET_OR_PROVIDE_ROTATION_WORKFLOW';
   if (idempotency === 'natural') return 'NEEDS_DURABLE_RECEIPT_BEFORE_APPROVAL_GATING';
+  // A recorded "not exposed" decision is a blocker, not a candidate, whatever its contract allows.
+  if (operation.status === 'UNSUPPORTED_WITH_REASON') return 'BLOCKED_BY_RECORDED_REASON';
   return 'ELIGIBLE_FOR_APPROVAL_BATCH_WITH_FAMILY_TESTS';
 }
 

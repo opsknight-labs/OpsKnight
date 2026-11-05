@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { randomBytes } from 'node:crypto';
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as audit from '@/lib/audit';
@@ -276,6 +277,40 @@ describe('independently reviewed MCP runbook execution', () => {
     expect(
       await db.runbookPreviewAuthorization.findUniqueOrThrow({ where: { id: p.previewId } })
     ).toMatchObject({ reviewedById: f.user.id, selfApproved: true });
+  });
+  it('with strict four-eyes on, nobody approves their own runbook request; a second reviewer can', async () => {
+    const f = await fixture();
+    const p = await f.prepare();
+    const decide = (by: { id: string; tokenVersion: number }, extra: Record<string, string> = {}) =>
+      decideMcpRunbookReview(
+        { id: p.previewId, planDigest: p.planDigest, decision: 'approve', ...extra },
+        by
+      );
+    await db.mcpPolicy.update({
+      where: { id: 'default' },
+      data: { requireDistinctReviewer: true },
+    });
+    try {
+      await expect(loadMcpRunbookReview(p.previewId, f.user)).rejects.toThrow(
+        'MCP_DISTINCT_REVIEWER_REQUIRED'
+      );
+      await expect(decide(f.user, { confirmSelfApproval: 'yes' })).rejects.toThrow(
+        'MCP_DISTINCT_REVIEWER_REQUIRED'
+      );
+      expect(
+        await db.runbookPreviewAuthorization.findUniqueOrThrow({ where: { id: p.previewId } })
+      ).toMatchObject({ reviewedById: null });
+      // A different reviewer is unaffected.
+      await decide(f.reviewer);
+      expect(
+        await db.runbookPreviewAuthorization.findUniqueOrThrow({ where: { id: p.previewId } })
+      ).toMatchObject({ reviewedById: f.reviewer.id, selfApproved: false });
+    } finally {
+      await db.mcpPolicy.update({
+        where: { id: 'default' },
+        data: { requireDistinctReviewer: false },
+      });
+    }
   });
   it('commits one canonical execution and replays the result after a lost response', async () => {
     const f = await fixture();

@@ -1,5 +1,6 @@
 import type { Config } from 'tailwindcss';
 import tailwindcssAnimate from 'tailwindcss-animate';
+import { STATUS_TAILWIND_COLORS } from './src/lib/design/status-palette';
 
 const config: Config = {
   darkMode: 'class',
@@ -19,32 +20,12 @@ const config: Config = {
     },
     extend: {
       fontFamily: {
-        sans: [
-          'var(--font-manrope)',
-          'Manrope',
-          '-apple-system',
-          'BlinkMacSystemFont',
-          'Segoe UI',
-          'sans-serif',
-        ],
-        display: [
-          'var(--font-manrope)',
-          'Manrope',
-          '-apple-system',
-          'BlinkMacSystemFont',
-          'Segoe UI',
-          'sans-serif',
-        ],
-        mono: ['SF Mono', 'Fira Code', 'Monaco', 'Cascadia Code', 'monospace'],
-        serif: [
-          'var(--font-serif)',
-          'Instrument Serif',
-          'Playfair Display',
-          'ui-serif',
-          'Georgia',
-          'Cambria',
-          'serif',
-        ],
+        // Brand typography (AGENTS.md "Typography"): Inter for UI/body,
+        // Space Grotesk for titles, badges and brand marks. Stacks live in
+        // styles/foundation/variables.css so CSS and Tailwind never drift.
+        sans: ['var(--font-family-sans)'],
+        display: ['var(--font-family-display)'],
+        mono: ['var(--font-family-mono)'],
       },
       fontSize: {
         '2xs': ['0.6875rem', { lineHeight: '1rem', letterSpacing: '0.02em' }],
@@ -87,6 +68,8 @@ const config: Config = {
       // Keep the design-system contract isolated under --ui-* so the two token
       // generations cannot corrupt one another while legacy CSS is removed.
       colors: {
+        // Status colour semantics (AGENTS.md); see src/lib/design/status-palette.ts
+        status: STATUS_TAILWIND_COLORS,
         border: 'hsl(var(--ui-border) / <alpha-value>)',
         input: 'hsl(var(--ui-input) / <alpha-value>)',
         ring: 'hsl(var(--ui-ring) / <alpha-value>)',

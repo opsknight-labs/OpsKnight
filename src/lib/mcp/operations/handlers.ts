@@ -146,6 +146,10 @@ export const MCP_HANDLERS = new Map<string, () => Promise<Handler>>([
     async () => (await import('@/app/api/v2/incidents/[id]/acknowledge/route')).POST,
   ],
   ['assignIncident', async () => (await import('@/app/api/v2/incidents/[id]/assign/route')).POST],
+  [
+    'escalateIncident',
+    async () => (await import('@/app/api/v2/incidents/[id]/escalate/route')).POST,
+  ],
   ['listIncidentNotes', async () => (await import('@/app/api/v2/incidents/[id]/notes/route')).GET],
   [
     'getIncidentIntelligence',
@@ -153,6 +157,12 @@ export const MCP_HANDLERS = new Map<string, () => Promise<Handler>>([
   ],
   ['addIncidentNote', async () => (await import('@/app/api/v2/incidents/[id]/notes/route')).POST],
   ['resolveIncident', async () => (await import('@/app/api/v2/incidents/[id]/resolve/route')).POST],
+  // Routine responder actions run directly, like acknowledge; snooze and unacknowledge stay gated.
+  ['reopenIncident', async () => (await import('@/app/api/v2/incidents/[id]/reopen/route')).POST],
+  [
+    'unsnoozeIncident',
+    async () => (await import('@/app/api/v2/incidents/[id]/unsnooze/route')).POST,
+  ],
   ['getIncident', async () => (await import('@/app/api/v2/incidents/[id]/route')).GET],
   [
     'getIncidentTimeline',
@@ -226,6 +236,30 @@ export const MCP_HANDLERS = new Map<string, () => Promise<Handler>>([
     'getScheduleOnCall',
     async () => (await import('@/app/api/v2/schedules/[id]/on-call/route')).GET,
   ],
+  // The caller's own shifts across every readable schedule (curated as oncall_my_shifts).
+  [
+    'listMyOnCallShifts',
+    async () => (await import('@/app/api/v2/users/me/on-call-shifts/route')).GET,
+  ],
+  // Who is on call now and who is next across schedules (curated as oncall_now).
+  ['getOnCallNow', async () => (await import('@/app/api/v2/schedules/on-call-now/route')).GET],
+  // What the caller missed: opened, resolved and active incidents (curated as oncall_catch_up).
+  ['getMyCatchUp', async () => (await import('@/app/api/v2/users/me/catch-up/route')).GET],
+  // Past resolved incidents that look like one incident (curated as incident_find_similar).
+  [
+    'listSimilarIncidents',
+    async () => (await import('@/app/api/v2/incidents/[id]/similar/route')).GET,
+  ],
+  // Read-only directory; execution keeps only id, name, role, status and teams (projection.ts).
+  ['listUsers', async () => (await import('@/app/api/v2/users/route')).GET],
+  ['getUser', async () => (await import('@/app/api/v2/users/[id]/route')).GET],
+  // Integration health: enabled state and delivery outcomes only, never configuration.
+  [
+    'getIntegrationDiagnostics',
+    async () => (await import('@/app/api/v2/integrations/[id]/diagnostics/route')).GET,
+  ],
+  // Sensitive read (administrator opt-in); IP and actor email are dropped by the field allowlist.
+  ['listAuditLogs', async () => (await import('@/app/api/v2/audit-logs/route')).GET],
   [
     'listScheduleOverrides',
     async () => (await import('@/app/api/v2/schedules/[id]/overrides/route')).GET,
@@ -583,7 +617,6 @@ export const MCP_APPROVAL_HANDLERS = new Map<string, () => Promise<Handler>>([
     'createIncidentTemplate',
     async () => (await import('@/app/api/v2/incidents/templates/route')).POST,
   ],
-  ['reopenIncident', async () => (await import('@/app/api/v2/incidents/[id]/reopen/route')).POST],
   ['snoozeIncident', async () => (await import('@/app/api/v2/incidents/[id]/snooze/route')).POST],
   [
     'suppressIncident',
@@ -592,10 +625,6 @@ export const MCP_APPROVAL_HANDLERS = new Map<string, () => Promise<Handler>>([
   [
     'unacknowledgeIncident',
     async () => (await import('@/app/api/v2/incidents/[id]/unacknowledge/route')).POST,
-  ],
-  [
-    'unsnoozeIncident',
-    async () => (await import('@/app/api/v2/incidents/[id]/unsnooze/route')).POST,
   ],
   [
     'unsuppressIncident',

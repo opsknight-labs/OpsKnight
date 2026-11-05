@@ -1,4 +1,5 @@
 import { calculateActorSLAMetrics } from '@/lib/actor-metrics';
+import { incidentStatusColor } from '@/lib/design/status-palette';
 import { formatTimeMinutesMs } from '@/lib/time-format';
 import { smoothSeries } from '@/lib/analytics-metrics';
 import { formatDateTime } from '@/lib/timezone';
@@ -44,14 +45,7 @@ interface Props {
 }
 
 function getStatusColor(status: string): string {
-  const colors: Record<string, string> = {
-    OPEN: '#dc2626',
-    ACKNOWLEDGED: '#2563eb',
-    SNOOZED: '#ca8a04',
-    SUPPRESSED: '#7c3aed',
-    RESOLVED: '#16a34a',
-  };
-  return colors[status] || '#6b7280';
+  return incidentStatusColor(status);
 }
 
 export function buildSparklinePath(
@@ -570,7 +564,7 @@ export default async function AnalyticsContent({
           value={formatPercent(metrics.resolveRate)}
           detail="Completion"
           variant={metrics.resolveRate > 80 ? 'success' : 'default'}
-          icon={<CheckCircle className="w-5 h-5 text-green-500" />}
+          icon={<CheckCircle className="w-5 h-5 text-emerald-500" />}
           tooltip={metricDefinitionTooltip(
             INCIDENT_METRIC_DEFINITIONS.resolveRate,
             `Last ${windowLabelDays} days`

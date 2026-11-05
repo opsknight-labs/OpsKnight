@@ -11,6 +11,7 @@ verification:
   evidence:
     - .github/workflows/mcp-certification.yml
     - scripts/mcp/certify.cjs
+    - tests/e2e/mcp-lifecycle.spec.ts
 ---
 
 # MCP certification status
@@ -94,3 +95,34 @@ The settings page now identifies local automatic-connection readiness and suppli
 The repeatable local browser harness and MCP CI now start two application replicas with the same database, canonical App URL and ordinary application secrets. The automatic-onboarding flow checks that one consented token discovers the same scoped tools on both replicas and is blocked on both after automatic connections are disabled. The second direct listener receives the canonical public Host, simulating an ingress that preserves it. Actual deployment topology, load balancers, production migration scale and independent real-client certification still need their own evidence.
 
 The post-commit fault-injection child now waits at a bounded barrier so it cannot exit normally before the parent injects SIGKILL. The isolated three-case process/connection recovery suite passed with this harness fix; a previous full-suite run reported 1,013 passes and one ESRCH harness race and is not counted as a green run. Final rerun results are recorded in the PR after completion.
+
+## Live client checkpoint
+
+A client's status in the [compatibility table](../../guides/mcp/self-hosted-setup.md#client-compatibility) is tied to a run recorded here, and a unit test (`tests/mcp/docs-reference.test.ts`) enforces it:
+
+- **Tested (vX.Y.Z, YYYY-MM-DD)** needs an entry below naming that version and date.
+- **Verified (Client X.Y.Z, YYYY-MM-DD)** needs an entry naming the client version, the date, the negotiated MCP revision, the full 40-character server commit SHA and a result for every check: registration, consent, tools/list, scoped read, refresh, role change and revocation.
+
+Record a new entry after each live run against a released build, using the steps of the OpsKnight MCP end-to-end rounds. Never record a check that was not observed.
+
+### Claude Code against v2.1.2, 2026-11-03
+
+- Server: a live deployment of build `386adeb` (v2.1.2 with the MCP pull requests up to #955); the full commit SHA was not recorded.
+- Client: Claude Code CLI; its version and the negotiated revision were not recorded.
+- Registration: pass (automatic registration, and the "not allowed to connect" page with automatic connections off).
+- Consent: pass (PKCE consent page; the 48-scope by four-role consent matrix had no mismatches).
+- tools/list: pass (31 tools for the administrator's consent).
+- Scoped read: pass (`search_capabilities`, paged `incident_search`, exact page-size and unknown-operation errors).
+- Refresh: not recorded.
+- Role change: pass (promotion and demotion change the offered scopes; deactivation ends the session).
+- Revocation: not recorded for an individual grant in this run.
+
+This is a "Tested" entry, not "Verified": the client version, revision, full SHA, refresh and revocation are missing. It predates this release.
+
+## Credential lifecycle through the official SDK client (round 6)
+
+`tests/e2e/mcp-lifecycle.spec.ts` drives the published 1.x SDK client **over HTTP against the production-built server** (the same server the browser flows use) and checks what the in-process tests cannot: a direct write and its replay under one idempotency key; turning changes off hiding the write tool and refusing the call on the next request; a role change narrowing what a connected client sees on its very next call with no reconnect; refresh-token rotation retiring the previous access token; replaying a used refresh token revoking the whole grant, including the token just issued; and revocation ending a connected client on its next request. The spec removes everything it creates and restores the policy, so the browser flows that follow see the database they expect, and it runs once rather than once per browser.
+
+Observed on 6 November 2026 against a local development server (not a production build): all six checks passed. It has **not yet been observed in the GitHub workflow against the production build**; that run is the evidence to record. It mints credentials directly in the database, so the OAuth consent and code exchange are covered only by the browser flows, not by this spec. The SDK negotiates revision 2025-11-25; revision 2026-07-28 is exercised by the raw-protocol tests and the listen-stream check, not by an SDK client.
+
+This workflow runs on `main` and on pull requests labelled `ci:full`; add the label to a pull request that changes MCP paths to run it before merge.

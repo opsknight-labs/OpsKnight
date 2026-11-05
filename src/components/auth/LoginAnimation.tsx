@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useRef } from 'react';
-import Image from 'next/image';
+import AuthBrand from '@/components/auth/AuthBrand';
 import { cn } from '@/lib/utils';
 
 // Deterministic pseudo-random star field — seeded so the server-rendered and
@@ -609,20 +609,7 @@ export default function LoginAnimation({
           isBanner && 'hidden'
         )}
       >
-        <div className="flex items-center gap-2.5">
-          <div className="h-8 w-8 rounded-xl bg-red-950/50 border border-red-500/30 flex items-center justify-center p-1 shadow-[0_0_12px_rgba(220,38,38,0.25)]">
-            <Image
-              src="/logo.png"
-              alt="OpsKnight"
-              width={28}
-              height={28}
-              className="h-6 w-6 object-contain"
-              priority
-              unoptimized
-            />
-          </div>
-          <span className="text-lg 2xl:text-xl font-bold tracking-tight text-white">OpsKnight</span>
-        </div>
+        <AuthBrand tone="onDark" />
       </div>
 
       {/* Earth + orbit, anchored toward the bottom so it reads as a planetary
@@ -929,7 +916,7 @@ export default function LoginAnimation({
         <div className="w-7 h-[2px] bg-red-600 mb-3" />
         <h2 className="text-3xl lg:text-4xl 2xl:text-5xl min-[2000px]:text-6xl font-extrabold text-white tracking-tight leading-[1.2]">
           You are not{' '}
-          <span className="text-red-500 italic font-serif text-[38px] lg:text-[46px] 2xl:text-[58px] min-[2000px]:text-[70px] font-normal">
+          <span className="text-red-500">
             the only one awake.
           </span>
         </h2>

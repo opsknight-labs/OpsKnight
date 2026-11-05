@@ -201,7 +201,7 @@ export default function UserList({
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-[160px]">
               <DropdownMenuItem onClick={() => handleBulkAction('ACTIVATE')}>
-                <UserCheck className="mr-2 h-4 w-4 text-green-500" />
+                <UserCheck className="mr-2 h-4 w-4 text-emerald-500" />
                 <span>Activate</span>
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => handleBulkAction('DEACTIVATE')}>

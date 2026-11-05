@@ -37,11 +37,58 @@ export function toIncidentApiDto<T extends IncidentDurationFields>(incident: T):
       ? { slaAckElapsedMs: durationToNumber(incident.slaAckElapsedMs, 'slaAckElapsedMs') }
       : {}),
     ...('slaResolveElapsedMs' in incident
-      ? { slaResolveElapsedMs: durationToNumber(incident.slaResolveElapsedMs, 'slaResolveElapsedMs') }
+      ? {
+          slaResolveElapsedMs: durationToNumber(
+            incident.slaResolveElapsedMs,
+            'slaResolveElapsedMs'
+          ),
+        }
       : {}),
   } as JsonIncident<T>;
 }
 
 export function toIncidentApiDtos<T extends IncidentDurationFields>(incidents: T[]) {
   return incidents.map(toIncidentApiDto);
+}
+
+type IncidentResponseStateFields = IncidentDurationFields & {
+  currentEscalationStep: number | null;
+  nextEscalationAt: Date | null;
+  escalationStatus: string | null;
+  slaAckTargetMs: number | null;
+  slaResolveTargetMs: number | null;
+};
+
+/**
+ * The single-incident REST view: the list fields plus where escalation stands and the SLA
+ * targets against elapsed time, so a responder (or an assistant) can tell who has been paged and
+ * when it escalates next. The engine's internal claim columns (processing lease, generation) are
+ * never selected or exposed.
+ */
+export function toIncidentDetailDto<T extends IncidentResponseStateFields>(incident: T) {
+  const {
+    currentEscalationStep,
+    nextEscalationAt,
+    escalationStatus,
+    slaAckTargetMs,
+    slaResolveTargetMs,
+    ...rest
+  } = incident;
+  const dto = toIncidentApiDto(rest);
+  return {
+    ...dto,
+    escalation: {
+      step: currentEscalationStep,
+      status: escalationStatus,
+      nextAt: nextEscalationAt,
+    },
+    sla: {
+      ackTargetMs: slaAckTargetMs,
+      resolveTargetMs: slaResolveTargetMs,
+      ackElapsedMs: durationToNumber(incident.slaAckElapsedMs, 'slaAckElapsedMs') ?? null,
+      resolveElapsedMs:
+        durationToNumber(incident.slaResolveElapsedMs, 'slaResolveElapsedMs') ?? null,
+      pausedMs: durationToNumber(incident.slaPausedMs, 'slaPausedMs') ?? null,
+    },
+  };
 }
