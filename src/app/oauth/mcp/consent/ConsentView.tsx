@@ -4,6 +4,9 @@ import type { McpConsentGroup } from '@/lib/mcp/auth/consent-offer';
 import type { McpConsentIdentity } from '@/lib/mcp/auth/consent-identity';
 import ConsentForm from './ConsentForm';
 import { MCP_CONSENT_WRITES_OFF_NOTE } from '@/lib/mcp/policy-copy';
+import { AssistantIcon } from '@/components/common/BrandLogos';
+import { formatDateTime } from '@/lib/timezone';
+import { mcpHref } from '@/app/(app)/settings/integrations/mcp/list-params';
 
 type Props = {
   action: (form: FormData) => Promise<void>;
@@ -25,6 +28,8 @@ type Props = {
   writesEnabled: boolean;
   /** When the connection this consent replaces was created, if there is one. */
   replacesConnectionFrom: Date | null;
+  /** The signed-in person's time zone, for every time shown here. */
+  timeZone: string;
 };
 
 /** The focused consent dialog. Pure presentation: the page loads and authorizes the data. */
@@ -41,6 +46,7 @@ export default function ConsentView({
   redirectWarning,
   writesEnabled,
   replacesConnectionFrom,
+  timeZone,
 }: Props) {
   const hasChanges = groups.some(group => group.change.length > 0);
   // Many areas get a two-column grid on large screens; a short list stays a compact dialog.
@@ -85,9 +91,15 @@ export default function ConsentView({
           <div className="space-y-1.5">
             <h1
               id="mcp-consent-title"
-              className="break-words font-['Space_Grotesk',sans-serif] font-bold tracking-tight text-slate-950 dark:text-white"
+              className="flex items-center gap-2 break-words font-['Space_Grotesk',sans-serif] font-bold tracking-tight text-slate-950 dark:text-white"
             >
-              Connect {clientName}?
+              {/* A brand logo only for a verified metadata host; a chosen name gets the generic icon. */}
+              <AssistantIcon
+                name={clientName}
+                verifiedHost={identity.kind === 'metadata' ? identity.host : null}
+                className="h-6 w-6 shrink-0"
+              />
+              <span className="min-w-0">Connect {clientName}?</span>
             </h1>
             <p
               data-testid="mcp-consent-identity"
@@ -147,10 +159,9 @@ export default function ConsentView({
           {replacesConnectionFrom && (
             <p className="text-xs text-slate-500 dark:text-slate-400">
               Allowing replaces your connection from{' '}
-              {replacesConnectionFrom.toLocaleDateString('en-US', {
-                dateStyle: 'medium',
-                timeZone: 'UTC',
-              })}
+              <time dateTime={replacesConnectionFrom.toISOString()}>
+                {formatDateTime(replacesConnectionFrom, timeZone, { includeTimeZone: true })}
+              </time>
               .
             </p>
           )}
@@ -168,7 +179,14 @@ export default function ConsentView({
             writesEnabled={writesEnabled}
           />
           <p className="border-t border-slate-100 pt-4 text-xs leading-relaxed text-slate-500 dark:border-slate-800 dark:text-slate-400">
-            You can disconnect any time in Settings → Integrations & ChatOps → MCP (AI Assistants).
+            You can{' '}
+            <a
+              href={mcpHref({ tab: 'connections' })}
+              className="font-medium text-slate-700 underline underline-offset-2 hover:text-slate-900 dark:text-slate-200 dark:hover:text-white"
+            >
+              disconnect any time
+            </a>{' '}
+            in Settings → Integrations & ChatOps → MCP (AI Assistants).
             {identity.kind === 'self-registered' && !redirectWarning && (
               <> Only continue if you just started this connection yourself.</>
             )}

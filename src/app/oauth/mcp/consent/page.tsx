@@ -12,6 +12,7 @@ import { McpBoundaryError } from '@/lib/mcp/core/errors';
 import { buildMcpConsentOffer } from '@/lib/mcp/auth/consent-offer';
 import { decideMcpConsent } from '@/app/(app)/settings/integrations/mcp/actions';
 import { consentIdentity, consentRedirectFacts } from '@/lib/mcp/auth/consent-identity';
+import { getUserTimeZone } from '@/lib/timezone';
 import ConsentView from './ConsentView';
 import './consent.css';
 
@@ -83,6 +84,7 @@ export default async function McpConsent({
       redirectWarning={identity.kind === 'self-registered' && !returnTo.staysLocal}
       writesEnabled={policy?.writesEnabled ?? false}
       replacesConnectionFrom={previous?.createdAt ?? null}
+      timeZone={getUserTimeZone(who)}
     />
   );
 }

@@ -29,6 +29,7 @@ const base = {
   writesEnabled: true,
   replacesConnectionFrom: null,
   redirectWarning: false,
+  timeZone: 'UTC',
 };
 
 describe('consent identity line', () => {
@@ -72,7 +73,49 @@ describe('consent identity line', () => {
     expect(screen.getByRole('note').textContent).toContain('Changes are currently turned off');
     expect(screen.getByText('Changes off')).toBeTruthy();
     expect(screen.queryByText('Can make changes')).toBeNull();
-    expect(screen.getByText(/replaces your connection from Oct 1, 2026/)).toBeTruthy();
+    expect(screen.getByText(/Oct 1, 2026/).closest('p')?.textContent).toContain(
+      'replaces your connection from Oct 1, 2026'
+    );
+  });
+});
+
+describe('UX-15 consent details', () => {
+  it("shows the replaced connection in the person's own time zone", () => {
+    render(
+      <ConsentView
+        {...base}
+        timeZone="Asia/Kolkata"
+        returnHost="localhost:1"
+        identity={{ kind: 'registered' }}
+        replacesConnectionFrom={new Date('2026-10-01T20:00:00Z')}
+      />
+    );
+    const time = screen.getByText(/Oct 2, 2026/);
+    expect(time.textContent).toMatch(/1:30\s?AM/);
+    expect(time.textContent).toMatch(/GMT\+5:30|IST/);
+    expect(time.getAttribute('dateTime')).toBe('2026-10-01T20:00:00.000Z');
+  });
+  it('links straight to the connections list to disconnect', () => {
+    render(<ConsentView {...base} returnHost="localhost:1" identity={{ kind: 'registered' }} />);
+    expect(screen.getByRole('link', { name: 'disconnect any time' }).getAttribute('href')).toBe(
+      '/settings/integrations/mcp?tab=connections'
+    );
+  });
+  it('shows a brand icon only for a verified metadata host', () => {
+    const { container, rerender } = render(
+      <ConsentView {...base} returnHost="localhost:1" identity={{ kind: 'self-registered' }} />
+    );
+    const heading = () => screen.getByRole('heading', { level: 1 });
+    expect(heading().querySelector('[aria-label="Anthropic Claude logo"]')).toBeNull();
+    expect(heading().querySelector('svg')).not.toBeNull();
+    rerender(
+      <ConsentView
+        {...base}
+        returnHost="localhost:1"
+        identity={{ kind: 'metadata', host: 'claude.ai' }}
+      />
+    );
+    expect(container.querySelector('h1 [aria-label="Anthropic Claude logo"]')).not.toBeNull();
   });
 });
 
