@@ -7,8 +7,8 @@ import { supersededMcpGrantsWhere } from '@/lib/mcp/auth/consent';
 import { buildMcpConsentOffer } from '@/lib/mcp/auth/consent-offer';
 import { consentIdentity } from '@/lib/mcp/auth/consent-identity';
 import {
+  assertCanReviewMcpDevice,
   formatMcpUserCode,
-  mcpDeviceClientCeiling,
   normalizeMcpUserCode,
 } from '@/lib/mcp/auth/device-flow';
 import { friendlyMcpError } from '@/lib/mcp/auth/friendly-error';
@@ -85,24 +85,16 @@ export default async function McpDevice({
     );
   const signedInAs = who.email ?? who.name ?? 'you';
   if (params.id && ID.test(params.id)) {
-    const pending = await prisma.mcpDeviceAuthorization.findFirst({
-      where: {
-        id: params.id,
-        userId: who.id,
-        status: 'PENDING',
-        expiresAt: { gt: new Date() },
-      },
-    });
-    const client = pending
-      ? await prisma.mcpClient.findUnique({ where: { id: pending.clientId } })
-      : null;
-    if (!pending || !client || !mcpDeviceClientCeiling(client, policy))
+    // Only this person's own claimed, pending sign-in from a client still allowed the grant.
+    const review = await assertCanReviewMcpDevice(params.id, who.id, policy);
+    if (!review)
       return (
         <DeviceView
           state={{ kind: 'enter', userCode: '', error: 'MCP_DEVICE_CODE_EXPIRED', signedInAs }}
           action={confirmMcpDeviceCode}
         />
       );
+    const { pending, client } = review;
     // decideMcpDeviceConsent repeats this on submit: the stored request ∩ the person's role.
     const previous = await prisma.mcpGrant.findFirst({
       where: supersededMcpGrantsWhere(who.id, client),

@@ -24,7 +24,7 @@ function Shell({ children }: { children: ReactNode }) {
   return (
     <main
       id="mcp-consent"
-      className="flex min-h-screen flex-col items-center justify-center bg-slate-50 px-4 py-8 font-['Inter',ui-sans-serif,system-ui,sans-serif] text-slate-900 sm:px-6 sm:py-12 dark:bg-slate-950 dark:text-slate-100"
+      className="flex min-h-screen flex-col items-center justify-center bg-slate-50 px-4 py-8 font-sans text-slate-900 sm:px-6 sm:py-12 dark:bg-slate-950 dark:text-slate-100"
     >
       <div className="w-full max-w-md space-y-6 min-[1440px]:max-w-lg">
         <a
@@ -43,9 +43,7 @@ function Shell({ children }: { children: ReactNode }) {
             priority
             unoptimized
           />
-          <span className="font-['Space_Grotesk',sans-serif] text-lg font-bold tracking-tight">
-            OpsKnight
-          </span>
+          <span className="font-display text-lg font-bold tracking-tight">OpsKnight</span>
         </a>
         <section
           aria-labelledby="mcp-device-title"
@@ -59,7 +57,7 @@ function Shell({ children }: { children: ReactNode }) {
 }
 
 const titleClass =
-  "flex items-center gap-2 font-['Space_Grotesk',sans-serif] font-bold tracking-tight text-slate-950 dark:text-white";
+  'flex items-center gap-2 font-display font-bold tracking-tight text-slate-950 dark:text-white';
 
 /** The device sign-in page outside the consent step. Pure presentation. */
 export default function DeviceView({ state, action }: Props) {

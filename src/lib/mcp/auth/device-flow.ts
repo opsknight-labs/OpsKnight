@@ -225,3 +225,18 @@ export async function pollMcpDeviceAuthorization(
     },
   };
 }
+
+/**
+ * The signed-in person's own pending device sign-in and its client, for the verification page:
+ * only a request this person already claimed by entering its code, still pending and unexpired,
+ * from a client that is still allowed the device grant. Anything else is null.
+ */
+export async function assertCanReviewMcpDevice(id: string, userId: string, policy: McpPolicy) {
+  const pending = await prisma.mcpDeviceAuthorization.findFirst({
+    where: { id, userId, status: 'PENDING', expiresAt: { gt: new Date() } },
+  });
+  if (!pending) return null;
+  const client = await prisma.mcpClient.findUnique({ where: { id: pending.clientId } });
+  if (!client || !mcpDeviceClientCeiling(client, policy)) return null;
+  return { pending, client };
+}
