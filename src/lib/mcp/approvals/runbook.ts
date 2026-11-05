@@ -22,7 +22,12 @@ import { requireMcp } from '../core/errors';
 import { lockMcpMutationAuthority } from '../core/mutation-authority';
 import type { ExecutionContext } from '../core/execution';
 import { MCP_REVIEWED_RUNBOOK_SCOPES, canUseReviewedRunbooks } from './policy';
-import { commitDeadline, readMcpApprovalTiming, reviewDeadline } from './timing';
+import {
+  commitDeadline,
+  mcpApprovalPollGuidance,
+  readMcpApprovalTiming,
+  reviewDeadline,
+} from './timing';
 import { notifyRequesterOfDecision, notifyRunbookReviewers } from './notify';
 import { decisionReasonSchema, untrustedDecisionReason } from './operation';
 
@@ -426,7 +431,9 @@ export function getMcpRunbookApproval(context: ExecutionContext, raw: unknown) {
         executionId: preview.executionId,
         reviewUrl: `${mcpOrigin()}/settings/integrations/mcp/approvals/${preview.id}`,
         ...untrustedDecisionReason(preview.decisionReason),
-        ...(status === 'PENDING' ? { pollAfterSeconds: 15 } : {}),
+        ...(status === 'PENDING'
+          ? { pollAfterSeconds: 30, poll: mcpApprovalPollGuidance(preview.expiresAt.toISOString()) }
+          : {}),
         ...(status === 'APPROVED' ? { next: 'runbook_execute_approved' } : {}),
         ...(status === 'EXPIRED' || status === 'REJECTED' ? { hint: REPREPARE_HINT } : {}),
       };

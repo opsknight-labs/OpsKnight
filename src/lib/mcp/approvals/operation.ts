@@ -25,7 +25,12 @@ import {
 import { lockMcpMutationAuthority } from '../core/mutation-authority';
 import { isMcpCapabilityDisabled } from '../catalog/capabilities';
 import { projectMcpData } from '../core/projection';
-import { commitDeadline, readMcpApprovalTiming, reviewDeadline } from './timing';
+import {
+  commitDeadline,
+  mcpApprovalPollGuidance,
+  readMcpApprovalTiming,
+  reviewDeadline,
+} from './timing';
 import { notifyOperationReviewers, notifyRequesterOfDecision } from './notify';
 
 // An approved plan that was claimed but not confirmed may be retried for a bounded window only.
@@ -448,7 +453,9 @@ function publicState(approval: McpOperationApproval) {
     committedAt: approval.committedAt?.toISOString() ?? null,
     outcome: approval.outcome,
     ...untrustedDecisionReason(approval.decisionReason),
-    ...(status === 'PENDING' ? { pollAfterSeconds: 15 } : {}),
+    ...(status === 'PENDING'
+      ? { pollAfterSeconds: 30, poll: mcpApprovalPollGuidance(approval.expiresAt.toISOString()) }
+      : {}),
     ...(status === 'APPROVED' ? { next: 'operation_commit_approved' } : {}),
     ...(status === 'EXPIRED' || status === 'REJECTED' ? { hint: REPREPARE_HINT } : {}),
   };

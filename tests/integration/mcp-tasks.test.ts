@@ -6,7 +6,7 @@ import { decideMcpRunbookReview, prepareMcpRunbook } from '@/lib/mcp/approvals/r
 import { MCP_REVIEWED_RUNBOOK_SCOPES } from '@/lib/mcp/approvals/policy';
 import { digestMcpSecret, mcpResource } from '@/lib/mcp/auth/config';
 import { CostBudget } from '@/lib/mcp/core/budget';
-import { cleanupExpiredMcpTasks } from '@/lib/mcp/protocol/tasks';
+import { cleanupExpiredMcpTasks, getMcpTask } from '@/lib/mcp/protocol/tasks';
 import { POST } from '@/app/mcp/route';
 
 beforeAll(async () => {
@@ -82,6 +82,38 @@ function call(bearer: string, method: string, params: Record<string, unknown>, t
       }),
     })
   ).then(response => response.json());
+}
+
+/** A runbook plan waiting for review, prepared through the real workflow. */
+async function pendingRunbookApproval(key = 'prepare-pending') {
+  const user = await createTestUser({ role: 'ADMIN' });
+  const reviewer = await createTestUser({ role: 'ADMIN' });
+  const connection = await connect(user.id, user.tokenVersion);
+  const runbook = await createRunbook(
+    {
+      name: 'Approval-wait runbook',
+      slug: `approval-wait-${crypto.randomUUID()}`,
+      description: '',
+      definition: {
+        steps: [{ key: 'wait', name: 'Wait', type: 'WAIT', config: { durationSeconds: 60 } }],
+      },
+    },
+    user.id
+  );
+  await publishDraftVersion(runbook.draftVersionId!, user.id);
+  const context = {
+    grantId: connection.grant.id,
+    credentialId: connection.token.id,
+    tokenScopes: scopes,
+    requestId: 'tasks-test',
+    budget: new CostBudget(),
+  };
+  const prepared = await prepareMcpRunbook(context, {
+    runbookId: runbook.id,
+    body: { parameters: {} },
+    idempotencyKey: key,
+  });
+  return { user, reviewer, context, ...connection, prepared };
 }
 
 async function approvedExecution() {
@@ -301,5 +333,173 @@ describe('Tasks extension (io.modelcontextprotocol/tasks)', () => {
       inputResponses: { never: { action: 'accept' } },
     });
     expect(update.result).toEqual({ resultType: 'complete' });
+  });
+
+  describe('approval waits (TQ-14b / D7)', () => {
+    const wait = (bearer: string, previewId: string, tasks = true) =>
+      call(bearer, 'tools/call', { name: 'runbook_get_approval', arguments: { previewId } }, tasks);
+
+    it('parks a PENDING approval as a task that follows the human decision', async () => {
+      const f = await pendingRunbookApproval();
+      const created = await wait(f.bearer, f.prepared.previewId);
+      expect(created.result).toMatchObject({
+        resultType: 'task',
+        status: 'working',
+        statusMessage: 'Waiting for review in OpsKnight; not client input.',
+      });
+      const task = await db.mcpTask.findUniqueOrThrow({ where: { id: created.result.taskId } });
+      expect(task).toMatchObject({
+        kind: 'RUNBOOK_APPROVAL',
+        toolName: 'runbook_get_approval',
+        resourceId: f.prepared.previewId,
+      });
+      // Never outlives the approval it observes.
+      const preview = await db.runbookPreviewAuthorization.findUniqueOrThrow({
+        where: { id: f.prepared.previewId },
+      });
+      expect(task.expiresAt.getTime()).toBeLessThanOrEqual(preview.expiresAt.getTime());
+      expect(created.result.ttlMs).toBe(task.expiresAt.getTime() - task.createdAt.getTime());
+      const working = await call(f.bearer, 'tasks/get', { taskId: task.id });
+      expect(working.result).toMatchObject({ status: 'working' });
+      await decideMcpRunbookReview(
+        { id: f.prepared.previewId, planDigest: f.prepared.planDigest, decision: 'approve' },
+        f.reviewer
+      );
+      const done = await call(f.bearer, 'tasks/get', { taskId: task.id });
+      expect(done.result).toMatchObject({
+        status: 'completed',
+        result: {
+          isError: false,
+          structuredContent: { status: 'APPROVED', next: 'runbook_execute_approved' },
+        },
+      });
+      expect(done.result.result.structuredContent.commitDeadline).toEqual(expect.any(String));
+    });
+
+    it('completes, not fails, on a rejection or an expiry', async () => {
+      const rejected = await pendingRunbookApproval('prepare-reject');
+      const first = await wait(rejected.bearer, rejected.prepared.previewId);
+      await decideMcpRunbookReview(
+        {
+          id: rejected.prepared.previewId,
+          planDigest: rejected.prepared.planDigest,
+          decision: 'reject',
+        },
+        rejected.reviewer
+      );
+      expect(
+        (await call(rejected.bearer, 'tasks/get', { taskId: first.result.taskId })).result
+      ).toMatchObject({
+        status: 'completed',
+        result: { isError: false, structuredContent: { status: 'REJECTED' } },
+      });
+
+      const lapsed = await pendingRunbookApproval('prepare-expire');
+      const second = await wait(lapsed.bearer, lapsed.prepared.previewId);
+      await db.runbookPreviewAuthorization.update({
+        where: { id: lapsed.prepared.previewId },
+        data: { expiresAt: new Date(Date.now() - 1000) },
+      });
+      expect(
+        (await call(lapsed.bearer, 'tasks/get', { taskId: second.result.taskId })).result
+      ).toMatchObject({
+        status: 'completed',
+        result: { isError: false, structuredContent: { status: 'EXPIRED' } },
+      });
+    });
+
+    it('answers synchronously when the approval is already decided, or without the extension', async () => {
+      const f = await pendingRunbookApproval('prepare-sync');
+      const plain = await wait(f.bearer, f.prepared.previewId, false);
+      expect(plain.result.resultType).not.toBe('task');
+      expect(plain.result.structuredContent.status).toBe('PENDING');
+      expect(plain.result.structuredContent.poll).toMatchObject({ afterSeconds: 30 });
+      await decideMcpRunbookReview(
+        { id: f.prepared.previewId, planDigest: f.prepared.planDigest, decision: 'approve' },
+        f.reviewer
+      );
+      const decided = await wait(f.bearer, f.prepared.previewId);
+      expect(decided.result.resultType).not.toBe('task');
+      expect(decided.result.structuredContent.status).toBe('APPROVED');
+      expect(await db.mcpTask.count({ where: { resourceId: f.prepared.previewId } })).toBe(0);
+    });
+
+    it('hides the task from another grant and from a requester who lost access', async () => {
+      const f = await pendingRunbookApproval('prepare-foreign');
+      const created = await wait(f.bearer, f.prepared.previewId);
+      const other = await connect(f.user.id, f.user.tokenVersion);
+      expect(
+        (await call(other.bearer, 'tasks/get', { taskId: created.result.taskId })).error.code
+      ).toBe(-32602);
+      // The approval moved to another requester: the same reader refuses, so the task is gone.
+      await db.runbookPreviewAuthorization.update({
+        where: { id: f.prepared.previewId },
+        data: { actorId: f.reviewer.id },
+      });
+      expect(
+        (await call(f.bearer, 'tasks/get', { taskId: created.result.taskId })).error.code
+      ).toBe(-32602);
+    });
+
+    it('stops observing on cancel without withdrawing or deciding the approval', async () => {
+      const f = await pendingRunbookApproval('prepare-cancel');
+      const created = await wait(f.bearer, f.prepared.previewId);
+      const ack = await call(f.bearer, 'tasks/cancel', { taskId: created.result.taskId });
+      expect(ack.result).toEqual({ resultType: 'complete' });
+      const preview = await db.runbookPreviewAuthorization.findUniqueOrThrow({
+        where: { id: f.prepared.previewId },
+      });
+      expect(preview).toMatchObject({ reviewedAt: null, rejectedAt: null, consumedAt: null });
+      expect(
+        (await call(f.bearer, 'tasks/get', { taskId: created.result.taskId })).result.status
+      ).toBe('cancelled');
+      // The person can still approve it, and the assistant can still read it.
+      await decideMcpRunbookReview(
+        { id: f.prepared.previewId, planDigest: f.prepared.planDigest, decision: 'approve' },
+        f.reviewer
+      );
+      expect(
+        (await wait(f.bearer, f.prepared.previewId, false)).result.structuredContent.status
+      ).toBe('APPROVED');
+    });
+
+    it('re-reads an operation approval through its own reader', async () => {
+      const f = await pendingRunbookApproval('prepare-operation');
+      const approval = await db.mcpOperationApproval.create({
+        data: {
+          operationId: 'updateService',
+          riskClass: 'R2',
+          operationDigest: 'a'.repeat(64),
+          contractDigest: 'b'.repeat(64),
+          actorId: f.user.id,
+          requesterGrantId: f.grant.id,
+          requesterCredentialId: f.token.id,
+          summary: {},
+          expiresAt: new Date(Date.now() + 3600_000),
+        },
+      });
+      const task = await db.mcpTask.create({
+        data: {
+          id: randomBytes(24).toString('base64url'),
+          grantId: f.grant.id,
+          credentialId: f.token.id,
+          actorId: f.user.id,
+          toolName: 'operation_get_approval',
+          kind: 'OPERATION_APPROVAL',
+          resourceId: approval.id,
+          expiresAt: approval.expiresAt,
+        },
+      });
+      const context = { ...f.context, budget: new CostBudget() };
+      expect(await getMcpTask(context, task.id)).toMatchObject({ status: 'working' });
+      await db.mcpOperationApproval.update({
+        where: { id: approval.id },
+        data: { status: 'REJECTED', rejectedAt: new Date() },
+      });
+      expect(await getMcpTask({ ...context, budget: new CostBudget() }, task.id)).toMatchObject({
+        status: 'completed',
+        result: { isError: false, structuredContent: { status: 'REJECTED' } },
+      });
+    });
   });
 });

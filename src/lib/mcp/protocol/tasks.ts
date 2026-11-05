@@ -15,8 +15,24 @@ import {
 export const TASKS_EXTENSION = 'io.modelcontextprotocol/tasks';
 export const TASK_TTL_MS = 24 * 3600_000;
 export const TASK_POLL_INTERVAL_MS = 5_000;
-/** Tools whose work is durable and asynchronous, so a task handle is meaningful. */
-export const TASK_CAPABLE_TOOLS = new Set(['runbook_execute_approved']);
+/**
+ * Tools whose wait is durable and asynchronous, so a task handle is meaningful: a runbook run,
+ * and a human review of an approval (the long wait). The prepare tools stay synchronous so the
+ * review link and ids reach the model at once.
+ */
+export const TASK_CAPABLE_TOOLS = new Set([
+  'runbook_execute_approved',
+  'operation_get_approval',
+  'runbook_get_approval',
+]);
+
+/** What a task observes, by the tool that created it; status is always re-read from it. */
+const TASK_KINDS = new Map([
+  ['runbook_execute_approved', 'RUNBOOK_EXECUTION'],
+  ['operation_get_approval', 'OPERATION_APPROVAL'],
+  ['runbook_get_approval', 'RUNBOOK_APPROVAL'],
+]);
+const APPROVAL_KINDS = new Set(['OPERATION_APPROVAL', 'RUNBOOK_APPROVAL']);
 
 const taskIdSchema = z.string().regex(/^[A-Za-z0-9_-]{32,64}$/);
 
@@ -75,15 +91,45 @@ function taskShape(
   };
 }
 
+/**
+ * The task a task-capable tool result becomes, or null when it is not a wait worth a handle: a
+ * started runbook execution, or an approval that is still PENDING. Any other result (an error,
+ * a decided or expired approval) is returned synchronously as it was.
+ */
+export function taskTargetOf(
+  toolName: string,
+  structured: Record<string, unknown> | undefined
+): { kind: string; resourceId: string; expiresAt?: Date } | null {
+  const kind = TASK_KINDS.get(toolName);
+  if (!kind || !structured) return null;
+  if (kind === 'RUNBOOK_EXECUTION')
+    return typeof structured.executionId === 'string'
+      ? { kind, resourceId: structured.executionId }
+      : null;
+  const resourceId = kind === 'OPERATION_APPROVAL' ? structured.approvalId : structured.previewId;
+  const expiresAt =
+    typeof structured.expiresAt === 'string' ? new Date(structured.expiresAt) : undefined;
+  return structured.status === 'PENDING' &&
+    typeof resourceId === 'string' &&
+    expiresAt &&
+    Number.isFinite(expiresAt.getTime())
+    ? { kind, resourceId, expiresAt }
+    : null;
+}
+
 /** Durably records the task before the handle is returned, so tasks/get resolves immediately. */
-export async function createRunbookExecutionTask(
+export async function createMcpTask(
   context: ExecutionContext,
   actorId: string,
-  executionId: string
+  toolName: string,
+  target: { kind: string; resourceId: string; expiresAt?: Date }
 ) {
   requireMcp(context.credentialId, 'MCP_INVALID_TOKEN', 401);
-  // One clock for both ends keeps the advertised TTL exact.
+  // One clock for both ends keeps the advertised TTL exact. An approval task never outlives
+  // the approval it observes.
   const now = new Date();
+  const ttlEnd = now.getTime() + TASK_TTL_MS;
+  const expiresAt = new Date(Math.min(ttlEnd, target.expiresAt?.getTime() ?? ttlEnd));
   const task = await withMcpDatabase(() =>
     prisma.mcpTask.create({
       data: {
@@ -91,19 +137,24 @@ export async function createRunbookExecutionTask(
         grantId: context.grantId,
         credentialId: context.credentialId!,
         actorId,
-        toolName: 'runbook_execute_approved',
-        kind: 'RUNBOOK_EXECUTION',
-        resourceId: executionId,
+        toolName,
+        kind: target.kind,
+        resourceId: target.resourceId,
         createdAt: now,
-        expiresAt: new Date(now.getTime() + TASK_TTL_MS),
+        expiresAt,
       },
     })
   );
+  const message = APPROVAL_KINDS.has(target.kind)
+    ? APPROVAL_WAITING
+    : 'The runbook execution has been queued.';
   return {
     resultType: 'task' as const,
-    ...taskShape(task, 'working', 'The runbook execution has been queued.', task.createdAt),
+    ...taskShape(task, 'working', message, task.createdAt),
   };
 }
+
+const APPROVAL_WAITING = 'Waiting for review in OpsKnight; not client input.';
 
 // Unknown, expired and foreign task ids are indistinguishable.
 async function ownedTask(context: ExecutionContext, raw: unknown) {
@@ -122,11 +173,63 @@ async function ownedTask(context: ExecutionContext, raw: unknown) {
   return task;
 }
 
-/** Re-authenticates and re-authorizes on every poll; status comes from the durable execution. */
+type OwnedTask = Awaited<ReturnType<typeof ownedTask>>;
+
+/** Lost read authority hides the task rather than revealing what it observes. */
+function hideOnLostAccess(error: unknown): never {
+  if (error instanceof McpBoundaryError && [403, 404].includes(error.status))
+    throw new McpBoundaryError('MCP_TASK_NOT_FOUND', 404);
+  throw error;
+}
+
+/**
+ * An approval task, re-read through the same reader the get-approval tool uses, so each poll
+ * re-authorizes exactly as the tool does. PENDING is working; any decision or lapse completes
+ * the task with the tool's own result, which is a valid outcome and never a tool error. A task
+ * the client cancelled has only stopped observing: the approval itself is untouched.
+ */
+async function getApprovalTask(context: ExecutionContext, task: OwnedTask) {
+  let state: Record<string, unknown>;
+  try {
+    state =
+      task.kind === 'OPERATION_APPROVAL'
+        ? await (
+            await import('../approvals/operation')
+          ).getMcpOperationApproval(context, { approvalId: task.resourceId })
+        : await (
+            await import('../approvals/runbook')
+          ).getMcpRunbookApproval(context, { previewId: task.resourceId });
+  } catch (error) {
+    hideOnLostAccess(error);
+  }
+  const now = new Date();
+  if (task.cancelRequestedAt)
+    return {
+      resultType: 'complete' as const,
+      ...taskShape(task, 'cancelled', 'No longer observed; the approval is unchanged.', now),
+    };
+  if (state.status === 'PENDING')
+    return {
+      resultType: 'complete' as const,
+      ...taskShape(task, 'working', APPROVAL_WAITING, now),
+    };
+  return {
+    resultType: 'complete' as const,
+    ...taskShape(task, 'completed', `The approval is ${String(state.status)}.`, now),
+    result: {
+      content: [{ type: 'text', text: JSON.stringify(state) }],
+      structuredContent: state,
+      isError: false,
+    },
+  };
+}
+
+/** Re-authenticates and re-authorizes on every poll; status comes from the durable record. */
 export function getMcpTask(context: ExecutionContext, taskId: unknown) {
   return context.budget.track(
     withMcpDatabase(async () => {
       const task = await ownedTask(context, taskId);
+      if (APPROVAL_KINDS.has(task.kind)) return getApprovalTask(context, task);
       let execution: ExecutionView;
       try {
         const read = await callMcpOperation(context, 'getRunbookExecution', {
@@ -134,10 +237,7 @@ export function getMcpTask(context: ExecutionContext, taskId: unknown) {
         });
         execution = ((read.data as { data?: ExecutionView })?.data ?? {}) as ExecutionView;
       } catch (error) {
-        // Lost read authority hides the task rather than revealing the execution.
-        if (error instanceof McpBoundaryError && [403, 404].includes(error.status))
-          throw new McpBoundaryError('MCP_TASK_NOT_FOUND', 404);
-        throw error;
+        hideOnLostAccess(error);
       }
       const { status, message } = mapStatus(execution);
       const updatedAt =
@@ -166,13 +266,23 @@ export function getMcpTask(context: ExecutionContext, taskId: unknown) {
 }
 
 /**
- * Cooperative cancellation through the native cancel command. The binding check runs inside the
- * command's own transaction; a retry is a replay. An already-finished execution stays finished.
+ * Cooperative cancellation of a runbook execution through the native cancel command. The binding
+ * check runs inside the command's own transaction; a retry is a replay. An already-finished
+ * execution stays finished.
  */
 export function cancelMcpTask(context: ExecutionContext, taskId: unknown) {
   return context.budget.track(
     withMcpDatabase(async () => {
       const task = await ownedTask(context, taskId);
+      // Cancelling an approval wait only stops observing it. There is no requester withdraw
+      // command, and a client must never be able to decide or withdraw a human review.
+      if (APPROVAL_KINDS.has(task.kind)) {
+        await prisma.mcpTask.updateMany({
+          where: { id: task.id, cancelRequestedAt: null },
+          data: { cancelRequestedAt: new Date() },
+        });
+        return { resultType: 'complete' as const };
+      }
       try {
         await callApprovedMcpOperation(
           context,

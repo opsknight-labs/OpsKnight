@@ -349,7 +349,8 @@ describe('C3 status and rejection reasons', () => {
     const status = () => getMcpRunbookApproval(f.ctx(), { previewId: prepared.previewId });
     expect(await status()).toMatchObject({
       status: 'PENDING',
-      pollAfterSeconds: 15,
+      pollAfterSeconds: 30,
+      poll: { afterSeconds: 30, stopAt: prepared.expiresAt },
       reviewUrl: `http://localhost:3000/settings/integrations/mcp/approvals/${prepared.previewId}`,
     });
     const other = await runbookFixture();
