@@ -28,12 +28,18 @@ test('add URL, automatically register, sign in and revoke without manual client 
   );
   // Scoped: WebKit can briefly hold a second copy of the page outside the main region.
   const main = page.locator('#main-content');
+  // WebKit reports a settling router.refresh() / redirect as an interrupting navigation, so retry
+  // the move to the policy tab instead of racing it.
+  const gotoPolicy = () =>
+    expect(async () => {
+      await page.goto('/settings/integrations/mcp?tab=policy');
+    }).toPass({ timeout: 15_000 });
   const settingsResponse = await page.goto('/settings/integrations/mcp');
   expect(settingsResponse?.headers()['referrer-policy']).toBe('no-referrer');
   expect(settingsResponse?.headers()['cache-control']).toContain('no-store');
   // Earlier specs share this database and may have enabled MCP; return to a true first-run state.
   if (!(await main.getByRole('button', { name: 'Turn on AI assistant access' }).isVisible())) {
-    await page.goto('/settings/integrations/mcp?tab=policy');
+    await gotoPolicy();
     await main.getByRole('checkbox', { name: /Enable MCP/ }).uncheck();
     await main.getByRole('button', { name: 'Save policy', exact: true }).click();
     await expect(page.getByText('MCP configuration saved', { exact: true })).toBeVisible();
@@ -49,7 +55,7 @@ test('add URL, automatically register, sign in and revoke without manual client 
   await expect(main.getByText('MCP server URL', { exact: true })).toBeVisible();
   await shot('02-after-setup');
   // Narrow the ceiling to a single scope so the later assertions are deterministic.
-  await page.goto('/settings/integrations/mcp?tab=policy');
+  await gotoPolicy();
   await main.getByRole('checkbox', { name: /Enable MCP/ }).check();
   await main.getByRole('checkbox', { name: 'Automatic connections' }).check();
   // Each scope's accessible name ends with its scope string, e.g. "View incidents READ incidents:read".
